@@ -28,3 +28,6 @@ build/
 # Logs
 *.log
 npm-debug.log*
+
+# Claude Code per-machine overrides
+.claude/settings.local.json
