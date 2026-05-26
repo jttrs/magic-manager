@@ -28,6 +28,7 @@ Search Scryfall for Magic the Gathering cards by translating the user's request 
 Subcommands:
 - `search '<query>' [order=edhrec] [unique=cards|prints|art] [dir=asc|desc] [page=N]`
 - `named '<exact card name>'`
+- `collection [body.json]` — POST to `/cards/collection` for bulk identifier lookup (up to 75 cards per call). Reads JSON body from stdin or a file path. Body shape: `{"identifiers": [{"name":"Sol Ring"}, {"set":"leb","collector_number":"162"}, ...]}`. Used by `magic_manager.parsers.resolve()`.
 - `raw '/some/path' 'already=encoded&query=string'` — for endpoints not covered above (sets, rulings, etc.)
 
 Pipe the JSON through Python or `jq` to extract just what you need:

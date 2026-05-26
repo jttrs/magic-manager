@@ -31,3 +31,11 @@ npm-debug.log*
 
 # Claude Code per-machine overrides
 .claude/settings.local.json
+
+# magic-manager local state
+magic_manager.db
+magic_manager.db-*
+inventory/
+.venv/
+uv.lock
+

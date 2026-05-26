@@ -1,0 +1,19 @@
+[project]
+name = "magic-manager"
+version = "0.1.0"
+description = "Local-first MTG collection / set / wishlist / deck manager"
+authors = [
+    { name = "Jared Torre", email = "jared.torre@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "openpyxl>=3.1.5",
+    "typer>=0.25.1",
+]
+
+[project.scripts]
+mm = "magic_manager.cli:app"
+
+[build-system]
+requires = ["uv_build>=0.11.6,<0.12.0"]
+build-backend = "uv_build"

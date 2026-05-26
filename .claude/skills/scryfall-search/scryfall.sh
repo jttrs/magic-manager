@@ -73,14 +73,16 @@ pace() {
 }
 
 call_api() {
-  # $1 = path (e.g. /cards/search), rest = query string parts already URL-encoded
-  local path="$1"; shift
-  local qs="$*"
+  # $1 = method (GET|POST)
+  # $2 = path (e.g. /cards/search)
+  # $3 = query string already URL-encoded (may be empty)
+  # $4 = JSON body for POST (may be empty)
+  local method="$1" path="$2" qs="${3:-}" body="${4:-}"
   local url="https://api.scryfall.com${path}"
   [ -n "$qs" ] && url="${url}?${qs}"
 
   local cache_key cache_file
-  cache_key=$(printf '%s' "$url" | sha)
+  cache_key=$(printf '%s\n%s\n%s' "$method" "$url" "$body" | sha)
   cache_file="$CACHE_DIR/$cache_key.json"
 
   if [ -f "$cache_file" ]; then
@@ -100,22 +102,35 @@ call_api() {
     *) pace $FAST_GAP_MS ;;
   esac
 
-  local tmp_body tmp_status
+  local tmp_body
   tmp_body=$(mktemp)
-  tmp_status=$(mktemp)
   # shellcheck disable=SC2064
-  trap "rm -f '$tmp_body' '$tmp_status'; rmdir '$LOCK_FILE' 2>/dev/null || true" EXIT
+  trap "rm -f '$tmp_body'; rmdir '$LOCK_FILE' 2>/dev/null || true" EXIT
 
   local http_code
-  http_code=$(curl -sS \
-    -H "User-Agent: $UA" \
-    -H 'Accept: application/json;q=0.9,*/*;q=0.8' \
-    -o "$tmp_body" \
-    -w '%{http_code}' \
-    "$url") || {
-      echo "scryfall.sh: curl failed for $url" >&2
-      exit 4
-    }
+  if [ "$method" = "POST" ]; then
+    http_code=$(curl -sS -X POST \
+      -H "User-Agent: $UA" \
+      -H 'Accept: application/json;q=0.9,*/*;q=0.8' \
+      -H 'Content-Type: application/json' \
+      --data-binary "$body" \
+      -o "$tmp_body" \
+      -w '%{http_code}' \
+      "$url") || {
+        echo "scryfall.sh: curl POST failed for $url" >&2
+        exit 4
+      }
+  else
+    http_code=$(curl -sS \
+      -H "User-Agent: $UA" \
+      -H 'Accept: application/json;q=0.9,*/*;q=0.8' \
+      -o "$tmp_body" \
+      -w '%{http_code}' \
+      "$url") || {
+        echo "scryfall.sh: curl failed for $url" >&2
+        exit 4
+      }
+  fi
 
   if [ "$http_code" = "429" ]; then
     # Per Scryfall: 30s lockout. Persist a backoff window of 35s to be safe.
@@ -149,25 +164,43 @@ case "$cmd" in
       k="${kv%%=*}"; v="${kv#*=}"
       parts="${parts}&$(urlencode "$k")=$(urlencode "$v")"
     done
-    call_api /cards/search "$parts"
+    call_api GET /cards/search "$parts" ""
     ;;
   named)
     name="${1:-}"; shift || true
     [ -z "$name" ] && { echo "usage: scryfall.sh named '<exact name>'" >&2; exit 1; }
-    call_api /cards/named "exact=$(urlencode "$name")"
+    call_api GET /cards/named "exact=$(urlencode "$name")" ""
+    ;;
+  collection)
+    # Reads a JSON body from stdin or a file. Body must match Scryfall's
+    # /cards/collection schema: {"identifiers":[ ... up to 75 ... ]}
+    # Each identifier is one of:
+    #   {"name": "Lightning Bolt"}
+    #   {"name": "Lightning Bolt", "set": "leb"}
+    #   {"set": "leb", "collector_number": "162"}
+    #   {"id": "<scryfall-uuid>"}
+    src="${1:-}"
+    if [ -n "$src" ] && [ -f "$src" ]; then
+      body=$(cat "$src")
+    else
+      body=$(cat)
+    fi
+    [ -z "$body" ] && { echo "usage: scryfall.sh collection [path-to-body.json]  (or pipe JSON on stdin)" >&2; exit 1; }
+    call_api POST /cards/collection "" "$body"
     ;;
   raw)
     path="${1:-}"; qs="${2:-}"
     [ -z "$path" ] && { echo "usage: scryfall.sh raw '/path' 'qs=already&encoded'" >&2; exit 1; }
-    call_api "$path" "$qs"
+    call_api GET "$path" "$qs" ""
     ;;
   *)
     cat >&2 <<EOF
 scryfall.sh: unknown subcommand '$cmd'
 Subcommands:
-  search '<scryfall syntax>' [order=edhrec] [unique=cards] [dir=asc] [page=N]
-  named  '<exact card name>'
-  raw    '/api/path' 'already=encoded&query=string'
+  search     '<scryfall syntax>' [order=edhrec] [unique=cards] [dir=asc] [page=N]
+  named      '<exact card name>'
+  collection [path-to-body.json]   (or pipe JSON body on stdin; up to 75 identifiers per call)
+  raw        '/api/path' 'already=encoded&query=string'
 EOF
     exit 1
     ;;
