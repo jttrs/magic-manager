@@ -14,7 +14,7 @@ from pathlib import Path
 
 import typer
 
-from . import db, exports, lists as lists_mod, sets as sets_mod
+from . import db, exports, intake as intake_mod, lists as lists_mod, sets as sets_mod
 
 INPUT_DIR = Path("input")
 PROCESSED_DIR = INPUT_DIR / "processed"
@@ -114,14 +114,14 @@ def _slice_suffix(*, only_codes: list[str], rarities: list[str]) -> str:
     return "-".join(parts) if parts else "master"
 
 
-def _intake_path(slug: str, slice_suffix: str = "master") -> Path:
-    return INPUT_DIR / f"{slug}-{slice_suffix}.xlsx"
+def _intake_path(slug: str, slice_suffix: str = "master", ext: str = "xlsx") -> Path:
+    return INPUT_DIR / f"{slug}-{slice_suffix}.{ext}"
 
 
 def _processed_path(slug: str, slice_suffix: str = "master",
-                    when: datetime | None = None) -> Path:
+                    when: datetime | None = None, ext: str = "xlsx") -> Path:
     when = when or datetime.now()
-    return PROCESSED_DIR / f"{slug}-{slice_suffix}-{when:%Y-%m-%d-%H%M%S}.xlsx"
+    return PROCESSED_DIR / f"{slug}-{slice_suffix}-{when:%Y-%m-%d-%H%M%S}.{ext}"
 
 
 def _file_sha256(path: Path) -> str:
@@ -189,21 +189,30 @@ def set_master_list(
         False, "--force",
         help="Overwrite an existing intake XLSX without prompting.",
     ),
+    fmt: str = typer.Option(
+        "xlsx", "--format",
+        help="Output format: 'xlsx' (default; clickable Scryfall hyperlinks) "
+             "or 'md' (markdown checklist editable in any text editor).",
+    ),
 ):
-    """Build the inventory intake XLSX for a release family or a slice of it.
+    """Build the inventory intake doc for a release family or a slice of it.
 
     The default family is the anchor set + every related set whose set_type
     is in {expansion, commander, masterpiece, promo}. Tokens, memorabilia
     (art series, scene boxes), and other set_types are excluded by default;
     opt them in with ``--include token,memorabilia``.
 
-    The XLSX lands at ``input/<slug>-<slice>.xlsx`` where ``<slice>`` encodes
+    The doc lands at ``input/<slug>-<slice>.<ext>`` where ``<slice>`` encodes
     the optional ``--only`` and ``--rarity`` filters (or ``master`` if neither
-    is given). There can be at most one active intake per slice at a time;
-    if one exists, the command refuses with exit
-    ``EXIT_UNPROCESSED_INTAKE`` (3). Either ingest that file first via
-    ``mm set ingest`` or pass ``--force``.
+    is given) and ``<ext>`` is ``xlsx`` (default) or ``md``. There can be at
+    most one active intake per slice + format at a time; if one exists, the
+    command refuses with exit ``EXIT_UNPROCESSED_INTAKE`` (3). Either ingest
+    that file first via ``mm set ingest`` or pass ``--force``.
     """
+    fmt = fmt.lower()
+    if fmt not in ("xlsx", "md"):
+        typer.echo(f"error: --format must be 'xlsx' or 'md', got {fmt!r}", err=True)
+        raise typer.Exit(2)
     try:
         r, codes = _resolve_codes(name_or_code, include_kinds=list(include or []), only=list(only or []))
     except (LookupError, typer.BadParameter) as e:
@@ -219,7 +228,7 @@ def set_master_list(
     slug = _slug(r.name)
     label = f"set:{r.code}"
     slice_suffix = _slice_suffix(only_codes=only_codes, rarities=rarities)
-    out_path = out or _intake_path(slug, slice_suffix)
+    out_path = out or _intake_path(slug, slice_suffix, ext=fmt)
 
     # Collision detection: only when the user is using the default path.
     if out is None and out_path.exists() and not force:
@@ -256,7 +265,11 @@ def set_master_list(
     if force and out_path.exists():
         typer.echo(f"  ! --force: overwriting {out_path}", err=True)
 
-    n_rows, prefilled = sets_mod.write_master_list_xlsx(
+    writer = (
+        sets_mod.write_master_list_md if fmt == "md"
+        else sets_mod.write_master_list_xlsx
+    )
+    n_rows, prefilled = writer(
         codes, out_path,
         # Tokens and memorabilia are governed by the family filter, not by a
         # second flag. If the user --included them they're in `codes` already.
@@ -271,7 +284,10 @@ def set_master_list(
         typer.echo(f"  → {prefilled} qty cell(s) pre-filled from {label!r}")
     typer.echo()
     typer.echo("Next steps:")
-    typer.echo(f"  1. Open {out_path} in Excel/Numbers and fill in qty_normal / qty_foil.")
+    if fmt == "md":
+        typer.echo(f"  1. Open {out_path} in any text editor and edit `[N:k F:k]` quantities.")
+    else:
+        typer.echo(f"  1. Open {out_path} in Excel/Numbers and fill in qty_normal / qty_foil.")
     typer.echo(f"  2. When done: mm set ingest {name_or_code!r}")
 
 
@@ -350,17 +366,22 @@ def set_ingest(
         anchor = r.code
         label = f"set:{anchor}"
         slug = _slug(r.name)
-        # Look for intake docs matching this family's slug. There can be more
-        # than one (master + rarity slices); if exactly one matches use it,
-        # otherwise force the user to disambiguate via --path.
-        candidates = sorted(INPUT_DIR.glob(f"{slug}-*.xlsx")) if INPUT_DIR.exists() else []
+        # Look for intake docs matching this family's slug, in either format.
+        # There can be more than one (master + rarity slices, or both xlsx and
+        # md side-by-side); if exactly one matches use it, otherwise force the
+        # user to disambiguate via --path.
+        candidates = []
+        if INPUT_DIR.exists():
+            for ext in ("xlsx", "md"):
+                candidates.extend(INPUT_DIR.glob(f"{slug}-*.{ext}"))
+            candidates = sorted(candidates)
         if not candidates:
-            typer.echo(f"error: no intake XLSX found in {INPUT_DIR}/ for slug {slug!r}", err=True)
+            typer.echo(f"error: no intake doc (.xlsx/.md) found in {INPUT_DIR}/ for slug {slug!r}", err=True)
             typer.echo(f"  run `mm set master-list {name_or_code!r}` first", err=True)
             raise typer.Exit(2)
         if len(candidates) > 1:
             typer.echo(
-                f"error: multiple intake XLSX files match slug {slug!r}; "
+                f"error: multiple intake docs match slug {slug!r}; "
                 "pass --path to choose:",
                 err=True,
             )
@@ -407,12 +428,14 @@ def set_ingest(
     if result is not None:
         # Compute slice suffix from the file's stem for the archive name.
         # The stem is ``<slug>-<slice>`` (or just ``<slug>`` if no slice).
+        # Preserve the original extension so .md → .md and .xlsx → .xlsx.
         stem = src.stem
         if stem.startswith(f"{slug}-"):
             slice_suffix = stem[len(slug) + 1:]
         else:
             slice_suffix = stem
-        archived = _processed_path(slug, slice_suffix)
+        ext = src.suffix.lstrip(".") or "xlsx"
+        archived = _processed_path(slug, slice_suffix, ext=ext)
         archived.parent.mkdir(parents=True, exist_ok=True)
         src.rename(archived)
 
@@ -481,7 +504,7 @@ def set_ingest(
             typer.echo(f"  not found: {nf}", err=True)
     for ex in result["extras"]:
         typer.echo(f"  extra (not in seeded set list): {ex['raw']}", err=True)
-    typer.echo(f"Archived intake XLSX → {archived}")
+    typer.echo(f"Archived intake doc → {archived}")
     typer.echo(
         f"{label!r} now: {summary['distinct_rows']} distinct rows, "
         f"qty {summary['total_qty']}, value ${summary['total_value']:.2f}"
@@ -564,6 +587,42 @@ def list_ls():
                    f"{r['distinct_rows']:>6}  {r['source']}")
 
 
+# ---------- intake (scan-loop REPL) ----------
+
+@app.command("intake")
+def intake_cmd(
+    name_or_code: str = typer.Argument(...),
+    only: list[str] = typer.Option(None, "--only"),
+    include: list[str] = typer.Option(None, "--include"),
+):
+    """Scan-loop REPL: type ``<set>? <cn> [+N|=N] [f]`` per card, qty updates live.
+
+    Bound to ``set:<anchor>`` for the resolved family. The first set code you
+    type becomes sticky; subsequent lines without a set use it. Each entry is
+    a separate DB transaction — Ctrl-C is safe.
+
+    Modes per line:
+      - bare              → +1 (default)
+      - +N                → increment by N
+      - =N                → overwrite to exactly N (requires N >= 0)
+      - trailing f / foil → this card is foil
+
+    Other commands: u/undo, s <code>/set <code>, ?/help, q/quit.
+
+    Run ``mm set master-list <name>`` once before this command — the REPL
+    only updates rows that the master-list command has seeded into
+    ``set:<anchor>``.
+    """
+    try:
+        r, codes = _resolve_codes(
+            name_or_code, include_kinds=list(include or []), only=list(only or []),
+        )
+    except (LookupError, typer.BadParameter) as e:
+        typer.echo(f"error: {e}", err=True); raise typer.Exit(2)
+    label = f"set:{r.code}"
+    intake_mod.run_repl(r, label)
+
+
 # ---------- export ----------
 
 @app.command("export")
@@ -620,7 +679,12 @@ def input_list(
             typer.echo(f"(input dir {INPUT_DIR}/ does not exist)")
         return
 
-    files = sorted(p for p in INPUT_DIR.glob("*.xlsx") if p.is_file())
+    # Walk both supported formats. Don't recurse into processed/ — those are
+    # immutable archives, not active intake docs.
+    files: list[Path] = []
+    for pattern in ("*.xlsx", "*.md"):
+        files.extend(p for p in INPUT_DIR.glob(pattern) if p.is_file())
+    files = sorted(files)
     out_files: list[dict] = []
     for f in files:
         sha = _file_sha256(f)

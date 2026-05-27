@@ -230,7 +230,7 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
         rows = conn.execute(
             f"""
             SELECT scryfall_id, set_code, collector_number, name, flavor_name,
-                   rarity, cmc, prices_usd, prices_usd_foil, is_token
+                   rarity, cmc, prices_usd, prices_usd_foil, is_token, scryfall_uri
             FROM cards
             WHERE set_code IN ({placeholders})
             ORDER BY 1, 2
@@ -288,6 +288,10 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
     ws.add_data_validation(int_validator)
 
     cells_prefilled = 0
+    # Hyperlink-styled font for the name cell — blue + underline mimics how
+    # most apps render web links. The cell's value is unchanged (just the
+    # displayed name); the hyperlink is a separate property openpyxl supports.
+    link_font = Font(color="0563C1", underline="single")
     for r in rows:
         qn = prepop.get((r["scryfall_id"], "nonfoil"))
         qf = prepop.get((r["scryfall_id"], "foil"))
@@ -312,6 +316,14 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
             qn,
             qf,
         ])
+        # Attach a clickable hyperlink to the name cell, pointing at the card's
+        # Scryfall page. Falls through silently if scryfall_uri is missing for
+        # this row (older DB rows from V1.2 might not have one — re-sync fixes).
+        uri = r["scryfall_uri"]
+        if uri:
+            name_cell = ws.cell(row=ws.max_row, column=3)
+            name_cell.hyperlink = uri
+            name_cell.font = link_font
     last_row = ws.max_row
 
     # Tint qty columns and apply integer validation.
@@ -376,3 +388,164 @@ def read_master_list_meta(path: Path) -> dict | None:
         val = "" if (len(row) < 2 or row[1] is None) else str(row[1]).strip()
         out[key] = val
     return out
+
+
+# ---------- markdown intake format ----------
+
+def write_master_list_md(set_codes: Iterable[str], out_path: Path,
+                         include_tokens: bool = False,
+                         prepopulate_from_label: str | None = None,
+                         rarity_filter: Iterable[str] | None = None,
+                         anchor_code: str | None = None,
+                         slug: str | None = None) -> tuple[int, int]:
+    """Markdown twin of ``write_master_list_xlsx()``.
+
+    File shape:
+
+        ---
+        anchor_code: fca
+        set_codes: fin,fic,...
+        rarity_filter: rare        # blank when no rarity slice
+        slug: final-fantasy-...
+        include_tokens: 0
+        generated_at: 2026-...
+        magic_manager_version: 0.1.0
+        ---
+
+        # <set name> — <slice description>
+
+        ## Mythic (15 cards)
+
+        - (FCA) 2 [N:0 F:0] — [<displayed name>](<scryfall_uri>) — $4.66 / $164.18
+        - (FCA) 5 [N:0 F:0] — ...
+
+    Returns ``(rows_written, cells_prefilled)`` to mirror the XLSX writer.
+    The user edits the ``[N:k F:k]`` brackets to record their inventory; the
+    parser keys on ``(SET) CN`` so display changes don't affect ingest.
+    """
+    codes = [c.lower() for c in set_codes]
+    if not codes:
+        raise ValueError("no set codes provided")
+
+    rarity_set: set[str] | None = None
+    if rarity_filter is not None:
+        rarity_set = {r.lower() for r in rarity_filter if r and str(r).strip()}
+        if not rarity_set:
+            rarity_set = None
+
+    placeholders = ",".join("?" for _ in codes)
+    with db.connect() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT scryfall_id, set_code, collector_number, name, flavor_name,
+                   rarity, prices_usd, prices_usd_foil, is_token, scryfall_uri
+            FROM cards
+            WHERE set_code IN ({placeholders})
+            ORDER BY 1, 2
+            """,
+            codes,
+        ).fetchall()
+
+        prepop: dict[tuple[str, str], int] = {}
+        if prepopulate_from_label:
+            for r in conn.execute(
+                "SELECT scryfall_id, finish, quantity FROM list_rows "
+                "WHERE label = ? AND quantity > 0",
+                (prepopulate_from_label,),
+            ).fetchall():
+                prepop[(r["scryfall_id"], r["finish"])] = r["quantity"]
+
+    if not include_tokens:
+        rows = [r for r in rows if not r["is_token"]]
+    if rarity_set is not None:
+        rows = [r for r in rows if (r["rarity"] or "").lower() in rarity_set]
+
+    def cn_sortkey(cn: str) -> tuple:
+        m = re.match(r"^(\d+)(.*)$", cn or "")
+        if m:
+            return (int(m.group(1)), m.group(2))
+        return (10**9, cn or "")
+
+    rows = sorted(
+        rows,
+        key=lambda r: (
+            RARITY_ORDER.get((r["rarity"] or "").lower(), 9),
+            r["set_code"],
+            cn_sortkey(r["collector_number"]),
+        ),
+    )
+
+    rarity_value = ",".join(sorted(rarity_set)) if rarity_set else ""
+    from . import __version__
+    meta = {
+        "anchor_code": (anchor_code or codes[0]).lower(),
+        "set_codes": ",".join(codes),
+        "rarity_filter": rarity_value,
+        "slug": slug or out_path.stem,
+        "include_tokens": "1" if include_tokens else "0",
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "magic_manager_version": __version__,
+    }
+
+    out_lines: list[str] = []
+    out_lines.append("---")
+    for k, v in meta.items():
+        out_lines.append(f"{k}: {v}")
+    out_lines.append("---")
+    out_lines.append("")
+
+    title = anchor_code.upper() if anchor_code else codes[0].upper()
+    if rarity_value:
+        title += f" — {rarity_value}"
+    out_lines.append(f"# {title}")
+    out_lines.append("")
+    out_lines.append(
+        "Edit the `[N:k F:k]` brackets to record quantities. Save, then run "
+        "`/ingest-new-inventory-list` (or `mm set ingest`) to apply."
+    )
+    out_lines.append("")
+
+    cells_prefilled = 0
+    current_rarity = None
+    rarity_counts: dict[str, int] = {}
+    for r in rows:
+        rarity_counts[r["rarity"] or "?"] = rarity_counts.get(r["rarity"] or "?", 0) + 1
+
+    for r in rows:
+        rarity = r["rarity"] or "?"
+        if rarity != current_rarity:
+            current_rarity = rarity
+            out_lines.append("")
+            out_lines.append(f"## {rarity.title()} ({rarity_counts[rarity]} cards)")
+            out_lines.append("")
+
+        flavor = r["flavor_name"]
+        display_name = f"{flavor} / {r['name']}" if flavor else r["name"]
+        # Escape pipes / brackets that would otherwise interfere with markdown
+        # link/table syntax. ``[`` and ``]`` in a link's display text need to
+        # be escaped; flavor and oracle names rarely contain them but a few
+        # split-card names do (e.g. "Fire // Ice" wouldn't, but
+        # "[Battlefield Forge]" hypothetically would).
+        safe_name = display_name.replace("[", "\\[").replace("]", "\\]")
+        uri = r["scryfall_uri"] or ""
+        link = f"[{safe_name}]({uri})" if uri else safe_name
+
+        qn = prepop.get((r["scryfall_id"], "nonfoil"), 0)
+        qf = prepop.get((r["scryfall_id"], "foil"), 0)
+        if qn > 0:
+            cells_prefilled += 1
+        if qf > 0:
+            cells_prefilled += 1
+
+        usd = r["prices_usd"]
+        usd_foil = r["prices_usd_foil"]
+        price_segment = f"${usd if usd is not None else '—'} / ${usd_foil if usd_foil is not None else '—'}"
+
+        out_lines.append(
+            f"- ({r['set_code'].upper()}) {r['collector_number']} "
+            f"[N:{qn} F:{qf}] — {link} — {price_segment}"
+        )
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text("\n".join(out_lines) + "\n", encoding="utf-8")
+    return (len(rows), cells_prefilled)

@@ -1,5 +1,5 @@
 ---
-description: Walk the user through ingesting every active intake XLSX in input/, asking replace vs additive per file.
+description: Walk the user through ingesting every active intake doc (XLSX or markdown) in input/, asking replace vs additive per file.
 allowed-tools:
   - Bash
   - AskUserQuestion
@@ -7,7 +7,7 @@ allowed-tools:
 
 # Ingest new inventory lists
 
-Walk the user through ingesting every active intake XLSX currently in `input/`. The work is mechanical — there is one decision per file (replace vs additive) and the rest is reading structured CLI output and surfacing it.
+Walk the user through ingesting every active intake doc currently in `input/`. Both `.xlsx` and `.md` files are picked up — the CLI auto-dispatches to the right parser. The work is mechanical: there is one decision per file (replace vs additive) and the rest is reading structured CLI output and surfacing it.
 
 ## Steps (do these in order, deterministically)
 
@@ -27,7 +27,7 @@ Parse the JSON. The shape is `{ "input_dir": "...", "files": [...] }` where each
 - `prior_success`: the matching log row if duplicate, else `null`.
 - `prior_failed`: a prior FAILED ingest with the same hash, if any.
 
-If `files` is empty: tell the user "no intake XLSX files in `input/` to ingest. Generate one with `mm set master-list <name>` first." and stop.
+If `files` is empty: tell the user "no intake docs in `input/` to ingest. Generate one with `mm set master-list <name>` (or `--format md`) first, or use `mm intake <name>` for the scan-loop REPL instead." and stop.
 
 ### 2. Show a one-shot summary of what was found
 

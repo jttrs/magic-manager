@@ -145,6 +145,8 @@ def list_import(label: str, *, text: str | None = None, path: Path | None = None
         fmt = parsers.detect_format(path)
         if fmt == "xlsx":
             result = parsers.parse_master_list_xlsx(path)
+        elif fmt == "md":
+            result = parsers.parse_master_list_md(path)
         else:
             result = parsers.parse_text(path.read_text(encoding="utf-8"))
     else:
@@ -348,6 +350,10 @@ def _list_in_partition_rows(conn, label: str, partition: Partition) -> list:
 def summarize_xlsx_file(path: Path) -> dict:
     """Pre-ingest preview for the slash command.
 
+    Despite the function name, this handles both XLSX and markdown intake
+    docs — dispatch is based on ``parsers.detect_format``. The name stays
+    for backwards compatibility; use ``summarize_intake_file`` in new code.
+
     Returns a dict with: ``path``, ``meta`` (or ``None``), ``anchor_code``,
     ``set_codes``, ``rarity_filter``, ``rows_total``, ``rows_with_qty``,
     ``total_qty``, ``estimated_value``, ``top_value`` (top 5 rows by line value),
@@ -356,7 +362,11 @@ def summarize_xlsx_file(path: Path) -> dict:
     Doesn't hit the network beyond what the parser already does (the
     rate-limited /cards/collection lookup for resolution).
     """
-    result = parsers.parse_master_list_xlsx(path)
+    fmt = parsers.detect_format(path)
+    if fmt == "md":
+        result = parsers.parse_master_list_md(path)
+    else:
+        result = parsers.parse_master_list_xlsx(path)
     parsers.resolve(result)
     meta = result.meta
     rows_with_qty = 0
@@ -404,6 +414,10 @@ def summarize_xlsx_file(path: Path) -> dict:
         "top_value": top_value,
         "warnings": result.warnings,
     }
+
+
+# Forward-compatible alias — new code should call this.
+summarize_intake_file = summarize_xlsx_file
 
 
 def _kind_from_label(label: str) -> str:

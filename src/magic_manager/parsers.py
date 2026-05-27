@@ -217,6 +217,83 @@ def parse_master_list_xlsx(path: Path) -> ParseResult:
     return res
 
 
+# Markdown intake-doc line: `- (SET) CN [N:k F:k] — ...`
+# The trailing chunk after the brackets (link, prices, anything else) is ignored.
+MD_LINE_RE = re.compile(
+    r"""
+    ^\s*-\s+
+    \((?P<set>[A-Za-z0-9]{2,6})\)\s+
+    (?P<cn>\S+)\s+
+    \[\s*N:\s*(?P<n>\d+)\s+F:\s*(?P<f>\d+)\s*\]
+    """,
+    re.VERBOSE,
+)
+
+
+def parse_master_list_md(path: Path) -> ParseResult:
+    """Parse the markdown intake format emitted by ``write_master_list_md()``.
+
+    Reads YAML-frontmatter ``_meta`` into ``ParseResult.meta``. Body lines
+    matching ``- (SET) CN [N:k F:k] ...`` are emitted as one or two ``Entry``
+    records (one per nonzero finish). Lines that don't match are ignored.
+
+    Like the XLSX parser, this keys cards by ``(set, collector_number)`` —
+    the displayed name (whether reskin-merged or plain) is informational
+    only, so users can edit it without breaking ingest.
+    """
+    res = ParseResult()
+    text = path.read_text(encoding="utf-8")
+    body = text
+
+    # Parse the YAML frontmatter (we don't need a real YAML parser — the
+    # writer only emits ``key: value`` pairs of strings).
+    if text.startswith("---\n") or text.startswith("---\r\n"):
+        end = text.find("\n---\n", 4)
+        if end == -1:
+            end = text.find("\n---\r\n", 4)
+        if end != -1:
+            fm = text[4:end]
+            meta: dict[str, str] = {}
+            for line in fm.splitlines():
+                if ":" not in line:
+                    continue
+                k, _, v = line.partition(":")
+                meta[k.strip()] = v.strip()
+            if meta:
+                res.meta = meta
+            body = text[end:].split("\n", 1)[1] if "\n" in text[end:] else ""
+
+    line_num = 0
+    for raw_line in body.splitlines():
+        line_num += 1
+        m = MD_LINE_RE.match(raw_line)
+        if not m:
+            continue
+        set_code = m.group("set").lower()
+        cn = m.group("cn")
+        try:
+            qn = int(m.group("n"))
+            qf = int(m.group("f"))
+        except ValueError:
+            res.warnings.append(f"line {line_num}: bad integer in {raw_line!r}")
+            continue
+
+        if qn > 0:
+            res.entries.append(Entry(
+                qty=qn, raw=f"line {line_num}: {qn} (SET) {cn} [N:{qn}]",
+                name="", set=set_code, collector_number=cn,
+                foil=False, section="mainboard",
+            ))
+        if qf > 0:
+            res.entries.append(Entry(
+                qty=qf, raw=f"line {line_num}: {qf} (SET) {cn} [F:{qf}]",
+                name="", set=set_code, collector_number=cn,
+                foil=True, section="mainboard",
+            ))
+
+    return res
+
+
 def _coerce_qty(raw, row_num: int, col: str, res: ParseResult) -> int:
     if raw is None or (isinstance(raw, str) and not raw.strip()):
         return 0
@@ -234,11 +311,13 @@ def _coerce_qty(raw, row_num: int, col: str, res: ParseResult) -> int:
 # ---------- format detection ----------
 
 def detect_format(text_or_path: str | Path) -> str:
-    """Return one of: ``xlsx``, ``moxfield`` (covers Archidekt/MTGA/MTGO/deckstats —
-    they all share the parser), ``unknown``."""
+    """Return one of: ``xlsx``, ``md``, ``moxfield`` (covers
+    Archidekt/MTGA/MTGO/deckstats — they all share the parser), ``unknown``."""
     if isinstance(text_or_path, Path):
         if text_or_path.suffix.lower() in (".xlsx", ".xlsm"):
             return "xlsx"
+        if text_or_path.suffix.lower() in (".md", ".markdown"):
+            return "md"
         if text_or_path.suffix.lower() in (".csv",):
             return "csv"
         text = text_or_path.read_text(encoding="utf-8")

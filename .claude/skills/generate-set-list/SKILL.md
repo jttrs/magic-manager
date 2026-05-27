@@ -39,6 +39,31 @@ The XLSX carries a hidden `_meta` sheet recording the slice, so ingest knows whi
 - `--include token,memorabilia` — opt extra `set_type`s into the family. Use only when the user explicitly asks for tokens, art series, or scene boxes.
 - `--out <path>` — redirect output to a non-default path (skips collision detection). Almost never the right answer.
 - `--force` — overwrite an existing intake XLSX. Only after the user has explicitly chosen "discard partial work" via the exit-3 prompt.
+- `--format md` — emit a markdown checklist instead of XLSX. The file lands at `input/<slug>-<slice>.md` with YAML frontmatter, sections per rarity, and lines like `- (FCA) 4 [N:0 F:0] — [Wild Rose Rebellion / Counterspell](https://scryfall.com/card/fca/4) — $4.66 / $5.50`. Edit the `[N:k F:k]` brackets in any text editor (or on a phone). `mm set ingest` and `/ingest-new-inventory-list` both auto-detect the format.
+
+## Three intake surfaces (XLSX, markdown, scan loop)
+
+The user picks the surface that fits the moment. All three converge on the same `set:<anchor>` list, so exports/queries are surface-agnostic.
+
+| Surface | When to use | Command |
+|---|---|---|
+| XLSX (default) | First-pass cataloging of a whole set / sit-down session in a spreadsheet app | `mm set master-list "<name>"` |
+| Markdown | Phone-editable, plain-text-editor, or wanting to diff against an old version in git | `mm set master-list "<name>" --format md` |
+| Scan loop (REPL) | Rapid manual entry — fastest for "I have a stack of cards in my hand right now" | `mm intake "<name>"` |
+
+The scan loop's grammar:
+
+```
+> fca 4         # +1 to FCA #4 nonfoil (default)
+> 4 +3          # sticky set: FCA #4 +3 nonfoil
+> 4 =1          # FCA #4 nonfoil → exactly 1 (overwrite)
+> 4 f           # FCA #4 foil +1
+> 4 +2 f        # FCA #4 foil +2
+> u             # undo the last entry
+> q             # quit + show summary
+```
+
+The set code is sticky after first use — typing just `4` after `fca 4` still means FCA. The REPL writes to the DB on every line (Ctrl-C is safe; partial work persists). Run `mm set master-list <name>` once before scanning so the family is seeded.
 
 ## Exit-3 prompt template
 

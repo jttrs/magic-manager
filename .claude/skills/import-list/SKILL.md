@@ -14,8 +14,9 @@ Wraps `mm list import` to take pasted text or a filled-in XLSX and save it under
    - If they're re-importing a master list, the label MUST be `set:<code>` — the same one `generate-set-list` seeded.
    - For new free-form lists, suggest a label following these conventions: `wishlist:<name>`, `deck:<name>`, `idea:<name>`, `buy:<name>`. Anything works; the prefix is a tag, not a constraint.
 2. **Pick the right command.**
-   - **For one or more filled-in intake XLSX files in `input/`** (whatever [[generate-set-list]] produced — full master lists OR rarity/code slices): tell the user to run **`/ingest-new-inventory-list`**. That slash command walks them through every active intake doc, asks replace vs additive per file, archives each on success, and uses content hashing to detect duplicates. Don't run `mm set ingest` directly unless the user is explicitly bypassing the slash command.
+   - **For filled-in intake docs in `input/`** (XLSX or `.md` — both produced by [[generate-set-list]]): tell the user to run **`/ingest-new-inventory-list`**. That slash command walks them through every active intake doc, asks replace vs additive per file, archives each on success, and uses content hashing to detect duplicates. Don't run `mm set ingest` directly unless the user is explicitly bypassing the slash command.
    - **For everything else** (pasted text, an XLSX from outside `input/`, a wishlist/deck/idea label): use `uv run mm list import <label> <path>` or pipe via stdin: `cat /tmp/x.txt | uv run mm list import <label>`.
+   - **Note:** if the user has been entering data via `mm intake` (the scan-loop REPL), there is no file to ingest — the REPL writes directly to the DB. Skip ingest entirely.
 3. **Surface warnings and not-founds.** The CLI prints them to stderr — pass them on. The most important one is `name/printing mismatch` — that means the user typed `Atraxa, Praetors' Voice (CMR) 248` but `(CMR) 248` is actually Reclamation Sage. The user has a typo; show them the line and the resolved name.
 4. **Show the result.** After import, run `mm list show <label>` and `mm list value <label>` to confirm what landed.
 
