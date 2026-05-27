@@ -1,6 +1,6 @@
 ---
 name: generate-set-list
-description: Build the inventory intake spreadsheet (XLSX) for a Magic the Gathering release family — every printing across the parent set + commander + masterpiece + promos, with current Scryfall prices and two quantity columns the user fills in by going through their physically-sorted boxes. Use this whenever the user wants to start (or resume) cataloging a set. Mechanical workflow: invoke `mm set master-list <name>` and react only to the structured exit codes; no judgment about which sibling sets to include.
+description: Build the inventory checklist (XLSX or markdown) for a Magic the Gathering release family — every printing across the parent set + commander + masterpiece + promos, with current Scryfall prices and two quantity columns the user fills in by going through their physically-sorted boxes. Use this whenever the user wants to start (or resume) cataloging a set. Mechanical workflow: invoke `mm set master-list <name>` and react only to the structured exit codes; no judgment about which sibling sets to include.
 ---
 
 # Generate Set List
@@ -16,10 +16,10 @@ The mechanical wrapper around `mm set master-list`. The user names a release ("F
    - **0**: success. Tell the user the file path and the next step (`mm set ingest "<name>"` when they've filled in quantities). Done.
    - **2**: bad arguments / no Scryfall match. Surface the error verbatim and ask for clarification.
    - **3**: an unprocessed intake XLSX already exists. The CLI prints a readout of the current `set:<anchor>` state (rows owned, total value, top-value cards). Show that readout to the user and ask which path forward they want via `AskUserQuestion`.
-3. If they chose "ingest first": run `uv run mm set ingest "<name>"`, surface the result, then re-run `mm set master-list "<name>"` to start a fresh intake doc.
+3. If they chose "ingest first": run `uv run mm set ingest "<name>"`, surface the result, then re-run `mm set master-list "<name>"` to start a fresh inventory checklist.
 4. If they chose "discard partial work": re-run `uv run mm set master-list "<name>" --force` and warn that any XLSX-only edits (those not yet ingested) are gone.
 
-## Slicing — generating partial intake docs
+## Slicing — generating partial inventory checklists
 
 The user often catalogs piecemeal: "just the rares from FF", "just the `fic` cards", "this booster I just opened". For these cases, slice at generate-time so the resulting XLSX only covers the intended scope. Two flags compose:
 
@@ -77,15 +77,15 @@ The set code is sticky after first use — typing just `4` after `fca 4` still m
 When the CLI exits 3, the stderr already contains the readout. After surfacing it, use `AskUserQuestion` with these two options (always the same two):
 
 > **An unprocessed intake XLSX exists for `<set-name>`. What should I do?**
-> - **Ingest the existing XLSX first (Recommended)** — run `mm set ingest "<set-name>"` to save your filled-in quantities, then start a fresh intake doc.
+> - **Ingest the existing XLSX first (Recommended)** — run `mm set ingest "<set-name>"` to save your filled-in quantities, then start a fresh inventory checklist.
 > - **Discard the partial XLSX edits and regenerate** — run `mm set master-list "<set-name>" --force`. Any quantities filled in but not yet ingested will be lost.
 
 ## What the user sees
 
 | Path | Filename | Lifecycle |
 |---|---|---|
-| Active intake doc (one per family at a time) | `input/<slug>-master.xlsx` | Created by `master-list`. User edits in Excel/Numbers. |
-| Archived intake docs | `input/processed/<slug>-master-<YYYY-MM-DD-HHMMSS>.xlsx` | Created by `ingest` after the data lands in the DB. Immutable. |
+| Active inventory checklist (one per family at a time) | `input/<slug>-master.xlsx` | Created by `master-list`. User edits in Excel/Numbers. |
+| Archived inventory checklists | `input/processed/<slug>-master-<YYYY-MM-DD-HHMMSS>.xlsx` | Created by `ingest` after the data lands in the DB. Immutable. |
 
 The XLSX columns: `set`, `collector_number`, `name`, `rarity`, `mana_value`, `usd`, `usd_foil`, `qty_normal`, `qty_foil`. The two `qty_*` columns are tinted yellow, validated as non-negative integers, and pre-populated from `set:<anchor>` whenever the user already owns cards from previous ingest cycles. Rows are sorted by rarity bucket (mythic → rare → uncommon → common → bonus → special) then collector number to match the user's physical box order.
 
@@ -104,7 +104,7 @@ uv run mm set master-list "Final Fantasy"
 If exit 0: tell them `input/final-fantasy-master.xlsx` is ready and `mm set ingest "Final Fantasy"` is the next command.
 If exit 3: surface the readout, show the AskUserQuestion above.
 
-User: *"give me a master list for OTJ but include the breaking news cards too."*
+User: *"give me an inventory checklist for OTJ but include the breaking news cards too."*
 
 `pbig`, `big`, `otp` are already in the default family for `otj` (they're `set_type=expansion`/`promo`). The user's request is already covered by the default. Run:
 
@@ -120,7 +120,7 @@ uv run mm set master-list "Final Fantasy" --include token
 
 ## Caveats
 
-- The XLSX is a **transient intake document**, not a source of truth. The DB is the source of truth. Tell the user to run `mm set ingest "<name>"` when they're done editing — that's when the data actually lands.
+- The inventory checklist is a **transient editing artifact**, not a source of truth. The DB is the source of truth. Tell the user to run `mm set ingest "<name>"` when they're done editing — that's when the data actually lands.
 - Re-running `master-list` is safe (DB-backed cells re-pre-populate), but only after the previous intake has been ingested. If you see exit 3, do NOT pass `--force` without confirming with the user — XLSX-only edits will be silently discarded.
 - A full Final Fantasy family sync touches Scryfall ~1,244 cards over 8 paginated calls (~4–6 seconds with the 500ms wrapper rate limit). OTJ is similar.
 - Stale lock state: if `scryfall.sh` died mid-run, you may see `lock timeout`. Clear with `rm -rf "${TMPDIR}scryfall-state/lock"` and retry.

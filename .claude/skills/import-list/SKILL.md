@@ -1,20 +1,20 @@
 ---
 name: import-list
-description: Save a pasted decklist or filled-in Excel master list under a labeled list in the local DB. Use whenever the user has copied a deck/wishlist/cube/etc. block from Moxfield, Archidekt, MTGA, MTGO, deckstats, or any platform that uses the common "<qty> <name> (SET) CN" text format — OR when they've finished filling in the quantity columns of a set master list XLSX from generate-set-list. Each import targets a label like `wishlist:edh-staples`, `deck:atraxa-superfriends`, or `set:fin`.
+description: Save a pasted decklist or filled-in inventory checklist under a labeled list in the local DB. Use whenever the user has copied a deck/wishlist/cube/etc. block from Moxfield, Archidekt, MTGA, MTGO, deckstats, or any platform that uses the common "<qty> <name> (SET) CN" text format — OR when they've finished filling in the quantity columns of a set inventory checklist (XLSX or markdown) from generate-set-list. Each import targets a label like `wishlist:edh-staples`, `deck:atraxa-superfriends`, or `set:fin`.
 ---
 
 # Import List
 
-Wraps `mm list import` to take pasted text or a filled-in XLSX and save it under a labeled list. The same skill handles wishlists, deck lists, idea lists, set master lists — they're all just labels on the same `list_rows` table.
+Wraps `mm list import` to take pasted text or a filled-in XLSX and save it under a labeled list. The same skill handles wishlists, deck lists, idea lists, set inventory checklists — they're all just labels on the same `list_rows` table.
 
 ## Workflow
 
 1. **Get the paste (or path) and the label.**
    - If the user pasted text in chat, write it to `/tmp/import-<n>.txt` first to avoid quoting issues with apostrophes (`Atraxa, Praetors' Voice`), unicode (`★`), and multi-line content.
-   - If they're re-importing a master list, the label MUST be `set:<code>` — the same one `generate-set-list` seeded.
+   - If they're re-importing an inventory checklist, the label MUST be `set:<code>` — the same one `generate-set-list` seeded.
    - For new free-form lists, suggest a label following these conventions: `wishlist:<name>`, `deck:<name>`, `idea:<name>`, `buy:<name>`. Anything works; the prefix is a tag, not a constraint.
 2. **Pick the right command.**
-   - **For filled-in intake docs in `input/`** (XLSX or `.md` — both produced by [[generate-set-list]]): tell the user to run **`/ingest-new-inventory-list`**. That slash command walks them through every active intake doc, asks replace vs additive per file, archives each on success, and uses content hashing to detect duplicates. Don't run `mm set ingest` directly unless the user is explicitly bypassing the slash command.
+   - **For filled-in inventory checklists in `input/`** (XLSX or `.md` — both produced by [[generate-set-list]]): tell the user to run **`/ingest-new-inventory-list`**. That slash command walks them through every active checklist, asks replace vs additive per file, archives each on success, and uses content hashing to detect duplicates. Don't run `mm set ingest` directly unless the user is explicitly bypassing the slash command.
    - **For everything else** (pasted text, an XLSX from outside `input/`, a wishlist/deck/idea label): use `uv run mm list import <label> <path>` or pipe via stdin: `cat /tmp/x.txt | uv run mm list import <label>`.
    - **Note:** if the user has been entering data via `mm intake` (the scan-loop REPL), there is no file to ingest — the REPL writes directly to the DB. Skip ingest entirely.
 3. **Surface warnings and not-founds.** The CLI prints them to stderr — pass them on. The most important one is `name/printing mismatch` — that means the user typed `Atraxa, Praetors' Voice (CMR) 248` but `(CMR) 248` is actually Reclamation Sage. The user has a typo; show them the line and the resolved name.
@@ -35,7 +35,7 @@ The CLI's behavior depends on the label prefix:
 ## Subcommand cheat sheet
 
 ```bash
-# Re-import a filled-in master list
+# Re-import a filled-in inventory checklist
 uv run mm list import set:fca input/final-fantasy-through-the-ages-master.xlsx
 
 # Save a Moxfield paste from stdin as a wishlist
@@ -69,7 +69,7 @@ Steps:
 3. Tell the user: "4 cards saved under `wishlist:edh-staples`. Total value: $X.XX. To export: `mm export tcgplayer label:wishlist:edh-staples`."
 
 User finishes filling in `input/final-fantasy-through-the-ages-master.xlsx`:
-> "I'm done filling in the FCA master list."
+> "I'm done filling in the FCA inventory checklist."
 
 Steps:
 1. `uv run mm list import set:fca input/final-fantasy-through-the-ages-master.xlsx`
@@ -79,6 +79,6 @@ Steps:
 ## Caveats
 
 - The XLSX parser reads ONLY columns `set`, `collector_number`, `qty_normal`, `qty_foil`. The user can add notes columns to the right and they'll be ignored.
-- Foil import: a foil-line in a set master list (qty_foil > 0) lands as `finish='foil'` in the DB. Make sure foil pricing flows through (`mm list value` uses `prices_usd_foil` for those rows).
+- Foil import: a foil-line in a set inventory checklist (qty_foil > 0) lands as `finish='foil'` in the DB. Make sure foil pricing flows through (`mm list value` uses `prices_usd_foil` for those rows).
 - A blank or 0 qty in the XLSX deletes the corresponding row. If the user wants to "zero out" a card they no longer have, they edit the cell to 0 (or blank) and re-import.
 - Section headers (`SIDEBOARD:`, `COMMANDER:`) in pasted text are parsed and stored on the entry as metadata, but V1 doesn't differentiate sections at the list-level — every imported card lands in the labeled list flat. If the user wants a "sideboard" preserved separately, suggest a separate label like `deck:atraxa-sideboard`.

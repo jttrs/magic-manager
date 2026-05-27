@@ -32,7 +32,7 @@ app = typer.Typer(no_args_is_help=True, add_completion=False,
 set_app = typer.Typer(no_args_is_help=True, help="Set sync and master-list generation.")
 list_app = typer.Typer(no_args_is_help=True, help="Labeled lists.")
 
-input_app = typer.Typer(no_args_is_help=True, help="Inspect intake XLSX files in input/.")
+input_app = typer.Typer(no_args_is_help=True, help="Inspect inventory checklists in input/.")
 
 app.add_typer(set_app, name="set")
 app.add_typer(list_app, name="list")
@@ -187,7 +187,7 @@ def set_master_list(
     ),
     force: bool = typer.Option(
         False, "--force",
-        help="Overwrite an existing intake XLSX without prompting.",
+        help="Overwrite an existing inventory checklist without prompting.",
     ),
     fmt: str = typer.Option(
         "xlsx", "--format",
@@ -198,23 +198,24 @@ def set_master_list(
         False, "--include-variants",
         help="Include prerelease, store-stamped, japanshowcase, serialized, "
              "and white/yellow-bordered variants. Off by default — these are "
-             "filtered out of the master list AND the seeded set:<anchor> list "
+             "filtered out of the inventory checklist AND the seeded set:<anchor> list "
              "so set-missing math doesn't count them.",
     ),
 ):
-    """Build the inventory intake doc for a release family or a slice of it.
+    """Build the inventory checklist for a release family or a slice of it.
 
     The default family is the anchor set + every related set whose set_type
     is in {expansion, commander, masterpiece, promo}. Tokens, memorabilia
     (art series, scene boxes), and other set_types are excluded by default;
     opt them in with ``--include token,memorabilia``.
 
-    The doc lands at ``input/<slug>-<slice>.<ext>`` where ``<slice>`` encodes
-    the optional ``--only`` and ``--rarity`` filters (or ``master`` if neither
-    is given) and ``<ext>`` is ``xlsx`` (default) or ``md``. There can be at
-    most one active intake per slice + format at a time; if one exists, the
-    command refuses with exit ``EXIT_UNPROCESSED_INTAKE`` (3). Either ingest
-    that file first via ``mm set ingest`` or pass ``--force``.
+    The checklist lands at ``input/<slug>-<slice>.<ext>`` where ``<slice>``
+    encodes the optional ``--only`` and ``--rarity`` filters (or ``master``
+    if neither is given) and ``<ext>`` is ``xlsx`` (default) or ``md``.
+    There can be at most one active inventory checklist per slice + format
+    at a time; if one exists, the command refuses with exit
+    ``EXIT_UNPROCESSED_INTAKE`` (3). Either ingest that file first via
+    ``mm set ingest`` or pass ``--force``.
     """
     fmt = fmt.lower()
     if fmt not in ("xlsx", "md"):
@@ -239,7 +240,7 @@ def set_master_list(
 
     # Collision detection: only when the user is using the default path.
     if out is None and out_path.exists() and not force:
-        typer.echo(f"refusing to overwrite existing intake doc: {out_path}", err=True)
+        typer.echo(f"refusing to overwrite existing inventory checklist: {out_path}", err=True)
         typer.echo(f"current state of {label!r}:", err=True)
         s = lists_mod.summarize_label(label)
         typer.echo(
@@ -307,7 +308,7 @@ def set_ingest(
     ),
     path: Path = typer.Option(
         None, "--path",
-        help="Override path to the intake XLSX. Default: input/<slug>-master.xlsx.",
+        help="Override path to the inventory checklist. Default: input/<slug>-master.xlsx.",
     ),
     mode: str = typer.Option(
         "replace", "--mode",
@@ -325,13 +326,13 @@ def set_ingest(
              "(for the /ingest-new-inventory-list slash command).",
     ),
 ):
-    """Ingest a filled-in intake XLSX, then archive it under input/processed/.
+    """Ingest a filled-in inventory checklist, then archive it under input/processed/.
 
     Imports the qty_normal / qty_foil cells into ``set:<anchor>`` honoring
     the file's partition (set codes + rarity from ``_meta`` or inferred from
     rows), then atomically renames the file with a timestamp so the next
-    ``mm set master-list`` run will produce a fresh intake doc pre-populated
-    from the now-saved DB state.
+    ``mm set master-list`` run will produce a fresh inventory checklist
+    pre-populated from the now-saved DB state.
     """
     if mode not in ("replace", "additive"):
         typer.echo(f"error: --mode must be 'replace' or 'additive', got {mode!r}", err=True)
@@ -341,7 +342,7 @@ def set_ingest(
     if path is not None:
         src = path
         if not src.exists():
-            typer.echo(f"error: no intake XLSX found at {src}", err=True)
+            typer.echo(f"error: no inventory checklist found at {src}", err=True)
             raise typer.Exit(2)
         # Try the file's _meta first; fall back to name_or_code arg.
         meta = sets_mod.read_master_list_meta(src)
@@ -384,12 +385,12 @@ def set_ingest(
                 candidates.extend(INPUT_DIR.glob(f"{slug}-*.{ext}"))
             candidates = sorted(candidates)
         if not candidates:
-            typer.echo(f"error: no intake doc (.xlsx/.md) found in {INPUT_DIR}/ for slug {slug!r}", err=True)
+            typer.echo(f"error: no inventory checklist (.xlsx/.md) found in {INPUT_DIR}/ for slug {slug!r}", err=True)
             typer.echo(f"  run `mm set master-list {name_or_code!r}` first", err=True)
             raise typer.Exit(2)
         if len(candidates) > 1:
             typer.echo(
-                f"error: multiple intake docs match slug {slug!r}; "
+                f"error: multiple inventory checklists match slug {slug!r}; "
                 "pass --path to choose:",
                 err=True,
             )
@@ -512,7 +513,7 @@ def set_ingest(
             typer.echo(f"  not found: {nf}", err=True)
     for ex in result["extras"]:
         typer.echo(f"  extra (not in seeded set list): {ex['raw']}", err=True)
-    typer.echo(f"Archived intake doc → {archived}")
+    typer.echo(f"Archived inventory checklist → {archived}")
     typer.echo(
         f"{label!r} now: {summary['distinct_rows']} distinct rows, "
         f"qty {summary['total_qty']}, value ${summary['total_value']:.2f}"
@@ -749,7 +750,7 @@ def export_cmd(
 def input_list(
     json_out: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
 ):
-    """List every active intake XLSX in ``input/`` with a summary and
+    """List every active inventory checklist in ``input/`` with a summary and
     duplicate-vs-prior-ingest flag.
 
     The ``/ingest-new-inventory-list`` slash command reads the JSON form of
