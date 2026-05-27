@@ -37,9 +37,16 @@ The XLSX carries a hidden `_meta` sheet recording the slice, so ingest knows whi
 ## Other flags (rarely needed)
 
 - `--include token,memorabilia` — opt extra `set_type`s into the family. Use only when the user explicitly asks for tokens, art series, or scene boxes.
+- `--include-variants` — opt prerelease, store-stamped, japanshowcase, serialized, and white/yellow-bordered printings back in. **Off by default** — these are filtered out of both the master-list output AND the seeded `set:<anchor>` list (so set-missing math doesn't count them). The user said they don't catalog these and there are too few to keep around.
 - `--out <path>` — redirect output to a non-default path (skips collision detection). Almost never the right answer.
 - `--force` — overwrite an existing intake XLSX. Only after the user has explicitly chosen "discard partial work" via the exit-3 prompt.
-- `--format md` — emit a markdown checklist instead of XLSX. The file lands at `input/<slug>-<slice>.md` with YAML frontmatter, sections per rarity, and lines like `- (FCA) 4 [N:0 F:0] — [Wild Rose Rebellion / Counterspell](https://scryfall.com/card/fca/4) — $4.66 / $5.50`. Edit the `[N:k F:k]` brackets in any text editor (or on a phone). `mm set ingest` and `/ingest-new-inventory-list` both auto-detect the format.
+- `--format md` — emit a markdown checklist instead of XLSX. The file lands at `input/<slug>-<slice>.md` with YAML frontmatter, sections per rarity, and lines like `- (FCA) 4 [N:0 F:0] [b|sm] — [Wild Rose Rebellion / Counterspell](https://scryfall.com/card/fca/4) — $4.66 / $5.50`. Edit the `[N:k F:k]` brackets in any text editor (or on a phone). `mm set ingest` and `/ingest-new-inventory-list` both auto-detect the format.
+
+## Treatment column
+
+Each row has a `treatment` cell between `rarity` and `mana_value`. It's a `|`-delimited keyword string identifying what kind of special print this is (modern overlay/bleed, masterpiece reskin, fancy foil, etc.). Empty cell = standard print. Full keyword space and derivation rules in [`docs/scryfall-printing-treatments.md`](../../../docs/scryfall-printing-treatments.md). The XLSX has a hidden `_legend` sheet documenting the codes; the markdown form appends a `## Treatment legend` section at the bottom.
+
+This column lets you tell apart multiple printings of the same card (e.g. the six [Cloud, Ex-SOLDIER (FIC)](https://scryfall.com/card/fic/2/cloud-ex-soldier) variants) without clicking through to Scryfall.
 
 ## Three intake surfaces (XLSX, markdown, scan loop)
 

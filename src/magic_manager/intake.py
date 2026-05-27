@@ -194,12 +194,16 @@ def _print_help(sticky_set: str | None, undo_stack: list[Entry], count: int) -> 
 
 def _apply(label: str, parsed: ParsedLine) -> Entry | None:
     """Run one entry as a DB transaction. Returns the Entry on success."""
+    from .treatments import compute_treatment
     finish = "foil" if parsed.foil else "nonfoil"
     with db.connect() as conn:
-        # Look up the printing.
+        # Look up the printing. Pull the treatment-input fields too so the
+        # feedback line can show e.g. [b|sm] alongside the card name.
         card = conn.execute(
             """
-            SELECT c.scryfall_id, c.name, c.flavor_name, c.prices_usd, c.prices_usd_foil
+            SELECT c.scryfall_id, c.name, c.flavor_name,
+                   c.prices_usd, c.prices_usd_foil,
+                   c.frame_effects, c.promo_types, c.full_art
             FROM cards c
             WHERE LOWER(c.set_code) = ? AND c.collector_number = ?
             """,
@@ -246,8 +250,10 @@ def _apply(label: str, parsed: ParsedLine) -> Entry | None:
             if parsed.qty_op == "+"
             else f"qty {prev_qty} → {new_qty} (=)"
         )
+        treatment = compute_treatment(card)
+        treatment_s = f" [{treatment}]" if treatment else ""
         print(f"  [OK] {display} ({parsed.set_code.upper()}) {parsed.collector_number} "
-              f"{finish}  {delta_s}  {unit_s}")
+              f"{finish}{treatment_s}  {delta_s}  {unit_s}")
 
     return Entry(
         set_code=parsed.set_code.lower(),

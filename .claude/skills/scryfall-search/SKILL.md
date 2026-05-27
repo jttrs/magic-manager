@@ -17,9 +17,23 @@ Search Scryfall for Magic the Gathering cards by translating the user's request 
    - A short list of top results (name · mana cost · type · set · oracle snippet)
    - The Scryfall web URL for the search
 
-## Running the API call
+## Running queries — use `mm scryfall` first
 
-**Always go through the wrapper script `.claude/skills/scryfall-search/scryfall.sh`.** A PreToolUse hook in this project will block any direct `curl` to `api.scryfall.com` — the wrapper enforces Scryfall's rate limits (500ms between `/cards/*` calls, 100ms otherwise), caches responses for 24h, and refuses to call again for 35s after an HTTP 429. Bypassing it risks a temp/permanent ban of the project's User-Agent.
+For interactive / ad-hoc queries, **prefer `mm scryfall '<query>'` from the project root**:
+
+```bash
+uv run mm scryfall '!"Cloud, Ex-SOLDIER" g:fin' --first 10
+```
+
+It's a thin wrapper over the rate-limited `scryfall.sh` script, formats results as a tight table including the computed `treatment` keyword (so you can immediately see how each printing differs), and **never needs Python heredocs or quote-escaping tricks** — apostrophes in card names just work.
+
+Useful flags:
+
+- `--first N` — show at most N results (default 20).
+- `--fields col1,col2,...` — pick columns. Available: `set`, `collector_number`, `name`, `rarity`, `treatment`, `full_art`, `border_color`, `frame_effects`, `promo_types`, `security_stamp`, `prices_usd`, `prices_usd_foil`, `scryfall_uri`. Default is `set,collector_number,name,treatment,rarity`.
+- `--json` — emit the raw Scryfall JSON instead of the table.
+
+When you need the wrapper directly (e.g. inside another script), call it via the shell:
 
 ```bash
 .claude/skills/scryfall-search/scryfall.sh search 't:dragon c:r mv<=4 f:modern' order=edhrec
@@ -31,27 +45,29 @@ Subcommands:
 - `collection [body.json]` — POST to `/cards/collection` for bulk identifier lookup (up to 75 cards per call). Reads JSON body from stdin or a file path. Body shape: `{"identifiers": [{"name":"Sol Ring"}, {"set":"leb","collector_number":"162"}, ...]}`. Used by `magic_manager.parsers.resolve()`.
 - `raw '/some/path' 'already=encoded&query=string'` — for endpoints not covered above (sets, rulings, etc.)
 
-Pipe the JSON through Python or `jq` to extract just what you need:
-
-```bash
-.claude/skills/scryfall-search/scryfall.sh search 't:dragon c:r mv<=4 f:modern' order=edhrec \
-  | python3 -c "
-import json, sys
-d = json.load(sys.stdin)
-if d.get('object') == 'error':
-    print('ERROR:', d.get('details')); sys.exit(1)
-print(f\"Total: {d['total_cards']}\")
-for c in d['data'][:15]:
-    name = c.get('name','?')
-    cost = c.get('mana_cost') or ''
-    tline = c.get('type_line','')
-    setc = c.get('set','').upper()
-    text = (c.get('oracle_text') or '').replace('\n',' / ')[:120]
-    print(f\"- {name} {cost} | {tline} [{setc}] — {text}\")
-"
-```
+**Always go through the wrapper.** A PreToolUse hook in this project will block any direct `curl` to `api.scryfall.com`. The wrapper enforces Scryfall's rate limits (500ms between `/cards/*` calls, 100ms otherwise), caches responses for 24h, and refuses to call again for 35s after an HTTP 429. Bypassing it risks a temp/permanent ban of the project's User-Agent.
 
 If the API returns `{"object":"error", ...}` (e.g. zero matches, bad syntax), surface the `details` field to the user verbatim and suggest a fix.
+
+## Custom Python — when the CLI isn't enough
+
+If `mm scryfall` doesn't cover what you need (e.g. complex per-card analysis, comparing fields across many printings), use a **stdin heredoc** rather than `python -c "..."`:
+
+```bash
+python3 - <<'PY'
+import sys; sys.path.insert(0, 'src')
+from magic_manager import scryfall as sf
+
+# Apostrophes, $, backslashes here are all literal because we used 'PY'
+# (single-quoted heredoc, no shell expansion).
+for c in sf.search('!"Cloud, Ex-SOLDIER" g:fin', unique='prints'):
+    print(c['set'], c['collector_number'], c['name'], c.get('frame_effects'))
+PY
+```
+
+**Never write `python -c "..."` with embedded quote-bearing data.** Card names contain `'` (Atraxa, Praetors' Voice; April O'Neil), Scryfall query syntax uses `"..."` for exact-name matching (`!"Card Name"`), and shell escaping of those inside a `-c` argument breaks regularly. The heredoc form sidesteps all of it.
+
+If the script grows past a few lines, lift it into a real `.py` file under `src/magic_manager/` (or the equivalent project location) — but for one-shot research, the heredoc is correct.
 
 ## Rate limit and etiquette
 

@@ -33,6 +33,45 @@ RARITY_ORDER = {
 DEFAULT_INVENTORY_SET_TYPES = frozenset({"expansion", "commander", "masterpiece", "promo"})
 
 
+# Per V1.5 user direction: prerelease promos, store-stamped promos,
+# japanshowcase variants, serialized cards, and weird-border variants are
+# excluded from default master-list output so the user only sees printings
+# they actually catalog. Toggled by --include-variants on master-list.
+EXCLUDED_BORDERS = frozenset({"white", "yellow"})
+EXCLUDED_PROMO_TYPES = frozenset({
+    "prerelease", "datestamped", "stamped", "promopack",
+    "japanshowcase", "serialized",
+})
+
+
+def is_excluded_variant(card_row) -> bool:
+    """Return True if a card row should be filtered from default master-list
+    output. Operates on either a sqlite Row or a Scryfall API dict.
+
+    The filter intentionally errs on the side of exclusion — if a card has
+    ANY of the excluded promo_types or borders, it's out. The user-facing
+    effect is "the master list shows the printings I'd want to catalog,
+    nothing else."
+    """
+    bc = card_row["border_color"] if hasattr(card_row, "keys") else card_row.get("border_color")
+    if bc and str(bc).lower() in EXCLUDED_BORDERS:
+        return True
+    raw_pt = card_row["promo_types"] if hasattr(card_row, "keys") else card_row.get("promo_types")
+    if raw_pt is None:
+        return False
+    # promo_types is a JSON-encoded list in our DB rows but a real list in
+    # the Scryfall response — handle both.
+    if isinstance(raw_pt, str):
+        import json as _json
+        try:
+            pts = _json.loads(raw_pt)
+        except _json.JSONDecodeError:
+            return False
+    else:
+        pts = raw_pt
+    return any(p in EXCLUDED_PROMO_TYPES for p in (pts or []))
+
+
 @dataclass
 class ResolvedSet:
     code: str           # anchor set code, e.g. "fin"
@@ -146,11 +185,16 @@ def sync(set_codes: Iterable[str]) -> int:
 
 # ---------- master-list seeding + XLSX emit ----------
 
-def seed_set_list(label: str, set_codes: Iterable[str]) -> int:
+def seed_set_list(label: str, set_codes: Iterable[str],
+                  include_variants: bool = False) -> int:
     """Create (or update) a list with every printing in ``set_codes`` seeded at qty=0.
 
     Existing rows are preserved (so re-running this after the user has filled in
     quantities is safe). Only missing ``(card, finish)`` pairs get a 0 row.
+
+    By default, prerelease/stamped/japanshowcase/serialized/white-bordered
+    variants are NOT seeded so that ``set:<code> missing`` math doesn't count
+    them. Pass ``include_variants=True`` to opt them back in.
     """
     codes = [c.lower() for c in set_codes]
     if not codes:
@@ -160,13 +204,16 @@ def seed_set_list(label: str, set_codes: Iterable[str]) -> int:
         placeholders = ",".join("?" for _ in codes)
         rows = conn.execute(
             f"""
-            SELECT scryfall_id, finishes FROM cards
+            SELECT scryfall_id, finishes, border_color, promo_types
+            FROM cards
             WHERE set_code IN ({placeholders})
             """,
             codes,
         ).fetchall()
         seeded = 0
         for r in rows:
+            if not include_variants and is_excluded_variant(r):
+                continue
             import json
             finishes = json.loads(r["finishes"] or "[]") or ["nonfoil"]
             for fin in finishes:
@@ -192,7 +239,8 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
                            prepopulate_from_label: str | None = None,
                            rarity_filter: Iterable[str] | None = None,
                            anchor_code: str | None = None,
-                           slug: str | None = None) -> tuple[int, int]:
+                           slug: str | None = None,
+                           include_variants: bool = False) -> tuple[int, int]:
     """Emit a fillable XLSX of every printing in ``set_codes``.
 
     When ``prepopulate_from_label`` is set, qty cells are pre-filled from
@@ -230,7 +278,8 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
         rows = conn.execute(
             f"""
             SELECT scryfall_id, set_code, collector_number, name, flavor_name,
-                   rarity, cmc, prices_usd, prices_usd_foil, is_token, scryfall_uri
+                   rarity, cmc, prices_usd, prices_usd_foil, is_token, scryfall_uri,
+                   frame_effects, promo_types, border_color, full_art
             FROM cards
             WHERE set_code IN ({placeholders})
             ORDER BY 1, 2
@@ -249,6 +298,8 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
 
     if not include_tokens:
         rows = [r for r in rows if not r["is_token"]]
+    if not include_variants:
+        rows = [r for r in rows if not is_excluded_variant(r)]
     if rarity_set is not None:
         rows = [r for r in rows if (r["rarity"] or "").lower() in rarity_set]
 
@@ -272,8 +323,11 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
     ws = wb.active
     ws.title = "master-list"
 
-    headers = ["set", "collector_number", "name", "rarity", "mana_value",
-               "usd", "usd_foil", "qty_normal", "qty_foil"]
+    # Column order is fixed; treatment is V1.5 between rarity and mana_value.
+    # If columns shift, update parse_master_list_xlsx, the qty-tint indices,
+    # and the widths dict below.
+    headers = ["set", "collector_number", "name", "rarity", "treatment",
+               "mana_value", "usd", "usd_foil", "qty_normal", "qty_foil"]
     ws.append(headers)
     for col, _ in enumerate(headers, start=1):
         cell = ws.cell(row=1, column=col)
@@ -292,6 +346,7 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
     # most apps render web links. The cell's value is unchanged (just the
     # displayed name); the hyperlink is a separate property openpyxl supports.
     link_font = Font(color="0563C1", underline="single")
+    from .treatments import compute_treatment
     for r in rows:
         qn = prepop.get((r["scryfall_id"], "nonfoil"))
         qf = prepop.get((r["scryfall_id"], "foil"))
@@ -305,11 +360,13 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
         # Round-trip-safe: parse_master_list_xlsx() keys on (set_code, cn).
         flavor = r["flavor_name"]
         display_name = f"{flavor} / {r['name']}" if flavor else r["name"]
+        treatment = compute_treatment(r)
         ws.append([
             r["set_code"],
             r["collector_number"],
             display_name,
             r["rarity"],
+            treatment,
             r["cmc"],
             r["prices_usd"],
             r["prices_usd_foil"],
@@ -326,16 +383,17 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
             name_cell.font = link_font
     last_row = ws.max_row
 
-    # Tint qty columns and apply integer validation.
-    for col_idx in (8, 9):  # qty_normal, qty_foil
+    # Tint qty columns and apply integer validation. With treatment inserted
+    # at column 5, qty_normal/qty_foil are now columns 9/10.
+    for col_idx in (9, 10):
         col_letter = get_column_letter(col_idx)
         rng = f"{col_letter}2:{col_letter}{last_row}"
         int_validator.add(rng)
         for r in range(2, last_row + 1):
             ws.cell(row=r, column=col_idx).fill = qty_fill
 
-    # Sensible widths.
-    widths = {1: 8, 2: 14, 3: 38, 4: 11, 5: 8, 6: 8, 7: 9, 8: 12, 9: 10}
+    # Sensible widths. Column 5 is treatment — sized for "b|shw|ext|sm|ff" worst case.
+    widths = {1: 8, 2: 14, 3: 38, 4: 11, 5: 16, 6: 8, 7: 8, 8: 9, 9: 12, 10: 10}
     for col_idx, w in widths.items():
         ws.column_dimensions[get_column_letter(col_idx)].width = w
 
@@ -362,6 +420,19 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
     }
     for k, v in meta.items():
         meta_ws.append([k, v])
+
+    # Hidden _legend sheet: documents the treatment-column keyword space so
+    # users can unhide it for reference without leaving the workbook.
+    from .treatments import LEGEND
+    legend_ws = wb.create_sheet("_legend")
+    legend_ws.sheet_state = "hidden"
+    legend_ws.append(["code", "meaning"])
+    legend_ws["A1"].font = Font(bold=True)
+    legend_ws["B1"].font = Font(bold=True)
+    for code, meaning in LEGEND:
+        legend_ws.append([code, meaning])
+    legend_ws.column_dimensions["A"].width = 6
+    legend_ws.column_dimensions["B"].width = 90
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     wb.save(out_path)
@@ -397,7 +468,8 @@ def write_master_list_md(set_codes: Iterable[str], out_path: Path,
                          prepopulate_from_label: str | None = None,
                          rarity_filter: Iterable[str] | None = None,
                          anchor_code: str | None = None,
-                         slug: str | None = None) -> tuple[int, int]:
+                         slug: str | None = None,
+                         include_variants: bool = False) -> tuple[int, int]:
     """Markdown twin of ``write_master_list_xlsx()``.
 
     File shape:
@@ -438,7 +510,8 @@ def write_master_list_md(set_codes: Iterable[str], out_path: Path,
         rows = conn.execute(
             f"""
             SELECT scryfall_id, set_code, collector_number, name, flavor_name,
-                   rarity, prices_usd, prices_usd_foil, is_token, scryfall_uri
+                   rarity, prices_usd, prices_usd_foil, is_token, scryfall_uri,
+                   frame_effects, promo_types, border_color, full_art
             FROM cards
             WHERE set_code IN ({placeholders})
             ORDER BY 1, 2
@@ -457,6 +530,8 @@ def write_master_list_md(set_codes: Iterable[str], out_path: Path,
 
     if not include_tokens:
         rows = [r for r in rows if not r["is_token"]]
+    if not include_variants:
+        rows = [r for r in rows if not is_excluded_variant(r)]
     if rarity_set is not None:
         rows = [r for r in rows if (r["rarity"] or "").lower() in rarity_set]
 
@@ -511,6 +586,7 @@ def write_master_list_md(set_codes: Iterable[str], out_path: Path,
     for r in rows:
         rarity_counts[r["rarity"] or "?"] = rarity_counts.get(r["rarity"] or "?", 0) + 1
 
+    from .treatments import compute_treatment, LEGEND
     for r in rows:
         rarity = r["rarity"] or "?"
         if rarity != current_rarity:
@@ -541,10 +617,23 @@ def write_master_list_md(set_codes: Iterable[str], out_path: Path,
         usd_foil = r["prices_usd_foil"]
         price_segment = f"${usd if usd is not None else '—'} / ${usd_foil if usd_foil is not None else '—'}"
 
+        treatment = compute_treatment(r)
+        # Treatment is rendered in `[...]` after the qty bracket; empty for
+        # standard prints. Parser keys on `(SET) CN` so the position doesn't
+        # affect ingest.
+        treatment_seg = f" [{treatment}]" if treatment else ""
+
         out_lines.append(
             f"- ({r['set_code'].upper()}) {r['collector_number']} "
-            f"[N:{qn} F:{qf}] — {link} — {price_segment}"
+            f"[N:{qn} F:{qf}]{treatment_seg} — {link} — {price_segment}"
         )
+
+    # Legend at the bottom — informational, ignored by the parser.
+    out_lines.append("")
+    out_lines.append("## Treatment legend")
+    out_lines.append("")
+    for code, meaning in LEGEND:
+        out_lines.append(f"- `{code}` — {meaning}")
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text("\n".join(out_lines) + "\n", encoding="utf-8")

@@ -194,6 +194,13 @@ def set_master_list(
         help="Output format: 'xlsx' (default; clickable Scryfall hyperlinks) "
              "or 'md' (markdown checklist editable in any text editor).",
     ),
+    include_variants: bool = typer.Option(
+        False, "--include-variants",
+        help="Include prerelease, store-stamped, japanshowcase, serialized, "
+             "and white/yellow-bordered variants. Off by default — these are "
+             "filtered out of the master list AND the seeded set:<anchor> list "
+             "so set-missing math doesn't count them.",
+    ),
 ):
     """Build the inventory intake doc for a release family or a slice of it.
 
@@ -259,7 +266,7 @@ def set_master_list(
     n_synced = sets_mod.sync(codes)
     typer.echo(f"  → {n_synced} cards upserted")
 
-    seeded = sets_mod.seed_set_list(label, codes)
+    seeded = sets_mod.seed_set_list(label, codes, include_variants=include_variants)
     typer.echo(f"Seeded list {label!r} ({seeded} new rows at qty=0)")
 
     if force and out_path.exists():
@@ -278,6 +285,7 @@ def set_master_list(
         rarity_filter=rarities or None,
         anchor_code=r.code,
         slug=slug,
+        include_variants=include_variants,
     )
     typer.echo(f"Wrote {n_rows} rows to {out_path}")
     if prefilled:
@@ -585,6 +593,84 @@ def list_ls():
     for r in rows:
         typer.echo(f"{r['label']:40} {r['kind']:10} {r['total_qty']:>6} "
                    f"{r['distinct_rows']:>6}  {r['source']}")
+
+
+# ---------- ad-hoc scryfall query ----------
+
+@app.command("scryfall")
+def scryfall_cmd(
+    query: str = typer.Argument(..., help="Scryfall search query (any syntax the API accepts)."),
+    first: int = typer.Option(20, "--first", help="Show at most N results."),
+    json_out: bool = typer.Option(False, "--json", help="Emit raw Scryfall JSON instead of the table."),
+    fields: str = typer.Option(
+        "set,collector_number,name,treatment,rarity",
+        "--fields",
+        help="Comma-separated columns. Available: set,collector_number,name,rarity,"
+             "treatment,full_art,border_color,frame_effects,promo_types,security_stamp,"
+             "prices_usd,prices_usd_foil,scryfall_uri",
+    ),
+):
+    """Run an ad-hoc Scryfall search and pretty-print the results.
+
+    Avoids the shell-quoting trap of writing one-shot Python at the prompt.
+    Uses the rate-limited wrapper (``scryfall.sh``) under the hood, so
+    multi-page queries paginate cleanly. Card-name apostrophes are passed
+    through without escaping issues.
+
+    Each row's computed treatment string (per ``treatments.compute_treatment``)
+    is included by default, so distinct printings of the same card
+    (e.g. Cloud, Ex-SOLDIER variants) are immediately visually distinguishable.
+    """
+    from .scryfall import search as sf_search
+    from .treatments import compute_treatment
+
+    cols = [c.strip().lower() for c in fields.split(",") if c.strip()]
+    rows: list[dict] = []
+    try:
+        for i, c in enumerate(sf_search(query, unique="prints")):
+            if i >= first:
+                break
+            rows.append(c)
+    except Exception as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+
+    if not rows:
+        typer.echo(f"(no results for {query!r})", err=True)
+        raise typer.Exit(1)
+
+    if json_out:
+        json.dump(rows, sys.stdout, indent=2, default=str)
+        sys.stdout.write("\n")
+        return
+
+    def get(c: dict, col: str):
+        if col == "treatment":
+            return compute_treatment(c) or "—"
+        if col == "frame_effects":
+            return ",".join(c.get("frame_effects") or []) or "—"
+        if col == "promo_types":
+            return ",".join(c.get("promo_types") or []) or "—"
+        if col == "prices_usd":
+            return (c.get("prices") or {}).get("usd") or "—"
+        if col == "prices_usd_foil":
+            return (c.get("prices") or {}).get("usd_foil") or "—"
+        if col == "scryfall_uri":
+            return c.get("scryfall_uri") or "—"
+        if col == "full_art":
+            return "yes" if c.get("full_art") else "no"
+        v = c.get(col, "—")
+        return v if v not in (None, "") else "—"
+
+    # Compute column widths for a tight table.
+    widths = {col: max(len(col), max(len(str(get(r, col))) for r in rows)) for col in cols}
+    header = "  ".join(col.ljust(widths[col]) for col in cols)
+    typer.echo(header)
+    typer.echo("  ".join("-" * widths[col] for col in cols))
+    for r in rows:
+        typer.echo("  ".join(str(get(r, col)).ljust(widths[col]) for col in cols))
+    typer.echo("", err=True)
+    typer.echo(f"# {len(rows)} result(s) for {query!r}", err=True)
 
 
 # ---------- intake (scan-loop REPL) ----------

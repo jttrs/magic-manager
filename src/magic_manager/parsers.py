@@ -128,7 +128,7 @@ def parse_text(text: str) -> ParseResult:
 # ---------- XLSX parsing (master-list round-trip) ----------
 
 MASTER_LIST_COLUMNS = (
-    "set", "collector_number", "name", "rarity", "mana_value",
+    "set", "collector_number", "name", "rarity", "treatment", "mana_value",
     "usd", "usd_foil", "qty_normal", "qty_foil",
 )
 
@@ -182,9 +182,13 @@ def parse_master_list_xlsx(path: Path) -> ParseResult:
 
     header_lower = [str(h).strip().lower() if h is not None else "" for h in header]
     idx = {c: header_lower.index(c) for c in MASTER_LIST_COLUMNS if c in header_lower}
-    missing = [c for c in MASTER_LIST_COLUMNS if c not in idx]
+    # ``treatment`` is display-only and was added in V1.5 — older XLSX files
+    # legitimately lack it, so don't warn about its absence.
+    required = {"set", "collector_number", "qty_normal", "qty_foil"}
+    missing = [c for c in MASTER_LIST_COLUMNS
+               if c not in idx and c in required]
     if missing:
-        res.warnings.append(f"XLSX missing expected columns: {missing!r}")
+        res.warnings.append(f"XLSX missing required columns: {missing!r}")
 
     for row_num, row in enumerate(rows, start=2):
         if all(v is None or str(v).strip() == "" for v in row):
