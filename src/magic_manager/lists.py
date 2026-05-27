@@ -115,17 +115,31 @@ def all_lists() -> list[dict]:
 # ---------- import (text or XLSX → list) ----------
 
 def list_import(label: str, *, text: str | None = None, path: Path | None = None,
-                kind: str | None = None) -> dict:
+                kind: str | None = None, mode: str = "replace") -> dict:
     """Parse a text block or an XLSX file and upsert into the labeled list.
 
-    For ``set:*`` labels, the import only updates rows that are already seeded
-    in the list (use ``mm set master-list`` first to create the universe);
-    extras get a warning. For other labels, every parsed entry becomes a row.
+    For ``set:*`` labels:
 
-    Returns ``{"updated": N, "added": M, "warnings": [...], "not_found": [...]}``.
+    - **replace mode** (default): every (card, finish) cell present in the
+      input becomes the new DB qty for that row. Cells *inside the partition*
+      that are missing from the input are zeroed out. Cells outside the
+      partition are never touched. The partition is the union of (set_code,
+      rarity) pairs the input file actually covers — derived from the XLSX
+      ``_meta`` sheet when present, or inferred from the rows otherwise.
+    - **additive mode**: every cell with qty>0 in the input adds to the
+      existing DB qty for that row. Cells with 0/blank are no-ops. Out-of-
+      partition cells are never touched. Useful for booster-by-booster intake.
+
+    For non-``set:`` labels, ``mode`` is ignored and the historical "insert or
+    sum" behavior is preserved.
+
+    Returns ``{"updated": N, "added": M, "zeroed": N, "warnings": [...],
+    "not_found": [...], "extras": [...]}``.
     """
     if (text is None) == (path is None):
         raise ValueError("provide exactly one of text= or path=")
+    if mode not in ("replace", "additive"):
+        raise ValueError(f"unknown mode {mode!r}; expected 'replace' or 'additive'")
 
     if path is not None:
         fmt = parsers.detect_format(path)
@@ -142,23 +156,28 @@ def list_import(label: str, *, text: str | None = None, path: Path | None = None
     inferred_kind = kind or _kind_from_label(label)
     added = 0
     updated = 0
+    zeroed = 0
     extras: list[dict] = []
 
     with db.connect() as conn:
         # Ensure the list row exists (idempotent).
         db.upsert_list(conn, label, kind=inferred_kind, source="imported")
 
-        for entry in result.entries:
-            if entry.card is None:
-                continue
-            # Make sure the resolved card is in our local cache before inserting
-            # a list_row that references it (FK constraint).
-            db.upsert_card(conn, entry.card)
-            scry_id = entry.card["id"]
-            finish = "foil" if entry.foil else "nonfoil"
+        if is_set_label:
+            # Build the partition descriptor: which (set_code, rarity) pairs
+            # are in scope. Prefer _meta; fall back to row-derivation.
+            partition = _derive_partition(result, conn, label)
+            seen_keys: set[tuple[str, str]] = set()  # (scryfall_id, finish) we touched
 
-            if is_set_label:
-                # Only update; never insert new rows.
+            for entry in result.entries:
+                if entry.card is None:
+                    continue
+                db.upsert_card(conn, entry.card)
+                scry_id = entry.card["id"]
+                finish = "foil" if entry.foil else "nonfoil"
+
+                # Verify the card is in the seeded set list (i.e. we know
+                # about this printing).
                 row = conn.execute(
                     "SELECT quantity FROM list_rows WHERE label = ? AND scryfall_id = ? AND finish = ?",
                     (label, scry_id, finish),
@@ -173,13 +192,57 @@ def list_import(label: str, *, text: str | None = None, path: Path | None = None
                         ),
                     })
                     continue
-                conn.execute(
-                    "UPDATE list_rows SET quantity = ? WHERE label = ? AND scryfall_id = ? AND finish = ?",
-                    (entry.qty, label, scry_id, finish),
-                )
-                updated += 1
-            else:
-                # Free-form list: insert or sum.
+
+                seen_keys.add((scry_id, finish))
+                current_qty = row["quantity"]
+
+                if mode == "replace":
+                    new_qty = entry.qty
+                else:  # additive
+                    if entry.qty <= 0:
+                        continue  # no-op for blank/zero cells in additive mode
+                    new_qty = current_qty + entry.qty
+
+                if new_qty == current_qty:
+                    continue
+                if new_qty == 0:
+                    conn.execute(
+                        "UPDATE list_rows SET quantity = 0 WHERE label = ? AND scryfall_id = ? AND finish = ?",
+                        (label, scry_id, finish),
+                    )
+                    if current_qty > 0:
+                        zeroed += 1
+                else:
+                    conn.execute(
+                        "UPDATE list_rows SET quantity = ? WHERE label = ? AND scryfall_id = ? AND finish = ?",
+                        (new_qty, label, scry_id, finish),
+                    )
+                    updated += 1
+
+            # Replace mode only: zero out in-partition rows not seen in the
+            # input. Additive mode never zeroes out anything implicitly.
+            if mode == "replace" and partition is not None:
+                in_partition_rows = _list_in_partition_rows(conn, label, partition)
+                for r in in_partition_rows:
+                    key = (r["scryfall_id"], r["finish"])
+                    if key in seen_keys:
+                        continue
+                    if r["quantity"] == 0:
+                        continue  # already zero, no-op
+                    conn.execute(
+                        "UPDATE list_rows SET quantity = 0 "
+                        "WHERE label = ? AND scryfall_id = ? AND finish = ?",
+                        (label, r["scryfall_id"], r["finish"]),
+                    )
+                    zeroed += 1
+        else:
+            # Free-form list: insert or sum (mode is ignored for these).
+            for entry in result.entries:
+                if entry.card is None:
+                    continue
+                db.upsert_card(conn, entry.card)
+                scry_id = entry.card["id"]
+                finish = "foil" if entry.foil else "nonfoil"
                 existing = conn.execute(
                     "SELECT quantity FROM list_rows WHERE label = ? AND scryfall_id = ? AND finish = ?",
                     (label, scry_id, finish),
@@ -199,17 +262,147 @@ def list_import(label: str, *, text: str | None = None, path: Path | None = None
                     added += 1
 
         db.record_import(conn,
-                         command=f"list_import {label}",
+                         command=f"list_import {label} mode={mode}",
                          source_path=str(path) if path else None,
-                         rows_changed=added + updated)
+                         rows_changed=added + updated + zeroed)
 
     return {
         "label": label,
+        "mode": mode,
         "added": added,
         "updated": updated,
+        "zeroed": zeroed,
         "warnings": result.warnings,
         "not_found": result.not_found,
         "extras": extras,
+    }
+
+
+@dataclass
+class Partition:
+    """The (set_code, rarity) scope a master-list XLSX claims to cover.
+
+    ``rarities`` is None if the file has no rarity restriction (e.g. a full
+    master list). ``set_codes`` is always non-empty.
+    """
+    set_codes: list[str]
+    rarities: list[str] | None
+
+
+def _derive_partition(result: parsers.ParseResult, conn, label: str) -> Partition | None:
+    """Return the partition the input file claims to cover.
+
+    Priority:
+    1. ``_meta`` sheet on the XLSX (definitive).
+    2. Inferred from the rows present in the file (fallback).
+    3. ``None`` — the input has no rows at all.
+    """
+    meta = result.meta or {}
+    if meta:
+        codes = [c.strip().lower() for c in (meta.get("set_codes") or "").split(",") if c.strip()]
+        rar = [r.strip().lower() for r in (meta.get("rarity_filter") or "").split(",") if r.strip()]
+        if codes:
+            return Partition(set_codes=codes, rarities=(rar or None))
+
+    # Fallback: look at the cards parsed and derive scope from them.
+    seen_codes: set[str] = set()
+    seen_rarities: set[str] = set()
+    for entry in result.entries:
+        if entry.card:
+            seen_codes.add((entry.card.get("set") or "").lower())
+            r = (entry.card.get("rarity") or "").lower()
+            if r:
+                seen_rarities.add(r)
+    if not seen_codes:
+        return None
+    return Partition(
+        set_codes=sorted(seen_codes),
+        # If we saw multiple rarities, treat as no-rarity-filter (safer).
+        rarities=sorted(seen_rarities) if len(seen_rarities) == 1 else None,
+    )
+
+
+def _list_in_partition_rows(conn, label: str, partition: Partition) -> list:
+    """Return list_rows for ``label`` that fall inside ``partition``."""
+    set_placeholders = ",".join("?" for _ in partition.set_codes)
+    args: list = list(partition.set_codes)
+    rarity_clause = ""
+    if partition.rarities:
+        rarity_placeholders = ",".join("?" for _ in partition.rarities)
+        rarity_clause = f" AND LOWER(c.rarity) IN ({rarity_placeholders})"
+        args.extend(partition.rarities)
+    args.insert(0, label)
+    return conn.execute(
+        f"""
+        SELECT lr.scryfall_id, lr.finish, lr.quantity
+        FROM list_rows lr
+        JOIN cards c ON c.scryfall_id = lr.scryfall_id
+        WHERE lr.label = ?
+          AND LOWER(c.set_code) IN ({set_placeholders})
+          {rarity_clause}
+        """,
+        args,
+    ).fetchall()
+
+
+def summarize_xlsx_file(path: Path) -> dict:
+    """Pre-ingest preview for the slash command.
+
+    Returns a dict with: ``path``, ``meta`` (or ``None``), ``anchor_code``,
+    ``set_codes``, ``rarity_filter``, ``rows_total``, ``rows_with_qty``,
+    ``total_qty``, ``estimated_value``, ``top_value`` (top 5 rows by line value),
+    ``warnings`` (parser warnings).
+
+    Doesn't hit the network beyond what the parser already does (the
+    rate-limited /cards/collection lookup for resolution).
+    """
+    result = parsers.parse_master_list_xlsx(path)
+    parsers.resolve(result)
+    meta = result.meta
+    rows_with_qty = 0
+    total_qty = 0
+    estimated_value = 0.0
+    rows_for_top: list[tuple[float, dict]] = []
+    for e in result.entries:
+        if not e.card or e.qty <= 0:
+            continue
+        rows_with_qty += 1
+        total_qty += e.qty
+        prices = e.card.get("prices") or {}
+        unit_str = prices.get("usd_foil") if e.foil else prices.get("usd")
+        try:
+            unit = float(unit_str) if unit_str is not None else None
+        except (TypeError, ValueError):
+            unit = None
+        line_value = (unit or 0.0) * e.qty
+        if unit is not None:
+            estimated_value += line_value
+        rows_for_top.append((line_value, {
+            "qty": e.qty,
+            "name": e.card.get("name"),
+            "set": (e.card.get("set") or "").lower(),
+            "collector_number": e.card.get("collector_number"),
+            "finish": "foil" if e.foil else "nonfoil",
+            "unit_usd": unit,
+            "line_value": line_value if unit is not None else None,
+        }))
+    rows_for_top.sort(key=lambda x: x[0], reverse=True)
+    top_value = [r[1] for r in rows_for_top[:5]]
+    anchor = (meta or {}).get("anchor_code") or ""
+    set_codes = (meta or {}).get("set_codes") or ""
+    rarity_filter = (meta or {}).get("rarity_filter") or ""
+    return {
+        "path": str(path),
+        "meta": meta,
+        "anchor_code": anchor,
+        "set_codes": [c for c in set_codes.split(",") if c],
+        "rarity_filter": [r for r in rarity_filter.split(",") if r],
+        "rows_total": len(result.entries),
+        "rows_with_qty": rows_with_qty,
+        "total_qty": total_qty,
+        "estimated_value": estimated_value,
+        "top_value": top_value,
+        "warnings": result.warnings,
     }
 
 

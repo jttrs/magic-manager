@@ -104,8 +104,29 @@ CREATE TABLE IF NOT EXISTS settings (
 """
 
 
+SCHEMA_V2 = """
+CREATE TABLE IF NOT EXISTS ingest_log (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    at            TEXT NOT NULL,           -- ISO timestamp (UTC)
+    label         TEXT NOT NULL,
+    mode          TEXT NOT NULL CHECK (mode IN ('replace','additive')),
+    source_path   TEXT NOT NULL,           -- input/<slug>-<slice>.xlsx (pre-archive)
+    archived_path TEXT,                    -- input/processed/...; NULL if archive failed
+    file_sha256   TEXT NOT NULL,
+    rows_added    INTEGER NOT NULL DEFAULT 0,
+    rows_updated  INTEGER NOT NULL DEFAULT 0,
+    rows_zeroed   INTEGER NOT NULL DEFAULT 0,
+    status        TEXT NOT NULL CHECK (status IN ('success','failed')),
+    error         TEXT
+);
+
+CREATE INDEX IF NOT EXISTS ingest_log_hash_idx ON ingest_log (file_sha256);
+"""
+
+
 MIGRATIONS: list[str] = [
     SCHEMA_V1,
+    SCHEMA_V2,
 ]
 CURRENT_VERSION = len(MIGRATIONS)
 
@@ -287,3 +308,135 @@ def record_import(conn: sqlite3.Connection, command: str, source_path: str | Non
         (command, source_path, rows_changed,
          datetime.now(timezone.utc).isoformat(timespec="seconds")),
     )
+
+
+def record_ingest_log(
+    conn: sqlite3.Connection, *,
+    label: str,
+    mode: str,
+    source_path: str,
+    archived_path: str | None,
+    file_sha256: str,
+    rows_added: int,
+    rows_updated: int,
+    rows_zeroed: int,
+    status: str,
+    error: str | None = None,
+) -> int:
+    from datetime import datetime, timezone
+    cur = conn.execute(
+        """
+        INSERT INTO ingest_log
+            (at, label, mode, source_path, archived_path, file_sha256,
+             rows_added, rows_updated, rows_zeroed, status, error)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            label, mode, source_path, archived_path, file_sha256,
+            rows_added, rows_updated, rows_zeroed, status, error,
+        ),
+    )
+    return cur.lastrowid
+
+
+def find_ingest_log_by_hash(conn: sqlite3.Connection, file_sha256: str) -> list[dict]:
+    """Return prior ingest_log entries with this file hash, newest first."""
+    rows = conn.execute(
+        """
+        SELECT id, at, label, mode, source_path, archived_path, status, error,
+               rows_added, rows_updated, rows_zeroed
+        FROM ingest_log
+        WHERE file_sha256 = ?
+        ORDER BY id DESC
+        """,
+        (file_sha256,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+# ---------- one-time directory migration ----------
+
+_MIGRATION_FLAG = "input_dir_migrated_at"
+
+
+def migrate_inventory_to_input() -> str | None:
+    """One-shot migration: move ``inventory/<*.xlsx>`` and
+    ``inventory/processed/`` to ``input/`` to match V1.2 conventions.
+
+    Idempotent: returns a status string the first time it runs (so the CLI
+    can print a one-line note), ``None`` thereafter. The flag is persisted in
+    ``settings`` table so it survives across processes.
+    """
+    repo = _repo_root()
+    inv = repo / "inventory"
+    inp = repo / "input"
+
+    # If we've already done this, bail.
+    flag_value = _read_setting(_MIGRATION_FLAG)
+    if flag_value is not None:
+        return None
+    # If `inventory/` doesn't exist or is empty, mark migrated and exit.
+    if not inv.exists():
+        _write_setting(_MIGRATION_FLAG, "skipped:no-inventory-dir")
+        return None
+    interesting = list(inv.glob("*.xlsx"))
+    proc = inv / "processed"
+    if not interesting and not proc.exists():
+        _write_setting(_MIGRATION_FLAG, "skipped:nothing-to-move")
+        return None
+
+    inp.mkdir(parents=True, exist_ok=True)
+    moved_files = 0
+    for f in interesting:
+        target = inp / f.name
+        if target.exists():
+            # Don't clobber; rename source with a suffix.
+            target = inp / f"{f.stem}.legacy{f.suffix}"
+        f.rename(target)
+        moved_files += 1
+    moved_processed = 0
+    if proc.exists():
+        target = inp / "processed"
+        if target.exists():
+            for sub in proc.iterdir():
+                dst = target / sub.name
+                if dst.exists():
+                    dst = target / f"{sub.stem}.legacy{sub.suffix}"
+                sub.rename(dst)
+                moved_processed += 1
+            proc.rmdir()
+        else:
+            proc.rename(target)
+            moved_processed = sum(1 for _ in target.iterdir())
+
+    # Clean up empty inventory dir if possible.
+    try:
+        inv.rmdir()
+    except OSError:
+        pass
+
+    msg = (
+        f"migrated intake docs from inventory/ → input/ "
+        f"({moved_files} active, {moved_processed} archived)"
+    )
+    _write_setting(_MIGRATION_FLAG, msg)
+    return msg
+
+
+def _read_setting(key: str) -> str | None:
+    try:
+        with connect() as conn:
+            row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+            return row["value"] if row else None
+    except sqlite3.Error:
+        return None
+
+
+def _write_setting(key: str, value: str) -> None:
+    with connect() as conn:
+        conn.execute(
+            "INSERT INTO settings (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (key, value),
+        )

@@ -189,12 +189,22 @@ def seed_set_list(label: str, set_codes: Iterable[str]) -> int:
 
 def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
                            include_tokens: bool = False,
-                           prepopulate_from_label: str | None = None) -> tuple[int, int]:
+                           prepopulate_from_label: str | None = None,
+                           rarity_filter: Iterable[str] | None = None,
+                           anchor_code: str | None = None,
+                           slug: str | None = None) -> tuple[int, int]:
     """Emit a fillable XLSX of every printing in ``set_codes``.
 
     When ``prepopulate_from_label`` is set, qty cells are pre-filled from
     that label's existing rows so resuming after an ingest doesn't lose
     visible progress.
+
+    When ``rarity_filter`` is given (case-insensitive iterable of rarities),
+    only printings with one of those rarities are emitted.
+
+    A hidden ``_meta`` sheet is always written so ingest can recover scope
+    later: ``anchor_code``, ``set_codes``, ``rarity_filter``, ``slug``,
+    ``generated_at``, ``magic_manager_version``.
 
     Returns ``(rows_written, cells_prefilled)``.
     """
@@ -203,9 +213,17 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
     from openpyxl.utils import get_column_letter
     from openpyxl.worksheet.datavalidation import DataValidation
 
+    from . import __version__
+
     codes = [c.lower() for c in set_codes]
     if not codes:
         raise ValueError("no set codes provided")
+
+    rarity_set: set[str] | None = None
+    if rarity_filter is not None:
+        rarity_set = {r.lower() for r in rarity_filter if r and str(r).strip()}
+        if not rarity_set:
+            rarity_set = None  # treat empty list as "no filter"
 
     placeholders = ",".join("?" for _ in codes)
     with db.connect() as conn:
@@ -231,6 +249,8 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
 
     if not include_tokens:
         rows = [r for r in rows if not r["is_token"]]
+    if rarity_set is not None:
+        rows = [r for r in rows if (r["rarity"] or "").lower() in rarity_set]
 
     # Sort: rarity bucket, then collector_number (numeric where possible).
     def cn_sortkey(cn: str) -> tuple:
@@ -303,6 +323,50 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
 
     ws.freeze_panes = "A2"
 
+    # Hidden _meta sheet: lets `mm set ingest` recover scope without trusting
+    # the filename. Two columns (key, value) so the format stays human-readable
+    # in case someone unhides the sheet for debugging.
+    meta_ws = wb.create_sheet("_meta")
+    meta_ws.sheet_state = "hidden"
+    meta_ws.append(["key", "value"])
+    meta_ws["A1"].font = Font(bold=True)
+    meta_ws["B1"].font = Font(bold=True)
+
+    rarity_value = ",".join(sorted(rarity_set)) if rarity_set else ""
+    meta = {
+        "anchor_code": (anchor_code or codes[0]).lower(),
+        "set_codes": ",".join(codes),
+        "rarity_filter": rarity_value,
+        "slug": slug or out_path.stem,
+        "include_tokens": "1" if include_tokens else "0",
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "magic_manager_version": __version__,
+    }
+    for k, v in meta.items():
+        meta_ws.append([k, v])
+
     out_path.parent.mkdir(parents=True, exist_ok=True)
     wb.save(out_path)
     return (last_row - 1, cells_prefilled)
+
+
+def read_master_list_meta(path: Path) -> dict | None:
+    """Read the ``_meta`` sheet from a master-list XLSX. Returns the dict
+    of key/value strings, or ``None`` if the sheet is absent.
+    """
+    from openpyxl import load_workbook
+
+    wb = load_workbook(filename=str(path), data_only=True)
+    if "_meta" not in wb.sheetnames:
+        return None
+    ws = wb["_meta"]
+    out: dict[str, str] = {}
+    rows = ws.iter_rows(values_only=True)
+    next(rows, None)  # skip header
+    for row in rows:
+        if not row or row[0] is None:
+            continue
+        key = str(row[0]).strip()
+        val = "" if (len(row) < 2 or row[1] is None) else str(row[1]).strip()
+        out[key] = val
+    return out

@@ -81,6 +81,11 @@ class ParseResult:
     entries: list[Entry] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     not_found: list[dict] = field(default_factory=list)
+    # Populated by parse_master_list_xlsx when the file has a _meta sheet.
+    # Keys: anchor_code, set_codes, rarity_filter, slug, include_tokens,
+    # generated_at, magic_manager_version. Each value is a string; comma-lists
+    # are NOT pre-split (callers split as needed). ``None`` if no _meta sheet.
+    meta: dict | None = None
 
     @property
     def found_entries(self) -> list[Entry]:
@@ -134,13 +139,41 @@ def parse_master_list_xlsx(path: Path) -> ParseResult:
     Yields one Entry per (row, finish) where the qty column is a positive
     integer. Both ``qty_normal`` and ``qty_foil`` may produce entries from the
     same row.
+
+    If the workbook has a ``_meta`` sheet (written by recent
+    ``write_master_list_xlsx`` runs) its key/value pairs are attached to
+    ``ParseResult.meta``. Older XLSX files without ``_meta`` parse fine but
+    leave ``meta=None`` — the caller can then infer scope from the rows.
     """
     from openpyxl import load_workbook
 
     wb = load_workbook(filename=str(path), data_only=True)
-    ws = wb.active
+
+    # Active sheet is the visible master-list sheet; the meta sheet (if any)
+    # is hidden and named "_meta".
+    ws = None
+    for name in wb.sheetnames:
+        if name != "_meta":
+            ws = wb[name]
+            break
+    if ws is None:
+        ws = wb.active
 
     res = ParseResult()
+
+    if "_meta" in wb.sheetnames:
+        meta_ws = wb["_meta"]
+        meta: dict[str, str] = {}
+        meta_rows = meta_ws.iter_rows(values_only=True)
+        next(meta_rows, None)  # skip header
+        for mrow in meta_rows:
+            if not mrow or mrow[0] is None:
+                continue
+            k = str(mrow[0]).strip()
+            v = "" if (len(mrow) < 2 or mrow[1] is None) else str(mrow[1]).strip()
+            meta[k] = v
+        res.meta = meta
+
     rows = ws.iter_rows(values_only=True)
     header = next(rows, None)
     if not header:
