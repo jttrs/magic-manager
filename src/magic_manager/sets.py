@@ -27,15 +27,41 @@ RARITY_ORDER = {
 }
 
 
+# Set types that count as "things players actively collect" for the default
+# inventory bundle. Tokens and memorabilia (art series, scene boxes) are off
+# by default; explicitly opt them in via include_kinds.
+DEFAULT_INVENTORY_SET_TYPES = frozenset({"expansion", "commander", "masterpiece", "promo"})
+
+
 @dataclass
 class ResolvedSet:
-    code: str           # parent set code, e.g. "fin"
+    code: str           # anchor set code, e.g. "fin"
     name: str           # display name, e.g. "Final Fantasy"
-    related: list[dict] # all sets in the family, including the parent
+    related: list[dict] # all sets in the family, anchor first
 
     @property
     def all_codes(self) -> list[str]:
         return [s["code"] for s in self.related]
+
+    def filtered_codes(self, *, include_kinds: Iterable[str] = ()) -> list[str]:
+        """Codes in the family whose ``set_type`` is in the default inventory
+        bundle (expansion / commander / masterpiece / promo), expanded by
+        ``include_kinds`` (e.g. ``{"token", "memorabilia"}``).
+
+        The anchor is always included regardless — naming a token set
+        explicitly should still produce that set in the output.
+        """
+        allowed = set(DEFAULT_INVENTORY_SET_TYPES) | set(include_kinds)
+        out: list[str] = []
+        for s in self.related:
+            if s["code"] == self.code or s.get("set_type") in allowed:
+                out.append(s["code"])
+        return out
+
+    @property
+    def filtered_related(self) -> list[dict]:
+        codes = set(self.filtered_codes())
+        return [s for s in self.related if s["code"] in codes]
 
 
 # ---------- name resolution ----------
@@ -162,8 +188,16 @@ def seed_set_list(label: str, set_codes: Iterable[str]) -> int:
 
 
 def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
-                           include_tokens: bool = False) -> int:
-    """Emit a fillable XLSX of every printing in ``set_codes``. Returns row count."""
+                           include_tokens: bool = False,
+                           prepopulate_from_label: str | None = None) -> tuple[int, int]:
+    """Emit a fillable XLSX of every printing in ``set_codes``.
+
+    When ``prepopulate_from_label`` is set, qty cells are pre-filled from
+    that label's existing rows so resuming after an ingest doesn't lose
+    visible progress.
+
+    Returns ``(rows_written, cells_prefilled)``.
+    """
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Font, PatternFill
     from openpyxl.utils import get_column_letter
@@ -177,7 +211,7 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
     with db.connect() as conn:
         rows = conn.execute(
             f"""
-            SELECT set_code, collector_number, name, rarity, cmc,
+            SELECT scryfall_id, set_code, collector_number, name, rarity, cmc,
                    prices_usd, prices_usd_foil, is_token
             FROM cards
             WHERE set_code IN ({placeholders})
@@ -185,6 +219,15 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
             """,
             codes,
         ).fetchall()
+
+        # (scryfall_id, finish) -> quantity
+        prepop: dict[tuple[str, str], int] = {}
+        if prepopulate_from_label:
+            for r in conn.execute(
+                "SELECT scryfall_id, finish, quantity FROM list_rows WHERE label = ? AND quantity > 0",
+                (prepopulate_from_label,),
+            ).fetchall():
+                prepop[(r["scryfall_id"], r["finish"])] = r["quantity"]
 
     if not include_tokens:
         rows = [r for r in rows if not r["is_token"]]
@@ -224,7 +267,14 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
     int_validator.errorTitle = "Invalid quantity"
     ws.add_data_validation(int_validator)
 
+    cells_prefilled = 0
     for r in rows:
+        qn = prepop.get((r["scryfall_id"], "nonfoil"))
+        qf = prepop.get((r["scryfall_id"], "foil"))
+        if qn is not None:
+            cells_prefilled += 1
+        if qf is not None:
+            cells_prefilled += 1
         ws.append([
             r["set_code"],
             r["collector_number"],
@@ -233,8 +283,8 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
             r["cmc"],
             r["prices_usd"],
             r["prices_usd_foil"],
-            None,
-            None,
+            qn,
+            qf,
         ])
     last_row = ws.max_row
 
@@ -255,4 +305,4 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     wb.save(out_path)
-    return last_row - 1
+    return (last_row - 1, cells_prefilled)

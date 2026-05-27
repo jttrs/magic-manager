@@ -72,6 +72,24 @@ def list_value(label: str) -> dict:
     return {"total": total, "rows": len(rows), "missing_price": missing_price}
 
 
+def summarize_label(label: str, *, top_n: int = 5) -> dict:
+    """Snapshot of a list for the collision readout.
+
+    Returns ``{"distinct_rows": N, "total_qty": N, "total_value": $X.XX,
+    "top_value": [ListRow, ...]}`` covering only rows with quantity > 0.
+    """
+    rows = [r for r in list_show(label) if r.quantity > 0]
+    rows_by_value = sorted(
+        rows, key=lambda r: (r.line_value or 0.0), reverse=True,
+    )
+    return {
+        "distinct_rows": len(rows),
+        "total_qty": sum(r.quantity for r in rows),
+        "total_value": sum((r.line_value or 0.0) for r in rows),
+        "top_value": rows_by_value[:top_n],
+    }
+
+
 def list_delete(label: str) -> int:
     with db.connect() as conn:
         n = conn.execute("DELETE FROM lists WHERE label = ?", (label,)).rowcount

@@ -1,67 +1,76 @@
 ---
 name: generate-set-list
-description: Build a fillable Excel master list for a Magic the Gathering set. Resolve a plain-language set name (e.g. "Final Fantasy", "Outlaws of Thunder Junction") into Scryfall set codes, sync every printing locally, and emit an XLSX the user can fill in by going through their physically-sorted boxes (qty_normal and qty_foil columns). Use this whenever the user wants to start cataloging a set, or wants a printable per-set checklist with current prices.
+description: Build the inventory intake spreadsheet (XLSX) for a Magic the Gathering release family — every printing across the parent set + commander + masterpiece + promos, with current Scryfall prices and two quantity columns the user fills in by going through their physically-sorted boxes. Use this whenever the user wants to start (or resume) cataloging a set. Mechanical workflow: invoke `mm set master-list <name>` and react only to the structured exit codes; no judgment about which sibling sets to include.
 ---
 
 # Generate Set List
 
-Wraps `mm set master-list` to give the user a fillable Excel spreadsheet for an entire MTG set (or set family — parent + commander + promos + masterpiece etc.). The XLSX is the primary cataloging UX: the user fills in `qty_normal` and `qty_foil` while flipping through their boxes, then re-imports it via `import-list`.
+The mechanical wrapper around `mm set master-list`. The user names a release ("Final Fantasy", "Outlaws of Thunder Junction", `otj`, `fin`); the CLI computes the family from Scryfall's `parent_set_code` graph filtered to `set_type IN (expansion, commander, masterpiece, promo)`, syncs prices, and writes `inventory/<slug>-master.xlsx` pre-populated from any existing inventory.
 
-## Workflow
+**You make zero judgment calls about scope.** The recommended bundle is codified in the CLI; do not list sibling sets and ask which to include. If the user wants tokens or memorabilia, they will say so explicitly — translate that to `--include token,memorabilia`.
 
-1. **Get the set name.** If the user just says "generate a set list" without naming one, ask. Accept either a plain-language name ("Final Fantasy") or a 3–5 letter Scryfall code (`fin`).
-2. **Show related sets and confirm scope.** Run `mm set list-related <name>` and show the user the family tree. Most parent expansions have 5–10 sibling sets (commander deck, masterpiece, promos, art series, tokens). Ask which to include — sensible defaults are *parent + commander + promos + masterpiece*; tokens, art series, and scene boxes are usually skipped unless the user collects them.
-3. **Generate.** Run `mm set master-list <code> [--include-related] [--only code1,code2,...] [--out path]`. The default output path is `inventory/<slug>-master-<YYYY-MM-DD>.xlsx`. Defaults to NOT including tokens; pass `--include-tokens` if the user wants them.
-4. **Hand off.** Tell the user the path, that columns 8 and 9 (`qty_normal`, `qty_foil`) are tinted yellow and validated as non-negative integers, and that re-import is `mm list import set:<code> <path>` — point them at the [[import-list]] skill for that step.
+## Steps
 
-## Subcommand cheat sheet
+1. Run `uv run mm set master-list "<name-or-code>"` from the repo root. That's the whole happy path.
+2. Look at the exit code:
+   - **0**: success. Tell the user the file path and the next step (`mm set ingest "<name>"` when they've filled in quantities). Done.
+   - **2**: bad arguments / no Scryfall match. Surface the error verbatim and ask for clarification.
+   - **3**: an unprocessed intake XLSX already exists. The CLI prints a readout of the current `set:<anchor>` state (rows owned, total value, top-value cards). Show that readout to the user and ask which path forward they want via `AskUserQuestion`.
+3. If they chose "ingest first": run `uv run mm set ingest "<name>"`, surface the result, then re-run `mm set master-list "<name>"` to start a fresh intake doc.
+4. If they chose "discard partial work": re-run `uv run mm set master-list "<name>" --force` and warn that any XLSX-only edits (those not yet ingested) are gone.
 
-```bash
-# 1. Show what's in the family
-uv run mm set list-related "Final Fantasy"
+## Flags (rarely needed)
 
-# 2. Generate parent set only
-uv run mm set master-list fin --out inventory/fin-master.xlsx
+- `--include token,memorabilia` — opt extra `set_type`s into the family. Use only when the user explicitly asks for tokens, art series, or scene boxes.
+- `--only fin,fic` — hard-restrict to a list of codes. Bypasses the default filter; use only when the user lists exact codes.
+- `--out <path>` — redirect output to a non-default path (skips collision detection). Almost never the right answer.
+- `--force` — overwrite an existing intake XLSX. Only after the user has explicitly chosen "discard partial work" via the exit-3 prompt.
 
-# 3. Generate parent + commander + promos + masterpiece (skipping tokens, art, scene)
-uv run mm set master-list fin --include-related --only fin,fic,pfin,fca
+## Exit-3 prompt template
 
-# 4. Generate the full family
-uv run mm set master-list fin --include-related --include-tokens
-```
+When the CLI exits 3, the stderr already contains the readout. After surfacing it, use `AskUserQuestion` with these two options (always the same two):
 
-## What the XLSX looks like
+> **An unprocessed intake XLSX exists for `<set-name>`. What should I do?**
+> - **Ingest the existing XLSX first (Recommended)** — run `mm set ingest "<set-name>"` to save your filled-in quantities, then start a fresh intake doc.
+> - **Discard the partial XLSX edits and regenerate** — run `mm set master-list "<set-name>" --force`. Any quantities filled in but not yet ingested will be lost.
 
-| Column | Notes |
-|---|---|
-| `set` | lowercase Scryfall code (e.g. `fca`) |
-| `collector_number` | the printed CN within the set (`5`, `123-456`, etc.) |
-| `name` | exact Scryfall name; double-faced cards use `Front // Back` |
-| `rarity` | `mythic`, `rare`, `uncommon`, `common`, `bonus`, `special` |
-| `mana_value` | numeric CMC |
-| `usd` | current normal price from Scryfall (may be blank if not for sale) |
-| `usd_foil` | current foil price from Scryfall (blank for nonfoil-only printings) |
-| `qty_normal` | **input column** — yellow tint, integer ≥ 0 |
-| `qty_foil` | **input column** — yellow tint, integer ≥ 0 |
+## What the user sees
 
-Rows are sorted by **rarity bucket then collector number** to match how the user has their physical boxes organized. Header row is frozen.
+| Path | Filename | Lifecycle |
+|---|---|---|
+| Active intake doc (one per family at a time) | `inventory/<slug>-master.xlsx` | Created by `master-list`. User edits in Excel/Numbers. |
+| Archived intake docs | `inventory/processed/<slug>-master-<YYYY-MM-DD-HHMMSS>.xlsx` | Created by `ingest` after the data lands in the DB. Immutable. |
 
-## Re-running for the same set
-
-`mm set master-list` is idempotent: re-run anytime to refresh prices or pick up newly-printed cards. The seeded list `set:<code>` keeps existing quantity entries — running master-list again only adds *new* zero-qty rows for printings that didn't exist before; it never overwrites filled-in numbers.
+The XLSX columns: `set`, `collector_number`, `name`, `rarity`, `mana_value`, `usd`, `usd_foil`, `qty_normal`, `qty_foil`. The two `qty_*` columns are tinted yellow, validated as non-negative integers, and pre-populated from `set:<anchor>` whenever the user already owns cards from previous ingest cycles. Rows are sorted by rarity bucket (mythic → rare → uncommon → common → bonus → special) then collector number to match the user's physical box order.
 
 ## Examples
 
-User: *"generate a set list for Final Fantasy."*
-- Run `mm set list-related fin`. There are 11 related sets (parent + 10 children/siblings).
-- Ask whether to include the regional promos (`rfin`, `pss5`), art series (`afin`), scene box (`afic`), tokens (`tfin`, `tfic`, `wfin`). Recommend `--only fin,fic,pfin,fca` (parent + commander + promos + masterpiece) unless they say otherwise.
-- Run `mm set master-list fin --include-related --only fin,fic,pfin,fca`. Tell them where the file landed, what to fill in, and how to re-import.
+User: *"generate an inventory excel for the Final Fantasy sets."*
+
+```bash
+uv run mm set master-list "Final Fantasy"
+```
+
+If exit 0: tell them `inventory/final-fantasy-master.xlsx` is ready and `mm set ingest "Final Fantasy"` is the next command.
+If exit 3: surface the readout, show the AskUserQuestion above.
 
 User: *"give me a master list for OTJ but include the breaking news cards too."*
-- The Big Score (`big`) and Breaking News (`otp`) are siblings of `otj`. `mm set list-related otj` confirms.
-- Run `mm set master-list otj --include-related --only otj,big,otp`.
+
+`pbig`, `big`, `otp` are already in the default family for `otj` (they're `set_type=expansion`/`promo`). The user's request is already covered by the default. Run:
+
+```bash
+uv run mm set master-list otj
+```
+
+User: *"include the FF tokens this time."*
+
+```bash
+uv run mm set master-list "Final Fantasy" --include token
+```
 
 ## Caveats
 
-- Scryfall sometimes reports a set's `card_count` higher than the search returns. If you see `Wrote N rows` and N is lower than the printed count, a handful of variants are hidden by default — usually art-series-only entries that don't show up in standard search. Not a bug.
-- `mm set master-list` calls Scryfall through the project's rate-limited wrapper. A full Final Fantasy family sync is ~1,300 cards, which takes 8–12 seconds (paginated, 175 cards per page, 500ms between calls).
+- The XLSX is a **transient intake document**, not a source of truth. The DB is the source of truth. Tell the user to run `mm set ingest "<name>"` when they're done editing — that's when the data actually lands.
+- Re-running `master-list` is safe (DB-backed cells re-pre-populate), but only after the previous intake has been ingested. If you see exit 3, do NOT pass `--force` without confirming with the user — XLSX-only edits will be silently discarded.
+- A full Final Fantasy family sync touches Scryfall ~1,244 cards over 8 paginated calls (~4–6 seconds with the 500ms wrapper rate limit). OTJ is similar.
+- Stale lock state: if `scryfall.sh` died mid-run, you may see `lock timeout`. Clear with `rm -rf "${TMPDIR}scryfall-state/lock"` and retry.

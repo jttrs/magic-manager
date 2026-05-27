@@ -13,7 +13,9 @@ Wraps `mm list import` to take pasted text or a filled-in XLSX and save it under
    - If the user pasted text in chat, write it to `/tmp/import-<n>.txt` first to avoid quoting issues with apostrophes (`Atraxa, Praetors' Voice`), unicode (`★`), and multi-line content.
    - If they're re-importing a master list, the label MUST be `set:<code>` — the same one `generate-set-list` seeded.
    - For new free-form lists, suggest a label following these conventions: `wishlist:<name>`, `deck:<name>`, `idea:<name>`, `buy:<name>`. Anything works; the prefix is a tag, not a constraint.
-2. **Run `mm list import <label> <path>`** (or pipe text via stdin: `cat /tmp/x.txt | uv run mm list import <label>`).
+2. **Pick the right command.**
+   - **For a filled-in set master list at `inventory/<slug>-master.xlsx`** (the file [[generate-set-list]] produced): use `uv run mm set ingest "<set-name>"`. It does the import AND archives the XLSX to `inventory/processed/` so the next `master-list` run won't trip the collision check.
+   - **For everything else** (pasted text, an XLSX from somewhere else, a wishlist/deck/idea label): use `uv run mm list import <label> <path>` or pipe via stdin: `cat /tmp/x.txt | uv run mm list import <label>`.
 3. **Surface warnings and not-founds.** The CLI prints them to stderr — pass them on. The most important one is `name/printing mismatch` — that means the user typed `Atraxa, Praetors' Voice (CMR) 248` but `(CMR) 248` is actually Reclamation Sage. The user has a typo; show them the line and the resolved name.
 4. **Show the result.** After import, run `mm list show <label>` and `mm list value <label>` to confirm what landed.
 
