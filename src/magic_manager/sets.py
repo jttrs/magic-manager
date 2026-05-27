@@ -229,8 +229,8 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
     with db.connect() as conn:
         rows = conn.execute(
             f"""
-            SELECT scryfall_id, set_code, collector_number, name, rarity, cmc,
-                   prices_usd, prices_usd_foil, is_token
+            SELECT scryfall_id, set_code, collector_number, name, flavor_name,
+                   rarity, cmc, prices_usd, prices_usd_foil, is_token
             FROM cards
             WHERE set_code IN ({placeholders})
             ORDER BY 1, 2
@@ -295,10 +295,16 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
             cells_prefilled += 1
         if qf is not None:
             cells_prefilled += 1
+        # Render the displayed name as "<flavor_name> / <oracle_name>" when the
+        # printing has a Universes Beyond reskin name (e.g. FCA Counterspell →
+        # "Wild Rose Rebellion / Counterspell"); otherwise just the oracle name.
+        # Round-trip-safe: parse_master_list_xlsx() keys on (set_code, cn).
+        flavor = r["flavor_name"]
+        display_name = f"{flavor} / {r['name']}" if flavor else r["name"]
         ws.append([
             r["set_code"],
             r["collector_number"],
-            r["name"],
+            display_name,
             r["rarity"],
             r["cmc"],
             r["prices_usd"],

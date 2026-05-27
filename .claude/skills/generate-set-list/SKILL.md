@@ -57,6 +57,10 @@ When the CLI exits 3, the stderr already contains the readout. After surfacing i
 
 The XLSX columns: `set`, `collector_number`, `name`, `rarity`, `mana_value`, `usd`, `usd_foil`, `qty_normal`, `qty_foil`. The two `qty_*` columns are tinted yellow, validated as non-negative integers, and pre-populated from `set:<anchor>` whenever the user already owns cards from previous ingest cycles. Rows are sorted by rarity bucket (mythic → rare → uncommon → common → bonus → special) then collector number to match the user's physical box order.
 
+For Universes Beyond reskin printings (FCA, MAR, PZA, etc.) the `name` cell renders as `<flavor_name> / <oracle_name>` so the user can find the row by either the printed name (what they see on the card) or the canonical Magic name. Non-reskin rows show just the oracle name.
+
+> **Upgrading from V1.2:** if your DB was populated before V1.3, the `flavor_name`/`is_reskin` columns will be NULL/0 on existing card rows. Run `uv run mm set sync <name>` once before the next `master-list` to backfill — the sync upserts every printing and the next XLSX will display merged names correctly.
+
 ## Examples
 
 User: *"generate an inventory excel for the Final Fantasy sets."*

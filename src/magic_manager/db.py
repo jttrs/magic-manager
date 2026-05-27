@@ -124,9 +124,24 @@ CREATE INDEX IF NOT EXISTS ingest_log_hash_idx ON ingest_log (file_sha256);
 """
 
 
+# V1.3: Universes Beyond awareness — flavor names + treatment fields.
+# ALTER TABLE ADD COLUMN is not idempotent in SQLite, but _ensure_schema()
+# runs migrations only once (MIGRATIONS[have:]).
+SCHEMA_V3 = """
+ALTER TABLE cards ADD COLUMN flavor_name     TEXT;
+ALTER TABLE cards ADD COLUMN promo_types     TEXT;
+ALTER TABLE cards ADD COLUMN border_color    TEXT;
+ALTER TABLE cards ADD COLUMN full_art        INTEGER;
+ALTER TABLE cards ADD COLUMN security_stamp  TEXT;
+ALTER TABLE cards ADD COLUMN is_reskin       INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX IF NOT EXISTS cards_is_reskin_idx ON cards (is_reskin);
+"""
+
+
 MIGRATIONS: list[str] = [
     SCHEMA_V1,
     SCHEMA_V2,
+    SCHEMA_V3,
 ]
 CURRENT_VERSION = len(MIGRATIONS)
 
@@ -174,13 +189,17 @@ def upsert_card(conn: sqlite3.Connection, card: dict) -> None:
             rarity, mana_cost, cmc, type_line, colors, color_identity,
             prices_usd, prices_usd_foil, prices_updated_at,
             image_uri, scryfall_uri, is_promo, is_token,
-            frame_effects, finishes, oracle_text
+            frame_effects, finishes, oracle_text,
+            flavor_name, promo_types, border_color, full_art,
+            security_stamp, is_reskin
         ) VALUES (
             :scryfall_id, :oracle_id, :name, :set_code, :collector_number,
             :rarity, :mana_cost, :cmc, :type_line, :colors, :color_identity,
             :prices_usd, :prices_usd_foil, :prices_updated_at,
             :image_uri, :scryfall_uri, :is_promo, :is_token,
-            :frame_effects, :finishes, :oracle_text
+            :frame_effects, :finishes, :oracle_text,
+            :flavor_name, :promo_types, :border_color, :full_art,
+            :security_stamp, :is_reskin
         )
         ON CONFLICT(scryfall_id) DO UPDATE SET
             oracle_id          = excluded.oracle_id,
@@ -202,7 +221,13 @@ def upsert_card(conn: sqlite3.Connection, card: dict) -> None:
             is_token           = excluded.is_token,
             frame_effects      = excluded.frame_effects,
             finishes           = excluded.finishes,
-            oracle_text        = excluded.oracle_text
+            oracle_text        = excluded.oracle_text,
+            flavor_name        = excluded.flavor_name,
+            promo_types        = excluded.promo_types,
+            border_color       = excluded.border_color,
+            full_art           = excluded.full_art,
+            security_stamp     = excluded.security_stamp,
+            is_reskin          = excluded.is_reskin
         """,
         _card_row(card),
     )
@@ -233,6 +258,7 @@ def _card_row(c: dict) -> dict:
         except (TypeError, ValueError):
             return None
 
+    promo_types = f("promo_types") or []
     return {
         "scryfall_id":      f("id"),
         "oracle_id":        f("oracle_id"),
@@ -255,6 +281,22 @@ def _card_row(c: dict) -> dict:
         "frame_effects":    json.dumps(f("frame_effects") or []),
         "finishes":         json.dumps(f("finishes") or []),
         "oracle_text":      f("oracle_text"),
+        # V1.3 — UB awareness fields. ``flavor_name`` lives on card_faces[0]
+        # for split / double-faced cards, mirroring the image_uris pattern
+        # already used above.
+        "flavor_name":      (
+            f("flavor_name")
+            or ((c.get("card_faces") or [{}])[0] or {}).get("flavor_name")
+        ),
+        "promo_types":      json.dumps(promo_types),
+        "border_color":     f("border_color"),
+        "full_art":         1 if f("full_art") else 0,
+        "security_stamp":   f("security_stamp"),
+        # is_reskin is the canonical "this is a Universes Beyond reskin" signal
+        # per docs/scryfall-set-families-and-bonus-sheets.md §4a. The discriminator
+        # is `promo_types contains "sourcematerial"`, NOT flavor_name (some MAR
+        # cards keep their oracle name but get Marvel-themed art).
+        "is_reskin":        1 if "sourcematerial" in promo_types else 0,
     }
 
 

@@ -311,8 +311,19 @@ def resolve(result: ParseResult) -> ParseResult:
         if entry.set and entry.collector_number:
             typed = entry.name.lower()
             resolved_name = (entry.card.get("name") or "").lower()
+            flavor_name = (entry.card.get("flavor_name") or "").lower()
+            # Accepted forms (any of these is a non-mismatch):
+            # - oracle name ("Counterspell")
+            # - front face of a DFC ("Pegasus Guardian")
+            # - flavor name alone ("Wild Rose Rebellion")
+            # - the merged "<flavor> / <oracle>" form our XLSX renders
             front = resolved_name.split(" // ")[0]
-            if typed and typed not in (resolved_name, front):
+            accepted = {resolved_name, front}
+            if flavor_name:
+                accepted.add(flavor_name)
+                accepted.add(f"{flavor_name} / {resolved_name}")
+                accepted.add(f"{flavor_name} / {front}")
+            if typed and typed not in accepted:
                 result.warnings.append(
                     f"name/printing mismatch [{entry.section}]: {entry.raw!r} "
                     f"resolved to {entry.card.get('name')!r} via "
