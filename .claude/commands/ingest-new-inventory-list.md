@@ -1,5 +1,5 @@
 ---
-description: Walk the user through ingesting every active inventory checklist (XLSX or markdown) in input/, asking replace vs additive per file.
+description: Walk the user through ingesting every active inventory checklist (XLSX or markdown) in checklists/, asking replace vs additive per file.
 allowed-tools:
   - Bash
   - AskUserQuestion
@@ -7,7 +7,7 @@ allowed-tools:
 
 # Ingest new inventory lists
 
-Walk the user through ingesting every active inventory checklist currently in `input/`. Both `.xlsx` and `.md` files are picked up — the CLI auto-dispatches to the right parser. The work is mechanical: there is one decision per file (replace vs additive) and the rest is reading structured CLI output and surfacing it.
+Walk the user through ingesting every active inventory checklist currently in `checklists/`. Both `.xlsx` and `.md` files are picked up — the CLI auto-dispatches to the right parser. The work is mechanical: there is one decision per file (replace vs additive) and the rest is reading structured CLI output and surfacing it.
 
 ## Steps (do these in order, deterministically)
 
@@ -23,11 +23,11 @@ Parse the JSON. The shape is `{ "input_dir": "...", "files": [...] }` where each
 
 - `path`, `name`, `sha256`, `size_bytes`
 - `summary`: `{anchor_code, set_codes[], rarity_filter[], rows_total, rows_with_qty, total_qty, estimated_value, top_value[], warnings[]}`
-- `duplicate_of_log_id`: integer or `null`. **Non-null means this file's content matches a prior successful ingest** (almost certainly a failed cleanup from a previous run — the file should already have been archived but ended up back in `input/`).
+- `duplicate_of_log_id`: integer or `null`. **Non-null means this file's content matches a prior successful ingest** (almost certainly a failed cleanup from a previous run — the file should already have been archived but ended up back in `checklists/`).
 - `prior_success`: the matching log row if duplicate, else `null`.
 - `prior_failed`: a prior FAILED ingest with the same hash, if any.
 
-If `files` is empty: tell the user "no inventory checklists in `input/` to ingest. Generate one with `mm set master-list <name>` (or `--format md`) first, or use `mm intake <name>` for the scan-loop REPL instead." and stop.
+If `files` is empty: tell the user "no inventory checklists in `checklists/` to ingest. Generate one with `mm set master-list <name>` (or `--format md`) first, or use `mm intake <name>` for the scan-loop REPL instead." and stop.
 
 ### 2. Show a one-shot summary of what was found
 
@@ -38,7 +38,7 @@ Print a compact bulleted list, one line per file:
 
 If any file has `duplicate_of_log_id != null`, surface that VERY prominently before walking the user into per-file ingest:
 
-> ⚠ `<name>` is a content-match for a prior successful ingest (log id N at <timestamp>). This usually means a failed cleanup left the archived file in `input/`. Recommended: skip it. If you really want to re-apply, you'll need to confirm `--force` for that one.
+> ⚠ `<name>` is a content-match for a prior successful ingest (log id N at <timestamp>). This usually means a failed cleanup left the archived file in `checklists/`. Recommended: skip it. If you really want to re-apply, you'll need to confirm `--force` for that one.
 
 ### 3. Per file, ask mode + ingest
 
@@ -94,5 +94,5 @@ If any file failed (status=`failed` in the JSON), call that out explicitly and t
 - **Never silently choose mode.** Always ask. Even when the recommendation is obvious, the user gets the final say.
 - **Never overwrite without confirmation.** The CLI itself refuses with exit 4 on duplicate hash; trust the CLI to do the right thing rather than computing it yourself.
 - **Surface all warnings.** Especially `name/printing mismatch` — they almost always mean the user has a typo, not that the data is fine.
-- **Do not delete `input/processed/` files** under any circumstances. The archived copy is the audit trail.
+- **Do not delete `checklists/processed/` files** under any circumstances. The archived copy is the audit trail.
 - **All shell paths are quoted** because XLSX filenames contain hyphens and the user's set names sometimes contain colons that survive into the slug.

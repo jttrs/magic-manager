@@ -5,7 +5,7 @@ description: Build the inventory checklist (XLSX or markdown) for a Magic the Ga
 
 # Generate Set List
 
-The mechanical wrapper around `mm set master-list`. The user names a release ("Final Fantasy", "Outlaws of Thunder Junction", `otj`, `fin`); the CLI computes the family from Scryfall's `parent_set_code` graph filtered to `set_type IN (expansion, commander, masterpiece, promo)`, syncs prices, and writes `input/<slug>-master.xlsx` pre-populated from any existing inventory.
+The mechanical wrapper around `mm set master-list`. The user names a release ("Final Fantasy", "Outlaws of Thunder Junction", `otj`, `fin`); the CLI computes the family from Scryfall's `parent_set_code` graph filtered to `set_type IN (expansion, commander, masterpiece, promo)`, syncs prices, and writes `checklists/<slug>-master-checklist.xlsx` pre-populated from any existing inventory.
 
 **You make zero judgment calls about scope.** The recommended bundle is codified in the CLI; do not list sibling sets and ask which to include. If the user wants tokens or memorabilia, they will say so explicitly — translate that to `--include token,memorabilia`.
 
@@ -23,14 +23,14 @@ The mechanical wrapper around `mm set master-list`. The user names a release ("F
 
 The user often catalogs piecemeal: "just the rares from FF", "just the `fic` cards", "this booster I just opened". For these cases, slice at generate-time so the resulting XLSX only covers the intended scope. Two flags compose:
 
-- `--rarity <r>` (repeatable, comma-OK): emit only the named rarities. Values: `mythic`, `rare`, `uncommon`, `common`, `bonus`, `special`. Filename gains a rarity suffix (`<slug>-rare.xlsx`, `<slug>-rare+mythic.xlsx`).
-- `--only <codes>`: restrict to specific set codes within the family. Filename gains a code suffix (`<slug>-fic.xlsx`).
+- `--rarity <r>` (repeatable, comma-OK): emit only the named rarities. Values: `mythic`, `rare`, `uncommon`, `common`, `bonus`, `special`. Filename gains a rarity suffix (`<slug>-rare-checklist.xlsx`, `<slug>-rare+mythic-checklist.xlsx`).
+- `--only <codes>`: restrict to specific set codes within the family. Filename gains a code suffix (`<slug>-fic-checklist.xlsx`).
 
-Both compose: `--only fic --rarity rare` → `<slug>-fic-rare.xlsx`.
+Both compose: `--only fic --rarity rare` → `<slug>-fic-rare-checklist.xlsx`.
 
 When the user says "just the rares", run `mm set master-list "<name>" --rarity rare`. When they say "just the commander deck", run `mm set master-list "<name>" --only fic` (after confirming the family has the code they meant via `mm set list-related`).
 
-Each slice can be in flight independently — collision detection is per-filename, so you can have `<slug>-rare.xlsx` and `<slug>-uncommon.xlsx` both pending at the same time.
+Each slice can be in flight independently — collision detection is per-filename, so you can have `<slug>-rare-checklist.xlsx` and `<slug>-uncommon-checklist.xlsx` both pending at the same time.
 
 The XLSX carries a hidden `_meta` sheet recording the slice, so ingest knows which (set, rarity) pairs are in-partition. The user never sees `_meta`.
 
@@ -40,7 +40,7 @@ The XLSX carries a hidden `_meta` sheet recording the slice, so ingest knows whi
 - `--include-variants` — opt prerelease, store-stamped, japanshowcase, serialized, and white/yellow-bordered printings back in. **Off by default** — these are filtered out of both the master-list output AND the seeded `set:<anchor>` list (so set-missing math doesn't count them). The user said they don't catalog these and there are too few to keep around.
 - `--out <path>` — redirect output to a non-default path (skips collision detection). Almost never the right answer.
 - `--force` — overwrite an existing intake XLSX. Only after the user has explicitly chosen "discard partial work" via the exit-3 prompt.
-- `--format md` — emit a markdown checklist instead of XLSX. The file lands at `input/<slug>-<slice>.md` with YAML frontmatter, sections per rarity, and lines like `- (FCA) 4 [N:0 F:0] [b|sm] — [Wild Rose Rebellion / Counterspell](https://scryfall.com/card/fca/4) — $4.66 / $5.50`. Edit the `[N:k F:k]` brackets in any text editor (or on a phone). `mm set ingest` and `/ingest-new-inventory-list` both auto-detect the format.
+- `--format md` — emit a markdown checklist instead of XLSX. The file lands at `checklists/<slug>-<slice>-checklist.md` with YAML frontmatter, sections per rarity, and lines like `- (FCA) 4 [N:0 F:0] [b|sm] — [Wild Rose Rebellion / Counterspell](https://scryfall.com/card/fca/4) — $4.66 / $5.50`. Edit the `[N:k F:k]` brackets in any text editor (or on a phone). `mm set ingest` and `/ingest-new-inventory-list` both auto-detect the format.
 
 ## Treatment column
 
@@ -84,8 +84,8 @@ When the CLI exits 3, the stderr already contains the readout. After surfacing i
 
 | Path | Filename | Lifecycle |
 |---|---|---|
-| Active inventory checklist (one per family at a time) | `input/<slug>-master.xlsx` | Created by `master-list`. User edits in Excel/Numbers. |
-| Archived inventory checklists | `input/processed/<slug>-master-<YYYY-MM-DD-HHMMSS>.xlsx` | Created by `ingest` after the data lands in the DB. Immutable. |
+| Active inventory checklist (one per family at a time) | `checklists/<slug>-master-checklist.xlsx` | Created by `master-list`. User edits in Excel/Numbers. |
+| Archived inventory checklists | `checklists/processed/<slug>-master-checklist-<YYYY-MM-DD-HHMMSS>.xlsx` | Created by `ingest` after the data lands in the DB. Immutable. |
 
 The XLSX columns: `set`, `collector_number`, `name`, `rarity`, `mana_value`, `usd`, `usd_foil`, `qty_normal`, `qty_foil`. The two `qty_*` columns are tinted yellow, validated as non-negative integers, and pre-populated from `set:<anchor>` whenever the user already owns cards from previous ingest cycles. Rows are sorted by rarity bucket (mythic → rare → uncommon → common → bonus → special) then collector number to match the user's physical box order.
 
@@ -101,7 +101,7 @@ User: *"generate an inventory excel for the Final Fantasy sets."*
 uv run mm set master-list "Final Fantasy"
 ```
 
-If exit 0: tell them `input/final-fantasy-master.xlsx` is ready and `mm set ingest "Final Fantasy"` is the next command.
+If exit 0: tell them `checklists/final-fantasy-master-checklist.xlsx` is ready and `mm set ingest "Final Fantasy"` is the next command.
 If exit 3: surface the readout, show the AskUserQuestion above.
 
 User: *"give me an inventory checklist for OTJ but include the breaking news cards too."*

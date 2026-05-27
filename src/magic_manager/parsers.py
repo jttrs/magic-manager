@@ -151,11 +151,17 @@ def parse_master_list_xlsx(path: Path) -> ParseResult:
 
     # Active sheet is the visible master-list sheet; the meta sheet (if any)
     # is hidden and named "_meta".
+    # Prefer the explicitly named ``checklist`` sheet (V1.6+); fall back to
+    # the first non-private sheet otherwise. ``_meta`` and ``_legend`` are
+    # internal sheets and should never be parsed as data.
     ws = None
-    for name in wb.sheetnames:
-        if name != "_meta":
-            ws = wb[name]
-            break
+    if "checklist" in wb.sheetnames:
+        ws = wb["checklist"]
+    else:
+        for name in wb.sheetnames:
+            if not name.startswith("_"):
+                ws = wb[name]
+                break
     if ws is None:
         ws = wb.active
 

@@ -321,7 +321,7 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
 
     wb = Workbook()
     ws = wb.active
-    ws.title = "master-list"
+    ws.title = "checklist"
 
     # Column order is fixed; treatment is V1.5 between rarity and mana_value.
     # If columns shift, update parse_master_list_xlsx, the qty-tint indices,
@@ -373,6 +373,14 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
             qn,
             qf,
         ])
+        # Force collector_number to render as text. Many CNs are pure
+        # digits ('4', '210') and Excel auto-coerces them to numbers,
+        # then complains with the green-triangle "Number Stored as Text"
+        # warning when other CNs in the same column have letter suffixes
+        # (like '212s' or '551f'). Setting the cell's number_format to '@'
+        # tells Excel "this is intentional text" and the warning disappears.
+        cn_cell = ws.cell(row=ws.max_row, column=2)
+        cn_cell.number_format = "@"
         # Attach a clickable hyperlink to the name cell, pointing at the card's
         # Scryfall page. Falls through silently if scryfall_uri is missing for
         # this row (older DB rows from V1.2 might not have one — re-sync fixes).
@@ -392,10 +400,19 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
         for r in range(2, last_row + 1):
             ws.cell(row=r, column=col_idx).fill = qty_fill
 
-    # Sensible widths. Column 5 is treatment — sized for "b|shw|ext|sm|ff" worst case.
-    widths = {1: 8, 2: 14, 3: 38, 4: 11, 5: 16, 6: 8, 7: 8, 8: 9, 9: 12, 10: 10}
+    # Sensible widths. Column 5 is treatment — sized for "b|shw|ext|sm|ff"
+    # worst case. Column 3 (name) holds long reskin pairs like
+    # "Knights of San d'Oria / Ranger-Captain of Eos" so it gets generous
+    # room.
+    widths = {1: 6, 2: 8, 3: 48, 4: 10, 5: 14, 6: 6, 7: 9, 8: 9, 9: 11, 10: 9}
     for col_idx, w in widths.items():
         ws.column_dimensions[get_column_letter(col_idx)].width = w
+
+    # Format USD columns as currency with two decimals so prices line up
+    # ($3.00 / $0.43 instead of $3.0 / $0.43).
+    for col_idx in (7, 8):
+        for row_idx in range(2, last_row + 1):
+            ws.cell(row=row_idx, column=col_idx).number_format = '"$"#,##0.00'
 
     ws.freeze_panes = "A2"
 

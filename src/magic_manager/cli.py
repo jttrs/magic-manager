@@ -16,8 +16,12 @@ import typer
 
 from . import db, exports, intake as intake_mod, lists as lists_mod, sets as sets_mod
 
-INPUT_DIR = Path("input")
-PROCESSED_DIR = INPUT_DIR / "processed"
+CHECKLISTS_DIR = Path("checklists")
+PROCESSED_DIR = CHECKLISTS_DIR / "processed"
+# Backwards-compat alias — older code paths and migration helpers reference
+# INPUT_DIR. Both names point at the same Path; the directory itself was
+# renamed from ``input/`` → ``checklists/`` in V1.6.
+INPUT_DIR = CHECKLISTS_DIR
 
 # Exit codes used by master-list collision detection. The `generate-set-list`
 # skill reads these to decide whether to prompt for ingest-or-force.
@@ -32,19 +36,23 @@ app = typer.Typer(no_args_is_help=True, add_completion=False,
 set_app = typer.Typer(no_args_is_help=True, help="Set sync and master-list generation.")
 list_app = typer.Typer(no_args_is_help=True, help="Labeled lists.")
 
-input_app = typer.Typer(no_args_is_help=True, help="Inspect inventory checklists in input/.")
+checklists_app = typer.Typer(no_args_is_help=True,
+                             help="Inspect inventory checklists in checklists/.")
 
 app.add_typer(set_app, name="set")
 app.add_typer(list_app, name="list")
-app.add_typer(input_app, name="input")
+app.add_typer(checklists_app, name="checklists")
+# Back-compat alias for muscle memory: ``mm input list`` still works.
+app.add_typer(checklists_app, name="input")
 
 
 @app.callback()
 def _app_init():
-    """Run once-per-invocation startup tasks: dir migration + schema bump."""
-    msg = db.migrate_inventory_to_input()
-    if msg:
-        typer.echo(f"info: {msg}", err=True)
+    """Run once-per-invocation startup tasks: dir migrations + schema bump."""
+    for migrate in (db.migrate_inventory_to_input, db.migrate_input_to_checklists):
+        msg = migrate()
+        if msg:
+            typer.echo(f"info: {msg}", err=True)
 
 
 def _slug(s: str) -> str:
@@ -115,13 +123,15 @@ def _slice_suffix(*, only_codes: list[str], rarities: list[str]) -> str:
 
 
 def _intake_path(slug: str, slice_suffix: str = "master", ext: str = "xlsx") -> Path:
-    return INPUT_DIR / f"{slug}-{slice_suffix}.{ext}"
+    # ``-checklist`` suffix matches the user-facing artifact name. Files were
+    # ``input/<slug>-<slice>.xlsx`` pre-V1.6.
+    return CHECKLISTS_DIR / f"{slug}-{slice_suffix}-checklist.{ext}"
 
 
 def _processed_path(slug: str, slice_suffix: str = "master",
                     when: datetime | None = None, ext: str = "xlsx") -> Path:
     when = when or datetime.now()
-    return PROCESSED_DIR / f"{slug}-{slice_suffix}-{when:%Y-%m-%d-%H%M%S}.{ext}"
+    return PROCESSED_DIR / f"{slug}-{slice_suffix}-checklist-{when:%Y-%m-%d-%H%M%S}.{ext}"
 
 
 def _file_sha256(path: Path) -> str:
@@ -436,9 +446,13 @@ def set_ingest(
     archived: Path | None = None
     if result is not None:
         # Compute slice suffix from the file's stem for the archive name.
-        # The stem is ``<slug>-<slice>`` (or just ``<slug>`` if no slice).
-        # Preserve the original extension so .md → .md and .xlsx → .xlsx.
+        # Modern V1.6+ stems look like ``<slug>-<slice>-checklist``; older
+        # files (pre-V1.6 or hand-named) may just be ``<slug>-<slice>`` or
+        # ``<slug>``. Strip the ``-checklist`` suffix if present so the
+        # archive name doesn't double it.
         stem = src.stem
+        if stem.endswith("-checklist"):
+            stem = stem[: -len("-checklist")]
         if stem.startswith(f"{slug}-"):
             slice_suffix = stem[len(slug) + 1:]
         else:
@@ -746,7 +760,7 @@ def export_cmd(
 
 # ---------- input/ inspection (used by the slash command) ----------
 
-@input_app.command("list")
+@checklists_app.command("list")
 def input_list(
     json_out: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
 ):

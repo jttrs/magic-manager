@@ -14,8 +14,8 @@ Wraps `mm list import` to take pasted text or a filled-in XLSX and save it under
    - If they're re-importing an inventory checklist, the label MUST be `set:<code>` — the same one `generate-set-list` seeded.
    - For new free-form lists, suggest a label following these conventions: `wishlist:<name>`, `deck:<name>`, `idea:<name>`, `buy:<name>`. Anything works; the prefix is a tag, not a constraint.
 2. **Pick the right command.**
-   - **For filled-in inventory checklists in `input/`** (XLSX or `.md` — both produced by [[generate-set-list]]): tell the user to run **`/ingest-new-inventory-list`**. That slash command walks them through every active checklist, asks replace vs additive per file, archives each on success, and uses content hashing to detect duplicates. Don't run `mm set ingest` directly unless the user is explicitly bypassing the slash command.
-   - **For everything else** (pasted text, an XLSX from outside `input/`, a wishlist/deck/idea label): use `uv run mm list import <label> <path>` or pipe via stdin: `cat /tmp/x.txt | uv run mm list import <label>`.
+   - **For filled-in inventory checklists in `checklists/`** (XLSX or `.md` — both produced by [[generate-set-list]]): tell the user to run **`/ingest-new-inventory-list`**. That slash command walks them through every active checklist, asks replace vs additive per file, archives each on success, and uses content hashing to detect duplicates. Don't run `mm set ingest` directly unless the user is explicitly bypassing the slash command.
+   - **For everything else** (pasted text, an XLSX from outside `checklists/`, a wishlist/deck/idea label): use `uv run mm list import <label> <path>` or pipe via stdin: `cat /tmp/x.txt | uv run mm list import <label>`.
    - **Note:** if the user has been entering data via `mm intake` (the scan-loop REPL), there is no file to ingest — the REPL writes directly to the DB. Skip ingest entirely.
 3. **Surface warnings and not-founds.** The CLI prints them to stderr — pass them on. The most important one is `name/printing mismatch` — that means the user typed `Atraxa, Praetors' Voice (CMR) 248` but `(CMR) 248` is actually Reclamation Sage. The user has a typo; show them the line and the resolved name.
 4. **Show the result.** After import, run `mm list show <label>` and `mm list value <label>` to confirm what landed.
@@ -36,7 +36,7 @@ The CLI's behavior depends on the label prefix:
 
 ```bash
 # Re-import a filled-in inventory checklist
-uv run mm list import set:fca input/final-fantasy-through-the-ages-master.xlsx
+uv run mm list import set:fca checklists/final-fantasy-through-the-ages-master-checklist.xlsx
 
 # Save a Moxfield paste from stdin as a wishlist
 cat /tmp/edh-wishlist.txt | uv run mm list import wishlist:edh-staples
@@ -68,11 +68,11 @@ Steps:
 2. `uv run mm list import wishlist:edh-staples /tmp/import-1.txt`
 3. Tell the user: "4 cards saved under `wishlist:edh-staples`. Total value: $X.XX. To export: `mm export tcgplayer label:wishlist:edh-staples`."
 
-User finishes filling in `input/final-fantasy-through-the-ages-master.xlsx`:
+User finishes filling in `checklists/final-fantasy-through-the-ages-master-checklist.xlsx`:
 > "I'm done filling in the FCA inventory checklist."
 
 Steps:
-1. `uv run mm list import set:fca input/final-fantasy-through-the-ages-master.xlsx`
+1. `uv run mm list import set:fca checklists/final-fantasy-through-the-ages-master-checklist.xlsx`
 2. Surface any warnings (typically zero for a clean XLSX round-trip).
 3. Report: "Updated N rows in `set:fca`. Current owned value: $Y.YY. Run `mm export moxfield 'set:fca missing'` to see what's still missing."
 

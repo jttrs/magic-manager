@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
@@ -463,6 +464,93 @@ def migrate_inventory_to_input() -> str | None:
         f"({moved_files} active, {moved_processed} archived)"
     )
     _write_setting(_MIGRATION_FLAG, msg)
+    return msg
+
+
+_CHECKLISTS_MIGRATION_FLAG = "checklists_dir_migrated_at"
+
+
+def migrate_input_to_checklists() -> str | None:
+    """One-shot migration: rename ``input/`` → ``checklists/`` and append
+    ``-checklist`` to every xlsx/md filename so the artifact's directory
+    matches its user-facing name.
+
+    Runs after :func:`migrate_inventory_to_input`. Idempotent — flag in
+    ``settings`` table tracks completion.
+    """
+    repo = _repo_root()
+    inp = repo / "input"
+    chk = repo / "checklists"
+
+    flag_value = _read_setting(_CHECKLISTS_MIGRATION_FLAG)
+    if flag_value is not None:
+        return None
+    # Nothing to migrate? Mark done and bail.
+    if not inp.exists() and not chk.exists():
+        _write_setting(_CHECKLISTS_MIGRATION_FLAG, "skipped:nothing-to-move")
+        return None
+
+    chk.mkdir(parents=True, exist_ok=True)
+
+    def _add_checklist_suffix(p: Path) -> Path:
+        """Insert ``-checklist`` before the extension, idempotent."""
+        stem = p.stem
+        # Older archived names contain a timestamp at the end:
+        # ``<slug>-<slice>-YYYY-MM-DD-HHMMSS.xlsx``. Rewrite to
+        # ``<slug>-<slice>-checklist-YYYY-MM-DD-HHMMSS.xlsx`` so the
+        # archived form matches the new pattern.
+        ts_re = re.compile(r"^(.*?)(-\d{4}-\d{2}-\d{2}-\d{6})$")
+        m = ts_re.match(stem)
+        if m:
+            base, ts = m.group(1), m.group(2)
+            if base.endswith("-checklist"):
+                return p
+            return p.with_name(f"{base}-checklist{ts}{p.suffix}")
+        if stem.endswith("-checklist"):
+            return p
+        return p.with_name(f"{stem}-checklist{p.suffix}")
+
+    moved_active = 0
+    moved_processed = 0
+    if inp.exists():
+        for f in list(inp.glob("*.xlsx")) + list(inp.glob("*.md")):
+            new_name = _add_checklist_suffix(f).name
+            target = chk / new_name
+            if target.exists():
+                target = chk / f"{Path(new_name).stem}.legacy{Path(new_name).suffix}"
+            f.rename(target)
+            moved_active += 1
+        proc_old = inp / "processed"
+        proc_new = chk / "processed"
+        if proc_old.exists():
+            proc_new.mkdir(parents=True, exist_ok=True)
+            for sub in proc_old.iterdir():
+                if not sub.is_file():
+                    continue
+                new_name = _add_checklist_suffix(sub).name
+                dst = proc_new / new_name
+                if dst.exists():
+                    dst = proc_new / f"{Path(new_name).stem}.legacy{Path(new_name).suffix}"
+                sub.rename(dst)
+                moved_processed += 1
+            try:
+                proc_old.rmdir()
+            except OSError:
+                pass
+        try:
+            inp.rmdir()
+        except OSError:
+            pass
+
+    if not moved_active and not moved_processed:
+        msg = "renamed input/ → checklists/ (empty)"
+    else:
+        msg = (
+            f"migrated checklists from input/ → checklists/ "
+            f"({moved_active} active, {moved_processed} archived; "
+            "filenames gained -checklist suffix)"
+        )
+    _write_setting(_CHECKLISTS_MIGRATION_FLAG, msg)
     return msg
 
 
