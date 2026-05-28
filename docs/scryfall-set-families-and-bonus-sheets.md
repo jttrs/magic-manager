@@ -219,6 +219,13 @@ We use `g:<parent>` to enumerate everything in a family. **Risk:** Scryfall's gr
 ### Assumption: `set_type` will eventually be normalized
 We're assuming that Scryfall's classification of `tmc` as `eternal` (rather than `commander`) is a data-quality issue that may be corrected. **Risk:** If we write code that special-cases `tmc → commander`, that special case will silently rot if Scryfall fixes the upstream data. **Mitigation:** Don't hard-code set codes; instead, derive the "is this a commander deck?" classification from card composition (presence of new legendary creatures, format staples, deck-builder cards like Sol Ring/Arcane Signet).
 
+### Fact: `rfin` (Final Fantasy Regional Promos) is Japanese-only
+The `rfin` set contains 2 cards, both `lang: ja` ([Force of Negation J1](https://scryfall.com/card/rfin/J1/force-of-negation), [J2]). There is no English print. By default, Scryfall search returns `lang=en` cards only via the explicit `lang:en` filter, but a bare `e:rfin` or `g:fin` query will return the Japanese print as the canonical "default print per (set, CN)" since it's the only one that exists.
+
+**How `mm` handles it:** `magic_manager.sets.sync()` adds `lang:en` to its query, so RFIN is silently skipped (zero rows imported). The user catalogs English copies; Japanese-only regional promos don't belong in the inventory checklist.
+
+If a future regional-promo set ships an English print, the same query will pick it up. If a user explicitly wants to catalog Japanese cards, that's a future feature requiring a `lang` column on `cards` and an opt-in flag — not in scope today.
+
 ### Older UB releases use different family shapes (verified)
 Our four primary subjects (FIN/SPM/TLA/TMT) follow "expansion parent + siblings." Other UB releases verified May 2026:
 - **LTR** (Tales of Middle-earth): parent is `set_type: "draft_innovation"`. Family includes a `minigame` sub-set (`mltr`).

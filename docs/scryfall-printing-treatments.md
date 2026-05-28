@@ -122,6 +122,28 @@ This drift was confirmed by side-by-side image comparison ([Aerith FIN 374](http
 - **`ext` (extendedart)** is technically redundant with the standard frame (no other visual flag fires when only `extendedart` is present). Kept because the user wants the distinction from a standard reprint.
 - **`fa`** is rarely seen on non-basic-lands but matters when it does fire (FDN starter collection). Kept as separate from `b` because the visual style is genuinely different (Zendikar-era convention vs. modern overlay).
 
+## 5b. Scope decisions: things we deliberately don't track
+
+### Scene-box and scene-panorama cards
+
+Some MTG products group cards into "scenes" — either:
+- **Scene boxes** (e.g. FIC 460–475, the FFXV / FFX / FFVII / FFVI / FFI scene boxes) where a small set of borderless reskin cards is sold together as a non-booster product, AND
+- **Scene panoramas in the main set** (e.g. LTR 174–180, where four common-rarity cards' art tiles into one continuous illustration when laid side-by-side).
+
+**Scryfall does not model scene membership.** Verified May 2026 by inspecting [Chocobo Camp (FIC) 462](https://scryfall.com/card/fic/462/chocobo-camp), [Many Partings (LTR) 176](https://scryfall.com/card/ltr/176/many-partings), and [Many Partings (LTR) 445](https://scryfall.com/card/ltr/445/many-partings):
+
+- No `scene_id`, `scene_name`, `panorama_*`, `subgroup`, or comparable field exists.
+- Scene-box FF cards (FIC 460–475) have **byte-for-byte identical** Scryfall fingerprints to the FFI commander-deck reskin cards (FIC 442–445): same `border_color: borderless`, same `frame_effects: ['inverted']` (or `['legendary','inverted']`), same `full_art: True`, same `promo_types: ['ff*', 'universesbeyond']`. The only thing distinguishing them is the **collector number range**, which is product-organizing convention not Scryfall metadata.
+- `booster: false` is **not** a scene-box discriminator — it's also `false` for all 4 FIC commander decks, all art-series cards, all bundle promos, etc.
+- LTR 176 (the in-set print of Many Partings, which is part of the Grey Havens scene panorama) has `frame_effects: null`, `border_color: black`, `booster: true` — visually indistinguishable from any other common.
+
+**Decision:** We don't try to track scene membership. To track it, we'd need an external mapping table (`scryfall_id → scene_id`) seeded from community/marketing sources. That's a manual data-entry chore with low payoff for set-completion math, and the user explicitly opted out (2026-05-27).
+
+If a future use case requires it, the right shape is:
+- Add a `scenes` table: `(scene_id, scene_name, parent_set_code, notes)`.
+- Add a `card_scene_membership` table: `(scryfall_id, scene_id, position)`.
+- Seed manually from external sources per release.
+
 ## 6. Scryfall query tips
 
 When researching new sets or unknown frames, use `mm scryfall '<query>'` from the project root. It's a thin wrapper over our rate-limited Scryfall search; results print as a tight table including the computed treatment string.

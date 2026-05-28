@@ -169,12 +169,19 @@ def _descendants_of(all_sets: list[dict], parent_code: str) -> list[dict]:
 # ---------- syncing ----------
 
 def sync(set_codes: Iterable[str]) -> int:
-    """Pull every printing in ``set_codes`` into the cards table. Returns rows synced."""
+    """Pull every printing in ``set_codes`` into the cards table. Returns rows synced.
+
+    English-only: sets that ship only in non-English (e.g. ``rfin`` regional
+    promos which are JP-only) will simply have zero rows imported. The user
+    catalogs English copies; non-English-only prints don't belong in the checklist.
+    """
     codes = [c.lower() for c in set_codes]
     if not codes:
         return 0
-    # Build a single search query using `or` so we paginate once.
-    query = " or ".join(f"e:{c}" for c in codes)
+    # Build a single search query using `or` so we paginate once. ``lang:en``
+    # filters out the Japanese-only rfin J1/J2 prints (and any future non-English
+    # variants Scryfall adds to a release).
+    query = "(" + " or ".join(f"e:{c}" for c in codes) + ") lang:en"
     n = 0
     with db.connect() as conn:
         for card in scryfall.search(query, unique="prints"):
