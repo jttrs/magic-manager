@@ -5,7 +5,7 @@ description: Build the inventory checklist (XLSX or markdown) for a Magic the Ga
 
 # Generate Set List
 
-The mechanical wrapper around `mm set master-list`. The user names a release ("Final Fantasy", "Outlaws of Thunder Junction", `otj`, `fin`); the CLI computes the family from Scryfall's `parent_set_code` graph filtered to `set_type IN (expansion, commander, masterpiece, promo)`, syncs prices, and writes `checklists/<slug>-master-checklist.xlsx` pre-populated from any existing inventory.
+The mechanical wrapper around `mm set master-list`. The user names a release ("Final Fantasy", "Outlaws of Thunder Junction", `otj`, `fin`); the CLI computes the family from Scryfall's `parent_set_code` graph filtered to `set_type IN (expansion, commander, masterpiece, promo)`, syncs prices, and writes `checklists/<slug>-checklist.xlsx` pre-populated from any existing inventory.
 
 **You make zero judgment calls about scope.** The recommended bundle is codified in the CLI; do not list sibling sets and ask which to include. If the user wants tokens or memorabilia, they will say so explicitly — translate that to `--include token,memorabilia`.
 
@@ -84,8 +84,8 @@ When the CLI exits 3, the stderr already contains the readout. After surfacing i
 
 | Path | Filename | Lifecycle |
 |---|---|---|
-| Active inventory checklist (one per family at a time) | `checklists/<slug>-master-checklist.xlsx` | Created by `master-list`. User edits in Excel/Numbers. |
-| Archived inventory checklists | `checklists/processed/<slug>-master-checklist-<YYYY-MM-DD-HHMMSS>.xlsx` | Created by `ingest` after the data lands in the DB. Immutable. |
+| Active inventory checklist (one per family at a time) | `checklists/<slug>-checklist.xlsx` | Created by `master-list`. User edits in Excel/Numbers. |
+| Archived inventory checklists | `checklists/processed/<slug>-checklist-<YYYY-MM-DD-HHMMSS>.xlsx` | Created by `ingest` after the data lands in the DB. Immutable. |
 
 The XLSX columns: `set`, `collector_number`, `name`, `rarity`, `mana_value`, `usd`, `usd_foil`, `qty_normal`, `qty_foil`. The two `qty_*` columns are tinted yellow, validated as non-negative integers, and pre-populated from `set:<anchor>` whenever the user already owns cards from previous ingest cycles. Rows are sorted by rarity bucket (mythic → rare → uncommon → common → bonus → special) then collector number to match the user's physical box order.
 
@@ -101,7 +101,7 @@ User: *"generate an inventory excel for the Final Fantasy sets."*
 uv run mm set master-list "Final Fantasy"
 ```
 
-If exit 0: tell them `checklists/final-fantasy-master-checklist.xlsx` is ready and `mm set ingest "Final Fantasy"` is the next command.
+If exit 0: tell them `checklists/final-fantasy-checklist.xlsx` is ready and `mm set ingest "Final Fantasy"` is the next command.
 If exit 3: surface the readout, show the AskUserQuestion above.
 
 User: *"give me an inventory checklist for OTJ but include the breaking news cards too."*

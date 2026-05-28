@@ -46,15 +46,6 @@ app.add_typer(checklists_app, name="checklists")
 app.add_typer(checklists_app, name="input")
 
 
-@app.callback()
-def _app_init():
-    """Run once-per-invocation startup tasks: dir migrations + schema bump."""
-    for migrate in (db.migrate_inventory_to_input, db.migrate_input_to_checklists):
-        msg = migrate()
-        if msg:
-            typer.echo(f"info: {msg}", err=True)
-
-
 def _slug(s: str) -> str:
     raw = "".join(c if c.isalnum() else "-" for c in s.lower())
     # Collapse runs of hyphens so "Final Fantasy: Through the Ages" → "final-fantasy-through-the-ages"
@@ -109,7 +100,7 @@ def set_sync(
 def _slice_suffix(*, only_codes: list[str], rarities: list[str]) -> str:
     """Build the filename slice suffix from optional set-code and rarity slices.
 
-    No slice → ``"master"`` (the V1.1 default).
+    No slice → ``""`` (empty — the unsliced default; filename has no slice token).
     Codes only → ``codes-joined-by-plus``.
     Rarities only → ``rarities-joined-by-plus``.
     Both → ``codes-rarities``.
@@ -119,19 +110,24 @@ def _slice_suffix(*, only_codes: list[str], rarities: list[str]) -> str:
         parts.append("+".join(only_codes))
     if rarities:
         parts.append("+".join(rarities))
-    return "-".join(parts) if parts else "master"
+    return "-".join(parts)
 
 
-def _intake_path(slug: str, slice_suffix: str = "master", ext: str = "xlsx") -> Path:
-    # ``-checklist`` suffix matches the user-facing artifact name. Files were
-    # ``input/<slug>-<slice>.xlsx`` pre-V1.6.
-    return CHECKLISTS_DIR / f"{slug}-{slice_suffix}-checklist.{ext}"
+def _intake_path(slug: str, slice_suffix: str = "", ext: str = "xlsx") -> Path:
+    # ``-checklist`` suffix matches the user-facing artifact name. Filename
+    # is ``<slug>-checklist.<ext>`` for the unsliced default,
+    # ``<slug>-<slice>-checklist.<ext>`` for slices (e.g. rarity slices,
+    # set-code slices). Pre-V1.6 was ``input/<slug>-<slice>.xlsx`` with
+    # an explicit ``master`` token for the unsliced case.
+    middle = f"-{slice_suffix}" if slice_suffix else ""
+    return CHECKLISTS_DIR / f"{slug}{middle}-checklist.{ext}"
 
 
-def _processed_path(slug: str, slice_suffix: str = "master",
+def _processed_path(slug: str, slice_suffix: str = "",
                     when: datetime | None = None, ext: str = "xlsx") -> Path:
     when = when or datetime.now()
-    return PROCESSED_DIR / f"{slug}-{slice_suffix}-checklist-{when:%Y-%m-%d-%H%M%S}.{ext}"
+    middle = f"-{slice_suffix}" if slice_suffix else ""
+    return PROCESSED_DIR / f"{slug}{middle}-checklist-{when:%Y-%m-%d-%H%M%S}.{ext}"
 
 
 def _file_sha256(path: Path) -> str:
@@ -446,14 +442,18 @@ def set_ingest(
     archived: Path | None = None
     if result is not None:
         # Compute slice suffix from the file's stem for the archive name.
-        # Modern V1.6+ stems look like ``<slug>-<slice>-checklist``; older
-        # files (pre-V1.6 or hand-named) may just be ``<slug>-<slice>`` or
-        # ``<slug>``. Strip the ``-checklist`` suffix if present so the
-        # archive name doesn't double it.
+        # Possible stems:
+        #   <slug>-checklist           → unsliced (V1.6+)
+        #   <slug>-<slice>-checklist   → sliced (V1.6+)
+        #   <slug>-<slice>             → pre-V1.6 file the user hand-renamed
+        #   <slug>                     → pre-V1.6 unsliced (rare)
+        # Strip ``-checklist`` first so the rest is just ``<slug>[-<slice>]``.
         stem = src.stem
         if stem.endswith("-checklist"):
             stem = stem[: -len("-checklist")]
-        if stem.startswith(f"{slug}-"):
+        if stem == slug:
+            slice_suffix = ""
+        elif stem.startswith(f"{slug}-"):
             slice_suffix = stem[len(slug) + 1:]
         else:
             slice_suffix = stem

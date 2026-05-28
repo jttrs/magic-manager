@@ -36,7 +36,7 @@ The CLI's behavior depends on the label prefix:
 
 ```bash
 # Re-import a filled-in inventory checklist
-uv run mm list import set:fca checklists/final-fantasy-through-the-ages-master-checklist.xlsx
+uv run mm list import set:fca checklists/final-fantasy-through-the-ages-checklist.xlsx
 
 # Save a Moxfield paste from stdin as a wishlist
 cat /tmp/edh-wishlist.txt | uv run mm list import wishlist:edh-staples
@@ -68,11 +68,11 @@ Steps:
 2. `uv run mm list import wishlist:edh-staples /tmp/import-1.txt`
 3. Tell the user: "4 cards saved under `wishlist:edh-staples`. Total value: $X.XX. To export: `mm export tcgplayer label:wishlist:edh-staples`."
 
-User finishes filling in `checklists/final-fantasy-through-the-ages-master-checklist.xlsx`:
+User finishes filling in `checklists/final-fantasy-through-the-ages-checklist.xlsx`:
 > "I'm done filling in the FCA inventory checklist."
 
 Steps:
-1. `uv run mm list import set:fca checklists/final-fantasy-through-the-ages-master-checklist.xlsx`
+1. `uv run mm list import set:fca checklists/final-fantasy-through-the-ages-checklist.xlsx`
 2. Surface any warnings (typically zero for a clean XLSX round-trip).
 3. Report: "Updated N rows in `set:fca`. Current owned value: $Y.YY. Run `mm export moxfield 'set:fca missing'` to see what's still missing."
 
