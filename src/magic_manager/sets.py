@@ -656,6 +656,77 @@ def _derive_inventory_partition(result) -> "_InventoryPartition | None":
     )
 
 
+def summarize_intake_file(path: Path) -> dict:
+    """Pre-ingest preview for the slash command. Handles both XLSX and md.
+
+    Returns a dict with: ``path``, ``meta`` (or ``None``), ``anchor_code``,
+    ``set_codes``, ``rarity_filter``, ``rows_total``, ``rows_with_qty``,
+    ``total_qty``, ``estimated_value``, ``top_value`` (top 5 rows by line
+    value), ``warnings`` (parser warnings).
+
+    Doesn't hit the network beyond what the parser already does (the
+    rate-limited /cards/collection lookup for resolution).
+    """
+    from . import parsers
+    fmt = parsers.detect_format(path)
+    if fmt == "md":
+        result = parsers.parse_master_list_md(path)
+    else:
+        result = parsers.parse_master_list_xlsx(path)
+    parsers.resolve(result)
+    meta = result.meta
+    rows_with_qty = 0
+    total_qty = 0
+    estimated_value = 0.0
+    rows_for_top: list[tuple[float, dict]] = []
+    for e in result.entries:
+        if not e.card or e.qty <= 0:
+            continue
+        rows_with_qty += 1
+        total_qty += e.qty
+        prices = e.card.get("prices") or {}
+        unit_str = prices.get("usd_foil") if e.foil else prices.get("usd")
+        try:
+            unit = float(unit_str) if unit_str is not None else None
+        except (TypeError, ValueError):
+            unit = None
+        line_value = (unit or 0.0) * e.qty
+        if unit is not None:
+            estimated_value += line_value
+        oracle_name = e.card.get("name") or ""
+        flavor_name = e.card.get("flavor_name") or (
+            ((e.card.get("card_faces") or [{}])[0] or {}).get("flavor_name")
+        )
+        display_name = f"{flavor_name} / {oracle_name}" if flavor_name else oracle_name
+        rows_for_top.append((line_value, {
+            "qty": e.qty,
+            "name": display_name,
+            "set": (e.card.get("set") or "").lower(),
+            "collector_number": e.card.get("collector_number"),
+            "finish": "foil" if e.foil else "nonfoil",
+            "unit_usd": unit,
+            "line_value": line_value if unit is not None else None,
+        }))
+    rows_for_top.sort(key=lambda x: x[0], reverse=True)
+    top_value = [r[1] for r in rows_for_top[:5]]
+    anchor = (meta or {}).get("anchor_code") or ""
+    set_codes = (meta or {}).get("set_codes") or ""
+    rarity_filter = (meta or {}).get("rarity_filter") or ""
+    return {
+        "path": str(path),
+        "meta": meta,
+        "anchor_code": anchor,
+        "set_codes": [c for c in set_codes.split(",") if c],
+        "rarity_filter": [r for r in rarity_filter.split(",") if r],
+        "rows_total": len(result.entries),
+        "rows_with_qty": rows_with_qty,
+        "total_qty": total_qty,
+        "estimated_value": estimated_value,
+        "top_value": top_value,
+        "warnings": result.warnings,
+    }
+
+
 # ---------- markdown intake format ----------
 
 def write_master_list_md(set_codes: Iterable[str], out_path: Path,

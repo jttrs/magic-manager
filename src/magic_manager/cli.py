@@ -20,7 +20,6 @@ from . import (
     exports,
     intake as intake_mod,
     inventory as inv_mod,
-    lists as lists_mod,
     selectors as sel_mod,
     sets as sets_mod,
     wishlist as wishlist_mod,
@@ -44,7 +43,6 @@ VALID_RARITIES = ("mythic", "rare", "uncommon", "common", "bonus", "special")
 app = typer.Typer(no_args_is_help=True, add_completion=False,
                   help="Local-first MTG collection / set / wishlist manager.")
 set_app = typer.Typer(no_args_is_help=True, help="Set sync and master-list generation.")
-list_app = typer.Typer(no_args_is_help=True, help="Labeled lists (V1, deprecated — use inventory/wishlist/deck).")
 inventory_app = typer.Typer(no_args_is_help=True, help="Cards I physically own (V2 fact table).")
 wishlist_app = typer.Typer(no_args_is_help=True, help="Cards I want, organized by free-text category.")
 deck_app = typer.Typer(no_args_is_help=True, help="Decks: compositions independent of ownership.")
@@ -59,7 +57,6 @@ db_app = typer.Typer(no_args_is_help=True,
                      help="Manage the local SQLite DB: snapshots, restore, integrity.")
 
 app.add_typer(set_app, name="set")
-app.add_typer(list_app, name="list")
 app.add_typer(inventory_app, name="inventory")
 app.add_typer(wishlist_app, name="wishlist")
 app.add_typer(deck_app, name="deck")
@@ -572,84 +569,6 @@ def set_ingest(
             f"Inventory in {anchor} family: {inv_summary['distinct_rows']} rows, "
             f"qty {inv_summary['total_qty']}, value ${inv_summary['total_value']:.2f}"
         )
-
-
-# ---------- list ----------
-
-@list_app.command("import")
-def list_import(
-    label: str = typer.Argument(...),
-    source: str = typer.Argument(None, help="Path to file (XLSX/text) or '-' for stdin (default: stdin)."),
-):
-    """Read a pasted block (stdin or text file) or a filled-in master-list
-    XLSX and upsert into the labeled list."""
-    text = None
-    path = None
-    if source is None or source == "-":
-        text = sys.stdin.read()
-    else:
-        path = Path(source)
-        if not path.exists():
-            typer.echo(f"error: file not found: {path}", err=True); raise typer.Exit(2)
-
-    result = lists_mod.list_import(label, text=text, path=path)
-    typer.echo(f"List {label!r}: {result['updated']} updated, {result['added']} added")
-    for w in result["warnings"]:
-        typer.echo(f"  warning: {w}", err=True)
-    for nf in result["not_found"]:
-        if "raw" in nf:
-            typer.echo(f"  not found: {nf['raw']} ({nf.get('reason','')})", err=True)
-        else:
-            typer.echo(f"  not found: {nf}", err=True)
-    for ex in result["extras"]:
-        typer.echo(f"  extra (not in seeded set list): {ex['raw']}", err=True)
-
-
-@list_app.command("show")
-def list_show(label: str = typer.Argument(...)):
-    rows = lists_mod.list_show(label)
-    if not rows:
-        typer.echo(f"(empty list: {label})"); return
-    typer.echo(f"{'qty':>4} {'finish':>7} {'set':>6} {'cn':>6}  name (rarity, usd)")
-    for r in rows:
-        if r.quantity == 0: continue
-        usd = f"${r.unit_price:.2f}" if r.unit_price is not None else "—"
-        # display_name renders as "<flavor_name> / <oracle_name>" for reskins,
-        # plain oracle name otherwise. Matches the inventory-checklist XLSX.
-        typer.echo(f"{r.quantity:>4} {r.finish:>7} {r.set_code:>6} "
-                   f"{r.collector_number:>6}  {r.display_name} ({r.rarity}, {usd})")
-
-
-@list_app.command("value")
-def list_value(label: str = typer.Argument(...)):
-    v = lists_mod.list_value(label)
-    typer.echo(f"List {label!r}: ${v['total']:.2f} across {v['rows']} rows")
-    if v["missing_price"]:
-        typer.echo(f"Cards without USD price ({len(v['missing_price'])}):")
-        for name, set_code, cn, finish in v["missing_price"]:
-            typer.echo(f"  {name} ({set_code.upper()}) {cn} [{finish}]")
-
-
-@list_app.command("delete")
-def list_delete(label: str = typer.Argument(...),
-                yes: bool = typer.Option(False, "--yes", "-y")):
-    if not yes:
-        typer.echo(f"refusing without --yes; this will delete list {label!r} and all its rows.", err=True)
-        raise typer.Exit(2)
-    n = lists_mod.list_delete(label)
-    typer.echo(f"Deleted {n} list(s)")
-
-
-@list_app.command("ls")
-def list_ls():
-    """List every saved list with row counts and total quantities."""
-    rows = lists_mod.all_lists()
-    if not rows:
-        typer.echo("(no lists)"); return
-    typer.echo(f"{'label':40} {'kind':10} {'qty':>6} {'rows':>6}  source")
-    for r in rows:
-        typer.echo(f"{r['label']:40} {r['kind']:10} {r['total_qty']:>6} "
-                   f"{r['distinct_rows']:>6}  {r['source']}")
 
 
 # ---------- inventory (V2) ----------
@@ -1664,7 +1583,7 @@ def input_list(
         prior_success = next((p for p in prior if p["status"] == "success"), None)
         prior_failed = next((p for p in prior if p["status"] == "failed"), None)
         try:
-            summary = lists_mod.summarize_xlsx_file(f)
+            summary = sets_mod.summarize_intake_file(f)
         except Exception as e:  # malformed XLSX shouldn't crash the listing
             summary = {"error": repr(e)}
         out_files.append({

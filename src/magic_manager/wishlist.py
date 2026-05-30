@@ -1,14 +1,9 @@
 """Wishlist CRUD + value math.
 
-Wishlist entries live in the V4 ``wishlist_entries`` table — one row per
+Wishlist entries live in the ``wishlist_entries`` table — one row per
 ``(scryfall_id, finish, category)``. The single-table-with-category shape
-replaces the V1 ``wishlist:*`` / ``buy:*`` / ``idea:*`` label-prefix split
-(see plan §"Notes / decisions"): any of those former prefixes is now just
-a free-text ``category`` value, while keeping the same semantic intent
-("a card I want, organized by purpose").
-
-This module mirrors :mod:`magic_manager.lists` shape-for-shape but reads
-and writes the new table. ``lists.py`` stays in place until Phase 4e.
+captures "a card I want, organized by purpose" (e.g. category='edh-staples',
+'buy', 'idea').
 """
 
 from __future__ import annotations
@@ -59,7 +54,7 @@ class WishlistRow:
     def display_name(self) -> str:
         """Render as ``<flavor_name> / <oracle_name>`` for reskin printings,
         otherwise just the oracle name. Mirrors the V1.7 reskin display rule
-        documented at lists.py:47.
+        documented inline.
         """
         return f"{self.flavor_name} / {self.name}" if self.flavor_name else self.name
 

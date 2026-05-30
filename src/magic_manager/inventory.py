@@ -1,12 +1,8 @@
 """Inventory: physical-card ownership CRUD + value math.
 
-This is the V2 replacement for the ``set:*`` / ``owned:*`` label conventions
-in :mod:`magic_manager.lists`. The ``inventory`` table holds ONE row per
-``(scryfall_id, finish)`` and is the single source of truth for "do I own
-this card?". See plan §1.1 for the schema and §2.1 for this module's contract.
-
-Pure CRUD + value math. No CLI, no Typer, no printing — the CLI layer
-(Phase 4a) wraps these.
+The ``inventory`` table holds ONE row per ``(scryfall_id, finish)`` and is
+the single source of truth for "do I own this card?". Pure CRUD + value
+math — no CLI, no Typer, no printing.
 """
 
 from __future__ import annotations
