@@ -1,8 +1,10 @@
 """SQLite store for magic-manager.
 
-Single file at the repo root: ``magic_manager.db``. Schema is created on first
-connect; subsequent versions add migrations to the ``MIGRATIONS`` list and bump
-``CURRENT_VERSION``.
+Live DB at ``db/magic_manager.db`` under the repo root. Snapshots land in
+``db/bak/``, files displaced by a restore land in ``db/replaced/``. SQLite's
+``-wal`` and ``-shm`` siblings are colocated with the live file. Schema is
+created on first connect; subsequent versions add migrations to the
+``MIGRATIONS`` list and bump ``CURRENT_VERSION``.
 """
 
 from __future__ import annotations
@@ -16,14 +18,38 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterable, Iterator
 
+DB_DIR_NAME = "db"
+BAK_SUBDIR = "bak"
+REPLACED_SUBDIR = "replaced"
 DB_FILENAME = "magic_manager.db"
+
+
+def db_dir() -> Path:
+    """Directory holding the live DB, its WAL/SHM siblings, and bak/+replaced/.
+
+    Honors ``MAGIC_MANAGER_DB`` as a file-path override (the test/rehearsal
+    flow sets it to a temp file); the parent of that override path becomes
+    the effective ``db_dir()`` for the process.
+    """
+    override = os.environ.get("MAGIC_MANAGER_DB")
+    if override:
+        return Path(override).parent
+    return _repo_root() / DB_DIR_NAME
 
 
 def db_path() -> Path:
     override = os.environ.get("MAGIC_MANAGER_DB")
     if override:
         return Path(override)
-    return _repo_root() / DB_FILENAME
+    return db_dir() / DB_FILENAME
+
+
+def bak_dir() -> Path:
+    return db_dir() / BAK_SUBDIR
+
+
+def replaced_dir() -> Path:
+    return db_dir() / REPLACED_SUBDIR
 
 
 def _repo_root() -> Path:
@@ -172,8 +198,8 @@ CREATE INDEX IF NOT EXISTS cards_is_reskin_idx ON cards (is_reskin);
 # Auto-snapshot: when MIGRATIONS gets a new entry, every existing user's
 # next `mm` invocation triggers `_ensure_schema()`, which calls
 # `snapshot(label="pre-vN")` BEFORE applying anything. That backup lives
-# alongside `magic_manager.db` and is the recovery path if anything goes
-# wrong. Don't bypass it.
+# in `db/bak/` and is the recovery path if anything goes wrong. Don't
+# bypass it.
 
 MIGRATIONS: list[str] = [
     SCHEMA_V1,
@@ -247,12 +273,11 @@ def _check_integrity(path: Path) -> str:
 
 
 def snapshot(*, label: str | None = None, dest: Path | None = None) -> Path:
-    """Copy the active DB to a timestamped backup. Returns the backup path.
+    """Copy the active DB to a timestamped backup in ``db/bak/``.
 
-    The default location is alongside the live DB, named
-    ``<live>.bak-<YYYY-MM-DD-HHMMSS>[-<label>]``. ``label`` is a short slug
-    recorded in the filename so future-you can tell snapshots apart
-    (e.g. ``"pre-v4"``).
+    Default destination: ``db/bak/<live>.bak-<YYYY-MM-DD-HHMMSS>[-<label>]``.
+    ``label`` is a short slug recorded in the filename so future-you can tell
+    snapshots apart (e.g. ``"pre-v4"``).
 
     Verifies the copy with ``PRAGMA integrity_check`` before returning. If
     integrity fails, deletes the bad copy and raises.
@@ -267,7 +292,7 @@ def snapshot(*, label: str | None = None, dest: Path | None = None) -> Path:
     if dest is None:
         ts = datetime.now().strftime("%Y-%m-%d-%H%M%S")
         suffix = f"-{label}" if label else ""
-        dest = src.with_name(f"{src.name}.bak-{ts}{suffix}")
+        dest = bak_dir() / f"{src.name}.bak-{ts}{suffix}"
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(src, dest)
     result = _check_integrity(dest)
@@ -283,9 +308,9 @@ def snapshot(*, label: str | None = None, dest: Path | None = None) -> Path:
 def restore(backup_path: Path) -> Path:
     """Replace the active DB with ``backup_path``.
 
-    The current live DB is renamed to ``<live>.replaced-<timestamp>`` rather
-    than deleted, so a mistaken restore is itself recoverable. Returns the
-    path the old live DB was moved to (or ``None`` if there was no live DB).
+    The current live DB is moved to ``db/replaced/<live>.replaced-<timestamp>``
+    rather than deleted, so a mistaken restore is itself recoverable. Returns
+    the path the old live DB was moved to (or ``None`` if there was no live DB).
 
     Refuses to run if ``backup_path`` doesn't exist or fails integrity check.
     """
@@ -300,19 +325,21 @@ def restore(backup_path: Path) -> Path:
     replaced: Path | None = None
     if live.exists():
         ts = datetime.now().strftime("%Y-%m-%d-%H%M%S")
-        replaced = live.with_name(f"{live.name}.replaced-{ts}")
+        rdir = replaced_dir()
+        rdir.mkdir(parents=True, exist_ok=True)
+        replaced = rdir / f"{live.name}.replaced-{ts}"
         live.rename(replaced)
     shutil.copy2(backup_path, live)
     return replaced  # type: ignore[return-value]
 
 
 def list_snapshots() -> list[Path]:
-    """Return ``<live>.bak-*`` files alongside the live DB, newest first."""
+    """Return snapshot files in ``db/bak/``, newest first."""
     live = db_path()
-    parent = live.parent
-    if not parent.exists():
+    bdir = bak_dir()
+    if not bdir.exists():
         return []
-    candidates = list(parent.glob(f"{live.name}.bak-*"))
+    candidates = list(bdir.glob(f"{live.name}.bak-*"))
     candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     return candidates
 

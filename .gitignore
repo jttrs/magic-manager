@@ -33,10 +33,7 @@ npm-debug.log*
 .claude/settings.local.json
 
 # magic-manager local state
-magic_manager.db
-magic_manager.db-*
-magic_manager.db.bak*
-magic_manager.db.replaced*
+db/
 checklists/
 input/
 inventory/
