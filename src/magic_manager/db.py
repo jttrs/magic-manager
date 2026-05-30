@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sqlite3
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import Iterable, Iterator
 
@@ -138,6 +140,41 @@ CREATE INDEX IF NOT EXISTS cards_is_reskin_idx ON cards (is_reskin);
 """
 
 
+# ---------- migration-authoring convention ----------
+#
+# Always-safe ops in a migration: CREATE TABLE, ALTER TABLE ADD COLUMN,
+# CREATE INDEX, INSERT of seed data. These never lose data.
+#
+# Never-direct ops: DROP COLUMN, RENAME COLUMN, changing PK/FK, changing
+# CHECK constraints. SQLite doesn't support these cleanly; use the
+# copy-rebuild dance below if you really need them.
+#
+# Precious tables (data the user can't reconstruct):
+#   - list_rows         the inventory the user typed in
+#   - lists             labels + their kind/source
+#   - ingest_log        audit trail of which checklist landed when
+#   - precons / precon_cards    (when V2 ships them)
+#
+# Re-derivable tables (recovery = re-run a sync):
+#   - cards             every column is rebuilt by `mm set sync <name>`
+#   - schema_version    bookkeeping
+#   - settings          flags; nothing irreplaceable
+#
+# Copy-rebuild dance for destructive changes:
+#   BEGIN;
+#   CREATE TABLE list_rows__new (...new shape...);
+#   INSERT INTO list_rows__new SELECT ...projection... FROM list_rows;
+#   DROP TABLE list_rows;
+#   ALTER TABLE list_rows__new RENAME TO list_rows;
+#   -- recreate indexes
+#   COMMIT;
+#
+# Auto-snapshot: when MIGRATIONS gets a new entry, every existing user's
+# next `mm` invocation triggers `_ensure_schema()`, which calls
+# `snapshot(label="pre-vN")` BEFORE applying anything. That backup lives
+# alongside `magic_manager.db` and is the recovery path if anything goes
+# wrong. Don't bypass it.
+
 MIGRATIONS: list[str] = [
     SCHEMA_V1,
     SCHEMA_V2,
@@ -170,12 +207,114 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
     cur = conn.execute("SELECT version FROM schema_version")
     row = cur.fetchone()
     have = row["version"] if row else 0
+    if have > 0 and have < CURRENT_VERSION:
+        # Take a pre-migration snapshot so a botched migration is recoverable.
+        # Skipped on a fresh DB (have == 0) since there's nothing to lose.
+        # The snapshot opens its own sqlite handle on the file we're about to
+        # mutate; that's safe because we haven't started any transaction yet
+        # on `conn` (the migrations run after this).
+        try:
+            backup = snapshot(label=f"pre-v{CURRENT_VERSION}")
+            import sys
+            print(f"info: pre-migration snapshot saved to {backup}", file=sys.stderr)
+        except Exception as e:
+            # If snapshot fails (disk full, permissions, etc.) we still want
+            # to surface that loudly rather than apply migrations blindly.
+            raise RuntimeError(
+                f"refusing to apply migrations: pre-migration snapshot failed ({e}). "
+                f"Fix the underlying issue or back up {db_path()} manually before retrying."
+            ) from e
     for i, sql in enumerate(MIGRATIONS[have:], start=have + 1):
         if i != 1:  # MIGRATIONS[0] already ran above
             conn.executescript(sql)
     if have < CURRENT_VERSION:
         conn.execute("DELETE FROM schema_version")
         conn.execute("INSERT INTO schema_version (version) VALUES (?)", (CURRENT_VERSION,))
+
+
+# ---------- snapshots, restore, integrity ----------
+
+def _check_integrity(path: Path) -> str:
+    """Run ``PRAGMA integrity_check`` against ``path``. Returns 'ok' or the
+    first integrity-check message (which is what SQLite emits when a problem
+    is found)."""
+    conn = sqlite3.connect(str(path))
+    try:
+        row = conn.execute("PRAGMA integrity_check").fetchone()
+        return row[0] if row else "(no result)"
+    finally:
+        conn.close()
+
+
+def snapshot(*, label: str | None = None, dest: Path | None = None) -> Path:
+    """Copy the active DB to a timestamped backup. Returns the backup path.
+
+    The default location is alongside the live DB, named
+    ``<live>.bak-<YYYY-MM-DD-HHMMSS>[-<label>]``. ``label`` is a short slug
+    recorded in the filename so future-you can tell snapshots apart
+    (e.g. ``"pre-v4"``).
+
+    Verifies the copy with ``PRAGMA integrity_check`` before returning. If
+    integrity fails, deletes the bad copy and raises.
+
+    IMPORTANT: call this OUTSIDE any active ``connect()`` context. Taking a
+    snapshot while a writer is mid-transaction can capture an inconsistent
+    state.
+    """
+    src = db_path()
+    if not src.exists():
+        raise FileNotFoundError(f"no DB to snapshot at {src}")
+    if dest is None:
+        ts = datetime.now().strftime("%Y-%m-%d-%H%M%S")
+        suffix = f"-{label}" if label else ""
+        dest = src.with_name(f"{src.name}.bak-{ts}{suffix}")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src, dest)
+    result = _check_integrity(dest)
+    if result != "ok":
+        try:
+            dest.unlink()
+        except OSError:
+            pass
+        raise RuntimeError(f"snapshot integrity check failed: {result}")
+    return dest
+
+
+def restore(backup_path: Path) -> Path:
+    """Replace the active DB with ``backup_path``.
+
+    The current live DB is renamed to ``<live>.replaced-<timestamp>`` rather
+    than deleted, so a mistaken restore is itself recoverable. Returns the
+    path the old live DB was moved to (or ``None`` if there was no live DB).
+
+    Refuses to run if ``backup_path`` doesn't exist or fails integrity check.
+    """
+    backup_path = Path(backup_path)
+    if not backup_path.exists():
+        raise FileNotFoundError(f"backup not found: {backup_path}")
+    result = _check_integrity(backup_path)
+    if result != "ok":
+        raise RuntimeError(f"refusing to restore: backup failed integrity check: {result}")
+
+    live = db_path()
+    replaced: Path | None = None
+    if live.exists():
+        ts = datetime.now().strftime("%Y-%m-%d-%H%M%S")
+        replaced = live.with_name(f"{live.name}.replaced-{ts}")
+        live.rename(replaced)
+    shutil.copy2(backup_path, live)
+    return replaced  # type: ignore[return-value]
+
+
+def list_snapshots() -> list[Path]:
+    """Return ``<live>.bak-*`` files alongside the live DB, newest first."""
+    live = db_path()
+    parent = live.parent
+    if not parent.exists():
+        return []
+    candidates = list(parent.glob(f"{live.name}.bak-*"))
+    candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return candidates
 
 
 # ---------- card upserts ----------

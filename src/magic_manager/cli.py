@@ -40,6 +40,8 @@ checklists_app = typer.Typer(no_args_is_help=True,
                              help="Inspect inventory checklists in checklists/.")
 mtgjson_app = typer.Typer(no_args_is_help=True,
                           help="Read MTGJSON.com data (precon decks, set files, etc.).")
+db_app = typer.Typer(no_args_is_help=True,
+                     help="Manage the local SQLite DB: snapshots, restore, integrity.")
 
 app.add_typer(set_app, name="set")
 app.add_typer(list_app, name="list")
@@ -47,6 +49,7 @@ app.add_typer(checklists_app, name="checklists")
 # Back-compat alias for muscle memory: ``mm input list`` still works.
 app.add_typer(checklists_app, name="input")
 app.add_typer(mtgjson_app, name="mtgjson")
+app.add_typer(db_app, name="db")
 
 
 def _slug(s: str) -> str:
@@ -826,6 +829,51 @@ def mtgjson_check_stale(
         typer.echo("stale")
         raise typer.Exit(1)
     typer.echo("fresh")
+
+
+# ---------- db (snapshots, restore, integrity) ----------
+
+@db_app.command("snapshot")
+def db_snapshot_cmd(
+    label: str = typer.Option(None, "--label", help="Suffix appended to the backup filename."),
+):
+    """Take a timestamped snapshot of the active DB next to the live file."""
+    backup = db.snapshot(label=label)
+    typer.echo(str(backup))
+
+
+@db_app.command("snapshots")
+def db_snapshots_cmd():
+    """List local DB snapshots (newest first)."""
+    snaps = db.list_snapshots()
+    if not snaps:
+        typer.echo("(no snapshots)", err=True)
+        raise typer.Exit(0)
+    for p in snaps:
+        st = p.stat()
+        size_mb = st.st_size / (1024 * 1024)
+        when = datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+        typer.echo(f"{when}  {size_mb:>6.2f} MB  {p}")
+
+
+@db_app.command("restore")
+def db_restore_cmd(
+    backup_path: Path = typer.Argument(..., help="Path to a snapshot file."),
+):
+    """Restore the active DB from a snapshot. Renames the current live DB to <live>.replaced-<ts>."""
+    replaced = db.restore(backup_path)
+    if replaced is not None:
+        typer.echo(f"prior live DB moved to: {replaced}", err=True)
+    typer.echo(f"restored from: {backup_path}")
+
+
+@db_app.command("integrity")
+def db_integrity_cmd():
+    """Run PRAGMA integrity_check on the live DB. Exits non-zero if not 'ok'."""
+    result = db._check_integrity(db.db_path())
+    typer.echo(result)
+    if result != "ok":
+        raise typer.Exit(1)
 
 
 # ---------- intake (scan-loop REPL) ----------

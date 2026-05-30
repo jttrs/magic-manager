@@ -35,6 +35,8 @@ npm-debug.log*
 # magic-manager local state
 magic_manager.db
 magic_manager.db-*
+magic_manager.db.bak*
+magic_manager.db.replaced*
 checklists/
 input/
 inventory/
