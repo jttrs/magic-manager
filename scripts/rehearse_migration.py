@@ -4,6 +4,12 @@ Copies the live DB to a temp file, runs the schema migrations against the
 copy, and asserts that the precious tables (``list_rows``, ``lists``,
 ``ingest_log``) still hold every row they did before.
 
+When the rehearsal actually exercises the V4 migration (i.e. pre-version
+< 4 and post-version >= 4), it ALSO verifies that V4's new tables
+(``inventory``, ``wishlist_entries``, ``decks``, ``deck_cards``,
+``set_targets``) were populated correctly from the V1 ``list_rows``/``lists``
+data. See ``_verify_v4_population`` for the exact contract.
+
 Usage:
 
     uv run python -m scripts.rehearse_migration
@@ -18,6 +24,7 @@ script that can be wired into pytest later if/when we adopt one.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import shutil
 import sqlite3
@@ -31,6 +38,7 @@ from magic_manager import db
 
 
 PRECIOUS_TABLES = ("lists", "list_rows", "ingest_log")
+V4_NEW_TABLES = ("inventory", "wishlist_entries", "decks", "deck_cards", "set_targets")
 
 
 def _row_hashes(conn: sqlite3.Connection, table: str) -> tuple[int, str]:
@@ -48,6 +56,180 @@ def _row_hashes(conn: sqlite3.Connection, table: str) -> tuple[int, str]:
         h.update("\x1f".join("" if v is None else str(v) for v in r).encode("utf-8"))
         h.update(b"\x1e")
     return len(rows), h.hexdigest()
+
+
+def _verify_v4_population(
+    pre_conn: sqlite3.Connection, post_conn: sqlite3.Connection
+) -> tuple[bool, list[str]]:
+    """Verify that V4 populated its new tables from V1 list_rows/lists data.
+
+    Returns ``(ok, lines)`` where ``lines`` is one human-readable status
+    line per V4 table (matching the OK/DIVERGED format the precious-table
+    check uses).
+    """
+    lines: list[str] = []
+    ok = True
+
+    # --- inventory: SUM by (scryfall_id, finish) across set:* and owned:* with qty>0
+    expected_inv: dict[tuple[str, str], int] = {}
+    for r in pre_conn.execute(
+        "SELECT scryfall_id, finish, SUM(quantity) AS q "
+        "FROM list_rows "
+        "WHERE quantity > 0 "
+        "  AND (label LIKE 'set:%' OR label LIKE 'owned:%') "
+        "GROUP BY scryfall_id, finish"
+    ).fetchall():
+        expected_inv[(r["scryfall_id"], r["finish"])] = int(r["q"])
+
+    actual_inv: dict[tuple[str, str], int] = {
+        (r["scryfall_id"], r["finish"]): int(r["quantity"])
+        for r in post_conn.execute(
+            "SELECT scryfall_id, finish, quantity FROM inventory"
+        ).fetchall()
+    }
+    inv_ok = all(actual_inv.get(k, 0) >= v for k, v in expected_inv.items())
+    # Live DB may have MORE rows than V1 list_rows (post-V4 interactive use)
+    # so the contract is "every expected key is present with >= expected qty".
+    status = "OK" if inv_ok else "DIVERGED"
+    lines.append(
+        f"  inventory       {len(expected_inv):>6} expected → {len(actual_inv):>6} present  {status}"
+    )
+    if not inv_ok:
+        ok = False
+        missing = [k for k, v in expected_inv.items() if actual_inv.get(k, 0) < v]
+        lines.append(f"     missing/short: {missing[:5]}{' …' if len(missing) > 5 else ''}")
+
+    # --- wishlist_entries: every wishlist:/buy:/idea: row with qty>0,
+    #     keyed by (scryfall_id, finish, category=suffix-after-first-colon)
+    expected_wl: dict[tuple[str, str, str], int] = {}
+    for r in pre_conn.execute(
+        "SELECT scryfall_id, finish, "
+        "       SUBSTR(label, INSTR(label, ':') + 1) AS category, "
+        "       quantity "
+        "FROM list_rows "
+        "WHERE quantity > 0 "
+        "  AND (label LIKE 'wishlist:%' OR label LIKE 'buy:%' OR label LIKE 'idea:%')"
+    ).fetchall():
+        expected_wl[(r["scryfall_id"], r["finish"], r["category"])] = int(r["quantity"])
+
+    actual_wl: dict[tuple[str, str, str], int] = {
+        (r["scryfall_id"], r["finish"], r["category"]): int(r["qty_wanted"])
+        for r in post_conn.execute(
+            "SELECT scryfall_id, finish, category, qty_wanted FROM wishlist_entries"
+        ).fetchall()
+    }
+    wl_ok = all(actual_wl.get(k, 0) >= v for k, v in expected_wl.items())
+    status = "OK" if wl_ok else "DIVERGED"
+    lines.append(
+        f"  wishlist_entries{len(expected_wl):>6} expected → {len(actual_wl):>6} present  {status}"
+    )
+    if not wl_ok:
+        ok = False
+        missing = [k for k, v in expected_wl.items() if actual_wl.get(k, 0) < v]
+        lines.append(f"     missing/short: {missing[:5]}{' …' if len(missing) > 5 else ''}")
+
+    # --- decks: one row per deck:* label that has at least one row.
+    #     deck_cards: one row per (scryfall_id, finish) qty>0 under that label,
+    #     all on board='main'.
+    expected_deck_slugs: set[str] = set()
+    expected_deck_cards: dict[str, set[tuple[str, str]]] = {}  # slug -> {(scryfall_id, finish), ...}
+    for r in pre_conn.execute(
+        "SELECT DISTINCT label FROM list_rows WHERE label LIKE 'deck:%' AND quantity > 0"
+    ).fetchall():
+        slug = r["label"][len("deck:"):]
+        if not slug:
+            continue
+        expected_deck_slugs.add(slug)
+        expected_deck_cards[slug] = set()
+    for r in pre_conn.execute(
+        "SELECT label, scryfall_id, finish "
+        "FROM list_rows "
+        "WHERE label LIKE 'deck:%' AND quantity > 0"
+    ).fetchall():
+        slug = r["label"][len("deck:"):]
+        if slug in expected_deck_cards:
+            expected_deck_cards[slug].add((r["scryfall_id"], r["finish"]))
+
+    actual_deck_slugs: dict[str, int] = {
+        r["slug"]: int(r["deck_id"])
+        for r in post_conn.execute("SELECT slug, deck_id FROM decks").fetchall()
+    }
+    decks_ok = expected_deck_slugs.issubset(actual_deck_slugs.keys())
+    status = "OK" if decks_ok else "DIVERGED"
+    lines.append(
+        f"  decks           {len(expected_deck_slugs):>6} expected → {len(actual_deck_slugs):>6} present  {status}"
+    )
+    if not decks_ok:
+        ok = False
+        missing = sorted(expected_deck_slugs - set(actual_deck_slugs.keys()))
+        lines.append(f"     missing slugs: {missing[:5]}{' …' if len(missing) > 5 else ''}")
+
+    # deck_cards: count expected vs present, and verify each expected pair exists on main board.
+    total_expected_cards = sum(len(v) for v in expected_deck_cards.values())
+    cards_ok = True
+    missing_pairs: list[tuple[str, str, str]] = []
+    for slug, pairs in expected_deck_cards.items():
+        deck_id = actual_deck_slugs.get(slug)
+        if deck_id is None:
+            cards_ok = False
+            missing_pairs.extend((slug, p[0], p[1]) for p in pairs)
+            continue
+        present = {
+            (r["scryfall_id"], r["finish"])
+            for r in post_conn.execute(
+                "SELECT scryfall_id, finish FROM deck_cards "
+                "WHERE deck_id = ? AND board = 'main'",
+                (deck_id,),
+            ).fetchall()
+        }
+        for p in pairs:
+            if p not in present:
+                cards_ok = False
+                missing_pairs.append((slug, p[0], p[1]))
+    actual_card_count = post_conn.execute("SELECT COUNT(*) AS c FROM deck_cards").fetchone()["c"]
+    status = "OK" if cards_ok else "DIVERGED"
+    lines.append(
+        f"  deck_cards      {total_expected_cards:>6} expected → {actual_card_count:>6} present  {status}"
+    )
+    if not cards_ok:
+        ok = False
+        lines.append(f"     missing pairs: {missing_pairs[:5]}{' …' if len(missing_pairs) > 5 else ''}")
+
+    # --- set_targets: one row per set:* label that exists in V1 lists,
+    #     regardless of whether any row has qty>0. related_codes = JSON [anchor].
+    expected_targets: dict[str, str] = {}  # anchor -> related_codes JSON
+    for r in pre_conn.execute(
+        "SELECT label FROM lists WHERE label LIKE 'set:%'"
+    ).fetchall():
+        anchor = r["label"][len("set:"):].lower()
+        if not anchor:
+            continue
+        expected_targets[anchor] = json.dumps([anchor])
+
+    actual_targets: dict[str, str] = {
+        r["anchor_code"]: r["related_codes"]
+        for r in post_conn.execute(
+            "SELECT anchor_code, related_codes FROM set_targets"
+        ).fetchall()
+    }
+    targets_ok = all(
+        anchor in actual_targets and actual_targets[anchor] == related
+        for anchor, related in expected_targets.items()
+    )
+    status = "OK" if targets_ok else "DIVERGED"
+    lines.append(
+        f"  set_targets     {len(expected_targets):>6} expected → {len(actual_targets):>6} present  {status}"
+    )
+    if not targets_ok:
+        ok = False
+        bad = [
+            (a, expected_targets[a], actual_targets.get(a))
+            for a in expected_targets
+            if actual_targets.get(a) != expected_targets[a]
+        ]
+        lines.append(f"     mismatches: {bad[:3]}{' …' if len(bad) > 3 else ''}")
+
+    return ok, lines
 
 
 def main() -> int:
@@ -69,7 +251,6 @@ def main() -> int:
             pre[t] = (0, "<absent>")
     pre_version_row = src.execute("SELECT version FROM schema_version").fetchone()
     pre_version = pre_version_row["version"] if pre_version_row else 0
-    src.close()
 
     # 2. Copy live DB to a temp location and point MAGIC_MANAGER_DB at it.
     with tempfile.TemporaryDirectory(prefix="mm-rehearsal-") as tmp:
@@ -96,7 +277,16 @@ def main() -> int:
                 except sqlite3.OperationalError:
                     post[t] = (0, "<absent>")
 
-    # 5. Compare.
+            # 5. V4 population check — only meaningful when the migration
+            #    actually ran on this rehearsal.
+            v4_ok: bool | None = None
+            v4_lines: list[str] = []
+            if post_version >= 4 and pre_version < 4:
+                v4_ok, v4_lines = _verify_v4_population(src, conn)
+
+    src.close()
+
+    # 6. Compare precious tables.
     print(f"schema_version: {pre_version} → {post_version}")
     fail = False
     for t in PRECIOUS_TABLES:
@@ -113,6 +303,21 @@ def main() -> int:
     if fail:
         print("\nFAIL: precious-table contents diverged across migration.", file=sys.stderr)
         return 1
+
+    # 7. V4 population block.
+    print()
+    if v4_ok is None:
+        print("(V4 migration not exercised this rehearsal)")
+    else:
+        print("V4 population check:")
+        for line in v4_lines:
+            print(line)
+        if not v4_ok:
+            print("\nFAIL: V4 migration did not populate new tables as expected.", file=sys.stderr)
+            return 1
+        print("\nOK: V4 migration populated all new tables correctly.")
+        return 0
+
     print("\nOK: every precious table is byte-equivalent before and after migration.")
     return 0
 
