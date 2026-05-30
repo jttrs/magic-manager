@@ -9,6 +9,11 @@
             "type": "command",
             "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/scryfall-guard.sh",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/mtgjson-guard.sh",
+            "timeout": 5
           }
         ]
       }

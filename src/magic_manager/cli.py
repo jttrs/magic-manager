@@ -38,12 +38,15 @@ list_app = typer.Typer(no_args_is_help=True, help="Labeled lists.")
 
 checklists_app = typer.Typer(no_args_is_help=True,
                              help="Inspect inventory checklists in checklists/.")
+mtgjson_app = typer.Typer(no_args_is_help=True,
+                          help="Read MTGJSON.com data (precon decks, set files, etc.).")
 
 app.add_typer(set_app, name="set")
 app.add_typer(list_app, name="list")
 app.add_typer(checklists_app, name="checklists")
 # Back-compat alias for muscle memory: ``mm input list`` still works.
 app.add_typer(checklists_app, name="input")
+app.add_typer(mtgjson_app, name="mtgjson")
 
 
 def _slug(s: str) -> str:
@@ -686,6 +689,143 @@ def scryfall_cmd(
         typer.echo("  ".join(str(get(r, col)).ljust(widths[col]) for col in cols))
     typer.echo("", err=True)
     typer.echo(f"# {len(rows)} result(s) for {query!r}", err=True)
+
+
+# ---------- mtgjson (precon decks + set data) ----------
+
+@mtgjson_app.command("meta")
+def mtgjson_meta(
+    json_out: bool = typer.Option(False, "--json", help="Emit raw JSON."),
+):
+    """Show MTGJSON's current build date and version."""
+    from . import mtgjson as mj
+    m = mj.meta()
+    if json_out:
+        json.dump(m, sys.stdout, indent=2)
+        sys.stdout.write("\n")
+        return
+    typer.echo(f"date:    {m.get('date')}")
+    typer.echo(f"version: {m.get('version')}")
+
+
+@mtgjson_app.command("set")
+def mtgjson_set(
+    set_code: str = typer.Argument(..., help="Set code, e.g. fic, FIC."),
+    json_out: bool = typer.Option(False, "--json", help="Emit raw set JSON."),
+):
+    """Pretty-print MTGJSON's per-set summary."""
+    from . import mtgjson as mj
+    s = mj.set_file(set_code)
+    if json_out:
+        json.dump(s, sys.stdout, indent=2, default=str)
+        sys.stdout.write("\n")
+        return
+    typer.echo(f"name:           {s.get('name')}")
+    typer.echo(f"code:           {s.get('code')}")
+    typer.echo(f"type:           {s.get('type')}")
+    typer.echo(f"releaseDate:    {s.get('releaseDate')}")
+    typer.echo(f"totalSetSize:   {s.get('totalSetSize')}")
+    typer.echo(f"baseSetSize:    {s.get('baseSetSize')}")
+    cards = s.get("cards") or []
+    tokens = s.get("tokens") or []
+    decks = s.get("decks") or []
+    typer.echo(f"cards:          {len(cards)}")
+    typer.echo(f"tokens:         {len(tokens)}")
+    typer.echo(f"decks (inline): {len(decks)}")
+
+
+@mtgjson_app.command("decks")
+def mtgjson_decks(
+    set_code: str = typer.Option(None, "--set", help="Filter to one set code."),
+    first: int = typer.Option(50, "--first", help="Show at most N rows."),
+    json_out: bool = typer.Option(False, "--json", help="Emit raw DeckList JSON."),
+):
+    """List decks (filterable by set code) from MTGJSON's DeckList.json."""
+    from . import mtgjson as mj
+    rows = mj.deck_list(set_code=set_code)
+    if json_out:
+        json.dump(rows, sys.stdout, indent=2, default=str)
+        sys.stdout.write("\n")
+        return
+    if not rows:
+        typer.echo(f"(no decks{f' for set {set_code.upper()}' if set_code else ''})", err=True)
+        raise typer.Exit(1)
+    rows = rows[:first]
+    cols = ("code", "fileName", "name", "type", "releaseDate")
+    widths = {c: max(len(c), max(len(str(r.get(c) or "")) for r in rows)) for c in cols}
+    typer.echo("  ".join(c.ljust(widths[c]) for c in cols))
+    typer.echo("  ".join("-" * widths[c] for c in cols))
+    for r in rows:
+        typer.echo("  ".join(str(r.get(c) or "—").ljust(widths[c]) for c in cols))
+
+
+@mtgjson_app.command("deck")
+def mtgjson_deck(
+    file_name: str = typer.Argument(..., help="MTGJSON deck fileName, e.g. CounterBlitzFinalFantasyX_FIC."),
+    json_out: bool = typer.Option(False, "--json", help="Emit raw deck JSON."),
+    show: int = typer.Option(10, "--show", help="Show at most N cards per board in summary view."),
+):
+    """Pretty-print one MTGJSON deck file (commander, mainBoard, sideBoard)."""
+    from . import mtgjson as mj
+    d = mj.deck(file_name)
+    if json_out:
+        json.dump(d, sys.stdout, indent=2, default=str)
+        sys.stdout.write("\n")
+        return
+    typer.echo(f"name:        {d.get('name')}")
+    typer.echo(f"code:        {d.get('code')}")
+    typer.echo(f"type:        {d.get('type')}")
+    typer.echo(f"releaseDate: {d.get('releaseDate')}")
+
+    def emit(board: str):
+        cards = d.get(board) or []
+        if not cards:
+            return
+        typer.echo(f"\n{board} ({len(cards)} {'entry' if len(cards) == 1 else 'entries'}):")
+        for c in cards[:show]:
+            finish = "foil" if c.get("isFoil") else "nonfoil"
+            sid = (c.get("identifiers") or {}).get("scryfallId", "—")
+            typer.echo(
+                f"  {c.get('count', 1):>2}x  ({c.get('setCode')}) {str(c.get('number')):>5}  "
+                f"{(c.get('name') or '')[:40]:40}  {finish:7}  scryfall:{sid}"
+            )
+        if len(cards) > show:
+            typer.echo(f"  … {len(cards) - show} more")
+
+    emit("commander")
+    emit("mainBoard")
+    emit("sideBoard")
+    emit("tokens")
+
+
+@mtgjson_app.command("refresh")
+def mtgjson_refresh(
+    resource_path: str = typer.Argument(..., help="Resource path, e.g. FIC.json or DeckList.json."),
+):
+    """Delete the cached copy of ``resource_path`` so the next fetch re-downloads."""
+    from . import mtgjson as mj
+    mj.refresh(resource_path)
+    typer.echo(f"refreshed: {resource_path}")
+
+
+@mtgjson_app.command("check-stale")
+def mtgjson_check_stale(
+    resource_path: str = typer.Argument(..., help="Resource path, e.g. FIC.json or DeckList.json."),
+):
+    """Compare cached SHA-256 to MTGJSON's published .sha256 sidecar.
+
+    Exits 0 if fresh, 1 if stale, 2 if not cached.
+    """
+    from . import mtgjson as mj
+    try:
+        stale = mj.is_stale(resource_path)
+    except mj.MtgJsonError as e:
+        typer.echo(f"absent ({e})", err=True)
+        raise typer.Exit(2)
+    if stale:
+        typer.echo("stale")
+        raise typer.Exit(1)
+    typer.echo("fresh")
 
 
 # ---------- intake (scan-loop REPL) ----------
