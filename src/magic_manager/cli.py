@@ -21,6 +21,7 @@ from . import (
     intake as intake_mod,
     inventory as inv_mod,
     lists as lists_mod,
+    selectors as sel_mod,
     sets as sets_mod,
     wishlist as wishlist_mod,
 )
@@ -47,6 +48,8 @@ list_app = typer.Typer(no_args_is_help=True, help="Labeled lists (V1, deprecated
 inventory_app = typer.Typer(no_args_is_help=True, help="Cards I physically own (V2 fact table).")
 wishlist_app = typer.Typer(no_args_is_help=True, help="Cards I want, organized by free-text category.")
 deck_app = typer.Typer(no_args_is_help=True, help="Decks: compositions independent of ownership.")
+query_app = typer.Typer(no_args_is_help=True,
+                        help="Run V2 selector queries against the local DB (show/value/xlsx/url/top/total/multiples/stats).")
 
 checklists_app = typer.Typer(no_args_is_help=True,
                              help="Inspect inventory checklists in checklists/.")
@@ -60,6 +63,7 @@ app.add_typer(list_app, name="list")
 app.add_typer(inventory_app, name="inventory")
 app.add_typer(wishlist_app, name="wishlist")
 app.add_typer(deck_app, name="deck")
+app.add_typer(query_app, name="query")
 app.add_typer(checklists_app, name="checklists")
 # Back-compat alias for muscle memory: ``mm input list`` still works.
 app.add_typer(checklists_app, name="input")
@@ -981,6 +985,303 @@ def deck_import_cmd(
             typer.echo(f"  not found: {nf['raw']} ({nf.get('reason','')})", err=True)
         else:
             typer.echo(f"  not found: {nf}", err=True)
+
+
+# ---------- query (V2 selectors) ----------
+
+QUERIES_DIR = Path("queries")
+
+
+def _selector_slug(selector: str) -> str:
+    """Slugify a selector string for use in artifact filenames.
+
+    Deterministic: same selector always produces the same slug. Lowercases,
+    keeps alphanumerics, collapses everything else to a single hyphen,
+    trims leading/trailing hyphens.
+    """
+    raw = "".join(c if c.isalnum() else "-" for c in selector.lower())
+    while "--" in raw:
+        raw = raw.replace("--", "-")
+    return raw.strip("-")
+
+
+def _materialize_or_die(selector: str):
+    try:
+        return sel_mod.materialize(selector)
+    except sel_mod.SelectorParseError as e:
+        typer.echo(f"error: invalid selector: {e}", err=True); raise typer.Exit(2)
+    except LookupError as e:
+        typer.echo(f"error: {e}", err=True); raise typer.Exit(2)
+
+
+def _row_unit_price(r: sel_mod.MaterializedRow) -> float | None:
+    if r.finish == "foil":
+        return r.card.get("prices_usd_foil")
+    return r.card.get("prices_usd")
+
+
+def _row_line_value(r: sel_mod.MaterializedRow) -> float | None:
+    p = _row_unit_price(r)
+    return p * r.quantity if p is not None else None
+
+
+def _row_display_name(r: sel_mod.MaterializedRow) -> str:
+    flavor = r.card.get("flavor_name")
+    name = r.card.get("name") or ""
+    return f"{flavor} / {name}" if flavor else name
+
+
+@query_app.command("show")
+def query_show_cmd(
+    selector: str = typer.Argument(..., help="V2 selector, e.g. 'inventory' or 'set:sld missing rarity=mythic'"),
+    first: int = typer.Option(None, "--first", help="Cap displayed rows (total count still printed)."),
+    json_out: bool = typer.Option(False, "--json"),
+):
+    """Show rows matching a selector."""
+    rows = _materialize_or_die(selector)
+    if json_out:
+        out = [
+            {
+                "scryfall_id": r.scryfall_id,
+                "set": r.card.get("set"),
+                "collector_number": r.card.get("collector_number"),
+                "name": r.card.get("name"),
+                "flavor_name": r.card.get("flavor_name"),
+                "rarity": r.card.get("rarity"),
+                "finish": r.finish,
+                "quantity": r.quantity,
+                "unit_price": _row_unit_price(r),
+                "line_value": _row_line_value(r),
+            }
+            for r in rows
+        ]
+        json.dump(out, sys.stdout, indent=2); sys.stdout.write("\n")
+        return
+    typer.echo(f"# selector: {selector}", err=True)
+    typer.echo(f"# rows: {len(rows)}", err=True)
+    if not rows:
+        raise typer.Exit(1)
+    capped = rows[:first] if first else rows
+    typer.echo(f"{'qty':>4} {'finish':>7} {'set':>6} {'cn':>6} {'rarity':>9}  name (usd / line)")
+    for r in capped:
+        unit = _row_unit_price(r); line = _row_line_value(r)
+        usd = f"${unit:.2f}" if unit is not None else "—"
+        line_s = f"${line:.2f}" if line is not None else "—"
+        typer.echo(f"{r.quantity:>4} {r.finish:>7} {r.card.get('set',''):>6} "
+                   f"{r.card.get('collector_number',''):>6} {(r.card.get('rarity') or ''):>9}  "
+                   f"{_row_display_name(r)} ({usd} / {line_s})")
+    if first and len(rows) > first:
+        typer.echo(f"# truncated to first {first}; total {len(rows)}", err=True)
+
+
+@query_app.command("value")
+def query_value_cmd(
+    selector: str = typer.Argument(...),
+    json_out: bool = typer.Option(False, "--json"),
+):
+    """Total USD value of a selector's rows."""
+    rows = _materialize_or_die(selector)
+    total = 0.0
+    missing = []
+    priced_rows: list[tuple[float, sel_mod.MaterializedRow]] = []
+    for r in rows:
+        line = _row_line_value(r)
+        if line is None and r.quantity > 0:
+            missing.append((_row_display_name(r), r.card.get("set"), r.card.get("collector_number"), r.finish))
+        else:
+            total += line or 0.0
+            if line is not None:
+                priced_rows.append((line, r))
+    priced_rows.sort(key=lambda t: t[0], reverse=True)
+    top_5 = [
+        {"name": _row_display_name(r), "set": r.card.get("set"),
+         "cn": r.card.get("collector_number"), "finish": r.finish, "line_value": v}
+        for v, r in priced_rows[:5]
+    ]
+    if json_out:
+        json.dump({"selector": selector, "total": total, "rows": len(rows),
+                   "missing_price": [{"name": n, "set": s, "cn": c, "finish": f}
+                                     for n, s, c, f in missing],
+                   "top_5": top_5}, sys.stdout, indent=2)
+        sys.stdout.write("\n")
+        return
+    typer.echo(f"Selector {selector!r}: ${total:.2f} across {len(rows)} rows")
+    if missing:
+        typer.echo(f"  ({len(missing)} rows have no USD price)")
+    if top_5:
+        typer.echo("Top 5 by line value:")
+        for t in top_5:
+            typer.echo(f"  ${t['line_value']:.2f}  {t['name']} ({(t['set'] or '').upper()}) {t['cn']} [{t['finish']}]")
+
+
+@query_app.command("top")
+def query_top_cmd(
+    n: int = typer.Argument(10, help="Show top-N rows by line value."),
+):
+    """Top-N inventory rows by line value (shorthand for `mm query show inventory` sorted)."""
+    rows = _materialize_or_die("inventory")
+    priced = [(r, _row_line_value(r)) for r in rows]
+    priced = [(r, v) for r, v in priced if v is not None]
+    priced.sort(key=lambda t: t[1], reverse=True)
+    capped = priced[:n]
+    typer.echo(f"Top {len(capped)} inventory rows by line value:")
+    for r, line in capped:
+        typer.echo(f"  ${line:.2f}  {_row_display_name(r)} "
+                   f"({(r.card.get('set') or '').upper()}) {r.card.get('collector_number')} "
+                   f"[{r.finish}] qty={r.quantity}")
+
+
+@query_app.command("total")
+def query_total_cmd():
+    """Shorthand for `mm query value inventory`."""
+    query_value_cmd(selector="inventory", json_out=False)
+
+
+@query_app.command("multiples")
+def query_multiples_cmd():
+    """Inventory rows with quantity > 1, ordered by qty desc."""
+    rows = _materialize_or_die("inventory qty>=2")
+    rows.sort(key=lambda r: r.quantity, reverse=True)
+    if not rows:
+        typer.echo("(no multiples in inventory)"); return
+    typer.echo(f"{'qty':>4} {'finish':>7} {'set':>6} {'cn':>6}  name")
+    for r in rows:
+        typer.echo(f"{r.quantity:>4} {r.finish:>7} {(r.card.get('set') or ''):>6} "
+                   f"{r.card.get('collector_number',''):>6}  {_row_display_name(r)}")
+
+
+@query_app.command("stats")
+def query_stats_cmd(
+    json_out: bool = typer.Option(False, "--json"),
+):
+    """Inventory rollup: totals, by-rarity, by-set, by-finish."""
+    rows = _materialize_or_die("inventory")
+    total = 0.0
+    by_rarity: dict[str, dict] = {}
+    by_set: dict[str, dict] = {}
+    by_finish: dict[str, dict] = {}
+    for r in rows:
+        line = _row_line_value(r) or 0.0
+        total += line
+        rar = (r.card.get("rarity") or "unknown").lower()
+        st = (r.card.get("set") or "unknown").lower()
+        bucket = by_rarity.setdefault(rar, {"rows": 0, "qty": 0, "value": 0.0})
+        bucket["rows"] += 1; bucket["qty"] += r.quantity; bucket["value"] += line
+        bucket = by_set.setdefault(st, {"rows": 0, "qty": 0, "value": 0.0})
+        bucket["rows"] += 1; bucket["qty"] += r.quantity; bucket["value"] += line
+        bucket = by_finish.setdefault(r.finish, {"rows": 0, "qty": 0, "value": 0.0})
+        bucket["rows"] += 1; bucket["qty"] += r.quantity; bucket["value"] += line
+    out = {"total": total, "rows": len(rows),
+           "qty": sum(r.quantity for r in rows),
+           "by_rarity": by_rarity, "by_set": by_set, "by_finish": by_finish}
+    if json_out:
+        json.dump(out, sys.stdout, indent=2); sys.stdout.write("\n"); return
+    typer.echo(f"Total: ${total:.2f} / {out['qty']} cards / {len(rows)} rows")
+    typer.echo("\nBy rarity:")
+    for rar, b in sorted(by_rarity.items()):
+        typer.echo(f"  {rar:10} rows={b['rows']:>4} qty={b['qty']:>4} value=${b['value']:.2f}")
+    typer.echo("\nBy set:")
+    for st, b in sorted(by_set.items()):
+        typer.echo(f"  {st.upper():10} rows={b['rows']:>4} qty={b['qty']:>4} value=${b['value']:.2f}")
+    typer.echo("\nBy finish:")
+    for fin, b in sorted(by_finish.items()):
+        typer.echo(f"  {fin:10} rows={b['rows']:>4} qty={b['qty']:>4} value=${b['value']:.2f}")
+
+
+@query_app.command("url")
+def query_url_cmd(
+    selector: str = typer.Argument(...),
+    chunk_size: int = typer.Option(20, "--chunk-size",
+                                   help="Cards per Scryfall search URL chunk (default 20)."),
+):
+    """Synthesize Scryfall search URLs for the result of a selector.
+
+    Uses `!"name"` form so each card matches its exact oracle name. URLs
+    chunked at --chunk-size to stay under URL-length limits.
+    """
+    from urllib.parse import quote_plus
+    rows = _materialize_or_die(selector)
+    if not rows:
+        typer.echo("(selector matched 0 rows)"); raise typer.Exit(1)
+    # Dedupe by oracle name — multiple finishes / printings of the same card
+    # collapse to one URL term.
+    names: list[str] = []
+    seen: set[str] = set()
+    for r in rows:
+        nm = r.card.get("name")
+        if nm and nm not in seen:
+            seen.add(nm); names.append(nm)
+    chunks = [names[i:i+chunk_size] for i in range(0, len(names), chunk_size)]
+    typer.echo(f"{len(names)} distinct cards → {len(chunks)} URL(s)")
+    for i, chunk in enumerate(chunks, start=1):
+        terms = " or ".join(f'!"{nm}"' for nm in chunk)
+        url = f"https://scryfall.com/search?q={quote_plus(terms)}"
+        typer.echo(f"Chunk {i}/{len(chunks)} ({len(chunk)} cards): {url}")
+
+
+@query_app.command("xlsx")
+def query_xlsx_cmd(
+    selector: str = typer.Argument(...),
+    name: str = typer.Option(None, "--name", help="Override the slug for the filename."),
+    out: Path = typer.Option(None, "--out", help="Override the full output path."),
+):
+    """Write the selector's rows to a queries/<slug>-<timestamp>.xlsx artifact.
+
+    The XLSX has columns: set, collector_number, name, rarity, finish, qty,
+    unit_usd, line_value. A hidden _meta sheet records the selector verbatim.
+    Empty result still writes a file (with headers + empty body) and warns.
+    """
+    from openpyxl import Workbook
+    from openpyxl.styles import Font
+    from openpyxl.utils import get_column_letter
+
+    rows = _materialize_or_die(selector)
+    slug = name or _selector_slug(selector)
+    ts = datetime.now().strftime("%Y-%m-%d-%H%M%S")
+    if out:
+        target = out
+    else:
+        target = QUERIES_DIR / f"{slug}-{ts}.xlsx"
+    target.parent.mkdir(parents=True, exist_ok=True)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "results"
+    headers = ["set", "collector_number", "name", "rarity", "finish",
+               "qty", "unit_usd", "line_value", "scryfall_id"]
+    ws.append(headers)
+    for col, _ in enumerate(headers, start=1):
+        ws.cell(row=1, column=col).font = Font(bold=True)
+    for r in rows:
+        unit = _row_unit_price(r); line = _row_line_value(r)
+        ws.append([
+            r.card.get("set"), r.card.get("collector_number"),
+            _row_display_name(r), r.card.get("rarity"), r.finish,
+            r.quantity, unit, line, r.scryfall_id,
+        ])
+        # Force CN to text to avoid Excel's "Number Stored as Text" warning.
+        ws.cell(row=ws.max_row, column=2).number_format = "@"
+    last = ws.max_row
+    for col_idx in (7, 8):
+        for row_idx in range(2, last + 1):
+            ws.cell(row=row_idx, column=col_idx).number_format = '"$"#,##0.00'
+    widths = {1: 6, 2: 8, 3: 48, 4: 10, 5: 8, 6: 5, 7: 9, 8: 11, 9: 38}
+    for col_idx, w in widths.items():
+        ws.column_dimensions[get_column_letter(col_idx)].width = w
+    ws.freeze_panes = "A2"
+
+    meta_ws = wb.create_sheet("_meta")
+    meta_ws.sheet_state = "hidden"
+    meta_ws.append(["key", "value"])
+    meta_ws.append(["selector", selector])
+    meta_ws.append(["slug", slug])
+    meta_ws.append(["generated_at", datetime.now().isoformat(timespec="seconds")])
+    meta_ws.append(["row_count", str(len(rows))])
+
+    wb.save(target)
+    if not rows:
+        typer.echo(f"warning: selector matched 0 rows; wrote empty file {target}", err=True)
+    typer.echo(f"wrote {target} ({len(rows)} rows)")
 
 
 # ---------- ad-hoc scryfall query ----------
