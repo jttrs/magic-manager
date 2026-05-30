@@ -425,6 +425,13 @@ def _card_row(c: dict) -> dict:
             return None
 
     promo_types = f("promo_types") or []
+    # ``flavor_name`` lives on card_faces[0] for split / double-faced cards,
+    # mirroring the image_uris pattern. Hoisted out of the dict body so
+    # ``is_reskin`` can use the same merged value.
+    flavor_name = (
+        f("flavor_name")
+        or ((c.get("card_faces") or [{}])[0] or {}).get("flavor_name")
+    )
     return {
         "scryfall_id":      f("id"),
         "oracle_id":        f("oracle_id"),
@@ -450,19 +457,23 @@ def _card_row(c: dict) -> dict:
         # V1.3 — UB awareness fields. ``flavor_name`` lives on card_faces[0]
         # for split / double-faced cards, mirroring the image_uris pattern
         # already used above.
-        "flavor_name":      (
-            f("flavor_name")
-            or ((c.get("card_faces") or [{}])[0] or {}).get("flavor_name")
-        ),
+        "flavor_name":      flavor_name,
         "promo_types":      json.dumps(promo_types),
         "border_color":     f("border_color"),
         "full_art":         1 if f("full_art") else 0,
         "security_stamp":   f("security_stamp"),
-        # is_reskin is the canonical "this is a Universes Beyond reskin" signal
-        # per docs/scryfall-set-families-and-bonus-sheets.md §4a. The discriminator
-        # is `promo_types contains "sourcematerial"`, NOT flavor_name (some MAR
-        # cards keep their oracle name but get Marvel-themed art).
-        "is_reskin":        1 if "sourcematerial" in promo_types else 0,
+        # is_reskin: a printing where the visible name differs from the oracle
+        # name OR the printing carries the formal masterpiece-sheet tag. Two
+        # signals, unioned, because each catches cases the other misses:
+        #   - `sourcematerial in promo_types` catches the FCA/MAR/PZA/TLE
+        #     bonus sheets even when the card kept its oracle name (e.g.
+        #     MAR Wedding Ring kept "Wedding Ring" but is still a reskin).
+        #   - `flavor_name is not None` catches SLD UB drops and other
+        #     printings that rename without using the masterpiece tag
+        #     (e.g. SLD 1858 oracle "Day of Judgment" / flavor "Spira's
+        #     Punishment", promo_types ["ffx","universesbeyond"]).
+        # See docs/scryfall-set-families-and-bonus-sheets.md §4a.
+        "is_reskin":        1 if ("sourcematerial" in promo_types or flavor_name) else 0,
     }
 
 

@@ -153,7 +153,12 @@ Examples confirmed:
 - **PZA #15** — `name: "Conqueror's Flail"`, `flavor_name: "Ronin's Arsenal"`
 - **PZA #4** — `name: "Brainstorm"`, no `flavor_name`
 
-**Code rule of thumb:** `is_reskin = "sourcematerial" in promo_types`. The `mm` CLI computes this once at upsert time (`magic_manager.db._card_row`) and stores it on the cards table.
+**Code rule of thumb (V1.7+):** `is_reskin = ("sourcematerial" in promo_types) OR (flavor_name IS NOT NULL)`. Two signals unioned, because each catches cases the other misses:
+
+- `"sourcematerial" in promo_types` is the **formal masterpiece-sheet tag** — present on every FCA/MAR/PZA/TLE printing including the ones that kept their oracle name (e.g. MAR Wedding Ring is still `is_reskin=1` despite no flavor_name).
+- `flavor_name IS NOT NULL` catches **per-IP-tagged reskins** that don't carry the masterpiece tag — e.g. SLD UB drops like `SLD 1858` (oracle "Day of Judgment", flavor "Spira's Punishment", `promo_types=["ffx","universesbeyond"]`). Same for FIC #483 ("Birds of Paradise" / "Paradise Chocobo") which uses `["ffxiv","universesbeyond","bundle"]` — no `sourcematerial`.
+
+The `mm` CLI computes this once at upsert time (`magic_manager.db._card_row`). Pre-V1.7, the rule was `sourcematerial`-only and 19 SLD/FIC reskins were under-counted; a one-shot `UPDATE cards SET is_reskin=1 WHERE flavor_name IS NOT NULL` backfilled them.
 
 ### 4b. Format-specific supplemental sets
 
@@ -176,7 +181,8 @@ Given a Scryfall card object, these fields answer specific questions:
 |---|---|---|
 | Is this a reprint? | `reprint: true` | Authoritative oracle-level flag |
 | Has it been reskinned with a themed name? | `flavor_name` populated | `name` is still the oracle name |
-| Is it part of the premium reskin treatment? | `promo_types` contains `"sourcematerial"` | Sufficient but not necessary — TMC uses `surgefoil` instead |
+| Is it a reskin printing (visible name differs from oracle, or formal masterpiece sheet)? | `is_reskin` column on cards (V1.7+: `sourcematerial OR flavor_name IS NOT NULL`) | The union catches FCA/MAR/PZA bonus sheets AND SLD/FIC UB drops |
+| Is it part of the formal masterpiece reskin sheet (FCA/MAR/PZA)? | `promo_types` contains `"sourcematerial"` | Stricter than `is_reskin` — only fires on the dedicated bonus sheets |
 | Is it borderless? | `border_color: "borderless"` | Or `frame_effects` contains `"borderless"` (older sets) |
 | Is it full-art? | `full_art: true` | |
 | Does it appear in the parent set's boosters? | `booster: true` | False for separate-product masterpiece sheets and most commander/eternal cards |
@@ -232,8 +238,12 @@ Our four primary subjects (FIN/SPM/TLA/TMT) follow "expansion parent + siblings.
 - **Doctor Who, Fallout, Warhammer 40,000 Commander**: parent is `set_type: "commander"`. No "main expansion" — they were standalone preconstructed-deck releases. Family is just the commander deck plus its tokens.
 Don't assume "expansion parent." Walk `parent_set_code` from any anchor.
 
-### Fact: `flavor_name` is NOT a reliable reskin signal
-We previously assumed `flavor_name` was populated on every reskinned printing. **It isn't.** MAR contains 46 (out of 53) cards that have the full reskin treatment (borderless, full-art for some, `sourcematerial` promo type, themed Marvel art) but kept their oracle name because the original name already fit the theme — Wedding Ring stays "Wedding Ring," Beast Within stays "Beast Within." The discriminator is `promo_types contains "sourcematerial"`, never `flavor_name`. Code that uses `flavor_name` as a reskin discriminator will under-report on MAR.
+### Fact: neither `flavor_name` NOR `sourcematerial` ALONE catches every reskin
+
+- `flavor_name` alone **under-counts on MAR/FCA/PZA**: ~46 of 53 MAR cards kept their oracle name (Wedding Ring stays "Wedding Ring") despite being the full Marvel reskin treatment.
+- `sourcematerial` in `promo_types` alone **under-counts on SLD/FIC UB drops**: those use per-IP tags (`ffx`, `ffvii`, `ffxiii`, etc.) without `sourcematerial`. SLD 1858–1872 are all reskins with flavor names, but `promo_types=["ffx","universesbeyond"]` — no `sourcematerial`.
+
+The V1.7 fix: `is_reskin = sourcematerial OR flavor_name IS NOT NULL`. The union catches both cases. Cards that are reskinned without a name change (MAR Wedding Ring) get caught by the first signal; cards that get a name change without the masterpiece tag (SLD 1858) get caught by the second. Verified against current data: union catches all printings the user agreed should be reskins; no false positives observed.
 
 ---
 

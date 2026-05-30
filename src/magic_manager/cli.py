@@ -265,7 +265,7 @@ def set_master_list(
             for row in s["top_value"]:
                 price = f"${row.unit_price:.2f}" if row.unit_price is not None else "—"
                 typer.echo(
-                    f"    {row.quantity}x {row.name} ({row.set_code.upper()}) "
+                    f"    {row.quantity}x {row.display_name} ({row.set_code.upper()}) "
                     f"{row.collector_number} [{row.finish}] @ {price}",
                     err=True,
                 )
@@ -580,8 +580,10 @@ def list_show(label: str = typer.Argument(...)):
     for r in rows:
         if r.quantity == 0: continue
         usd = f"${r.unit_price:.2f}" if r.unit_price is not None else "—"
+        # display_name renders as "<flavor_name> / <oracle_name>" for reskins,
+        # plain oracle name otherwise. Matches the inventory-checklist XLSX.
         typer.echo(f"{r.quantity:>4} {r.finish:>7} {r.set_code:>6} "
-                   f"{r.collector_number:>6}  {r.name} ({r.rarity}, {usd})")
+                   f"{r.collector_number:>6}  {r.display_name} ({r.rarity}, {usd})")
 
 
 @list_app.command("value")

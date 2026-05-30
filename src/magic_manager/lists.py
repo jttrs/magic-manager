@@ -32,6 +32,7 @@ class ListRow:
     prices_usd: float | None
     prices_usd_foil: float | None
     cmc: float | None
+    flavor_name: str | None = None
 
     @property
     def unit_price(self) -> float | None:
@@ -42,6 +43,15 @@ class ListRow:
         p = self.unit_price
         return p * self.quantity if p is not None else None
 
+    @property
+    def display_name(self) -> str:
+        """Render as ``<flavor_name> / <oracle_name>`` for reskin printings,
+        otherwise just the oracle name. Matches the convention used by the
+        master-list XLSX writer (sets.py:369) so users see consistent names
+        across `mm list show`, intake REPL feedback, and inventory checklists.
+        """
+        return f"{self.flavor_name} / {self.name}" if self.flavor_name else self.name
+
 
 def list_show(label: str) -> list[ListRow]:
     with db.connect() as conn:
@@ -49,7 +59,7 @@ def list_show(label: str) -> list[ListRow]:
             """
             SELECT lr.scryfall_id, lr.finish, lr.quantity,
                    c.name, c.set_code, c.collector_number, c.rarity,
-                   c.prices_usd, c.prices_usd_foil, c.cmc
+                   c.prices_usd, c.prices_usd_foil, c.cmc, c.flavor_name
             FROM list_rows lr
             JOIN cards c ON c.scryfall_id = lr.scryfall_id
             WHERE lr.label = ?
@@ -66,7 +76,8 @@ def list_value(label: str) -> dict:
     missing_price = []
     for r in rows:
         if r.line_value is None and r.quantity > 0:
-            missing_price.append((r.name, r.set_code, r.collector_number, r.finish))
+            # Use display_name so reskin printings show as "<flavor> / <oracle>".
+            missing_price.append((r.display_name, r.set_code, r.collector_number, r.finish))
         else:
             total += r.line_value or 0.0
     return {"total": total, "rows": len(rows), "missing_price": missing_price}
@@ -387,9 +398,16 @@ def summarize_xlsx_file(path: Path) -> dict:
         line_value = (unit or 0.0) * e.qty
         if unit is not None:
             estimated_value += line_value
+        # Render top-value display name with the merged "<flavor>/<oracle>"
+        # form when the printing has a flavor_name (matches list_show display).
+        oracle_name = e.card.get("name") or ""
+        flavor_name = e.card.get("flavor_name") or (
+            ((e.card.get("card_faces") or [{}])[0] or {}).get("flavor_name")
+        )
+        display_name = f"{flavor_name} / {oracle_name}" if flavor_name else oracle_name
         rows_for_top.append((line_value, {
             "qty": e.qty,
-            "name": e.card.get("name"),
+            "name": display_name,
             "set": (e.card.get("set") or "").lower(),
             "collector_number": e.card.get("collector_number"),
             "finish": "foil" if e.foil else "nonfoil",

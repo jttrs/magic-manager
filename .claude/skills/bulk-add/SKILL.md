@@ -56,9 +56,21 @@ For discrete CN lists (`1858, 1860, 1862`), use `cn:1858 or cn:1860 or cn:1862`.
 
 ### 3. Show the preview
 
-Tight table with these columns: `set`, `collector_number`, `name`, `treatment`, `rarity`, `finish`, `price`. Compute `finish` per the user's tokens. Show price from `prices_usd` for nonfoil rows, `prices_usd_foil` for foil rows. Add a total at the bottom.
+Tight table with these columns: `set`, `collector_number`, **name**, `treatment`, `rarity`, `finish`, `price`. Compute `finish` per the user's tokens. Show price from `prices_usd` for nonfoil rows, `prices_usd_foil` for foil rows. Add a total at the bottom.
 
 Sort by collector_number ascending so the user can scan against their physical pile.
+
+**Reskin printings — render flavor_name.** When a card has a populated `flavor_name` (most SLD UB drops, FCA, MAR, PZA, FIC bonus reskins, etc.), the user is physically holding a card whose printed name is the flavor name, not the oracle name. The preview MUST display `<flavor_name> / <oracle_name>` (e.g. `Spira's Punishment / Day of Judgment`). This matches the convention used by `mm list show`, `mm intake` feedback, and the inventory-checklist XLSX — same merged form everywhere a human reads names.
+
+To pull flavor_name in the resolve step, request it explicitly via `--json` or by adding `flavor_name` to `--fields`:
+
+```bash
+uv run mm scryfall '<query>' --first 200 \
+  --fields set,collector_number,name,treatment,rarity,prices_usd,prices_usd_foil \
+  --json    # then format the table yourself, including flavor_name
+```
+
+The `--fields` table view doesn't currently include flavor_name as a known column — use `--json` and post-process when reskins are likely (any SLD/SPG/FCA/MAR/PZA range, or any UB-heavy set).
 
 ### 4. Gap-check (release-date + CN-contiguity)
 
@@ -110,9 +122,11 @@ Compose a Moxfield-style text block:
 ```
 
 Format rules (driven by `parsers.parse_text` at `src/magic_manager/parsers.py:97`):
-- Quantity, then name, then `(SET)` (uppercase fine, lowercase fine), then CN, optional ` *F*` for foil.
+- Quantity, then **oracle** name, then `(SET)` (uppercase fine, lowercase fine), then CN, optional ` *F*` for foil.
 - One card per line. Blank lines OK.
 - For `both` finish, emit two lines (one without `*F*`, one with).
+
+**Use the oracle name in the import block, not the flavor name.** The resolver (`parsers.resolve()` at `parsers.py:348`) accepts both forms — typing `Spira's Punishment (SLD) 1858` resolves cleanly — but oracle name is the canonical form and matches the export round-trip path (Moxfield, Archidekt, TCGplayer all expect oracle names). The cards table stores flavor_name as a separate column and `mm list show` will render `<flavor> / <oracle>` automatically based on that column.
 
 Pipe to `mm list import`:
 
@@ -159,6 +173,8 @@ The user can override per-invocation. The default is `owned:` because:
 
 ## Caveats
 
+- **Flavor names are display-only.** Stored on the `cards` table as `flavor_name`. Renders as `<flavor> / <oracle>` in `mm list show`, intake REPL feedback, and inventory-checklist XLSX. NOT used in exports (Moxfield/Archidekt/TCGplayer get the oracle name). Resolver accepts both forms on import.
+- **`is_reskin = 1` is set when EITHER `flavor_name IS NOT NULL` OR `'sourcematerial' in promo_types`.** Catches both the FCA/MAR/PZA bonus sheets and the SLD per-IP-tagged drops. See `docs/scryfall-set-families-and-bonus-sheets.md` §4a.
 - **Re-import sums quantities.** Importing `SLD 1858 nonfoil` twice gives qty=2. Always check `mm list show <label>` before re-importing if you're unsure whether a previous attempt landed.
 - **`owned:<set>` is NOT reconciled with `set:<set>` master math.** `mm export 'set:sld missing'` doesn't subtract `owned:sld` automatically. That's a V2 feature (selector grammar extension). For now, the two lists are independent.
 - **The CN range `cn>=A cn<=B` only matches base-numeric CNs.** Letter-suffix CNs (`1858a`, `212s`) need explicit listing or a `cn:1858a or cn:1858b` style query.
