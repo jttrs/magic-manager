@@ -15,7 +15,7 @@ The mechanical wrapper around `mm set master-list`. The user names a release ("F
 2. Look at the exit code:
    - **0**: success. Tell the user the file path and the next step (`mm set ingest "<name>"` when they've filled in quantities). Done.
    - **2**: bad arguments / no Scryfall match. Surface the error verbatim and ask for clarification.
-   - **3**: an unprocessed intake XLSX already exists. The CLI prints a readout of the current `set:<anchor>` state (rows owned, total value, top-value cards). Show that readout to the user and ask which path forward they want via `AskUserQuestion`.
+   - **3**: an unprocessed intake XLSX already exists. The CLI prints a readout of inventory in this set's family (rows owned, total value, top-value cards). Show that readout to the user and ask which path forward they want via `AskUserQuestion`.
 3. If they chose "ingest first": run `uv run mm set ingest "<name>"`, surface the result, then re-run `mm set master-list "<name>"` to start a fresh inventory checklist.
 4. If they chose "discard partial work": re-run `uv run mm set master-list "<name>" --force` and warn that any XLSX-only edits (those not yet ingested) are gone.
 
@@ -37,7 +37,7 @@ The XLSX carries a hidden `_meta` sheet recording the slice, so ingest knows whi
 ## Other flags (rarely needed)
 
 - `--include token,memorabilia` — opt extra `set_type`s into the family. Use only when the user explicitly asks for tokens, art series, or scene boxes.
-- `--include-variants` — opt prerelease, store-stamped, japanshowcase, serialized, and white/yellow-bordered printings back in. **Off by default** — these are filtered out of both the master-list output AND the seeded `set:<anchor>` list (so set-missing math doesn't count them). The user said they don't catalog these and there are too few to keep around.
+- `--include-variants` — opt prerelease, store-stamped, japanshowcase, serialized, and white/yellow-bordered printings back in. **Off by default** — these are filtered out of the master-list output and from set-missing math via the registered `set_targets` row. The user said they don't catalog these and there are too few to keep around.
 - `--out <path>` — redirect output to a non-default path (skips collision detection). Almost never the right answer.
 - `--force` — overwrite an existing intake XLSX. Only after the user has explicitly chosen "discard partial work" via the exit-3 prompt.
 - `--format md` — emit a markdown checklist instead of XLSX. The file lands at `checklists/<slug>-<slice>-checklist.md` with YAML frontmatter, sections per rarity, and lines like `- (FCA) 4 [N:0 F:0] [b|sm] — [Wild Rose Rebellion / Counterspell](https://scryfall.com/card/fca/4) — $4.66 / $5.50`. Edit the `[N:k F:k]` brackets in any text editor (or on a phone). `mm set ingest` and `/ingest-new-inventory-list` both auto-detect the format.
@@ -50,7 +50,7 @@ This column lets you tell apart multiple printings of the same card (e.g. the si
 
 ## Three intake surfaces (XLSX, markdown, scan loop)
 
-The user picks the surface that fits the moment. All three converge on the same `set:<anchor>` list, so exports/queries are surface-agnostic.
+The user picks the surface that fits the moment. All three converge on the same `inventory` table, so exports/queries are surface-agnostic.
 
 | Surface | When to use | Command |
 |---|---|---|
@@ -87,7 +87,7 @@ When the CLI exits 3, the stderr already contains the readout. After surfacing i
 | Active inventory checklist (one per family at a time) | `checklists/<slug>-checklist.xlsx` | Created by `master-list`. User edits in Excel/Numbers. |
 | Archived inventory checklists | `checklists/processed/<slug>-checklist-<YYYY-MM-DD-HHMMSS>.xlsx` | Created by `ingest` after the data lands in the DB. Immutable. |
 
-The XLSX columns: `set`, `collector_number`, `name`, `rarity`, `mana_value`, `usd`, `usd_foil`, `qty_normal`, `qty_foil`. The two `qty_*` columns are tinted yellow, validated as non-negative integers, and pre-populated from `set:<anchor>` whenever the user already owns cards from previous ingest cycles. Rows are sorted by rarity bucket (mythic → rare → uncommon → common → bonus → special) then collector number to match the user's physical box order.
+The XLSX columns: `set`, `collector_number`, `name`, `rarity`, `mana_value`, `usd`, `usd_foil`, `qty_normal`, `qty_foil`. The two `qty_*` columns are tinted yellow, validated as non-negative integers, and pre-populated from the `inventory` table whenever the user already owns cards from previous ingest cycles. Rows are sorted by rarity bucket (mythic → rare → uncommon → common → bonus → special) then collector number to match the user's physical box order.
 
 For Universes Beyond reskin printings (FCA, MAR, PZA, etc.) the `name` cell renders as `<flavor_name> / <oracle_name>` so the user can find the row by either the printed name (what they see on the card) or the canonical Magic name. Non-reskin rows show just the oracle name.
 

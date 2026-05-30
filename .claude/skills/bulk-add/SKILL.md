@@ -60,7 +60,7 @@ Tight table with these columns: `set`, `collector_number`, **name**, `treatment`
 
 Sort by collector_number ascending so the user can scan against their physical pile.
 
-**Reskin printings — render flavor_name.** When a card has a populated `flavor_name` (most SLD UB drops, FCA, MAR, PZA, FIC bonus reskins, etc.), the user is physically holding a card whose printed name is the flavor name, not the oracle name. The preview MUST display `<flavor_name> / <oracle_name>` (e.g. `Spira's Punishment / Day of Judgment`). This matches the convention used by `mm list show`, `mm intake` feedback, and the inventory-checklist XLSX — same merged form everywhere a human reads names.
+**Reskin printings — render flavor_name.** When a card has a populated `flavor_name` (most SLD UB drops, FCA, MAR, PZA, FIC bonus reskins, etc.), the user is physically holding a card whose printed name is the flavor name, not the oracle name. The preview MUST display `<flavor_name> / <oracle_name>` (e.g. `Spira's Punishment / Day of Judgment`). This matches the convention used by `mm inventory show`, `mm intake` feedback, and the inventory-checklist XLSX — same merged form everywhere a human reads names.
 
 To pull flavor_name in the resolve step, request it explicitly via `--json` or by adding `flavor_name` to `--fields`:
 
@@ -102,9 +102,9 @@ If the gap-check turns up zero neighbors, just say "No release-date neighbors de
 Use `AskUserQuestion`:
 
 ```
-Question: Import these N cards into `<label>`?
+Question: Import these N cards into inventory?
 Options:
-  - "Yes, import all <N> cards" (default label: owned:<set>)
+  - "Yes, import all <N> cards"
   - "Cancel — let me revise"
 ```
 
@@ -126,44 +126,36 @@ Format rules (driven by `parsers.parse_text` at `src/magic_manager/parsers.py:97
 - One card per line. Blank lines OK.
 - For `both` finish, emit two lines (one without `*F*`, one with).
 
-**Use the oracle name in the import block, not the flavor name.** The resolver (`parsers.resolve()` at `parsers.py:348`) accepts both forms — typing `Spira's Punishment (SLD) 1858` resolves cleanly — but oracle name is the canonical form and matches the export round-trip path (Moxfield, Archidekt, TCGplayer all expect oracle names). The cards table stores flavor_name as a separate column and `mm list show` will render `<flavor> / <oracle>` automatically based on that column.
+**Use the oracle name in the import block, not the flavor name.** The resolver (`parsers.resolve()` at `parsers.py:348`) accepts both forms — typing `Spira's Punishment (SLD) 1858` resolves cleanly — but oracle name is the canonical form and matches the export round-trip path (Moxfield, Archidekt, TCGplayer all expect oracle names). The cards table stores flavor_name as a separate column and `mm inventory show` will render `<flavor> / <oracle>` automatically based on that column.
 
-Pipe to `mm list import`:
+Pipe to `mm inventory import`:
 
 ```bash
-printf '%s' "$BLOCK" | uv run mm list import owned:sld
+printf '%s' "$BLOCK" | uv run mm inventory import
 ```
 
-`mm list import` will:
+`mm inventory import` will:
 - Auto-upsert each card into the `cards` table (so SLD doesn't need to be pre-synced).
 - Resolve each line via Scryfall (already cached from step 2 — no extra HTTP).
-- Insert-or-sum into `owned:sld` (free-form-list semantics).
+- Insert-or-sum into the `inventory` table (per `(scryfall_id, finish)` key).
 
 Surface any warnings or `not_found` entries verbatim. Most common warning: name/printing mismatch (means our text-block name didn't match what Scryfall returned for that CN — usually our copy/paste error, fix and re-run).
 
 ### 7. Confirm what landed
 
 ```bash
-uv run mm list show owned:sld
-uv run mm list value owned:sld
+uv run mm inventory show
+uv run mm inventory value
 ```
 
 Report:
-- Total rows in `owned:sld` after this import.
+- Total rows in inventory after this import.
 - Total value (USD).
 - Whether any cards were already at qty>0 before this run (means the user re-imported the same range — flag it).
 
-## Default label: `owned:<set>`
+## Where the cards land
 
-Lowercase set code, no other suffix. Examples:
-- `owned:sld` — Secret Lair cards
-- `owned:spg` — Special Guests cards
-- `owned:fic` — FIC cards added piecemeal (not via the master-list flow)
-
-The user can override per-invocation. The default is `owned:` because:
-- Mirrors the existing prefix vocabulary (`set:`, `wishlist:`, `deck:`, `idea:`, `buy:`).
-- Visually parallel to `set:<code>` — "stuff from this set, but only what I own."
-- The free-form-list semantics ("re-import sums quantities") match how SLD usage actually works: the user adds one drop at a time, accumulating over months.
+Imports always land in the V2 `inventory` table — one row per `(scryfall_id, finish)`, no labels. There is no per-set or per-source partitioning at the inventory level; "which set did these come from?" is answered by the joined `cards.set_code`. The free-form-list semantics ("re-import sums quantities") match how SLD usage actually works: the user adds one drop at a time, accumulating over months.
 
 ## Foil/nonfoil notes
 
@@ -173,10 +165,10 @@ The user can override per-invocation. The default is `owned:` because:
 
 ## Caveats
 
-- **Flavor names are display-only.** Stored on the `cards` table as `flavor_name`. Renders as `<flavor> / <oracle>` in `mm list show`, intake REPL feedback, and inventory-checklist XLSX. NOT used in exports (Moxfield/Archidekt/TCGplayer get the oracle name). Resolver accepts both forms on import.
+- **Flavor names are display-only.** Stored on the `cards` table as `flavor_name`. Renders as `<flavor> / <oracle>` in `mm inventory show`, intake REPL feedback, and inventory-checklist XLSX. NOT used in exports (Moxfield/Archidekt/TCGplayer get the oracle name). Resolver accepts both forms on import.
 - **`is_reskin = 1` is set when EITHER `flavor_name IS NOT NULL` OR `'sourcematerial' in promo_types`.** Catches both the FCA/MAR/PZA bonus sheets and the SLD per-IP-tagged drops. See `docs/scryfall-set-families-and-bonus-sheets.md` §4a.
-- **Re-import sums quantities.** Importing `SLD 1858 nonfoil` twice gives qty=2. Always check `mm list show <label>` before re-importing if you're unsure whether a previous attempt landed.
-- **`owned:<set>` is NOT reconciled with `set:<set>` master math.** `mm export 'set:sld missing'` doesn't subtract `owned:sld` automatically. That's a V2 feature (selector grammar extension). For now, the two lists are independent.
+- **Re-import sums quantities.** Importing `SLD 1858 nonfoil` twice gives qty=2. Always check `mm inventory show` before re-importing if you're unsure whether a previous attempt landed.
+- **`set:sld missing` reconciles against inventory automatically.** In V2 the selector grammar treats `inventory` as the single source of truth for ownership, so `mm export moxfield 'set:sld missing'` excludes whatever the bulk-add just wrote. No separate label to keep in sync.
 - **The CN range `cn>=A cn<=B` only matches base-numeric CNs.** Letter-suffix CNs (`1858a`, `212s`) need explicit listing or a `cn:1858a or cn:1858b` style query.
 - **Gap-check is informational, not authoritative.** Same release date doesn't always mean same drop (SLD often releases multiple drops on the same day). The CN-contiguity filter mitigates but doesn't eliminate false positives. Show the user the data and let them decide.
 
@@ -191,7 +183,7 @@ Steps:
 2. Show preview.
 3. Gap-check: query `set:sld cn>=1853 cn<=1877 --json`, filter to release_date=2025-06-09, exclude user's range. → If no neighbors with same date, say "no release-date neighbors detected." If `1857` shares the date, flag it.
 4. Confirm.
-5. `printf '%s' "$BLOCK" | uv run mm list import owned:sld` where `$BLOCK` is 15 lines of `1 Day of Judgment (SLD) 1858` etc.
+5. `printf '%s' "$BLOCK" | uv run mm inventory import` where `$BLOCK` is 15 lines of `1 Day of Judgment (SLD) 1858` etc.
 6. Show final tally.
 
 ### Two ranges, mixed finish
@@ -214,7 +206,7 @@ Same flow. The gap-check will probably show zero neighbors (small drop, all 3 CN
 
 ## Cross-references
 
-- [[import-list]] — for paste-from-clipboard text blocks (Moxfield, Archidekt, etc.). This skill REUSES `mm list import` under the hood.
+- [[import-list]] — for paste-from-clipboard text blocks (Moxfield, Archidekt, etc.). This skill REUSES `mm inventory import` under the hood.
 - [[scryfall-search]] — for the underlying query syntax. `mm scryfall` is the preferred search interface.
 - [[generate-set-list]] — when the user wants to catalog a whole set, not just specific CNs.
 - [`docs/spg-source-attribution.md`](../../../docs/spg-source-attribution.md) — companion "evolving set on its own schedule" pattern (SPG / PMEI). SLD is the same shape; this skill is the right tool for SPG/PMEI bulk-adds too.
