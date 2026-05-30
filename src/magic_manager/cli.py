@@ -1597,13 +1597,15 @@ def intake_cmd(
 @app.command("export")
 def export_cmd(
     target: str = typer.Argument(..., help="moxfield | manapool | tcgplayer | archidekt | plain | scryfall-json"),
-    selector: str = typer.Argument(..., help="A selector string, e.g. 'label:set:fca' or 'set:fca missing'"),
+    selector: str = typer.Argument(..., help="V2 selector, e.g. 'inventory', 'set:fca missing', 'wishlist:edh-staples'"),
     out: Path = typer.Option(None, "--out", help="Optional output path; otherwise prints to stdout."),
 ):
-    """Materialize a selector and emit a paste-ready block for the target service."""
+    """Materialize a V2 selector and emit a paste-ready block for the target service."""
     try:
-        rows = lists_mod.materialize(selector)
-    except (ValueError, LookupError) as e:
+        rows = sel_mod.materialize(selector)
+    except sel_mod.SelectorParseError as e:
+        typer.echo(f"error: invalid selector: {e}", err=True); raise typer.Exit(2)
+    except LookupError as e:
         typer.echo(f"error: {e}", err=True); raise typer.Exit(2)
     if not rows:
         typer.echo(f"(selector matched 0 rows: {selector})", err=True)
