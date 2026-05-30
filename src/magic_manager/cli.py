@@ -14,7 +14,16 @@ from pathlib import Path
 
 import typer
 
-from . import db, exports, intake as intake_mod, lists as lists_mod, sets as sets_mod
+from . import (
+    db,
+    decks as decks_mod,
+    exports,
+    intake as intake_mod,
+    inventory as inv_mod,
+    lists as lists_mod,
+    sets as sets_mod,
+    wishlist as wishlist_mod,
+)
 
 CHECKLISTS_DIR = Path("checklists")
 PROCESSED_DIR = CHECKLISTS_DIR / "processed"
@@ -34,7 +43,10 @@ VALID_RARITIES = ("mythic", "rare", "uncommon", "common", "bonus", "special")
 app = typer.Typer(no_args_is_help=True, add_completion=False,
                   help="Local-first MTG collection / set / wishlist manager.")
 set_app = typer.Typer(no_args_is_help=True, help="Set sync and master-list generation.")
-list_app = typer.Typer(no_args_is_help=True, help="Labeled lists.")
+list_app = typer.Typer(no_args_is_help=True, help="Labeled lists (V1, deprecated — use inventory/wishlist/deck).")
+inventory_app = typer.Typer(no_args_is_help=True, help="Cards I physically own (V2 fact table).")
+wishlist_app = typer.Typer(no_args_is_help=True, help="Cards I want, organized by free-text category.")
+deck_app = typer.Typer(no_args_is_help=True, help="Decks: compositions independent of ownership.")
 
 checklists_app = typer.Typer(no_args_is_help=True,
                              help="Inspect inventory checklists in checklists/.")
@@ -45,6 +57,9 @@ db_app = typer.Typer(no_args_is_help=True,
 
 app.add_typer(set_app, name="set")
 app.add_typer(list_app, name="list")
+app.add_typer(inventory_app, name="inventory")
+app.add_typer(wishlist_app, name="wishlist")
+app.add_typer(deck_app, name="deck")
 app.add_typer(checklists_app, name="checklists")
 # Back-compat alias for muscle memory: ``mm input list`` still works.
 app.add_typer(checklists_app, name="input")
@@ -616,6 +631,356 @@ def list_ls():
     for r in rows:
         typer.echo(f"{r['label']:40} {r['kind']:10} {r['total_qty']:>6} "
                    f"{r['distinct_rows']:>6}  {r['source']}")
+
+
+# ---------- inventory (V2) ----------
+
+def _read_text_or_path(source: str | None) -> tuple[str | None, Path | None]:
+    """Resolve the (text, path) tuple for an import source argument.
+
+    None or '-' means stdin. A non-existent path errors out.
+    """
+    if source is None or source == "-":
+        return sys.stdin.read(), None
+    p = Path(source)
+    if not p.exists():
+        typer.echo(f"error: file not found: {p}", err=True); raise typer.Exit(2)
+    return None, p
+
+
+def _resolve_block(text: str | None, path: Path | None):
+    """Parse a text block / file with parsers.parse_text + resolve.
+
+    Returns the ParseResult. Caller decides how to route entries into the
+    target table (inventory / wishlist / deck_cards).
+    """
+    from . import parsers as _parsers
+    if path is not None:
+        fmt = _parsers.detect_format(path)
+        if fmt == "xlsx":
+            result = _parsers.parse_master_list_xlsx(path)
+        elif fmt == "md":
+            result = _parsers.parse_master_list_md(path)
+        else:
+            result = _parsers.parse_text(path.read_text(encoding="utf-8"))
+    else:
+        result = _parsers.parse_text(text)
+    _parsers.resolve(result)
+    return result
+
+
+@inventory_app.command("show")
+def inventory_show_cmd():
+    """Show every printing in inventory with quantities and current value."""
+    rows = inv_mod.inventory_show()
+    if not rows:
+        typer.echo("(inventory empty)"); return
+    typer.echo(f"{'qty':>4} {'finish':>7} {'set':>6} {'cn':>6}  name (rarity, usd)")
+    for r in rows:
+        usd = f"${r.unit_price:.2f}" if r.unit_price is not None else "—"
+        typer.echo(f"{r.quantity:>4} {r.finish:>7} {r.set_code:>6} "
+                   f"{r.collector_number:>6}  {r.display_name} ({r.rarity}, {usd})")
+
+
+@inventory_app.command("value")
+def inventory_value_cmd():
+    """Total inventory value in USD."""
+    v = inv_mod.inventory_value()
+    typer.echo(f"Inventory: ${v['total']:.2f} across {v['rows']} rows")
+    if v["missing_price"]:
+        typer.echo(f"Cards without USD price ({len(v['missing_price'])}):")
+        for name, set_code, cn, finish in v["missing_price"]:
+            typer.echo(f"  {name} ({set_code.upper()}) {cn} [{finish}]")
+
+
+@inventory_app.command("add")
+def inventory_add_cmd(
+    scryfall_id: str = typer.Argument(...),
+    finish: str = typer.Argument(..., help="nonfoil | foil"),
+    qty: int = typer.Argument(1),
+    replace: bool = typer.Option(False, "--replace", help="Set quantity outright instead of summing."),
+):
+    """Add (or replace) a single printing in inventory."""
+    try:
+        result = inv_mod.inventory_add(scryfall_id, finish, qty, replace=replace)
+    except ValueError as e:
+        typer.echo(f"error: {e}", err=True); raise typer.Exit(2)
+    typer.echo(f"{result['action']}: {scryfall_id} {finish} qty={result['new_qty']}")
+
+
+@inventory_app.command("remove")
+def inventory_remove_cmd(
+    scryfall_id: str = typer.Argument(...),
+    finish: str = typer.Argument(..., help="nonfoil | foil"),
+    qty: int = typer.Option(None, "--qty", help="Subtract this many (omit to delete the row)."),
+):
+    """Remove (or decrement) a single printing in inventory."""
+    result = inv_mod.inventory_remove(scryfall_id, finish, qty)
+    typer.echo(f"{result['action']}: {scryfall_id} {finish} new_qty={result['new_qty']}")
+
+
+@inventory_app.command("import")
+def inventory_import_cmd(
+    source: str = typer.Argument(None, help="Path to file (XLSX/text) or '-' for stdin."),
+):
+    """Read a Moxfield-style block (stdin or file) and add to inventory.
+
+    Insert-or-sum semantics: re-importing the same block doubles the qty.
+    Use ``mm inventory remove`` or ``mm inventory add --replace`` to undo.
+    """
+    text, path = _read_text_or_path(source)
+    result = _resolve_block(text, path)
+    added = updated = 0
+    with db.connect() as conn:
+        for entry in result.entries:
+            if entry.card is None:
+                continue
+            db.upsert_card(conn, entry.card)
+    for entry in result.entries:
+        if entry.card is None:
+            continue
+        finish = "foil" if entry.foil else "nonfoil"
+        r = inv_mod.inventory_add(entry.card["id"], finish, entry.qty)
+        if r["action"] == "inserted":
+            added += 1
+        else:
+            updated += 1
+    typer.echo(f"Inventory: {added} added, {updated} updated")
+    for w in result.warnings:
+        typer.echo(f"  warning: {w}", err=True)
+    for nf in result.not_found:
+        if isinstance(nf, dict) and "raw" in nf:
+            typer.echo(f"  not found: {nf['raw']} ({nf.get('reason','')})", err=True)
+        else:
+            typer.echo(f"  not found: {nf}", err=True)
+
+
+# ---------- wishlist (V2) ----------
+
+@wishlist_app.command("show")
+def wishlist_show_cmd(
+    category: str = typer.Option(None, "--category", "-c", help="Filter to one category."),
+):
+    """Show wishlist entries (optionally filtered to one category)."""
+    rows = wishlist_mod.wishlist_show(category=category)
+    if not rows:
+        scope = f"category={category!r}" if category else "all categories"
+        typer.echo(f"(wishlist empty for {scope})"); return
+    typer.echo(f"{'qty':>4} {'finish':>7} {'set':>6} {'cn':>6}  category   name (rarity, usd)")
+    for r in rows:
+        usd = f"${r.unit_price:.2f}" if r.unit_price is not None else "—"
+        typer.echo(f"{r.qty_wanted:>4} {r.finish:>7} {r.set_code:>6} "
+                   f"{r.collector_number:>6}  {r.category:10} {r.display_name} ({r.rarity}, {usd})")
+
+
+@wishlist_app.command("categories")
+def wishlist_categories_cmd():
+    """List distinct wishlist categories with row/qty counts."""
+    cats = wishlist_mod.wishlist_categories()
+    if not cats:
+        typer.echo("(no wishlist entries)"); return
+    typer.echo(f"{'category':30} {'rows':>6} {'qty':>6}")
+    for c in cats:
+        typer.echo(f"{c['category']:30} {c['rows']:>6} {c['total_qty']:>6}")
+
+
+@wishlist_app.command("value")
+def wishlist_value_cmd(
+    category: str = typer.Option(None, "--category", "-c"),
+):
+    """Total wishlist value in USD (acquisition floor)."""
+    v = wishlist_mod.wishlist_value(category=category)
+    scope = f"({category})" if category else "(all)"
+    typer.echo(f"Wishlist {scope}: ${v['total']:.2f} across {v['rows']} rows")
+    if v["missing_price"]:
+        typer.echo(f"Cards without USD price ({len(v['missing_price'])}):")
+        for name, set_code, cn, finish in v["missing_price"]:
+            typer.echo(f"  {name} ({set_code.upper()}) {cn} [{finish}]")
+
+
+@wishlist_app.command("add")
+def wishlist_add_cmd(
+    scryfall_id: str = typer.Argument(...),
+    finish: str = typer.Argument(..., help="nonfoil | foil | either"),
+    category: str = typer.Argument("default"),
+    qty: int = typer.Argument(1),
+    priority: int = typer.Option(None, "--priority"),
+    notes: str = typer.Option(None, "--notes"),
+):
+    """Add a single printing to a wishlist category."""
+    try:
+        result = wishlist_mod.wishlist_add(scryfall_id, finish, category, qty,
+                                           priority=priority, notes=notes)
+    except ValueError as e:
+        typer.echo(f"error: {e}", err=True); raise typer.Exit(2)
+    typer.echo(f"{result['action']}: {scryfall_id} {finish} {category} qty={result['new_qty']}")
+
+
+@wishlist_app.command("remove")
+def wishlist_remove_cmd(
+    scryfall_id: str = typer.Argument(...),
+    finish: str = typer.Argument(..., help="nonfoil | foil | either"),
+    category: str = typer.Argument("default"),
+    qty: int = typer.Option(None, "--qty"),
+):
+    """Remove a wishlist entry (or decrement its qty)."""
+    result = wishlist_mod.wishlist_remove(scryfall_id, finish, category, qty)
+    typer.echo(f"{result['action']}: {scryfall_id} {finish} {category} new_qty={result['new_qty']}")
+
+
+@wishlist_app.command("import")
+def wishlist_import_cmd(
+    category: str = typer.Argument(...),
+    source: str = typer.Argument(None, help="Path to file or '-' for stdin."),
+    finish: str = typer.Option("either", "--finish", help="Default finish for imported lines."),
+):
+    """Read a Moxfield-style block and add to a wishlist category."""
+    if finish not in ("nonfoil", "foil", "either"):
+        typer.echo(f"error: --finish must be nonfoil|foil|either, got {finish!r}", err=True)
+        raise typer.Exit(2)
+    text, path = _read_text_or_path(source)
+    result = _resolve_block(text, path)
+    added = updated = 0
+    with db.connect() as conn:
+        for entry in result.entries:
+            if entry.card is None:
+                continue
+            db.upsert_card(conn, entry.card)
+    for entry in result.entries:
+        if entry.card is None:
+            continue
+        # If the entry's parsed finish is foil, use that; otherwise the --finish default.
+        eff_finish = "foil" if entry.foil else finish
+        r = wishlist_mod.wishlist_add(entry.card["id"], eff_finish, category, entry.qty)
+        if r["action"] == "inserted":
+            added += 1
+        else:
+            updated += 1
+    typer.echo(f"Wishlist {category!r}: {added} added, {updated} updated")
+    for w in result.warnings:
+        typer.echo(f"  warning: {w}", err=True)
+    for nf in result.not_found:
+        if isinstance(nf, dict) and "raw" in nf:
+            typer.echo(f"  not found: {nf['raw']} ({nf.get('reason','')})", err=True)
+        else:
+            typer.echo(f"  not found: {nf}", err=True)
+
+
+# ---------- deck (V2) ----------
+
+@deck_app.command("ls")
+def deck_ls_cmd():
+    """List every deck."""
+    ds = decks_mod.deck_list()
+    if not ds:
+        typer.echo("(no decks)"); return
+    typer.echo(f"{'slug':30} {'name':40} {'format':12} {'updated_at'}")
+    for d in ds:
+        typer.echo(f"{d.slug:30} {d.name:40} {(d.format or '—'):12} {d.updated_at}")
+
+
+@deck_app.command("show")
+def deck_show_cmd(slug: str = typer.Argument(...)):
+    """Show every card in a deck (all boards)."""
+    try:
+        rows = decks_mod.deck_show(slug)
+    except LookupError as e:
+        typer.echo(f"error: {e}", err=True); raise typer.Exit(2)
+    if not rows:
+        typer.echo(f"(deck {slug!r} is empty)"); return
+    typer.echo(f"{'cnt':>4} {'finish':>7} {'board':>10} {'set':>6} {'cn':>6}  name (rarity, usd)")
+    for r in rows:
+        usd = f"${r.unit_price:.2f}" if r.unit_price is not None else "—"
+        typer.echo(f"{r.count:>4} {r.finish:>7} {r.board:>10} {r.set_code:>6} "
+                   f"{r.collector_number:>6}  {r.display_name} ({r.rarity}, {usd})")
+
+
+@deck_app.command("create")
+def deck_create_cmd(
+    slug: str = typer.Argument(...),
+    name: str = typer.Option(..., "--name"),
+    format: str = typer.Option(None, "--format"),
+    archetype: str = typer.Option(None, "--archetype"),
+    notes: str = typer.Option(None, "--notes"),
+):
+    """Create a new (empty) deck."""
+    try:
+        d = decks_mod.deck_create(slug, name, format=format, archetype=archetype, notes=notes)
+    except ValueError as e:
+        typer.echo(f"error: {e}", err=True); raise typer.Exit(2)
+    typer.echo(f"Created deck #{d.deck_id}: {d.slug} ({d.name})")
+
+
+@deck_app.command("delete")
+def deck_delete_cmd(
+    slug: str = typer.Argument(...),
+    yes: bool = typer.Option(False, "--yes", "-y"),
+):
+    """Delete a deck (cascades to deck_cards)."""
+    if not yes:
+        typer.echo("refusing without --yes; this deletes the deck and all its cards.", err=True)
+        raise typer.Exit(2)
+    n = decks_mod.deck_delete(slug)
+    typer.echo(f"Deleted {n} deck(s)")
+
+
+@deck_app.command("value")
+def deck_value_cmd(slug: str = typer.Argument(...)):
+    """Total deck value in USD."""
+    try:
+        v = decks_mod.deck_value(slug)
+    except LookupError as e:
+        typer.echo(f"error: {e}", err=True); raise typer.Exit(2)
+    typer.echo(f"Deck {slug!r}: ${v['total']:.2f} across {v['rows']} rows")
+    if v["missing_price"]:
+        typer.echo(f"Cards without USD price ({len(v['missing_price'])}):")
+        for name, set_code, cn, finish in v["missing_price"]:
+            typer.echo(f"  {name} ({set_code.upper()}) {cn} [{finish}]")
+
+
+@deck_app.command("import")
+def deck_import_cmd(
+    slug: str = typer.Argument(...),
+    source: str = typer.Argument(None, help="Path to file or '-' for stdin."),
+    board: str = typer.Option("main", "--board", help="main | side | commander | companion | maybe"),
+):
+    """Import a Moxfield-style block into a deck/board.
+
+    The deck must already exist (use ``mm deck create``). All entries land
+    on the given --board; for sideboards, run a second import with
+    --board side.
+    """
+    if board not in ("main", "side", "commander", "companion", "maybe"):
+        typer.echo(f"error: --board must be one of main/side/commander/companion/maybe, got {board!r}", err=True)
+        raise typer.Exit(2)
+    if decks_mod.deck_get(slug) is None:
+        typer.echo(f"error: no deck {slug!r}; create with `mm deck create`", err=True)
+        raise typer.Exit(2)
+    text, path = _read_text_or_path(source)
+    result = _resolve_block(text, path)
+    with db.connect() as conn:
+        for entry in result.entries:
+            if entry.card is None:
+                continue
+            db.upsert_card(conn, entry.card)
+    added = updated = 0
+    for entry in result.entries:
+        if entry.card is None:
+            continue
+        finish = "foil" if entry.foil else "nonfoil"
+        r = decks_mod.deck_add_card(slug, entry.card["id"], board, finish, entry.qty)
+        if r["action"] == "inserted":
+            added += 1
+        else:
+            updated += 1
+    typer.echo(f"Deck {slug!r} (board={board}): {added} added, {updated} updated")
+    for w in result.warnings:
+        typer.echo(f"  warning: {w}", err=True)
+    for nf in result.not_found:
+        if isinstance(nf, dict) and "raw" in nf:
+            typer.echo(f"  not found: {nf['raw']} ({nf.get('reason','')})", err=True)
+        else:
+            typer.echo(f"  not found: {nf}", err=True)
 
 
 # ---------- ad-hoc scryfall query ----------
