@@ -192,67 +192,66 @@ def sync(set_codes: Iterable[str]) -> int:
 
 # ---------- master-list seeding + XLSX emit ----------
 
-def seed_set_list(label: str, set_codes: Iterable[str],
-                  include_variants: bool = False) -> int:
-    """Create (or update) a list with every printing in ``set_codes`` seeded at qty=0.
+def register_set_target(anchor_code: str, related_codes: Iterable[str], *,
+                        include_variants: bool = False,
+                        rarity_filter: Iterable[str] | None = None) -> dict:
+    """Insert (or update) a set_targets row recording user intent to track a set.
 
-    Existing rows are preserved (so re-running this after the user has filled in
-    quantities is safe). Only missing ``(card, finish)`` pairs get a 0 row.
+    The set's universe of printings lives in the cards table — set_targets
+    just records "I'm tracking this anchor + family" for `set:CODE missing`
+    queries. Replaces V1's seed-rows-at-qty-0 pattern.
 
-    By default, prerelease/stamped/japanshowcase/serialized/white-bordered
-    variants are NOT seeded so that ``set:<code> missing`` math doesn't count
-    them. Pass ``include_variants=True`` to opt them back in.
+    Returns ``{"action": "inserted"|"updated", "anchor_code": str,
+    "related_codes": list[str]}``.
     """
-    codes = [c.lower() for c in set_codes]
+    import json as _json
+    anchor = anchor_code.lower()
+    codes = sorted({c.lower() for c in related_codes})
     if not codes:
-        return 0
+        codes = [anchor]
+    rarities = sorted({r.lower() for r in (rarity_filter or []) if r}) or None
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     with db.connect() as conn:
-        db.upsert_list(conn, label, kind="set", source="set-master")
-        placeholders = ",".join("?" for _ in codes)
-        rows = conn.execute(
-            f"""
-            SELECT scryfall_id, finishes, border_color, promo_types
-            FROM cards
-            WHERE set_code IN ({placeholders})
-            """,
-            codes,
-        ).fetchall()
-        seeded = 0
-        for r in rows:
-            if not include_variants and is_excluded_variant(r):
-                continue
-            import json
-            finishes = json.loads(r["finishes"] or "[]") or ["nonfoil"]
-            for fin in finishes:
-                if fin not in ("nonfoil", "foil"):
-                    continue
-                # only insert if absent — don't clobber existing user qty
-                existing = conn.execute(
-                    "SELECT 1 FROM list_rows WHERE label = ? AND scryfall_id = ? AND finish = ?",
-                    (label, r["scryfall_id"], fin),
-                ).fetchone()
-                if existing:
-                    continue
-                conn.execute(
-                    "INSERT INTO list_rows (label, scryfall_id, finish, quantity) VALUES (?, ?, ?, 0)",
-                    (label, r["scryfall_id"], fin),
-                )
-                seeded += 1
-        return seeded
+        existing = conn.execute(
+            "SELECT 1 FROM set_targets WHERE anchor_code = ?", (anchor,)
+        ).fetchone()
+        if existing:
+            conn.execute(
+                """
+                UPDATE set_targets
+                SET related_codes = ?, include_variants = ?, rarity_filter = ?, updated_at = ?
+                WHERE anchor_code = ?
+                """,
+                (_json.dumps(codes), 1 if include_variants else 0,
+                 _json.dumps(rarities) if rarities else None, now, anchor),
+            )
+            action = "updated"
+        else:
+            conn.execute(
+                """
+                INSERT INTO set_targets
+                  (anchor_code, related_codes, include_variants, rarity_filter, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (anchor, _json.dumps(codes), 1 if include_variants else 0,
+                 _json.dumps(rarities) if rarities else None, now, now),
+            )
+            action = "inserted"
+    return {"action": action, "anchor_code": anchor, "related_codes": codes}
 
 
 def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
                            include_tokens: bool = False,
-                           prepopulate_from_label: str | None = None,
+                           prepopulate_from_inventory: bool = True,
                            rarity_filter: Iterable[str] | None = None,
                            anchor_code: str | None = None,
                            slug: str | None = None,
                            include_variants: bool = False) -> tuple[int, int]:
     """Emit a fillable XLSX of every printing in ``set_codes``.
 
-    When ``prepopulate_from_label`` is set, qty cells are pre-filled from
-    that label's existing rows so resuming after an ingest doesn't lose
-    visible progress.
+    When ``prepopulate_from_inventory`` is True (default), qty cells are
+    pre-filled from the ``inventory`` table for printings the user already
+    owns, so resuming after an ingest doesn't lose visible progress.
 
     When ``rarity_filter`` is given (case-insensitive iterable of rarities),
     only printings with one of those rarities are emitted.
@@ -294,12 +293,12 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
             codes,
         ).fetchall()
 
-        # (scryfall_id, finish) -> quantity
+        # (scryfall_id, finish) -> quantity (from inventory; only printings
+        # in this set's family will actually be looked up by the loop below).
         prepop: dict[tuple[str, str], int] = {}
-        if prepopulate_from_label:
+        if prepopulate_from_inventory:
             for r in conn.execute(
-                "SELECT scryfall_id, finish, quantity FROM list_rows WHERE label = ? AND quantity > 0",
-                (prepopulate_from_label,),
+                "SELECT scryfall_id, finish, quantity FROM inventory"
             ).fetchall():
                 prepop[(r["scryfall_id"], r["finish"])] = r["quantity"]
 
@@ -485,11 +484,183 @@ def read_master_list_meta(path: Path) -> dict | None:
     return out
 
 
+# ---------- V2 inventory ingest ----------
+
+def ingest_inventory_from_xlsx(path: Path, *, mode: str = "replace") -> dict:
+    """Parse a filled-in master-list XLSX/MD and write qty cells to inventory.
+
+    Partition-aware: in 'replace' mode, in-partition rows missing from the
+    input are zeroed out (deleted from inventory); out-of-partition cells
+    are never touched. In 'additive' mode, only cells with qty>0 add to
+    existing inventory rows; nothing is zeroed.
+
+    Partition is derived from the file's _meta sheet (definitive) or
+    inferred from the rows present (fallback). Cards in the file that
+    aren't in the partition's set codes are flagged as 'extras' (the user
+    pasted unrelated cards into a set's checklist).
+
+    Returns ``{"added": N, "updated": N, "zeroed": N, "warnings": [...],
+    "not_found": [...], "extras": [...]}``.
+    """
+    from . import db, parsers
+    if mode not in ("replace", "additive"):
+        raise ValueError(f"unknown mode {mode!r}; expected 'replace' or 'additive'")
+
+    fmt = parsers.detect_format(path)
+    if fmt == "xlsx":
+        result = parsers.parse_master_list_xlsx(path)
+    elif fmt == "md":
+        result = parsers.parse_master_list_md(path)
+    else:
+        result = parsers.parse_text(path.read_text(encoding="utf-8"))
+    parsers.resolve(result)
+
+    partition = _derive_inventory_partition(result)
+    added = 0
+    updated = 0
+    zeroed = 0
+    extras: list[dict] = []
+    seen_keys: set[tuple[str, str]] = set()
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+    with db.connect() as conn:
+        for entry in result.entries:
+            if entry.card is None:
+                continue
+            db.upsert_card(conn, entry.card)
+            scry_id = entry.card["id"]
+            finish = "foil" if entry.foil else "nonfoil"
+            card_set = (entry.card.get("set") or "").lower()
+
+            # Out-of-partition cards are 'extras' (file tried to set qty for
+            # a card outside the file's declared scope).
+            if partition and card_set not in partition.set_codes:
+                extras.append({
+                    "raw": entry.raw,
+                    "reason": (
+                        f"card {entry.card['name']} ({card_set}) "
+                        f"{entry.card.get('collector_number')} is outside the "
+                        f"file's partition (set codes: {partition.set_codes})"
+                    ),
+                })
+                continue
+
+            seen_keys.add((scry_id, finish))
+
+            row = conn.execute(
+                "SELECT quantity FROM inventory WHERE scryfall_id = ? AND finish = ?",
+                (scry_id, finish),
+            ).fetchone()
+            current_qty = row["quantity"] if row else 0
+
+            if mode == "replace":
+                new_qty = entry.qty
+            else:
+                if entry.qty <= 0:
+                    continue
+                new_qty = current_qty + entry.qty
+
+            if new_qty == current_qty:
+                continue
+            if new_qty == 0:
+                if current_qty > 0:
+                    conn.execute(
+                        "DELETE FROM inventory WHERE scryfall_id = ? AND finish = ?",
+                        (scry_id, finish),
+                    )
+                    zeroed += 1
+            elif row:
+                conn.execute(
+                    "UPDATE inventory SET quantity = ? WHERE scryfall_id = ? AND finish = ?",
+                    (new_qty, scry_id, finish),
+                )
+                updated += 1
+            else:
+                conn.execute(
+                    """
+                    INSERT INTO inventory (scryfall_id, finish, quantity, acquired_at)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (scry_id, finish, new_qty, now),
+                )
+                added += 1
+
+        # Replace mode: zero out in-partition inventory rows not seen.
+        if mode == "replace" and partition is not None:
+            in_partition_rows = conn.execute(
+                f"""
+                SELECT inv.scryfall_id, inv.finish, inv.quantity
+                FROM inventory inv
+                JOIN cards c ON c.scryfall_id = inv.scryfall_id
+                WHERE LOWER(c.set_code) IN ({",".join("?" for _ in partition.set_codes)})
+                """ + (
+                    f" AND LOWER(c.rarity) IN ({','.join('?' for _ in partition.rarities)})"
+                    if partition.rarities else ""
+                ),
+                partition.set_codes + (partition.rarities or []),
+            ).fetchall()
+            for r in in_partition_rows:
+                key = (r["scryfall_id"], r["finish"])
+                if key in seen_keys:
+                    continue
+                conn.execute(
+                    "DELETE FROM inventory WHERE scryfall_id = ? AND finish = ?",
+                    (r["scryfall_id"], r["finish"]),
+                )
+                zeroed += 1
+
+        db.record_import(conn,
+                         command=f"ingest_inventory_from_xlsx mode={mode}",
+                         source_path=str(path),
+                         rows_changed=added + updated + zeroed)
+
+    return {
+        "added": added,
+        "updated": updated,
+        "zeroed": zeroed,
+        "warnings": result.warnings,
+        "not_found": result.not_found,
+        "extras": extras,
+    }
+
+
+@dataclass
+class _InventoryPartition:
+    set_codes: list[str]
+    rarities: list[str] | None
+
+
+def _derive_inventory_partition(result) -> "_InventoryPartition | None":
+    """Same partition logic as lists._derive_partition but parameterized
+    against the inventory table (no label scoping)."""
+    meta = result.meta or {}
+    if meta:
+        codes = [c.strip().lower() for c in (meta.get("set_codes") or "").split(",") if c.strip()]
+        rar = [r.strip().lower() for r in (meta.get("rarity_filter") or "").split(",") if r.strip()]
+        if codes:
+            return _InventoryPartition(set_codes=codes, rarities=(rar or None))
+
+    seen_codes: set[str] = set()
+    seen_rarities: set[str] = set()
+    for entry in result.entries:
+        if entry.card:
+            seen_codes.add((entry.card.get("set") or "").lower())
+            r = (entry.card.get("rarity") or "").lower()
+            if r:
+                seen_rarities.add(r)
+    if not seen_codes:
+        return None
+    return _InventoryPartition(
+        set_codes=sorted(seen_codes),
+        rarities=sorted(seen_rarities) if len(seen_rarities) == 1 else None,
+    )
+
+
 # ---------- markdown intake format ----------
 
 def write_master_list_md(set_codes: Iterable[str], out_path: Path,
                          include_tokens: bool = False,
-                         prepopulate_from_label: str | None = None,
+                         prepopulate_from_inventory: bool = True,
                          rarity_filter: Iterable[str] | None = None,
                          anchor_code: str | None = None,
                          slug: str | None = None,
@@ -544,11 +715,9 @@ def write_master_list_md(set_codes: Iterable[str], out_path: Path,
         ).fetchall()
 
         prepop: dict[tuple[str, str], int] = {}
-        if prepopulate_from_label:
+        if prepopulate_from_inventory:
             for r in conn.execute(
-                "SELECT scryfall_id, finish, quantity FROM list_rows "
-                "WHERE label = ? AND quantity > 0",
-                (prepopulate_from_label,),
+                "SELECT scryfall_id, finish, quantity FROM inventory"
             ).fetchall():
                 prepop[(r["scryfall_id"], r["finish"])] = r["quantity"]
 

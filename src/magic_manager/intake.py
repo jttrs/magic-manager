@@ -15,7 +15,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from . import db, lists as lists_mod
+from . import db, inventory as inv_mod
 from .sets import ResolvedSet
 
 
@@ -102,18 +102,20 @@ def parse_line(line: str, sticky_set: str | None) -> ParsedLine | None:
     )
 
 
-def run_repl(resolved: ResolvedSet, label: str, prompt: str = "> ") -> None:
-    """Open the REPL loop bound to ``label`` (e.g. ``set:fca``).
+def run_repl(resolved: ResolvedSet, prompt: str = "> ") -> None:
+    """Open the REPL loop bound to ``resolved``'s family.
 
-    The family is ``resolved.all_codes``; cards outside it are rejected.
+    Each accepted line writes directly to the V2 ``inventory`` table.
+    Cards outside ``resolved.all_codes`` are rejected.
     """
     family = set(resolved.all_codes)
     sticky_set = resolved.code
     undo_stack: list[Entry] = []
     session_count = 0
+    anchor = resolved.code
 
-    print(f"mm intake — bound to {label!r} (family: {' '.join(resolved.all_codes)})")
-    print(f"sticky set: {sticky_set!r}.  Type '?' for help, 'q' to quit.\n")
+    print(f"mm intake — bound to family {anchor!r} ({' '.join(resolved.all_codes)})")
+    print(f"sticky set: {sticky_set!r}.  Writes to inventory.  '?' for help, 'q' to quit.\n")
 
     while True:
         try:
@@ -129,13 +131,13 @@ def run_repl(resolved: ResolvedSet, label: str, prompt: str = "> ") -> None:
             _print_help(sticky_set, undo_stack, session_count)
             continue
         if cmd in ("u", "undo"):
-            sticky_set = _do_undo(undo_stack, label, sticky_set)
+            sticky_set = _do_undo(undo_stack, sticky_set)
             continue
         if cmd.startswith("s ") or cmd.startswith("set "):
             new_set = cmd.split(maxsplit=1)[1].strip().lower()
             if SET_RE.match(new_set):
                 if new_set not in family:
-                    print(f"  [warn] {new_set!r} isn't in the family for {label!r} "
+                    print(f"  [warn] {new_set!r} isn't in family {anchor!r} "
                           f"({sorted(family)}). Sticky set unchanged.")
                 else:
                     sticky_set = new_set
@@ -154,20 +156,19 @@ def run_repl(resolved: ResolvedSet, label: str, prompt: str = "> ") -> None:
             print(f"  [error] no sticky set yet — type 'set <code>' first or include the set code on this line.")
             continue
         if parsed.set_code not in family:
-            print(f"  [error] {parsed.set_code!r} isn't in the family for {label!r}. "
+            print(f"  [error] {parsed.set_code!r} isn't in family {anchor!r}. "
                   f"Family: {sorted(family)}.")
             continue
 
-        entry = _apply(label, parsed)
+        entry = _apply(parsed)
         if entry is None:
             continue
 
-        # Sticky set follows the most recent successful entry.
         sticky_set = entry.set_code
         undo_stack.append(entry)
         session_count += 1
 
-    _print_summary(label, session_count)
+    _print_summary(anchor, family, session_count)
 
 
 # ---------- internals ----------
@@ -192,13 +193,12 @@ def _print_help(sticky_set: str | None, undo_stack: list[Entry], count: int) -> 
     print()
 
 
-def _apply(label: str, parsed: ParsedLine) -> Entry | None:
-    """Run one entry as a DB transaction. Returns the Entry on success."""
+def _apply(parsed: ParsedLine) -> Entry | None:
+    """Run one entry against the inventory table. Returns the Entry on success."""
     from .treatments import compute_treatment
     finish = "foil" if parsed.foil else "nonfoil"
     with db.connect() as conn:
-        # Look up the printing. Pull the treatment-input fields too so the
-        # feedback line can show e.g. [b|sm] alongside the card name.
+        # Look up the printing. Pull treatment-input fields too for feedback.
         card = conn.execute(
             """
             SELECT c.scryfall_id, c.name, c.flavor_name,
@@ -215,17 +215,12 @@ def _apply(label: str, parsed: ParsedLine) -> Entry | None:
                   f"in the local DB. Run `mm set sync {parsed.set_code}` first if needed.")
             return None
 
-        # Verify the card is in the seeded set list (master-list seeded it).
         existing = conn.execute(
-            "SELECT quantity FROM list_rows WHERE label = ? AND scryfall_id = ? AND finish = ?",
-            (label, card["scryfall_id"], finish),
+            "SELECT quantity FROM inventory WHERE scryfall_id = ? AND finish = ?",
+            (card["scryfall_id"], finish),
         ).fetchone()
-        if existing is None:
-            print(f"  [error] card not seeded in {label!r}. "
-                  f"Run `mm set master-list <name>` once before scanning.")
-            return None
+        prev_qty = existing["quantity"] if existing else 0
 
-        prev_qty = existing["quantity"]
         if parsed.qty_op == "+":
             new_qty = prev_qty + parsed.qty_n
         else:  # "="
@@ -238,22 +233,26 @@ def _apply(label: str, parsed: ParsedLine) -> Entry | None:
             print(f"  [no-op] qty already {prev_qty}")
             return None
 
-        db.upsert_list_row(conn, label, card["scryfall_id"], finish, new_qty)
+    # Outside the connection: route through inventory module so behavior
+    # (acquired_at, replace semantics) stays consistent.
+    if new_qty == 0:
+        inv_mod.inventory_remove(card["scryfall_id"], finish, qty=prev_qty)
+    else:
+        inv_mod.inventory_set(card["scryfall_id"], finish, new_qty)
 
-        # Build display name for feedback.
-        flavor = card["flavor_name"]
-        display = f"{flavor} / {card['name']}" if flavor else card["name"]
-        unit = card["prices_usd_foil"] if finish == "foil" else card["prices_usd"]
-        unit_s = f"${unit:.2f}" if unit is not None else "—"
-        delta_s = (
-            f"qty {prev_qty} → {new_qty} (+{new_qty - prev_qty})"
-            if parsed.qty_op == "+"
-            else f"qty {prev_qty} → {new_qty} (=)"
-        )
-        treatment = compute_treatment(card)
-        treatment_s = f" [{treatment}]" if treatment else ""
-        print(f"  [OK] {display} ({parsed.set_code.upper()}) {parsed.collector_number} "
-              f"{finish}{treatment_s}  {delta_s}  {unit_s}")
+    flavor = card["flavor_name"]
+    display = f"{flavor} / {card['name']}" if flavor else card["name"]
+    unit = card["prices_usd_foil"] if finish == "foil" else card["prices_usd"]
+    unit_s = f"${unit:.2f}" if unit is not None else "—"
+    delta_s = (
+        f"qty {prev_qty} → {new_qty} (+{new_qty - prev_qty})"
+        if parsed.qty_op == "+"
+        else f"qty {prev_qty} → {new_qty} (=)"
+    )
+    treatment = compute_treatment(card)
+    treatment_s = f" [{treatment}]" if treatment else ""
+    print(f"  [OK] {display} ({parsed.set_code.upper()}) {parsed.collector_number} "
+          f"{finish}{treatment_s}  {delta_s}  {unit_s}")
 
     return Entry(
         set_code=parsed.set_code.lower(),
@@ -262,13 +261,12 @@ def _apply(label: str, parsed: ParsedLine) -> Entry | None:
     )
 
 
-def _do_undo(undo_stack: list[Entry], label: str, sticky_set: str | None) -> str | None:
+def _do_undo(undo_stack: list[Entry], sticky_set: str | None) -> str | None:
     if not undo_stack:
         print("  [undo] nothing to undo")
         return sticky_set
     last = undo_stack.pop()
     with db.connect() as conn:
-        # Re-fetch the card so we can confirm it still exists; then revert.
         card = conn.execute(
             "SELECT scryfall_id FROM cards WHERE LOWER(set_code) = ? AND collector_number = ?",
             (last.set_code, last.collector_number),
@@ -276,15 +274,21 @@ def _do_undo(undo_stack: list[Entry], label: str, sticky_set: str | None) -> str
         if card is None:
             print("  [undo] couldn't re-find card; aborting")
             return sticky_set
-        db.upsert_list_row(conn, label, card["scryfall_id"], last.finish, last.prev_qty)
+    if last.prev_qty == 0:
+        inv_mod.inventory_remove(card["scryfall_id"], last.finish, qty=last.new_qty)
+    else:
+        inv_mod.inventory_set(card["scryfall_id"], last.finish, last.prev_qty)
     print(f"  [UNDO] {last.set_code.upper()} {last.collector_number} {last.finish}: "
           f"{last.new_qty} → {last.prev_qty}")
     return sticky_set
 
 
-def _print_summary(label: str, count: int) -> None:
-    s = lists_mod.summarize_label(label)
+def _print_summary(anchor: str, family: set[str], count: int) -> None:
+    rows = [r for r in inv_mod.inventory_show() if r.set_code in family]
+    distinct = len(rows)
+    total_qty = sum(r.quantity for r in rows)
+    total_value = sum((r.line_value or 0.0) for r in rows)
     print()
     print(f"Session ended.  {count} entr{'y' if count == 1 else 'ies'} applied.")
-    print(f"{label!r} now: {s['distinct_rows']} distinct rows, "
-          f"qty {s['total_qty']}, value ${s['total_value']:.2f}")
+    print(f"Inventory in family {anchor!r}: {distinct} distinct rows, "
+          f"qty {total_qty}, value ${total_value:.2f}")

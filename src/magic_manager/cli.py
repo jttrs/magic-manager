@@ -265,29 +265,34 @@ def set_master_list(
         raise typer.Exit(2)
 
     slug = _slug(r.name)
-    label = f"set:{r.code}"
     slice_suffix = _slice_suffix(only_codes=only_codes, rarities=rarities)
     out_path = out or _intake_path(slug, slice_suffix, ext=fmt)
 
     # Collision detection: only when the user is using the default path.
     if out is None and out_path.exists() and not force:
         typer.echo(f"refusing to overwrite existing inventory checklist: {out_path}", err=True)
-        typer.echo(f"current state of {label!r}:", err=True)
-        s = lists_mod.summarize_label(label)
-        typer.echo(
-            f"  {s['distinct_rows']} distinct (card,finish) rows owned, "
-            f"qty {s['total_qty']}, value ${s['total_value']:.2f}",
-            err=True,
-        )
-        if s["top_value"]:
-            typer.echo("  top by value:", err=True)
-            for row in s["top_value"]:
-                price = f"${row.unit_price:.2f}" if row.unit_price is not None else "—"
-                typer.echo(
-                    f"    {row.quantity}x {row.display_name} ({row.set_code.upper()}) "
-                    f"{row.collector_number} [{row.finish}] @ {price}",
-                    err=True,
-                )
+        # Snapshot the current inventory rows that fall in this set's family.
+        inv_rows = [r for r in inv_mod.inventory_show() if r.set_code in codes]
+        if inv_rows:
+            total_qty = sum(r.quantity for r in inv_rows)
+            total_value = sum((r.line_value or 0.0) for r in inv_rows)
+            typer.echo(
+                f"  {len(inv_rows)} (card,finish) row(s) currently owned in this family, "
+                f"qty {total_qty}, value ${total_value:.2f}",
+                err=True,
+            )
+            top = sorted(inv_rows, key=lambda x: (x.line_value or 0.0), reverse=True)[:5]
+            if top:
+                typer.echo("  top by value:", err=True)
+                for row in top:
+                    price = f"${row.unit_price:.2f}" if row.unit_price is not None else "—"
+                    typer.echo(
+                        f"    {row.quantity}x {row.display_name} ({row.set_code.upper()}) "
+                        f"{row.collector_number} [{row.finish}] @ {price}",
+                        err=True,
+                    )
+        else:
+            typer.echo(f"  no inventory rows yet in family {codes}", err=True)
         typer.echo("", err=True)
         typer.echo("To proceed, either:", err=True)
         typer.echo(f"  - Finish editing the existing XLSX, then: mm set ingest {name_or_code!r}", err=True)
@@ -298,8 +303,11 @@ def set_master_list(
     n_synced = sets_mod.sync(codes)
     typer.echo(f"  → {n_synced} cards upserted")
 
-    seeded = sets_mod.seed_set_list(label, codes, include_variants=include_variants)
-    typer.echo(f"Seeded list {label!r} ({seeded} new rows at qty=0)")
+    target_result = sets_mod.register_set_target(
+        r.code, codes, include_variants=include_variants, rarity_filter=rarities or None,
+    )
+    typer.echo(f"Registered set_target {r.code!r} ({target_result['action']}, "
+               f"{len(target_result['related_codes'])} related code(s))")
 
     if force and out_path.exists():
         typer.echo(f"  ! --force: overwriting {out_path}", err=True)
@@ -313,7 +321,7 @@ def set_master_list(
         # Tokens and memorabilia are governed by the family filter, not by a
         # second flag. If the user --included them they're in `codes` already.
         include_tokens=True,
-        prepopulate_from_label=label,
+        prepopulate_from_inventory=True,
         rarity_filter=rarities or None,
         anchor_code=r.code,
         slug=slug,
@@ -321,7 +329,7 @@ def set_master_list(
     )
     typer.echo(f"Wrote {n_rows} rows to {out_path}")
     if prefilled:
-        typer.echo(f"  → {prefilled} qty cell(s) pre-filled from {label!r}")
+        typer.echo(f"  → {prefilled} qty cell(s) pre-filled from inventory")
     typer.echo()
     typer.echo("Next steps:")
     if fmt == "md":
@@ -379,7 +387,6 @@ def set_ingest(
         meta = sets_mod.read_master_list_meta(src)
         if meta and meta.get("anchor_code"):
             anchor = meta["anchor_code"]
-            label = f"set:{anchor}"
             slug = meta.get("slug") or _slug(anchor)
         elif name_or_code:
             try:
@@ -387,7 +394,6 @@ def set_ingest(
             except LookupError as e:
                 typer.echo(f"error: {e}", err=True); raise typer.Exit(2)
             anchor = r.code
-            label = f"set:{anchor}"
             slug = _slug(r.name)
         else:
             typer.echo(
@@ -404,7 +410,6 @@ def set_ingest(
         except LookupError as e:
             typer.echo(f"error: {e}", err=True); raise typer.Exit(2)
         anchor = r.code
-        label = f"set:{anchor}"
         slug = _slug(r.name)
         # Look for intake docs matching this family's slug, in either format.
         # There can be more than one (master + rarity slices, or both xlsx and
@@ -438,7 +443,7 @@ def set_ingest(
     if prior_success and not force:
         msg = (
             f"this file's SHA-256 matches a previous successful ingest "
-            f"(log id {prior_success['id']}, label {prior_success['label']!r}, "
+            f"(log id {prior_success['id']}, "
             f"mode {prior_success['mode']}, at {prior_success['at']})."
         )
         if json_out:
@@ -456,11 +461,12 @@ def set_ingest(
                        "in the chosen --mode and a new log row will be added).", err=True)
         raise typer.Exit(EXIT_DUPLICATE_INGEST)
 
-    # Run the actual import.
+    # Run the actual import — V2 path writes directly to the inventory table,
+    # honoring the file's partition (set codes + rarity from _meta or rows).
     error: str | None = None
     result: dict | None = None
     try:
-        result = lists_mod.list_import(label, path=src, mode=mode)
+        result = sets_mod.ingest_inventory_from_xlsx(src, mode=mode)
     except Exception as e:
         error = repr(e)
 
@@ -487,11 +493,14 @@ def set_ingest(
         archived.parent.mkdir(parents=True, exist_ok=True)
         src.rename(archived)
 
-    # Persist the log entry.
+    # Persist the log entry. The label column now records the set anchor as
+    # a 'set:<code>' string for backwards compatibility with the ingest_log
+    # schema; the row no longer means a list_rows row exists.
+    log_label = f"set:{anchor}"
     with db.connect() as conn:
         db.record_ingest_log(
             conn,
-            label=label,
+            label=log_label,
             mode=mode,
             source_path=str(src),
             archived_path=str(archived) if archived else None,
@@ -503,14 +512,26 @@ def set_ingest(
             error=error,
         )
 
-    summary = lists_mod.summarize_label(label) if error is None else None
+    # Snapshot inventory in this set's family post-ingest.
+    inv_summary = None
+    if error is None:
+        try:
+            family_codes = set(sets_mod.resolve(anchor).all_codes)
+        except LookupError:
+            family_codes = {anchor}
+        inv_rows = [r for r in inv_mod.inventory_show() if r.set_code in family_codes]
+        inv_summary = {
+            "distinct_rows": len(inv_rows),
+            "total_qty": sum(r.quantity for r in inv_rows),
+            "total_value": sum((r.line_value or 0.0) for r in inv_rows),
+        }
 
     if json_out:
         out = {
             "status": "success" if error is None else "failed",
             "file": str(src),
             "archived_path": str(archived) if archived else None,
-            "label": label,
+            "anchor_code": anchor,
             "mode": mode,
             "sha256": sha,
             "rows_added": (result or {}).get("added", 0),
@@ -519,14 +540,7 @@ def set_ingest(
             "warnings": (result or {}).get("warnings", []),
             "not_found": (result or {}).get("not_found", []),
             "extras": (result or {}).get("extras", []),
-            "label_summary": (
-                {
-                    "distinct_rows": summary["distinct_rows"],
-                    "total_qty": summary["total_qty"],
-                    "total_value": summary["total_value"],
-                }
-                if summary else None
-            ),
+            "inventory_summary": inv_summary,
             "error": error,
         }
         json.dump(out, sys.stdout, indent=2, default=str)
@@ -540,7 +554,7 @@ def set_ingest(
         raise typer.Exit(2)
 
     typer.echo(
-        f"List {label!r}: {result['updated']} updated, "
+        f"Inventory ({anchor}): {result['updated']} updated, "
         f"{result['added']} added, {result['zeroed']} zeroed (mode={mode})"
     )
     for w in result["warnings"]:
@@ -551,12 +565,13 @@ def set_ingest(
         else:
             typer.echo(f"  not found: {nf}", err=True)
     for ex in result["extras"]:
-        typer.echo(f"  extra (not in seeded set list): {ex['raw']}", err=True)
+        typer.echo(f"  extra (outside file's partition): {ex['raw']}", err=True)
     typer.echo(f"Archived inventory checklist → {archived}")
-    typer.echo(
-        f"{label!r} now: {summary['distinct_rows']} distinct rows, "
-        f"qty {summary['total_qty']}, value ${summary['total_value']:.2f}"
-    )
+    if inv_summary:
+        typer.echo(
+            f"Inventory in {anchor} family: {inv_summary['distinct_rows']} rows, "
+            f"qty {inv_summary['total_qty']}, value ${inv_summary['total_value']:.2f}"
+        )
 
 
 # ---------- list ----------
@@ -1554,9 +1569,11 @@ def intake_cmd(
 ):
     """Scan-loop REPL: type ``<set>? <cn> [+N|=N] [f]`` per card, qty updates live.
 
-    Bound to ``set:<anchor>`` for the resolved family. The first set code you
-    type becomes sticky; subsequent lines without a set use it. Each entry is
-    a separate DB transaction — Ctrl-C is safe.
+    Bound to a resolved set family. Writes directly to the V2 ``inventory``
+    table — no master-list seeding required (any card synced via
+    ``mm set sync`` is fair game). The first set code you type becomes
+    sticky; subsequent lines without a set use it. Each entry is a separate
+    DB transaction — Ctrl-C is safe.
 
     Modes per line:
       - bare              → +1 (default)
@@ -1565,10 +1582,6 @@ def intake_cmd(
       - trailing f / foil → this card is foil
 
     Other commands: u/undo, s <code>/set <code>, ?/help, q/quit.
-
-    Run ``mm set master-list <name>`` once before this command — the REPL
-    only updates rows that the master-list command has seeded into
-    ``set:<anchor>``.
     """
     try:
         r, codes = _resolve_codes(
@@ -1576,8 +1589,7 @@ def intake_cmd(
         )
     except (LookupError, typer.BadParameter) as e:
         typer.echo(f"error: {e}", err=True); raise typer.Exit(2)
-    label = f"set:{r.code}"
-    intake_mod.run_repl(r, label)
+    intake_mod.run_repl(r)
 
 
 # ---------- export ----------
