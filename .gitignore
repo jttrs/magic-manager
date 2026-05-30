@@ -37,6 +37,7 @@ db/
 checklists/
 input/
 inventory/
+queries/
 .venv/
 uv.lock
 
