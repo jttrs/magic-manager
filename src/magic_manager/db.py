@@ -166,6 +166,130 @@ CREATE INDEX IF NOT EXISTS cards_is_reskin_idx ON cards (is_reskin);
 """
 
 
+# V2.0 (schema V4): split list_rows into proper fact tables.
+#
+# This migration creates new tables and translates the V1 list_rows data
+# into them. The OLD list_rows / lists tables are LEFT IN PLACE for one
+# session of safety — V5 (a future migration) drops them once V4 has been
+# in production long enough to confirm nothing depends on the old shape.
+#
+# The Python post-migration helper (``_run_v4_python_migration``) runs
+# AFTER this SQL block to handle two operations SQL alone can't do
+# cleanly: deck_id allocation (per deck:* label) and set_targets seeding
+# (which needs Scryfall family resolution).
+SCHEMA_V4 = """
+-- INVENTORY: physical cards owned. ONE row per (scryfall_id, finish).
+-- This is THE source of truth for "do I own this card?" — no other table
+-- answers it. Replaces the role of `set:*` rows with qty>0 plus `owned:*`
+-- rows in the V1 list_rows model.
+CREATE TABLE IF NOT EXISTS inventory (
+    scryfall_id   TEXT NOT NULL,
+    finish        TEXT NOT NULL CHECK (finish IN ('nonfoil','foil')),
+    quantity      INTEGER NOT NULL CHECK (quantity > 0),
+    acquired_at   TEXT,                       -- ISO date when first added
+    notes         TEXT,
+    PRIMARY KEY (scryfall_id, finish),
+    FOREIGN KEY (scryfall_id) REFERENCES cards(scryfall_id)
+);
+
+CREATE INDEX IF NOT EXISTS inventory_scryfall_idx ON inventory (scryfall_id);
+
+-- WISHLIST_ENTRIES: cards I want. Many wishlists can target the same card,
+-- so this table has a category column instead of an FK to a 'wishlists'
+-- table. Replaces the V1 `wishlist:*` / `buy:*` / `idea:*` label kinds.
+CREATE TABLE IF NOT EXISTS wishlist_entries (
+    scryfall_id   TEXT NOT NULL,
+    finish        TEXT NOT NULL CHECK (finish IN ('nonfoil','foil','either')),
+    category      TEXT NOT NULL DEFAULT 'default',
+    qty_wanted    INTEGER NOT NULL CHECK (qty_wanted > 0),
+    priority      INTEGER,
+    notes         TEXT,
+    added_at      TEXT NOT NULL,
+    PRIMARY KEY (scryfall_id, finish, category),
+    FOREIGN KEY (scryfall_id) REFERENCES cards(scryfall_id)
+);
+
+CREATE INDEX IF NOT EXISTS wishlist_category_idx ON wishlist_entries (category);
+CREATE INDEX IF NOT EXISTS wishlist_scryfall_idx ON wishlist_entries (scryfall_id);
+
+-- DECKS: compositions, independent of ownership.
+CREATE TABLE IF NOT EXISTS decks (
+    deck_id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    slug          TEXT UNIQUE NOT NULL,        -- 'atraxa-superfriends'
+    name          TEXT NOT NULL,                -- 'Atraxa Superfriends'
+    format        TEXT,                          -- 'commander', 'modern', 'cube'
+    archetype     TEXT,
+    notes         TEXT,
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL
+);
+
+-- DECK_CARDS: deck composition. ONE row per (deck_id, scryfall_id, board, finish).
+CREATE TABLE IF NOT EXISTS deck_cards (
+    deck_id       INTEGER NOT NULL,
+    scryfall_id   TEXT NOT NULL,
+    board         TEXT NOT NULL CHECK (board IN ('main','side','commander','companion','maybe')),
+    finish        TEXT NOT NULL CHECK (finish IN ('nonfoil','foil','either')),
+    count         INTEGER NOT NULL CHECK (count > 0),
+    PRIMARY KEY (deck_id, scryfall_id, board, finish),
+    FOREIGN KEY (deck_id) REFERENCES decks(deck_id) ON DELETE CASCADE,
+    FOREIGN KEY (scryfall_id) REFERENCES cards(scryfall_id)
+);
+
+CREATE INDEX IF NOT EXISTS deck_cards_deck_idx ON deck_cards (deck_id);
+CREATE INDEX IF NOT EXISTS deck_cards_scryfall_idx ON deck_cards (scryfall_id);
+
+-- SET_TARGETS: which sets the user is actively tracking. Populated when
+-- `mm set master-list <name>` runs. Selectors like `set:fin missing` use
+-- this to know the family scope. The list of printings in the family lives
+-- in `cards`; set_targets just records intent.
+CREATE TABLE IF NOT EXISTS set_targets (
+    anchor_code       TEXT PRIMARY KEY,        -- 'fin'
+    related_codes     TEXT NOT NULL,            -- JSON array of family codes
+    include_variants  INTEGER NOT NULL DEFAULT 0,
+    rarity_filter     TEXT,                     -- JSON array if --rarity used; NULL = all
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL
+);
+
+-- Migrate inventory: every list_row from set:* or owned:* labels with
+-- qty>0 → inventory. SUM by (scryfall_id, finish) so multi-label tracking
+-- collapses cleanly. Conflict resolution: SUM is deterministic and matches
+-- the "every list_row qty represents a physical card" model.
+INSERT OR IGNORE INTO inventory (scryfall_id, finish, quantity, acquired_at)
+SELECT lr.scryfall_id, lr.finish, SUM(lr.quantity),
+       MIN(COALESCE(l.created_at, datetime('now')))
+FROM list_rows lr
+JOIN lists l ON l.label = lr.label
+WHERE lr.quantity > 0
+  AND (lr.label LIKE 'set:%' OR lr.label LIKE 'owned:%')
+GROUP BY lr.scryfall_id, lr.finish;
+
+-- Migrate wishlist entries: V1's wishlist:/buy:/idea: prefixes get
+-- their suffix as `category`. The prefix itself is preserved as a
+-- category-name option (e.g. 'wishlist:edh-staples' becomes
+-- category='edh-staples'; 'buy:reserved-list' becomes 'reserved-list').
+-- Cross-prefix collisions (same suffix in wishlist: and buy:) get one
+-- category each because PRIMARY KEY is (scryfall_id, finish, category).
+INSERT OR IGNORE INTO wishlist_entries
+    (scryfall_id, finish, category, qty_wanted, added_at)
+SELECT lr.scryfall_id, lr.finish,
+       SUBSTR(lr.label, INSTR(lr.label, ':') + 1) AS category,
+       lr.quantity,
+       COALESCE(l.created_at, datetime('now'))
+FROM list_rows lr
+JOIN lists l ON l.label = lr.label
+WHERE lr.quantity > 0
+  AND (lr.label LIKE 'wishlist:%'
+       OR lr.label LIKE 'buy:%'
+       OR lr.label LIKE 'idea:%');
+
+-- Note: deck:* labels and set_targets are migrated by Python helpers
+-- (see _run_v4_python_migration) because they need INSERT...RETURNING
+-- semantics and Scryfall family resolution respectively.
+"""
+
+
 # ---------- migration-authoring convention ----------
 #
 # Always-safe ops in a migration: CREATE TABLE, ALTER TABLE ADD COLUMN,
@@ -205,6 +329,7 @@ MIGRATIONS: list[str] = [
     SCHEMA_V1,
     SCHEMA_V2,
     SCHEMA_V3,
+    SCHEMA_V4,
 ]
 CURRENT_VERSION = len(MIGRATIONS)
 
@@ -253,9 +378,102 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
     for i, sql in enumerate(MIGRATIONS[have:], start=have + 1):
         if i != 1:  # MIGRATIONS[0] already ran above
             conn.executescript(sql)
+        # Per-version Python post-migration hooks. SQL alone can't handle
+        # operations needing INSERT...RETURNING, JSON building, or external
+        # API calls; we run those in Python after the SQL ran.
+        if i == 4 and have < 4:
+            _run_v4_python_migration(conn)
     if have < CURRENT_VERSION:
         conn.execute("DELETE FROM schema_version")
         conn.execute("INSERT INTO schema_version (version) VALUES (?)", (CURRENT_VERSION,))
+
+
+# ---------- V4 Python post-migration ----------
+
+def _run_v4_python_migration(conn: sqlite3.Connection) -> None:
+    """Translate V1 ``deck:*`` labels and ``set:*`` label intent into the
+    new V4 schema. Idempotent: uses ``INSERT OR IGNORE`` so re-running is
+    a no-op.
+
+    Operations:
+    1. Migrate ``deck:*`` labels into ``decks`` + ``deck_cards``.
+       - Slug = label suffix (e.g. ``deck:atraxa-superfriends`` → slug
+         ``atraxa-superfriends``).
+       - Name = humanized slug ("Atraxa Superfriends").
+       - All V1 deck rows land on ``board='main'`` since V1 didn't store
+         per-row board info on ``list_rows``. Users can re-import the
+         deck via ``mm deck import`` if they want sideboards/commanders
+         broken out.
+    2. Seed ``set_targets`` for any ``set:*`` label that exists in V1.
+       - ``related_codes`` = JSON array containing just the anchor code
+         (the family graph isn't recorded; next ``mm set master-list``
+         will refresh it via Scryfall).
+    """
+    # 1. Decks
+    deck_labels = conn.execute(
+        "SELECT label, created_at, updated_at, notes FROM lists WHERE label LIKE 'deck:%'"
+    ).fetchall()
+    for row in deck_labels:
+        label = row["label"]
+        slug = label[len("deck:"):]
+        if not slug:
+            continue
+        # Skip if a deck with this slug already exists (re-run safety).
+        existing = conn.execute(
+            "SELECT deck_id FROM decks WHERE slug = ?", (slug,)
+        ).fetchone()
+        if existing:
+            deck_id = existing["deck_id"]
+        else:
+            name = " ".join(w.capitalize() for w in slug.replace("-", " ").split())
+            cur = conn.execute(
+                "INSERT INTO decks (slug, name, created_at, updated_at, notes) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (slug, name, row["created_at"], row["updated_at"], row["notes"]),
+            )
+            deck_id = cur.lastrowid
+
+        # All V1 deck rows → main board, count = quantity, finish preserved.
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO deck_cards
+                (deck_id, scryfall_id, board, finish, count)
+            SELECT ?, lr.scryfall_id, 'main', lr.finish, lr.quantity
+            FROM list_rows lr
+            WHERE lr.label = ? AND lr.quantity > 0
+            """,
+            (deck_id, label),
+        )
+
+    # 2. set_targets
+    now = _utcnow_iso()
+    set_labels = conn.execute(
+        "SELECT label, created_at, updated_at FROM lists WHERE label LIKE 'set:%'"
+    ).fetchall()
+    for row in set_labels:
+        label = row["label"]
+        anchor = label[len("set:"):].lower()
+        if not anchor:
+            continue
+        # related_codes will be re-derived on the next `mm set master-list`.
+        # For now, the anchor itself is the only code we know.
+        related_json = json.dumps([anchor])
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO set_targets
+                (anchor_code, related_codes, include_variants, rarity_filter,
+                 created_at, updated_at)
+            VALUES (?, ?, 0, NULL, ?, ?)
+            """,
+            (anchor, related_json,
+             row["created_at"] or now,
+             row["updated_at"] or now),
+        )
+
+
+def _utcnow_iso() -> str:
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 # ---------- snapshots, restore, integrity ----------
