@@ -21,6 +21,32 @@ Translate English questions about the local collection into `mm query` invocatio
 - Exporting to Moxfield/Archidekt/TCGplayer for trade or deck-building (use [[export-list]] — it knows the per-platform output formats).
 - Cataloging a new set from scratch (use [[generate-set-list]] to produce the inventory checklist XLSX first).
 
+## Output rules (read this before formatting any answer)
+
+### Canonical "list of cards" table
+
+When answering any question that returns a list of inventory rows ("top N", "what do I own from X", "what's missing", etc.), use this **wide markdown table** format. The set/cn/finish columns already disambiguate printings, so the `Card` column carries only the verbatim card name (linked to Scryfall).
+
+| # | Qty | Set | CN | Finish | Unit | Line | Card |
+|---|---:|---|---:|---|---:|---:|---|
+| 1 | 1 | FIN | 570 | foil | $243.16 | $243.16 | [Vivi Ornitier](https://scryfall.com/card/fin/570) |
+| 6 | 3 | FIN | 248 | nonfoil | $37.01 | $111.03 | [Vivi Ornitier](https://scryfall.com/card/fin/248) |
+
+Note: the *same* card name appears twice; the set/cn/finish columns make it unambiguous. No "(anime)", no "(borderless)", no parenthetical anything in the Card column — just the name as written in `cards.name`, wrapped in a Scryfall hyperlink.
+
+### Hard rules for the Card column
+
+1. **Card names are verbatim from `cards.name`** — same string the checklist XLSX uses in its `name` column. Double-faced cards display as `Front // Back`; reskins display as `Flavor / Oracle`. Whatever the DB has is what you write. No exceptions.
+2. **Never invent descriptors.** Tokens like `(anime)`, `(retro)`, `(borderless)`, `(showcase)`, `(extended)`, `(promo)`, `(alt art)` are forbidden in the Card column unless they are literally present in `cards.name`. You cannot infer a treatment from the art or from your guess about which printing is which.
+3. **Always link the name to Scryfall** using `cards.scryfall_uri` (strip the `?utm_source=api` suffix for clean Markdown). The hyperlink IS the name — do not append a separate "URL:" column.
+4. **Disambiguation is the table columns, not the name.** Same-named printings are already separated by Set + CN + Finish columns. Do not add disambiguators inside the Card cell — the row already disambiguates.
+
+### When the user asks "why are these two printings different?"
+
+Read the cards-table fields verbatim and surface them. Do NOT paraphrase or invent treatment labels. The distinguishing fields are: `border_color`, `frame_effects`, `promo_types`, `full_art`, `security_stamp`, `is_promo`, `finishes`. Show the raw values; if a treatment name is desired, quote it from `promo_types` (e.g. "chocobotrackfoil") rather than inventing one. See [Disambiguating same-named printings](#disambiguating-same-named-printings) below for the SQL recipe.
+
+If a user *wants* a treatment label baked into a listing, the only acceptable source is the checklist XLSX's `treatment` column — those codes (`b`, `sm`, `fa`, `shw`, etc.) are decoded in the file's `_legend` sheet and are derived deterministically from `frame_effects`/`border_color`/`promo_types`. Quote the code, not your interpretation.
+
 ## Decision tree
 
 Deterministic English-to-CLI mapping. Pick the row whose left side matches the user's phrasing.
@@ -42,6 +68,7 @@ Deterministic English-to-CLI mapping. Pick the row whose left side matches the u
 | "What dragons do I own?" | `uv run mm query show 'inventory scryfall:t:dragon'` (or `cards:t:dragon owned`) |
 | "Cards in deck X I still need?" | `uv run mm query xlsx 'deck:X missing'` |
 | "Wishlist entries I haven't bought?" | `uv run mm query show 'wishlist'` (wishlist IS the unbought-list; nothing to subtract) |
+| "Why are these two printings different?" / "what's the difference between SET CN1 and SET CN2?" | Read `cards` row for each — see [Disambiguating same-named printings](#disambiguating-same-named-printings) below. Never invent labels. |
 
 When a question doesn't fit a row, fall through to the **Selector cookbook** below and compose the selector by hand. All `mm query` subcommands accept any selector the parser accepts.
 
@@ -110,6 +137,7 @@ To overwrite a fixed name, pass `--name <slug>` or `--out <path>`.
 - **Modifiers are intersection (AND), not union.** There's no OR operator in V2. If you need disjunction, push it into the TERM via `cards:` or `scryfall:` and use the API's native `or` syntax (e.g. `cards:'r:mythic or r:rare'`). Modifier order doesn't matter — same result either way.
 - **`value>=N` / `value<=N` drop rows with no USD price.** Otherwise `missing value<=20` would silently include every unpriced card. If you need unpriced rows, omit the value filter.
 - **Wishlist `either` finish materializes as nonfoil** for value math (cheaper-finish convention). Override with a `finish=foil` modifier if you want foil prices.
+- **Card names are verbatim from `cards.name`, linked to Scryfall, no invented descriptors.** Format any "list of cards" answer as the wide table from the [canonical "list of cards" table](#canonical-list-of-cards-table) section: separate columns for #/Qty/Set/CN/Finish/Unit/Line/Card, with the Card column containing only `[name](scryfall_uri)` — no parenthetical "(anime)" / "(borderless)" / "(promo)". Disambiguation is the Set+CN+Finish columns; same-named printings just repeat the name on different rows. When the user asks "what's different about these two printings?", read the cards-table row for each and surface the raw fields — see [Disambiguating same-named printings](#disambiguating-same-named-printings).
 
 ## Examples
 
@@ -147,20 +175,59 @@ Top 5 by line value:
 
 ### "Top 5 most valuable cards I own?"
 
+Run the CLI:
+
 ```
 uv run mm query top 5
 ```
 
-Output:
+The CLI's text output (one card per line) is for terminal use. **In chat replies, always reformat as the canonical wide table** — one row per inventory row, Card column linked to `cards.scryfall_uri`:
 
+| # | Qty | Set | CN | Finish | Unit | Line | Card |
+|---|---:|---|---:|---|---:|---:|---|
+| 1 | 1 | SLD | 1865 | foil | $7.84 | $7.84 | [Cloud's Buster Sword / Umezawa's Jitte](https://scryfall.com/card/sld/1865) |
+| 2 | 1 | SLD | 1867 | foil | $4.21 | $4.21 | [Tidus's Brotherhood Sword / Sword of Truth and Justice](https://scryfall.com/card/sld/1867) |
+| 3 | 1 | SLD | 1872 | foil | $3.08 | $3.08 | [Aerith's Curaga Magic / Heroic Intervention](https://scryfall.com/card/sld/1872) |
+| 4 | 1 | SLD | 1869 | foil | $2.45 | $2.45 | [Hope's Aero Magic / Cyclonic Rift](https://scryfall.com/card/sld/1869) |
+| 5 | 1 | SLD | 1868 | foil | $1.92 | $1.92 | [Yuna's Holy Magic / Prismatic Ending](https://scryfall.com/card/sld/1868) |
+
+To produce the table, query the DB directly so you have `scryfall_uri` available. Use this exact recipe:
+
+```bash
+uv run python3 - <<'PY'
+import sqlite3
+c = sqlite3.connect('db/magic_manager.db'); c.row_factory = sqlite3.Row
+rows = c.execute("""
+  SELECT i.quantity AS qty, i.finish, c.set_code, c.collector_number,
+         c.name, c.flavor_name,
+         CASE WHEN i.finish='foil' THEN c.prices_usd_foil ELSE c.prices_usd END AS unit_usd,
+         c.scryfall_uri
+  FROM inventory i JOIN cards c USING(scryfall_id)
+""").fetchall()
+ranked = []
+for r in rows:
+    unit = float(r['unit_usd']) if r['unit_usd'] is not None else None
+    line = (unit or 0) * r['qty']
+    uri = (r['scryfall_uri'] or '').split('?')[0]
+    # Display name follows the checklist convention: 'flavor / oracle' for reskins, oracle alone otherwise.
+    display = f"{r['flavor_name']} / {r['name']}" if r['flavor_name'] else r['name']
+    ranked.append((line, unit, r['qty'], r['finish'], r['set_code'].upper(), r['collector_number'], display, uri))
+ranked.sort(reverse=True)
+print(f"| # | Qty | Set | CN | Finish | Unit | Line | Card |")
+print(f"|---|---:|---|---:|---|---:|---:|---|")
+for i,(line,unit,qty,finish,setc,cn,display,uri) in enumerate(ranked[:5],1):
+    u = f"${unit:.2f}" if unit else "—"
+    l = f"${line:.2f}" if line else "—"
+    print(f"| {i} | {qty} | {setc} | {cn} | {finish} | {u} | {l} | [{display}]({uri}) |")
+PY
 ```
-Top 5 inventory rows by line value:
-  $7.84  Cloud's Buster Sword / Umezawa's Jitte (SLD) 1865 [foil] qty=1
-  $4.21  Tidus's Brotherhood Sword / Sword of Truth and Justice (SLD) 1867 [foil] qty=1
-  $3.08  Aerith's Curaga Magic / Heroic Intervention (SLD) 1872 [foil] qty=1
-  $2.45  Hope's Aero Magic / Cyclonic Rift (SLD) 1869 [foil] qty=1
-  $1.92  Yuna's Holy Magic / Prismatic Ending (SLD) 1868 [foil] qty=1
-```
+
+Swap `[:5]` for `[:N]` to change the cap. The same recipe works for any selector — replace the `FROM inventory i JOIN cards c USING(scryfall_id)` clause with whatever materialization you need (or pipe `mm query show '<selector>' --json` through the same render loop, looking up `scryfall_uri` and `flavor_name` per row).
+
+**Display-name rule** (matches both the checklist XLSX and `mm query top` text output):
+- If `cards.flavor_name` is set (UB reskins like FCA Final Fantasy precons, where the front-of-card text is rebranded but the rules text is from a Magic original), display as `{flavor_name} / {name}`.
+- Otherwise, display `{name}` alone.
+- Double-faced cards (`name` containing ` // `) display as-is — the `//` is part of the verbatim oracle name. Do not add a flavor-name prefix even if `flavor_name` is set on a DFC; just use the rule above.
 
 ### "Generate a Scryfall URL for the SLD foils I have"
 
@@ -176,6 +243,38 @@ Chunk 1/1 (18 cards): https://scryfall.com/search?q=%21%22Day+of+Judgment%22+or+
 ```
 
 For 50 cards, output would be three chunks (20 + 20 + 10), each with its own URL.
+
+### Disambiguating same-named printings
+
+When two rows in `mm query top` (or any other listing) share a card name — e.g. `Vivi Ornitier` appears at FIN 248 and FIN 570 — and the user asks "why are these two different?", the answer comes straight from the `cards` table. Do not infer or paraphrase.
+
+Run this exact query, substituting the set/CN pairs in question:
+
+```bash
+uv run python3 - <<'PY'
+import sqlite3
+c = sqlite3.connect('db/magic_manager.db'); c.row_factory = sqlite3.Row
+for setc, cn in [('fin','248'), ('fin','570')]:
+    r = c.execute("""
+      SELECT name, border_color, frame_effects, promo_types, full_art,
+             security_stamp, is_promo, finishes, scryfall_uri
+      FROM cards WHERE set_code=? AND collector_number=?""", (setc, cn)).fetchone()
+    print(f"--- {setc.upper()} {cn} ---")
+    for k in r.keys(): print(f"  {k}: {r[k]}")
+    print()
+PY
+```
+
+Then surface the output verbatim. A typical reply looks like:
+
+> FIN 248 vs FIN 570 — both are `Vivi Ornitier`. The differing fields:
+> - **border_color**: 248 = `black`, 570 = `borderless`
+> - **frame_effects**: 248 = `["legendary"]`, 570 = `["legendary","inverted"]`
+> - **promo_types**: 248 = `["universesbeyond","ffix"]`, 570 = `["chocobotrackfoil","universesbeyond","ffix"]`
+>
+> So 570 is a borderless, inverted-frame chocobo-track foil treatment; 248 is the regular black-bordered printing. The named treatment ("chocobo-track foil") is read from `promo_types`, not invented.
+
+**Hard rule recap**: every descriptor in the answer must be traceable to a specific cards-table field value. If you find yourself writing a label that isn't in the JSON above, delete it.
 
 ### "Stats breakdown by rarity?"
 
