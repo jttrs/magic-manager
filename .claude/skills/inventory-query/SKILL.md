@@ -69,6 +69,7 @@ Deterministic English-to-CLI mapping. Pick the row whose left side matches the u
 | "Cards in deck X I still need?" | `uv run mm query xlsx 'deck:X missing'` |
 | "Wishlist entries I haven't bought?" | `uv run mm query show 'wishlist'` (wishlist IS the unbought-list; nothing to subtract) |
 | "Why are these two printings different?" / "what's the difference between SET CN1 and SET CN2?" | Read `cards` row for each — see [Disambiguating same-named printings](#disambiguating-same-named-printings) below. Never invent labels. |
+| "What am I missing from set X?" / "build me a TCGplayer cart for the X gaps" / "what's left to buy from X?" | Use the [[missing-from-set]] skill. It composes the rare/mythic + alt-treatment union, picks output format (chunked chat table / 3 XLSX files / TCGplayer two-block + ManaPool one-block), and threads sort options. Set-agnostic — works for FIN today, Avatar/TMNT/etc. tomorrow. |
 
 When a question doesn't fit a row, fall through to the **Selector cookbook** below and compose the selector by hand. All `mm query` subcommands accept any selector the parser accepts.
 
@@ -99,6 +100,7 @@ A selector is `TERM (' ' MODIFIER)*`. The TERM picks the universe of `(printing,
 | `qty>=N` / `qty<=N` / `qty=N` | Filter by quantity. Useful on `inventory` for "show me multiples." | `inventory qty>=2` |
 | `finish=foil` / `finish=nonfoil` | Filter by finish. Terminal — no `either` here. | `inventory finish=foil` |
 | `rarity=common\|uncommon\|rare\|mythic\|special\|bonus` | Filter by rarity. | `set:sld missing rarity=mythic` |
+| `treatment=regular\|alt\|any-alt\|b\|fa\|shw\|ext\|sm\|ff` | Filter by treatment class (computed from `frame_effects`/`full_art`/`promo_types` via `treatments.compute_treatment`). `regular` = no codes; `alt` = any non-empty AND no `ext`; `any-alt` = any non-empty (includes `ext`); individual codes match exact code presence. See `treatments.LEGEND` for what each code means. | `set:fin+related missing treatment=alt` |
 | `cn>=N` / `cn<=N` | Filter by collector number (numeric prefix; letter suffixes coerce by stripping non-digits). | `inventory cn>=1858 cn<=1872` |
 | `value>=N` / `value<=N` | Filter by current Scryfall USD price for the row's finish. Rows without a price are dropped. | `inventory value>=10` |
 | `scryfall:Q` (post-filter) | Run Scryfall query, intersect by id with the in-flight rows. Lets you compose two queries. | `set:fca missing scryfall:t:dragon` |
@@ -107,9 +109,9 @@ A selector is `TERM (' ' MODIFIER)*`. The TERM picks the universe of `(printing,
 
 All subcommands accept `--json` for machine-readable output and exit 0 on success, 2 on selector parse error.
 
-- **`mm query show '<selector>' [--first N]`** — tabular dump. Columns: qty, finish, set, cn, rarity, name (with `flavor_name / oracle_name` form when applicable), unit_usd, line_value. `--first N` caps display; total count is always printed.
+- **`mm query show '<selector>' [--first N] [--sort default|value-desc|value-asc|rarity]`** — tabular dump. Columns: qty, finish, set, cn, rarity, name (with `flavor_name / oracle_name` form when applicable), unit_usd, line_value. `--first N` caps display; total count is always printed. `--sort` overrides the default `(set, cn, finish)` ordering; `value-desc`/`value-asc` push unpriced rows to the bottom regardless of direction.
 - **`mm query value '<selector>'`** — emits total USD, row count, count of rows with no price, and top-5 by line value.
-- **`mm query xlsx '<selector>' [--name SLUG] [--out PATH]`** — writes `queries/<slug>-<timestamp>.xlsx`. Columns: set, collector_number, name, rarity, finish, qty, unit_usd, line_value, scryfall_id. Hidden `_meta` sheet records the selector verbatim, slug, timestamp, and row count. Empty results still write a file with headers and emit a stderr warning.
+- **`mm query xlsx '<selector>' [--name SLUG] [--out PATH] [--sort default|value-desc|value-asc|rarity]`** — writes `queries/<slug>-<timestamp>.xlsx`. Columns: set, collector_number, name, rarity, finish, qty, unit_usd, line_value, scryfall_id. Hidden `_meta` sheet records the selector verbatim, slug, timestamp, and row count. `--sort` matches `mm query show`. Empty results still write a file with headers and emit a stderr warning.
 - **`mm query url '<selector>' [--chunk-size 20]`** — synthesizes Scryfall search URLs using `!"oracle_name"` form, deduped by oracle name (multiple finishes/printings of the same card collapse to one URL term). Default chunk size is 20.
 - **`mm query top [N]`** — top-N inventory rows by line value. Default N=10.
 - **`mm query total`** — shorthand for `mm query value 'inventory'`.

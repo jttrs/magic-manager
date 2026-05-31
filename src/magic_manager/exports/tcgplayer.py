@@ -3,11 +3,17 @@
     1 Card Name [Set Name]
     1 Lightning Bolt [Magic 2021]
 
-V1 starts with this widely-attested form. The Mass Entry tool's exact spec was
-not accessible during planning; ``mm export tcgplayer`` prints a reminder
-asking the user to verify the first paste, and we adjust this builder if
-reality disagrees. ManaPool consumes Moxfield-format directly, so don't
-confuse the two.
+**Foil/nonfoil is NOT marked per-line.** TCGplayer's Mass Entry UI exposes a
+foil-vs-nonfoil control next to the paste box, applied to the whole batch on
+submit. Adding a per-line marker (e.g. ``- Foil``) breaks the format. To
+build a mixed cart, run this exporter twice with selectors filtered on
+``finish=nonfoil`` and ``finish=foil``, paste each block separately, and
+toggle the UI control between pastes. The ``missing-from-set`` skill
+encapsulates this two-block workflow.
+
+ManaPool consumes Moxfield-format directly (see ``moxfield.py`` and the
+alias in ``__init__.py``); ManaPool's bulk-add accepts the ``★`` per-line
+foil marker, so it stays single-block. Don't confuse the two.
 
 Set names come from Scryfall via a small in-memory cache. The wrapper caches
 ``/sets`` for 24h, so this is a single API call per session at worst.

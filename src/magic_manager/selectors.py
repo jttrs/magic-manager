@@ -47,7 +47,11 @@ VALID_TERMS = ("inventory", "wishlist", "deck", "set", "cards", "scryfall")
 VALID_MODIFIERS = (
     "missing", "owned",
     "qty", "finish", "rarity", "cn", "value",
-    "scryfall",
+    "scryfall", "treatment",
+)
+VALID_TREATMENT_CLASSES = (
+    "regular", "alt", "any-alt",
+    "b", "fa", "shw", "ext", "sm", "ff",
 )
 VALID_RARITIES = ("common", "uncommon", "rare", "mythic", "special", "bonus")
 VALID_FINISHES = ("nonfoil", "foil")
@@ -194,6 +198,15 @@ def _parse_modifier(tok: str) -> Modifier:
             )
         return Modifier(kind="rarity", op="=", value=v)
 
+    # treatment=<class>
+    if low.startswith("treatment="):
+        v = tok.split("=", 1)[1].strip().lower()
+        if v not in VALID_TREATMENT_CLASSES:
+            raise SelectorParseError(
+                f"treatment= must be one of {VALID_TREATMENT_CLASSES}, got {v!r}"
+            )
+        return Modifier(kind="treatment", op="=", value=v)
+
     # qty/cn/value with comparator
     m = _NUMERIC_OPS_RE.match(low)
     if m:
@@ -212,7 +225,8 @@ def _parse_modifier(tok: str) -> Modifier:
         return Modifier(kind="scryfall", value=q)
 
     raise SelectorParseError(
-        f"unknown MODIFIER {tok!r}; valid prefixes: missing, owned, qty, finish, rarity, cn, value, scryfall"
+        f"unknown MODIFIER {tok!r}; valid prefixes: missing, owned, qty, finish, "
+        f"rarity, treatment, cn, value, scryfall"
     )
 
 
@@ -283,7 +297,8 @@ def _materialize_term(term: Term) -> list[MaterializedRow]:
 _CARD_COLS = (
     "c.scryfall_id, c.name, c.flavor_name, c.set_code, c.collector_number, "
     "c.rarity, c.prices_usd, c.prices_usd_foil, c.cmc, c.type_line, c.mana_cost, "
-    "c.frame_effects, c.colors, c.color_identity, c.is_promo, c.is_token, c.finishes"
+    "c.frame_effects, c.full_art, c.promo_types, "
+    "c.colors, c.color_identity, c.is_promo, c.is_token, c.finishes"
 )
 
 
@@ -474,6 +489,8 @@ def _apply_modifier(rows: list[MaterializedRow], mod: Modifier) -> list[Material
         return [r for r in rows if r.finish == mod.value]
     if mod.kind == "rarity":
         return [r for r in rows if (r.card.get("rarity") or "").lower() == mod.value]
+    if mod.kind == "treatment":
+        return _filter_treatment(rows, mod.value)
     if mod.kind == "cn":
         return _filter_cn(rows, mod.op, int(float(mod.value)))
     if mod.kind == "value":
@@ -567,6 +584,43 @@ def _filter_cn(rows: list[MaterializedRow], op: str, threshold: int) -> list[Mat
     return out
 
 
+def _filter_treatment(rows: list[MaterializedRow], cls: str) -> list[MaterializedRow]:
+    """Filter rows by treatment class (computed from frame_effects/full_art/promo_types).
+
+    Class values:
+      regular  — compute_treatment() returns empty string
+      b/fa/shw/ext/sm/ff — treatment string contains that exact code
+      alt      — non-empty AND does not contain 'ext' (the user-facing default
+                 for "alternate treatment but not extended-art")
+      any-alt  — non-empty (includes ext)
+
+    Compute_treatment is called once per scryfall_id within this filter call;
+    the same printing can appear at multiple finishes but the treatment is
+    a property of the printing, not the finish.
+    """
+    from . import treatments
+    cache: dict[str, set[str]] = {}
+    out: list[MaterializedRow] = []
+    for r in rows:
+        sid = r.scryfall_id
+        codes = cache.get(sid)
+        if codes is None:
+            t = treatments.compute_treatment(r.card)
+            codes = set(t.split("|")) if t else set()
+            cache[sid] = codes
+        if cls == "regular":
+            keep = not codes
+        elif cls == "alt":
+            keep = bool(codes) and "ext" not in codes
+        elif cls == "any-alt":
+            keep = bool(codes)
+        else:
+            keep = cls in codes
+        if keep:
+            out.append(r)
+    return out
+
+
 def _filter_value(rows: list[MaterializedRow], op: str, threshold: float) -> list[MaterializedRow]:
     """Filter by current Scryfall USD price for the row's finish.
 
@@ -599,7 +653,12 @@ def _cn_sort_key(cn: str) -> tuple[int, str]:
 
 
 def _card_dict(row) -> dict:
-    """Normalize a sqlite Row (with the c.* columns aliased) into a plain dict."""
+    """Normalize a sqlite Row (with the c.* columns aliased) into a plain dict.
+
+    Includes the treatment-classification inputs (frame_effects, full_art,
+    promo_types) so treatments.compute_treatment() can run on the resulting
+    dict at filter time.
+    """
     return {
         "scryfall_id":      row["scryfall_id"],
         "name":             row["name"],
@@ -612,6 +671,9 @@ def _card_dict(row) -> dict:
         "cmc":              row["cmc"],
         "type_line":        row["type_line"],
         "mana_cost":        row["mana_cost"],
+        "frame_effects":    row["frame_effects"],
+        "full_art":         row["full_art"],
+        "promo_types":      row["promo_types"],
     }
 
 
@@ -630,6 +692,9 @@ def _card_dict_from_scryfall(c: dict) -> dict:
         "cmc":              c.get("cmc"),
         "type_line":        c.get("type_line"),
         "mana_cost":        c.get("mana_cost"),
+        "frame_effects":    c.get("frame_effects"),
+        "full_art":         c.get("full_art"),
+        "promo_types":      c.get("promo_types"),
     }
 
 

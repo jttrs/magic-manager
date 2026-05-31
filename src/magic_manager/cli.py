@@ -965,14 +965,61 @@ def _row_display_name(r: sel_mod.MaterializedRow) -> str:
     return f"{flavor} / {name}" if flavor else name
 
 
+_RARITY_RANK = {"mythic": 0, "rare": 1, "uncommon": 2, "common": 3,
+                "special": 4, "bonus": 5}
+_VALID_SORTS = ("default", "value-desc", "value-asc", "rarity")
+
+
+def _apply_sort(rows: list[sel_mod.MaterializedRow], sort_key: str) -> list[sel_mod.MaterializedRow]:
+    """Apply a named sort to materialized rows, with deterministic tie-breaking.
+
+    'default' is a no-op — the materializer already sorts by (set, cn, finish).
+    'value-desc' / 'value-asc' use line value. Unpriced rows always sink to
+    the BOTTOM (regardless of direction) — None is informationally similar to
+    'unknown' rather than 'cheapest', so surfacing it at the top of value-asc
+    would mislead someone scanning for low-hanging fruit. 'rarity' orders
+    mythic > rare > uncommon > common > special > bonus. All sorts break ties
+    on (set, cn, finish).
+    """
+    if sort_key == "default":
+        return rows
+    if sort_key not in _VALID_SORTS:
+        typer.echo(f"error: --sort must be one of {_VALID_SORTS}, got {sort_key!r}", err=True)
+        raise typer.Exit(2)
+
+    def tie(r: sel_mod.MaterializedRow):
+        return (r.card.get("set") or "", r.card.get("collector_number") or "", r.finish)
+
+    if sort_key == "value-desc":
+        # Unpriced rows go to the bottom: priority bit 1 for unpriced, 0 for priced.
+        return sorted(rows, key=lambda r: (
+            0 if _row_line_value(r) is not None else 1,
+            -(_row_line_value(r) or 0.0),
+            tie(r),
+        ))
+    if sort_key == "value-asc":
+        # Same priority bit so unpriced rows stay at the bottom in asc too.
+        return sorted(rows, key=lambda r: (
+            0 if _row_line_value(r) is not None else 1,
+            _row_line_value(r) if _row_line_value(r) is not None else 0.0,
+            tie(r),
+        ))
+    if sort_key == "rarity":
+        return sorted(rows, key=lambda r: (_RARITY_RANK.get((r.card.get("rarity") or "").lower(), 99), tie(r)))
+    return rows
+
+
 @query_app.command("show")
 def query_show_cmd(
     selector: str = typer.Argument(..., help="V2 selector, e.g. 'inventory' or 'set:sld missing rarity=mythic'"),
     first: int = typer.Option(None, "--first", help="Cap displayed rows (total count still printed)."),
+    sort: str = typer.Option("default", "--sort",
+        help="Sort order: default (set,cn,finish) | value-desc | value-asc | rarity."),
     json_out: bool = typer.Option(False, "--json"),
 ):
     """Show rows matching a selector."""
     rows = _materialize_or_die(selector)
+    rows = _apply_sort(rows, sort)
     if json_out:
         out = [
             {
@@ -1158,6 +1205,8 @@ def query_xlsx_cmd(
     selector: str = typer.Argument(...),
     name: str = typer.Option(None, "--name", help="Override the slug for the filename."),
     out: Path = typer.Option(None, "--out", help="Override the full output path."),
+    sort: str = typer.Option("default", "--sort",
+        help="Sort order: default (set,cn,finish) | value-desc | value-asc | rarity."),
 ):
     """Write the selector's rows to a queries/<slug>-<timestamp>.xlsx artifact.
 
@@ -1170,6 +1219,7 @@ def query_xlsx_cmd(
     from openpyxl.utils import get_column_letter
 
     rows = _materialize_or_die(selector)
+    rows = _apply_sort(rows, sort)
     slug = name or _selector_slug(selector)
     ts = datetime.now().strftime("%Y-%m-%d-%H%M%S")
     if out:
