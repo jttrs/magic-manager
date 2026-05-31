@@ -171,6 +171,7 @@ Imports always land in the V2 `inventory` table — one row per `(scryfall_id, f
 - **`set:sld missing` reconciles against inventory automatically.** In V2 the selector grammar treats `inventory` as the single source of truth for ownership, so `mm export moxfield 'set:sld missing'` excludes whatever the bulk-add just wrote. No separate label to keep in sync.
 - **The CN range `cn>=A cn<=B` only matches base-numeric CNs.** Letter-suffix CNs (`1858a`, `212s`) need explicit listing or a `cn:1858a or cn:1858b` style query.
 - **Gap-check is informational, not authoritative.** Same release date doesn't always mean same drop (SLD often releases multiple drops on the same day). The CN-contiguity filter mitigates but doesn't eliminate false positives. Show the user the data and let them decide.
+- **`PRM` printed on a card is NOT a Scryfall set code.** The bottom-left set-code line on physical promo cards reads `PRM` for any Wizards promo printing — prerelease, Standard Showdown, Magazine Insert, WPN, store-championship, buy-a-box, Universes Beyond promos, etc. Scryfall does have a `prm` set ("Magic Online Promos"), but that's a digital-only umbrella for MTGO promos and contains none of the printed `PRM`-stamped cards the user is holding. **Never resolve a printed `PRM` card against Scryfall's `prm` set.** Instead, resolve by *card name + (printed CN or artist)* using `mm scryfall '!"<name>" artist:<artist>'` or by name alone, then read the *actual* Scryfall set code off the result. Common destinations for `PRM`-printed cards: `pfin` (Final Fantasy Promos, CNs like `38s`), `pmei` (Magazine Inserts, CNs like `2025-13`), `pss5` (FIN Standard Showdown), `pw25` (FIN WPN promos), `rfin` (Regional Promos). The printed CN is usually the same number as Scryfall's CN with leading zeros stripped (e.g. printed `0001` → Scryfall `1`), but PMEI and similar use prefixed forms (`2025-NN`). Always verify with an image read before adding when in doubt.
 
 ## Examples
 
@@ -203,6 +204,26 @@ Steps:
 User: *"just opened the Equinox Secret Lair, CNs 7001-7003"*
 
 Same flow. The gap-check will probably show zero neighbors (small drop, all 3 CNs accounted for) — confirm that, proceed to import.
+
+### Printed `PRM` set code (resolve by name+artist)
+
+User: *"I have a card called Despark, CN 0002, artist MAJI."*
+
+The user is reading the printed set-code line, which says `PRM`. **Do not query `set:prm`** — that's the wrong set entirely. Resolve by name + artist:
+
+```bash
+.claude/skills/scryfall-search/scryfall.sh search '!"Despark" artist:Maji' \
+  | jq '.data[] | {set, collector_number, name, artist, promo_types, finishes, prices: .prices}'
+```
+
+Result: `set=pw25 cn=2` (Final Fantasy WPN promos), foil + nonfoil available, $3.57 / $12.88. Pull the image with `image_uris.normal` and confirm visually that:
+1. The printed CN matches (`0002` ↔ Scryfall CN `2` after stripping leading zeros).
+2. The artist matches (printed `MAJI` ↔ Scryfall `Maji`).
+3. The art and frame look the same as what the user is holding.
+
+Only after image confirmation, ask the user the finish + qty, then `mm inventory add <scryfall_id> <finish> <qty>`. If multiple printings come back from the search (e.g. a card was reprinted with different art across PMEI/PSS5/PW25), use the artist match plus image read to disambiguate — the artist is by far the strongest signal since reprints almost always swap artists.
+
+For batches of `PRM`-stamped cards, run one search-and-image-verify cycle per card *before* composing any import block — there's no shortcut, since the destination set varies card-by-card.
 
 ## Cross-references
 
