@@ -1518,34 +1518,24 @@ def query_url_cmd(
         typer.echo(f"Chunk {i}/{len(chunks)} ({len(chunk)} printings): {url}")
 
 
-@query_app.command("xlsx")
-def query_xlsx_cmd(
-    selector: str = typer.Argument(...),
-    name: str = typer.Option(None, "--name", help="Override the slug for the filename."),
-    out: Path = typer.Option(None, "--out", help="Override the full output path."),
-    sort: str = typer.Option("default", "--sort",
-        help="Sort order: default (set,cn,finish) | value-desc | value-asc | rarity."),
-):
-    """Write the selector's rows to a queries/<slug>-<timestamp>.xlsx artifact.
+def _write_query_xlsx(
+    rows: list[sel_mod.MaterializedRow],
+    target: Path,
+    selector: str,
+    slug: str,
+) -> None:
+    """Write a list of materialized rows to an XLSX checklist artifact.
 
-    The XLSX has columns: set, collector_number, name, rarity, finish, qty,
-    unit_usd, line_value. A hidden _meta sheet records the selector verbatim.
-    Empty result still writes a file (with headers + empty body) and warns.
+    Shared by `mm query xlsx` and the missing-set orchestrator. Columns:
+    set, collector_number, name, rarity, finish, qty, unit_usd, line_value,
+    scryfall_id. Hidden _meta sheet records the originating selector and
+    timestamp so the file's lineage is traceable.
     """
     from openpyxl import Workbook
     from openpyxl.styles import Font
     from openpyxl.utils import get_column_letter
 
-    rows = _materialize_or_die(selector)
-    rows = _apply_sort(rows, sort)
-    slug = name or _selector_slug(selector)
-    ts = datetime.now().strftime("%Y-%m-%d-%H%M%S")
-    if out:
-        target = out
-    else:
-        target = QUERIES_DIR / f"{slug}-{ts}.xlsx"
     target.parent.mkdir(parents=True, exist_ok=True)
-
     wb = Workbook()
     ws = wb.active
     ws.title = "results"
@@ -1581,9 +1571,168 @@ def query_xlsx_cmd(
     meta_ws.append(["row_count", str(len(rows))])
 
     wb.save(target)
+
+
+@query_app.command("xlsx")
+def query_xlsx_cmd(
+    selector: str = typer.Argument(...),
+    name: str = typer.Option(None, "--name", help="Override the slug for the filename."),
+    out: Path = typer.Option(None, "--out", help="Override the full output path."),
+    sort: str = typer.Option("default", "--sort",
+        help="Sort order: default (set,cn,finish) | value-desc | value-asc | rarity."),
+):
+    """Write the selector's rows to a queries/<slug>-<timestamp>.xlsx artifact.
+
+    The XLSX has columns: set, collector_number, name, rarity, finish, qty,
+    unit_usd, line_value. A hidden _meta sheet records the selector verbatim.
+    Empty result still writes a file (with headers + empty body) and warns.
+    """
+    rows = _materialize_or_die(selector)
+    rows = _apply_sort(rows, sort)
+    slug = name or _selector_slug(selector)
+    ts = datetime.now().strftime("%Y-%m-%d-%H%M%S")
+    target = out if out else QUERIES_DIR / f"{slug}-{ts}.xlsx"
+    _write_query_xlsx(rows, target, selector, slug)
     if not rows:
         typer.echo(f"warning: selector matched 0 rows; wrote empty file {target}", err=True)
     typer.echo(f"wrote {target} ({len(rows)} rows)")
+
+
+@query_app.command("missing-set")
+def query_missing_set_cmd(
+    code: str = typer.Argument(
+        ...,
+        help="Anchor set code (e.g. 'fin', 'avatar', 'tmnt'). Resolves +related family automatically.",
+    ),
+    chunk_size: int = typer.Option(
+        20, "--chunk-size",
+        help="Cards per Scryfall URL chunk (default 20; matches Scryfall web UI's nested-conditions cap).",
+    ),
+    treatment_class: str = typer.Option(
+        "collectible-alt", "--treatment-class",
+        help="Treatment class for the alt sub-selector. Default 'collectible-alt' (excludes pure-ff and ext). "
+             "Pass 'alt' to include pure-ff, 'any-alt' to also include ext.",
+    ),
+):
+    """Canonical "what am I missing from set <CODE>?" workflow.
+
+    Materializes the union of three sub-selectors (rare-regular, mythic-regular,
+    treatment-class) printing-level, then emits exactly three things:
+
+    \b
+    1. Scryfall printing-specific URL chunks (markdown table → STDOUT for chat).
+       Sorted cheapest-first; uses (set:CODE cn:"CN") form with unique=prints
+       and order=usd&dir=asc so each URL renders the EXACT missing printings.
+    2. XLSX checklist (set-grouped, sorted by CN within each set) → queries/.
+    3. ManaPool bulk-add MD (3 fenced blocks, one per sub-selector) → queries/.
+
+    The chat output is always just the URL table + two `file://` link lines so
+    the user can click to open the artifacts. The XLSX and ManaPool MD are
+    NEVER rendered inline — the user explicitly wants them as files only.
+
+    Set-agnostic: works for FIN today, Avatar/TMNT/etc. tomorrow with the same
+    invocation.
+    """
+    import re as _re
+    from urllib.parse import quote_plus as _quote_plus
+
+    code_l = code.lower()
+    SUBS = [
+        ("rare-regular",     f"set:{code_l}+related missing rarity=rare treatment=regular"),
+        ("mythic-regular",   f"set:{code_l}+related missing rarity=mythic treatment=regular"),
+        (treatment_class,    f"set:{code_l}+related missing treatment={treatment_class}"),
+    ]
+
+    # 1. Materialize each sub-selector + dedupe to a printing-level union.
+    union: dict[str, sel_mod.MaterializedRow] = {}
+    sub_rows: dict[str, list[sel_mod.MaterializedRow]] = {}
+    for slug_key, sel in SUBS:
+        try:
+            rs = sel_mod.materialize(sel)
+        except sel_mod.SelectorParseError as e:
+            typer.echo(f"error: invalid selector {sel!r}: {e}", err=True); raise typer.Exit(2)
+        except LookupError as e:
+            typer.echo(f"error: {e} (sub-selector {sel!r})", err=True); raise typer.Exit(2)
+        sub_rows[slug_key] = rs
+        for r in rs:
+            union[r.scryfall_id] = r
+
+    rows_union = list(union.values())
+    if not rows_union:
+        typer.echo(f"# No missing printings found for set:{code_l}+related (full collection? wrong code?).")
+        raise typer.Exit(0)
+
+    # 2. Cheapest-first ordering for the Scryfall URL chunks.
+    def _cn_key(cn: str | None) -> tuple[int, str]:
+        m = _re.match(r"^(\d+)(.*)$", cn or "")
+        return (int(m.group(1)) if m else 0, m.group(2) if m else (cn or ""))
+
+    rows_by_value = sorted(rows_union, key=lambda r: (
+        0 if _row_line_value(r) is not None else 1,
+        _row_line_value(r) or 0.0,
+        r.card.get("set") or "", _cn_key(r.card.get("collector_number")),
+    ))
+    chunks = [rows_by_value[i:i+chunk_size] for i in range(0, len(rows_by_value), chunk_size)]
+
+    # 3. Build the XLSX checklist artifact (grouped by set, sorted by CN within each).
+    rows_for_xlsx = sorted(rows_union, key=lambda r: (
+        r.card.get("set") or "",
+        _cn_key(r.card.get("collector_number")),
+        r.finish,
+    ))
+    ts = datetime.now().strftime("%Y-%m-%d-%H%M%S")
+    QUERIES_DIR.mkdir(parents=True, exist_ok=True)
+    xlsx_path = QUERIES_DIR / f"missing-{code_l}-checklist-{ts}.xlsx"
+    union_selector_repr = (
+        f"({SUBS[0][1]}) ∪ ({SUBS[1][1]}) ∪ ({SUBS[2][1]})  [printing-level union]"
+    )
+    _write_query_xlsx(rows_for_xlsx, xlsx_path, union_selector_repr, f"missing-{code_l}-checklist")
+
+    # 4. Build the ManaPool MD artifact (3 fenced blocks).
+    md_path = QUERIES_DIR / f"missing-{code_l}-manapool-{ts}.md"
+    SUB_HEADINGS = {
+        "rare-regular":   "Rare, regular treatment",
+        "mythic-regular": "Mythic, regular treatment",
+        "alt":            "Any rarity, alt treatment (no `ext`, includes pure-`ff`)",
+        "collectible-alt":"Any rarity, collectible-alt (no `ext`, no pure-`ff`)",
+        "any-alt":        "Any rarity, any non-empty treatment (includes `ext`)",
+    }
+    total_value = sum((_row_line_value(r) or 0.0) for r in rows_union)
+    with open(md_path, "w") as f:
+        f.write(f"# {code_l.upper()} family — ManaPool bulk-add (missing printings)\n\n")
+        f.write(f"Generated: {datetime.now().isoformat(timespec='seconds')}\n\n")
+        f.write(f"**{len(rows_union)} distinct printings · ${total_value:,.2f}**\n\n")
+        f.write(f"Filter: rare/mythic regular treatment OR any-rarity {treatment_class}. "
+                f"Printing-level missing (owning any finish hides the printing).\n\n")
+        f.write(f"Paste each block below into ManaPool's bulk-add box. `★` marks foil.\n\n---\n\n")
+        for slug_key, sel in SUBS:
+            block = exports.build("manapool", sub_rows[slug_key])
+            line_count = len([ln for ln in block.split("\n") if ln.strip()])
+            heading = SUB_HEADINGS.get(slug_key, slug_key)
+            f.write(f"## {heading} ({line_count} rows)\n\n_Selector: `{sel}`_\n\n```\n{block.rstrip()}\n```\n\n")
+
+    # 5. Emit chat output: URL table + two file:// links. Nothing else.
+    typer.echo(f"# Missing from set:{code_l}+related — {len(rows_union)} distinct printings · ${total_value:,.2f}")
+    typer.echo(f"")
+    typer.echo(f"## Scryfall URLs ({len(chunks)} chunks, cheapest first)")
+    typer.echo(f"")
+    typer.echo(f"| # | Printings | Price band | URL |")
+    typer.echo(f"|---:|---:|---|---|")
+    for i, chunk in enumerate(chunks, start=1):
+        cheap = _row_line_value(chunk[0])
+        most = _row_line_value(chunk[-1])
+        cs = f"${cheap:.2f}" if cheap is not None else "—"
+        ms = f"${most:.2f}" if most is not None else "—"
+        terms = " or ".join(
+            f'(set:{r.card.get("set")} cn:"{r.card.get("collector_number")}")' for r in chunk
+        )
+        url = f"https://scryfall.com/search?q={_quote_plus(terms)}&unique=prints&order=usd&dir=asc"
+        typer.echo(f"| {i} | {len(chunk)} | {cs} → {ms} | [chunk {i}]({url}) |")
+    typer.echo(f"")
+    abs_xlsx = xlsx_path.resolve()
+    abs_md = md_path.resolve()
+    typer.echo(f"📋 Checklist (xlsx): [{xlsx_path}](file://{abs_xlsx})")
+    typer.echo(f"🛒 ManaPool bulk-add: [{md_path}](file://{abs_md})")
 
 
 # ---------- ad-hoc scryfall query ----------
