@@ -80,6 +80,34 @@ FAMILY_DUPE_FOIL_PROMO_TYPES: dict[str, frozenset[str]] = {
     # chocobotrackfoil is intentionally NOT here — it marks unique art (FIN 564 etc.).
     "fin": frozenset({"surgefoil"}),
 }
+
+
+# Global exclusion: prints that exist only in MTG Arena / Alchemy and have no
+# physical counterpart. The 'rebalanced' / 'alchemy' promo_types are unambiguous
+# platform-level signals (any card with one is a digital-only re-tuned variant);
+# they apply regardless of set/family. Always filtered out of physical-
+# collection queries (missing-set, checklists, exports).
+#
+# Examples in FIN: 'A-Vivi Ornitier' (FIN A-248) and 'A-Winota, Joiner of Forces'
+# (FCA A-19) — both Arena-only with `security_stamp: "arena"` and
+# `finishes: ["nonfoil"]`.
+DIGITAL_ONLY_PROMO_TYPES: frozenset[str] = frozenset({"rebalanced", "alchemy"})
+
+
+def _is_digital_only(card: dict) -> bool:
+    """True iff the card is an Arena/Alchemy rebalanced print (no physical counterpart)."""
+    import json as _json
+    pt_raw = card.get("promo_types")
+    if pt_raw is None:
+        return False
+    if isinstance(pt_raw, str):
+        try:
+            pt = set(_json.loads(pt_raw))
+        except (ValueError, TypeError):
+            return False
+    else:
+        pt = set(pt_raw)
+    return bool(pt & DIGITAL_ONLY_PROMO_TYPES)
 VALID_RARITIES = ("common", "uncommon", "rare", "mythic", "special", "bonus")
 VALID_FINISHES = ("nonfoil", "foil")
 VALID_MISSING_FINISHES = ("nonfoil", "foil", "either")
@@ -813,6 +841,11 @@ def _filter_treatment_preferred(rows: list[MaterializedRow]) -> list[Materialize
         family_codes = set(sets_mod.resolve(anchor).all_codes)
     except LookupError:
         family_codes = {anchor}
+
+    # Step 0: drop digital-only (Arena / Alchemy rebalanced) prints up-front.
+    # These never have a physical counterpart and shouldn't appear in any
+    # physical-collection workflow regardless of treatment shape.
+    rows = [r for r in rows if not _is_digital_only(r.card)]
 
     # Step 1: filter to collectible-alt rows.
     collectible: list[MaterializedRow] = []

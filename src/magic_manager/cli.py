@@ -1518,23 +1518,35 @@ def query_url_cmd(
         typer.echo(f"Chunk {i}/{len(chunks)} ({len(chunk)} printings): {url}")
 
 
-def _drop_datestamped_with_sibling(
+def _apply_preferred_post_filter(
     rows: list[sel_mod.MaterializedRow],
     anchor_code: str,
 ) -> list[sel_mod.MaterializedRow]:
-    """Post-filter rows: drop any printing whose `promo_types` contains 'datestamped'
-    AND a same-name same-treatment-codes sibling exists in the family that ISN'T
-    datestamped.
+    """Post-filter rows for `mm query missing-set` regular sub-selectors when
+    `--treatment-class=preferred`. Applies two exclusions that the selector
+    grammar's `treatment=preferred` already applies to the alt sub-selector,
+    but which need to be applied to the regular sub-selectors here:
 
-    Used by `mm query missing-set` in 'preferred' mode for the rare/mythic regular
-    sub-selectors. The selector grammar's `treatment=preferred` already applies
-    this to the alt sub-selector; this helper covers the regular-treatment rows
-    so the orchestrator's union picks up the same exclusion across all three subs.
+    1. **Digital-only (Arena/Alchemy rebalanced)** — drop unconditionally.
+       Same rule the selector applies; these never have physical counterparts.
+
+    2. **Datestamped reprints with a non-stamped sibling** at the same name and
+       same treatment codes in the family. Catches PFIN's prerelease-stamped
+       FIN cards that are visually identical to the FIN versions.
     """
     import json as _json
     from . import treatments as _treatments
+    from .selectors import _is_digital_only as _digital_only
+
     if not rows:
         return rows
+
+    # Step 1: drop digital-only prints unconditionally.
+    rows = [r for r in rows if not _digital_only(r.card)]
+    if not rows:
+        return rows
+
+    # Step 2: build family index for datestamped-with-sibling check.
     try:
         family_codes = set(sets_mod.resolve(anchor_code).all_codes)
     except LookupError:
@@ -1564,7 +1576,6 @@ def _drop_datestamped_with_sibling(
         if "datestamped" not in my_pt:
             out.append(r)
             continue
-        # Find a non-stamped sibling at the same name + same treatment codes.
         t = _treatments.compute_treatment(r.card)
         codes = frozenset(t.split("|")) if t else frozenset()
         siblings = by_name_codes.get((r.card.get("name"), codes), [])
@@ -1733,8 +1744,8 @@ def query_missing_set_cmd(
     # runs on the alt sub-selector (treatment=preferred); regular-treatment
     # rows skip the filter unless we apply it here.
     if treatment_class == "preferred":
-        sub_rows["rare-regular"]   = _drop_datestamped_with_sibling(sub_rows["rare-regular"], code_l)
-        sub_rows["mythic-regular"] = _drop_datestamped_with_sibling(sub_rows["mythic-regular"], code_l)
+        sub_rows["rare-regular"]   = _apply_preferred_post_filter(sub_rows["rare-regular"], code_l)
+        sub_rows["mythic-regular"] = _apply_preferred_post_filter(sub_rows["mythic-regular"], code_l)
 
     for slug_key in sub_rows:
         for r in sub_rows[slug_key]:
