@@ -91,6 +91,49 @@ Always show the user:
 
 Keep the summary tight. The user can click the web link for the full visual results.
 
+## Query gotchas (read this before building any URL with multiple printings)
+
+These are non-obvious behaviors that bite when you're building set-completion or printing-specific queries. Each rule has a real failure mode that surfaced in practice — don't skip them.
+
+### `cn:` is loose-match — use `cn:"N"` for exact
+
+`set:fin cn:248` returns BOTH `FIN 248` and `FIN A-248` — the `A-` prefix is treated as a CN variant, not a separate identifier. For exact CN matching, **always quote the value**:
+
+| Form | Behavior |
+|---|---|
+| `set:fin cn:248` | Loose: matches `248` AND `A-248`. Useful for "all variants of CN 248." |
+| `set:fin cn:"248"` | Exact: matches only the literal CN `248`. Use for printing-specific queries. |
+| `set:pmei cn:2025-13` | **Fails to parse** — the `-` is misread as a Scryfall operator. |
+| `set:pmei cn:"2025-13"` | Works: hyphenated CNs (PMEI / PSS5 / etc.) require quotes. |
+
+Rule of thumb: when emitting `(set:CODE cn:CN)` disjunctions for a missing-from-set workflow, **always quote the CN** — protects against both A-prefix variants and hyphenated CN formats.
+
+### Scryfall web UI caps at 20 nested OR conditions
+
+The API will accept disjunctions of 25+ printings, but the web UI shows "Your search may not contain more than twenty (20) nested conditions" and renders no results. **Cap chunk size at 20** when building Scryfall URLs intended for the user's browser.
+
+This bit us building cheapest-first FIN missing URLs — 25/chunk worked via `scryfall.sh` but failed in Chrome. The relevant cap is the user-facing one.
+
+### Default search dedupes by oracle name — use `unique=prints` for printing-specific views
+
+Default Scryfall search behavior collapses results by oracle name. `(set:fin cn:"248") or (set:fin cn:"570")` returns ONE row labeled "Vivi Ornitier" even though there are two distinct printings. For set-completion / "which exact printings am I missing" workflows, **always append `&unique=prints`** to the URL.
+
+```
+https://scryfall.com/search?q=...&unique=prints&order=usd&dir=asc
+```
+
+`order=usd&dir=asc` further sorts by cheapest-first within the chunk, which matches the typical "what should I buy?" intent. For shopping-by-name workflows (where the user wants to pick whichever printing is cheapest), the default oracle-name dedup IS what you want — leave `unique=prints` off.
+
+### Quote `scryfall:Q` selector queries that contain spaces
+
+When `scryfall:` (or `cards:`) appears inside the project's V2 selector grammar (e.g. `mm query show 'set:fca scryfall:t:dragon r:mythic'`), `shlex` tokenizes on whitespace and the `r:mythic` becomes a "modifier" the parser doesn't recognize. Quote the whole sub-query:
+
+```bash
+mm query show 'set:fca scryfall:"t:dragon r:mythic"'
+```
+
+This rule applies to the V2 selector grammar specifically. The bare `mm scryfall '...'` invocation is fine — the entire query is one shell argument.
+
 ## Scryfall search syntax reference
 
 This is the authoritative cheat sheet — do not invent operators not listed here.

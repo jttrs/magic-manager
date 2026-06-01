@@ -94,16 +94,16 @@ A selector is `TERM (' ' MODIFIER)*`. The TERM picks the universe of `(printing,
 
 | Modifier | Meaning | Example |
 |---|---|---|
-| `missing` | Set difference: TERM minus inventory by `(scryfall_id, finish)`. Rejected on `inventory`/`wishlist` (tautology). | `set:fca missing` |
-| `missing:nonfoil` / `missing:foil` / `missing:either` | Finish-aware missing. `nonfoil` keeps only nonfoil rows; `foil` only foil; `either` (default) keeps both. | `set:sld missing:foil` |
+| `missing` / `missing:either` | **Printing-level** set difference: drop the printing entirely if ANY finish is in inventory; collapse remaining rows to one per `scryfall_id` (preferring nonfoil for display). Matches the "unique art I'm missing" intent — owning the nonfoil hides the foil and vice versa. Rejected on `inventory`/`wishlist` (tautology). | `set:fca missing` |
+| `missing:nonfoil` / `missing:foil` | **Finish-aware** missing. `nonfoil` keeps nonfoil rows whose `(id, 'nonfoil')` isn't in inventory; `foil` likewise. Strips the other finish from output entirely. Use these when the user explicitly asks for foil-only or nonfoil-only completion gaps ("what foils am I missing from X?"). | `set:sld missing:foil` |
 | `owned` | Set intersection with inventory. Inverse of `missing`. Same restriction. | `set:fca owned` |
 | `qty>=N` / `qty<=N` / `qty=N` | Filter by quantity. Useful on `inventory` for "show me multiples." | `inventory qty>=2` |
 | `finish=foil` / `finish=nonfoil` | Filter by finish. Terminal — no `either` here. | `inventory finish=foil` |
 | `rarity=common\|uncommon\|rare\|mythic\|special\|bonus` | Filter by rarity. | `set:sld missing rarity=mythic` |
-| `treatment=regular\|alt\|any-alt\|b\|fa\|shw\|ext\|sm\|ff` | Filter by treatment class (computed from `frame_effects`/`full_art`/`promo_types` via `treatments.compute_treatment`). `regular` = no codes; `alt` = any non-empty AND no `ext`; `any-alt` = any non-empty (includes `ext`); individual codes match exact code presence. See `treatments.LEGEND` for what each code means. | `set:fin+related missing treatment=alt` |
+| `treatment=regular\|alt\|collectible-alt\|any-alt\|b\|fa\|shw\|ext\|sm\|ff` | Filter by treatment class (computed from `frame_effects`/`full_art`/`promo_types` via `treatments.compute_treatment`). `regular` = no codes; `alt` = non-empty AND no `ext`; `collectible-alt` = `alt` minus pure-`{ff}` (drops fancy-foil-only rows that are visually identical to regular); `any-alt` = any non-empty (includes `ext`); individual codes match exact code presence. See `treatments.LEGEND` for what each code means. The `[[missing-from-set]]` skill uses `collectible-alt` as the default for "what am I missing?" queries. | `set:fin+related missing treatment=collectible-alt` |
 | `cn>=N` / `cn<=N` | Filter by collector number (numeric prefix; letter suffixes coerce by stripping non-digits). | `inventory cn>=1858 cn<=1872` |
 | `value>=N` / `value<=N` | Filter by current Scryfall USD price for the row's finish. Rows without a price are dropped. | `inventory value>=10` |
-| `scryfall:Q` (post-filter) | Run Scryfall query, intersect by id with the in-flight rows. Lets you compose two queries. | `set:fca missing scryfall:t:dragon` |
+| `scryfall:Q` (post-filter) | Run Scryfall query, intersect by id with the in-flight rows. Lets you compose two queries. **Quote `Q` if it contains spaces** — `shlex` tokenizes on whitespace, so `scryfall:t:dragon r:mythic` parses `r:mythic` as a separate (invalid) modifier. Use `scryfall:"t:dragon r:mythic"` instead. See `[[scryfall-search]]`'s "Query gotchas" for more cn-quoting / unique=prints / 20-cap rules. | `set:fca missing scryfall:"t:dragon r:mythic"` |
 
 ## Subcommand reference
 
@@ -112,7 +112,11 @@ All subcommands accept `--json` for machine-readable output and exit 0 on succes
 - **`mm query show '<selector>' [--first N] [--sort default|value-desc|value-asc|rarity]`** — tabular dump. Columns: qty, finish, set, cn, rarity, name (with `flavor_name / oracle_name` form when applicable), unit_usd, line_value. `--first N` caps display; total count is always printed. `--sort` overrides the default `(set, cn, finish)` ordering; `value-desc`/`value-asc` push unpriced rows to the bottom regardless of direction.
 - **`mm query value '<selector>'`** — emits total USD, row count, count of rows with no price, and top-5 by line value.
 - **`mm query xlsx '<selector>' [--name SLUG] [--out PATH] [--sort default|value-desc|value-asc|rarity]`** — writes `queries/<slug>-<timestamp>.xlsx`. Columns: set, collector_number, name, rarity, finish, qty, unit_usd, line_value, scryfall_id. Hidden `_meta` sheet records the selector verbatim, slug, timestamp, and row count. `--sort` matches `mm query show`. Empty results still write a file with headers and emit a stderr warning.
-- **`mm query url '<selector>' [--chunk-size 20]`** — synthesizes Scryfall search URLs using `!"oracle_name"` form, deduped by oracle name (multiple finishes/printings of the same card collapse to one URL term). Default chunk size is 20.
+- **`mm query url '<selector>' [--mode oracle|prints] [--chunk-size 20] [--sort default|value-desc|value-asc|rarity]`** — synthesizes Scryfall search URLs from a selector's results. Two modes:
+  - `--mode oracle` (default): emits `!"<oracle name>"` ORed terms, deduped by oracle name. Multiple finishes/printings of the same card collapse to one URL term. Best for shopping by name (let Scryfall show every printing so you can pick whichever is cheapest).
+  - `--mode prints`: emits `(set:CODE cn:"CN")` ORed terms, one per distinct printing, with `unique=prints&order=usd&dir=asc` appended so Scryfall returns each printing as a separate result sorted cheapest-first within the chunk. Best for set-completion / "which exact printings am I missing." Honors quoted CNs so hyphenated CNs (PMEI 2025-13) and A-prefix variants (FIN A-248) work correctly.
+  - `--chunk-size` defaults to 20 (Scryfall's web UI caps at 20 nested OR conditions; larger chunks fail in the browser).
+  - `--sort` orders results before chunking. Use `value-asc` with `--mode prints` for cheapest-first set-completion URLs.
 - **`mm query top [N]`** — top-N inventory rows by line value. Default N=10.
 - **`mm query total`** — shorthand for `mm query value 'inventory'`.
 - **`mm query multiples`** — inventory rows with `qty>=2`, ordered by qty desc.

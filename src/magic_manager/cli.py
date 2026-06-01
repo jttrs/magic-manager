@@ -1173,31 +1173,84 @@ def query_stats_cmd(
 def query_url_cmd(
     selector: str = typer.Argument(...),
     chunk_size: int = typer.Option(20, "--chunk-size",
-                                   help="Cards per Scryfall search URL chunk (default 20)."),
+                                   help="Cards per Scryfall search URL chunk (default 20; Scryfall web UI caps at 20 nested OR conditions)."),
+    mode: str = typer.Option("oracle", "--mode",
+                             help="'oracle' = !\"<name>\" form, dedupe by oracle name (good for shopping by name). "
+                                  "'prints' = (set:CODE cn:\"CN\") form with unique=prints, one entry per printing "
+                                  "(good for set-completion / 'which exact printing am I missing')."),
+    sort: str = typer.Option("default", "--sort",
+                             help="Sort order applied before chunking. default (set,cn,finish) | value-desc | value-asc | rarity. "
+                                  "Use value-asc with --mode prints for cheapest-first set-completion URLs."),
 ):
     """Synthesize Scryfall search URLs for the result of a selector.
 
-    Uses `!"name"` form so each card matches its exact oracle name. URLs
-    chunked at --chunk-size to stay under URL-length limits.
+    Two modes:
+
+    \b
+    - oracle (default): emits `!"<oracle name>"` ORed terms, deduped by oracle
+      name. Multiple finishes / printings of the same card collapse to one URL
+      term. Best for shopping by name (let Scryfall show every printing so you
+      can pick the cheapest).
+    - prints: emits `(set:CODE cn:"CN")` ORed terms, one per distinct printing
+      from the selector results, with `unique=prints&order=usd&dir=asc` appended
+      to the URL so Scryfall returns each printing as a separate result sorted
+      cheapest-first. Best for set-completion / "which exact printing am I
+      missing" workflows. Honors `cn:"..."` quoting so hyphenated CNs (PMEI
+      2025-13) and A-prefix variants (FIN A-248) work correctly.
+
+    URLs are chunked at --chunk-size (default 20). Scryfall's web UI caps OR'd
+    queries at 20 nested conditions; chunks larger than 20 will fail in the
+    browser even if the API accepts them.
     """
     from urllib.parse import quote_plus
     rows = _materialize_or_die(selector)
+    rows = _apply_sort(rows, sort)
     if not rows:
         typer.echo("(selector matched 0 rows)"); raise typer.Exit(1)
-    # Dedupe by oracle name — multiple finishes / printings of the same card
-    # collapse to one URL term.
-    names: list[str] = []
-    seen: set[str] = set()
+
+    if mode not in ("oracle", "prints"):
+        typer.echo(f"error: --mode must be 'oracle' or 'prints', got {mode!r}", err=True)
+        raise typer.Exit(2)
+
+    if mode == "oracle":
+        # Dedupe by oracle name — multiple finishes / printings of the same card
+        # collapse to one URL term.
+        names: list[str] = []
+        seen: set[str] = set()
+        for r in rows:
+            nm = r.card.get("name")
+            if nm and nm not in seen:
+                seen.add(nm); names.append(nm)
+        chunks = [names[i:i+chunk_size] for i in range(0, len(names), chunk_size)]
+        typer.echo(f"{len(names)} distinct cards → {len(chunks)} URL(s) (mode=oracle)")
+        for i, chunk in enumerate(chunks, start=1):
+            terms = " or ".join(f'!"{nm}"' for nm in chunk)
+            url = f"https://scryfall.com/search?q={quote_plus(terms)}"
+            typer.echo(f"Chunk {i}/{len(chunks)} ({len(chunk)} cards): {url}")
+        return
+
+    # mode == "prints"
+    # Collapse to one entry per (set, cn) — within a printing, multiple finishes
+    # are the same Scryfall card. Preserve sort order from _apply_sort.
+    seen_printings: set[tuple[str, str]] = set()
+    printings: list[tuple[str, str]] = []  # [(set_code, cn), ...]
     for r in rows:
-        nm = r.card.get("name")
-        if nm and nm not in seen:
-            seen.add(nm); names.append(nm)
-    chunks = [names[i:i+chunk_size] for i in range(0, len(names), chunk_size)]
-    typer.echo(f"{len(names)} distinct cards → {len(chunks)} URL(s)")
+        setc = r.card.get("set") or ""
+        cn = r.card.get("collector_number") or ""
+        if not setc or not cn:
+            continue
+        key = (setc, cn)
+        if key in seen_printings:
+            continue
+        seen_printings.add(key)
+        printings.append(key)
+
+    chunks = [printings[i:i+chunk_size] for i in range(0, len(printings), chunk_size)]
+    typer.echo(f"{len(printings)} distinct printings → {len(chunks)} URL(s) (mode=prints)")
     for i, chunk in enumerate(chunks, start=1):
-        terms = " or ".join(f'!"{nm}"' for nm in chunk)
-        url = f"https://scryfall.com/search?q={quote_plus(terms)}"
-        typer.echo(f"Chunk {i}/{len(chunks)} ({len(chunk)} cards): {url}")
+        terms = " or ".join(f'(set:{s} cn:"{cn}")' for s, cn in chunk)
+        url = f"https://scryfall.com/search?q={quote_plus(terms)}&unique=prints&order=usd&dir=asc"
+        typer.echo(f"Chunk {i}/{len(chunks)} ({len(chunk)} printings): {url}")
 
 
 @query_app.command("xlsx")
@@ -1620,11 +1673,27 @@ def input_list(
         return
 
     # Walk both supported formats. Don't recurse into processed/ — those are
-    # immutable archives, not active intake docs.
+    # immutable archives, not active intake docs. Skip Excel/LibreOffice
+    # temp-lock sidecars (``~$<name>.xlsx``, ``.~lock.<name>#``) — they aren't
+    # real workbooks; the user just has the file open in Excel.
     files: list[Path] = []
+    skipped_lock_files: list[str] = []
     for pattern in ("*.xlsx", "*.md"):
-        files.extend(p for p in INPUT_DIR.glob(pattern) if p.is_file())
+        for p in INPUT_DIR.glob(pattern):
+            if not p.is_file():
+                continue
+            if p.name.startswith("~$") or p.name.startswith(".~lock."):
+                skipped_lock_files.append(p.name)
+                continue
+            files.append(p)
     files = sorted(files)
+    if skipped_lock_files and not json_out:
+        typer.echo(
+            f"(skipped {len(skipped_lock_files)} Excel/LibreOffice lock file(s); "
+            f"close the workbook in your editor if you intended to ingest it: "
+            f"{', '.join(skipped_lock_files)})",
+            err=True,
+        )
     out_files: list[dict] = []
     for f in files:
         sha = _file_sha256(f)

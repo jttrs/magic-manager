@@ -50,7 +50,7 @@ VALID_MODIFIERS = (
     "scryfall", "treatment",
 )
 VALID_TREATMENT_CLASSES = (
-    "regular", "alt", "any-alt",
+    "regular", "alt", "collectible-alt", "any-alt",
     "b", "fa", "shw", "ext", "sm", "ff",
 )
 VALID_RARITIES = ("common", "uncommon", "rare", "mythic", "special", "bonus")
@@ -501,15 +501,39 @@ def _apply_modifier(rows: list[MaterializedRow], mod: Modifier) -> list[Material
 
 
 def _modifier_missing(rows: list[MaterializedRow], finish_filter: str) -> list[MaterializedRow]:
-    """Set-difference: rows minus what's in inventory at the same (id, finish).
+    """Set-difference: rows minus what's in inventory.
 
     finish_filter:
-      'either'  → keep rows where the matching (id, finish) is NOT in inventory
-      'nonfoil' → only consider/keep nonfoil rows; strip foils from output
-      'foil'    → only consider/keep foil rows; strip nonfoils from output
+      'either'  → PRINTING-LEVEL. Drop the printing entirely if ANY finish is in
+                  inventory; collapse remaining rows so each scryfall_id appears
+                  at most once (with finish='nonfoil' if available, else 'foil').
+                  This is the default for `missing` (no suffix). Matches the
+                  user-facing intent of 'unique art I'm missing' rather than
+                  'every (printing, finish) tuple I haven't bought'.
+      'nonfoil' → FINISH-LEVEL. Keep nonfoil rows whose (id, 'nonfoil') is NOT
+                  in inventory; strip foils from output entirely.
+      'foil'    → FINISH-LEVEL. Same shape, foil only.
     """
     inv = _inventory_index()
-    out: list[MaterializedRow] = []
+
+    if finish_filter == "either":
+        # PRINTING-LEVEL: a printing is "missing" iff zero finishes are owned.
+        # Collapse to one row per scryfall_id, preferring nonfoil for display
+        # when both finishes exist in the rows.
+        owned_ids = {sid for (sid, _f) in inv.keys()}
+        prefer = sorted(rows, key=lambda r: (r.scryfall_id, 0 if r.finish == "nonfoil" else 1))
+        out: list[MaterializedRow] = []
+        seen: set[str] = set()
+        for r in prefer:
+            if r.scryfall_id in owned_ids:
+                continue
+            if r.scryfall_id in seen:
+                continue
+            seen.add(r.scryfall_id)
+            out.append(r)
+        return out
+
+    out = []
     for r in rows:
         if finish_filter == "nonfoil" and r.finish != "nonfoil":
             continue
@@ -611,7 +635,15 @@ def _filter_treatment(rows: list[MaterializedRow], cls: str) -> list[Materialize
         if cls == "regular":
             keep = not codes
         elif cls == "alt":
+            # Any non-empty treatment that isn't extended-art.
             keep = bool(codes) and "ext" not in codes
+        elif cls == "collectible-alt":
+            # Stricter: alt minus pure-ff. Fancy-foil-only rows are visually
+            # identical to their regular-frame counterparts (the foil sheet
+            # is the only difference), so the user excludes them when asking
+            # 'what am I missing?'. Multi-code rows like b|ff, fa|ff still
+            # pass because they carry an additional visual distinction.
+            keep = bool(codes) and "ext" not in codes and codes != {"ff"}
         elif cls == "any-alt":
             keep = bool(codes)
         else:
