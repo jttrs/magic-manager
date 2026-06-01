@@ -42,6 +42,8 @@ So the "missing-but-meaningful" set is:
 
 When the user asks **"what do I own from set X?"** (or aggregate questions like total value, top N, etc.), there is **no treatment filter**. Every printing the user owns counts toward inventory rollups, including pure `ff` and `ext`. Don't conflate the two question shapes.
 
+**Note on `inventory` vs `inventory available`**: `missing` queries materialize against the bare `inventory` term, which counts every owned copy regardless of whether it's currently sleeved into a deck. If the user wants a "what would I have to buy if I refused to deconstruct any current decks?" view (i.e. subtract committed copies from owned), they should ask explicitly — that's `inventory available`, not the default. See the [[inventory-query]] cookbook entry for `available`. The default `missing` calculation is "what art/printing is missing from my owned printings, period," not "what's currently on the shelf and free."
+
 The selector grammar is AND-only — there's no OR — so the missing-query filter is expressed as a **union of three sub-selectors** orchestrated outside the grammar (see [Recipe](#recipe) below).
 
 ## Recipe

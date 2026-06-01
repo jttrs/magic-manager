@@ -20,6 +20,7 @@ from . import (
     exports,
     intake as intake_mod,
     inventory as inv_mod,
+    mtgjson as mtgjson_mod,
     selectors as sel_mod,
     sets as sets_mod,
     wishlist as wishlist_mod,
@@ -862,6 +863,125 @@ def deck_delete_cmd(
     typer.echo(f"Deleted {n} deck(s)")
 
 
+@deck_app.command("find")
+def deck_find_cmd(
+    query: str = typer.Argument(
+        ...,
+        help="A scryfall_id, a 'set cn' pair (QUOTED, e.g. 'fin 248'), or an exact card name (QUOTED if it has spaces). Tries each form in order.",
+    ),
+    json_out: bool = typer.Option(False, "--json"),
+):
+    """List every deck that contains a given printing.
+
+    Resolution order: scryfall_id (UUID-shaped) → 'set cn' pair (two
+    whitespace-separated tokens) → exact case-insensitive name match against
+    cards.name OR cards.flavor_name. Reports per-deck commitments plus the
+    inventory↔committed↔available math for the resolved scryfall_id.
+    """
+    import re as _re
+
+    q = query.strip()
+    candidates: list[str] = []  # scryfall_ids matching the query
+    with db.connect() as conn:
+        # Form 1: UUID-shaped → exact scryfall_id lookup.
+        if _re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", q.lower()):
+            r = conn.execute("SELECT scryfall_id FROM cards WHERE scryfall_id = ?", (q.lower(),)).fetchone()
+            if r is not None:
+                candidates.append(r["scryfall_id"])
+
+        # Form 2: 'set cn' two-token form.
+        if not candidates:
+            parts = q.split()
+            if len(parts) == 2:
+                setc, cn = parts[0].lower(), parts[1]
+                rows = conn.execute(
+                    "SELECT scryfall_id FROM cards WHERE set_code = ? AND collector_number = ?",
+                    (setc, cn),
+                ).fetchall()
+                candidates.extend(r["scryfall_id"] for r in rows)
+
+        # Form 3: exact name (or flavor_name) match, case-insensitive.
+        if not candidates:
+            rows = conn.execute(
+                "SELECT scryfall_id FROM cards "
+                "WHERE LOWER(name) = ? OR LOWER(flavor_name) = ? "
+                "ORDER BY set_code, collector_number",
+                (q.lower(), q.lower()),
+            ).fetchall()
+            candidates.extend(r["scryfall_id"] for r in rows)
+
+    if not candidates:
+        typer.echo(f"no card found matching {query!r} (tried scryfall_id, 'set cn', and exact name)", err=True)
+        raise typer.Exit(1)
+
+    # For each candidate scryfall_id, gather (deck slug, board, finish, count)
+    # plus inventory and computed available.
+    results: list[dict] = []
+    with db.connect() as conn:
+        for sid in candidates:
+            card = conn.execute(
+                "SELECT name, flavor_name, set_code, collector_number, rarity FROM cards WHERE scryfall_id=?",
+                (sid,),
+            ).fetchone()
+            deck_rows = conn.execute(
+                "SELECT d.slug, dc.board, dc.finish, dc.count "
+                "FROM deck_cards dc JOIN decks d ON d.deck_id = dc.deck_id "
+                "WHERE dc.scryfall_id = ? "
+                "ORDER BY d.slug, dc.board, dc.finish",
+                (sid,),
+            ).fetchall()
+            inv_rows = conn.execute(
+                "SELECT finish, quantity FROM inventory WHERE scryfall_id = ?",
+                (sid,),
+            ).fetchall()
+            committed_by_finish: dict[str, int] = {}
+            for r in deck_rows:
+                committed_by_finish[r["finish"]] = committed_by_finish.get(r["finish"], 0) + r["count"]
+            owned_by_finish = {r["finish"]: r["quantity"] for r in inv_rows}
+            available_by_finish = {
+                fin: max(0, owned_by_finish.get(fin, 0) - committed_by_finish.get(fin, 0))
+                for fin in set(owned_by_finish) | set(committed_by_finish)
+            }
+            results.append({
+                "scryfall_id": sid,
+                "name": card["name"],
+                "flavor_name": card["flavor_name"],
+                "set": card["set_code"],
+                "collector_number": card["collector_number"],
+                "rarity": card["rarity"],
+                "decks": [
+                    {"slug": r["slug"], "board": r["board"], "finish": r["finish"], "count": r["count"]}
+                    for r in deck_rows
+                ],
+                "owned": owned_by_finish,
+                "committed": committed_by_finish,
+                "available": available_by_finish,
+            })
+
+    if json_out:
+        json.dump(results, sys.stdout, indent=2); sys.stdout.write("\n")
+        return
+
+    for res in results:
+        flavor = res["flavor_name"]
+        display = f"{flavor} / {res['name']}" if flavor else res["name"]
+        setc = (res["set"] or "?").upper()
+        cn = res["collector_number"] or "?"
+        typer.echo(f"\n{display} ({setc} {cn}, {res['rarity']})  scryfall_id={res['scryfall_id']}")
+        if not res["decks"]:
+            typer.echo("  (not in any deck)")
+        else:
+            for dk in res["decks"]:
+                typer.echo(f"  deck={dk['slug']:<30} board={dk['board']:<10} finish={dk['finish']:<8} count={dk['count']}")
+        # Math line
+        finish_keys = sorted(set(res["owned"]) | set(res["committed"]))
+        for fin in finish_keys:
+            o = res["owned"].get(fin, 0)
+            c = res["committed"].get(fin, 0)
+            a = res["available"].get(fin, 0)
+            typer.echo(f"  {fin:>7}: owned={o}  committed={c}  available={a}")
+
+
 @deck_app.command("value")
 def deck_value_cmd(slug: str = typer.Argument(...)):
     """Total deck value in USD."""
@@ -874,6 +994,151 @@ def deck_value_cmd(slug: str = typer.Argument(...)):
         typer.echo(f"Cards without USD price ({len(v['missing_price'])}):")
         for name, set_code, cn, finish in v["missing_price"]:
             typer.echo(f"  {name} ({set_code.upper()}) {cn} [{finish}]")
+
+
+_BOARD_KEY_TO_NAME = (
+    ("commander", "commander"),
+    ("mainBoard", "main"),
+    ("sideBoard", "side"),
+)
+
+
+@deck_app.command("import-precon")
+def deck_import_precon_cmd(
+    file_name: str = typer.Argument(
+        ...,
+        help="MTGJSON deck fileName (e.g. CounterBlitzFinalFantasyX_FIC). See `mm mtgjson decks` to list available precons.",
+    ),
+    slug: str = typer.Option(
+        None, "--slug",
+        help="Override the auto-derived slug. Defaults to slugified MTGJSON deck name; --copies>1 appends -2/-3/...",
+    ),
+    name: str = typer.Option(
+        None, "--name",
+        help="Override the deck's display name. Defaults to MTGJSON 'name' field.",
+    ),
+    copies: int = typer.Option(
+        1, "--copies", min=1,
+        help="Create N independent decks from this precon. First gets the bare slug; copies 2..N get -2, -3, ... suffixes.",
+    ),
+    add_inventory: bool = typer.Option(
+        True, "--add-inventory/--no-add-inventory",
+        help="Also add the precon's cards to inventory (default: yes). --no-add-inventory builds the deck composition without claiming physical ownership.",
+    ),
+    deconstruct: bool = typer.Option(
+        False, "--deconstruct",
+        help="Skip deck creation; only add cards to inventory. Use when opening a precon to break it down for parts.",
+    ),
+):
+    """Import an MTGJSON precon into the local DB.
+
+    By default: creates one or more named decks AND adds the cards to inventory.
+    The two effects are independent — see --no-add-inventory and --deconstruct.
+
+    The MTGJSON Card(Deck) entries carry `identifiers.scryfallId` which maps
+    directly to our cards table. No Scryfall API calls; the precon JSON is
+    cached after first fetch.
+    """
+    try:
+        deck_data = mtgjson_mod.deck(file_name)
+    except mtgjson_mod.MtgJsonError as e:
+        typer.echo(f"error: could not fetch MTGJSON precon {file_name!r}: {e}", err=True)
+        raise typer.Exit(2)
+
+    deck_name = name or deck_data.get("name") or file_name
+    base_slug = slug or _slug(deck_name)
+    if not base_slug:
+        typer.echo(f"error: could not derive slug from name {deck_name!r}; pass --slug", err=True)
+        raise typer.Exit(2)
+
+    # --- 1. Decide effective slugs (one per copy), checking collisions up-front. ---
+    effective_slugs: list[str] = []
+    if not deconstruct:
+        for i in range(copies):
+            s = base_slug if i == 0 else f"{base_slug}-{i+1}"
+            if decks_mod.deck_get(s) is not None:
+                typer.echo(
+                    f"error: deck slug {s!r} already exists. Pass --slug to override "
+                    f"or `mm deck delete {s}` to remove the existing deck first.",
+                    err=True,
+                )
+                raise typer.Exit(2)
+            effective_slugs.append(s)
+
+    # --- 2. Create deck rows (skipped under --deconstruct). ---
+    fmt = "commander" if deck_data.get("type", "").lower().startswith("commander") else None
+    for s in effective_slugs:
+        decks_mod.deck_create(s, deck_name, format=fmt)
+
+    # --- 3. Walk boards, write deck_cards rows + accumulate inventory aggregates. ---
+    deck_added = deck_updated = 0
+    deck_card_qty = 0
+    inv_aggregate: dict[tuple[str, str], int] = {}  # (scryfall_id, finish) → qty across all boards × copies
+    missing_sids: list[dict] = []  # mtgjson entries with no scryfallId
+    for mj_key, board_name in _BOARD_KEY_TO_NAME:
+        for entry in deck_data.get(mj_key, []) or []:
+            sid = (entry.get("identifiers") or {}).get("scryfallId")
+            if not sid:
+                missing_sids.append({
+                    "name": entry.get("name"),
+                    "set": entry.get("setCode"),
+                    "cn": entry.get("number"),
+                    "board": board_name,
+                })
+                continue
+            count = int(entry.get("count", 1) or 1)
+            finish = "foil" if entry.get("isFoil") else "nonfoil"
+            for s in effective_slugs:
+                r = decks_mod.deck_add_card(s, sid, board_name, finish, count)
+                deck_card_qty += count
+                if r["action"] == "inserted":
+                    deck_added += 1
+                else:
+                    deck_updated += 1
+            inv_aggregate[(sid, finish)] = inv_aggregate.get((sid, finish), 0) + count * copies
+
+    # --- 4. Inventory aggregates (suppressed by --no-add-inventory or --deconstruct override). ---
+    inv_added = inv_updated = 0
+    inv_qty_total = 0
+    if add_inventory:
+        for (sid, finish), qty in inv_aggregate.items():
+            r = inv_mod.inventory_add(sid, finish, qty)
+            inv_qty_total += qty
+            if r["action"] == "inserted":
+                inv_added += 1
+            else:
+                inv_updated += 1
+
+    # --- 5. Summary. ---
+    if deconstruct:
+        typer.echo(
+            f"Imported precon {deck_name!r} as INVENTORY ONLY (--deconstruct): "
+            f"{inv_added} new rows, {inv_updated} bumped, {inv_qty_total} total card-qty across "
+            f"{len(inv_aggregate)} distinct (printing, finish) entries × {copies} copies."
+        )
+    else:
+        slug_list = ", ".join(effective_slugs)
+        typer.echo(
+            f"Imported precon {deck_name!r} as {len(effective_slugs)} deck(s): {slug_list}. "
+            f"Deck rows: {deck_added} added, {deck_updated} updated ({deck_card_qty} total card-qty)."
+        )
+        if add_inventory:
+            typer.echo(
+                f"Inventory: {inv_added} new rows, {inv_updated} bumped "
+                f"({inv_qty_total} total card-qty)."
+            )
+        else:
+            typer.echo("Inventory: skipped (--no-add-inventory).")
+
+    if missing_sids:
+        typer.echo(
+            f"warning: {len(missing_sids)} entries had no scryfallId and were skipped:",
+            err=True,
+        )
+        for m in missing_sids[:5]:
+            typer.echo(f"  - {m['name']} ({m['set']} {m['cn']}, board={m['board']})", err=True)
+        if len(missing_sids) > 5:
+            typer.echo(f"  ...and {len(missing_sids) - 5} more", err=True)
 
 
 @deck_app.command("import")

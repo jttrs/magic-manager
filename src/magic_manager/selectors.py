@@ -45,7 +45,7 @@ from . import db, scryfall, sets as sets_mod
 
 VALID_TERMS = ("inventory", "wishlist", "deck", "set", "cards", "scryfall")
 VALID_MODIFIERS = (
-    "missing", "owned",
+    "missing", "owned", "available",
     "qty", "finish", "rarity", "cn", "value",
     "scryfall", "treatment",
 )
@@ -180,6 +180,10 @@ def _parse_modifier(tok: str) -> Modifier:
     if low == "owned":
         return Modifier(kind="owned")
 
+    # available — inventory minus deck commitments
+    if low == "available":
+        return Modifier(kind="available")
+
     # finish=foil|nonfoil
     if low.startswith("finish="):
         v = tok.split("=", 1)[1].strip().lower()
@@ -256,6 +260,17 @@ def _validate_combination(sel: Selector) -> None:
     if has_missing and has_owned:
         raise SelectorParseError(
             "'missing' and 'owned' are inverses; pick one"
+        )
+
+    has_available = any(m.kind == "available" for m in sel.modifiers)
+    if has_available and sel.term.kind != "inventory":
+        # `available` subtracts deck commitments from owned quantities. It
+        # only makes sense on raw inventory rows; `set:`/`cards:`/etc. don't
+        # carry per-row owned quantities to subtract from.
+        raise SelectorParseError(
+            f"'available' modifier requires the 'inventory' term — "
+            f"got {sel.term.kind!r}. Use `inventory available` (optionally "
+            f"composed with finish=/value=/treatment= filters)."
         )
 
 
@@ -483,6 +498,8 @@ def _apply_modifier(rows: list[MaterializedRow], mod: Modifier) -> list[Material
         return _modifier_missing(rows, mod.value or "either")
     if mod.kind == "owned":
         return _modifier_owned(rows)
+    if mod.kind == "available":
+        return _modifier_available(rows)
     if mod.kind == "qty":
         return _filter_numeric(rows, "quantity", mod.op, float(mod.value))
     if mod.kind == "finish":
@@ -558,6 +575,65 @@ def _modifier_owned(rows: list[MaterializedRow]) -> list[MaterializedRow]:
         out.append(MaterializedRow(
             scryfall_id=r.scryfall_id, quantity=owned_qty, finish=r.finish, card=r.card,
         ))
+    return out
+
+
+def _modifier_available(rows: list[MaterializedRow]) -> list[MaterializedRow]:
+    """Subtract deck commitments from inventory quantities.
+
+    Inputs are inventory rows (qty = total physical copies owned). Deck
+    commitments are summed across all decks per (scryfall_id, finish), and
+    the difference becomes the new qty.
+
+    Rows where the difference is <= 0 are dropped from the result and a
+    one-line stderr warning is emitted per drop, so the user notices when
+    they've committed more copies than they actually own.
+    """
+    import sys as _sys
+    committed = _deck_commitment_index()
+    out: list[MaterializedRow] = []
+    for r in rows:
+        com = committed.get((r.scryfall_id, r.finish), 0)
+        avail = r.quantity - com
+        if avail > 0:
+            out.append(MaterializedRow(
+                scryfall_id=r.scryfall_id, quantity=avail, finish=r.finish, card=r.card,
+            ))
+            continue
+        if com > r.quantity:
+            # Over-commitment: more deck copies than owned. The user wants this
+            # surfaced so they can fix the inconsistency (probably forgot to
+            # add inventory after a precon was opened, or double-counted a
+            # deck import).
+            name = r.card.get("name") or "?"
+            setc = (r.card.get("set") or "?").upper()
+            cn = r.card.get("collector_number") or "?"
+            print(
+                f"over-committed: {name} ({setc} {cn}) [{r.finish}] "
+                f"owned={r.quantity} committed={com}",
+                file=_sys.stderr,
+            )
+        # avail == 0 (fully committed) — silently drop. The user knows the deck
+        # has it; no need to noise the chat.
+    return out
+
+
+def _deck_commitment_index() -> dict[tuple[str, str], int]:
+    """Return {(scryfall_id, finish): SUM(count)} aggregated across all decks.
+
+    A printing committed to multiple decks is summed. `finish` reflects the
+    deck_cards row's finish — which for the import path is always 'foil' or
+    'nonfoil'; the schema's 'either' value is theoretically possible but not
+    emitted by current import paths.
+    """
+    out: dict[tuple[str, str], int] = {}
+    with db.connect() as conn:
+        rows = conn.execute(
+            "SELECT scryfall_id, finish, SUM(count) AS total "
+            "FROM deck_cards GROUP BY scryfall_id, finish"
+        ).fetchall()
+    for r in rows:
+        out[(r["scryfall_id"], r["finish"])] = r["total"]
     return out
 
 
