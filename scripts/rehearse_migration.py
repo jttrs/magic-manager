@@ -10,12 +10,23 @@ When the rehearsal actually exercises the V4 migration (i.e. pre-version
 ``set_targets``) were populated correctly from the V1 ``list_rows``/``lists``
 data. See ``_verify_v4_population`` for the exact contract.
 
-Usage:
+Usage
+-----
 
-    uv run python -m scripts.rehearse_migration
+    uv run python -m scripts.rehearse_migration [-h | --help]
 
-Exit code 0 = OK. Non-zero = something diverged; the script prints which
-table changed and how. The live DB is never touched.
+This script takes no behavioral options — it always rehearses against the
+current live DB at ``db/magic_manager.db`` and reports a per-table summary.
+``--help`` prints this docstring and exits without touching anything.
+
+Exit codes
+----------
+
+    0  — every precious table is byte-equivalent pre/post migration AND
+         (if V4 was exercised) V4's new tables were populated correctly.
+         Also 0 if there's no live DB to rehearse against (no-op).
+    1  — something diverged; the script prints which table changed and how.
+         The live DB is never touched even on failure.
 
 This is intentionally NOT a pytest harness. It's a one-shot rehearsal
 script that can be wired into pytest later if/when we adopt one.
@@ -23,6 +34,7 @@ script that can be wired into pytest later if/when we adopt one.
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import os
@@ -232,7 +244,29 @@ def _verify_v4_population(
     return ok, lines
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    # Tiny argparse just for --help / -h. The rehearsal itself takes no
+    # arguments — it operates on the live DB at db.db_path() unconditionally.
+    parser = argparse.ArgumentParser(
+        prog="rehearse_migration",
+        description=(
+            "Rehearse the schema migrations against a copy of the live DB and "
+            "verify that precious tables are byte-equivalent before and after. "
+            "Run this before shipping a new MIGRATIONS entry."
+        ),
+        epilog=(
+            "Usage:\n"
+            "  uv run python -m scripts.rehearse_migration\n\n"
+            "Exit codes:\n"
+            "  0  every precious table preserved (and V4-new tables populated, "
+            "if the V4 migration was exercised)\n"
+            "  1  something diverged; per-table report on stdout, error on stderr\n\n"
+            "The live DB is never touched."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.parse_args(argv)
+
     live = db.db_path()
     if not live.exists():
         print(f"(no live DB at {live} — nothing to rehearse against)", file=sys.stderr)
@@ -323,4 +357,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main())  # accept argv from sys.argv via argparse default
