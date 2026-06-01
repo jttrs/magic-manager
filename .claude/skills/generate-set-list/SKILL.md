@@ -124,3 +124,20 @@ uv run mm set master-list "Final Fantasy" --include token
 - Re-running `master-list` is safe (DB-backed cells re-pre-populate), but only after the previous intake has been ingested. If you see exit 3, do NOT pass `--force` without confirming with the user — XLSX-only edits will be silently discarded.
 - A full Final Fantasy family sync touches Scryfall ~1,244 cards over 8 paginated calls (~4–6 seconds with the 500ms wrapper rate limit). OTJ is similar.
 - Stale lock state: if `scryfall.sh` died mid-run, you may see `lock timeout`. Clear with `rm -rf "${TMPDIR}scryfall-state/lock"` and retry.
+- **Variant exclusions baked into master-list output** (`is_excluded_variant()` at `sets.py`): prerelease-stamped, datestamped, stamped, promopack, japanshowcase, serialized, white/yellow-bordered, and **Arena/Alchemy rebalanced** (digital-only, e.g. `A-Vivi Ornitier`). These are dropped at write time so the inventory checklist only shows printings the user could realistically physically catalog. Override with `--include-variants` if needed (rarely).
+
+## Not to be confused with: missing checklists
+
+The XLSX written by `mm set master-list` is an **inventory checklist** — purpose: cataloging physical cards. The XLSX written by `mm query missing-set <CODE>` (the [[missing-from-set]] skill) is a **missing checklist** — purpose: shopping list of printings the user doesn't own. Different artifacts, different purposes, different rules:
+
+| | Inventory checklist | Missing checklist |
+|---|---|---|
+| **Produced by** | `mm set master-list` | `mm query missing-set` |
+| **File location** | `checklists/<slug>-checklist.xlsx` | `queries/missing-<code>-checklist-<ts>.xlsx` |
+| **`_meta.kind`** | `inventory` | `missing` |
+| **Spine** | full family universe (with safe variant exclusions) OR a rarity slice | printing-level union of what the user doesn't own |
+| **Columns** | set, cn, name, rarity, treatment, mana_value, usd, usd_foil, **qty_normal, qty_foil** | set, cn, name, rarity, **finish**, qty, **unit_usd**, **line_value**, scryfall_id |
+| **Filter philosophy** | Permissive — keeps `ext` / pure-`ff` / fancy-foil dupes (user might own incidental copies cracked from boosters, etc.). Drops only safe-to-exclude variants + Arena. | Strict — drops everything not "unique art that can't be obtained more cheaply." See [[missing-from-set]]'s `preferred` treatment class. |
+| **Round-trips** | YES, via `mm set ingest` | NO, read-only |
+
+Mental model: **inventory checklist = "what could I own"; missing checklist = "what I want to buy."** Don't conflate them. If the user asks for "a checklist of FIN" without context, default to the inventory checklist (this skill); if they say "what am I missing" / "what to buy" / "shopping list," route to the missing-from-set skill.

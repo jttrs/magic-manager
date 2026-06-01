@@ -1593,13 +1593,20 @@ def _write_query_xlsx(
     target: Path,
     selector: str,
     slug: str,
+    kind: str = "query",
 ) -> None:
     """Write a list of materialized rows to an XLSX checklist artifact.
 
-    Shared by `mm query xlsx` and the missing-set orchestrator. Columns:
-    set, collector_number, name, rarity, finish, qty, unit_usd, line_value,
-    scryfall_id. Hidden _meta sheet records the originating selector and
-    timestamp so the file's lineage is traceable.
+    Shared by `mm query xlsx` (kind="query", ad-hoc selector results) and
+    `mm query missing-set` (kind="missing", canonical missing-checklist
+    output). The `kind` field is recorded in the hidden `_meta` sheet so
+    consumers can distinguish missing checklists from ad-hoc query results
+    or from `mm set master-list`'s inventory checklists (which are written
+    by a separate function in sets.py with `kind: "inventory"`).
+
+    Columns: set, collector_number, name, rarity, finish, qty, unit_usd,
+    line_value, scryfall_id. Hidden _meta sheet records the originating
+    selector and timestamp so the file's lineage is traceable.
     """
     from openpyxl import Workbook
     from openpyxl.styles import Font
@@ -1635,6 +1642,7 @@ def _write_query_xlsx(
     meta_ws = wb.create_sheet("_meta")
     meta_ws.sheet_state = "hidden"
     meta_ws.append(["key", "value"])
+    meta_ws.append(["kind", kind])
     meta_ws.append(["selector", selector])
     meta_ws.append(["slug", slug])
     meta_ws.append(["generated_at", datetime.now().isoformat(timespec="seconds")])
@@ -1780,7 +1788,10 @@ def query_missing_set_cmd(
     union_selector_repr = (
         f"({SUBS[0][1]}) ∪ ({SUBS[1][1]}) ∪ ({SUBS[2][1]})  [printing-level union]"
     )
-    _write_query_xlsx(rows_for_xlsx, xlsx_path, union_selector_repr, f"missing-{code_l}-checklist")
+    _write_query_xlsx(
+        rows_for_xlsx, xlsx_path, union_selector_repr,
+        f"missing-{code_l}-checklist", kind="missing",
+    )
 
     # 4. Build the ManaPool MD artifact (3 fenced blocks).
     md_path = QUERIES_DIR / f"missing-{code_l}-manapool-{ts}.md"

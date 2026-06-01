@@ -41,6 +41,12 @@ EXCLUDED_BORDERS = frozenset({"white", "yellow"})
 EXCLUDED_PROMO_TYPES = frozenset({
     "prerelease", "datestamped", "stamped", "promopack",
     "japanshowcase", "serialized",
+    # Arena/Alchemy rebalanced cards exist only as digital re-tunings — they
+    # have no physical counterpart, no foil finish, no secondary-market price,
+    # and a literal "arena" security_stamp. Always filtered from physical
+    # collection workflows. Mirrors selectors.DIGITAL_ONLY_PROMO_TYPES on the
+    # missing-set side; both signals are universal across MTG (not set-specific).
+    "rebalanced", "alchemy",
 })
 
 
@@ -433,6 +439,11 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
 
     rarity_value = ",".join(sorted(rarity_set)) if rarity_set else ""
     meta = {
+        # `kind` distinguishes this artifact from `mm query missing-set`'s output
+        # (which writes `kind: "missing"` to its own _meta sheet). Inventory
+        # checklists round-trip through `mm set ingest`; missing checklists
+        # never do. See feedback_checklist_artifacts memory for the full split.
+        "kind": "inventory",
         "anchor_code": (anchor_code or codes[0]).lower(),
         "set_codes": ",".join(codes),
         "rarity_filter": rarity_value,
@@ -817,6 +828,9 @@ def write_master_list_md(set_codes: Iterable[str], out_path: Path,
     rarity_value = ",".join(sorted(rarity_set)) if rarity_set else ""
     from . import __version__
     meta = {
+        # `kind` distinguishes inventory checklists (this writer) from missing
+        # checklists (`mm query missing-set`). See feedback_checklist_artifacts.
+        "kind": "inventory",
         "anchor_code": (anchor_code or codes[0]).lower(),
         "set_codes": ",".join(codes),
         "rarity_filter": rarity_value,

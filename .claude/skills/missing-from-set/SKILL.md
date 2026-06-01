@@ -8,7 +8,7 @@ description: Canonical "what am I missing from set X?" workflow for any set/fami
 Set-agnostic, deterministic, file-driven. The user has a strong opinion about output format that this skill exists to enforce:
 
 - **Scryfall URL chunks** → in chat, every time, as the canonical printing-specific table.
-- **Checklist (XLSX)** → file artifact in `queries/`, referenced by `file://` link in chat. **Never rendered inline.**
+- **Missing checklist (XLSX)** → file artifact in `queries/`, referenced by `file://` link in chat. **Never rendered inline.** Distinct from the "inventory checklist" produced by `mm set master-list` ([[generate-set-list]]); see [Not to be confused with](#not-to-be-confused-with-inventory-checklists) below.
 - **ManaPool bulk-add (MD)** → file artifact in `queries/`, referenced by `file://` link in chat. **Never rendered inline.**
 
 That's the whole output. Don't render the checklist as a markdown table in chat. Don't paste the ManaPool blocks as fenced code in chat. Don't ask which format the user wants — they want all three, with chat-rendering only for the URLs.
@@ -44,7 +44,7 @@ That's it. One command. Set-agnostic AS LONG AS the family is configured (see [N
    Net rule: "unique art the user can't get any cheaper way." Surgefoil reprints of borderless cards are dupes; chocobo-track foils with their own art are kept; PFIN prerelease stamps of regular cards are dupes; etc.
 3. **Materialize the union** by `scryfall_id`, dropping cards owned in any finish (printing-level missing semantics).
 4. **Emit Scryfall printing-specific URLs** to stdout as a chunked markdown table — sorted cheapest-first, 20 printings per chunk (matches Scryfall web UI's nested-condition cap), `unique=prints&order=usd&dir=asc` so each chunk shows the exact missing printings sorted by cheapest-first within the chunk.
-5. **Write XLSX checklist** to `queries/missing-<code>-checklist-<timestamp>.xlsx` (set-grouped, sorted by CN within each set).
+5. **Write missing checklist** (XLSX) to `queries/missing-<code>-checklist-<timestamp>.xlsx` (set-grouped, sorted by CN within each set). The hidden `_meta` sheet records `kind: "missing"` so consumers can distinguish this from inventory checklists (which carry `kind: "inventory"`).
 6. **Write ManaPool bulk-add MD** to `queries/missing-<code>-manapool-<timestamp>.md` (3 fenced blocks, one per sub-selector, with `★` foil markers per line).
 7. **Print two `file://` link lines** at the end of stdout so the user can click to open either artifact.
 
@@ -91,7 +91,7 @@ Just relay the orchestrator's stdout verbatim — don't add summary tables, don'
 ...
 | 15 | 6 | $1979.40 → — | [chunk 15](https://scryfall.com/...) |
 
-📋 Checklist (xlsx): [queries/missing-fin-checklist-2026-05-31-192604.xlsx](file:///Users/torre/.../queries/missing-fin-checklist-2026-05-31-192604.xlsx)
+📋 Missing checklist (xlsx): [queries/missing-fin-checklist-2026-05-31-192604.xlsx](file:///Users/torre/.../queries/missing-fin-checklist-2026-05-31-192604.xlsx)
 🛒 ManaPool bulk-add: [queries/missing-fin-manapool-2026-05-31-192604.md](file:///Users/torre/.../queries/missing-fin-manapool-2026-05-31-192604.md)
 ```
 
@@ -116,6 +116,22 @@ These are the explicit overrides that REQUIRE the user to ask for them. Default 
 - **Printing-level missing.** Owning any finish of a printing hides BOTH finishes from the result. For finish-specific gap reports ("what foils am I missing?"), use `mm query xlsx 'set:<CODE>+related missing:foil ...'` — that's a finish-aware query, not the canonical missing-set workflow.
 - **Cards committed to decks still count as "owned" for the missing-set query.** This skill does NOT subtract `deck_cards` commitments. If the user wants "what would I have to buy if I didn't deconstruct any decks?", run `mm query show 'inventory available'` (different question shape) — see [[inventory-query]].
 - **Don't paste the artifact contents into chat.** The user explicitly asked for files-only. If they need to see what's in the file, give them a `file://` link or run `open <path>` for them.
+
+## Not to be confused with: inventory checklists
+
+The XLSX written by this skill is a **missing checklist** — purpose: shopping list of printings the user doesn't yet own. The XLSX written by `mm set master-list` (the [[generate-set-list]] skill) is an **inventory checklist** — purpose: cataloging physical cards. Different artifacts, different purposes, different filter rules:
+
+| | Missing checklist (this skill) | Inventory checklist ([[generate-set-list]]) |
+|---|---|---|
+| **Produced by** | `mm query missing-set` | `mm set master-list` |
+| **File location** | `queries/missing-<code>-checklist-<ts>.xlsx` | `checklists/<slug>-checklist.xlsx` |
+| **`_meta.kind`** | `missing` | `inventory` |
+| **Spine** | printing-level union of what's missing from inventory | full family universe (with safe variant exclusions) |
+| **Columns** | set, cn, name, rarity, **finish**, qty, **unit_usd**, **line_value**, scryfall_id | set, cn, name, rarity, treatment, mana_value, usd, usd_foil, **qty_normal, qty_foil** |
+| **Filter philosophy** | **Strict** — `preferred` treatment class drops ext, pure-`ff`, datestamped-with-sibling, family-configured fancy-foil dupes (e.g. FIN surgefoil), and Arena/Alchemy. "Unique art the user can't get more cheaply elsewhere." | **Permissive** — keeps ext / pure-`ff` / fancy-foil dupes (the user might own incidental copies cracked from boosters etc., and the inventory checklist needs to track them). Drops only safe-to-exclude variants (prerelease/datestamped/stamped/promopack/serialized/yellow-bordered) plus Arena/Alchemy. |
+| **Round-trips** | NO, read-only | YES, via `mm set ingest` |
+
+Mental model: **missing checklist = "what I want to buy"; inventory checklist = "what I could own."** If the user asks "what am I missing from set X?" / "what's left to buy?" / "shopping list" → this skill. If they ask for "a checklist of FIN" / "let me catalog my Final Fantasy cards" → [[generate-set-list]].
 
 ## Cross-references
 
