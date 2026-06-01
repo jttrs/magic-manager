@@ -50,9 +50,36 @@ VALID_MODIFIERS = (
     "scryfall", "treatment",
 )
 VALID_TREATMENT_CLASSES = (
-    "regular", "alt", "collectible-alt", "any-alt",
+    "regular", "alt", "collectible-alt", "preferred", "any-alt",
     "b", "fa", "shw", "ext", "sm", "ff",
 )
+
+
+# Per-family configuration: which promo_types on a fancy-foil print signal
+# "same art as a cheaper sibling, just on a fancy-foil sheet" (i.e. dupe).
+# A `ff`-treatment print is filtered as a dupe iff:
+#   - a same-name sibling exists with the same treatment-codes-minus-ff
+#   - AND the print's promo_types differ from that sibling's ONLY by entries
+#     in this family's dupe-foil set
+#
+# Example: FIN 532 Prompto (b|ff, promo_types includes 'surgefoil') has FIN 387
+# (b, no surgefoil) as a sibling. The diff is exactly {'surgefoil'} ⊆ FIN's
+# dupe-foil set, so FIN 532 is dropped.
+#
+# Counter-example: FIN 564 Cloud (b, promo_types includes 'chocobotrackfoil')
+# has FIN 375 (b, no chocobo) as a sibling. The diff is {'chocobotrackfoil'},
+# which is NOT in FIN's dupe-foil set — chocobo-track is unique art on a
+# fancy-foil sheet. FIN 564 is kept.
+#
+# Each family must be explicitly configured. The `preferred` treatment class
+# (and `mm query missing-set`) refuse to silently fall back to a less-strict
+# class when a family is unconfigured — instead they error out with a clear
+# instruction for the user to configure or to opt into a looser class.
+FAMILY_DUPE_FOIL_PROMO_TYPES: dict[str, frozenset[str]] = {
+    # Final Fantasy: surgefoil is "same art, fancy-foil sheet" (FIN 532-ish).
+    # chocobotrackfoil is intentionally NOT here — it marks unique art (FIN 564 etc.).
+    "fin": frozenset({"surgefoil"}),
+}
 VALID_RARITIES = ("common", "uncommon", "rare", "mythic", "special", "bonus")
 VALID_FINISHES = ("nonfoil", "foil")
 VALID_MISSING_FINISHES = ("nonfoil", "foil", "either")
@@ -690,17 +717,22 @@ def _filter_treatment(rows: list[MaterializedRow], cls: str) -> list[Materialize
     Class values:
       regular  — compute_treatment() returns empty string
       b/fa/shw/ext/sm/ff — treatment string contains that exact code
-      alt      — non-empty AND does not contain 'ext' (the user-facing default
-                 for "alternate treatment but not extended-art")
+      alt      — non-empty AND does not contain 'ext'
+      collectible-alt — alt minus pure-`ff` (fancy-foil-only rows excluded)
+      preferred — collectible-alt minus (a) datestamped prints with a non-stamped
+                  same-treatment sibling in the family AND (b) `ff`-treatment
+                  prints that are visually identical to a cheaper sibling per
+                  the family's FAMILY_DUPE_FOIL_PROMO_TYPES configuration.
+                  Requires the family to be configured; raises if not.
       any-alt  — non-empty (includes ext)
-
-    Compute_treatment is called once per scryfall_id within this filter call;
-    the same printing can appear at multiple finishes but the treatment is
-    a property of the printing, not the finish.
     """
     from . import treatments
     cache: dict[str, set[str]] = {}
     out: list[MaterializedRow] = []
+
+    if cls == "preferred":
+        return _filter_treatment_preferred(rows)
+
     for r in rows:
         sid = r.scryfall_id
         codes = cache.get(sid)
@@ -711,14 +743,8 @@ def _filter_treatment(rows: list[MaterializedRow], cls: str) -> list[Materialize
         if cls == "regular":
             keep = not codes
         elif cls == "alt":
-            # Any non-empty treatment that isn't extended-art.
             keep = bool(codes) and "ext" not in codes
         elif cls == "collectible-alt":
-            # Stricter: alt minus pure-ff. Fancy-foil-only rows are visually
-            # identical to their regular-frame counterparts (the foil sheet
-            # is the only difference), so the user excludes them when asking
-            # 'what am I missing?'. Multi-code rows like b|ff, fa|ff still
-            # pass because they carry an additional visual distinction.
             keep = bool(codes) and "ext" not in codes and codes != {"ff"}
         elif cls == "any-alt":
             keep = bool(codes)
@@ -726,6 +752,146 @@ def _filter_treatment(rows: list[MaterializedRow], cls: str) -> list[Materialize
             keep = cls in codes
         if keep:
             out.append(r)
+    return out
+
+
+def _filter_treatment_preferred(rows: list[MaterializedRow]) -> list[MaterializedRow]:
+    """`preferred` = collectible-alt MINUS (datestamped-with-sibling) MINUS (ff-dupes).
+
+    Step 1 — start from the collectible-alt subset (alt minus pure-ff).
+    Step 2 — drop datestamped prints that have a non-stamped same-name same-codes
+             sibling anywhere in the local cards table.
+    Step 3 — drop ff-treatment prints whose promo_types differ from a same-name
+             same-codes-minus-ff sibling ONLY by family-configured dupe-foil
+             markers (e.g. {'surgefoil'} for FIN). Chocobo-track foils and other
+             unique-art-on-fancy-foil prints are kept because their distinctive
+             promo_type is NOT in the dupe-foil set.
+
+    Requires the family's anchor to be present in FAMILY_DUPE_FOIL_PROMO_TYPES.
+    If unconfigured, raises SelectorParseError with a clear message instructing
+    the caller to either configure the family or fall back to a looser class.
+    """
+    from . import treatments
+    import json as _json
+
+    if not rows:
+        return []
+
+    # Resolve anchor code(s) from row set codes by walking the family graph.
+    set_codes = {(r.card.get("set") or "").lower() for r in rows if r.card.get("set")}
+    anchors: set[str] = set()
+    for setc in set_codes:
+        try:
+            resolved = sets_mod.resolve(setc)
+            anchors.add(resolved.code)  # parent anchor of the family
+        except LookupError:
+            pass
+    # Of the anchors found, do we have config for any?
+    configured = [a for a in anchors if a in FAMILY_DUPE_FOIL_PROMO_TYPES]
+    if not configured:
+        anchors_str = ", ".join(sorted(anchors)) if anchors else "(none resolvable)"
+        raise SelectorParseError(
+            f"'treatment=preferred' requires per-family dupe-foil config. "
+            f"Resolved anchor(s) for these rows: {anchors_str}. "
+            f"Configured anchors: {sorted(FAMILY_DUPE_FOIL_PROMO_TYPES.keys())}. "
+            f"Either add an entry to FAMILY_DUPE_FOIL_PROMO_TYPES in selectors.py "
+            f"(see the Final Fantasy entry as a template — the user must specify "
+            f"which promo_types signal 'same art, just on a fancy-foil sheet' "
+            f"for this family), or use 'treatment=collectible-alt' instead."
+        )
+    if len(configured) > 1:
+        # Mixed-family rows: can't apply a single dupe-foil set. Reject.
+        raise SelectorParseError(
+            f"'treatment=preferred' got rows spanning multiple configured families "
+            f"({sorted(configured)}); applying a single dupe-foil filter is "
+            f"ambiguous. Run separately per family."
+        )
+    anchor = configured[0]
+    dupe_foil_pts = FAMILY_DUPE_FOIL_PROMO_TYPES[anchor]
+    # All family codes for this anchor (so the sibling search stays in-family).
+    try:
+        family_codes = set(sets_mod.resolve(anchor).all_codes)
+    except LookupError:
+        family_codes = {anchor}
+
+    # Step 1: filter to collectible-alt rows.
+    collectible: list[MaterializedRow] = []
+    cache_codes: dict[str, set[str]] = {}
+    for r in rows:
+        t = treatments.compute_treatment(r.card)
+        codes = set(t.split("|")) if t else set()
+        cache_codes[r.scryfall_id] = codes
+        if codes and "ext" not in codes and codes != {"ff"}:
+            collectible.append(r)
+
+    if not collectible:
+        return []
+
+    # Build family-wide index by (name, codes-minus-ff) for sibling lookup.
+    # Pull every family card from db.cards, since rows might only contain a
+    # subset (e.g. just "missing" rows). Sibling references go against the full
+    # universe.
+    placeholders = ",".join("?" for _ in family_codes)
+    fam_rows = []
+    with db.connect() as conn:
+        fam_rows = conn.execute(
+            f"SELECT scryfall_id, name, frame_effects, full_art, promo_types "
+            f"FROM cards WHERE set_code IN ({placeholders})",
+            list(family_codes),
+        ).fetchall()
+    by_name_codes: dict[tuple[str | None, frozenset[str]], list[dict]] = {}
+    promo_index: dict[str, set[str]] = {}
+    for fr in fam_rows:
+        t = treatments.compute_treatment(dict(fr))
+        codes = set(t.split("|")) if t else set()
+        no_ff = frozenset(codes - {"ff"})
+        pt = set(_json.loads(fr["promo_types"] or "[]"))
+        promo_index[fr["scryfall_id"]] = pt
+        by_name_codes.setdefault((fr["name"], no_ff), []).append({
+            "scryfall_id": fr["scryfall_id"],
+            "promo_types": pt,
+            "codes": codes,
+        })
+
+    out: list[MaterializedRow] = []
+    for r in collectible:
+        sid = r.scryfall_id
+        codes = cache_codes[sid]
+        my_pt = promo_index.get(sid, set())
+        name = r.card.get("name")
+
+        # Step 2: datestamped + non-stamped sibling → drop.
+        if "datestamped" in my_pt:
+            sibs_same_codes = by_name_codes.get((name, frozenset(codes)), [])
+            non_stamped_sibling_exists = any(
+                s["scryfall_id"] != sid and "datestamped" not in s["promo_types"]
+                for s in sibs_same_codes
+            )
+            if non_stamped_sibling_exists:
+                continue
+
+        # Step 3: ff-dupe with sibling differing only by dupe-foil markers → drop.
+        if "ff" in codes:
+            no_ff = frozenset(codes - {"ff"})
+            siblings = by_name_codes.get((name, no_ff), [])
+            for sib in siblings:
+                if sib["scryfall_id"] == sid:
+                    continue
+                only_in_me = my_pt - sib["promo_types"]
+                # The print is a dupe iff what's only-in-me is a non-empty
+                # subset of the family's dupe-foil promo_types. Anything
+                # in the diff outside that set means it has unique signal
+                # (e.g. chocobotrackfoil) and we keep it.
+                if only_in_me and only_in_me.issubset(dupe_foil_pts):
+                    break
+            else:
+                # No dupe-marker sibling found — keep.
+                out.append(r)
+                continue
+            # Found a dupe-marker sibling — drop this row.
+            continue
+
+        out.append(r)
     return out
 
 

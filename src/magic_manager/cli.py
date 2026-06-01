@@ -1518,6 +1518,65 @@ def query_url_cmd(
         typer.echo(f"Chunk {i}/{len(chunks)} ({len(chunk)} printings): {url}")
 
 
+def _drop_datestamped_with_sibling(
+    rows: list[sel_mod.MaterializedRow],
+    anchor_code: str,
+) -> list[sel_mod.MaterializedRow]:
+    """Post-filter rows: drop any printing whose `promo_types` contains 'datestamped'
+    AND a same-name same-treatment-codes sibling exists in the family that ISN'T
+    datestamped.
+
+    Used by `mm query missing-set` in 'preferred' mode for the rare/mythic regular
+    sub-selectors. The selector grammar's `treatment=preferred` already applies
+    this to the alt sub-selector; this helper covers the regular-treatment rows
+    so the orchestrator's union picks up the same exclusion across all three subs.
+    """
+    import json as _json
+    from . import treatments as _treatments
+    if not rows:
+        return rows
+    try:
+        family_codes = set(sets_mod.resolve(anchor_code).all_codes)
+    except LookupError:
+        family_codes = {anchor_code}
+    placeholders = ",".join("?" for _ in family_codes)
+    with db.connect() as conn:
+        fam_rows = conn.execute(
+            f"SELECT scryfall_id, name, frame_effects, full_art, promo_types "
+            f"FROM cards WHERE set_code IN ({placeholders})",
+            list(family_codes),
+        ).fetchall()
+    by_name_codes: dict[tuple[str | None, frozenset[str]], list[dict]] = {}
+    promo_index: dict[str, set[str]] = {}
+    for fr in fam_rows:
+        t = _treatments.compute_treatment(dict(fr))
+        codes = frozenset(t.split("|")) if t else frozenset()
+        pt = set(_json.loads(fr["promo_types"] or "[]"))
+        promo_index[fr["scryfall_id"]] = pt
+        by_name_codes.setdefault((fr["name"], codes), []).append({
+            "scryfall_id": fr["scryfall_id"],
+            "promo_types": pt,
+        })
+    out: list[sel_mod.MaterializedRow] = []
+    for r in rows:
+        sid = r.scryfall_id
+        my_pt = promo_index.get(sid, set())
+        if "datestamped" not in my_pt:
+            out.append(r)
+            continue
+        # Find a non-stamped sibling at the same name + same treatment codes.
+        t = _treatments.compute_treatment(r.card)
+        codes = frozenset(t.split("|")) if t else frozenset()
+        siblings = by_name_codes.get((r.card.get("name"), codes), [])
+        non_stamped_sibling_exists = any(
+            s["scryfall_id"] != sid and "datestamped" not in s["promo_types"]
+            for s in siblings
+        )
+        if not non_stamped_sibling_exists:
+            out.append(r)  # Keep — no cheaper sibling to substitute.
+    return out
+
+
 def _write_query_xlsx(
     rows: list[sel_mod.MaterializedRow],
     target: Path,
@@ -1609,9 +1668,11 @@ def query_missing_set_cmd(
         help="Cards per Scryfall URL chunk (default 20; matches Scryfall web UI's nested-conditions cap).",
     ),
     treatment_class: str = typer.Option(
-        "collectible-alt", "--treatment-class",
-        help="Treatment class for the alt sub-selector. Default 'collectible-alt' (excludes pure-ff and ext). "
-             "Pass 'alt' to include pure-ff, 'any-alt' to also include ext.",
+        "preferred", "--treatment-class",
+        help="Treatment class for the alt sub-selector. Default 'preferred' (collectible-alt minus "
+             "datestamped-with-sibling and family-configured fancy-foil dupes). "
+             "Pass 'collectible-alt' to skip the dupe filtering, 'alt' to also include pure-ff, "
+             "'any-alt' to also include ext.",
     ),
 ):
     """Canonical "what am I missing from set <CODE>?" workflow.
@@ -1630,10 +1691,22 @@ def query_missing_set_cmd(
     the user can click to open the artifacts. The XLSX and ManaPool MD are
     NEVER rendered inline — the user explicitly wants them as files only.
 
+    When --treatment-class=preferred (default), the rare/mythic regular-treatment
+    sub-selectors are ALSO post-filtered to drop datestamped reprints that have
+    a non-stamped sibling at the same treatment in the family. This catches
+    e.g. PFIN's prerelease-stamped versions of FIN cards that are otherwise
+    visually identical.
+
+    New families with no FAMILY_DUPE_FOIL_PROMO_TYPES config will fail with a
+    clear error from the selector layer. Either configure the family or pass
+    --treatment-class collectible-alt to opt into the looser pre-`preferred`
+    behavior.
+
     Set-agnostic: works for FIN today, Avatar/TMNT/etc. tomorrow with the same
-    invocation.
+    invocation, once each new family is configured.
     """
     import re as _re
+    import json as _json
     from urllib.parse import quote_plus as _quote_plus
 
     code_l = code.lower()
@@ -1654,7 +1727,17 @@ def query_missing_set_cmd(
         except LookupError as e:
             typer.echo(f"error: {e} (sub-selector {sel!r})", err=True); raise typer.Exit(2)
         sub_rows[slug_key] = rs
-        for r in rs:
+
+    # 1a. When using 'preferred' mode, also drop datestamped-with-sibling rows
+    # from the rare/mythic regular sub-selectors. The 'preferred' filter only
+    # runs on the alt sub-selector (treatment=preferred); regular-treatment
+    # rows skip the filter unless we apply it here.
+    if treatment_class == "preferred":
+        sub_rows["rare-regular"]   = _drop_datestamped_with_sibling(sub_rows["rare-regular"], code_l)
+        sub_rows["mythic-regular"] = _drop_datestamped_with_sibling(sub_rows["mythic-regular"], code_l)
+
+    for slug_key in sub_rows:
+        for r in sub_rows[slug_key]:
             union[r.scryfall_id] = r
 
     rows_union = list(union.values())

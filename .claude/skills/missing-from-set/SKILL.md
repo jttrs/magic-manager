@@ -31,13 +31,17 @@ That's the whole output. Don't render the checklist as a markdown table in chat.
 uv run mm query missing-set <CODE>
 ```
 
-That's it. One command. Set-agnostic. The orchestrator handles all of:
+That's it. One command. Set-agnostic AS LONG AS the family is configured (see [New family protocol](#new-family-protocol) below). The orchestrator handles all of:
 
 1. **Resolve the family** via the existing `+related` graph in `selectors.py:_materialize_set` — works for FIN today, Avatar/TMNT/etc. tomorrow with the same invocation.
 2. **Compose the three sub-selectors** (printing-level, post-treatment-filter):
    - `set:<CODE>+related missing rarity=rare treatment=regular`
    - `set:<CODE>+related missing rarity=mythic treatment=regular`
-   - `set:<CODE>+related missing treatment=collectible-alt`
+   - `set:<CODE>+related missing treatment=preferred`
+
+   The default treatment class for the alt sub-selector is **`preferred`**, which is `collectible-alt` minus two extra categories of visually-redundant prints: (a) datestamped reprints (e.g. PFIN's prerelease-stamped versions of FIN cards) that have a non-stamped sibling in the family; (b) fancy-foil-only prints (e.g. FIN 532 Prompto on a surgefoil sheet) whose art is identical to a cheaper sibling per the family's per-family `FAMILY_DUPE_FOIL_PROMO_TYPES` configuration. The `preferred` filter ALSO applies the datestamped exclusion to the rare/mythic regular sub-selectors so PFIN datestamped prints don't slip through there.
+
+   Net rule: "unique art the user can't get any cheaper way." Surgefoil reprints of borderless cards are dupes; chocobo-track foils with their own art are kept; PFIN prerelease stamps of regular cards are dupes; etc.
 3. **Materialize the union** by `scryfall_id`, dropping cards owned in any finish (printing-level missing semantics).
 4. **Emit Scryfall printing-specific URLs** to stdout as a chunked markdown table — sorted cheapest-first, 20 printings per chunk (matches Scryfall web UI's nested-condition cap), `unique=prints&order=usd&dir=asc` so each chunk shows the exact missing printings sorted by cheapest-first within the chunk.
 5. **Write XLSX checklist** to `queries/missing-<code>-checklist-<timestamp>.xlsx` (set-grouped, sorted by CN within each set).
@@ -51,7 +55,25 @@ The chat rendering is automatically capped at the URL table + two file links —
 | Flag | Effect |
 |---|---|
 | `--chunk-size N` | Override the 20-printing cap on Scryfall URL chunks. Default 20 matches Scryfall's web-UI nested-conditions limit; raising it will produce URLs that fail to load. Lower it if specific browsers truncate URLs. |
-| `--treatment-class <class>` | Override the alt sub-selector's treatment class. Default `collectible-alt` (excludes pure-`ff` and `ext`). Pass `alt` to include pure-`ff`. Pass `any-alt` to also include `ext`. Use these only when the user explicitly says "include fancy foils" or "include extended art." |
+| `--treatment-class <class>` | Override the alt sub-selector's treatment class. Default `preferred` (excludes pure-`ff`, `ext`, datestamped-with-sibling, and family-configured fancy-foil dupes). Pass `collectible-alt` to skip the dupe-foil and datestamped filtering (re-includes surgefoil dupes and PFIN stamped reprints). Pass `alt` to also include pure-`ff`. Pass `any-alt` to also include `ext`. Use the lower classes only when the user explicitly says "include fancy foils" / "include stamped reprints" / "include extended art." |
+
+## New family protocol
+
+`treatment=preferred` requires per-family configuration in `selectors.FAMILY_DUPE_FOIL_PROMO_TYPES`. Each entry maps an anchor set code (e.g. `fin`) to a frozenset of `promo_types` strings that signal "same art, just on a fancy-foil sheet" — the dupe-foil markers for that family.
+
+For Final Fantasy: `{"surgefoil"}`. Chocobo-track foils are intentionally NOT in the set because they have unique art.
+
+**When the user asks about a family that ISN'T configured**, the selector layer raises a clear error pointing at the missing config. The skill MUST NOT silently fall back to `collectible-alt` and pretend the answer is filtered correctly — the user explicitly does NOT want that.
+
+The required protocol when this happens:
+
+1. **Stop and tell the user** the family isn't configured. Quote the anchor code and the configured anchor list from the error message.
+2. **Run `mm query show 'set:<CODE>+related treatment=any-alt' --first 50`** (or similar) to surface a sample of fancy-foil prints in the new family.
+3. **Ask the user**, with concrete examples from step 2: which `promo_types` on these prints signal "same art, just on a fancy-foil sheet" vs "unique art that happens to come on a fancy-foil sheet"? Show specific cards (set + CN + promo_types + Scryfall image link if relevant) so the user can adjudicate visually.
+4. **Add the entry to `FAMILY_DUPE_FOIL_PROMO_TYPES`** in `src/magic_manager/selectors.py` based on the user's answer. Re-run `mm query missing-set <CODE>` to verify.
+5. **Memory**: update `memory/precon_workflow.md` or a new family-specific note if the user articulates a durable rule worth carrying forward (e.g. "any future Star Wars set will probably use `lightsaberfoil` similarly to FIN's surgefoil").
+
+Don't skip steps. The user's stated principle is "unique art I can't get any cheaper way" — the dupe-foil set is the only place where assistant judgment about visual identity intersects with set-specific data, and getting it wrong silently bakes errors into every subsequent missing-set query.
 
 ## Output format (what the user sees in chat)
 
