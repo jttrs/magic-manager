@@ -136,14 +136,16 @@ def _slice_suffix(*, only_codes: list[str], rarities: list[str]) -> str:
     return "-".join(parts)
 
 
-def _intake_path(slug: str, slice_suffix: str = "", ext: str = "xlsx") -> Path:
-    # ``-checklist`` suffix matches the user-facing artifact name. Filename
-    # is ``<slug>-checklist.<ext>`` for the unsliced default,
-    # ``<slug>-<slice>-checklist.<ext>`` for slices (e.g. rarity slices,
-    # set-code slices). Pre-V1.6 was ``input/<slug>-<slice>.xlsx`` with
-    # an explicit ``master`` token for the unsliced case.
+def _intake_path(slug: str, slice_suffix: str = "", ext: str = "xlsx", mode: str = "add") -> Path:
+    # Filename shape: ``<slug>[-<slice>]-<mode>-checklist.<ext>``.
+    # ``mode`` is ``add`` (default; blank-qty checklist for additive ingest)
+    # or ``modify`` (prefilled-qty checklist for replace ingest). The mode
+    # token in the filename is critical because cmux/Finder show filenames
+    # without exposing _meta — surface intent on disk. Slice suffix encodes
+    # the optional ``--only`` and ``--rarity`` filters; pre-V1.6 used an
+    # explicit ``master`` token instead of an empty slice.
     middle = f"-{slice_suffix}" if slice_suffix else ""
-    return CHECKLISTS_DIR / f"{slug}{middle}-checklist.{ext}"
+    return CHECKLISTS_DIR / f"{slug}{middle}-{mode}-checklist.{ext}"
 
 
 def _processed_path(slug: str, slice_suffix: str = "",
@@ -230,6 +232,15 @@ def set_master_list(
              "filtered out of the inventory checklist AND the seeded set:<anchor> list "
              "so set-missing math doesn't count them.",
     ),
+    mode: str = typer.Option(
+        "add", "--mode",
+        help="'add' (default): blank checklist for additive ingest — qty>0 "
+             "cells sum into existing inventory; safe (cannot zero rows). Use "
+             "for new acquisitions (booster packs, precons, trade-ins). "
+             "'modify': prefilled checklist for replace ingest — in-partition "
+             "cells overwrite DB qty AND missing in-partition rows zero out. "
+             "Use to correct existing records (sold cards, miscounts, audits).",
+    ),
 ):
     """Build the inventory checklist for a release family or a slice of it.
 
@@ -250,6 +261,10 @@ def set_master_list(
     if fmt not in ("xlsx", "md"):
         typer.echo(f"error: --format must be 'xlsx' or 'md', got {fmt!r}", err=True)
         raise typer.Exit(2)
+    mode = mode.lower()
+    if mode not in ("add", "modify"):
+        typer.echo(f"error: --mode must be 'add' or 'modify', got {mode!r}", err=True)
+        raise typer.Exit(2)
     try:
         r, codes = _resolve_codes(name_or_code, include_kinds=list(include or []), only=list(only or []))
     except (LookupError, typer.BadParameter) as e:
@@ -264,7 +279,7 @@ def set_master_list(
 
     slug = _slug(r.name)
     slice_suffix = _slice_suffix(only_codes=only_codes, rarities=rarities)
-    out_path = out or _intake_path(slug, slice_suffix, ext=fmt)
+    out_path = out or _intake_path(slug, slice_suffix, ext=fmt, mode=mode)
 
     # Collision detection: only when the user is using the default path.
     if out is None and out_path.exists() and not force:
@@ -319,22 +334,30 @@ def set_master_list(
         # Tokens and memorabilia are governed by the family filter, not by a
         # second flag. If the user --included them they're in `codes` already.
         include_tokens=True,
-        prepopulate_from_inventory=True,
+        # mode='modify' prefills qty cells from current inventory (intended
+        # for replace-style ingest). mode='add' leaves them blank (intended
+        # for additive ingest of new acquisitions).
+        prepopulate_from_inventory=(mode == "modify"),
         rarity_filter=rarities or None,
         anchor_code=r.code,
         slug=slug,
         include_variants=include_variants,
+        mode=mode,
     )
-    typer.echo(f"Wrote {n_rows} rows to {out_path}")
+    typer.echo(f"Wrote {n_rows} rows to {out_path} (mode={mode})")
     if prefilled:
         typer.echo(f"  → {prefilled} qty cell(s) pre-filled from inventory")
     typer.echo()
     typer.echo("Next steps:")
-    if fmt == "md":
-        typer.echo(f"  1. Open {out_path} in any text editor and edit `[N:k F:k]` quantities.")
+    if mode == "add":
+        verb = "fill in qty_normal / qty_foil for the cards you're ADDING (cells start blank)"
     else:
-        typer.echo(f"  1. Open {out_path} in Excel/Numbers and fill in qty_normal / qty_foil.")
-    typer.echo(f"  2. When done: mm set ingest {name_or_code!r}")
+        verb = "edit qty_normal / qty_foil to MODIFY existing inventory (prefilled values shown)"
+    if fmt == "md":
+        typer.echo(f"  1. Open {out_path} in any text editor and edit `[N:k F:k]` quantities ({verb}).")
+    else:
+        typer.echo(f"  1. Open {out_path} in Excel/Numbers — {verb}.")
+    typer.echo(f"  2. When done: mm set ingest {name_or_code!r}  (auto-detects mode={mode} from _meta)")
 
 
 @set_app.command("ingest")
@@ -348,10 +371,13 @@ def set_ingest(
         help="Override path to the inventory checklist. Default: input/<slug>-master.xlsx.",
     ),
     mode: str = typer.Option(
-        "replace", "--mode",
-        help="'replace' (default): xlsx cells inside the file's partition overwrite "
-             "DB qty (missing in-partition rows go to 0). 'additive': only cells "
-             "with qty>0 add to DB qty.",
+        None, "--mode",
+        help="OPTIONAL OVERRIDE. 'replace' (in-partition cells overwrite DB qty; "
+             "missing in-partition rows zero out) or 'additive' (only qty>0 cells "
+             "add to existing). Default: auto-detect from the checklist's _meta.mode "
+             "('modify' → replace, 'add' → additive). Pass --mode explicitly only to "
+             "override the file's declared intent (logs a stderr warning) OR for "
+             "legacy files with no _meta.mode.",
     ),
     force: bool = typer.Option(
         False, "--force",
@@ -370,8 +396,13 @@ def set_ingest(
     rows), then atomically renames the file with a timestamp so the next
     ``mm set master-list`` run will produce a fresh inventory checklist
     pre-populated from the now-saved DB state.
+
+    The ingest mode is read from the checklist's _meta sheet by default
+    (``modify`` checklists → replace semantics, ``add`` checklists → additive
+    semantics). Pass ``--mode`` explicitly to override; the override is honored
+    with a stderr warning when it disagrees with the file's declared mode.
     """
-    if mode not in ("replace", "additive"):
+    if mode is not None and mode not in ("replace", "additive"):
         typer.echo(f"error: --mode must be 'replace' or 'additive', got {mode!r}", err=True)
         raise typer.Exit(2)
 
@@ -432,6 +463,39 @@ def set_ingest(
                 typer.echo(f"  - {c}", err=True)
             raise typer.Exit(2)
         src = candidates[0]
+
+    # ---- Mode resolution: auto-detect from _meta.mode, reconcile with --mode ----
+    # Read _meta unconditionally now (the path-resolution branches above may
+    # or may not have already done so). Source of truth is the file we're
+    # about to ingest, regardless of how we found it.
+    file_meta = sets_mod.read_master_list_meta(src) or {}
+    declared_meta_mode = file_meta.get("mode")  # 'modify', 'add', or None (legacy)
+    declared_to_op = {"modify": "replace", "add": "additive"}
+    declared_op = declared_to_op.get(declared_meta_mode)  # 'replace', 'additive', or None
+    if mode is None:
+        # No explicit override → use the file's declared mode.
+        if declared_op is None:
+            typer.echo(
+                f"error: this checklist has no _meta.mode (likely generated before "
+                f"mode-aware tagging). Pass --mode replace or --mode additive "
+                f"explicitly to ingest it.",
+                err=True,
+            )
+            raise typer.Exit(2)
+        mode = declared_op
+    elif declared_op is not None and declared_op != mode:
+        # User passed --mode AND it disagrees with the file's declaration.
+        # Honor the override but warn loudly — getting this wrong on a
+        # 'modify' checklist run as 'additive' (or vice versa) silently
+        # corrupts the inventory state.
+        typer.echo(
+            f"warning: file's _meta.mode is {declared_meta_mode!r} (would ingest "
+            f"as {declared_op!r}); --mode override is {mode!r} — applying "
+            f"{mode!r} as requested. If this is wrong, ctrl-C now.",
+            err=True,
+        )
+    # else: --mode passed and either agrees with declared OR file is legacy
+    # (declared_op is None and user provided explicit --mode, which is fine).
 
     # Hash + duplicate check.
     sha = _file_sha256(src)

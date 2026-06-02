@@ -1,11 +1,11 @@
 ---
 name: generate-set-list
-description: Build the inventory checklist (XLSX or markdown) for a Magic the Gathering release family — every printing across the parent set + commander + masterpiece + promos, with current Scryfall prices and two quantity columns the user fills in by going through their physically-sorted boxes. Use this whenever the user wants to start (or resume) cataloging a set. Mechanical workflow: invoke `mm set master-list <name>` and react only to the structured exit codes; no judgment about which sibling sets to include.
+description: Build the inventory checklist (XLSX or markdown) for a Magic the Gathering release family — every printing across the parent set + commander + masterpiece + promos, with two quantity columns the user fills in. Two flavors via --mode: 'add' (default; blank cells; ingests as additive — safe for new acquisitions) and 'modify' (prefilled cells; ingests as replace — for correcting existing records). Use this whenever the user wants to catalog cards. Mechanical workflow: invoke `mm set master-list <name> [--mode add|modify]` and react only to the structured exit codes.
 ---
 
 # Generate Set List
 
-The mechanical wrapper around `mm set master-list`. The user names a release ("Final Fantasy", "Outlaws of Thunder Junction", `otj`, `fin`); the CLI computes the family from Scryfall's `parent_set_code` graph filtered to `set_type IN (expansion, commander, masterpiece, promo)`, syncs prices, and writes `checklists/<slug>-checklist.xlsx` pre-populated from any existing inventory.
+The mechanical wrapper around `mm set master-list`. The user names a release ("Final Fantasy", "Outlaws of Thunder Junction", `otj`, `fin`); the CLI computes the family from Scryfall's `parent_set_code` graph filtered to `set_type IN (expansion, commander, masterpiece, promo)`, syncs prices, and writes `checklists/<slug>-<mode>-checklist.xlsx` (mode = `add` by default — blank qty cells; `modify` pre-populates from current inventory).
 
 **You make zero judgment calls about scope.** The recommended bundle is codified in the CLI; do not list sibling sets and ask which to include. If the user wants tokens or memorabilia, they will say so explicitly — translate that to `--include token,memorabilia`.
 
@@ -19,18 +19,33 @@ The mechanical wrapper around `mm set master-list`. The user names a release ("F
 3. If they chose "ingest first": run `uv run mm set ingest "<name>"`, surface the result, then re-run `mm set master-list "<name>"` to start a fresh inventory checklist.
 4. If they chose "discard partial work": re-run `uv run mm set master-list "<name>" --force` and warn that any XLSX-only edits (those not yet ingested) are gone.
 
+## Mode — `add` vs `modify` (CRITICAL: pick the right one)
+
+`mm set master-list` produces two flavors of inventory checklist depending on `--mode`. The mode is encoded in both the filename and the file's `_meta.mode`, and `mm set ingest` auto-detects it later.
+
+| `--mode` | Filename | Qty cells at generation | Ingest semantics | When to use |
+|---|---|---|---|---|
+| **`add`** (default) | `<slug>-add-checklist.xlsx` | **Blank** | **additive** — qty>0 cells sum into existing inventory; blanks/0s no-op | New acquisitions: a booster pack opened, a precon, a trade-in, cards picked up at a tournament. Safe — additive ingest cannot accidentally zero out rows. |
+| **`modify`** | `<slug>-modify-checklist.xlsx` | **Prefilled** from current `inventory` | **replace** — in-partition cells overwrite DB qty; rows in-partition but missing from the file are zeroed out | Correcting existing records: you sold a card, miscounted on a previous ingest, or want to do a full audit pass on a set you already cataloged. Powerful — can zero rows. |
+
+**Default is `add` for safety.** Only switch to `--mode modify` when the user explicitly says they want to correct/audit their current inventory (e.g. "I sold some cards and need to update", "let me re-audit FCA"). For everything else (a new pack, a precon, "let me catalog these cards I have"), use the default `add`.
+
+The filename convention means both flavors can coexist — `final-fantasy-add-checklist.xlsx` and `final-fantasy-modify-checklist.xlsx` are independent files in `checklists/`. Each ingests with the right semantics automatically.
+
+When asking the user, default-recommend `add`. Only suggest `modify` if their phrasing implies correction over augmentation.
+
 ## Slicing — generating partial inventory checklists
 
 The user often catalogs piecemeal: "just the rares from FF", "just the `fic` cards", "this booster I just opened". For these cases, slice at generate-time so the resulting XLSX only covers the intended scope. Two flags compose:
 
-- `--rarity <r>` (repeatable, comma-OK): emit only the named rarities. Values: `mythic`, `rare`, `uncommon`, `common`, `bonus`, `special`. Filename gains a rarity suffix (`<slug>-rare-checklist.xlsx`, `<slug>-rare+mythic-checklist.xlsx`).
-- `--only <codes>`: restrict to specific set codes within the family. Filename gains a code suffix (`<slug>-fic-checklist.xlsx`).
+- `--rarity <r>` (repeatable, comma-OK): emit only the named rarities. Values: `mythic`, `rare`, `uncommon`, `common`, `bonus`, `special`. Filename gains a rarity suffix (`<slug>-rare-add-checklist.xlsx`, `<slug>-rare+mythic-add-checklist.xlsx`).
+- `--only <codes>`: restrict to specific set codes within the family. Filename gains a code suffix (`<slug>-fic-add-checklist.xlsx`).
 
-Both compose: `--only fic --rarity rare` → `<slug>-fic-rare-checklist.xlsx`.
+All compose with `--mode`: `--only fic --rarity rare --mode modify` → `<slug>-fic-rare-modify-checklist.xlsx`.
 
 When the user says "just the rares", run `mm set master-list "<name>" --rarity rare`. When they say "just the commander deck", run `mm set master-list "<name>" --only fic` (after confirming the family has the code they meant via `mm set list-related`).
 
-Each slice can be in flight independently — collision detection is per-filename, so you can have `<slug>-rare-checklist.xlsx` and `<slug>-uncommon-checklist.xlsx` both pending at the same time.
+Each slice can be in flight independently — collision detection is per-filename, so you can have `<slug>-rare-add-checklist.xlsx` and `<slug>-uncommon-add-checklist.xlsx` both pending at the same time.
 
 The XLSX carries a hidden `_meta` sheet recording the slice, so ingest knows which (set, rarity) pairs are in-partition. The user never sees `_meta`.
 
@@ -84,8 +99,8 @@ When the CLI exits 3, the stderr already contains the readout. After surfacing i
 
 | Path | Filename | Lifecycle |
 |---|---|---|
-| Active inventory checklist (one per family at a time) | `checklists/<slug>-checklist.xlsx` | Created by `master-list`. User edits in Excel/Numbers. |
-| Archived inventory checklists | `checklists/processed/<slug>-checklist-<YYYY-MM-DD-HHMMSS>.xlsx` | Created by `ingest` after the data lands in the DB. Immutable. |
+| Active inventory checklist (one per family per mode at a time) | `checklists/<slug>-<mode>-checklist.xlsx` (e.g. `final-fantasy-add-checklist.xlsx`, `final-fantasy-modify-checklist.xlsx`) | Created by `master-list`. User edits in Excel/Numbers. |
+| Archived inventory checklists | `checklists/processed/<slug>-<mode>-checklist-<YYYY-MM-DD-HHMMSS>.xlsx` | Created by `ingest` after the data lands in the DB. Immutable. |
 
 The XLSX columns: `set`, `collector_number`, `name`, `rarity`, `mana_value`, `usd`, `usd_foil`, `qty_normal`, `qty_foil`. The two `qty_*` columns are tinted yellow, validated as non-negative integers, and pre-populated from the `inventory` table whenever the user already owns cards from previous ingest cycles. Rows are sorted by rarity bucket (mythic → rare → uncommon → common → bonus → special) then collector number to match the user's physical box order.
 
@@ -101,7 +116,7 @@ User: *"generate an inventory excel for the Final Fantasy sets."*
 uv run mm set master-list "Final Fantasy"
 ```
 
-If exit 0: tell them `checklists/final-fantasy-checklist.xlsx` is ready and `mm set ingest "Final Fantasy"` is the next command.
+If exit 0: tell them `checklists/final-fantasy-add-checklist.xlsx` is ready and `mm set ingest "Final Fantasy"` is the next command.
 If exit 3: surface the readout, show the AskUserQuestion above.
 
 User: *"give me an inventory checklist for OTJ but include the breaking news cards too."*
@@ -130,14 +145,18 @@ uv run mm set master-list "Final Fantasy" --include token
 
 The XLSX written by `mm set master-list` is an **inventory checklist** — purpose: cataloging physical cards. The XLSX written by `mm query missing-set <CODE>` (the [[missing-from-set]] skill) is a **missing checklist** — purpose: shopping list of printings the user doesn't own. Different artifacts, different purposes, different rules:
 
-| | Inventory checklist | Missing checklist |
-|---|---|---|
-| **Produced by** | `mm set master-list` | `mm query missing-set` |
-| **File location** | `checklists/<slug>-checklist.xlsx` | `queries/missing-<code>-checklist-<ts>.xlsx` |
-| **`_meta.kind`** | `inventory` | `missing` |
-| **Spine** | full family universe (with safe variant exclusions) OR a rarity slice | printing-level union of what the user doesn't own |
-| **Columns** | set, cn, name, rarity, treatment, mana_value, usd, usd_foil, **qty_normal, qty_foil** | set, cn, name, rarity, **finish**, qty, **unit_usd**, **line_value**, scryfall_id |
-| **Filter philosophy** | Permissive — keeps `ext` / pure-`ff` / fancy-foil dupes (user might own incidental copies cracked from boosters, etc.). Drops only safe-to-exclude variants + Arena. | Strict — drops everything not "unique art that can't be obtained more cheaply." See [[missing-from-set]]'s `preferred` treatment class. |
-| **Round-trips** | YES, via `mm set ingest` | NO, read-only |
+| | Inventory checklist (add) | Inventory checklist (modify) | Missing checklist |
+|---|---|---|---|
+| **Produced by** | `mm set master-list` (default) | `mm set master-list --mode modify` | `mm query missing-set` |
+| **File location** | `checklists/<slug>-add-checklist.xlsx` | `checklists/<slug>-modify-checklist.xlsx` | `queries/missing-<code>-checklist-<ts>.xlsx` |
+| **`_meta.kind`** | `inventory` | `inventory` | `missing` |
+| **`_meta.mode`** | `add` | `modify` | (n/a) |
+| **Qty cells at gen** | Blank | Pre-filled from `inventory` | Pre-filled with quantity needed |
+| **Ingest semantics** | additive (sum into DB) | replace (overwrite + zero missing in-partition) | (read-only) |
+| **Spine** | full family universe (with safe variant exclusions) OR a rarity slice | same as add | printing-level union of what the user doesn't own |
+| **Columns** | set, cn, name, rarity, treatment, mana_value, usd, usd_foil, **qty_normal, qty_foil** | same as add | set, cn, name, rarity, **finish**, qty, **unit_usd**, **line_value**, scryfall_id |
+| **Filter philosophy** | Permissive — keeps `ext` / pure-`ff` / fancy-foil dupes (user might own incidental copies cracked from boosters, etc.). Drops only safe-to-exclude variants + Arena. | same as add | Strict — drops everything not "unique art that can't be obtained more cheaply." See [[missing-from-set]]'s `preferred` treatment class. |
+| **Round-trips** | YES, via `mm set ingest` (auto-detected) | YES, via `mm set ingest` (auto-detected) | NO, read-only |
+| **Use case** | New acquisitions (booster pack, precon, trade-in) | Correcting records (sold cards, audit pass) | Shopping list |
 
-Mental model: **inventory checklist = "what could I own"; missing checklist = "what I want to buy."** Don't conflate them. If the user asks for "a checklist of FIN" without context, default to the inventory checklist (this skill); if they say "what am I missing" / "what to buy" / "shopping list," route to the missing-from-set skill.
+Mental model: **inventory checklist = "what could I own" (add for new, modify for correction); missing checklist = "what I want to buy."** Don't conflate them. If the user asks for "a checklist of FIN" without context, default to the inventory checklist with `--mode add` (this skill); if they say "what am I missing" / "what to buy" / "shopping list," route to the missing-from-set skill.

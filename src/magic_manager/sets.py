@@ -252,7 +252,8 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
                            rarity_filter: Iterable[str] | None = None,
                            anchor_code: str | None = None,
                            slug: str | None = None,
-                           include_variants: bool = False) -> tuple[int, int]:
+                           include_variants: bool = False,
+                           mode: str = "add") -> tuple[int, int]:
     """Emit a fillable XLSX of every printing in ``set_codes``.
 
     When ``prepopulate_from_inventory`` is True (default), qty cells are
@@ -444,6 +445,12 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
         # checklists round-trip through `mm set ingest`; missing checklists
         # never do. See feedback_checklist_artifacts memory for the full split.
         "kind": "inventory",
+        # `mode` declares the intended ingest semantics — read by `mm set
+        # ingest` and applied automatically. 'modify' → replace ingest
+        # (in-partition cells overwrite, missing rows zero out); 'add' →
+        # additive ingest (qty>0 cells sum into existing inventory). The
+        # mode is also encoded in the filename slug for visibility on disk.
+        "mode": mode,
         "anchor_code": (anchor_code or codes[0]).lower(),
         "set_codes": ",".join(codes),
         "rarity_filter": rarity_value,
@@ -746,7 +753,8 @@ def write_master_list_md(set_codes: Iterable[str], out_path: Path,
                          rarity_filter: Iterable[str] | None = None,
                          anchor_code: str | None = None,
                          slug: str | None = None,
-                         include_variants: bool = False) -> tuple[int, int]:
+                         include_variants: bool = False,
+                         mode: str = "add") -> tuple[int, int]:
     """Markdown twin of ``write_master_list_xlsx()``.
 
     File shape:
@@ -831,6 +839,9 @@ def write_master_list_md(set_codes: Iterable[str], out_path: Path,
         # `kind` distinguishes inventory checklists (this writer) from missing
         # checklists (`mm query missing-set`). See feedback_checklist_artifacts.
         "kind": "inventory",
+        # `mode` declares ingest semantics. See the XLSX writer for the full
+        # rationale; same field, same semantics in markdown form.
+        "mode": mode,
         "anchor_code": (anchor_code or codes[0]).lower(),
         "set_codes": ",".join(codes),
         "rarity_filter": rarity_value,
