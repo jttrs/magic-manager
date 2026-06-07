@@ -1769,9 +1769,8 @@ def query_missing_set_cmd(
        and order=usd&dir=asc so each URL renders the EXACT missing printings.
     2. XLSX checklist (set-grouped, sorted by CN within each set) → queries/.
     3. ManaPool bulk-add .txt (flat list, *F* foil markers per line) → queries/.
-    4. TCGplayer Mass Entry .txt files split by finish (cart toggles foil per
-       paste, so nonfoil and foil go in separate files) → queries/. Foil/nonfoil
-       file is omitted if 0 rows for that finish.
+    4. TCGplayer Mass Entry .txt (flat list, no per-line foil marker — user runs
+       TCGplayer's cart optimizer to select foil/nonfoil per row) → queries/.
 
     The chat output is always just the URL table + file:// link lines so the
     user can click to open the artifacts. The bulk-add files are NEVER rendered
@@ -1875,18 +1874,12 @@ def query_missing_set_cmd(
 
     # ManaPool: single flat list, *F* foil markers preserved per-line.
     mp_path = QUERIES_DIR / f"missing-{code_l}-manapool-{ts}.txt"
-    mp_text = exports.build("manapool", rows_for_bulk)
-    mp_path.write_text(mp_text, encoding="utf-8")
+    mp_path.write_text(exports.build("manapool", rows_for_bulk), encoding="utf-8")
 
-    # TCGplayer: split by finish (cart UI applies foil per-batch, not per-line).
-    tcg_nonfoil_rows = [r for r in rows_for_bulk if r.finish == "nonfoil"]
-    tcg_foil_rows    = [r for r in rows_for_bulk if r.finish == "foil"]
-    tcg_nonfoil_path = QUERIES_DIR / f"missing-{code_l}-tcgplayer-nonfoil-{ts}.txt"
-    tcg_foil_path    = QUERIES_DIR / f"missing-{code_l}-tcgplayer-foil-{ts}.txt"
-    if tcg_nonfoil_rows:
-        tcg_nonfoil_path.write_text(exports.build("tcgplayer", tcg_nonfoil_rows), encoding="utf-8")
-    if tcg_foil_rows:
-        tcg_foil_path.write_text(exports.build("tcgplayer", tcg_foil_rows), encoding="utf-8")
+    # TCGplayer: single flat list. Foil/nonfoil isn't marked per-line — the
+    # user runs TCGplayer's cart optimizer afterward to pick finish per row.
+    tcg_path = QUERIES_DIR / f"missing-{code_l}-tcgplayer-{ts}.txt"
+    tcg_path.write_text(exports.build("tcgplayer", rows_for_bulk), encoding="utf-8")
 
     # 5. Emit chat output: URL table + file:// links. Nothing else.
     typer.echo(f"# Missing from set:{code_l}+related — {len(rows_union)} distinct printings · ${total_value:,.2f}")
@@ -1908,12 +1901,7 @@ def query_missing_set_cmd(
     typer.echo(f"")
     typer.echo(f"📋 Checklist (xlsx): [{xlsx_path}](file://{xlsx_path.resolve()})")
     typer.echo(f"🛒 ManaPool bulk-add ({len(rows_for_bulk)} rows): [{mp_path}](file://{mp_path.resolve()})")
-    if tcg_nonfoil_rows:
-        typer.echo(f"🛒 TCGplayer nonfoil ({len(tcg_nonfoil_rows)} rows): "
-                   f"[{tcg_nonfoil_path}](file://{tcg_nonfoil_path.resolve()})")
-    if tcg_foil_rows:
-        typer.echo(f"🛒 TCGplayer foil ({len(tcg_foil_rows)} rows): "
-                   f"[{tcg_foil_path}](file://{tcg_foil_path.resolve()})")
+    typer.echo(f"🛒 TCGplayer Mass Entry ({len(rows_for_bulk)} rows): [{tcg_path}](file://{tcg_path.resolve()})")
 
 
 # ---------- ad-hoc scryfall query ----------

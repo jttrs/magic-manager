@@ -1,6 +1,6 @@
 ---
 name: missing-from-set
-description: Canonical "what am I missing from set X?" workflow for any set/family. Always invokes `mm query missing-set <CODE>` which emits Scryfall printing-specific URL chunks to chat plus file:// links (XLSX checklist + plain-text ManaPool bulk-add + plain-text TCGplayer Mass Entry split by finish). Triggers: "what am I missing from FIN/avatar/tmnt/<set>?", "what's left to buy from <set>?", "missing rare/mythics from <set>?", "give me a checklist of what I need from <set>", "build me a ManaPool cart for the <set> gaps", "TCGplayer mass entry for missing <set>".
+description: Canonical "what am I missing from set X?" workflow for any set/family. Always invokes `mm query missing-set <CODE>` which emits Scryfall printing-specific URL chunks to chat plus file:// links (XLSX checklist + plain-text ManaPool bulk-add + plain-text TCGplayer Mass Entry). Triggers: "what am I missing from FIN/avatar/tmnt/<set>?", "what's left to buy from <set>?", "missing rare/mythics from <set>?", "give me a checklist of what I need from <set>", "build me a ManaPool cart for the <set> gaps", "TCGplayer mass entry for missing <set>".
 ---
 
 # Missing-from-set
@@ -10,9 +10,9 @@ Set-agnostic, deterministic, file-driven. The user has a strong opinion about ou
 - **Scryfall URL chunks** → in chat, every time, as the canonical printing-specific table.
 - **Missing checklist (XLSX)** → file artifact in `queries/`, referenced by `file://` link in chat. **Never rendered inline.** Distinct from the "inventory checklist" produced by `mm set master-list` ([[generate-set-list]]); see [Not to be confused with](#not-to-be-confused-with-inventory-checklists) below.
 - **ManaPool bulk-add (.txt)** → file artifact in `queries/`, referenced by `file://` link in chat. Plain text, paste-ready (no comments / headers / fences — portals reject extra characters). `*F*` per-line foil marker.
-- **TCGplayer Mass Entry (.txt × 2)** → file artifacts in `queries/`, split by finish (cart UI applies foil per-batch, not per-line). Plain text, paste-ready. The foil/nonfoil file is omitted entirely if 0 rows for that finish.
+- **TCGplayer Mass Entry (.txt)** → file artifact in `queries/`, paste-ready. Plain text, single flat list of all rows regardless of finish. TCGplayer doesn't accept a per-line foil marker; the user runs the cart optimizer afterward to choose finish per row.
 
-That's the whole output. Don't render the checklist as a markdown table in chat. Don't paste the bulk-add file contents as fenced code in chat. Don't ask which format the user wants — they want all four (XLSX + 1 ManaPool .txt + up to 2 TCG .txt), with chat-rendering only for the URLs.
+That's the whole output. Don't render the checklist as a markdown table in chat. Don't paste the bulk-add file contents as fenced code in chat. Don't ask which format the user wants — they want all three artifact files (XLSX + ManaPool .txt + TCGplayer .txt), with chat-rendering only for the URLs.
 
 ## When to use
 
@@ -47,8 +47,8 @@ That's it. One command. Set-agnostic AS LONG AS the family is configured (see [N
 4. **Emit Scryfall printing-specific URLs** to stdout as a chunked markdown table — sorted cheapest-first, 20 printings per chunk (matches Scryfall web UI's nested-condition cap), `unique=prints&order=usd&dir=asc` so each chunk shows the exact missing printings sorted by cheapest-first within the chunk.
 5. **Write missing checklist** (XLSX) to `queries/missing-<code>-checklist-<timestamp>.xlsx` (set-grouped, sorted by CN within each set). The hidden `_meta` sheet records `kind: "missing"` so consumers can distinguish this from inventory checklists (which carry `kind: "inventory"`).
 6. **Write ManaPool bulk-add .txt** to `queries/missing-<code>-manapool-<timestamp>.txt` (single flat list of all rows, sorted by set/CN/finish, `*F*` foil marker per line — Moxfield's documented import token, which ManaPool consumes natively). Plain text, no headers/comments/fences — portals reject anything that's not a card row.
-7. **Write TCGplayer Mass Entry .txt files split by finish** — `queries/missing-<code>-tcgplayer-nonfoil-<timestamp>.txt` and `queries/missing-<code>-tcgplayer-foil-<timestamp>.txt`. Plain text, format `<qty> <Card Name> [SETCODE] CN`. TCGplayer applies foil per-batch via the cart UI toggle (not per-line), so foil rows live in a separate file. Either file is **omitted entirely** if 0 rows for that finish (e.g. a fully-nonfoil missing set produces only the nonfoil .txt).
-8. **Print `file://` link lines** at the end of stdout — XLSX, ManaPool, then TCGplayer files (if non-empty) — so the user can click to open each artifact.
+7. **Write TCGplayer Mass Entry .txt** to `queries/missing-<code>-tcgplayer-<timestamp>.txt` — single flat list of all rows, format `<qty> <Card Name> [SETCODE] CN`. No per-line foil marker; the user runs TCGplayer's cart optimizer afterward to pick finish per row. Plain text, no headers/comments.
+8. **Print three `file://` link lines** at the end of stdout (XLSX + ManaPool + TCGplayer) so the user can click to open each artifact.
 
 The chat rendering is automatically capped at the URL table + file links — the orchestrator never includes the inventory of cards or the bulk-add file contents inline.
 
@@ -95,8 +95,7 @@ Just relay the orchestrator's stdout verbatim — don't add summary tables, don'
 
 📋 Checklist (xlsx): [queries/missing-fin-checklist-2026-06-06-192352.xlsx](file:///Users/torre/.../queries/missing-fin-checklist-2026-06-06-192352.xlsx)
 🛒 ManaPool bulk-add (149 rows): [queries/missing-fin-manapool-2026-06-06-192352.txt](file:///Users/torre/.../queries/missing-fin-manapool-2026-06-06-192352.txt)
-🛒 TCGplayer nonfoil (126 rows): [queries/missing-fin-tcgplayer-nonfoil-2026-06-06-192352.txt](file:///Users/torre/.../queries/missing-fin-tcgplayer-nonfoil-2026-06-06-192352.txt)
-🛒 TCGplayer foil (23 rows): [queries/missing-fin-tcgplayer-foil-2026-06-06-192352.txt](file:///Users/torre/.../queries/missing-fin-tcgplayer-foil-2026-06-06-192352.txt)
+🛒 TCGplayer Mass Entry (149 rows): [queries/missing-fin-tcgplayer-2026-06-06-192352.txt](file:///Users/torre/.../queries/missing-fin-tcgplayer-2026-06-06-192352.txt)
 ```
 
 ## When the user wants something different

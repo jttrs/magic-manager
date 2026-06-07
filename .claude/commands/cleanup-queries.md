@@ -63,10 +63,9 @@ The script classifies every file in `queries/` into one of three "kinds" based o
 
 | Filename pattern | Kind | Default behavior |
 |---|---|---|
-| `missing-<code>-checklist-<ts>.xlsx`         | `missing-checklist`         | Keep newest 1 per `<code>`; delete the rest |
-| `missing-<code>-manapool-<ts>.{txt,md}`      | `missing-manapool`          | Keep newest 1 per `<code>`; delete the rest |
-| `missing-<code>-tcgplayer-nonfoil-<ts>.txt`  | `missing-tcgplayer-nonfoil` | Keep newest 1 per `<code>`; delete the rest |
-| `missing-<code>-tcgplayer-foil-<ts>.txt`     | `missing-tcgplayer-foil`    | Keep newest 1 per `<code>`; delete the rest |
+| `missing-<code>-checklist-<ts>.xlsx`     | `missing-checklist` | Keep newest 1 per `<code>`; delete the rest |
+| `missing-<code>-manapool-<ts>.{txt,md}`  | `missing-manapool`  | Keep newest 1 per `<code>`; delete the rest |
+| `missing-<code>-tcgplayer-<ts>.txt`      | `missing-tcgplayer` | Keep newest 1 per `<code>`; delete the rest |
 | `<anything-else>-<ts>.xlsx`          | `adhoc`             | Keep all (unless `--include-adhoc`) |
 | Files that don't match any pattern   | (unclassified)      | Skipped silently — never touched |
 

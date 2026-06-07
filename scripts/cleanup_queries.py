@@ -7,11 +7,10 @@ that something.
 
 | Artifact | Filename pattern | Source |
 |---|---|---|
-| Missing checklist (XLSX)        | ``missing-<code>-checklist-<ts>.xlsx``           | ``mm query missing-set <CODE>`` |
-| ManaPool bulk-add (.txt)        | ``missing-<code>-manapool-<ts>.txt``             | ``mm query missing-set <CODE>`` |
-| TCGplayer Mass Entry, nonfoil   | ``missing-<code>-tcgplayer-nonfoil-<ts>.txt``    | ``mm query missing-set <CODE>`` |
-| TCGplayer Mass Entry, foil      | ``missing-<code>-tcgplayer-foil-<ts>.txt``       | ``mm query missing-set <CODE>`` |
-| Ad-hoc query (XLSX)             | ``<slug>-<ts>.xlsx``                             | ``mm query xlsx '<selector>' [--name SLUG]`` |
+| Missing checklist (XLSX)   | ``missing-<code>-checklist-<ts>.xlsx``     | ``mm query missing-set <CODE>`` |
+| ManaPool bulk-add (.txt)   | ``missing-<code>-manapool-<ts>.txt``       | ``mm query missing-set <CODE>`` |
+| TCGplayer Mass Entry (.txt)| ``missing-<code>-tcgplayer-<ts>.txt``      | ``mm query missing-set <CODE>`` |
+| Ad-hoc query (XLSX)        | ``<slug>-<ts>.xlsx``                       | ``mm query xlsx '<selector>' [--name SLUG]`` |
 
 The ``<ts>`` suffix is always ``YYYY-MM-DD-HHMMSS``.
 
@@ -85,11 +84,10 @@ QUERIES_DIR = REPO_ROOT / "queries"
 # 19 characters before the extension (``YYYY-MM-DD-HHMMSS``).
 #
 # The "kind" suffix per group:
-#   - missing-<code>-checklist           -> kind "missing-checklist"
-#   - missing-<code>-manapool            -> kind "missing-manapool"
-#   - missing-<code>-tcgplayer-nonfoil   -> kind "missing-tcgplayer-nonfoil"
-#   - missing-<code>-tcgplayer-foil      -> kind "missing-tcgplayer-foil"
-#   - <anything else>                    -> kind "adhoc"
+#   - missing-<code>-checklist  -> kind "missing-checklist"
+#   - missing-<code>-manapool   -> kind "missing-manapool"
+#   - missing-<code>-tcgplayer  -> kind "missing-tcgplayer"
+#   - <anything else>           -> kind "adhoc"
 TIMESTAMP_SUFFIX_RE = re.compile(
     r"^(?P<base>.+)-(?P<ts>\d{4}-\d{2}-\d{2}-\d{6})\.(?P<ext>xlsx|md|txt)$"
 )
@@ -118,8 +116,8 @@ def _classify(path: Path) -> tuple[str, str] | None:
     """Return (group_key, kind) for a file in queries/, or None if it doesn't
     match a recognized pattern. ``group_key`` is the per-set logical group
     (e.g. ``missing-fin-checklist``); ``kind`` is one of
-    ``missing-checklist``, ``missing-manapool``, ``missing-tcgplayer-nonfoil``,
-    ``missing-tcgplayer-foil``, ``adhoc``.
+    ``missing-checklist``, ``missing-manapool``, ``missing-tcgplayer``,
+    ``adhoc``.
     """
     m = TIMESTAMP_SUFFIX_RE.match(path.name)
     if not m:
@@ -130,10 +128,8 @@ def _classify(path: Path) -> tuple[str, str] | None:
             return (base, "missing-checklist")
         if base.endswith("-manapool"):
             return (base, "missing-manapool")
-        if base.endswith("-tcgplayer-nonfoil"):
-            return (base, "missing-tcgplayer-nonfoil")
-        if base.endswith("-tcgplayer-foil"):
-            return (base, "missing-tcgplayer-foil")
+        if base.endswith("-tcgplayer"):
+            return (base, "missing-tcgplayer")
     return (base, "adhoc")
 
 
