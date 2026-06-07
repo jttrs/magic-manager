@@ -2,12 +2,14 @@
 
     1 Card Name (SET) CN
     4 Lightning Bolt (LEB) 162
-    1 Sol Ring (CMM) 410 ★            (foil)
+    1 Sol Ring (CMM) 410 *F*          (foil)
     1 Pegasus Guardian // Rescue the Foal (CLB) 36
 
 Section headers go on their own line with a blank line above them. We don't
 emit section headers for V1 lists — they're flat. ManaPool consumes this
-format directly via its "import from Moxfield" path.
+format directly via its "import from Moxfield" path; ManaPool does NOT
+accept the ★ display character that Moxfield's UI shows — it parses the
+*F* import marker.
 """
 
 from __future__ import annotations
@@ -26,7 +28,7 @@ def _line(r) -> str:
     name = c["name"]
     set_code = (c["set"] or "").upper()
     cn = c["collector_number"] or ""
-    foil = " ★" if r.finish == "foil" else ""
+    foil = " *F*" if r.finish == "foil" else ""
     if set_code and cn:
         return f"{r.quantity} {name} ({set_code}) {cn}{foil}"
     return f"{r.quantity} {name}{foil}"

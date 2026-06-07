@@ -1,6 +1,6 @@
 ---
 name: missing-from-set
-description: Canonical "what am I missing from set X?" workflow for any set/family. Always invokes `mm query missing-set <CODE>` which emits Scryfall printing-specific URL chunks to chat plus two file:// links (XLSX checklist + ManaPool bulk-add MD). Triggers: "what am I missing from FIN/avatar/tmnt/<set>?", "what's left to buy from <set>?", "missing rare/mythics from <set>?", "give me a checklist of what I need from <set>", "build me a ManaPool cart for the <set> gaps".
+description: Canonical "what am I missing from set X?" workflow for any set/family. Always invokes `mm query missing-set <CODE>` which emits Scryfall printing-specific URL chunks to chat plus file:// links (XLSX checklist + plain-text ManaPool bulk-add + plain-text TCGplayer Mass Entry split by finish). Triggers: "what am I missing from FIN/avatar/tmnt/<set>?", "what's left to buy from <set>?", "missing rare/mythics from <set>?", "give me a checklist of what I need from <set>", "build me a ManaPool cart for the <set> gaps", "TCGplayer mass entry for missing <set>".
 ---
 
 # Missing-from-set
@@ -9,9 +9,10 @@ Set-agnostic, deterministic, file-driven. The user has a strong opinion about ou
 
 - **Scryfall URL chunks** → in chat, every time, as the canonical printing-specific table.
 - **Missing checklist (XLSX)** → file artifact in `queries/`, referenced by `file://` link in chat. **Never rendered inline.** Distinct from the "inventory checklist" produced by `mm set master-list` ([[generate-set-list]]); see [Not to be confused with](#not-to-be-confused-with-inventory-checklists) below.
-- **ManaPool bulk-add (MD)** → file artifact in `queries/`, referenced by `file://` link in chat. **Never rendered inline.**
+- **ManaPool bulk-add (.txt)** → file artifact in `queries/`, referenced by `file://` link in chat. Plain text, paste-ready (no comments / headers / fences — portals reject extra characters). `*F*` per-line foil marker.
+- **TCGplayer Mass Entry (.txt × 2)** → file artifacts in `queries/`, split by finish (cart UI applies foil per-batch, not per-line). Plain text, paste-ready. The foil/nonfoil file is omitted entirely if 0 rows for that finish.
 
-That's the whole output. Don't render the checklist as a markdown table in chat. Don't paste the ManaPool blocks as fenced code in chat. Don't ask which format the user wants — they want all three, with chat-rendering only for the URLs.
+That's the whole output. Don't render the checklist as a markdown table in chat. Don't paste the bulk-add file contents as fenced code in chat. Don't ask which format the user wants — they want all four (XLSX + 1 ManaPool .txt + up to 2 TCG .txt), with chat-rendering only for the URLs.
 
 ## When to use
 
@@ -45,10 +46,11 @@ That's it. One command. Set-agnostic AS LONG AS the family is configured (see [N
 3. **Materialize the union** by `scryfall_id`, dropping cards owned in any finish (printing-level missing semantics).
 4. **Emit Scryfall printing-specific URLs** to stdout as a chunked markdown table — sorted cheapest-first, 20 printings per chunk (matches Scryfall web UI's nested-condition cap), `unique=prints&order=usd&dir=asc` so each chunk shows the exact missing printings sorted by cheapest-first within the chunk.
 5. **Write missing checklist** (XLSX) to `queries/missing-<code>-checklist-<timestamp>.xlsx` (set-grouped, sorted by CN within each set). The hidden `_meta` sheet records `kind: "missing"` so consumers can distinguish this from inventory checklists (which carry `kind: "inventory"`).
-6. **Write ManaPool bulk-add MD** to `queries/missing-<code>-manapool-<timestamp>.md` (3 fenced blocks, one per sub-selector, with `★` foil markers per line).
-7. **Print two `file://` link lines** at the end of stdout so the user can click to open either artifact.
+6. **Write ManaPool bulk-add .txt** to `queries/missing-<code>-manapool-<timestamp>.txt` (single flat list of all rows, sorted by set/CN/finish, `*F*` foil marker per line — Moxfield's documented import token, which ManaPool consumes natively). Plain text, no headers/comments/fences — portals reject anything that's not a card row.
+7. **Write TCGplayer Mass Entry .txt files split by finish** — `queries/missing-<code>-tcgplayer-nonfoil-<timestamp>.txt` and `queries/missing-<code>-tcgplayer-foil-<timestamp>.txt`. Plain text, format `<qty> <Card Name> [SETCODE] CN`. TCGplayer applies foil per-batch via the cart UI toggle (not per-line), so foil rows live in a separate file. Either file is **omitted entirely** if 0 rows for that finish (e.g. a fully-nonfoil missing set produces only the nonfoil .txt).
+8. **Print `file://` link lines** at the end of stdout — XLSX, ManaPool, then TCGplayer files (if non-empty) — so the user can click to open each artifact.
 
-The chat rendering is automatically capped at the URL table + two file links — the orchestrator never includes the inventory of cards or the ManaPool block contents inline.
+The chat rendering is automatically capped at the URL table + file links — the orchestrator never includes the inventory of cards or the bulk-add file contents inline.
 
 ## Flags
 
@@ -91,8 +93,10 @@ Just relay the orchestrator's stdout verbatim — don't add summary tables, don'
 ...
 | 15 | 6 | $1979.40 → — | [chunk 15](https://scryfall.com/...) |
 
-📋 Missing checklist (xlsx): [queries/missing-fin-checklist-2026-05-31-192604.xlsx](file:///Users/torre/.../queries/missing-fin-checklist-2026-05-31-192604.xlsx)
-🛒 ManaPool bulk-add: [queries/missing-fin-manapool-2026-05-31-192604.md](file:///Users/torre/.../queries/missing-fin-manapool-2026-05-31-192604.md)
+📋 Checklist (xlsx): [queries/missing-fin-checklist-2026-06-06-192352.xlsx](file:///Users/torre/.../queries/missing-fin-checklist-2026-06-06-192352.xlsx)
+🛒 ManaPool bulk-add (149 rows): [queries/missing-fin-manapool-2026-06-06-192352.txt](file:///Users/torre/.../queries/missing-fin-manapool-2026-06-06-192352.txt)
+🛒 TCGplayer nonfoil (126 rows): [queries/missing-fin-tcgplayer-nonfoil-2026-06-06-192352.txt](file:///Users/torre/.../queries/missing-fin-tcgplayer-nonfoil-2026-06-06-192352.txt)
+🛒 TCGplayer foil (23 rows): [queries/missing-fin-tcgplayer-foil-2026-06-06-192352.txt](file:///Users/torre/.../queries/missing-fin-tcgplayer-foil-2026-06-06-192352.txt)
 ```
 
 ## When the user wants something different
@@ -102,12 +106,12 @@ These are the explicit overrides that REQUIRE the user to ask for them. Default 
 | User says | Action |
 |---|---|
 | "Show the checklist in chat" / "render it inline" / "I don't want a file" | Run `mm query missing-set <CODE>`, then ALSO run `mm query show '<one of the sub-selectors>' --first N` and render those rows in chat. Confirm with the user which sub-selector they care about — there are 3, and rendering all 286 inline is rarely useful. |
-| "Show the ManaPool block in chat" | Same idea: run the canonical recipe (artifacts written), then `cat queries/missing-<code>-manapool-<ts>.md` and inline the requested block(s) in fenced code. Or `mm export manapool '<sub-selector>'` for one specific subset. |
+| "Show the ManaPool block in chat" | Same idea: run the canonical recipe (artifacts written), then `cat queries/missing-<code>-manapool-<ts>.txt` and inline the contents in fenced code. Or `mm export manapool '<sub-selector>'` for one specific subset. |
 | "Include extended art" | Run `mm query missing-set <CODE> --treatment-class any-alt`. Document the change in chat ("Used `any-alt` per request — extended-art rows are included"). |
 | "Include fancy-foil-only reprints" | `mm query missing-set <CODE> --treatment-class alt`. Same documentation note. |
 | "Just the rare/mythics, skip alt" | NOT supported by `mm query missing-set`. Run `mm query xlsx 'set:<CODE>+related missing rarity=rare treatment=regular' --sort value-asc` and `mm query xlsx 'set:<CODE>+related missing rarity=mythic treatment=regular' --sort value-asc` separately — pass the resulting file links to the user. Mention this is a non-default ask. |
 | "Sort by name" / "sort by rarity" | The canonical XLSX is set-grouped + CN-sorted (matches physical box-flipping). For other orders, run `mm query xlsx '<full union as a single selector>' --sort <key>` separately. |
-| "TCGplayer cart, not ManaPool" | Run `mm export tcgplayer '<sub-selector> finish=nonfoil'` and `... finish=foil'` per Phase 3 of the original orchestration plan (see [[export-list]]). Two paste blocks per sub-selector because TCGplayer has no per-line foil marker. ManaPool is the canonical bulk-add target because it round-trips foil correctly; TCGplayer is the explicit override. |
+| "I only want the ManaPool file" / "I only want TCGplayer files" | The orchestrator emits all the artifacts in one shot — they're cheap to write. Just point the user at the link they care about; don't add CLI flags to suppress the others. If they really want ad-hoc one-format export, `mm export manapool '<selector>'` or `mm export tcgplayer '<selector> finish=nonfoil'` is the manual escape hatch. |
 
 ## Caveats
 

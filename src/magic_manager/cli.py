@@ -1761,18 +1761,23 @@ def query_missing_set_cmd(
     """Canonical "what am I missing from set <CODE>?" workflow.
 
     Materializes the union of three sub-selectors (rare-regular, mythic-regular,
-    treatment-class) printing-level, then emits exactly three things:
+    treatment-class) printing-level, then emits:
 
     \b
     1. Scryfall printing-specific URL chunks (markdown table → STDOUT for chat).
        Sorted cheapest-first; uses (set:CODE cn:"CN") form with unique=prints
        and order=usd&dir=asc so each URL renders the EXACT missing printings.
     2. XLSX checklist (set-grouped, sorted by CN within each set) → queries/.
-    3. ManaPool bulk-add MD (3 fenced blocks, one per sub-selector) → queries/.
+    3. ManaPool bulk-add .txt (flat list, *F* foil markers per line) → queries/.
+    4. TCGplayer Mass Entry .txt files split by finish (cart toggles foil per
+       paste, so nonfoil and foil go in separate files) → queries/. Foil/nonfoil
+       file is omitted if 0 rows for that finish.
 
-    The chat output is always just the URL table + two `file://` link lines so
-    the user can click to open the artifacts. The XLSX and ManaPool MD are
-    NEVER rendered inline — the user explicitly wants them as files only.
+    The chat output is always just the URL table + file:// link lines so the
+    user can click to open the artifacts. The bulk-add files are NEVER rendered
+    inline — the user explicitly wants them as files only, and they must be
+    paste-ready (no comments, headers, or fences) since portals don't tolerate
+    extra characters.
 
     When --treatment-class=preferred (default), the rare/mythic regular-treatment
     sub-selectors are ALSO post-filtered to drop datestamped reprints that have
@@ -1857,30 +1862,33 @@ def query_missing_set_cmd(
         f"missing-{code_l}-checklist", kind="missing",
     )
 
-    # 4. Build the ManaPool MD artifact (3 fenced blocks).
-    md_path = QUERIES_DIR / f"missing-{code_l}-manapool-{ts}.md"
-    SUB_HEADINGS = {
-        "rare-regular":   "Rare, regular treatment",
-        "mythic-regular": "Mythic, regular treatment",
-        "alt":            "Any rarity, alt treatment (no `ext`, includes pure-`ff`)",
-        "collectible-alt":"Any rarity, collectible-alt (no `ext`, no pure-`ff`)",
-        "any-alt":        "Any rarity, any non-empty treatment (includes `ext`)",
-    }
+    # 4. Build the bulk-add artifacts.
+    #    All three are plain text — no headings, no comments, no fences. Pasting
+    #    into a portal's mass-entry box must succeed without any pre-edit.
+    #    Order rows by (set, cn, finish) within each file for predictability.
+    rows_for_bulk = sorted(rows_union, key=lambda r: (
+        r.card.get("set") or "",
+        _cn_key(r.card.get("collector_number")),
+        r.finish,
+    ))
     total_value = sum((_row_line_value(r) or 0.0) for r in rows_union)
-    with open(md_path, "w") as f:
-        f.write(f"# {code_l.upper()} family — ManaPool bulk-add (missing printings)\n\n")
-        f.write(f"Generated: {datetime.now().isoformat(timespec='seconds')}\n\n")
-        f.write(f"**{len(rows_union)} distinct printings · ${total_value:,.2f}**\n\n")
-        f.write(f"Filter: rare/mythic regular treatment OR any-rarity {treatment_class}. "
-                f"Printing-level missing (owning any finish hides the printing).\n\n")
-        f.write(f"Paste each block below into ManaPool's bulk-add box. `★` marks foil.\n\n---\n\n")
-        for slug_key, sel in SUBS:
-            block = exports.build("manapool", sub_rows[slug_key])
-            line_count = len([ln for ln in block.split("\n") if ln.strip()])
-            heading = SUB_HEADINGS.get(slug_key, slug_key)
-            f.write(f"## {heading} ({line_count} rows)\n\n_Selector: `{sel}`_\n\n```\n{block.rstrip()}\n```\n\n")
 
-    # 5. Emit chat output: URL table + two file:// links. Nothing else.
+    # ManaPool: single flat list, *F* foil markers preserved per-line.
+    mp_path = QUERIES_DIR / f"missing-{code_l}-manapool-{ts}.txt"
+    mp_text = exports.build("manapool", rows_for_bulk)
+    mp_path.write_text(mp_text, encoding="utf-8")
+
+    # TCGplayer: split by finish (cart UI applies foil per-batch, not per-line).
+    tcg_nonfoil_rows = [r for r in rows_for_bulk if r.finish == "nonfoil"]
+    tcg_foil_rows    = [r for r in rows_for_bulk if r.finish == "foil"]
+    tcg_nonfoil_path = QUERIES_DIR / f"missing-{code_l}-tcgplayer-nonfoil-{ts}.txt"
+    tcg_foil_path    = QUERIES_DIR / f"missing-{code_l}-tcgplayer-foil-{ts}.txt"
+    if tcg_nonfoil_rows:
+        tcg_nonfoil_path.write_text(exports.build("tcgplayer", tcg_nonfoil_rows), encoding="utf-8")
+    if tcg_foil_rows:
+        tcg_foil_path.write_text(exports.build("tcgplayer", tcg_foil_rows), encoding="utf-8")
+
+    # 5. Emit chat output: URL table + file:// links. Nothing else.
     typer.echo(f"# Missing from set:{code_l}+related — {len(rows_union)} distinct printings · ${total_value:,.2f}")
     typer.echo(f"")
     typer.echo(f"## Scryfall URLs ({len(chunks)} chunks, cheapest first)")
@@ -1898,10 +1906,14 @@ def query_missing_set_cmd(
         url = f"https://scryfall.com/search?q={_quote_plus(terms)}&unique=prints&order=usd&dir=asc"
         typer.echo(f"| {i} | {len(chunk)} | {cs} → {ms} | [chunk {i}]({url}) |")
     typer.echo(f"")
-    abs_xlsx = xlsx_path.resolve()
-    abs_md = md_path.resolve()
-    typer.echo(f"📋 Checklist (xlsx): [{xlsx_path}](file://{abs_xlsx})")
-    typer.echo(f"🛒 ManaPool bulk-add: [{md_path}](file://{abs_md})")
+    typer.echo(f"📋 Checklist (xlsx): [{xlsx_path}](file://{xlsx_path.resolve()})")
+    typer.echo(f"🛒 ManaPool bulk-add ({len(rows_for_bulk)} rows): [{mp_path}](file://{mp_path.resolve()})")
+    if tcg_nonfoil_rows:
+        typer.echo(f"🛒 TCGplayer nonfoil ({len(tcg_nonfoil_rows)} rows): "
+                   f"[{tcg_nonfoil_path}](file://{tcg_nonfoil_path.resolve()})")
+    if tcg_foil_rows:
+        typer.echo(f"🛒 TCGplayer foil ({len(tcg_foil_rows)} rows): "
+                   f"[{tcg_foil_path}](file://{tcg_foil_path.resolve()})")
 
 
 # ---------- ad-hoc scryfall query ----------
@@ -2221,9 +2233,9 @@ def export_cmd(
     typer.echo(f"# target: {target}", err=True)
     typer.echo(f"# rows: {len(rows)}", err=True)
     if target == "tcgplayer":
-        typer.echo("# NOTE: TCGplayer Mass Entry format starts as '1 Card Name [Set Name]'.", err=True)
-        typer.echo("#       On the FIRST paste, verify a few lines parse correctly. Adjust", err=True)
-        typer.echo("#       src/magic_manager/exports/tcgplayer.py if reality disagrees.", err=True)
+        typer.echo("# NOTE: TCGplayer Mass Entry format is '1 Card Name [SETCODE] CN'.", err=True)
+        typer.echo("#       Foil is set per-batch via the cart UI toggle, not per-line —", err=True)
+        typer.echo("#       run twice with finish=nonfoil and finish=foil for a mixed cart.", err=True)
 
     if out:
         out.parent.mkdir(parents=True, exist_ok=True)

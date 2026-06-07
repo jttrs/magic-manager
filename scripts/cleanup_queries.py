@@ -1,19 +1,31 @@
 """Prune accumulated artifacts in ``queries/``.
 
-The ``queries/`` directory holds three artifact types produced by ``mm query``
-commands. All are timestamped, regenerable, and gitignored — they accumulate
-without bound until something cleans them up. This script is that something.
+The ``queries/`` directory holds several artifact types produced by ``mm
+query`` commands. All are timestamped, regenerable, and gitignored — they
+accumulate without bound until something cleans them up. This script is
+that something.
 
 | Artifact | Filename pattern | Source |
 |---|---|---|
-| Missing checklist (XLSX) | ``missing-<code>-checklist-<YYYY-MM-DD-HHMMSS>.xlsx`` | ``mm query missing-set <CODE>`` |
-| ManaPool bulk-add (MD)   | ``missing-<code>-manapool-<YYYY-MM-DD-HHMMSS>.md``    | ``mm query missing-set <CODE>`` |
-| Ad-hoc query (XLSX)      | ``<slug>-<YYYY-MM-DD-HHMMSS>.xlsx``                   | ``mm query xlsx '<selector>' [--name SLUG]`` |
+| Missing checklist (XLSX)        | ``missing-<code>-checklist-<ts>.xlsx``           | ``mm query missing-set <CODE>`` |
+| ManaPool bulk-add (.txt)        | ``missing-<code>-manapool-<ts>.txt``             | ``mm query missing-set <CODE>`` |
+| TCGplayer Mass Entry, nonfoil   | ``missing-<code>-tcgplayer-nonfoil-<ts>.txt``    | ``mm query missing-set <CODE>`` |
+| TCGplayer Mass Entry, foil      | ``missing-<code>-tcgplayer-foil-<ts>.txt``       | ``mm query missing-set <CODE>`` |
+| Ad-hoc query (XLSX)             | ``<slug>-<ts>.xlsx``                             | ``mm query xlsx '<selector>' [--name SLUG]`` |
 
-Default behavior: for each ``missing-<code>-checklist`` and ``missing-<code>-manapool``
-group, keep the most recent file and delete the rest. Ad-hoc XLSX files are
-left alone unless ``--include-adhoc`` is passed (they're often hand-named for
-specific reports the user wants to keep around).
+The ``<ts>`` suffix is always ``YYYY-MM-DD-HHMMSS``.
+
+Default behavior: for each ``missing-<code>-*`` group, keep the most recent
+file and delete the rest. Ad-hoc XLSX files are left alone unless
+``--include-adhoc`` is passed (they're often hand-named for specific reports
+the user wants to keep around).
+
+Older artifact patterns (kept for backward-compat with already-archived
+files):
+
+- ``missing-<code>-manapool-<ts>.md`` — pre-2026-06-06 ManaPool bulk-add
+  files used a fenced-markdown layout; current artifacts are plain text.
+  Cleaned up identically.
 
 Usage
 -----
@@ -73,11 +85,13 @@ QUERIES_DIR = REPO_ROOT / "queries"
 # 19 characters before the extension (``YYYY-MM-DD-HHMMSS``).
 #
 # The "kind" suffix per group:
-#   - missing-<code>-checklist  -> kind "missing-checklist"
-#   - missing-<code>-manapool   -> kind "missing-manapool"
-#   - <anything else>           -> kind "adhoc"
+#   - missing-<code>-checklist           -> kind "missing-checklist"
+#   - missing-<code>-manapool            -> kind "missing-manapool"
+#   - missing-<code>-tcgplayer-nonfoil   -> kind "missing-tcgplayer-nonfoil"
+#   - missing-<code>-tcgplayer-foil      -> kind "missing-tcgplayer-foil"
+#   - <anything else>                    -> kind "adhoc"
 TIMESTAMP_SUFFIX_RE = re.compile(
-    r"^(?P<base>.+)-(?P<ts>\d{4}-\d{2}-\d{2}-\d{6})\.(?P<ext>xlsx|md)$"
+    r"^(?P<base>.+)-(?P<ts>\d{4}-\d{2}-\d{2}-\d{6})\.(?P<ext>xlsx|md|txt)$"
 )
 
 
@@ -104,16 +118,22 @@ def _classify(path: Path) -> tuple[str, str] | None:
     """Return (group_key, kind) for a file in queries/, or None if it doesn't
     match a recognized pattern. ``group_key`` is the per-set logical group
     (e.g. ``missing-fin-checklist``); ``kind`` is one of
-    ``missing-checklist``, ``missing-manapool``, ``adhoc``.
+    ``missing-checklist``, ``missing-manapool``, ``missing-tcgplayer-nonfoil``,
+    ``missing-tcgplayer-foil``, ``adhoc``.
     """
     m = TIMESTAMP_SUFFIX_RE.match(path.name)
     if not m:
         return None
     base = m.group("base")
-    if base.startswith("missing-") and base.endswith("-checklist"):
-        return (base, "missing-checklist")
-    if base.startswith("missing-") and base.endswith("-manapool"):
-        return (base, "missing-manapool")
+    if base.startswith("missing-"):
+        if base.endswith("-checklist"):
+            return (base, "missing-checklist")
+        if base.endswith("-manapool"):
+            return (base, "missing-manapool")
+        if base.endswith("-tcgplayer-nonfoil"):
+            return (base, "missing-tcgplayer-nonfoil")
+        if base.endswith("-tcgplayer-foil"):
+            return (base, "missing-tcgplayer-foil")
     return (base, "adhoc")
 
 

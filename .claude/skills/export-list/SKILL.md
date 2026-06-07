@@ -29,9 +29,9 @@ Wraps `mm export` to materialize a card selection and format it for any of six t
      - `value>=N` / `value<=N` — filter by current Scryfall USD price for the row's finish.
      - `scryfall:<query>` — POST-FILTER, intersect by scryfall_id with a live Scryfall query.
 2. **Pick the target.** Ask if not specified. Targets:
-   - `tcgplayer` — Mass Entry: `1 Card Name [Set Name]`. **First-paste verification required** (see Caveats below).
+   - `tcgplayer` — Mass Entry: `1 Card Name [SETCODE] CN` (e.g. `1 Lightning Bolt [SLD] 84`). Foil is set per-batch via the cart UI toggle, not per-line — for mixed carts, run twice with `finish=nonfoil` and `finish=foil`.
    - `manapool` — emits Moxfield format (ManaPool consumes it directly via their import-from-Moxfield path).
-   - `moxfield` — `1 Card Name (SET) CN[★]`.
+   - `moxfield` — `1 Card Name (SET) CN[ *F*]` (Moxfield's documented import marker for foil; ManaPool also parses it).
    - `archidekt` — `1x Card Name (set) cn`.
    - `plain` (or `plain-text`) — TSV with prices.
    - `scryfall-json` — `{"identifiers":[...]}` for round-tripping back through `scryfall.sh collection`.
@@ -100,12 +100,8 @@ User: *"give me a Scryfall identifier JSON for the FCA cards I own."*
 
 ## Caveats
 
-- **TCGplayer first-paste verification.** The Mass Entry tool's exact spec wasn't documented during this skill's development; we ship with `1 Card Name [Set Name]`, the most widely-attested form. On the FIRST paste, take 5 lines and verify they all match. If TCGplayer rejects the format or matches the wrong printing:
-  1. Open `src/magic_manager/exports/tcgplayer.py`.
-  2. Adjust the line builder (likely candidates: `1x` prefix, set code instead of name, `Foil` keyword).
-  3. Re-export and re-paste.
-  4. Update this skill once the canonical format is confirmed.
+- **TCGplayer Mass Entry format**: `<qty> <Card Name> [SETCODE] CN` (e.g. `1 Lightning Bolt [SLD] 84`), per the help.tcgplayer.com "Getting Started With Mass Entry" article. Set code is uppercased, in brackets; collector number follows the bracket. Foil is NOT marked per-line — the cart UI has a foil toggle that applies to the whole pasted batch. For mixed-finish carts, export twice (once each with `finish=nonfoil` and `finish=foil`) and toggle the UI between pastes; the [[missing-from-set]] orchestrator already does this split automatically.
 - **`set:<code> missing` requires the set to have been synced and registered.** `set:` reads from the local cards table, so the set's printings must have been pulled via `mm set sync` or `mm set master-list`. If the selector returns 0 rows but the user expects results, run [[generate-set-list]] for that set first.
 - **`missing` and `owned` reject `inventory`/`wishlist` terms.** Both are tautologies (the term IS inventory, so subtracting inventory is empty). Use them with `set:`, `cards:`, `scryfall:`, or `deck:`.
-- **Foil exports.** `moxfield` appends ` ★`. `archidekt` doesn't carry foil syntax in V1 (their format supports `*F*` but our exporter doesn't yet — log a TODO if a user asks). `tcgplayer` doesn't differentiate foil in the line either; the user picks foil at the cart stage.
+- **Foil exports.** `moxfield` (and `manapool`, which aliases moxfield) appends ` *F*` per line — Moxfield's documented import token, which ManaPool's bulk-add parses natively. `archidekt` doesn't carry foil syntax in V1 (their format also supports `*F*` but our exporter doesn't yet — log a TODO if a user asks). `tcgplayer` doesn't differentiate foil in the line either; the user picks foil at the cart stage.
 - **Long pastes.** TCGplayer Mass Entry has historically choked on >500-line pastes; if the export is huge, suggest splitting into chunks via `--out` + manual file split.

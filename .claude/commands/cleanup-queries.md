@@ -7,7 +7,7 @@ allowed-tools:
 
 # Cleanup queries/
 
-Walk the user through pruning the `queries/` directory. Each `mm query missing-set <CODE>` invocation writes a new timestamped pair (`missing-<code>-checklist-<ts>.xlsx` + `missing-<code>-manapool-<ts>.md`); these accumulate without bound. This command runs `scripts/cleanup_queries.py` which keeps the newest of each `(set, kind)` group by default.
+Walk the user through pruning the `queries/` directory. Each `mm query missing-set <CODE>` invocation writes a fresh timestamped set of artifacts (XLSX checklist + ManaPool .txt + up to two TCGplayer .txt files); these accumulate without bound. This command runs `scripts/cleanup_queries.py` which keeps the newest of each `(set, kind)` group by default.
 
 ## Steps (do these in order, deterministically)
 
@@ -63,8 +63,10 @@ The script classifies every file in `queries/` into one of three "kinds" based o
 
 | Filename pattern | Kind | Default behavior |
 |---|---|---|
-| `missing-<code>-checklist-<ts>.xlsx` | `missing-checklist` | Keep newest 1 per `<code>`; delete the rest |
-| `missing-<code>-manapool-<ts>.md`    | `missing-manapool`  | Keep newest 1 per `<code>`; delete the rest |
+| `missing-<code>-checklist-<ts>.xlsx`         | `missing-checklist`         | Keep newest 1 per `<code>`; delete the rest |
+| `missing-<code>-manapool-<ts>.{txt,md}`      | `missing-manapool`          | Keep newest 1 per `<code>`; delete the rest |
+| `missing-<code>-tcgplayer-nonfoil-<ts>.txt`  | `missing-tcgplayer-nonfoil` | Keep newest 1 per `<code>`; delete the rest |
+| `missing-<code>-tcgplayer-foil-<ts>.txt`     | `missing-tcgplayer-foil`    | Keep newest 1 per `<code>`; delete the rest |
 | `<anything-else>-<ts>.xlsx`          | `adhoc`             | Keep all (unless `--include-adhoc`) |
 | Files that don't match any pattern   | (unclassified)      | Skipped silently — never touched |
 
