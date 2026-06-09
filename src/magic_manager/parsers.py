@@ -304,7 +304,163 @@ def parse_master_list_md(path: Path) -> ParseResult:
     return res
 
 
-def _coerce_qty(raw, row_num: int, col: str, res: ParseResult) -> int:
+# ---------- Jumpstart-list parsing (kind=jumpstart) ----------
+
+@dataclass
+class JumpstartRow:
+    """One row of a Jumpstart-list checklist: a single pack variant.
+
+    ``file_name`` is the MTGJSON deck filename (e.g. ``Toph_TLE``) and is the
+    join key used by the ingest path to fetch the variant's contents.
+    """
+    file_name: str
+    theme: str
+    qty_kept_assembled: int
+    qty_deconstructed: int
+    raw: str = ""
+
+
+@dataclass
+class JumpstartParseResult:
+    rows: list[JumpstartRow] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+    meta: dict | None = None
+
+    @property
+    def filled_rows(self) -> list[JumpstartRow]:
+        """Rows where the user filled in at least one qty column."""
+        return [r for r in self.rows if r.qty_kept_assembled > 0 or r.qty_deconstructed > 0]
+
+
+JUMPSTART_LIST_COLUMNS = (
+    "file_name", "theme", "card_count", "usd_total",
+    "qty_kept_assembled", "qty_deconstructed",
+)
+
+
+def parse_jumpstart_list_xlsx(path: Path) -> JumpstartParseResult:
+    """Read a filled-in Jumpstart checklist emitted by ``mm set jumpstart-list``.
+
+    Yields one ``JumpstartRow`` per spreadsheet row, regardless of qty —
+    callers filter via ``filled_rows`` to act only on the user's edits. The
+    ``_meta`` sheet (if present) is attached to ``meta``.
+    """
+    from openpyxl import load_workbook
+
+    wb = load_workbook(filename=str(path), data_only=True)
+    ws = wb["checklist"] if "checklist" in wb.sheetnames else wb.active
+
+    res = JumpstartParseResult()
+
+    if "_meta" in wb.sheetnames:
+        meta_ws = wb["_meta"]
+        meta: dict[str, str] = {}
+        meta_rows = meta_ws.iter_rows(values_only=True)
+        next(meta_rows, None)
+        for mrow in meta_rows:
+            if not mrow or mrow[0] is None:
+                continue
+            k = str(mrow[0]).strip()
+            v = "" if (len(mrow) < 2 or mrow[1] is None) else str(mrow[1]).strip()
+            meta[k] = v
+        res.meta = meta
+
+    rows = ws.iter_rows(values_only=True)
+    header = next(rows, None)
+    if not header:
+        res.warnings.append("XLSX has no header row")
+        return res
+
+    header_lower = [str(h).strip().lower() if h is not None else "" for h in header]
+    idx = {c: header_lower.index(c) for c in JUMPSTART_LIST_COLUMNS if c in header_lower}
+    required = {"file_name", "qty_kept_assembled", "qty_deconstructed"}
+    missing = [c for c in required if c not in idx]
+    if missing:
+        res.warnings.append(f"XLSX missing required columns: {missing!r}")
+        return res
+
+    for row_num, row in enumerate(rows, start=2):
+        if all(v is None or str(v).strip() == "" for v in row):
+            continue
+        file_name = (str(row[idx["file_name"]]).strip() if row[idx["file_name"]] is not None else "")
+        if not file_name:
+            continue
+        theme = (str(row[idx["theme"]]).strip() if "theme" in idx and row[idx["theme"]] is not None else "")
+        qk = _coerce_qty(row[idx["qty_kept_assembled"]], row_num, "qty_kept_assembled", res)
+        qd = _coerce_qty(row[idx["qty_deconstructed"]], row_num, "qty_deconstructed", res)
+        res.rows.append(JumpstartRow(
+            file_name=file_name,
+            theme=theme,
+            qty_kept_assembled=qk,
+            qty_deconstructed=qd,
+            raw=f"row {row_num}: {file_name} K:{qk} D:{qd}",
+        ))
+    return res
+
+
+# Markdown line shape: ``- <FileName> — <Theme> — <N> cards — $X.XX [K:k D:k]``
+# Parser keys on FileName + the [K: D:] bracket. Surrounding text can change.
+MD_JUMPSTART_LINE_RE = re.compile(
+    r"""
+    ^\s*-\s+
+    (?P<file_name>[A-Za-z0-9_]+_[A-Z0-9]{2,6})
+    .*?
+    \[\s*K:\s*(?P<k>\d+)\s+D:\s*(?P<d>\d+)\s*\]
+    """,
+    re.VERBOSE,
+)
+
+
+def parse_jumpstart_list_md(path: Path) -> JumpstartParseResult:
+    """Markdown twin of ``parse_jumpstart_list_xlsx``.
+
+    Frontmatter → ``meta``. Body lines matching ``MD_JUMPSTART_LINE_RE``
+    become rows; non-matching lines are ignored.
+    """
+    res = JumpstartParseResult()
+    text = Path(path).read_text(encoding="utf-8")
+    body = text
+
+    if text.startswith("---\n") or text.startswith("---\r\n"):
+        end = text.find("\n---\n", 4)
+        if end == -1:
+            end = text.find("\n---\r\n", 4)
+        if end != -1:
+            fm = text[4:end]
+            meta: dict[str, str] = {}
+            for line in fm.splitlines():
+                if ":" not in line:
+                    continue
+                k, _, v = line.partition(":")
+                meta[k.strip()] = v.strip()
+            if meta:
+                res.meta = meta
+            body = text[end:].split("\n", 1)[1] if "\n" in text[end:] else ""
+
+    line_num = 0
+    for raw_line in body.splitlines():
+        line_num += 1
+        m = MD_JUMPSTART_LINE_RE.match(raw_line)
+        if not m:
+            continue
+        file_name = m.group("file_name")
+        try:
+            qk = int(m.group("k"))
+            qd = int(m.group("d"))
+        except ValueError:
+            res.warnings.append(f"line {line_num}: bad integer in {raw_line!r}")
+            continue
+        res.rows.append(JumpstartRow(
+            file_name=file_name,
+            theme="",
+            qty_kept_assembled=qk,
+            qty_deconstructed=qd,
+            raw=f"line {line_num}: {file_name} K:{qk} D:{qd}",
+        ))
+    return res
+
+
+def _coerce_qty(raw, row_num: int, col: str, res) -> int:
     if raw is None or (isinstance(raw, str) and not raw.strip()):
         return 0
     try:

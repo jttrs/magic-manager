@@ -98,6 +98,16 @@ def deck_list(*, set_code: str | None = None) -> list[dict]:
     return rows
 
 
+def jumpstart_variants(set_code: str) -> list[dict]:
+    """DeckList entries for a set's Jumpstart pack variants.
+
+    Filter of ``deck_list(set_code=...)`` to ``type == 'Jumpstart'``. Sets
+    like TLE/J25/JMP/J22 publish 50+ variants; sets without Jumpstart product
+    return ``[]``.
+    """
+    return [d for d in deck_list(set_code=set_code) if d.get("type") == "Jumpstart"]
+
+
 # ---------- staleness + cache management ----------
 
 def is_stale(resource_path: str) -> bool:

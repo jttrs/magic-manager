@@ -481,9 +481,31 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
 
 
 def read_master_list_meta(path: Path) -> dict | None:
-    """Read the ``_meta`` sheet from a master-list XLSX. Returns the dict
-    of key/value strings, or ``None`` if the sheet is absent.
+    """Read the ``_meta`` sheet (XLSX) or YAML frontmatter (MD) from a
+    checklist file. Returns the dict of key/value strings, or ``None`` if no
+    metadata is present.
+
+    Works for both inventory checklists and Jumpstart checklists — the meta
+    shape differs but the read is the same.
     """
+    suffix = path.suffix.lower()
+    if suffix == ".md":
+        text = path.read_text(encoding="utf-8")
+        if not (text.startswith("---\n") or text.startswith("---\r\n")):
+            return None
+        end = text.find("\n---\n", 4)
+        if end == -1:
+            end = text.find("\n---\r\n", 4)
+        if end == -1:
+            return None
+        out: dict[str, str] = {}
+        for line in text[4:end].splitlines():
+            if ":" not in line:
+                continue
+            k, _, v = line.partition(":")
+            out[k.strip()] = v.strip()
+        return out or None
+
     from openpyxl import load_workbook
 
     wb = load_workbook(filename=str(path), data_only=True)
@@ -927,3 +949,348 @@ def write_master_list_md(set_codes: Iterable[str], out_path: Path,
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text("\n".join(out_lines) + "\n", encoding="utf-8")
     return (len(rows), cells_prefilled)
+
+
+# ---------- Jumpstart pack-level checklist (kind=jumpstart) ----------
+
+# A "jumpstart variant" is one MTGJSON deck file describing a sealed pack's
+# 15-card content list (e.g. ``Toph_TLE``). Sets like TLE/J25/JMP/J22 publish
+# 50+ variants. The user fills in two qty columns per row:
+#   - ``qty_kept_assembled`` → creates that many `pack:*` deck rows
+#   - ``qty_deconstructed``  → adds the variant's cards to inventory only
+# Both can be filled on the same row (e.g. opened 3 packs, kept 2 assembled,
+# broke 1 down for parts).
+
+def _jumpstart_variant_summary(variant_meta: dict) -> dict:
+    """Fetch one variant's MTGJSON deck file and roll up displayable stats.
+
+    Returns ``{"file_name", "theme", "card_count", "usd_total"}``. Pulls
+    Scryfall USD per scryfall_id from the local cards table to compute
+    ``usd_total`` (nonfoil price × count); printings missing from cards are
+    skipped silently — user can still ingest, the totals just under-report.
+    """
+    from . import mtgjson as mtgjson_mod
+    file_name = variant_meta["fileName"]
+    deck_data = mtgjson_mod.deck(file_name)
+    sids: list[tuple[str, int, bool]] = []  # (scryfall_id, count, is_foil)
+    total_count = 0
+    for board_key in ("commander", "mainBoard", "sideBoard"):
+        for entry in deck_data.get(board_key) or []:
+            sid = (entry.get("identifiers") or {}).get("scryfallId")
+            count = int(entry.get("count", 1) or 1)
+            total_count += count
+            if sid:
+                sids.append((sid, count, bool(entry.get("isFoil"))))
+
+    usd_total = 0.0
+    if sids:
+        with db.connect() as conn:
+            placeholders = ",".join("?" for _ in sids)
+            rows = {
+                r["scryfall_id"]: (r["prices_usd"], r["prices_usd_foil"])
+                for r in conn.execute(
+                    f"SELECT scryfall_id, prices_usd, prices_usd_foil "
+                    f"FROM cards WHERE scryfall_id IN ({placeholders})",
+                    [s[0] for s in sids],
+                ).fetchall()
+            }
+        for sid, count, is_foil in sids:
+            prices = rows.get(sid)
+            if not prices:
+                continue
+            price = prices[1] if is_foil else prices[0]
+            if price is not None:
+                usd_total += float(price) * count
+    return {
+        "file_name": file_name,
+        "theme": variant_meta.get("name") or file_name,
+        "card_count": total_count,
+        "usd_total": round(usd_total, 2) if usd_total else None,
+    }
+
+
+def _build_jumpstart_rows(set_code: str) -> list[dict]:
+    """Enumerate Jumpstart variants for ``set_code`` and roll each one up."""
+    from . import mtgjson as mtgjson_mod
+    variants = mtgjson_mod.jumpstart_variants(set_code)
+    if not variants:
+        return []
+    return [_jumpstart_variant_summary(v) for v in
+            sorted(variants, key=lambda d: d.get("name") or d.get("fileName") or "")]
+
+
+def write_jumpstart_list_xlsx(set_code: str, out_path: Path,
+                              *, slug: str | None = None) -> int:
+    """Emit a fillable XLSX of every Jumpstart pack variant for ``set_code``.
+
+    Row schema: file_name | theme | card_count | usd_total | qty_kept_assembled | qty_deconstructed
+
+    Hidden ``_meta`` sheet declares ``kind=jumpstart`` so ingest can dispatch
+    the correct branch. Returns ``rows_written``.
+    """
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+    from openpyxl.worksheet.datavalidation import DataValidation
+
+    from . import __version__
+
+    rows = _build_jumpstart_rows(set_code)
+    if not rows:
+        raise ValueError(
+            f"no Jumpstart variants found for set {set_code!r}. "
+            f"Check `mm mtgjson decks --set {set_code}` for available decks."
+        )
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "checklist"
+
+    headers = ["file_name", "theme", "card_count", "usd_total",
+               "qty_kept_assembled", "qty_deconstructed"]
+    ws.append(headers)
+    for col, _ in enumerate(headers, start=1):
+        cell = ws.cell(row=1, column=col)
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(horizontal="left")
+
+    qty_fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
+    int_validator = DataValidation(type="whole", operator="greaterThanOrEqual",
+                                   formula1=0, allow_blank=True)
+    int_validator.error = "Enter a non-negative integer (or leave blank for 0)."
+    int_validator.errorTitle = "Invalid quantity"
+    ws.add_data_validation(int_validator)
+
+    for r in rows:
+        ws.append([
+            r["file_name"],
+            r["theme"],
+            r["card_count"],
+            r["usd_total"],
+            None,
+            None,
+        ])
+    last_row = ws.max_row
+
+    for col_idx in (5, 6):
+        col_letter = get_column_letter(col_idx)
+        rng = f"{col_letter}2:{col_letter}{last_row}"
+        int_validator.add(rng)
+        for r in range(2, last_row + 1):
+            ws.cell(row=r, column=col_idx).fill = qty_fill
+
+    for row_idx in range(2, last_row + 1):
+        ws.cell(row=row_idx, column=4).number_format = '"$"#,##0.00'
+
+    widths = {1: 22, 2: 24, 3: 11, 4: 11, 5: 19, 6: 18}
+    for col_idx, w in widths.items():
+        ws.column_dimensions[get_column_letter(col_idx)].width = w
+
+    ws.freeze_panes = "A2"
+
+    meta_ws = wb.create_sheet("_meta")
+    meta_ws.sheet_state = "hidden"
+    meta_ws.append(["key", "value"])
+    meta_ws["A1"].font = Font(bold=True)
+    meta_ws["B1"].font = Font(bold=True)
+
+    code = set_code.lower()
+    meta = {
+        # `kind` is the dispatch key for `mm set ingest`. New value 'jumpstart'
+        # routes to the Jumpstart importer; existing values 'inventory' and
+        # 'missing' route to their own paths.
+        "kind": "jumpstart",
+        "anchor_code": code,
+        "set_codes": code,
+        "slug": slug or out_path.stem,
+        "mode": "add",
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "magic_manager_version": __version__,
+    }
+    for k, v in meta.items():
+        meta_ws.append([k, v])
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    wb.save(out_path)
+    return last_row - 1
+
+
+def write_jumpstart_list_md(set_code: str, out_path: Path,
+                            *, slug: str | None = None) -> int:
+    """Markdown twin of ``write_jumpstart_list_xlsx``.
+
+    Line shape (after YAML frontmatter):
+
+        - Toph_TLE — Toph — 15 cards — $4.20 [K:0 D:0]
+
+    Parser keys on the leading file_name token, so prose changes don't break
+    ingest. The ``[K:k D:k]`` brackets are kept_assembled and deconstructed.
+    """
+    from . import __version__
+
+    rows = _build_jumpstart_rows(set_code)
+    if not rows:
+        raise ValueError(
+            f"no Jumpstart variants found for set {set_code!r}. "
+            f"Check `mm mtgjson decks --set {set_code}` for available decks."
+        )
+
+    code = set_code.lower()
+    meta = {
+        "kind": "jumpstart",
+        "anchor_code": code,
+        "set_codes": code,
+        "slug": slug or out_path.stem,
+        "mode": "add",
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "magic_manager_version": __version__,
+    }
+
+    out_lines: list[str] = ["---"]
+    for k, v in meta.items():
+        out_lines.append(f"{k}: {v}")
+    out_lines.append("---")
+    out_lines.append("")
+    out_lines.append(f"# {code.upper()} Jumpstart variants ({len(rows)} packs)")
+    out_lines.append("")
+    out_lines.append(
+        "Edit the `[K:k D:k]` brackets per row: `K` = kept-assembled packs "
+        "(creates `pack:*` deck rows), `D` = deconstructed packs (cards added "
+        "to inventory only). Save, then run `mm set ingest` to apply."
+    )
+    out_lines.append("")
+    for r in rows:
+        usd = r["usd_total"]
+        usd_seg = f"${usd:.2f}" if usd is not None else "—"
+        out_lines.append(
+            f"- {r['file_name']} — {r['theme']} — {r['card_count']} cards — "
+            f"{usd_seg} [K:0 D:0]"
+        )
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text("\n".join(out_lines) + "\n", encoding="utf-8")
+    return len(rows)
+
+
+def _slug_theme(theme: str, set_code: str) -> str:
+    """Build a deck slug for a Jumpstart pack: ``pack:<theme>-<setcode>``."""
+    raw_theme = "".join(c if c.isalnum() else "-" for c in theme.lower())
+    while "--" in raw_theme:
+        raw_theme = raw_theme.replace("--", "-")
+    raw_theme = raw_theme.strip("-")
+    return f"pack:{raw_theme}-{set_code.lower()}"
+
+
+def ingest_jumpstart_from_path(path: Path) -> dict:
+    """Apply a filled-in Jumpstart checklist to the local DB.
+
+    For each row with ``qty_kept_assembled > 0``, creates that many ``pack:*``
+    deck rows (format='jumpstart') and adds the variant's cards to inventory
+    (existing ``import_precon`` machinery). For each row with
+    ``qty_deconstructed > 0``, runs ``import_precon(deconstruct=True)`` so
+    the cards land in inventory without creating a deck.
+
+    Returns a summary:
+      - ``rows_total`` (int): rows present in the file
+      - ``rows_acted`` (int): rows with at least one filled qty column
+      - ``packs_created`` (int): total ``pack:*`` deck rows created
+      - ``packs_deconstructed`` (int): total deconstructed pack-copies
+      - ``inv_qty_total`` (int): cumulative card-qty added to inventory
+      - ``per_row``: list of ``{"file_name", "kept", "deconstructed",
+        "slugs": [...], "missing_sids": [...], "error": str|None}``
+      - ``warnings`` (list[str]): non-fatal parse/lookup warnings
+    """
+    from . import decks as decks_mod, mtgjson as mtgjson_mod
+    from . import parsers
+    from pathlib import Path as _Path
+
+    path = _Path(path)
+    suffix = path.suffix.lower()
+    if suffix in (".xlsx",):
+        parsed = parsers.parse_jumpstart_list_xlsx(path)
+    elif suffix in (".md",):
+        parsed = parsers.parse_jumpstart_list_md(path)
+    else:
+        raise ValueError(f"unsupported jumpstart-list extension: {suffix!r}")
+
+    meta = parsed.meta or {}
+    set_code = (meta.get("set_codes") or meta.get("anchor_code") or "").lower()
+    if not set_code:
+        # Fall back to inferring from a fileName like ``Toph_TLE`` if _meta is
+        # missing. Unlikely but cheap to support.
+        for r in parsed.rows:
+            if "_" in r.file_name:
+                set_code = r.file_name.rsplit("_", 1)[1].lower()
+                break
+    if not set_code:
+        raise ValueError("could not determine set_code from checklist _meta or rows")
+
+    summary: dict = {
+        "rows_total": len(parsed.rows),
+        "rows_acted": 0,
+        "packs_created": 0,
+        "packs_deconstructed": 0,
+        "inv_qty_total": 0,
+        "per_row": [],
+        "warnings": list(parsed.warnings),
+    }
+
+    for row in parsed.rows:
+        if row.qty_kept_assembled <= 0 and row.qty_deconstructed <= 0:
+            continue
+        summary["rows_acted"] += 1
+        per_row: dict = {
+            "file_name": row.file_name,
+            "theme": row.theme,
+            "kept": row.qty_kept_assembled,
+            "deconstructed": row.qty_deconstructed,
+            "slugs": [],
+            "missing_sids": [],
+            "error": None,
+        }
+
+        # Resolve theme from MTGJSON when the parser couldn't capture it (md path).
+        theme_for_slug = row.theme
+        if not theme_for_slug:
+            try:
+                deck_data = mtgjson_mod.deck(row.file_name)
+                theme_for_slug = deck_data.get("name") or row.file_name
+            except mtgjson_mod.MtgJsonError as e:
+                per_row["error"] = f"could not fetch deck JSON: {e}"
+                summary["per_row"].append(per_row)
+                continue
+
+        base_slug = _slug_theme(theme_for_slug, set_code)
+
+        try:
+            if row.qty_kept_assembled > 0:
+                r = decks_mod.import_precon(
+                    row.file_name,
+                    slug=base_slug,
+                    format="jumpstart",
+                    copies=row.qty_kept_assembled,
+                    add_inventory=True,
+                    deconstruct=False,
+                )
+                per_row["slugs"].extend(r["effective_slugs"])
+                per_row["missing_sids"].extend(r["missing_sids"])
+                summary["packs_created"] += len(r["effective_slugs"])
+                summary["inv_qty_total"] += r["inv_qty_total"]
+
+            if row.qty_deconstructed > 0:
+                r = decks_mod.import_precon(
+                    row.file_name,
+                    slug=base_slug,  # not used in deconstruct path
+                    format="jumpstart",
+                    copies=row.qty_deconstructed,
+                    add_inventory=True,
+                    deconstruct=True,
+                )
+                per_row["missing_sids"].extend(r["missing_sids"])
+                summary["packs_deconstructed"] += row.qty_deconstructed
+                summary["inv_qty_total"] += r["inv_qty_total"]
+        except (mtgjson_mod.MtgJsonError, ValueError) as e:
+            per_row["error"] = str(e)
+
+        summary["per_row"].append(per_row)
+
+    return summary

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from . import db
+from . import db, inventory as inv_mod, mtgjson as mtgjson_mod
 
 
 # Allowed values mirror the V4 CHECK constraints on ``deck_cards``.
@@ -450,3 +450,137 @@ def deck_set_card(
         )
         _touch_deck(conn, deck_id)
     return {"action": action, "old_count": old_count, "new_count": count}
+
+
+# ---------- precon / pack import ----------
+
+# MTGJSON deck JSON has these board keys; map to our V4 ``deck_cards.board``.
+_BOARD_KEY_TO_NAME = (
+    ("commander", "commander"),
+    ("mainBoard", "main"),
+    ("sideBoard", "side"),
+)
+
+
+def _slug(s: str) -> str:
+    raw = "".join(c if c.isalnum() else "-" for c in s.lower())
+    while "--" in raw:
+        raw = raw.replace("--", "-")
+    return raw.strip("-")
+
+
+def import_precon(
+    file_name: str,
+    *,
+    slug: str | None = None,
+    name: str | None = None,
+    format: str | None = None,
+    copies: int = 1,
+    add_inventory: bool = True,
+    deconstruct: bool = False,
+) -> dict:
+    """Import an MTGJSON precon (or Jumpstart pack — same shape) into the DB.
+
+    Returns a summary dict with these fields:
+      - ``deck_name``       (str) display name used
+      - ``effective_slugs`` (list[str]) deck slugs created (empty under deconstruct)
+      - ``deck_added``      (int) deck_cards rows inserted
+      - ``deck_updated``    (int) deck_cards rows updated
+      - ``deck_card_qty``   (int) total card-qty written across deck_cards
+      - ``inv_added``       (int) inventory rows inserted
+      - ``inv_updated``     (int) inventory rows updated
+      - ``inv_qty_total``   (int) total card-qty added to inventory
+      - ``inv_distinct``    (int) distinct (printing, finish) pairs touched
+      - ``copies``          (int) copies parameter (preserved for caller)
+      - ``missing_sids``    (list[dict]) entries with no scryfallId, skipped
+
+    Raises:
+      - ``mtgjson_mod.MtgJsonError`` if the deck JSON cannot be fetched
+      - ``ValueError`` if the slug cannot be derived or already exists
+
+    Slug & format:
+      - If ``slug`` is None, derived from ``name`` or the MTGJSON deck name.
+      - For ``copies > 1``, copies 2..N get ``-2``, ``-3``, ... suffixes.
+      - If ``format`` is None, defaults to ``'commander'`` when the MTGJSON
+        deck type starts with 'commander', else None. Pass ``'jumpstart'``
+        explicitly for sealed-pack imports.
+    """
+    deck_data = mtgjson_mod.deck(file_name)
+
+    deck_name = name or deck_data.get("name") or file_name
+    base_slug = slug or _slug(deck_name)
+    if not base_slug:
+        raise ValueError(
+            f"could not derive slug from name {deck_name!r}; pass slug= explicitly"
+        )
+
+    # Decide effective slugs (one per copy), checking collisions up-front.
+    effective_slugs: list[str] = []
+    if not deconstruct:
+        for i in range(copies):
+            s = base_slug if i == 0 else f"{base_slug}-{i+1}"
+            if deck_get(s) is not None:
+                raise ValueError(
+                    f"deck slug {s!r} already exists; pass slug= override "
+                    f"or delete the existing deck first"
+                )
+            effective_slugs.append(s)
+
+    # Create deck rows (skipped under deconstruct).
+    fmt = format
+    if fmt is None:
+        fmt = "commander" if deck_data.get("type", "").lower().startswith("commander") else None
+    for s in effective_slugs:
+        deck_create(s, deck_name, format=fmt)
+
+    # Walk boards: write deck_cards + accumulate inventory aggregates.
+    deck_added = deck_updated = 0
+    deck_card_qty = 0
+    inv_aggregate: dict[tuple[str, str], int] = {}
+    missing_sids: list[dict] = []
+    for mj_key, board_name in _BOARD_KEY_TO_NAME:
+        for entry in deck_data.get(mj_key, []) or []:
+            sid = (entry.get("identifiers") or {}).get("scryfallId")
+            if not sid:
+                missing_sids.append({
+                    "name": entry.get("name"),
+                    "set": entry.get("setCode"),
+                    "cn": entry.get("number"),
+                    "board": board_name,
+                })
+                continue
+            count = int(entry.get("count", 1) or 1)
+            finish = "foil" if entry.get("isFoil") else "nonfoil"
+            for s in effective_slugs:
+                r = deck_add_card(s, sid, board_name, finish, count)
+                deck_card_qty += count
+                if r["action"] == "inserted":
+                    deck_added += 1
+                else:
+                    deck_updated += 1
+            inv_aggregate[(sid, finish)] = inv_aggregate.get((sid, finish), 0) + count * copies
+
+    inv_added = inv_updated = 0
+    inv_qty_total = 0
+    if add_inventory:
+        for (sid, finish), qty in inv_aggregate.items():
+            r = inv_mod.inventory_add(sid, finish, qty)
+            inv_qty_total += qty
+            if r["action"] == "inserted":
+                inv_added += 1
+            else:
+                inv_updated += 1
+
+    return {
+        "deck_name": deck_name,
+        "effective_slugs": effective_slugs,
+        "deck_added": deck_added,
+        "deck_updated": deck_updated,
+        "deck_card_qty": deck_card_qty,
+        "inv_added": inv_added,
+        "inv_updated": inv_updated,
+        "inv_qty_total": inv_qty_total,
+        "inv_distinct": len(inv_aggregate),
+        "copies": copies,
+        "missing_sids": missing_sids,
+    }

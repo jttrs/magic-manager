@@ -360,6 +360,215 @@ def set_master_list(
     typer.echo(f"  2. When done: mm set ingest {name_or_code!r}  (auto-detects mode={mode} from _meta)")
 
 
+@set_app.command("jumpstart-list")
+def set_jumpstart_list(
+    set_code: str = typer.Argument(
+        ...,
+        help="Jumpstart set code: tle, j25, j22, jmp, etc. The set itself "
+             "must publish Jumpstart variants in MTGJSON (run "
+             "`mm mtgjson decks --set <CODE>` to confirm).",
+    ),
+    out: Path = typer.Option(
+        None, "--out",
+        help="Override output path. When set, collision detection is skipped.",
+    ),
+    force: bool = typer.Option(
+        False, "--force",
+        help="Overwrite an existing Jumpstart checklist without prompting.",
+    ),
+    fmt: str = typer.Option(
+        "xlsx", "--format",
+        help="Output format: 'xlsx' (default) or 'md' (markdown).",
+    ),
+):
+    """Build a pack-level checklist of every Jumpstart variant for a set.
+
+    One row per sealed-pack variant (e.g. ~66 rows for TLE). Two qty columns:
+    ``qty_kept_assembled`` (creates ``pack:*`` deck rows holding the variant's
+    cards) and ``qty_deconstructed`` (cards added to inventory only — pack
+    is broken down for parts). Both can be filled on the same row.
+
+    Complements ``mm set master-list``: that one is per-card across the whole
+    family, this one is per-pack inside one Jumpstart set. Use this when
+    you've opened sealed product and want to ingest whole packs at once.
+    """
+    fmt = fmt.lower()
+    if fmt not in ("xlsx", "md"):
+        typer.echo(f"error: --format must be 'xlsx' or 'md', got {fmt!r}", err=True)
+        raise typer.Exit(2)
+
+    code = set_code.lower()
+    # The slug embeds 'jumpstart' so the filename is self-describing on disk
+    # (Finder/cmux don't show _meta) and never collides with a master-list
+    # checklist for the same code.
+    slug = f"{code}-jumpstart"
+    out_path = out or (CHECKLISTS_DIR / f"{slug}-checklist.{fmt}")
+
+    if out is None and out_path.exists() and not force:
+        typer.echo(f"refusing to overwrite existing Jumpstart checklist: {out_path}", err=True)
+        typer.echo("", err=True)
+        typer.echo("To proceed, either:", err=True)
+        typer.echo(f"  - Finish editing the existing file, then: mm set ingest --path {out_path}", err=True)
+        typer.echo(f"  - Discard partial edits and regenerate: mm set jumpstart-list {set_code} --force", err=True)
+        raise typer.Exit(EXIT_UNPROCESSED_INTAKE)
+
+    # Sync the set's cards so usd_total roll-ups have prices to pull from
+    # AND the eventual ingest can resolve every scryfall_id locally. Jumpstart
+    # variants for a set like TLE include prints from BOTH the set itself AND
+    # its parent expansion (TLA), so sync the family.
+    try:
+        r, codes = _resolve_codes(set_code, include_kinds=[], only=[])
+    except (LookupError, typer.BadParameter) as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+    typer.echo(f"Syncing {len(codes)} set(s) (Jumpstart contents may span the family): {' '.join(codes)}")
+    n_synced = sets_mod.sync(codes)
+    typer.echo(f"  → {n_synced} cards upserted")
+
+    if force and out_path.exists():
+        typer.echo(f"  ! --force: overwriting {out_path}", err=True)
+
+    writer = (
+        sets_mod.write_jumpstart_list_md if fmt == "md"
+        else sets_mod.write_jumpstart_list_xlsx
+    )
+    try:
+        n_rows = writer(code, out_path, slug=slug)
+    except ValueError as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+    typer.echo(f"Wrote {n_rows} Jumpstart variant rows to {out_path}")
+    typer.echo()
+    typer.echo("Next steps:")
+    if fmt == "md":
+        typer.echo(f"  1. Open {out_path} in any text editor and edit `[K:k D:k]` quantities.")
+    else:
+        typer.echo(f"  1. Open {out_path} in Excel/Numbers — fill in qty_kept_assembled / qty_deconstructed.")
+    typer.echo(f"  2. When done: mm set ingest --path {out_path}")
+
+
+def _ingest_jumpstart(src: Path, *, sha: str, force: bool, json_out: bool) -> None:
+    """Apply a Jumpstart checklist (kind=jumpstart). Branches off ``mm set
+    ingest`` when the file's _meta says it's a pack-level checklist.
+
+    Logs an ingest_log row with label ``jumpstart:<setcode>``, archives the
+    file under processed/. Mirrors the duplicate-detection + archive shape of
+    the inventory ingest path so both kinds of checklist look the same on
+    disk.
+    """
+    with db.connect() as conn:
+        prior = db.find_ingest_log_by_hash(conn, sha)
+    prior_success = next((p for p in prior if p["status"] == "success"), None)
+    if prior_success and not force:
+        msg = (
+            f"this file's SHA-256 matches a previous successful ingest "
+            f"(log id {prior_success['id']}, "
+            f"mode {prior_success['mode']}, at {prior_success['at']})."
+        )
+        if json_out:
+            json.dump({
+                "status": "duplicate",
+                "file": str(src),
+                "sha256": sha,
+                "prior_log": prior_success,
+                "message": msg,
+            }, sys.stdout, indent=2)
+            sys.stdout.write("\n")
+        else:
+            typer.echo(f"refusing to re-ingest: {msg}", err=True)
+            typer.echo("  pass --force to proceed.", err=True)
+        raise typer.Exit(EXIT_DUPLICATE_INGEST)
+
+    error: str | None = None
+    summary: dict | None = None
+    try:
+        summary = sets_mod.ingest_jumpstart_from_path(src)
+    except Exception as e:
+        error = repr(e)
+
+    archived: Path | None = None
+    if summary is not None:
+        # Jumpstart checklists use a flat naming pattern: <setcode>-jumpstart-checklist.<ext>
+        # Archive with timestamp under processed/ so re-runs don't collide.
+        ext = src.suffix.lstrip(".") or "xlsx"
+        when = datetime.now()
+        archived = PROCESSED_DIR / f"{src.stem}-{when:%Y-%m-%d-%H%M%S}.{ext}"
+        archived.parent.mkdir(parents=True, exist_ok=True)
+        src.rename(archived)
+
+    meta = sets_mod.read_master_list_meta(archived or src) or {}
+    set_code = meta.get("anchor_code") or meta.get("set_codes") or "?"
+    log_label = f"jumpstart:{set_code}"
+    rows_added = (summary or {}).get("packs_created", 0)
+    rows_updated = (summary or {}).get("packs_deconstructed", 0)
+    with db.connect() as conn:
+        db.record_ingest_log(
+            conn,
+            label=log_label,
+            # Jumpstart ingest is semantically additive (only adds packs +
+            # inventory; never zeroes). The ``label`` already encodes
+            # ``jumpstart:`` so this row is distinguishable from inventory
+            # ingests sharing the same mode.
+            mode="additive",
+            source_path=str(src),
+            archived_path=str(archived) if archived else None,
+            file_sha256=sha,
+            rows_added=rows_added,
+            rows_updated=rows_updated,
+            rows_zeroed=0,
+            status="success" if error is None else "failed",
+            error=error,
+        )
+
+    if json_out:
+        out = {
+            "status": "success" if error is None else "failed",
+            "file": str(src),
+            "archived_path": str(archived) if archived else None,
+            "kind": "jumpstart",
+            "set_code": set_code,
+            "sha256": sha,
+            "summary": summary,
+            "error": error,
+        }
+        json.dump(out, sys.stdout, indent=2, default=str)
+        sys.stdout.write("\n")
+        if error is not None:
+            raise typer.Exit(2)
+        return
+
+    if error is not None:
+        typer.echo(f"error: jumpstart ingest failed: {error}", err=True)
+        raise typer.Exit(2)
+
+    typer.echo(
+        f"Jumpstart ({set_code}): "
+        f"{summary['rows_acted']}/{summary['rows_total']} rows acted on, "
+        f"{summary['packs_created']} packs created, "
+        f"{summary['packs_deconstructed']} packs deconstructed, "
+        f"{summary['inv_qty_total']} card-qty added to inventory."
+    )
+    for row in summary["per_row"]:
+        if row["error"]:
+            typer.echo(f"  ! {row['file_name']}: {row['error']}", err=True)
+            continue
+        bits = []
+        if row["kept"] > 0:
+            bits.append(f"kept {row['kept']} → {', '.join(row['slugs']) or '(no decks)'}")
+        if row["deconstructed"] > 0:
+            bits.append(f"deconstructed {row['deconstructed']}")
+        typer.echo(f"  {row['file_name']} ({row['theme']}): {'; '.join(bits)}")
+        if row["missing_sids"]:
+            typer.echo(
+                f"    warning: {len(row['missing_sids'])} entries had no scryfallId",
+                err=True,
+            )
+    for w in summary["warnings"]:
+        typer.echo(f"  warning: {w}", err=True)
+    if archived:
+        typer.echo(f"Archived Jumpstart checklist → {archived}")
+
+
 @set_app.command("ingest")
 def set_ingest(
     name_or_code: str = typer.Argument(
@@ -463,6 +672,12 @@ def set_ingest(
                 typer.echo(f"  - {c}", err=True)
             raise typer.Exit(2)
         src = candidates[0]
+
+    # ---- kind dispatch: 'jumpstart' checklists go to a separate import path ----
+    early_meta = sets_mod.read_master_list_meta(src) or {}
+    if early_meta.get("kind") == "jumpstart":
+        _ingest_jumpstart(src, sha=_file_sha256(src), force=force, json_out=json_out)
+        return
 
     # ---- Mode resolution: auto-detect from _meta.mode, reconcile with --mode ----
     # Read _meta unconditionally now (the path-resolution branches above may
@@ -1060,13 +1275,6 @@ def deck_value_cmd(slug: str = typer.Argument(...)):
             typer.echo(f"  {name} ({set_code.upper()}) {cn} [{finish}]")
 
 
-_BOARD_KEY_TO_NAME = (
-    ("commander", "commander"),
-    ("mainBoard", "main"),
-    ("sideBoard", "side"),
-)
-
-
 @deck_app.command("import-precon")
 def deck_import_precon_cmd(
     file_name: str = typer.Argument(
@@ -1104,96 +1312,46 @@ def deck_import_precon_cmd(
     cached after first fetch.
     """
     try:
-        deck_data = mtgjson_mod.deck(file_name)
+        result = decks_mod.import_precon(
+            file_name,
+            slug=slug,
+            name=name,
+            copies=copies,
+            add_inventory=add_inventory,
+            deconstruct=deconstruct,
+        )
     except mtgjson_mod.MtgJsonError as e:
         typer.echo(f"error: could not fetch MTGJSON precon {file_name!r}: {e}", err=True)
         raise typer.Exit(2)
-
-    deck_name = name or deck_data.get("name") or file_name
-    base_slug = slug or _slug(deck_name)
-    if not base_slug:
-        typer.echo(f"error: could not derive slug from name {deck_name!r}; pass --slug", err=True)
+    except ValueError as e:
+        typer.echo(f"error: {e}", err=True)
         raise typer.Exit(2)
 
-    # --- 1. Decide effective slugs (one per copy), checking collisions up-front. ---
-    effective_slugs: list[str] = []
-    if not deconstruct:
-        for i in range(copies):
-            s = base_slug if i == 0 else f"{base_slug}-{i+1}"
-            if decks_mod.deck_get(s) is not None:
-                typer.echo(
-                    f"error: deck slug {s!r} already exists. Pass --slug to override "
-                    f"or `mm deck delete {s}` to remove the existing deck first.",
-                    err=True,
-                )
-                raise typer.Exit(2)
-            effective_slugs.append(s)
-
-    # --- 2. Create deck rows (skipped under --deconstruct). ---
-    fmt = "commander" if deck_data.get("type", "").lower().startswith("commander") else None
-    for s in effective_slugs:
-        decks_mod.deck_create(s, deck_name, format=fmt)
-
-    # --- 3. Walk boards, write deck_cards rows + accumulate inventory aggregates. ---
-    deck_added = deck_updated = 0
-    deck_card_qty = 0
-    inv_aggregate: dict[tuple[str, str], int] = {}  # (scryfall_id, finish) → qty across all boards × copies
-    missing_sids: list[dict] = []  # mtgjson entries with no scryfallId
-    for mj_key, board_name in _BOARD_KEY_TO_NAME:
-        for entry in deck_data.get(mj_key, []) or []:
-            sid = (entry.get("identifiers") or {}).get("scryfallId")
-            if not sid:
-                missing_sids.append({
-                    "name": entry.get("name"),
-                    "set": entry.get("setCode"),
-                    "cn": entry.get("number"),
-                    "board": board_name,
-                })
-                continue
-            count = int(entry.get("count", 1) or 1)
-            finish = "foil" if entry.get("isFoil") else "nonfoil"
-            for s in effective_slugs:
-                r = decks_mod.deck_add_card(s, sid, board_name, finish, count)
-                deck_card_qty += count
-                if r["action"] == "inserted":
-                    deck_added += 1
-                else:
-                    deck_updated += 1
-            inv_aggregate[(sid, finish)] = inv_aggregate.get((sid, finish), 0) + count * copies
-
-    # --- 4. Inventory aggregates (suppressed by --no-add-inventory or --deconstruct override). ---
-    inv_added = inv_updated = 0
-    inv_qty_total = 0
-    if add_inventory:
-        for (sid, finish), qty in inv_aggregate.items():
-            r = inv_mod.inventory_add(sid, finish, qty)
-            inv_qty_total += qty
-            if r["action"] == "inserted":
-                inv_added += 1
-            else:
-                inv_updated += 1
-
-    # --- 5. Summary. ---
+    deck_name = result["deck_name"]
+    effective_slugs = result["effective_slugs"]
     if deconstruct:
         typer.echo(
             f"Imported precon {deck_name!r} as INVENTORY ONLY (--deconstruct): "
-            f"{inv_added} new rows, {inv_updated} bumped, {inv_qty_total} total card-qty across "
-            f"{len(inv_aggregate)} distinct (printing, finish) entries × {copies} copies."
+            f"{result['inv_added']} new rows, {result['inv_updated']} bumped, "
+            f"{result['inv_qty_total']} total card-qty across "
+            f"{result['inv_distinct']} distinct (printing, finish) entries × {copies} copies."
         )
     else:
         slug_list = ", ".join(effective_slugs)
         typer.echo(
             f"Imported precon {deck_name!r} as {len(effective_slugs)} deck(s): {slug_list}. "
-            f"Deck rows: {deck_added} added, {deck_updated} updated ({deck_card_qty} total card-qty)."
+            f"Deck rows: {result['deck_added']} added, {result['deck_updated']} updated "
+            f"({result['deck_card_qty']} total card-qty)."
         )
         if add_inventory:
             typer.echo(
-                f"Inventory: {inv_added} new rows, {inv_updated} bumped "
-                f"({inv_qty_total} total card-qty)."
+                f"Inventory: {result['inv_added']} new rows, {result['inv_updated']} bumped "
+                f"({result['inv_qty_total']} total card-qty)."
             )
         else:
             typer.echo("Inventory: skipped (--no-add-inventory).")
 
+    missing_sids = result["missing_sids"]
     if missing_sids:
         typer.echo(
             f"warning: {len(missing_sids)} entries had no scryfallId and were skipped:",
