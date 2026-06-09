@@ -1810,6 +1810,49 @@ def _apply_preferred_post_filter(
     return out
 
 
+def _drop_meld_back_faces(
+    rows: list[sel_mod.MaterializedRow],
+    anchor_code: str,
+) -> list[sel_mod.MaterializedRow]:
+    """Drop rows whose card name has ALL its family printings on a 'b'-suffix
+    collector number — these are meld-back faces (not real products).
+
+    Heuristic: a meld card has two front halves (e.g. Fang + Vanille) plus
+    the merged back face (Ragnarok). Wizards prints the back face with the
+    same set + a CN like ``99b``, ``381b``, ``446b``, ``526b``. Scryfall
+    captures it as a separate ``cards`` row, but neither TCGplayer nor
+    ManaPool sells it as a standalone product — it's only obtained as the
+    back of one of the front-half printings.
+
+    The signal: every printing of the card name in the family has a CN
+    that ends in ``b``. Real cards with a 'b' variant (e.g. neon-ink
+    ``Traveling Chocobo`` 551b) ALSO have non-'b' siblings under the same
+    name, so they pass through. Robust across families without a per-set
+    allowlist.
+    """
+    if not rows:
+        return rows
+    try:
+        family_codes = set(sets_mod.resolve(anchor_code).all_codes)
+    except LookupError:
+        family_codes = {anchor_code}
+    placeholders = ",".join("?" for _ in family_codes)
+    with db.connect() as conn:
+        fam_rows = conn.execute(
+            f"SELECT name, collector_number "
+            f"FROM cards WHERE set_code IN ({placeholders})",
+            list(family_codes),
+        ).fetchall()
+    cns_by_name: dict[str, list[str]] = {}
+    for fr in fam_rows:
+        cns_by_name.setdefault(fr["name"], []).append(fr["collector_number"] or "")
+    meld_back_names = {
+        name for name, cns in cns_by_name.items()
+        if cns and all(cn.endswith("b") for cn in cns)
+    }
+    return [r for r in rows if r.card.get("name") not in meld_back_names]
+
+
 def _write_query_xlsx(
     rows: list[sel_mod.MaterializedRow],
     target: Path,
@@ -1980,6 +2023,14 @@ def query_missing_set_cmd(
     if treatment_class == "preferred":
         sub_rows["rare-regular"]   = _apply_preferred_post_filter(sub_rows["rare-regular"], code_l)
         sub_rows["mythic-regular"] = _apply_preferred_post_filter(sub_rows["mythic-regular"], code_l)
+
+    # 1b. Drop meld-back faces. Identified by: every printing of this card
+    # name in the family has a 'b' suffix on its collector number. Meld
+    # backs aren't sold as products on TCGplayer or ManaPool — they're the
+    # back face of a meld pair, only obtainable as part of the front-face
+    # printing.
+    for slug_key in list(sub_rows.keys()):
+        sub_rows[slug_key] = _drop_meld_back_faces(sub_rows[slug_key], code_l)
 
     for slug_key in sub_rows:
         for r in sub_rows[slug_key]:

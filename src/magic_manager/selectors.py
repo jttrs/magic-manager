@@ -367,7 +367,7 @@ def _materialize_term(term: Term) -> list[MaterializedRow]:
 _CARD_COLS = (
     "c.scryfall_id, c.name, c.flavor_name, c.set_code, c.collector_number, "
     "c.rarity, c.prices_usd, c.prices_usd_foil, c.cmc, c.type_line, c.mana_cost, "
-    "c.frame_effects, c.full_art, c.promo_types, "
+    "c.frame_effects, c.full_art, c.promo_types, c.border_color, "
     "c.colors, c.color_identity, c.is_promo, c.is_token, c.finishes"
 )
 
@@ -981,6 +981,7 @@ def _card_dict(row) -> dict:
         "frame_effects":    row["frame_effects"],
         "full_art":         row["full_art"],
         "promo_types":      row["promo_types"],
+        "border_color":     row["border_color"],
     }
 
 
@@ -1002,6 +1003,7 @@ def _card_dict_from_scryfall(c: dict) -> dict:
         "frame_effects":    c.get("frame_effects"),
         "full_art":         c.get("full_art"),
         "promo_types":      c.get("promo_types"),
+        "border_color":     c.get("border_color"),
     }
 
 
