@@ -316,7 +316,12 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
     if rarity_set is not None:
         rows = [r for r in rows if (r["rarity"] or "").lower() in rarity_set]
 
-    # Sort: rarity bucket, then collector_number (numeric where possible).
+    # Sort: set code asc, then collector_number asc (numeric where possible).
+    # Inventory checklists are *input* tools — the user fills them in while
+    # holding a physically-sorted pile of cards. Set+CN matches how MTG
+    # players sort cards on their desk; rarity grouping (the old order) made
+    # it harder to find any specific card. Output artifacts (missing-set,
+    # query reports) still sort rarity-first because they're for *reading*.
     def cn_sortkey(cn: str) -> tuple:
         m = re.match(r"^(\d+)(.*)$", cn or "")
         if m:
@@ -326,7 +331,6 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
     rows = sorted(
         rows,
         key=lambda r: (
-            RARITY_ORDER.get((r["rarity"] or "").lower(), 9),
             r["set_code"],
             cn_sortkey(r["collector_number"]),
         ),
@@ -840,6 +844,8 @@ def write_master_list_md(set_codes: Iterable[str], out_path: Path,
     if rarity_set is not None:
         rows = [r for r in rows if (r["rarity"] or "").lower() in rarity_set]
 
+    # Sort: set code asc, then collector_number asc. See the XLSX writer for
+    # why inventory checklists sort this way (input tool, not a report).
     def cn_sortkey(cn: str) -> tuple:
         m = re.match(r"^(\d+)(.*)$", cn or "")
         if m:
@@ -849,7 +855,6 @@ def write_master_list_md(set_codes: Iterable[str], out_path: Path,
     rows = sorted(
         rows,
         key=lambda r: (
-            RARITY_ORDER.get((r["rarity"] or "").lower(), 9),
             r["set_code"],
             cn_sortkey(r["collector_number"]),
         ),
@@ -892,18 +897,18 @@ def write_master_list_md(set_codes: Iterable[str], out_path: Path,
     out_lines.append("")
 
     cells_prefilled = 0
-    current_rarity = None
-    rarity_counts: dict[str, int] = {}
+    current_set = None
+    set_counts: dict[str, int] = {}
     for r in rows:
-        rarity_counts[r["rarity"] or "?"] = rarity_counts.get(r["rarity"] or "?", 0) + 1
+        set_counts[r["set_code"]] = set_counts.get(r["set_code"], 0) + 1
 
     from .treatments import compute_treatment, LEGEND
     for r in rows:
-        rarity = r["rarity"] or "?"
-        if rarity != current_rarity:
-            current_rarity = rarity
+        set_code = r["set_code"]
+        if set_code != current_set:
+            current_set = set_code
             out_lines.append("")
-            out_lines.append(f"## {rarity.title()} ({rarity_counts[rarity]} cards)")
+            out_lines.append(f"## {set_code.upper()} ({set_counts[set_code]} cards)")
             out_lines.append("")
 
         flavor = r["flavor_name"]
