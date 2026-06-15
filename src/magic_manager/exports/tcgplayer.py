@@ -177,10 +177,10 @@ def _is_basic_land(c: dict) -> bool:
 # first match in this dict wins (Python preserves insertion order). The
 # defaults below are conservative — only entries the user has confirmed.
 _PROMO_TYPE_TCG_SET = {
-    "bundle":   "UMP",
-    "buyabox":  "BABP",
-    # Likely additional remaps to surface as the user tests:
-    #   "playpromo":         ?  (LTR 299 Gandalf the White)
+    "bundle":    "UMP",   # confirmed: LTR 451 The One Ring (LTR Bundle)
+    "buyabox":   "BABP",  # confirmed: LTR 398 Lórien Brooch
+    "playpromo": "PTP",   # confirmed: LTR 299 Gandalf the White (Pro Tour Promos)
+    # Yet to confirm via empirical TCGplayer titles:
     #   "storechampionship": ?  (LTR 300 Saruman of Many Colors)
     #   "tourney":           ?  (LTR 301 Sauron, the Dark Lord)
 }
