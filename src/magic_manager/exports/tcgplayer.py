@@ -101,9 +101,26 @@ def build(rows) -> str:
 
     out = []
     for r in rows:
-        set_code = (r.card.get("set") or "").upper()
+        # Skip tokens. TCGplayer catalogs them as "Foo // Bar Double-Sided
+        # Token" with slashed CNs (e.g. "11 // 6"); the back-face data isn't
+        # part of our cards row. Excluding tokens from the export keeps the
+        # rest of the rows valid; the user can hand-add tokens if needed.
+        type_line = (r.card.get("type_line") or "")
+        if type_line.startswith("Token"):
+            continue
+        # TCGplayer files special-distribution promos under umbrella sets
+        # (UMP for bundle inserts, BABP for buy-a-box promos, etc.) rather
+        # than the parent expansion. The set-code in the Mass Entry line
+        # must match TCGplayer's catalog set, NOT Scryfall's.
+        scryfall_set = (r.card.get("set") or "").lower()
+        tcg_set = _tcg_set_remap(r.card)
+        set_code = (tcg_set or scryfall_set).upper()
         cn = r.card.get("collector_number") or ""
         base = _base_product_name(r.card)
+        # Strip combining accents — TCGplayer's product titles use ASCII
+        # equivalents (Lórien → Lorien, dûr → dur). The matcher rejects
+        # accented versions even when the underlying card is the same.
+        base = _strip_accents(base)
 
         # Insert (NNNN) when there's a same-set collision on the product-
         # name string OR when this is a basic land with any suffix. Basic
@@ -146,6 +163,48 @@ def _is_basic_land(c: dict) -> bool:
 # only known instance today is the Final Fantasy Traveling Chocobo 551
 # series, hand-mapped from the FIN catalog page. Add new entries here when
 # new sets ship neon-ink prints with multiple colors.
+# TCGplayer set-code remapping by promo_types. Some special-distribution
+# promos are filed under umbrella sets ("Unique and Miscellaneous Promos",
+# "Buy-A-Box Promos") rather than the Scryfall parent set. Mass Entry's
+# (SETCODE) bracket must match TCGplayer's set, not Scryfall's, or the row
+# is rejected as "card not found in this set."
+#
+# Empirically verified for LTR (2026-06-15):
+#   - LTR 451 The One Ring (bundle) → set UMP
+#   - LTR 398 Lórien Brooch (buyabox) → set BABP
+#
+# When a card has multiple promo_types that match different remaps, the
+# first match in this dict wins (Python preserves insertion order). The
+# defaults below are conservative — only entries the user has confirmed.
+_PROMO_TYPE_TCG_SET = {
+    "bundle":   "UMP",
+    "buyabox":  "BABP",
+    # Likely additional remaps to surface as the user tests:
+    #   "playpromo":         ?  (LTR 299 Gandalf the White)
+    #   "storechampionship": ?  (LTR 300 Saruman of Many Colors)
+    #   "tourney":           ?  (LTR 301 Sauron, the Dark Lord)
+}
+
+
+def _tcg_set_remap(c: dict) -> str | None:
+    """Return the TCGplayer set code if this card's promo_types map to one
+    of the umbrella sets, else None (caller falls back to Scryfall set).
+    """
+    for pt in _decode_list(c.get("promo_types")):
+        if pt in _PROMO_TYPE_TCG_SET:
+            return _PROMO_TYPE_TCG_SET[pt]
+    return None
+
+
+def _strip_accents(s: str) -> str:
+    """Replace combining-accent characters with their ASCII equivalents.
+    TCGplayer titles use 'Lorien' for Scryfall's 'Lórien', 'dur' for 'dûr'.
+    """
+    import unicodedata
+    nfkd = unicodedata.normalize("NFKD", s)
+    return "".join(ch for ch in nfkd if not unicodedata.combining(ch))
+
+
 _NEON_INK_COLORS = {
     ("fin", "551a"): "(Neon Ink Yellow)",
     ("fin", "551b"): "(Neon Ink Pink)",
@@ -274,13 +333,14 @@ def _treatment_token(c: dict) -> str | None:
 
     if set_code in _FAMILY_POLICY and _FAMILY_POLICY[set_code] is _LTR_POLICY:
         # LTR family compound treatment naming.
-        # Reskin lands (LTC 348-377): flavor_name set, borderless+inverted.
-        # TCGplayer files these as "<flavor> - <oracle>" with NO treatment
-        # suffix at all — the reskin form IS the canonical product. The
-        # surgefoil/doublerainbow variants of the same reskin (CN 378+, 378z)
-        # are filtered upstream as dupe-foils, so we don't need to emit a
-        # token for them either.
+        # Reskin lands split by silverfoil presence:
+        #   LTC 348-377 (no silverfoil): "<flavor> - <oracle>" with NO suffix
+        #   LTC 515-519 (silverfoil reskin): "<flavor> - <oracle> (Borderless)"
+        # TCGplayer treats the non-silverfoil reskin form as the canonical
+        # product and adds a suffix only when the sheet/foil distinguishes it.
         if flavor:
+            if "silverfoil" in promo_types:
+                return "(Borderless)"
             return None
         if border_color == "borderless" and "poster" in promo_types:
             return "(Borderless Poster)"
