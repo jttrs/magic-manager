@@ -252,7 +252,10 @@ def _collision_map(set_codes: set[str]) -> set[tuple[str, str]]:
             "frame_effects":    r["frame_effects"],
             "promo_types":      r["promo_types"],
         }
-        base = _base_product_name(d)
+        # Strip accents to match the form `build()` uses at lookup time.
+        # Otherwise the key 'Barad-dûr (Borderless)' won't match the
+        # post-strip lookup key 'Barad-dur (Borderless)'.
+        base = _strip_accents(_base_product_name(d))
         key = (r["set_code"].upper(), base)
         counts[key] = counts.get(key, 0) + 1
     return {k for k, n in counts.items() if n > 1}
@@ -287,8 +290,18 @@ _DEFAULT_POLICY = {
 
 _LTR_POLICY = {
     "reskin_showcase_suffix": False,
-    "basic_land_cn_prefix": False,
-    "collision_cn_prefix": False,
+    # Basic lands DO get the (NNNN) CN prefix when a foil-sheet suffix is
+    # present. Confirmed via Plains LTR 713 surgefoil: TCGplayer titles it
+    # "Plains (0713) (Surge Foil)" — same convention as FIN.
+    "basic_land_cn_prefix": True,
+    # Collision prefix IS used for LTR same-name same-treatment pairs.
+    # Confirmed via Barad-dur 340 vs 425 (both borderless inverted, no
+    # other distinguishing suffix → TCGplayer titles them "Barad-dur (0340)
+    # (Borderless)" and "Barad-dur (0425) (Borderless)"). Same for Minas
+    # Tirith 341/420. The earlier Aragorn 317/434/741 case avoided the
+    # prefix because each had a different suffix combination
+    # (Showcase / Borderless / Borderless Poster).
+    "collision_cn_prefix": True,
 }
 
 _FAMILY_POLICY: dict[str, dict] = {
@@ -402,7 +415,18 @@ def _base_product_name(c: dict) -> str:
     elif "serialized" in promo_types:
         foil_token = "(Serial Numbered)"
 
-    suffix_parts = [t for t in (treatment_token, foil_token) if t]
+    # Distribution-product qualifier (independent of treatment + foil).
+    # TCGplayer appends a "(<Set> Bundle)" / "(<Set> Buy-A-Box)" /
+    # "(<Set> Promo Pack)" suffix to identify which physical product
+    # contained the print, AFTER the treatment and foil tokens.
+    # Confirmed for LTR bundle: "The One Ring (Borderless) (LTR Bundle)"
+    # at TCGplayer set UMP. The set token in the suffix uses the Scryfall
+    # parent expansion code, NOT the remapped TCGplayer set code.
+    distribution_token: str | None = None
+    if "bundle" in promo_types:
+        distribution_token = f"({(c.get('set') or '').upper()} Bundle)"
+
+    suffix_parts = [t for t in (treatment_token, foil_token, distribution_token) if t]
     if suffix_parts:
         return f"{name} {' '.join(suffix_parts)}"
     return name
