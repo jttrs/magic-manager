@@ -61,21 +61,31 @@ The chat rendering is automatically capped at the URL table + file links — the
 
 ## New family protocol
 
-`treatment=preferred` requires per-family configuration in `selectors.FAMILY_DUPE_FOIL_PROMO_TYPES`. Each entry maps an anchor set code (e.g. `fin`) to a frozenset of `promo_types` strings that signal "same art, just on a fancy-foil sheet" — the dupe-foil markers for that family.
+The missing-set filter has **two configurable per-family knobs** in `src/magic_manager/selectors.py`. New families typically need both reviewed before `mm query missing-set <CODE>` produces useful output:
 
-For Final Fantasy: `{"surgefoil"}`. Chocobo-track foils are intentionally NOT in the set because they have unique art.
+1. **`FAMILY_DUPE_FOIL_PROMO_TYPES[anchor]`** — a frozenset of `promo_types` strings that signal "same art as a sibling, just on a fancy-foil sheet." Examples: FIN's `{"surgefoil"}`, LTR's `{"surgefoil", "doublerainbow"}`. Required for `treatment=preferred` — unconfigured anchors raise `SelectorParseError`.
 
-**When the user asks about a family that ISN'T configured**, the selector layer raises a clear error pointing at the missing config. The skill MUST NOT silently fall back to `collectible-alt` and pretend the answer is filtered correctly — the user explicitly does NOT want that.
+2. **`FAMILY_UNOBTAINABLE_RULES[anchor]`** — a list of rules describing prints the user has personally ruled out of their want list (rare distribution, narrow channels, personal taste). These are NOT dupes — the art is distinct — but the user won't shop for them. Each rule is a dict; supported conditions:
+   - `promo_types_all_of`: frozenset, all must be present (AND-of-tokens, e.g. LTR's `{"silverfoil", "scroll"}` for showcase scroll-frame prints)
+   - `promo_types_any_of`: frozenset, any one is enough
+   - `frame_effects_all_of`: frozenset
+   - `border_color`: string (e.g. `"yellow"`)
 
-The required protocol when this happens:
+   Rules within a family are OR'd; conditions within a rule are AND'd. Example: LTR has one rule excluding `{silverfoil, scroll}` co-occurrence prints.
 
-1. **Stop and tell the user** the family isn't configured. Quote the anchor code and the configured anchor list from the error message.
-2. **Run `mm query show 'set:<CODE>+related treatment=any-alt' --first 50`** (or similar) to surface a sample of fancy-foil prints in the new family.
-3. **Ask the user**, with concrete examples from step 2: which `promo_types` on these prints signal "same art, just on a fancy-foil sheet" vs "unique art that happens to come on a fancy-foil sheet"? Show specific cards (set + CN + promo_types + Scryfall image link if relevant) so the user can adjudicate visually.
-4. **Add the entry to `FAMILY_DUPE_FOIL_PROMO_TYPES`** in `src/magic_manager/selectors.py` based on the user's answer. Re-run `mm query missing-set <CODE>` to verify.
-5. **Memory**: update `memory/precon_workflow.md` or a new family-specific note if the user articulates a durable rule worth carrying forward (e.g. "any future Star Wars set will probably use `lightsaberfoil` similarly to FIN's surgefoil").
+**When the user asks about a family that's UNCONFIGURED for `FAMILY_DUPE_FOIL_PROMO_TYPES`**, the selector layer raises a clear error. The skill MUST NOT silently fall back to `collectible-alt` and pretend the filter is correct.
 
-Don't skip steps. The user's stated principle is "unique art I can't get any cheaper way" — the dupe-foil set is the only place where assistant judgment about visual identity intersects with set-specific data, and getting it wrong silently bakes errors into every subsequent missing-set query.
+The protocol when invoking missing-set on a new family:
+
+1. **Run `uv run python scripts/survey_treatment_signature.py <CODE>`** (added 2026-06-14). This prints: every promo_type frequency in the family, top co-occurrence pairs (catches AND-of-tokens treatments like LTR's silverfoil+scroll), and per-token examples with same-name siblings WITHOUT that token plus Scryfall URLs for visual comparison. Read the output before composing any user-facing question.
+2. **Tell the user** the family isn't configured yet, quote the survey's findings (top promo_types, co-occurrence patterns, sample URLs), and **ask them to adjudicate each candidate** with concrete examples. For each candidate, the question is one of three buckets:
+   - **(A) Same art as a sibling, fancy-foil sheet** → goes in `FAMILY_DUPE_FOIL_PROMO_TYPES`
+   - **(B) Distinct art, but the user won't shop for it** → goes in `FAMILY_UNOBTAINABLE_RULES`
+   - **(C) Distinct art, the user might shop for it** → leave out of both
+3. **Add the entries** to `selectors.py` based on the user's answers. Comment each entry with the example CN(s) and the user's reasoning so future readers (and future-you) understand the call.
+4. **Re-run `mm query missing-set <CODE>`** to verify. Compare the row count drop to the user's stated expectations.
+
+Don't skip the survey step — the per-token examples are how the user adjudicates visually without you guessing. The user has explicitly said memories are not as transparent as code/skills, so durable family-specific rules belong in `selectors.py` as commented config entries, not in memory files.
 
 ## Output format (what the user sees in chat)
 

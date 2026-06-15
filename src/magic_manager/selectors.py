@@ -79,23 +79,140 @@ FAMILY_DUPE_FOIL_PROMO_TYPES: dict[str, frozenset[str]] = {
     # Final Fantasy: surgefoil is "same art, fancy-foil sheet" (FIN 532-ish).
     # chocobotrackfoil is intentionally NOT here — it marks unique art (FIN 564 etc.).
     "fin": frozenset({"surgefoil"}),
+    # Lord of the Rings: surgefoil and doublerainbow are both same-art-as-sibling
+    # dupe foils. surgefoil prints (e.g. LTC 378 The Great Henge) match the
+    # borderless inverted siblings (LTC 348). doublerainbow serialized prints
+    # (e.g. LTC 378z) likewise match. silverfoil/scroll showcase prints (LTC
+    # 411-431) are intentionally NOT here — those are a unique scroll-frame art
+    # treatment, not a dupe of any other print. poster prints (LTR 731-746)
+    # are unique poster-art treatment, also intentionally not in this set.
+    "ltr": frozenset({"surgefoil", "doublerainbow"}),
 }
 
 
-# Global exclusion: prints that exist only in MTG Arena / Alchemy and have no
-# physical counterpart. The 'rebalanced' / 'alchemy' promo_types are unambiguous
-# platform-level signals (any card with one is a digital-only re-tuned variant);
-# they apply regardless of set/family. Always filtered out of physical-
-# collection queries (missing-set, checklists, exports).
+# Per-family "unobtainable in practice" rules — prints the user has decided
+# they will not attempt to acquire (rarity / distribution / personal taste),
+# even though the cardboard exists. Filtered from `mm query missing-set` and
+# from any `treatment=preferred` query, but NOT from master-list checklists
+# (the user might still ingest one if it lands in their hands incidentally).
 #
-# Examples in FIN: 'A-Vivi Ornitier' (FIN A-248) and 'A-Winota, Joiner of Forces'
-# (FCA A-19) — both Arena-only with `security_stamp: "arena"` and
-# `finishes: ["nonfoil"]`.
+# Schema: anchor_code -> list of rules. A rule matches a card if EVERY
+# condition in the rule holds; a card is excluded if it matches ANY rule.
+# Conditions supported:
+#   - promo_types_all_of: frozenset[str]
+#       The card's promo_types must include every member of this set.
+#       Use for treatment families that combine multiple promo_types
+#       (e.g. silverfoil AND scroll for LTR's showcase scroll-frame prints).
+#   - promo_types_any_of: frozenset[str]
+#       The card's promo_types must include at least one of these. Use for
+#       single-promo-type signals like a hypothetical "neonink" treatment.
+#   - frame_effects_all_of: frozenset[str]
+#       The card's frame_effects must include every member.
+#   - border_color: str
+#       The card's border_color must equal this string.
+# Conditions can be combined within a rule for AND semantics.
+#
+# When adding a new family: survey its prints with the script in
+# `scripts/survey_treatment_signature.py` (added 2026-06-14), then write the
+# rule that matches the user's "I will never shop for these" criteria.
+FAMILY_UNOBTAINABLE_RULES: dict[str, list[dict]] = {
+    "ltr": [
+        # Showcase scroll-frame silverfoil prints (LTR 452-490, LTC 411-431):
+        # parchment-style scroll frame, foil-only, distributed via Bundle/special
+        # products and rarely surfaced on the secondary market in the user's
+        # experience. The two promo_types co-occur on 349 prints in the LTR
+        # family; matching on both rules out a few non-scroll silverfoils
+        # (LTC 517, 525, etc.) that ARE in standard distribution.
+        {"promo_types_all_of": frozenset({"silverfoil", "scroll"})},
+    ],
+}
+
+
+def _card_promo_types(card: dict) -> set[str]:
+    """Coerce a card's ``promo_types`` field to a set, regardless of whether
+    it arrived as JSON-encoded string (DB row) or list (Scryfall API dict).
+    """
+    import json as _json
+    raw = card.get("promo_types")
+    if raw is None:
+        return set()
+    if isinstance(raw, str):
+        try:
+            return set(_json.loads(raw))
+        except (ValueError, TypeError):
+            return set()
+    return set(raw)
+
+
+def _card_frame_effects(card: dict) -> set[str]:
+    """Same coercion as `_card_promo_types` for ``frame_effects``."""
+    import json as _json
+    raw = card.get("frame_effects")
+    if raw is None:
+        return set()
+    if isinstance(raw, str):
+        try:
+            return set(_json.loads(raw))
+        except (ValueError, TypeError):
+            return set()
+    return set(raw)
+
+
+def _matches_unobtainable_rule(card: dict, rule: dict) -> bool:
+    """True iff the card matches every condition in the rule."""
+    if "promo_types_all_of" in rule:
+        if not rule["promo_types_all_of"].issubset(_card_promo_types(card)):
+            return False
+    if "promo_types_any_of" in rule:
+        if not (rule["promo_types_any_of"] & _card_promo_types(card)):
+            return False
+    if "frame_effects_all_of" in rule:
+        if not rule["frame_effects_all_of"].issubset(_card_frame_effects(card)):
+            return False
+    if "border_color" in rule:
+        if (card.get("border_color") or "") != rule["border_color"]:
+            return False
+    return True
+
+
+def _is_family_unobtainable(card: dict, anchor_code: str) -> bool:
+    """True iff any of the family's unobtainable rules match this card."""
+    rules = FAMILY_UNOBTAINABLE_RULES.get(anchor_code.lower())
+    if not rules:
+        return False
+    return any(_matches_unobtainable_rule(card, rule) for rule in rules)
+
+
+# Global exclusion: prints that are effectively unobtainable for a physical
+# collector. Two categories, same exclusion rule:
+#
+# 1. Digital-only: Arena/Alchemy rebalanced cards. No physical counterpart
+#    exists. Examples: FIN A-248 'A-Vivi Ornitier', FCA A-19 'A-Winota,
+#    Joiner of Forces' — `security_stamp: "arena"`, `finishes: ["nonfoil"]`.
+# 2. Serialized 1-of-N chase prints. Each individually-numbered copy is
+#    unique and rarely surfaces on the secondary market; aggregating them
+#    into a "missing" shopping list is noise. Examples: LTR 731z–750z
+#    'Lord of the Rings' poster series, LTC 378z–407z borderless lands.
+#
+# Both categories are filtered globally from physical-collection queries
+# (missing-set, treatment=preferred, etc.) regardless of set/family. The
+# master-list writer in sets.py also drops 'serialized' via
+# EXCLUDED_PROMO_TYPES; this list is the selectors-side equivalent so the
+# query path matches.
+UNOBTAINABLE_PROMO_TYPES: frozenset[str] = frozenset({
+    "rebalanced", "alchemy",  # Arena/Alchemy digital-only
+    "serialized",             # 1-of-N chase prints
+})
+
+# Backwards-compat alias — older callers import this name.
 DIGITAL_ONLY_PROMO_TYPES: frozenset[str] = frozenset({"rebalanced", "alchemy"})
 
 
 def _is_digital_only(card: dict) -> bool:
-    """True iff the card is an Arena/Alchemy rebalanced print (no physical counterpart)."""
+    """True iff the card is unobtainable for a physical collector — Arena/Alchemy
+    rebalanced or serialized 1-of-N. Name kept for backwards compat; the
+    underlying set is now ``UNOBTAINABLE_PROMO_TYPES``.
+    """
     import json as _json
     pt_raw = card.get("promo_types")
     if pt_raw is None:
@@ -107,7 +224,7 @@ def _is_digital_only(card: dict) -> bool:
             return False
     else:
         pt = set(pt_raw)
-    return bool(pt & DIGITAL_ONLY_PROMO_TYPES)
+    return bool(pt & UNOBTAINABLE_PROMO_TYPES)
 VALID_RARITIES = ("common", "uncommon", "rare", "mythic", "special", "bonus")
 VALID_FINISHES = ("nonfoil", "foil")
 VALID_MISSING_FINISHES = ("nonfoil", "foil", "either")
@@ -842,10 +959,16 @@ def _filter_treatment_preferred(rows: list[MaterializedRow]) -> list[Materialize
     except LookupError:
         family_codes = {anchor}
 
-    # Step 0: drop digital-only (Arena / Alchemy rebalanced) prints up-front.
-    # These never have a physical counterpart and shouldn't appear in any
-    # physical-collection workflow regardless of treatment shape.
+    # Step 0: drop digital-only (Arena / Alchemy rebalanced) prints AND
+    # serialized 1-of-N chase prints up-front. Both are categorically
+    # unobtainable for a physical collector. Also apply per-family
+    # unobtainable rules (FAMILY_UNOBTAINABLE_RULES) which encode set-specific
+    # treatments the user has decided not to pursue (e.g. LTR's showcase
+    # scroll-frame silverfoil prints, distributed via products the user
+    # doesn't engage with). These are NOT dupes of other prints — they're
+    # distinct art that the user has personally ruled out of their want list.
     rows = [r for r in rows if not _is_digital_only(r.card)]
+    rows = [r for r in rows if not _is_family_unobtainable(r.card, anchor)]
 
     # Step 1: filter to collectible-alt rows.
     collectible: list[MaterializedRow] = []

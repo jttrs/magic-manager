@@ -1758,13 +1758,21 @@ def _apply_preferred_post_filter(
     """
     import json as _json
     from . import treatments as _treatments
-    from .selectors import _is_digital_only as _digital_only
+    from .selectors import (
+        _is_digital_only as _digital_only,
+        _is_family_unobtainable as _family_unobtainable,
+    )
 
     if not rows:
         return rows
 
-    # Step 1: drop digital-only prints unconditionally.
+    # Step 1: drop digital-only + serialized prints unconditionally, then
+    # apply the family's unobtainable-rules (e.g. LTR's scroll-frame
+    # silverfoils). Same exclusions the selector-side preferred filter
+    # applies; we run them here so the rare/mythic-regular sub-selectors
+    # of `mm query missing-set` match.
     rows = [r for r in rows if not _digital_only(r.card)]
+    rows = [r for r in rows if not _family_unobtainable(r.card, anchor_code)]
     if not rows:
         return rows
 
