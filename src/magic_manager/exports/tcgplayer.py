@@ -109,11 +109,14 @@ def build(rows) -> str:
         # name string OR when this is a basic land with any suffix. Basic
         # lands always need the CN prefix on TCGplayer because the bare
         # name collides with the regular printings of the same land
-        # regardless of which suffix variant we want.
-        needs_cn_prefix = _has_suffix(base) and (
-            (set_code, base) in collisions
-            or _is_basic_land(r.card)
-        )
+        # regardless of which suffix variant we want. Both rules are
+        # disabled per-family for releases that use suffix combinations
+        # alone for disambiguation (e.g. LTR uses `(Borderless Poster)` to
+        # distinguish CN 731 from CN 305 without any numeric prefix).
+        policy = _policy_for(r.card.get("set"))
+        collision_match = (set_code, base) in collisions and policy["collision_cn_prefix"]
+        basic_match = _is_basic_land(r.card) and policy["basic_land_cn_prefix"]
+        needs_cn_prefix = _has_suffix(base) and (collision_match or basic_match)
         if needs_cn_prefix:
             product = _insert_cn_prefix(base, cn)
         else:
@@ -196,6 +199,115 @@ def _collision_map(set_codes: set[str]) -> set[tuple[str, str]]:
     return {k for k, n in counts.items() if n > 1}
 
 
+# Per-family TCGplayer naming policy. TCGplayer's product catalog doesn't use
+# a single naming convention across all releases — different sets file
+# alt-treatment prints differently. Defaults below are FIN's behavior (the
+# original target); override per family via _FAMILY_POLICY.
+#
+# Empirical adjustments observed:
+#   FIN family  : reskins suffix `(Showcase)`, borderless suffix `(Borderless)`,
+#                 (NNNN) CN prefix on collisions.
+#   LTR family  : reskins have NO `(Showcase)` suffix. Compound suffixes:
+#                 borderless+showcase → `(Showcase)`, borderless+inverted →
+#                 `(Borderless)`, borderless+poster → `(Borderless Poster)`.
+#                 silverfoil+scroll → `(Showcase Scrolls)` (handled by the
+#                 unobtainable filter so rarely emitted, but kept for
+#                 completeness). No (NNNN) CN prefix needed.
+#
+# Add a new family entry by reading TCGplayer product titles for ~3 different
+# treatment combinations, then wiring the rule mapping below.
+_DEFAULT_POLICY = {
+    # If True, reskin (flavor_name set) appends "(Showcase)" after the
+    # "<flavor> - <oracle>" base name. False → bare base name.
+    "reskin_showcase_suffix": True,
+    # If True, basic-land + any-suffix gets the (NNNN) prefix unconditionally.
+    "basic_land_cn_prefix": True,
+    # If True, multi-printing-collisions get the (NNNN) prefix.
+    "collision_cn_prefix": True,
+}
+
+_LTR_POLICY = {
+    "reskin_showcase_suffix": False,
+    "basic_land_cn_prefix": False,
+    "collision_cn_prefix": False,
+}
+
+_FAMILY_POLICY: dict[str, dict] = {
+    "ltr": _LTR_POLICY,
+    "ltc": _LTR_POLICY,
+    "pltr": _LTR_POLICY,
+    "pltc": _LTR_POLICY,
+    "altr": _LTR_POLICY,
+    "altc": _LTR_POLICY,
+    "tltr": _LTR_POLICY,
+    "tltc": _LTR_POLICY,
+    "fltr": _LTR_POLICY,
+    "mltr": _LTR_POLICY,
+}
+
+
+def _policy_for(set_code: str) -> dict:
+    return _FAMILY_POLICY.get((set_code or "").lower(), _DEFAULT_POLICY)
+
+
+def _treatment_token(c: dict) -> str | None:
+    """Compute the TCGplayer treatment-frame suffix for a card.
+
+    Default rules (FIN-derived):
+      - reskin (flavor_name)       → (Showcase) [if policy enables]
+      - border_color borderless    → (Borderless)
+      - frame_effects showcase     → (Showcase)
+      - frame_effects extendedart  → (Extended Art)
+
+    LTR family compound rules (override the simple ladder above):
+      - borderless + showcase frame              → (Showcase)
+      - borderless + inverted (no showcase)      → (Borderless)
+      - borderless + poster                      → (Borderless Poster)
+      - silverfoil + scroll showcase             → (Showcase Scrolls)
+    """
+    set_code = (c.get("set") or "").lower()
+    flavor = c.get("flavor_name")
+    border_color = c.get("border_color")
+    frame_effects = _decode_list(c.get("frame_effects"))
+    promo_types = _decode_list(c.get("promo_types"))
+    policy = _policy_for(set_code)
+
+    if set_code in _FAMILY_POLICY and _FAMILY_POLICY[set_code] is _LTR_POLICY:
+        # LTR family compound treatment naming.
+        # Reskin lands (LTC 348-377): flavor_name set, borderless+inverted.
+        # TCGplayer files these as "<flavor> - <oracle>" with NO treatment
+        # suffix at all — the reskin form IS the canonical product. The
+        # surgefoil/doublerainbow variants of the same reskin (CN 378+, 378z)
+        # are filtered upstream as dupe-foils, so we don't need to emit a
+        # token for them either.
+        if flavor:
+            return None
+        if border_color == "borderless" and "poster" in promo_types:
+            return "(Borderless Poster)"
+        if border_color == "borderless" and "showcase" in frame_effects:
+            return "(Showcase)"
+        if border_color == "borderless":
+            return "(Borderless)"
+        if "scroll" in promo_types and "silverfoil" in promo_types:
+            return "(Showcase Scrolls)"
+        if "showcase" in frame_effects:
+            return "(Showcase)"
+        if "extendedart" in frame_effects:
+            return "(Extended Art)"
+        return None
+
+    # Default ladder (FIN-style).
+    if flavor and policy["reskin_showcase_suffix"]:
+        return "(Showcase)"
+    if border_color == "borderless":
+        return "(Borderless)"
+    if "showcase" in frame_effects:
+        return "(Showcase)"
+    if "extendedart" in frame_effects:
+        return "(Extended Art)"
+    return None
+
+
 def _base_product_name(c: dict) -> str:
     """Build the product name without any (NNNN) collision prefix.
 
@@ -208,9 +320,7 @@ def _base_product_name(c: dict) -> str:
         oracle = oracle.split(" // ", 1)[0]
 
     flavor = c.get("flavor_name")
-    frame_effects = _decode_list(c.get("frame_effects"))
     promo_types = _decode_list(c.get("promo_types"))
-    border_color = c.get("border_color")
 
     # Base name: reskin renames to "<flavor> - <oracle>", everything else
     # uses the oracle name (DFC front face, set above).
@@ -219,16 +329,7 @@ def _base_product_name(c: dict) -> str:
     else:
         name = oracle
 
-    # Treatment frame suffix (at most one).
-    treatment_token: str | None = None
-    if flavor:
-        treatment_token = "(Showcase)"
-    elif border_color == "borderless":
-        treatment_token = "(Borderless)"
-    elif "showcase" in frame_effects:
-        treatment_token = "(Showcase)"
-    elif "extendedart" in frame_effects:
-        treatment_token = "(Extended Art)"
+    treatment_token = _treatment_token(c)
 
     # Foil-sheet qualifier (independent of treatment).
     foil_token: str | None = None
