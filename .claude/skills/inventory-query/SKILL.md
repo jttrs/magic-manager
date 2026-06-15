@@ -7,6 +7,18 @@ description: Inline workflow for asking the local DB questions about owned cards
 
 Translate English questions about the local collection into `mm query` invocations built on the V2 selector grammar. No new logic — the skill is the human-to-CLI mapping layer.
 
+## Mandatory first step (read before running any `mm query`)
+
+When this skill is invoked, the workflow is **decision-tree first**. Before composing or running any `mm query` invocation:
+
+1. **Locate the user's question in the [Decision tree](#decision-tree) below.** Match on phrasing (LHS column).
+2. If a row matches verbatim, run that exact command. Do not paraphrase the selector or guess at flags.
+3. If no row matches, compose a selector from the [Selector cookbook](#selector-cookbook). Read the **Terms** and **Modifiers** tables in full first — `+related`, `owned`, `missing`, `available`, `value>=N` are easy to forget and the consequences of omitting them are silent (wrong rows, wrong totals).
+4. **Family questions need `set:CODE+related`, not `set:CODE`.** Any LOTR / Final Fantasy / Spider-Man / TMNT / Avatar question that spans parent + bonus sheets / commander deck / promos requires `+related`. `set:ltr` alone misses LTC, PLTR, PLTC. `set:fin` alone misses FCA, FIC. See the [+related family-aware row](#decision-tree) and the cookbook entry. **If the user names a release by its narrative title** ("Lord of the Rings", "Final Fantasy", "Avatar") **rather than a single set code**, default to `+related`.
+5. If the first run produces a surprising row count (e.g. 1545 rows when you expected ~600), stop and reconsider — it likely means the selector was missing `owned` (you got the universe instead of the inventory) or missing `+related` (you got the wrong slice).
+
+**Anti-pattern:** running `mm query value 'set:ltr'` for "value of my LOTR collection." That returns the value of every LTR-family printing in the cards table multiplied by their inventory qty — including printings you don't own (qty resolves to a synthetic 1 for `set:` term). Always pair `set:` with `owned` when the question is "what I have," and with `+related` when the question spans a family.
+
 ## When to use
 
 - "What's missing from <set>?" — gap reports against a synced set universe.
@@ -56,7 +68,8 @@ Deterministic English-to-CLI mapping. Pick the row whose left side matches the u
 | "What's missing from X?" | `uv run mm query xlsx 'set:X missing'` |
 | "What do I own from X?" | `uv run mm query show 'set:X owned'` |
 | "Value of my X?" (whole collection) | `uv run mm query value 'inventory'` (or `mm query total`) |
-| "Value of my X?" (slice) | `uv run mm query value 'set:X owned'` |
+| "Value of my X?" (single set, no siblings) | `uv run mm query value 'set:X owned'` |
+| "Value of my X?" (release family — LOTR, Final Fantasy, Avatar, Spider-Man, TMNT, etc.) <a id="family-row"></a> | `uv run mm query value 'set:X+related owned'`. The `+related` is mandatory when the user names a release by its narrative title or when they could plausibly mean parent + bonus-sheet / commander deck / promos. Without `+related`, you'll silently miss LTC/PLTR/PLTC/FCA/FIC/etc. and under-report. |
 | "Top N most valuable cards I own?" | `uv run mm query top N` (default N=10) |
 | "Do I have any multiples?" | `uv run mm query multiples` |
 | "Total collection value?" | `uv run mm query total` |

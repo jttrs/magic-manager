@@ -37,6 +37,18 @@ Default finish if unspecified: **nonfoil**.
 
 Multiple set codes per request OK — process each independently.
 
+### 1b. Disambiguation safety check (single-card and ambiguous-name adds)
+
+Before resolving, decide whether the request is **disambiguation-prone**:
+
+- **Single-card add** (one CN, one set) — preview is cheap (one row) and skipping it makes wrong-printing imports invisible.
+- **Card name shared across multiple CNs in the set.** E.g. LTR has The One Ring at CN 246 (standard), 380 (borderless promo), 451 (Marta Nael borderless scene), 0451 in some product naming. If the user says "The One Ring" without a set, OR gives a CN but the set has multiple printings of that name, the preview is mandatory.
+- **Reskin printings** (`flavor_name` populated) — the user often types the flavor name; the resolver accepts it but the oracle name in the preview is the round-trip safety check.
+
+If any of the above applies, **never skip the preview step**. Show the resolved row(s) with set, CN, name, flavor_name (if any), artist, treatment, rarity, and price BEFORE the import. The cost is one extra confirm; the avoided cost is silently importing the wrong borderless variant of a $300 card.
+
+For multi-card range adds with no flavor_name overlap, the preview is the standard step 3 — proceed.
+
 ### 2. Resolve via `mm scryfall`
 
 Build a single query per set code:
