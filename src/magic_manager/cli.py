@@ -1878,8 +1878,10 @@ def _write_query_xlsx(
     by a separate function in sets.py with `kind: "inventory"`).
 
     Columns: set, collector_number, name, rarity, finish, qty, unit_usd,
-    line_value, scryfall_id. Hidden _meta sheet records the originating
-    selector and timestamp so the file's lineage is traceable.
+    line_value. The `name` cell is hyperlinked to the card's Scryfall page
+    (same convention as the inventory checklist) so the user can click
+    through to the printing without copying a UUID. Hidden _meta sheet
+    records the originating selector and timestamp.
     """
     from openpyxl import Workbook
     from openpyxl.styles import Font
@@ -1890,24 +1892,31 @@ def _write_query_xlsx(
     ws = wb.active
     ws.title = "results"
     headers = ["set", "collector_number", "name", "rarity", "finish",
-               "qty", "unit_usd", "line_value", "scryfall_id"]
+               "qty", "unit_usd", "line_value"]
     ws.append(headers)
     for col, _ in enumerate(headers, start=1):
         ws.cell(row=1, column=col).font = Font(bold=True)
+    # Match master-list's hyperlink styling: blue + underline mimics web links.
+    link_font = Font(color="0563C1", underline="single")
     for r in rows:
         unit = _row_unit_price(r); line = _row_line_value(r)
         ws.append([
             r.card.get("set"), r.card.get("collector_number"),
             _row_display_name(r), r.card.get("rarity"), r.finish,
-            r.quantity, unit, line, r.scryfall_id,
+            r.quantity, unit, line,
         ])
         # Force CN to text to avoid Excel's "Number Stored as Text" warning.
         ws.cell(row=ws.max_row, column=2).number_format = "@"
+        uri = r.card.get("scryfall_uri")
+        if uri:
+            name_cell = ws.cell(row=ws.max_row, column=3)
+            name_cell.hyperlink = uri
+            name_cell.font = link_font
     last = ws.max_row
     for col_idx in (7, 8):
         for row_idx in range(2, last + 1):
             ws.cell(row=row_idx, column=col_idx).number_format = '"$"#,##0.00'
-    widths = {1: 6, 2: 8, 3: 48, 4: 10, 5: 8, 6: 5, 7: 9, 8: 11, 9: 38}
+    widths = {1: 6, 2: 8, 3: 48, 4: 10, 5: 8, 6: 5, 7: 9, 8: 11}
     for col_idx, w in widths.items():
         ws.column_dimensions[get_column_letter(col_idx)].width = w
     ws.freeze_panes = "A2"
