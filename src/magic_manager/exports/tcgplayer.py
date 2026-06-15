@@ -186,10 +186,32 @@ _PROMO_TYPE_TCG_SET = {
 }
 
 
+# Scryfall-set-code remapping. Some sets in Scryfall's family graph don't
+# exist as standalone TCGplayer sets at all — their cards are filed under
+# umbrella promo sets. Keyed on the LOWERCASE Scryfall set code.
+# Confirmed for LTR family (2026-06-15):
+#   pltc (Tales of Middle-earth Deluxe Commander Kit) → UMP. Frodo,
+#     Determined Hero PLTC 1 is filed under "Unique and Miscellaneous
+#     Promos" at TCGplayer with bare oracle name and CN 1.
+_SCRYFALL_SET_TCG_SET = {
+    "pltc": "UMP",
+}
+
+
 def _tcg_set_remap(c: dict) -> str | None:
-    """Return the TCGplayer set code if this card's promo_types map to one
-    of the umbrella sets, else None (caller falls back to Scryfall set).
+    """Return the TCGplayer set code if this card maps to a non-Scryfall
+    umbrella set, else None (caller falls back to the Scryfall set code).
+
+    Two layers of mapping, checked in order:
+      1. Scryfall-set-code remap: some Scryfall sets don't exist as
+         standalone TCGplayer sets (PLTC's cards live in UMP).
+      2. Promo-type remap: cards with bundle / buyabox / playpromo etc.
+         promo_types are filed under product-specific umbrella sets
+         regardless of their Scryfall set membership.
     """
+    scryfall_set = (c.get("set") or "").lower()
+    if scryfall_set in _SCRYFALL_SET_TCG_SET:
+        return _SCRYFALL_SET_TCG_SET[scryfall_set]
     for pt in _decode_list(c.get("promo_types")):
         if pt in _PROMO_TYPE_TCG_SET:
             return _PROMO_TYPE_TCG_SET[pt]
