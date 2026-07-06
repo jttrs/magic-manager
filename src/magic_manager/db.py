@@ -290,6 +290,33 @@ WHERE lr.quantity > 0
 """
 
 
+# V5: split deck composition (`deck_cards`, the recipe) from card assignment
+# (`deck_assignments`, which physical inventory currently fulfills the recipe).
+# Before V5, "the deck's cards" and "the physical cards standing in for the
+# deck" were the same rows in `deck_cards`, which forced `deck import-precon
+# --copies 2` to fabricate `-2` slug clones. Under V5, the recipe is unchanged
+# by physical composition/decomposition; only `deck_assignments` moves.
+#
+# No back-fill: every pre-existing deck starts with zero assignments. Users
+# who want to bind inventory to an existing deck run `mm deck compose <slug>`
+# explicitly.
+SCHEMA_V5 = """
+CREATE TABLE IF NOT EXISTS deck_assignments (
+    deck_id       INTEGER NOT NULL,
+    scryfall_id   TEXT NOT NULL,
+    finish        TEXT NOT NULL CHECK (finish IN ('nonfoil','foil')),
+    count         INTEGER NOT NULL CHECK (count > 0),
+    assigned_at   TEXT NOT NULL,
+    PRIMARY KEY (deck_id, scryfall_id, finish),
+    FOREIGN KEY (deck_id) REFERENCES decks(deck_id) ON DELETE CASCADE,
+    FOREIGN KEY (scryfall_id) REFERENCES cards(scryfall_id)
+);
+
+CREATE INDEX IF NOT EXISTS deck_assignments_card_idx ON deck_assignments (scryfall_id, finish);
+CREATE INDEX IF NOT EXISTS deck_assignments_deck_idx ON deck_assignments (deck_id);
+"""
+
+
 # ---------- migration-authoring convention ----------
 #
 # Always-safe ops in a migration: CREATE TABLE, ALTER TABLE ADD COLUMN,
@@ -330,6 +357,7 @@ MIGRATIONS: list[str] = [
     SCHEMA_V2,
     SCHEMA_V3,
     SCHEMA_V4,
+    SCHEMA_V5,
 ]
 CURRENT_VERSION = len(MIGRATIONS)
 

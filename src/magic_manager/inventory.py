@@ -132,6 +132,44 @@ def _validate_qty_positive(qty: int) -> None:
         raise ValueError(f"quantity must be a positive integer, got {qty!r}")
 
 
+def free_quantity(
+    scryfall_id: str,
+    finish: str,
+    *,
+    conn=None,
+) -> int:
+    """How many copies of ``(scryfall_id, finish)`` are NOT assigned to a deck.
+
+    Returns ``inventory.quantity - SUM(deck_assignments.count)`` for the pair,
+    or 0 if inventory has no row. Negative results are impossible when write
+    paths honor the overflow check; if one ever leaks through we clamp to 0
+    so callers get a sane display.
+
+    Pass ``conn`` when calling from inside an open transaction (e.g. the
+    assign/unassign write paths) so this read joins the same view of the DB;
+    otherwise a fresh connection is opened.
+    """
+    _validate_finish(finish)
+
+    def _q(c):
+        inv = c.execute(
+            "SELECT quantity FROM inventory WHERE scryfall_id = ? AND finish = ?",
+            (scryfall_id, finish),
+        ).fetchone()
+        owned = inv["quantity"] if inv else 0
+        assigned = c.execute(
+            "SELECT COALESCE(SUM(count), 0) AS s FROM deck_assignments "
+            "WHERE scryfall_id = ? AND finish = ?",
+            (scryfall_id, finish),
+        ).fetchone()["s"]
+        return max(0, owned - assigned)
+
+    if conn is not None:
+        return _q(conn)
+    with db.connect() as c:
+        return _q(c)
+
+
 def inventory_add(
     scryfall_id: str,
     finish: str,

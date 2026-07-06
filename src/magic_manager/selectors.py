@@ -43,9 +43,9 @@ from . import db, scryfall, sets as sets_mod
 
 # ---------- AST ----------
 
-VALID_TERMS = ("inventory", "wishlist", "deck", "set", "cards", "scryfall")
+VALID_TERMS = ("inventory", "free", "wishlist", "deck", "assigned", "set", "cards", "scryfall")
 VALID_MODIFIERS = (
-    "missing", "owned", "available",
+    "missing", "owned", "available", "assigned",
     "qty", "finish", "rarity", "cn", "value",
     "scryfall", "treatment",
 )
@@ -292,6 +292,14 @@ def _parse_term(tok: str) -> Term:
     low = tok.lower()
     if low == "inventory":
         return Term(kind="inventory")
+    if low == "free":
+        # V5: 'free' = 'inventory' minus deck_assignments. See _materialize_free.
+        return Term(kind="free")
+    if low.startswith("assigned:"):
+        slug = tok.split(":", 1)[1].strip()
+        if not slug:
+            raise SelectorParseError("assigned: term needs a deck slug after the colon")
+        return Term(kind="assigned", arg=slug)
     if low == "wishlist":
         return Term(kind="wishlist", arg=None)
     if low.startswith("wishlist:"):
@@ -352,9 +360,13 @@ def _parse_modifier(tok: str) -> Modifier:
     if low == "owned":
         return Modifier(kind="owned")
 
-    # available — inventory minus deck commitments
+    # available — inventory minus deck commitments (V5: same as materializing 'free')
     if low == "available":
         return Modifier(kind="available")
+
+    # assigned — restrict inventory rows to those with SUM(deck_assignments) > 0
+    if low == "assigned":
+        return Modifier(kind="assigned")
 
     # finish=foil|nonfoil
     if low.startswith("finish="):
@@ -422,11 +434,20 @@ def _validate_combination(sel: Selector) -> None:
         )
 
     has_owned = any(m.kind == "owned" for m in sel.modifiers)
-    if has_owned and sel.term.kind in ("inventory", "wishlist"):
+    if has_owned and sel.term.kind in ("inventory", "free", "wishlist", "assigned"):
         raise SelectorParseError(
             f"'owned' modifier requires a TERM that defines a card universe "
             f"(set:, cards:, scryfall:, deck:); '{sel.term.kind}' is already "
             f"derived from inventory."
+        )
+
+    has_assigned_mod = any(m.kind == "assigned" for m in sel.modifiers)
+    if has_assigned_mod and sel.term.kind not in ("inventory", "free"):
+        raise SelectorParseError(
+            f"'assigned' modifier restricts inventory-shaped rows to those with "
+            f"active deck_assignments; got term kind {sel.term.kind!r}. "
+            f"Use 'inventory assigned' to see everything currently pledged, or "
+            f"'assigned:<slug>' as a term to see one deck's pledges."
         )
 
     if has_missing and has_owned:
@@ -468,10 +489,14 @@ def materialize(sel_or_str: Selector | str) -> list[MaterializedRow]:
 def _materialize_term(term: Term) -> list[MaterializedRow]:
     if term.kind == "inventory":
         return _materialize_inventory()
+    if term.kind == "free":
+        return _materialize_free()
     if term.kind == "wishlist":
         return _materialize_wishlist(term.arg)
     if term.kind == "deck":
         return _materialize_deck(term.arg)
+    if term.kind == "assigned":
+        return _materialize_assigned(term.arg)
     if term.kind == "set":
         return _materialize_set(term.arg, term.include_related)
     if term.kind == "cards":
@@ -579,6 +604,78 @@ def _materialize_deck(slug: str) -> list[MaterializedRow]:
     return out
 
 
+def _materialize_free() -> list[MaterializedRow]:
+    """V5: inventory rows with quantity reduced by current deck_assignments.
+
+    Fully-committed rows drop out of the result (qty would be 0). Callers use
+    this for "what can I actually deploy elsewhere right now?" — the same
+    question ``inventory available`` answers via the modifier path.
+    """
+    out: list[MaterializedRow] = []
+    with db.connect() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT inv.scryfall_id AS inv_scryfall_id, inv.finish AS inv_finish,
+                   inv.quantity AS inv_quantity,
+                   COALESCE(
+                       (SELECT SUM(count) FROM deck_assignments da
+                        WHERE da.scryfall_id = inv.scryfall_id AND da.finish = inv.finish),
+                       0
+                   ) AS assigned_qty,
+                   {_CARD_COLS}
+            FROM inventory inv
+            JOIN cards c ON c.scryfall_id = inv.scryfall_id
+            ORDER BY c.set_code, c.collector_number, inv.finish
+            """
+        ).fetchall()
+    for r in rows:
+        free = r["inv_quantity"] - r["assigned_qty"]
+        if free <= 0:
+            continue
+        out.append(MaterializedRow(
+            scryfall_id=r["inv_scryfall_id"],
+            quantity=free,
+            finish=r["inv_finish"],
+            card=_card_dict(r),
+        ))
+    return out
+
+
+def _materialize_assigned(slug: str) -> list[MaterializedRow]:
+    """V5: current physical fulfillment of a deck's recipe.
+
+    Distinct from ``deck:<slug>`` (which is the recipe). Yields one row per
+    ``(scryfall_id, finish)`` currently pledged to the deck, with quantity =
+    the pledged count.
+    """
+    out: list[MaterializedRow] = []
+    with db.connect() as conn:
+        deck = conn.execute(
+            "SELECT deck_id FROM decks WHERE slug = ?", (slug,)
+        ).fetchone()
+        if deck is None:
+            raise LookupError(f"no deck with slug {slug!r}")
+        rows = conn.execute(
+            f"""
+            SELECT da.scryfall_id AS d_scryfall_id, da.finish AS d_finish,
+                   da.count AS d_count, {_CARD_COLS}
+            FROM deck_assignments da
+            JOIN cards c ON c.scryfall_id = da.scryfall_id
+            WHERE da.deck_id = ?
+            ORDER BY c.set_code, c.collector_number, da.finish
+            """,
+            (deck["deck_id"],),
+        ).fetchall()
+    for r in rows:
+        out.append(MaterializedRow(
+            scryfall_id=r["d_scryfall_id"],
+            quantity=r["d_count"],
+            finish=r["d_finish"],
+            card=_card_dict(r),
+        ))
+    return out
+
+
 def _materialize_set(code: str, include_related: bool) -> list[MaterializedRow]:
     codes = [code]
     if include_related:
@@ -672,6 +769,8 @@ def _apply_modifier(rows: list[MaterializedRow], mod: Modifier) -> list[Material
         return _modifier_owned(rows)
     if mod.kind == "available":
         return _modifier_available(rows)
+    if mod.kind == "assigned":
+        return _modifier_assigned(rows)
     if mod.kind == "qty":
         return _filter_numeric(rows, "quantity", mod.op, float(mod.value))
     if mod.kind == "finish":
@@ -790,19 +889,42 @@ def _modifier_available(rows: list[MaterializedRow]) -> list[MaterializedRow]:
     return out
 
 
+def _modifier_assigned(rows: list[MaterializedRow]) -> list[MaterializedRow]:
+    """V5: keep only rows where ``SUM(deck_assignments.count) > 0`` for the
+    (scryfall_id, finish) pair. Quantity in the emitted row is set to the
+    assigned count (not the raw inventory quantity), so ``value assigned``
+    reports the value that's currently pledged rather than the value of the
+    whole inventory row it came from.
+    """
+    committed = _deck_commitment_index()
+    out: list[MaterializedRow] = []
+    for r in rows:
+        com = committed.get((r.scryfall_id, r.finish), 0)
+        if com <= 0:
+            continue
+        out.append(MaterializedRow(
+            scryfall_id=r.scryfall_id,
+            quantity=min(com, r.quantity),
+            finish=r.finish,
+            card=r.card,
+        ))
+    return out
+
+
 def _deck_commitment_index() -> dict[tuple[str, str], int]:
     """Return {(scryfall_id, finish): SUM(count)} aggregated across all decks.
 
-    A printing committed to multiple decks is summed. `finish` reflects the
-    deck_cards row's finish — which for the import path is always 'foil' or
-    'nonfoil'; the schema's 'either' value is theoretically possible but not
-    emitted by current import paths.
+    V5: reads from ``deck_assignments`` (actual physical pledges), NOT from
+    ``deck_cards`` (recipes). Under the pre-V5 conflated model this queried
+    deck_cards because that's where "committed to a deck" lived; under V5
+    "committed" specifically means "an inventory copy is currently pledged
+    to a deck," which is exactly what deck_assignments records.
     """
     out: dict[tuple[str, str], int] = {}
     with db.connect() as conn:
         rows = conn.execute(
             "SELECT scryfall_id, finish, SUM(count) AS total "
-            "FROM deck_cards GROUP BY scryfall_id, finish"
+            "FROM deck_assignments GROUP BY scryfall_id, finish"
         ).fetchall()
     for r in rows:
         out[(r["scryfall_id"], r["finish"])] = r["total"]

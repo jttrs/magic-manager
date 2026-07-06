@@ -1287,7 +1287,7 @@ def deck_import_precon_cmd(
     ),
     slug: str = typer.Option(
         None, "--slug",
-        help="Override the auto-derived slug. Defaults to slugified MTGJSON deck name; --copies>1 appends -2/-3/...",
+        help="Override the auto-derived slug. Defaults to slugified MTGJSON deck name.",
     ),
     name: str = typer.Option(
         None, "--name",
@@ -1295,7 +1295,7 @@ def deck_import_precon_cmd(
     ),
     copies: int = typer.Option(
         1, "--copies", min=1,
-        help="Create N independent decks from this precon. First gets the bare slug; copies 2..N get -2, -3, ... suffixes.",
+        help="Multiply inventory-add by N (you opened N physical copies). Deck composition is still created ONCE — a recipe is a recipe. Use `mm deck compose <slug>` afterwards to pledge the physical copies to the deck.",
     ),
     add_inventory: bool = typer.Option(
         True, "--add-inventory/--no-add-inventory",
@@ -1304,6 +1304,10 @@ def deck_import_precon_cmd(
     deconstruct: bool = typer.Option(
         False, "--deconstruct",
         help="Skip deck creation; only add cards to inventory. Use when opening a precon to break it down for parts.",
+    ),
+    merge_inventory: bool = typer.Option(
+        False, "--merge-inventory",
+        help="Skip deck creation; the composition already exists at this slug. Just add another copy's worth of cards to inventory. Requires the deck to already exist.",
     ),
 ):
     """Import an MTGJSON precon into the local DB.
@@ -1323,6 +1327,7 @@ def deck_import_precon_cmd(
             copies=copies,
             add_inventory=add_inventory,
             deconstruct=deconstruct,
+            merge_inventory=merge_inventory,
         )
     except mtgjson_mod.MtgJsonError as e:
         typer.echo(f"error: could not fetch MTGJSON precon {file_name!r}: {e}", err=True)
@@ -1340,18 +1345,30 @@ def deck_import_precon_cmd(
             f"{result['inv_qty_total']} total card-qty across "
             f"{result['inv_distinct']} distinct (printing, finish) entries × {copies} copies."
         )
-    else:
-        slug_list = ", ".join(effective_slugs)
+    elif merge_inventory:
         typer.echo(
-            f"Imported precon {deck_name!r} as {len(effective_slugs)} deck(s): {slug_list}. "
+            f"Merged {copies} physical copies of {deck_name!r} into inventory: "
+            f"{result['inv_added']} new rows, {result['inv_updated']} bumped "
+            f"({result['inv_qty_total']} total card-qty). Deck composition untouched."
+        )
+    else:
+        slug_list = ", ".join(effective_slugs) or "(none)"
+        copies_note = f" × {copies} physical copies" if copies > 1 else ""
+        typer.echo(
+            f"Imported precon {deck_name!r} as deck: {slug_list}. "
             f"Deck rows: {result['deck_added']} added, {result['deck_updated']} updated "
             f"({result['deck_card_qty']} total card-qty)."
         )
         if add_inventory:
             typer.echo(
-                f"Inventory: {result['inv_added']} new rows, {result['inv_updated']} bumped "
-                f"({result['inv_qty_total']} total card-qty)."
+                f"Inventory{copies_note}: {result['inv_added']} new rows, "
+                f"{result['inv_updated']} bumped ({result['inv_qty_total']} total card-qty)."
             )
+            if copies > 1:
+                typer.echo(
+                    f"  Physical copies are LOOSE. Pledge one to the deck with "
+                    f"`mm deck compose {effective_slugs[0]}`."
+                )
         else:
             typer.echo("Inventory: skipped (--no-add-inventory).")
 
@@ -1410,6 +1427,167 @@ def deck_import_cmd(
             typer.echo(f"  not found: {nf['raw']} ({nf.get('reason','')})", err=True)
         else:
             typer.echo(f"  not found: {nf}", err=True)
+
+
+# ---------- V5: physical composition (deck_assignments) ----------
+
+@deck_app.command("compose")
+def deck_compose_cmd(
+    slug: str = typer.Argument(..., help="Deck slug to physically assemble from loose inventory."),
+    foil_first: bool = typer.Option(
+        False, "--foil-first",
+        help="For 'either'-finish recipe slots, prefer foil over nonfoil (default: nonfoil first).",
+    ),
+    allow_shortfall: bool = typer.Option(
+        False, "--allow-shortfall",
+        help="Assign whatever inventory covers, skip rows that would overflow. Default: refuse to write anything if ANY row would overflow.",
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run",
+        help="Preview the assignment (rows, shortfalls, 'either' choices) without writing.",
+    ),
+):
+    """Pledge loose inventory to a deck to physically assemble it.
+
+    The deck composition (deck_cards) is unchanged. Assignment happens in
+    ``deck_assignments`` — a separate join table so inventory qty is preserved
+    and the recipe survives a later decompose.
+
+    Overflow protection: refuses to write if the total pledged (including
+    prior assignments across all decks) would exceed either the deck's own
+    recipe or the free inventory pool.
+    """
+    try:
+        plan = decks_mod.deck_compose_plan(slug, foil_first=foil_first)
+    except LookupError as e:
+        typer.echo(f"error: {e}", err=True); raise typer.Exit(2)
+
+    if dry_run:
+        typer.echo(f"# selector: deck:{slug} (compose plan, foil_first={foil_first})")
+        typer.echo(f"# rows: {len(plan['rows'])}  shortfalls: {len(plan['shortfalls'])}  either_choices: {len(plan['either_choices'])}")
+        if plan["shortfalls"]:
+            typer.echo("shortfalls:")
+            for s in plan["shortfalls"][:20]:
+                typer.echo(f"  {s['scryfall_id'][:8]}/{s['finish']}: need {s['need']}, free {s['free']}")
+            if len(plan["shortfalls"]) > 20:
+                typer.echo(f"  ...and {len(plan['shortfalls']) - 20} more")
+        if plan["either_choices"]:
+            typer.echo(f"either-slot resolutions: {len(plan['either_choices'])} (first 5 shown)")
+            for c in plan["either_choices"][:5]:
+                typer.echo(f"  {c['scryfall_id'][:8]}: chose {c['chose_finish']} ({c['reason']})")
+        return
+
+    try:
+        result = decks_mod.deck_assign_from_composition(
+            slug, foil_first=foil_first, allow_shortfall=allow_shortfall,
+        )
+    except LookupError as e:
+        typer.echo(f"error: {e}", err=True); raise typer.Exit(2)
+    except decks_mod.AssignmentOverflow as e:
+        typer.echo(f"error: {e}", err=True)
+        typer.echo(
+            "Retry with --allow-shortfall to skip overflowing rows, or "
+            "add the missing cards to inventory first.",
+            err=True,
+        )
+        raise typer.Exit(3)
+
+    typer.echo(
+        f"Deck {slug!r} composed: {result['assigned_rows']} rows pledged "
+        f"({result['assigned_qty']} total card-qty)."
+    )
+    if result.get("either_choices"):
+        typer.echo(f"  Resolved {len(result['either_choices'])} 'either'-finish slot(s).")
+    if result.get("shortfalls"):
+        typer.echo(
+            f"warning: skipped {len(result['shortfalls'])} row(s) that would overflow "
+            f"(--allow-shortfall). Run `mm deck free {slug} --dry-run` to see them.",
+            err=True,
+        )
+
+
+@deck_app.command("decompose")
+def deck_decompose_cmd(
+    slug: str = typer.Argument(..., help="Deck slug to physically disassemble; recipe survives."),
+):
+    """Unpledge every card assigned to a deck — the recipe stays intact.
+
+    Under V5 this is a pure ``deck_assignments`` delete: inventory qty is
+    unchanged, ``deck_cards`` (the recipe) is unchanged, only the
+    "which physical copies are currently pledged" join table shrinks. Use
+    ``mm deck delete <slug>`` if you also want to drop the composition.
+    """
+    try:
+        result = decks_mod.deck_unassign_batch(slug, "all")
+    except LookupError as e:
+        typer.echo(f"error: {e}", err=True); raise typer.Exit(2)
+    if result["unassigned_rows"] == 0:
+        typer.echo(f"Deck {slug!r} had no assignments to unpledge.")
+    else:
+        typer.echo(
+            f"Deck {slug!r} decomposed: {result['unassigned_rows']} rows "
+            f"({result['unassigned_qty']} card-qty) unpledged. Recipe preserved."
+        )
+
+
+@deck_app.command("assign")
+def deck_assign_cmd(
+    slug: str = typer.Argument(..., help="Deck slug to assign inventory to."),
+    from_composition: bool = typer.Option(
+        True, "--from-composition/--no-from-composition",
+        help="Assign the entire recipe in one shot (default). --no-from-composition reserved for future partial-assign paths.",
+    ),
+    foil_first: bool = typer.Option(False, "--foil-first"),
+    allow_shortfall: bool = typer.Option(False, "--allow-shortfall"),
+):
+    """Alias for ``mm deck compose`` today. Reserved for a future partial-
+    assign flow (e.g. accepting a piped card block for one-by-one binding).
+    """
+    if not from_composition:
+        typer.echo(
+            "error: --no-from-composition is reserved for a future partial-assign flow; "
+            "for now use `mm deck compose <slug>` (or omit the flag).",
+            err=True,
+        )
+        raise typer.Exit(2)
+    # Delegate to compose (same underlying primitive).
+    ctx = typer.Context.current if hasattr(typer.Context, "current") else None
+    del ctx
+    return deck_compose_cmd(
+        slug=slug, foil_first=foil_first, allow_shortfall=allow_shortfall, dry_run=False,
+    )
+
+
+@deck_app.command("unassign")
+def deck_unassign_cmd(
+    slug: str = typer.Argument(..., help="Deck slug to unassign from."),
+    all_flag: bool = typer.Option(
+        True, "--all/--no-all",
+        help="Unassign every row (default). --no-all reserved for future partial paths.",
+    ),
+):
+    """Alias for ``mm deck decompose`` today; reserved for future partial paths."""
+    if not all_flag:
+        typer.echo(
+            "error: --no-all reserved for a future partial-unassign flow. "
+            "For now use `mm deck decompose <slug>`.",
+            err=True,
+        )
+        raise typer.Exit(2)
+    return deck_decompose_cmd(slug=slug)
+
+
+@deck_app.command("free")
+def deck_free_cmd(
+    slug: str = typer.Argument(..., help="Deck slug to plan a compose against."),
+    foil_first: bool = typer.Option(False, "--foil-first"),
+):
+    """Preview what ``mm deck compose <slug>`` would do — shortfalls, 'either'
+    resolutions — without writing. Alias for ``mm deck compose <slug> --dry-run``.
+    """
+    return deck_compose_cmd(
+        slug=slug, foil_first=foil_first, allow_shortfall=False, dry_run=True,
+    )
 
 
 # ---------- query (V2 selectors) ----------
