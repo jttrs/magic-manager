@@ -184,8 +184,12 @@ def _resolve_codes(name_or_code: str, *, include_kinds: list[str], only: list[st
     only_codes = _split_csv(only)
     kinds = _split_csv(include_kinds)
     if only_codes:
-        wanted = set(only_codes)
-        codes = [c for c in r.all_codes if c in wanted]
+        # Honor explicit --only codes verbatim, even if they aren't in the
+        # parent's Scryfall related-set graph. UB families like SPM ship with
+        # a separate masterpiece root (mar/Marvel Universe) whose
+        # parent_set_code is null — the user knows it belongs in the family
+        # checklist even though Scryfall doesn't link it.
+        codes = list(only_codes)
     else:
         codes = r.filtered_codes(include_kinds=kinds)
     if not codes:
