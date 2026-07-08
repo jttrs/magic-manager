@@ -87,6 +87,25 @@ FAMILY_DUPE_FOIL_PROMO_TYPES: dict[str, frozenset[str]] = {
     # treatment, not a dupe of any other print. poster prints (LTR 731-746)
     # are unique poster-art treatment, also intentionally not in this set.
     "ltr": frozenset({"surgefoil", "doublerainbow"}),
+    # Spider-Man: no dupe-foil signals per survey_treatment_signature.py audit
+    # (2026-07-08). textured (SPM 235-241) is a 7-print series of DISTINCT
+    # comic-panel arts, not a dupe of any base print. cosmicfoil is a singleton
+    # (needs visual audit if encountered but not worth a rule for one print).
+    # Empty frozenset satisfies the `treatment=preferred` config requirement
+    # without filtering anything. See docs/sets/spm.md §2.
+    "spm": frozenset(),
+    # Avatar: The Last Airbender: no dupe-foil signals per audit (2026-07-08).
+    # neonink (TLA 359-362) is a 4-print themed chase (Aang/Zuko/Katara/Toph
+    # by Flavio Girón) with distinct art, not a dupe. raisedfoil singleton
+    # (TLA 363 Avatar Aang, Bryan Konietzko + headliner) probably unique-art.
+    # Empty frozenset per docs/sets/tla.md §2.
+    "tla": frozenset(),
+    # TMNT: surgefoil is same-art-as-sibling (TMT 309 Forest BEMOCS surgefoil
+    # matches TMT 195 Forest BEMOCS base). fracturefoil is same-art-as-sibling
+    # (TMT 291 Leonardo A4Mitsuori fracturefoil+japanshowcase matches TMT 281
+    # Leonardo A4Mitsuori japanshowcase). japanshowcase itself is unique art
+    # (different artist from base) — kept. See docs/sets/tmt.md §2.
+    "tmt": frozenset({"surgefoil", "fracturefoil"}),
 }
 
 

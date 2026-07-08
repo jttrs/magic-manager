@@ -101,3 +101,13 @@ The Python clients (`scryfall.py`, `mtgjson.py`) ultimately call these wrappers,
 - Filename conventions encode intent for Finder/cmux (no `_meta` visible there): `<slug>-<slice>-<mode>-checklist.xlsx`, `missing-<code>-checklist-<ts>.xlsx`, `missing-<code>-{manapool,tcgplayer}-<ts>.txt`. Keep them stable — skills and slash commands grep for them.
 - `queries/` is for ephemeral artifacts (missing-set XLSX/TXT, `query xlsx` outputs); the `cleanup-queries` skill prunes it. Don't put anything durable there.
 - `docs/` is reference, not always implemented — file headers say "Documented but not implemented as of V<N>" when the schema/design exists but the importer doesn't yet.
+
+### Per-set knowledge (`docs/sets/`)
+
+`docs/sets/<anchor>.md` is the durable memory doc for each set-family (LTR, FIN, SPM, TLA, TMT, …). Each follows the shape defined in `docs/sets/_TEMPLATE.md`: family map, treatments, chase variants, scenes/posters, unobtainable rules, PRM destinations, edge cases, code refs.
+
+**Read before answering.** When the user asks a set-specific question or you're working on a set-specific command, `Read` `docs/sets/<anchor>.md` **before** answering. It captures peculiarities Scryfall metadata doesn't (chase variants, scene groupings, family-topology gotchas like MAR being a separately-rooted SPM bonus sheet). If no doc exists yet for the family, suggest running the `characterize-set` skill to bootstrap one.
+
+**Update when you learn something new.** If a session surfaces a new per-set fact — a chase variant we hadn't catalogued, a scene grouping, an unusual `promo_types` behavior, a new PRM destination, a family-topology gotcha — add it to the appropriate section of `docs/sets/<anchor>.md` before ending the session. Keep entries dense and factual (every row of every table should be verifiable via `mm scryfall` or the survey script).
+
+**Code + doc stay in sync.** `docs/sets/<anchor>.md` §8 "Code refs" points at `FAMILY_DUPE_FOIL_PROMO_TYPES` / `FAMILY_UNOBTAINABLE_RULES` entries in `src/magic_manager/selectors.py`. If you add/remove those constants, update the doc's §8 in the same commit.

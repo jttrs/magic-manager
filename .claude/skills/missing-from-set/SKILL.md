@@ -61,7 +61,9 @@ The chat rendering is automatically capped at the URL table + file links — the
 
 ## New family protocol
 
-The missing-set filter has **two configurable per-family knobs** in `src/magic_manager/selectors.py`. New families typically need both reviewed before `mm query missing-set <CODE>` produces useful output:
+**Canonical entry point: [[characterize-set]].** When `mm query missing-set <CODE>` errors out because the family is unconfigured (or when no `docs/sets/<anchor>.md` exists yet), invoke the `characterize-set` skill first. It runs the full audit (family topology, treatment signatures, chase variants, scenes, PRM destinations, edge-case cards), produces `docs/sets/<anchor>.md`, and proposes the necessary `selectors.py` diffs for the two per-family knobs described below. Missing-set then works out of the box.
+
+The two configurable per-family knobs in `src/magic_manager/selectors.py`:
 
 1. **`FAMILY_DUPE_FOIL_PROMO_TYPES[anchor]`** — a frozenset of `promo_types` strings that signal "same art as a sibling, just on a fancy-foil sheet." Examples: FIN's `{"surgefoil"}`, LTR's `{"surgefoil", "doublerainbow"}`. Required for `treatment=preferred` — unconfigured anchors raise `SelectorParseError`.
 
@@ -73,19 +75,9 @@ The missing-set filter has **two configurable per-family knobs** in `src/magic_m
 
    Rules within a family are OR'd; conditions within a rule are AND'd. Example: LTR has one rule excluding `{silverfoil, scroll}` co-occurrence prints.
 
-**When the user asks about a family that's UNCONFIGURED for `FAMILY_DUPE_FOIL_PROMO_TYPES`**, the selector layer raises a clear error. The skill MUST NOT silently fall back to `collectible-alt` and pretend the filter is correct.
+**When the user asks about a family that's UNCONFIGURED for `FAMILY_DUPE_FOIL_PROMO_TYPES`**, the selector layer raises a clear error. The skill MUST NOT silently fall back to `collectible-alt` and pretend the filter is correct. Route the user to `characterize-set <anchor>` first.
 
-The protocol when invoking missing-set on a new family:
-
-1. **Run `uv run python scripts/survey_treatment_signature.py <CODE>`** (added 2026-06-14). This prints: every promo_type frequency in the family, top co-occurrence pairs (catches AND-of-tokens treatments like LTR's silverfoil+scroll), and per-token examples with same-name siblings WITHOUT that token plus Scryfall URLs for visual comparison. Read the output before composing any user-facing question.
-2. **Tell the user** the family isn't configured yet, quote the survey's findings (top promo_types, co-occurrence patterns, sample URLs), and **ask them to adjudicate each candidate** with concrete examples. For each candidate, the question is one of three buckets:
-   - **(A) Same art as a sibling, fancy-foil sheet** → goes in `FAMILY_DUPE_FOIL_PROMO_TYPES`
-   - **(B) Distinct art, but the user won't shop for it** → goes in `FAMILY_UNOBTAINABLE_RULES`
-   - **(C) Distinct art, the user might shop for it** → leave out of both
-3. **Add the entries** to `selectors.py` based on the user's answers. Comment each entry with the example CN(s) and the user's reasoning so future readers (and future-you) understand the call.
-4. **Re-run `mm query missing-set <CODE>`** to verify. Compare the row count drop to the user's stated expectations.
-
-Don't skip the survey step — the per-token examples are how the user adjudicates visually without you guessing. The user has explicitly said memories are not as transparent as code/skills, so durable family-specific rules belong in `selectors.py` as commented config entries, not in memory files.
+**Uncommon chase variants** (added `751e627`) — the missing-set pipeline includes a fourth sub-selector `set:<code>+related missing rarity=uncommon treatment=regular chase` that surfaces card names with ≥3 distinct-art printings at the same treatment (LTR Nazgûl ×9, FIN Cid ×16, FIC Secret Rendezvous ×3). This is on by default; see `src/magic_manager/selectors.py:_modifier_chase` and the per-family §3 "Chase variants" tables in `docs/sets/<anchor>.md`.
 
 ## Output format (what the user sees in chat)
 

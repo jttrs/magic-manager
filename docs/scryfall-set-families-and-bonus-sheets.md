@@ -5,6 +5,7 @@ How Scryfall models the multiple set codes that ship with a single Magic the Gat
 This document is the consolidated record of what we've learned by inspecting Scryfall metadata for the FIN (Final Fantasy), SPM (Spider-Man), TLA (Avatar), and TMT (TMNT) releases. It includes the rules we trust, the assumptions we're making, and the pitfalls to watch out for.
 
 **See also:**
+- [`docs/sets/`](sets/) — **per-family memory docs.** One file per anchor (`ltr.md`, `fin.md`, `spm.md`, `tla.md`, `tmt.md`, …). Chase variants, scene groupings, PRM destinations, unobtainable rules, code refs. This is the first place to look when working with a specific set family; this document covers the general Scryfall-metadata patterns those docs build on. Bootstrap new families via the `characterize-set` skill.
 - [`docs/scryfall-printing-treatments.md`](scryfall-printing-treatments.md) — per-printing visual treatment classification (the `treatment` column added in V1.5). Covers `frame_effects`, `full_art`, `border_color`, `promo_types`, the keyword space, and the Scryfall data drift we've observed.
 - [`docs/spg-source-attribution.md`](spg-source-attribution.md) — Special Guests release-window mapping (e.g. SPG cards from 2026-01-23 belong to the Lorwyn Eclipsed window). Documented but not yet implemented in code.
 
