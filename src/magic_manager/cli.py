@@ -2200,6 +2200,11 @@ def query_missing_set_cmd(
     SUBS = [
         ("rare-regular",     f"set:{code_l}+related missing rarity=rare treatment=regular"),
         ("mythic-regular",   f"set:{code_l}+related missing rarity=mythic treatment=regular"),
+        # Uncommons only surface if they're a chase-variant sheet — same
+        # (name, treatment) appears ≥3 times in the family (LTR Nazgûl x9,
+        # FIN Cid x16). Ordinary uncommons are omitted since a completionist
+        # doesn't chase every uncommon reprint. See selectors._modifier_chase.
+        ("uncommon-chase",   f"set:{code_l}+related missing rarity=uncommon treatment=regular chase"),
         (treatment_class,    f"set:{code_l}+related missing treatment={treatment_class}"),
     ]
 
@@ -2222,6 +2227,7 @@ def query_missing_set_cmd(
     if treatment_class == "preferred":
         sub_rows["rare-regular"]   = _apply_preferred_post_filter(sub_rows["rare-regular"], code_l)
         sub_rows["mythic-regular"] = _apply_preferred_post_filter(sub_rows["mythic-regular"], code_l)
+        sub_rows["uncommon-chase"] = _apply_preferred_post_filter(sub_rows["uncommon-chase"], code_l)
 
     # 1b. Drop meld-back faces. Identified by: every printing of this card
     # name in the family has a 'b' suffix on its collector number. Meld

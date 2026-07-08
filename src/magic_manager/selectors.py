@@ -47,7 +47,7 @@ VALID_TERMS = ("inventory", "free", "wishlist", "deck", "assigned", "set", "card
 VALID_MODIFIERS = (
     "missing", "owned", "available", "assigned",
     "qty", "finish", "rarity", "cn", "value",
-    "scryfall", "treatment",
+    "scryfall", "treatment", "chase",
 )
 VALID_TREATMENT_CLASSES = (
     "regular", "alt", "collectible-alt", "preferred", "any-alt",
@@ -412,9 +412,26 @@ def _parse_modifier(tok: str) -> Modifier:
             raise SelectorParseError("scryfall: post-filter needs a query")
         return Modifier(kind="scryfall", value=q)
 
+    # chase[:N] — keep rows whose (name, treatment) group has ≥N distinct-art
+    # printings in the family present in the input rows. Catches chase-variant
+    # sheets (LTR Nazgûl x9, FIN Cid x16) that are technically uncommon but
+    # every collector wants every art. Default N=3 — ordinary reprints across
+    # a base set + one commander deck top out at 2, so 3+ reliably identifies
+    # a multi-variant chase sheet without false positives.
+    if low == "chase":
+        return Modifier(kind="chase", value="3")
+    if low.startswith("chase:"):
+        n = tok.split(":", 1)[1].strip()
+        try:
+            if int(n) < 2:
+                raise ValueError
+        except ValueError as e:
+            raise SelectorParseError(f"chase:N expects an integer ≥2, got {n!r}") from e
+        return Modifier(kind="chase", value=n)
+
     raise SelectorParseError(
         f"unknown MODIFIER {tok!r}; valid prefixes: missing, owned, qty, finish, "
-        f"rarity, treatment, cn, value, scryfall"
+        f"rarity, treatment, cn, value, scryfall, chase"
     )
 
 
@@ -785,7 +802,50 @@ def _apply_modifier(rows: list[MaterializedRow], mod: Modifier) -> list[Material
         return _filter_value(rows, mod.op, float(mod.value))
     if mod.kind == "scryfall":
         return _modifier_scryfall_intersect(rows, mod.value)
+    if mod.kind == "chase":
+        return _modifier_chase(rows, int(mod.value))
     raise SelectorParseError(f"unhandled modifier {mod.kind!r}")
+
+
+def _modifier_chase(rows: list[MaterializedRow], threshold: int) -> list[MaterializedRow]:
+    """Keep rows whose (name, treatment) group has ≥threshold distinct-art
+    printings in the family spanned by the input row set codes.
+
+    "Distinct-art printings" is measured across the FULL cards table for those
+    set codes, not just the input rows — so `set:ltr+related missing chase`
+    correctly counts all 9 base Nazgûls even when the user already owns some
+    (which are filtered from the input by `missing`).
+
+    Rationale: a card name that has ≥3 unique-art printings at the same
+    treatment inside one release family is a "chase sheet" (LTR Nazgûl,
+    FIN Cid, TLA Aang…). Every completionist wants every variant regardless
+    of rarity. Ordinary reprints across a base set + one commander deck top
+    out at 2 printings per (name, treatment), so 3 is a safe floor.
+    """
+    from . import treatments
+    if not rows:
+        return []
+    set_codes = {(r.card.get("set") or "").lower() for r in rows if r.card.get("set")}
+    if not set_codes:
+        return []
+    placeholders = ",".join("?" for _ in set_codes)
+    with db.connect() as conn:
+        fam_rows = conn.execute(
+            f"SELECT name, frame_effects, full_art, promo_types "
+            f"FROM cards WHERE set_code IN ({placeholders})",
+            list(set_codes),
+        ).fetchall()
+    counts: dict[tuple[str, str], int] = {}
+    for fr in fam_rows:
+        key = (fr["name"] or "", treatments.compute_treatment(dict(fr)))
+        counts[key] = counts.get(key, 0) + 1
+    keep_keys = {k for k, v in counts.items() if v >= threshold}
+    out: list[MaterializedRow] = []
+    for r in rows:
+        key = (r.card.get("name") or "", treatments.compute_treatment(r.card))
+        if key in keep_keys:
+            out.append(r)
+    return out
 
 
 def _modifier_missing(rows: list[MaterializedRow], finish_filter: str) -> list[MaterializedRow]:
