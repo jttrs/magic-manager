@@ -387,10 +387,11 @@ def set_jumpstart_list(
 ):
     """Build a pack-level checklist of every Jumpstart variant for a set.
 
-    One row per sealed-pack variant (e.g. ~66 rows for TLE). Two qty columns:
-    ``qty_kept_assembled`` (creates ``pack:*`` deck rows holding the variant's
-    cards) and ``qty_deconstructed`` (cards added to inventory only — pack
-    is broken down for parts). Both can be filled on the same row.
+    One row per sealed-pack variant (e.g. ~66 rows for TLE). Fill ``qty``
+    (copies of the pack you opened) and optionally set ``deconstruct`` to 1
+    to skip creating a ``pack:*`` recipe and dump all copies to loose
+    inventory. Default (deconstruct=0) creates one recipe + adds qty copies'
+    worth of cards to inventory.
 
     Complements ``mm set master-list``: that one is per-card across the whole
     family, this one is per-pack inside one Jumpstart set. Use this when
@@ -445,9 +446,9 @@ def set_jumpstart_list(
     typer.echo()
     typer.echo("Next steps:")
     if fmt == "md":
-        typer.echo(f"  1. Open {out_path} in any text editor and edit `[K:k D:k]` quantities.")
+        typer.echo(f"  1. Open {out_path} in any text editor and edit the `[Q:k X:b]` brackets (Q=copies, X=1 to deconstruct).")
     else:
-        typer.echo(f"  1. Open {out_path} in Excel/Numbers — fill in qty_kept_assembled / qty_deconstructed.")
+        typer.echo(f"  1. Open {out_path} in Excel/Numbers — fill in qty (and set deconstruct=1 to skip the recipe).")
     typer.echo(f"  2. When done: mm set ingest --path {out_path}")
 
 
@@ -556,12 +557,11 @@ def _ingest_jumpstart(src: Path, *, sha: str, force: bool, json_out: bool) -> No
         if row["error"]:
             typer.echo(f"  ! {row['file_name']}: {row['error']}", err=True)
             continue
-        bits = []
-        if row["kept"] > 0:
-            bits.append(f"kept {row['kept']} → {', '.join(row['slugs']) or '(no decks)'}")
-        if row["deconstructed"] > 0:
-            bits.append(f"deconstructed {row['deconstructed']}")
-        typer.echo(f"  {row['file_name']} ({row['theme']}): {'; '.join(bits)}")
+        if row["deconstruct"]:
+            bits = f"deconstructed {row['qty']} → loose inventory"
+        else:
+            bits = f"kept {row['qty']} → {', '.join(row['slugs']) or '(no decks)'}"
+        typer.echo(f"  {row['file_name']} ({row['theme']}): {bits}")
         if row["missing_sids"]:
             typer.echo(
                 f"    warning: {len(row['missing_sids'])} entries had no scryfallId",

@@ -312,11 +312,20 @@ class JumpstartRow:
 
     ``file_name`` is the MTGJSON deck filename (e.g. ``Toph_TLE``) and is the
     join key used by the ingest path to fetch the variant's contents.
+
+    ``qty`` is how many copies of this pack the user opened. ``deconstruct``
+    is a per-row boolean: when False (default), one ``pack:*`` recipe is
+    created and ``qty`` copies' worth of cards land in inventory; when True,
+    NO recipe is created and all ``qty`` copies go straight to loose
+    inventory. There is no partial split — V5 semantics make a per-copy
+    "kept vs deconstructed" distinction unrepresentable (the recipe is
+    written once regardless of copies), so the only meaningful choice is
+    "does a recipe exist for this pack or not." See ``sets.py`` §Jumpstart.
     """
     file_name: str
     theme: str
-    qty_kept_assembled: int
-    qty_deconstructed: int
+    qty: int
+    deconstruct: bool
     raw: str = ""
 
 
@@ -328,13 +337,13 @@ class JumpstartParseResult:
 
     @property
     def filled_rows(self) -> list[JumpstartRow]:
-        """Rows where the user filled in at least one qty column."""
-        return [r for r in self.rows if r.qty_kept_assembled > 0 or r.qty_deconstructed > 0]
+        """Rows where the user recorded at least one opened pack."""
+        return [r for r in self.rows if r.qty > 0]
 
 
 JUMPSTART_LIST_COLUMNS = (
     "file_name", "theme", "card_count", "usd_total",
-    "qty_kept_assembled", "qty_deconstructed",
+    "qty", "deconstruct",
 )
 
 
@@ -373,7 +382,7 @@ def parse_jumpstart_list_xlsx(path: Path) -> JumpstartParseResult:
 
     header_lower = [str(h).strip().lower() if h is not None else "" for h in header]
     idx = {c: header_lower.index(c) for c in JUMPSTART_LIST_COLUMNS if c in header_lower}
-    required = {"file_name", "qty_kept_assembled", "qty_deconstructed"}
+    required = {"file_name", "qty", "deconstruct"}
     missing = [c for c in required if c not in idx]
     if missing:
         res.warnings.append(f"XLSX missing required columns: {missing!r}")
@@ -386,26 +395,27 @@ def parse_jumpstart_list_xlsx(path: Path) -> JumpstartParseResult:
         if not file_name:
             continue
         theme = (str(row[idx["theme"]]).strip() if "theme" in idx and row[idx["theme"]] is not None else "")
-        qk = _coerce_qty(row[idx["qty_kept_assembled"]], row_num, "qty_kept_assembled", res)
-        qd = _coerce_qty(row[idx["qty_deconstructed"]], row_num, "qty_deconstructed", res)
+        qty = _coerce_qty(row[idx["qty"]], row_num, "qty", res)
+        deconstruct = _coerce_bool(row[idx["deconstruct"]], row_num, "deconstruct", res)
         res.rows.append(JumpstartRow(
             file_name=file_name,
             theme=theme,
-            qty_kept_assembled=qk,
-            qty_deconstructed=qd,
-            raw=f"row {row_num}: {file_name} K:{qk} D:{qd}",
+            qty=qty,
+            deconstruct=deconstruct,
+            raw=f"row {row_num}: {file_name} Q:{qty} X:{int(deconstruct)}",
         ))
     return res
 
 
-# Markdown line shape: ``- <FileName> — <Theme> — <N> cards — $X.XX [K:k D:k]``
-# Parser keys on FileName + the [K: D:] bracket. Surrounding text can change.
+# Markdown line shape: ``- <FileName> — <Theme> — <N> cards — $X.XX [Q:k X:0]``
+# Parser keys on FileName + the [Q: X:] bracket. Surrounding text can change.
+# Q = qty opened, X = deconstruct-all flag (0/1).
 MD_JUMPSTART_LINE_RE = re.compile(
     r"""
     ^\s*-\s+
     (?P<file_name>[A-Za-z0-9_]+_[A-Z0-9]{2,6})
     .*?
-    \[\s*K:\s*(?P<k>\d+)\s+D:\s*(?P<d>\d+)\s*\]
+    \[\s*Q:\s*(?P<q>\d+)\s+X:\s*(?P<x>[01])\s*\]
     """,
     re.VERBOSE,
 )
@@ -445,17 +455,17 @@ def parse_jumpstart_list_md(path: Path) -> JumpstartParseResult:
             continue
         file_name = m.group("file_name")
         try:
-            qk = int(m.group("k"))
-            qd = int(m.group("d"))
+            qty = int(m.group("q"))
+            deconstruct = bool(int(m.group("x")))
         except ValueError:
             res.warnings.append(f"line {line_num}: bad integer in {raw_line!r}")
             continue
         res.rows.append(JumpstartRow(
             file_name=file_name,
             theme="",
-            qty_kept_assembled=qk,
-            qty_deconstructed=qd,
-            raw=f"line {line_num}: {file_name} K:{qk} D:{qd}",
+            qty=qty,
+            deconstruct=deconstruct,
+            raw=f"line {line_num}: {file_name} Q:{qty} X:{int(deconstruct)}",
         ))
     return res
 
@@ -472,6 +482,24 @@ def _coerce_qty(raw, row_num: int, col: str, res) -> int:
         res.warnings.append(f"row {row_num}: {col!r} value {v} is negative; treating as 0")
         return 0
     return v
+
+
+def _coerce_bool(raw, row_num: int, col: str, res) -> bool:
+    """Coerce a checklist cell to a boolean. Accepts blank/0/false/no → False,
+    1/true/yes/x/y → True. Warns and returns False on anything else."""
+    if raw is None or (isinstance(raw, str) and not raw.strip()):
+        return False
+    if isinstance(raw, bool):
+        return raw
+    if isinstance(raw, (int, float)):
+        return raw != 0
+    s = str(raw).strip().lower()
+    if s in ("1", "true", "yes", "y", "x", "t"):
+        return True
+    if s in ("0", "false", "no", "n", "f"):
+        return False
+    res.warnings.append(f"row {row_num}: {col!r} value {raw!r} is not a boolean; treating as False")
+    return False
 
 
 # ---------- format detection ----------
