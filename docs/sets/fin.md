@@ -47,6 +47,18 @@
 
 **Full-art convention:** FIN prints follow the older UB convention — borderless-inverted cards have `full_art: false` (unlike SPM/TLA/TMT which flipped this). See `docs/scryfall-printing-treatments.md` §6.5.
 
+### 2a. The FIC collector edition + finish-aware `ff`
+
+`fic` ships two parallel printings of most of its ~220 unique cards: a plain edition and a **collector edition** where the foil finish is `surgefoil`. Crucially these are the *same printing* with `finishes: [nonfoil, foil]` — the collector card has an ordinary **nonfoil** copy AND a surgefoil **foil** copy. This covers commander staples (Sol Ring, Arcane Signet, Command Tower, Talismans, mana rocks), the FF-character legendaries, Secret Rendezvous 253, and more. Each collector card's art is unique to that printing (verified by distinct `illustration_id`), so it is NOT a "same-art dupe of a plainer sibling."
+
+Because `surgefoil` is a **foil-finish** descriptor, `treatments.compute_treatment` is finish-aware (as of the finish-aware-treatment change; see §8):
+- **nonfoil** copy of a collector card → `ff` is NOT applied; it computes its base treatment (usually `regular`) and flows through the normal rarity/chase sub-selectors of `mm query missing-set`.
+- **foil** (surgefoil) copy → `ff` applied; excluded from missing-set as a fancy-foil the user doesn't chase.
+
+Contrast with a genuine foil-only dupe: **FIN 576 Forest** has `finishes: [foil]` only and shares art (`illustration_id`) with the plain FIN 307 — its only finish is the surgefoil, so it stays `ff`/excluded (correctly, it's just the foil version of 307). The distinguishing factor is finish availability on the printing, not the presence of `surgefoil`.
+
+**Full-art convention:** FIN prints follow the older UB convention — borderless-inverted cards have `full_art: false` (unlike SPM/TLA/TMT which flipped this). See `docs/scryfall-printing-treatments.md` §6.5.
+
 ---
 
 ## 3. Chase variants
@@ -58,7 +70,7 @@ Detected by `selectors._modifier_chase` (default threshold 3, added `751e627`). 
 | Cid, Timeless Artificer | 15 | `fin` 216, 407–420 | uncommon | regular |
 | Cid, Timeless Artificer (ext) | 1 | `fin` 480 | uncommon | ext |
 | Cid, Freeflier Pilot | 2 | `fic` 13, 131 | rare | regular + ext |
-| Secret Rendezvous | 4 | `fic` 217, 218, 219, 253 | uncommon | 217–219 regular, 253 surgefoil-only |
+| Secret Rendezvous | 4 | `fic` 217, 218, 219, 253 | uncommon | all four nonfoil+foil; 253's foil is surgefoil |
 
 **Cid, Timeless Artificer** is the canonical FIN chase: 15 distinct arts across FIN 216 (Cid of FF XIV, standard base slot) and 407–420 (one per FF game II through XVI, `boosterfun` treatment). Every FF-game Cid corresponds to a specific numbered game — this is the completionist's target set. Ext-treatment FIN 480 is the FF XIV Cid in extended-art frame.
 
@@ -68,9 +80,9 @@ Detected by `selectors._modifier_chase` (default threshold 3, added `751e627`). 
 - `fic` 219 — Barret ("Hey spike-head...")
 - `fic` 253 — Tifa ("Ok, I'm going to just go ahead and say it...")
 
-None are extended-art — all four use the standard bordered frame. 217–219 have plain nonfoil/foil finishes; **253 (Tifa) exists ONLY as surgefoil** (its unique art has no non-surgefoil printing).
+None are extended-art — all four use the standard bordered frame. All four are single printings with `finishes: [nonfoil, foil]`. 217–219 have plain foils; **253 (Tifa)'s foil is a `surgefoil`** — it's part of the FIC collector edition (see §2a). Its nonfoil copy is an ordinary nonfoil card.
 
-⚠️ **Known filter gap:** because 253 carries the `surgefoil` promo_type, `FAMILY_DUPE_FOIL_PROMO_TYPES["fin"]` (§2) drops it from `mm query missing-set fin` as if it were a same-art fancy-foil dupe. But 253 is a UNIQUE art (Tifa), not a foil reprint of 217–219 — so a completionist chasing all four date scenes will never be told to buy the Tifa one. The `surgefoil`-is-always-a-dupe assumption holds for FIN's basic lands but breaks for this card. Not yet fixed in code; see §8.
+**Filter behavior (fixed):** 253's nonfoil copy flows through `mm query missing-set fin` as a `regular` uncommon and surfaces via this chase, exactly like 217–219. Only its *surgefoil foil* copy is excluded. This was previously broken — the whole 253 printing was dropped as `ff` — until treatment was made finish-aware (see §2a and §8).
 
 ---
 
@@ -122,7 +134,8 @@ Physical CN often doesn't match Scryfall CN (leading zeros stripped, or `Ns` suf
 
 ## 8. Code refs
 
-- `selectors.py:78-90` — `FAMILY_DUPE_FOIL_PROMO_TYPES["fin"] = frozenset({"surgefoil"})`. **Known false-positive:** this drops FIC 253 Secret Rendezvous (Tifa) as a "surgefoil dupe" even though its art is unique (§3). A precise fix would exempt prints whose `illustration_id` has no non-surgefoil sibling in the family, rather than treating `surgefoil` as unconditionally dupe. Low priority (one card), but revisit if more surgefoil-only unique arts surface.
-- `selectors.py:_modifier_chase` — surfaces Cid + Secret Rendezvous chases via `mm query missing-set fin` (but NOT 253, per the filter gap above)
-- FCA reskin sheet handling — no per-family code; discovered via `sourcematerial` promo_type in `treatments.py:114`
+- `selectors.py:78-90` — `FAMILY_DUPE_FOIL_PROMO_TYPES["fin"] = frozenset({"surgefoil"})`.
+- **Finish-aware `ff`** — `treatments.compute_treatment(card, finish=...)` applies foil-finish promo types (surgefoil et al.) only on the foil finish. The selector row-level calls pass `finish=r.finish`; the family-wide treatment indexes (`_modifier_chase`, `_filter_treatment_preferred` sibling index) key on `_effective_finish(fr)` (nonfoil if the printing offers it). This is what lets a nonfoil+surgefoil FIC collector card's nonfoil copy flow through as `regular` while its surgefoil foil copy is excluded. See §2a and `docs/scryfall-printing-treatments.md`.
+- `selectors.py:_modifier_chase` — surfaces Cid + Secret Rendezvous chases (incl. 253 nonfoil) via `mm query missing-set fin`.
+- FCA reskin sheet handling — no per-family code; discovered via `sourcematerial` promo_type in `treatments.py:114`.
 - Related docs: [`../scryfall-printing-treatments.md`](../scryfall-printing-treatments.md) §4a (FCA reskin sheet properties), §6.5 (full_art convention).

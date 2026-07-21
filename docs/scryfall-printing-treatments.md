@@ -23,6 +23,18 @@ Six codes, `|`-delimited, ordered by visual prominence. Maximum cell width on a 
 
 The pure derivation lives in `src/magic_manager/treatments.py:compute_treatment()`. That function is the single source of truth — XLSX writer, MD writer, intake REPL, and `mm scryfall` all call it.
 
+### `ff` is finish-aware for foil-finish promo types
+
+`compute_treatment(card, finish=...)` takes an optional finish. The foil-finish promo types (`surgefoil` et al. — everything in the `ff` list EXCEPT `etched`) describe only the **foil** finish of a printing. A card with `finishes: [nonfoil, foil]` and `promo_types: [surgefoil]` (the FIC collector edition, e.g. Secret Rendezvous 253) has an ordinary **nonfoil** copy and a surgefoil **foil** copy:
+
+- `compute_treatment(card, "nonfoil")` → `ff` is NOT applied (the nonfoil copy is a plain card; it gets its base frame treatment, often `regular`).
+- `compute_treatment(card, "foil")` → `ff` applied.
+- `compute_treatment(card, None)` → `ff` applied (legacy printing-level behavior, preserved for display/checklist callers that render one row per printing).
+
+`etched` is a frame-level foil treatment — its own distinct printing, never a finish option of a plainer card — so it stays finish-independent and fires on every finish.
+
+The selector pipeline (`selectors.py`) passes `finish=r.finish` at row-level treatment calls so a nonfoil+surgefoil card's nonfoil row flows through `treatment=regular`/chase while its surgefoil foil row is excluded. Family-wide treatment indexes key on `_effective_finish` (nonfoil if the printing offers it). Printing-level display callers (XLSX/MD writers, `mm scryfall`, `foil_price_diff`) pass no finish and keep the historical `ff`-on-any-fancy-signal behavior. See `docs/sets/fin.md` §2a.
+
 ## 2. Worked examples
 
 | (SET) CN | Card | Cell |

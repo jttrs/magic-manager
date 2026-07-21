@@ -826,6 +826,29 @@ def _apply_modifier(rows: list[MaterializedRow], mod: Modifier) -> list[Material
     raise SelectorParseError(f"unhandled modifier {mod.kind!r}")
 
 
+def _effective_finish(card_row) -> str:
+    """The most-basic obtainable finish for treatment grouping: ``nonfoil`` if
+    the printing offers it, else ``foil``.
+
+    Family-wide treatment indexes (chase counts, preferred sibling lookup) are
+    built from ``db.cards`` rows that have no per-finish identity. To keep those
+    index keys consistent with the nonfoil-preferred row that survives the
+    ``missing:either`` collapse, we compute each family card's treatment at this
+    finish. A nonfoil+surgefoil FIC collector card thus indexes as its nonfoil
+    (``regular``) treatment, matching the row that flows through the pipeline.
+    """
+    import json as _json
+    try:
+        raw = card_row["finishes"]
+    except (KeyError, IndexError, TypeError):
+        raw = None
+    try:
+        fins = set(_json.loads(raw)) if raw else set()
+    except (ValueError, TypeError):
+        fins = set()
+    return "nonfoil" if ("nonfoil" in fins or not fins) else "foil"
+
+
 def _modifier_chase(rows: list[MaterializedRow], threshold: int) -> list[MaterializedRow]:
     """Keep rows whose (name, treatment) group has ≥threshold distinct-art
     printings in the family spanned by the input row set codes.
@@ -850,18 +873,20 @@ def _modifier_chase(rows: list[MaterializedRow], threshold: int) -> list[Materia
     placeholders = ",".join("?" for _ in set_codes)
     with db.connect() as conn:
         fam_rows = conn.execute(
-            f"SELECT name, frame_effects, full_art, promo_types "
+            f"SELECT name, frame_effects, full_art, promo_types, finishes "
             f"FROM cards WHERE set_code IN ({placeholders})",
             list(set_codes),
         ).fetchall()
     counts: dict[tuple[str, str], int] = {}
     for fr in fam_rows:
-        key = (fr["name"] or "", treatments.compute_treatment(dict(fr)))
+        key = (fr["name"] or "",
+               treatments.compute_treatment(dict(fr), finish=_effective_finish(fr)))
         counts[key] = counts.get(key, 0) + 1
     keep_keys = {k for k, v in counts.items() if v >= threshold}
     out: list[MaterializedRow] = []
     for r in rows:
-        key = (r.card.get("name") or "", treatments.compute_treatment(r.card))
+        key = (r.card.get("name") or "",
+               treatments.compute_treatment(r.card, finish=r.finish))
         if key in keep_keys:
             out.append(r)
     return out
@@ -1073,19 +1098,22 @@ def _filter_treatment(rows: list[MaterializedRow], cls: str) -> list[Materialize
       any-alt  — non-empty (includes ext)
     """
     from . import treatments
-    cache: dict[str, set[str]] = {}
+    # Cache keyed by (scryfall_id, finish): treatment is now finish-aware, so
+    # the nonfoil and foil rows of one printing can differ (e.g. a nonfoil+
+    # surgefoil FIC card is `regular` nonfoil / `ff` foil) and must not collide.
+    cache: dict[tuple[str, str], set[str]] = {}
     out: list[MaterializedRow] = []
 
     if cls == "preferred":
         return _filter_treatment_preferred(rows)
 
     for r in rows:
-        sid = r.scryfall_id
-        codes = cache.get(sid)
+        ckey = (r.scryfall_id, r.finish)
+        codes = cache.get(ckey)
         if codes is None:
-            t = treatments.compute_treatment(r.card)
+            t = treatments.compute_treatment(r.card, finish=r.finish)
             codes = set(t.split("|")) if t else set()
-            cache[sid] = codes
+            cache[ckey] = codes
         if cls == "regular":
             keep = not codes
         elif cls == "alt":
@@ -1171,13 +1199,17 @@ def _filter_treatment_preferred(rows: list[MaterializedRow]) -> list[Materialize
     rows = [r for r in rows if not _is_digital_only(r.card)]
     rows = [r for r in rows if not _is_family_unobtainable(r.card, anchor)]
 
-    # Step 1: filter to collectible-alt rows.
+    # Step 1: filter to collectible-alt rows. Treatment is finish-aware, so the
+    # cache is keyed by (scryfall_id, finish): a nonfoil+surgefoil FIC collector
+    # card computes `regular` on its nonfoil row (thus NOT collectible-alt —
+    # correctly handled by the rare/mythic/chase sub-selectors instead) and `ff`
+    # on its foil row.
     collectible: list[MaterializedRow] = []
-    cache_codes: dict[str, set[str]] = {}
+    cache_codes: dict[tuple[str, str], set[str]] = {}
     for r in rows:
-        t = treatments.compute_treatment(r.card)
+        t = treatments.compute_treatment(r.card, finish=r.finish)
         codes = set(t.split("|")) if t else set()
-        cache_codes[r.scryfall_id] = codes
+        cache_codes[(r.scryfall_id, r.finish)] = codes
         if codes and "ext" not in codes and codes != {"ff"}:
             collectible.append(r)
 
@@ -1192,14 +1224,18 @@ def _filter_treatment_preferred(rows: list[MaterializedRow]) -> list[Materialize
     fam_rows = []
     with db.connect() as conn:
         fam_rows = conn.execute(
-            f"SELECT scryfall_id, name, frame_effects, full_art, promo_types "
+            f"SELECT scryfall_id, name, frame_effects, full_art, promo_types, finishes "
             f"FROM cards WHERE set_code IN ({placeholders})",
             list(family_codes),
         ).fetchall()
     by_name_codes: dict[tuple[str | None, frozenset[str]], list[dict]] = {}
     promo_index: dict[str, set[str]] = {}
     for fr in fam_rows:
-        t = treatments.compute_treatment(dict(fr))
+        # Index each family card at its most-basic obtainable finish so the
+        # sibling keys match the nonfoil-preferred row that survives the
+        # missing:either collapse (a nonfoil+surgefoil card indexes as its
+        # nonfoil `regular` treatment, not `ff`).
+        t = treatments.compute_treatment(dict(fr), finish=_effective_finish(fr))
         codes = set(t.split("|")) if t else set()
         no_ff = frozenset(codes - {"ff"})
         pt = set(_json.loads(fr["promo_types"] or "[]"))
@@ -1213,7 +1249,7 @@ def _filter_treatment_preferred(rows: list[MaterializedRow]) -> list[Materialize
     out: list[MaterializedRow] = []
     for r in collectible:
         sid = r.scryfall_id
-        codes = cache_codes[sid]
+        codes = cache_codes[(sid, r.finish)]
         my_pt = promo_index.get(sid, set())
         name = r.card.get("name")
 

@@ -70,12 +70,28 @@ def _row_get(row, key, default=None):
     return v if v is not None else default
 
 
-def compute_treatment(card_row) -> str:
+def compute_treatment(card_row, finish: str | None = None) -> str:
     """Return the ``|``-delimited treatment keyword string for a printing.
 
     Accepts either a Scryfall API response dict or a sqlite3.Row from our
     local ``cards`` table — the only fields read are:
     ``frame_effects``, ``full_art``, ``promo_types``.
+
+    ``finish`` (``"nonfoil"`` / ``"foil"`` / ``None``) makes the ``ff`` keyword
+    finish-aware. Foil-finish promo types (``surgefoil`` et al. in
+    ``FANCY_FOIL_PROMO_TYPES``) describe only the FOIL finish of a printing —
+    a FIC collector card with ``finishes: [nonfoil, foil]`` and
+    ``promo_types: [surgefoil]`` has an ordinary nonfoil copy and a surgefoil
+    foil copy. When ``finish == "nonfoil"`` those promo types contribute NO
+    ``ff`` (the nonfoil row is a plain card); when ``finish`` is ``"foil"`` or
+    ``None`` they do. ``finish=None`` therefore preserves the historical
+    printing-level behavior (any fancy-foil signal → ``ff``) for display and
+    checklist callers that render one row per printing. ``etched`` is a
+    frame-level foil treatment (its own distinct printing, never a finish
+    option of a plainer card), so it stays finish-independent.
+
+    Frame codes (``b``/``fa``/``shw``/``ext``/``sm``) are finish-independent
+    and unaffected by ``finish``.
 
     Returns an empty string for standard prints. Codes are emitted in a
     fixed visual-prominence order so the same printing always renders the
@@ -114,7 +130,13 @@ def compute_treatment(card_row) -> str:
     if "sourcematerial" in pts:
         codes.append("sm")
 
-    if "etched" in fes or pts & FANCY_FOIL_PROMO_TYPES:
+    # Foil-finish promo types (surgefoil et al.) describe the FOIL finish only,
+    # so on a nonfoil row they contribute nothing — the nonfoil copy is an
+    # ordinary card. `etched` is a frame-level foil treatment (its own printing,
+    # not a finish option of a plainer card) and stays finish-independent.
+    # finish=None keeps the historical printing-level behavior.
+    fancy_foil_applies = (finish != "nonfoil") and bool(pts & FANCY_FOIL_PROMO_TYPES)
+    if "etched" in fes or fancy_foil_applies:
         codes.append("ff")
 
     return "|".join(codes)
