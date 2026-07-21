@@ -58,12 +58,19 @@ Detected by `selectors._modifier_chase` (default threshold 3, added `751e627`). 
 | Cid, Timeless Artificer | 15 | `fin` 216, 407–420 | uncommon | regular |
 | Cid, Timeless Artificer (ext) | 1 | `fin` 480 | uncommon | ext |
 | Cid, Freeflier Pilot | 2 | `fic` 13, 131 | rare | regular + ext |
-| Secret Rendezvous | 3 | `fic` 217–219 | uncommon | regular |
-| Secret Rendezvous (ext) | 1 | `fic` 253 | uncommon | ext |
+| Secret Rendezvous | 4 | `fic` 217, 218, 219, 253 | uncommon | 217–219 regular, 253 surgefoil-only |
 
 **Cid, Timeless Artificer** is the canonical FIN chase: 15 distinct arts across FIN 216 (Cid of FF XIV, standard base slot) and 407–420 (one per FF game II through XVI, `boosterfun` treatment). Every FF-game Cid corresponds to a specific numbered game — this is the completionist's target set. Ext-treatment FIN 480 is the FF XIV Cid in extended-art frame.
 
-**Secret Rendezvous** is a minor FIC chase — 3 same-treatment prints across CN 217–219, plus ext-treatment CN 253.
+**Secret Rendezvous** is the FF7 Gold Saucer date-scene cycle — **four distinct arts** (all Yuu Fujiki), each pairing Cloud with a different date partner at the fireworks (verified by image + distinct `illustration_id` per print):
+- `fic` 217 — Yuffie ("Hey! Say something, why don't you!")
+- `fic` 218 — Aerith ("It's beautiful, isn't it?")
+- `fic` 219 — Barret ("Hey spike-head...")
+- `fic` 253 — Tifa ("Ok, I'm going to just go ahead and say it...")
+
+None are extended-art — all four use the standard bordered frame. 217–219 have plain nonfoil/foil finishes; **253 (Tifa) exists ONLY as surgefoil** (its unique art has no non-surgefoil printing).
+
+⚠️ **Known filter gap:** because 253 carries the `surgefoil` promo_type, `FAMILY_DUPE_FOIL_PROMO_TYPES["fin"]` (§2) drops it from `mm query missing-set fin` as if it were a same-art fancy-foil dupe. But 253 is a UNIQUE art (Tifa), not a foil reprint of 217–219 — so a completionist chasing all four date scenes will never be told to buy the Tifa one. The `surgefoil`-is-always-a-dupe assumption holds for FIN's basic lands but breaks for this card. Not yet fixed in code; see §8.
 
 ---
 
@@ -115,7 +122,7 @@ Physical CN often doesn't match Scryfall CN (leading zeros stripped, or `Ns` suf
 
 ## 8. Code refs
 
-- `selectors.py:78-90` — `FAMILY_DUPE_FOIL_PROMO_TYPES["fin"] = frozenset({"surgefoil"})`
-- `selectors.py:_modifier_chase` — surfaces Cid + Secret Rendezvous chases via `mm query missing-set fin`
+- `selectors.py:78-90` — `FAMILY_DUPE_FOIL_PROMO_TYPES["fin"] = frozenset({"surgefoil"})`. **Known false-positive:** this drops FIC 253 Secret Rendezvous (Tifa) as a "surgefoil dupe" even though its art is unique (§3). A precise fix would exempt prints whose `illustration_id` has no non-surgefoil sibling in the family, rather than treating `surgefoil` as unconditionally dupe. Low priority (one card), but revisit if more surgefoil-only unique arts surface.
+- `selectors.py:_modifier_chase` — surfaces Cid + Secret Rendezvous chases via `mm query missing-set fin` (but NOT 253, per the filter gap above)
 - FCA reskin sheet handling — no per-family code; discovered via `sourcematerial` promo_type in `treatments.py:114`
 - Related docs: [`../scryfall-printing-treatments.md`](../scryfall-printing-treatments.md) §4a (FCA reskin sheet properties), §6.5 (full_art convention).
