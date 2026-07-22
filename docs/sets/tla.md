@@ -34,9 +34,7 @@
 
 ## 2. Treatments
 
-`selectors.FAMILY_DUPE_FOIL_PROMO_TYPES["tla"]` — **not configured yet.** TLA's audit reveals no surgefoil / doublerainbow / silverfoil signals. `mm query missing-set tla treatment=preferred` will raise `SelectorParseError` until a config decision is made.
-
-**Recommendation:** add `selectors.FAMILY_DUPE_FOIL_PROMO_TYPES["tla"] = frozenset()` (empty frozenset) to satisfy the config requirement without filtering. TLA's fancy-foil signals are all unique-art per audit (neonink 4-card themed chase, raisedfoil singleton). See §8.
+`selectors.FAMILY_DUPE_FOIL_PROMO_TYPES["tla"] = frozenset()` — TLA's audit reveals no surgefoil / doublerainbow / silverfoil *dupe* signals, so the empty set satisfies the `treatment=preferred` config requirement without filtering anything. TLA's fancy-foil signals are all unique-art (neonink 4-card themed chase, raisedfoil singleton) — those are handled by the §5 unobtainable rule, not the dupe-foil filter.
 
 | promo_type | Treatment keyword | Dupe of a sibling? | Notes |
 |---|---|---|---|
@@ -79,9 +77,21 @@ Update this section when a scene audit runs.
 
 ## 5. Unobtainable rules
 
-`selectors.FAMILY_UNOBTAINABLE_RULES["tla"]` — not configured. No LTR-style scroll-frame equivalent surfaced yet.
+`selectors.FAMILY_UNOBTAINABLE_RULES["tla"]` = `[{"promo_types_any_of": {"neonink", "headliner", "raisedfoil"}}]` (added 2026-07-21).
 
-Globally filtered:
+Excludes the 5 chase-tier premiums the user does not shop for. All foil-only, extreme-rarity Play Booster pulls with **unique art** — so the dupe-foil filter would *keep* them; this rule is what removes them from `mm query missing-set tla`:
+
+| CN | Card | Treatment | ~USD foil |
+|---|---|---|---:|
+| `tla` 359 | Aang, Swift Savior // Aang and La | neonink | $536 |
+| `tla` 360 | Fire Lord Zuko | neonink | $465 |
+| `tla` 361 | Katara, the Fearless | neonink | $472 |
+| `tla` 362 | Toph, the First Metalbender | neonink | $886 |
+| `tla` 363 | Avatar Aang // Aang, Master of Elements (Bryan Konietzko, set headline ultra-rare) | headliner + raisedfoil | $3,908 |
+
+`any_of` because neonink and headliner/raisedfoil never co-occur; matching any one catches exactly these 5 and nothing else in the family (verified 2026-07-21). Effect on missing-set: total drops from ~$7,343 (141 prints) to **~$1,075 (136 prints)** — the realistic completion target.
+
+Globally filtered (not via this rule):
 - `serialized` promo_type.
 - `rebalanced` / `alchemy` promo_types (TLA has A-prefixed Arena rebalances).
 
@@ -114,7 +124,7 @@ For any PRM-stamped TLA card, resolve by name+artist per `.claude/skills/bulk-ad
 
 ## 8. Code refs
 
-- `selectors.py:FAMILY_DUPE_FOIL_PROMO_TYPES["tla"]` — **not configured.** Recommended: `"tla": frozenset()` (audit shows no dupe-foil signals; empty set unblocks `missing-set` queries).
-- `selectors.py:FAMILY_UNOBTAINABLE_RULES["tla"]` — not configured (no rule needed).
+- `selectors.py:FAMILY_DUPE_FOIL_PROMO_TYPES["tla"]` = `frozenset()` (audit shows no dupe-foil signals; empty set unblocks `missing-set` queries).
+- `selectors.py:FAMILY_UNOBTAINABLE_RULES["tla"]` = `[{"promo_types_any_of": {"neonink", "headliner", "raisedfoil"}}]` — excludes the 5 chase premiums (359-363). See §5.
 - `selectors.py:_modifier_chase` — chase variants surface via `mm query missing-set tla`.
 - Related docs: [`../scryfall-printing-treatments.md`](../scryfall-printing-treatments.md) §6.5 (full_art convention).

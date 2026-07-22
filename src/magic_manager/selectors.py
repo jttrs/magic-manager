@@ -144,6 +144,20 @@ FAMILY_UNOBTAINABLE_RULES: dict[str, list[dict]] = {
         # (LTC 517, 525, etc.) that ARE in standard distribution.
         {"promo_types_all_of": frozenset({"silverfoil", "scroll"})},
     ],
+    "tla": [
+        # Chase-tier premiums the user does not shop for. All foil-only,
+        # extreme-rarity Play Booster pulls with unique art (so they're NOT
+        # fancy-foil dupes — the dupe filter would keep them; this rule is what
+        # removes them from missing-set):
+        #   - neonink: the 4-card themed premium (TLA 359-362, Aang/Zuko/
+        #     Katara/Toph by Flavio Girón), ~$460-$890 each.
+        #   - headliner + raisedfoil: TLA 363 Avatar Aang (Bryan Konietzko,
+        #     the show's co-creator), the set's headline ultra-rare, ~$3,900.
+        # any_of because neonink and headliner/raisedfoil never co-occur on the
+        # same print; matching any one of the three catches exactly these 5
+        # cards and nothing else in the TLA family (verified 2026-07-21).
+        {"promo_types_any_of": frozenset({"neonink", "headliner", "raisedfoil"})},
+    ],
 }
 
 
