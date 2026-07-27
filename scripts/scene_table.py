@@ -70,6 +70,12 @@ def _price(prices: dict, key: str) -> float | None:
         return None
 
 
+def _scryfall_url(set_code: str, cn: str) -> str:
+    """Stable printing URL — no query string / utm suffix (matches
+    foil_price_diff.py)."""
+    return f"https://scryfall.com/card/{set_code.lower()}/{cn}"
+
+
 def _ownership(set_code: str) -> dict[tuple[str, str], int]:
     """(collector_number, finish) -> owned quantity, for one set code."""
     out: dict[tuple[str, str], int] = {}
@@ -168,9 +174,10 @@ def main() -> int:
         for cn, name, onf, off, nf, ff in rows:
             onf_s = f"**{onf}**" if onf else "0"
             off_s = f"**{off}**" if off else "0"
-            safe = name.replace("|", "\\|")
+            safe = (name or "").replace("|", "\\|")
+            link = f"[{safe}]({_scryfall_url(setc, str(cn))})"
             out.append(
-                f"| {cn} | {safe} | {onf_s} | {off_s} | "
+                f"| {cn} | {link} | {onf_s} | {off_s} | "
                 f"{_fmt_usd(nf)} | {_fmt_usd(ff)} | "
                 f"{_fmt_pct(nf, ff)} | {_fmt_diff(nf, ff)} |"
             )
