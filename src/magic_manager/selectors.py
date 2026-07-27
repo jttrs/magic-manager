@@ -161,6 +161,33 @@ FAMILY_UNOBTAINABLE_RULES: dict[str, list[dict]] = {
 }
 
 
+# Per-family "scene" groupings — sets of collector numbers that form a single
+# multi-card artwork/theme (borderless-inverted scene runs, poster panels,
+# date-scene cycles, etc.). Scryfall does NOT tag scene membership, so this is
+# a curated map, hand-verified against the set's art and documented in
+# docs/sets/<anchor>.md §4. Consumed by scripts/scene_table.py to emit the
+# standardized scene-completion table (ownership + live foil/nonfoil prices,
+# grouped by scene). Keep this in sync with docs/sets/<anchor>.md §4/§8.
+#
+# Schema: anchor_code -> ordered list of scene dicts, each:
+#   {"name": str, "artist": str|None, "set": str, "cn_lo": int, "cn_hi": int}
+# The (set, cn_lo..cn_hi) range is inclusive and numeric-CN-only. Scenes are
+# listed in the order they should render.
+FAMILY_SCENES: dict[str, list[dict]] = {
+    # LTR borderless-inverted "Scene Cards" (Scryfall UI CN range 399-451),
+    # 7 artist-run scenes. See docs/sets/ltr.md §4a.
+    "ltr": [
+        {"name": "Shire / Hobbits",             "artist": "Livia Prima",     "set": "ltr", "cn_lo": 399, "cn_hi": 404},
+        {"name": "Balrog / Moria",              "artist": "Colin Boyer",     "set": "ltr", "cn_lo": 405, "cn_hi": 410},
+        {"name": "Isengard / Ents",             "artist": "David Rapoza",    "set": "ltr", "cn_lo": 411, "cn_hi": 419},
+        {"name": "Minas Tirith / Pelennor",     "artist": "Tyler Jacobson",  "set": "ltr", "cn_lo": 420, "cn_hi": 437},
+        {"name": "Scouring of the Shire",       "artist": "Martina Fačková", "set": "ltr", "cn_lo": 438, "cn_hi": 441},
+        {"name": "Grey Havens",                 "artist": "Kieran Yanner",   "set": "ltr", "cn_lo": 442, "cn_hi": 447},
+        {"name": "Mount Doom climax",           "artist": "Marta Nael",      "set": "ltr", "cn_lo": 448, "cn_hi": 451},
+    ],
+}
+
+
 def _card_promo_types(card: dict) -> set[str]:
     """Coerce a card's ``promo_types`` field to a set, regardless of whether
     it arrived as JSON-encoded string (DB row) or list (Scryfall API dict).

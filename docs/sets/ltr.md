@@ -88,7 +88,9 @@ Scryfall's web UI groups these as "Scene Cards" via a hand-curated CN range (see
 | 6 | Kieran Yanner | 442–447 | 6 | Grey Havens |
 | 7 | Marta Nael | 448–451 | 4 | Mount Doom climax |
 
-**Detection recipe:**
+**Machine-readable:** these 7 scenes are encoded in `selectors.FAMILY_SCENES["ltr"]` (§8). The standardized ownership + live-price scene-completion table is `uv run python scripts/scene_table.py ltr` (grouped by scene, per-finish owned qty + prices + %/$ diff, per-scene and grand-total cost-to-finish in each finish). Keep the config, this table, and §8 in sync.
+
+**Detection recipe** (how the boundaries were originally derived — the config above is the curated result):
 
 ```bash
 .claude/skills/scryfall-search/scryfall.sh search 'set:ltr border:borderless' unique=prints \
@@ -160,4 +162,5 @@ For any PRM-stamped card the user presents, resolve by name+artist first (see `.
 - `selectors.py:78-90` — `FAMILY_DUPE_FOIL_PROMO_TYPES["ltr"] = frozenset({"surgefoil", "doublerainbow"})`
 - `selectors.py:118-128` — `FAMILY_UNOBTAINABLE_RULES["ltr"]` with the `silverfoil+scroll` rule
 - `selectors.py:_modifier_chase` — surfaces the Nazgûl chase via `mm query missing-set ltr`
-- Related docs: [`ltr-borderless-scenes.md`](../ltr-borderless-scenes.md) — one-off scene analysis with per-scene ownership + finish-completion cost.
+- `selectors.py:FAMILY_SCENES["ltr"]` — the 7 scene groupings (§4a) as `{name, artist, set, cn_lo, cn_hi}` dicts. Consumed by `scripts/scene_table.py ltr` for the standardized ownership + live-price scene table. **Keep in sync with §4a.**
+- Related docs: [`ltr-borderless-scenes.md`](../ltr-borderless-scenes.md) — the original one-off scene analysis (superseded for live use by `scripts/scene_table.py`, kept as narrative reference).

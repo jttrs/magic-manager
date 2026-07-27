@@ -84,7 +84,7 @@ Inside `src/magic_manager/`:
 - `scryfall.py`, `mtgjson.py` — thin clients; the bash wrappers in `.claude/skills/{scryfall,mtgjson}-search/` are the canonical access path (see hooks below).
 - `exports/` — one module per target (moxfield, manapool, tcgplayer, archidekt, plain, scryfall_json), all with `build(rows) -> str`.
 
-`scripts/` holds one-off utilities: `rehearse_migration.py` (replays migrations on a copy of the DB), `survey_treatment_signature.py` (audits a family's prints when adding `FAMILY_*` rules), `cleanup_queries.py` (prunes `queries/`).
+`scripts/` holds one-off utilities: `rehearse_migration.py` (replays migrations on a copy of the DB), `survey_treatment_signature.py` (audits a family's prints when adding `FAMILY_*` rules), `cleanup_queries.py` (prunes `queries/`), `foil_price_diff.py` (ranks a card list by foil-vs-nonfoil price gap via live `/cards/collection` prices), `scene_table.py` (standardized per-scene ownership + live-price completion table, driven by `selectors.FAMILY_SCENES`).
 
 ## External-API hooks (will block you)
 

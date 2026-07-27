@@ -73,7 +73,9 @@ Scryfall-UI-only groupings that don't appear in card metadata. Detection is heur
 
 If a detailed one-off analysis exists, link it (e.g. `docs/ltr-borderless-scenes.md`).
 
-**Detection recipe** (if this family has scenes worth cataloguing):
+**Encode scenes for the standardized table.** Once boundaries are confirmed, add them to `selectors.FAMILY_SCENES["<anchor>"]` as `{name, artist, set, cn_lo, cn_hi}` dicts (see the `ltr` entry as the template). Then `uv run python scripts/scene_table.py <anchor>` emits the standardized ownership + live-price scene-completion table (per-finish owned qty, live nonfoil/foil prices, %/$ diff, per-scene + grand-total cost-to-finish in each finish). Record the config in §8 and keep it in sync with this section.
+
+**Detection recipe** (how to derive the boundaries in the first place):
 
 ```
 .claude/skills/scryfall-search/scryfall.sh search 'set:<anchor> border:borderless' unique=prints
