@@ -387,11 +387,12 @@ def set_jumpstart_list(
 ):
     """Build a pack-level checklist of every Jumpstart variant for a set.
 
-    One row per sealed-pack variant (e.g. ~66 rows for TLE). Fill ``qty``
-    (copies of the pack you opened) and optionally set ``deconstruct`` to 1
-    to skip creating a ``pack:*`` recipe and dump all copies to loose
-    inventory. Default (deconstruct=0) creates one recipe + adds qty copies'
-    worth of cards to inventory.
+    One row per sealed-pack variant (e.g. ~66 rows for TLE). Fill
+    ``keep_qty`` (0 or 1 — copies kept *constructed*: one ``pack:*`` recipe
+    is created and one physical copy is auto-composed) and
+    ``deconstructed_qty`` (copies torn into free cards; no pledge). The two
+    sum to total packs opened and that total determines how many cards land in
+    inventory.
 
     Complements ``mm set master-list``: that one is per-card across the whole
     family, this one is per-pack inside one Jumpstart set. Use this when
@@ -446,9 +447,9 @@ def set_jumpstart_list(
     typer.echo()
     typer.echo("Next steps:")
     if fmt == "md":
-        typer.echo(f"  1. Open {out_path} in any text editor and edit the `[Q:k X:b]` brackets (Q=copies, X=1 to deconstruct).")
+        typer.echo(f"  1. Open {out_path} in any text editor and edit the `[K:k D:d]` brackets (K=0/1 kept constructed, D=copies to deconstruct).")
     else:
-        typer.echo(f"  1. Open {out_path} in Excel/Numbers — fill in qty (and set deconstruct=1 to skip the recipe).")
+        typer.echo(f"  1. Open {out_path} in Excel/Numbers — fill keep_qty (0 or 1) and deconstructed_qty per pack.")
     typer.echo(f"  2. When done: mm set ingest --path {out_path}")
 
 
@@ -504,8 +505,8 @@ def _ingest_jumpstart(src: Path, *, sha: str, force: bool, json_out: bool) -> No
     meta = sets_mod.read_master_list_meta(archived or src) or {}
     set_code = meta.get("anchor_code") or meta.get("set_codes") or "?"
     log_label = f"jumpstart:{set_code}"
-    rows_added = (summary or {}).get("packs_created", 0)
-    rows_updated = (summary or {}).get("packs_deconstructed", 0)
+    rows_added = (summary or {}).get("packs_constructed", 0)
+    rows_updated = (summary or {}).get("loose_copies", 0)
     with db.connect() as conn:
         db.record_ingest_log(
             conn,
@@ -549,18 +550,21 @@ def _ingest_jumpstart(src: Path, *, sha: str, force: bool, json_out: bool) -> No
     typer.echo(
         f"Jumpstart ({set_code}): "
         f"{summary['rows_acted']}/{summary['rows_total']} rows acted on, "
-        f"{summary['packs_created']} packs created, "
-        f"{summary['packs_deconstructed']} packs deconstructed, "
+        f"{summary['packs_constructed']} constructed, "
+        f"{summary['loose_copies']} loose dupe-copies, "
         f"{summary['inv_qty_total']} card-qty added to inventory."
     )
     for row in summary["per_row"]:
         if row["error"]:
             typer.echo(f"  ! {row['file_name']}: {row['error']}", err=True)
             continue
-        if row["deconstruct"]:
-            bits = f"deconstructed {row['qty']} → loose inventory"
+        if row["keep_qty"] == 1:
+            if row["deconstructed_qty"] > 0:
+                bits = f"constructed 1 + {row['deconstructed_qty']} loose → {row['slug']}"
+            else:
+                bits = f"constructed 1 → {row['slug']}"
         else:
-            bits = f"kept {row['qty']} → {', '.join(row['slugs']) or '(no decks)'}"
+            bits = f"deconstructed {row['deconstructed_qty']} → loose inventory"
         typer.echo(f"  {row['file_name']} ({row['theme']}): {bits}")
         if row["missing_sids"]:
             typer.echo(

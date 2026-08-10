@@ -1039,13 +1039,14 @@ def write_jumpstart_list_xlsx(set_code: str, out_path: Path,
                               *, slug: str | None = None) -> int:
     """Emit a fillable XLSX of every Jumpstart pack variant for ``set_code``.
 
-    Row schema: file_name | theme | card_count | usd_total | qty | deconstruct
+    Row schema: file_name | theme | card_count | usd_total | keep_qty | deconstructed_qty
 
-    ``qty`` is how many copies of the pack were opened; ``deconstruct`` is a
-    boolean (0/1, or blank=0) — set it to 1 to skip creating a recipe and dump
-    all copies to loose inventory. Hidden ``_meta`` sheet declares
-    ``kind=jumpstart`` so ingest can dispatch the correct branch. Returns
-    ``rows_written``.
+    ``keep_qty`` (0 or 1) = copies kept *constructed*: one ``pack:*`` recipe is
+    created and the sum of keep_qty + deconstructed_qty copies' worth of cards
+    land in inventory, then one physical copy is auto-composed into
+    deck_assignments. ``deconstructed_qty`` = copies torn into free/loose cards
+    (no pledge). Hidden ``_meta`` sheet declares ``kind=jumpstart`` so ingest
+    can dispatch the correct branch. Returns ``rows_written``.
     """
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Font, PatternFill
@@ -1066,7 +1067,7 @@ def write_jumpstart_list_xlsx(set_code: str, out_path: Path,
     ws.title = "checklist"
 
     headers = ["file_name", "theme", "card_count", "usd_total",
-               "qty", "deconstruct"]
+               "keep_qty", "deconstructed_qty"]
     ws.append(headers)
     for col, _ in enumerate(headers, start=1):
         cell = ws.cell(row=1, column=col)
@@ -1074,18 +1075,21 @@ def write_jumpstart_list_xlsx(set_code: str, out_path: Path,
         cell.alignment = Alignment(horizontal="left")
 
     qty_fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
-    int_validator = DataValidation(type="whole", operator="greaterThanOrEqual",
-                                   formula1=0, allow_blank=True)
-    int_validator.error = "Enter a non-negative integer (or leave blank for 0)."
-    int_validator.errorTitle = "Invalid quantity"
-    ws.add_data_validation(int_validator)
 
-    # deconstruct is a 0/1 flag: constrain to those two values (blank = 0).
-    bool_validator = DataValidation(type="whole", operator="between",
+    # keep_qty is a 0/1 flag: 0 = deconstruct all copies (no recipe),
+    # 1 = keep one constructed (creates recipe + auto-composes one copy).
+    keep_validator = DataValidation(type="whole", operator="between",
                                     formula1=0, formula2=1, allow_blank=True)
-    bool_validator.error = "Enter 0 (keep a recipe) or 1 (deconstruct all copies)."
-    bool_validator.errorTitle = "Invalid flag"
-    ws.add_data_validation(bool_validator)
+    keep_validator.error = "Enter 0 (deconstruct all copies, no recipe) or 1 (keep one constructed)."
+    keep_validator.errorTitle = "Invalid keep_qty"
+    ws.add_data_validation(keep_validator)
+
+    # deconstructed_qty is a non-negative integer (blank = 0).
+    decon_validator = DataValidation(type="whole", operator="greaterThanOrEqual",
+                                     formula1=0, allow_blank=True)
+    decon_validator.error = "Enter a non-negative integer (or leave blank for 0)."
+    decon_validator.errorTitle = "Invalid deconstructed_qty"
+    ws.add_data_validation(decon_validator)
 
     for r in rows:
         ws.append([
@@ -1098,11 +1102,11 @@ def write_jumpstart_list_xlsx(set_code: str, out_path: Path,
         ])
     last_row = ws.max_row
 
-    # col 5 = qty (non-negative int), col 6 = deconstruct (0/1)
-    qty_letter = get_column_letter(5)
-    int_validator.add(f"{qty_letter}2:{qty_letter}{last_row}")
-    bool_letter = get_column_letter(6)
-    bool_validator.add(f"{bool_letter}2:{bool_letter}{last_row}")
+    # col 5 = keep_qty (0/1), col 6 = deconstructed_qty (non-negative int)
+    keep_letter = get_column_letter(5)
+    keep_validator.add(f"{keep_letter}2:{keep_letter}{last_row}")
+    decon_letter = get_column_letter(6)
+    decon_validator.add(f"{decon_letter}2:{decon_letter}{last_row}")
     for col_idx in (5, 6):
         for r in range(2, last_row + 1):
             ws.cell(row=r, column=col_idx).fill = qty_fill
@@ -1110,7 +1114,7 @@ def write_jumpstart_list_xlsx(set_code: str, out_path: Path,
     for row_idx in range(2, last_row + 1):
         ws.cell(row=row_idx, column=4).number_format = '"$"#,##0.00'
 
-    widths = {1: 22, 2: 24, 3: 11, 4: 11, 5: 8, 6: 12}
+    widths = {1: 22, 2: 24, 3: 11, 4: 11, 5: 10, 6: 17}
     for col_idx, w in widths.items():
         ws.column_dimensions[get_column_letter(col_idx)].width = w
 
@@ -1149,11 +1153,11 @@ def write_jumpstart_list_md(set_code: str, out_path: Path,
 
     Line shape (after YAML frontmatter):
 
-        - Toph_TLE — Toph — 15 cards — $4.20 [Q:0 X:0]
+        - Toph_TLE — Toph — 15 cards — $4.20 [K:0 D:0]
 
     Parser keys on the leading file_name token, so prose changes don't break
-    ingest. The ``[Q:k X:b]`` bracket holds qty (copies opened) and the
-    deconstruct-all flag (0/1).
+    ingest. The ``[K:k D:d]`` bracket holds keep_qty (0 or 1, copies kept
+    constructed) and deconstructed_qty (copies torn into free cards).
     """
     from . import __version__
 
@@ -1183,10 +1187,10 @@ def write_jumpstart_list_md(set_code: str, out_path: Path,
     out_lines.append(f"# {code.upper()} Jumpstart variants ({len(rows)} packs)")
     out_lines.append("")
     out_lines.append(
-        "Edit the `[Q:k X:b]` bracket per row: `Q` = copies of the pack you "
-        "opened, `X` = deconstruct-all flag (0 = keep a `pack:*` recipe, "
-        "1 = dump all copies to loose inventory, no recipe). Save, then run "
-        "`mm set ingest` to apply."
+        "Edit the `[K:k D:d]` bracket per row: `K` = copies kept *constructed* "
+        "(0 or 1 — creates a `pack:*` recipe and auto-composes one physical copy), "
+        "`D` = copies deconstructed to free cards (no pledge). K+D = total packs "
+        "opened. Save, then run `mm set ingest` to apply."
     )
     out_lines.append("")
     for r in rows:
@@ -1194,7 +1198,7 @@ def write_jumpstart_list_md(set_code: str, out_path: Path,
         usd_seg = f"${usd:.2f}" if usd is not None else "—"
         out_lines.append(
             f"- {r['file_name']} — {r['theme']} — {r['card_count']} cards — "
-            f"{usd_seg} [Q:0 X:0]"
+            f"{usd_seg} [K:0 D:0]"
         )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text("\n".join(out_lines) + "\n", encoding="utf-8")
@@ -1213,23 +1217,27 @@ def _slug_theme(theme: str, set_code: str) -> str:
 def ingest_jumpstart_from_path(path: Path) -> dict:
     """Apply a filled-in Jumpstart checklist to the local DB.
 
-    For each row with ``qty > 0``:
-      - ``deconstruct=False`` (default): creates one ``pack:*`` recipe
-        (format='jumpstart') and adds ``qty`` copies' worth of cards to
-        inventory via ``import_precon(copies=qty)``.
-      - ``deconstruct=True``: runs ``import_precon(deconstruct=True,
-        copies=qty)`` so all ``qty`` copies' cards land in inventory with no
-        recipe created.
+    For each row with T = keep_qty + deconstructed_qty > 0:
+      - ``keep_qty == 1``: creates one ``pack:*`` recipe (format='jumpstart'),
+        adds T copies' worth of cards to inventory via
+        ``import_precon(deconstruct=False, copies=T)``, then auto-constructs
+        one physical copy via ``deck_assign_from_composition(base_slug)``.
+      - ``keep_qty == 0`` (D > 0): fully deconstructed — runs
+        ``import_precon(deconstruct=True, copies=D)`` so all D copies' cards
+        land in inventory with no recipe created.
+
+    Raises ``ValueError`` (naming the offending file_name(s)) if any acted row
+    has ``keep_qty > 1`` — validation runs before any DB writes.
 
     Returns a summary:
       - ``rows_total`` (int): rows present in the file
-      - ``rows_acted`` (int): rows with qty > 0
-      - ``packs_created`` (int): total ``pack:*`` deck rows created
-      - ``packs_deconstructed`` (int): total pack-copies dumped to loose
-        inventory (deconstruct rows)
+      - ``rows_acted`` (int): rows with T > 0
+      - ``packs_constructed`` (int): rows where keep_qty == 1 (recipe + composed)
+      - ``loose_copies`` (int): total unpledged copies = sum(T) - packs_constructed
       - ``inv_qty_total`` (int): cumulative card-qty added to inventory
-      - ``per_row``: list of ``{"file_name", "theme", "qty", "deconstruct",
-        "slugs": [...], "missing_sids": [...], "error": str|None}``
+      - ``per_row``: list of ``{"file_name", "theme", "keep_qty",
+        "deconstructed_qty", "composed": bool, "slug": str|None,
+        "slugs": list, "missing_sids": [...], "error": str|None}``
       - ``warnings`` (list[str]): non-fatal parse/lookup warnings
     """
     from . import decks as decks_mod, mtgjson as mtgjson_mod
@@ -1257,25 +1265,40 @@ def ingest_jumpstart_from_path(path: Path) -> dict:
     if not set_code:
         raise ValueError("could not determine set_code from checklist _meta or rows")
 
+    # Pre-scan validation: keep_qty must be 0 or 1 for every acted row.
+    # Do this before any DB writes so we never partially commit.
+    invalid = [
+        r.file_name
+        for r in parsed.rows
+        if r.keep_qty + r.deconstructed_qty > 0 and r.keep_qty > 1
+    ]
+    if invalid:
+        raise ValueError(
+            f"keep_qty must be 0 or 1; offending pack(s): {', '.join(invalid)}"
+        )
+
     summary: dict = {
         "rows_total": len(parsed.rows),
         "rows_acted": 0,
-        "packs_created": 0,
-        "packs_deconstructed": 0,
+        "packs_constructed": 0,
+        "loose_copies": 0,
         "inv_qty_total": 0,
         "per_row": [],
         "warnings": list(parsed.warnings),
     }
 
     for row in parsed.rows:
-        if row.qty <= 0:
+        total = row.keep_qty + row.deconstructed_qty
+        if total <= 0:
             continue
         summary["rows_acted"] += 1
         per_row: dict = {
             "file_name": row.file_name,
             "theme": row.theme,
-            "qty": row.qty,
-            "deconstruct": row.deconstruct,
+            "keep_qty": row.keep_qty,
+            "deconstructed_qty": row.deconstructed_qty,
+            "composed": False,
+            "slug": None,
             "slugs": [],
             "missing_sids": [],
             "error": None,
@@ -1295,31 +1318,40 @@ def ingest_jumpstart_from_path(path: Path) -> dict:
         base_slug = _slug_theme(theme_for_slug, set_code)
 
         try:
-            if row.deconstruct:
-                r = decks_mod.import_precon(
-                    row.file_name,
-                    slug=base_slug,  # not used in deconstruct path
-                    format="jumpstart",
-                    copies=row.qty,
-                    add_inventory=True,
-                    deconstruct=True,
-                )
-                per_row["missing_sids"].extend(r["missing_sids"])
-                summary["packs_deconstructed"] += row.qty
-                summary["inv_qty_total"] += r["inv_qty_total"]
-            else:
+            if row.keep_qty == 1:
+                # Create the recipe + add T copies' worth of cards to inventory,
+                # then auto-construct one physical copy.
                 r = decks_mod.import_precon(
                     row.file_name,
                     slug=base_slug,
                     format="jumpstart",
-                    copies=row.qty,
+                    copies=total,
                     add_inventory=True,
                     deconstruct=False,
                 )
                 per_row["slugs"].extend(r["effective_slugs"])
                 per_row["missing_sids"].extend(r["missing_sids"])
-                summary["packs_created"] += len(r["effective_slugs"])
+                per_row["slug"] = base_slug
                 summary["inv_qty_total"] += r["inv_qty_total"]
+                # Auto-construct one physical copy (pledges exactly one recipe's
+                # worth into deck_assignments, leaving deconstructed_qty copies free).
+                decks_mod.deck_assign_from_composition(base_slug)
+                per_row["composed"] = True
+                summary["packs_constructed"] += 1
+                summary["loose_copies"] += row.deconstructed_qty
+            else:
+                # Fully deconstructed: D copies loose, no recipe.
+                r = decks_mod.import_precon(
+                    row.file_name,
+                    slug=base_slug,  # not used in deconstruct path
+                    format="jumpstart",
+                    copies=row.deconstructed_qty,
+                    add_inventory=True,
+                    deconstruct=True,
+                )
+                per_row["missing_sids"].extend(r["missing_sids"])
+                summary["inv_qty_total"] += r["inv_qty_total"]
+                summary["loose_copies"] += row.deconstructed_qty
         except (mtgjson_mod.MtgJsonError, ValueError) as e:
             per_row["error"] = str(e)
 

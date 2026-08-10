@@ -12,10 +12,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable
 
 from . import scryfall
-
 
 SECTION_ALIASES = {
     "deck": "mainboard",
@@ -257,7 +255,7 @@ def parse_master_list_md(path: Path) -> ParseResult:
 
     # Parse the YAML frontmatter (we don't need a real YAML parser — the
     # writer only emits ``key: value`` pairs of strings).
-    if text.startswith("---\n") or text.startswith("---\r\n"):
+    if text.startswith(("---\n", "---\r\n")):
         end = text.find("\n---\n", 4)
         if end == -1:
             end = text.find("\n---\r\n", 4)
@@ -313,19 +311,17 @@ class JumpstartRow:
     ``file_name`` is the MTGJSON deck filename (e.g. ``Toph_TLE``) and is the
     join key used by the ingest path to fetch the variant's contents.
 
-    ``qty`` is how many copies of this pack the user opened. ``deconstruct``
-    is a per-row boolean: when False (default), one ``pack:*`` recipe is
-    created and ``qty`` copies' worth of cards land in inventory; when True,
-    NO recipe is created and all ``qty`` copies go straight to loose
-    inventory. There is no partial split — V5 semantics make a per-copy
-    "kept vs deconstructed" distinction unrepresentable (the recipe is
-    written once regardless of copies), so the only meaningful choice is
-    "does a recipe exist for this pack or not." See ``sets.py`` §Jumpstart.
+    ``keep_qty`` is how many copies to keep *constructed* (0 or 1): when 1, one
+    ``pack:*`` recipe is created, T = K+D copies' worth of cards land in
+    inventory, and one physical copy is auto-composed into ``deck_assignments``.
+    ``deconstructed_qty`` is how many copies to tear into free/loose cards (no
+    recipe). Together they sum to the total copies opened. See ``sets.py``
+    §Jumpstart.
     """
     file_name: str
     theme: str
-    qty: int
-    deconstruct: bool
+    keep_qty: int
+    deconstructed_qty: int
     raw: str = ""
 
 
@@ -338,12 +334,12 @@ class JumpstartParseResult:
     @property
     def filled_rows(self) -> list[JumpstartRow]:
         """Rows where the user recorded at least one opened pack."""
-        return [r for r in self.rows if r.qty > 0]
+        return [r for r in self.rows if r.keep_qty + r.deconstructed_qty > 0]
 
 
 JUMPSTART_LIST_COLUMNS = (
     "file_name", "theme", "card_count", "usd_total",
-    "qty", "deconstruct",
+    "keep_qty", "deconstructed_qty",
 )
 
 
@@ -382,7 +378,7 @@ def parse_jumpstart_list_xlsx(path: Path) -> JumpstartParseResult:
 
     header_lower = [str(h).strip().lower() if h is not None else "" for h in header]
     idx = {c: header_lower.index(c) for c in JUMPSTART_LIST_COLUMNS if c in header_lower}
-    required = {"file_name", "qty", "deconstruct"}
+    required = {"file_name", "keep_qty", "deconstructed_qty"}
     missing = [c for c in required if c not in idx]
     if missing:
         res.warnings.append(f"XLSX missing required columns: {missing!r}")
@@ -395,27 +391,27 @@ def parse_jumpstart_list_xlsx(path: Path) -> JumpstartParseResult:
         if not file_name:
             continue
         theme = (str(row[idx["theme"]]).strip() if "theme" in idx and row[idx["theme"]] is not None else "")
-        qty = _coerce_qty(row[idx["qty"]], row_num, "qty", res)
-        deconstruct = _coerce_bool(row[idx["deconstruct"]], row_num, "deconstruct", res)
+        keep_qty = _coerce_qty(row[idx["keep_qty"]], row_num, "keep_qty", res)
+        deconstructed_qty = _coerce_qty(row[idx["deconstructed_qty"]], row_num, "deconstructed_qty", res)
         res.rows.append(JumpstartRow(
             file_name=file_name,
             theme=theme,
-            qty=qty,
-            deconstruct=deconstruct,
-            raw=f"row {row_num}: {file_name} Q:{qty} X:{int(deconstruct)}",
+            keep_qty=keep_qty,
+            deconstructed_qty=deconstructed_qty,
+            raw=f"row {row_num}: {file_name} K:{keep_qty} D:{deconstructed_qty}",
         ))
     return res
 
 
-# Markdown line shape: ``- <FileName> — <Theme> — <N> cards — $X.XX [Q:k X:0]``
-# Parser keys on FileName + the [Q: X:] bracket. Surrounding text can change.
-# Q = qty opened, X = deconstruct-all flag (0/1).
+# Markdown line shape: ``- <FileName> — <Theme> — <N> cards — $X.XX [K:k D:d]``
+# Parser keys on FileName + the [K: D:] bracket. Surrounding text can change.
+# K = copies kept constructed (0 or 1), D = copies deconstructed to free cards.
 MD_JUMPSTART_LINE_RE = re.compile(
     r"""
     ^\s*-\s+
     (?P<file_name>[A-Za-z0-9_]+_[A-Z0-9]{2,6})
     .*?
-    \[\s*Q:\s*(?P<q>\d+)\s+X:\s*(?P<x>[01])\s*\]
+    \[\s*K:\s*(?P<k>\d+)\s+D:\s*(?P<d>\d+)\s*\]
     """,
     re.VERBOSE,
 )
@@ -431,7 +427,7 @@ def parse_jumpstart_list_md(path: Path) -> JumpstartParseResult:
     text = Path(path).read_text(encoding="utf-8")
     body = text
 
-    if text.startswith("---\n") or text.startswith("---\r\n"):
+    if text.startswith(("---\n", "---\r\n")):
         end = text.find("\n---\n", 4)
         if end == -1:
             end = text.find("\n---\r\n", 4)
@@ -455,17 +451,17 @@ def parse_jumpstart_list_md(path: Path) -> JumpstartParseResult:
             continue
         file_name = m.group("file_name")
         try:
-            qty = int(m.group("q"))
-            deconstruct = bool(int(m.group("x")))
+            keep_qty = int(m.group("k"))
+            deconstructed_qty = int(m.group("d"))
         except ValueError:
             res.warnings.append(f"line {line_num}: bad integer in {raw_line!r}")
             continue
         res.rows.append(JumpstartRow(
             file_name=file_name,
             theme="",
-            qty=qty,
-            deconstruct=deconstruct,
-            raw=f"line {line_num}: {file_name} Q:{qty} X:{int(deconstruct)}",
+            keep_qty=keep_qty,
+            deconstructed_qty=deconstructed_qty,
+            raw=f"line {line_num}: {file_name} K:{keep_qty} D:{deconstructed_qty}",
         ))
     return res
 

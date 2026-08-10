@@ -12,6 +12,31 @@
 
 ---
 
+> **⚠️ Disambiguation — the "Marvel Jumpstart" product is `msh`, NOT this set.**
+> The Marvel *Jumpstart* product is **`msh` "Marvel Super Heroes"** (`expansion`,
+> 453 cards, released 2026-06-26) — a **separate family with no Scryfall link to
+> `spm`** (`mm set list-related msh` roots at `msh` and never touches `spm`). It's
+> the one that publishes **51 `type: Jumpstart` packs** in MTGJSON, so
+> `mm set jumpstart-list msh` works. The Spider-Man family (`spm`/`spe`) publishes
+> **no** Jumpstart decks (see §7), so `jumpstart-list spm`/`spe` errors with "no
+> Jumpstart variants found." `msh` family topology (`mm set list-related msh`):
+>
+> | Code | `set_type` | Cards | Notes |
+> |---|---|---:|---|
+> | `msh` | expansion | 453 | Marvel Super Heroes — the Jumpstart parent |
+> | `msc` | commander | 866 | Marvel Super Heroes Commander |
+> | `amsh` | memorabilia | 66 | Art Series |
+> | `fmsc` | memorabilia | 61 | **Jumpstart Front Cards** — the JMP front-card sheet, analogous to TLA's `jtla` |
+> | `tmsh` / `tmsc` | token | 27 / 32 | set + commander tokens |
+>
+> MTGJSON `MSH` deck mix: 51 Jumpstart + 12 Box Set (Beginner Box) + 5 Welcome
+> Deck + 2 Bundle Land Pack. Ingest opened packs via `mm set jumpstart-list msh`
+> → fill **`keep_qty`** (0 or 1 — copies kept *constructed*: recipe created +
+> auto-composed) and **`deconstructed_qty`** (copies torn into free cards); the
+> two sum to total packs opened → `mm set ingest`.
+
+---
+
 ## 1. Family map
 
 | Code | `set_type` | Cards | Released | Notes |
