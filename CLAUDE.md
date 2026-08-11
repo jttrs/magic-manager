@@ -84,7 +84,7 @@ Inside `src/magic_manager/`:
 - `scryfall.py`, `mtgjson.py` — thin clients; the bash wrappers in `.claude/skills/{scryfall,mtgjson}-search/` are the canonical access path (see hooks below).
 - `exports/` — one module per target (moxfield, manapool, tcgplayer, archidekt, plain, scryfall_json), all with `build(rows) -> str`.
 
-`scripts/` holds one-off utilities: `rehearse_migration.py` (replays migrations on a copy of the DB), `survey_treatment_signature.py` (audits a family's prints when adding `FAMILY_*` rules), `cleanup_queries.py` (prunes `queries/`), `foil_price_diff.py` (ranks a card list by foil-vs-nonfoil price gap via live `/cards/collection` prices), `scene_table.py` (standardized per-scene ownership + live-price completion table, driven by `selectors.FAMILY_SCENES`).
+`scripts/` holds one-off utilities: `rehearse_migration.py` (replays migrations on a copy of the DB), `survey_treatment_signature.py` (audits a family's prints when adding `FAMILY_*` rules), `cleanup_queries.py` (prunes `queries/`), `foil_price_diff.py` (ranks a card list by foil-vs-nonfoil price gap via live `/cards/collection` prices), `scene_table.py` (standardized per-scene ownership + live-price completion table, driven by `selectors.FAMILY_SCENES`), `manapool_cart.py` (fetches the live Mana Pool cart — headless login, else bookmarklet paste) + `manapool_price_check.py` (grades a cart vs Mana Pool + Scryfall market — see the `manapool-price-check` skill).
 
 ## External-API hooks (will block you)
 
@@ -92,8 +92,11 @@ Inside `src/magic_manager/`:
 
 - `.claude/skills/scryfall-search/scryfall.sh` (rate-limited, 24h cache, 429 backoff) — or `uv run mm scryfall <query>`
 - `.claude/skills/mtgjson-search/mtgjson.sh` (cached under `$TMPDIR/mtgjson-cache` with `.sha256` sidecars) — or `uv run mm mtgjson …`
+- `.claude/skills/manapool-search/manapool.sh` (Mana Pool sanctioned API — catalog/prices; rate-limited, 24h cache, 429 backoff; reads `MANAPOOL_*` from `.env`). The `manapool-guard.sh` hook blocks ad-hoc curl to `manapool.com/api` and `sb-api.manapool.com`; the cart tiers in `scripts/manapool_cart.py` are allowlisted (they handle the short-lived Supabase session JWT correctly — that JWT is held in memory only, never persisted).
 
 The Python clients (`scryfall.py`, `mtgjson.py`) ultimately call these wrappers, so the CLI is always safe.
+
+Secrets live only in the gitignored `.env` at repo root (`MANAPOOL_EMAIL`, `MANAPOOL_ACCESS_TOKEN`, optional `MANAPOOL_PASSWORD` for the tier-3 headless cart fetch). Never commit or log them.
 
 ## Conventions
 
