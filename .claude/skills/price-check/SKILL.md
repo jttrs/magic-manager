@@ -95,6 +95,46 @@ Scryfall price are listed separately (can't be judged).
 | `--method headless\|bookmarklet` (on manapool_cart.py) | Force one fetch path. |
 | `--over-market-pct N` | ⚠️ flag threshold: %% over Scryfall market. Default 50. |
 
+### Full cart audit (`manapool_cart_check.py`) — superset of the overpay check
+
+When the question is broader than "am I overpaying" — e.g. *"what can I remove
+from my cart?"*, *"what am I still missing?"* — use the cart-audit tool. It runs
+up to **three atomic checks** over the same single cart-mapping pass:
+
+```bash
+uv run python scripts/manapool_cart_check.py --set tla                       # all three checks
+uv run python scripts/manapool_cart_check.py --set tla --check owned         # just one
+uv run python scripts/manapool_cart_check.py --set tla --check missing
+uv run python scripts/manapool_cart_check.py --set tla --check overpay --file cart.json
+```
+
+| Check | Answers | Notes |
+|---|---|---|
+| `owned` | Cart lines you **already own** (redundant — remove these) | **Finish-level**: matched on (printing, finish), so a *foil* cart line isn't flagged just because you own the nonfoil. |
+| `missing` | Family gaps **not in the cart** (should-add) | Reuses `mm query missing-set` logic (`magic_manager.missing`). **Requires `--set`.** |
+| `overpay` | Priced over true market | Same comparison as `manapool_price_check.py` (shared `manapool_common.overpay_rows`), rendered in this tool's split-column table (`Δ $` / `Δ %` / `Flag`). |
+
+- `--set CODE` scopes `owned`/`overpay` to `set:CODE+related`; out-of-family cart
+  lines are counted and reported on stderr (not misclassified). `missing` always
+  needs `--set`.
+- `--check owned|missing|overpay|all` (default `all`), plus the same
+  `--file/--method/--over-market-pct` as the overpay pipeline, and
+  `--treatment-class` (forwarded to the missing check, default `preferred`).
+
+**Output contract (deterministic, machine-parseable).** STDOUT is data only:
+a `## Summary` metrics table, then one `## Owned` / `## Missing` / `## Overpay`
+data table per requested check, each closed by a bold **Total (N)** row. No
+prose, no empty-state sentences — an empty section still emits its header + a
+`Total (0)` row. All commentary (family scoping, skipped/unmapped/no-market
+lines) goes to **STDERR**. Fixed columns, fixed row order (checks sort by
+set/CN/finish; overpay by %-over desc), fixed `$X.XX` money — so same-day
+re-runs are byte-identical and the tables can be diffed or parsed directly.
+
+Use the two-script pipeline above (`manapool_price_check.py`) for a pure overpay
+check with its original combined `Over market` column; use
+`manapool_cart_check.py` when you want owned/missing too or the split-column,
+summary-topped report.
+
 ---
 
 ## Adding a mode (e.g. `tcgplayer`)
@@ -129,7 +169,9 @@ template), and secrets in the gitignored `.env`.
 
 - `.claude/skills/manapool-search/manapool.sh` — sanctioned catalog/price wrapper (manapool mode).
 - `scripts/manapool_cart.py` — manapool cart fetch (headless, else bookmarklet).
-- `scripts/manapool_price_check.py` — the comparison table.
+- `scripts/manapool_common.py` — shared cart plumbing (load, uuid→product mapping, overpay buckets); DRY core for both cart tools.
+- `scripts/manapool_price_check.py` — the overpay comparison table (thin consumer of `manapool_common`).
+- `scripts/manapool_cart_check.py` — full cart audit: owned / missing-from-cart / overpay (three atomic checks, one mapping pass).
 - `.claude/skills/price-check/cart-bookmarklet.js` — manapool bookmarklet (fallback fetch).
 - [[foil-diff]] — sibling price-analysis skill (foil vs nonfoil gap).
 - [[missing-from-set]] — produces want-lists you could also run through a marketplace optimizer.

@@ -1926,127 +1926,6 @@ def query_url_cmd(
         typer.echo(f"Chunk {i}/{len(chunks)} ({len(chunk)} printings): {url}")
 
 
-def _apply_preferred_post_filter(
-    rows: list[sel_mod.MaterializedRow],
-    anchor_code: str,
-) -> list[sel_mod.MaterializedRow]:
-    """Post-filter rows for `mm query missing-set` regular sub-selectors when
-    `--treatment-class=preferred`. Applies two exclusions that the selector
-    grammar's `treatment=preferred` already applies to the alt sub-selector,
-    but which need to be applied to the regular sub-selectors here:
-
-    1. **Digital-only (Arena/Alchemy rebalanced)** — drop unconditionally.
-       Same rule the selector applies; these never have physical counterparts.
-
-    2. **Datestamped reprints with a non-stamped sibling** at the same name and
-       same treatment codes in the family. Catches PFIN's prerelease-stamped
-       FIN cards that are visually identical to the FIN versions.
-    """
-    import json as _json
-    from . import treatments as _treatments
-    from .selectors import (
-        _is_digital_only as _digital_only,
-        _is_family_unobtainable as _family_unobtainable,
-    )
-
-    if not rows:
-        return rows
-
-    # Step 1: drop digital-only + serialized prints unconditionally, then
-    # apply the family's unobtainable-rules (e.g. LTR's scroll-frame
-    # silverfoils). Same exclusions the selector-side preferred filter
-    # applies; we run them here so the rare/mythic-regular sub-selectors
-    # of `mm query missing-set` match.
-    rows = [r for r in rows if not _digital_only(r.card)]
-    rows = [r for r in rows if not _family_unobtainable(r.card, anchor_code)]
-    if not rows:
-        return rows
-
-    # Step 2: build family index for datestamped-with-sibling check.
-    try:
-        family_codes = set(sets_mod.resolve(anchor_code).all_codes)
-    except LookupError:
-        family_codes = {anchor_code}
-    placeholders = ",".join("?" for _ in family_codes)
-    with db.connect() as conn:
-        fam_rows = conn.execute(
-            f"SELECT scryfall_id, name, frame_effects, full_art, promo_types "
-            f"FROM cards WHERE set_code IN ({placeholders})",
-            list(family_codes),
-        ).fetchall()
-    by_name_codes: dict[tuple[str | None, frozenset[str]], list[dict]] = {}
-    promo_index: dict[str, set[str]] = {}
-    for fr in fam_rows:
-        t = _treatments.compute_treatment(dict(fr))
-        codes = frozenset(t.split("|")) if t else frozenset()
-        pt = set(_json.loads(fr["promo_types"] or "[]"))
-        promo_index[fr["scryfall_id"]] = pt
-        by_name_codes.setdefault((fr["name"], codes), []).append({
-            "scryfall_id": fr["scryfall_id"],
-            "promo_types": pt,
-        })
-    out: list[sel_mod.MaterializedRow] = []
-    for r in rows:
-        sid = r.scryfall_id
-        my_pt = promo_index.get(sid, set())
-        if "datestamped" not in my_pt:
-            out.append(r)
-            continue
-        t = _treatments.compute_treatment(r.card)
-        codes = frozenset(t.split("|")) if t else frozenset()
-        siblings = by_name_codes.get((r.card.get("name"), codes), [])
-        non_stamped_sibling_exists = any(
-            s["scryfall_id"] != sid and "datestamped" not in s["promo_types"]
-            for s in siblings
-        )
-        if not non_stamped_sibling_exists:
-            out.append(r)  # Keep — no cheaper sibling to substitute.
-    return out
-
-
-def _drop_meld_back_faces(
-    rows: list[sel_mod.MaterializedRow],
-    anchor_code: str,
-) -> list[sel_mod.MaterializedRow]:
-    """Drop rows whose card name has ALL its family printings on a 'b'-suffix
-    collector number — these are meld-back faces (not real products).
-
-    Heuristic: a meld card has two front halves (e.g. Fang + Vanille) plus
-    the merged back face (Ragnarok). Wizards prints the back face with the
-    same set + a CN like ``99b``, ``381b``, ``446b``, ``526b``. Scryfall
-    captures it as a separate ``cards`` row, but neither TCGplayer nor
-    ManaPool sells it as a standalone product — it's only obtained as the
-    back of one of the front-half printings.
-
-    The signal: every printing of the card name in the family has a CN
-    that ends in ``b``. Real cards with a 'b' variant (e.g. neon-ink
-    ``Traveling Chocobo`` 551b) ALSO have non-'b' siblings under the same
-    name, so they pass through. Robust across families without a per-set
-    allowlist.
-    """
-    if not rows:
-        return rows
-    try:
-        family_codes = set(sets_mod.resolve(anchor_code).all_codes)
-    except LookupError:
-        family_codes = {anchor_code}
-    placeholders = ",".join("?" for _ in family_codes)
-    with db.connect() as conn:
-        fam_rows = conn.execute(
-            f"SELECT name, collector_number "
-            f"FROM cards WHERE set_code IN ({placeholders})",
-            list(family_codes),
-        ).fetchall()
-    cns_by_name: dict[str, list[str]] = {}
-    for fr in fam_rows:
-        cns_by_name.setdefault(fr["name"], []).append(fr["collector_number"] or "")
-    meld_back_names = {
-        name for name, cns in cns_by_name.items()
-        if cns and all(cn.endswith("b") for cn in cns)
-    }
-    return [r for r in rows if r.card.get("name") not in meld_back_names]
-
-
 def _write_query_xlsx(
     rows: list[sel_mod.MaterializedRow],
     target: Path,
@@ -2200,52 +2079,19 @@ def query_missing_set_cmd(
     import json as _json
     from urllib.parse import quote_plus as _quote_plus
 
+    from . import missing as missing_mod
+
     code_l = code.lower()
-    SUBS = [
-        ("rare-regular",     f"set:{code_l}+related missing rarity=rare treatment=regular"),
-        ("mythic-regular",   f"set:{code_l}+related missing rarity=mythic treatment=regular"),
-        # Uncommons only surface if they're a chase-variant sheet — same
-        # (name, treatment) appears ≥3 times in the family (LTR Nazgûl x9,
-        # FIN Cid x16). Ordinary uncommons are omitted since a completionist
-        # doesn't chase every uncommon reprint. See selectors._modifier_chase.
-        ("uncommon-chase",   f"set:{code_l}+related missing rarity=uncommon treatment=regular chase"),
-        (treatment_class,    f"set:{code_l}+related missing treatment={treatment_class}"),
-    ]
 
-    # 1. Materialize each sub-selector + dedupe to a printing-level union.
-    union: dict[str, sel_mod.MaterializedRow] = {}
-    sub_rows: dict[str, list[sel_mod.MaterializedRow]] = {}
-    for slug_key, sel in SUBS:
-        try:
-            rs = sel_mod.materialize(sel)
-        except sel_mod.SelectorParseError as e:
-            typer.echo(f"error: invalid selector {sel!r}: {e}", err=True); raise typer.Exit(2)
-        except LookupError as e:
-            typer.echo(f"error: {e} (sub-selector {sel!r})", err=True); raise typer.Exit(2)
-        sub_rows[slug_key] = rs
+    # 1. Materialize the printing-level union of the missing-set sub-selectors.
+    # Shared with scripts/manapool_cart_check.py via magic_manager.missing.
+    try:
+        rows_union = missing_mod.missing_printings(code_l, treatment_class)
+    except sel_mod.SelectorParseError as e:
+        typer.echo(f"error: invalid selector: {e}", err=True); raise typer.Exit(2)
+    except LookupError as e:
+        typer.echo(f"error: {e}", err=True); raise typer.Exit(2)
 
-    # 1a. When using 'preferred' mode, also drop datestamped-with-sibling rows
-    # from the rare/mythic regular sub-selectors. The 'preferred' filter only
-    # runs on the alt sub-selector (treatment=preferred); regular-treatment
-    # rows skip the filter unless we apply it here.
-    if treatment_class == "preferred":
-        sub_rows["rare-regular"]   = _apply_preferred_post_filter(sub_rows["rare-regular"], code_l)
-        sub_rows["mythic-regular"] = _apply_preferred_post_filter(sub_rows["mythic-regular"], code_l)
-        sub_rows["uncommon-chase"] = _apply_preferred_post_filter(sub_rows["uncommon-chase"], code_l)
-
-    # 1b. Drop meld-back faces. Identified by: every printing of this card
-    # name in the family has a 'b' suffix on its collector number. Meld
-    # backs aren't sold as products on TCGplayer or ManaPool — they're the
-    # back face of a meld pair, only obtainable as part of the front-face
-    # printing.
-    for slug_key in list(sub_rows.keys()):
-        sub_rows[slug_key] = _drop_meld_back_faces(sub_rows[slug_key], code_l)
-
-    for slug_key in sub_rows:
-        for r in sub_rows[slug_key]:
-            union[r.scryfall_id] = r
-
-    rows_union = list(union.values())
     if not rows_union:
         typer.echo(f"# No missing printings found for set:{code_l}+related (full collection? wrong code?).")
         raise typer.Exit(0)
@@ -2271,8 +2117,9 @@ def query_missing_set_cmd(
     ts = datetime.now().strftime("%Y-%m-%d-%H%M%S")
     QUERIES_DIR.mkdir(parents=True, exist_ok=True)
     xlsx_path = QUERIES_DIR / f"missing-{code_l}-checklist-{ts}.xlsx"
+    _subs = missing_mod.sub_selectors(code_l, treatment_class)
     union_selector_repr = (
-        f"({SUBS[0][1]}) ∪ ({SUBS[1][1]}) ∪ ({SUBS[2][1]})  [printing-level union]"
+        f"({_subs[0][1]}) ∪ ({_subs[1][1]}) ∪ ({_subs[2][1]})  [printing-level union]"
     )
     _write_query_xlsx(
         rows_for_xlsx, xlsx_path, union_selector_repr,

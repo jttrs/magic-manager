@@ -39,71 +39,15 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import json
-import subprocess
 import sys
-import urllib.parse
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "src"))
+sys.path.insert(0, str(ROOT / "scripts"))
 
-from magic_manager import scryfall  # noqa: E402
-
-MANAPOOL_SH = ROOT / ".claude" / "skills" / "manapool-search" / "manapool.sh"
-
-# ManaPool finish_id -> (scryfall finish, is_foil)
-FINISH_FOIL = {"FO": True, "NF": False, "FN": False, "ET": True}
-
-
-def _load_cart(src: str | None) -> list[dict]:
-    if src and src != "-":
-        text = Path(src).read_text()
-    else:
-        text = sys.stdin.read()
-    data = json.loads(text)
-    items = data.get("items") if isinstance(data, dict) else data
-    if not isinstance(items, list):
-        raise SystemExit("input is not a cart JSON array (or {items:[...]})")
-    return items
-
-
-def _mp_product(uuid: str) -> dict | None:
-    """One Mana Pool product row for an mtgjson uuid (scryfall_id + variants).
-    Per-uuid because the response doesn't echo which uuid produced each row;
-    the wrapper's 24h cache makes repeat single lookups cheap."""
-    qs = "mtgjson_uuids=" + urllib.parse.quote(uuid)
-    res = subprocess.run(
-        [str(MANAPOOL_SH), "raw", "GET", "/products/singles", qs],
-        capture_output=True, text=True, check=False,
-    )
-    if res.returncode != 0:
-        return None
-    data = json.loads(res.stdout).get("data", [])
-    return data[0] if data else None
-
-
-def _variant_low(prod: dict, foil: bool, condition: str) -> int | None:
-    """low_price (cents) for the finish+condition variant; falls back to the
-    finish-matched cheapest across conditions, then the top-level nm field."""
-    want_fin = {"FO"} if foil else {"NF", "FN"}
-    cands = [v for v in prod.get("variants", [])
-             if v.get("finish_id") in want_fin and v.get("low_price")]
-    if not cands:
-        # top-level fallback
-        return prod.get("price_cents_nm_foil") if foil else prod.get("price_cents_nm")
-    # prefer exact condition, else cheapest of the finish
-    exact = [v for v in cands if v.get("condition_id") == condition]
-    pool = exact or cands
-    return min(v["low_price"] for v in pool)
-
-
-def _usd(cents) -> float | None:
-    return round(cents / 100.0, 2) if isinstance(cents, (int, float)) else None
-
-
-def _fmt(v: float | None) -> str:
-    return f"${v:.2f}" if v is not None else "—"
+# Shared cart plumbing — cart load, mtgjson-uuid → product mapping, and the
+# overpay comparison all live in manapool_common (DRY with manapool_cart_check).
+from manapool_common import load_cart, map_cart, overpay_rows, _fmt  # noqa: E402
 
 
 def main() -> int:
@@ -113,59 +57,17 @@ def main() -> int:
                     help="Flag lines priced this %% or more over Scryfall/TCG market. Default 50.")
     args = ap.parse_args()
 
-    cart = _load_cart(args.file)
+    cart = load_cart(args.file, method="bookmarklet")
     uuids = [c["card_id"] for c in cart if c.get("card_id")]
     if not uuids:
         raise SystemExit("no card_id (mtgjson uuid) on any cart line; can't map.")
 
     print(f"mapping {len(set(uuids))} cart cards via Mana Pool products…", file=sys.stderr)
-    prod_by_uuid: dict[str, dict] = {}
-    for u in dict.fromkeys(uuids):  # dedup, preserve order
-        p = _mp_product(u)
-        if p:
-            prod_by_uuid[u] = p
-
-    scryfall_ids = sorted({p["scryfall_id"] for p in prod_by_uuid.values() if p.get("scryfall_id")})
-    scry: dict[str, dict] = {}
-    if scryfall_ids:
-        found, _ = scryfall.collection([{"id": s} for s in scryfall_ids])
-        for c in found:
-            scry[c["id"]] = c.get("prices") or {}
-
-    rows = []
-    no_market = []
-    unmapped = 0
-    for line in cart:
-        prod = prod_by_uuid.get(line.get("card_id"))
-        if not prod:
-            unmapped += 1
-            continue
-        foil = FINISH_FOIL.get(line.get("finish_id"), False)
-        cond = line.get("condition_id") or "NM"
-        your = _usd(line.get("price_cents"))
-        mp_cheap = _usd(_variant_low(prod, foil, cond))
-        sp = scry.get(prod.get("scryfall_id"), {})
-        m = sp.get("usd_foil") if foil else sp.get("usd")
-        market = float(m) if m not in (None, "") else None
-        # treatment label (from scryfall frame/promo would need extra fetch;
-        # use MP's own finish + set/num which already encode the printing)
-        rec = {
-            "name": prod.get("name") or "?",
-            "set": (prod.get("set_code") or "").upper(),
-            "num": str(prod.get("number") or ""),
-            "fin": "foil" if foil else "nonfoil",
-            "your": your, "mp_cheap": mp_cheap, "market": market,
-        }
-        if market is None or your is None:
-            no_market.append(rec)
-            continue
-        over = your - market
-        pct = (over / market * 100) if market else 0.0
-        rec["over"] = over
-        rec["pct"] = pct
-        rows.append(rec)
-
-    rows.sort(key=lambda r: (-r["pct"], r["name"], r["set"], r["num"]))
+    mapped = map_cart(cart)
+    buckets = overpay_rows(mapped)
+    rows = buckets["rows"]
+    no_market = buckets["no_market"]
+    unmapped = buckets["unmapped"]
 
     print("| Card | Fin | Your $ | MP cheapest | Scry/TCG market | Over market |")
     print("|---|:--:|--:|--:|--:|--:|")
