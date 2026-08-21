@@ -121,19 +121,29 @@ uv run python scripts/manapool_cart_check.py --set tla --check overpay --file ca
   `--file/--method/--over-market-pct` as the overpay pipeline, and
   `--treatment-class` (forwarded to the missing check, default `preferred`).
 
-**Output contract (deterministic, machine-parseable).** STDOUT is data only:
-a `## Summary` metrics table, then one `## Owned` / `## Missing` / `## Overpay`
-data table per requested check, each closed by a bold **Total (N)** row. No
-prose, no empty-state sentences — an empty section still emits its header + a
-`Total (0)` row. All commentary (family scoping, skipped/unmapped/no-market
-lines) goes to **STDERR**. Fixed columns, fixed row order (checks sort by
-set/CN/finish; overpay by %-over desc), fixed `$X.XX` money — so same-day
-re-runs are byte-identical and the tables can be diffed or parsed directly.
+**Output contract (deterministic; chat report + full file artifact).** Mirrors
+the [[missing-from-set]] split — a concise, chat-ready report to STDOUT and the
+full detail written to `queries/`:
 
-Use the two-script pipeline above (`manapool_price_check.py`) for a pure overpay
-check with its original combined `Over market` column; use
-`manapool_cart_check.py` when you want owned/missing too or the split-column,
-summary-topped report.
+- **STDOUT (chat)** — a `## Summary` metrics table, then the **actionable subset**:
+  the full `## Owned` and `## Missing` tables (row-capped at 40 with a
+  `_+N more (see file)_` marker beyond that), and an `## Overpay (flagged)` table
+  showing **only** lines ≥ the threshold (Total row reads `N/total`). Every table
+  is closed by a bold **Total (N)** row; empty sections still emit header +
+  `Total (0)`. No prose. A `🧾 Full cart check … (file://…)` link is printed last.
+- **File** — `queries/cart-check-<anchor>-<ts>.md` holds the same report with the
+  **complete, uncapped** `## Overpay` table (every priced line, sorted %-over
+  desc), so the deep price detail is one click away without flooding chat.
+- **STDERR** — all commentary (family scoping, skipped/unmapped/no-market lines).
+
+Fixed columns, fixed row order (owned/missing sort by set/CN/finish; overpay by
+%-over desc), fixed `$X.XX` money — so the chat report and the file are both
+deterministic (same-day re-runs are byte-identical) and parseable directly.
+
+Relay the STDOUT report verbatim in chat and surface the `file://` link; don't
+paste the file's full overpay table inline. Use the two-script pipeline above
+(`manapool_price_check.py`) for a pure overpay check with its original combined
+`Over market` column and no file artifact.
 
 ---
 

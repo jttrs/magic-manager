@@ -33,9 +33,11 @@ from __future__ import annotations
 
 import argparse
 import sys
+from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+QUERIES_DIR = ROOT / "queries"
 sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "src"))
 
@@ -159,72 +161,108 @@ def check_overpay(mapped: list[CartLine], family_codes: set[str] | None) -> tupl
 
 # ---------- rendering ----------
 #
-# Output contract: STDOUT is data only — a summary table then one data table per
-# requested check, each closed by a bold Total row. No prose, no empty-state
-# sentences (an empty section still renders header + Total(0)). All commentary
-# (scope, skips, unmapped/no-market notes) goes to STDERR. Deterministic: fixed
-# columns, fixed row order (the check functions sort), fixed money formatting.
+# Each section builder returns a list of markdown lines (no printing) so the SAME
+# builder feeds both the chat report and the full file artifact (DRY). Output is
+# data only — a summary table then one data table per check, each closed by a
+# bold Total row; no prose, no empty-state sentences (an empty section still
+# renders header + Total(0)). Deterministic: fixed columns, fixed row order (the
+# check functions sort), fixed money formatting.
+#
+# Chat vs file split (mirrors the missing-from-set skill): the chat report is the
+# ACTIONABLE subset — full owned/missing lists (capped for safety) plus only the
+# FLAGGED overpay rows — while the full report (every overpay row) is written to
+# queries/ and linked. Prevents a 100+-row overpay table from flooding chat.
 
-def _render_summary(set_code: str | None, n_lines: int, results: dict, over_market_pct: float) -> None:
-    print("## Summary")
-    print()
-    print("| Metric | Value |")
-    print("|---|--:|")
-    print(f"| Set family | {(set_code.lower() + '+related') if set_code else '(unscoped)'} |")
-    print(f"| Cart lines | {n_lines} |")
+_CHAT_ROW_CAP = 40  # per-table row cap for the chat report; the file is uncapped
+
+
+def _summary_lines(set_code: str | None, n_lines: int, results: dict, over_market_pct: float) -> list[str]:
+    out = ["## Summary", "", "| Metric | Value |", "|---|--:|",
+           f"| Set family | {(set_code.lower() + '+related') if set_code else '(unscoped)'} |",
+           f"| Cart lines | {n_lines} |"]
     if "owned" in results:
         rows = results["owned"]
-        print(f"| Owned (redundant) | {len(rows)} · {_fmt(sum(r['your'] for r in rows))} |")
+        out.append(f"| Owned (redundant) | {len(rows)} · {_fmt(sum(r['your'] for r in rows))} |")
     if "missing" in results:
         rows = results["missing"]
-        print(f"| Missing from cart | {len(rows)} · {_fmt(sum((r['market'] or 0.0) for r in rows))} |")
+        out.append(f"| Missing from cart | {len(rows)} · {_fmt(sum((r['market'] or 0.0) for r in rows))} |")
     if "overpay" in results:
         b = results["overpay"]
         n_flag = sum(1 for r in b["rows"] if r["pct"] >= over_market_pct)
         flagged_over = sum(r["over"] for r in b["rows"] if r["pct"] >= over_market_pct)
-        print(f"| Overpay flagged (≥{over_market_pct:.0f}%) | {n_flag} · {_fmt(flagged_over)} |")
+        out.append(f"| Overpay flagged (≥{over_market_pct:.0f}%) | {n_flag} · {_fmt(flagged_over)} |")
+    return out
 
 
-def _render_owned(rows: list[dict]) -> None:
-    print("## Owned")
-    print()
-    print("| Card | Fin | Owned | Cart $ |")
-    print("|---|:--:|--:|--:|")
-    for r in rows:
-        print(f"| {_card_link(r['name'], r['set'], r['num'])} | {r['fin']} | "
-              f"{r['owned_qty']} | {_fmt(r['your'])} |")
-    print(f"| **Total ({len(rows)})** | | | **{_fmt(sum(r['your'] for r in rows))}** |")
+def _capped(rows: list[dict], cap: int | None) -> tuple[list[dict], int]:
+    """(shown_rows, n_hidden). cap=None means show all."""
+    if cap is None or len(rows) <= cap:
+        return rows, 0
+    return rows[:cap], len(rows) - cap
 
 
-def _render_missing(rows: list[dict]) -> None:
-    print("## Missing")
-    print()
-    print("| Card | Fin | Market $ |")
-    print("|---|:--:|--:|")
-    for r in rows:
-        print(f"| {_card_link(r['name'], r['set'], r['num'])} | {r['fin']} | "
-              f"{_fmt(r['market'])} |")
-    print(f"| **Total ({len(rows)})** | | **{_fmt(sum((r['market'] or 0.0) for r in rows))}** |")
+def _owned_lines(rows: list[dict], cap: int | None = None) -> list[str]:
+    shown, hidden = _capped(rows, cap)
+    out = ["## Owned", "", "| Card | Fin | Owned | Cart $ |", "|---|:--:|--:|--:|"]
+    for r in shown:
+        out.append(f"| {_card_link(r['name'], r['set'], r['num'])} | {r['fin']} | "
+                   f"{r['owned_qty']} | {_fmt(r['your'])} |")
+    if hidden:
+        out.append(f"| _+{hidden} more (see file)_ | | | |")
+    out.append(f"| **Total ({len(rows)})** | | | **{_fmt(sum(r['your'] for r in rows))}** |")
+    return out
 
 
-def _render_overpay(buckets: dict, over_market_pct: float) -> None:
-    print("## Overpay")
-    print()
+def _missing_lines(rows: list[dict], cap: int | None = None) -> list[str]:
+    shown, hidden = _capped(rows, cap)
+    out = ["## Missing", "", "| Card | Fin | Market $ |", "|---|:--:|--:|"]
+    for r in shown:
+        out.append(f"| {_card_link(r['name'], r['set'], r['num'])} | {r['fin']} | {_fmt(r['market'])} |")
+    if hidden:
+        out.append(f"| _+{hidden} more (see file)_ | | |")
+    out.append(f"| **Total ({len(rows)})** | | **{_fmt(sum((r['market'] or 0.0) for r in rows))}** |")
+    return out
+
+
+def _overpay_lines(buckets: dict, over_market_pct: float, flagged_only: bool = False) -> list[str]:
     rows = buckets["rows"]
-    print("| Card | Fin | Your $ | MP $ | Market $ | Δ $ | Δ % | Flag |")
-    print("|---|:--:|--:|--:|--:|--:|--:|:--:|")
-    n_flag = 0
-    flagged_total_over = 0.0
-    for r in rows:
+    n_flag = sum(1 for r in rows if r["pct"] >= over_market_pct)
+    flagged_total_over = sum(r["over"] for r in rows if r["pct"] >= over_market_pct)
+    display = [r for r in rows if r["pct"] >= over_market_pct] if flagged_only else rows
+    title = "## Overpay (flagged)" if flagged_only else "## Overpay"
+    out = [title, "", "| Card | Fin | Your $ | MP $ | Market $ | Δ $ | Δ % | Flag |",
+           "|---|:--:|--:|--:|--:|--:|--:|:--:|"]
+    for r in display:
         flagged = r["pct"] >= over_market_pct
-        if flagged:
-            n_flag += 1
-            flagged_total_over += r["over"]
-        print(f"| {_card_link(r['name'], r['set'], r['num'])} | {r['fin']} | "
-              f"{_fmt(r['your'])} | {_fmt(r['mp_cheap'])} | {_fmt(r['market'])} | "
-              f"{r['over']:+.2f} | {r['pct']:+.0f}% | {'⚠️' if flagged else ''} |")
-    print(f"| **Total ({len(rows)})** | | | | | **{flagged_total_over:+.2f}** | | "
-          f"**{n_flag} ⚠️** |")
+        out.append(f"| {_card_link(r['name'], r['set'], r['num'])} | {r['fin']} | "
+                   f"{_fmt(r['your'])} | {_fmt(r['mp_cheap'])} | {_fmt(r['market'])} | "
+                   f"{r['over']:+.2f} | {r['pct']:+.0f}% | {'⚠️' if flagged else ''} |")
+    if flagged_only and not display:
+        out.append("| _none ≥ threshold — full pricing in file_ | | | | | | | |")
+    denom = len(display) if flagged_only else len(rows)
+    out.append(f"| **Total ({denom}{'/' + str(len(rows)) if flagged_only else ''})** | | | | | "
+               f"**{flagged_total_over:+.2f}** | | **{n_flag} ⚠️** |")
+    return out
+
+
+def _report_blocks(set_code, n_lines, results, over_market_pct, *, chat: bool) -> list[str]:
+    """Assemble the full report (chat=False) or the concise chat report
+    (chat=True: full-but-capped owned/missing, flagged-only overpay)."""
+    cap = _CHAT_ROW_CAP if chat else None
+    blocks: list[list[str]] = [_summary_lines(set_code, n_lines, results, over_market_pct)]
+    if "owned" in results:
+        blocks.append(_owned_lines(results["owned"], cap))
+    if "missing" in results:
+        blocks.append(_missing_lines(results["missing"], cap))
+    if "overpay" in results:
+        blocks.append(_overpay_lines(results["overpay"], over_market_pct, flagged_only=chat))
+    # join blocks with a blank line between
+    lines: list[str] = []
+    for i, b in enumerate(blocks):
+        if i:
+            lines.append("")
+        lines.extend(b)
+    return lines
 
 
 # ---------- main ----------
@@ -295,20 +333,32 @@ def main() -> int:
                              f"({', '.join(x['name'] for x in no_market[:8])}"
                              f"{'…' if len(no_market) > 8 else ''})")
 
-    # STDOUT: title, summary, then one data table per check (in fixed order).
-    print(f"# Mana Pool cart check — {len(mapped)} line(s)")
+    title = f"# Mana Pool cart check — {len(mapped)} line(s)"
+
+    # Write the FULL report (every row, uncapped) to queries/ so the chat report
+    # can stay concise. Only worth writing when overpay ran (it's the big table).
+    file_link = None
+    if "overpay" in results:
+        full = [title, ""] + _report_blocks(
+            args.set_code, len(mapped), results, args.over_market_pct, chat=False)
+        QUERIES_DIR.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now().strftime("%Y-%m-%d-%H%M%S")
+        anchor = (args.set_code or "cart").lower()
+        out_path = QUERIES_DIR / f"cart-check-{anchor}-{ts}.md"
+        out_path.write_text("\n".join(full) + "\n", encoding="utf-8")
+        file_link = out_path
+
+    # STDOUT: the concise, chat-ready report (capped owned/missing, flagged-only
+    # overpay). Full detail lives in the file linked at the end.
+    print(title)
     print()
-    _render_summary(args.set_code, len(mapped), results, args.over_market_pct)
-    for chk in ("owned", "missing", "overpay"):
-        if chk not in results:
-            continue
+    for line in _report_blocks(
+            args.set_code, len(mapped), results, args.over_market_pct, chat=True):
+        print(line)
+    if file_link is not None:
         print()
-        if chk == "owned":
-            _render_owned(results["owned"])
-        elif chk == "missing":
-            _render_missing(results["missing"])
-        elif chk == "overpay":
-            _render_overpay(results["overpay"], args.over_market_pct)
+        print(f"🧾 Full cart check ({len(results['overpay']['rows'])} priced lines): "
+              f"[{file_link.relative_to(ROOT)}](file://{file_link.resolve()})")
 
     # STDERR: all commentary.
     if family_codes:
