@@ -5,7 +5,9 @@ description: Build the inventory checklist (XLSX or markdown) for a Magic the Ga
 
 # Generate Set List
 
-The mechanical wrapper around `mm set master-list`. The user names a release ("Final Fantasy", "Outlaws of Thunder Junction", `otj`, `fin`); the CLI computes the family from Scryfall's `parent_set_code` graph filtered to `set_type IN (expansion, commander, masterpiece, promo)`, syncs prices, and writes `checklists/<slug>-<mode>-checklist.xlsx` (mode = `add` by default — blank qty cells; `modify` pre-populates from current inventory).
+The mechanical wrapper around `mm set master-list`. The user names a release ("Final Fantasy", "Outlaws of Thunder Junction", `otj`, `fin`); the CLI computes the family from Scryfall's `parent_set_code` graph filtered to `set_type IN (expansion, commander, masterpiece, promo, eternal)`, syncs prices, and writes `checklists/<slug>-<mode>-checklist.xlsx` (mode = `add` by default — blank qty cells; `modify` pre-populates from current inventory).
+
+> `eternal` covers the "Jumpstart-analog" Eternal products that ship with modern UB families (`tle` for Avatar, `tmc` for TMNT) — their cards turn up in the family's boosters, so they're always part of the collectable family.
 
 **You make zero judgment calls about scope.** The recommended bundle is codified in the CLI; do not list sibling sets and ask which to include. If the user wants tokens or memorabilia, they will say so explicitly — translate that to `--include token,memorabilia`.
 

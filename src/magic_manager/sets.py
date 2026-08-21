@@ -30,7 +30,12 @@ RARITY_ORDER = {
 # Set types that count as "things players actively collect" for the default
 # inventory bundle. Tokens and memorabilia (art series, scene boxes) are off
 # by default; explicitly opt them in via include_kinds.
-DEFAULT_INVENTORY_SET_TYPES = frozenset({"expansion", "commander", "masterpiece", "promo"})
+#
+# `eternal` is the set_type for the "Jumpstart-analog" Eternal products that
+# ship alongside a modern UB release (e.g. `tle` for Avatar, `tmc` for TMNT).
+# Their cards appear in Collector/Play Boosters for the family, so they are
+# part of the collectable family by user direction — always included.
+DEFAULT_INVENTORY_SET_TYPES = frozenset({"expansion", "commander", "masterpiece", "promo", "eternal"})
 
 
 # Per V1.5 user direction: prerelease promos, store-stamped promos,
@@ -90,8 +95,8 @@ class ResolvedSet:
 
     def filtered_codes(self, *, include_kinds: Iterable[str] = ()) -> list[str]:
         """Codes in the family whose ``set_type`` is in the default inventory
-        bundle (expansion / commander / masterpiece / promo), expanded by
-        ``include_kinds`` (e.g. ``{"token", "memorabilia"}``).
+        bundle (expansion / commander / masterpiece / promo / eternal),
+        expanded by ``include_kinds`` (e.g. ``{"token", "memorabilia"}``).
 
         The anchor is always included regardless — naming a token set
         explicitly should still produce that set in the output.

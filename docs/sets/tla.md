@@ -113,7 +113,7 @@ For any PRM-stamped TLA card, resolve by name+artist per `.claude/skills/bulk-ad
 
 ## 7. Edge cases & gotchas
 
-- **`tle` (Avatar: The Last Airbender Eternal) is `set_type: eternal`, not `set_type: commander`.** Similar to TMT's `tmc`. Contains a Jumpstart-analog product with 317 cards.
+- **`tle` (Avatar: The Last Airbender Eternal) is `set_type: eternal`, not `set_type: commander`.** Similar to TMT's `tmc`. Contains a Jumpstart-analog product with 317 cards. As of the 2026-08 protocol change, `eternal` is in `DEFAULT_INVENTORY_SET_TYPES` (`sets.py:33`), so `tle` is now pulled into the default `master-list` family — previously it was silently dropped, and its Collector-Booster cards (e.g. foil 118/158/217, ext-art 206, sourcematerial 5) had to be added by hand via `mm inventory add`.
 - **`jtla` "Jumpstart Front Cards"** (46 memorabilia) — a separate memorabilia set for Jumpstart product front cards. Different from the actual Jumpstart cards in tle.
 - **`ftla` "Beginner Box Front Cards"** (10 memorabilia) — similar; front cards from the beginner box product.
 - **Digital-only Arena prints** — TLA has A-prefixed Alchemy rebalanced variants (globally filtered).

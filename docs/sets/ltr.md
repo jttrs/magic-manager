@@ -149,7 +149,7 @@ For any PRM-stamped card the user presents, resolve by name+artist first (see `.
 
 ## 7. Edge cases & gotchas
 
-- **`mltr` minigame set** — 1 card, `set_type: minigame`. Unusual type not seen in newer UB families. Excluded from default `filtered_codes()` in `sets.py:33` (which allows expansion/commander/masterpiece/promo). If the user ever wants it included in checklists, use `--include minigame`.
+- **`mltr` minigame set** — 1 card, `set_type: minigame`. Unusual type not seen in newer UB families. Excluded from default `filtered_codes()` in `sets.py:33` (which allows expansion/commander/masterpiece/promo/eternal). If the user ever wants it included in checklists, use `--include minigame`.
 - **`altc` Scene Box** — 24 memorabilia cards. Not in default checklists (memorabilia excluded). Distinct product from the borderless-inverted "Scene Cards" of §4a — the Scene Box is a physical display, altc is the memorabilia set code.
 - **LTC set_type=commander** — this is a genuine Commander-deck set (Riders of Rohan / Hosts of Mordor / Elven Council / Food and Fellowship, 4 decks). Distinct from TMT's `tmc` which has `set_type: eternal` despite being a Commander deck (TMT gotcha).
 - **Meld-back faces** — none known; the missing-set pipeline's `_drop_meld_back_faces` filter (`cli.py:2233`) is defensive here.

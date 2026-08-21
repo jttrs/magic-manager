@@ -207,7 +207,7 @@ def set_master_list(
     include: list[str] = typer.Option(
         None, "--include",
         help="Opt extra set_types into the family beyond the default "
-             "(expansion/commander/masterpiece/promo). E.g. --include token,memorabilia.",
+             "(expansion/commander/masterpiece/promo/eternal). E.g. --include token,memorabilia.",
     ),
     rarity: list[str] = typer.Option(
         None, "--rarity",
@@ -249,9 +249,9 @@ def set_master_list(
     """Build the inventory checklist for a release family or a slice of it.
 
     The default family is the anchor set + every related set whose set_type
-    is in {expansion, commander, masterpiece, promo}. Tokens, memorabilia
-    (art series, scene boxes), and other set_types are excluded by default;
-    opt them in with ``--include token,memorabilia``.
+    is in {expansion, commander, masterpiece, promo, eternal}. Tokens,
+    memorabilia (art series, scene boxes), and other set_types are excluded
+    by default; opt them in with ``--include token,memorabilia``.
 
     The checklist lands at ``input/<slug>-<slice>.<ext>`` where ``<slice>``
     encodes the optional ``--only`` and ``--rarity`` filters (or ``master``
