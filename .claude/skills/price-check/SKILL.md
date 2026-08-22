@@ -98,8 +98,9 @@ Scryfall price are listed separately (can't be judged).
 ### Full cart audit (`manapool_cart_check.py`) — superset of the overpay check
 
 When the question is broader than "am I overpaying" — e.g. *"what can I remove
-from my cart?"*, *"what am I still missing?"* — use the cart-audit tool. It runs
-up to **three atomic checks** over the same single cart-mapping pass:
+from my cart?"*, *"what am I still missing?"* — use the **[[cart-check]]** skill
+(its own `/cart-check` command), which drives the tool below. It runs up to
+**three atomic checks** over the same single cart-mapping pass:
 
 ```bash
 uv run python scripts/manapool_cart_check.py --set tla                       # all three checks
