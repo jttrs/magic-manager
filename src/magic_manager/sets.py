@@ -982,17 +982,15 @@ def write_master_list_md(set_codes: Iterable[str], out_path: Path,
 # as `available` in `mm deck find`: one pack's worth is pledged to the recipe,
 # the rest are loose. That's expected, not a bug.)
 
-def _jumpstart_variant_summary(variant_meta: dict) -> dict:
-    """Fetch one variant's MTGJSON deck file and roll up displayable stats.
+def _rollup_deck_prices(deck_data: dict) -> tuple[int, float | None]:
+    """Sum card_count + local-market USD across a precon/Jumpstart deck JSON.
 
-    Returns ``{"file_name", "theme", "card_count", "usd_total"}``. Pulls
-    Scryfall USD per scryfall_id from the local cards table to compute
-    ``usd_total`` (nonfoil price × count); printings missing from cards are
-    skipped silently — user can still ingest, the totals just under-report.
+    Walks the commander/main/side boards, pulling Scryfall USD per scryfall_id
+    from the local cards table (foil price for foil cards, nonfoil otherwise).
+    Printings missing from the cards table are skipped silently — the totals
+    just under-report, and the user can still ingest. Returns ``(total_count,
+    usd_total)`` where ``usd_total`` is ``None`` when nothing priced.
     """
-    from . import mtgjson as mtgjson_mod
-    file_name = variant_meta["fileName"]
-    deck_data = mtgjson_mod.deck(file_name)
     sids: list[tuple[str, int, bool]] = []  # (scryfall_id, count, is_foil)
     total_count = 0
     for board_key in ("commander", "mainBoard", "sideBoard"):
@@ -1022,11 +1020,26 @@ def _jumpstart_variant_summary(variant_meta: dict) -> dict:
             price = prices[1] if is_foil else prices[0]
             if price is not None:
                 usd_total += float(price) * count
+    return total_count, (round(usd_total, 2) if usd_total else None)
+
+
+def _jumpstart_variant_summary(variant_meta: dict) -> dict:
+    """Fetch one variant's MTGJSON deck file and roll up displayable stats.
+
+    Returns ``{"file_name", "theme", "card_count", "usd_total"}``. Pulls
+    Scryfall USD per scryfall_id from the local cards table to compute
+    ``usd_total`` (nonfoil price × count); printings missing from cards are
+    skipped silently — user can still ingest, the totals just under-report.
+    """
+    from . import mtgjson as mtgjson_mod
+    file_name = variant_meta["fileName"]
+    deck_data = mtgjson_mod.deck(file_name)
+    total_count, usd_total = _rollup_deck_prices(deck_data)
     return {
         "file_name": file_name,
         "theme": variant_meta.get("name") or file_name,
         "card_count": total_count,
-        "usd_total": round(usd_total, 2) if usd_total else None,
+        "usd_total": usd_total,
     }
 
 
@@ -1038,6 +1051,55 @@ def _build_jumpstart_rows(set_code: str) -> list[dict]:
         return []
     return [_jumpstart_variant_summary(v) for v in
             sorted(variants, key=lambda d: d.get("name") or d.get("fileName") or "")]
+
+
+def _precon_variant_summary(variant_meta: dict) -> dict:
+    """Fetch one precon's MTGJSON deck file and roll up displayable stats.
+
+    Precon twin of ``_jumpstart_variant_summary``, carrying the extra
+    descriptive columns a precon checklist surfaces: ``type`` (product type,
+    e.g. "Commander Deck"), ``release_date`` (from the DeckList entry), and
+    ``commander`` (the commander-board card name(s), joined with "; "; blank
+    for non-commander products). ``card_count``/``usd_total`` share the
+    ``_rollup_deck_prices`` core with Jumpstart.
+    """
+    from . import mtgjson as mtgjson_mod
+    file_name = variant_meta["fileName"]
+    deck_data = mtgjson_mod.deck(file_name)
+    total_count, usd_total = _rollup_deck_prices(deck_data)
+    commander = "; ".join(
+        (c.get("name") or "") for c in (deck_data.get("commander") or [])
+    )
+    return {
+        "file_name": file_name,
+        "deck_name": variant_meta.get("name") or file_name,
+        "type": variant_meta.get("type") or "",
+        "release_date": variant_meta.get("releaseDate") or "",
+        "commander": commander,
+        "card_count": total_count,
+        "usd_total": usd_total,
+    }
+
+
+def _build_precon_rows(
+    set_code: str,
+    *,
+    only_type: str | None = None,
+    include_collector: bool = False,
+) -> list[dict]:
+    """Enumerate physical precon products for ``set_code`` and roll each up.
+
+    Sorted by ``(type, deck_name)`` so like products cluster in the checklist.
+    """
+    from . import mtgjson as mtgjson_mod
+    variants = mtgjson_mod.precon_variants(
+        set_code, only_type=only_type, include_collector=include_collector
+    )
+    if not variants:
+        return []
+    summaries = [_precon_variant_summary(v) for v in variants]
+    summaries.sort(key=lambda r: (r["type"], r["deck_name"]))
+    return summaries
 
 
 def write_jumpstart_list_xlsx(set_code: str, out_path: Path,
@@ -1210,6 +1272,193 @@ def write_jumpstart_list_md(set_code: str, out_path: Path,
     return len(rows)
 
 
+def write_precon_list_xlsx(set_code: str, out_path: Path, *,
+                           slug: str | None = None,
+                           only_type: str | None = None,
+                           include_collector: bool = False) -> int:
+    """Emit a fillable XLSX of every physical precon product for ``set_code``.
+
+    Row schema: file_name | deck_name | type | release_date | commander |
+    card_count | usd_total | keep_qty | deconstructed_qty
+
+    ``keep_qty`` (0 or 1) and ``deconstructed_qty`` carry the same semantics as
+    the Jumpstart checklist (a precon is the base concept, Jumpstart a species
+    of it): keep_qty=1 creates one deck recipe + auto-composes one physical
+    copy and adds keep_qty+deconstructed_qty copies' worth of cards to
+    inventory; keep_qty=0 with deconstructed_qty>0 adds loose cards, no recipe.
+    Hidden ``_meta`` sheet declares ``kind=precon`` so ingest dispatches the
+    shared deck-checklist engine. Returns ``rows_written``.
+    """
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+    from openpyxl.worksheet.datavalidation import DataValidation
+
+    from . import __version__
+
+    rows = _build_precon_rows(set_code, only_type=only_type,
+                              include_collector=include_collector)
+    if not rows:
+        raise ValueError(
+            f"no precon variants found for set {set_code!r}"
+            + (f" of type {only_type!r}" if only_type else "")
+            + f". Check `mm mtgjson decks --set {set_code}` for available decks."
+        )
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "checklist"
+
+    headers = ["file_name", "deck_name", "type", "release_date", "commander",
+               "card_count", "usd_total", "keep_qty", "deconstructed_qty"]
+    ws.append(headers)
+    for col, _ in enumerate(headers, start=1):
+        cell = ws.cell(row=1, column=col)
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(horizontal="left")
+
+    qty_fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
+
+    # keep_qty is a 0/1 flag: 0 = deconstruct all copies (no recipe),
+    # 1 = keep one constructed (creates recipe + auto-composes one copy).
+    keep_validator = DataValidation(type="whole", operator="between",
+                                    formula1=0, formula2=1, allow_blank=True)
+    keep_validator.error = "Enter 0 (deconstruct all copies, no recipe) or 1 (keep one constructed)."
+    keep_validator.errorTitle = "Invalid keep_qty"
+    ws.add_data_validation(keep_validator)
+
+    # deconstructed_qty is a non-negative integer (blank = 0).
+    decon_validator = DataValidation(type="whole", operator="greaterThanOrEqual",
+                                     formula1=0, allow_blank=True)
+    decon_validator.error = "Enter a non-negative integer (or leave blank for 0)."
+    decon_validator.errorTitle = "Invalid deconstructed_qty"
+    ws.add_data_validation(decon_validator)
+
+    for r in rows:
+        ws.append([
+            r["file_name"],
+            r["deck_name"],
+            r["type"],
+            r["release_date"],
+            r["commander"],
+            r["card_count"],
+            r["usd_total"],
+            None,
+            None,
+        ])
+    last_row = ws.max_row
+
+    # col 8 = keep_qty (0/1), col 9 = deconstructed_qty (non-negative int)
+    keep_letter = get_column_letter(8)
+    keep_validator.add(f"{keep_letter}2:{keep_letter}{last_row}")
+    decon_letter = get_column_letter(9)
+    decon_validator.add(f"{decon_letter}2:{decon_letter}{last_row}")
+    for col_idx in (8, 9):
+        for r in range(2, last_row + 1):
+            ws.cell(row=r, column=col_idx).fill = qty_fill
+
+    for row_idx in range(2, last_row + 1):
+        ws.cell(row=row_idx, column=7).number_format = '"$"#,##0.00'
+
+    widths = {1: 34, 2: 30, 3: 18, 4: 13, 5: 26, 6: 11, 7: 11, 8: 10, 9: 17}
+    for col_idx, w in widths.items():
+        ws.column_dimensions[get_column_letter(col_idx)].width = w
+
+    ws.freeze_panes = "A2"
+
+    meta_ws = wb.create_sheet("_meta")
+    meta_ws.sheet_state = "hidden"
+    meta_ws.append(["key", "value"])
+    meta_ws["A1"].font = Font(bold=True)
+    meta_ws["B1"].font = Font(bold=True)
+
+    code = set_code.lower()
+    meta = {
+        # `kind` is the dispatch key for `mm set ingest`. 'precon' routes to
+        # the shared deck-checklist engine (as 'jumpstart' does); 'inventory'
+        # and 'missing' route to their own paths.
+        "kind": "precon",
+        "anchor_code": code,
+        "set_codes": code,
+        "slug": slug or out_path.stem,
+        "mode": "add",
+        # Provenance: which slice of the set's products this file covers.
+        "only_type": only_type or "",
+        "include_collector": "1" if include_collector else "0",
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "magic_manager_version": __version__,
+    }
+    for k, v in meta.items():
+        meta_ws.append([k, v])
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    wb.save(out_path)
+    return last_row - 1
+
+
+def write_precon_list_md(set_code: str, out_path: Path, *,
+                         slug: str | None = None,
+                         only_type: str | None = None,
+                         include_collector: bool = False) -> int:
+    """Markdown twin of ``write_precon_list_xlsx``.
+
+    Line shape (after YAML frontmatter):
+
+        - CounterBlitzFinalFantasyX_FIC — Counter Blitz — Commander Deck — 100 cards — $142.50 [K:0 D:0]
+
+    Reuses the Jumpstart ``[K:k D:d]`` bracket convention so the shared parser
+    handles it unchanged. ``K`` = keep_qty (0 or 1), ``D`` = deconstructed_qty.
+    """
+    from . import __version__
+
+    rows = _build_precon_rows(set_code, only_type=only_type,
+                              include_collector=include_collector)
+    if not rows:
+        raise ValueError(
+            f"no precon variants found for set {set_code!r}"
+            + (f" of type {only_type!r}" if only_type else "")
+            + f". Check `mm mtgjson decks --set {set_code}` for available decks."
+        )
+
+    code = set_code.lower()
+    meta = {
+        "kind": "precon",
+        "anchor_code": code,
+        "set_codes": code,
+        "slug": slug or out_path.stem,
+        "mode": "add",
+        "only_type": only_type or "",
+        "include_collector": "1" if include_collector else "0",
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "magic_manager_version": __version__,
+    }
+
+    out_lines: list[str] = ["---"]
+    for k, v in meta.items():
+        out_lines.append(f"{k}: {v}")
+    out_lines.append("---")
+    out_lines.append("")
+    out_lines.append(f"# {code.upper()} precon products ({len(rows)} decks)")
+    out_lines.append("")
+    out_lines.append(
+        "Edit the `[K:k D:d]` bracket per row: `K` = copies kept *constructed* "
+        "(0 or 1 — creates a deck recipe and auto-composes one physical copy), "
+        "`D` = copies deconstructed to free cards (no pledge). K+D = total "
+        "copies opened. Save, then run `mm set ingest` to apply."
+    )
+    out_lines.append("")
+    for r in rows:
+        usd = r["usd_total"]
+        usd_seg = f"${usd:.2f}" if usd is not None else "—"
+        out_lines.append(
+            f"- {r['file_name']} — {r['deck_name']} — {r['type']} — "
+            f"{r['card_count']} cards — {usd_seg} [K:0 D:0]"
+        )
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text("\n".join(out_lines) + "\n", encoding="utf-8")
+    return len(rows)
+
+
 def _slug_theme(theme: str, set_code: str) -> str:
     """Build a deck slug for a Jumpstart pack: ``pack:<theme>-<setcode>``."""
     raw_theme = "".join(c if c.isalnum() else "-" for c in theme.lower())
@@ -1219,14 +1468,41 @@ def _slug_theme(theme: str, set_code: str) -> str:
     return f"pack:{raw_theme}-{set_code.lower()}"
 
 
-def ingest_jumpstart_from_path(path: Path) -> dict:
-    """Apply a filled-in Jumpstart checklist to the local DB.
+# ---------------------------------------------------------------------------
+# Deck-checklist ingest engine.
+#
+# Taxonomy: a *precon* (preconstructed product) is the base concept; a
+# Jumpstart pack is one species of precon. So the ingest is a single engine
+# both kinds share — NOT a Jumpstart path with a precon clone bolted on. The
+# only per-kind differences are (a) how a deck's slug is derived and (b) which
+# ``format`` the created deck gets. ``ingest_jumpstart_from_path`` below is a
+# thin specialization wrapper preserved for its callers.
+# ---------------------------------------------------------------------------
+
+# What each ``kind`` contributes to the shared engine:
+#   slug_fn(deck_name)  -> the deck slug to create (or None to let
+#                          ``import_precon`` derive it from the deck name), and
+#   deck_format         -> the ``format`` passed to ``import_precon`` (None lets
+#                          it derive ``commander`` for Commander decks, else null).
+def _deck_checklist_kind_config(kind: str, set_code: str):
+    if kind == "jumpstart":
+        # pack:<theme>-<code> slugs; every pack is a 'jumpstart'-format deck.
+        return (lambda name: _slug_theme(name, set_code)), "jumpstart"
+    if kind == "precon":
+        # Slug derived from the deck name (as `mm deck import-precon` does);
+        # format left to import_precon's type-based default.
+        return (lambda name: None), None
+    raise ValueError(f"unknown deck-checklist kind: {kind!r}")
+
+
+def _apply_deck_checklist(parsed, *, set_code: str, slug_fn, deck_format) -> dict:
+    """Apply parsed keep/deconstruct rows to the DB (the shared engine).
 
     For each row with T = keep_qty + deconstructed_qty > 0:
-      - ``keep_qty == 1``: creates one ``pack:*`` recipe (format='jumpstart'),
-        adds T copies' worth of cards to inventory via
-        ``import_precon(deconstruct=False, copies=T)``, then auto-constructs
-        one physical copy via ``deck_assign_from_composition(base_slug)``.
+      - ``keep_qty == 1``: creates one deck recipe, adds T copies' worth of
+        cards to inventory via ``import_precon(deconstruct=False, copies=T)``,
+        then auto-constructs one physical copy via
+        ``deck_assign_from_composition``.
       - ``keep_qty == 0`` (D > 0): fully deconstructed — runs
         ``import_precon(deconstruct=True, copies=D)`` so all D copies' cards
         land in inventory with no recipe created.
@@ -1234,41 +1510,18 @@ def ingest_jumpstart_from_path(path: Path) -> dict:
     Raises ``ValueError`` (naming the offending file_name(s)) if any acted row
     has ``keep_qty > 1`` — validation runs before any DB writes.
 
-    Returns a summary:
+    Returns a kind-neutral summary:
       - ``rows_total`` (int): rows present in the file
       - ``rows_acted`` (int): rows with T > 0
-      - ``packs_constructed`` (int): rows where keep_qty == 1 (recipe + composed)
-      - ``loose_copies`` (int): total unpledged copies = sum(T) - packs_constructed
+      - ``constructed`` (int): rows where keep_qty == 1 (recipe + composed)
+      - ``loose_copies`` (int): total unpledged copies deconstructed to inventory
       - ``inv_qty_total`` (int): cumulative card-qty added to inventory
-      - ``per_row``: list of ``{"file_name", "theme", "keep_qty",
+      - ``per_row``: list of ``{"file_name", "label", "keep_qty",
         "deconstructed_qty", "composed": bool, "slug": str|None,
         "slugs": list, "missing_sids": [...], "error": str|None}``
       - ``warnings`` (list[str]): non-fatal parse/lookup warnings
     """
     from . import decks as decks_mod, mtgjson as mtgjson_mod
-    from . import parsers
-    from pathlib import Path as _Path
-
-    path = _Path(path)
-    suffix = path.suffix.lower()
-    if suffix in (".xlsx",):
-        parsed = parsers.parse_jumpstart_list_xlsx(path)
-    elif suffix in (".md",):
-        parsed = parsers.parse_jumpstart_list_md(path)
-    else:
-        raise ValueError(f"unsupported jumpstart-list extension: {suffix!r}")
-
-    meta = parsed.meta or {}
-    set_code = (meta.get("set_codes") or meta.get("anchor_code") or "").lower()
-    if not set_code:
-        # Fall back to inferring from a fileName like ``Toph_TLE`` if _meta is
-        # missing. Unlikely but cheap to support.
-        for r in parsed.rows:
-            if "_" in r.file_name:
-                set_code = r.file_name.rsplit("_", 1)[1].lower()
-                break
-    if not set_code:
-        raise ValueError("could not determine set_code from checklist _meta or rows")
 
     # Pre-scan validation: keep_qty must be 0 or 1 for every acted row.
     # Do this before any DB writes so we never partially commit.
@@ -1279,13 +1532,13 @@ def ingest_jumpstart_from_path(path: Path) -> dict:
     ]
     if invalid:
         raise ValueError(
-            f"keep_qty must be 0 or 1; offending pack(s): {', '.join(invalid)}"
+            f"keep_qty must be 0 or 1; offending deck(s): {', '.join(invalid)}"
         )
 
     summary: dict = {
         "rows_total": len(parsed.rows),
         "rows_acted": 0,
-        "packs_constructed": 0,
+        "constructed": 0,
         "loose_copies": 0,
         "inv_qty_total": 0,
         "per_row": [],
@@ -1299,7 +1552,7 @@ def ingest_jumpstart_from_path(path: Path) -> dict:
         summary["rows_acted"] += 1
         per_row: dict = {
             "file_name": row.file_name,
-            "theme": row.theme,
+            "label": row.theme,
             "keep_qty": row.keep_qty,
             "deconstructed_qty": row.deconstructed_qty,
             "composed": False,
@@ -1309,18 +1562,21 @@ def ingest_jumpstart_from_path(path: Path) -> dict:
             "error": None,
         }
 
-        # Resolve theme from MTGJSON when the parser couldn't capture it (md path).
-        theme_for_slug = row.theme
-        if not theme_for_slug:
+        # Resolve the display name (used both as a label and to derive the
+        # slug) from MTGJSON when the parser couldn't capture it (md path, or
+        # the precon XLSX 'deck_name' column the shared parser doesn't read).
+        deck_name = row.theme
+        if not deck_name:
             try:
                 deck_data = mtgjson_mod.deck(row.file_name)
-                theme_for_slug = deck_data.get("name") or row.file_name
+                deck_name = deck_data.get("name") or row.file_name
             except mtgjson_mod.MtgJsonError as e:
                 per_row["error"] = f"could not fetch deck JSON: {e}"
                 summary["per_row"].append(per_row)
                 continue
+            per_row["label"] = deck_name
 
-        base_slug = _slug_theme(theme_for_slug, set_code)
+        base_slug = slug_fn(deck_name)  # may be None → import_precon derives it
 
         try:
             if row.keep_qty == 1:
@@ -1329,27 +1585,31 @@ def ingest_jumpstart_from_path(path: Path) -> dict:
                 r = decks_mod.import_precon(
                     row.file_name,
                     slug=base_slug,
-                    format="jumpstart",
+                    format=deck_format,
                     copies=total,
                     add_inventory=True,
                     deconstruct=False,
                 )
                 per_row["slugs"].extend(r["effective_slugs"])
                 per_row["missing_sids"].extend(r["missing_sids"])
-                per_row["slug"] = base_slug
+                # import_precon derives the slug when slug_fn returned None, so
+                # read the effective slug back rather than trusting base_slug.
+                effective_slug = r["effective_slugs"][0] if r["effective_slugs"] else base_slug
+                per_row["slug"] = effective_slug
                 summary["inv_qty_total"] += r["inv_qty_total"]
                 # Auto-construct one physical copy (pledges exactly one recipe's
                 # worth into deck_assignments, leaving deconstructed_qty copies free).
-                decks_mod.deck_assign_from_composition(base_slug)
-                per_row["composed"] = True
-                summary["packs_constructed"] += 1
+                if effective_slug:
+                    decks_mod.deck_assign_from_composition(effective_slug)
+                    per_row["composed"] = True
+                summary["constructed"] += 1
                 summary["loose_copies"] += row.deconstructed_qty
             else:
                 # Fully deconstructed: D copies loose, no recipe.
                 r = decks_mod.import_precon(
                     row.file_name,
                     slug=base_slug,  # not used in deconstruct path
-                    format="jumpstart",
+                    format=deck_format,
                     copies=row.deconstructed_qty,
                     add_inventory=True,
                     deconstruct=True,
@@ -1363,3 +1623,53 @@ def ingest_jumpstart_from_path(path: Path) -> dict:
         summary["per_row"].append(per_row)
 
     return summary
+
+
+def ingest_deck_checklist_from_path(path: Path, *, kind: str) -> dict:
+    """Apply a filled-in deck checklist (precon or Jumpstart) to the local DB.
+
+    The general (precon-level) entry point: parse the file, resolve its
+    ``set_code`` from ``_meta`` (falling back to a ``Words_CODE`` fileName
+    suffix), then run the shared ``_apply_deck_checklist`` engine with the
+    per-``kind`` slug/format config. ``kind`` is one of ``"precon"`` or
+    ``"jumpstart"``. Returns the kind-neutral summary described on
+    ``_apply_deck_checklist``.
+    """
+    from . import parsers
+    from pathlib import Path as _Path
+
+    path = _Path(path)
+    suffix = path.suffix.lower()
+    if suffix == ".xlsx":
+        parsed = parsers.parse_jumpstart_list_xlsx(path)
+    elif suffix == ".md":
+        parsed = parsers.parse_jumpstart_list_md(path)
+    else:
+        raise ValueError(f"unsupported deck-checklist extension: {suffix!r}")
+
+    meta = parsed.meta or {}
+    set_code = (meta.get("set_codes") or meta.get("anchor_code") or "").lower()
+    if not set_code:
+        # Fall back to inferring from a fileName like ``Toph_TLE`` if _meta is
+        # missing. Unlikely but cheap to support.
+        for r in parsed.rows:
+            if "_" in r.file_name:
+                set_code = r.file_name.rsplit("_", 1)[1].lower()
+                break
+    if not set_code:
+        raise ValueError("could not determine set_code from checklist _meta or rows")
+
+    slug_fn, deck_format = _deck_checklist_kind_config(kind, set_code)
+    return _apply_deck_checklist(
+        parsed, set_code=set_code, slug_fn=slug_fn, deck_format=deck_format
+    )
+
+
+def ingest_jumpstart_from_path(path: Path) -> dict:
+    """Apply a filled-in Jumpstart checklist to the local DB.
+
+    Thin specialization of ``ingest_deck_checklist_from_path`` (Jumpstart is a
+    species of precon): ``pack:*`` slugs and ``format='jumpstart'``. Behavior
+    is unchanged from before the shared-engine refactor.
+    """
+    return ingest_deck_checklist_from_path(path, kind="jumpstart")

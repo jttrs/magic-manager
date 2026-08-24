@@ -108,6 +108,44 @@ def jumpstart_variants(set_code: str) -> list[dict]:
     return [d for d in deck_list(set_code=set_code) if d.get("type") == "Jumpstart"]
 
 
+# Deck ``type`` values that have their OWN dedicated workflow (Jumpstart →
+# `mm set jumpstart-list`; Secret Lair Drop → the `bulk-add` skill) or are
+# digital-only (``MTGO *``). They never belong in a physical-precon checklist.
+PRECON_EXCLUDED_TYPES: frozenset[str] = frozenset({"Jumpstart", "Secret Lair Drop"})
+
+
+def precon_variants(
+    set_code: str,
+    *,
+    only_type: str | None = None,
+    include_collector: bool = False,
+) -> list[dict]:
+    """DeckList entries for a set's physical preconstructed-deck products.
+
+    Filter of ``deck_list(set_code=...)`` that keeps every physical sealed
+    product (Commander Deck, Box Set, Starter Kit, Planeswalker Deck, Bundle
+    Land Pack, Intro Pack, …) while dropping the types with their own
+    workflow (``PRECON_EXCLUDED_TYPES``) and the digital ``MTGO *`` types.
+
+    ``only_type`` narrows to one exact ``type`` string (e.g. ``"Commander
+    Deck"``). ``include_collector=False`` (the default) drops the
+    ``… Collector's Edition`` twins MTGJSON ships alongside the standard decks
+    — the user doesn't collect those. Returns ``[]`` for sets with no
+    matching product.
+    """
+    out: list[dict] = []
+    for d in deck_list(set_code=set_code):
+        t = d.get("type") or ""
+        if t in PRECON_EXCLUDED_TYPES or t.startswith("MTGO"):
+            continue
+        if only_type is not None and t != only_type:
+            continue
+        if not include_collector and "Collector's Edition" in (d.get("name") or ""):
+            continue
+        out.append(d)
+    return out
+
+
 # ---------- staleness + cache management ----------
 
 def is_stale(resource_path: str) -> bool:

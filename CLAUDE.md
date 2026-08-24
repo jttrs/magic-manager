@@ -13,7 +13,7 @@ The `mm` CLI is a `uv` project script (`pyproject.toml` → `mm = "magic_manager
 Top-level subcommand groups (each `--help` lists its own subcommands):
 
 ```
-uv run mm set …          # sync sets, build/ingest inventory checklists, jumpstart-list
+uv run mm set …          # sync sets, build/ingest inventory checklists, jumpstart-list, precon-list
 uv run mm inventory …    # show / value / add / remove / import (V2 fact table)
 uv run mm wishlist …     # categories of cards I want
 uv run mm deck …         # decks (composition independent of ownership), import-precon
@@ -59,7 +59,9 @@ A Magic "set" is rarely one Scryfall code. `sets_mod.resolve(name_or_code)` retu
 2. User edits qty cells in Excel/Numbers (or any text editor for `--format md`).
 3. `mm set ingest <set>` (or `--path <file>`) reads `_meta.mode` to pick replace vs additive semantics, writes to the `inventory` table, archives the file under `checklists/processed/<…>-<timestamp>.xlsx`, and appends a row to `ingest_log`. Files are SHA-256-fingerprinted; re-ingesting the same file is refused without `--force`.
 
-There can be only one active checklist per slug+slice+format at a time (collision exits with `EXIT_UNPROCESSED_INTAKE = 3`). Jumpstart checklists are a separate `kind` with their own ingest path (`_ingest_jumpstart`).
+There can be only one active checklist per slug+slice+format at a time (collision exits with `EXIT_UNPROCESSED_INTAKE = 3`).
+
+**Deck checklists (precon + jumpstart).** A *precon* (preconstructed product) is the base concept; a *Jumpstart pack* is one species of it. `mm set precon-list <set>` writes one row per physical sealed product (Commander Deck, Box Set, Starter Kit, …) and `mm set jumpstart-list <set>` writes one row per Jumpstart pack; both carry `keep_qty` (0/1) + `deconstructed_qty` fill-in columns and a hidden `_meta` sheet declaring `kind` (`precon` or `jumpstart`). On `mm set ingest`, both kinds route through one shared engine — `sets.ingest_deck_checklist_from_path(path, kind=…)` → `_apply_deck_checklist` (the CLI consumer is `_ingest_deck_checklist`, parameterized by kind). Each row's `keep_qty`/`deconstructed_qty` becomes an `import_precon()` call: `keep_qty=1` creates one deck recipe + auto-composes one physical copy, `keep_qty=0` with `deconstructed_qty>0` adds loose cards only. The precon path lets `import_precon` derive the deck slug (from the deck name) and `format` (`commander` for Commander decks, else null); the jumpstart path uses `pack:*` slugs and `format=jumpstart`. **Collector's Edition** variants are a premium product the collection doesn't track — MTGJSON ships them as separate deck files (e.g. `…CollectorSEdition…`), and `precon-list` excludes any whose name contains "Collector's Edition" unless `--include-collector` is passed. Digital (`MTGO …`), Jumpstart (its own command), and Secret Lair Drop (the `bulk-add` skill) types are never listed by `precon-list`.
 
 ### Database
 
@@ -75,7 +77,7 @@ Inside `src/magic_manager/`:
 
 - `cli.py` — every `typer` command. Long but flat; new commands go here.
 - `db.py` — schema, migrations, `connect()` context manager, snapshot/restore.
-- `sets.py` — set family resolution, sync from Scryfall, master-list/jumpstart-list writers, ingest readers.
+- `sets.py` — set family resolution, sync from Scryfall, master-list/jumpstart-list/precon-list writers, ingest readers + the shared deck-checklist ingest engine (`_apply_deck_checklist`).
 - `selectors.py` — the selector DSL parser + materializer.
 - `inventory.py`, `wishlist.py`, `decks.py` — V2 fact-table CRUD + value rollups.
 - `intake.py` — scan-loop REPL.
@@ -101,7 +103,7 @@ Secrets live only in the gitignored `.env` at repo root (`MANAPOOL_EMAIL`, `MANA
 ## Conventions
 
 - The user is the only consumer of this codebase; back-compat shims (`INPUT_DIR` alias, `mm input …` typer alias) exist only as long as the user's muscle memory needs them. No need to add new ones for hypothetical future callers.
-- Filename conventions encode intent for Finder/cmux (no `_meta` visible there): `<slug>-<slice>-<mode>-checklist.xlsx`, `missing-<code>-checklist-<ts>.xlsx`, `missing-<code>-{manapool,tcgplayer}-<ts>.txt`. Keep them stable — skills and slash commands grep for them.
+- Filename conventions encode intent for Finder/cmux (no `_meta` visible there): `<slug>-<slice>-<mode>-checklist.xlsx`, `<code>-jumpstart-checklist.xlsx`, `<code>-precon-checklist.xlsx`, `missing-<code>-checklist-<ts>.xlsx`, `missing-<code>-{manapool,tcgplayer}-<ts>.txt`. Keep them stable — skills and slash commands grep for them.
 - `queries/` is for ephemeral artifacts (missing-set XLSX/TXT, `query xlsx` outputs); the `cleanup-queries` skill prunes it. Don't put anything durable there.
 - `docs/` is reference, not always implemented — file headers say "Documented but not implemented as of V<N>" when the schema/design exists but the importer doesn't yet.
 

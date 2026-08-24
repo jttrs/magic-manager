@@ -453,15 +453,122 @@ def set_jumpstart_list(
     typer.echo(f"  2. When done: mm set ingest --path {out_path}")
 
 
-def _ingest_jumpstart(src: Path, *, sha: str, force: bool, json_out: bool) -> None:
-    """Apply a Jumpstart checklist (kind=jumpstart). Branches off ``mm set
-    ingest`` when the file's _meta says it's a pack-level checklist.
+@set_app.command("precon-list")
+def set_precon_list(
+    set_code: str = typer.Argument(
+        ...,
+        help="Set code whose preconstructed products to list: fic, fin, tdc, "
+             "etc. Run `mm mtgjson decks --set <CODE>` to see what MTGJSON "
+             "publishes for the set.",
+    ),
+    only_type: str = typer.Option(
+        None, "--type",
+        help="Narrow to one exact product type (e.g. 'Commander Deck', "
+             "'Box Set', 'Starter Kit'). Default: every physical sealed deck.",
+    ),
+    include_collector: bool = typer.Option(
+        False, "--include-collector",
+        help="Include the '… Collector's Edition' twins (excluded by default — "
+             "they're a premium variant the collection doesn't track).",
+    ),
+    out: Path = typer.Option(
+        None, "--out",
+        help="Override output path. When set, collision detection is skipped.",
+    ),
+    force: bool = typer.Option(
+        False, "--force",
+        help="Overwrite an existing precon checklist without prompting.",
+    ),
+    fmt: str = typer.Option(
+        "xlsx", "--format",
+        help="Output format: 'xlsx' (default) or 'md' (markdown).",
+    ),
+):
+    """Build a product-level checklist of every precon for a set.
 
-    Logs an ingest_log row with label ``jumpstart:<setcode>``, archives the
-    file under processed/. Mirrors the duplicate-detection + archive shape of
-    the inventory ingest path so both kinds of checklist look the same on
-    disk.
+    One row per physical sealed product (Commander Deck, Box Set, Starter Kit,
+    Planeswalker Deck, Bundle Land Pack, …), carrying deck name, product type,
+    release date, commander(s), card count, and summed market value. Fill
+    ``keep_qty`` (0 or 1 — copies kept *constructed*: one deck recipe is
+    created and one physical copy is auto-composed) and ``deconstructed_qty``
+    (copies torn into free cards; no pledge). The two sum to total copies
+    opened and that total determines how many cards land in inventory.
+
+    A precon is the base concept here; ``mm set jumpstart-list`` is the
+    Jumpstart-specific sibling. Collector's Edition variants are excluded
+    unless ``--include-collector`` is passed. Digital (``MTGO …``), Jumpstart
+    (own command), and Secret Lair (own bulk-add flow) products are never
+    listed.
     """
+    fmt = fmt.lower()
+    if fmt not in ("xlsx", "md"):
+        typer.echo(f"error: --format must be 'xlsx' or 'md', got {fmt!r}", err=True)
+        raise typer.Exit(2)
+
+    code = set_code.lower()
+    # The slug embeds 'precon' so the filename is self-describing on disk
+    # (Finder/cmux don't show _meta) and never collides with a master-list or
+    # jumpstart checklist for the same code.
+    slug = f"{code}-precon"
+    out_path = out or (CHECKLISTS_DIR / f"{slug}-checklist.{fmt}")
+
+    if out is None and out_path.exists() and not force:
+        typer.echo(f"refusing to overwrite existing precon checklist: {out_path}", err=True)
+        typer.echo("", err=True)
+        typer.echo("To proceed, either:", err=True)
+        typer.echo(f"  - Finish editing the existing file, then: mm set ingest --path {out_path}", err=True)
+        typer.echo(f"  - Discard partial edits and regenerate: mm set precon-list {set_code} --force", err=True)
+        raise typer.Exit(EXIT_UNPROCESSED_INTAKE)
+
+    # Sync the set's cards so usd_total roll-ups have prices to pull from AND
+    # the eventual ingest can resolve every scryfall_id locally. Precon
+    # contents can span the family (reprints carry their original set code),
+    # so sync the whole family.
+    try:
+        r, codes = _resolve_codes(set_code, include_kinds=[], only=[])
+    except (LookupError, typer.BadParameter) as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+    typer.echo(f"Syncing {len(codes)} set(s) (precon contents may span the family): {' '.join(codes)}")
+    n_synced = sets_mod.sync(codes)
+    typer.echo(f"  → {n_synced} cards upserted")
+
+    if force and out_path.exists():
+        typer.echo(f"  ! --force: overwriting {out_path}", err=True)
+
+    writer = (
+        sets_mod.write_precon_list_md if fmt == "md"
+        else sets_mod.write_precon_list_xlsx
+    )
+    try:
+        n_rows = writer(code, out_path, slug=slug, only_type=only_type,
+                        include_collector=include_collector)
+    except ValueError as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+    typer.echo(f"Wrote {n_rows} precon product rows to {out_path}")
+    typer.echo()
+    typer.echo("Next steps:")
+    if fmt == "md":
+        typer.echo(f"  1. Open {out_path} in any text editor and edit the `[K:k D:d]` brackets (K=0/1 kept constructed, D=copies to deconstruct).")
+    else:
+        typer.echo(f"  1. Open {out_path} in Excel/Numbers — fill keep_qty (0 or 1) and deconstructed_qty per deck.")
+    typer.echo(f"  2. When done: mm set ingest --path {out_path}")
+
+
+def _ingest_deck_checklist(src: Path, *, kind: str, sha: str, force: bool,
+                           json_out: bool) -> None:
+    """Apply a deck checklist (kind ∈ {'jumpstart', 'precon'}). Branches off
+    ``mm set ingest`` when the file's _meta declares one of those kinds.
+
+    A precon is the base concept; Jumpstart is a species of it — so both share
+    this one consumer, parameterized by ``kind`` for the log label and the
+    human-facing noun. Logs an ingest_log row with label ``<kind>:<setcode>``,
+    archives the file under processed/. Mirrors the duplicate-detection +
+    archive shape of the inventory ingest path so all checklists look the same
+    on disk.
+    """
+    noun = "Jumpstart" if kind == "jumpstart" else "Precon"
     with db.connect() as conn:
         prior = db.find_ingest_log_by_hash(conn, sha)
     prior_success = next((p for p in prior if p["status"] == "success"), None)
@@ -488,13 +595,13 @@ def _ingest_jumpstart(src: Path, *, sha: str, force: bool, json_out: bool) -> No
     error: str | None = None
     summary: dict | None = None
     try:
-        summary = sets_mod.ingest_jumpstart_from_path(src)
+        summary = sets_mod.ingest_deck_checklist_from_path(src, kind=kind)
     except Exception as e:
         error = repr(e)
 
     archived: Path | None = None
     if summary is not None:
-        # Jumpstart checklists use a flat naming pattern: <setcode>-jumpstart-checklist.<ext>
+        # Deck checklists use a flat naming pattern: <setcode>-<kind>-checklist.<ext>
         # Archive with timestamp under processed/ so re-runs don't collide.
         ext = src.suffix.lstrip(".") or "xlsx"
         when = datetime.now()
@@ -504,17 +611,17 @@ def _ingest_jumpstart(src: Path, *, sha: str, force: bool, json_out: bool) -> No
 
     meta = sets_mod.read_master_list_meta(archived or src) or {}
     set_code = meta.get("anchor_code") or meta.get("set_codes") or "?"
-    log_label = f"jumpstart:{set_code}"
-    rows_added = (summary or {}).get("packs_constructed", 0)
+    log_label = f"{kind}:{set_code}"
+    rows_added = (summary or {}).get("constructed", 0)
     rows_updated = (summary or {}).get("loose_copies", 0)
     with db.connect() as conn:
         db.record_ingest_log(
             conn,
             label=log_label,
-            # Jumpstart ingest is semantically additive (only adds packs +
-            # inventory; never zeroes). The ``label`` already encodes
-            # ``jumpstart:`` so this row is distinguishable from inventory
-            # ingests sharing the same mode.
+            # Deck-checklist ingest is semantically additive (only adds decks +
+            # inventory; never zeroes). The ``label`` already encodes the kind
+            # so this row is distinguishable from inventory ingests sharing the
+            # same mode.
             mode="additive",
             source_path=str(src),
             archived_path=str(archived) if archived else None,
@@ -531,7 +638,7 @@ def _ingest_jumpstart(src: Path, *, sha: str, force: bool, json_out: bool) -> No
             "status": "success" if error is None else "failed",
             "file": str(src),
             "archived_path": str(archived) if archived else None,
-            "kind": "jumpstart",
+            "kind": kind,
             "set_code": set_code,
             "sha256": sha,
             "summary": summary,
@@ -544,14 +651,14 @@ def _ingest_jumpstart(src: Path, *, sha: str, force: bool, json_out: bool) -> No
         return
 
     if error is not None:
-        typer.echo(f"error: jumpstart ingest failed: {error}", err=True)
+        typer.echo(f"error: {kind} ingest failed: {error}", err=True)
         raise typer.Exit(2)
 
     typer.echo(
-        f"Jumpstart ({set_code}): "
+        f"{noun} ({set_code}): "
         f"{summary['rows_acted']}/{summary['rows_total']} rows acted on, "
-        f"{summary['packs_constructed']} constructed, "
-        f"{summary['loose_copies']} loose dupe-copies, "
+        f"{summary['constructed']} constructed, "
+        f"{summary['loose_copies']} loose copies, "
         f"{summary['inv_qty_total']} card-qty added to inventory."
     )
     for row in summary["per_row"]:
@@ -565,7 +672,7 @@ def _ingest_jumpstart(src: Path, *, sha: str, force: bool, json_out: bool) -> No
                 bits = f"constructed 1 → {row['slug']}"
         else:
             bits = f"deconstructed {row['deconstructed_qty']} → loose inventory"
-        typer.echo(f"  {row['file_name']} ({row['theme']}): {bits}")
+        typer.echo(f"  {row['file_name']} ({row['label']}): {bits}")
         if row["missing_sids"]:
             typer.echo(
                 f"    warning: {len(row['missing_sids'])} entries had no scryfallId",
@@ -574,7 +681,7 @@ def _ingest_jumpstart(src: Path, *, sha: str, force: bool, json_out: bool) -> No
     for w in summary["warnings"]:
         typer.echo(f"  warning: {w}", err=True)
     if archived:
-        typer.echo(f"Archived Jumpstart checklist → {archived}")
+        typer.echo(f"Archived {noun} checklist → {archived}")
 
 
 @set_app.command("ingest")
@@ -681,10 +788,13 @@ def set_ingest(
             raise typer.Exit(2)
         src = candidates[0]
 
-    # ---- kind dispatch: 'jumpstart' checklists go to a separate import path ----
+    # ---- kind dispatch: deck checklists (precon / jumpstart, its species) go
+    # to the shared deck-checklist import path; inventory/missing fall through ----
     early_meta = sets_mod.read_master_list_meta(src) or {}
-    if early_meta.get("kind") == "jumpstart":
-        _ingest_jumpstart(src, sha=_file_sha256(src), force=force, json_out=json_out)
+    early_kind = early_meta.get("kind")
+    if early_kind in ("jumpstart", "precon"):
+        _ingest_deck_checklist(src, kind=early_kind, sha=_file_sha256(src),
+                               force=force, json_out=json_out)
         return
 
     # ---- Mode resolution: auto-detect from _meta.mode, reconcile with --mode ----
