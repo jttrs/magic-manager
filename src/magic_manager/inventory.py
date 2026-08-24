@@ -177,6 +177,7 @@ def inventory_add(
     *,
     replace: bool = False,
     notes: str | None = None,
+    conn=None,
 ) -> dict:
     """Insert or merge an inventory row.
 
@@ -190,13 +191,17 @@ def inventory_add(
 
     Raises ``ValueError`` for invalid ``finish`` or non-positive ``qty``.
 
+    Pass ``conn`` to enlist in a caller's open transaction (e.g.
+    ``import_precon`` adding all precon cards atomically); omit it for a
+    standalone add.
+
     Returns ``{"action": "inserted"|"updated", "old_qty": int|None,
     "new_qty": int}``.
     """
     _validate_finish(finish)
     _validate_qty_positive(qty)
 
-    with db.connect() as conn:
+    with db.transaction(conn) as conn:
         existing = conn.execute(
             "SELECT quantity FROM inventory WHERE scryfall_id = ? AND finish = ?",
             (scryfall_id, finish),

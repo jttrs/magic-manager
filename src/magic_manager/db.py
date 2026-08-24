@@ -381,6 +381,27 @@ def connect(path: Path | None = None) -> Iterator[sqlite3.Connection]:
         conn.close()
 
 
+@contextmanager
+def transaction(conn: sqlite3.Connection | None = None) -> Iterator[sqlite3.Connection]:
+    """Borrow-or-open: yield ``conn`` if the caller passed one (they own the
+    surrounding ``connect()`` and its commit/rollback), else open a fresh
+    ``connect()`` for a standalone call.
+
+    This lets a CRUD function be either a self-contained operation
+    (``conn=None`` → its own transaction) OR one step inside a larger atomic
+    unit (``conn=<open connection>`` → no premature commit). Mirrors the
+    ``conn=`` seam already used by ``inventory.free_quantity``; it is what
+    lets ``import_precon`` run deck_create + N×deck_add_card + N×inventory_add
+    inside a SINGLE transaction so a mid-import failure rolls the whole thing
+    back (no orphan deck shell).
+    """
+    if conn is not None:
+        yield conn
+    else:
+        with connect() as c:
+            yield c
+
+
 def _ensure_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(MIGRATIONS[0])  # idempotent CREATE IF NOT EXISTS
     cur = conn.execute("SELECT version FROM schema_version")

@@ -140,10 +140,15 @@ def deck_create(
     format: str | None = None,
     archetype: str | None = None,
     notes: str | None = None,
+    conn=None,
 ) -> Deck:
-    """Insert a new deck. Raises ``ValueError`` if ``slug`` is already in use."""
+    """Insert a new deck. Raises ``ValueError`` if ``slug`` is already in use.
+
+    Pass ``conn`` to enlist in a caller's open transaction (e.g. ``import_precon``
+    creating the deck + its cards atomically); omit it for a standalone insert.
+    """
     now = db._utcnow_iso()
-    with db.connect() as conn:
+    with db.transaction(conn) as conn:
         existing = _fetch_deck(conn, slug)
         if existing is not None:
             raise ValueError(f"deck with slug {slug!r} already exists")
@@ -181,8 +186,8 @@ def deck_list() -> list[Deck]:
     return [_deck_row_to_dataclass(r) for r in rows]
 
 
-def deck_get(slug: str) -> Deck | None:
-    with db.connect() as conn:
+def deck_get(slug: str, *, conn=None) -> Deck | None:
+    with db.transaction(conn) as conn:
         row = _fetch_deck(conn, slug)
     return _deck_row_to_dataclass(row) if row else None
 
@@ -293,19 +298,24 @@ def deck_add_card(
     board: str,
     finish: str,
     count: int,
+    *,
+    conn=None,
 ) -> dict:
     """Add ``count`` of a printing to a deck's board+finish slot.
 
     If a row already exists for ``(deck_id, scryfall_id, board, finish)`` the
     count is summed (insert-or-add semantics). Returns ``{"action":
     "inserted"|"updated", "old_count": int|None, "new_count": int}``.
+
+    Pass ``conn`` to enlist in a caller's open transaction (atomic multi-card
+    writes); omit it for a standalone add.
     """
     _validate_board(board)
     _validate_finish(finish)
     if count <= 0:
         raise ValueError(f"count must be > 0, got {count}")
 
-    with db.connect() as conn:
+    with db.transaction(conn) as conn:
         deck = _fetch_deck(conn, slug)
         if deck is None:
             raise LookupError(f"deck with slug {slug!r} not found")
@@ -898,6 +908,8 @@ def import_precon(
       - ``mtgjson_mod.MtgJsonError`` if the deck JSON cannot be fetched
       - ``ValueError`` if the slug cannot be derived or the slug conflicts
     """
+    from . import sets as sets_mod  # local import avoids a module-level cycle
+
     deck_data = mtgjson_mod.deck(file_name)
 
     deck_name = name or deck_data.get("name") or file_name
@@ -907,38 +919,12 @@ def import_precon(
             f"could not derive slug from name {deck_name!r}; pass slug= explicitly"
         )
 
-    # V5: one composition per import, regardless of copies. Callers who
-    # genuinely want a second composition run import-precon a second time
-    # with --slug <other>.
-    effective_slugs: list[str] = []
-    if not deconstruct and not merge_inventory:
-        if deck_get(base_slug) is not None:
-            raise ValueError(
-                f"deck slug {base_slug!r} already exists; pass --slug to name a "
-                f"variant, --merge-inventory to skip the deck insert and add "
-                f"only inventory, or delete the existing deck first."
-            )
-        effective_slugs.append(base_slug)
-    elif merge_inventory:
-        if deck_get(base_slug) is None:
-            raise ValueError(
-                f"--merge-inventory requires an existing deck at slug "
-                f"{base_slug!r}; use plain `import-precon` to create one."
-            )
-
-    # Create deck rows (skipped under deconstruct or merge_inventory).
-    fmt = format
-    if fmt is None:
-        fmt = "commander" if deck_data.get("type", "").lower().startswith("commander") else None
-    for s in effective_slugs:
-        deck_create(s, deck_name, format=fmt)
-
-    # Walk boards: write deck_cards for the single composition, accumulate
-    # inventory aggregates scaled by ``copies``.
-    deck_added = deck_updated = 0
-    deck_card_qty = 0
-    inv_aggregate: dict[tuple[str, str], int] = {}
+    # Collect the entries once (all boards) so we can (a) sync the families the
+    # cards belong to BEFORE any write, and (b) walk them inside the atomic
+    # block below. Each entry: (sid, count, finish, board_name).
+    parsed_entries: list[tuple[str, int, str, str]] = []
     missing_sids: list[dict] = []
+    set_codes: set[str] = set()
     for mj_key, board_name in _BOARD_KEY_TO_NAME:
         for entry in deck_data.get(mj_key, []) or []:
             sid = (entry.get("identifiers") or {}).get("scryfallId")
@@ -952,8 +938,59 @@ def import_precon(
                 continue
             count = int(entry.get("count", 1) or 1)
             finish = "foil" if entry.get("isFoil") else "nonfoil"
+            parsed_entries.append((sid, count, finish, board_name))
+            sc = entry.get("setCode")
+            if sc:
+                set_codes.add(sc.lower())
+
+    # Sync-before-use: the deck's cards must exist in the `cards` table before
+    # any deck_cards/inventory FK insert. Precons commonly reference a family
+    # that's never been synced (the historical FK-failure bug). We sync here,
+    # OUTSIDE the atomic write below, because syncing is a precondition — not
+    # part of the deck-creation unit — and mirrors the sync-first pattern in
+    # master-list / jumpstart-list / precon-list.
+    if set_codes:
+        sets_mod.sync(sorted(set_codes))
+
+    # V5: one composition per import, regardless of copies. Callers who
+    # genuinely want a second composition run import-precon a second time
+    # with --slug <other>.
+    effective_slugs: list[str] = []
+    fmt = format
+    if fmt is None:
+        fmt = "commander" if deck_data.get("type", "").lower().startswith("commander") else None
+
+    deck_added = deck_updated = 0
+    deck_card_qty = 0
+    inv_aggregate: dict[tuple[str, str], int] = {}
+    inv_added = inv_updated = 0
+    inv_qty_total = 0
+
+    # ONE transaction spans the collision check, deck creation, every
+    # deck_add_card, and every inventory_add. If any FK insert fails, the whole
+    # thing rolls back — no orphan deck shell, so a corrected retry works.
+    with db.connect() as conn:
+        if not deconstruct and not merge_inventory:
+            if deck_get(base_slug, conn=conn) is not None:
+                raise ValueError(
+                    f"deck slug {base_slug!r} already exists; pass --slug to name a "
+                    f"variant, --merge-inventory to skip the deck insert and add "
+                    f"only inventory, or delete the existing deck first."
+                )
+            effective_slugs.append(base_slug)
+        elif merge_inventory:
+            if deck_get(base_slug, conn=conn) is None:
+                raise ValueError(
+                    f"--merge-inventory requires an existing deck at slug "
+                    f"{base_slug!r}; use plain `import-precon` to create one."
+                )
+
+        for s in effective_slugs:
+            deck_create(s, deck_name, format=fmt, conn=conn)
+
+        for sid, count, finish, board_name in parsed_entries:
             for s in effective_slugs:
-                r = deck_add_card(s, sid, board_name, finish, count)
+                r = deck_add_card(s, sid, board_name, finish, count, conn=conn)
                 deck_card_qty += count
                 if r["action"] == "inserted":
                     deck_added += 1
@@ -961,16 +998,14 @@ def import_precon(
                     deck_updated += 1
             inv_aggregate[(sid, finish)] = inv_aggregate.get((sid, finish), 0) + count * copies
 
-    inv_added = inv_updated = 0
-    inv_qty_total = 0
-    if add_inventory:
-        for (sid, finish), qty in inv_aggregate.items():
-            r = inv_mod.inventory_add(sid, finish, qty)
-            inv_qty_total += qty
-            if r["action"] == "inserted":
-                inv_added += 1
-            else:
-                inv_updated += 1
+        if add_inventory:
+            for (sid, finish), qty in inv_aggregate.items():
+                r = inv_mod.inventory_add(sid, finish, qty, conn=conn)
+                inv_qty_total += qty
+                if r["action"] == "inserted":
+                    inv_added += 1
+                else:
+                    inv_updated += 1
 
     return {
         "deck_name": deck_name,

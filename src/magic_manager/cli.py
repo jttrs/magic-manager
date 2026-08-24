@@ -23,6 +23,7 @@ from . import (
     mtgjson as mtgjson_mod,
     selectors as sel_mod,
     sets as sets_mod,
+    util,
     wishlist as wishlist_mod,
 )
 
@@ -56,6 +57,8 @@ mtgjson_app = typer.Typer(no_args_is_help=True,
                           help="Read MTGJSON.com data (precon decks, set files, etc.).")
 db_app = typer.Typer(no_args_is_help=True,
                      help="Manage the local SQLite DB: snapshots, restore, integrity.")
+audit_app = typer.Typer(no_args_is_help=True,
+                        help="Consistency checks + repair for the local DB.")
 
 app.add_typer(set_app, name="set")
 app.add_typer(inventory_app, name="inventory")
@@ -67,6 +70,7 @@ app.add_typer(checklists_app, name="checklists")
 app.add_typer(checklists_app, name="input")
 app.add_typer(mtgjson_app, name="mtgjson")
 app.add_typer(db_app, name="db")
+app.add_typer(audit_app, name="audit")
 
 
 def _slug(s: str) -> str:
@@ -118,6 +122,41 @@ def set_sync(
     typer.echo(f"Syncing {len(codes)} set(s): {' '.join(codes)}")
     n = sets_mod.sync(codes)
     typer.echo(f"  → {n} cards upserted")
+
+
+@set_app.command("is-synced")
+def set_is_synced(
+    name_or_code: str = typer.Argument(...),
+):
+    """Report how many cards are synced per family set-code. Exits non-zero if
+    the family has zero cards locally.
+
+    Answers "do I need to `mm set sync` before importing a precon / running a
+    query?" without a hand-written ``SELECT COUNT(*)``. Resolves the +related
+    family and prints one line per code with its local card count.
+    """
+    try:
+        r = sets_mod.resolve(name_or_code)
+    except LookupError as e:
+        typer.echo(f"error: {e}", err=True); raise typer.Exit(2)
+
+    codes = r.all_codes
+    placeholders = ",".join("?" for _ in codes)
+    with db.connect() as conn:
+        rows = conn.execute(
+            f"SELECT set_code, COUNT(*) AS n FROM cards "
+            f"WHERE set_code IN ({placeholders}) GROUP BY set_code",
+            [c.lower() for c in codes],
+        ).fetchall()
+    counts = {row["set_code"]: row["n"] for row in rows}
+    total = sum(counts.values())
+    typer.echo(f"{r.name} (anchor {r.code}) — {total} cards across {len(codes)} code(s):")
+    for c in codes:
+        n = counts.get(c.lower(), 0)
+        mark = " " if n else " (not synced)"
+        typer.echo(f"  {c:8} {n:>5}{mark}")
+    if total == 0:
+        raise typer.Exit(1)
 
 
 def _slice_suffix(*, only_codes: list[str], rarities: list[str]) -> str:
@@ -1709,17 +1748,7 @@ def deck_free_cmd(
 QUERIES_DIR = Path("queries")
 
 
-def _selector_slug(selector: str) -> str:
-    """Slugify a selector string for use in artifact filenames.
-
-    Deterministic: same selector always produces the same slug. Lowercases,
-    keeps alphanumerics, collapses everything else to a single hyphen,
-    trims leading/trailing hyphens.
-    """
-    raw = "".join(c if c.isalnum() else "-" for c in selector.lower())
-    while "--" in raw:
-        raw = raw.replace("--", "-")
-    return raw.strip("-")
+# _selector_slug merged into _slug (identical implementation) — use _slug.
 
 
 def _materialize_or_die(selector: str):
@@ -2124,7 +2153,7 @@ def query_xlsx_cmd(
     """
     rows = _materialize_or_die(selector)
     rows = _apply_sort(rows, sort)
-    slug = name or _selector_slug(selector)
+    slug = name or _slug(selector)
     ts = datetime.now().strftime("%Y-%m-%d-%H%M%S")
     target = out if out else QUERIES_DIR / f"{slug}-{ts}.xlsx"
     _write_query_xlsx(rows, target, selector, slug)
@@ -2207,21 +2236,17 @@ def query_missing_set_cmd(
         raise typer.Exit(0)
 
     # 2. Cheapest-first ordering for the Scryfall URL chunks.
-    def _cn_key(cn: str | None) -> tuple[int, str]:
-        m = _re.match(r"^(\d+)(.*)$", cn or "")
-        return (int(m.group(1)) if m else 0, m.group(2) if m else (cn or ""))
-
     rows_by_value = sorted(rows_union, key=lambda r: (
         0 if _row_line_value(r) is not None else 1,
         _row_line_value(r) or 0.0,
-        r.card.get("set") or "", _cn_key(r.card.get("collector_number")),
+        r.card.get("set") or "", util.cn_sort_key(r.card.get("collector_number")),
     ))
     chunks = [rows_by_value[i:i+chunk_size] for i in range(0, len(rows_by_value), chunk_size)]
 
     # 3. Build the XLSX checklist artifact (grouped by set, sorted by CN within each).
     rows_for_xlsx = sorted(rows_union, key=lambda r: (
         r.card.get("set") or "",
-        _cn_key(r.card.get("collector_number")),
+        util.cn_sort_key(r.card.get("collector_number")),
         r.finish,
     ))
     ts = datetime.now().strftime("%Y-%m-%d-%H%M%S")
@@ -2242,7 +2267,7 @@ def query_missing_set_cmd(
     #    Order rows by (set, cn, finish) within each file for predictability.
     rows_for_bulk = sorted(rows_union, key=lambda r: (
         r.card.get("set") or "",
-        _cn_key(r.card.get("collector_number")),
+        util.cn_sort_key(r.card.get("collector_number")),
         r.finish,
     ))
     total_value = sum((_row_line_value(r) or 0.0) for r in rows_union)
@@ -2536,6 +2561,110 @@ def db_integrity_cmd():
     result = db._check_integrity(db.db_path())
     typer.echo(result)
     if result != "ok":
+        raise typer.Exit(1)
+
+
+@db_app.command("unlock")
+def db_unlock_cmd(
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
+):
+    """Clear stale -wal/-shm sidecar files left by a run that died mid-write.
+
+    Automates the ``rm -rf db/*.db-wal`` hand-fix. GUARDED: refuses if the DB is
+    currently locked by a live process (a busy PRAGMA probe), so it can't corrupt
+    an active write. Only removes the sidecars when the DB opens cleanly.
+    """
+    p = db.db_path()
+    wal = p.with_name(p.name + "-wal")
+    shm = p.with_name(p.name + "-shm")
+    present = [f for f in (wal, shm) if f.exists()]
+    if not present:
+        typer.echo("No -wal/-shm sidecars present; nothing to unlock.")
+        return
+
+    # Guard: if another process holds the lock, a quick write probe raises
+    # "database is locked" — refuse rather than risk clobbering a live write.
+    import sqlite3
+    try:
+        probe = sqlite3.connect(str(p), timeout=0.5)
+        probe.execute("BEGIN IMMEDIATE")
+        probe.rollback()
+        probe.close()
+    except sqlite3.OperationalError as e:
+        typer.echo(f"error: DB appears locked by another process ({e}); "
+                   f"not touching sidecars.", err=True)
+        raise typer.Exit(1)
+
+    typer.echo("Stale sidecars to remove:")
+    for f in present:
+        typer.echo(f"  {f.name}")
+    if not yes:
+        typer.confirm("Remove them?", abort=True)
+    # Checkpoint first so any durable WAL content folds into the main DB, then
+    # the sidecars are safe to drop.
+    with db.connect() as conn:
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    for f in present:
+        if f.exists():
+            f.unlink()
+    typer.echo(f"Removed {len(present)} sidecar file(s).")
+
+
+@audit_app.command("deck-inventory")
+def audit_deck_inventory_cmd(
+    fix: bool = typer.Option(False, "--fix", help="Delete orphan (empty) decks found."),
+):
+    """Report DB consistency issues between decks and inventory; ``--fix`` repairs
+    the safe ones.
+
+    Detects:
+      - **orphan decks** — deck rows with zero ``deck_cards`` (e.g. an
+        interrupted import before the atomicity fix). ``--fix`` deletes these
+        (cascades to any stray rows) — automates the manual ``deck delete``
+        recovery.
+      - **over-assignment** — printings whose ``deck_assignments`` total exceeds
+        the owned inventory quantity (report-only; never auto-changed).
+    """
+    with db.connect() as conn:
+        orphans = conn.execute(
+            """
+            SELECT d.slug, d.name
+            FROM decks d
+            LEFT JOIN deck_cards dc ON dc.deck_id = d.deck_id
+            WHERE dc.deck_id IS NULL
+            ORDER BY d.slug
+            """
+        ).fetchall()
+        over = conn.execute(
+            """
+            SELECT da.scryfall_id, da.finish,
+                   SUM(da.count) AS assigned,
+                   COALESCE((SELECT quantity FROM inventory i
+                             WHERE i.scryfall_id = da.scryfall_id
+                               AND i.finish = da.finish), 0) AS owned
+            FROM deck_assignments da
+            GROUP BY da.scryfall_id, da.finish
+            HAVING assigned > owned
+            """
+        ).fetchall()
+
+    typer.echo(f"Orphan decks (0 cards): {len(orphans)}")
+    for o in orphans:
+        typer.echo(f"  {o['slug']}  ({o['name']})")
+    typer.echo(f"Over-assigned printings (assigned > owned): {len(over)}")
+    for o in over:
+        typer.echo(f"  {o['scryfall_id']} [{o['finish']}]  assigned {o['assigned']} > owned {o['owned']}")
+
+    if fix and orphans:
+        for o in orphans:
+            decks_mod.deck_delete(o["slug"])
+        typer.echo(f"Fixed: deleted {len(orphans)} orphan deck(s).")
+    elif orphans and not fix:
+        typer.echo("Re-run with --fix to delete the orphan deck(s).")
+
+    if over:
+        # Over-assignment is a data-integrity smell but auto-fixing it (which
+        # copies to keep?) needs human judgment — report only.
         raise typer.Exit(1)
 
 
