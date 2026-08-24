@@ -140,12 +140,17 @@ def deck_create(
     format: str | None = None,
     archetype: str | None = None,
     notes: str | None = None,
+    source_set_code: str | None = None,
     conn=None,
 ) -> Deck:
     """Insert a new deck. Raises ``ValueError`` if ``slug`` is already in use.
 
     Pass ``conn`` to enlist in a caller's open transaction (e.g. ``import_precon``
     creating the deck + its cards atomically); omit it for a standalone insert.
+
+    ``source_set_code`` is the set the deck came from (e.g. 'ncc' for a New
+    Capenna Commander precon) — the hard link used by family-scoped queries.
+    NULL for hand-created decks.
     """
     now = db._utcnow_iso()
     with db.transaction(conn) as conn:
@@ -155,10 +160,11 @@ def deck_create(
         cur = conn.execute(
             """
             INSERT INTO decks (slug, name, format, archetype, notes,
-                               created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                               source_set_code, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (slug, name, format, archetype, notes, now, now),
+            (slug, name, format, archetype, notes,
+             (source_set_code or None), now, now),
         )
         deck_id = cur.lastrowid
     return Deck(
@@ -236,6 +242,44 @@ def deck_value(slug: str) -> dict:
         else:
             total += r.line_value or 0.0
     return {"total": total, "rows": len(rows), "missing_price": missing_price}
+
+
+def backfill_source_set_codes(*, conn=None) -> int:
+    """Set ``source_set_code`` for decks where it's NULL, from the deck's
+    dominant card set (the modal ``cards.set_code`` across its ``deck_cards``,
+    count-weighted). Idempotent: only touches NULL rows; re-running is a no-op
+    once every deck is linked. Returns the number of decks updated.
+
+    Existing precon decks (imported before the V6 hard link) get their family
+    tie this way; hand-created decks with no cards stay NULL. New imports set
+    the column at creation time via ``import_precon`` and never reach here.
+    """
+    with db.transaction(conn) as conn:
+        null_decks = conn.execute(
+            "SELECT deck_id FROM decks WHERE source_set_code IS NULL"
+        ).fetchall()
+        updated = 0
+        for row in null_decks:
+            deck_id = row["deck_id"]
+            modal = conn.execute(
+                """
+                SELECT LOWER(c.set_code) AS sc, SUM(dc.count) AS n
+                FROM deck_cards dc
+                JOIN cards c ON c.scryfall_id = dc.scryfall_id
+                WHERE dc.deck_id = ?
+                GROUP BY LOWER(c.set_code)
+                ORDER BY n DESC, sc ASC
+                LIMIT 1
+                """,
+                (deck_id,),
+            ).fetchone()
+            if modal and modal["sc"]:
+                conn.execute(
+                    "UPDATE decks SET source_set_code = ? WHERE deck_id = ?",
+                    (modal["sc"], deck_id),
+                )
+                updated += 1
+    return updated
 
 
 def deck_delete(slug: str) -> int:
@@ -959,6 +1003,8 @@ def import_precon(
     fmt = format
     if fmt is None:
         fmt = "commander" if deck_data.get("type", "").lower().startswith("commander") else None
+    # Hard link to the source set (e.g. 'ncc'): MTGJSON gives it as deck_data['code'].
+    src_set = (deck_data.get("code") or "").lower() or None
 
     deck_added = deck_updated = 0
     deck_card_qty = 0
@@ -986,7 +1032,7 @@ def import_precon(
                 )
 
         for s in effective_slugs:
-            deck_create(s, deck_name, format=fmt, conn=conn)
+            deck_create(s, deck_name, format=fmt, source_set_code=src_set, conn=conn)
 
         for sid, count, finish, board_name in parsed_entries:
             for s in effective_slugs:

@@ -317,6 +317,17 @@ CREATE INDEX IF NOT EXISTS deck_assignments_deck_idx ON deck_assignments (deck_i
 """
 
 
+# V6: record which set a deck came from. import_precon knows the MTGJSON source
+# set (deck_data['code'], e.g. 'NCC') but previously discarded it, so a deck's
+# only tie to a family was via its cards' set_code — a heuristic. This column is
+# the hard link: set_status and any family-scoped deck query can filter decks by
+# source_set_code directly. Nullable; hand-created decks (mm deck create) leave
+# it NULL. Existing precon decks are backfilled from their dominant card set.
+SCHEMA_V6 = """
+ALTER TABLE decks ADD COLUMN source_set_code TEXT;
+"""
+
+
 # ---------- migration-authoring convention ----------
 #
 # Always-safe ops in a migration: CREATE TABLE, ALTER TABLE ADD COLUMN,
@@ -358,6 +369,7 @@ MIGRATIONS: list[str] = [
     SCHEMA_V3,
     SCHEMA_V4,
     SCHEMA_V5,
+    SCHEMA_V6,
 ]
 CURRENT_VERSION = len(MIGRATIONS)
 
