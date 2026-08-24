@@ -52,6 +52,7 @@ Output includes:
 - If the token-bearing print is **visually identical** to a same-name sibling without the token → it's a **dupe foil** → add to `FAMILY_DUPE_FOIL_PROMO_TYPES[anchor]`.
 - If the token-bearing print has **unique art** → keep it out of DUPE_FOIL. Note in the doc's Treatments section as "kept — unique art despite fancy foil" (e.g. FIN chocobotrackfoil).
 - If a token co-occurs with another (like `silverfoil+scroll` for LTR scroll frames) AND the user won't shop for the print → propose an entry in `FAMILY_UNOBTAINABLE_RULES[anchor]` with `promo_types_all_of: frozenset(...)`.
+- ⚠️ **DUPE_FOIL is gated on the `ff` treatment keyword.** The dupe-foil drop in `selectors._filter_treatment_preferred` (Step 3 of that function) only inspects prints whose computed treatment contains `ff`. So a same-art fancy foil is only caught by `FAMILY_DUPE_FOIL_PROMO_TYPES` if `treatments.compute_treatment` classifies it as `ff`. If the print is same-art-on-a-fancy-sheet but its promo_type does **not** compute to `ff` (e.g. SNC `stepandcompleat` → treatment `b`, not `b|ff`; verified 2026-08-24), the DUPE_FOIL entry silently misses it — route it to `FAMILY_UNOBTAINABLE_RULES[anchor]` (a `promo_types_any_of` rule) instead, and note in the doc which treatment the print actually computes to. Quick check: `uv run python -c "import sys;sys.path.insert(0,'src');from magic_manager import db,treatments; ... print(treatments.compute_treatment(row))"` — if there's no `ff`, use UNOBTAINABLE_RULES.
 
 ### 3. Enumerate chase-variant candidates
 
@@ -117,6 +118,14 @@ grep -i -E "pspm|pfin|ptla|ptmt|mar|<other family promo codes>" .claude/skills/b
 
 Spot-check a few tricky prints via `mm scryfall` — meld-back faces, digital-only Arena/Alchemy prints (should already be globally filtered), name-collision printings across siblings, `set_type` mismatches (like TMT's `tmc` being `set_type: eternal` despite being a commander deck).
 
+**Digital-only validation (arena stamp).** Alchemy-**original** cards carry no `rebalanced`/`alchemy` promo_type — only `security_stamp: "arena"` (e.g. `ysnc` cards). These once leaked into missing-set until `_is_digital_only` was taught to check the stamp (fixed 2026-08-24). Confirm none leak for this family:
+
+```bash
+uv run mm query show 'set:<anchor>+related missing' | grep -i arena   # expect no rows
+```
+
+If arena-stamped cards DO appear, it's a bug in `selectors._is_digital_only` (not a per-family config issue) — flag it rather than papering over it with a family rule.
+
 ### 8. Draft `docs/sets/<anchor>.md`
 
 Copy `docs/sets/_TEMPLATE.md` to `docs/sets/<anchor>.md` and fill each section from steps 1-7. Keep it dense — no filler prose; every row of every table should be a fact you verified.
@@ -132,6 +141,14 @@ If the audit revealed:
 Emit the proposed diff for `src/magic_manager/selectors.py` and let the user approve before applying. Use `Edit` to apply after approval. Update the new doc's §8 "Code refs" to reflect the new entries.
 
 **Never** apply code diffs before showing the diff and getting explicit approval — silent selector changes affect `mm query missing-set` output for real acquisitions.
+
+**Scarcity-tier sanity check (do this before finalizing the diffs).** After proposing the config, look at the top of the missing list by value:
+
+```bash
+uv run mm query show 'set:<anchor>+related missing treatment=preferred' --sort value-desc --first 30
+```
+
+If the top ~30 is dominated by a single tier priced $100+ each — promo-pack/prerelease **stamped** promos with no non-stamped sibling in the family graph (SNC found $1,697 of these), or a fancy-foil masterpiece tier (EOE's galaxyfoil lands / headliner found ~$5,800) — that's a **scarcity tier** the user won't realistically chase. Propose it for `FAMILY_UNOBTAINABLE_RULES[anchor]` (usually `promo_types_any_of`). **Record the before/after `mm query missing-set <anchor>` total** in the doc's §5 so the exclusion's impact is auditable, and so an over-aggressive rule is easy to spot later. A family whose missing total is thousands of dollars almost always has such a tier — don't accept a huge total at face value.
 
 ### 10. Report
 
