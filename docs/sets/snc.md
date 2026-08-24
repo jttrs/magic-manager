@@ -89,6 +89,7 @@ them explicitly.
 | Signal | What it catches | ~Value removed |
 |---|---|---|
 | `promopack` OR `stamped` | 160 prints across `pncc` (75), `psnc` (80), `snc` (5) — promo-pack + prerelease stamp variants | ~$1,697 |
+| `stepandcompleat` | `snc` 469 Urabrask — the Phyrexian "Step-and-Compleat" premium foil of the same borderless concept art as `snc` 468 (which is kept). Foil-only. NOT caught by the dupe-foil filter because it computes to treatment `b`, not `ff` — so it lives here, not in FAMILY_DUPE_FOIL_PROMO_TYPES. | ~$16 |
 
 Effect: missing-set drops to the realistic **~$371.66 / 121 prints** (topped by
 the boosterfun showcase dual lands — Jetmir's Garden `snc` 291 ~$23, etc.).
@@ -117,8 +118,11 @@ Resolve a PRM-stamped SNC card by name + the `s`/`p` CN suffix per
   nonfoil version; its dupe representative (boosterfun showcase 296-340) has both.
 - **Two `Tenuous Truce` printings in `ncc`** (87, 95) — a name collision; distinct
   scryfall_ids. Match by CN, not name.
-- **Urabrask, Heretic Praetor (`snc` 469)** — Phyrexia-invasion crossover concept
-  card (`concept+setextension+stepandcompleat`); unique art, kept.
+- **Urabrask, Heretic Praetor — two borderless concept prints:** `snc` 468
+  (`concept+boosterfun+setextension`, nonfoil+foil, ~$7/$9, KEPT — legit gap) and
+  `snc` 469 (same art + `stepandcompleat` Phyrexian foil, foil-only, ~$16,
+  EXCLUDED via §5 unobtainable rule). Same illustration; 469 is just the premium
+  foil process. See §5.
 - **`ncc` is a genuine `set_type: commander`** (5 real precons), unlike TMT's
   `tmc`/Avatar's `tle` (eternal-typed). No topology gotcha.
 - **Alchemy A-prefixed** prints (snc A-###) — digital-only, globally filtered via `rebalanced`/`alchemy` promo_types.
@@ -131,8 +135,8 @@ Resolve a PRM-stamped SNC card by name + the `s`/`p` CN suffix per
 - `selectors.py:FAMILY_DUPE_FOIL_PROMO_TYPES["snc"]` = `frozenset({"gilded"})`
   — **configured 2026-08-24.** Drops the 45 gilded golden-foil dupes (361-405),
   keeps the boosterfun showcase (296-340) as the preferred representative. §2.
-- `selectors.py:FAMILY_UNOBTAINABLE_RULES["snc"]` = `[{"promo_types_any_of":
-  frozenset({"promopack", "stamped"})}]` — **configured 2026-08-24.** Excludes
-  the 160 promo-pack/prerelease stamp variants (~$1,697). Dropped the family
-  total from $2,069 to ~$372. §5.
+- `selectors.py:FAMILY_UNOBTAINABLE_RULES["snc"]` = two rules —
+  `{"promo_types_any_of": {"promopack", "stamped"}}` (160 stamp variants, ~$1,697)
+  and `{"promo_types_any_of": {"stepandcompleat"}}` (snc 469 Step-and-Compleat
+  foil, ~$16). **configured 2026-08-24.** §5.
 - No `FAMILY_SCENES["snc"]` (no panoramas — §4).

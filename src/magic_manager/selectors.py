@@ -111,6 +111,9 @@ FAMILY_DUPE_FOIL_PROMO_TYPES: dict[str, frozenset[str]] = {
     # exact art + showcase+inverted frame of their boosterfun showcase siblings
     # (SNC 296-340). Verified on Brazen Upstart 361↔296, Ziatora 404↔339. The
     # gilded print is the dupe; the boosterfun showcase is kept as preferred.
+    # (stepandcompleat is NOT here — it doesn't map to the `ff` treatment keyword
+    # the dupe-foil step gates on, so it's handled via FAMILY_UNOBTAINABLE_RULES
+    # instead. See docs/sets/snc.md §5.)
     # See docs/sets/snc.md §2.
     "snc": frozenset({"gilded"}),
     # Edge of Eternities: fracturefoil is same-art-as-sibling — the
@@ -188,6 +191,13 @@ FAMILY_UNOBTAINABLE_RULES: dict[str, list[dict]] = {
         # alone is enough. Effect: missing-set drops ~$1,697 (→ ~$372/121).
         # See docs/sets/snc.md §5.
         {"promo_types_any_of": frozenset({"promopack", "stamped"})},
+        # stepandcompleat: the Phyrexian "Step-and-Compleat" premium foil — SNC
+        # 469 Urabrask is the same borderless concept art as SNC 468, just that
+        # fancy foil process (foil-only, ~2x price). It computes to treatment
+        # 'b' (not 'ff'), so the dupe-foil step doesn't catch it; exclude it here
+        # as a fancy-foil variant the user doesn't chase. Single print in family.
+        # See docs/sets/snc.md §2/§5.
+        {"promo_types_any_of": frozenset({"stepandcompleat"})},
     ],
     "eoe": [
         # Chase-tier premiums the user does not shop for (2026-08-23 directive).
