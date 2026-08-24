@@ -38,7 +38,7 @@ import re
 import shlex
 from dataclasses import dataclass, field
 
-from . import db, scryfall, sets as sets_mod
+from . import db, scryfall, sets as sets_mod, util
 
 
 # ---------- AST ----------
@@ -1379,11 +1379,12 @@ def _filter_value(rows: list[MaterializedRow], op: str, threshold: float) -> lis
 # ---------- helpers ----------
 
 def _cn_sort_key(cn: str) -> tuple[int, str]:
-    """Sort collector numbers '1858' < '1858a' < '1859'."""
-    m = re.match(r"^(\d+)(.*)$", cn)
-    if not m:
-        return (0, cn)
-    return (int(m.group(1)), m.group(2))
+    """Sort collector numbers '1858' < '1858a' < '1859'.
+
+    Thin alias for the canonical ``util.cn_sort_key`` (kept for the existing
+    ``selectors._cn_sort_key`` call sites and the test that imports this name).
+    """
+    return util.cn_sort_key(cn)
 
 
 def _card_dict(row) -> dict:

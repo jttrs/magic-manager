@@ -23,6 +23,7 @@ from . import (
     mtgjson as mtgjson_mod,
     selectors as sel_mod,
     sets as sets_mod,
+    util,
     wishlist as wishlist_mod,
 )
 
@@ -1709,17 +1710,7 @@ def deck_free_cmd(
 QUERIES_DIR = Path("queries")
 
 
-def _selector_slug(selector: str) -> str:
-    """Slugify a selector string for use in artifact filenames.
-
-    Deterministic: same selector always produces the same slug. Lowercases,
-    keeps alphanumerics, collapses everything else to a single hyphen,
-    trims leading/trailing hyphens.
-    """
-    raw = "".join(c if c.isalnum() else "-" for c in selector.lower())
-    while "--" in raw:
-        raw = raw.replace("--", "-")
-    return raw.strip("-")
+# _selector_slug merged into _slug (identical implementation) — use _slug.
 
 
 def _materialize_or_die(selector: str):
@@ -2124,7 +2115,7 @@ def query_xlsx_cmd(
     """
     rows = _materialize_or_die(selector)
     rows = _apply_sort(rows, sort)
-    slug = name or _selector_slug(selector)
+    slug = name or _slug(selector)
     ts = datetime.now().strftime("%Y-%m-%d-%H%M%S")
     target = out if out else QUERIES_DIR / f"{slug}-{ts}.xlsx"
     _write_query_xlsx(rows, target, selector, slug)
@@ -2207,21 +2198,17 @@ def query_missing_set_cmd(
         raise typer.Exit(0)
 
     # 2. Cheapest-first ordering for the Scryfall URL chunks.
-    def _cn_key(cn: str | None) -> tuple[int, str]:
-        m = _re.match(r"^(\d+)(.*)$", cn or "")
-        return (int(m.group(1)) if m else 0, m.group(2) if m else (cn or ""))
-
     rows_by_value = sorted(rows_union, key=lambda r: (
         0 if _row_line_value(r) is not None else 1,
         _row_line_value(r) or 0.0,
-        r.card.get("set") or "", _cn_key(r.card.get("collector_number")),
+        r.card.get("set") or "", util.cn_sort_key(r.card.get("collector_number")),
     ))
     chunks = [rows_by_value[i:i+chunk_size] for i in range(0, len(rows_by_value), chunk_size)]
 
     # 3. Build the XLSX checklist artifact (grouped by set, sorted by CN within each).
     rows_for_xlsx = sorted(rows_union, key=lambda r: (
         r.card.get("set") or "",
-        _cn_key(r.card.get("collector_number")),
+        util.cn_sort_key(r.card.get("collector_number")),
         r.finish,
     ))
     ts = datetime.now().strftime("%Y-%m-%d-%H%M%S")
@@ -2242,7 +2229,7 @@ def query_missing_set_cmd(
     #    Order rows by (set, cn, finish) within each file for predictability.
     rows_for_bulk = sorted(rows_union, key=lambda r: (
         r.card.get("set") or "",
-        _cn_key(r.card.get("collector_number")),
+        util.cn_sort_key(r.card.get("collector_number")),
         r.finish,
     ))
     total_value = sum((_row_line_value(r) or 0.0) for r in rows_union)
