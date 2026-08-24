@@ -1231,14 +1231,18 @@ def _filter_treatment_preferred(rows: list[MaterializedRow]) -> list[Materialize
     configured = [a for a in anchors if a in FAMILY_DUPE_FOIL_PROMO_TYPES]
     if not configured:
         anchors_str = ", ".join(sorted(anchors)) if anchors else "(none resolvable)"
+        primary = sorted(anchors)[0] if anchors else "<anchor>"
         raise SelectorParseError(
             f"'treatment=preferred' requires per-family dupe-foil config. "
             f"Resolved anchor(s) for these rows: {anchors_str}. "
             f"Configured anchors: {sorted(FAMILY_DUPE_FOIL_PROMO_TYPES.keys())}. "
-            f"Either add an entry to FAMILY_DUPE_FOIL_PROMO_TYPES in selectors.py "
-            f"(see the Final Fantasy entry as a template — the user must specify "
-            f"which promo_types signal 'same art, just on a fancy-foil sheet' "
-            f"for this family), or use 'treatment=collectible-alt' instead."
+            f"Fix: run the characterize-set skill to onboard this family "
+            f"(`/characterize-set {primary}` — it audits the family and proposes "
+            f"the FAMILY_DUPE_FOIL_PROMO_TYPES / FAMILY_UNOBTAINABLE_RULES entries), "
+            f"or add a FAMILY_DUPE_FOIL_PROMO_TYPES['{primary}'] entry in "
+            f"selectors.py by hand (see the Final Fantasy entry as a template — "
+            f"which promo_types signal 'same art, just on a fancy-foil sheet'). "
+            f"To bypass the filter entirely, use 'treatment=collectible-alt'."
         )
     if len(configured) > 1:
         # Mixed-family rows: can't apply a single dupe-foil set. Reject.

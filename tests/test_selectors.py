@@ -49,8 +49,11 @@ def test_unconfigured_family_preferred_raises(tmp_db, seed_cards, make_card, mon
                         lambda: [{"code": "zzz", "parent_set_code": None,
                                   "name": "Zzz", "set_type": "expansion"}])
     seed_cards([make_card(id="z1", set="zzz", collector_number="1", rarity="rare")])
-    with pytest.raises(SelectorParseError):
+    with pytest.raises(SelectorParseError) as exc:
         selectors.materialize("set:zzz+related missing treatment=preferred")
+    # the error must point the user at the characterize-set onboarding path
+    assert "characterize-set" in str(exc.value)
+    assert "zzz" in str(exc.value)
 
 
 # ---------- materialize against a seeded DB ----------
