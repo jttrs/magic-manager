@@ -106,6 +106,13 @@ FAMILY_DUPE_FOIL_PROMO_TYPES: dict[str, frozenset[str]] = {
     # Leonardo A4Mitsuori japanshowcase). japanshowcase itself is unique art
     # (different artist from base) — kept. See docs/sets/tmt.md §2.
     "tmt": frozenset({"surgefoil", "fracturefoil"}),
+    # Streets of New Capenna: gilded is same-art-as-sibling — the 45 gilded
+    # golden-showcase foils (SNC 361-405, gilded+boosterfun, foil-only) share the
+    # exact art + showcase+inverted frame of their boosterfun showcase siblings
+    # (SNC 296-340). Verified on Brazen Upstart 361↔296, Ziatora 404↔339. The
+    # gilded print is the dupe; the boosterfun showcase is kept as preferred.
+    # See docs/sets/snc.md §2.
+    "snc": frozenset({"gilded"}),
     # Edge of Eternities: fracturefoil is same-art-as-sibling — the
     # fracturefoil+japanshowcase showcase mythics (EOE 383-392, treatment
     # b|shw|ff) are the same showcase art as the plain japanshowcase prints
@@ -168,6 +175,19 @@ FAMILY_UNOBTAINABLE_RULES: dict[str, list[dict]] = {
         # same print; matching any one of the three catches exactly these 5
         # cards and nothing else in the TLA family (verified 2026-07-21).
         {"promo_types_any_of": frozenset({"neonink", "headliner", "raisedfoil"})},
+    ],
+    "snc": [
+        # Promo-pack + prerelease STAMP variants the user does not shop for
+        # (2026-08-24). 160 prints across pncc (75, NCC commander promos), psnc
+        # (80, prerelease/promo-pack), snc (5). They're the same card as the base
+        # with a promo stamp, priced 10-30x on scarcity (Currency Converter
+        # pncc 81p ~$182 vs base ncc 81 ~$5). Normally the global preferred
+        # filter drops promopack/stamped, but these lack a non-stamped sibling in
+        # the family graph so they survive — this rule removes them explicitly.
+        # any_of because promopack and stamped nearly always co-occur but either
+        # alone is enough. Effect: missing-set drops ~$1,697 (→ ~$372/121).
+        # See docs/sets/snc.md §5.
+        {"promo_types_any_of": frozenset({"promopack", "stamped"})},
     ],
     "eoe": [
         # Chase-tier premiums the user does not shop for (2026-08-23 directive).
@@ -300,6 +320,14 @@ def _is_digital_only(card: dict) -> bool:
     underlying set is now ``UNOBTAINABLE_PROMO_TYPES``.
     """
     import json as _json
+    # Alchemy-ORIGINAL cards (e.g. ysnc "Herald of Vengeance") carry NO
+    # rebalanced/alchemy promo_type — only ``security_stamp: "arena"``. The
+    # rebalanced *reprints* (A-prefixed) have the promo_type; the originals
+    # don't. Both are digital-only, so the arena stamp is the reliable signal.
+    # (Verified: every arena-stamped card in the DB is a y*/A-prefixed digital
+    # print — no physical card uses this stamp.)
+    if (card.get("security_stamp") or "").lower() == "arena":
+        return True
     pt_raw = card.get("promo_types")
     if pt_raw is None:
         return False
@@ -613,7 +641,7 @@ _CARD_COLS = (
     "c.scryfall_id, c.name, c.flavor_name, c.set_code, c.collector_number, "
     "c.rarity, c.prices_usd, c.prices_usd_foil, c.cmc, c.type_line, c.mana_cost, "
     "c.frame_effects, c.full_art, c.promo_types, c.border_color, c.scryfall_uri, "
-    "c.colors, c.color_identity, c.is_promo, c.is_token, c.finishes"
+    "c.colors, c.color_identity, c.is_promo, c.is_token, c.finishes, c.security_stamp"
 )
 
 
@@ -1415,6 +1443,9 @@ def _card_dict(row) -> dict:
         "promo_types":      row["promo_types"],
         "border_color":     row["border_color"],
         "scryfall_uri":     row["scryfall_uri"],
+        # security_stamp: "arena" marks Alchemy-original digital-only cards that
+        # carry no rebalanced/alchemy promo_type — _is_digital_only needs it.
+        "security_stamp":   row["security_stamp"],
     }
 
 
@@ -1438,6 +1469,7 @@ def _card_dict_from_scryfall(c: dict) -> dict:
         "promo_types":      c.get("promo_types"),
         "border_color":     c.get("border_color"),
         "scryfall_uri":     c.get("scryfall_uri"),
+        "security_stamp":   c.get("security_stamp"),
     }
 
 

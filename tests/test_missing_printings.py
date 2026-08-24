@@ -61,3 +61,20 @@ def test_sub_selectors_shape(tmp_db, tla_family):
     assert len(subs) == 4
     slugs = [s for s, _ in subs]
     assert slugs[:3] == ["rare-regular", "mythic-regular", "uncommon-chase"]
+
+
+def test_arena_stamped_alchemy_originals_excluded(tmp_db, tla_family, seed_cards, make_card):
+    """Alchemy-ORIGINAL cards carry no rebalanced/alchemy promo_type — only
+    security_stamp='arena'. They must still be filtered from missing-set
+    (regression: they leaked into SNC because the projection dropped the stamp)."""
+    from magic_manager import missing
+    seed_cards([
+        make_card(id="phys", set="tla", collector_number="5", rarity="rare",
+                  name="Physical Rare"),                       # normal → missing
+        make_card(id="arena1", set="tla", collector_number="6", rarity="rare",
+                  name="Digital Rare", promo_types=[], security_stamp="arena"),  # digital → excluded
+    ])
+    rows = missing.missing_printings("tla")
+    sids = {r.scryfall_id for r in rows}
+    assert "phys" in sids
+    assert "arena1" not in sids, "arena-stamped Alchemy original leaked into missing-set"
