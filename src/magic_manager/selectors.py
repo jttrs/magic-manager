@@ -106,6 +106,17 @@ FAMILY_DUPE_FOIL_PROMO_TYPES: dict[str, frozenset[str]] = {
     # Leonardo A4Mitsuori japanshowcase). japanshowcase itself is unique art
     # (different artist from base) — kept. See docs/sets/tmt.md §2.
     "tmt": frozenset({"surgefoil", "fracturefoil"}),
+    # Edge of Eternities: fracturefoil is same-art-as-sibling — the
+    # fracturefoil+japanshowcase showcase mythics (EOE 383-392, treatment
+    # b|shw|ff) are the same showcase art as the plain japanshowcase prints
+    # (EOE 357-366, treatment b|shw), just on a fracture-foil sheet. Verified
+    # on The Dominion Bracelet: 364 (b|shw) and 390 (b|shw|ff) share art.
+    # japanshowcase itself is NOT a dupe — it's a distinct showcase treatment
+    # the user WANTS in missing-set output (2026-08-23 directive). So this
+    # entry keeps 357-366 as the preferred representative and drops the
+    # 383-392 fracturefoil dupes. Mirrors the TMNT case exactly.
+    # See docs/sets/eoe.md §2/§5.
+    "eoe": frozenset({"fracturefoil"}),
 }
 
 
@@ -157,6 +168,21 @@ FAMILY_UNOBTAINABLE_RULES: dict[str, list[dict]] = {
         # same print; matching any one of the three catches exactly these 5
         # cards and nothing else in the TLA family (verified 2026-07-21).
         {"promo_types_any_of": frozenset({"neonink", "headliner", "raisedfoil"})},
+    ],
+    "eoe": [
+        # Chase-tier premiums the user does not shop for (2026-08-23 directive).
+        #   - headliner / singularityfoil: EOE 382 Sothera, the Supervoid — the
+        #     set's headline ultra-rare (poster + singularityfoil), ~$1,223.
+        #     Direct analog of TLA's Avatar Aang headliner. Exactly 1 print.
+        #   - galaxyfoil: the "Stellar Sights" (EOS) premium foil masterpiece
+        #     lands + a few EOE galaxyfoil mythics (Ancient Tomb, Mana
+        #     Confluence, Gemstone Caverns, etc.), ~$60-$475 each — 105 prints
+        #     across eoe+eos. These are the fancy-foil versions; the user still
+        #     sees the non-galaxyfoil EOS/EOE print of the same card if one
+        #     exists (e.g. EOS 1/46 Ancient Tomb boosterfun remain in the list).
+        # any_of because headliner/singularityfoil and galaxyfoil never co-occur;
+        # matching any one catches exactly these chase prints.
+        {"promo_types_any_of": frozenset({"headliner", "singularityfoil", "galaxyfoil"})},
     ],
 }
 
