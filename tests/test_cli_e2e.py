@@ -84,3 +84,42 @@ def test_query_missing_set_e2e(tmp_db, app, fake_scryfall, seed_cards, make_card
     assert res.exit_code == 0, res.stdout
     # headline reflects 1 missing printing; artifacts written to queries/
     assert "Missing from set:tla" in res.stdout
+
+
+# ---------- Phase 5: audit/debug commands ----------
+
+def test_set_is_synced_reports_counts(tmp_db, app, seed_cards, make_card, monkeypatch):
+    import magic_manager.scryfall as scry
+    monkeypatch.setattr(scry, "all_sets",
+                        lambda: [{"code": "tla", "parent_set_code": None,
+                                  "name": "Avatar", "set_type": "expansion"}])
+    # unsynced → exit 1
+    res = runner.invoke(app, ["set", "is-synced", "tla"])
+    assert res.exit_code == 1
+    assert "not synced" in res.stdout
+    # after seeding → exit 0, count shown
+    seed_cards([make_card(id="s1", set="tla", collector_number="1")])
+    res2 = runner.invoke(app, ["set", "is-synced", "tla"])
+    assert res2.exit_code == 0
+    assert "1 cards" in res2.stdout
+
+
+def test_audit_deck_inventory_finds_and_fixes_orphan(tmp_db, app):
+    from magic_manager import db, decks
+    # create an orphan deck (row with no deck_cards) — the pre-fix failure state
+    decks.deck_create("orphan-deck", "Orphan")
+    res = runner.invoke(app, ["audit", "deck-inventory"])
+    assert res.exit_code == 0
+    assert "Orphan decks (0 cards): 1" in res.stdout
+    assert "orphan-deck" in res.stdout
+    # --fix deletes it
+    res2 = runner.invoke(app, ["audit", "deck-inventory", "--fix"])
+    assert "deleted 1 orphan" in res2.stdout.lower()
+    with db.connect() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM decks").fetchone()[0] == 0
+
+
+def test_db_unlock_no_sidecars(tmp_db, app):
+    res = runner.invoke(app, ["db", "unlock"])
+    assert res.exit_code == 0
+    assert "nothing to unlock" in res.stdout.lower()

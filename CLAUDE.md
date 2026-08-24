@@ -13,20 +13,25 @@ The `mm` CLI is a `uv` project script (`pyproject.toml` → `mm = "magic_manager
 Top-level subcommand groups (each `--help` lists its own subcommands):
 
 ```
-uv run mm set …          # sync sets, build/ingest inventory checklists, jumpstart-list, precon-list
+uv run mm set …          # sync sets, is-synced, build/ingest inventory checklists, jumpstart-list, precon-list
 uv run mm inventory …    # show / value / add / remove / import (V2 fact table)
 uv run mm wishlist …     # categories of cards I want
 uv run mm deck …         # decks (composition independent of ownership), import-precon
 uv run mm query …        # selector queries: show, value, top, total, multiples, stats, url, xlsx, missing-set
 uv run mm checklists …   # inspect files in checklists/ (alias: `mm input …`)
 uv run mm mtgjson …      # MTGJSON precon/set lookups (cached)
-uv run mm db …           # snapshot, snapshots, restore, integrity
+uv run mm db …           # snapshot, snapshots, restore, integrity, unlock (clear stale -wal/-shm)
+uv run mm audit …        # deck-inventory consistency checks (--fix deletes orphan decks)
 uv run mm intake <set>   # scan-loop REPL for fast bulk entry
 uv run mm export …       # paste-ready blocks for moxfield/manapool/tcgplayer/archidekt/plain/scryfall-json
 uv run mm scryfall <q>   # ad-hoc Scryfall search via the rate-limited wrapper
 ```
 
-There is no test suite, no linter config, and no build step. `uv sync` installs deps.
+There is a pytest suite under `tests/` (`uv run pytest`); fixtures use the
+`MAGIC_MANAGER_DB` env override for a throwaway DB and monkeypatch the
+`scryfall`/`mtgjson` wrappers so the suite is fully offline.
+
+There is a pytest suite (`uv run pytest`, dev-dep in `pyproject.toml`); no linter config and no build step beyond `uv_build`. `uv sync` installs deps.
 
 ## Architecture (the parts that need cross-file reading)
 
@@ -76,13 +81,14 @@ V2 fact tables: `cards`, `inventory`, `wishlist_entries`, `decks`, `deck_cards`,
 Inside `src/magic_manager/`:
 
 - `cli.py` — every `typer` command. Long but flat; new commands go here.
-- `db.py` — schema, migrations, `connect()` context manager, snapshot/restore.
+- `db.py` — schema, migrations, `connect()` context manager, `transaction(conn=None)` borrow-or-open helper (lets a caller run multiple CRUD writes in one atomic transaction — e.g. `import_precon`), snapshot/restore.
 - `sets.py` — set family resolution, sync from Scryfall, master-list/jumpstart-list/precon-list writers, ingest readers + the shared deck-checklist ingest engine (`_apply_deck_checklist`).
 - `selectors.py` — the selector DSL parser + materializer.
 - `inventory.py`, `wishlist.py`, `decks.py` — V2 fact-table CRUD + value rollups.
 - `intake.py` — scan-loop REPL.
 - `parsers.py` — Moxfield-style block parser (used by `import` commands).
 - `treatments.py` — derives a treatment string (e.g. `b|ff`, `ext`) from Scryfall card fields. Centralized so missing-set, master-list, and ad-hoc queries all agree on what counts as a "distinct printing".
+- `util.py` — dependency-free shared helpers: `cn_sort_key` (canonical collector-number sort, aliased by `selectors._cn_sort_key`) and `fmt_usd`.
 - `scryfall.py`, `mtgjson.py` — thin clients; the bash wrappers in `.claude/skills/{scryfall,mtgjson}-search/` are the canonical access path (see hooks below).
 - `exports/` — one module per target (moxfield, manapool, tcgplayer, archidekt, plain, scryfall_json), all with `build(rows) -> str`.
 
