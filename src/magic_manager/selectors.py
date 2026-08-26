@@ -181,16 +181,19 @@ FAMILY_UNOBTAINABLE_RULES: dict[str, list[dict]] = {
     ],
     "snc": [
         # Promo-pack + prerelease STAMP variants the user does not shop for
-        # (2026-08-24). 160 prints across pncc (75, NCC commander promos), psnc
-        # (80, prerelease/promo-pack), snc (5). They're the same card as the base
-        # with a promo stamp, priced 10-30x on scarcity (Currency Converter
-        # pncc 81p ~$182 vs base ncc 81 ~$5). Normally the global preferred
-        # filter drops promopack/stamped, but these lack a non-stamped sibling in
-        # the family graph so they survive — this rule removes them explicitly.
-        # any_of because promopack and stamped nearly always co-occur but either
-        # alone is enough. Effect: missing-set drops ~$1,697 (→ ~$372/121).
-        # See docs/sets/snc.md §5.
-        {"promo_types_any_of": frozenset({"promopack", "stamped"})},
+        # (2026-08-24). Prints across pncc (NCC commander promos), psnc
+        # (prerelease/promo-pack), snc. They're the same card as the base with a
+        # promo stamp, priced 10-30x on scarcity (Currency Converter pncc 81p
+        # ~$182 vs base ncc 81 ~$5). Normally the global preferred filter drops
+        # promopack/stamped, but these lack a non-stamped sibling in the family
+        # graph so they survive — this rule removes them explicitly.
+        #
+        # Signal is `stamped` ONLY, not `promopack` (corrected 2026-08-26): the
+        # promo-pack STAMP always carries `stamped`; but 5 borderless alt-arts
+        # (snc 463-467, inverted frame) are `promopack` WITHOUT `stamped` — a
+        # distinct art the user WANTS. Matching on `promopack` would wrongly drop
+        # those 5. See docs/sets/snc.md §5.
+        {"promo_types_any_of": frozenset({"stamped"})},
         # stepandcompleat: the Phyrexian "Step-and-Compleat" premium foil — SNC
         # 469 Urabrask is the same borderless concept art as SNC 468, just that
         # fancy foil process (foil-only, ~2x price). It computes to treatment
@@ -213,6 +216,14 @@ FAMILY_UNOBTAINABLE_RULES: dict[str, list[dict]] = {
         # any_of because headliner/singularityfoil and galaxyfoil never co-occur;
         # matching any one catches exactly these chase prints.
         {"promo_types_any_of": frozenset({"headliner", "singularityfoil", "galaxyfoil"})},
+        # Promo-pack/prerelease STAMP variants (added 2026-08-26, mirroring SNC).
+        # 80 stamped prints (mostly peoe) — same card as a kept base/boosterfun
+        # sibling, priced on scarcity (Quantum Riddler peoe 72p ~$38 vs base
+        # eoe 72 ~$33 + boosterfun eoe 305, both kept). Signal is `stamped` ONLY:
+        # validated that all 80 dupes carry `stamped`, while 5 borderless alt-arts
+        # (eoe 393-397, inverted frame) are `promopack` WITHOUT `stamped` and must
+        # stay. Effect: missing-set drops ~$291 (217→137 prints). See docs/sets/eoe.md §5.
+        {"promo_types_any_of": frozenset({"stamped"})},
     ],
 }
 

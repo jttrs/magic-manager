@@ -76,8 +76,8 @@ added 2026-08-23). The gap to fix is the *missing-set* side (§5).
 ## 5. Unobtainable rules — and the japanshowcase INCLUSION directive
 
 `FAMILY_DUPE_FOIL_PROMO_TYPES["eoe"]` = `frozenset({"fracturefoil"})` — **configured 2026-08-23.**
-`FAMILY_UNOBTAINABLE_RULES["eoe"]` = one `promo_types_any_of` rule over
-`{headliner, singularityfoil, galaxyfoil}` — **configured 2026-08-23.**
+`FAMILY_UNOBTAINABLE_RULES["eoe"]` = `{headliner, singularityfoil, galaxyfoil}`
+(configured 2026-08-23) + a `{stamped}` rule (added 2026-08-26).
 
 **User directive (2026-08-23):** when asked "what am I missing from EOE?", the
 `japanshowcase` showcase mythics (`eoe` 357–366, treatment `b|shw`) **should be
@@ -101,9 +101,11 @@ realistic **$1,931.76 / 217 prints** (−$5,797.85). Excludes:
 |---|---|---|
 | `headliner` / `singularityfoil` | `eoe` 382 Sothera, the Supervoid — the set headline ultra-rare (poster + singularityfoil), 1 print. Analog of TLA's Avatar Aang headliner. | ~$1,223 |
 | `galaxyfoil` | Stellar Sights (`eos`) premium foil masterpiece lands + a few `eoe` galaxyfoil mythics (Ancient Tomb, Mana Confluence, Gemstone Caverns, …), 105 prints across `eoe`+`eos`. The *non*-galaxyfoil EOS print of the same card stays in scope (e.g. `eos` 1/46 Ancient Tomb boosterfun). | ~$4,575 |
+| `stamped` | promo-pack/prerelease STAMP variants (80 prints, mostly `peoe`) — same card as a kept base/boosterfun sibling, priced on scarcity (Quantum Riddler `peoe` 72p ~$38 vs base `eoe` 72 + boosterfun `eoe` 305, both kept). Added 2026-08-26, mirroring SNC. **Signal is `stamped` ONLY** — validated all 80 dupes carry `stamped`, while 5 borderless alt-arts (`eoe` 393-397, inverted frame) are `promopack` WITHOUT `stamped` and are KEPT. | ~$291 |
 
-`any_of` because headliner/singularityfoil and galaxyfoil never co-occur;
-matching any one catches exactly these chase prints.
+`any_of` within each rule. Effect of the `stamped` rule: **$1,951.95 / 217 →
+~$1,641 / 137 prints.** (The bulk of the remaining total is the `eos` masterpiece
+land sheet, intentionally KEPT — see the Note below.)
 
 **Note:** the residual list is still topped by `eos` boosterfun masterpiece
 lands (Ancient Tomb `eos` 46 ~$169, 1 ~$121, Gemstone Caverns ~$86, …) — the
@@ -141,10 +143,12 @@ treatment-rule change — do not conflate.
   — **configured 2026-08-23.** Unblocks `mm query missing-set eoe`; keeps the
   357–366 japanshowcase showcase prints, drops the 383–392 fracturefoil dupes.
   See §5.
-- `selectors.py:FAMILY_UNOBTAINABLE_RULES["eoe"]` = `[{"promo_types_any_of":
-  frozenset({"headliner", "singularityfoil", "galaxyfoil"})}]` —
-  **configured 2026-08-23.** Excludes the Sothera headliner + the galaxyfoil
-  masterpiece tier. Dropped the family total from $7,729.61 to $1,931.76. See §5.
+- `selectors.py:FAMILY_UNOBTAINABLE_RULES["eoe"]` = two rules —
+  `{"promo_types_any_of": {"headliner", "singularityfoil", "galaxyfoil"}}`
+  (configured 2026-08-23; Sothera headliner + galaxyfoil masterpiece tier,
+  $7,729→$1,952) and `{"promo_types_any_of": {"stamped"}}` (added 2026-08-26;
+  80 promo-pack/prerelease stamps, mostly `peoe`, $1,952→~$1,641; `stamped` not
+  `promopack`, sparing the 5 `eoe` 393-397 borderless alt-arts). See §5.
 - `sets.py:EXCLUDED_PROMO_TYPES` — contains `japanshowcase`; this is why the 20
   showcase mythics are absent from `mm set master-list eoe`. Intentionally left
   unchanged (checklist-side exclusion per user direction).

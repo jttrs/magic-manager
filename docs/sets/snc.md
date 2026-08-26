@@ -73,26 +73,34 @@ single-artist panorama. No `FAMILY_SCENES["snc"]` entry needed.
 
 ## 5. Unobtainable rules
 
-`FAMILY_UNOBTAINABLE_RULES["snc"]` = one rule excluding `promopack`/`stamped`
-(added 2026-08-24).
+`FAMILY_UNOBTAINABLE_RULES["snc"]` = a `stamped` rule + a `stepandcompleat` rule
+(added 2026-08-24; `stamped` signal corrected 2026-08-26 — see below).
 
 **Rationale.** Without it, missing-set totals **$2,069.10 / 281 prints**; the
 top of the list is entirely `pncc`/`psnc` promo-pack-**stamped** cards (Currency
 Converter `pncc` 81p $182, Smuggler's Share `pncc` 21p $100, …). These are
 scarcity-priced stamp variants the user doesn't shop for. They normally fall to
-the global preferred filter (`promopack`/`stamped` are in
-`sets.EXCLUDED_PROMO_TYPES`), but the commander-promo (`pncc`) and prerelease
+the global preferred filter, but the commander-promo (`pncc`) and prerelease
 (`psnc`) prints have **no non-stamped sibling in the family graph** for the
 datestamped-with-sibling filter to substitute, so they survive. This rule drops
 them explicitly.
 
+**Signal is `stamped` ONLY (not `promopack`).** Corrected 2026-08-26 after
+validating each excluded print has a same-art kept sibling: the promo-pack STAMP
+always carries `stamped`, but **5 borderless alt-arts (`snc` 463-467** — An Offer
+You Can't Refuse, Rumor Gatherer, Incriminate, Light 'Em Up, Courier's Briefcase,
+all `promopack`+inverted-frame, no `stamped`) are a **distinct art the user
+wants**. The original `promopack OR stamped` rule wrongly dropped those 5;
+matching on `stamped` alone excludes the scarcity stamps and keeps the alt-arts.
+
 | Signal | What it catches | ~Value removed |
 |---|---|---|
-| `promopack` OR `stamped` | 160 prints across `pncc` (75), `psnc` (80), `snc` (5) — promo-pack + prerelease stamp variants | ~$1,697 |
+| `stamped` | promo-pack + prerelease stamp variants across `pncc`/`psnc`/`snc` (same card as a kept base/showcase sibling, priced on scarcity) | ~$1,700 |
 | `stepandcompleat` | `snc` 469 Urabrask — the Phyrexian "Step-and-Compleat" premium foil of the same borderless concept art as `snc` 468 (which is kept). Foil-only. NOT caught by the dupe-foil filter because it computes to treatment `b`, not `ff` — so it lives here, not in FAMILY_DUPE_FOIL_PROMO_TYPES. | ~$16 |
 
-Effect: missing-set drops to the realistic **~$371.66 / 121 prints** (topped by
-the boosterfun showcase dual lands — Jetmir's Garden `snc` 291 ~$23, etc.).
+Effect: missing-set drops to the realistic **~$361.60 / 105 prints** (topped by
+the boosterfun showcase dual lands — Jetmir's Garden `snc` 291 ~$23, etc.; the
+5 `promopack` alt-arts 463-467 are kept).
 
 Globally filtered (not via this rule): `alchemy`/`rebalanced` (digital),
 `serialized` (none in SNC).
@@ -136,7 +144,9 @@ Resolve a PRM-stamped SNC card by name + the `s`/`p` CN suffix per
   — **configured 2026-08-24.** Drops the 45 gilded golden-foil dupes (361-405),
   keeps the boosterfun showcase (296-340) as the preferred representative. §2.
 - `selectors.py:FAMILY_UNOBTAINABLE_RULES["snc"]` = two rules —
-  `{"promo_types_any_of": {"promopack", "stamped"}}` (160 stamp variants, ~$1,697)
-  and `{"promo_types_any_of": {"stepandcompleat"}}` (snc 469 Step-and-Compleat
-  foil, ~$16). **configured 2026-08-24.** §5.
+  `{"promo_types_any_of": {"stamped"}}` (promo-pack/prerelease stamp variants,
+  ~$1,700) and `{"promo_types_any_of": {"stepandcompleat"}}` (snc 469
+  Step-and-Compleat foil, ~$16). **configured 2026-08-24; stamped signal
+  corrected from `{promopack,stamped}`→`{stamped}` 2026-08-26 to spare the 5
+  `promopack`-only borderless alt-arts snc 463-467.** §5.
 - No `FAMILY_SCENES["snc"]` (no panoramas — §4).
