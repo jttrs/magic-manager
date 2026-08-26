@@ -78,3 +78,36 @@ def test_arena_stamped_alchemy_originals_excluded(tmp_db, tla_family, seed_cards
     sids = {r.scryfall_id for r in rows}
     assert "phys" in sids
     assert "arena1" not in sids, "arena-stamped Alchemy original leaked into missing-set"
+
+
+def test_stamped_excluded_but_promopack_altart_kept(tmp_db, seed_cards, make_card, monkeypatch):
+    """The scarcity-stamp exclusion must key on `stamped`, NOT `promopack`:
+    a promo-pack STAMP (carries `stamped`) is a scarcity dupe → excluded, but a
+    borderless alt-art that is `promopack`-only (no `stamped`) is distinct art →
+    KEPT. Regression for the 2026-08-26 over-exclusion fix (snc 463-467 /
+    eoe 393-397 were wrongly dropped by a {promopack,stamped} rule).
+
+    Uses the real, configured `snc` family (its FAMILY_UNOBTAINABLE_RULES has the
+    `stamped` rule). Both cards are rare so they enter via the rare-regular
+    sub-selector.
+    """
+    from magic_manager import missing
+    import magic_manager.scryfall as scry
+    monkeypatch.setattr(scry, "all_sets",
+                        lambda: [{"code": "snc", "parent_set_code": None,
+                                  "name": "Streets of New Capenna", "set_type": "expansion"}])
+    seed_cards([
+        # a plain base card (kept) so the stamped one has a same-art sibling
+        make_card(id="base", set="snc", collector_number="100", rarity="rare",
+                  name="Widget", promo_types=[]),
+        # promo-pack STAMP of the same card → scarcity dupe → excluded
+        make_card(id="stamp", set="snc", collector_number="100p", rarity="rare",
+                  name="Widget", promo_types=["promopack", "stamped"]),
+        # promopack-ONLY borderless alt-art (no stamped) → distinct art → KEPT
+        make_card(id="altart", set="snc", collector_number="463", rarity="rare",
+                  name="Gizmo", promo_types=["promopack"], frame_effects=["inverted"]),
+    ])
+    rows = missing.missing_printings("snc")
+    sids = {r.scryfall_id for r in rows}
+    assert "stamp" not in sids, "promo-pack STAMP leaked into missing-set (should be excluded)"
+    assert "altart" in sids, "promopack-only alt-art was wrongly excluded (over-broad rule)"
