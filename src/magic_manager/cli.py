@@ -494,21 +494,29 @@ def set_jumpstart_list(
 
 @set_app.command("precon-list")
 def set_precon_list(
-    set_code: str = typer.Argument(
-        ...,
-        help="Set code whose preconstructed products to list: fic, fin, tdc, "
-             "etc. Run `mm mtgjson decks --set <CODE>` to see what MTGJSON "
-             "publishes for the set.",
-    ),
     only_type: str = typer.Option(
         None, "--type",
         help="Narrow to one exact product type (e.g. 'Commander Deck', "
-             "'Box Set', 'Starter Kit'). Default: every physical sealed deck.",
+             "'Box Set', 'Duel Deck'). Default: the modern-constructed precon "
+             "types (Commander, Box Set, Planeswalker, Duel, Starter Kit, …).",
+    ),
+    all_physical: bool = typer.Option(
+        False, "--all-physical",
+        help="Widen scope to EVERY physical product MTGJSON lists (~1500 rows, "
+             "incl. old Theme Decks / Intro Packs / Welcome Decks). Default is "
+             "the modern-constructed subset. Ignored when --type is given.",
     ),
     include_collector: bool = typer.Option(
         False, "--include-collector",
         help="Include the '… Collector's Edition' twins (excluded by default — "
              "they're a premium variant the collection doesn't track).",
+    ),
+    sync_all: bool = typer.Option(
+        False, "--sync-all",
+        help="Sync every set referenced by the catalog from Scryfall before "
+             "rollup so ALL usd_total values populate. Slow (pulls ~180 sets) "
+             "and grows the local cards table with sets you may not own. "
+             "Default: best-effort — totals blank for un-synced sets.",
     ),
     out: Path = typer.Option(
         None, "--out",
@@ -516,72 +524,71 @@ def set_precon_list(
     ),
     force: bool = typer.Option(
         False, "--force",
-        help="Overwrite an existing precon checklist without prompting.",
+        help="Overwrite an existing precon catalog without prompting.",
     ),
     fmt: str = typer.Option(
         "xlsx", "--format",
         help="Output format: 'xlsx' (default) or 'md' (markdown).",
     ),
 ):
-    """Build a product-level checklist of every precon for a set.
+    """Build a global catalog of preconstructed products across ALL sets.
 
-    One row per physical sealed product (Commander Deck, Box Set, Starter Kit,
-    Planeswalker Deck, Bundle Land Pack, …), carrying deck name, product type,
-    release date, commander(s), card count, and summed market value. Fill
-    ``keep_qty`` (0 or 1 — copies kept *constructed*: one deck recipe is
-    created and one physical copy is auto-composed) and ``deconstructed_qty``
-    (copies torn into free cards; no pledge). The two sum to total copies
-    opened and that total determines how many cards land in inventory.
+    There are only a handful of precons per set, so this is one master list you
+    populate once — not a per-set file. One row per product (Commander Deck,
+    Box Set, Planeswalker Deck, …), carrying its set, deck name, product type,
+    release date, commander(s), card count, and best-effort market value. Fill
+    ``keep_qty`` (0 or 1 — copies kept *constructed*: one deck recipe is created
+    and one physical copy is auto-composed) and ``deconstructed_qty`` (copies
+    torn into free cards; no pledge). The two sum to total copies opened and
+    that total determines how many cards land in inventory.
 
-    A precon is the base concept here; ``mm set jumpstart-list`` is the
-    Jumpstart-specific sibling. Collector's Edition variants are excluded
-    unless ``--include-collector`` is passed. Digital (``MTGO …``), Jumpstart
+    Scope defaults to the modern-constructed precon types; ``--type`` narrows to
+    one, ``--all-physical`` opens it to everything. Collector's Edition variants
+    are excluded unless ``--include-collector``. Digital (``MTGO …``), Jumpstart
     (own command), and Secret Lair (own bulk-add flow) products are never
     listed.
+
+    Generation does NOT sync by default (an all-sets catalog can't sync all of
+    Magic), so ``usd_total`` is blank for sets not yet in the local cards table;
+    ingest of a filled row self-syncs that precon's sets, so values fill in over
+    time. Pass ``--sync-all`` to sync every referenced set up front and populate
+    all totals in one go (slower).
     """
     fmt = fmt.lower()
     if fmt not in ("xlsx", "md"):
         typer.echo(f"error: --format must be 'xlsx' or 'md', got {fmt!r}", err=True)
         raise typer.Exit(2)
 
-    code = set_code.lower()
-    # The slug embeds 'precon' so the filename is self-describing on disk
-    # (Finder/cmux don't show _meta) and never collides with a master-list or
-    # jumpstart checklist for the same code.
-    slug = f"{code}-precon"
+    # Global catalog — one file, not per-set. The slug embeds 'precons' so it's
+    # self-describing on disk and never collides with a master-list or
+    # jumpstart checklist.
+    slug = "precons"
     out_path = out or (CHECKLISTS_DIR / f"{slug}-checklist.{fmt}")
 
     if out is None and out_path.exists() and not force:
-        typer.echo(f"refusing to overwrite existing precon checklist: {out_path}", err=True)
+        typer.echo(f"refusing to overwrite existing precon catalog: {out_path}", err=True)
         typer.echo("", err=True)
         typer.echo("To proceed, either:", err=True)
         typer.echo(f"  - Finish editing the existing file, then: mm set ingest --path {out_path}", err=True)
-        typer.echo(f"  - Discard partial edits and regenerate: mm set precon-list {set_code} --force", err=True)
+        typer.echo(f"  - Discard partial edits and regenerate: mm set precon-list --force", err=True)
         raise typer.Exit(EXIT_UNPROCESSED_INTAKE)
-
-    # Sync the set's cards so usd_total roll-ups have prices to pull from AND
-    # the eventual ingest can resolve every scryfall_id locally. Precon
-    # contents can span the family (reprints carry their original set code),
-    # so sync the whole family.
-    try:
-        r, codes = _resolve_codes(set_code, include_kinds=[], only=[])
-    except (LookupError, typer.BadParameter) as e:
-        typer.echo(f"error: {e}", err=True)
-        raise typer.Exit(2)
-    typer.echo(f"Syncing {len(codes)} set(s) (precon contents may span the family): {' '.join(codes)}")
-    n_synced = sets_mod.sync(codes)
-    typer.echo(f"  → {n_synced} cards upserted")
 
     if force and out_path.exists():
         typer.echo(f"  ! --force: overwriting {out_path}", err=True)
 
+    typer.echo("Cataloging precons across all sets (reading MTGJSON per-deck files; first run may take a moment)…")
+    if sync_all:
+        typer.echo("  --sync-all: will sync every referenced set from Scryfall first (this is the slow part)…")
     writer = (
         sets_mod.write_precon_list_md if fmt == "md"
         else sets_mod.write_precon_list_xlsx
     )
     try:
-        n_rows = writer(code, out_path, slug=slug, only_type=only_type,
-                        include_collector=include_collector)
+        n_rows = writer(out_path, slug=slug, only_type=only_type,
+                        all_physical=all_physical,
+                        include_collector=include_collector,
+                        sync_all=sync_all,
+                        progress=lambda m: typer.echo(f"  {m}"))
     except ValueError as e:
         typer.echo(f"error: {e}", err=True)
         raise typer.Exit(2)
@@ -649,8 +656,10 @@ def _ingest_deck_checklist(src: Path, *, kind: str, sha: str, force: bool,
         src.rename(archived)
 
     meta = sets_mod.read_master_list_meta(archived or src) or {}
-    set_code = meta.get("anchor_code") or meta.get("set_codes") or "?"
-    log_label = f"{kind}:{set_code}"
+    # The global precon catalog carries no anchor_code/set_codes (it spans every
+    # set); its rows each name their own set. Fall back to a bare kind label.
+    set_code = meta.get("anchor_code") or meta.get("set_codes") or ""
+    log_label = f"{kind}:{set_code}" if set_code else kind
     rows_added = (summary or {}).get("constructed", 0)
     rows_updated = (summary or {}).get("loose_copies", 0)
     with db.connect() as conn:
@@ -693,8 +702,9 @@ def _ingest_deck_checklist(src: Path, *, kind: str, sha: str, force: bool,
         typer.echo(f"error: {kind} ingest failed: {error}", err=True)
         raise typer.Exit(2)
 
+    scope_seg = f" ({set_code})" if set_code else ""
     typer.echo(
-        f"{noun} ({set_code}): "
+        f"{noun}{scope_seg}: "
         f"{summary['rows_acted']}/{summary['rows_total']} rows acted on, "
         f"{summary['constructed']} constructed, "
         f"{summary['loose_copies']} loose copies, "
@@ -769,6 +779,20 @@ def set_ingest(
         typer.echo(f"error: --mode must be 'replace' or 'additive', got {mode!r}", err=True)
         raise typer.Exit(2)
 
+    # ---- kind dispatch (early): deck checklists (precon / jumpstart, its
+    # species) route to the shared deck-checklist engine BEFORE the
+    # inventory-specific anchor resolution below. The global precon catalog has
+    # no anchor_code/set_codes in its _meta (it spans every set), so it must
+    # short-circuit here or the anchor resolution would reject it. Only applies
+    # with an explicit --path (deck checklists are always ingested by path).
+    if path is not None and path.exists():
+        early_meta = sets_mod.read_master_list_meta(path) or {}
+        early_kind = early_meta.get("kind")
+        if early_kind in ("jumpstart", "precon"):
+            _ingest_deck_checklist(path, kind=early_kind, sha=_file_sha256(path),
+                                   force=force, json_out=json_out)
+            return
+
     # Resolve path + anchor. Either name_or_code or --path must give us enough.
     if path is not None:
         src = path
@@ -826,15 +850,6 @@ def set_ingest(
                 typer.echo(f"  - {c}", err=True)
             raise typer.Exit(2)
         src = candidates[0]
-
-    # ---- kind dispatch: deck checklists (precon / jumpstart, its species) go
-    # to the shared deck-checklist import path; inventory/missing fall through ----
-    early_meta = sets_mod.read_master_list_meta(src) or {}
-    early_kind = early_meta.get("kind")
-    if early_kind in ("jumpstart", "precon"):
-        _ingest_deck_checklist(src, kind=early_kind, sha=_file_sha256(src),
-                               force=force, json_out=json_out)
-        return
 
     # ---- Mode resolution: auto-detect from _meta.mode, reconcile with --mode ----
     # Read _meta unconditionally now (the path-resolution branches above may
@@ -2816,18 +2831,30 @@ def input_list(
         if "error" in s:
             typer.echo(f"    parse error: {s['error']}")
             continue
-        rarity = ",".join(s.get("rarity_filter") or []) or "(none)"
-        codes = ",".join(s.get("set_codes") or []) or "(none)"
-        typer.echo(
-            f"    anchor={s.get('anchor_code') or '?'} "
-            f"set_codes={codes} rarity_filter={rarity}"
-        )
-        typer.echo(
-            f"    rows_total={s['rows_total']} "
-            f"rows_with_qty={s['rows_with_qty']} "
-            f"total_qty={s['total_qty']} "
-            f"value=${s['estimated_value']:.2f}"
-        )
+        if s.get("kind") in ("precon", "jumpstart"):
+            # Deck checklist: qty_normal/qty_foil don't apply — report the
+            # keep/deconstruct shape instead.
+            noun = "packs" if s["kind"] == "jumpstart" else "decks"
+            typer.echo(f"    kind={s['kind']} (deck checklist)")
+            typer.echo(
+                f"    {s['rows_with_qty']}/{s['rows_total']} {noun} filled — "
+                f"{s.get('decks_to_construct', 0)} to construct, "
+                f"{s.get('loose_copies', 0)} loose copies, "
+                f"value=${s['estimated_value']:.2f}"
+            )
+        else:
+            rarity = ",".join(s.get("rarity_filter") or []) or "(none)"
+            codes = ",".join(s.get("set_codes") or []) or "(none)"
+            typer.echo(
+                f"    anchor={s.get('anchor_code') or '?'} "
+                f"set_codes={codes} rarity_filter={rarity}"
+            )
+            typer.echo(
+                f"    rows_total={s['rows_total']} "
+                f"rows_with_qty={s['rows_with_qty']} "
+                f"total_qty={s['total_qty']} "
+                f"value=${s['estimated_value']:.2f}"
+            )
         if f["duplicate_of_log_id"]:
             ps = f["prior_success"]
             typer.echo(

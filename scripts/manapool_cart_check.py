@@ -159,6 +159,82 @@ def check_overpay(mapped: list[CartLine], family_codes: set[str] | None) -> tupl
     return overpay_rows(mapped), skipped
 
 
+def check_dupes(mapped: list[CartLine]) -> list[dict]:
+    """Cart lines that duplicate a printing you're already buying.
+
+    Unscoped by design (a dupe is a dupe regardless of --set family): group by
+    scryfall_id — which on Scryfall uniquely identifies one ART, finish being
+    orthogonal — and flag any printing bought more than once. Two flavors:
+      hard  a single finish has qty >= 2 (two literally identical cards).
+      soft  both a nonfoil and a foil of the same printing are in the cart
+            (same art, two finishes — the collection tracks these as distinct
+            copies, but when BUYING you usually want only the cheaper).
+    A printing can be both. One collated row per dupe printing, carrying each
+    finish's qty + cheapest cart price so the user can pick or confirm intent.
+    """
+    # group[scryfall_id] = {"nf_qty","fo_qty","nf_price","fo_price","name","set","num"}
+    groups: dict[str, dict] = {}
+    for m in mapped:
+        if not m.scryfall_id:
+            continue
+        g = groups.setdefault(m.scryfall_id, {
+            "name": m.name or "?", "set": m.set_code or "", "num": m.number or "",
+            "nf_qty": 0, "fo_qty": 0, "nf_price": None, "fo_price": None,
+        })
+        qty = m.quantity or 1
+        price = m.price_cents / 100 if m.price_cents is not None else None
+        if m.foil:
+            g["fo_qty"] += qty
+            if price is not None and (g["fo_price"] is None or price < g["fo_price"]):
+                g["fo_price"] = price
+        else:
+            g["nf_qty"] += qty
+            if price is not None and (g["nf_price"] is None or price < g["nf_price"]):
+                g["nf_price"] = price
+
+    rows: list[dict] = []
+    for g in groups.values():
+        hard = g["nf_qty"] >= 2 or g["fo_qty"] >= 2
+        soft = g["nf_qty"] >= 1 and g["fo_qty"] >= 1
+        if not (hard or soft):
+            continue
+        notes: list[str] = []
+        if g["nf_qty"] >= 2:
+            notes.append(f"×{g['nf_qty']} nonfoil")
+        if g["fo_qty"] >= 2:
+            notes.append(f"×{g['fo_qty']} foil")
+        if soft:
+            notes.append("foil+nonfoil")
+        prices = [p for p in (g["nf_price"], g["fo_price"]) if p is not None]
+        rows.append({
+            "name": g["name"], "set": g["set"], "num": g["num"],
+            "nf_qty": g["nf_qty"], "nf_price": g["nf_price"],
+            "fo_qty": g["fo_qty"], "fo_price": g["fo_price"],
+            "cheaper": min(prices) if (soft and prices) else None,
+            "note": ", ".join(notes),
+        })
+    rows.sort(key=lambda r: (r["set"], _cn_sort_key(r["num"])))
+    return rows
+
+
+def infer_set_anchors(mapped: list[CartLine]) -> list[str]:
+    """Distinct family anchors of the cart's mapped set codes.
+
+    Each mapped line carries the Scryfall set code of its printing; collapsing
+    those to family anchors via sets_mod.resolve (24h-cached /sets) tells us
+    which family (or families) the cart belongs to — one anchor => deterministic
+    imputation, several => ambiguous (report all, let the user disambiguate).
+    """
+    codes = {m.set_code.lower() for m in mapped if m.set_code and m.scryfall_id}
+    anchors: set[str] = set()
+    for c in codes:
+        try:
+            anchors.add(sets_mod.resolve(c).code)
+        except LookupError:
+            pass
+    return sorted(anchors)
+
+
 # ---------- rendering ----------
 #
 # Each section builder returns a list of markdown lines (no printing) so the SAME

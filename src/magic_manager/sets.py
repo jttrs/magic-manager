@@ -191,13 +191,18 @@ def sync(set_codes: Iterable[str]) -> int:
         return 0
     # Build a single search query using `or` so we paginate once. ``lang:en``
     # filters out the Japanese-only rfin J1/J2 prints (and any future non-English
-    # variants Scryfall adds to a release).
-    query = "(" + " or ".join(f"e:{c}" for c in codes) + ") lang:en"
+    # variants Scryfall adds to a release). Cap the codes-per-query so a very
+    # large set list (e.g. the all-sets precon catalog's ~180 sets) can't build
+    # a Scryfall query string past its length limit — batch and sum instead.
+    _MAX_CODES_PER_QUERY = 60
     n = 0
     with db.connect() as conn:
-        for card in scryfall.search(query, unique="prints"):
-            db.upsert_card(conn, card)
-            n += 1
+        for i in range(0, len(codes), _MAX_CODES_PER_QUERY):
+            batch = codes[i:i + _MAX_CODES_PER_QUERY]
+            query = "(" + " or ".join(f"e:{c}" for c in batch) + ") lang:en"
+            for card in scryfall.search(query, unique="prints"):
+                db.upsert_card(conn, card)
+                n += 1
     return n
 
 
@@ -705,18 +710,124 @@ def _derive_inventory_partition(result) -> "_InventoryPartition | None":
     )
 
 
+def _summarize_deck_checklist(path: Path, meta: dict) -> dict:
+    """Pre-ingest preview for a deck checklist (kind=precon | jumpstart).
+
+    The inventory summarizer's qty_normal/qty_foil model doesn't fit these
+    files (they use keep_qty/deconstructed_qty), so this reports the
+    deck-shaped stats the ``/ingest-new-inventory-list`` command needs:
+    which decks are filled, how many will be constructed vs deconstructed.
+
+    Returns a dict sharing the inventory summary's key names where they carry
+    over (``rows_total``, ``rows_with_qty``, ``total_qty``, ``estimated_value``,
+    ``warnings``) plus a ``kind`` discriminator and deck-specific fields:
+    ``decks_to_construct`` (rows with keep_qty==1), ``loose_copies`` (sum of
+    deconstructed_qty over filled rows), and ``filled`` (per-filled-row
+    ``{file_name, label, keep_qty, deconstructed_qty, set, usd_total}``).
+    ``estimated_value`` sums the ``usd_total`` column over filled rows (the
+    catalog already priced them; blank cells contribute nothing).
+    """
+    from . import parsers
+    kind = meta.get("kind") or "precon"
+    suffix = path.suffix.lower()
+    if suffix == ".xlsx":
+        parsed = parsers.parse_jumpstart_list_xlsx(path)
+    else:
+        parsed = parsers.parse_jumpstart_list_md(path)
+
+    # The deck-checklist parser keeps only file_name/keep_qty/deconstructed_qty.
+    # Pull the descriptive set/usd_total columns straight from the XLSX cells so
+    # the preview can show per-deck set + value without a network round-trip.
+    extra: dict[str, dict] = {}
+    if suffix == ".xlsx":
+        from openpyxl import load_workbook
+        wb = load_workbook(filename=str(path), data_only=True)
+        ws = wb["checklist"] if "checklist" in wb.sheetnames else wb.active
+        rows_iter = ws.iter_rows(values_only=True)
+        header = next(rows_iter, None) or ()
+        hidx = {str(h).strip().lower(): i for i, h in enumerate(header) if h is not None}
+        fn_i = hidx.get("file_name")
+        set_i = hidx.get("set")
+        usd_i = hidx.get("usd_total")
+        if fn_i is not None:
+            for row in rows_iter:
+                if fn_i >= len(row) or row[fn_i] is None:
+                    continue
+                fn = str(row[fn_i]).strip()
+                usd = row[usd_i] if (usd_i is not None and usd_i < len(row)) else None
+                setc = row[set_i] if (set_i is not None and set_i < len(row)) else None
+                extra[fn] = {
+                    "set": (str(setc).lower() if setc else ""),
+                    "usd_total": (float(usd) if isinstance(usd, (int, float)) else None),
+                }
+
+    filled: list[dict] = []
+    decks_to_construct = 0
+    loose_copies = 0
+    total_qty = 0
+    estimated_value = 0.0
+    for r in parsed.rows:
+        t = r.keep_qty + r.deconstructed_qty
+        if t <= 0:
+            continue
+        info = extra.get(r.file_name, {})
+        usd = info.get("usd_total")
+        filled.append({
+            "file_name": r.file_name,
+            "label": r.theme or r.file_name,
+            "keep_qty": r.keep_qty,
+            "deconstructed_qty": r.deconstructed_qty,
+            "set": info.get("set", ""),
+            "usd_total": usd,
+        })
+        total_qty += t
+        if r.keep_qty == 1:
+            decks_to_construct += 1
+        loose_copies += r.deconstructed_qty
+        if usd is not None:
+            estimated_value += usd
+
+    return {
+        "path": str(path),
+        "meta": meta,
+        "kind": kind,
+        # Inventory-shape keys kept for the shared text printer / skill.
+        "anchor_code": "",
+        "set_codes": [],
+        "rarity_filter": [],
+        "rows_total": len(parsed.rows),
+        "rows_with_qty": len(filled),
+        "total_qty": total_qty,
+        "estimated_value": estimated_value,
+        "top_value": [],
+        # Deck-specific fields.
+        "decks_to_construct": decks_to_construct,
+        "loose_copies": loose_copies,
+        "filled": filled,
+        "warnings": parsed.warnings,
+    }
+
+
 def summarize_intake_file(path: Path) -> dict:
     """Pre-ingest preview for the slash command. Handles both XLSX and md.
 
-    Returns a dict with: ``path``, ``meta`` (or ``None``), ``anchor_code``,
+    For inventory checklists (``kind=inventory`` or untagged) returns a dict
+    with: ``path``, ``meta`` (or ``None``), ``kind``, ``anchor_code``,
     ``set_codes``, ``rarity_filter``, ``rows_total``, ``rows_with_qty``,
     ``total_qty``, ``estimated_value``, ``top_value`` (top 5 rows by line
-    value), ``warnings`` (parser warnings).
+    value), ``warnings`` (parser warnings). Deck checklists (``kind=precon`` /
+    ``kind=jumpstart``) are routed to ``_summarize_deck_checklist``, which
+    returns the same key names where they carry over plus deck-specific fields.
 
     Doesn't hit the network beyond what the parser already does (the
     rate-limited /cards/collection lookup for resolution).
     """
     from . import parsers
+    # Kind-dispatch: deck checklists don't fit the inventory qty model.
+    file_meta = read_master_list_meta(path) or {}
+    if file_meta.get("kind") in ("precon", "jumpstart"):
+        return _summarize_deck_checklist(path, file_meta)
+
     fmt = parsers.detect_format(path)
     if fmt == "md":
         result = parsers.parse_master_list_md(path)
@@ -764,6 +875,7 @@ def summarize_intake_file(path: Path) -> dict:
     return {
         "path": str(path),
         "meta": meta,
+        "kind": (meta or {}).get("kind") or "inventory",
         "anchor_code": anchor,
         "set_codes": [c for c in set_codes.split(",") if c],
         "rarity_filter": [r for r in rarity_filter.split(",") if r],
@@ -1072,6 +1184,9 @@ def _precon_variant_summary(variant_meta: dict) -> dict:
     )
     return {
         "file_name": file_name,
+        # DeckList's ``code`` is the product's own set code (uppercase); lower
+        # it for consistency with the rest of the codebase's code handling.
+        "set": (variant_meta.get("code") or "").lower(),
         "deck_name": variant_meta.get("name") or file_name,
         "type": variant_meta.get("type") or "",
         "release_date": variant_meta.get("releaseDate") or "",
@@ -1081,24 +1196,95 @@ def _precon_variant_summary(variant_meta: dict) -> dict:
     }
 
 
+# Sentinel: default ``types`` for _build_precon_rows means "the modern-precon
+# allow-set". We can't reference mtgjson.PRECON_MODERN_TYPES as a default arg
+# because mtgjson is imported lazily (function-local) to avoid an import cycle.
+_PRECON_TYPES_DEFAULT = object()
+
+
+def unsynced_set_codes(codes: Iterable[str]) -> list[str]:
+    """Return the subset of ``codes`` (lowercased) with zero rows in ``cards``.
+
+    Used to decide which sets still need a Scryfall pull before a price
+    rollup can see them.
+    """
+    wanted = sorted({c.lower() for c in codes if c})
+    if not wanted:
+        return []
+    with db.connect() as conn:
+        placeholders = ",".join("?" for _ in wanted)
+        present = {
+            row[0]
+            for row in conn.execute(
+                f"SELECT DISTINCT set_code FROM cards WHERE set_code IN ({placeholders})",
+                wanted,
+            ).fetchall()
+        }
+    return [c for c in wanted if c not in present]
+
+
 def _build_precon_rows(
-    set_code: str,
+    set_code: str | None = None,
     *,
     only_type: str | None = None,
+    types=_PRECON_TYPES_DEFAULT,
     include_collector: bool = False,
+    sync_all: bool = False,
+    progress=None,
 ) -> list[dict]:
-    """Enumerate physical precon products for ``set_code`` and roll each up.
+    """Enumerate physical precon products and roll each up.
 
-    Sorted by ``(type, deck_name)`` so like products cluster in the checklist.
+    ``set_code=None`` (the default) spans every set — the precon catalog is
+    global. ``types`` defaults to ``mtgjson.PRECON_MODERN_TYPES``; pass
+    ``types=None`` for every physical type. Rolling up
+    ``card_count``/``commander`` fetches each precon's per-deck JSON from
+    MTGJSON (cached forever), so a first all-sets run makes one request per
+    precon.
+
+    ``usd_total`` is best-effort: it prices only cards already present in the
+    local ``cards`` table, so it's blank for sets not yet synced. With
+    ``sync_all=True``, every set referenced by the catalog's cards is synced
+    from Scryfall first (batched), so all totals populate — slower, and it
+    grows the local cards table with sets you may not own. ``progress`` is an
+    optional ``callable(str)`` for status lines. Sorted newest-first, then by
+    ``(type, deck_name)``.
     """
     from . import mtgjson as mtgjson_mod
+    if types is _PRECON_TYPES_DEFAULT:
+        types = mtgjson_mod.PRECON_MODERN_TYPES
     variants = mtgjson_mod.precon_variants(
-        set_code, only_type=only_type, include_collector=include_collector
+        set_code, only_type=only_type, types=types,
+        include_collector=include_collector,
     )
     if not variants:
         return []
+
+    if sync_all:
+        # Pre-pass: fetch each deck once (cached after) to collect every set its
+        # cards belong to — including cross-set reprints (a FIC deck's FIN
+        # cards) — then sync only the sets not already local, in one batched
+        # call. The rollup below re-reads the same cached deck JSON for free.
+        referenced: set[str] = set()
+        for v in variants:
+            deck_data = mtgjson_mod.deck(v["fileName"])
+            for board_key in ("commander", "mainBoard", "sideBoard"):
+                for entry in deck_data.get(board_key) or []:
+                    sc = entry.get("setCode")
+                    if sc:
+                        referenced.add(sc.lower())
+        missing = unsynced_set_codes(referenced)
+        if progress:
+            progress(f"{len(referenced)} sets referenced; {len(missing)} not yet local — syncing…")
+        if missing:
+            n = sync(missing)
+            if progress:
+                progress(f"synced {len(missing)} sets → {n} cards upserted")
+
     summaries = [_precon_variant_summary(v) for v in variants]
-    summaries.sort(key=lambda r: (r["type"], r["deck_name"]))
+    # Newest first (release_date is an ISO date string, so reverse-lex works),
+    # then cluster like product types, then name.
+    summaries.sort(key=lambda r: (r["release_date"], r["type"], r["deck_name"]),
+                   reverse=True)
     return summaries
 
 
@@ -1272,13 +1458,47 @@ def write_jumpstart_list_md(set_code: str, out_path: Path,
     return len(rows)
 
 
-def write_precon_list_xlsx(set_code: str, out_path: Path, *,
+def _precon_list_meta(slug: str, out_stem: str, *, only_type: str | None,
+                      all_physical: bool, include_collector: bool) -> dict:
+    """Shared ``_meta`` for the (global, all-sets) precon catalog.
+
+    No ``anchor_code``/``set_codes`` — the catalog spans every set, so ingest
+    derives each row's set from its ``Words_CODE`` fileName and syncs on demand.
+    """
+    from . import __version__
+    return {
+        # `kind` is the dispatch key for `mm set ingest`. 'precon' routes to
+        # the shared deck-checklist engine (as 'jumpstart' does); 'inventory'
+        # and 'missing' route to their own paths.
+        "kind": "precon",
+        "slug": slug or out_stem,
+        "mode": "add",
+        # Provenance: which slice of Magic's precons this catalog covers.
+        "only_type": only_type or "",
+        "all_physical": "1" if all_physical else "0",
+        "include_collector": "1" if include_collector else "0",
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "magic_manager_version": __version__,
+    }
+
+
+def write_precon_list_xlsx(out_path: Path, *,
                            slug: str | None = None,
                            only_type: str | None = None,
-                           include_collector: bool = False) -> int:
-    """Emit a fillable XLSX of every physical precon product for ``set_code``.
+                           all_physical: bool = False,
+                           include_collector: bool = False,
+                           sync_all: bool = False,
+                           progress=None) -> int:
+    """Emit a fillable XLSX cataloging preconstructed products across ALL sets.
 
-    Row schema: file_name | deck_name | type | release_date | commander |
+    The precon catalog is global — there are only a handful of precons per set,
+    so this is one master list you populate once, not a per-set file. Scope
+    defaults to the modern-constructed product types (``PRECON_MODERN_TYPES``);
+    ``only_type`` narrows to one type, ``all_physical=True`` opens it to every
+    physical product. ``… Collector's Edition`` twins are excluded unless
+    ``include_collector=True``.
+
+    Row schema: file_name | set | deck_name | type | release_date | commander |
     card_count | usd_total | keep_qty | deconstructed_qty
 
     ``keep_qty`` (0 or 1) and ``deconstructed_qty`` carry the same semantics as
@@ -1286,31 +1506,38 @@ def write_precon_list_xlsx(set_code: str, out_path: Path, *,
     of it): keep_qty=1 creates one deck recipe + auto-composes one physical
     copy and adds keep_qty+deconstructed_qty copies' worth of cards to
     inventory; keep_qty=0 with deconstructed_qty>0 adds loose cards, no recipe.
-    Hidden ``_meta`` sheet declares ``kind=precon`` so ingest dispatches the
-    shared deck-checklist engine. Returns ``rows_written``.
+    ``usd_total`` is best-effort — blank for sets not yet in the local cards
+    table (generation never syncs; ingest syncs the filled rows' sets on
+    demand). Pass ``sync_all=True`` to sync every referenced set first so all
+    totals populate (slower; ``progress`` is an optional status callback).
+    Hidden ``_meta`` sheet declares ``kind=precon``. Returns ``rows_written``.
     """
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Font, PatternFill
     from openpyxl.utils import get_column_letter
     from openpyxl.worksheet.datavalidation import DataValidation
 
-    from . import __version__
-
-    rows = _build_precon_rows(set_code, only_type=only_type,
-                              include_collector=include_collector)
+    rows = _build_precon_rows(
+        only_type=only_type,
+        types=(None if all_physical else _PRECON_TYPES_DEFAULT),
+        include_collector=include_collector,
+        sync_all=sync_all,
+        progress=progress,
+    )
     if not rows:
         raise ValueError(
-            f"no precon variants found for set {set_code!r}"
+            "no precon variants found"
             + (f" of type {only_type!r}" if only_type else "")
-            + f". Check `mm mtgjson decks --set {set_code}` for available decks."
+            + ". Check `mm mtgjson decks` for available decks."
         )
 
     wb = Workbook()
     ws = wb.active
     ws.title = "checklist"
 
-    headers = ["file_name", "deck_name", "type", "release_date", "commander",
-               "card_count", "usd_total", "keep_qty", "deconstructed_qty"]
+    headers = ["file_name", "set", "deck_name", "type", "release_date",
+               "commander", "card_count", "usd_total",
+               "keep_qty", "deconstructed_qty"]
     ws.append(headers)
     for col, _ in enumerate(headers, start=1):
         cell = ws.cell(row=1, column=col)
@@ -1337,6 +1564,7 @@ def write_precon_list_xlsx(set_code: str, out_path: Path, *,
     for r in rows:
         ws.append([
             r["file_name"],
+            r["set"].upper(),
             r["deck_name"],
             r["type"],
             r["release_date"],
@@ -1348,19 +1576,19 @@ def write_precon_list_xlsx(set_code: str, out_path: Path, *,
         ])
     last_row = ws.max_row
 
-    # col 8 = keep_qty (0/1), col 9 = deconstructed_qty (non-negative int)
-    keep_letter = get_column_letter(8)
+    # col 9 = keep_qty (0/1), col 10 = deconstructed_qty (non-negative int)
+    keep_letter = get_column_letter(9)
     keep_validator.add(f"{keep_letter}2:{keep_letter}{last_row}")
-    decon_letter = get_column_letter(9)
+    decon_letter = get_column_letter(10)
     decon_validator.add(f"{decon_letter}2:{decon_letter}{last_row}")
-    for col_idx in (8, 9):
+    for col_idx in (9, 10):
         for r in range(2, last_row + 1):
             ws.cell(row=r, column=col_idx).fill = qty_fill
 
     for row_idx in range(2, last_row + 1):
-        ws.cell(row=row_idx, column=7).number_format = '"$"#,##0.00'
+        ws.cell(row=row_idx, column=8).number_format = '"$"#,##0.00'
 
-    widths = {1: 34, 2: 30, 3: 18, 4: 13, 5: 26, 6: 11, 7: 11, 8: 10, 9: 17}
+    widths = {1: 34, 2: 6, 3: 30, 4: 18, 5: 13, 6: 26, 7: 11, 8: 11, 9: 10, 10: 17}
     for col_idx, w in widths.items():
         ws.column_dimensions[get_column_letter(col_idx)].width = w
 
@@ -1372,22 +1600,9 @@ def write_precon_list_xlsx(set_code: str, out_path: Path, *,
     meta_ws["A1"].font = Font(bold=True)
     meta_ws["B1"].font = Font(bold=True)
 
-    code = set_code.lower()
-    meta = {
-        # `kind` is the dispatch key for `mm set ingest`. 'precon' routes to
-        # the shared deck-checklist engine (as 'jumpstart' does); 'inventory'
-        # and 'missing' route to their own paths.
-        "kind": "precon",
-        "anchor_code": code,
-        "set_codes": code,
-        "slug": slug or out_path.stem,
-        "mode": "add",
-        # Provenance: which slice of the set's products this file covers.
-        "only_type": only_type or "",
-        "include_collector": "1" if include_collector else "0",
-        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "magic_manager_version": __version__,
-    }
+    meta = _precon_list_meta(slug, out_path.stem, only_type=only_type,
+                             all_physical=all_physical,
+                             include_collector=include_collector)
     for k, v in meta.items():
         meta_ws.append([k, v])
 
@@ -1396,49 +1611,49 @@ def write_precon_list_xlsx(set_code: str, out_path: Path, *,
     return last_row - 1
 
 
-def write_precon_list_md(set_code: str, out_path: Path, *,
+def write_precon_list_md(out_path: Path, *,
                          slug: str | None = None,
                          only_type: str | None = None,
-                         include_collector: bool = False) -> int:
-    """Markdown twin of ``write_precon_list_xlsx``.
+                         all_physical: bool = False,
+                         include_collector: bool = False,
+                         sync_all: bool = False,
+                         progress=None) -> int:
+    """Markdown twin of ``write_precon_list_xlsx`` (global, all-sets catalog).
 
     Line shape (after YAML frontmatter):
 
-        - CounterBlitzFinalFantasyX_FIC — Counter Blitz — Commander Deck — 100 cards — $142.50 [K:0 D:0]
+        - CounterBlitzFinalFantasyX_FIC — FIC — Counter Blitz — Commander Deck — 100 cards — $142.50 [K:0 D:0]
 
     Reuses the Jumpstart ``[K:k D:d]`` bracket convention so the shared parser
     handles it unchanged. ``K`` = keep_qty (0 or 1), ``D`` = deconstructed_qty.
+    ``sync_all``/``progress`` behave as on ``write_precon_list_xlsx``.
     """
-    from . import __version__
-
-    rows = _build_precon_rows(set_code, only_type=only_type,
-                              include_collector=include_collector)
+    rows = _build_precon_rows(
+        only_type=only_type,
+        types=(None if all_physical else _PRECON_TYPES_DEFAULT),
+        include_collector=include_collector,
+        sync_all=sync_all,
+        progress=progress,
+    )
     if not rows:
         raise ValueError(
-            f"no precon variants found for set {set_code!r}"
+            "no precon variants found"
             + (f" of type {only_type!r}" if only_type else "")
-            + f". Check `mm mtgjson decks --set {set_code}` for available decks."
+            + ". Check `mm mtgjson decks` for available decks."
         )
 
-    code = set_code.lower()
-    meta = {
-        "kind": "precon",
-        "anchor_code": code,
-        "set_codes": code,
-        "slug": slug or out_path.stem,
-        "mode": "add",
-        "only_type": only_type or "",
-        "include_collector": "1" if include_collector else "0",
-        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "magic_manager_version": __version__,
-    }
+    meta = _precon_list_meta(slug, out_path.stem, only_type=only_type,
+                             all_physical=all_physical,
+                             include_collector=include_collector)
 
     out_lines: list[str] = ["---"]
     for k, v in meta.items():
         out_lines.append(f"{k}: {v}")
     out_lines.append("---")
     out_lines.append("")
-    out_lines.append(f"# {code.upper()} precon products ({len(rows)} decks)")
+    scope = only_type if only_type else ("all physical products" if all_physical
+                                         else "modern constructed precons")
+    out_lines.append(f"# Precon catalog — {scope} ({len(rows)} decks, all sets)")
     out_lines.append("")
     out_lines.append(
         "Edit the `[K:k D:d]` bracket per row: `K` = copies kept *constructed* "
@@ -1451,8 +1666,8 @@ def write_precon_list_md(set_code: str, out_path: Path, *,
         usd = r["usd_total"]
         usd_seg = f"${usd:.2f}" if usd is not None else "—"
         out_lines.append(
-            f"- {r['file_name']} — {r['deck_name']} — {r['type']} — "
-            f"{r['card_count']} cards — {usd_seg} [K:0 D:0]"
+            f"- {r['file_name']} — {r['set'].upper()} — {r['deck_name']} — "
+            f"{r['type']} — {r['card_count']} cards — {usd_seg} [K:0 D:0]"
         )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text("\n".join(out_lines) + "\n", encoding="utf-8")
@@ -1628,11 +1843,15 @@ def _apply_deck_checklist(parsed, *, set_code: str, slug_fn, deck_format) -> dic
 def ingest_deck_checklist_from_path(path: Path, *, kind: str) -> dict:
     """Apply a filled-in deck checklist (precon or Jumpstart) to the local DB.
 
-    The general (precon-level) entry point: parse the file, resolve its
-    ``set_code`` from ``_meta`` (falling back to a ``Words_CODE`` fileName
-    suffix), then run the shared ``_apply_deck_checklist`` engine with the
-    per-``kind`` slug/format config. ``kind`` is one of ``"precon"`` or
-    ``"jumpstart"``. Returns the kind-neutral summary described on
+    The general (precon-level) entry point: parse the file, then run the shared
+    ``_apply_deck_checklist`` engine with the per-``kind`` slug/format config.
+    ``kind`` is one of ``"precon"`` or ``"jumpstart"``.
+
+    A ``set_code`` is only meaningful for Jumpstart (it seeds the ``pack:*``
+    slug). The precon catalog is global — every row can be from a different set,
+    so no single ``set_code`` applies; the precon slug is derived per-row from
+    the deck name instead, and each ``import_precon`` call self-syncs the sets
+    its own cards reference. Returns the kind-neutral summary described on
     ``_apply_deck_checklist``.
     """
     from . import parsers
@@ -1650,13 +1869,14 @@ def ingest_deck_checklist_from_path(path: Path, *, kind: str) -> dict:
     meta = parsed.meta or {}
     set_code = (meta.get("set_codes") or meta.get("anchor_code") or "").lower()
     if not set_code:
-        # Fall back to inferring from a fileName like ``Toph_TLE`` if _meta is
-        # missing. Unlikely but cheap to support.
+        # Fall back to inferring from a fileName like ``Toph_TLE``.
         for r in parsed.rows:
             if "_" in r.file_name:
                 set_code = r.file_name.rsplit("_", 1)[1].lower()
                 break
-    if not set_code:
+    # Only Jumpstart needs a set_code (for its slug); the global precon catalog
+    # doesn't, so its absence is not an error there.
+    if not set_code and kind == "jumpstart":
         raise ValueError("could not determine set_code from checklist _meta or rows")
 
     slug_fn, deck_format = _deck_checklist_kind_config(kind, set_code)

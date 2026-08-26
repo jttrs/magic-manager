@@ -113,34 +113,87 @@ def jumpstart_variants(set_code: str) -> list[dict]:
 # digital-only (``MTGO *``). They never belong in a physical-precon checklist.
 PRECON_EXCLUDED_TYPES: frozenset[str] = frozenset({"Jumpstart", "Secret Lair Drop"})
 
+# The default "precon" scope: the constructed preconstructed-deck product a
+# collector actually tracks — Commander decks, box/duel/planeswalker/starter
+# decks, and the beginner intro/welcome/starter lines (which ship as themed
+# constructed decks, one per color or color-pair). Deliberately excludes
+# non-deck / digital-adjacent product lines (Deck Builder's Toolkit, Sample
+# Deck, Arena Starter Deck, Welcome Booster, Shandalar/World Championship, …)
+# and everything ``--all-physical`` (``types=None``) still reaches.
+#
+# NOTE: this is the one knob that decides what "counts" as a precon. When the
+# user says a product line is missing, the fix is almost always adding its
+# exact MTGJSON ``type`` string here (see `mm mtgjson decks` / DeckList types).
+PRECON_MODERN_TYPES: frozenset[str] = frozenset({
+    "Commander Deck",
+    "Box Set",
+    "Duel Deck",
+    "Planeswalker Deck",
+    "Starter Kit",
+    "Starter Deck",
+    "Spellslinger Starter Kit",
+    "Welcome Deck",
+    "Intro Pack",
+    "Challenger Deck",
+    "Pioneer Challenger Deck",
+    "Guild Kit",
+    "Brawl Deck",
+    "Clash Pack",
+    "Game Night Deck",
+    "Archenemy Deck",
+    "Planechase Deck",
+})
+
+
+def _is_collector_edition(name: str) -> bool:
+    """True if a deck name marks a Collector's Edition product.
+
+    Catches both the modern premium-variant twins (``… Collector's Edition``,
+    e.g. ``Counter Blitz Collector's Edition``) and the 1993 standalone box
+    sets whose apostrophe sits differently (``Collectors' Edition``,
+    ``Intl. Collectors' Edition``). All are premium/collector product the
+    collection doesn't track.
+    """
+    return "collector's edition" in name.lower() or "collectors' edition" in name.lower()
+
 
 def precon_variants(
-    set_code: str,
+    set_code: str | None = None,
     *,
     only_type: str | None = None,
+    types: frozenset[str] | set[str] | None = PRECON_MODERN_TYPES,
     include_collector: bool = False,
 ) -> list[dict]:
-    """DeckList entries for a set's physical preconstructed-deck products.
+    """DeckList entries for physical preconstructed-deck products.
 
-    Filter of ``deck_list(set_code=...)`` that keeps every physical sealed
-    product (Commander Deck, Box Set, Starter Kit, Planeswalker Deck, Bundle
-    Land Pack, Intro Pack, …) while dropping the types with their own
-    workflow (``PRECON_EXCLUDED_TYPES``) and the digital ``MTGO *`` types.
+    Filter of ``deck_list(set_code=...)`` that keeps physical sealed products
+    while dropping the types with their own workflow (``PRECON_EXCLUDED_TYPES``)
+    and the digital ``MTGO *`` types. ``set_code=None`` (the default) spans
+    **every** set — the precon catalog is global, not per-set (there are only a
+    handful of precons per set, so a per-set file would be pointless).
 
-    ``only_type`` narrows to one exact ``type`` string (e.g. ``"Commander
-    Deck"``). ``include_collector=False`` (the default) drops the
-    ``… Collector's Edition`` twins MTGJSON ships alongside the standard decks
-    — the user doesn't collect those. Returns ``[]`` for sets with no
-    matching product.
+    Scope of ``type`` values, in precedence order:
+      - ``only_type`` set → keep only that exact type (e.g. ``"Commander
+        Deck"``); overrides ``types``.
+      - else ``types`` set → keep types in that allow-set (default
+        ``PRECON_MODERN_TYPES``).
+      - ``types=None`` → keep every physical type (the ``--all-physical`` mode).
+
+    ``include_collector=False`` (the default) drops the ``… Collector's
+    Edition`` twins MTGJSON ships alongside the standard decks — the user
+    doesn't collect those. Returns ``[]`` when nothing matches.
     """
     out: list[dict] = []
     for d in deck_list(set_code=set_code):
         t = d.get("type") or ""
         if t in PRECON_EXCLUDED_TYPES or t.startswith("MTGO"):
             continue
-        if only_type is not None and t != only_type:
+        if only_type is not None:
+            if t != only_type:
+                continue
+        elif types is not None and t not in types:
             continue
-        if not include_collector and "Collector's Edition" in (d.get("name") or ""):
+        if not include_collector and _is_collector_edition(d.get("name") or ""):
             continue
         out.append(d)
     return out
