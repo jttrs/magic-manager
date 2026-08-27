@@ -8,7 +8,7 @@ description: Canonical "what am I missing from set X?" workflow for any set/fami
 Set-agnostic, deterministic, file-driven. The user has a strong opinion about output format that this skill exists to enforce:
 
 - **Scryfall URL chunks** → in chat, every time, as the canonical printing-specific table.
-- **Missing checklist (XLSX)** → file artifact in `queries/`, referenced by `file://` link in chat. **Never rendered inline.** Distinct from the "inventory checklist" produced by `mm set master-list` ([[generate-set-list]]); see [Not to be confused with](#not-to-be-confused-with-inventory-checklists) below.
+- **Missing checklist (XLSX)** → file artifact in `queries/`, referenced by `file://` link in chat. **Never rendered inline.** Distinct from the "inventory checklist" produced by `mm set master-list` ([[generate-set-checklist]]); see [Not to be confused with](#not-to-be-confused-with-inventory-checklists) below.
 - **ManaPool bulk-add (.txt)** → file artifact in `queries/`, referenced by `file://` link in chat. Plain text, paste-ready (no comments / headers / fences — portals reject extra characters). `*F*` per-line foil marker.
 - **TCGplayer Mass Entry (.txt)** → file artifact in `queries/`, paste-ready. Plain text, single flat list of all rows regardless of finish. TCGplayer doesn't accept a per-line foil marker; the user runs the cart optimizer afterward to choose finish per row.
 
@@ -124,9 +124,9 @@ These are the explicit overrides that REQUIRE the user to ask for them. Default 
 
 ## Not to be confused with: inventory checklists
 
-The XLSX written by this skill is a **missing checklist** — purpose: shopping list of printings the user doesn't yet own. The XLSX written by `mm set master-list` (the [[generate-set-list]] skill) is an **inventory checklist** — purpose: cataloging physical cards. Different artifacts, different purposes, different filter rules:
+The XLSX written by this skill is a **missing checklist** — purpose: shopping list of printings the user doesn't yet own. The XLSX written by `mm set master-list` (the [[generate-set-checklist]] skill) is an **inventory checklist** — purpose: cataloging physical cards. Different artifacts, different purposes, different filter rules:
 
-| | Missing checklist (this skill) | Inventory checklist ([[generate-set-list]]) |
+| | Missing checklist (this skill) | Inventory checklist ([[generate-set-checklist]]) |
 |---|---|---|
 | **Produced by** | `mm query missing-set` | `mm set master-list` |
 | **File location** | `queries/missing-<code>-checklist-<ts>.xlsx` | `checklists/<slug>-checklist.xlsx` |
@@ -136,12 +136,12 @@ The XLSX written by this skill is a **missing checklist** — purpose: shopping 
 | **Filter philosophy** | **Strict** — `preferred` treatment class drops ext, pure-`ff`, datestamped-with-sibling, family-configured fancy-foil dupes (e.g. FIN surgefoil), and Arena/Alchemy. "Unique art the user can't get more cheaply elsewhere." | **Permissive** — keeps ext / pure-`ff` / fancy-foil dupes (the user might own incidental copies cracked from boosters etc., and the inventory checklist needs to track them). Drops only safe-to-exclude variants (prerelease/datestamped/stamped/promopack/serialized/yellow-bordered) plus Arena/Alchemy. |
 | **Round-trips** | NO, read-only | YES, via `mm set ingest` |
 
-Mental model: **missing checklist = "what I want to buy"; inventory checklist = "what I could own."** If the user asks "what am I missing from set X?" / "what's left to buy?" / "shopping list" → this skill. If they ask for "a checklist of FIN" / "let me catalog my Final Fantasy cards" → [[generate-set-list]].
+Mental model: **missing checklist = "what I want to buy"; inventory checklist = "what I could own."** If the user asks "what am I missing from set X?" / "what's left to buy?" / "shopping list" → this skill. If they ask for "a checklist of FIN" / "let me catalog my Final Fantasy cards" → [[generate-set-checklist]].
 
 ## Cross-references
 
 - [[inventory-query]] — broader inventory questions (value rollups, top N, owned-from-set, `mm deck find`). The new `available` modifier subtracts deck commitments.
-- [[generate-set-list]] — for the user's first pass on a new set (creates the inventory checklist XLSX). Feeds [[ingest-new-inventory-list]] which populates inventory so this skill's `missing` math has data to subtract.
+- [[generate-set-checklist]] — for the user's first pass on a new set (creates the inventory checklist XLSX). Feeds [[ingest-new-inventory-list]] which populates inventory so this skill's `missing` math has data to subtract.
 - [[bulk-add]] — for adding cards from a CN range/list into inventory (the inverse direction).
 - [[import-precon]] — for adding the contents of a Magic precon (FIC, future Avatar/TMNT precons, etc.). Closes gaps that this skill would otherwise report as missing.
 - [[scryfall-search]] — for the underlying Scryfall query syntax. The "Query gotchas" section there documents `cn:"N"` quoting, the 20-condition web cap, and `unique=prints` — all of which `mm query missing-set` already handles correctly.

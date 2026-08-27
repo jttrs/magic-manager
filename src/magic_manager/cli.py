@@ -34,7 +34,7 @@ PROCESSED_DIR = CHECKLISTS_DIR / "processed"
 # renamed from ``input/`` → ``checklists/`` in V1.6.
 INPUT_DIR = CHECKLISTS_DIR
 
-# Exit codes used by master-list collision detection. The `generate-set-list`
+# Exit codes used by master-list collision detection. The `generate-set-checklist`
 # skill reads these to decide whether to prompt for ingest-or-force.
 EXIT_UNPROCESSED_INTAKE = 3
 # Ingest collision: file SHA matches a prior successful ingest_log row.

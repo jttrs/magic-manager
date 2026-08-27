@@ -1,5 +1,5 @@
 ---
-name: generate-set-list
+name: generate-set-checklist
 description: Build the inventory checklist (XLSX or markdown) for a Magic the Gathering release family — every printing across the parent set + commander + masterpiece + promos, with two quantity columns the user fills in. Two flavors via --mode: 'add' (default; blank cells; ingests as additive — safe for new acquisitions) and 'modify' (prefilled cells; ingests as replace — for correcting existing records). Use this whenever the user wants to catalog cards. Mechanical workflow: invoke `mm set master-list <name> [--mode add|modify]` and react only to the structured exit codes.
 ---
 
