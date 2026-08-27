@@ -117,16 +117,20 @@ def check_owned(mapped: list[CartLine], family_codes: set[str] | None) -> tuple[
 def check_missing(anchor: str, mapped: list[CartLine], treatment_class: str) -> list[dict]:
     """Family gaps (missing.missing_printings) that are NOT already in the cart.
 
-    Cart membership is keyed on (scryfall_id, finish) — both sides normalized to
-    the 'nonfoil'|'foil' string — so a nonfoil cart line does not suppress a
-    foil gap (or vice-versa). Deterministic sort (set, cn, finish).
+    Cart membership is keyed on scryfall_id ALONE — printing-level, finish
+    ignored. This is the buying principle: when filling gaps, a copy is a copy;
+    the foil-vs-nonfoil distinction matters only at collection-entry, not at
+    buy-time. So a foil in the cart fills the gap for that printing and the
+    nonfoil is not re-listed (and vice-versa). It also matches the gap set we're
+    filtering: missing.missing_printings is itself printing-level (the bare
+    `missing` selector == `missing:either`), so keying on the same granularity
+    keeps the two steps consistent. Deterministic sort (set, cn, finish).
     """
-    in_cart = {(m.scryfall_id, "foil" if m.foil else "nonfoil")
-               for m in mapped if m.scryfall_id}
+    in_cart = {m.scryfall_id for m in mapped if m.scryfall_id}
     gaps = missing_mod.missing_printings(anchor, treatment_class)
     rows: list[dict] = []
     for r in gaps:
-        if (r.scryfall_id, r.finish) in in_cart:
+        if r.scryfall_id in in_cart:
             continue
         rows.append({
             "name": r.card.get("name") or "?",
@@ -217,22 +221,37 @@ def check_dupes(mapped: list[CartLine]) -> list[dict]:
     return rows
 
 
+def _family_root(resolved) -> str:
+    """The root code of a resolved family — the member whose parent_set_code is
+    not itself in the family. sets_mod.resolve(x).code merely echoes the code you
+    asked for (`resolve('tle').code == 'tle'`), so two codes from ONE family
+    (`tla` + its child `tle`) would look like two anchors; keying on the shared
+    root collapses them. That root is also the code you'd pass to `--set`.
+    """
+    codes = {s["code"].lower() for s in resolved.related}
+    for s in resolved.related:
+        parent = (s.get("parent_set_code") or "").lower()
+        if not parent or parent not in codes:
+            return s["code"].lower()
+    return resolved.code.lower()
+
+
 def infer_set_anchors(mapped: list[CartLine]) -> list[str]:
-    """Distinct family anchors of the cart's mapped set codes.
+    """Distinct family ROOTS of the cart's mapped set codes.
 
     Each mapped line carries the Scryfall set code of its printing; collapsing
-    those to family anchors via sets_mod.resolve (24h-cached /sets) tells us
-    which family (or families) the cart belongs to — one anchor => deterministic
+    those to family roots via sets_mod.resolve (24h-cached /sets) tells us which
+    family (or families) the cart belongs to — one root => deterministic
     imputation, several => ambiguous (report all, let the user disambiguate).
     """
     codes = {m.set_code.lower() for m in mapped if m.set_code and m.scryfall_id}
-    anchors: set[str] = set()
+    roots: set[str] = set()
     for c in codes:
         try:
-            anchors.add(sets_mod.resolve(c).code)
+            roots.add(_family_root(sets_mod.resolve(c)))
         except LookupError:
             pass
-    return sorted(anchors)
+    return sorted(roots)
 
 
 # ---------- rendering ----------
@@ -251,11 +270,24 @@ def infer_set_anchors(mapped: list[CartLine]) -> list[str]:
 
 _CHAT_ROW_CAP = 40  # per-table row cap for the chat report; the file is uncapped
 
+# A line must clear BOTH gates to be flagged: the % gate (--over-market-pct)
+# AND an absolute-dollar floor. The dollar floor kills the low-threshold noise
+# where a big percentage is pennies (e.g. $0.21 → $0.25 is +19% but +$0.04).
+_OVER_MARKET_USD_MIN = 1.00  # min $ over market to flag, on top of the % gate
+
+
+def _is_flagged(row: dict, over_market_pct: float) -> bool:
+    """Overpay flag predicate: ≥ pct over market AND > $_OVER_MARKET_USD_MIN over
+    market. Single source of truth — every count/sum/display uses this."""
+    return row["pct"] >= over_market_pct and row["over"] > _OVER_MARKET_USD_MIN
+
 
 def _summary_lines(set_code: str | None, n_lines: int, results: dict, over_market_pct: float) -> list[str]:
     out = ["## Summary", "", "| Metric | Value |", "|---|--:|",
            f"| Set family | {(set_code.lower() + '+related') if set_code else '(unscoped)'} |",
            f"| Cart lines | {n_lines} |"]
+    if "dupes" in results:
+        out.append(f"| Dupe printings | {len(results['dupes'])} |")
     if "owned" in results:
         rows = results["owned"]
         out.append(f"| Owned (redundant) | {len(rows)} · {_fmt(sum(r['your'] for r in rows))} |")
@@ -264,9 +296,10 @@ def _summary_lines(set_code: str | None, n_lines: int, results: dict, over_marke
         out.append(f"| Missing from cart | {len(rows)} · {_fmt(sum((r['market'] or 0.0) for r in rows))} |")
     if "overpay" in results:
         b = results["overpay"]
-        n_flag = sum(1 for r in b["rows"] if r["pct"] >= over_market_pct)
-        flagged_over = sum(r["over"] for r in b["rows"] if r["pct"] >= over_market_pct)
-        out.append(f"| Overpay flagged (≥{over_market_pct:.0f}%) | {n_flag} · {_fmt(flagged_over)} |")
+        n_flag = sum(1 for r in b["rows"] if _is_flagged(r, over_market_pct))
+        flagged_over = sum(r["over"] for r in b["rows"] if _is_flagged(r, over_market_pct))
+        out.append(f"| Overpay flagged (≥{over_market_pct:.0f}% & >{_fmt(_OVER_MARKET_USD_MIN)}) "
+                   f"| {n_flag} · {_fmt(flagged_over)} |")
     return out
 
 
@@ -275,6 +308,26 @@ def _capped(rows: list[dict], cap: int | None) -> tuple[list[dict], int]:
     if cap is None or len(rows) <= cap:
         return rows, 0
     return rows[:cap], len(rows) - cap
+
+
+def _qty_price(qty: int, price: float | None) -> str:
+    """`{qty} · {$price}` for a present finish, `—` when that finish is absent."""
+    return f"{qty} · {_fmt(price)}" if qty else "—"
+
+
+def _dupes_lines(rows: list[dict], cap: int | None = None) -> list[str]:
+    shown, hidden = _capped(rows, cap)
+    out = ["## Dupes", "", "| Card | Nonfoil | Foil | Cheaper | Note |",
+           "|---|--:|--:|--:|:--|"]
+    for r in shown:
+        out.append(f"| {_card_link(r['name'], r['set'], r['num'])} | "
+                   f"{_qty_price(r['nf_qty'], r['nf_price'])} | "
+                   f"{_qty_price(r['fo_qty'], r['fo_price'])} | "
+                   f"{_fmt(r['cheaper']) if r['cheaper'] is not None else '—'} | {r['note']} |")
+    if hidden:
+        out.append(f"| _+{hidden} more (see file)_ | | | | |")
+    out.append(f"| **Total ({len(rows)})** | | | | |")
+    return out
 
 
 def _owned_lines(rows: list[dict], cap: int | None = None) -> list[str]:
@@ -302,14 +355,14 @@ def _missing_lines(rows: list[dict], cap: int | None = None) -> list[str]:
 
 def _overpay_lines(buckets: dict, over_market_pct: float, flagged_only: bool = False) -> list[str]:
     rows = buckets["rows"]
-    n_flag = sum(1 for r in rows if r["pct"] >= over_market_pct)
-    flagged_total_over = sum(r["over"] for r in rows if r["pct"] >= over_market_pct)
-    display = [r for r in rows if r["pct"] >= over_market_pct] if flagged_only else rows
+    n_flag = sum(1 for r in rows if _is_flagged(r, over_market_pct))
+    flagged_total_over = sum(r["over"] for r in rows if _is_flagged(r, over_market_pct))
+    display = [r for r in rows if _is_flagged(r, over_market_pct)] if flagged_only else rows
     title = "## Overpay (flagged)" if flagged_only else "## Overpay"
     out = [title, "", "| Card | Fin | Your $ | MP $ | Market $ | Δ $ | Δ % | Flag |",
            "|---|:--:|--:|--:|--:|--:|--:|:--:|"]
     for r in display:
-        flagged = r["pct"] >= over_market_pct
+        flagged = _is_flagged(r, over_market_pct)
         out.append(f"| {_card_link(r['name'], r['set'], r['num'])} | {r['fin']} | "
                    f"{_fmt(r['your'])} | {_fmt(r['mp_cheap'])} | {_fmt(r['market'])} | "
                    f"{r['over']:+.2f} | {r['pct']:+.0f}% | {'⚠️' if flagged else ''} |")
@@ -326,6 +379,8 @@ def _report_blocks(set_code, n_lines, results, over_market_pct, *, chat: bool) -
     (chat=True: full-but-capped owned/missing, flagged-only overpay)."""
     cap = _CHAT_ROW_CAP if chat else None
     blocks: list[list[str]] = [_summary_lines(set_code, n_lines, results, over_market_pct)]
+    if "dupes" in results:
+        blocks.append(_dupes_lines(results["dupes"], cap))
     if "owned" in results:
         blocks.append(_owned_lines(results["owned"], cap))
     if "missing" in results:
@@ -348,20 +403,27 @@ def main() -> int:
     ap.add_argument("--set", dest="set_code", default=None,
                     help="Set-family anchor (e.g. tla). Required for the missing check; "
                          "scopes owned/overpay to set:CODE+related when given.")
-    ap.add_argument("--check", choices=["owned", "missing", "overpay", "all"], default="all",
-                    help="Which check(s) to run. Default all.")
+    ap.add_argument("--check", choices=["owned", "missing", "overpay", "dupes", "all"],
+                    default="all", help="Which check(s) to run. Default all.")
     ap.add_argument("--file", default=None, help="Cart JSON path, or '-' for stdin.")
     ap.add_argument("--method", choices=["headless", "bookmarklet"], default=None,
                     help="Force cart fetch path. Default: try headless, else stdin.")
-    ap.add_argument("--over-market-pct", type=float, default=50.0,
-                    help="Flag overpay lines this %% or more over market. Default 50.")
+    ap.add_argument("--over-market-pct", type=float, default=10.0,
+                    help="Flag overpay lines this %% or more over market. Default 10.")
     ap.add_argument("--treatment-class", default="preferred",
                     help="Treatment class for the missing check. Default preferred.")
     args = ap.parse_args()
 
-    checks = ["owned", "missing", "overpay"] if args.check == "all" else [args.check]
+    # `all` is context-sensitive: with a set anchor it runs everything; without
+    # one it runs only the anchor-free checks (dupes + overpay) — so a bare,
+    # zero-context invocation still produces a useful audit instead of erroring.
+    if args.check == "all":
+        checks = (["dupes", "owned", "missing", "overpay"] if args.set_code
+                  else ["dupes", "overpay"])
+    else:
+        checks = [args.check]
 
-    # Missing requires an anchor.
+    # Missing requires an anchor (only reachable now via an EXPLICIT --check missing).
     if "missing" in checks and not args.set_code:
         print("error: --set CODE is required for the missing check.", file=sys.stderr)
         return 2
@@ -389,7 +451,9 @@ def main() -> int:
     results: dict = {}
     skips: list[str] = []
     for chk in checks:
-        if chk == "owned":
+        if chk == "dupes":
+            results["dupes"] = check_dupes(mapped)
+        elif chk == "owned":
             rows, skipped = check_owned(mapped, family_codes)
             results["owned"] = rows
             if skipped:
@@ -412,9 +476,9 @@ def main() -> int:
     title = f"# Mana Pool cart check — {len(mapped)} line(s)"
 
     # Write the FULL report (every row, uncapped) to queries/ so the chat report
-    # can stay concise. Only worth writing when overpay ran (it's the big table).
+    # can stay concise. Worth writing whenever a big table ran (overpay or dupes).
     file_link = None
-    if "overpay" in results:
+    if "overpay" in results or "dupes" in results:
         full = [title, ""] + _report_blocks(
             args.set_code, len(mapped), results, args.over_market_pct, chat=False)
         QUERIES_DIR.mkdir(parents=True, exist_ok=True)
@@ -432,8 +496,10 @@ def main() -> int:
             args.set_code, len(mapped), results, args.over_market_pct, chat=True):
         print(line)
     if file_link is not None:
+        detail = (f"{len(results['overpay']['rows'])} priced lines" if "overpay" in results
+                  else f"{len(results['dupes'])} dupe printings")
         print()
-        print(f"🧾 Full cart check ({len(results['overpay']['rows'])} priced lines): "
+        print(f"🧾 Full cart check ({detail}): "
               f"[{file_link.relative_to(ROOT)}](file://{file_link.resolve()})")
 
     # STDERR: all commentary.
@@ -442,6 +508,17 @@ def main() -> int:
               f"out-of-family cart lines skipped where noted.", file=sys.stderr)
     for s in skips:
         print(s, file=sys.stderr)
+    # No anchor was given: impute the family from the cart's own set codes so the
+    # user can opt into the set-scoped checks (owned + missing) on a re-run.
+    if not args.set_code:
+        anchors = infer_set_anchors(mapped)
+        if anchors:
+            plural = "y" if len(anchors) == 1 else "ies"
+            print(f"imputed set famil{plural}: {', '.join(anchors)} — re-run with "
+                  f"--set <code> to add the owned + missing checks.", file=sys.stderr)
+        else:
+            print("could not impute a set family (no mapped set codes); pass "
+                  "--set <code> for the owned + missing checks.", file=sys.stderr)
     return 0
 
 
