@@ -342,13 +342,22 @@ JUMPSTART_LIST_COLUMNS = (
     "keep_qty", "deconstructed_qty",
 )
 
+# The "how many to construct" column is named ``keep_qty`` on jumpstart
+# checklists (a 0/1 flag) and ``constructed_qty`` on precon checklists (a
+# count). Both map to the ``JumpstartRow.keep_qty`` field — for a precon it can
+# exceed 1. The parser accepts whichever header is present so one parser serves
+# both kinds; the jumpstart ingest engine still enforces the 0/1 cap.
+_CONSTRUCT_COLUMN_ALIASES = ("constructed_qty", "keep_qty")
+
 
 def parse_jumpstart_list_xlsx(path: Path) -> JumpstartParseResult:
-    """Read a filled-in Jumpstart checklist emitted by ``mm set jumpstart-list``.
+    """Read a filled-in deck checklist (jumpstart OR precon) from XLSX.
 
     Yields one ``JumpstartRow`` per spreadsheet row, regardless of qty —
     callers filter via ``filled_rows`` to act only on the user's edits. The
-    ``_meta`` sheet (if present) is attached to ``meta``.
+    "construct count" comes from either the ``keep_qty`` (jumpstart) or
+    ``constructed_qty`` (precon) column. The ``_meta`` sheet (if present) is
+    attached to ``meta``.
     """
     from openpyxl import load_workbook
 
@@ -377,11 +386,17 @@ def parse_jumpstart_list_xlsx(path: Path) -> JumpstartParseResult:
         return res
 
     header_lower = [str(h).strip().lower() if h is not None else "" for h in header]
-    idx = {c: header_lower.index(c) for c in JUMPSTART_LIST_COLUMNS if c in header_lower}
-    required = {"file_name", "keep_qty", "deconstructed_qty"}
-    missing = [c for c in required if c not in idx]
-    if missing:
-        res.warnings.append(f"XLSX missing required columns: {missing!r}")
+    idx = {c: header_lower.index(c)
+           for c in (*JUMPSTART_LIST_COLUMNS, "constructed_qty")
+           if c in header_lower}
+    # The construct column may be named keep_qty (jumpstart) or constructed_qty
+    # (precon); accept whichever is present.
+    construct_col = next((c for c in _CONSTRUCT_COLUMN_ALIASES if c in idx), None)
+    if construct_col is None or "file_name" not in idx or "deconstructed_qty" not in idx:
+        res.warnings.append(
+            "XLSX missing required columns: need file_name, deconstructed_qty, "
+            "and one of keep_qty/constructed_qty"
+        )
         return res
 
     for row_num, row in enumerate(rows, start=2):
@@ -391,27 +406,27 @@ def parse_jumpstart_list_xlsx(path: Path) -> JumpstartParseResult:
         if not file_name:
             continue
         theme = (str(row[idx["theme"]]).strip() if "theme" in idx and row[idx["theme"]] is not None else "")
-        keep_qty = _coerce_qty(row[idx["keep_qty"]], row_num, "keep_qty", res)
+        keep_qty = _coerce_qty(row[idx[construct_col]], row_num, construct_col, res)
         deconstructed_qty = _coerce_qty(row[idx["deconstructed_qty"]], row_num, "deconstructed_qty", res)
         res.rows.append(JumpstartRow(
             file_name=file_name,
             theme=theme,
             keep_qty=keep_qty,
             deconstructed_qty=deconstructed_qty,
-            raw=f"row {row_num}: {file_name} K:{keep_qty} D:{deconstructed_qty}",
+            raw=f"row {row_num}: {file_name} C:{keep_qty} D:{deconstructed_qty}",
         ))
     return res
 
 
-# Markdown line shape: ``- <FileName> — <Theme> — <N> cards — $X.XX [K:k D:d]``
-# Parser keys on FileName + the [K: D:] bracket. Surrounding text can change.
-# K = copies kept constructed (0 or 1), D = copies deconstructed to free cards.
+# Markdown line shape: ``- <FileName> — … [K:k D:d]`` (jumpstart) or
+# ``… [C:c D:d]`` (precon). Parser keys on FileName + the bracket; both the
+# ``K:`` and ``C:`` labels map to the construct count. Surrounding text can change.
 MD_JUMPSTART_LINE_RE = re.compile(
     r"""
     ^\s*-\s+
     (?P<file_name>[A-Za-z0-9_]+_[A-Z0-9]{2,6})
     .*?
-    \[\s*K:\s*(?P<k>\d+)\s+D:\s*(?P<d>\d+)\s*\]
+    \[\s*[KC]:\s*(?P<k>\d+)\s+D:\s*(?P<d>\d+)\s*\]
     """,
     re.VERBOSE,
 )

@@ -127,6 +127,13 @@ FAMILY_DUPE_FOIL_PROMO_TYPES: dict[str, frozenset[str]] = {
     # 383-392 fracturefoil dupes. Mirrors the TMNT case exactly.
     # See docs/sets/eoe.md §2/§5.
     "eoe": frozenset({"fracturefoil"}),
+    # Lorwyn Eclipsed: fracturefoil is same-art-as-sibling (same pattern as EOE).
+    # The 10 fracturefoil+japanshowcase showcase mythics (treatment b|shw|ff) are
+    # the same art as their japanshowcase-only siblings (b|shw), just on a
+    # fracture-foil sheet. Verified on Bloodline Bidding: 385 (b|shw) ↔ 395
+    # (b|shw|ff). Keeps the japanshowcase print, drops the fracturefoil dupe.
+    # See docs/sets/ecl.md §2.
+    "ecl": frozenset({"fracturefoil"}),
 }
 
 
@@ -224,6 +231,17 @@ FAMILY_UNOBTAINABLE_RULES: dict[str, list[dict]] = {
         # (eoe 393-397, inverted frame) are `promopack` WITHOUT `stamped` and must
         # stay. Effect: missing-set drops ~$291 (217→137 prints). See docs/sets/eoe.md §5.
         {"promo_types_any_of": frozenset({"stamped"})},
+    ],
+    "ecl": [
+        # Lorwyn Eclipsed headline serialized chase (added 2026-08-26). ecl 352
+        # Bitterbloom Bearer — doublerainbow + headliner + serialized, foil-only,
+        # the set's ultra-rare. Analog of EOE Sothera / TLA Avatar Aang. any_of
+        # catches this single print (headliner and serialized co-occur here); the
+        # base/showcase Bitterbloom Bearer prints (ecl 88, 310) stay in scope.
+        # NO stamped/promopack rule: pecl has 0 stamped, and ecl 402-406 are
+        # promopack-ONLY borderless alt-arts (kept) — no scarcity tier exists.
+        # See docs/sets/ecl.md §5.
+        {"promo_types_any_of": frozenset({"headliner", "serialized"})},
     ],
 }
 

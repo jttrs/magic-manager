@@ -1,6 +1,6 @@
 ---
 name: cart-check
-description: Audit a live Mana Pool cart against your collection and a set family — three atomic checks in one pass. (1) OWNED — cart lines you already own (redundant, remove them); (2) MISSING — set-family gaps NOT in the cart (should-add); (3) OVERPAY — lines priced over true Scryfall/TCG market. Deterministic, well-formatted markdown tables relayed to chat, with the full uncapped report written to queries/. Triggers "/cart-check", "audit my manapool cart", "what can I remove from my cart", "what am I still missing from my cart for <set>", "is my cart complete / am I overpaying", "check my cart against my collection".
+description: Audit a live Mana Pool cart against your collection and a set family — four atomic checks in one pass. (1) DUPES — cart lines that duplicate a printing you're already buying (×N same finish, or foil+nonfoil of the same art collated); (2) OWNED — cart lines you already own (redundant, remove them); (3) MISSING — set-family gaps NOT in the cart (should-add); (4) OVERPAY — lines priced over true Scryfall/TCG market. Runs with NO --set (dupes + overpay + imputes the family); pass --set to add owned + missing. Deterministic, well-formatted markdown tables relayed to chat, with the full uncapped report written to queries/. Triggers "/cart-check", "audit my manapool cart", "what can I remove from my cart", "any duplicates in my cart", "what am I still missing from my cart for <set>", "is my cart complete / am I overpaying", "check my cart against my collection".
 ---
 
 # cart-check
@@ -11,23 +11,27 @@ This is the superset of the `price-check` skill's `manapool` mode: `price-check`
 
 ## When to use
 
-- **Cart cleanup** — "what can I remove from my cart?" → the `owned` check flags redundant lines.
-- **Completeness** — "what am I still missing from <set> for my cart?" → the `missing` check lists family gaps not yet in the cart.
-- **Sanity/price** — "am I overpaying?" / "is this cart a good deal?" → the `overpay` check (same comparison as `price-check`).
-- **Full audit** — "audit my cart" / "check my cart" → run all three (default).
+- **Dupe cleanup** — "any duplicates in my cart?" / "did I add the same card twice?" → the `dupes` check flags any printing bought more than once (incl. foil+nonfoil of the same art). Runs by default, no `--set` needed.
+- **Cart cleanup** — "what can I remove from my cart?" → the `owned` check flags lines you already own. Needs `--set`.
+- **Completeness** — "what am I still missing from <set> for my cart?" → the `missing` check lists family gaps not yet in the cart. Needs `--set`.
+- **Sanity/price** — "am I overpaying?" / "is this cart a good deal?" → the `overpay` check (same comparison as `price-check`). No `--set` needed.
+- **Full audit** — "audit my cart" / "check my cart" → run everything (default). With `--set` that's all four; without, it's dupes + overpay and the script *imputes* the family so you can re-run with `--set`.
 
 **Don't** use for:
-- **A pure overpay check with no set context** — that's the `price-check` skill's two-script pipeline (`manapool_cart.py | manapool_price_check.py`); it needs no `--set`.
+- **A pure overpay check with no set context** — that's the `price-check` skill's two-script pipeline (`manapool_cart.py | manapool_price_check.py`); it needs no `--set`. (`cart-check` with no `--set` also runs overpay, but additionally does the dupe check + family imputation.)
 - **Non-Mana-Pool carts** — this drives the Mana Pool cart fetch specifically. TCGplayer/other markets aren't wired up.
 - **Adding cards to inventory** — that's [[import-list]] / [[bulk-add]] / [[import-precon]].
 
 ## The canonical recipe
 
 ```bash
-uv run python scripts/manapool_cart_check.py --set <CODE> --check all
+uv run python scripts/manapool_cart_check.py --set <CODE> --check all   # all four checks
+uv run python scripts/manapool_cart_check.py                            # no set: dupes + overpay + impute family
 ```
 
 That's the whole happy path: it fetches the live cart (headless, else stdin), does ONE cart→card mapping pass, runs the requested checks, prints the concise chat report to stdout, and writes the full report to `queries/cart-check-<anchor>-<ts>.md`.
+
+**When no `--set` is given**, the script skips the anchor-only checks (`owned`/`missing`) and instead prints an `imputed set famil…: <anchor>` line on **stderr**. Surface that anchor to the user and offer to re-run with `--set <anchor>` to add the owned + missing checks. If it imputes *several* families (a cart spanning e.g. FIN + TLA), list them and ask which to scope to — never silently pick.
 
 **Relay the entire stdout verbatim in your chat reply** so the markdown renders as tables, and include the `🧾 Full cart check … (file://…)` link the script prints. Do not re-render, summarize-instead-of-showing, or paste the file's full overpay table inline — the chat report is already the right shape.
 
@@ -35,41 +39,43 @@ That's the whole happy path: it fetches the live cart (headless, else stdin), do
 
 | Flag | Effect |
 |---|---|
-| `--set CODE` | Set-family anchor (e.g. `tla`). **Required** for the `missing` check (and thus for `--check all`). Scopes `owned`/`overpay` to `set:CODE+related`; out-of-family cart lines are counted + reported on stderr, never misclassified. |
-| `--check owned\|missing\|overpay\|all` | Which check(s) to run. Default `all`. Each is atomic — run just one when that's all the user asked. |
+| `--set CODE` | Set-family anchor (e.g. `tla`). **Required** for the `missing` check and to include `owned`/`missing` in `--check all`. Scopes `owned`/`overpay` to `set:CODE+related`; out-of-family cart lines are counted + reported on stderr, never misclassified. When omitted, the script imputes the family from the cart's own set codes (stderr) instead of erroring. |
+| `--check dupes\|owned\|missing\|overpay\|all` | Which check(s) to run. Default `all` — **context-sensitive**: with `--set` it runs all four; without, only the anchor-free `dupes` + `overpay`. Each is atomic — run just one when that's all the user asked. |
 | `--file PATH` / `--file -` | Read cart JSON from a file / stdin (bookmarklet output) instead of the live headless fetch. |
 | `--method headless\|bookmarklet` | Force the cart fetch path. Default: try headless, else read stdin. |
-| `--over-market-pct N` | ⚠️ flag threshold for the overpay check: % over Scryfall market. Default 50. |
+| `--over-market-pct N` | ⚠️ flag threshold for the overpay check: % over Scryfall market. Default 10. |
 | `--treatment-class CLASS` | Treatment class for the `missing` check (forwarded to `missing.missing_printings`). Default `preferred`. |
 
-## The three checks
+## The four checks
 
 | Check | Answers | How |
 |---|---|---|
-| `owned` | Cart lines you **already own** (redundant — remove) | **Finish-level**: matched on (scryfall_id, finish), so a *foil* cart line isn't flagged just because you own the nonfoil. Reads local `inventory`. |
-| `missing` | Family gaps **not in the cart** (should-add) | Reuses the missing-set union (`magic_manager.missing.missing_printings`) minus cart membership on (scryfall_id, finish). **Requires `--set`.** |
-| `overpay` | Priced over true market | Reuses `manapool_common.overpay_rows` (same comparison as the `price-check` skill), live Scryfall/TCG market via `/cards/collection`. |
+| `dupes` | Cart lines that **duplicate a printing** you're already buying | **Printing-level** (groups by `scryfall_id` — which on Scryfall uniquely identifies one ART; finish is orthogonal). Two flavors: **hard** = a single finish with qty ≥ 2 (identical cards); **soft** = a nonfoil AND a foil of the same printing both in the cart (same art, two finishes — collated onto one row with each finish's qty + cheapest price + a `Cheaper` cell so you pick the cheaper or confirm the pair is intentional). Cart-context rule: the collection tracks foil vs nonfoil as distinct copies, but when *buying* you usually only want the cheaper. **No `--set` needed** (a dupe is a dupe regardless of family). |
+| `owned` | Cart lines you **already own** (redundant — remove) | **Finish-level**: matched on (scryfall_id, finish), so a *foil* cart line isn't flagged just because you own the nonfoil. Reads local `inventory`. **Requires `--set`.** |
+| `missing` | Family gaps **not in the cart** (should-add) | Reuses the missing-set union (`magic_manager.missing.missing_printings`) minus cart membership on **scryfall_id alone** (finish-agnostic — the buying principle: a copy is a copy, so a foil already in the cart fills the gap and the nonfoil isn't re-listed). Matches the union's own printing-level granularity. **Requires `--set`.** |
+| `overpay` | Priced over true market | Reuses `manapool_common.overpay_rows` (same comparison as the `price-check` skill), live Scryfall/TCG market via `/cards/collection`. **Dual gate** (`_is_flagged`): a line is flagged only if it's **≥ `--over-market-pct`% over market AND > $1.00 over market** — the dollar floor suppresses the low-threshold noise where a big % is pennies (e.g. $0.21→$0.25 is +19% but +$0.04). |
 
-All three run off a **single cart→card mapping pass** (`map_cart`): each cart line's mtgjson uuid → ManaPool product → scryfall_id, the join key shared by every check.
+All four run off a **single cart→card mapping pass** (`map_cart`): each cart line's mtgjson uuid → ManaPool product → scryfall_id, the join key shared by every check. That mapped `set_code` is also what `infer_set_anchors` collapses (via `sets.resolve`) to impute the family when `--set` is omitted.
 
 ## Output shape
 
 STDOUT is a concise, chat-ready markdown report — relay it verbatim:
 
-1. `## Summary` — a metrics table (set family, cart lines, owned count·$, missing count·$, overpay flagged·$).
-2. `## Owned` — full list, row-capped at 40 with a `_+N more (see file)_` marker beyond that; closed by a bold `Total (N)` row.
-3. `## Missing` — same shape.
-4. `## Overpay (flagged)` — **only** lines ≥ threshold; the Total row reads `N/total` so the full denominator is visible.
-5. A `🧾 Full cart check (N priced lines): [queries/cart-check-<anchor>-<ts>.md](file://…)` link — the file holds the **complete, uncapped** overpay table.
+1. `## Summary` — a metrics table (set family, cart lines, dupe printings, owned count·$, missing count·$, overpay flagged·$).
+2. `## Dupes` — one row per duplicated printing: `Card | Nonfoil (qty·$) | Foil (qty·$) | Cheaper | Note`, closed by a bold `Total (N)` row.
+3. `## Owned` — full list, row-capped at 40 with a `_+N more (see file)_` marker beyond that; closed by a bold `Total (N)` row.
+4. `## Missing` — same shape.
+5. `## Overpay (flagged)` — **only** lines ≥ threshold; the Total row reads `N/total` so the full denominator is visible.
+6. A `🧾 Full cart check (…): [queries/cart-check-<anchor>-<ts>.md](file://…)` link — the file holds the **complete, uncapped** tables. (`<anchor>` is the `--set` code, or `cart` when unscoped.)
 
-STDERR carries commentary (family scoping, skipped out-of-family / unmapped / no-market lines). Surface it briefly beneath the tables if it's non-trivial; don't let it clutter the report.
+STDERR carries commentary (family scoping, imputed family when `--set` omitted, skipped out-of-family / unmapped / no-market lines). Surface it briefly beneath the tables if it's non-trivial; don't let it clutter the report. **Always** surface the `imputed set famil…` line and offer the `--set` re-run.
 
 Every table is data-only (no prose, empty sections still emit header + `Total (0)`), fixed columns, fixed sort — so same-day re-runs are byte-identical.
 
 ## Determinism guarantees
 
 - **One mapping pass**, `_mp_product` cached 24h at the wrapper — same cart, same day → identical output.
-- **Fixed sorts**: owned/missing by `(set, cn, finish)`; overpay by `%-over` descending.
+- **Fixed sorts**: dupes by `(set, cn)`; owned/missing by `(set, cn, finish)`; overpay by `%-over` descending.
 - **Fixed money** (`$X.XX`), hand-built `https://scryfall.com/card/<set>/<cn>` links (no query-string drift).
 - **Chat report and file** are both deterministic; the file is the uncapped superset of the chat overpay table.
 

@@ -18,6 +18,7 @@ from . import (
     db,
     decks as decks_mod,
     exports,
+    front_cards as front_cards_mod,
     intake as intake_mod,
     inventory as inv_mod,
     mtgjson as mtgjson_mod,
@@ -34,7 +35,7 @@ PROCESSED_DIR = CHECKLISTS_DIR / "processed"
 # renamed from ``input/`` → ``checklists/`` in V1.6.
 INPUT_DIR = CHECKLISTS_DIR
 
-# Exit codes used by master-list collision detection. The `generate-set-list`
+# Exit codes used by master-list collision detection. The `generate-set-checklist`
 # skill reads these to decide whether to prompt for ingest-or-force.
 EXIT_UNPROCESSED_INTAKE = 3
 # Ingest collision: file SHA matches a prior successful ingest_log row.
@@ -492,6 +493,119 @@ def set_jumpstart_list(
     typer.echo(f"  2. When done: mm set ingest --path {out_path}")
 
 
+@set_app.command("jumpstart-pack")
+def set_jumpstart_pack(
+    set_code: str = typer.Argument(..., help="Jumpstart set code, e.g. msh"),
+    theme: str = typer.Argument(..., help="Pack theme or MTGJSON fileName, e.g. Scarlet or Scarlet_MSH"),
+    fmt: str = typer.Option("manapool", "--format", help="manapool|moxfield|tcgplayer|plain"),
+    missing: bool = typer.Option(False, "--missing", help="Only cards not in inventory"),
+    out: Path = typer.Option(None, "--out", help="Write to file instead of stdout"),
+):
+    """Emit a paste-ready export block for one Jumpstart pack — every
+    gameplay single plus the pack's front/title card (from the quarantined
+    ``front_cards`` table, e.g. FMSC for MSH), which never appears anywhere
+    else in the app.
+    """
+    code = set_code.lower()
+
+    # Sync the family so gameplay scryfall_ids resolve locally, mirroring
+    # `jumpstart-list`'s sync sequence. Front-card sync is separate (and
+    # NEVER touches the `cards` table) — best-effort.
+    try:
+        r, codes = _resolve_codes(set_code, include_kinds=[], only=[])
+    except (LookupError, typer.BadParameter) as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+    sets_mod.sync(codes)
+    front_cards_mod.sync_front_cards(code)
+
+    variants = mtgjson_mod.jumpstart_variants(code)
+    if not variants:
+        typer.echo(f"error: no Jumpstart variants found for set {set_code!r}", err=True)
+        raise typer.Exit(2)
+
+    normalized_theme = front_cards_mod.normalize_theme(theme)
+    exact_file = [v for v in variants if v.get("fileName") == theme]
+    matches = exact_file or [v for v in variants if (v.get("name") or "").lower() == theme.lower()]
+    if not matches:
+        matches = [v for v in variants
+                   if front_cards_mod.normalize_theme(v.get("name") or "") == normalized_theme]
+
+    if not matches:
+        available = ", ".join(sorted(v.get("name") or v.get("fileName") or "" for v in variants))
+        typer.echo(f"error: no Jumpstart variant matches theme {theme!r} in {set_code!r}", err=True)
+        typer.echo(f"available themes: {available}", err=True)
+        raise typer.Exit(2)
+    if len(matches) > 1:
+        ambiguous = ", ".join(sorted(v.get("name") or v.get("fileName") or "" for v in matches))
+        typer.echo(f"error: theme {theme!r} matches multiple variants: {ambiguous}", err=True)
+        raise typer.Exit(2)
+
+    matched = matches[0]
+    deck_data = mtgjson_mod.deck(matched["fileName"])
+
+    entries: list[tuple[str, int, bool]] = []  # (scryfall_id, count, is_foil)
+    for board_key in ("commander", "mainBoard", "sideBoard"):
+        for entry in deck_data.get(board_key) or []:
+            sid = (entry.get("identifiers") or {}).get("scryfallId")
+            if not sid:
+                continue
+            count = int(entry.get("count", 1) or 1)
+            entries.append((sid, count, bool(entry.get("isFoil"))))
+
+    rows: list[sel_mod.MaterializedRow] = []
+    n_skipped = 0
+    if entries:
+        with db.connect() as conn:
+            placeholders = ",".join("?" for _ in entries)
+            card_rows = {
+                cr["scryfall_id"]: cr
+                for cr in conn.execute(
+                    f"SELECT {sel_mod._CARD_COLS} FROM cards c "
+                    f"WHERE c.scryfall_id IN ({placeholders})",
+                    [e[0] for e in entries],
+                ).fetchall()
+            }
+        for sid, count, is_foil in entries:
+            cr = card_rows.get(sid)
+            if cr is None:
+                n_skipped += 1
+                continue
+            rows.append(sel_mod.MaterializedRow(
+                scryfall_id=sid,
+                quantity=count,
+                finish="foil" if is_foil else "nonfoil",
+                card=sel_mod._card_dict(cr),
+            ))
+    if n_skipped:
+        typer.echo(f"warning: {n_skipped} card(s) not found locally, skipped", err=True)
+
+    fc = front_cards_mod.front_card_for_theme(code, matched.get("name") or theme)
+    if fc is not None:
+        rows.append(front_cards_mod.front_card_row(fc))
+
+    if missing:
+        with db.connect() as conn:
+            owned = {
+                (row["scryfall_id"], row["finish"])
+                for row in conn.execute("SELECT scryfall_id, finish FROM inventory").fetchall()
+            }
+        rows = [r for r in rows if (r.scryfall_id, r.finish) not in owned]
+
+    try:
+        text = exports.build(fmt, rows)
+    except ValueError as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+
+    if out:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(text, encoding="utf-8")
+        typer.echo(f"wrote {out}", err=True)
+    else:
+        typer.echo(text, nl=False)
+
+
 @set_app.command("precon-list")
 def set_precon_list(
     only_type: str = typer.Option(
@@ -510,6 +624,14 @@ def set_precon_list(
         False, "--include-collector",
         help="Include the '… Collector's Edition' twins (excluded by default — "
              "they're a premium variant the collection doesn't track).",
+    ),
+    mode: str = typer.Option(
+        "add", "--mode",
+        help="'add' (default): blank constructed_qty/deconstructed_qty cells; "
+             "ingest ADDS the counts you enter to the precon ledger. 'modify': "
+             "both columns prefilled from the ledger (your current recorded "
+             "precon units); ingest applies the signed delta vs the prefilled "
+             "value. Use 'modify' to correct counts or see what you already have.",
     ),
     sync_all: bool = typer.Option(
         False, "--sync-all",
@@ -536,11 +658,15 @@ def set_precon_list(
     There are only a handful of precons per set, so this is one master list you
     populate once — not a per-set file. One row per product (Commander Deck,
     Box Set, Planeswalker Deck, …), carrying its set, deck name, product type,
-    release date, commander(s), card count, and best-effort market value. Fill
-    ``keep_qty`` (0 or 1 — copies kept *constructed*: one deck recipe is created
-    and one physical copy is auto-composed) and ``deconstructed_qty`` (copies
-    torn into free cards; no pledge). The two sum to total copies opened and
-    that total determines how many cards land in inventory.
+    release date, commander(s), card count, and best-effort market value.
+
+    Track precon decks AS UNITS via two fill columns: ``constructed_qty`` (built
+    copies — each creates a deck + adds its cards to inventory) and
+    ``deconstructed_qty`` (copies torn down for parts — loose cards, no deck).
+    In ``--mode add`` (default) the cells are blank and ingest ADDS the counts;
+    in ``--mode modify`` they're prefilled from the ledger (your current units)
+    and ingest applies the signed delta — so you SEE what you already have and
+    don't double-add.
 
     Scope defaults to the modern-constructed precon types; ``--type`` narrows to
     one, ``--all-physical`` opens it to everything. Collector's Edition variants
@@ -558,25 +684,31 @@ def set_precon_list(
     if fmt not in ("xlsx", "md"):
         typer.echo(f"error: --format must be 'xlsx' or 'md', got {fmt!r}", err=True)
         raise typer.Exit(2)
+    mode = mode.lower()
+    if mode not in ("add", "modify"):
+        typer.echo(f"error: --mode must be 'add' or 'modify', got {mode!r}", err=True)
+        raise typer.Exit(2)
 
-    # Global catalog — one file, not per-set. The slug embeds 'precons' so it's
-    # self-describing on disk and never collides with a master-list or
-    # jumpstart checklist.
+    # Global catalog — one file, not per-set. The slug embeds 'precons' + the
+    # mode so it's self-describing on disk and add/modify files can coexist
+    # (mirrors master-list's <slug>-<mode>-checklist convention).
     slug = "precons"
-    out_path = out or (CHECKLISTS_DIR / f"{slug}-checklist.{fmt}")
+    out_path = out or (CHECKLISTS_DIR / f"{slug}-{mode}-checklist.{fmt}")
 
     if out is None and out_path.exists() and not force:
         typer.echo(f"refusing to overwrite existing precon catalog: {out_path}", err=True)
         typer.echo("", err=True)
         typer.echo("To proceed, either:", err=True)
         typer.echo(f"  - Finish editing the existing file, then: mm set ingest --path {out_path}", err=True)
-        typer.echo(f"  - Discard partial edits and regenerate: mm set precon-list --force", err=True)
+        typer.echo(f"  - Discard partial edits and regenerate: mm set precon-list --mode {mode} --force", err=True)
         raise typer.Exit(EXIT_UNPROCESSED_INTAKE)
 
     if force and out_path.exists():
         typer.echo(f"  ! --force: overwriting {out_path}", err=True)
 
     typer.echo("Cataloging precons across all sets (reading MTGJSON per-deck files; first run may take a moment)…")
+    if mode == "modify":
+        typer.echo("  --mode modify: constructed_qty/deconstructed_qty prefilled from the precon ledger.")
     if sync_all:
         typer.echo("  --sync-all: will sync every referenced set from Scryfall first (this is the slow part)…")
     writer = (
@@ -584,7 +716,7 @@ def set_precon_list(
         else sets_mod.write_precon_list_xlsx
     )
     try:
-        n_rows = writer(out_path, slug=slug, only_type=only_type,
+        n_rows = writer(out_path, slug=slug, mode=mode, only_type=only_type,
                         all_physical=all_physical,
                         include_collector=include_collector,
                         sync_all=sync_all,
@@ -592,13 +724,13 @@ def set_precon_list(
     except ValueError as e:
         typer.echo(f"error: {e}", err=True)
         raise typer.Exit(2)
-    typer.echo(f"Wrote {n_rows} precon product rows to {out_path}")
+    typer.echo(f"Wrote {n_rows} precon product rows to {out_path} (mode={mode})")
     typer.echo()
     typer.echo("Next steps:")
     if fmt == "md":
-        typer.echo(f"  1. Open {out_path} in any text editor and edit the `[K:k D:d]` brackets (K=0/1 kept constructed, D=copies to deconstruct).")
+        typer.echo(f"  1. Open {out_path} in any text editor and edit the `[C:c D:d]` brackets (C=constructed copies, D=deconstructed copies).")
     else:
-        typer.echo(f"  1. Open {out_path} in Excel/Numbers — fill keep_qty (0 or 1) and deconstructed_qty per deck.")
+        typer.echo(f"  1. Open {out_path} in Excel/Numbers — fill constructed_qty and deconstructed_qty per deck.")
     typer.echo(f"  2. When done: mm set ingest --path {out_path}")
 
 
@@ -660,8 +792,11 @@ def _ingest_deck_checklist(src: Path, *, kind: str, sha: str, force: bool,
     # set); its rows each name their own set. Fall back to a bare kind label.
     set_code = meta.get("anchor_code") or meta.get("set_codes") or ""
     log_label = f"{kind}:{set_code}" if set_code else kind
+    # Both summaries expose ``constructed``; precon uses ``deconstructed`` where
+    # jumpstart uses ``loose_copies`` for the torn-down count.
     rows_added = (summary or {}).get("constructed", 0)
-    rows_updated = (summary or {}).get("loose_copies", 0)
+    rows_updated = ((summary or {}).get("loose_copies")
+                    or (summary or {}).get("deconstructed", 0))
     with db.connect() as conn:
         db.record_ingest_log(
             conn,
@@ -703,30 +838,59 @@ def _ingest_deck_checklist(src: Path, *, kind: str, sha: str, force: bool,
         raise typer.Exit(2)
 
     scope_seg = f" ({set_code})" if set_code else ""
-    typer.echo(
-        f"{noun}{scope_seg}: "
-        f"{summary['rows_acted']}/{summary['rows_total']} rows acted on, "
-        f"{summary['constructed']} constructed, "
-        f"{summary['loose_copies']} loose copies, "
-        f"{summary['inv_qty_total']} card-qty added to inventory."
-    )
-    for row in summary["per_row"]:
-        if row["error"]:
-            typer.echo(f"  ! {row['file_name']}: {row['error']}", err=True)
-            continue
-        if row["keep_qty"] == 1:
-            if row["deconstructed_qty"] > 0:
-                bits = f"constructed 1 + {row['deconstructed_qty']} loose → {row['slug']}"
-            else:
-                bits = f"constructed 1 → {row['slug']}"
-        else:
-            bits = f"deconstructed {row['deconstructed_qty']} → loose inventory"
-        typer.echo(f"  {row['file_name']} ({row['label']}): {bits}")
-        if row["missing_sids"]:
+    if kind == "precon":
+        # Precon summary: signed ledger transaction. Different shape from
+        # jumpstart (built/torn_down + ledger_before/after per row).
+        typer.echo(
+            f"{noun}: {summary['rows_acted']}/{summary['rows_total']} rows acted on, "
+            f"{summary['constructed']} built, "
+            f"{summary['deconstructed']} deconstructed, "
+            f"{summary['inv_qty_total']} card-qty added to inventory."
+        )
+        for row in summary["per_row"]:
+            if row["error"]:
+                typer.echo(f"  ! {row['file_name']}: {row['error']}", err=True)
+                continue
+            bc, bd = row["ledger_before"]
+            ac, ad = row["ledger_after"]
             typer.echo(
-                f"    warning: {len(row['missing_sids'])} entries had no scryfallId",
-                err=True,
+                f"  {row['file_name']} ({row['label']}): "
+                f"constructed {bc}→{ac}, deconstructed {bd}→{ad}"
+                + (f"  [built {row['built']}]" if row["built"] else "")
+                + (f"  [+{row['torn_down']} loose]" if row["torn_down"] else "")
             )
+            if row.get("warning"):
+                typer.echo(f"    note: {row['warning']}", err=True)
+            if row["missing_sids"]:
+                typer.echo(
+                    f"    warning: {len(row['missing_sids'])} entries had no scryfallId",
+                    err=True,
+                )
+    else:
+        typer.echo(
+            f"{noun}{scope_seg}: "
+            f"{summary['rows_acted']}/{summary['rows_total']} rows acted on, "
+            f"{summary['constructed']} constructed, "
+            f"{summary['loose_copies']} loose copies, "
+            f"{summary['inv_qty_total']} card-qty added to inventory."
+        )
+        for row in summary["per_row"]:
+            if row["error"]:
+                typer.echo(f"  ! {row['file_name']}: {row['error']}", err=True)
+                continue
+            if row["keep_qty"] == 1:
+                if row["deconstructed_qty"] > 0:
+                    bits = f"constructed 1 + {row['deconstructed_qty']} loose → {row['slug']}"
+                else:
+                    bits = f"constructed 1 → {row['slug']}"
+            else:
+                bits = f"deconstructed {row['deconstructed_qty']} → loose inventory"
+            typer.echo(f"  {row['file_name']} ({row['label']}): {bits}")
+            if row["missing_sids"]:
+                typer.echo(
+                    f"    warning: {len(row['missing_sids'])} entries had no scryfallId",
+                    err=True,
+                )
     for w in summary["warnings"]:
         typer.echo(f"  warning: {w}", err=True)
     if archived:
@@ -745,12 +909,19 @@ def set_ingest(
     ),
     mode: str = typer.Option(
         None, "--mode",
-        help="OPTIONAL OVERRIDE. 'replace' (in-partition cells overwrite DB qty; "
-             "missing in-partition rows zero out) or 'additive' (only qty>0 cells "
-             "add to existing). Default: auto-detect from the checklist's _meta.mode "
-             "('modify' → replace, 'add' → additive). Pass --mode explicitly only to "
-             "override the file's declared intent (logs a stderr warning) OR for "
-             "legacy files with no _meta.mode.",
+        help="OPTIONAL OVERRIDE. 'replace' (each in-partition row is SET to its "
+             "cell value — a signed change vs current) or 'additive' (only qty>0 "
+             "cells add to existing). Default: auto-detect from the checklist's "
+             "_meta.mode ('modify' → replace, 'add' → additive). Pass --mode "
+             "explicitly only to override the file's declared intent (logs a "
+             "stderr warning) OR for legacy files with no _meta.mode.",
+    ),
+    zero_untouched: bool = typer.Option(
+        None, "--zero-untouched/--no-zero-untouched",
+        help="Replace/modify ingest ONLY. When set, in-partition rows absent "
+             "from the file are also zeroed (full-audit: file is authoritative). "
+             "Default: not set — you're asked interactively, or with --json it "
+             "defaults to NOT zeroing (safe; the file is a delta, not a wipe).",
     ),
     force: bool = typer.Option(
         False, "--force",
@@ -884,7 +1055,23 @@ def set_ingest(
     # else: --mode passed and either agrees with declared OR file is legacy
     # (declared_op is None and user provided explicit --mode, which is fine).
 
-    # Hash + duplicate check.
+    # Resolve zero_untouched (replace/modify only). Tri-state --flag:
+    #   explicit --zero-untouched / --no-zero-untouched → honor it.
+    #   unset + --json (non-interactive) → False (safe: file is a delta).
+    #   unset + interactive → ask; default No.
+    do_zero = False
+    if mode == "replace":
+        if zero_untouched is not None:
+            do_zero = zero_untouched
+        elif json_out:
+            do_zero = False
+        else:
+            do_zero = typer.confirm(
+                "This is a MODIFY (replace) ingest. Each row in the file is set "
+                "to its cell value. Also ZERO in-partition rows that are ABSENT "
+                "from the file? (only if the file is a full-inventory audit)",
+                default=False,
+            )
     sha = _file_sha256(src)
     with db.connect() as conn:
         prior = db.find_ingest_log_by_hash(conn, sha)
@@ -915,7 +1102,7 @@ def set_ingest(
     error: str | None = None
     result: dict | None = None
     try:
-        result = sets_mod.ingest_inventory_from_xlsx(src, mode=mode)
+        result = sets_mod.ingest_inventory_from_xlsx(src, mode=mode, zero_untouched=do_zero)
     except Exception as e:
         error = repr(e)
 
@@ -982,6 +1169,7 @@ def set_ingest(
             "archived_path": str(archived) if archived else None,
             "anchor_code": anchor,
             "mode": mode,
+            "zero_untouched": do_zero,
             "sha256": sha,
             "rows_added": (result or {}).get("added", 0),
             "rows_updated": (result or {}).get("updated", 0),
@@ -1002,9 +1190,12 @@ def set_ingest(
         typer.echo(f"error: ingest failed: {error}", err=True)
         raise typer.Exit(2)
 
+    zero_note = "" if mode != "replace" else (
+        " [zeroed absent rows]" if do_zero else " [absent rows left alone]"
+    )
     typer.echo(
         f"Inventory ({anchor}): {result['updated']} updated, "
-        f"{result['added']} added, {result['zeroed']} zeroed (mode={mode})"
+        f"{result['added']} added, {result['zeroed']} zeroed (mode={mode}{zero_note})"
     )
     for w in result["warnings"]:
         typer.echo(f"  warning: {w}", err=True)

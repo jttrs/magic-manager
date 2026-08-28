@@ -1,5 +1,5 @@
 ---
-name: generate-set-list
+name: generate-set-checklist
 description: Build the inventory checklist (XLSX or markdown) for a Magic the Gathering release family — every printing across the parent set + commander + masterpiece + promos, with two quantity columns the user fills in. Two flavors via --mode: 'add' (default; blank cells; ingests as additive — safe for new acquisitions) and 'modify' (prefilled cells; ingests as replace — for correcting existing records). Use this whenever the user wants to catalog cards. Mechanical workflow: invoke `mm set master-list <name> [--mode add|modify]` and react only to the structured exit codes.
 ---
 
@@ -27,10 +27,12 @@ The mechanical wrapper around `mm set master-list`. The user names a release ("F
 
 | `--mode` | Filename | Qty cells at generation | Ingest semantics | When to use |
 |---|---|---|---|---|
-| **`add`** (default) | `<slug>-add-checklist.xlsx` | **Blank** | **additive** — qty>0 cells sum into existing inventory; blanks/0s no-op | New acquisitions: a booster pack opened, a precon, a trade-in, cards picked up at a tournament. Safe — additive ingest cannot accidentally zero out rows. |
-| **`modify`** | `<slug>-modify-checklist.xlsx` | **Prefilled** from current `inventory` | **replace** — in-partition cells overwrite DB qty; rows in-partition but missing from the file are zeroed out | Correcting existing records: you sold a card, miscounted on a previous ingest, or want to do a full audit pass on a set you already cataloged. Powerful — can zero rows. |
+| **`add`** (default) | `<slug>-add-checklist.xlsx` | **Blank** | **additive** — qty>0 cells sum into existing inventory; blanks/0s no-op. Only ever increases. | New acquisitions: a booster pack opened, a precon, a trade-in, cards picked up at a tournament. Safe — additive ingest cannot remove or zero rows. |
+| **`modify`** | `<slug>-modify-checklist.xlsx` | **Prefilled** from current `inventory` | **replace, non-destructive by default** — each row is SET to its cell value (a *signed* change vs current: `3`→`5` nets +2, `3`→`1` nets −2, `0` zeroes that row). Rows left untouched/absent are **not** wiped. | Correcting existing records: sold a card, miscounted, re-auditing a set. |
 
 **Default is `add` for safety.** Only switch to `--mode modify` when the user explicitly says they want to correct/audit their current inventory (e.g. "I sold some cards and need to update", "let me re-audit FCA"). For everything else (a new pack, a precon, "let me catalog these cards I have"), use the default `add`.
+
+**`modify` no longer auto-zeroes.** Ingesting a `modify` file applies each row as a signed change and leaves rows you didn't touch alone — it does not rewrite history. Zeroing in-partition rows that are *absent* from the file (the old "full audit, file is authoritative" behavior) is now an **opt-in choice asked at ingest time** (default No). Non-interactive / `--json` callers can pass `--zero-untouched` or `--no-zero-untouched` explicitly; unset + `--json` defaults to `--no-zero-untouched`. The generated XLSX carries a red **README** banner sheet (green for `add`) restating this; the markdown form carries the same as a blockquote under the H1.
 
 The filename convention means both flavors can coexist — `final-fantasy-add-checklist.xlsx` and `final-fantasy-modify-checklist.xlsx` are independent files in `checklists/`. Each ingests with the right semantics automatically.
 
@@ -154,7 +156,7 @@ The XLSX written by `mm set master-list` is an **inventory checklist** — purpo
 | **`_meta.kind`** | `inventory` | `inventory` | `missing` |
 | **`_meta.mode`** | `add` | `modify` | (n/a) |
 | **Qty cells at gen** | Blank | Pre-filled from `inventory` | Pre-filled with quantity needed |
-| **Ingest semantics** | additive (sum into DB) | replace (overwrite + zero missing in-partition) | (read-only) |
+| **Ingest semantics** | additive (sum into DB) | replace, signed per-row; untouched/absent rows left alone (zeroing them is an opt-in ingest prompt) | (read-only) |
 | **Spine** | full family universe (with safe variant exclusions) OR a rarity slice | same as add | printing-level union of what the user doesn't own |
 | **Columns** | set, cn, name, rarity, treatment, mana_value, usd, usd_foil, **qty_normal, qty_foil** | same as add | set, cn, name, rarity, **finish**, qty, **unit_usd**, **line_value**, scryfall_id |
 | **Filter philosophy** | Permissive — keeps `ext` / pure-`ff` / fancy-foil dupes (user might own incidental copies cracked from boosters, etc.). Drops only safe-to-exclude variants + Arena. | same as add | Strict — drops everything not "unique art that can't be obtained more cheaply." See [[missing-from-set]]'s `preferred` treatment class. |

@@ -14,7 +14,7 @@ Conversational add-to-inventory for a set + collector-number ranges. Scryfall qu
 - Any "I have <set> <CN>, <CN>, <CN>" or "<set> <range>" request in chat.
 
 **Don't** use for:
-- Cataloging a whole set the user is trying to complete (use [[generate-set-list]] + the inventory-checklist flow).
+- Cataloging a whole set the user is trying to complete (use [[generate-set-checklist]] + the inventory-checklist flow).
 - Pasted Moxfield/Archidekt blocks (use [[import-list]] directly — the user already has the text format).
 
 ## Workflow
@@ -241,5 +241,5 @@ For batches of `PRM`-stamped cards, run one search-and-image-verify cycle per ca
 
 - [[import-list]] — for paste-from-clipboard text blocks (Moxfield, Archidekt, etc.). This skill REUSES `mm inventory import` under the hood.
 - [[scryfall-search]] — for the underlying query syntax. `mm scryfall` is the preferred search interface.
-- [[generate-set-list]] — when the user wants to catalog a whole set, not just specific CNs.
+- [[generate-set-checklist]] — when the user wants to catalog a whole set, not just specific CNs.
 - [`docs/spg-source-attribution.md`](../../../docs/spg-source-attribution.md) — companion "evolving set on its own schedule" pattern (SPG / PMEI). SLD is the same shape; this skill is the right tool for SPG/PMEI bulk-adds too.
