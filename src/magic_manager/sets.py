@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
-from . import db, scryfall
+from . import db, scryfall, util
 
 
 RARITY_ORDER = {
@@ -549,6 +549,8 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
     _add_mode_banner_sheet(wb, mode)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    for _ws in wb.worksheets:
+        util.apply_base_font_size(_ws)
     wb.save(out_path)
     return (last_row - 1, cells_prefilled)
 
@@ -1540,6 +1542,8 @@ def write_jumpstart_list_xlsx(set_code: str, out_path: Path,
         meta_ws.append([k, v])
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    for _ws in wb.worksheets:
+        util.apply_base_font_size(_ws)
     wb.save(out_path)
     return last_row - 1
 
@@ -1796,6 +1800,8 @@ def write_precon_list_xlsx(out_path: Path, *,
     _add_precon_banner_sheet(wb, mode)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    for _ws in wb.worksheets:
+        util.apply_base_font_size(_ws)
     wb.save(out_path)
     return last_row - 1
 

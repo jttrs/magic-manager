@@ -32,3 +32,33 @@ def cn_sort_key(cn: str | None) -> tuple[int, str]:
 def fmt_usd(v: float | None) -> str:
     """Render a USD amount as ``$X.XX``, or ``—`` when ``None``."""
     return f"${v:.2f}" if v is not None else "—"
+
+
+# Default point size for all generated XLSX artifacts. openpyxl's built-in
+# default (Calibri 11) renders too small; every worksheet writer calls
+# apply_base_font_size() before save so cells inherit this.
+XLSX_FONT_SIZE = 16
+
+
+def apply_base_font_size(ws, size: int = XLSX_FONT_SIZE) -> None:
+    """Bump every populated cell's font to ``size`` points, preserving all other
+    font attributes (bold/italic/color/underline/strike/vertAlign).
+
+    openpyxl won't let us change the effective default font on save (the Normal
+    style mutation is ignored), so we set the size explicitly per cell. Idempotent
+    and style-preserving — safe to call once on each worksheet just before
+    ``wb.save(...)``. The ``openpyxl`` import is local so ``util`` stays
+    dependency-free for the standalone scripts that only need the sort/format
+    helpers.
+    """
+    from openpyxl.styles import Font
+    for row in ws.iter_rows():
+        for cell in row:
+            if cell.value is None:
+                continue
+            f = cell.font
+            cell.font = Font(
+                name=f.name, size=size, bold=f.bold, italic=f.italic,
+                color=f.color, underline=f.underline, strike=f.strike,
+                vertAlign=f.vertAlign,
+            )

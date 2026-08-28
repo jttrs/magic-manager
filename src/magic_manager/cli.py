@@ -2340,6 +2340,8 @@ def _write_query_xlsx(
     meta_ws.append(["generated_at", datetime.now().isoformat(timespec="seconds")])
     meta_ws.append(["row_count", str(len(rows))])
 
+    for _ws in wb.worksheets:
+        util.apply_base_font_size(_ws)
     wb.save(target)
 
 
