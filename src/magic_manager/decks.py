@@ -1066,3 +1066,69 @@ def import_precon(
         "copies": copies,
         "missing_sids": missing_sids,
     }
+
+
+# ---------- precon unit ledger (SCHEMA_V7) ----------
+#
+# Tracks preconstructed products AS UNITS — how many built (constructed) vs
+# torn-down (deconstructed) copies of each product the user has, keyed by the
+# MTGJSON deck fileName. This is a RECORDED ledger written by the precon
+# checklist ingest; it is never inferred from loose inventory (reconstructing
+# torn-down copies from loose cards is a separate future effort). The `modify`
+# precon checklist prefills its two fill columns from here.
+
+def precon_ledger_get(file_name: str, *, conn=None) -> tuple[int, int]:
+    """Return ``(constructed_qty, deconstructed_qty)`` for ``file_name``.
+
+    ``(0, 0)`` if no ledger row exists yet.
+    """
+    with db.transaction(conn) as conn:
+        row = conn.execute(
+            "SELECT constructed_qty, deconstructed_qty FROM precon_ledger "
+            "WHERE file_name = ?",
+            (file_name,),
+        ).fetchone()
+    if row is None:
+        return (0, 0)
+    return (row["constructed_qty"], row["deconstructed_qty"])
+
+
+def precon_ledger_all() -> dict[str, tuple[int, int]]:
+    """Whole ledger as ``{file_name: (constructed_qty, deconstructed_qty)}``.
+
+    Used by the `modify` precon checklist to prefill every row in one read.
+    """
+    with db.connect() as conn:
+        rows = conn.execute(
+            "SELECT file_name, constructed_qty, deconstructed_qty FROM precon_ledger"
+        ).fetchall()
+    return {r["file_name"]: (r["constructed_qty"], r["deconstructed_qty"]) for r in rows}
+
+
+def precon_ledger_set(file_name: str, constructed_qty: int,
+                      deconstructed_qty: int, *, conn=None) -> None:
+    """Upsert the ledger row for ``file_name`` to the given absolute counts.
+
+    Both counts must be >= 0 (enforced by the table CHECK). A row of (0, 0) is
+    still written — the ledger keeps an explicit zero rather than deleting, so
+    a subsequent `modify` prefill shows the product as known-but-empty.
+    """
+    if constructed_qty < 0 or deconstructed_qty < 0:
+        raise ValueError(
+            f"ledger counts must be >= 0, got "
+            f"constructed={constructed_qty}, deconstructed={deconstructed_qty}"
+        )
+    now = db._utcnow_iso()
+    with db.transaction(conn) as conn:
+        conn.execute(
+            """
+            INSERT INTO precon_ledger (file_name, constructed_qty,
+                                       deconstructed_qty, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(file_name) DO UPDATE SET
+                constructed_qty = excluded.constructed_qty,
+                deconstructed_qty = excluded.deconstructed_qty,
+                updated_at = excluded.updated_at
+            """,
+            (file_name, constructed_qty, deconstructed_qty, now),
+        )

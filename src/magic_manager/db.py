@@ -328,6 +328,60 @@ ALTER TABLE decks ADD COLUMN source_set_code TEXT;
 """
 
 
+# V7: precon unit ledger. The precon checklist (`mm set precon-list`) tracks
+# preconstructed decks AS UNITS — how many built (constructed) vs torn-down
+# (deconstructed) copies of each product the user has. Keyed by the MTGJSON
+# deck fileName (stable, unique per product). This is a recorded ledger the
+# checklist ingest writes to; it is NOT inferred from loose inventory (that
+# reconciliation is a separate future effort). The `modify` precon checklist
+# prefills its two fill columns from this table.
+SCHEMA_V7 = """
+CREATE TABLE IF NOT EXISTS precon_ledger (
+    file_name         TEXT PRIMARY KEY,
+    constructed_qty   INTEGER NOT NULL DEFAULT 0 CHECK (constructed_qty >= 0),
+    deconstructed_qty INTEGER NOT NULL DEFAULT 0 CHECK (deconstructed_qty >= 0),
+    updated_at        TEXT NOT NULL
+);
+"""
+
+
+# V8: Jumpstart front/title cards (e.g. "Scarlet", "DOOM") live in a dedicated
+# memorabilia set (fmsc for MSH, jtla for TLE) and are NOT in MTGJSON deck
+# JSON — the link is by name match into the front-card set. They add to a
+# pack's singles value and feed a bulk-output command, but must NEVER appear
+# in `set:*`/`missing-set`/master-list/inventory queries. The isolation is
+# structural: front cards live ONLY in this table, never in `cards`, so every
+# query that reads `cards` is automatically blind to them. Re-derivable via
+# `front_cards.sync_front_cards()` — a Scryfall fetch, nothing precious.
+SCHEMA_V8 = """
+CREATE TABLE IF NOT EXISTS front_cards (
+    scryfall_id       TEXT PRIMARY KEY,
+    set_code          TEXT NOT NULL,
+    family_anchor     TEXT NOT NULL,
+    name              TEXT NOT NULL,
+    normalized_name   TEXT NOT NULL,
+    collector_number  TEXT,
+    prices_usd        REAL,
+    prices_usd_foil   REAL,
+    finishes          TEXT,
+    scryfall_uri      TEXT,
+    fetched_at        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS front_cards_anchor_idx ON front_cards (family_anchor, normalized_name);
+"""
+
+
+# V9: front-card price provenance. Scryfall carries no USD price for most
+# Jumpstart front cards (fmsc/jtla are `nonfoil` memorabilia it doesn't
+# track), but Mana Pool does. `front_cards.sync_front_cards()` now falls back
+# to the Mana Pool catalog price ONLY for front cards (never for `cards`), and
+# records which source each price came from here. NULL/'scryfall' = Scryfall
+# (or unpriced); 'manapool' = filled from the Mana Pool fallback.
+SCHEMA_V9 = """
+ALTER TABLE front_cards ADD COLUMN price_source TEXT;
+"""
+
+
 # ---------- migration-authoring convention ----------
 #
 # Always-safe ops in a migration: CREATE TABLE, ALTER TABLE ADD COLUMN,
@@ -341,12 +395,14 @@ ALTER TABLE decks ADD COLUMN source_set_code TEXT;
 #   - list_rows         the inventory the user typed in
 #   - lists             labels + their kind/source
 #   - ingest_log        audit trail of which checklist landed when
+#   - precon_ledger     built/torn-down precon-unit counts the user recorded
 #   - precons / precon_cards    (when V2 ships them)
 #
 # Re-derivable tables (recovery = re-run a sync):
 #   - cards             every column is rebuilt by `mm set sync <name>`
 #   - schema_version    bookkeeping
 #   - settings          flags; nothing irreplaceable
+#   - front_cards       rebuilt by `front_cards.sync_front_cards()` (a Scryfall fetch)
 #
 # Copy-rebuild dance for destructive changes:
 #   BEGIN;
@@ -370,6 +426,9 @@ MIGRATIONS: list[str] = [
     SCHEMA_V4,
     SCHEMA_V5,
     SCHEMA_V6,
+    SCHEMA_V7,
+    SCHEMA_V8,
+    SCHEMA_V9,
 ]
 CURRENT_VERSION = len(MIGRATIONS)
 
