@@ -134,6 +134,12 @@ FAMILY_DUPE_FOIL_PROMO_TYPES: dict[str, frozenset[str]] = {
     # (b|shw|ff). Keeps the japanshowcase print, drops the fracturefoil dupe.
     # See docs/sets/ecl.md §2.
     "ecl": frozenset({"fracturefoil"}),
+    # Secrets of Strixhaven: no fancy-foil-sheet dupe signal. The soa Mystical
+    # Archive foils are distinct art (not dupes), and the only other foils are
+    # the 1-off serialized headliner (§5 unobtainable). Empty set unblocks the
+    # `preferred` filter without dropping anything — like TLA/SPM.
+    # See docs/sets/sos.md §2.
+    "sos": frozenset(),
 }
 
 
@@ -247,6 +253,19 @@ FAMILY_UNOBTAINABLE_RULES: dict[str, list[dict]] = {
         # (safe to drop) and that the 5 `promopack`-ONLY alt-arts (ecl 402-406,
         # inverted frame, no `stamped`) are KEPT. Signal is `stamped` ONLY, like
         # SNC/EOE. Effect: missing-set 252→~172 prints. See docs/sets/ecl.md §5.
+        {"promo_types_any_of": frozenset({"stamped"})},
+    ],
+    "sos": [
+        # Secrets of Strixhaven serialized headline chase (added 2026-08-28).
+        # sos 306 Emeritus of Ideation // Ancestral Recall — headliner +
+        # rainbowfoil + serialized, foil-only, ~$2,900. Analog of EOE Sothera /
+        # ECL Bitterbloom Bearer.
+        {"promo_types_any_of": frozenset({"headliner", "serialized"})},
+        # Promo-pack STAMP variants: all 80 `psos` cards are `promopack`+`stamped`
+        # — same card as a kept base sibling + a stamp. Validated all 80 have a
+        # non-stamped sibling (safe to drop); the 5 `promopack`-ONLY guild Charm
+        # alt-arts (sos 363-367, no `stamped`) are KEPT. Signal is `stamped` ONLY,
+        # like SNC/EOE/ECL. See docs/sets/sos.md §5.
         {"promo_types_any_of": frozenset({"stamped"})},
     ],
 }
