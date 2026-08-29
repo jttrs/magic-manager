@@ -238,10 +238,16 @@ FAMILY_UNOBTAINABLE_RULES: dict[str, list[dict]] = {
         # the set's ultra-rare. Analog of EOE Sothera / TLA Avatar Aang. any_of
         # catches this single print (headliner and serialized co-occur here); the
         # base/showcase Bitterbloom Bearer prints (ecl 88, 310) stay in scope.
-        # NO stamped/promopack rule: pecl has 0 stamped, and ecl 402-406 are
-        # promopack-ONLY borderless alt-arts (kept) — no scarcity tier exists.
         # See docs/sets/ecl.md §5.
         {"promo_types_any_of": frozenset({"headliner", "serialized"})},
+        # Promo-pack STAMP variants (added 2026-08-28 — corrects a
+        # characterization error that wrongly claimed pecl had 0 stamped). All 80
+        # `pecl` cards are `promopack`+`stamped` — same card as a kept base/showcase
+        # sibling, priced on scarcity. Validated all 80 have a non-stamped sibling
+        # (safe to drop) and that the 5 `promopack`-ONLY alt-arts (ecl 402-406,
+        # inverted frame, no `stamped`) are KEPT. Signal is `stamped` ONLY, like
+        # SNC/EOE. Effect: missing-set 252→~172 prints. See docs/sets/ecl.md §5.
+        {"promo_types_any_of": frozenset({"stamped"})},
     ],
 }
 
