@@ -140,6 +140,17 @@ FAMILY_DUPE_FOIL_PROMO_TYPES: dict[str, frozenset[str]] = {
     # `preferred` filter without dropping anything — like TLA/SPM.
     # See docs/sets/sos.md §2.
     "sos": frozenset(),
+    # Bloomburrow: no dupe-foil signal retained. raisedfoil (the 21 showcase-
+    # legend premium foils) is a fancy-foil CHASE tier the user does not shop for
+    # (2026-08-30 directive — same stance as SNC gilded/stepandcompleat), so it's
+    # excluded wholesale via FAMILY_UNOBTAINABLE_RULES rather than DUPE_FOIL. A
+    # DUPE_FOIL entry would only drop the 7 raisedfoils that dupe a boosterfun-
+    # showcase twin; the 14 sole-showcase raisedfoils (Ms. Bumbleflower $1,380,
+    # Lumra $802, …) print ONLY in raisedfoil (no regular-foil of that art), so
+    # they'd survive. The any_of:{raisedfoil} rule catches all 21. imagine (28 BLC
+    # borderless legends) is DISTINCT art, KEPT. Empty set unblocks the `preferred`
+    # filter without filtering (like TLA/SPM/SOS). See docs/sets/blb.md §2/§5.
+    "blb": frozenset(),
 }
 
 
@@ -267,6 +278,32 @@ FAMILY_UNOBTAINABLE_RULES: dict[str, list[dict]] = {
         # alt-arts (sos 363-367, no `stamped`) are KEPT. Signal is `stamped` ONLY,
         # like SNC/EOE/ECL. See docs/sets/sos.md §5.
         {"promo_types_any_of": frozenset({"stamped"})},
+    ],
+    "blb": [
+        # Promo-pack STAMP variants (added 2026-08-30). All 80 `pblb`
+        # `promopack`+`stamped` `Np` prints are the same card as a kept base
+        # sibling + a promo-pack stamp, priced on scarcity. They compute to
+        # `regular` treatment, so the rare/mythic-regular sub-selectors pick them
+        # up (they bypass the `preferred` dedup) — this rule removes them.
+        # Validated: all 80 promopack cards also carry `stamped`, so a `stamped`
+        # rule catches every one; the 5 `promopack`-ONLY inverted-frame alt-arts
+        # (blb 381-385 Hop to It / Shoreline Looter / Fell / Wear Down /
+        # Stormcatch Mentor — distinct art, base siblings at blb 16/70/95/203/234)
+        # carry NO `stamped` and are KEPT. Signal is `stamped` ONLY, like
+        # SNC/EOE/ECL/SOS.
+        {"promo_types_any_of": frozenset({"stamped"})},
+        # raisedfoil premium-foil chase tier (added 2026-08-30). The 21
+        # `raisedfoil` showcase-legend foils are a fancy-foil variant the user
+        # does not shop for — same stance as SNC gilded/stepandcompleat. Unlike
+        # a DUPE_FOIL entry (which only drops the 7 that dupe a boosterfun-
+        # showcase twin), the 14 sole-showcase raisedfoils print ONLY in
+        # raisedfoil (no regular-foil of that art) — Ms. Bumbleflower blc 103
+        # ~$1,380, Lumra blb 343 ~$802, Bello blc 101 ~$559, etc., $5,701 of the
+        # $7,016 total. any_of:{raisedfoil} catches all 21; the base and
+        # boosterfun-showcase prints of each card stay in scope. Effect combined
+        # with the stamped rule: missing-set 484→383 prints ($7,302→~$1,315).
+        # See docs/sets/blb.md §2/§5.
+        {"promo_types_any_of": frozenset({"raisedfoil"})},
     ],
 }
 
