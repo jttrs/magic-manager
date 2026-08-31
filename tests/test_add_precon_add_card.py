@@ -1,11 +1,11 @@
 """Tests for the fast add paths (2026-08-30):
 
   - `mm deck add-precon` builds an in-memory precon checklist and runs it through
-    `sets._apply_precon_checklist` — the ONLY path that writes the precon_ledger
-    + builds decks + adds inventory atomically. These tests pin that in-memory
+    `sets._apply_precon_checklist`, which builds decks + adds inventory. Precon
+    unit counts are DERIVED from the `decks` table (V10: source_precon_file_name
+    + is_deconstructed) — there is no ledger. These tests pin the in-memory
     contract (JumpstartParseResult.rows shape) so a parser-dataclass change can't
-    silently break the CLI verb, and prove the ledger is written (the whole point
-    vs `import_precon`, which is ledger-blind).
+    silently break the CLI verb, and prove the derived counts + deck rows.
   - `mm inventory add-card` resolves SET+CN specs via parsers.resolve (Scryfall
     collection + sync-on-demand) and sums into inventory.
 
@@ -17,12 +17,12 @@ import pytest
 
 # ---------- add-precon: in-memory _apply_precon_checklist contract ----------
 
-def test_add_precon_writes_ledger_and_builds_deck(
+def test_add_precon_derives_count_and_builds_deck(
     tmp_db, fake_scryfall, fake_mtgjson, make_card, make_precon_deck,
 ):
     """The seam add-precon relies on: construct a JumpstartParseResult in-memory,
-    call sets._apply_precon_checklist(mode='add'), and get ledger+deck+inventory
-    all written in one shot."""
+    call sets._apply_precon_checklist(mode='add'), and get deck+inventory written
+    in one shot. The unit count derives from the decks table (no ledger)."""
     from magic_manager import sets as sets_mod, decks, db, parsers
 
     deck = make_precon_deck(
@@ -46,17 +46,21 @@ def test_add_precon_writes_ledger_and_builds_deck(
 
     assert summary["constructed"] == 1
     assert summary["rows_acted"] == 1
-    # Ledger written (the whole point vs import_precon).
-    assert decks.precon_ledger_get("FamilyMatters_BLC") == (1, 0)
+    # Count DERIVED from the decks table (the deck row carries the fileName).
+    assert decks.precon_unit_counts_for("FamilyMatters_BLC") == (1, 0)
     with db.connect() as conn:
         assert conn.execute("SELECT COUNT(*) FROM decks").fetchone()[0] == 1
+        row = conn.execute(
+            "SELECT source_precon_file_name, is_deconstructed FROM decks"
+        ).fetchone()
+        assert (row["source_precon_file_name"], row["is_deconstructed"]) == ("FamilyMatters_BLC", 0)
         assert conn.execute("SELECT COUNT(*) FROM inventory").fetchone()[0] == 2
 
 
 def test_add_precon_additive_second_copy(
     tmp_db, fake_scryfall, fake_mtgjson, make_card, make_precon_deck,
 ):
-    """Re-running add (mode='add') bumps the ledger 1→2 and creates a distinct
+    """Re-running add (mode='add') derives count 1→2 and creates a distinct
     second deck slug — the 'I opened another copy' behavior."""
     from magic_manager import sets as sets_mod, decks, db, parsers
 
@@ -78,16 +82,17 @@ def test_add_precon_additive_second_copy(
     _run()
     _run()
 
-    assert decks.precon_ledger_get("OtterLimits_BLB") == (2, 0)
+    assert decks.precon_unit_counts_for("OtterLimits_BLB") == (2, 0)
     with db.connect() as conn:
         slugs = [r[0] for r in conn.execute("SELECT slug FROM decks ORDER BY slug").fetchall()]
     assert slugs == ["otter-limits", "otter-limits-2"]
 
 
-def test_add_precon_deconstruct_only_no_deck(
+def test_add_precon_deconstruct_records_deck_rows(
     tmp_db, fake_scryfall, fake_mtgjson, make_card, make_precon_deck,
 ):
-    """constructed=0, deconstructed=2 → loose cards, ledger (0,2), NO deck row."""
+    """constructed=0, deconstructed=2 → loose cards + TWO is_deconstructed=1 deck
+    rows, so the torn-down copies are countable as units (derived count (0,2))."""
     from magic_manager import sets as sets_mod, decks, db, parsers
 
     deck = make_precon_deck(
@@ -106,10 +111,50 @@ def test_add_precon_deconstruct_only_no_deck(
 
     assert summary["constructed"] == 0
     assert summary["deconstructed"] == 2
-    assert decks.precon_ledger_get("HareRaising_BLB") == (0, 2)
+    assert decks.precon_unit_counts_for("HareRaising_BLB") == (0, 2)
     with db.connect() as conn:
-        assert conn.execute("SELECT COUNT(*) FROM decks").fetchone()[0] == 0
+        # Two deck rows, both flagged deconstructed.
+        assert conn.execute(
+            "SELECT COUNT(*) FROM decks WHERE is_deconstructed = 1"
+        ).fetchone()[0] == 2
         assert conn.execute("SELECT COUNT(*) FROM inventory").fetchone()[0] == 1
+
+
+def test_add_precon_modify_lowering_warns_not_deletes(
+    tmp_db, fake_scryfall, fake_mtgjson, make_card, make_precon_deck,
+):
+    """A modify ingest lowering a count does NOT delete decks — it warns and
+    points at `mm deck delete`. The derived count stays put."""
+    from magic_manager import sets as sets_mod, decks, db, parsers
+
+    deck = make_precon_deck(
+        "Family Matters", "Commander Deck",
+        [{"sid": "blc-sid-1", "name": "Cmd", "set": "blc", "cn": "1", "count": 1, "board": "commander"}],
+    )
+    fake_mtgjson(deck=deck)
+    fake_scryfall(search=[make_card(id="blc-sid-1", set="blc", collector_number="1", name="Cmd")])
+
+    # Build one copy (add), then modify it down to 0.
+    add = parsers.JumpstartParseResult(
+        rows=[parsers.JumpstartRow(file_name="FamilyMatters_BLC", theme="Family Matters",
+                                   keep_qty=1, deconstructed_qty=0)],
+        warnings=[], meta={"kind": "precon", "mode": "add"},
+    )
+    sets_mod._apply_precon_checklist(add, mode="add")
+    assert decks.precon_unit_counts_for("FamilyMatters_BLC") == (1, 0)
+
+    down = parsers.JumpstartParseResult(
+        rows=[parsers.JumpstartRow(file_name="FamilyMatters_BLC", theme="Family Matters",
+                                   keep_qty=0, deconstructed_qty=0)],
+        warnings=[], meta={"kind": "precon", "mode": "modify"},
+    )
+    summary = sets_mod._apply_precon_checklist(down, mode="modify")
+
+    # Warned, built/torn nothing, and the deck row still exists (count unchanged).
+    assert summary["constructed"] == 0 and summary["deconstructed"] == 0
+    assert summary["per_row"][0]["warning"] is not None
+    assert "mm deck delete" in summary["per_row"][0]["warning"]
+    assert decks.precon_unit_counts_for("FamilyMatters_BLC") == (1, 0)
 
 
 # ---------- add-precon: resolver + fuzzy match ----------

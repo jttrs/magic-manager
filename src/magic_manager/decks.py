@@ -46,6 +46,12 @@ class Deck:
     notes: str | None
     created_at: str
     updated_at: str
+    # V10: precon provenance. source_precon_file_name is the MTGJSON deck
+    # fileName this deck was imported from (NULL for hand-built decks); it's
+    # the join key that makes precon unit counts derivable. is_deconstructed
+    # marks a torn-down-for-parts copy (recipe kept, cards loose, not pledged).
+    source_precon_file_name: str | None = None
+    is_deconstructed: int = 0
 
 
 @dataclass
@@ -103,6 +109,7 @@ def _validate_finish(finish: str) -> None:
 
 
 def _deck_row_to_dataclass(row) -> Deck:
+    keys = row.keys()
     return Deck(
         deck_id=row["deck_id"],
         slug=row["slug"],
@@ -112,13 +119,18 @@ def _deck_row_to_dataclass(row) -> Deck:
         notes=row["notes"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
+        # These columns exist from V10 on; guard for rows selected without them.
+        source_precon_file_name=(row["source_precon_file_name"]
+                                 if "source_precon_file_name" in keys else None),
+        is_deconstructed=(row["is_deconstructed"] if "is_deconstructed" in keys else 0),
     )
 
 
 def _fetch_deck(conn, slug: str):
     return conn.execute(
         "SELECT deck_id, slug, name, format, archetype, notes, "
-        "created_at, updated_at FROM decks WHERE slug = ?",
+        "created_at, updated_at, source_precon_file_name, is_deconstructed "
+        "FROM decks WHERE slug = ?",
         (slug,),
     ).fetchone()
 
@@ -141,6 +153,8 @@ def deck_create(
     archetype: str | None = None,
     notes: str | None = None,
     source_set_code: str | None = None,
+    source_precon_file_name: str | None = None,
+    is_deconstructed: int = 0,
     conn=None,
 ) -> Deck:
     """Insert a new deck. Raises ``ValueError`` if ``slug`` is already in use.
@@ -151,6 +165,10 @@ def deck_create(
     ``source_set_code`` is the set the deck came from (e.g. 'ncc' for a New
     Capenna Commander precon) — the hard link used by family-scoped queries.
     NULL for hand-created decks.
+
+    ``source_precon_file_name`` (V10) is the MTGJSON deck fileName the deck was
+    imported from — the join key that makes precon unit counts derivable.
+    ``is_deconstructed`` marks a torn-down-for-parts copy (1) vs a built copy (0).
     """
     now = db._utcnow_iso()
     with db.transaction(conn) as conn:
@@ -160,11 +178,13 @@ def deck_create(
         cur = conn.execute(
             """
             INSERT INTO decks (slug, name, format, archetype, notes,
-                               source_set_code, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                               source_set_code, source_precon_file_name,
+                               is_deconstructed, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (slug, name, format, archetype, notes,
-             (source_set_code or None), now, now),
+             (source_set_code or None), (source_precon_file_name or None),
+             1 if is_deconstructed else 0, now, now),
         )
         deck_id = cur.lastrowid
     return Deck(
@@ -176,6 +196,8 @@ def deck_create(
         notes=notes,
         created_at=now,
         updated_at=now,
+        source_precon_file_name=(source_precon_file_name or None),
+        is_deconstructed=1 if is_deconstructed else 0,
     )
 
 
@@ -184,7 +206,7 @@ def deck_list() -> list[Deck]:
         rows = conn.execute(
             """
             SELECT deck_id, slug, name, format, archetype, notes,
-                   created_at, updated_at
+                   created_at, updated_at, source_precon_file_name, is_deconstructed
             FROM decks
             ORDER BY slug
             """
@@ -917,6 +939,7 @@ def import_precon(
     copies: int = 1,
     add_inventory: bool = True,
     deconstruct: bool = False,
+    record_deconstructed_deck: bool = False,
     merge_inventory: bool = False,
 ) -> dict:
     """Import an MTGJSON precon (or Jumpstart pack — same shape) into the DB.
@@ -933,6 +956,13 @@ def import_precon(
     ``merge_inventory=True`` skips deck creation entirely and only adds
     inventory. Use when the composition already exists (imported earlier)
     and you're now pouring in extra physical copies.
+
+    ``deconstruct=True`` adds the cards as loose inventory. By default (used by
+    the jumpstart engine) it creates NO deck row. Precon tracking passes
+    ``record_deconstructed_deck=True`` so a torn-down copy is still recorded as
+    a deck row flagged ``is_deconstructed=1`` (recipe kept, cards not pledged)
+    — making torn-down copies countable as units. ``copies`` then creates that
+    many deconstructed deck rows (distinct ``-2``/``-3`` slugs).
 
     Returns a summary dict with these fields:
       - ``deck_name``       (str) display name used
@@ -1015,8 +1045,13 @@ def import_precon(
     # ONE transaction spans the collision check, deck creation, every
     # deck_add_card, and every inventory_add. If any FK insert fails, the whole
     # thing rolls back — no orphan deck shell, so a corrected retry works.
+    # A deck row is created for a built import, or for a deconstructed import
+    # when the caller asks to record it (precon tracking). A plain deconstruct
+    # (jumpstart loose packs) and --merge-inventory create no deck row.
+    make_deck_row = (not merge_inventory) and (not deconstruct or record_deconstructed_deck)
+
     with db.connect() as conn:
-        if not deconstruct and not merge_inventory:
+        if make_deck_row:
             if deck_get(base_slug, conn=conn) is not None:
                 raise ValueError(
                     f"deck slug {base_slug!r} already exists; pass --slug to name a "
@@ -1032,7 +1067,10 @@ def import_precon(
                 )
 
         for s in effective_slugs:
-            deck_create(s, deck_name, format=fmt, source_set_code=src_set, conn=conn)
+            # is_deconstructed=1 only when this is a recorded torn-down copy.
+            deck_create(s, deck_name, format=fmt, source_set_code=src_set,
+                        source_precon_file_name=file_name,
+                        is_deconstructed=1 if deconstruct else 0, conn=conn)
 
         for sid, count, finish, board_name in parsed_entries:
             for s in effective_slugs:
@@ -1068,67 +1106,43 @@ def import_precon(
     }
 
 
-# ---------- precon unit ledger (SCHEMA_V7) ----------
+# ---------- precon unit counts (DERIVED from decks; V10) ----------
 #
-# Tracks preconstructed products AS UNITS — how many built (constructed) vs
-# torn-down (deconstructed) copies of each product the user has, keyed by the
-# MTGJSON deck fileName. This is a RECORDED ledger written by the precon
-# checklist ingest; it is never inferred from loose inventory (reconstructing
-# torn-down copies from loose cards is a separate future effort). The `modify`
-# precon checklist prefills its two fill columns from here.
+# Preconstructed products are tracked AS UNITS entirely by the `decks` table:
+# each built or torn-down copy is a deck row carrying source_precon_file_name
+# (the MTGJSON fileName) and is_deconstructed (0=built, 1=torn down). The
+# counts below are DERIVED — there is no separate ledger to drift from reality.
+# The V7 precon_ledger was dropped in the V10 migration.
 
-def precon_ledger_get(file_name: str, *, conn=None) -> tuple[int, int]:
-    """Return ``(constructed_qty, deconstructed_qty)`` for ``file_name``.
-
-    ``(0, 0)`` if no ledger row exists yet.
-    """
+def precon_unit_counts_for(file_name: str, *, conn=None) -> tuple[int, int]:
+    """Return ``(constructed_qty, deconstructed_qty)`` for one precon fileName,
+    counted live from the ``decks`` table. ``(0, 0)`` if none exist."""
     with db.transaction(conn) as conn:
         row = conn.execute(
-            "SELECT constructed_qty, deconstructed_qty FROM precon_ledger "
-            "WHERE file_name = ?",
+            """
+            SELECT
+              SUM(CASE WHEN is_deconstructed = 0 THEN 1 ELSE 0 END) AS c,
+              SUM(CASE WHEN is_deconstructed = 1 THEN 1 ELSE 0 END) AS d
+            FROM decks WHERE source_precon_file_name = ?
+            """,
             (file_name,),
         ).fetchone()
-    if row is None:
-        return (0, 0)
-    return (row["constructed_qty"], row["deconstructed_qty"])
+    return (row["c"] or 0, row["d"] or 0)
 
 
-def precon_ledger_all() -> dict[str, tuple[int, int]]:
-    """Whole ledger as ``{file_name: (constructed_qty, deconstructed_qty)}``.
-
-    Used by the `modify` precon checklist to prefill every row in one read.
-    """
+def precon_unit_counts() -> dict[str, tuple[int, int]]:
+    """Whole collection as ``{file_name: (constructed_qty, deconstructed_qty)}``,
+    derived from ``decks`` in one GROUP BY. Used by the `modify` precon checklist
+    to prefill every row from the REAL deck collection (no ledger)."""
     with db.connect() as conn:
         rows = conn.execute(
-            "SELECT file_name, constructed_qty, deconstructed_qty FROM precon_ledger"
-        ).fetchall()
-    return {r["file_name"]: (r["constructed_qty"], r["deconstructed_qty"]) for r in rows}
-
-
-def precon_ledger_set(file_name: str, constructed_qty: int,
-                      deconstructed_qty: int, *, conn=None) -> None:
-    """Upsert the ledger row for ``file_name`` to the given absolute counts.
-
-    Both counts must be >= 0 (enforced by the table CHECK). A row of (0, 0) is
-    still written — the ledger keeps an explicit zero rather than deleting, so
-    a subsequent `modify` prefill shows the product as known-but-empty.
-    """
-    if constructed_qty < 0 or deconstructed_qty < 0:
-        raise ValueError(
-            f"ledger counts must be >= 0, got "
-            f"constructed={constructed_qty}, deconstructed={deconstructed_qty}"
-        )
-    now = db._utcnow_iso()
-    with db.transaction(conn) as conn:
-        conn.execute(
             """
-            INSERT INTO precon_ledger (file_name, constructed_qty,
-                                       deconstructed_qty, updated_at)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(file_name) DO UPDATE SET
-                constructed_qty = excluded.constructed_qty,
-                deconstructed_qty = excluded.deconstructed_qty,
-                updated_at = excluded.updated_at
-            """,
-            (file_name, constructed_qty, deconstructed_qty, now),
-        )
+            SELECT source_precon_file_name AS fn,
+              SUM(CASE WHEN is_deconstructed = 0 THEN 1 ELSE 0 END) AS c,
+              SUM(CASE WHEN is_deconstructed = 1 THEN 1 ELSE 0 END) AS d
+            FROM decks
+            WHERE source_precon_file_name IS NOT NULL
+            GROUP BY source_precon_file_name
+            """
+        ).fetchall()
+    return {r["fn"]: (r["c"] or 0, r["d"] or 0) for r in rows}
