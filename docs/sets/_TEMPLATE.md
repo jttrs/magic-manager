@@ -127,3 +127,21 @@ Anything else that doesn't fit above. Free-form.
 - `selectors.py:FAMILY_DUPE_FOIL_PROMO_TYPES["<anchor>"]` — <status: configured / not configured>
 - `selectors.py:FAMILY_UNOBTAINABLE_RULES["<anchor>"]` — <status: configured / not configured>
 - Related test data: `<path>` if any
+
+---
+
+## 9. Product types
+
+Archetype definitions (Scene Box, Beginner Box, Jumpstart, Commander/Welcome/other
+constructed decks, Art Series, masterpiece sheet, Bundle/Buy-a-Box, Secret Lair,
+Collector's Edition) live in [`../product-types.md`](../product-types.md) — do NOT
+re-define them here. Record only this family's product **specifics / gotchas**:
+
+- SKU names + MTGJSON `fileName`s (e.g. Scene Box `<Name>_<ANCHOR>` for `import-precon --deconstruct`).
+- Cross-set sourcing quirks (e.g. a Beginner Box's decks filed under the parent but composed of eternal-child printings).
+- CN boundaries / product-exclusive ranges (e.g. "`<child>` CN ≥ N is Beginner Box, not booster").
+- Any deviation from the archetype's default handling.
+
+| Product | Archetype (→ product-types.md) | Family-specific detail |
+|---|---|---|
+| `<SKU name>` | Scene Box | `<CNs, fileName, handling note>` |

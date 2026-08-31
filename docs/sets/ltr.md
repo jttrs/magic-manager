@@ -20,7 +20,7 @@
 | `ltc` | commander | 591 | 2023-06-23 | Commander decks (Riders of Rohan, Hosts of Mordor, Elven Council, Food and Fellowship) |
 | `pltr` | promo | 86 | 2023-06-23 | Prerelease + set promos |
 | `pltc` | promo | 4 | 2023-06-23 | Deluxe Commander Kit promos |
-| `altc` | memorabilia | 24 | 2023-06-23 | **Scene Box** — physical panels sold as a display product |
+| `altc` | memorabilia | 24 | 2023-06-23 | **Scene Box** ([archetype](../product-types.md#scene-box)) — physical display panels; see §7 |
 | `tltr` | token | 25 | 2023-06-23 |  |
 | `tltc` | token | 15 | 2023-06-23 |  |
 | `fltr` | memorabilia | 10 | 2023-06-23 | Front cards (beginner box) |
@@ -150,7 +150,7 @@ For any PRM-stamped card the user presents, resolve by name+artist first (see `.
 ## 7. Edge cases & gotchas
 
 - **`mltr` minigame set** — 1 card, `set_type: minigame`. Unusual type not seen in newer UB families. Excluded from default `filtered_codes()` in `sets.py:33` (which allows expansion/commander/masterpiece/promo/eternal). If the user ever wants it included in checklists, use `--include minigame`.
-- **`altc` Scene Box** — 24 memorabilia cards. Not in default checklists (memorabilia excluded). Distinct product from the borderless-inverted "Scene Cards" of §4a — the Scene Box is a physical display, altc is the memorabilia set code.
+- **`altc` Scene Box** ([archetype](../product-types.md#scene-box)) — 24 memorabilia cards. Not in default checklists (memorabilia excluded). LTR-specific caveat: distinct product from the borderless-inverted "Scene Cards" of §4a — the Scene Box is a physical display SKU, `altc` is the memorabilia set code.
 - **LTC set_type=commander** — this is a genuine Commander-deck set (Riders of Rohan / Hosts of Mordor / Elven Council / Food and Fellowship, 4 decks). Distinct from TMT's `tmc` which has `set_type: eternal` despite being a Commander deck (TMT gotcha).
 - **Meld-back faces** — none known; the missing-set pipeline's `_drop_meld_back_faces` filter (`cli.py:2233`) is defensive here.
 - **Basic lands (LTR 273–281, 340–345, 751–756)** — three basic-land runs: standard (273–281), borderless-inverted (340–345), and duplicate borderless (751–756). Not part of any scene; treat as ordinary basics.

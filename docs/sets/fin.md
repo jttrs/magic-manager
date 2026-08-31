@@ -23,7 +23,7 @@
 | `pss5` | promo | 2 | 2025-06-13 | FIN Standard Showdown premiums |
 | `rfin` | promo | 2 | 2025-06-13 | Regional promos — **Japan-only distribution** (English collectors typically skip) |
 | `afin` | memorabilia | 53 | 2025-06-13 | Art Series |
-| `afic` | memorabilia | 24 | 2025-12-05 | Final Fantasy Scene Box — physical display product |
+| `afic` | memorabilia | 24 | 2025-12-05 | Final Fantasy **Scene Box** ([archetype](../product-types.md#scene-box)) — physical display; see §4 |
 | `tfin` | token | 37 | 2025-06-13 |  |
 | `tfic` | token | 11 | 2025-06-13 |  |
 | `wfin` | token | 3 | 2025-06-13 | FIN Asia WPN Promo Tokens |
@@ -92,7 +92,7 @@ None are extended-art — all four use the standard bordered frame. All four are
 
 **FCA masterpiece sheet** (66 cards, `fca` 1–66) is a bonus-sheet-per-FF-game grouping (`ffi` through `ffvii` tags on prints), not a spatial "scene" — the sheet is themed but the cards aren't a physical panorama.
 
-**Scene Box product `afic`** (24 memorabilia cards, released 2025-12-05) is a physical display box distinct from the borderless main-set prints. Excluded from default checklists (memorabilia).
+**Scene Box `afic`** ([archetype](../product-types.md#scene-box)) — 24 memorabilia cards, released 2025-12-05. FIN-specific: distinct from the borderless main-set prints; excluded from default checklists (memorabilia). Note the FIC 460–475 "scene box" candidate above is unaudited and separate from this `afic` memorabilia code.
 
 ---
 
