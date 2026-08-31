@@ -5,11 +5,11 @@ description: Build the global preconstructed-deck catalog (XLSX or markdown) acr
 
 # Generate Precon Checklist
 
-The mechanical wrapper around `mm set precon-list`. It writes a **global, all-sets catalog** — one row per preconstructed product across every Magic set — because there are only a handful of precons per set (a per-set file would be pointless). Precon decks are tracked AS UNITS: the two fill columns are `constructed_qty` (built copies kept assembled) and `deconstructed_qty` (copies torn down for parts).
+The mechanical wrapper around `mm set precon-list`. It writes a **global, all-sets catalog** — one row per preconstructed product across every Magic set — because there are only a handful of precons per set (a per-set file would be pointless). Precon decks are tracked AS UNITS via three fill columns: `constructed_qty` (built copies kept assembled), `deconstructed_qty` (copies torn down for parts), and `pool_qty` (card POOLS — Starter Collection / Scene Box — that were never a playable deck; cards go loose, a marker row is kept). Pool-suggested rows tint their `pool_qty` cell green (XLSX) or show `← pool (fill P)` (md).
 
 This is the precon sibling of [[generate-set-checklist]] (which is the per-card *inventory* checklist). They are different artifacts: this one is precon products as units; that one is individual card printings.
 
-> **Counts are derived from the decks table — there is no ledger.** Each built or torn-down copy is a deck row carrying the MTGJSON fileName + an `is_deconstructed` flag, so `--mode modify` prefills from the user's real deck collection and can never drift. See [[add-precon]] / [[import-precon]] for the one-liner add paths.
+> **Counts are derived from the decks table — there is no ledger.** Each copy is a deck row carrying the MTGJSON fileName + a `precon_state` (built / deconstructed / pool), so `--mode modify` prefills from the user's real deck collection and can never drift. See [[add-precon]] / [[import-precon]] for the one-liner add paths.
 
 ## Steps
 
@@ -25,7 +25,7 @@ The mode is encoded in the filename (`precons-<mode>-checklist.xlsx`) and the fi
 
 | `--mode` | Filename | Cells at generation | Ingest semantics | When to use |
 |---|---|---|---|---|
-| **`add`** (default) | `precons-add-checklist.xlsx` | **Blank** | ADDS the entered counts — each `constructed_qty` builds a deck copy (+cards to inventory), each `deconstructed_qty` records a torn-down copy. Only ever increases. | Recording precons you acquired. |
+| **`add`** (default) | `precons-add-checklist.xlsx` | **Blank** | ADDS the entered counts — `constructed_qty` builds a deck copy (+cards), `deconstructed_qty` records a torn-down copy, `pool_qty` records a card-pool unit (cards loose). Only ever increases. | Recording precons you acquired. |
 | **`modify`** | `precons-modify-checklist.xlsx` | **Prefilled** from your current deck collection (derived counts) | Applies the SIGNED DELTA vs the prefilled value. Raising a count builds/records copies. **Lowering a count is NOT applied** — it warns and points to `mm deck delete <slug>` (the derived count updates when you actually delete). | Seeing what you already own before adding, so you don't double-add. |
 
 **Default is `add`.** Recommend `modify` when the user wants to *review/correct* what they already have ("which precons do I have", "show me my current precons", "I want to see what's already tracked").
@@ -38,7 +38,7 @@ Both flavors carry a colored **README banner sheet** (green add / red modify) re
 - `--all-physical` — widen to EVERY physical product (~1500 rows, incl. old Theme Decks / Sample Decks / Welcome Boosters). Ignored when `--type` is given.
 - `--include-collector` — include the `… Collector's Edition` twins (excluded by default; the collection doesn't track them).
 - `--sync-all` — **slow.** Generation is best-effort on `usd_total` (blank for sets not yet in the local `cards` table). `--sync-all` syncs every referenced set (~180) from Scryfall up front so all totals populate in one run. Only use when the user explicitly wants full pricing now; otherwise values fill in over time as precons get ingested (each ingest self-syncs its own sets). Warn it takes several minutes.
-- `--format md` — markdown instead of XLSX; edit the `[C:c D:d]` bracket per row.
+- `--format md` — markdown instead of XLSX; edit the `[C:c D:d P:p]` bracket per row (P = pool).
 - `--out <path>` / `--force` — override path / overwrite an existing catalog.
 
 Never listed by `precon-list`: digital (`MTGO …`), Jumpstart (its own `mm set jumpstart-list` + [[generate-set-checklist]]-adjacent flow), and Secret Lair Drop ([[bulk-add]] / [[secret-lair-value]]).

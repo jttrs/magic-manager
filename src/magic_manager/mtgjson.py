@@ -254,6 +254,96 @@ def _is_collector_edition(name: str) -> bool:
     return "collector's edition" in name.lower() or "collectors' edition" in name.lower()
 
 
+# ---------- precon "pool" classification ----------
+#
+# Most precon products are playable decks (state 'built'). A few are card
+# POOLS — never a playable deck, just a bunch of cards you build your own decks
+# from (the Foundations Starter Collection, a 387-card library) or loose
+# collectible cards (Scene Boxes, `booster: null`). Those should ingest as
+# state 'pool' (cards → inventory, a marker deck row, no pledge), NOT as one
+# giant "built" deck.
+#
+# Neither `type` nor `sealedProduct.subtype` distinguishes them (a "Box Set"
+# spans 6→387 cards; Starter Collection and Beginner Box are both
+# box_set/starter_deck). So classification is name-pattern + a card-count
+# backstop. This is the single knob — when a new pool product appears, add its
+# name substring here.
+POOL_NAME_PATTERNS: frozenset[str] = frozenset({
+    "scene box",
+    "starter collection",
+})
+
+# A single deck this large isn't a playable deck — it's a build-your-own pool.
+# Playable decks top out at 100 (Commander); the Starter Collection is 387.
+POOL_CARD_COUNT_THRESHOLD = 150
+
+
+def _deck_total_cards(deck_data: dict) -> int:
+    """Total card count across a deck's playable boards (for pool detection)."""
+    total = 0
+    for board in ("commander", "mainBoard", "sideBoard"):
+        for e in deck_data.get(board) or []:
+            total += int(e.get("count", 1) or 1)
+    return total
+
+
+def _pool_named_product_decks(set_code: str) -> set[str]:
+    """Lowercased names of every deck that a pool-named sealedProduct (Scene Box,
+    Starter Collection, …) in ``set_code`` lists in its ``contents.deck``.
+
+    A Scene Box's "pool" signal lives on the PRODUCT name, not the component
+    deck's name (the deck is just "The Black Sun Invasion"), so we resolve
+    membership through ``sealedProduct``.
+    """
+    out: set[str] = set()
+    try:
+        for p in sealed_products(set_code):
+            pname = (p.get("name") or "").lower()
+            if any(pat in pname for pat in POOL_NAME_PATTERNS):
+                for e in (p.get("contents") or {}).get("deck") or []:
+                    out.add((e.get("name") or "").lower())
+    except Exception:
+        pass
+    return out
+
+
+def default_precon_state(file_name: str, *, name: str | None = None) -> str:
+    """Recommend the default ingest state for a precon: ``"pool"`` or ``"built"``.
+
+    ``"deconstructed"`` is never a *default* — it's an explicit user action.
+    A product is a pool if ANY of:
+      1. its deck name matches ``POOL_NAME_PATTERNS`` (e.g. "Starter Collection");
+      2. it's a component of a pool-named sealedProduct (e.g. a Scene Box's
+         decks, whose "Scene Box" marker is on the PRODUCT name, not the deck);
+      3. its single deck has an absurd-for-a-deck card count
+         (> ``POOL_CARD_COUNT_THRESHOLD``) — the mechanical backstop.
+
+    ``name`` (the deck display name) is used for test 1 if given; otherwise read
+    from the deck file. Network-tolerant: MTGJSON failures degrade to whatever
+    tests could run, then ``"built"``.
+    """
+    display = (name or "").lower()
+    if not display:
+        try:
+            display = (deck(file_name).get("name") or "").lower()
+        except Exception:
+            display = ""
+    if display and any(pat in display for pat in POOL_NAME_PATTERNS):
+        return "pool"
+    # Scene-Box-style: the deck is a component of a pool-named sealedProduct.
+    # Derive the set code from the Words_CODE fileName suffix.
+    if "_" in file_name and display:
+        set_code = file_name.rsplit("_", 1)[1]
+        if display in _pool_named_product_decks(set_code):
+            return "pool"
+    try:
+        if _deck_total_cards(deck(file_name)) > POOL_CARD_COUNT_THRESHOLD:
+            return "pool"
+    except Exception:
+        pass
+    return "built"
+
+
 def precon_variants(
     set_code: str | None = None,
     *,

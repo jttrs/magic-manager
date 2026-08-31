@@ -1,6 +1,6 @@
 ---
 name: add-precon
-description: One-liner wrapper around `mm deck add-precon` — adds preconstructed decks (Commander decks, Box Set decks, Planeswalker decks, etc.) as TRACKED UNITS in one shot, building the deck AND adding its cards to inventory. Precon unit counts derive from the decks table, so the added copies show up under /set-status and prefill the precon checklist's modify flavor. Selection is by set code (+ optional --all / fuzzy name query) or an exact MTGJSON fileName. Triggers: "add each BLC commander deck constructed", "I built the Family Matters precon", "add the Otter Limits starter kit", "add 2 copies of X deconstructed", "I opened another copy of the Y precon".
+description: One-liner wrapper around `mm deck add-precon` — adds preconstructed decks (Commander decks, Box Set decks, Planeswalker decks, etc.) as TRACKED UNITS in one shot, building the deck AND adding its cards to inventory. Each copy is recorded in one of three states — built / deconstructed / pool (card pools like the Starter Collection or a Scene Box) — auto-detected when no count flag is given. Precon unit counts derive from the decks table, so the added copies show up under /set-status and prefill the precon checklist's modify flavor. Selection is by set code (+ optional --all / fuzzy name query) or an exact MTGJSON fileName. Triggers: "add each BLC commander deck constructed", "I built the Family Matters precon", "add the Foundations Starter Collection", "add 2 copies of X deconstructed", "I opened another copy of the Y precon".
 ---
 
 # Add Precon
@@ -26,8 +26,9 @@ The mechanical wrapper around `mm deck add-precon`. The user names a precon or a
 
 ```
 mm deck add-precon <TARGET> [NAME_QUERY]
-    [--constructed/-c N]   (default 1)
-    [--deconstructed/-d M] (default 0)
+    [--constructed/-c N]     built copies (assembled decks)
+    [--deconstructed/-d M]   torn-down copies (loose cards, marker row)
+    [--pool/-p P]            card-pool copies (Starter Collection / Scene Box)
     [--all]
     [--type "Commander Deck"]
     [--include-collector]
@@ -36,6 +37,8 @@ mm deck add-precon <TARGET> [NAME_QUERY]
 
 `TARGET` is EITHER an exact MTGJSON fileName (e.g. `FamilyMatters_BLC`) OR a set code (e.g. `blc`). Find fileNames/types via `uv run mm mtgjson decks --set <code>`.
 
+**Pass NO count flag and the state auto-detects per deck:** pool-like products (Starter Collection, Scene Box — via `mtgjson.default_precon_state`) default to one `pool` copy, everything else to one `built` copy. The command prints an `ℹ auto-detected a card pool` note when it does. Only pass `-c/-d/-p` to override or to add more than one.
+
 ## Selection forms — map the NL request to the right form
 
 | User says | Command form |
@@ -43,8 +46,9 @@ mm deck add-precon <TARGET> [NAME_QUERY]
 | "each BLC commander deck" / "all the ... decks" | set code + `--all` (add `--type` if they name a product type) |
 | a specific named deck ("the Family Matters precon") | set code + fuzzy name query |
 | an exact fileName the user already has | that fileName, no name query |
-| "keep constructed" / "built" | `--constructed` (default is already 1, so often no flag needed) |
+| "I built it" / "keep constructed" | `--constructed` (or nothing — a normal deck auto-defaults to built 1) |
 | "deconstructed" / "tore down for parts" / "loose" | `--deconstructed` |
+| "the Starter Collection" / "a Scene Box" / any card pool | nothing (auto → pool), or explicit `--pool` |
 
 Examples:
 
@@ -63,11 +67,11 @@ A name query that matches 0 or more than 1 deck exits 2 and prints the candidate
 
 ## Additive semantics — re-running adds ANOTHER copy
 
-Re-running `add-precon` on the same deck is additive: constructed 1→2, not a reset (it creates another deck row — distinct slug `<slug>-2`). This is correct for "I opened/built another copy." It has no downward/correction form: `--constructed`/`--deconstructed` are ≥ 0. To REMOVE a copy (sold/miscounted), delete its deck row with `mm deck delete <slug>` — the derived count drops automatically.
+Re-running `add-precon` on the same deck is additive: built 1→2, not a reset (it creates another deck row — distinct slug `<slug>-2`). This is correct for "I opened/built another copy." It has no downward/correction form: `--constructed`/`--deconstructed`/`--pool` are ≥ 0. To REMOVE a copy (sold/miscounted), delete its deck row with `mm deck delete <slug>` — the derived count drops automatically.
 
 ## Output
 
-The command prints, per deck, a `constructed X→Y, deconstructed X→Y` line plus a headline summarizing rows changed, decks built, decks torn down, and cards added. Relay these to the user. `--json` emits the summary dict: `rows_acted`, `constructed`, `deconstructed`, `inv_qty_total`, `per_row[]` (each with `label`, `file_name`, `count_before`, `count_after`, and optional `warning`/`error`). The counts are derived live from the decks table.
+The command prints, per deck, a `built X→Y, deconstructed X→Y, pool X→Y` line plus a headline summarizing rows changed and totals built / torn down / pooled. Relay these to the user. `--json` emits the summary dict: `rows_acted`, `built`, `deconstructed`, `pool`, `inv_qty_total`, `per_row[]` (each with `label`, `file_name`, `count_before`/`count_after` as 3-tuples `(built, deconstructed, pool)`, and optional `warning`/`error`). Counts are derived live from the decks table.
 
 ## Guardrails
 

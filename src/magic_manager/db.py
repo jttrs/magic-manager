@@ -402,6 +402,25 @@ CREATE INDEX IF NOT EXISTS decks_precon_fn_idx ON decks (source_precon_file_name
 """
 
 
+# V11: widen the built/torn-down BOOLEAN into a 3-value precon STATE, so
+# card-POOL products (Foundations Starter Collection, Scene Boxes) — which were
+# never playable decks — stop being mis-modeled as a giant "built" deck or a
+# "deconstructed" one. States:
+#   - 'built'         : a real deck, assembled (cards pledged via deck_assignments)
+#   - 'deconstructed' : a real deck torn down for parts (recipe kept, cards loose)
+#   - 'pool'          : cards that were never a deck (loose in inventory); the
+#                       deck row is just a "unit-owned" marker so counting /
+#                       de-dup / checklist-prefill keep working.
+# The V11 Python hook backfills precon_state from is_deconstructed (0→built,
+# 1→deconstructed); no 'pool' rows exist pre-migration. The old is_deconstructed
+# column is LEFT IN PLACE (deprecated dead column — a DROP needs the
+# copy-rebuild dance and isn't worth it); precon_state is the source of truth.
+SCHEMA_V11 = """
+ALTER TABLE decks ADD COLUMN precon_state TEXT NOT NULL DEFAULT 'built';
+CREATE INDEX IF NOT EXISTS decks_precon_state_idx ON decks (source_precon_file_name, precon_state);
+"""
+
+
 # ---------- migration-authoring convention ----------
 #
 # Always-safe ops in a migration: CREATE TABLE, ALTER TABLE ADD COLUMN,
@@ -416,8 +435,9 @@ CREATE INDEX IF NOT EXISTS decks_precon_fn_idx ON decks (source_precon_file_name
 #   - lists             labels + their kind/source
 #   - ingest_log        audit trail of which checklist landed when
 #   - decks / deck_cards  compositions + the source_precon_file_name /
-#                         is_deconstructed columns that make precon unit counts
-#                         derivable (replaced the V7 precon_ledger, dropped in V10)
+#                         precon_state columns that make precon unit counts
+#                         derivable (replaced the V7 precon_ledger, dropped in V10;
+#                         precon_state is the V11 3-value widening of is_deconstructed)
 #   - precons / precon_cards    (when V2 ships them)
 #
 # Re-derivable tables (recovery = re-run a sync):
@@ -452,6 +472,7 @@ MIGRATIONS: list[str] = [
     SCHEMA_V8,
     SCHEMA_V9,
     SCHEMA_V10,
+    SCHEMA_V11,
 ]
 CURRENT_VERSION = len(MIGRATIONS)
 
@@ -528,6 +549,8 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
             _run_v4_python_migration(conn)
         if i == 10 and have < 10:
             _run_v10_python_migration(conn)
+        if i == 11 and have < 11:
+            _run_v11_python_migration(conn)
     if have < CURRENT_VERSION:
         conn.execute("DELETE FROM schema_version")
         conn.execute("INSERT INTO schema_version (version) VALUES (?)", (CURRENT_VERSION,))
@@ -782,6 +805,22 @@ def _run_v10_python_migration(conn: sqlite3.Connection) -> None:
 
     # 3. Drop the ledger — decks is now the single source of truth.
     conn.execute("DROP TABLE IF EXISTS precon_ledger")
+
+
+# ---------- V11 Python post-migration ----------
+
+def _run_v11_python_migration(conn: sqlite3.Connection) -> None:
+    """Backfill ``decks.precon_state`` from the old ``is_deconstructed`` boolean.
+
+    0 → 'built', 1 → 'deconstructed'. No 'pool' rows exist pre-migration (that
+    state is new in V11), so this is a pure 2→named remap. ``precon_state`` was
+    added with DEFAULT 'built', so only the ``is_deconstructed=1`` rows need an
+    UPDATE; do it explicitly for clarity + idempotency. Offline-safe (no
+    network).
+    """
+    conn.execute(
+        "UPDATE decks SET precon_state = 'deconstructed' WHERE is_deconstructed = 1"
+    )
 
 
 def _utcnow_iso() -> str:

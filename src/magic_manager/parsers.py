@@ -322,6 +322,10 @@ class JumpstartRow:
     theme: str
     keep_qty: int
     deconstructed_qty: int
+    # V11: precon 'pool' column (Starter Collection / Scene Box — cards that
+    # were never a deck). 0 for jumpstart (no such column). ``keep_qty`` doubles
+    # as precon 'constructed_qty' (a count, not a 0/1 flag) on precon files.
+    pool_qty: int = 0
     raw: str = ""
 
 
@@ -333,8 +337,9 @@ class JumpstartParseResult:
 
     @property
     def filled_rows(self) -> list[JumpstartRow]:
-        """Rows where the user recorded at least one opened pack."""
-        return [r for r in self.rows if r.keep_qty + r.deconstructed_qty > 0]
+        """Rows where the user recorded at least one opened pack/copy."""
+        return [r for r in self.rows
+                if r.keep_qty + r.deconstructed_qty + r.pool_qty > 0]
 
 
 JUMPSTART_LIST_COLUMNS = (
@@ -387,7 +392,7 @@ def parse_jumpstart_list_xlsx(path: Path) -> JumpstartParseResult:
 
     header_lower = [str(h).strip().lower() if h is not None else "" for h in header]
     idx = {c: header_lower.index(c)
-           for c in (*JUMPSTART_LIST_COLUMNS, "constructed_qty")
+           for c in (*JUMPSTART_LIST_COLUMNS, "constructed_qty", "pool_qty")
            if c in header_lower}
     # The construct column may be named keep_qty (jumpstart) or constructed_qty
     # (precon); accept whichever is present.
@@ -408,25 +413,30 @@ def parse_jumpstart_list_xlsx(path: Path) -> JumpstartParseResult:
         theme = (str(row[idx["theme"]]).strip() if "theme" in idx and row[idx["theme"]] is not None else "")
         keep_qty = _coerce_qty(row[idx[construct_col]], row_num, construct_col, res)
         deconstructed_qty = _coerce_qty(row[idx["deconstructed_qty"]], row_num, "deconstructed_qty", res)
+        pool_qty = (_coerce_qty(row[idx["pool_qty"]], row_num, "pool_qty", res)
+                    if "pool_qty" in idx else 0)
         res.rows.append(JumpstartRow(
             file_name=file_name,
             theme=theme,
             keep_qty=keep_qty,
             deconstructed_qty=deconstructed_qty,
-            raw=f"row {row_num}: {file_name} C:{keep_qty} D:{deconstructed_qty}",
+            pool_qty=pool_qty,
+            raw=f"row {row_num}: {file_name} C:{keep_qty} D:{deconstructed_qty} P:{pool_qty}",
         ))
     return res
 
 
 # Markdown line shape: ``- <FileName> — … [K:k D:d]`` (jumpstart) or
-# ``… [C:c D:d]`` (precon). Parser keys on FileName + the bracket; both the
-# ``K:`` and ``C:`` labels map to the construct count. Surrounding text can change.
+# ``… [C:c D:d P:p]`` (precon; the ``P:p`` pool count is optional). Parser keys
+# on FileName + the bracket; both the ``K:`` and ``C:`` labels map to the
+# construct count. Surrounding text can change.
 MD_JUMPSTART_LINE_RE = re.compile(
     r"""
     ^\s*-\s+
     (?P<file_name>[A-Za-z0-9_]+_[A-Z0-9]{2,6})
     .*?
-    \[\s*[KC]:\s*(?P<k>\d+)\s+D:\s*(?P<d>\d+)\s*\]
+    \[\s*[KC]:\s*(?P<k>\d+)\s+D:\s*(?P<d>\d+)
+    (?:\s+P:\s*(?P<p>\d+))?\s*\]
     """,
     re.VERBOSE,
 )
@@ -468,6 +478,7 @@ def parse_jumpstart_list_md(path: Path) -> JumpstartParseResult:
         try:
             keep_qty = int(m.group("k"))
             deconstructed_qty = int(m.group("d"))
+            pool_qty = int(m.group("p")) if m.group("p") is not None else 0
         except ValueError:
             res.warnings.append(f"line {line_num}: bad integer in {raw_line!r}")
             continue
@@ -476,7 +487,8 @@ def parse_jumpstart_list_md(path: Path) -> JumpstartParseResult:
             theme="",
             keep_qty=keep_qty,
             deconstructed_qty=deconstructed_qty,
-            raw=f"line {line_num}: {file_name} K:{keep_qty} D:{deconstructed_qty}",
+            pool_qty=pool_qty,
+            raw=f"line {line_num}: {file_name} C:{keep_qty} D:{deconstructed_qty} P:{pool_qty}",
         ))
     return res
 

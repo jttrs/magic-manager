@@ -849,36 +849,40 @@ def _summarize_deck_checklist(path: Path, meta: dict) -> dict:
 
     filled: list[dict] = []
     decks_to_construct = 0
-    loose_copies = 0
+    loose_copies = 0    # deconstructed + pool positive deltas (loose-card copies)
+    pool_copies = 0
     total_qty = 0
     estimated_value = 0.0
     for r in parsed.rows:
-        entered_c, entered_d = r.keep_qty, r.deconstructed_qty
+        entered = (r.keep_qty, r.deconstructed_qty, r.pool_qty)  # (c, d, p)
         if kind == "precon" and file_mode == "modify":
-            before_c, before_d = counts.get(r.file_name, (0, 0))
-            acts = (entered_c != before_c) or (entered_d != before_d)
-            delta_c, delta_d = entered_c - before_c, entered_d - before_d
+            before = counts.get(r.file_name, (0, 0, 0))
+            delta = tuple(e - b for e, b in zip(entered, before))
+            acts = any(x != 0 for x in delta)
         else:
-            acts = (entered_c + entered_d) > 0
-            delta_c, delta_d = entered_c, entered_d
+            delta = entered
+            acts = sum(entered) > 0
         if not acts:
             continue
+        delta_c, delta_d, delta_p = delta
         info = extra.get(r.file_name, {})
         usd = info.get("usd_total")
         filled.append({
             "file_name": r.file_name,
             "label": r.theme or r.file_name,
-            "keep_qty": entered_c,          # jumpstart flag / precon target constructed
-            "constructed_qty": entered_c,
-            "deconstructed_qty": entered_d,
-            "delta": (delta_c, delta_d),
+            "keep_qty": entered[0],          # jumpstart flag / precon target constructed
+            "constructed_qty": entered[0],
+            "deconstructed_qty": entered[1],
+            "pool_qty": entered[2],
+            "delta": delta,
             "set": info.get("set", ""),
             "usd_total": usd,
         })
-        total_qty += max(0, delta_c) + max(0, delta_d)
+        total_qty += max(0, delta_c) + max(0, delta_d) + max(0, delta_p)
         # "to construct" counts positive construct deltas (new builds this ingest).
-        decks_to_construct += max(0, delta_c) if kind == "precon" else (1 if entered_c == 1 else 0)
-        loose_copies += max(0, delta_d)
+        decks_to_construct += max(0, delta_c) if kind == "precon" else (1 if entered[0] == 1 else 0)
+        loose_copies += max(0, delta_d) + max(0, delta_p)
+        pool_copies += max(0, delta_p)
         if usd is not None and delta_c > 0:
             estimated_value += usd
 
@@ -899,6 +903,7 @@ def _summarize_deck_checklist(path: Path, meta: dict) -> dict:
         "mode": file_mode,
         "decks_to_construct": decks_to_construct,
         "loose_copies": loose_copies,
+        "pool_copies": pool_copies,
         "filled": filled,
         "warnings": parsed.warnings,
     }
@@ -1410,23 +1415,30 @@ def _build_precon_rows(
             if progress:
                 progress(f"synced {len(missing)} sets → {n} cards upserted")
 
+    from . import mtgjson as _mtg
     summaries = [_precon_variant_summary(v) for v in variants]
 
     # Fill columns: prefilled from the real deck collection for the `modify`
     # flavor, blank (None) for `add`. Derive all counts in one query, join by
-    # fileName.
+    # fileName. Each row also carries a `suggested_state` (built|pool) so the
+    # writer can steer pool products (Starter Collection, Scene Box) to the
+    # pool column.
     counts = {}
     if prepopulate_from_counts:
         from . import decks as decks_mod
         counts = decks_mod.precon_unit_counts()
     for s in summaries:
+        s["suggested_state"] = _mtg.default_precon_state(
+            s["file_name"], name=s.get("deck_name"))
         if prepopulate_from_counts:
-            c, d = counts.get(s["file_name"], (0, 0))
+            c, d, p = counts.get(s["file_name"], (0, 0, 0))
             s["constructed_qty"] = c
             s["deconstructed_qty"] = d
+            s["pool_qty"] = p
         else:
             s["constructed_qty"] = None
             s["deconstructed_qty"] = None
+            s["pool_qty"] = None
 
     # Newest first (release_date is an ISO date string, so reverse-lex works),
     # then cluster like product types, then name.
@@ -1646,8 +1658,8 @@ def _add_precon_banner_sheet(wb, mode: str) -> None:
         lines = [
             "⚠  MODIFY precon catalog — read before editing",
             "",
-            "constructed_qty / deconstructed_qty are prefilled with your",
-            "current precon decks (counted live from your collection).",
+            "constructed_qty / deconstructed_qty / pool_qty are prefilled with",
+            "your current precon units (counted live from your collection).",
             "",
             "Ingest applies the DIFFERENCE as a new transaction:",
             "  constructed 1 → 2  builds another copy (adds its cards + a deck).",
@@ -1655,6 +1667,11 @@ def _add_precon_banner_sheet(wb, mode: str) -> None:
             "                     explicit action: run `mm deck delete <slug>`.",
             "                     The count updates automatically once you do.",
             "Untouched rows are left alone.",
+            "",
+            "pool_qty = card-POOL products (Starter Collection, Scene Box) —",
+            "  never a playable deck. Their pool cell is tinted green; fill it,",
+            "  not constructed. Cards go loose in inventory; the deck row is",
+            "  just a 'you own one' marker.",
         ]
     else:
         color = "548235"
@@ -1664,7 +1681,11 @@ def _add_precon_banner_sheet(wb, mode: str) -> None:
             "constructed_qty = built copies you're adding (each creates a deck",
             "  and adds its cards to inventory).",
             "deconstructed_qty = copies you tore down for parts (a deck row is",
-            "  recorded, cards go loose). Ingest ADDS these; it never removes.",
+            "  recorded, cards go loose).",
+            "pool_qty = card-POOL products (Starter Collection, Scene Box) that",
+            "  were never a deck — cards go loose, a marker deck row is kept.",
+            "  Their pool cell is tinted green; fill it, not constructed.",
+            "Ingest ADDS these; it never removes.",
         ]
     title_font = Font(bold=True, size=13, color="FFFFFF")
     title_fill = PatternFill(start_color=color, end_color=color, fill_type="solid")
@@ -1737,7 +1758,7 @@ def write_precon_list_xlsx(out_path: Path, *,
 
     headers = ["file_name", "set", "deck_name", "type", "release_date",
                "commander", "card_count", "usd_total",
-               "constructed_qty", "deconstructed_qty"]
+               "constructed_qty", "deconstructed_qty", "pool_qty"]
     ws.append(headers)
     for col, _ in enumerate(headers, start=1):
         cell = ws.cell(row=1, column=col)
@@ -1745,8 +1766,11 @@ def write_precon_list_xlsx(out_path: Path, *,
         cell.alignment = Alignment(horizontal="left")
 
     qty_fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
+    # Pool-suggested rows (Starter Collection, Scene Box) get their pool cell
+    # tinted a distinct green so the user fills THAT column, not constructed.
+    pool_hint_fill = PatternFill(start_color="D9EAD3", end_color="D9EAD3", fill_type="solid")
 
-    # Both fill columns are now non-negative counts (constructed / deconstructed
+    # All three fill columns are non-negative counts (built / torn-down / pool
     # copies of the precon as a unit), not a 0/1 flag.
     count_validator = DataValidation(type="whole", operator="greaterThanOrEqual",
                                      formula1=0, allow_blank=True)
@@ -1766,20 +1790,25 @@ def write_precon_list_xlsx(out_path: Path, *,
             r["usd_total"],
             r.get("constructed_qty"),
             r.get("deconstructed_qty"),
+            r.get("pool_qty"),
         ])
     last_row = ws.max_row
 
-    # col 9 = constructed_qty, col 10 = deconstructed_qty (both non-negative int)
-    for col_idx in (9, 10):
+    # cols 9/10/11 = constructed_qty / deconstructed_qty / pool_qty (non-neg int)
+    for col_idx in (9, 10, 11):
         letter = get_column_letter(col_idx)
         count_validator.add(f"{letter}2:{letter}{last_row}")
         for r in range(2, last_row + 1):
             ws.cell(row=r, column=col_idx).fill = qty_fill
+    # Tint the pool cell of pool-suggested rows (col 11) so it stands out.
+    for i, r in enumerate(rows, start=2):
+        if r.get("suggested_state") == "pool":
+            ws.cell(row=i, column=11).fill = pool_hint_fill
 
     for row_idx in range(2, last_row + 1):
         ws.cell(row=row_idx, column=8).number_format = '"$"#,##0.00'
 
-    widths = {1: 34, 2: 6, 3: 30, 4: 18, 5: 13, 6: 26, 7: 11, 8: 11, 9: 15, 10: 17}
+    widths = {1: 34, 2: 6, 3: 30, 4: 18, 5: 13, 6: 26, 7: 11, 8: 11, 9: 15, 10: 17, 11: 9}
     for col_idx, w in widths.items():
         ws.column_dimensions[get_column_letter(col_idx)].width = w
 
@@ -1877,9 +1906,11 @@ def write_precon_list_md(out_path: Path, *,
         usd_seg = f"${usd:.2f}" if usd is not None else "—"
         c = r.get("constructed_qty") or 0
         d = r.get("deconstructed_qty") or 0
+        p = r.get("pool_qty") or 0
+        pool_hint = "  ← pool (fill P)" if r.get("suggested_state") == "pool" else ""
         out_lines.append(
             f"- {r['file_name']} — {r['set'].upper()} — {r['deck_name']} — "
-            f"{r['type']} — {r['card_count']} cards — {usd_seg} [C:{c} D:{d}]"
+            f"{r['type']} — {r['card_count']} cards — {usd_seg} [C:{c} D:{d} P:{p}]{pool_hint}"
         )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text("\n".join(out_lines) + "\n", encoding="utf-8")
@@ -2070,69 +2101,65 @@ def _apply_precon_checklist(parsed, *, mode: str) -> dict:
     """Apply a filled-in PRECON checklist as a signed transaction against the
     ``decks`` table — the single source of truth (there is no ledger).
 
-    Precon rows track built (``constructed_qty``, parsed into ``row.keep_qty``)
-    and torn-down (``deconstructed_qty``) copies as UNITS. Current counts are
-    DERIVED from decks via ``precon_unit_counts_for``:
+    Precon rows track built (``constructed_qty`` → ``row.keep_qty``), torn-down
+    (``deconstructed_qty``) and card-pool (``pool_qty``) copies as UNITS. Current
+    counts are DERIVED from decks via ``precon_unit_counts_for`` (built,
+    deconstructed, pool):
 
-      - ``add`` mode: the entered counts ARE the delta — build/tear that many
-        copies on top of what's already owned.
+      - ``add`` mode: the entered counts ARE the delta — add that many copies of
+        each state on top of what's already owned.
       - ``modify`` mode: the file was prefilled from the real deck counts, so
         the delta is (entered − current) per column.
 
-    Applying a delta:
-      - constructed +N → ``import_precon`` N times (distinct ``-2``/``-3`` slugs),
-        each creating a built deck row (recipe + cards to inventory) and
-        auto-composing one physical copy. Count rises because a deck row exists.
-      - deconstructed +M → ``import_precon(deconstruct=True,
-        record_deconstructed_deck=True)`` M times → M ``is_deconstructed=1`` deck
-        rows (recipe kept, cards loose). Count rises the same way.
-      - any negative delta (``modify`` lowering a count) → do NOT delete decks
-        from a spreadsheet edit. **Warn**, naming the concrete undo
-        (``mm deck delete <slug>``). Because counts are derived, the real
-        deletion path updates the count automatically — no drift, no history
-        rewrite via the checklist.
+    Applying a positive delta creates that many deck rows via ``import_precon``
+    (distinct ``-2``/``-3`` slugs) in the matching state: ``built`` pledges one
+    physical copy; ``deconstructed`` and ``pool`` leave the cards loose. Any
+    negative delta (``modify`` lowering a count) is NOT applied — it warns and
+    points at ``mm deck delete <slug>``; the derived count updates when the user
+    actually deletes. No history rewrite via the checklist.
 
-    Returns a summary with ``rows_total``/``rows_acted``/``constructed``/
-    ``deconstructed``/``inv_qty_total``/``per_row``/``warnings``, each ``per_row``
-    carrying ``count_before``/``count_after``/``delta`` and any ``warning``/``error``.
+    Returns a summary with ``rows_total``/``rows_acted``/``built``/
+    ``deconstructed``/``pool``/``inv_qty_total``/``per_row``/``warnings``; each
+    ``per_row`` carries ``count_before``/``count_after``/``delta`` (all 3-tuples)
+    and any ``warning``/``error``.
     """
     from . import decks as decks_mod, mtgjson as mtgjson_mod
 
     summary: dict = {
         "rows_total": len(parsed.rows),
         "rows_acted": 0,
-        "constructed": 0,      # decks actually built this ingest
+        "built": 0,            # decks built this ingest
         "deconstructed": 0,    # torn-down copies recorded this ingest
+        "pool": 0,             # card-pool units recorded this ingest
         "inv_qty_total": 0,
         "per_row": [],
         "warnings": list(parsed.warnings),
     }
 
     for row in parsed.rows:
-        entered_c = row.keep_qty            # constructed_qty (parsed into keep_qty)
-        entered_d = row.deconstructed_qty
-        before_c, before_d = decks_mod.precon_unit_counts_for(row.file_name)
+        entered = (row.keep_qty, row.deconstructed_qty, row.pool_qty)  # (c, d, p)
+        before = decks_mod.precon_unit_counts_for(row.file_name)       # (c, d, p)
 
-        # Compute the target absolute counts and the delta to apply.
+        # Compute target absolute counts + the delta to apply, per state.
         if mode == "modify":
-            target_c, target_d = entered_c, entered_d
+            target = entered
         else:  # add: entered values stack on top of what's already owned
-            target_c, target_d = before_c + entered_c, before_d + entered_d
-        delta_c = target_c - before_c
-        delta_d = target_d - before_d
+            target = tuple(b + e for b, e in zip(before, entered))
+        delta = tuple(t - b for t, b in zip(target, before))
 
-        if delta_c == 0 and delta_d == 0:
+        if all(x == 0 for x in delta):
             continue  # untouched row — leave it alone (no history rewrite)
         summary["rows_acted"] += 1
 
         per_row: dict = {
             "file_name": row.file_name,
             "label": row.theme or row.file_name,
-            "count_before": (before_c, before_d),
-            "count_after": (target_c, target_d),
-            "delta": (delta_c, delta_d),
+            "count_before": before,
+            "count_after": target,
+            "delta": delta,
             "built": 0,
             "torn_down": 0,
+            "pooled": 0,
             "slugs": [],
             "missing_sids": [],
             "warning": None,
@@ -2151,62 +2178,48 @@ def _apply_precon_checklist(parsed, *, mode: str) -> dict:
             per_row["label"] = deck_name
         base_slug = decks_mod._slug(deck_name)
 
-        try:
-            # constructed increase: build delta_c copies (distinct slugs).
-            if delta_c > 0:
-                for _ in range(delta_c):
-                    # First copy uses the bare slug; subsequent copies suffix
-                    # -2, -3, … so import_precon's "slug exists" guard passes.
-                    n_existing = _count_precon_deck_copies(base_slug)
-                    copy_slug = base_slug if n_existing == 0 else f"{base_slug}-{n_existing + 1}"
-                    r = decks_mod.import_precon(
-                        row.file_name,
-                        slug=copy_slug,
-                        format=None,          # import_precon derives commander/null
-                        copies=1,
-                        add_inventory=True,
-                        deconstruct=False,
-                    )
-                    per_row["slugs"].extend(r["effective_slugs"])
-                    per_row["missing_sids"].extend(r["missing_sids"])
-                    summary["inv_qty_total"] += r["inv_qty_total"]
+        # Build N copies in one state (distinct -2/-3 slugs); pledge only built.
+        def _build(n: int, state: str) -> None:
+            for _ in range(n):
+                n_existing = _count_precon_deck_copies(base_slug)
+                copy_slug = base_slug if n_existing == 0 else f"{base_slug}-{n_existing + 1}"
+                r = decks_mod.import_precon(
+                    row.file_name, slug=copy_slug, format=None, copies=1,
+                    add_inventory=True,
+                    deconstruct=(state != "built"),  # loose cards for decon + pool
+                    precon_state=state,
+                )
+                per_row["slugs"].extend(r["effective_slugs"])
+                per_row["missing_sids"].extend(r["missing_sids"])
+                summary["inv_qty_total"] += r["inv_qty_total"]
+                if state == "built":
                     eff = r["effective_slugs"][0] if r["effective_slugs"] else copy_slug
                     if eff:
                         decks_mod.deck_assign_from_composition(eff)
                     per_row["built"] += 1
-                    summary["constructed"] += 1
-
-            # deconstructed increase: build delta_d torn-down deck rows (recipe
-            # kept, cards loose). One import_precon call per copy so each gets a
-            # distinct slug and its own is_deconstructed=1 row.
-            if delta_d > 0:
-                for _ in range(delta_d):
-                    n_existing = _count_precon_deck_copies(base_slug)
-                    copy_slug = base_slug if n_existing == 0 else f"{base_slug}-{n_existing + 1}"
-                    r = decks_mod.import_precon(
-                        row.file_name,
-                        slug=copy_slug,
-                        format=None,
-                        copies=1,
-                        add_inventory=True,
-                        deconstruct=True,
-                        record_deconstructed_deck=True,
-                    )
-                    per_row["slugs"].extend(r["effective_slugs"])
-                    per_row["missing_sids"].extend(r["missing_sids"])
-                    summary["inv_qty_total"] += r["inv_qty_total"]
+                    summary["built"] += 1
+                elif state == "deconstructed":
                     per_row["torn_down"] += 1
                     summary["deconstructed"] += 1
+                else:  # pool
+                    per_row["pooled"] += 1
+                    summary["pool"] += 1
 
-            # negative delta: DON'T delete decks from a spreadsheet edit. Point
-            # at the real, explicit removal path; the derived count updates when
-            # the user runs it. No history rewrite via the checklist.
-            if delta_c < 0 or delta_d < 0:
+        try:
+            delta_c, delta_d, delta_p = delta
+            if delta_c > 0:
+                _build(delta_c, "built")
+            if delta_d > 0:
+                _build(delta_d, "deconstructed")
+            if delta_p > 0:
+                _build(delta_p, "pool")
+
+            if any(x < 0 for x in delta):
                 per_row["warning"] = (
-                    f"lowered counts (Δconstructed={delta_c}, Δdeconstructed={delta_d}) "
-                    f"were NOT applied — removing a precon copy is an explicit deck "
-                    f"action: run `mm deck delete <slug>` (see `mm deck list`). The "
-                    f"count updates automatically once you do."
+                    f"lowered counts (Δbuilt={delta_c}, Δdeconstructed={delta_d}, "
+                    f"Δpool={delta_p}) were NOT applied — removing a precon copy is "
+                    f"an explicit deck action: run `mm deck delete <slug>` (see "
+                    f"`mm deck ls`). The count updates automatically once you do."
                 )
         except (mtgjson_mod.MtgJsonError, ValueError) as e:
             per_row["error"] = str(e)
