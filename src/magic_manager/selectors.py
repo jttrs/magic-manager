@@ -151,6 +151,29 @@ FAMILY_DUPE_FOIL_PROMO_TYPES: dict[str, frozenset[str]] = {
     # borderless legends) is DISTINCT art, KEPT. Empty set unblocks the `preferred`
     # filter without filtering (like TLA/SPM/SOS). See docs/sets/blb.md §2/§5.
     "blb": frozenset(),
+    # Foundations: TWO same-art fancy-foil dupe signals (both compute to ff).
+    #   - manafoil: 60 prints (+boosterfun), the "mana foil" premium sheet over
+    #     the boosterfun art. Verified Abyssal Harvester 381 (manafoil, b|ff)
+    #     shares illustration_id f13f17e1 with 316 (boosterfun, b). Dupe.
+    #   - fracturefoil: 10 prints (+japanshowcase+boosterfun), the EOE/ECL-style
+    #     fracture-foil over the japanshowcase art. Verified Bloodthirsty
+    #     Conqueror 436 (shw|ff) shares illustration_id d9a581b0 with the
+    #     japanshowcase 426 (shw). Dupe; keeps the japanshowcase print.
+    # The base + boosterfun + japanshowcase + startercollection/beginnerbox/
+    # setextension prints (all `regular`/`b`/`shw` treatments, distinct or
+    # structural) are KEPT. See docs/sets/fdn.md §2.
+    "fdn": frozenset({"manafoil", "fracturefoil"}),
+    # March of the Machine: The Aftermath: no dupe-foil signal retained.
+    # halofoil (43 same-art fancy foils) is excluded WHOLESALE via
+    # FAMILY_UNOBTAINABLE_RULES instead of DUPE_FOIL — a DUPE_FOIL entry drops
+    # 42/43 but MISSES Tyvar the Bellicose 227, whose halofoil is a showcase
+    # frame (shw|ff) while its same-art sibling 98 is showcase+inverted (b|shw):
+    # the codes-minus-ff keys ({shw} vs {b,shw}) don't match, so the sibling
+    # dedup can't pair them. Since all 43 halofoils have a same-art non-halofoil
+    # sibling and the user doesn't chase fancy foils, any_of:{halofoil} is exact
+    # and robust. Empty set unblocks the `preferred` filter (like TLA/SPM/SOS/BLB).
+    # See docs/sets/mat.md §2/§5.
+    "mat": frozenset(),
 }
 
 
@@ -304,6 +327,38 @@ FAMILY_UNOBTAINABLE_RULES: dict[str, list[dict]] = {
         # with the stamped rule: missing-set 484→383 prints ($7,302→~$1,315).
         # See docs/sets/blb.md §2/§5.
         {"promo_types_any_of": frozenset({"raisedfoil"})},
+    ],
+    "fdn": [
+        # Promo-pack STAMP variants (added 2026-08-30). All 25 `pfdn`
+        # `promopack`+`stamped` prints are the same card as a kept base sibling +
+        # a promo-pack stamp; they compute to `regular` so the rare/mythic-regular
+        # sub-selectors pick them up (bypassing the `preferred` dedup) — this rule
+        # removes them. Validated: all 25 promopack cards ALSO carry `stamped`
+        # (signal is `stamped`), and Foundations has NO `promopack`-only alt-art
+        # trap (unlike SNC/EOE/ECL/BLB — zero promopack-without-stamped prints in
+        # the family), so `{stamped}` is exact. See docs/sets/fdn.md §5.
+        {"promo_types_any_of": frozenset({"stamped"})},
+        # NOTE: no serialized/headliner rule — Foundations has no such ultra-rare
+        # tier (0 serialized/headliner prints in the family). The lone
+        # `doublerainbow` (pfdn 1 Sol Ring, a buyabox promo) is distinct art, kept.
+    ],
+    "mat": [
+        # Promo-pack STAMP variants (added 2026-08-30). All 8 `pmat`
+        # `promopack`+`stamped` `Np` prints are the same card as a kept base
+        # sibling + a promo-pack stamp; they compute to `regular` so the
+        # rare/mythic-regular sub-selectors pick them up (bypassing the
+        # `preferred` dedup) — this rule removes them. Validated: all 8 have a
+        # non-stamped base sibling in `mat` (50p→50, 4p→4, 22p→22, …), and there
+        # is NO `promopack`-only alt-art trap (all 8 carry both tokens). No
+        # serialized/headliner tier in this family. See docs/sets/mat.md §5.
+        {"promo_types_any_of": frozenset({"stamped"})},
+        # halofoil fancy-foil dupes (added 2026-08-30). All 43 `halofoil` prints
+        # are same-art as a non-halofoil sibling (verified Arni 200 shares
+        # illustration_id 732292ff with boosterfun-showcase 66). DUPE_FOIL would
+        # drop 42 but miss Tyvar 227 (frame-effect codes mismatch — see §2), so
+        # exclude the whole treatment here instead. any_of:{halofoil} catches all
+        # 43; the boosterfun/showcase/base prints of each card stay in scope.
+        {"promo_types_any_of": frozenset({"halofoil"})},
     ],
 }
 

@@ -55,9 +55,11 @@ Two deliberate differences from the single-family report, worth stating in one l
 - **Missing is a print COUNT** (`165 prints`), not a live $ — the overview does ONE bulk owned-price fetch and skips the per-family missing-$ call to stay fast. For the live missing $ of one family, run `/set-status <anchor>`.
 - **Char** column is `✓`/`✗`; `✗` (or a `—` in Missing) marks an uncharacterized family. Offer to characterize any `✗` family the user names (see below), not all of them unprompted.
 
-## Uncharacterized families — offer to characterize
+## Uncharacterized families — auto-characterize (don't ask)
 
-If the report shows **Characterized: no** and/or **Missing: not configured**, the family has no `docs/sets/<parent>.md` and isn't set up for missing-set. After relaying the report, use **AskUserQuestion** to ask whether to run `/characterize-set <parent>` now. If yes, invoke the [[characterize-set]] skill on the **parent** code (the one in the report title, not the member the user typed) and follow its full protocol; afterward, re-run `set_status.py <parent>` to show the now-complete report (Missing $ + Characterized: yes).
+If the report shows **Characterized: no** and/or **Missing: not configured**, the family has no `docs/sets/<parent>.md` and isn't set up for missing-set. **Do NOT ask whether to characterize — just do it** (user directive, 2026-08-30). After relaying the report, immediately invoke the [[characterize-set]] skill on the **parent** code (the one in the report title, not the member the user typed) and follow its full protocol; afterward, re-run `set_status.py <parent>` to show the now-complete report (Missing $ + Characterized: yes).
+
+This applies to the single-anchor mode. In the **no-arg overview**, do NOT auto-characterize every `✗` family (that could be a dozen at once) — instead auto-characterize only when the user names a specific `✗` family to act on.
 
 ## Guardrails
 
