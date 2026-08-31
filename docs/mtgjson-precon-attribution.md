@@ -20,7 +20,11 @@ A user filling out the FIC inventory checklist who already owns Counter Blitz wa
 
 - `https://mtgjson.com/api/v5/DeckList.json` — every deck's metadata: `{code, fileName, name, releaseDate, type}`. ~700KB; updated daily.
 - `https://mtgjson.com/api/v5/decks/<FILENAME>.json` — one deck file. Each one is ~10KB.
-- Sidecar `<resource>.sha256` files for staleness detection (64 bytes each).
+- `https://mtgjson.com/api/v5/<SETCODE>.json` — the per-set file, which also carries a **`sealedProduct[]`** array (see below). Sidecar `<resource>.sha256` files for staleness detection (64 bytes each).
+
+### Sealed products — the product → deck mapping (`sealedProduct[]`)
+
+`DeckList.json` alone does NOT tell you which decks make up a multi-deck SKU (Beginner Box, Bundle, Scene Box). That mapping lives ONLY in the per-set file's `sealedProduct[].contents.deck`. **A deck's `type` is orthogonal to product membership** — a Beginner Box's decks may be typed `Box Set` (TLA) or `Jumpstart` (FDN). So to enumerate a product's decks, read `sealedProduct` (`mtgjson.sealed_products` / `sealed_product_decks`), never a `DeckList` `type` filter. See the [[mtgjson-search]] skill's sealedProduct section for the shape.
 
 ### Naming convention
 

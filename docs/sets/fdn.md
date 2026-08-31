@@ -126,6 +126,12 @@ Resolve a PRM-stamped FDN card by name + the `p`/`s` CN suffix per
   Collection). They compute to empty/`regular` treatment and flow through the
   normal rare/mythic sub-selectors — KEPT, not filtered. Do NOT mistake these for
   scarcity variants.
+- **The Beginner Box decklist EXISTS and is retrievable** — via `sealedProduct` →
+  its 10 component deck files (Cats_FDN … Wizards_FDN), which are typed `Jumpstart`
+  in the DeckList. Do NOT conclude "no decklist" from a DeckList `type` scan; see §9
+  and the [[mtgjson-search]] skill's sealedProduct warning. The `beginnerbox` /
+  `startercollection` promo_type tags (§7 first bullet) are a separate card-level
+  signal, not the product's decklist.
 - **`j25` (Foundations Jumpstart) is a 779-card companion pool** rooted to `fdn`,
   so `set:fdn+related` includes it. It contributes a large share of the missing
   count (many distinct rares/mythics). Expected — it's a real product family
@@ -169,8 +175,8 @@ Family-specific detail:
 | Product | Archetype (→ product-types.md) | Family-specific detail |
 |---|---|---|
 | Foundations Jumpstart | Jumpstart | `j25` (779 cards) + `fj25` front cards. Imported via `mm set jumpstart-list j25` → ingest. |
-| Beginner Box | Beginner Box | `beginnerbox` tag (129 `fdn` cards, CN overlapping main set). Not a separate code. |
-| Starter Collection | (starter product) | `startercollection` tag (278 `fdn` cards). Not a separate code. |
+| Beginner Box | Beginner Box | **Decklist IS retrievable** via `sealedProduct` "Foundations Beginner Box" (`box_set`/`starter_deck`, cardCount 200) → 10 component decks (Cats/Elves/Goblins/Healing/Inferno/Pirates/Primal/Undead/Vampires/Wizards), each a real MTGJSON deck file **typed `Jumpstart` in the DeckList** (so a `type` scan misses them — use `mtgjson.sealed_product_decks("fdn", "Foundations Beginner Box")`). Separately, the `beginnerbox` Scryfall promo_type tags 129 `fdn` cards — a card-level distribution signal, NOT the product decklist. No separate Scryfall set code. |
+| Starter Collection | (starter product) | Same shape: `sealedProduct` "Foundations Starter Collection" → its component deck(s); card-level `startercollection` tag on 278 `fdn` cards. No separate Scryfall set code. |
 | Set extension | (structural) | `setextension` tag (41 `fdn` cards, CN 731-771) — the "extended" main-set slots. |
 | Foundations Art Series | Art Series | `afdn` (55 cards, memorabilia). Not in default checklist. |
 | Promo Pack | promo (`promopack`+`stamped`) | `pfdn` `Np` — 25-card scarcity tier excluded via §5. |

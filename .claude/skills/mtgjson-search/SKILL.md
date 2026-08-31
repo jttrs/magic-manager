@@ -1,15 +1,35 @@
 ---
 name: mtgjson-search
-description: Read MTGJSON.com data — preconstructed deck contents, per-set files, build metadata. MTGJSON publishes structured JSON for every WotC precon ever shipped, including a `identifiers.scryfallId` cross-reference that bridges back to our local cards table. Use whenever the user asks "what's in this precon?", "which cards from FIC came in Counter Blitz vs Limit Break?", or anything else where Scryfall's data model (which has no precon-membership signal) falls short.
+description: Read MTGJSON.com data — preconstructed deck contents, SEALED PRODUCT contents (what ships in a Beginner Box / Bundle / Scene Box), per-set files, build metadata. MTGJSON publishes structured JSON for every WotC precon and sealed product ever shipped, with an `identifiers.scryfallId` cross-reference back to our local cards table. Use whenever the user asks "what's in this precon?", "what's in the <X> box / bundle / product?", "does a decklist exist for <product>?", "which cards from FIC came in Counter Blitz vs Limit Break?", or anything else where Scryfall's data model (which has no precon-membership signal) falls short.
 ---
 
 # MTGJSON Search
 
-Read-only access to [mtgjson.com](https://mtgjson.com) — a free, MIT-licensed third-party MTG data project that publishes structured JSON for every set, every printing, and (critically) every preconstructed deck WotC has ever shipped.
+Read-only access to [mtgjson.com](https://mtgjson.com) — a free, MIT-licensed third-party MTG data project that publishes structured JSON for every set, every printing, every preconstructed deck, and every sealed product (SKU) WotC has ever shipped.
+
+> ## ⚠ Product membership lives in `sealedProduct`, NOT the deck `type` field
+>
+> Before answering **"what's in the <X> box/bundle/product?"** or **"does a decklist
+> exist for <product>?"** — read the set file's `sealedProduct[].contents`, never conclude
+> from a deck's `type` or from a per-set `DeckList` scan.
+>
+> A deck's `type` (`"Jumpstart"`, `"Box Set"`, `"Commander Deck"`, …) is its FORMAT FLAVOR,
+> which is **orthogonal to which product it shipped in.** Worked example: the **Foundations
+> Beginner Box**'s 10 component decks are each typed `"Jumpstart"` in the DeckList, while the
+> **Avatar (TLA) Beginner Box**'s decks are typed `"Box Set"` — same product archetype,
+> different `type`. Filtering DeckList by `type` finds *neither* box's contents. Only
+> `sealedProduct[].contents.deck` maps a product → its decks. (This exact trap produced a
+> wrong "no decklist exists for the FDN Beginner Box" answer once — don't repeat it.)
+>
+> Helpers: `mm mtgjson set <code>` returns `sealedProduct[]`; in code use
+> `mtgjson.sealed_products(set_code[, category=, subtype=])` and
+> `mtgjson.sealed_product_decks(set_code, product_name)` (resolves a product's
+> `contents.deck` → the DeckList entries you can then `deck(fileName)`).
 
 ## When to use
 
 - "What cards are in the Counter Blitz precon?" → `mm mtgjson deck CounterBlitzFinalFantasyX_FIC`
+- "What's in the Foundations Beginner Box?" → `mtgjson.sealed_product_decks("fdn", "Foundations Beginner Box")` → the 10 deck fileNames, then `deck()` each. (NOT a DeckList `type` scan — see the warning above.)
 - "List all FIC commander decks" → `mm mtgjson decks --set fic`
 - "Which precon has [card]?" → fetch `DeckList.json` + every relevant deck file, search.
 - Set-completion math that needs to subtract "owned via precon X" from "still need."
@@ -143,7 +163,37 @@ For the V2 implementation sketch (precons + precon_cards tables, `precon:` selec
 
 ### DeckList entry
 
-`{code, fileName, name, releaseDate, type}` — five fields. `code` is the parent set's code (uppercase). `fileName` is what you pass to `deck()`.
+`{code, fileName, name, releaseDate, type}` — five fields. `code` is the parent set's code (uppercase). `fileName` is what you pass to `deck()`. **`type` is format flavor, not product membership** (see the warning at the top).
+
+### Sealed products (`sealedProduct[]`, in `<CODE>.json`)
+
+The per-set file's `sealedProduct[]` array is the authoritative list of physical SKUs and what each contains. Shape:
+
+```
+{
+  "name":       "Foundations Beginner Box",
+  "category":   "box_set",          // box_set | bundle | deck | booster_box | ...
+  "subtype":    "starter_deck",
+  "cardCount":  200,
+  "contents": {
+    "deck":  [ {"name": "Cats", "set": "fdn"}, ... ],   // → resolve to deck files
+    "sealed":[ {"name": "Play Booster", "count": 9}, ... ],
+    "other": [ {"name": "2 Gameboard playmats"}, ... ],
+    "card":  [ ... ], "pack": [ ... ]                    // optional
+  },
+  "identifiers": {...}, "purchaseUrls": {...}, "uuid": "..."
+}
+```
+
+`contents.deck` is the product → deck mapping. Each `{name, set}` resolves to a DeckList entry (and thus a `deck(fileName)` card list) — **regardless of that deck's `type`.** Use the helpers rather than hand-rolling:
+
+```python
+from magic_manager import mtgjson
+mtgjson.sealed_products("fdn", category="box_set")        # → the Beginner Box SKU(s)
+mtgjson.sealed_product_decks("fdn", "Foundations Beginner Box")  # → 10 DeckList entries
+```
+
+Coverage note: `sealedProduct` is well-populated for recent sets; older/oddball products may lack a `contents.deck`, in which case there's genuinely no authoritative decklist to retrieve (say so — don't guess).
 
 ## Examples
 

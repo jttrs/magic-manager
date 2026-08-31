@@ -45,11 +45,22 @@ You cannot infer the product from `set_type` alone — you must look at the MTGJ
 
 ## §1 Archetype index
 
+> **⚠ Product membership comes from `sealedProduct[].contents`, NOT a deck's `type`.**
+> The `deck.type` column below is a deck's *format flavor* and does not tell you which SKU
+> it shipped in. The authoritative product → component-deck mapping is
+> `sealedProduct[].contents.deck` in the set file. **Access it:** `mm mtgjson set <code>` →
+> `sealedProduct[]`, or in code `mtgjson.sealed_products(code[, category=])` /
+> `mtgjson.sealed_product_decks(code, product_name)` (resolves a product's decks to DeckList
+> entries you can `deck(fileName)`). Canonical gotcha: the **FDN** Beginner Box's 10 decks are
+> typed `Jumpstart`, while the **TLA** Beginner Box's are typed `Box Set` — same archetype,
+> different `type`, so a `type` scan finds neither. Never conclude "no decklist exists" for a
+> product from `type` alone.
+
 | Archetype | MTGJSON signal | Sourcing | Default handling |
 |---|---|---|---|
 | **Commander Deck** | `deck.type = "Commander Deck"` | Fixed 100-card constructed deck (sealed product) | `import-precon` **constructed** (deck row + inventory) |
 | **Box Set** | `deck.type = "Box Set"` | Umbrella `type` covering several distinct SKUs (Beginner Box, Scene Box, curated box sets) — disambiguate by `sealedProduct` + composition | depends on the SKU (see Beginner Box / Scene Box below) |
-| **Beginner Box** | `sealedProduct` `… Beginner Box`, category `box_set`/subtype `starter_deck`; N themed `Box Set`-type decks | Fixed multi-deck intro product; **cross-set sourced** (see below) | `import-precon` **constructed** (or `--deconstruct` for loose) |
+| **Beginner Box** | `sealedProduct` `… Beginner Box`, category `box_set`/subtype `starter_deck`; N themed component decks via `contents.deck` (their `type` VARIES — `Box Set` for TLA, `Jumpstart` for FDN) | Fixed multi-deck intro product; **cross-set sourced** (see below) | `import-precon` **constructed** (or `--deconstruct` for loose) |
 | **Scene Box** | `Box Set`-type deck of "scene" cards; `sealedProduct` category `box_set` | Fixed set of scene cards; **product-EXCLUSIVE** (`booster: null`, not pack-pullable) | `import-precon --deconstruct` — **always deconstructed** |
 | **Jumpstart** | `deck.type = "Jumpstart"` | Modular fixed-list half-deck packs (a set ships 50+ variants) | **Own workflow** — `mm set jumpstart-list`; excluded from precon catalog |
 | **Welcome Deck** | `deck.type = "Welcome Deck"` | Fixed intro constructed deck (often all-original designs) | `import-precon` constructed |
@@ -86,19 +97,26 @@ pointing at the eternal child that actually holds the printings.
 
 ### Beginner Box
 A **fixed multi-deck intro product** — N themed tutorial decks in one box
-(e.g. Avatar's 10: Aang Tutorial, Zuko Tutorial, Allies, …).
+(e.g. Avatar's 10: Aang Tutorial, Zuko Tutorial, Allies, …; Foundations' 10:
+Cats, Elves, Goblins, …).
 
+- **Find its decks via `sealedProduct`, not `type`:** `mtgjson.sealed_product_decks(code,
+  "<… Beginner Box>")` resolves the SKU's `contents.deck` to DeckList entries you can
+  `deck(fileName)`. The component decks' `type` field VARIES by set — **TLA**'s are typed
+  `Box Set`, **FDN**'s are typed `Jumpstart` — so a DeckList `type` scan finds neither box's
+  contents. (The FDN case once produced a wrong "no decklist exists" answer from exactly
+  this mistake.)
 - **Cross-set sourcing gotcha:** MTGJSON files the Beginner Box's decks under the
-  **parent** set (e.g. `TLA.json`, `deck.type = "Box Set"`), but the decks are
-  *composed of the eternal-child's printings* (e.g. `tle` cards). So resolving a
-  deck's `{count, uuid}` entries against only the parent set's `cards` list yields
-  **all-unresolved** — you must index the whole family (parent + child). *A
-  fully-unresolved deck means "wrong index," not "empty deck."*
+  **parent** set (e.g. `TLA.json`), but the decks are *composed of the eternal-child's
+  printings* (e.g. `tle` cards). So resolving a deck's `{count, uuid}` entries against only
+  the parent set's `cards` list yields **all-unresolved** — you must index the whole family
+  (parent + child). *A fully-unresolved deck means "wrong index," not "empty deck."*
 - **Handling:** `import-precon` **constructed** by default (one deck row per tutorial
   deck + inventory); `--deconstruct` adds the cards as loose inventory with no deck
   rows. (A box opened both ways: run once normal, once `--deconstruct`.)
-- **Instance:** TLA — see [`sets/tla.md`](sets/tla.md) §7 (the CN-265 boundary +
-  the worked "20/20 unresolved" example).
+- **Instances:** TLA — see [`sets/tla.md`](sets/tla.md) §7 (the CN-265 boundary +
+  the worked "20/20 unresolved" example); FDN — see [`sets/fdn.md`](sets/fdn.md) §9
+  (the `Jumpstart`-typed component decks).
 
 ### Jumpstart
 Modular **fixed-list half-deck packs** — a set publishes many variants (TLE ships

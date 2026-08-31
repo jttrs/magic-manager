@@ -9,6 +9,18 @@ Cache strategy:
 - Per-deck files: cache forever (precon decklists are immutable).
 - Per-set files / DeckList: cache until refreshed; check ``is_stale()`` on demand.
 - Meta: small enough to fetch on every probe.
+
+Product membership vs. deck ``type`` — READ THIS BEFORE ANSWERING "what's in
+product X". A per-set file (``<CODE>.json``) carries THREE arrays: ``cards[]``,
+``decks[]``, and ``sealedProduct[]``. The **authoritative** "which decks/cards
+ship in a given SKU" mapping lives ONLY in ``sealedProduct[].contents`` (see
+``sealed_products`` / ``sealed_product_decks``). A deck's ``type`` field
+(``"Jumpstart"``, ``"Box Set"``, …) describes its FORMAT FLAVOR, NOT which
+product it shipped in — e.g. the Foundations Beginner Box's 10 decks are typed
+``"Jumpstart"`` while the Avatar (TLA) Beginner Box's are typed ``"Box Set"``.
+Never conclude "no decklist exists" for a product from the ``DeckList`` ``type``
+field or from a product's absence in a per-set ``DeckList`` scan; check
+``sealedProduct`` first.
 """
 
 from __future__ import annotations
@@ -68,7 +80,18 @@ def set_list() -> list[dict]:
 
 
 def set_file(set_code: str) -> dict:
-    """Return ``<SETCODE>.json``'s ``data`` block — full set + every printing."""
+    """Return ``<SETCODE>.json``'s ``data`` block.
+
+    The block carries three arrays worth knowing:
+      - ``cards[]``          — every printing in the set.
+      - ``decks[]``          — decklists filed under this set code.
+      - ``sealedProduct[]``  — the physical SKUs (Beginner Box, Bundle, Scene
+        Box, booster boxes, …). Each has ``name``, ``category``, ``subtype``,
+        ``cardCount``, and ``contents`` (``deck[]`` / ``sealed[]`` / ``other[]``
+        / ``card[]`` / ``pack[]``). This is the AUTHORITATIVE product → contents
+        mapping — see ``sealed_products`` / ``sealed_product_decks``. Do NOT
+        infer product membership from a deck's ``type`` field.
+    """
     body = _run_json(["set", set_code])
     return body.get("data", {})
 
@@ -106,6 +129,80 @@ def jumpstart_variants(set_code: str) -> list[dict]:
     return ``[]``.
     """
     return [d for d in deck_list(set_code=set_code) if d.get("type") == "Jumpstart"]
+
+
+def sealed_products(set_code: str, *, category: str | None = None,
+                    subtype: str | None = None) -> list[dict]:
+    """The ``sealedProduct[]`` array from ``<set_code>.json`` — the physical SKUs.
+
+    Each entry: ``{name, category, subtype, cardCount, contents{...},
+    identifiers, purchaseUrls, releaseDate, uuid}``. This is the AUTHORITATIVE
+    record of what a product contains — the ONLY place that says which decks a
+    Beginner Box / Bundle / Scene Box actually ships. Optionally filter by
+    ``category`` (e.g. ``"box_set"``, ``"bundle"``, ``"deck"``) and/or
+    ``subtype`` (e.g. ``"starter_deck"``), both matched case-insensitively.
+
+    Returns ``[]`` for sets with no sealed-product data.
+    """
+    products = set_file(set_code).get("sealedProduct") or []
+    cat = category.lower() if category else None
+    sub = subtype.lower() if subtype else None
+    out = []
+    for p in products:
+        if cat is not None and (p.get("category") or "").lower() != cat:
+            continue
+        if sub is not None and (p.get("subtype") or "").lower() != sub:
+            continue
+        out.append(p)
+    return out
+
+
+def sealed_product_decks(set_code: str, product_name: str) -> list[dict]:
+    """Resolve one sealed product's component decks to their DeckList entries.
+
+    Finds the ``sealedProduct`` named ``product_name`` (case-insensitive) in
+    ``set_code``'s file, reads its ``contents.deck`` (each ``{name, set}``), and
+    matches those against ``deck_list()`` to return the full DeckList entries
+    (``{code, fileName, name, releaseDate, type}``) — so a caller can
+    ``deck(entry["fileName"])`` each to get card-by-card lists.
+
+    Membership comes from ``contents.deck``, NOT the deck ``type``: this returns
+    the FDN Beginner Box's 10 decks (typed ``"Jumpstart"`` in the DeckList) and
+    the TLA Beginner Box's decks (typed ``"Box Set"``) identically. Raises
+    ``LookupError`` if no product matches ``product_name``; returns ``[]`` if the
+    product has no ``contents.deck``.
+    """
+    products = set_file(set_code).get("sealedProduct") or []
+    want = product_name.strip().lower()
+    match = next((p for p in products if (p.get("name") or "").lower() == want), None)
+    if match is None:
+        # Fall back to substring so callers don't need the exact SKU name.
+        cands = [p for p in products if want in (p.get("name") or "").lower()]
+        if len(cands) == 1:
+            match = cands[0]
+    if match is None:
+        available = ", ".join(sorted(p.get("name", "?") for p in products)) or "(none)"
+        raise LookupError(
+            f"no sealedProduct named {product_name!r} in {set_code.upper()}; "
+            f"available: {available}"
+        )
+    deck_refs = (match.get("contents") or {}).get("deck") or []
+    # Index this set's DeckList by (deck-name-lower, set-code-lower) so we can
+    # resolve each contents.deck {name, set} ref to its full entry + fileName.
+    # contents.deck refs can point at a different set code than the product's
+    # (rare), so index the referenced sets, not just set_code.
+    ref_codes = {(r.get("set") or set_code).upper() for r in deck_refs}
+    by_key: dict[tuple[str, str], dict] = {}
+    for code in ref_codes:
+        for entry in deck_list(set_code=code):
+            by_key[((entry.get("name") or "").lower(), (entry.get("code") or "").lower())] = entry
+    resolved = []
+    for r in deck_refs:
+        key = ((r.get("name") or "").lower(), (r.get("set") or set_code).lower())
+        entry = by_key.get(key)
+        if entry is not None:
+            resolved.append(entry)
+    return resolved
 
 
 # Deck ``type`` values that have their OWN dedicated workflow (Jumpstart →
