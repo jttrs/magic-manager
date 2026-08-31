@@ -1,13 +1,13 @@
 ---
 name: add-precon
-description: One-liner wrapper around `mm deck add-precon` — adds preconstructed decks (Commander decks, Box Set decks, Planeswalker decks, etc.) as TRACKED UNITS in one shot, writing the precon_ledger AND building the deck AND adding its cards to inventory. Unlike `mm deck import-precon`, this makes the precon show up as a tracked unit under /set-status. Selection is by set code (+ optional --all / fuzzy name query) or an exact MTGJSON fileName. Triggers: "add each BLC commander deck constructed", "I built the Family Matters precon", "add the Otter Limits starter kit", "add 2 copies of X deconstructed", "I opened another copy of the Y precon".
+description: One-liner wrapper around `mm deck add-precon` — adds preconstructed decks (Commander decks, Box Set decks, Planeswalker decks, etc.) as TRACKED UNITS in one shot, building the deck AND adding its cards to inventory. Precon unit counts derive from the decks table, so the added copies show up under /set-status and prefill the precon checklist's modify flavor. Selection is by set code (+ optional --all / fuzzy name query) or an exact MTGJSON fileName. Triggers: "add each BLC commander deck constructed", "I built the Family Matters precon", "add the Otter Limits starter kit", "add 2 copies of X deconstructed", "I opened another copy of the Y precon".
 ---
 
 # Add Precon
 
-The mechanical wrapper around `mm deck add-precon`. The user names a precon or a whole set's worth of precons; the CLI resolves the MTGJSON deck(s), then runs the SAME ledger+deck+inventory transaction the precon checklist ingest uses — but as a single command, with no XLSX round-trip.
+The mechanical wrapper around `mm deck add-precon`. The user names a precon or a whole set's worth of precons; the CLI resolves the MTGJSON deck(s), then runs the SAME deck+inventory transaction the precon checklist ingest uses — but as a single command, with no XLSX round-trip.
 
-**The key distinction from `mm deck import-precon` ([[import-precon]]):** `import-precon` builds a deck + adds inventory but does NOT touch the `precon_ledger` — those decks don't show up as tracked units under `/set-status`. `add-precon` writes the ledger too, so the Precons count/format breakdown in a set-status report reflects what this command adds. If the user wants their precon purchases counted as tracked units (the normal case for "I bought/built a precon"), use this skill, not `import-precon`.
+**Relationship to `mm deck import-precon` ([[import-precon]]):** both create deck rows carrying the MTGJSON fileName + adds inventory, and precon unit counts DERIVE from those deck rows (there is no separate ledger — the reconciliation dropped it). So both feed the same single source of truth and both show up under `/set-status`. `add-precon` is the higher-level convenience: it resolves a set code / fuzzy name to the right MTGJSON fileName(s) and takes `--constructed`/`--deconstructed` counts, whereas `import-precon` takes one exact fileName. Use `add-precon` for "I bought/built the X precon" (or a whole set's worth); reach for `import-precon` when you already have the exact fileName and want the lower-level knobs.
 
 ## When to use
 
@@ -17,9 +17,10 @@ The mechanical wrapper around `mm deck add-precon`. The user names a precon or a
 - "Add 2 copies of Y deconstructed"
 
 **Don't** use for:
-- Many precons across many sets at once, or signed corrections to existing ledger counts → the precon checklist flow ([[ingest-new-inventory-list]] + `mm set precon-list`).
-- Just want the cards as loose inventory with no deck row and no ledger unit → `mm deck import-precon --deconstruct` or [[bulk-add]].
-- Verifying results afterward → [[set-status]] (the Precons row / overview count reflects the ledger).
+- Many precons across many sets at once, or reviewing current counts before editing → the precon checklist flow ([[ingest-new-inventory-list]] + `mm set precon-list --mode modify`).
+- Just want the cards as loose inventory with no deck row at all → [[bulk-add]].
+- Removing a copy (sold/miscounted) → `mm deck delete <slug>`; the derived count updates automatically.
+- Verifying results afterward → [[set-status]] (the Precons row / overview count is derived from the deck rows).
 
 ## The command
 
@@ -62,21 +63,21 @@ A name query that matches 0 or more than 1 deck exits 2 and prints the candidate
 
 ## Additive semantics — re-running adds ANOTHER copy
 
-Re-running `add-precon` on the same deck is additive: constructed 1→2, not a reset. This is correct for "I opened/built another copy." It is NOT the tool for signed ledger CORRECTIONS (lowering a count because you miscounted or sold a deck) — that correction stays in the precon-checklist `--mode modify` flow: `mm set precon-list --mode modify` → edit the XLSX → `mm set ingest`. `add-precon`'s `--constructed`/`--deconstructed` values have a minimum of 0; there is no negative/correction form here.
+Re-running `add-precon` on the same deck is additive: constructed 1→2, not a reset (it creates another deck row — distinct slug `<slug>-2`). This is correct for "I opened/built another copy." It has no downward/correction form: `--constructed`/`--deconstructed` are ≥ 0. To REMOVE a copy (sold/miscounted), delete its deck row with `mm deck delete <slug>` — the derived count drops automatically.
 
 ## Output
 
-The command prints, per deck, a `constructed X→Y, deconstructed X→Y` line plus a headline summarizing rows changed, decks built, decks torn down, and cards added. Relay these to the user. `--json` emits the summary dict: `rows_acted`, `constructed`, `deconstructed`, `inv_qty_total`, `per_row[]` (each with `label`, `file_name`, `ledger_before`, `ledger_after`, and optional `warning`/`error`).
+The command prints, per deck, a `constructed X→Y, deconstructed X→Y` line plus a headline summarizing rows changed, decks built, decks torn down, and cards added. Relay these to the user. `--json` emits the summary dict: `rows_acted`, `constructed`, `deconstructed`, `inv_qty_total`, `per_row[]` (each with `label`, `file_name`, `count_before`, `count_after`, and optional `warning`/`error`). The counts are derived live from the decks table.
 
 ## Guardrails
 
-- **This is a mutation, not a read-only command.** It writes to `decks`, `deck_cards`, `inventory`, and `precon_ledger` in one transaction per deck.
-- **Additive by default.** Re-running adds more, it never resets or corrects downward.
+- **This is a mutation, not a read-only command.** It writes to `decks`, `deck_cards`, and `inventory` in one transaction per deck. Unit counts are derived from those deck rows — there's no separate ledger to keep in sync.
+- **Additive by default.** Re-running adds more, it never resets or corrects downward — removal is `mm deck delete <slug>`.
 - **Never guess on ambiguous names.** Show the candidate list and ask, or use `--all`.
 
 ## Cross-references
 
-- [[import-precon]] — the ledger-blind sibling (`mm deck import-precon`); use when you want the deck + inventory but NOT a tracked ledger unit.
-- [[ingest-new-inventory-list]] — the precon-checklist flow (`mm set precon-list` + ingest), for bulk multi-set adds or signed corrections.
+- [[import-precon]] — the lower-level sibling (`mm deck import-precon`), takes one exact fileName; same deck+inventory effect, counts derive the same way.
+- [[generate-precon-checklist]] / [[ingest-new-inventory-list]] — the precon-checklist flow (`mm set precon-list` + ingest), for reviewing current counts or bulk multi-set adds.
 - [[bulk-add]] — for loose cards with no deck concept at all.
 - [[set-status]] — verify the Precons count after running this.

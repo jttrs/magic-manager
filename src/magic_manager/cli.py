@@ -628,10 +628,11 @@ def set_precon_list(
     mode: str = typer.Option(
         "add", "--mode",
         help="'add' (default): blank constructed_qty/deconstructed_qty cells; "
-             "ingest ADDS the counts you enter to the precon ledger. 'modify': "
-             "both columns prefilled from the ledger (your current recorded "
-             "precon units); ingest applies the signed delta vs the prefilled "
-             "value. Use 'modify' to correct counts or see what you already have.",
+             "ingest ADDS the counts you enter (each copy becomes a deck row). "
+             "'modify': both columns prefilled from your current deck collection "
+             "(counts derived from the decks table); ingest applies the signed "
+             "delta. Use 'modify' to see what you already have and avoid "
+             "double-adding.",
     ),
     sync_all: bool = typer.Option(
         False, "--sync-all",
@@ -662,11 +663,11 @@ def set_precon_list(
 
     Track precon decks AS UNITS via two fill columns: ``constructed_qty`` (built
     copies — each creates a deck + adds its cards to inventory) and
-    ``deconstructed_qty`` (copies torn down for parts — loose cards, no deck).
-    In ``--mode add`` (default) the cells are blank and ingest ADDS the counts;
-    in ``--mode modify`` they're prefilled from the ledger (your current units)
-    and ingest applies the signed delta — so you SEE what you already have and
-    don't double-add.
+    ``deconstructed_qty`` (copies torn down for parts — a deck row is recorded,
+    cards go loose). In ``--mode add`` (default) the cells are blank and ingest
+    ADDS the counts; in ``--mode modify`` they're prefilled from your current
+    deck collection (counts derived from the decks table) and ingest applies the
+    signed delta — so you SEE what you already have and don't double-add.
 
     Scope defaults to the modern-constructed precon types; ``--type`` narrows to
     one, ``--all-physical`` opens it to everything. Collector's Edition variants
