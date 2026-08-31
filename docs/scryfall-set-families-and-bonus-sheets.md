@@ -6,6 +6,7 @@ This document is the consolidated record of what we've learned by inspecting Scr
 
 **See also:**
 - [`docs/sets/`](sets/) — **per-family memory docs.** One file per anchor (`ltr.md`, `fin.md`, `spm.md`, `tla.md`, `tmt.md`, …). Chase variants, scene groupings, PRM destinations, unobtainable rules, code refs. This is the first place to look when working with a specific set family; this document covers the general Scryfall-metadata patterns those docs build on. Bootstrap new families via the `characterize-set` skill.
+- [`docs/product-types.md`](product-types.md) — cross-family **product-type** archetypes (Scene Box, Beginner Box, Jumpstart, Commander/Welcome deck, masterpiece sheet, Bundle, …): sourcing, MTGJSON mapping, handling recipes. This doc is the set-*code* axis; that doc is the physical-*SKU* axis.
 - [`docs/scryfall-printing-treatments.md`](scryfall-printing-treatments.md) — per-printing visual treatment classification (the `treatment` column added in V1.5). Covers `frame_effects`, `full_art`, `border_color`, `promo_types`, the keyword space, and the Scryfall data drift we've observed.
 - [`docs/spg-source-attribution.md`](spg-source-attribution.md) — Special Guests release-window mapping (e.g. SPG cards from 2026-01-23 belong to the Lorwyn Eclipsed window). Documented but not yet implemented in code.
 
@@ -117,7 +118,7 @@ This is the most inconsistently used set type we've seen. Scryfall applies `eter
 | Avatar Eternal | `tle` | Jumpstart (mostly reprints, many reskinned with `flavor_name`) |
 | TMNT Eternal | `tmc` | **Commander deck** (new legendary creatures + format staples + reskinned reprints) |
 
-So when you see `set_type: "eternal"`, you cannot tell from that field alone whether the product is a Welcome Deck, Jumpstart pack, or Commander deck. You have to look at:
+So when you see `set_type: "eternal"`, you cannot tell from that field alone whether the product is a Welcome Deck, Jumpstart pack, or Commander deck. (This `set_type`≠product distinction, and how to resolve each product, is the subject of [`docs/product-types.md`](product-types.md).) You have to look at:
 
 - The set code suffix (`*c` strongly hints at commander)
 - The composition of the cards (lots of new legendaries + format staples = commander)

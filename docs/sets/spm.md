@@ -30,7 +30,8 @@
 > | `tmsh` / `tmsc` | token | 27 / 32 | set + commander tokens |
 >
 > MTGJSON `MSH` deck mix: 51 Jumpstart + 12 Box Set (Beginner Box) + 5 Welcome
-> Deck + 2 Bundle Land Pack. Ingest opened packs via `mm set jumpstart-list msh`
+> Deck + 2 Bundle Land Pack (archetypes: [`../product-types.md`](../product-types.md)).
+> Ingest opened packs via `mm set jumpstart-list msh`
 > → fill **`keep_qty`** (0 or 1 — copies kept *constructed*: recipe created +
 > auto-composed) and **`deconstructed_qty`** (copies torn into free cards); the
 > two sum to total packs opened → `mm set ingest`.

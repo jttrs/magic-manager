@@ -65,13 +65,31 @@ The chase filter surfaces:
 
 ## 4. Scenes / posters / panoramas
 
-**Not yet audited.** TLA is a large family (394 cards in parent, 317 in tle) so scene detection is worth running. Apply the LTR scene-detection recipe (`docs/sets/ltr.md` §4a) to TLA if a scene-completion question comes up.
+### 4a. Scene Boxes — TLA instances (audited 2026-08-26)
+
+**Scene Box** is a cross-family archetype — product-exclusive scene cards, always
+deconstructed; see [`../product-types.md`](../product-types.md#scene-box) for the
+definition, MTGJSON modelling, and handling. TLA ships **two**:
+
+| Scene Box | MTGJSON `fileName` | `tle` CNs | Cards |
+|---|---|---|---|
+| **The Black Sun Invasion** | `TheBlackSunInvasion_TLA` | 62–67 | Appa, the Vigilant · Katara's Reversal · Fire Nation Turret · Swampbenders · Sokka's Charge · Earthshape |
+| **Tea Time at the Jasmine Dragon** | `TeaTimeAtTheJasmineDragon_TLA` | 68–73 | Mai and Zuko · Aang and Katara · Toph, Greatest Earthbender · Sokka and Suki · Momo's Heist · Uncle's Musings |
+
+A contiguous **`tle` 62–73** block: all `rare`, all `boosterfun+universesbeyond`,
+all `[foil, nonfoil]`, all `booster: null`. Verified product-exclusive: CN ≤61 and
+≥74 flip to Jumpstart-deck membership; **62–73 are the exclusive island**. Import
+each with `--deconstruct` (per the archetype default).
+
+### 4b. Not yet audited (main-set scenes)
+
+TLA is a large family (394 in parent, 317 in tle) so full scene detection on the *parent* set is still worth running. Apply the LTR scene-detection recipe (`docs/sets/ltr.md` §4a) if a parent-set scene-completion question comes up.
 
 Candidate signal areas:
 - **`sourcematerial` reskin prints** (61 in `tla`, around CN 297-350) may include thematic groupings analogous to LTR 399-451.
 - **`atla` Art Series** (54 cards) is a memorabilia set — not spatial "scenes" but a themed art collection.
 
-Update this section when a scene audit runs.
+Update this section when a parent-set scene audit runs.
 
 ---
 
@@ -114,6 +132,9 @@ For any PRM-stamped TLA card, resolve by name+artist per `.claude/skills/bulk-ad
 ## 7. Edge cases & gotchas
 
 - **`tle` (Avatar: The Last Airbender Eternal) is `set_type: eternal`, not `set_type: commander`.** Similar to TMT's `tmc`. Contains a Jumpstart-analog product with 317 cards. As of the 2026-08 protocol change, `eternal` is in `DEFAULT_INVENTORY_SET_TYPES` (`sets.py:33`), so `tle` is now pulled into the default `master-list` family — previously it was silently dropped, and its Collector-Booster cards (e.g. foil 118/158/217, ext-art 206, sourcematerial 5) had to be added by hand via `mm inventory add`.
+- **`tle` CN boundary at 265 — Jumpstart cards vs Beginner Box.** `tle` has a hard collector-number split: **CN ≤ 264** cards ship `[foil, nonfoil]` and populate the 66 fixed **Jumpstart** half-decks (126 cards across mainBoard/sideBoard); **CN ≥ 265** cards are **nonfoil-only** (191 cards) and are largely **Beginner Box** fixed-deck content, e.g. **Aang Tutorial = tle 265–276 + Plains 297–304**. So a ≥265 nonfoil card is typically obtained via the Beginner Box, not by cracking Jumpstart packs. (Beginner Box archetype + the cross-set-sourcing gotcha: [`../product-types.md`](../product-types.md#beginner-box).)
+- **TLA is the reference Beginner-Box cross-set instance.** The Avatar Beginner Box (`sealedProduct` `Avatar The Last Airbender Beginner Box`, `box_set`/`starter_deck`; 10 `Box Set`-type decks in `TLA.json`) is composed of `tle` 265+ printings — resolving its deck `{count, uuid}` entries against only `TLA`'s `cards` yields **20/20 unresolved**; index `TLA`+`TLE`. (The worked example behind the [product-types.md](../product-types.md#beginner-box) gotcha. TLE's own `decks` are all 66 Jumpstart; the Beginner Box is not among them.)
+- **Dual "Aang, Air Nomad" printing in `tle`.** Two prints: **TLE 210** (foil-only, ~$1.22) and **TLE 265** (nonfoil-only, ~$0.33). Same art/frame (`legendary`, `universesbeyond`, black border, non-full-art); they differ only in finish + CN. **TLE 265 is card #1 of the Beginner Box "Aang Tutorial" deck** (so it's a guaranteed fixed-deck card, not a pull); TLE 210 is the foil booster version. A third same-name print exists in `pmei` (magazine insert, CN `2025-25`). The `tle` 210-nonfoil / 265-foil counterparts do NOT exist — 210 is foil-only, 265 nonfoil-only.
 - **`jtla` "Jumpstart Front Cards"** (46 memorabilia) — a separate memorabilia set for Jumpstart product front cards. Different from the actual Jumpstart cards in tle.
 - **`ftla` "Beginner Box Front Cards"** (10 memorabilia) — similar; front cards from the beginner box product.
 - **Digital-only Arena prints** — TLA has A-prefixed Alchemy rebalanced variants (globally filtered).
