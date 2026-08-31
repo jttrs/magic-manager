@@ -2,10 +2,11 @@
 
   - `mm deck add-precon` builds an in-memory precon checklist and runs it through
     `sets._apply_precon_checklist`, which builds decks + adds inventory. Precon
-    unit counts are DERIVED from the `decks` table (V10: source_precon_file_name
-    + is_deconstructed) — there is no ledger. These tests pin the in-memory
-    contract (JumpstartParseResult.rows shape) so a parser-dataclass change can't
-    silently break the CLI verb, and prove the derived counts + deck rows.
+    unit counts are DERIVED from the `decks` table (V10 source_precon_file_name
+    + V11 precon_state built/deconstructed/pool) — there is no ledger. These
+    tests pin the in-memory contract (JumpstartParseResult.rows shape) so a
+    parser-dataclass change can't silently break the CLI verb, and prove the
+    derived 3-bucket counts + deck rows.
   - `mm inventory add-card` resolves SET+CN specs via parsers.resolve (Scryfall
     collection + sync-on-demand) and sums into inventory.
 
@@ -44,16 +45,16 @@ def test_add_precon_derives_count_and_builds_deck(
     )
     summary = sets_mod._apply_precon_checklist(parsed, mode="add")
 
-    assert summary["constructed"] == 1
+    assert summary["built"] == 1
     assert summary["rows_acted"] == 1
     # Count DERIVED from the decks table (the deck row carries the fileName).
-    assert decks.precon_unit_counts_for("FamilyMatters_BLC") == (1, 0)
+    assert decks.precon_unit_counts_for("FamilyMatters_BLC") == (1, 0, 0)
     with db.connect() as conn:
         assert conn.execute("SELECT COUNT(*) FROM decks").fetchone()[0] == 1
         row = conn.execute(
-            "SELECT source_precon_file_name, is_deconstructed FROM decks"
+            "SELECT source_precon_file_name, precon_state FROM decks"
         ).fetchone()
-        assert (row["source_precon_file_name"], row["is_deconstructed"]) == ("FamilyMatters_BLC", 0)
+        assert (row["source_precon_file_name"], row["precon_state"]) == ("FamilyMatters_BLC", "built")
         assert conn.execute("SELECT COUNT(*) FROM inventory").fetchone()[0] == 2
 
 
@@ -82,7 +83,7 @@ def test_add_precon_additive_second_copy(
     _run()
     _run()
 
-    assert decks.precon_unit_counts_for("OtterLimits_BLB") == (2, 0)
+    assert decks.precon_unit_counts_for("OtterLimits_BLB") == (2, 0, 0)
     with db.connect() as conn:
         slugs = [r[0] for r in conn.execute("SELECT slug FROM decks ORDER BY slug").fetchall()]
     assert slugs == ["otter-limits", "otter-limits-2"]
@@ -91,8 +92,8 @@ def test_add_precon_additive_second_copy(
 def test_add_precon_deconstruct_records_deck_rows(
     tmp_db, fake_scryfall, fake_mtgjson, make_card, make_precon_deck,
 ):
-    """constructed=0, deconstructed=2 → loose cards + TWO is_deconstructed=1 deck
-    rows, so the torn-down copies are countable as units (derived count (0,2))."""
+    """constructed=0, deconstructed=2 → loose cards + TWO deconstructed deck
+    rows, so the torn-down copies are countable as units (derived count (0,2,0))."""
     from magic_manager import sets as sets_mod, decks, db, parsers
 
     deck = make_precon_deck(
@@ -109,13 +110,13 @@ def test_add_precon_deconstruct_records_deck_rows(
     )
     summary = sets_mod._apply_precon_checklist(parsed, mode="add")
 
-    assert summary["constructed"] == 0
+    assert summary["built"] == 0
     assert summary["deconstructed"] == 2
-    assert decks.precon_unit_counts_for("HareRaising_BLB") == (0, 2)
+    assert decks.precon_unit_counts_for("HareRaising_BLB") == (0, 2, 0)
     with db.connect() as conn:
         # Two deck rows, both flagged deconstructed.
         assert conn.execute(
-            "SELECT COUNT(*) FROM decks WHERE is_deconstructed = 1"
+            "SELECT COUNT(*) FROM decks WHERE precon_state = 'deconstructed'"
         ).fetchone()[0] == 2
         assert conn.execute("SELECT COUNT(*) FROM inventory").fetchone()[0] == 1
 
@@ -141,7 +142,7 @@ def test_add_precon_modify_lowering_warns_not_deletes(
         warnings=[], meta={"kind": "precon", "mode": "add"},
     )
     sets_mod._apply_precon_checklist(add, mode="add")
-    assert decks.precon_unit_counts_for("FamilyMatters_BLC") == (1, 0)
+    assert decks.precon_unit_counts_for("FamilyMatters_BLC") == (1, 0, 0)
 
     down = parsers.JumpstartParseResult(
         rows=[parsers.JumpstartRow(file_name="FamilyMatters_BLC", theme="Family Matters",
@@ -151,10 +152,42 @@ def test_add_precon_modify_lowering_warns_not_deletes(
     summary = sets_mod._apply_precon_checklist(down, mode="modify")
 
     # Warned, built/torn nothing, and the deck row still exists (count unchanged).
-    assert summary["constructed"] == 0 and summary["deconstructed"] == 0
+    assert summary["built"] == 0 and summary["deconstructed"] == 0
     assert summary["per_row"][0]["warning"] is not None
     assert "mm deck delete" in summary["per_row"][0]["warning"]
-    assert decks.precon_unit_counts_for("FamilyMatters_BLC") == (1, 0)
+    assert decks.precon_unit_counts_for("FamilyMatters_BLC") == (1, 0, 0)
+
+
+def test_add_precon_pool_state(
+    tmp_db, fake_scryfall, fake_mtgjson, make_card, make_precon_deck,
+):
+    """pool_qty=1 → a precon_state='pool' deck row + loose inventory + NO
+    deck_assignments (a pool is never pledged); derived count (0,0,1)."""
+    from magic_manager import sets as sets_mod, decks, db, parsers
+
+    deck = make_precon_deck(
+        "Starter Collection", "Box Set",
+        [{"sid": "fdn-sid-1", "name": "Lib", "set": "fdn", "cn": "1", "count": 1, "board": "mainBoard"}],
+    )
+    fake_mtgjson(deck=deck)
+    fake_scryfall(search=[make_card(id="fdn-sid-1", set="fdn", collector_number="1", name="Lib")])
+
+    parsed = parsers.JumpstartParseResult(
+        rows=[parsers.JumpstartRow(file_name="StarterCollection_FDN", theme="Starter Collection",
+                                   keep_qty=0, deconstructed_qty=0, pool_qty=1)],
+        warnings=[], meta={"kind": "precon", "mode": "add"},
+    )
+    summary = sets_mod._apply_precon_checklist(parsed, mode="add")
+
+    assert summary["pool"] == 1 and summary["built"] == 0
+    assert decks.precon_unit_counts_for("StarterCollection_FDN") == (0, 0, 1)
+    with db.connect() as conn:
+        assert conn.execute(
+            "SELECT COUNT(*) FROM decks WHERE precon_state = 'pool'"
+        ).fetchone()[0] == 1
+        # Pool cards land in inventory but are NOT pledged to the deck.
+        assert conn.execute("SELECT COUNT(*) FROM inventory").fetchone()[0] == 1
+        assert conn.execute("SELECT COUNT(*) FROM deck_assignments").fetchone()[0] == 0
 
 
 # ---------- add-precon: resolver + fuzzy match ----------

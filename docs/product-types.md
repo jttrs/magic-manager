@@ -56,12 +56,24 @@ You cannot infer the product from `set_type` alone — you must look at the MTGJ
 > different `type`, so a `type` scan finds neither. Never conclude "no decklist exists" for a
 > product from `type` alone.
 
+> **Ingest state — built / deconstructed / pool.** Every imported precon copy is a `decks`
+> row carrying its MTGJSON fileName and a `precon_state` (V11): **built** (assembled deck,
+> cards pledged), **deconstructed** (a deck torn down for parts — recipe kept, cards loose),
+> or **pool** (cards that were never a deck — Starter Collection, Scene Box — loose in
+> inventory, the row is just a "unit owned" marker). Unit counts derive from these rows
+> (`decks.precon_unit_counts`). `mtgjson.default_precon_state(fileName)` picks the default —
+> **pool** for pool products (name in `POOL_NAME_PATTERNS`, a Scene Box's component decks, or
+> a single deck with card_count > `POOL_CARD_COUNT_THRESHOLD`=150), else **built**;
+> deconstructed is only ever an explicit user choice. Override per-ingest with
+> `mm deck add-precon --pool/-c/-d` or `mm deck import-precon --state`.
+
 | Archetype | MTGJSON signal | Sourcing | Default handling |
 |---|---|---|---|
 | **Commander Deck** | `deck.type = "Commander Deck"` | Fixed 100-card constructed deck (sealed product) | `import-precon` **constructed** (deck row + inventory) |
 | **Box Set** | `deck.type = "Box Set"` | Umbrella `type` covering several distinct SKUs (Beginner Box, Scene Box, curated box sets) — disambiguate by `sealedProduct` + composition | depends on the SKU (see Beginner Box / Scene Box below) |
 | **Beginner Box** | `sealedProduct` `… Beginner Box`, category `box_set`/subtype `starter_deck`; N themed component decks via `contents.deck` (their `type` VARIES — `Box Set` for TLA, `Jumpstart` for FDN) | Fixed multi-deck intro product; **cross-set sourced** (see below) | `import-precon` **constructed** (or `--deconstruct` for loose) |
-| **Scene Box** | `Box Set`-type deck of "scene" cards; `sealedProduct` category `box_set` | Fixed set of scene cards; **product-EXCLUSIVE** (`booster: null`, not pack-pullable) | `import-precon --deconstruct` — **always deconstructed** |
+| **Scene Box** | `Box Set`-type deck of "scene" cards; `sealedProduct` name contains "Scene Box" | Fixed set of scene cards; **product-EXCLUSIVE** (`booster: null`, not pack-pullable) | **pool** — never a playable deck; `default_precon_state` auto-classifies (name match) so `mm deck add-precon`/`import-precon` route it to `--state pool` |
+| **Starter Collection** | `sealedProduct` name "… Starter Collection", category `box_set`/subtype `starter_deck`; ONE large `contents.deck` (387 cards for FDN) | Build-your-own card LIBRARY, not a deck (+ 3 Play Boosters, random, not imported) | **pool** — auto-classified by name + card_count > 150 |
 | **Jumpstart** | `deck.type = "Jumpstart"` | Modular fixed-list half-deck packs (a set ships 50+ variants) | **Own workflow** — `mm set jumpstart-list`; excluded from precon catalog |
 | **Welcome Deck** | `deck.type = "Welcome Deck"` | Fixed intro constructed deck (often all-original designs) | `import-precon` constructed |
 | **Duel/Planeswalker/Starter/Challenger/Guild/Brawl/Clash/Game Night/Archenemy/Planechase/Intro/Spellslinger** | matching `deck.type` string | Fixed constructed decks | `import-precon` constructed — all in `PRECON_MODERN_TYPES` (§3) |
@@ -84,9 +96,12 @@ box (or the singles), never by cracking packs. MTGJSON models each Scene Box as 
 `Box Set`-`type` **deck** filed under the *parent* set, with `sourceSetCodes`
 pointing at the eternal child that actually holds the printings.
 
-- **Handling: always deconstructed.** A Scene Box is loose collectible cards, never
-  a playable deck — `mm deck import-precon <fileName> --deconstruct` (inventory
-  only, no deck row).
+- **Handling: pool.** A Scene Box is loose collectible cards, never a playable deck,
+  so it ingests as state `pool` (cards → inventory, a marker deck row, not pledged).
+  `default_precon_state` auto-classifies it via the "Scene Box" product name, so
+  `mm deck add-precon` / `import-precon` route it to pool with no flag; explicit
+  `--state pool` (or checklist `pool_qty`) does the same. (Historically documented as
+  "always deconstructed" — pool is the correct model: it was never a deck to tear down.)
 - **Terminology caveat:** the *Scene Box* (the display SKU) is distinct from the
   `a<anchor>` **memorabilia set code** that Scryfall sometimes labels similarly,
   and from the borderless-inverted **scene cards** inside the main set (§4 of a

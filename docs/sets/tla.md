@@ -67,9 +67,10 @@ The chase filter surfaces:
 
 ### 4a. Scene Boxes — TLA instances (audited 2026-08-26)
 
-**Scene Box** is a cross-family archetype — product-exclusive scene cards, always
-deconstructed; see [`../product-types.md`](../product-types.md#scene-box) for the
-definition, MTGJSON modelling, and handling. TLA ships **two**:
+**Scene Box** is a cross-family archetype — product-exclusive scene cards that were
+never a playable deck, so they ingest as state **pool** (cards loose, marker deck row);
+see [`../product-types.md`](../product-types.md#scene-box) for the definition, MTGJSON
+modelling, and handling. TLA ships **two**:
 
 | Scene Box | MTGJSON `fileName` | `tle` CNs | Cards |
 |---|---|---|---|
@@ -79,7 +80,9 @@ definition, MTGJSON modelling, and handling. TLA ships **two**:
 A contiguous **`tle` 62–73** block: all `rare`, all `boosterfun+universesbeyond`,
 all `[foil, nonfoil]`, all `booster: null`. Verified product-exclusive: CN ≤61 and
 ≥74 flip to Jumpstart-deck membership; **62–73 are the exclusive island**. Import
-each with `--deconstruct` (per the archetype default).
+each as a **pool** — `default_precon_state` auto-classifies both (their "Scene Box"
+sealedProduct name), so `mm deck add-precon tla "Black Sun"` / `import-precon
+<fileName>` route to pool with no flag.
 
 ### 4b. Not yet audited (main-set scenes)
 
