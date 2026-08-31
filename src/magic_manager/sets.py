@@ -798,8 +798,8 @@ def _summarize_deck_checklist(path: Path, meta: dict) -> dict:
     ``decks_to_construct``, ``loose_copies``, and ``filled`` (per-acted-row
     ``{file_name, label, constructed_qty, deconstructed_qty, delta, set,
     usd_total}``). For a precon ``modify`` file the entered numbers are absolute
-    targets prefilled from the ledger, so a row is "acted on" only when it
-    differs from its current ledger value; the reported construct/loose counts
+    targets prefilled from the live deck counts, so a row is "acted on" only
+    when it differs from its current count; the reported construct/loose counts
     are the positive deltas (what this ingest would build/tear down).
     ``estimated_value`` sums ``usd_total`` over rows that build a new copy.
     """
@@ -839,13 +839,13 @@ def _summarize_deck_checklist(path: Path, meta: dict) -> dict:
 
     # For precon, decide which rows count as "acted on". In `add` mode any
     # nonzero entered count acts; in `modify` mode the entered numbers are
-    # absolute targets prefilled from the ledger, so a row acts only if it
-    # differs from its current ledger value (a nonzero delta).
+    # absolute targets prefilled from the real deck counts, so a row acts only
+    # if it differs from its current derived count (a nonzero delta).
     file_mode = (meta.get("mode") or "add").lower()
-    ledger = {}
+    counts = {}
     if kind == "precon" and file_mode == "modify":
         from . import decks as decks_mod
-        ledger = decks_mod.precon_ledger_all()
+        counts = decks_mod.precon_unit_counts()
 
     filled: list[dict] = []
     decks_to_construct = 0
@@ -855,7 +855,7 @@ def _summarize_deck_checklist(path: Path, meta: dict) -> dict:
     for r in parsed.rows:
         entered_c, entered_d = r.keep_qty, r.deconstructed_qty
         if kind == "precon" and file_mode == "modify":
-            before_c, before_d = ledger.get(r.file_name, (0, 0))
+            before_c, before_d = counts.get(r.file_name, (0, 0))
             acts = (entered_c != before_c) or (entered_d != before_d)
             delta_c, delta_d = entered_c - before_c, entered_d - before_d
         else:
@@ -1354,7 +1354,7 @@ def _build_precon_rows(
     types=_PRECON_TYPES_DEFAULT,
     include_collector: bool = False,
     sync_all: bool = False,
-    prepopulate_from_ledger: bool = False,
+    prepopulate_from_counts: bool = False,
     progress=None,
 ) -> list[dict]:
     """Enumerate physical precon products and roll each up.
@@ -1374,10 +1374,10 @@ def _build_precon_rows(
     optional ``callable(str)`` for status lines.
 
     Each row carries ``constructed_qty``/``deconstructed_qty`` fill values.
-    With ``prepopulate_from_ledger=True`` (the ``modify`` flavor) they're
-    filled from the ``precon_ledger`` (current recorded units, 0 when absent);
-    otherwise (the ``add`` flavor) they're ``None`` (blank cells). Sorted
-    newest-first, then by ``(type, deck_name)``.
+    With ``prepopulate_from_counts=True`` (the ``modify`` flavor) they're filled
+    from the REAL deck collection via ``decks.precon_unit_counts()`` (0 when the
+    precon isn't owned); otherwise (the ``add`` flavor) they're ``None`` (blank
+    cells). Sorted newest-first, then by ``(type, deck_name)``.
     """
     from . import mtgjson as mtgjson_mod
     if types is _PRECON_TYPES_DEFAULT:
@@ -1412,15 +1412,16 @@ def _build_precon_rows(
 
     summaries = [_precon_variant_summary(v) for v in variants]
 
-    # Fill columns: prefilled from the ledger for the `modify` flavor, blank
-    # (None) for `add`. Read the whole ledger once and join by fileName.
-    ledger = {}
-    if prepopulate_from_ledger:
+    # Fill columns: prefilled from the real deck collection for the `modify`
+    # flavor, blank (None) for `add`. Derive all counts in one query, join by
+    # fileName.
+    counts = {}
+    if prepopulate_from_counts:
         from . import decks as decks_mod
-        ledger = decks_mod.precon_ledger_all()
+        counts = decks_mod.precon_unit_counts()
     for s in summaries:
-        if prepopulate_from_ledger:
-            c, d = ledger.get(s["file_name"], (0, 0))
+        if prepopulate_from_counts:
+            c, d = counts.get(s["file_name"], (0, 0))
             s["constructed_qty"] = c
             s["deconstructed_qty"] = d
         else:
@@ -1614,7 +1615,7 @@ def _precon_list_meta(slug: str, out_stem: str, *, mode: str,
     No ``anchor_code``/``set_codes`` — the catalog spans every set, so ingest
     derives each row's set from its ``Words_CODE`` fileName and syncs on demand.
     ``mode`` is ``add`` (blank fill columns; ingest adds the entered counts) or
-    ``modify`` (columns prefilled from the precon_ledger; ingest applies the
+    ``modify`` (columns prefilled from the live deck counts; ingest applies the
     signed delta vs the prefilled value).
     """
     from . import __version__
@@ -1646,14 +1647,14 @@ def _add_precon_banner_sheet(wb, mode: str) -> None:
             "⚠  MODIFY precon catalog — read before editing",
             "",
             "constructed_qty / deconstructed_qty are prefilled with your",
-            "current recorded precon units (from the ledger).",
+            "current precon decks (counted live from your collection).",
             "",
             "Ingest applies the DIFFERENCE as a new transaction:",
             "  constructed 1 → 2  builds another copy (adds its cards + a deck).",
-            "  constructed 2 → 1  records the drop in the ledger only; it does",
-            "                     NOT pull a built deck's cards back out (that",
-            "                     loose-card reconciliation is a separate effort).",
-            "It never rewrites history — untouched rows are left alone.",
+            "  constructed 2 → 1  is NOT applied here — removing a copy is an",
+            "                     explicit action: run `mm deck delete <slug>`.",
+            "                     The count updates automatically once you do.",
+            "Untouched rows are left alone.",
         ]
     else:
         color = "548235"
@@ -1662,9 +1663,8 @@ def _add_precon_banner_sheet(wb, mode: str) -> None:
             "",
             "constructed_qty = built copies you're adding (each creates a deck",
             "  and adds its cards to inventory).",
-            "deconstructed_qty = copies you tore down for parts (loose cards,",
-            "  no deck). Ingest ADDS these counts to the ledger; it never",
-            "  removes anything.",
+            "deconstructed_qty = copies you tore down for parts (a deck row is",
+            "  recorded, cards go loose). Ingest ADDS these; it never removes.",
         ]
     title_font = Font(bold=True, size=13, color="FFFFFF")
     title_fill = PatternFill(start_color=color, end_color=color, fill_type="solid")
@@ -1703,8 +1703,8 @@ def write_precon_list_xlsx(out_path: Path, *,
     ``constructed_qty`` and ``deconstructed_qty`` track precon decks AS UNITS:
     how many built vs torn-down copies of each product you have. In ``mode=add``
     (default) both cells are blank and ingest ADDS the entered counts. In
-    ``mode=modify`` both are prefilled from the ``precon_ledger`` (your current
-    recorded units) and ingest applies the SIGNED DELTA vs the prefilled value
+    ``mode=modify`` both are prefilled from the live deck counts (your current
+    collection) and ingest applies the SIGNED DELTA vs the prefilled value
     — a new transaction, not a history rewrite. ``usd_total`` is best-effort —
     blank for sets not yet in the local cards table; pass ``sync_all=True`` to
     sync every referenced set first (slower; ``progress`` is a status callback).
@@ -1721,7 +1721,7 @@ def write_precon_list_xlsx(out_path: Path, *,
         types=(None if all_physical else _PRECON_TYPES_DEFAULT),
         include_collector=include_collector,
         sync_all=sync_all,
-        prepopulate_from_ledger=(mode == "modify"),
+        prepopulate_from_counts=(mode == "modify"),
         progress=progress,
     )
     if not rows:
@@ -1822,7 +1822,7 @@ def write_precon_list_md(out_path: Path, *,
 
     The ``[C:c D:d]`` bracket holds constructed_qty and deconstructed_qty (both
     non-negative counts). In ``mode=modify`` the bracket is prefilled from the
-    precon_ledger. ``sync_all``/``progress`` behave as on
+    live deck counts. ``sync_all``/``progress`` behave as on
     ``write_precon_list_xlsx``.
     """
     rows = _build_precon_rows(
@@ -1830,7 +1830,7 @@ def write_precon_list_md(out_path: Path, *,
         types=(None if all_physical else _PRECON_TYPES_DEFAULT),
         include_collector=include_collector,
         sync_all=sync_all,
-        prepopulate_from_ledger=(mode == "modify"),
+        prepopulate_from_counts=(mode == "modify"),
         progress=progress,
     )
     if not rows:
@@ -1856,18 +1856,18 @@ def write_precon_list_md(out_path: Path, *,
     if mode == "modify":
         out_lines.append(
             "> ⚠ **MODIFY precon catalog.** The `[C:c D:d]` brackets are prefilled "
-            "with your current recorded precon units. Ingest applies the DIFFERENCE "
-            "as a new transaction: raising `C` builds another copy (adds its cards + "
-            "a deck); lowering `C` records the drop in the ledger only and does NOT "
-            "pull a built deck's cards back out (that's a separate loose-card effort). "
-            "Untouched rows are left alone."
+            "with your current precon decks (counted live from your collection). "
+            "Ingest applies the DIFFERENCE: raising `C` builds another copy (adds its "
+            "cards + a deck); lowering `C` is NOT applied here — removing a copy is an "
+            "explicit action (`mm deck delete <slug>`), and the count updates once you "
+            "do. Untouched rows are left alone."
         )
     else:
         out_lines.append(
             "> **ADD precon catalog.** Edit the `[C:c D:d]` bracket per row: `C` = "
             "built copies you acquired (each creates a deck + adds its cards), `D` = "
-            "copies you tore down for parts (loose cards, no deck). Ingest ADDS these "
-            "to the ledger; it never removes anything."
+            "copies you tore down for parts (a deck row is recorded, cards go loose). "
+            "Ingest ADDS these; it never removes anything."
         )
     out_lines.append("")
     out_lines.append("Save, then run `mm set ingest` to apply.")
@@ -2067,33 +2067,34 @@ def _count_precon_deck_copies(base_slug: str) -> int:
 
 
 def _apply_precon_checklist(parsed, *, mode: str) -> dict:
-    """Apply a filled-in PRECON checklist as a signed ledger transaction.
+    """Apply a filled-in PRECON checklist as a signed transaction against the
+    ``decks`` table — the single source of truth (there is no ledger).
 
     Precon rows track built (``constructed_qty``, parsed into ``row.keep_qty``)
-    and torn-down (``deconstructed_qty``) copies as UNITS. This is a different
-    transaction from the jumpstart engine (0/1 recipe flag), so it lives here:
+    and torn-down (``deconstructed_qty``) copies as UNITS. Current counts are
+    DERIVED from decks via ``precon_unit_counts_for``:
 
-      - ``add`` mode: the entered counts ARE the delta — add that many
-        constructed/deconstructed copies on top of the current ledger.
-      - ``modify`` mode: the file was prefilled from the ledger, so the delta
-        is (entered − current) per column.
+      - ``add`` mode: the entered counts ARE the delta — build/tear that many
+        copies on top of what's already owned.
+      - ``modify`` mode: the file was prefilled from the real deck counts, so
+        the delta is (entered − current) per column.
 
-    Applying a delta, never rewriting history:
-      - constructed +N → ``import_precon`` N times (distinct slugs for copies
-        beyond the first: ``<slug>``, ``<slug>-2``, …), each adding the deck's
-        cards to inventory + a deck recipe, then auto-composing one physical
-        copy. Ledger constructed += N.
-      - deconstructed +M → ``import_precon(deconstruct=True, copies=M)`` (loose
-        cards, no recipe). Ledger deconstructed += M.
-      - any negative delta (only possible in ``modify`` when lowering a count)
-        → update the ledger DOWN, but do NOT remove cards/decks — that
-        card-level reconciliation is the deferred loose-card effort. A warning
-        records what was not done.
+    Applying a delta:
+      - constructed +N → ``import_precon`` N times (distinct ``-2``/``-3`` slugs),
+        each creating a built deck row (recipe + cards to inventory) and
+        auto-composing one physical copy. Count rises because a deck row exists.
+      - deconstructed +M → ``import_precon(deconstruct=True,
+        record_deconstructed_deck=True)`` M times → M ``is_deconstructed=1`` deck
+        rows (recipe kept, cards loose). Count rises the same way.
+      - any negative delta (``modify`` lowering a count) → do NOT delete decks
+        from a spreadsheet edit. **Warn**, naming the concrete undo
+        (``mm deck delete <slug>``). Because counts are derived, the real
+        deletion path updates the count automatically — no drift, no history
+        rewrite via the checklist.
 
     Returns a summary with ``rows_total``/``rows_acted``/``constructed``/
-    ``deconstructed``/``inv_qty_total``/``per_row``/``warnings``, where each
-    ``per_row`` carries ``ledger_before``/``ledger_after`` and any per-row
-    ``warning``/``error``.
+    ``deconstructed``/``inv_qty_total``/``per_row``/``warnings``, each ``per_row``
+    carrying ``count_before``/``count_after``/``delta`` and any ``warning``/``error``.
     """
     from . import decks as decks_mod, mtgjson as mtgjson_mod
 
@@ -2101,7 +2102,7 @@ def _apply_precon_checklist(parsed, *, mode: str) -> dict:
         "rows_total": len(parsed.rows),
         "rows_acted": 0,
         "constructed": 0,      # decks actually built this ingest
-        "deconstructed": 0,    # loose copies torn down this ingest
+        "deconstructed": 0,    # torn-down copies recorded this ingest
         "inv_qty_total": 0,
         "per_row": [],
         "warnings": list(parsed.warnings),
@@ -2110,12 +2111,12 @@ def _apply_precon_checklist(parsed, *, mode: str) -> dict:
     for row in parsed.rows:
         entered_c = row.keep_qty            # constructed_qty (parsed into keep_qty)
         entered_d = row.deconstructed_qty
-        before_c, before_d = decks_mod.precon_ledger_get(row.file_name)
+        before_c, before_d = decks_mod.precon_unit_counts_for(row.file_name)
 
         # Compute the target absolute counts and the delta to apply.
         if mode == "modify":
             target_c, target_d = entered_c, entered_d
-        else:  # add: entered values stack on top of current ledger
+        else:  # add: entered values stack on top of what's already owned
             target_c, target_d = before_c + entered_c, before_d + entered_d
         delta_c = target_c - before_c
         delta_d = target_d - before_d
@@ -2127,8 +2128,8 @@ def _apply_precon_checklist(parsed, *, mode: str) -> dict:
         per_row: dict = {
             "file_name": row.file_name,
             "label": row.theme or row.file_name,
-            "ledger_before": (before_c, before_d),
-            "ledger_after": (target_c, target_d),
+            "count_before": (before_c, before_d),
+            "count_after": (target_c, target_d),
             "delta": (delta_c, delta_d),
             "built": 0,
             "torn_down": 0,
@@ -2175,33 +2176,38 @@ def _apply_precon_checklist(parsed, *, mode: str) -> dict:
                     per_row["built"] += 1
                     summary["constructed"] += 1
 
-            # deconstructed increase: M loose copies, no recipe.
+            # deconstructed increase: build delta_d torn-down deck rows (recipe
+            # kept, cards loose). One import_precon call per copy so each gets a
+            # distinct slug and its own is_deconstructed=1 row.
             if delta_d > 0:
-                r = decks_mod.import_precon(
-                    row.file_name,
-                    slug=base_slug,           # unused in deconstruct path
-                    format=None,
-                    copies=delta_d,
-                    add_inventory=True,
-                    deconstruct=True,
-                )
-                per_row["missing_sids"].extend(r["missing_sids"])
-                summary["inv_qty_total"] += r["inv_qty_total"]
-                per_row["torn_down"] += delta_d
-                summary["deconstructed"] += delta_d
+                for _ in range(delta_d):
+                    n_existing = _count_precon_deck_copies(base_slug)
+                    copy_slug = base_slug if n_existing == 0 else f"{base_slug}-{n_existing + 1}"
+                    r = decks_mod.import_precon(
+                        row.file_name,
+                        slug=copy_slug,
+                        format=None,
+                        copies=1,
+                        add_inventory=True,
+                        deconstruct=True,
+                        record_deconstructed_deck=True,
+                    )
+                    per_row["slugs"].extend(r["effective_slugs"])
+                    per_row["missing_sids"].extend(r["missing_sids"])
+                    summary["inv_qty_total"] += r["inv_qty_total"]
+                    per_row["torn_down"] += 1
+                    summary["deconstructed"] += 1
 
-            # negative delta: ledger-only correction, cards left in place.
+            # negative delta: DON'T delete decks from a spreadsheet edit. Point
+            # at the real, explicit removal path; the derived count updates when
+            # the user runs it. No history rewrite via the checklist.
             if delta_c < 0 or delta_d < 0:
                 per_row["warning"] = (
                     f"lowered counts (Δconstructed={delta_c}, Δdeconstructed={delta_d}) "
-                    f"recorded in the ledger only — cards were NOT removed from "
-                    f"inventory/decks (loose-card reconciliation is a separate effort)."
+                    f"were NOT applied — removing a precon copy is an explicit deck "
+                    f"action: run `mm deck delete <slug>` (see `mm deck list`). The "
+                    f"count updates automatically once you do."
                 )
-
-            # Commit the new absolute ledger counts (clamped at 0).
-            decks_mod.precon_ledger_set(
-                row.file_name, max(0, target_c), max(0, target_d),
-            )
         except (mtgjson_mod.MtgJsonError, ValueError) as e:
             per_row["error"] = str(e)
 

@@ -382,6 +382,26 @@ ALTER TABLE front_cards ADD COLUMN price_source TEXT;
 """
 
 
+# V10: reconcile precon tracking to a SINGLE source of truth. The V7
+# `precon_ledger` (keyed by MTGJSON fileName) drifted from the `decks` table
+# (keyed by slug, no fileName link) because they shared no join key and were
+# written by different paths. Fix: put the join key ON the deck row and derive
+# unit counts from decks, then drop the ledger.
+#   - source_precon_file_name: the MTGJSON deck fileName the deck came from
+#     (the missing join key; NULL for hand-built decks).
+#   - is_deconstructed: 0 = built/kept-assembled, 1 = torn-down-for-parts (the
+#     recipe is kept as a deck row but its cards are loose, not pledged).
+# constructed_qty(X)   = COUNT(decks WHERE source_precon_file_name=X AND is_deconstructed=0)
+# deconstructed_qty(X) = COUNT(decks WHERE source_precon_file_name=X AND is_deconstructed=1)
+# The V10 Python hook back-derives the fileName for existing decks and DROPs
+# precon_ledger (see `_run_v10_python_migration`).
+SCHEMA_V10 = """
+ALTER TABLE decks ADD COLUMN source_precon_file_name TEXT;
+ALTER TABLE decks ADD COLUMN is_deconstructed INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX IF NOT EXISTS decks_precon_fn_idx ON decks (source_precon_file_name);
+"""
+
+
 # ---------- migration-authoring convention ----------
 #
 # Always-safe ops in a migration: CREATE TABLE, ALTER TABLE ADD COLUMN,
@@ -395,7 +415,9 @@ ALTER TABLE front_cards ADD COLUMN price_source TEXT;
 #   - list_rows         the inventory the user typed in
 #   - lists             labels + their kind/source
 #   - ingest_log        audit trail of which checklist landed when
-#   - precon_ledger     built/torn-down precon-unit counts the user recorded
+#   - decks / deck_cards  compositions + the source_precon_file_name /
+#                         is_deconstructed columns that make precon unit counts
+#                         derivable (replaced the V7 precon_ledger, dropped in V10)
 #   - precons / precon_cards    (when V2 ships them)
 #
 # Re-derivable tables (recovery = re-run a sync):
@@ -429,6 +451,7 @@ MIGRATIONS: list[str] = [
     SCHEMA_V7,
     SCHEMA_V8,
     SCHEMA_V9,
+    SCHEMA_V10,
 ]
 CURRENT_VERSION = len(MIGRATIONS)
 
@@ -503,6 +526,8 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
         # API calls; we run those in Python after the SQL ran.
         if i == 4 and have < 4:
             _run_v4_python_migration(conn)
+        if i == 10 and have < 10:
+            _run_v10_python_migration(conn)
     if have < CURRENT_VERSION:
         conn.execute("DELETE FROM schema_version")
         conn.execute("INSERT INTO schema_version (version) VALUES (?)", (CURRENT_VERSION,))
@@ -589,6 +614,174 @@ def _run_v4_python_migration(conn: sqlite3.Connection) -> None:
              row["created_at"] or now,
              row["updated_at"] or now),
         )
+
+
+# ---------- V10 Python post-migration ----------
+
+def _run_v10_python_migration(conn: sqlite3.Connection) -> None:
+    """Reconcile precon tracking onto the ``decks`` table, then drop the ledger.
+
+    Two operations SQL can't do alone:
+
+    1. Back-derive ``decks.source_precon_file_name`` for existing decks. A deck
+       imported from a precon has slug ``_slug(name)`` and ``source_set_code``,
+       but never recorded the MTGJSON fileName. We rebuild the reverse map
+       ``(slug, set_code) -> fileName`` from MTGJSON's DeckList (precon +
+       jumpstart variants), scoped to the set codes actually present on deck
+       rows, and stamp each deck. ``source_set_code`` disambiguates the handful
+       of cross-set slug collisions.
+    2. Fold any ``precon_ledger`` rows with ``deconstructed_qty > 0`` into
+       ``is_deconstructed=1`` deck rows (the ledger was the only record of
+       torn-down copies). ``constructed_qty`` needs no action — those decks
+       already exist and get linked in step 1.
+
+    Then ``DROP TABLE precon_ledger``.
+
+    NETWORK-TOLERANT: the test suite monkeypatches the MTGJSON wrapper and runs
+    offline; a real migration on a machine with no network must still succeed.
+    Any MTGJSON failure makes step 1 a no-op (fileName left NULL, re-derivable
+    later via a backfill command) — but the ledger is still dropped, since its
+    data is either already represented as decks (constructed) or, for
+    deconstructed>0, converted in step 2 from the ledger rows we hold in hand
+    (no network needed for that).
+    """
+    import sys
+
+    # Distinct set codes present on deck rows — the only sets we need to map.
+    set_codes = [
+        r["source_set_code"]
+        for r in conn.execute(
+            "SELECT DISTINCT source_set_code FROM decks "
+            "WHERE source_set_code IS NOT NULL AND source_set_code != ''"
+        ).fetchall()
+    ]
+
+    # A precon deck's set is its source_set_code, but a JUMPSTART pack's
+    # fileName lives under the jumpstart set code (e.g. `pack:aang-tle` has
+    # source_set_code='tla' but fileName `Aang_TLE` under code TLE). The pack
+    # slug embeds the real code as its suffix, so we collect BOTH the deck
+    # source-set codes AND every `-<code>` suffix on pack: slugs, and query
+    # jumpstart/precon variants across that union.
+    pack_suffix_codes = {
+        (r["slug"].rsplit("-", 1)[1] if "-" in r["slug"] else "")
+        for r in conn.execute(
+            "SELECT slug FROM decks WHERE slug LIKE 'pack:%'"
+        ).fetchall()
+    }
+    # A -2/-3 copy suffix would leave a numeric "code"; drop those.
+    pack_suffix_codes = {c for c in pack_suffix_codes if c and not c.isdigit()}
+    query_codes = sorted({c.lower() for c in set_codes} | pack_suffix_codes)
+
+    # Build {(slug, set_code_lower): fileName} from MTGJSON, guarded so an
+    # offline/unreachable MTGJSON degrades to "no mapping" rather than aborting.
+    slug_map: dict[tuple[str, str], str] = {}
+    if query_codes:
+        try:
+            from . import mtgjson as _mtg
+            from .decks import _slug as _deck_slug
+
+            def _record(entry: dict) -> None:
+                name = entry.get("name") or ""
+                fn = entry.get("fileName")
+                code = (entry.get("code") or "").lower()
+                if name and fn and code:
+                    slug_map[(_deck_slug(name), code)] = fn
+
+            for code in query_codes:
+                try:
+                    for entry in _mtg.precon_variants(code, types=None,
+                                                      include_collector=True):
+                        _record(entry)
+                    for entry in _mtg.jumpstart_variants(code):
+                        _record(entry)
+                except Exception:
+                    continue  # skip this set; others may still map
+        except Exception as e:
+            print(f"info: V10 precon backfill skipped (MTGJSON unavailable: {e}); "
+                  f"fileName links left NULL", file=sys.stderr)
+
+    # 1. Stamp source_precon_file_name on existing decks.
+    if slug_map:
+        import re
+        decks = conn.execute(
+            "SELECT deck_id, slug, source_set_code FROM decks "
+            "WHERE source_set_code IS NOT NULL AND source_set_code != '' "
+            "AND source_precon_file_name IS NULL"
+        ).fetchall()
+        for d in decks:
+            slug = d["slug"]
+            src_code = (d["source_set_code"] or "").lower()
+            if slug.startswith("pack:"):
+                # `pack:<name-slug>-<code>` — the code suffix is the jumpstart
+                # set (TLE), not source_set_code (TLA). Split it off and match
+                # _slug(name) against that code.
+                core = slug[len("pack:"):]
+                core = re.sub(r"-\d+$", "", core)  # drop -2/-3 copy suffix
+                code = core.rsplit("-", 1)[1] if "-" in core else src_code
+                theme = core.rsplit("-", 1)[0] if "-" in core else core
+                candidates = [(theme, code)]
+            else:
+                # Precon: slug is _slug(name); set is source_set_code. Try the
+                # bare slug and a -2/-3-stripped variant.
+                candidates = [(slug, src_code),
+                              (re.sub(r"-\d+$", "", slug), src_code)]
+            for cand_slug, cand_code in candidates:
+                fn = slug_map.get((cand_slug, cand_code))
+                if fn:
+                    conn.execute(
+                        "UPDATE decks SET source_precon_file_name = ? WHERE deck_id = ?",
+                        (fn, d["deck_id"]),
+                    )
+                    break
+
+    # 2. Fold ledger deconstructed>0 rows into is_deconstructed=1 deck rows.
+    # The ledger may not exist if a fresh DB jumped straight to V10 with no V7
+    # data; guard the read.
+    try:
+        ledger_rows = conn.execute(
+            "SELECT file_name, constructed_qty, deconstructed_qty FROM precon_ledger"
+        ).fetchall()
+    except sqlite3.OperationalError:
+        ledger_rows = []
+    for lr in ledger_rows:
+        fn = lr["file_name"]
+        decon = lr["deconstructed_qty"] or 0
+        if decon <= 0:
+            continue
+        # How many deconstructed deck rows already exist for this fileName
+        # (should be 0 pre-migration, but stay idempotent).
+        have = conn.execute(
+            "SELECT COUNT(*) AS n FROM decks "
+            "WHERE source_precon_file_name = ? AND is_deconstructed = 1",
+            (fn,),
+        ).fetchone()["n"]
+        need = decon - have
+        if need <= 0:
+            continue
+        # Derive a base slug + set code from the fileName (Words_CODE). We can't
+        # rebuild the recipe offline, so create marker deck rows carrying the
+        # fileName + is_deconstructed=1 so the count is faithful; the recipe can
+        # be repopulated by a later `mm deck import-precon` if desired.
+        base = fn.rsplit("_", 1)[0]
+        code = fn.rsplit("_", 1)[1].lower() if "_" in fn else None
+        # Humanize the CamelCase base into a slug stub.
+        import re
+        stub = re.sub(r"(?<!^)(?=[A-Z])", "-", base).lower()
+        now = _utcnow_iso()
+        for k in range(need):
+            slug = f"decon:{stub}-{code}" + (f"-{k + 2}" if (have + k) > 0 else "")
+            # Ensure slug uniqueness (decon: namespace keeps it clear of real decks).
+            if conn.execute("SELECT 1 FROM decks WHERE slug = ?", (slug,)).fetchone():
+                continue
+            conn.execute(
+                "INSERT INTO decks (slug, name, source_set_code, "
+                "source_precon_file_name, is_deconstructed, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, 1, ?, ?)",
+                (slug, base, code, fn, now, now),
+            )
+
+    # 3. Drop the ledger — decks is now the single source of truth.
+    conn.execute("DROP TABLE IF EXISTS precon_ledger")
 
 
 def _utcnow_iso() -> str:

@@ -839,8 +839,8 @@ def _ingest_deck_checklist(src: Path, *, kind: str, sha: str, force: bool,
 
     scope_seg = f" ({set_code})" if set_code else ""
     if kind == "precon":
-        # Precon summary: signed ledger transaction. Different shape from
-        # jumpstart (built/torn_down + ledger_before/after per row).
+        # Precon summary: signed transaction against the decks table (counts
+        # are derived; no ledger). built/torn_down + count_before/after per row.
         typer.echo(
             f"{noun}: {summary['rows_acted']}/{summary['rows_total']} rows acted on, "
             f"{summary['constructed']} built, "
@@ -851,13 +851,13 @@ def _ingest_deck_checklist(src: Path, *, kind: str, sha: str, force: bool,
             if row["error"]:
                 typer.echo(f"  ! {row['file_name']}: {row['error']}", err=True)
                 continue
-            bc, bd = row["ledger_before"]
-            ac, ad = row["ledger_after"]
+            bc, bd = row["count_before"]
+            ac, ad = row["count_after"]
             typer.echo(
                 f"  {row['file_name']} ({row['label']}): "
                 f"constructed {bc}→{ac}, deconstructed {bd}→{ad}"
                 + (f"  [built {row['built']}]" if row["built"] else "")
-                + (f"  [+{row['torn_down']} loose]" if row["torn_down"] else "")
+                + (f"  [+{row['torn_down']} torn down]" if row["torn_down"] else "")
             )
             if row.get("warning"):
                 typer.echo(f"    note: {row['warning']}", err=True)
@@ -1543,13 +1543,15 @@ def wishlist_import_cmd(
 
 @deck_app.command("ls")
 def deck_ls_cmd():
-    """List every deck."""
+    """List every deck. A ``decon`` marker flags torn-down precon copies
+    (recipe kept, cards loose) so they read distinctly from built decks."""
     ds = decks_mod.deck_list()
     if not ds:
         typer.echo("(no decks)"); return
-    typer.echo(f"{'slug':30} {'name':40} {'format':12} {'updated_at'}")
+    typer.echo(f"{'slug':30} {'name':40} {'format':12} {'flags':6} {'updated_at'}")
     for d in ds:
-        typer.echo(f"{d.slug:30} {d.name:40} {(d.format or '—'):12} {d.updated_at}")
+        flags = "decon" if getattr(d, "is_deconstructed", 0) else ""
+        typer.echo(f"{d.slug:30} {d.name:40} {(d.format or '—'):12} {flags:6} {d.updated_at}")
 
 
 @deck_app.command("show")
@@ -1754,7 +1756,7 @@ def deck_import_precon_cmd(
     ),
     deconstruct: bool = typer.Option(
         False, "--deconstruct",
-        help="Skip deck creation; only add cards to inventory. Use when opening a precon to break it down for parts.",
+        help="Record a torn-down-for-parts copy: adds cards to inventory as loose (not pledged) and creates a deck row flagged deconstructed (recipe kept) so the copy is still tracked as a precon unit. Shows as 'decon' in `mm deck ls`.",
     ),
     merge_inventory: bool = typer.Option(
         False, "--merge-inventory",
@@ -1763,8 +1765,11 @@ def deck_import_precon_cmd(
 ):
     """Import an MTGJSON precon into the local DB.
 
-    By default: creates one or more named decks AND adds the cards to inventory.
-    The two effects are independent — see --no-add-inventory and --deconstruct.
+    By default: creates one built deck AND adds the cards to inventory. With
+    --deconstruct it records a torn-down copy instead (deck row flagged
+    deconstructed, cards loose). Either way the deck row carries the MTGJSON
+    fileName, so precon unit counts derive straight from the decks table — this
+    and the precon checklist feed one source of truth (no separate ledger).
 
     The MTGJSON Card(Deck) entries carry `identifiers.scryfallId` which maps
     directly to our cards table. No Scryfall API calls; the precon JSON is
@@ -1778,6 +1783,7 @@ def deck_import_precon_cmd(
             copies=copies,
             add_inventory=add_inventory,
             deconstruct=deconstruct,
+            record_deconstructed_deck=deconstruct,
             merge_inventory=merge_inventory,
         )
     except mtgjson_mod.MtgJsonError as e:
@@ -1939,11 +1945,12 @@ def deck_add_precon_cmd(
 ):
     """Add constructed/deconstructed precon copies AS TRACKED UNITS.
 
-    Unlike ``mm deck import-precon`` (which builds a deck + adds inventory but
-    does NOT touch the precon ledger), this writes the ``precon_ledger`` too —
-    so the decks show up under `/set-status` as tracked precon units. It's the
-    one-liner form of filling a precon checklist: resolve the deck(s), then run
-    the same ledger+deck+inventory transaction the checklist ingest uses.
+    The one-liner form of filling a precon checklist: resolve the deck(s), then
+    run the same deck+inventory transaction the checklist ingest uses. Precon
+    unit counts are DERIVED from the ``decks`` table (each built or torn-down
+    copy is a deck row carrying the MTGJSON fileName + is_deconstructed), so
+    both this and ``mm deck import-precon`` feed the same single source of truth
+    — there's no separate ledger to keep in sync.
 
     Selection:
       - ``mm deck add-precon blc --all``            → all BLC precons
@@ -1952,7 +1959,8 @@ def deck_add_precon_cmd(
       - ``--type "Commander Deck"``                  → narrow set resolution
 
     Additive: re-running adds ANOTHER copy (constructed 1→2). Use the precon
-    checklist in `--mode modify` for signed ledger corrections.
+    checklist in `--mode modify` to see current counts; remove a copy with
+    ``mm deck delete <slug>``.
     """
     if constructed == 0 and deconstructed == 0:
         typer.echo("error: nothing to add — pass --constructed and/or --deconstructed > 0.", err=True)
@@ -1994,8 +2002,8 @@ def deck_add_precon_cmd(
         f"{summary['inv_qty_total']} cards added."
     )
     for pr in summary["per_row"]:
-        bc, bd = pr["ledger_before"]
-        ac, ad = pr["ledger_after"]
+        bc, bd = pr["count_before"]
+        ac, ad = pr["count_after"]
         typer.echo(
             f"  {pr['label']} ({pr['file_name']}): "
             f"constructed {bc}→{ac}, deconstructed {bd}→{ad}"
