@@ -1,6 +1,6 @@
 ---
 name: set-status
-description: Concise, script-driven status report for a Magic set FAMILY — family topology (set codes + types), # checklist ingests, owned prints/qty/$ value, precon count by format, missing $ + count, and whether the family is characterized (docs/sets/<parent>.md exists). Accepts the family anchor OR any member code (snc, ncc, tmt, tle, eoc, …) and normalizes to the true parent. Prices are live. Triggers: "/set-status", "status of <set>", "how complete is my <set>", "where am I on <set>", "give me a <set> status report", "<set> collection status", "how am I doing on <set>".
+description: Concise, script-driven status report for a Magic set FAMILY — family topology (set codes + types), # checklist ingests, owned prints/qty/$ value, precon count by format, missing $ + count, and whether the family is characterized (docs/sets/<parent>.md exists). Accepts the family anchor OR any member code (snc, ncc, tmt, tle, eoc, …) and normalizes to the true parent. With NO argument, prints a collection-wide overview of every owned family (one row each). Prices are live. Triggers: "/set-status", "status of <set>", "how complete is my <set>", "where am I on <set>", "give me a <set> status report", "<set> collection status", "how am I doing on <set>", "collection overview", "all my sets", "how's my whole collection".
 ---
 
 # set-status
@@ -8,6 +8,8 @@ description: Concise, script-driven status report for a Magic set FAMILY — fam
 Deterministic, script-driven family status. Claude invokes `scripts/set_status.py <anchor>`, then **relays the script's stdout markdown block verbatim into chat**. No inline computation, no eyeballing counts or prices — the script is the single source of truth. Any stderr notes (unsynced family, "not configured", heuristic fallback) are surfaced briefly beneath the table.
 
 The `<anchor>` may be the family parent (`snc`, `tmt`) **or any member** (`ncc`, `tle`, `eoc`, `pncc`) — the script resolves the member up to the true parent automatically and reports the whole family.
+
+**No argument → collection overview.** Run `scripts/set_status.py` with no anchor for a high-level, collection-wide table: one compact row per family the user owns cards in (plus any registered-but-not-yet-owned family from `set_targets`), sorted by owned $ descending, with a grand-total row. Use this for "how's my whole collection", "collection overview", "all my sets", "/set-status" with no set named.
 
 ## When to use
 
@@ -23,10 +25,11 @@ The `<anchor>` may be the family parent (`snc`, `tmt`) **or any member** (`ncc`,
 ## The canonical recipe
 
 ```bash
-uv run python scripts/set_status.py <anchor>
+uv run python scripts/set_status.py <anchor>   # one family
+uv run python scripts/set_status.py             # collection-wide overview (all owned families)
 ```
 
-That's the whole happy path. `<anchor>` = a parent OR member code. Relay the entire stdout markdown block verbatim.
+That's the whole happy path. `<anchor>` = a parent OR member code; omit it for the overview. Relay the entire stdout markdown block verbatim.
 
 ## Output shape
 
@@ -43,6 +46,14 @@ A title line + one compact `Metric | Value` table:
 | Characterized | `yes → docs/sets/<parent>.md` or `no` |
 
 **Prices are live** (fetched each run via the rate-limited Scryfall wrapper), so the $ figures are current and the output is NOT byte-identical day-to-day — that's intended.
+
+### Overview shape (no-arg mode)
+
+`scripts/set_status.py` with no anchor emits `## Collection overview · N families` + a table: `Family | Owned (prints/qty) | $ (owned) | Precons | Missing | Char`, sorted by owned $ desc, ending in a bold **Total** row. Relay it verbatim, same as the single-family table.
+
+Two deliberate differences from the single-family report, worth stating in one line beneath the table if the user might wonder:
+- **Missing is a print COUNT** (`165 prints`), not a live $ — the overview does ONE bulk owned-price fetch and skips the per-family missing-$ call to stay fast. For the live missing $ of one family, run `/set-status <anchor>`.
+- **Char** column is `✓`/`✗`; `✗` (or a `—` in Missing) marks an uncharacterized family. Offer to characterize any `✗` family the user names (see below), not all of them unprompted.
 
 ## Uncharacterized families — offer to characterize
 

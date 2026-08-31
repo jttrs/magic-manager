@@ -1289,6 +1289,98 @@ def inventory_add_cmd(
     typer.echo(f"{result['action']}: {scryfall_id} {finish} qty={result['new_qty']}")
 
 
+def _parse_card_spec(spec: str) -> tuple[str, str, str, int]:
+    """Parse a single card spec into (set_code, collector_number, finish, qty).
+
+    Accepts a space form (``"SET CN [finish] [qty]"``) or a colon form
+    (``"SET:CN[:finish][:qty]"``). finish defaults to "nonfoil", qty defaults
+    to 1.
+    """
+    if ":" in spec:
+        tokens = spec.split(":")
+    else:
+        tokens = spec.split()
+    if len(tokens) < 2:
+        raise ValueError(f"malformed card spec {spec!r}: expected at least 'SET CN'")
+    set_code = tokens[0].lower()
+    collector_number = tokens[1]
+    finish = "nonfoil"
+    qty = 1
+    for token in tokens[2:]:
+        if token == "":
+            continue
+        if token.lower() in ("foil", "nonfoil"):
+            finish = token.lower()
+        elif token.isdigit():
+            n = int(token)
+            if n <= 0:
+                raise ValueError(f"malformed card spec {spec!r}: qty must be a positive integer, got {token!r}")
+            qty = n
+        else:
+            raise ValueError(f"malformed card spec {spec!r}: unrecognized token {token!r}")
+    return set_code, collector_number, finish, qty
+
+
+@inventory_app.command("add-card")
+def inventory_add_card_cmd(
+    specs: list[str] = typer.Argument(..., help="One or more card specs: 'SET CN [finish] [qty]' or 'SET:CN[:finish][:qty]'. finish=nonfoil|foil (default nonfoil), qty default 1."),
+    replace: bool = typer.Option(False, "--replace", help="Set quantity outright instead of summing."),
+    json_out: bool = typer.Option(False, "--json", help="Emit result as JSON."),
+):
+    """Add one or more cards to inventory by set + collector number."""
+    from . import parsers as _parsers
+    try:
+        parsed = [_parse_card_spec(spec) for spec in specs]
+    except ValueError as e:
+        typer.echo(f"error: {e}", err=True); raise typer.Exit(2)
+
+    result = _parsers.ParseResult(entries=[
+        _parsers.Entry(qty=qty, raw=spec, name="", set=set_code, collector_number=cn, foil=(finish == "foil"), section="mainboard")
+        for spec, (set_code, cn, finish, qty) in zip(specs, parsed)
+    ])
+    _parsers.resolve(result)
+
+    added = updated = 0
+    cards_out = []
+    with db.connect() as conn:
+        for entry in result.entries:
+            if entry.card is None:
+                continue
+            db.upsert_card(conn, entry.card)
+    for entry in result.entries:
+        if entry.card is None:
+            continue
+        finish = "foil" if entry.foil else "nonfoil"
+        r = inv_mod.inventory_add(entry.card["id"], finish, entry.qty, replace=replace)
+        if r["action"] == "inserted":
+            added += 1
+        else:
+            updated += 1
+        cards_out.append({
+            "set": entry.set, "cn": entry.collector_number, "finish": finish,
+            "qty": r["new_qty"], "name": entry.card.get("name"), "action": r["action"],
+        })
+        if not json_out:
+            typer.echo(f"  {r['action']}: {entry.card.get('name')} ({entry.set} {entry.collector_number}) [{finish}] qty={r['new_qty']}")
+
+    if json_out:
+        json.dump({
+            "added": added, "updated": updated, "cards": cards_out,
+            "warnings": result.warnings, "not_found": result.not_found,
+        }, sys.stdout, indent=2)
+        sys.stdout.write("\n")
+        return
+
+    typer.echo(f"Inventory: {added} added, {updated} updated")
+    for w in result.warnings:
+        typer.echo(f"  warning: {w}", err=True)
+    for nf in result.not_found:
+        if isinstance(nf, dict) and "raw" in nf:
+            typer.echo(f"  not found: {nf['raw']} ({nf.get('reason','')})", err=True)
+        else:
+            typer.echo(f"  not found: {nf}", err=True)
+
+
 @inventory_app.command("remove")
 def inventory_remove_cmd(
     scryfall_id: str = typer.Argument(...),
@@ -1741,6 +1833,181 @@ def deck_import_precon_cmd(
             typer.echo(f"  - {m['name']} ({m['set']} {m['cn']}, board={m['board']})", err=True)
         if len(missing_sids) > 5:
             typer.echo(f"  ...and {len(missing_sids) - 5} more", err=True)
+
+
+def _resolve_precon_filenames(
+    target: str,
+    name_query: str | None,
+    *,
+    want_all: bool,
+    only_type: str | None,
+    include_collector: bool,
+) -> list[dict]:
+    """Resolve the add-precon selector to a list of MTGJSON deck dicts.
+
+    Two forms:
+      - ``target`` is an exact MTGJSON fileName (``Name_CODE``) → that one deck.
+      - ``target`` is a set code → every physical precon in that set
+        (``--all`` / no name query), or the fuzzy-name match of ``name_query``.
+
+    Raises ``LookupError`` (→ exit 2) when nothing matches or a name query is
+    ambiguous; the message lists the candidates so the caller can disambiguate.
+    """
+    # Exact fileName? (deck() succeeds only for a real fileName; cheap, cached.)
+    if name_query is None and not want_all:
+        try:
+            d = mtgjson_mod.deck(target)
+            return [{
+                "fileName": target,
+                "name": d.get("name") or target,
+                "type": d.get("type") or "",
+                "code": (d.get("code") or "").upper(),
+            }]
+        except mtgjson_mod.MtgJsonError:
+            pass  # not a fileName — fall through to set-code resolution
+
+    variants = mtgjson_mod.precon_variants(
+        target.lower(), only_type=only_type, include_collector=include_collector,
+    )
+    if not variants:
+        type_note = f" of type {only_type!r}" if only_type else ""
+        raise LookupError(
+            f"no physical precons{type_note} found for set {target!r} "
+            f"(try `mm mtgjson decks --set {target.lower()}` to list them)."
+        )
+
+    if want_all or name_query is None:
+        return variants
+
+    # Fuzzy name match: case-insensitive substring first, then difflib.
+    q = name_query.strip().lower()
+    subs = [v for v in variants if q in (v["name"] or "").lower()]
+    if len(subs) == 1:
+        return subs
+    pool = subs or variants
+    if len(subs) > 1:
+        names = ", ".join(f"{v['name']!r} ({v['fileName']})" for v in subs)
+        raise LookupError(
+            f"ambiguous name {name_query!r} for set {target!r} — matches: {names}. "
+            f"Refine the name or pass --all."
+        )
+    # No substring hit — try difflib against the full variant list.
+    import difflib
+    best = difflib.get_close_matches(
+        q, [(v["name"] or "").lower() for v in pool], n=3, cutoff=0.5,
+    )
+    if len(best) == 1:
+        return [v for v in pool if (v["name"] or "").lower() == best[0]]
+    names = ", ".join(f"{v['name']!r} ({v['fileName']})" for v in pool)
+    raise LookupError(
+        f"no precon in set {target!r} matched name {name_query!r}. "
+        f"Available: {names}. Pass --all to add every deck."
+    )
+
+
+@deck_app.command("add-precon")
+def deck_add_precon_cmd(
+    target: str = typer.Argument(
+        ...,
+        help="A set code (e.g. blc) OR an exact MTGJSON fileName (e.g. FamilyMatters_BLC).",
+    ),
+    name_query: str = typer.Argument(
+        None,
+        help="Fuzzy deck-name filter within the set (e.g. 'Family Matters'). Omit with a set code to require --all.",
+    ),
+    constructed: int = typer.Option(
+        1, "--constructed", "-c", min=0,
+        help="Built copies to add per deck (each creates a deck + adds its cards to inventory). Default 1.",
+    ),
+    deconstructed: int = typer.Option(
+        0, "--deconstructed", "-d", min=0,
+        help="Torn-down copies to add per deck (loose cards, no deck recipe). Default 0.",
+    ),
+    want_all: bool = typer.Option(
+        False, "--all",
+        help="With a set code: add EVERY physical precon in the set (no name query).",
+    ),
+    only_type: str = typer.Option(
+        None, "--type",
+        help="Filter set-code resolution to one exact product type (e.g. 'Commander Deck').",
+    ),
+    include_collector: bool = typer.Option(
+        False, "--include-collector",
+        help="Include '… Collector's Edition' variants (excluded by default).",
+    ),
+    json_out: bool = typer.Option(False, "--json", help="Emit the summary as JSON."),
+):
+    """Add constructed/deconstructed precon copies AS TRACKED UNITS.
+
+    Unlike ``mm deck import-precon`` (which builds a deck + adds inventory but
+    does NOT touch the precon ledger), this writes the ``precon_ledger`` too —
+    so the decks show up under `/set-status` as tracked precon units. It's the
+    one-liner form of filling a precon checklist: resolve the deck(s), then run
+    the same ledger+deck+inventory transaction the checklist ingest uses.
+
+    Selection:
+      - ``mm deck add-precon blc --all``            → all BLC precons
+      - ``mm deck add-precon blc "Family Matters"``  → one, by fuzzy name
+      - ``mm deck add-precon FamilyMatters_BLC``     → one, by exact fileName
+      - ``--type "Commander Deck"``                  → narrow set resolution
+
+    Additive: re-running adds ANOTHER copy (constructed 1→2). Use the precon
+    checklist in `--mode modify` for signed ledger corrections.
+    """
+    if constructed == 0 and deconstructed == 0:
+        typer.echo("error: nothing to add — pass --constructed and/or --deconstructed > 0.", err=True)
+        raise typer.Exit(2)
+
+    try:
+        decks = _resolve_precon_filenames(
+            target, name_query, want_all=want_all,
+            only_type=only_type, include_collector=include_collector,
+        )
+    except LookupError as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+
+    # Build the in-memory precon checklist (add mode) and run the shared engine —
+    # the ONLY path that writes the ledger + builds decks + adds inventory
+    # atomically. No XLSX round-trip.
+    from . import parsers as _parsers
+    rows = [
+        _parsers.JumpstartRow(
+            file_name=d["fileName"], theme=d.get("name") or "",
+            keep_qty=constructed, deconstructed_qty=deconstructed,
+        )
+        for d in decks
+    ]
+    parsed = _parsers.JumpstartParseResult(
+        rows=rows, warnings=[], meta={"kind": "precon", "mode": "add"},
+    )
+    summary = sets_mod._apply_precon_checklist(parsed, mode="add")
+
+    if json_out:
+        json.dump(summary, sys.stdout, indent=2)
+        sys.stdout.write("\n")
+        return
+
+    typer.echo(
+        f"Added precons: {summary['rows_acted']} deck(s) changed — "
+        f"{summary['constructed']} built, {summary['deconstructed']} torn down, "
+        f"{summary['inv_qty_total']} cards added."
+    )
+    for pr in summary["per_row"]:
+        bc, bd = pr["ledger_before"]
+        ac, ad = pr["ledger_after"]
+        typer.echo(
+            f"  {pr['label']} ({pr['file_name']}): "
+            f"constructed {bc}→{ac}, deconstructed {bd}→{ad}"
+        )
+        if pr.get("warning"):
+            typer.echo(f"    warning: {pr['warning']}", err=True)
+        if pr.get("error"):
+            typer.echo(f"    error: {pr['error']}", err=True)
+        if pr.get("missing_sids"):
+            typer.echo(f"    note: {len(pr['missing_sids'])} entries had no scryfallId (skipped).", err=True)
+    for w in summary.get("warnings", []):
+        typer.echo(f"  warning: {w}", err=True)
 
 
 @deck_app.command("import")
