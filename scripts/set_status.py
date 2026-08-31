@@ -95,12 +95,17 @@ def ingest_count(family_codes: list[str]) -> int:
     return n
 
 
-def owned_summary(parent_code: str) -> tuple[int, int, float]:
-    """(distinct_printings, total_qty, live_usd) for owned family cards."""
+def owned_summary(parent_code: str, price_map: dict[str, dict] | None = None) -> tuple[int, int, float]:
+    """(distinct_printings, total_qty, live_usd) for owned family cards.
+
+    ``price_map`` (scryfall_id -> prices dict) lets a caller supply prices it
+    already fetched in bulk (the all-families overview batches every owned id
+    into ONE /cards/collection call). When None, prices are fetched here for
+    just this family (the single-anchor path)."""
     rows = selectors.materialize(f"set:{parent_code}+related owned")
     prints = len(rows)
     qty = sum(r.quantity for r in rows)
-    prices = _live_prices([r.scryfall_id for r in rows])
+    prices = price_map if price_map is not None else _live_prices([r.scryfall_id for r in rows])
     usd = sum(_unit(prices.get(r.scryfall_id, {}), r.finish) * r.quantity for r in rows)
     return prints, qty, usd
 
@@ -196,10 +201,127 @@ def render(parent_code, parent_name, codes_types, ingests, owned, precons,
     return "\n".join(lines)
 
 
+# ---------- all-families overview (no-arg mode) ----------
+
+def _owned_family_parents() -> dict[str, str]:
+    """{parent_code: parent_name} for every family the collection touches.
+
+    Union of (a) families the user owns cards in — distinct owned set codes,
+    each normalized to its family parent — and (b) registered families in
+    set_targets (so a master-list'd-but-not-yet-owned family still shows, with
+    zeros). Deduped to parents so siblings don't resolve repeatedly."""
+    with db.connect() as conn:
+        owned_codes = [
+            r[0].lower() for r in conn.execute(
+                "SELECT DISTINCT c.set_code FROM cards c "
+                "JOIN inventory i ON i.scryfall_id = c.scryfall_id "
+                "WHERE i.quantity > 0"
+            ).fetchall() if r[0]
+        ]
+        target_anchors = [
+            r[0].lower() for r in conn.execute(
+                "SELECT anchor_code FROM set_targets"
+            ).fetchall() if r[0]
+        ]
+    parents: dict[str, str] = {}
+    seen_codes: set[str] = set()
+    for code in owned_codes + target_anchors:
+        if code in seen_codes:
+            continue
+        seen_codes.add(code)
+        try:
+            pc, pn, _ = resolve_family(code)
+        except LookupError:
+            continue
+        # A member code resolves to the same parent as its siblings; record once
+        # and mark every family code seen so we don't re-resolve them.
+        if pc not in parents:
+            parents[pc] = pn
+    return parents
+
+
+def _all_owned_scryfall_ids(parents: list[str]) -> list[str]:
+    """Every owned scryfall_id across the given family parents (for one bulk
+    price fetch). Uses the same selector materialization the per-family owned
+    summary uses, so ids line up exactly."""
+    ids: list[str] = []
+    for pc in parents:
+        try:
+            ids.extend(r.scryfall_id for r in selectors.materialize(f"set:{pc}+related owned"))
+        except (selectors.SelectorParseError, LookupError):
+            continue
+    return ids
+
+
+def _missing_count(parent_code: str) -> int | None:
+    """# missing family printings, or None if unconfigured. Count only — no
+    live-$ fetch (the overview keeps to ONE bulk price call for owned cards)."""
+    try:
+        return len(missing_mod.missing_printings(parent_code))
+    except (selectors.SelectorParseError, LookupError):
+        return None
+
+
+def render_overview() -> str:
+    parents = _owned_family_parents()
+    if not parents:
+        return ("## Collection overview\n\n"
+                "No owned families yet — add cards (`mm inventory add-card …`), "
+                "ingest a checklist, or register a family with `mm set master-list <name>`.")
+
+    # ONE bulk price fetch for every owned card across all families.
+    price_map = _live_prices(_all_owned_scryfall_ids(sorted(parents)))
+
+    rows_data = []
+    tot_prints = tot_qty = 0
+    tot_usd = 0.0
+    for pc, pn in parents.items():
+        try:
+            _, _, related = resolve_family(pc)
+            fam_codes = [s["code"].lower() for s in related]
+        except LookupError:
+            fam_codes = [pc]
+        prints, qty, usd = owned_summary(pc, price_map)
+        precons = precon_summary(fam_codes)
+        n_precon = sum(precons.values())
+        miss = _missing_count(pc)
+        char = is_characterized(pc)
+        rows_data.append((pc, pn, prints, qty, usd, n_precon, miss, char))
+        tot_prints += prints
+        tot_qty += qty
+        tot_usd += usd
+
+    rows_data.sort(key=lambda t: t[4], reverse=True)  # by owned-$ desc
+
+    lines = [
+        f"## Collection overview · {len(rows_data)} families",
+        "",
+        "| Family | Owned | $ (owned) | Precons | Missing | Char |",
+        "|---|---|---|---|---|---|",
+    ]
+    for pc, pn, prints, qty, usd, n_precon, miss, char in rows_data:
+        miss_str = "—" if miss is None else f"{miss} prints"
+        precon_str = str(n_precon) if n_precon else "—"
+        lines.append(
+            f"| {pc} — {pn} | {prints} / {qty} | {util.fmt_usd(usd)} | "
+            f"{precon_str} | {miss_str} | {'✓' if char else '✗'} |"
+        )
+    lines.append(
+        f"| **Total** | **{tot_prints} / {tot_qty}** | **{util.fmt_usd(tot_usd)}** | | | |"
+    )
+    return "\n".join(lines)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Concise status report for a set family.")
-    ap.add_argument("anchor", help="Family anchor OR any member code (snc, ncc, tmt, tle, …).")
+    ap.add_argument("anchor", nargs="?", default=None,
+                    help="Family anchor OR any member code (snc, ncc, tmt, tle, …). "
+                         "Omit for a collection-wide overview of all owned families.")
     args = ap.parse_args()
+
+    if args.anchor is None:
+        print(render_overview())
+        return 0
 
     try:
         parent_code, parent_name, related = resolve_family(args.anchor)
