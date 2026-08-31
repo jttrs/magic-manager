@@ -174,6 +174,14 @@ FAMILY_DUPE_FOIL_PROMO_TYPES: dict[str, frozenset[str]] = {
     # and robust. Empty set unblocks the `preferred` filter (like TLA/SPM/SOS/BLB).
     # See docs/sets/mat.md §2/§5.
     "mat": frozenset(),
+    # Kamigawa: Neon Dynasty (2022, pre-fancy-foil-era): NO same-art dupe-foil
+    # signal. neonink (4 Hidetsugu prints) is DISTINCT art (4 neon colorways,
+    # each a different illustration_id — verified 429/430/431 all differ from the
+    # showcase 378), a foil-only chase the user doesn't shop for → excluded via
+    # FAMILY_UNOBTAINABLE_RULES, not here. thick (2 nec display commanders) is a
+    # niche oversized-stock variant, also §5. Empty set unblocks the `preferred`
+    # filter without filtering (like TLA/SPM/SOS/MAT). See docs/sets/neo.md §2.
+    "neo": frozenset(),
 }
 
 
@@ -359,6 +367,35 @@ FAMILY_UNOBTAINABLE_RULES: dict[str, list[dict]] = {
         # exclude the whole treatment here instead. any_of:{halofoil} catches all
         # 43; the boosterfun/showcase/base prints of each card stay in scope.
         {"promo_types_any_of": frozenset({"halofoil"})},
+    ],
+    "neo": [
+        # Chase-tier premiums the user does not shop for (added 2026-08-30).
+        #   - neonink: the 4 Hidetsugu, Devouring Chaos "neon ink" prints
+        #     (neo 429-432, foil-only, ~$35-$514 each). DISTINCT art — 4 neon
+        #     colorways, each its own illustration_id (verified all differ from
+        #     the boosterfun showcase 378), so NOT a dupe; the dupe filter would
+        #     keep them. Direct analog of TLA's neonink chase. neonink appears on
+        #     Hidetsugu ONLY in this family.
+        #   - thick: the 2 `nec` oversized "thick stock" display commanders
+        #     (Chishiro 77, Kotori 78, b|ff) — a display product, not a playable
+        #     the user catalogs. No plain-showcase sibling (only base + extended),
+        #     so DUPE_FOIL wouldn't pair them anyway.
+        # any_of because neonink and thick never co-occur; matching any one
+        # catches exactly these 6 prints. The base/showcase/extended/promopack
+        # prints of every card stay in scope (promopack 508-512 carry NO stamped
+        # — distinct alt-arts, kept). See docs/sets/neo.md §5.
+        {"promo_types_any_of": frozenset({"neonink", "thick"})},
+        # Promo-pack STAMP variants (added 2026-08-30). 69 `pneo`
+        # `promopack`+`stamped` `Np` prints — same card as a kept `neo` base
+        # sibling + a promo-pack stamp (2p→neo 2, 134p→neo 134, …); compute to
+        # `regular`, so the rare/mythic-regular sub-selectors pick them up
+        # (bypassing the `preferred` dedup). Validated: all 69 have a non-stamped
+        # base sibling, and the 5 `promopack`-ONLY in-set alt-arts (neo 508-512,
+        # no `stamped`) are KEPT — signal is `stamped` ONLY (SNC/EOE/ECL/BLB/FDN
+        # lesson). The 77 `Ns` prerelease+datestamped promos auto-drop via the
+        # Step-2 datestamped filter; the 2 `resale` ★ promos are distinct art,
+        # kept. Effect: missing-set 373→293 prints. See docs/sets/neo.md §5.
+        {"promo_types_any_of": frozenset({"stamped"})},
     ],
 }
 
