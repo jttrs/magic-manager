@@ -11,6 +11,12 @@ The mechanical wrapper around `mm set master-list`. The user names a release ("F
 
 **You make zero judgment calls about scope.** The recommended bundle is codified in the CLI; do not list sibling sets and ask which to include. If the user wants tokens or memorabilia, they will say so explicitly — translate that to `--include token,memorabilia`.
 
+> The generate → fill → ingest → archive lifecycle, the 0/2/3 exit-code contract, the
+> exit-3 collision prompt, the `add` vs `modify` modes, and the three intake surfaces are
+> **shared across all checklist generators** — see [checklist-lifecycle.md](../../../docs/checklist-lifecycle.md).
+> The sections below add the master-list-specific detail (the exit-3 *inventory readout*,
+> the `--zero-untouched` audit nuance, slicing, the treatment column, the scan loop).
+
 ## Steps
 
 1. Run `uv run mm set master-list "<name-or-code>"` from the repo root. That's the whole happy path.

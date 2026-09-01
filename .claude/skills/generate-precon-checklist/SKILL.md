@@ -19,6 +19,8 @@ This is the precon sibling of [[generate-set-checklist]] (which is the per-card 
    - **2**: bad arguments (e.g. bad `--format`/`--mode`) or "no precon variants found" for a `--type` that matched nothing. Surface the error verbatim.
    - **3** (`EXIT_UNPROCESSED_INTAKE`): a catalog for this mode already exists at `checklists/precons-<mode>-checklist.xlsx`. Tell the user; offer to ingest the existing one first (`mm set ingest --path <file>`) or regenerate with `--force` (warn that un-ingested edits are lost).
 
+   The exit codes, the generate → fill → ingest → archive lifecycle, and the exit-3 collision prompt are shared across all checklist generators — see [checklist-lifecycle.md](../../../docs/checklist-lifecycle.md).
+
 ## Mode — `add` vs `modify`
 
 The mode is encoded in the filename (`precons-<mode>-checklist.xlsx`) and the file's `_meta.mode`; `mm set ingest` auto-detects it.
