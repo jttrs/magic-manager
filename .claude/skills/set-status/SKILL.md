@@ -53,13 +53,19 @@ A title line + one compact `Metric | Value` table:
 
 Two deliberate differences from the single-family report, worth stating in one line beneath the table if the user might wonder:
 - **Missing is a print COUNT** (`165 prints`), not a live $ — the overview does ONE bulk owned-price fetch and skips the per-family missing-$ call to stay fast. For the live missing $ of one family, run `/set-status <anchor>`.
-- **Char** column is `✓`/`✗`; `✗` (or a `—` in Missing) marks an uncharacterized family. Offer to characterize any `✗` family the user names (see below), not all of them unprompted.
+- **Char column is 3-state:** `✓` = characterized · `✗` = characterizable but not yet done · **`-` = n/a** (not a characterizable family). `-` is the universal n/a marker in these chart outputs (also appears in Missing/Precons when not applicable). Only offer to characterize a `✗` family the user names (see below) — NEVER a `-` family.
+
+**`-` (non-family) sets** are grab-bag collector/promo products that reprint cards from many OTHER sets and don't form a coherent family — `sld` (Secret Lair Drop), `spg` (Special Guests), `pw25`, `pmei`, `sch` (the `NON_FAMILY_SETS` frozenset in `scripts/set_status.py`). They have no meaningful "missing from set" notion and are never characterized. Their owned $/counts are still real and shown.
+
+**Family grouping is set_targets-authoritative.** The overview (and single-anchor metrics) honor the user's registered `set_targets.related_codes` over the raw Scryfall `parent_set_code` graph — so e.g. `mar` (Marvel Universe, which Scryfall roots separately) folds into the `spm` row instead of floating as its own family. A code the user grouped under an anchor counts under that anchor everywhere.
 
 ## Uncharacterized families — auto-characterize (don't ask)
 
 If the report shows **Characterized: no** and/or **Missing: not configured**, the family has no `docs/sets/<parent>.md` and isn't set up for missing-set. **Do NOT ask whether to characterize — just do it** (user directive, 2026-08-30). After relaying the report, immediately invoke the [[characterize-set]] skill on the **parent** code (the one in the report title, not the member the user typed) and follow its full protocol; afterward, re-run `set_status.py <parent>` to show the now-complete report (Missing $ + Characterized: yes).
 
 This applies to the single-anchor mode. In the **no-arg overview**, do NOT auto-characterize every `✗` family (that could be a dozen at once) — instead auto-characterize only when the user names a specific `✗` family to act on.
+
+**NEVER auto-characterize a `-` (non-family) set** — `sld`/`spg`/`pw25`/`pmei`/`sch` are grab-bag collector/promo sets that reprint cards from other sets; they don't form a family and have no missing-from-set notion. If the user asks to characterize one, explain it's not a characterizable family rather than running the protocol.
 
 ## Guardrails
 

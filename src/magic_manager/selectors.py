@@ -182,6 +182,17 @@ FAMILY_DUPE_FOIL_PROMO_TYPES: dict[str, frozenset[str]] = {
     # niche oversized-stock variant, also §5. Empty set unblocks the `preferred`
     # filter without filtering (like TLA/SPM/SOS/MAT). See docs/sets/neo.md §2.
     "neo": frozenset(),
+    # Marvel Super Heroes (UB, 2026): NO dupe-foil signal retained. surgefoil
+    # (335 prints, the commander-deck collector-foil treatment) is excluded
+    # WHOLESALE via FAMILY_UNOBTAINABLE_RULES, not here — a DUPE_FOIL entry
+    # misfires: the surgefoil prints compute to bare `ff` (plain frame), but
+    # their same-art non-foil siblings compute to `ext` (extended-art frame), so
+    # the `(name, codes-minus-ff)` sibling match ({} vs {ext}) never pairs them
+    # (same class of frame-mismatch as MAT halofoil / neo). The user doesn't
+    # chase surgefoil at all, so any_of:{surgefoil} in §5 is exact. Empty set
+    # unblocks the `preferred` filter (like TLA/SPM/SOS/MAT/NEO).
+    # See docs/sets/msh.md §2/§5.
+    "msh": frozenset(),
 }
 
 
@@ -205,6 +216,10 @@ FAMILY_DUPE_FOIL_PROMO_TYPES: dict[str, frozenset[str]] = {
 #       The card's frame_effects must include every member.
 #   - border_color: str
 #       The card's border_color must equal this string.
+#   - collector_numbers: frozenset[str]
+#       The card's collector_number must be one of these. Use to pin a specific
+#       print that has no distinguishing promo_type (e.g. a borderless foil chase
+#       identified only by CN). Pair with border_color/frame_effects for safety.
 # Conditions can be combined within a rule for AND semantics.
 #
 # When adding a new family: survey its prints with the script in
@@ -397,6 +412,27 @@ FAMILY_UNOBTAINABLE_RULES: dict[str, list[dict]] = {
         # kept. Effect: missing-set 373→293 prints. See docs/sets/neo.md §5.
         {"promo_types_any_of": frozenset({"stamped"})},
     ],
+    "msh": [
+        # Headline chase the user does not shop for (added 2026-08-31). MSH 385
+        # The Mind Stone — `headliner`+`cosmicfoil`, the set's headline ultra-rare
+        # (analog of TLA Avatar Aang / EOE Sothera / ECL Bitterbloom Bearer).
+        # Exactly 1 print carries `headliner` in the family. any_of catches it.
+        {"promo_types_any_of": frozenset({"headliner"})},
+        # surgefoil collector-foil treatment (335 prints, near-zero foil value) —
+        # the commander-deck foil version the user doesn't chase. Excluded
+        # wholesale (NOT DUPE_FOIL — frame-mismatch, see §2). 264 dupe a non-foil
+        # sibling; 71 are foil-only staples (Arcane Signet, Command Tower) — the
+        # user opted to drop ALL surgefoil (2026-08-31). any_of:{surgefoil}.
+        {"promo_types_any_of": frozenset({"surgefoil"})},
+        # The Mind Stone borderless foil (msh 386, ~$1,699) — the set's flagship
+        # $ chase. Distinct borderless-inverted art (not the headliner 385), so no
+        # promo_type distinguishes it; pinned by CN + border_color. The base (21)
+        # and other prints stay in scope. (2026-08-31 user directive.)
+        {"collector_numbers": frozenset({"386"}), "border_color": "borderless"},
+        # NOTE: NO `{stamped}` rule — `stamped` does not occur in this family
+        # (0 prints); the `poster` showcase cards (msh 387/391/394, distinct art)
+        # are KEPT. See docs/sets/msh.md §5.
+    ],
 }
 
 
@@ -470,6 +506,9 @@ def _matches_unobtainable_rule(card: dict, rule: dict) -> bool:
             return False
     if "border_color" in rule:
         if (card.get("border_color") or "") != rule["border_color"]:
+            return False
+    if "collector_numbers" in rule:
+        if (card.get("collector_number") or "") not in rule["collector_numbers"]:
             return False
     return True
 

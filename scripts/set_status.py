@@ -29,6 +29,16 @@ from magic_manager import (  # noqa: E402
 )
 
 
+# Grab-bag / promo / collector sets that reprint cards from many OTHER sets and
+# are NOT coherent "families" — there's no meaningful "missing from set" notion,
+# and they should never be characterized. Rendered with the `-` (n/a) glyph in
+# the overview's Char + Missing columns, distinct from `✗` ("characterizable but
+# not yet done"). Hardcoded because no set_type/topology rule cleanly separates
+# these from real masterpiece/expansion families (spg is masterpiece like mar;
+# sld resolves to a real Scryfall family + is a registered set_target).
+NON_FAMILY_SETS: frozenset[str] = frozenset({"sld", "spg", "pw25", "pmei", "sch"})
+
+
 # ---------- family resolution (member → parent normalization) ----------
 
 def resolve_family(anchor: str) -> tuple[str, str, list[dict]]:
@@ -44,6 +54,105 @@ def resolve_family(anchor: str) -> tuple[str, str, list[dict]]:
         print(f"warning: no null-parent member in family; falling back to "
               f"{parent['code']!r}", file=sys.stderr)
     return parent["code"].lower(), parent.get("name") or parent["code"], related
+
+
+# ---------- set_targets-authoritative family grouping ----------
+#
+# The Scryfall parent_set_code graph (sets.resolve) and the user's registered
+# `set_targets.related_codes` can DISAGREE: e.g. `mar` (Marvel Universe) has
+# parent_set_code null on Scryfall (roots as its own family), but the user's
+# set_targets['spm'] lists mar as a Spider-Man family member. For the overview
+# and single-anchor metrics we treat set_targets as AUTHORITATIVE — a code that
+# the user has grouped under an anchor belongs to that anchor's family, even if
+# Scryfall roots it elsewhere. Codes not in any set_targets grouping fall back to
+# the Scryfall graph.
+
+_ST_INDEX: tuple[dict[str, str], dict[str, set[str]]] | None = None
+
+
+def _set_targets_index() -> tuple[dict[str, str], dict[str, set[str]]]:
+    """(member_to_anchor, anchor_to_codes), cached. member_to_anchor maps every
+    code in every anchor's related_codes (plus the anchor itself) to that anchor;
+    anchor_to_codes maps anchor → the full member set. First-wins on overlap."""
+    global _ST_INDEX
+    if _ST_INDEX is not None:
+        return _ST_INDEX
+    import json as _json
+    member_to_anchor: dict[str, str] = {}
+    anchor_to_codes: dict[str, set[str]] = {}
+    with db.connect() as conn:
+        rows = conn.execute(
+            "SELECT anchor_code, related_codes FROM set_targets"
+        ).fetchall()
+    for r in rows:
+        anchor = (r["anchor_code"] or "").lower()
+        if not anchor:
+            continue
+        try:
+            codes = {c.lower() for c in _json.loads(r["related_codes"] or "[]")}
+        except (ValueError, TypeError):
+            codes = set()
+        codes.add(anchor)
+        anchor_to_codes[anchor] = codes
+        for c in codes:
+            if c in member_to_anchor and member_to_anchor[c] != anchor:
+                print(f"warning: set code {c!r} is grouped under both "
+                      f"{member_to_anchor[c]!r} and {anchor!r}; keeping the first.",
+                      file=sys.stderr)
+                continue
+            member_to_anchor[c] = anchor
+    _ST_INDEX = (member_to_anchor, anchor_to_codes)
+    return _ST_INDEX
+
+
+def _family_parent(code: str) -> tuple[str, str]:
+    """(parent_code, parent_name) for an owned set code, set_targets-first.
+    A code the user registered under an anchor → that anchor (so mar → spm).
+    Otherwise the Scryfall-graph parent — but if THAT parent is itself a
+    set_targets member (e.g. code `lmar` → Scryfall parent `mar` → registered
+    under `spm`), follow the grouping one more hop so the whole Scryfall family
+    folds into the user's anchor."""
+    member_to_anchor, _ = _set_targets_index()
+
+    def _anchor_name(anchor: str) -> tuple[str, str]:
+        try:
+            pc, pn, _ = resolve_family(anchor)
+            return pc, pn
+        except LookupError:
+            return anchor, anchor
+
+    anchor = member_to_anchor.get(code.lower())
+    if anchor:
+        return _anchor_name(anchor)
+    pc, pn, _ = resolve_family(code)  # may raise LookupError → caller skips
+    # The Scryfall parent may itself be grouped under a user anchor (lmar→mar→spm).
+    anchor = member_to_anchor.get(pc)
+    if anchor and anchor != pc:
+        return _anchor_name(anchor)
+    return pc, pn
+
+
+def _family_code_set(parent_code: str, related: list[dict]) -> set[str]:
+    """The full set of set codes for a family's metrics: the Scryfall family
+    (`related`) UNION the user's set_targets grouping for this anchor UNION the
+    Scryfall family of each grouped member. That last hop matters because a
+    set_targets member can itself root a Scryfall sub-family (spm groups `mar`,
+    and `mar` roots `lmar`/`omb` on Scryfall) — all of it should count under spm."""
+    _, anchor_to_codes = _set_targets_index()
+    codes = {(s.get("code") or "").lower() for s in related if s.get("code")}
+    grouped = anchor_to_codes.get(parent_code, set())
+    codes |= grouped
+    # Expand each grouped member's own Scryfall family (mar → lmar/omb).
+    for member in grouped:
+        if member == parent_code:
+            continue
+        try:
+            codes |= {(s.get("code") or "").lower()
+                      for s in resolve_family(member)[2] if s.get("code")}
+        except LookupError:
+            continue
+    codes.discard("")
+    return codes
 
 
 # ---------- price helpers (live) ----------
@@ -67,9 +176,20 @@ def _unit(prices: dict, finish: str) -> float:
 
 # ---------- metrics ----------
 
-def family_codes_with_types(parent_code: str, related: list[dict]) -> list[tuple[str, str]]:
-    """[(code, set_type)] — parent first, remainder sorted by code."""
-    out = [(s["code"].lower(), s.get("set_type") or "?") for s in related]
+def family_codes_with_types(parent_code: str, related: list[dict],
+                            extra_codes: set[str] | None = None) -> list[tuple[str, str]]:
+    """[(code, set_type)] — parent first, remainder sorted by code. ``extra_codes``
+    folds in set_targets-grouped members not in the Scryfall ``related`` (e.g. mar
+    /lmar/omb under spm); their set_type is looked up via the cached set list."""
+    by_code = {(s.get("code") or "").lower(): (s.get("set_type") or "?") for s in related}
+    if extra_codes:
+        need = {c for c in extra_codes if c and c not in by_code}
+        if need:
+            all_sets = {s["code"].lower(): (s.get("set_type") or "?")
+                        for s in scryfall.all_sets()}
+            for c in need:
+                by_code[c] = all_sets.get(c, "?")
+    out = [(code, st) for code, st in by_code.items()]
     out.sort(key=lambda t: (t[0] != parent_code, t[0]))  # parent first, then alpha
     return out
 
@@ -103,6 +223,36 @@ def owned_summary(parent_code: str, price_map: dict[str, dict] | None = None) ->
     into ONE /cards/collection call). When None, prices are fetched here for
     just this family (the single-anchor path)."""
     rows = selectors.materialize(f"set:{parent_code}+related owned")
+    prints = len(rows)
+    qty = sum(r.quantity for r in rows)
+    prices = price_map if price_map is not None else _live_prices([r.scryfall_id for r in rows])
+    usd = sum(_unit(prices.get(r.scryfall_id, {}), r.finish) * r.quantity for r in rows)
+    return prints, qty, usd
+
+
+def _owned_rows_for_codes(codes) -> list:
+    """Owned MaterializedRows across a set of bare set codes, unioned by
+    (scryfall_id, finish). Used where a family's code set is set_targets-derived
+    (e.g. spm ∪ mar) and can't be expressed as a single `set:X+related` term
+    (the selector grammar has no multi-code union, and `+related` re-expands via
+    the Scryfall graph which excludes mar). Keying on (scryfall_id, finish) — not
+    scryfall_id alone — preserves legit nonfoil+foil pairs while guarding against
+    a printing being counted twice if code sets overlap."""
+    union: dict[tuple[str, str], object] = {}
+    for c in sorted(codes):
+        try:
+            for r in selectors.materialize(f"set:{c} owned"):
+                union[(r.scryfall_id, r.finish)] = r
+        except (selectors.SelectorParseError, LookupError):
+            continue
+    return list(union.values())
+
+
+def _owned_summary_for_codes(codes, price_map: dict[str, dict] | None = None) -> tuple[int, int, float]:
+    """(distinct_printings, total_qty, live_usd) over an explicit code set —
+    the set_targets-authoritative sibling of owned_summary. ``price_map`` supplies
+    pre-batched prices (overview); None fetches for just these codes."""
+    rows = _owned_rows_for_codes(codes)
     prints = len(rows)
     qty = sum(r.quantity for r in rows)
     prices = price_map if price_map is not None else _live_prices([r.scryfall_id for r in rows])
@@ -230,27 +380,13 @@ def _owned_family_parents() -> dict[str, str]:
             continue
         seen_codes.add(code)
         try:
-            pc, pn, _ = resolve_family(code)
+            pc, pn = _family_parent(code)  # set_targets-first (mar → spm)
         except LookupError:
             continue
-        # A member code resolves to the same parent as its siblings; record once
-        # and mark every family code seen so we don't re-resolve them.
+        # A member code maps to the same parent as its siblings; record once.
         if pc not in parents:
             parents[pc] = pn
     return parents
-
-
-def _all_owned_scryfall_ids(parents: list[str]) -> list[str]:
-    """Every owned scryfall_id across the given family parents (for one bulk
-    price fetch). Uses the same selector materialization the per-family owned
-    summary uses, so ids line up exactly."""
-    ids: list[str] = []
-    for pc in parents:
-        try:
-            ids.extend(r.scryfall_id for r in selectors.materialize(f"set:{pc}+related owned"))
-        except (selectors.SelectorParseError, LookupError):
-            continue
-    return ids
 
 
 def _missing_count(parent_code: str) -> int | None:
@@ -269,24 +405,32 @@ def render_overview() -> str:
                 "No owned families yet — add cards (`mm inventory add-card …`), "
                 "ingest a checklist, or register a family with `mm set master-list <name>`.")
 
-    # ONE bulk price fetch for every owned card across all families.
-    price_map = _live_prices(_all_owned_scryfall_ids(sorted(parents)))
+    # Family code set per parent — set_targets-authoritative (spm ∪ mar, etc.).
+    fam_codes_by_parent: dict[str, set[str]] = {}
+    for pc in parents:
+        try:
+            _, _, related = resolve_family(pc)
+        except LookupError:
+            related = [{"code": pc}]
+        fam_codes_by_parent[pc] = _family_code_set(pc, related)
+
+    # ONE bulk price fetch for every owned card across all families (deduped ids).
+    all_rows = _owned_rows_for_codes(
+        {c for codes in fam_codes_by_parent.values() for c in codes}
+    )
+    price_map = _live_prices([r.scryfall_id for r in all_rows])
 
     rows_data = []
     tot_prints = tot_qty = 0
     tot_usd = 0.0
     for pc, pn in parents.items():
-        try:
-            _, _, related = resolve_family(pc)
-            fam_codes = [s["code"].lower() for s in related]
-        except LookupError:
-            fam_codes = [pc]
-        prints, qty, usd = owned_summary(pc, price_map)
-        precons = precon_summary(fam_codes)
+        codes = fam_codes_by_parent[pc]
+        prints, qty, usd = _owned_summary_for_codes(codes, price_map)
+        precons = precon_summary(sorted(codes))
         n_precon = sum(precons.values())
-        miss = _missing_count(pc)
-        char = is_characterized(pc)
-        rows_data.append((pc, pn, prints, qty, usd, n_precon, miss, char))
+        non_family = pc in NON_FAMILY_SETS
+        miss = None if non_family else _missing_count(pc)
+        rows_data.append((pc, pn, prints, qty, usd, n_precon, miss, non_family))
         tot_prints += prints
         tot_qty += qty
         tot_usd += usd
@@ -299,12 +443,18 @@ def render_overview() -> str:
         "| Family | Owned | $ (owned) | Precons | Missing | Char |",
         "|---|---|---|---|---|---|",
     ]
-    for pc, pn, prints, qty, usd, n_precon, miss, char in rows_data:
-        miss_str = "—" if miss is None else f"{miss} prints"
-        precon_str = str(n_precon) if n_precon else "—"
+    for pc, pn, prints, qty, usd, n_precon, miss, non_family in rows_data:
+        # Universal `-` = n/a in these chart outputs.
+        if non_family:
+            char_cell = "-"      # not a characterizable family
+            miss_cell = "-"
+        else:
+            char_cell = "✓" if is_characterized(pc) else "✗"
+            miss_cell = "-" if miss is None else f"{miss} prints"
+        precon_cell = str(n_precon) if n_precon else "-"
         lines.append(
             f"| {pc} — {pn} | {prints} / {qty} | {util.fmt_usd(usd)} | "
-            f"{precon_str} | {miss_str} | {'✓' if char else '✗'} |"
+            f"{precon_cell} | {miss_cell} | {char_cell} |"
         )
     lines.append(
         f"| **Total** | **{tot_prints} / {tot_qty}** | **{util.fmt_usd(tot_usd)}** | | | |"
@@ -329,10 +479,14 @@ def main() -> int:
         print(f"error: {e}", file=sys.stderr)
         return 2
 
-    family_codes = [s["code"].lower() for s in related]
-    codes_types = family_codes_with_types(parent_code, related)
+    # set_targets-authoritative family codes (folds e.g. mar into spm). For
+    # characterized families whose set_targets grouping matches their Scryfall
+    # family, this equals the Scryfall code set → output byte-identical.
+    family_code_set = _family_code_set(parent_code, related)
+    family_codes = sorted(family_code_set)
+    codes_types = family_codes_with_types(parent_code, related, extra_codes=family_code_set)
     ingests = ingest_count(family_codes)
-    owned = owned_summary(parent_code)
+    owned = _owned_summary_for_codes(family_code_set)
     if owned[0] == 0:
         # Distinguish "never synced" from "synced but nothing owned".
         placeholders = ",".join("?" for _ in family_codes)
