@@ -493,6 +493,64 @@ def set_jumpstart_list(
     typer.echo(f"  2. When done: mm set ingest --path {out_path}")
 
 
+def _jumpstart_pack_rows(
+    code: str, matched: dict, *, include_front: bool = True
+) -> tuple[list, int]:
+    """Materialize one Jumpstart pack's cards into export-ready rows.
+
+    Walks the matched MTGJSON variant's commander/main/side boards, resolves
+    each scryfall_id against the local ``cards`` table, and (optionally)
+    appends the pack's front/title card from the quarantined ``front_cards``
+    table. Returns ``(rows, n_skipped)`` where ``n_skipped`` counts gameplay
+    printings absent from ``cards`` (caller decides whether to warn).
+
+    Shared by ``jumpstart-pack`` (one pack) and ``query missing-jumpstart``
+    (every un-owned pack in a set). Assumes the family is already synced.
+    """
+    deck_data = mtgjson_mod.deck(matched["fileName"])
+
+    entries: list[tuple[str, int, bool]] = []  # (scryfall_id, count, is_foil)
+    for board_key in ("commander", "mainBoard", "sideBoard"):
+        for entry in deck_data.get(board_key) or []:
+            sid = (entry.get("identifiers") or {}).get("scryfallId")
+            if not sid:
+                continue
+            count = int(entry.get("count", 1) or 1)
+            entries.append((sid, count, bool(entry.get("isFoil"))))
+
+    rows: list[sel_mod.MaterializedRow] = []
+    n_skipped = 0
+    if entries:
+        with db.connect() as conn:
+            placeholders = ",".join("?" for _ in entries)
+            card_rows = {
+                cr["scryfall_id"]: cr
+                for cr in conn.execute(
+                    f"SELECT {sel_mod._CARD_COLS} FROM cards c "
+                    f"WHERE c.scryfall_id IN ({placeholders})",
+                    [e[0] for e in entries],
+                ).fetchall()
+            }
+        for sid, count, is_foil in entries:
+            cr = card_rows.get(sid)
+            if cr is None:
+                n_skipped += 1
+                continue
+            rows.append(sel_mod.MaterializedRow(
+                scryfall_id=sid,
+                quantity=count,
+                finish="foil" if is_foil else "nonfoil",
+                card=sel_mod._card_dict(cr),
+            ))
+
+    if include_front:
+        fc = front_cards_mod.front_card_for_theme(code, matched.get("name") or "")
+        if fc is not None:
+            rows.append(front_cards_mod.front_card_row(fc))
+
+    return rows, n_skipped
+
+
 @set_app.command("jumpstart-pack")
 def set_jumpstart_pack(
     set_code: str = typer.Argument(..., help="Jumpstart set code, e.g. msh"),
@@ -542,47 +600,9 @@ def set_jumpstart_pack(
         raise typer.Exit(2)
 
     matched = matches[0]
-    deck_data = mtgjson_mod.deck(matched["fileName"])
-
-    entries: list[tuple[str, int, bool]] = []  # (scryfall_id, count, is_foil)
-    for board_key in ("commander", "mainBoard", "sideBoard"):
-        for entry in deck_data.get(board_key) or []:
-            sid = (entry.get("identifiers") or {}).get("scryfallId")
-            if not sid:
-                continue
-            count = int(entry.get("count", 1) or 1)
-            entries.append((sid, count, bool(entry.get("isFoil"))))
-
-    rows: list[sel_mod.MaterializedRow] = []
-    n_skipped = 0
-    if entries:
-        with db.connect() as conn:
-            placeholders = ",".join("?" for _ in entries)
-            card_rows = {
-                cr["scryfall_id"]: cr
-                for cr in conn.execute(
-                    f"SELECT {sel_mod._CARD_COLS} FROM cards c "
-                    f"WHERE c.scryfall_id IN ({placeholders})",
-                    [e[0] for e in entries],
-                ).fetchall()
-            }
-        for sid, count, is_foil in entries:
-            cr = card_rows.get(sid)
-            if cr is None:
-                n_skipped += 1
-                continue
-            rows.append(sel_mod.MaterializedRow(
-                scryfall_id=sid,
-                quantity=count,
-                finish="foil" if is_foil else "nonfoil",
-                card=sel_mod._card_dict(cr),
-            ))
+    rows, n_skipped = _jumpstart_pack_rows(code, matched)
     if n_skipped:
         typer.echo(f"warning: {n_skipped} card(s) not found locally, skipped", err=True)
-
-    fc = front_cards_mod.front_card_for_theme(code, matched.get("name") or theme)
-    if fc is not None:
-        rows.append(front_cards_mod.front_card_row(fc))
 
     if missing:
         with db.connect() as conn:
@@ -2842,6 +2862,132 @@ def query_missing_set_cmd(
     typer.echo(f"📋 Checklist (xlsx): [{xlsx_path}](file://{xlsx_path.resolve()})")
     typer.echo(f"🛒 ManaPool bulk-add ({len(rows_for_bulk)} rows): [{mp_path}](file://{mp_path.resolve()})")
     typer.echo(f"🛒 TCGplayer Mass Entry ({len(rows_for_bulk)} rows): [{tcg_path}](file://{tcg_path.resolve()})")
+
+
+@query_app.command("missing-jumpstart")
+def query_missing_jumpstart_cmd(
+    code: str = typer.Argument(
+        ...,
+        help="Jumpstart set code (e.g. 'j25', 'msh', 'tle'). Must publish "
+             "Jumpstart variants in MTGJSON.",
+    ),
+):
+    """Buy list for the Jumpstart packs you don't own from a set.
+
+    A pack is "missing" when you have no ``pack:<theme>-<code>`` deck for it
+    (i.e. you never opened/ingested it). For every such pack this emits the
+    full singles list — gameplay cards plus the pack's front/title card — as
+    three combined artifacts under ``queries/``: an XLSX checklist, a ManaPool
+    bulk-add ``.txt``, and a TCGplayer Mass Entry ``.txt``.
+
+    Contents are NOT deduped across packs and NOT reduced by cards you already
+    own — it lists each un-owned pack's full contents. (A future workflow will
+    shrink the list by building packs from free inventory.)
+    """
+    code_l = code.lower()
+
+    # Sync the family (gameplay scryfall_ids) + front cards, mirroring
+    # jumpstart-list / jumpstart-pack.
+    try:
+        _r, codes = _resolve_codes(code, include_kinds=[], only=[])
+    except (LookupError, typer.BadParameter) as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+    sets_mod.sync(codes)
+    front_cards_mod.sync_front_cards(code_l)
+
+    variants = mtgjson_mod.jumpstart_variants(code_l)
+    if not variants:
+        typer.echo(
+            f"error: no Jumpstart variants found for set {code!r}. "
+            f"Check `mm mtgjson decks --set {code_l}` for available decks.",
+            err=True,
+        )
+        raise typer.Exit(2)
+
+    # Diff against owned pack:* decks. Copy suffixes (-2/-3) share the base
+    # slug, so an owned base slug counts the theme as owned.
+    with db.connect() as conn:
+        owned_slugs = {
+            row["slug"]
+            for row in conn.execute(
+                "SELECT slug FROM decks WHERE slug LIKE ?", (f"pack:%-{code_l}",)
+            ).fetchall()
+        }
+    missing_variants = [
+        v for v in variants
+        if sets_mod._slug_theme(v.get("name") or v.get("fileName") or "", code_l)
+        not in owned_slugs
+    ]
+    missing_variants.sort(key=lambda v: (v.get("name") or v.get("fileName") or ""))
+
+    if not missing_variants:
+        typer.echo(
+            f"# You own all {len(variants)} Jumpstart pack(s) for set:{code_l}. Nothing missing."
+        )
+        raise typer.Exit(0)
+
+    # Build combined rows across every missing pack (no cross-pack dedup —
+    # each pack's buy list is its full contents). Track a per-pack summary.
+    all_rows: list[sel_mod.MaterializedRow] = []
+    pack_summaries: list[tuple[str, int, float]] = []  # (theme, card_count, usd_total)
+    total_skipped = 0
+    for v in missing_variants:
+        rows, n_skipped = _jumpstart_pack_rows(code_l, v)
+        total_skipped += n_skipped
+        pack_usd = sum((_row_line_value(r) or 0.0) for r in rows)
+        pack_summaries.append((v.get("name") or v.get("fileName") or "?", len(rows), pack_usd))
+        all_rows.extend(rows)
+
+    if not all_rows:
+        typer.echo(
+            f"# {len(missing_variants)} missing pack(s) for set:{code_l}, but no cards "
+            f"resolved locally (sync issue?).",
+            err=True,
+        )
+        raise typer.Exit(2)
+
+    ts = datetime.now().strftime("%Y-%m-%d-%H%M%S")
+    QUERIES_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Artifacts are named `missing-jumpstart-<code>-*` so they never collide
+    # with `query missing-set`'s `missing-<code>-*` files.
+    rows_for_xlsx = sorted(all_rows, key=lambda r: (
+        r.card.get("set") or "",
+        util.cn_sort_key(r.card.get("collector_number")),
+        r.finish,
+    ))
+    xlsx_path = QUERIES_DIR / f"missing-jumpstart-{code_l}-checklist-{ts}.xlsx"
+    _write_query_xlsx(
+        rows_for_xlsx, xlsx_path,
+        f"jumpstart-missing:{code_l} ({len(missing_variants)} un-owned packs)",
+        f"missing-jumpstart-{code_l}-checklist", kind="missing",
+    )
+
+    mp_path = QUERIES_DIR / f"missing-jumpstart-{code_l}-manapool-{ts}.txt"
+    mp_path.write_text(exports.build("manapool", rows_for_xlsx), encoding="utf-8")
+
+    tcg_path = QUERIES_DIR / f"missing-jumpstart-{code_l}-tcgplayer-{ts}.txt"
+    tcg_path.write_text(exports.build("tcgplayer", rows_for_xlsx), encoding="utf-8")
+
+    total_value = sum((_row_line_value(r) or 0.0) for r in all_rows)
+    typer.echo(
+        f"# Missing Jumpstart packs for set:{code_l} — "
+        f"{len(missing_variants)} of {len(variants)} packs · "
+        f"{len(all_rows)} card-rows · ${total_value:,.2f}"
+    )
+    typer.echo("")
+    typer.echo("| Pack | Cards | Value |")
+    typer.echo("|---|---:|---:|")
+    for theme, n_cards, usd in pack_summaries:
+        typer.echo(f"| {theme} | {n_cards} | ${usd:,.2f} |")
+    typer.echo("")
+    if total_skipped:
+        typer.echo(f"> ⚠️ {total_skipped} card(s) not found locally, skipped.")
+        typer.echo("")
+    typer.echo(f"📋 Checklist (xlsx): [{xlsx_path}](file://{xlsx_path.resolve()})")
+    typer.echo(f"🛒 ManaPool bulk-add ({len(rows_for_xlsx)} rows): [{mp_path}](file://{mp_path.resolve()})")
+    typer.echo(f"🛒 TCGplayer Mass Entry ({len(rows_for_xlsx)} rows): [{tcg_path}](file://{tcg_path.resolve()})")
 
 
 # ---------- ad-hoc scryfall query ----------
