@@ -357,7 +357,7 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
             f"""
             SELECT scryfall_id, set_code, collector_number, name, flavor_name,
                    rarity, cmc, prices_usd, prices_usd_foil, is_token, scryfall_uri,
-                   frame_effects, promo_types, border_color, full_art
+                   frame_effects, promo_types, border_color, full_art, color_identity
             FROM cards
             WHERE set_code IN ({placeholders})
             ORDER BY 1, 2
@@ -405,10 +405,10 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
     ws = wb.active
     ws.title = "checklist"
 
-    # Column order is fixed; treatment is V1.5 between rarity and mana_value.
-    # If columns shift, update parse_master_list_xlsx, the qty-tint indices,
-    # and the widths dict below.
-    headers = ["set", "collector_number", "name", "rarity", "treatment",
+    # Column order is fixed; `color` (WUBRGM code) follows name, treatment is
+    # between rarity and mana_value. If columns shift, update
+    # parse_master_list_xlsx, the qty-tint indices, and the widths dict below.
+    headers = ["set", "collector_number", "name", "color", "rarity", "treatment",
                "mana_value", "usd", "usd_foil", "qty_normal", "qty_foil"]
     ws.append(headers)
     for col, _ in enumerate(headers, start=1):
@@ -443,10 +443,13 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
         flavor = r["flavor_name"]
         display_name = f"{flavor} / {r['name']}" if flavor else r["name"]
         treatment = compute_treatment(r)
+        # Single-card color identity, WUBRGM convention: multicolor → 'M'.
+        color = util.format_color_identity(r["color_identity"], collapse_multicolor=True)
         ws.append([
             r["set_code"],
             r["collector_number"],
             display_name,
+            color,
             r["rarity"],
             treatment,
             r["cmc"],
@@ -473,26 +476,26 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
             name_cell.font = link_font
     last_row = ws.max_row
 
-    # Tint qty columns and apply integer validation. With treatment inserted
-    # at column 5, qty_normal/qty_foil are now columns 9/10.
-    for col_idx in (9, 10):
+    # Tint qty columns and apply integer validation. With `color` (col 4) and
+    # treatment (col 6) inserted, qty_normal/qty_foil are now columns 10/11.
+    for col_idx in (10, 11):
         col_letter = get_column_letter(col_idx)
         rng = f"{col_letter}2:{col_letter}{last_row}"
         int_validator.add(rng)
         for r in range(2, last_row + 1):
             ws.cell(row=r, column=col_idx).fill = qty_fill
 
-    # Sensible widths. Column 5 is treatment — sized for "b|shw|ext|sm|ff"
-    # worst case. Column 3 (name) holds long reskin pairs like
-    # "Knights of San d'Oria / Ranger-Captain of Eos" so it gets generous
-    # room.
-    widths = {1: 6, 2: 8, 3: 48, 4: 10, 5: 14, 6: 6, 7: 9, 8: 9, 9: 11, 10: 9}
+    # Sensible widths. Column 4 is color (WUBRGM code, narrow). Column 6 is
+    # treatment — sized for "b|shw|ext|sm|ff" worst case. Column 3 (name) holds
+    # long reskin pairs like "Knights of San d'Oria / Ranger-Captain of Eos" so
+    # it gets generous room.
+    widths = {1: 6, 2: 8, 3: 48, 4: 7, 5: 10, 6: 14, 7: 6, 8: 9, 9: 9, 10: 11, 11: 9}
     for col_idx, w in widths.items():
         ws.column_dimensions[get_column_letter(col_idx)].width = w
 
     # Format USD columns as currency with two decimals so prices line up
-    # ($3.00 / $0.43 instead of $3.0 / $0.43).
-    for col_idx in (7, 8):
+    # ($3.00 / $0.43 instead of $3.0 / $0.43). usd/usd_foil are now cols 8/9.
+    for col_idx in (8, 9):
         for row_idx in range(2, last_row + 1):
             ws.cell(row=row_idx, column=col_idx).number_format = '"$"#,##0.00'
 
@@ -1040,7 +1043,7 @@ def write_master_list_md(set_codes: Iterable[str], out_path: Path,
             f"""
             SELECT scryfall_id, set_code, collector_number, name, flavor_name,
                    rarity, prices_usd, prices_usd_foil, is_token, scryfall_uri,
-                   frame_effects, promo_types, border_color, full_art
+                   frame_effects, promo_types, border_color, full_art, color_identity
             FROM cards
             WHERE set_code IN ({placeholders})
             ORDER BY 1, 2
@@ -1173,9 +1176,12 @@ def write_master_list_md(set_codes: Iterable[str], out_path: Path,
         # affect ingest.
         treatment_seg = f" [{treatment}]" if treatment else ""
 
+        # Single-card color identity (WUBRGM: multicolor → 'M').
+        color = util.format_color_identity(r["color_identity"], collapse_multicolor=True)
+
         out_lines.append(
             f"- ({r['set_code'].upper()}) {r['collector_number']} "
-            f"[N:{qn} F:{qf}]{treatment_seg} — {link} — {price_segment}"
+            f"[N:{qn} F:{qf}]{treatment_seg} — {link} — {color} — {price_segment}"
         )
 
     # Legend at the bottom — informational, ignored by the parser.
@@ -1213,20 +1219,25 @@ def write_master_list_md(set_codes: Iterable[str], out_path: Path,
 
 def _rollup_deck_prices(
     deck_data: dict,
-) -> tuple[int, float | None, str | None, float | None]:
+) -> tuple[int, float | None, str | None, float | None, set[str]]:
     """Sum card_count + local-market USD across a precon/Jumpstart deck JSON,
-    and identify the single most expensive gameplay card.
+    identify the single most expensive gameplay card, and union the deck's
+    color identity.
 
     Walks the commander/main/side boards, pulling Scryfall USD per scryfall_id
     from the local cards table (foil price for foil cards, nonfoil otherwise).
     Printings missing from the cards table are skipped silently — the totals
     just under-report, and the user can still ingest. Returns ``(total_count,
-    usd_total, top_card, top_card_usd)`` where ``usd_total`` is ``None`` when
-    nothing priced, and ``top_card``/``top_card_usd`` name the priciest single
-    card at its shipped finish (same price basis as ``usd_total``) — both
-    ``None`` when nothing priced. Ties keep the first card seen (board order:
-    commander → main → side).
+    usd_total, top_card, top_card_usd, color_identity)`` where ``usd_total`` is
+    ``None`` when nothing priced; ``top_card``/``top_card_usd`` name the priciest
+    single card at its shipped finish (same price basis as ``usd_total``), both
+    ``None`` when nothing priced (ties keep the first card seen, board order
+    commander → main → side); and ``color_identity`` is the set of WUBRG letters
+    unioned across EVERY resolved card (independent of price — an unpriced card
+    still contributes its colors), empty for an all-colorless deck.
     """
+    import json as _json
+
     sids: list[tuple[str, int, bool]] = []  # (scryfall_id, count, is_foil)
     total_count = 0
     for board_key in ("commander", "mainBoard", "sideBoard"):
@@ -1240,14 +1251,16 @@ def _rollup_deck_prices(
     usd_total = 0.0
     top_card: str | None = None
     top_card_usd: float | None = None
+    color_identity: set[str] = set()
     if sids:
         with db.connect() as conn:
             placeholders = ",".join("?" for _ in sids)
             rows = {
-                r["scryfall_id"]: (r["name"], r["prices_usd"], r["prices_usd_foil"])
+                r["scryfall_id"]: (r["name"], r["prices_usd"],
+                                   r["prices_usd_foil"], r["color_identity"])
                 for r in conn.execute(
-                    f"SELECT scryfall_id, name, prices_usd, prices_usd_foil "
-                    f"FROM cards WHERE scryfall_id IN ({placeholders})",
+                    f"SELECT scryfall_id, name, prices_usd, prices_usd_foil, "
+                    f"color_identity FROM cards WHERE scryfall_id IN ({placeholders})",
                     [s[0] for s in sids],
                 ).fetchall()
             }
@@ -1255,7 +1268,16 @@ def _rollup_deck_prices(
             row = rows.get(sid)
             if not row:
                 continue
-            name, nonfoil, foil = row
+            name, nonfoil, foil, ci = row
+            # Color identity: union across every resolved card, regardless of
+            # price (a $0/unpriced card still contributes its colors).
+            if ci:
+                try:
+                    color_identity.update(
+                        c for c in _json.loads(ci) if c in util.WUBRG_ORDER
+                    )
+                except (ValueError, TypeError):
+                    pass
             price = foil if is_foil else nonfoil
             if price is not None:
                 price = float(price)
@@ -1269,6 +1291,7 @@ def _rollup_deck_prices(
         (round(usd_total, 2) if usd_total else None),
         top_card,
         (round(top_card_usd, 2) if top_card_usd is not None else None),
+        color_identity,
     )
 
 
@@ -1289,7 +1312,7 @@ def _jumpstart_variant_summary(variant_meta: dict, *, anchor: str) -> dict:
     from . import mtgjson as mtgjson_mod
     file_name = variant_meta["fileName"]
     deck_data = mtgjson_mod.deck(file_name)
-    total_count, usd_total, top_card, top_card_usd = _rollup_deck_prices(deck_data)
+    total_count, usd_total, top_card, top_card_usd, color_ci = _rollup_deck_prices(deck_data)
     theme = variant_meta.get("name") or file_name
     fc = _fc.front_card_for_theme(anchor, theme)
     if fc is not None and fc["prices_usd"] is not None:
@@ -1297,6 +1320,9 @@ def _jumpstart_variant_summary(variant_meta: dict, *, anchor: str) -> dict:
     return {
         "file_name": file_name,
         "theme": theme,
+        # Combined color identity across the pack's gameplay cards, as actual
+        # WUBRG letters (deck convention — no 'M' collapse). 'C' = colorless.
+        "color": util.format_color_identity(color_ci, collapse_multicolor=False),
         # top_card is the priciest gameplay card only — the front card folds into
         # usd_total (above) but never competes for top_card (it's not a gameplay
         # card and isn't part of _rollup_deck_prices' scan).
@@ -1333,7 +1359,7 @@ def _precon_variant_summary(variant_meta: dict) -> dict:
     file_name = variant_meta["fileName"]
     deck_data = mtgjson_mod.deck(file_name)
     # Precon checklists don't surface a top-card column; ignore those two.
-    total_count, usd_total, _top_card, _top_card_usd = _rollup_deck_prices(deck_data)
+    total_count, usd_total, _top_card, _top_card_usd, color_ci = _rollup_deck_prices(deck_data)
     commander = "; ".join(
         (c.get("name") or "") for c in (deck_data.get("commander") or [])
     )
@@ -1343,6 +1369,9 @@ def _precon_variant_summary(variant_meta: dict) -> dict:
         # it for consistency with the rest of the codebase's code handling.
         "set": (variant_meta.get("code") or "").lower(),
         "deck_name": variant_meta.get("name") or file_name,
+        # Combined color identity across the deck's cards, actual WUBRG letters
+        # (deck convention — no 'M'). 'C' = colorless.
+        "color": util.format_color_identity(color_ci, collapse_multicolor=False),
         "type": variant_meta.get("type") or "",
         "release_date": variant_meta.get("releaseDate") or "",
         "commander": commander,
@@ -1504,7 +1533,7 @@ def write_jumpstart_list_xlsx(set_code: str, out_path: Path,
     ws = wb.active
     ws.title = "checklist"
 
-    headers = ["file_name", "theme", "top_card", "top_card_usd",
+    headers = ["file_name", "theme", "color", "top_card", "top_card_usd",
                "card_count", "usd_total", "keep_qty", "deconstructed_qty"]
     ws.append(headers)
     for col, _ in enumerate(headers, start=1):
@@ -1533,6 +1562,7 @@ def write_jumpstart_list_xlsx(set_code: str, out_path: Path,
         ws.append([
             r["file_name"],
             r["theme"],
+            r["color"],
             r["top_card"],
             r["top_card_usd"],
             r["card_count"],
@@ -1542,21 +1572,22 @@ def write_jumpstart_list_xlsx(set_code: str, out_path: Path,
         ])
     last_row = ws.max_row
 
-    # col 7 = keep_qty (0/1), col 8 = deconstructed_qty (non-negative int)
-    keep_letter = get_column_letter(7)
+    # col 8 = keep_qty (0/1), col 9 = deconstructed_qty (non-negative int)
+    keep_letter = get_column_letter(8)
     keep_validator.add(f"{keep_letter}2:{keep_letter}{last_row}")
-    decon_letter = get_column_letter(8)
+    decon_letter = get_column_letter(9)
     decon_validator.add(f"{decon_letter}2:{decon_letter}{last_row}")
-    for col_idx in (7, 8):
+    for col_idx in (8, 9):
         for r in range(2, last_row + 1):
             ws.cell(row=r, column=col_idx).fill = qty_fill
 
-    # Currency format: col 4 = top_card_usd (unit price), col 6 = usd_total (pack).
+    # Currency format: col 5 = top_card_usd (unit price), col 7 = usd_total (pack).
     for row_idx in range(2, last_row + 1):
-        ws.cell(row=row_idx, column=4).number_format = '"$"#,##0.00'
-        ws.cell(row=row_idx, column=6).number_format = '"$"#,##0.00'
+        ws.cell(row=row_idx, column=5).number_format = '"$"#,##0.00'
+        ws.cell(row=row_idx, column=7).number_format = '"$"#,##0.00'
 
-    widths = {1: 22, 2: 24, 3: 24, 4: 11, 5: 11, 6: 11, 7: 10, 8: 17}
+    # cols: 3 = color (narrow), 4 = top_card (name, wide).
+    widths = {1: 22, 2: 24, 3: 7, 4: 24, 5: 11, 6: 11, 7: 11, 8: 10, 9: 17}
     for col_idx, w in widths.items():
         ws.column_dimensions[get_column_letter(col_idx)].width = w
 
@@ -1645,9 +1676,10 @@ def write_jumpstart_list_md(set_code: str, out_path: Path,
         top_card = r.get("top_card")
         top_usd = r.get("top_card_usd")
         top_seg = f"{top_card} (${top_usd:.2f})" if top_card and top_usd is not None else "—"
+        color = r.get("color") or "C"
         out_lines.append(
-            f"- {r['file_name']} — {r['theme']} — {top_seg} — {r['card_count']} cards — "
-            f"{usd_seg} [K:0 D:0]"
+            f"- {r['file_name']} — {r['theme']} — {color} — {top_seg} — "
+            f"{r['card_count']} cards — {usd_seg} [K:0 D:0]"
         )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text("\n".join(out_lines) + "\n", encoding="utf-8")
@@ -1791,7 +1823,7 @@ def write_precon_list_xlsx(out_path: Path, *,
     ws = wb.active
     ws.title = "checklist"
 
-    headers = ["file_name", "set", "deck_name", "type", "release_date",
+    headers = ["file_name", "set", "deck_name", "color", "type", "release_date",
                "commander", "card_count", "usd_total",
                "constructed_qty", "deconstructed_qty", "pool_qty"]
     ws.append(headers)
@@ -1818,6 +1850,7 @@ def write_precon_list_xlsx(out_path: Path, *,
             r["file_name"],
             r["set"].upper(),
             r["deck_name"],
+            r["color"],
             r["type"],
             r["release_date"],
             r["commander"],
@@ -1829,21 +1862,23 @@ def write_precon_list_xlsx(out_path: Path, *,
         ])
     last_row = ws.max_row
 
-    # cols 9/10/11 = constructed_qty / deconstructed_qty / pool_qty (non-neg int)
-    for col_idx in (9, 10, 11):
+    # cols 10/11/12 = constructed_qty / deconstructed_qty / pool_qty (non-neg int)
+    for col_idx in (10, 11, 12):
         letter = get_column_letter(col_idx)
         count_validator.add(f"{letter}2:{letter}{last_row}")
         for r in range(2, last_row + 1):
             ws.cell(row=r, column=col_idx).fill = qty_fill
-    # Tint the pool cell of pool-suggested rows (col 11) so it stands out.
+    # Tint the pool cell of pool-suggested rows (col 12) so it stands out.
     for i, r in enumerate(rows, start=2):
         if r.get("suggested_state") == "pool":
-            ws.cell(row=i, column=11).fill = pool_hint_fill
+            ws.cell(row=i, column=12).fill = pool_hint_fill
 
+    # usd_total is now col 9.
     for row_idx in range(2, last_row + 1):
-        ws.cell(row=row_idx, column=8).number_format = '"$"#,##0.00'
+        ws.cell(row=row_idx, column=9).number_format = '"$"#,##0.00'
 
-    widths = {1: 34, 2: 6, 3: 30, 4: 18, 5: 13, 6: 26, 7: 11, 8: 11, 9: 15, 10: 17, 11: 9}
+    # col 4 = color (WUBRG letters, narrow); rest shifted +1 from the insert.
+    widths = {1: 34, 2: 6, 3: 30, 4: 7, 5: 18, 6: 13, 7: 26, 8: 11, 9: 11, 10: 15, 11: 17, 12: 9}
     for col_idx, w in widths.items():
         ws.column_dimensions[get_column_letter(col_idx)].width = w
 
@@ -1943,8 +1978,9 @@ def write_precon_list_md(out_path: Path, *,
         d = r.get("deconstructed_qty") or 0
         p = r.get("pool_qty") or 0
         pool_hint = "  ← pool (fill P)" if r.get("suggested_state") == "pool" else ""
+        color = r.get("color") or "C"
         out_lines.append(
-            f"- {r['file_name']} — {r['set'].upper()} — {r['deck_name']} — "
+            f"- {r['file_name']} — {r['set'].upper()} — {r['deck_name']} — {color} — "
             f"{r['type']} — {r['card_count']} cards — {usd_seg} [C:{c} D:{d} P:{p}]{pool_hint}"
         )
     out_path.parent.mkdir(parents=True, exist_ok=True)
