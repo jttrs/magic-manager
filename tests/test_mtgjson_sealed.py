@@ -107,6 +107,61 @@ def test_sealed_product_decks_no_deck_contents(monkeypatch):
     assert mtgjson.sealed_product_decks("fdn", "Foundations Bundle") == []
 
 
+# ---------- sealed_product_deck_refs — completeness reporting ----------
+
+def test_deck_refs_full_resolution(monkeypatch):
+    from magic_manager import mtgjson
+    _patch(monkeypatch)
+    r = mtgjson.sealed_product_deck_refs("fdn", "Foundations Beginner Box")
+    assert [d["fileName"] for d in r["resolved"]] == ["Cats_FDN", "Elves_FDN", "Goblins_FDN"]
+    assert r["unresolved"] == []
+    assert r["has_deck_contents"] is True
+
+
+def test_deck_refs_partial_resolution(monkeypatch):
+    """A contents.deck ref with no matching DeckList entry is reported as
+    unresolved, NOT silently dropped — the fix for the silent-partial finding."""
+    from magic_manager import mtgjson
+    # Beginner Box with a 4th component that isn't in the DeckList.
+    sealed = [{
+        "name": "Foundations Beginner Box",
+        "category": "box_set",
+        "contents": {"deck": [
+            {"name": "Cats", "set": "fdn"},
+            {"name": "Elves", "set": "fdn"},
+            {"name": "Goblins", "set": "fdn"},
+            {"name": "Phantom", "set": "fdn"},   # no DeckList entry
+        ]},
+    }]
+    monkeypatch.setattr(mtgjson, "set_file",
+                        lambda code: {"sealedProduct": sealed} if code.lower() == "fdn" else {})
+    monkeypatch.setattr(mtgjson, "deck_list",
+                        lambda *, set_code=None: [d for d in _FDN_DECKLIST
+                                                  if set_code is None or d["code"] == set_code.upper()])
+    r = mtgjson.sealed_product_deck_refs("fdn", "Foundations Beginner Box")
+    assert [d["fileName"] for d in r["resolved"]] == ["Cats_FDN", "Elves_FDN", "Goblins_FDN"]
+    assert [ref["name"] for ref in r["unresolved"]] == ["Phantom"]
+    assert r["has_deck_contents"] is True
+
+
+def test_deck_refs_deckless_vs_unresolved_distinguishable(monkeypatch):
+    """The two empty-cases the CLI must tell apart: a deckless product has
+    has_deck_contents=False; a fully-unresolved box has it True with resolved=[]."""
+    from magic_manager import mtgjson
+    _patch(monkeypatch)
+    # Deckless: the Bundle (no contents.deck).
+    bundle = mtgjson.sealed_product_deck_refs("fdn", "Foundations Bundle")
+    assert bundle["has_deck_contents"] is False
+    assert bundle["resolved"] == [] and bundle["unresolved"] == []
+
+    # Fully-unresolved: contents.deck present, but the DeckList is empty.
+    monkeypatch.setattr(mtgjson, "deck_list", lambda *, set_code=None: [])
+    box = mtgjson.sealed_product_deck_refs("fdn", "Foundations Beginner Box")
+    assert box["has_deck_contents"] is True
+    assert box["resolved"] == []
+    assert len(box["unresolved"]) == 3
+
+
 # ---------- default_precon_state classifier (V11) ----------
 
 def _patch_deck(monkeypatch, name, cards):
