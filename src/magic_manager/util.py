@@ -7,9 +7,40 @@ the standalone scripts can import it.
 
 from __future__ import annotations
 
+import json
 import re
 
 _CN_RE = re.compile(r"^(\d+)(.*)$")
+
+# MTG's canonical color order. Multicolor collapses to 'M', colorless to 'C'.
+WUBRG_ORDER = "WUBRG"
+
+
+def format_color_identity(identity, *, collapse_multicolor: bool) -> str:
+    """Render a color identity as a WUBRG-ordered code.
+
+    ``identity`` is a list of color letters (``["W","G"]``) or the raw JSON
+    string the DB stores (``'["W","G"]'``) — both accepted so callers can pass
+    ``cards.color_identity`` straight through. Letters are filtered to
+    ``{W,U,B,R,G}``, deduped, and ordered W→U→B→R→G.
+
+    - Empty / colorless → ``"C"``.
+    - ``collapse_multicolor=True`` (single-card convention): any 2+ colors
+      render as ``"M"`` (the WUBRGM convention); one color renders as itself.
+    - ``collapse_multicolor=False`` (deck/pack convention): the actual letters,
+      e.g. white+green → ``"WG"``, five-color → ``"WUBRG"``.
+    """
+    if isinstance(identity, str):
+        try:
+            identity = json.loads(identity)
+        except (ValueError, TypeError):
+            identity = []
+    letters = {c for c in (identity or []) if c in WUBRG_ORDER}
+    if not letters:
+        return "C"
+    if collapse_multicolor and len(letters) >= 2:
+        return "M"
+    return "".join(c for c in WUBRG_ORDER if c in letters)
 
 
 def cn_sort_key(cn: str | None) -> tuple[int, str]:

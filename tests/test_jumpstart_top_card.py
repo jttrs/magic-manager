@@ -27,7 +27,7 @@ def test_rollup_top_card_picks_priciest_gameplay_card(tmp_db, seed_cards, make_c
         {"sid": "s-chase", "name": "Chase Mythic", "count": 1, "board": "mainBoard"},
     ])
 
-    total_count, usd_total, top_card, top_card_usd = sets_mod._rollup_deck_prices(deck)
+    total_count, usd_total, top_card, top_card_usd, _ci = sets_mod._rollup_deck_prices(deck)
     assert total_count == 12
     assert top_card == "Chase Mythic"
     assert top_card_usd == 25.00        # nonfoil (shipped nonfoil), unit price not ×count
@@ -51,7 +51,7 @@ def test_rollup_top_card_uses_shipped_foil_price(tmp_db, seed_cards, make_card, 
         {"sid": "s-foil-hi", "name": "Foil Fifty", "count": 1, "foil": True, "board": "mainBoard"},
     ])
 
-    _tc, _usd, top_card, top_card_usd = sets_mod._rollup_deck_prices(deck)
+    _tc, _usd, top_card, top_card_usd, _ci = sets_mod._rollup_deck_prices(deck)
     assert top_card == "Foil Fifty"      # 50.00 foil > 20.00 nonfoil
     assert top_card_usd == 50.00
 
@@ -66,7 +66,48 @@ def test_rollup_top_card_none_when_unpriced(tmp_db, seed_cards, make_card, make_
     deck = make_precon_deck("Demo", "Jumpstart", [
         {"sid": "s-np", "name": "No Price", "count": 3, "board": "mainBoard"},
     ])
-    total_count, usd_total, top_card, top_card_usd = sets_mod._rollup_deck_prices(deck)
+    total_count, usd_total, top_card, top_card_usd, _ci = sets_mod._rollup_deck_prices(deck)
     assert total_count == 3           # count still tallies unpriced cards
     assert usd_total is None
     assert top_card is None and top_card_usd is None
+
+
+# ---------- color-identity union (deck convention) ----------
+
+def test_rollup_color_identity_unions_all_cards(tmp_db, seed_cards, make_card, make_precon_deck):
+    """Deck color identity unions every RESOLVED card's colors — including an
+    unpriced one — regardless of price, in WUBRG order via format_color_identity."""
+    from magic_manager import sets as sets_mod, util
+
+    seed_cards([
+        make_card(id="c-w", name="Whitey", collector_number="1",
+                  prices={"usd": "1.00", "usd_foil": "2.00"}, color_identity=["W"]),
+        make_card(id="c-g", name="Greenie", collector_number="2",
+                  prices={"usd": None, "usd_foil": None}, color_identity=["G"]),  # unpriced
+        make_card(id="c-artifact", name="Rock", collector_number="3",
+                  prices={"usd": "0.50", "usd_foil": "1.00"}, color_identity=[]),  # colorless
+    ])
+    deck = make_precon_deck("Demo", "Jumpstart", [
+        {"sid": "c-w", "name": "Whitey", "count": 1, "board": "mainBoard"},
+        {"sid": "c-g", "name": "Greenie", "count": 1, "board": "mainBoard"},
+        {"sid": "c-artifact", "name": "Rock", "count": 1, "board": "mainBoard"},
+    ])
+    *_rest, color_ci = sets_mod._rollup_deck_prices(deck)
+    assert color_ci == {"W", "G"}       # unpriced green still contributes; colorless adds nothing
+    # deck convention: actual letters in WUBRG order, no 'M'
+    assert util.format_color_identity(color_ci, collapse_multicolor=False) == "WG"
+
+
+def test_rollup_color_identity_all_colorless(tmp_db, seed_cards, make_card, make_precon_deck):
+    from magic_manager import sets as sets_mod, util
+
+    seed_cards([
+        make_card(id="c-a", name="Artifact A", collector_number="1",
+                  prices={"usd": "1.00", "usd_foil": "2.00"}, color_identity=[]),
+    ])
+    deck = make_precon_deck("Demo", "Jumpstart", [
+        {"sid": "c-a", "name": "Artifact A", "count": 5, "board": "mainBoard"},
+    ])
+    *_rest, color_ci = sets_mod._rollup_deck_prices(deck)
+    assert color_ci == set()
+    assert util.format_color_identity(color_ci, collapse_multicolor=False) == "C"
