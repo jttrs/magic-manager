@@ -1211,14 +1211,21 @@ def write_master_list_md(set_codes: Iterable[str], out_path: Path,
 # as `available` in `mm deck find`: one pack's worth is pledged to the recipe,
 # the rest are loose. That's expected, not a bug.)
 
-def _rollup_deck_prices(deck_data: dict) -> tuple[int, float | None]:
-    """Sum card_count + local-market USD across a precon/Jumpstart deck JSON.
+def _rollup_deck_prices(
+    deck_data: dict,
+) -> tuple[int, float | None, str | None, float | None]:
+    """Sum card_count + local-market USD across a precon/Jumpstart deck JSON,
+    and identify the single most expensive gameplay card.
 
     Walks the commander/main/side boards, pulling Scryfall USD per scryfall_id
     from the local cards table (foil price for foil cards, nonfoil otherwise).
     Printings missing from the cards table are skipped silently — the totals
     just under-report, and the user can still ingest. Returns ``(total_count,
-    usd_total)`` where ``usd_total`` is ``None`` when nothing priced.
+    usd_total, top_card, top_card_usd)`` where ``usd_total`` is ``None`` when
+    nothing priced, and ``top_card``/``top_card_usd`` name the priciest single
+    card at its shipped finish (same price basis as ``usd_total``) — both
+    ``None`` when nothing priced. Ties keep the first card seen (board order:
+    commander → main → side).
     """
     sids: list[tuple[str, int, bool]] = []  # (scryfall_id, count, is_foil)
     total_count = 0
@@ -1231,25 +1238,38 @@ def _rollup_deck_prices(deck_data: dict) -> tuple[int, float | None]:
                 sids.append((sid, count, bool(entry.get("isFoil"))))
 
     usd_total = 0.0
+    top_card: str | None = None
+    top_card_usd: float | None = None
     if sids:
         with db.connect() as conn:
             placeholders = ",".join("?" for _ in sids)
             rows = {
-                r["scryfall_id"]: (r["prices_usd"], r["prices_usd_foil"])
+                r["scryfall_id"]: (r["name"], r["prices_usd"], r["prices_usd_foil"])
                 for r in conn.execute(
-                    f"SELECT scryfall_id, prices_usd, prices_usd_foil "
+                    f"SELECT scryfall_id, name, prices_usd, prices_usd_foil "
                     f"FROM cards WHERE scryfall_id IN ({placeholders})",
                     [s[0] for s in sids],
                 ).fetchall()
             }
         for sid, count, is_foil in sids:
-            prices = rows.get(sid)
-            if not prices:
+            row = rows.get(sid)
+            if not row:
                 continue
-            price = prices[1] if is_foil else prices[0]
+            name, nonfoil, foil = row
+            price = foil if is_foil else nonfoil
             if price is not None:
-                usd_total += float(price) * count
-    return total_count, (round(usd_total, 2) if usd_total else None)
+                price = float(price)
+                usd_total += price * count
+                # Track the priciest single card at its shipped finish (unit
+                # price, not ×count). Strict '>' keeps the first card on ties.
+                if top_card_usd is None or price > top_card_usd:
+                    top_card, top_card_usd = name, price
+    return (
+        total_count,
+        (round(usd_total, 2) if usd_total else None),
+        top_card,
+        (round(top_card_usd, 2) if top_card_usd is not None else None),
+    )
 
 
 def _jumpstart_variant_summary(variant_meta: dict, *, anchor: str) -> dict:
@@ -1269,7 +1289,7 @@ def _jumpstart_variant_summary(variant_meta: dict, *, anchor: str) -> dict:
     from . import mtgjson as mtgjson_mod
     file_name = variant_meta["fileName"]
     deck_data = mtgjson_mod.deck(file_name)
-    total_count, usd_total = _rollup_deck_prices(deck_data)
+    total_count, usd_total, top_card, top_card_usd = _rollup_deck_prices(deck_data)
     theme = variant_meta.get("name") or file_name
     fc = _fc.front_card_for_theme(anchor, theme)
     if fc is not None and fc["prices_usd"] is not None:
@@ -1277,6 +1297,11 @@ def _jumpstart_variant_summary(variant_meta: dict, *, anchor: str) -> dict:
     return {
         "file_name": file_name,
         "theme": theme,
+        # top_card is the priciest gameplay card only — the front card folds into
+        # usd_total (above) but never competes for top_card (it's not a gameplay
+        # card and isn't part of _rollup_deck_prices' scan).
+        "top_card": top_card,
+        "top_card_usd": top_card_usd,
         "card_count": total_count,
         "usd_total": usd_total,
     }
@@ -1307,7 +1332,8 @@ def _precon_variant_summary(variant_meta: dict) -> dict:
     from . import mtgjson as mtgjson_mod
     file_name = variant_meta["fileName"]
     deck_data = mtgjson_mod.deck(file_name)
-    total_count, usd_total = _rollup_deck_prices(deck_data)
+    # Precon checklists don't surface a top-card column; ignore those two.
+    total_count, usd_total, _top_card, _top_card_usd = _rollup_deck_prices(deck_data)
     commander = "; ".join(
         (c.get("name") or "") for c in (deck_data.get("commander") or [])
     )
@@ -1478,8 +1504,8 @@ def write_jumpstart_list_xlsx(set_code: str, out_path: Path,
     ws = wb.active
     ws.title = "checklist"
 
-    headers = ["file_name", "theme", "card_count", "usd_total",
-               "keep_qty", "deconstructed_qty"]
+    headers = ["file_name", "theme", "top_card", "top_card_usd",
+               "card_count", "usd_total", "keep_qty", "deconstructed_qty"]
     ws.append(headers)
     for col, _ in enumerate(headers, start=1):
         cell = ws.cell(row=1, column=col)
@@ -1507,6 +1533,8 @@ def write_jumpstart_list_xlsx(set_code: str, out_path: Path,
         ws.append([
             r["file_name"],
             r["theme"],
+            r["top_card"],
+            r["top_card_usd"],
             r["card_count"],
             r["usd_total"],
             None,
@@ -1514,19 +1542,21 @@ def write_jumpstart_list_xlsx(set_code: str, out_path: Path,
         ])
     last_row = ws.max_row
 
-    # col 5 = keep_qty (0/1), col 6 = deconstructed_qty (non-negative int)
-    keep_letter = get_column_letter(5)
+    # col 7 = keep_qty (0/1), col 8 = deconstructed_qty (non-negative int)
+    keep_letter = get_column_letter(7)
     keep_validator.add(f"{keep_letter}2:{keep_letter}{last_row}")
-    decon_letter = get_column_letter(6)
+    decon_letter = get_column_letter(8)
     decon_validator.add(f"{decon_letter}2:{decon_letter}{last_row}")
-    for col_idx in (5, 6):
+    for col_idx in (7, 8):
         for r in range(2, last_row + 1):
             ws.cell(row=r, column=col_idx).fill = qty_fill
 
+    # Currency format: col 4 = top_card_usd (unit price), col 6 = usd_total (pack).
     for row_idx in range(2, last_row + 1):
         ws.cell(row=row_idx, column=4).number_format = '"$"#,##0.00'
+        ws.cell(row=row_idx, column=6).number_format = '"$"#,##0.00'
 
-    widths = {1: 22, 2: 24, 3: 11, 4: 11, 5: 10, 6: 17}
+    widths = {1: 22, 2: 24, 3: 24, 4: 11, 5: 11, 6: 11, 7: 10, 8: 17}
     for col_idx, w in widths.items():
         ws.column_dimensions[get_column_letter(col_idx)].width = w
 
@@ -1567,11 +1597,13 @@ def write_jumpstart_list_md(set_code: str, out_path: Path,
 
     Line shape (after YAML frontmatter):
 
-        - Toph_TLE — Toph — 15 cards — $4.20 [K:0 D:0]
+        - Toph_TLE — Toph — Sokka, Master Strategist ($12.50) — 15 cards — $4.20 [K:0 D:0]
 
-    Parser keys on the leading file_name token, so prose changes don't break
-    ingest. The ``[K:k D:d]`` bracket holds keep_qty (0 or 1, copies kept
-    constructed) and deconstructed_qty (copies torn into free cards).
+    The segment after the theme is the pack's most expensive gameplay card and
+    its (shipped-finish) value. Parser keys on the leading file_name token and
+    the trailing bracket, so this middle prose doesn't break ingest. The
+    ``[K:k D:d]`` bracket holds keep_qty (0 or 1, copies kept constructed) and
+    deconstructed_qty (copies torn into free cards).
     """
     from . import __version__
 
@@ -1610,8 +1642,11 @@ def write_jumpstart_list_md(set_code: str, out_path: Path,
     for r in rows:
         usd = r["usd_total"]
         usd_seg = f"${usd:.2f}" if usd is not None else "—"
+        top_card = r.get("top_card")
+        top_usd = r.get("top_card_usd")
+        top_seg = f"{top_card} (${top_usd:.2f})" if top_card and top_usd is not None else "—"
         out_lines.append(
-            f"- {r['file_name']} — {r['theme']} — {r['card_count']} cards — "
+            f"- {r['file_name']} — {r['theme']} — {top_seg} — {r['card_count']} cards — "
             f"{usd_seg} [K:0 D:0]"
         )
     out_path.parent.mkdir(parents=True, exist_ok=True)
