@@ -1,6 +1,6 @@
 ---
 name: add-precon
-description: One-liner wrapper around `mm deck add-precon` — adds preconstructed decks (Commander decks, Box Set decks, Planeswalker decks, etc.) as TRACKED UNITS in one shot, building the deck AND adding its cards to inventory. Each copy is recorded in one of three states — built / deconstructed / pool (card pools like the Starter Collection or a Scene Box) — auto-detected when no count flag is given. Precon unit counts derive from the decks table, so the added copies show up under /set-status and prefill the precon checklist's modify flavor. Selection is by set code (+ optional --all / fuzzy name query) or an exact MTGJSON fileName. Triggers: "add each BLC commander deck constructed", "I built the Family Matters precon", "add the Foundations Starter Collection", "add 2 copies of X deconstructed", "I opened another copy of the Y precon".
+description: One-liner wrapper around `mm deck add-precon` — adds preconstructed decks (Commander decks, Box Set decks, Planeswalker decks, etc.) as TRACKED UNITS in one shot, building the deck AND adding its cards to inventory. Each copy is recorded in one of three states — built / deconstructed / pool (card pools like the Starter Collection or a Scene Box) — auto-detected when no count flag is given. Precon unit counts derive from the decks table, so the added copies show up under /set-status and prefill the precon checklist's modify flavor. Selection is by set code (+ optional --all / fuzzy name query) or an exact MTGJSON fileName. Triggers: "add each BLC commander deck constructed", "I built the Family Matters precon", "add the Foundations Starter Collection", "add a (Foundations) Beginner Box", "I opened a Bundle / sealed box", "add 2 copies of X deconstructed", "I opened another copy of the Y precon". For a sealed box/bundle (Beginner Box, Bundle) — a multi-deck product with no decklist — resolve its component decks from `sealedProduct` first (see the "Sealed boxes" section); never conclude the product doesn't exist from a DeckList scan.
 ---
 
 # Add Precon
@@ -49,6 +49,17 @@ mm deck add-precon <TARGET> [NAME_QUERY]
 | "I built it" / "keep constructed" | `--constructed` (or nothing — a normal deck auto-defaults to built 1) |
 | "deconstructed" / "tore down for parts" / "loose" | `--deconstructed` |
 | "the Starter Collection" / "a Scene Box" / any card pool | nothing (auto → pool), or explicit `--pool` |
+| a **sealed box / bundle** ("a Beginner Box", "the Foundations Beginner Box") | set code + the box name — the CLI expands it to its component decks |
+
+### Sealed boxes (Beginner Box, Bundle, …) — one command
+
+A sealed **box/bundle is NOT a single deck** and usually has **NO decklist**, so it never appears in `mm mtgjson decks`. Its membership lives in the set's `sealedProduct[].contents.deck` (see [[mtgjson-search]]). **`add-precon` resolves this for you** — pass the set code + the box name and it expands to the box's component decks:
+
+```bash
+uv run mm deck add-precon fdn "Foundations Beginner Box" -c 1   # → builds its 10 component decks
+```
+
+Resolution is **deck-first**: a real deck named X still wins; the box expansion is the fallback when no single deck matches. A matched product with no component decks (a pack-only Bundle) errors clearly. Don't hand-loop fileNames or use `<code> --all` (that sweeps in other products) — just name the box.
 
 Examples:
 

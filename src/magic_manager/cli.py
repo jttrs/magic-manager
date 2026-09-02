@@ -1908,14 +1908,38 @@ def _resolve_precon_filenames(
 ) -> list[dict]:
     """Resolve the add-precon selector to a list of MTGJSON deck dicts.
 
-    Two forms:
+    Three forms:
       - ``target`` is an exact MTGJSON fileName (``Name_CODE``) → that one deck.
       - ``target`` is a set code → every physical precon in that set
         (``--all`` / no name query), or the fuzzy-name match of ``name_query``.
+      - ``target`` set code + ``name_query`` naming a **sealed box/bundle**
+        (Beginner Box, Bundle, …) → the box's component decks. A sealed box has
+        no decklist of its own, so it never appears in ``precon_variants``; its
+        membership lives in ``sealedProduct[].contents.deck``. This is a
+        FALLBACK: it only runs when the single-deck fuzzy path finds no match,
+        so a real deck named the same still wins.
 
     Raises ``LookupError`` (→ exit 2) when nothing matches or a name query is
     ambiguous; the message lists the candidates so the caller can disambiguate.
     """
+    def _try_sealed_box() -> list[dict] | None:
+        """Resolve ``name_query`` as a sealed product's component decks, or None
+        if no such product exists. Raises LookupError for a matched-but-deckless
+        product (e.g. a pack-only Bundle) — add-precon only tracks decks."""
+        if not name_query:
+            return None
+        try:
+            decks = mtgjson_mod.sealed_product_decks(target.lower(), name_query)
+        except LookupError:
+            return None  # no sealed product by that name — let the deck-path error stand
+        if not decks:
+            raise LookupError(
+                f"sealed product {name_query!r} in {target.upper()} has no component "
+                f"decks to add — add-precon only tracks decks; use bulk-add / "
+                f"inventory add-card for loose cards."
+            )
+        return decks
+
     # Exact fileName? (deck() succeeds only for a real fileName; cheap, cached.)
     if name_query is None and not want_all:
         try:
@@ -1933,6 +1957,11 @@ def _resolve_precon_filenames(
         target.lower(), only_type=only_type, include_collector=include_collector,
     )
     if not variants:
+        # No single-deck precons in this set — but a sealed box might still exist
+        # (its components are excluded types, e.g. Jumpstart). Try that first.
+        box = _try_sealed_box()
+        if box is not None:
+            return box
         type_note = f" of type {only_type!r}" if only_type else ""
         raise LookupError(
             f"no physical precons{type_note} found for set {target!r} "
@@ -1961,6 +1990,10 @@ def _resolve_precon_filenames(
     )
     if len(best) == 1:
         return [v for v in pool if (v["name"] or "").lower() == best[0]]
+    # No single deck matched — deck-first fallback to a sealed box/bundle.
+    box = _try_sealed_box()
+    if box is not None:
+        return box
     names = ", ".join(f"{v['name']!r} ({v['fileName']})" for v in pool)
     raise LookupError(
         f"no precon in set {target!r} matched name {name_query!r}. "
@@ -1976,7 +2009,9 @@ def deck_add_precon_cmd(
     ),
     name_query: str = typer.Argument(
         None,
-        help="Fuzzy deck-name filter within the set (e.g. 'Family Matters'). Omit with a set code to require --all.",
+        help="Fuzzy deck-name filter within the set (e.g. 'Family Matters'), OR the "
+             "name of a sealed box/bundle (e.g. 'Foundations Beginner Box') to add its "
+             "component decks. Omit with a set code to require --all.",
     ),
     constructed: int = typer.Option(
         None, "--constructed", "-c", min=0,
@@ -2017,6 +2052,9 @@ def deck_add_precon_cmd(
       - ``mm deck add-precon blc --all``            → all BLC precons
       - ``mm deck add-precon blc "Family Matters"``  → one, by fuzzy name
       - ``mm deck add-precon FamilyMatters_BLC``     → one, by exact fileName
+      - ``mm deck add-precon fdn "Foundations Beginner Box"`` → a sealed box's
+        component decks (resolved via ``sealedProduct``; a box has no decklist
+        of its own). Deck-first: a real deck by that name wins over a box.
       - ``--type "Commander Deck"``                  → narrow set resolution
 
     Additive: re-running adds ANOTHER copy (built 1→2). Remove a copy with

@@ -15,6 +15,7 @@
 #   mtgjson.sh set FIC
 #   mtgjson.sh deck CounterBlitz_FIC
 #   mtgjson.sh decklist
+#   mtgjson.sh sealed FDN 'Beginner Box'
 #   mtgjson.sh sha256 FIC.json
 #   mtgjson.sh raw '/api/v5/SetList.json'
 #   mtgjson.sh check-stale FIC.json
@@ -149,6 +150,40 @@ case "$cmd" in
     fetch_to_cache "SetList.json" 0
     emit_cached "SetList.json"
     ;;
+  sealed)
+    # Surface a set's sealedProduct[] catalog — booster boxes, bundles, and
+    # BEGINNER BOXES that carry NO decklist and so never appear in `decklist`.
+    # Optional name substring (case-insensitive) filters the list. This is the
+    # documented path for "what's in the <X> box?" — never conclude a product
+    # doesn't exist from a `decklist` scan; boxes live HERE. Emits JSON:
+    # [{name, category, subtype, cardCount, decks:[fileName-ish {name,set}], other:[...]}]
+    code="${1:-}"
+    [ -z "$code" ] && { echo "usage: mtgjson.sh sealed <SETCODE> [name-substring]" >&2; exit 1; }
+    substr="${2:-}"
+    code_upper=$(printf '%s' "$code" | tr '[:lower:]' '[:upper:]')
+    fetch_to_cache "${code_upper}.json" 0
+    emit_cached "${code_upper}.json" | SUBSTR="$substr" python3 -c '
+import sys, json, os
+sub = (os.environ.get("SUBSTR") or "").lower()
+data = json.load(sys.stdin).get("data", {})
+out = []
+for p in data.get("sealedProduct") or []:
+    name = p.get("name") or ""
+    if sub and sub not in name.lower():
+        continue
+    contents = p.get("contents") or {}
+    out.append({
+        "name": name,
+        "category": p.get("category"),
+        "subtype": p.get("subtype"),
+        "cardCount": p.get("cardCount"),
+        "decks": contents.get("deck") or [],
+        "other": [o.get("name") for o in (contents.get("other") or [])],
+    })
+json.dump(out, sys.stdout, indent=2)
+sys.stdout.write("\n")
+'
+    ;;
   sha256)
     resource="${1:-}"
     [ -z "$resource" ] && { echo "usage: mtgjson.sh sha256 <RESOURCE_PATH>" >&2; exit 1; }
@@ -204,6 +239,9 @@ Subcommands:
   deck <FILENAME>               decks/<FILENAME>.json (e.g. CounterBlitz_FIC)
   decklist                      DeckList.json (every deck's metadata)
   setlist                       SetList.json (every set's metadata)
+  sealed <SETCODE> [substr]     sealedProduct[] catalog (boxes/bundles/beginner
+                                boxes, incl. ones with NO decklist) → each
+                                product's component decks + other contents
   sha256 <RESOURCE_PATH>        <RESOURCE_PATH>.sha256 (always fresh)
   raw '/api/v5/<path>'          arbitrary path (escape hatch)
   check-stale <RESOURCE_PATH>   compare cached file's SHA-256 to the published one;
