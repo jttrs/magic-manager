@@ -1924,21 +1924,59 @@ def _resolve_precon_filenames(
     """
     def _try_sealed_box() -> list[dict] | None:
         """Resolve ``name_query`` as a sealed product's component decks, or None
-        if no such product exists. Raises LookupError for a matched-but-deckless
-        product (e.g. a pack-only Bundle) — add-precon only tracks decks."""
+        if no such product exists (let the deck-path error stand).
+
+        Distinguishes three product outcomes and raises/warns accordingly:
+          - no ``contents.deck`` at all → a genuinely deckless product (pack-only
+            Bundle); raise (add-precon only tracks decks).
+          - ``contents.deck`` present but NONE resolved to a local DeckList entry
+            → a data/cache mismatch; raise a DISTINCT error (not "deckless").
+          - some resolved, some not → PARTIAL; warn (naming the unresolved
+            components) and proceed with what resolved.
+        Also warns that precon-only flags (``--type`` / ``--include-collector``)
+        don't apply to sealed-box resolution and were ignored."""
         if not name_query:
             return None
         try:
-            decks = mtgjson_mod.sealed_product_decks(target.lower(), name_query)
+            refs = mtgjson_mod.sealed_product_deck_refs(target.lower(), name_query)
         except LookupError:
             return None  # no sealed product by that name — let the deck-path error stand
-        if not decks:
+        resolved, unresolved = refs["resolved"], refs["unresolved"]
+        if not refs["has_deck_contents"]:
             raise LookupError(
                 f"sealed product {name_query!r} in {target.upper()} has no component "
                 f"decks to add — add-precon only tracks decks; use bulk-add / "
                 f"inventory add-card for loose cards."
             )
-        return decks
+        if not resolved:
+            # contents.deck listed decks but none matched the local DeckList —
+            # a data/cache mismatch, NOT a genuinely deckless product.
+            missing = ", ".join(r.get("name") or "?" for r in unresolved)
+            raise LookupError(
+                f"sealed product {name_query!r} in {target.upper()} lists "
+                f"{len(unresolved)} component deck(s) but none resolved to a local "
+                f"MTGJSON DeckList entry (data/cache mismatch — try "
+                f"`.claude/skills/mtgjson-search/mtgjson.sh refresh {target.upper()}.json`). "
+                f"Unresolved: {missing}."
+            )
+        if unresolved:
+            total = len(resolved) + len(unresolved)
+            missing = ", ".join(r.get("name") or "?" for r in unresolved)
+            typer.echo(
+                f"warning: sealed product {name_query!r} in {target.upper()} ships "
+                f"{total} component deck(s); {len(resolved)} resolved, "
+                f"{len(unresolved)} did NOT and will be skipped: {missing}. "
+                f"(MTGJSON data/cache mismatch — the rest are being added.)",
+                err=True,
+            )
+        if only_type or include_collector:
+            typer.echo(
+                "warning: --type / --include-collector don't apply to sealed-box "
+                "resolution (a box's component decks come from sealedProduct, not "
+                "the precon-type filter) — ignored.",
+                err=True,
+            )
+        return resolved
 
     # Exact fileName? (deck() succeeds only for a real fileName; cheap, cached.)
     if name_query is None and not want_all:

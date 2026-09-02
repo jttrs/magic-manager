@@ -157,20 +157,21 @@ def sealed_products(set_code: str, *, category: str | None = None,
     return out
 
 
-def sealed_product_decks(set_code: str, product_name: str) -> list[dict]:
-    """Resolve one sealed product's component decks to their DeckList entries.
+def sealed_product_deck_refs(set_code: str, product_name: str) -> dict:
+    """Resolve one sealed product's component decks, reporting completeness.
 
-    Finds the ``sealedProduct`` named ``product_name`` (case-insensitive) in
-    ``set_code``'s file, reads its ``contents.deck`` (each ``{name, set}``), and
-    matches those against ``deck_list()`` to return the full DeckList entries
-    (``{code, fileName, name, releaseDate, type}``) — so a caller can
-    ``deck(entry["fileName"])`` each to get card-by-card lists.
+    Like :func:`sealed_product_decks`, but distinguishes decks that resolved to
+    a DeckList entry from ``contents.deck`` refs that did NOT — so a caller can
+    tell a fully-resolved box from a partial one (some refs unmatched) and from
+    a genuinely deckless product (no ``contents.deck`` at all). Returns::
 
-    Membership comes from ``contents.deck``, NOT the deck ``type``: this returns
-    the FDN Beginner Box's 10 decks (typed ``"Jumpstart"`` in the DeckList) and
-    the TLA Beginner Box's decks (typed ``"Box Set"``) identically. Raises
-    ``LookupError`` if no product matches ``product_name``; returns ``[]`` if the
-    product has no ``contents.deck``.
+        {"resolved":   list[dict],   # matched DeckList entries {code,fileName,name,type,…}
+         "unresolved": list[dict],   # contents.deck refs {name,set} with NO DeckList match
+         "has_deck_contents": bool}  # whether contents.deck was non-empty
+
+    Membership comes from ``contents.deck``, NOT the deck ``type`` (see
+    :func:`sealed_product_decks`). Raises ``LookupError`` if no product matches
+    ``product_name``.
     """
     products = set_file(set_code).get("sealedProduct") or []
     want = product_name.strip().lower()
@@ -196,13 +197,38 @@ def sealed_product_decks(set_code: str, product_name: str) -> list[dict]:
     for code in ref_codes:
         for entry in deck_list(set_code=code):
             by_key[((entry.get("name") or "").lower(), (entry.get("code") or "").lower())] = entry
-    resolved = []
+    resolved, unresolved = [], []
     for r in deck_refs:
         key = ((r.get("name") or "").lower(), (r.get("set") or set_code).lower())
         entry = by_key.get(key)
         if entry is not None:
             resolved.append(entry)
-    return resolved
+        else:
+            unresolved.append(r)
+    return {
+        "resolved": resolved,
+        "unresolved": unresolved,
+        "has_deck_contents": bool(deck_refs),
+    }
+
+
+def sealed_product_decks(set_code: str, product_name: str) -> list[dict]:
+    """Resolve one sealed product's component decks to their DeckList entries.
+
+    Finds the ``sealedProduct`` named ``product_name`` (case-insensitive) in
+    ``set_code``'s file, reads its ``contents.deck`` (each ``{name, set}``), and
+    matches those against ``deck_list()`` to return the full DeckList entries
+    (``{code, fileName, name, releaseDate, type}``) — so a caller can
+    ``deck(entry["fileName"])`` each to get card-by-card lists.
+
+    Membership comes from ``contents.deck``, NOT the deck ``type``: this returns
+    the FDN Beginner Box's 10 decks (typed ``"Jumpstart"`` in the DeckList) and
+    the TLA Beginner Box's decks (typed ``"Box Set"``) identically. Raises
+    ``LookupError`` if no product matches ``product_name``; returns ``[]`` if the
+    product has no ``contents.deck`` (or if no refs resolved — use
+    :func:`sealed_product_deck_refs` to tell those two cases apart).
+    """
+    return sealed_product_deck_refs(set_code, product_name)["resolved"]
 
 
 # Deck ``type`` values that have their OWN dedicated workflow (Jumpstart →
