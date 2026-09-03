@@ -108,11 +108,12 @@ def _card_rows_for_variant(code: str, variant: dict, summary: dict) -> tuple[lis
         with db.connect() as conn:
             placeholders = ",".join("?" for _ in sids)
             card_data = {
-                r["scryfall_id"]: (r["name"], r["prices_usd"],
-                                   r["prices_usd_foil"], r["color_identity"])
+                r["scryfall_id"]: (r["name"], r["prices_usd"], r["prices_usd_foil"],
+                                   r["color_identity"], r["rarity"], r["collector_number"])
                 for r in conn.execute(
                     f"SELECT scryfall_id, name, prices_usd, prices_usd_foil, "
-                    f"color_identity FROM cards WHERE scryfall_id IN ({placeholders})",
+                    f"color_identity, rarity, collector_number "
+                    f"FROM cards WHERE scryfall_id IN ({placeholders})",
                     sids,
                 ).fetchall()
             }
@@ -124,7 +125,7 @@ def _card_rows_for_variant(code: str, variant: dict, summary: dict) -> tuple[lis
         if data is None:
             n_skipped += 1
             continue
-        name, nonfoil, foil, ci = data
+        name, nonfoil, foil, ci, rarity, cn = data
         price = foil if is_foil else nonfoil
         rows.append({
             "set": code.upper(),
@@ -133,6 +134,8 @@ def _card_rows_for_variant(code: str, variant: dict, summary: dict) -> tuple[lis
             "card_name": name,
             "card_value": float(price) if price is not None else None,
             "count": counts[(sid, is_foil)],
+            "rarity": rarity or "",
+            "collector_number": cn or "",
         })
     return rows, n_skipped
 
@@ -174,9 +177,14 @@ def _write_xlsx(pack_rows: list[dict], card_rows: list[dict], out_path: Path) ->
     from openpyxl.styles import Alignment, Font
     from openpyxl.utils import get_column_letter
 
-    # Sort both sheets: color (C→W→U→B→R→G→multi), then name A→Z.
-    pack_rows.sort(key=lambda r: (_color_sort_key(r["color"]), (r["theme"] or "").lower()))
-    card_rows.sort(key=lambda r: (_color_sort_key(r["color"]), (r["card_name"] or "").lower()))
+    # packs: set code first, then color (C→W→U→B→R→G→multi), then theme A→Z.
+    pack_rows.sort(key=lambda r: (r["set"], _color_sort_key(r["color"]), (r["theme"] or "").lower()))
+    # cards: set, then theme A→Z, then rarity (mythic→…→special), then collector number.
+    card_rows.sort(key=lambda r: (
+        r["set"], (r["theme"] or "").lower(),
+        sets.RARITY_ORDER.get((r["rarity"] or "").lower(), 99),
+        util.cn_sort_key(r["collector_number"]),
+    ))
 
     wb = Workbook()
 
@@ -197,14 +205,18 @@ def _write_xlsx(pack_rows: list[dict], card_rows: list[dict], out_path: Path) ->
         ws_p.column_dimensions[get_column_letter(ci)].width = w
 
     ws_c = wb.create_sheet("cards")
-    c_headers = ["set", "theme", "color", "card_name", "card_value", "count"]
+    c_headers = ["set", "theme", "color", "card_name", "card_value", "count",
+                 "rarity", "collector_number"]
     ws_c.append(c_headers)
     for r in card_rows:
         ws_c.append([r["set"], r["theme"], r["color"], r["card_name"],
-                     r["card_value"], r["count"]])
+                     r["card_value"], r["count"], r["rarity"], r["collector_number"]])
     for row_idx in range(2, ws_c.max_row + 1):
         ws_c.cell(row=row_idx, column=5).number_format = '"$"#,##0.00'
-    _c_widths = {1: 6, 2: 26, 3: 8, 4: 34, 5: 12, 6: 7}
+        # Force collector_number (col 8) to text so mixed '4'/'212s' CNs don't
+        # trip Excel's "number stored as text" warning (mirrors master-list).
+        ws_c.cell(row=row_idx, column=8).number_format = "@"
+    _c_widths = {1: 6, 2: 26, 3: 8, 4: 34, 5: 12, 6: 7, 7: 10, 8: 16}
     for ci, w in _c_widths.items():
         ws_c.column_dimensions[get_column_letter(ci)].width = w
 
