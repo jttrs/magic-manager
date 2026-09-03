@@ -47,6 +47,9 @@ does the same for a set family's singles. It is the *shopping* sibling of
 
 - [[generate-jumpstart-checklist]] — catalog packs you OPENED (ingestible). This is the
   inverse: a buy list for packs you HAVEN'T.
+- [[jumpstart-buildable]] — buy list for the *cards* to make every theme buildable (deduped
+  across a theme's versions), rather than whole packs. [[jumpstart-reference]] — read-only XLSX
+  identifying which pack version is which + its contents.
 - [[missing-from-set]] — the singles buy list for a whole set family (`missing-set`).
 - [[export-list]] — the general per-pack export (`mm set jumpstart-pack <code> <theme>`)
   for ONE named pack, with an optional `--missing` inventory filter.

@@ -68,6 +68,8 @@ packs only ever adds). `usd_total` includes the pack's front/title card price
 
 - [[jumpstart-missing]] — the *shopping list* for Jumpstart packs you DON'T own
   (`mm query missing-jumpstart <code>`). Read-only buy list, not an ingestible checklist.
+- [[jumpstart-buildable]] — buy list for the *cards* to make every theme buildable (not whole
+  packs); [[jumpstart-reference]] — read-only XLSX identifying pack versions + contents.
 - [[generate-set-checklist]] / [[generate-precon-checklist]] — the per-card and
   precon-product checklists. Different artifacts.
 - [[ingest-new-inventory-list]] — ingests the filled Jumpstart checklist back into the DB.
