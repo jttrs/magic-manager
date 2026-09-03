@@ -193,6 +193,16 @@ FAMILY_DUPE_FOIL_PROMO_TYPES: dict[str, frozenset[str]] = {
     # unblocks the `preferred` filter (like TLA/SPM/SOS/MAT/NEO).
     # See docs/sets/msh.md §2/§5.
     "msh": frozenset(),
+    # Outlaws of Thunder Junction: raisedfoil is same-art-as-sibling — the 5
+    # "vault" raised-foil showcase prints (BIG 61-65, vault+raisedfoil+boosterfun,
+    # treatment shw|ff) share the exact showcase art of their vault-only siblings
+    # (BIG 50/51/54/56/60, vault+boosterfun, shw). Verified all 5 pair cleanly
+    # (Vaultborn Tyrant 61↔50, illustration 486388b6). Keeps the vault showcase,
+    # drops the raisedfoil dupe. textured (OTP masterpieces) is NOT here — it
+    # can't pair via the sibling dedup (frame mismatch b vs shw) so it's handled
+    # via FAMILY_UNOBTAINABLE_RULES instead; vault itself is DISTINCT showcase
+    # art (illustration 486388b6 vs base 5fbc04c1), KEPT. See docs/sets/otj.md §2.
+    "otj": frozenset({"raisedfoil"}),
 }
 
 
@@ -432,6 +442,26 @@ FAMILY_UNOBTAINABLE_RULES: dict[str, list[dict]] = {
         # NOTE: NO `{stamped}` rule — `stamped` does not occur in this family
         # (0 prints); the `poster` showcase cards (msh 387/391/394, distinct art)
         # are KEPT. See docs/sets/msh.md §5.
+    ],
+    "otj": [
+        # "Breaking News" textured-foil masterpieces (added 2026-09-03). The 15
+        # OTP textured prints (CN 66-80, textured+boosterfun) are the same art as
+        # their showcase masterpiece siblings (OTP 22-65, boosterfun) — verified
+        # Anguished Unmaking 74↔35 share illustration f4d16fc6 — but DUPE_FOIL
+        # can't pair them: the textured print computes to `b` (inverted frame)
+        # while the sibling is `shw` (showcase), so the codes-minus-ff keys
+        # ({b} vs {shw}) never match (same frame-mismatch class as MAT halofoil /
+        # MSH surgefoil). A fancy-foil masterpiece tier the user doesn't chase.
+        # any_of:{textured} catches exactly these 15.
+        {"promo_types_any_of": frozenset({"textured"})},
+        # Promo-pack/prerelease STAMP variants (mirrors SNC/EOE/ECL/SOS). 94
+        # stamped prints (pbig 14 + potj 80) — same card as a kept base/showcase
+        # sibling + a stamp, priced on scarcity. Signal is `stamped` ONLY:
+        # validated the 5 `promopack`-WITHOUT-`stamped` OTJ alt-arts (368-372,
+        # inverted-frame DISTINCT art) are KEPT. (datestamped prerelease prints
+        # are already dropped by the global preferred Step-2 filter — all 80 have
+        # a non-stamped OTJ sibling.) See docs/sets/otj.md §5.
+        {"promo_types_any_of": frozenset({"stamped"})},
     ],
 }
 
