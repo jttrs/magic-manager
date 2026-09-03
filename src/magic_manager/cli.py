@@ -427,12 +427,13 @@ def set_jumpstart_list(
 ):
     """Build a pack-level checklist of every Jumpstart variant for a set.
 
-    One row per sealed-pack variant (e.g. ~66 rows for TLE). Fill
-    ``keep_qty`` (0 or 1 — copies kept *constructed*: one ``pack:*`` recipe
-    is created and one physical copy is auto-composed) and
-    ``deconstructed_qty`` (copies torn into free cards; no pledge). The two
-    sum to total packs opened and that total determines how many cards land in
-    inventory.
+    One row per sealed-pack variant (e.g. ~66 rows for TLE). Fill a single
+    ``acquired_qty`` per pack — how many copies you opened. Ingest SPLITS it
+    deterministically: a net-new pack keeps its first copy *constructed* (a
+    ``pack:*`` recipe + one auto-composed physical copy) and records the rest
+    *deconstructed* (tracked rows, cards loose); if you already own a built
+    copy, every copy is deconstructed. You never pre-declare states, so you
+    don't have to know your existing collection at fill time.
 
     Complements ``mm set master-list``: that one is per-card across the whole
     family, this one is per-pack inside one Jumpstart set. Use this when
@@ -487,9 +488,9 @@ def set_jumpstart_list(
     typer.echo()
     typer.echo("Next steps:")
     if fmt == "md":
-        typer.echo(f"  1. Open {out_path} in any text editor and edit the `[K:k D:d]` brackets (K=0/1 kept constructed, D=copies to deconstruct).")
+        typer.echo(f"  1. Open {out_path} in any text editor and edit the `[A:n]` brackets (A=copies acquired; ingest splits built vs deconstructed).")
     else:
-        typer.echo(f"  1. Open {out_path} in Excel/Numbers — fill keep_qty (0 or 1) and deconstructed_qty per pack.")
+        typer.echo(f"  1. Open {out_path} in Excel/Numbers — fill acquired_qty per pack (copies opened; ingest splits built vs deconstructed).")
     typer.echo(f"  2. When done: mm set ingest --path {out_path}")
 
 
@@ -647,12 +648,13 @@ def set_precon_list(
     ),
     mode: str = typer.Option(
         "add", "--mode",
-        help="'add' (default): blank constructed_qty/deconstructed_qty cells; "
-             "ingest ADDS the counts you enter (each copy becomes a deck row). "
-             "'modify': both columns prefilled from your current deck collection "
+        help="'add' (default): a single blank acquired_qty column; enter how "
+             "many copies you got and ingest SPLITS them (net-new buildable → 1 "
+             "built + rest deconstructed; already-built → all deconstructed; pool "
+             "products → pool). 'modify': constructed_qty/deconstructed_qty/"
+             "pool_qty columns prefilled from your current deck collection "
              "(counts derived from the decks table); ingest applies the signed "
-             "delta. Use 'modify' to see what you already have and avoid "
-             "double-adding.",
+             "delta. Use 'modify' to correct absolute per-state counts.",
     ),
     sync_all: bool = typer.Option(
         False, "--sync-all",
@@ -681,13 +683,15 @@ def set_precon_list(
     Box Set, Planeswalker Deck, …), carrying its set, deck name, product type,
     release date, commander(s), card count, and best-effort market value.
 
-    Track precon decks AS UNITS via two fill columns: ``constructed_qty`` (built
-    copies — each creates a deck + adds its cards to inventory) and
-    ``deconstructed_qty`` (copies torn down for parts — a deck row is recorded,
-    cards go loose). In ``--mode add`` (default) the cells are blank and ingest
-    ADDS the counts; in ``--mode modify`` they're prefilled from your current
-    deck collection (counts derived from the decks table) and ingest applies the
-    signed delta — so you SEE what you already have and don't double-add.
+    Track precon decks AS UNITS. In ``--mode add`` (default) fill a single
+    ``acquired_qty`` per product — how many copies you got — and ingest SPLITS
+    them into built / deconstructed / pool for you (net-new buildable → 1 built +
+    rest deconstructed; already-built → all deconstructed; card-pool products →
+    pool), so you never have to know your prior collection at fill time. In
+    ``--mode modify`` three per-state columns (``constructed_qty`` /
+    ``deconstructed_qty`` / ``pool_qty``) are prefilled from your current deck
+    collection (counts derived from the decks table) and ingest applies the
+    signed delta — use it to correct absolute counts.
 
     Scope defaults to the modern-constructed precon types; ``--type`` narrows to
     one, ``--all-physical`` opens it to everything. Collector's Edition variants
@@ -729,7 +733,7 @@ def set_precon_list(
 
     typer.echo("Cataloging precons across all sets (reading MTGJSON per-deck files; first run may take a moment)…")
     if mode == "modify":
-        typer.echo("  --mode modify: constructed_qty/deconstructed_qty prefilled from the precon ledger.")
+        typer.echo("  --mode modify: constructed_qty/deconstructed_qty/pool_qty prefilled from your current deck collection.")
     if sync_all:
         typer.echo("  --sync-all: will sync every referenced set from Scryfall first (this is the slow part)…")
     writer = (
@@ -748,10 +752,16 @@ def set_precon_list(
     typer.echo(f"Wrote {n_rows} precon product rows to {out_path} (mode={mode})")
     typer.echo()
     typer.echo("Next steps:")
-    if fmt == "md":
-        typer.echo(f"  1. Open {out_path} in any text editor and edit the `[C:c D:d]` brackets (C=constructed copies, D=deconstructed copies).")
+    if mode == "modify":
+        if fmt == "md":
+            typer.echo(f"  1. Open {out_path} in any text editor and edit the `[C:c D:d P:p]` brackets (absolute per-state counts).")
+        else:
+            typer.echo(f"  1. Open {out_path} in Excel/Numbers — edit constructed_qty/deconstructed_qty/pool_qty per deck (absolute counts).")
     else:
-        typer.echo(f"  1. Open {out_path} in Excel/Numbers — fill constructed_qty and deconstructed_qty per deck.")
+        if fmt == "md":
+            typer.echo(f"  1. Open {out_path} in any text editor and edit the `[A:n]` brackets (A=copies acquired; ingest splits the states).")
+        else:
+            typer.echo(f"  1. Open {out_path} in Excel/Numbers — fill acquired_qty per deck (copies acquired; ingest splits built/deconstructed/pool).")
     typer.echo(f"  2. When done: mm set ingest --path {out_path}")
 
 
@@ -813,11 +823,11 @@ def _ingest_deck_checklist(src: Path, *, kind: str, sha: str, force: bool,
     # set); its rows each name their own set. Fall back to a bare kind label.
     set_code = meta.get("anchor_code") or meta.get("set_codes") or ""
     log_label = f"{kind}:{set_code}" if set_code else kind
-    # Both summaries expose ``constructed``; precon uses ``deconstructed`` where
-    # jumpstart uses ``loose_copies`` for the torn-down count.
-    rows_added = (summary or {}).get("constructed", 0)
-    rows_updated = ((summary or {}).get("loose_copies")
-                    or (summary or {}).get("deconstructed", 0))
+    # Unified summary shape: ``built`` copies added, ``deconstructed`` + ``pool``
+    # torn-down/loose copies added.
+    rows_added = (summary or {}).get("built", 0)
+    rows_updated = ((summary or {}).get("deconstructed", 0)
+                    + (summary or {}).get("pool", 0))
     with db.connect() as conn:
         db.record_ingest_log(
             conn,
@@ -859,21 +869,23 @@ def _ingest_deck_checklist(src: Path, *, kind: str, sha: str, force: bool,
         raise typer.Exit(2)
 
     scope_seg = f" ({set_code})" if set_code else ""
-    if kind == "precon":
-        # Precon summary: signed transaction against the decks table (counts
-        # are derived; no ledger). built/torn_down/pooled + count_before/after
-        # (3-tuples: built, deconstructed, pool) per row.
-        typer.echo(
-            f"{noun}: {summary['rows_acted']}/{summary['rows_total']} rows acted on, "
-            f"{summary['built']} built, "
-            f"{summary['deconstructed']} deconstructed, "
-            f"{summary['pool']} pooled, "
-            f"{summary['inv_qty_total']} card-qty added to inventory."
-        )
-        for row in summary["per_row"]:
-            if row["error"]:
-                typer.echo(f"  ! {row['file_name']}: {row['error']}", err=True)
-                continue
+    # Two summary shapes share the unified built/deconstructed/pool tallies:
+    #   - MODIFY precon rows carry ``count_before``/``count_after`` (signed delta).
+    #   - ADD rows (jumpstart + precon add) carry ``acquired_qty``/``net_new``.
+    is_modify = bool(summary["per_row"]) and "count_before" in summary["per_row"][0]
+    typer.echo(
+        f"{noun}{scope_seg}: "
+        f"{summary['rows_acted']}/{summary['rows_total']} rows acted on, "
+        f"{summary['built']} built, "
+        f"{summary['deconstructed']} deconstructed, "
+        f"{summary['pool']} pooled, "
+        f"{summary['inv_qty_total']} card-qty added to inventory."
+    )
+    for row in summary["per_row"]:
+        if row["error"]:
+            typer.echo(f"  ! {row['file_name']}: {row['error']}", err=True)
+            continue
+        if is_modify:
             bc, bd, bp = row["count_before"]
             ac, ad, ap = row["count_after"]
             typer.echo(
@@ -883,38 +895,27 @@ def _ingest_deck_checklist(src: Path, *, kind: str, sha: str, force: bool,
                 + (f"  [+{row['torn_down']} torn down]" if row["torn_down"] else "")
                 + (f"  [+{row['pooled']} pooled]" if row["pooled"] else "")
             )
-            if row.get("warning"):
-                typer.echo(f"    note: {row['warning']}", err=True)
-            if row["missing_sids"]:
-                typer.echo(
-                    f"    warning: {len(row['missing_sids'])} entries had no scryfallId",
-                    err=True,
-                )
-    else:
-        typer.echo(
-            f"{noun}{scope_seg}: "
-            f"{summary['rows_acted']}/{summary['rows_total']} rows acted on, "
-            f"{summary['constructed']} constructed, "
-            f"{summary['loose_copies']} loose copies, "
-            f"{summary['inv_qty_total']} card-qty added to inventory."
-        )
-        for row in summary["per_row"]:
-            if row["error"]:
-                typer.echo(f"  ! {row['file_name']}: {row['error']}", err=True)
-                continue
-            if row["keep_qty"] == 1:
-                if row["deconstructed_qty"] > 0:
-                    bits = f"constructed 1 + {row['deconstructed_qty']} loose → {row['slug']}"
-                else:
-                    bits = f"constructed 1 → {row['slug']}"
-            else:
-                bits = f"deconstructed {row['deconstructed_qty']} → loose inventory"
-            typer.echo(f"  {row['file_name']} ({row['label']}): {bits}")
-            if row["missing_sids"]:
-                typer.echo(
-                    f"    warning: {len(row['missing_sids'])} entries had no scryfallId",
-                    err=True,
-                )
+        else:
+            # add mode: acquired copies split into built/decon/pool.
+            parts = []
+            if row["built"]:
+                parts.append(f"{row['built']} built → {row['slug']}")
+            if row["torn_down"]:
+                parts.append(f"{row['torn_down']} deconstructed")
+            if row["pooled"]:
+                parts.append(f"{row['pooled']} pooled")
+            tag = "net-new" if row.get("net_new") else "duplicate → auto-deconstructed"
+            typer.echo(
+                f"  {row['file_name']} ({row['label']}): "
+                f"acquired {row['acquired_qty']} → {', '.join(parts) or 'no-op'}  [{tag}]"
+            )
+        if row.get("warning"):
+            typer.echo(f"    note: {row['warning']}", err=True)
+        if row["missing_sids"]:
+            typer.echo(
+                f"    warning: {len(row['missing_sids'])} entries had no scryfallId",
+                err=True,
+            )
     for w in summary["warnings"]:
         typer.echo(f"  warning: {w}", err=True)
     if archived:

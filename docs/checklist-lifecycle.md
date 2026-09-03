@@ -64,6 +64,25 @@ implies correction/review over augmentation ("I sold some", "re-audit", "what do
 already have"). Each generator's SKILL.md notes any command-specific `modify` nuance
 (e.g. precon `modify` won't apply a *lowered* count; it points at `mm deck delete`).
 
+### Deck checklists (precon + jumpstart) — `add` mode is a single `acquired_qty`
+
+For **precon and jumpstart** checklists, `add` mode does NOT ask you to pre-declare
+built-vs-deconstructed. It has ONE fill column, **`acquired_qty`** (`[A:n]` in
+markdown) = how many copies of that product you acquired. Ingest SPLITS it
+deterministically, so you never need to know your prior collection at fill time:
+
+- **card-pool products** (Starter Collection, Scene Box) → all copies → `pool`;
+- **buildable, net-new** → 1st copy kept `built` (recipe + auto-composed), the rest
+  `deconstructed`;
+- **buildable, you already own a built copy** → every acquired copy `deconstructed`.
+
+Every copy — including jumpstart — becomes a tracked `decks` row (distinct `-2`/`-3`
+slugs), so built vs deconstructed counts stay derivable from the decks table. There
+is no silent "already exists" skip: a redundant copy becomes a tracked deconstructed
+row. Precon `modify` mode keeps the explicit three-column layout
+(`constructed_qty`/`deconstructed_qty`/`pool_qty`, `[C:c D:d P:p]`) for correcting
+absolute per-state counts.
+
 Both flavors carry a colored **README banner sheet** (green `add` / red `modify`) in
 the XLSX, and the same as a blockquote under the H1 in markdown.
 

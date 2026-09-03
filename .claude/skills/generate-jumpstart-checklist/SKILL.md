@@ -1,6 +1,6 @@
 ---
 name: generate-jumpstart-checklist
-description: Build the pack-level checklist (XLSX or markdown) for one Jumpstart set — one row per sealed Jumpstart pack variant (e.g. ~51 for MSH, ~121 for J25) with keep_qty/deconstructed_qty columns the user fills in per pack. Use whenever the user wants to catalog Jumpstart packs they opened, by set code. Mechanical workflow: invoke `mm set jumpstart-list <code>` and relay the result. Triggers: "jumpstart checklist for j25", "generate a jumpstart checklist for msh", "catalog my jumpstart packs", "checklist of all <set> jumpstart packs", "I opened some Foundations Jumpstart packs".
+description: Build the pack-level checklist (XLSX or markdown) for one Jumpstart set — one row per sealed Jumpstart pack variant (e.g. ~51 for MSH, ~121 for J25) with a single acquired_qty column the user fills in per pack (copies opened; ingest splits built vs deconstructed). Use whenever the user wants to catalog Jumpstart packs they opened, by set code. Mechanical workflow: invoke `mm set jumpstart-list <code>` and relay the result. Triggers: "jumpstart checklist for j25", "generate a jumpstart checklist for msh", "catalog my jumpstart packs", "checklist of all <set> jumpstart packs", "I opened some Foundations Jumpstart packs".
 ---
 
 # Generate Jumpstart Checklist
@@ -33,18 +33,25 @@ This is the Jumpstart sibling of [[generate-set-checklist]] (per-card inventory)
 See [checklist-lifecycle.md](../../../docs/checklist-lifecycle.md) for the full
 generate → fill → ingest → archive lifecycle and the transient-artifact principle.
 
-## Fill columns (Jumpstart-specific)
+## Fill column (Jumpstart-specific)
 
-One row per pack. Columns: `file_name`, `theme`, `card_count`, `usd_total`, and the
-two fill columns:
+One row per pack. Columns: `file_name`, `theme`, `color`, `top_card`, `top_card_usd`,
+`card_count`, `usd_total`, and a **single** fill column:
 
 | Column | Meaning |
 |---|---|
-| **`keep_qty`** | `0` or `1` — copies kept *constructed*. `1` creates one `pack:<theme>-<code>` recipe deck AND auto-composes one physical copy. |
-| **`deconstructed_qty`** | copies torn into free/loose cards (no recipe pledged). |
+| **`acquired_qty`** | How many copies of that pack you opened. That's all you enter. |
 
-`keep_qty + deconstructed_qty` = total copies of that pack opened = total copies added
-to inventory. Markdown form uses a `[K:k D:d]` bracket per line.
+Ingest SPLITS `acquired_qty` deterministically — you never pre-declare states, so you
+don't need to know your existing collection:
+
+- **net-new pack** → 1st copy kept *constructed* (creates a `pack:<theme>-<code>`
+  recipe + auto-composes one physical copy), any remaining copies *deconstructed*
+  (tracked deck rows, cards loose);
+- **you already own a built copy** → every acquired copy *deconstructed*.
+
+Every copy becomes a tracked deck row, so built vs deconstructed counts stay derivable
+from `mm deck ls`. Markdown form uses an `[A:n]` bracket per line.
 
 **No `--mode`, no `--rarity`/`--only` slicing** — Jumpstart is always additive (opening
 packs only ever adds). `usd_total` includes the pack's front/title card price
@@ -52,7 +59,7 @@ packs only ever adds). `usd_total` includes the pack's front/title card price
 
 ## Flags (rarely needed)
 
-- `--format md` — markdown instead of XLSX; edit the `[K:k D:d]` bracket per row.
+- `--format md` — markdown instead of XLSX; edit the `[A:n]` bracket per row.
 - `--out <path>` — redirect output (skips collision detection).
 - `--force` — overwrite an existing active checklist (only after the user chooses
   "discard" at the exit-3 prompt).
@@ -71,7 +78,8 @@ User: *"generate a jumpstart checklist for j25"* → `uv run mm set jumpstart-li
 → tell them `checklists/j25-jumpstart-checklist.xlsx` (121 pack rows) is ready.
 
 User: *"I opened some Marvel jumpstart packs, let me log them"* →
-`uv run mm set jumpstart-list msh` → they fill `keep_qty`/`deconstructed_qty` per pack.
+`uv run mm set jumpstart-list msh` → they fill `acquired_qty` per pack (ingest splits
+built vs deconstructed automatically).
 
 User: *"give me the avatar jumpstart list as markdown"* →
 `uv run mm set jumpstart-list tle --format md`.
