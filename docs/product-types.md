@@ -136,8 +136,9 @@ Cats, Elves, Goblins, …).
 ### Jumpstart
 Modular **fixed-list half-deck packs** — a set publishes many variants (TLE ships
 66; MSH 51). Has its **own workflow** (`mm set jumpstart-list <set>` →
-fill `keep_qty`/`deconstructed_qty` → `mm set ingest`), so it is deliberately in
-`PRECON_EXCLUDED_TYPES` and never appears in the precon catalog.
+fill a single `acquired_qty` per pack → `mm set ingest`, which splits built vs
+deconstructed automatically), so it is deliberately in `PRECON_EXCLUDED_TYPES` and
+never appears in the precon catalog.
 
 ### Commander Deck / Welcome Deck / other constructed lines
 Standard sealed constructed decks. `import-precon` constructed is the default (deck

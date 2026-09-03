@@ -320,12 +320,20 @@ class JumpstartRow:
     """
     file_name: str
     theme: str
-    keep_qty: int
-    deconstructed_qty: int
+    # Modify-mode / explicit per-state counts (0 for add-mode rows, which use
+    # ``acquired_qty`` instead).
+    keep_qty: int = 0
+    deconstructed_qty: int = 0
     # V11: precon 'pool' column (Starter Collection / Scene Box — cards that
     # were never a deck). 0 for jumpstart (no such column). ``keep_qty`` doubles
     # as precon 'constructed_qty' (a count, not a 0/1 flag) on precon files.
     pool_qty: int = 0
+    # V12: ADD-mode single-quantity column. ``acquired_qty`` = how many copies
+    # you just acquired; ingest SPLITS it deterministically into built vs
+    # deconstructed vs pool (you don't pre-declare the states). Used by both
+    # jumpstart and precon in add mode; the keep_qty/deconstructed_qty/pool_qty
+    # columns above are only for precon's modify flavor (absolute-count edits).
+    acquired_qty: int = 0
     raw: str = ""
 
 
@@ -339,7 +347,7 @@ class JumpstartParseResult:
     def filled_rows(self) -> list[JumpstartRow]:
         """Rows where the user recorded at least one opened pack/copy."""
         return [r for r in self.rows
-                if r.keep_qty + r.deconstructed_qty + r.pool_qty > 0]
+                if r.keep_qty + r.deconstructed_qty + r.pool_qty + r.acquired_qty > 0]
 
 
 JUMPSTART_LIST_COLUMNS = (
@@ -392,15 +400,23 @@ def parse_jumpstart_list_xlsx(path: Path) -> JumpstartParseResult:
 
     header_lower = [str(h).strip().lower() if h is not None else "" for h in header]
     idx = {c: header_lower.index(c)
-           for c in (*JUMPSTART_LIST_COLUMNS, "constructed_qty", "pool_qty")
+           for c in (*JUMPSTART_LIST_COLUMNS, "constructed_qty", "pool_qty", "acquired_qty")
            if c in header_lower}
+    # Two layouts share this parser:
+    #   - ADD mode: a single ``acquired_qty`` column (ingest splits the states).
+    #   - MODIFY mode (precon): explicit constructed/keep + deconstructed [+ pool]
+    #     columns (absolute-count edits).
     # The construct column may be named keep_qty (jumpstart) or constructed_qty
     # (precon); accept whichever is present.
     construct_col = next((c for c in _CONSTRUCT_COLUMN_ALIASES if c in idx), None)
-    if construct_col is None or "file_name" not in idx or "deconstructed_qty" not in idx:
+    has_acquired = "acquired_qty" in idx
+    if "file_name" not in idx or (
+        not has_acquired and (construct_col is None or "deconstructed_qty" not in idx)
+    ):
         res.warnings.append(
-            "XLSX missing required columns: need file_name, deconstructed_qty, "
-            "and one of keep_qty/constructed_qty"
+            "XLSX missing required columns: need file_name and either "
+            "acquired_qty (add mode) or keep_qty/constructed_qty + "
+            "deconstructed_qty (modify mode)"
         )
         return res
 
@@ -411,8 +427,12 @@ def parse_jumpstart_list_xlsx(path: Path) -> JumpstartParseResult:
         if not file_name:
             continue
         theme = (str(row[idx["theme"]]).strip() if "theme" in idx and row[idx["theme"]] is not None else "")
-        keep_qty = _coerce_qty(row[idx[construct_col]], row_num, construct_col, res)
-        deconstructed_qty = _coerce_qty(row[idx["deconstructed_qty"]], row_num, "deconstructed_qty", res)
+        acquired_qty = (_coerce_qty(row[idx["acquired_qty"]], row_num, "acquired_qty", res)
+                        if has_acquired else 0)
+        keep_qty = (_coerce_qty(row[idx[construct_col]], row_num, construct_col, res)
+                    if construct_col is not None else 0)
+        deconstructed_qty = (_coerce_qty(row[idx["deconstructed_qty"]], row_num, "deconstructed_qty", res)
+                             if "deconstructed_qty" in idx else 0)
         pool_qty = (_coerce_qty(row[idx["pool_qty"]], row_num, "pool_qty", res)
                     if "pool_qty" in idx else 0)
         res.rows.append(JumpstartRow(
@@ -421,22 +441,31 @@ def parse_jumpstart_list_xlsx(path: Path) -> JumpstartParseResult:
             keep_qty=keep_qty,
             deconstructed_qty=deconstructed_qty,
             pool_qty=pool_qty,
-            raw=f"row {row_num}: {file_name} C:{keep_qty} D:{deconstructed_qty} P:{pool_qty}",
+            acquired_qty=acquired_qty,
+            raw=f"row {row_num}: {file_name} A:{acquired_qty} C:{keep_qty} D:{deconstructed_qty} P:{pool_qty}",
         ))
     return res
 
 
-# Markdown line shape: ``- <FileName> — … [K:k D:d]`` (jumpstart) or
-# ``… [C:c D:d P:p]`` (precon; the ``P:p`` pool count is optional). Parser keys
-# on FileName + the bracket; both the ``K:`` and ``C:`` labels map to the
-# construct count. Surrounding text can change.
+# Markdown line shape. Two bracket forms share this parser:
+#   ADD mode:    ``- <FileName> — … [A:n]``      (single acquired count)
+#   MODIFY mode: ``- <FileName> — … [K:k D:d]``  (jumpstart) or
+#                ``… [C:c D:d P:p]``             (precon; ``P:p`` optional)
+# Parser keys on FileName + the bracket; ``K:``/``C:`` both map to the construct
+# count. The two alternatives are mutually exclusive per line. Surrounding text
+# can change.
 MD_JUMPSTART_LINE_RE = re.compile(
     r"""
     ^\s*-\s+
     (?P<file_name>[A-Za-z0-9_]+_[A-Z0-9]{2,6})
     .*?
-    \[\s*[KC]:\s*(?P<k>\d+)\s+D:\s*(?P<d>\d+)
-    (?:\s+P:\s*(?P<p>\d+))?\s*\]
+    \[\s*
+    (?:
+        A:\s*(?P<a>\d+)                                  # add-mode: single count
+      | [KC]:\s*(?P<k>\d+)\s+D:\s*(?P<d>\d+)              # modify: construct + decon
+        (?:\s+P:\s*(?P<p>\d+))?                           #         + optional pool
+    )
+    \s*\]
     """,
     re.VERBOSE,
 )
@@ -476,9 +505,15 @@ def parse_jumpstart_list_md(path: Path) -> JumpstartParseResult:
             continue
         file_name = m.group("file_name")
         try:
-            keep_qty = int(m.group("k"))
-            deconstructed_qty = int(m.group("d"))
-            pool_qty = int(m.group("p")) if m.group("p") is not None else 0
+            if m.group("a") is not None:
+                # ADD mode: single acquired count; states resolved at ingest.
+                acquired_qty = int(m.group("a"))
+                keep_qty = deconstructed_qty = pool_qty = 0
+            else:
+                acquired_qty = 0
+                keep_qty = int(m.group("k"))
+                deconstructed_qty = int(m.group("d"))
+                pool_qty = int(m.group("p")) if m.group("p") is not None else 0
         except ValueError:
             res.warnings.append(f"line {line_num}: bad integer in {raw_line!r}")
             continue
@@ -488,7 +523,8 @@ def parse_jumpstart_list_md(path: Path) -> JumpstartParseResult:
             keep_qty=keep_qty,
             deconstructed_qty=deconstructed_qty,
             pool_qty=pool_qty,
-            raw=f"line {line_num}: {file_name} C:{keep_qty} D:{deconstructed_qty} P:{pool_qty}",
+            acquired_qty=acquired_qty,
+            raw=f"line {line_num}: {file_name} A:{acquired_qty} C:{keep_qty} D:{deconstructed_qty} P:{pool_qty}",
         ))
     return res
 
