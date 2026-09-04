@@ -126,8 +126,8 @@ def parse_text(text: str) -> ParseResult:
 # ---------- XLSX parsing (master-list round-trip) ----------
 
 MASTER_LIST_COLUMNS = (
-    "set", "collector_number", "name", "rarity", "treatment", "mana_value",
-    "usd", "usd_foil", "qty_normal", "qty_foil",
+    "set", "collector_number", "name", "rarity", "treatment", "mana_cost",
+    "mana_value", "usd", "usd_foil", "qty_normal", "qty_foil",
 )
 
 

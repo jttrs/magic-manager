@@ -356,8 +356,9 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
         rows = conn.execute(
             f"""
             SELECT scryfall_id, set_code, collector_number, name, flavor_name,
-                   rarity, cmc, prices_usd, prices_usd_foil, is_token, scryfall_uri,
-                   frame_effects, promo_types, border_color, full_art, color_identity
+                   rarity, mana_cost, cmc, prices_usd, prices_usd_foil, is_token,
+                   scryfall_uri, frame_effects, promo_types, border_color,
+                   full_art, color_identity
             FROM cards
             WHERE set_code IN ({placeholders})
             ORDER BY 1, 2
@@ -381,12 +382,10 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
     if rarity_set is not None:
         rows = [r for r in rows if (r["rarity"] or "").lower() in rarity_set]
 
-    # Sort: set code asc, then collector_number asc (numeric where possible).
-    # Inventory checklists are *input* tools — the user fills them in while
-    # holding a physically-sorted pile of cards. Set+CN matches how MTG
-    # players sort cards on their desk; rarity grouping (the old order) made
-    # it harder to find any specific card. Output artifacts (missing-set,
-    # query reports) still sort rarity-first because they're for *reading*.
+    # Sort: set code, then rarity (mythic→…→special), then collector_number
+    # asc. Collector numbers within a set already run in color order
+    # (C W U B R G M) natively, so no explicit color sort is needed — CN
+    # gives it for free while also keeping cards physically contiguous.
     def cn_sortkey(cn: str) -> tuple:
         m = re.match(r"^(\d+)(.*)$", cn or "")
         if m:
@@ -397,6 +396,7 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
         rows,
         key=lambda r: (
             r["set_code"],
+            RARITY_ORDER.get((r["rarity"] or "").lower(), 99),
             cn_sortkey(r["collector_number"]),
         ),
     )
@@ -406,10 +406,11 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
     ws.title = "checklist"
 
     # Column order is fixed; `color` (WUBRGM code) follows name, treatment is
-    # between rarity and mana_value. If columns shift, update
-    # parse_master_list_xlsx, the qty-tint indices, and the widths dict below.
+    # between rarity and mana_cost, and mana_cost (the symbol string, e.g.
+    # "2UU") sits just before mana_value (the numeric CMC). If columns shift,
+    # update parse_master_list_xlsx, the qty-tint indices, and the widths dict.
     headers = ["set", "collector_number", "name", "color", "rarity", "treatment",
-               "mana_value", "usd", "usd_foil", "qty_normal", "qty_foil"]
+               "mana_cost", "mana_value", "usd", "usd_foil", "qty_normal", "qty_foil"]
     ws.append(headers)
     for col, _ in enumerate(headers, start=1):
         cell = ws.cell(row=1, column=col)
@@ -452,6 +453,7 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
             color,
             r["rarity"],
             treatment,
+            util.fmt_mana_cost(r["mana_cost"]),
             r["cmc"],
             r["prices_usd"],
             r["prices_usd_foil"],
@@ -476,9 +478,10 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
             name_cell.font = link_font
     last_row = ws.max_row
 
-    # Tint qty columns and apply integer validation. With `color` (col 4) and
-    # treatment (col 6) inserted, qty_normal/qty_foil are now columns 10/11.
-    for col_idx in (10, 11):
+    # Tint qty columns and apply integer validation. With `color` (col 4),
+    # treatment (col 6), and mana_cost (col 7) inserted, qty_normal/qty_foil
+    # are now columns 11/12.
+    for col_idx in (11, 12):
         col_letter = get_column_letter(col_idx)
         rng = f"{col_letter}2:{col_letter}{last_row}"
         int_validator.add(rng)
@@ -486,16 +489,17 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
             ws.cell(row=r, column=col_idx).fill = qty_fill
 
     # Sensible widths. Column 4 is color (WUBRGM code, narrow). Column 6 is
-    # treatment — sized for "b|shw|ext|sm|ff" worst case. Column 3 (name) holds
-    # long reskin pairs like "Knights of San d'Oria / Ranger-Captain of Eos" so
-    # it gets generous room.
-    widths = {1: 6, 2: 8, 3: 48, 4: 7, 5: 10, 6: 14, 7: 6, 8: 9, 9: 9, 10: 11, 11: 9}
+    # treatment — sized for "b|shw|ext|sm|ff" worst case. Column 7 is mana_cost
+    # — sized for "2(W|U)U"-style strings. Column 3 (name) holds long reskin
+    # pairs like "Knights of San d'Oria / Ranger-Captain of Eos" so it gets
+    # generous room.
+    widths = {1: 6, 2: 8, 3: 48, 4: 7, 5: 10, 6: 14, 7: 10, 8: 6, 9: 9, 10: 9, 11: 11, 12: 9}
     for col_idx, w in widths.items():
         ws.column_dimensions[get_column_letter(col_idx)].width = w
 
     # Format USD columns as currency with two decimals so prices line up
-    # ($3.00 / $0.43 instead of $3.0 / $0.43). usd/usd_foil are now cols 8/9.
-    for col_idx in (8, 9):
+    # ($3.00 / $0.43 instead of $3.0 / $0.43). usd/usd_foil are now cols 9/10.
+    for col_idx in (9, 10):
         for row_idx in range(2, last_row + 1):
             ws.cell(row=row_idx, column=col_idx).number_format = '"$"#,##0.00'
 
@@ -1065,8 +1069,9 @@ def write_master_list_md(set_codes: Iterable[str], out_path: Path,
         rows = conn.execute(
             f"""
             SELECT scryfall_id, set_code, collector_number, name, flavor_name,
-                   rarity, prices_usd, prices_usd_foil, is_token, scryfall_uri,
-                   frame_effects, promo_types, border_color, full_art, color_identity
+                   rarity, mana_cost, prices_usd, prices_usd_foil, is_token,
+                   scryfall_uri, frame_effects, promo_types, border_color,
+                   full_art, color_identity
             FROM cards
             WHERE set_code IN ({placeholders})
             ORDER BY 1, 2
@@ -1088,8 +1093,8 @@ def write_master_list_md(set_codes: Iterable[str], out_path: Path,
     if rarity_set is not None:
         rows = [r for r in rows if (r["rarity"] or "").lower() in rarity_set]
 
-    # Sort: set code asc, then collector_number asc. See the XLSX writer for
-    # why inventory checklists sort this way (input tool, not a report).
+    # Sort: set code, then rarity, then CN (which already runs in color order
+    # natively). See the XLSX writer for the full rationale.
     def cn_sortkey(cn: str) -> tuple:
         m = re.match(r"^(\d+)(.*)$", cn or "")
         if m:
@@ -1100,6 +1105,7 @@ def write_master_list_md(set_codes: Iterable[str], out_path: Path,
         rows,
         key=lambda r: (
             r["set_code"],
+            RARITY_ORDER.get((r["rarity"] or "").lower(), 99),
             cn_sortkey(r["collector_number"]),
         ),
     )
@@ -1202,9 +1208,15 @@ def write_master_list_md(set_codes: Iterable[str], out_path: Path,
         # Single-card color identity (WUBRGM: multicolor → 'M').
         color = util.format_color_identity(r["color_identity"], collapse_multicolor=True)
 
+        # Mana cost symbols (e.g. "2UU"), rendered in braces after treatment;
+        # empty for costless cards (lands) so those lines stay clean. The parser
+        # anchors on the leading "(SET) CN [N:k F:k]", so trailing text is free.
+        mc = util.fmt_mana_cost(r["mana_cost"])
+        mc_seg = f" {{{mc}}}" if mc else ""
+
         out_lines.append(
             f"- ({r['set_code'].upper()}) {r['collector_number']} "
-            f"[N:{qn} F:{qf}]{treatment_seg} — {link} — {color} — {price_segment}"
+            f"[N:{qn} F:{qf}]{treatment_seg}{mc_seg} — {link} — {color} — {price_segment}"
         )
 
     # Legend at the bottom — informational, ignored by the parser.
