@@ -6,8 +6,9 @@ version of each theme constructed, plus the unique/extra cards from that theme's
 other versions. This reports the cards still MISSING to reach that target, as
 missing-set-style artifacts (ManaPool txt + TCGplayer txt + XLSX).
 
-A "theme" is a Jumpstart variant name minus its ``(N)`` suffix:
-``Angels (1)`` / ``Angels (2)`` → theme ``Angels``.
+A "theme" is a Jumpstart variant name minus its trailing version suffix,
+parenthesized or bare: ``Angels (1)`` / ``Angels (2)`` → theme ``Angels``;
+``Corruption 1`` / ``Corruption 2`` (ONE-style naming) → theme ``Corruption``.
 
 Target math (per scryfall_id):
   - within a theme: MAX count across that theme's versions (union at max
@@ -45,11 +46,19 @@ from magic_manager import db, exports, mtgjson, selectors, sets, util  # noqa: E
 
 QUERIES_DIR = ROOT / "queries"
 
-_VERSION_SUFFIX = re.compile(r"\s*\(\d+\)\s*$")
+# A version suffix is a trailing integer, with or without parentheses:
+#   'Angels (1)'    → 'Angels'   (parenthesized — e.g. J25/MSH naming)
+#   'Corruption 1'  → 'Corruption' (bare space-number — e.g. ONE naming)
+# The `$` anchor guarantees only a TRAILING version token is stripped, so a
+# digit inside a theme name (none observed, but e.g. 'Squad 5' would keep '5')
+# is only removed when it's the final token — which is exactly the version
+# marker in every Jumpstart set's DeckList naming to date.
+_VERSION_SUFFIX = re.compile(r"\s*\(?\d+\)?\s*$")
 
 
 def theme_of(variant_name: str) -> str:
-    """Strip a trailing ``(N)`` version suffix: 'Angels (1)' → 'Angels'."""
+    """Strip a trailing version suffix, parenthesized or bare:
+    'Angels (1)' → 'Angels', 'Corruption 1' → 'Corruption'."""
     return _VERSION_SUFFIX.sub("", variant_name or "").strip()
 
 

@@ -24,6 +24,16 @@ def test_theme_of_strips_version_suffix():
     assert theme_of("Of the Coast (2)") == "Of the Coast"
 
 
+def test_theme_of_strips_bare_space_number_suffix():
+    # ONE-style Jumpstart naming uses a bare trailing integer, no parens.
+    assert theme_of("Corruption 1") == "Corruption"
+    assert theme_of("Corruption 2") == "Corruption"
+    assert theme_of("Mite-y 1") == "Mite-y"               # hyphen preserved
+    assert theme_of("Toxic 10") == "Toxic"
+    # A bare integer is only stripped when it's the TRAILING token.
+    assert theme_of("Squad") == "Squad"
+
+
 def test_max_within_theme():
     """Two versions of one theme → per-sid MAX across versions."""
     boards = {
