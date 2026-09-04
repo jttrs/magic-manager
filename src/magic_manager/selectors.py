@@ -203,6 +203,42 @@ FAMILY_DUPE_FOIL_PROMO_TYPES: dict[str, frozenset[str]] = {
     # via FAMILY_UNOBTAINABLE_RULES instead; vault itself is DISTINCT showcase
     # art (illustration 486388b6 vs base 5fbc04c1), KEPT. See docs/sets/otj.md §2.
     "otj": frozenset({"raisedfoil"}),
+    # The Lost Caverns of Ixalan: embossed is same-art-as-sibling — the 19
+    # `embossed` Jurassic World Collection foils (rex 27-45, universesbeyond+
+    # embossed+boosterfun, treatment b|ff) share the exact art of their
+    # boosterfun base siblings (rex 2-26, treatment b). Verified all 19 pair
+    # cleanly via illustration_id (Blue 33↔8 df362086, Compy Swarm 34↔9
+    # 88132924, …). Keeps the boosterfun print, drops the embossed dupe. neonink
+    # (LCI 410a-f Cavern of Souls) is NOT here — distinct art, routed to
+    # FAMILY_UNOBTAINABLE_RULES; boxtopper (LCC 101-120) is distinct borderless
+    # art, KEPT. See docs/sets/lci.md §2.
+    "lci": frozenset({"embossed"}),
+    # Innistrad Remastered (masters reprint set): NO same-art fancy-foil dupe
+    # signal. The poster+boosterfun showcases (INR 481-490 Avacyn/Emrakul/Edgar/
+    # Meathook Massacre, treatment shw) are DISTINCT showcase art, KEPT. The lone
+    # ultra-rare — INR 491 Edgar Markov (serialized+headliner+doublerainbow,
+    # ~$2,825) — is caught by the GLOBAL UNOBTAINABLE_PROMO_TYPES (serialized), so
+    # no per-family rule is strictly needed (the §5 headliner rule is documented
+    # for parity with ECL/SOS but is a no-op). Empty frozenset unblocks the
+    # `preferred` filter without filtering (like TLA/SPM/SOS/MAT/NEO/BLB).
+    # See docs/sets/inr.md §2/§5.
+    "inr": frozenset(),
+    # Assassin's Creed (UB draft_innovation): textured is same-art-as-sibling —
+    # the 5 protagonist textured foils (ACR 267-271 Ezio/Altaïr/Edward/Eivor/
+    # Kassandra, textured+boosterfun, treatment shw|ff) share the exact showcase
+    # art of their showcase siblings (Ezio 267↔131 illustration 42171712, Altaïr
+    # 268↔137 c99db07c, …). Both key to {shw} (textured adds ff), so the sibling
+    # dedup pairs them cleanly. Keeps the showcase, drops the textured dupe.
+    # See docs/sets/acr.md §2.
+    "acr": frozenset({"textured"}),
+    # Phyrexia: All Will Be One: NO same-art fancy-foil dupe signal. The two
+    # premium tiers — oilslick raised-foil borderless mythics (ONE 352-371) and
+    # stepandcompleat Phyrexian-showcase foils (ONE 417-473) — are BOTH distinct
+    # art (dupe filter would keep them), so they're excluded via
+    # FAMILY_UNOBTAINABLE_RULES, not here. stepandcompleat computes to b|shw (not
+    # ff), so a DUPE_FOIL entry couldn't catch it anyway (SNC trap). Empty
+    # frozenset unblocks the `preferred` filter. See docs/sets/one.md §2/§5.
+    "one": frozenset(),
 }
 
 
@@ -462,6 +498,58 @@ FAMILY_UNOBTAINABLE_RULES: dict[str, list[dict]] = {
         # are already dropped by the global preferred Step-2 filter — all 80 have
         # a non-stamped OTJ sibling.) See docs/sets/otj.md §5.
         {"promo_types_any_of": frozenset({"stamped"})},
+    ],
+    "lci": [
+        # The 6 serialized neon-ink Cavern of Souls (LCI 410a-f), foil-only,
+        # $74-$4,900 each (~$7,200 total). DISTINCT art (each neon colorway its
+        # own illustration), so the dupe-foil filter would KEEP them — this rule
+        # is what removes them. A chase tier the user does not shop for; direct
+        # analog of TLA/NEO neonink. any_of:{neonink} catches exactly these 6
+        # prints (LCI 410b also carries wizardsplaynetwork; still matched). The
+        # base (LCI 269) and boosterfun showcase (LCI 345) Caverns stay in scope.
+        # No `stamped` rule needed — every plci promo-pack/prerelease stamp has a
+        # non-stamped sibling, so the global preferred filter already drops them
+        # (0 promopack-without-stamped trap prints). See docs/sets/lci.md §5.
+        {"promo_types_any_of": frozenset({"neonink"})},
+    ],
+    "inr": [
+        # Innistrad Remastered headline serialized chase — INR 491 Edgar Markov
+        # (serialized + headliner + doublerainbow + poster + boosterfun,
+        # foil-only, ~$2,825). Analog of EOE Sothera / ECL Bitterbloom Bearer /
+        # SOS Emeritus. NOTE: this rule is a documented no-op — `serialized` is
+        # already in the GLOBAL UNOBTAINABLE_PROMO_TYPES, so Edgar 491 never
+        # reaches missing-set regardless (verified: identical 178-print/$940
+        # result with and without this rule). Kept for parity/discoverability
+        # with the other headliner families. See docs/sets/inr.md §5.
+        {"promo_types_any_of": frozenset({"headliner", "serialized"})},
+    ],
+    "acr": [
+        # Assassin's Creed headline serialized chase — ACR 120z Mary Read and
+        # Anne Bonny (serialized + doublerainbow, foil-only, ~$600). NOTE: a
+        # documented no-op — `serialized` is already in the GLOBAL
+        # UNOBTAINABLE_PROMO_TYPES, so 120z never reaches missing-set regardless
+        # (verified identical result with/without). Kept for parity with the
+        # INR/ECL/SOS headliner families. See docs/sets/acr.md §5.
+        {"promo_types_any_of": frozenset({"serialized", "doublerainbow"})},
+    ],
+    "one": [
+        # Promo-pack STAMP variants — 80 `pone` promopack+stamped `Np` prints,
+        # same card as a kept base/showcase sibling + a stamp; compute to
+        # `regular` (bypass preferred dedup). Signal is `stamped` ONLY: the 5
+        # `promopack`-WITHOUT-`stamped` inverted alt-arts (one 277-281 Ossification/
+        # Sheoldred's Edict/Slaughter Singer/Bladehold War-Whip/Experimental
+        # Augury) are KEPT (verified 5 traps survive the rule).
+        {"promo_types_any_of": frozenset({"stamped"})},
+        # Premium DISTINCT-ART foil tiers the user doesn't chase (2026-09-03):
+        # oilslick raised-foil borderless mythics (one 352-371, ~$796) +
+        # stepandcompleat Phyrexian showcase foils (one 417-473, ~$1,000+). Both
+        # distinct art (the dupe filter would keep them); any_of catches all 77.
+        # The base/boosterfun/concept prints of each card stay in scope.
+        {"promo_types_any_of": frozenset({"oilslick", "stepandcompleat"})},
+        # Documented no-op (parity with INR/ACR/ECL/SOS): `serialized` is already
+        # in the GLOBAL UNOBTAINABLE_PROMO_TYPES, so ONE's serialized prints never
+        # reach missing-set regardless. Kept for discoverability. See docs/sets/one.md §5.
+        {"promo_types_any_of": frozenset({"serialized"})},
     ],
 }
 
