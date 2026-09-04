@@ -65,6 +65,26 @@ def fmt_usd(v: float | None) -> str:
     return f"${v:.2f}" if v is not None else "—"
 
 
+def fmt_mana_cost(raw: str | None) -> str:
+    """Render a Scryfall mana_cost string (``'{2}{U}{U}'``) as a compact symbol
+    string (``'2UU'``).
+
+    Single-character symbols are concatenated bare; multi-character symbols
+    (hybrid/Phyrexian like ``'{W/U}'`` or ``'{U/P}'``) are wrapped in parens
+    with ``/`` shown as ``|`` — so ``'{2}{W/U}{U}'`` → ``'2(W|U)U'``. ``None``
+    or empty (lands and other costless cards) → ``''``.
+    """
+    if not raw:
+        return ""
+    out: list[str] = []
+    for sym in re.findall(r"\{([^}]+)\}", raw):
+        if len(sym) == 1:
+            out.append(sym)
+        else:
+            out.append("(" + sym.replace("/", "|") + ")")
+    return "".join(out)
+
+
 # Default point size for all generated XLSX artifacts. openpyxl's built-in
 # default (Calibri 11) renders too small; every worksheet writer calls
 # apply_base_font_size() before save so cells inherit this.

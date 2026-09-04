@@ -2716,8 +2716,8 @@ def _write_query_xlsx(
     or from `mm set master-list`'s inventory checklists (which are written
     by a separate function in sets.py with `kind: "inventory"`).
 
-    Columns: set, collector_number, name, rarity, finish, qty, unit_usd,
-    line_value. The `name` cell is hyperlinked to the card's Scryfall page
+    Columns: set, collector_number, name, mana_cost, rarity, finish, qty,
+    unit_usd, line_value. The `name` cell is hyperlinked to the card's Scryfall page
     (same convention as the inventory checklist) so the user can click
     through to the printing without copying a UUID. Hidden _meta sheet
     records the originating selector and timestamp.
@@ -2730,7 +2730,7 @@ def _write_query_xlsx(
     wb = Workbook()
     ws = wb.active
     ws.title = "results"
-    headers = ["set", "collector_number", "name", "rarity", "finish",
+    headers = ["set", "collector_number", "name", "mana_cost", "rarity", "finish",
                "qty", "unit_usd", "line_value"]
     ws.append(headers)
     for col, _ in enumerate(headers, start=1):
@@ -2741,7 +2741,8 @@ def _write_query_xlsx(
         unit = _row_unit_price(r); line = _row_line_value(r)
         ws.append([
             r.card.get("set"), r.card.get("collector_number"),
-            _row_display_name(r), r.card.get("rarity"), r.finish,
+            _row_display_name(r), util.fmt_mana_cost(r.card.get("mana_cost")),
+            r.card.get("rarity"), r.finish,
             r.quantity, unit, line,
         ])
         # Force CN to text to avoid Excel's "Number Stored as Text" warning.
@@ -2752,10 +2753,11 @@ def _write_query_xlsx(
             name_cell.hyperlink = uri
             name_cell.font = link_font
     last = ws.max_row
-    for col_idx in (7, 8):
+    # With mana_cost inserted at col 4, unit_usd/line_value shift to cols 8/9.
+    for col_idx in (8, 9):
         for row_idx in range(2, last + 1):
             ws.cell(row=row_idx, column=col_idx).number_format = '"$"#,##0.00'
-    widths = {1: 6, 2: 8, 3: 48, 4: 10, 5: 8, 6: 5, 7: 9, 8: 11}
+    widths = {1: 6, 2: 8, 3: 48, 4: 10, 5: 10, 6: 8, 7: 5, 8: 9, 9: 11}
     for col_idx, w in widths.items():
         ws.column_dimensions[get_column_letter(col_idx)].width = w
     ws.freeze_panes = "A2"
