@@ -1252,6 +1252,46 @@ def write_master_list_md(set_codes: Iterable[str], out_path: Path,
 # as `available` in `mm deck find`: one pack's worth is pledged to the recipe,
 # the rest are loose. That's expected, not a bug.)
 
+def card_price_map(scryfall_ids: Iterable[str], *, conn=None) -> dict[str, dict]:
+    """Fetch identity + local Scryfall prices for a set of ``scryfall_id``s.
+
+    Returns ``{scryfall_id: {name, set_code, collector_number, prices_usd,
+    prices_usd_foil, color_identity}}`` for every id present in the local
+    ``cards`` table (ids absent from the table are simply omitted — the caller
+    treats them as unpriced/unresolved). Deduplicates the input, so passing a
+    board with repeated printings costs one row each. This is the single source
+    of truth for "price a printing by id", shared by ``_rollup_deck_prices`` and
+    the ``construct`` module so both agree on the price basis and card metadata.
+    """
+    ids = list(dict.fromkeys(s for s in scryfall_ids if s))  # dedupe, preserve order
+    if not ids:
+        return {}
+
+    def _q(c):
+        placeholders = ",".join("?" for _ in ids)
+        return {
+            r["scryfall_id"]: {
+                "name": r["name"],
+                "set_code": r["set_code"],
+                "collector_number": r["collector_number"],
+                "prices_usd": r["prices_usd"],
+                "prices_usd_foil": r["prices_usd_foil"],
+                "color_identity": r["color_identity"],
+            }
+            for r in c.execute(
+                f"SELECT scryfall_id, name, set_code, collector_number, "
+                f"prices_usd, prices_usd_foil, color_identity "
+                f"FROM cards WHERE scryfall_id IN ({placeholders})",
+                ids,
+            ).fetchall()
+        }
+
+    if conn is not None:
+        return _q(conn)
+    with db.connect() as c:
+        return _q(c)
+
+
 def _rollup_deck_prices(
     deck_data: dict,
 ) -> tuple[int, float | None, str | None, float | None, set[str]]:
@@ -1260,16 +1300,17 @@ def _rollup_deck_prices(
     color identity.
 
     Walks the commander/main/side boards, pulling Scryfall USD per scryfall_id
-    from the local cards table (foil price for foil cards, nonfoil otherwise).
-    Printings missing from the cards table are skipped silently — the totals
-    just under-report, and the user can still ingest. Returns ``(total_count,
-    usd_total, top_card, top_card_usd, color_identity)`` where ``usd_total`` is
-    ``None`` when nothing priced; ``top_card``/``top_card_usd`` name the priciest
-    single card at its shipped finish (same price basis as ``usd_total``), both
-    ``None`` when nothing priced (ties keep the first card seen, board order
-    commander → main → side); and ``color_identity`` is the set of WUBRG letters
-    unioned across EVERY resolved card (independent of price — an unpriced card
-    still contributes its colors), empty for an all-colorless deck.
+    from the local cards table (foil price for foil cards, nonfoil otherwise)
+    via :func:`card_price_map`. Printings missing from the cards table are
+    skipped silently — the totals just under-report, and the user can still
+    ingest. Returns ``(total_count, usd_total, top_card, top_card_usd,
+    color_identity)`` where ``usd_total`` is ``None`` when nothing priced;
+    ``top_card``/``top_card_usd`` name the priciest single card at its shipped
+    finish (same price basis as ``usd_total``), both ``None`` when nothing priced
+    (ties keep the first card seen, board order commander → main → side); and
+    ``color_identity`` is the set of WUBRG letters unioned across EVERY resolved
+    card (independent of price — an unpriced card still contributes its colors),
+    empty for an all-colorless deck.
     """
     import json as _json
 
@@ -1288,22 +1329,14 @@ def _rollup_deck_prices(
     top_card_usd: float | None = None
     color_identity: set[str] = set()
     if sids:
-        with db.connect() as conn:
-            placeholders = ",".join("?" for _ in sids)
-            rows = {
-                r["scryfall_id"]: (r["name"], r["prices_usd"],
-                                   r["prices_usd_foil"], r["color_identity"])
-                for r in conn.execute(
-                    f"SELECT scryfall_id, name, prices_usd, prices_usd_foil, "
-                    f"color_identity FROM cards WHERE scryfall_id IN ({placeholders})",
-                    [s[0] for s in sids],
-                ).fetchall()
-            }
+        rows = card_price_map(s[0] for s in sids)
         for sid, count, is_foil in sids:
-            row = rows.get(sid)
-            if not row:
+            meta = rows.get(sid)
+            if not meta:
                 continue
-            name, nonfoil, foil, ci = row
+            name = meta["name"]
+            nonfoil, foil = meta["prices_usd"], meta["prices_usd_foil"]
+            ci = meta["color_identity"]
             # Color identity: union across every resolved card, regardless of
             # price (a $0/unpriced card still contributes its colors).
             if ci:
