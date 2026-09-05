@@ -36,7 +36,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from magic_manager import ev, mtgjson, sealed, sets, util  # noqa: E402
+from magic_manager import construct, ev, mtgjson, sealed, sets, util  # noqa: E402
 
 QUERIES_DIR = ROOT / "queries"
 
@@ -63,6 +63,70 @@ def _render_tree(node: sealed.ProductNode, *, depth: int = 0) -> list[str]:
     return lines
 
 
+# ---------- top singles (reuses the construct engine — DRY) ----------
+
+def _compute_top_singles(code: str, product_substr: str | None):
+    """Expand the product into deterministic per-card singles, sorted by value
+    desc, by REUSING ``construct``. Returns ``(rows, packs_skipped, error)``:
+    ``rows`` is a list of ``construct.NetRow`` (finish-aware unit prices),
+    ``packs_skipped`` the random-booster labels excluded, ``error`` a string if
+    expansion failed (the sealed report degrades gracefully, never crashes).
+
+    Market is forced ``null`` here — the sealed *market* price is already shown
+    in the tree above; this section is the deterministic local-price singles
+    breakdown ("which cards carry the value")."""
+    try:
+        exp = construct.expand_sealed(code, product_substr, market="null")
+    except Exception as e:  # noqa: BLE001 — never break the sealed report
+        return [], [], str(e)
+    rows = construct.net_against_loose(exp.needs)
+    return rows, exp.packs_skipped, None
+
+
+def _render_top_singles(rows, packs_skipped, error, *, top_n: int = 15) -> list[str]:
+    """Markdown 'Top singles' section for chat + txt. Shows the top ``top_n`` by
+    unit value, the full priced-singles total, and notes for random boosters or
+    a pure-booster product."""
+    lines = ["", "### Top singles (by value)"]
+    if error:
+        lines.append(f"  (singles unavailable: {error})")
+        return lines
+    priced = [r for r in rows if r.unit_usd is not None]
+    if not priced:
+        lines.append("  No fixed singles — this product is all random boosters; "
+                     "see per-booster EV above.")
+        if packs_skipped:
+            lines.append(f"  ({len(packs_skipped)} random booster(s): "
+                         + _summarize_packs(packs_skipped) + ")")
+        return lines
+    lines.append("")
+    lines.append("| # | Card | Set | CN | Finish | Unit $ |")
+    lines.append("|---:|---|---|---|---|---:|")
+    for i, r in enumerate(priced[:top_n], 1):
+        link = f"[{r.name}]({construct.scryfall_url(r.set_code, r.collector_number)})"
+        lines.append(f"| {i} | {link} | {r.set_code.upper()} | {r.collector_number} | "
+                     f"{r.finish} | {_fmt(r.unit_usd)} |")
+    total = sum(r.unit_usd * r.need_qty for r in priced)
+    n_cards = sum(r.need_qty for r in priced)
+    lines.append("")
+    lines.append(f"Deterministic singles total {_fmt(round(total, 2))} across {n_cards} card(s)"
+                 + (f"; showing top {top_n}." if len(priced) > top_n else "."))
+    if packs_skipped:
+        lines.append(f"  · {len(packs_skipped)} random booster(s) excluded from the singles "
+                     f"table (a random pack can't be itemized) — see EV above: "
+                     f"{_summarize_packs(packs_skipped)}.")
+    return lines
+
+
+def _summarize_packs(packs: list[str]) -> str:
+    """Collapse a repetitive booster-label list to ``label ×N`` counts, e.g.
+    36 identical labels → 'M15 draft booster ×36'."""
+    from collections import Counter
+    counts = Counter(packs)
+    return ", ".join(f"{label} ×{n}" if n > 1 else label
+                     for label, n in counts.items())
+
+
 # ---------- XLSX artifact ----------
 
 def _flatten(node: sealed.ProductNode, depth: int = 0, out=None):
@@ -73,7 +137,8 @@ def _flatten(node: sealed.ProductNode, depth: int = 0, out=None):
     return out
 
 
-def _write_xlsx(node: sealed.ProductNode, market_source: str, out_path: Path) -> None:
+def _write_xlsx(node: sealed.ProductNode, market_source: str, out_path: Path,
+                singles_rows=None) -> None:
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Font
     from openpyxl.utils import get_column_letter
@@ -122,6 +187,31 @@ def _write_xlsx(node: sealed.ProductNode, market_source: str, out_path: Path) ->
             ws_.cell(row=1, column=col).alignment = Alignment(horizontal="left")
         ws_.freeze_panes = "A2"
         util.apply_base_font_size(ws_)
+
+    # Third sheet: the FULL deterministic singles table (top-value first), the
+    # per-card complement to the tree's summed deck/singles nodes.
+    if singles_rows:
+        ws3 = wb.create_sheet("singles")
+        ws3.append(["rank", "name", "set_code", "collector_number", "finish",
+                    "unit_usd", "scryfall_url"])
+        rank = 0
+        for r in singles_rows:
+            if r.unit_usd is None:
+                continue
+            rank += 1
+            ws3.append([rank, r.name, r.set_code.upper(), r.collector_number,
+                        r.finish, r.unit_usd,
+                        construct.scryfall_url(r.set_code, r.collector_number)])
+        for row_idx in range(2, ws3.max_row + 1):
+            ws3.cell(row=row_idx, column=6).number_format = '"$"#,##0.00'
+        for ci, w in {2: 34, 7: 46}.items():
+            ws3.column_dimensions[get_column_letter(ci)].width = w
+        for col in range(1, ws3.max_column + 1):
+            ws3.cell(row=1, column=col).font = Font(bold=True)
+            ws3.cell(row=1, column=col).alignment = Alignment(horizontal="left")
+        ws3.freeze_panes = "A2"
+        util.apply_base_font_size(ws3)
+
     out_path.parent.mkdir(parents=True, exist_ok=True)
     wb.save(out_path)
 
@@ -246,6 +336,13 @@ def main() -> int:
         for d in totals.diagnostics[:12]:
             print(f"  · {d}")
 
+    # Top singles — always shown: reuse the construct engine to itemize which
+    # cards carry the value (the per-card complement to the summed tree above).
+    singles_rows, packs_skipped, singles_err = _compute_top_singles(code, args.product)
+    singles_lines = _render_top_singles(singles_rows, packs_skipped, singles_err)
+    for line in singles_lines:
+        print(line)
+
     # Artifacts.
     args.out_dir.mkdir(parents=True, exist_ok=True)
     from datetime import UTC, datetime
@@ -255,12 +352,15 @@ def main() -> int:
     written: list[Path] = []
     if args.format in ("txt", "all"):
         p = args.out_dir / f"sealed-value-{code}-{slug}-{ts}.txt"
-        p.write_text("\n".join(_render_tree(node)) + "\n", encoding="utf-8")
+        # txt carries the tree + the FULL singles table (no top-N truncation).
+        full_singles = _render_top_singles(singles_rows, packs_skipped, singles_err,
+                                           top_n=10**9)
+        p.write_text("\n".join(_render_tree(node) + full_singles) + "\n", encoding="utf-8")
         written.append(p)
     if args.format in ("xlsx", "all"):
         p = args.out_dir / f"sealed-value-{code}-{slug}-{ts}.xlsx"
         src = getattr(market_provider, "last_source", None) or market_provider.name
-        _write_xlsx(node, src, p)
+        _write_xlsx(node, src, p, singles_rows=singles_rows)
         written.append(p)
     for p in written:
         print(f"  → {p}")

@@ -40,6 +40,13 @@ from . import inventory, mtgjson, parsers, sealed, sets
 _MAX_DEPTH = 6  # mirrors sealed._MAX_DEPTH — Case → Kit → deck is the deepest real nesting
 
 
+def scryfall_url(set_code: str, collector_number: str) -> str:
+    """Canonical Scryfall card page URL for a printing. Shared by the
+    construct-value and sealed-value scripts so their card tables link
+    identically."""
+    return f"https://scryfall.com/card/{set_code.lower()}/{collector_number}"
+
+
 # ---------- data ----------
 
 @dataclass
