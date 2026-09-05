@@ -105,10 +105,11 @@ Inside `src/magic_manager/`:
 - `.claude/skills/scryfall-search/scryfall.sh` (rate-limited, 24h cache, 429 backoff) — or `uv run mm scryfall <query>`
 - `.claude/skills/mtgjson-search/mtgjson.sh` (cached under `$TMPDIR/mtgjson-cache` with `.sha256` sidecars) — or `uv run mm mtgjson …`
 - `.claude/skills/manapool-search/manapool.sh` (Mana Pool sanctioned API — catalog/prices; rate-limited, 24h cache, 429 backoff; reads `MANAPOOL_*` from `.env`). The `manapool-guard.sh` hook blocks ad-hoc curl to `manapool.com/api` and `sb-api.manapool.com`; the cart tiers in `scripts/manapool_cart.py` are allowlisted (they handle the short-lived Supabase session JWT correctly — that JWT is held in memory only, never persisted).
+- `.claude/skills/sealed-value/{tcgcsv,tcgapi,ebay}.sh` — **sealed-product market prices** (MTGJSON has none), for the `sealed-value` skill. `tcgcsv.sh` (no auth, primary) and `tcgapi.sh` (`X-API-Key`, secondary) price TCGplayer products; `ebay.sh` fetches advisory active-listing comps (mints an OAuth app token from `EBAY_CLIENT_ID`/`EBAY_CLIENT_SECRET`). The `{tcgcsv,tcgapi,ebay}-guard.sh` hooks block ad-hoc curl to each host. **Full provider setup (signup, `.env` keys, auth model, caveats): [`docs/market-providers.md`](docs/market-providers.md).**
 
-The Python clients (`scryfall.py`, `mtgjson.py`) ultimately call these wrappers, so the CLI is always safe.
+The Python clients (`scryfall.py`, `mtgjson.py`, and the `sealed-value` providers `tcgcsv.py`/`tcgapi.py`/`ebay.py`) ultimately call these wrappers, so the CLI is always safe.
 
-Secrets live only in the gitignored `.env` at repo root (`MANAPOOL_EMAIL`, `MANAPOOL_ACCESS_TOKEN`, optional `MANAPOOL_PASSWORD` for the tier-3 headless cart fetch). Never commit or log them.
+Secrets live only in the gitignored `.env` at repo root (`MANAPOOL_EMAIL`, `MANAPOOL_ACCESS_TOKEN`, optional `MANAPOOL_PASSWORD` for the tier-3 headless cart fetch; `TCGAPI_KEY`, `EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET` for sealed-value market prices). Never commit or log them.
 
 ## Conventions
 
