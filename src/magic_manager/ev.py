@@ -38,7 +38,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from . import db
+from . import db, mtgjson
 
 
 # ---------- local price join (mirrors sets._rollup_deck_prices) ----------
@@ -61,6 +61,40 @@ def _local_prices(scryfall_ids: list[str]) -> dict[str, tuple[float | None, floa
         }
 
 
+def _index_cards(cards: list[dict], uuid_meta: dict[str, dict],
+                 by_sid: dict[str, str]) -> None:
+    """Fold one set file's ``cards[]`` into the accumulating uuid→meta index and
+    the scryfall_id→uuid map (both mutated in place). Prices are left ``None``
+    here; the single :func:`_local_prices` join happens once by the caller after
+    all source sets are indexed. Later sets don't clobber earlier ones (a uuid is
+    globally unique across MTGJSON, so a re-index is idempotent)."""
+    for c in cards:
+        uuid = c.get("uuid")
+        sid = (c.get("identifiers") or {}).get("scryfallId")
+        if not uuid:
+            continue
+        uuid_meta.setdefault(uuid, {"scryfall_id": sid, "name": c.get("name"),
+                                    "usd": None, "usd_foil": None})
+        if sid:
+            by_sid[sid] = uuid
+
+
+def _join_prices(uuid_meta: dict[str, dict], by_sid: dict[str, str]) -> list[str]:
+    """Join local prices into ``uuid_meta`` (mutated in place) and return the
+    list of uuids that couldn't be priced (no local cards row, or no scryfallId
+    at all) — the "sync the set first" signal."""
+    prices = _local_prices(list(by_sid))
+    no_row: list[str] = []
+    for sid, uuid in by_sid.items():
+        pr = prices.get(sid)
+        if pr is None:
+            no_row.append(uuid)
+            continue
+        uuid_meta[uuid]["usd"], uuid_meta[uuid]["usd_foil"] = pr
+    no_row.extend(u for u, m in uuid_meta.items() if not m["scryfall_id"])
+    return no_row
+
+
 def build_uuid_price_map(set_data: dict) -> tuple[dict[str, dict], list[str]]:
     """Build ``{uuid: {"scryfall_id", "name", "usd", "usd_foil"}}`` for every
     printing in ``set_data['cards']``, joining local prices by scryfall_id.
@@ -71,29 +105,58 @@ def build_uuid_price_map(set_data: dict) -> tuple[dict[str, dict], list[str]]:
     list is uuids whose scryfallId had NO row in the local cards table at all
     (a "sync the set first" signal). Per-finish ``None`` prices are left in the
     dict and resolved per-sheet later (a sheet's foil-ness decides which price
-    matters, so finish-specific missingness is diagnosed in ``sheet_ev``)."""
-    cards = set_data.get("cards") or []
-    by_sid: dict[str, str] = {}     # scryfall_id -> uuid (for the price join)
+    matters, so finish-specific missingness is diagnosed in ``sheet_ev``).
+
+    Only indexes the PARENT set's ``cards[]``. For boosters whose sheets pull
+    from other sets (``booster[type].sourceSetCodes``), use
+    :func:`build_booster_uuid_price_map`, which merges every source set."""
     uuid_meta: dict[str, dict] = {}
-    for c in cards:
-        uuid = c.get("uuid")
-        sid = (c.get("identifiers") or {}).get("scryfallId")
-        if not uuid:
+    by_sid: dict[str, str] = {}     # scryfall_id -> uuid (for the price join)
+    _index_cards(set_data.get("cards") or [], uuid_meta, by_sid)
+    no_row = _join_prices(uuid_meta, by_sid)
+    return uuid_meta, no_row
+
+
+def build_booster_uuid_price_map(
+    set_data: dict, booster_type: str,
+) -> tuple[dict[str, dict], list[str]]:
+    """Like :func:`build_uuid_price_map`, but merges the cards of EVERY set the
+    booster pulls from, so cross-set sheets price correctly.
+
+    A booster sheet can reference cards from another set (e.g. AFR's collector
+    booster seeds extended-art cards from AFC, and its set booster seeds PLST
+    reprints). MTGJSON records the full source list in
+    ``set_data['booster'][booster_type]['sourceSetCodes']`` (which always
+    includes the parent). We load each referenced set file via
+    ``mtgjson.set_file`` (cached), index all their ``cards[]`` into one uuid map,
+    and do a SINGLE local-price join over the union.
+
+    Falls back to :func:`build_uuid_price_map` (parent-only, identical behavior)
+    when the booster has no ``sourceSetCodes`` (older sets). A referenced set not
+    yet synced locally simply leaves its uuids unpriced — same graceful
+    under-report as the single-set path (surfaced via ``coverage``)."""
+    booster = (set_data.get("booster") or {}).get(booster_type) or {}
+    source_codes = booster.get("sourceSetCodes")
+    if not source_codes:
+        return build_uuid_price_map(set_data)
+
+    parent_code = (set_data.get("code") or "").lower()
+    uuid_meta: dict[str, dict] = {}
+    by_sid: dict[str, str] = {}
+    # Index the parent once from the set_data already in hand.
+    _index_cards(set_data.get("cards") or [], uuid_meta, by_sid)
+    seen = {parent_code}
+    for code in source_codes:
+        cl = (code or "").lower()
+        if not cl or cl in seen:      # dedupe; never re-load the parent
             continue
-        uuid_meta[uuid] = {"scryfall_id": sid, "name": c.get("name"),
-                           "usd": None, "usd_foil": None}
-        if sid:
-            by_sid[sid] = uuid
-    prices = _local_prices(list(by_sid))
-    no_row: list[str] = []
-    for sid, uuid in by_sid.items():
-        pr = prices.get(sid)
-        if pr is None:
-            no_row.append(uuid)
+        seen.add(cl)
+        try:
+            other = mtgjson.set_file(cl)
+        except Exception:  # noqa: BLE001 — an unresolvable source set just under-reports
             continue
-        uuid_meta[uuid]["usd"], uuid_meta[uuid]["usd_foil"] = pr
-    # uuids with no scryfallId at all also can't be priced.
-    no_row.extend(u for u, m in uuid_meta.items() if not m["scryfall_id"])
+        _index_cards(other.get("cards") or [], uuid_meta, by_sid)
+    no_row = _join_prices(uuid_meta, by_sid)
     return uuid_meta, no_row
 
 
@@ -200,7 +263,9 @@ def booster_ev(set_data: dict, booster_type: str,
         )
     cfg = boosters[booster_type]
     if uuid_price is None:
-        uuid_price, _ = build_uuid_price_map(set_data)
+        # Cross-set aware: prices sheets that pull from OTHER sets (via the
+        # booster's sourceSetCodes), falling back to parent-only when absent.
+        uuid_price, _ = build_booster_uuid_price_map(set_data, booster_type)
 
     # Compute each sheet's per-pull EV once (label it for diagnostics).
     sheet_evs: dict[str, SheetEV] = {}

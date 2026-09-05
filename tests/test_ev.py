@@ -153,3 +153,142 @@ def test_build_uuid_price_map_joins_local_prices(tmp_path, monkeypatch):
     assert up["u-missing"]["usd"] is None
     assert "u-missing" in no_row
     assert "u-nosid" in no_row
+
+
+# ---------- cross-set booster price map (sourceSetCodes) ----------
+
+def _parent_with_cross_set_booster():
+    """A parent set 'AAA' whose collector booster has ONE sheet sourced entirely
+    from another set 'BBB' (mirrors AFR collector → AFC). sourceSetCodes lists
+    both (parent included, as MTGJSON does)."""
+    return {
+        "code": "AAA",
+        "cards": [  # parent has its own card, unrelated to the cross-set sheet
+            {"uuid": "u-aaa", "name": "Parent Card", "identifiers": {"scryfallId": "sid-aaa"}},
+        ],
+        "booster": {
+            "collector": {
+                "sourceSetCodes": ["AAA", "BBB"],
+                "boostersTotalWeight": 1,
+                "boosters": [{"contents": {"cross": 1}, "weight": 1}],
+                "sheets": {
+                    # every card on this sheet lives in BBB, not AAA
+                    "cross": {"foil": False, "totalWeight": 1, "cards": {"u-bbb": 1}},
+                },
+            }
+        },
+    }
+
+
+_BBB_FILE = {
+    "code": "BBB",
+    "cards": [
+        {"uuid": "u-bbb", "name": "Other-Set Card", "identifiers": {"scryfallId": "sid-bbb"}},
+    ],
+}
+
+
+def test_build_booster_uuid_price_map_merges_source_sets(tmp_path, monkeypatch):
+    """A uuid living only in a referenced set file is priced once that set's
+    cards are seeded locally + its set file is resolvable."""
+    monkeypatch.setenv("MAGIC_MANAGER_DB", str(tmp_path / "mm.db"))
+    from magic_manager import db, mtgjson
+    with db.connect() as conn:
+        conn.execute("INSERT INTO cards (scryfall_id, name, set_code, collector_number, "
+                     "rarity, prices_usd, prices_usd_foil) "
+                     "VALUES ('sid-bbb', 'Other-Set Card', 'bbb', '1', 'rare', 5.0, 12.0)")
+    monkeypatch.setattr(mtgjson, "set_file", lambda code: _BBB_FILE)  # only BBB is fetched
+
+    up, no_row = ev.build_booster_uuid_price_map(_parent_with_cross_set_booster(), "collector")
+    assert up["u-bbb"]["usd"] == 5.0        # cross-set card resolved + priced
+    assert "u-bbb" not in no_row
+
+
+def test_booster_ev_cross_set_coverage_full(tmp_path, monkeypatch):
+    """The regression proof for the AFR bug: a booster whose sheet is sourced
+    from another set prices to 100% coverage once that set is local."""
+    monkeypatch.setenv("MAGIC_MANAGER_DB", str(tmp_path / "mm.db"))
+    from magic_manager import db, mtgjson
+    with db.connect() as conn:
+        conn.execute("INSERT INTO cards (scryfall_id, name, set_code, collector_number, "
+                     "rarity, prices_usd, prices_usd_foil) "
+                     "VALUES ('sid-bbb', 'Other-Set Card', 'bbb', '1', 'rare', 5.0, 12.0)")
+    monkeypatch.setattr(mtgjson, "set_file", lambda code: _BBB_FILE)
+
+    b = ev.booster_ev(_parent_with_cross_set_booster(), "collector")  # no uuid_price
+    assert b.ev_usd == pytest.approx(5.0)
+    assert b.n_unpriced == 0
+    assert b.coverage == pytest.approx(1.0)
+
+
+def test_booster_ev_cross_set_unpriced_before_sync(tmp_path, monkeypatch):
+    """Same booster but the referenced set is NOT seeded locally → the sheet is
+    unpriced, coverage < 1, no crash (matches the pre-fix 93.3% state)."""
+    monkeypatch.setenv("MAGIC_MANAGER_DB", str(tmp_path / "mm.db"))
+    from magic_manager import db, mtgjson
+    with db.connect():
+        pass  # empty cards table — BBB not synced
+    monkeypatch.setattr(mtgjson, "set_file", lambda code: _BBB_FILE)
+
+    b = ev.booster_ev(_parent_with_cross_set_booster(), "collector")
+    assert b.ev_usd == pytest.approx(0.0)
+    assert b.n_unpriced == 1
+    assert b.coverage == pytest.approx(0.0)
+
+
+def test_build_booster_uuid_price_map_no_source_codes_falls_back(tmp_path, monkeypatch):
+    """A booster with no sourceSetCodes behaves exactly like build_uuid_price_map
+    (parent-only) — zero regression for older sets."""
+    monkeypatch.setenv("MAGIC_MANAGER_DB", str(tmp_path / "mm.db"))
+    from magic_manager import db
+    with db.connect() as conn:
+        conn.execute("INSERT INTO cards (scryfall_id, name, set_code, collector_number, "
+                     "rarity, prices_usd, prices_usd_foil) "
+                     "VALUES ('sid-aaa', 'Parent Card', 'aaa', '1', 'rare', 1.0, 2.0)")
+    set_data = {
+        "code": "AAA",
+        "cards": [{"uuid": "u-aaa", "name": "Parent Card",
+                   "identifiers": {"scryfallId": "sid-aaa"}}],
+        "booster": {"draft": {"boosters": [], "sheets": {}}},  # no sourceSetCodes
+    }
+    got, _ = ev.build_booster_uuid_price_map(set_data, "draft")
+    want, _ = ev.build_uuid_price_map(set_data)
+    assert got == want
+    assert got["u-aaa"]["usd"] == 1.0
+
+
+def test_build_booster_uuid_price_map_dedupes_parent(tmp_path, monkeypatch):
+    """sourceSetCodes listing the parent (and dupes) must NOT re-fetch the parent
+    via set_file — the parent's cards come from the passed set_data."""
+    monkeypatch.setenv("MAGIC_MANAGER_DB", str(tmp_path / "mm.db"))
+    from magic_manager import db, mtgjson
+    with db.connect():
+        pass
+    fetched = []
+    monkeypatch.setattr(mtgjson, "set_file",
+                        lambda code: fetched.append(code.lower()) or _BBB_FILE)
+    set_data = _parent_with_cross_set_booster()
+    set_data["booster"]["collector"]["sourceSetCodes"] = ["AAA", "aaa", "BBB"]
+
+    ev.build_booster_uuid_price_map(set_data, "collector")
+    assert "aaa" not in fetched          # parent never re-fetched
+    assert fetched.count("bbb") == 1     # referenced set fetched exactly once
+
+
+# ---------- sealed.referenced_set_codes discovery ----------
+
+def test_referenced_set_codes_includes_booster_source_sets(monkeypatch):
+    """A pack node whose booster sourceSetCodes name another set surfaces that
+    set even though no node carries it as set_code."""
+    from magic_manager import mtgjson, sealed
+    monkeypatch.setattr(mtgjson, "set_file", lambda code: {
+        "booster": {"collector": {"sourceSetCodes": ["AAA", "BBB"]}}
+    })
+    pack = sealed.ProductNode(
+        name="AAA collector booster", set_code="aaa", kind="pack",
+        ev_detail=ev.BoosterEV(booster_type="collector", ev_usd=0.0,
+                               boosters_total_weight=1, n_configs=1),
+    )
+    root = sealed.ProductNode(name="Box", set_code="aaa", kind="sealed", children=[pack])
+    codes = sealed.referenced_set_codes(root)
+    assert "aaa" in codes and "bbb" in codes

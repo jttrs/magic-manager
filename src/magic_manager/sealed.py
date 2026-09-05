@@ -530,3 +530,33 @@ def aggregate(node: ProductNode) -> Totals:
         coverage=coverage,
         diagnostics=diags,
     )
+
+
+def referenced_set_codes(node: ProductNode) -> set[str]:
+    """Every set code whose cards need pricing to value this tree, lowercased.
+
+    Walks the tree collecting each node's own ``set_code``, AND — for every
+    ``pack`` node — the booster's ``sourceSetCodes`` (the sets its sheets pull
+    from). A pack node's ``set_code`` is only the pack's own set; a booster can
+    seed cards from OTHER sets (AFR collector → AFC, AFR set → PLST), and those
+    live in the MTGJSON booster config, never as a node field — so a plain
+    tree-walk can't surface them. Callers feed this to ``sets.unsynced_set_codes``
+    → ``sets.sync`` so cross-set booster cards are local before EV is computed.
+    This is the shared discovery path for the sealed-value + review-earmarks
+    scripts (keeps the sourceSetCodes logic in one place)."""
+    codes: set[str] = set()
+
+    def _walk(n: ProductNode) -> None:
+        if n.set_code:
+            codes.add(n.set_code.lower())
+        if n.kind == "pack" and n.ev_detail is not None:
+            booster = ((mtgjson.set_file(n.set_code).get("booster") or {})
+                       .get(n.ev_detail.booster_type) or {})
+            for c in booster.get("sourceSetCodes") or []:
+                if c:
+                    codes.add(c.lower())
+        for c in n.children:
+            _walk(c)
+
+    _walk(node)
+    return codes
