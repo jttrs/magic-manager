@@ -69,15 +69,11 @@ def _value_product(set_code: str, product_name: str, market_provider) -> dict:
         return {"market": None, "intrinsic": None, "error": str(e)}
 
     # Discover + sync referenced sets so local prices resolve (best-effort).
+    # referenced_set_codes also folds in each booster's cross-set sourceSetCodes
+    # (e.g. a bundle's collector booster pulling from a Commander set), so those
+    # get synced too and EV doesn't under-report.
     scout = sealed.build_product_tree(set_code, product)
-    codes: set[str] = set()
-
-    def _walk(n):
-        codes.add(n.set_code.lower())
-        for c in n.children:
-            _walk(c)
-    _walk(scout)
-    unsynced = sets.unsynced_set_codes(codes)
+    unsynced = sets.unsynced_set_codes(sealed.referenced_set_codes(scout))
     if unsynced:
         try:
             sets.sync(unsynced)

@@ -132,9 +132,7 @@ def _sync_referenced_sets(node: sealed.ProductNode) -> None:
     """Sync every set code referenced anywhere in the tree so local prices
     resolve. Best-effort — a sync failure just under-reports (surfaced as low
     coverage)."""
-    codes = set()
-    for _, n in _flatten(node):
-        codes.add(n.set_code.lower())
+    codes = sealed.referenced_set_codes(node)
     unsynced = sets.unsynced_set_codes(codes)
     if unsynced:
         print(f"Syncing {len(unsynced)} referenced set(s): {', '.join(sorted(unsynced))}…")
@@ -172,15 +170,23 @@ def main() -> int:
         if not types:
             print(f"{code.upper()}: no booster data in MTGJSON.", file=sys.stderr)
             return 2
+        # Sync the parent + every set any booster type pulls from (sourceSetCodes),
+        # so cross-set sheets (e.g. AFR collector → AFC, set → PLST) price fully.
+        boosters = set_data.get("booster") or {}
+        wanted = {code}
+        for t in types:
+            for c in (boosters.get(t) or {}).get("sourceSetCodes") or []:
+                if c:
+                    wanted.add(c.lower())
         try:
-            sets.sync(sets.unsynced_set_codes([code]))
+            sets.sync(sets.unsynced_set_codes(wanted))
         except Exception as e:  # noqa: BLE001
             print(f"  ! sync failed: {e}", file=sys.stderr)
         set_data = mtgjson.set_file(code)
-        up, _ = ev.build_uuid_price_map(set_data)
         print(f"{code.upper()} booster types ({len(types)}):")
         for t in types:
-            b = ev.booster_ev(set_data, t, uuid_price=up)
+            # No shared uuid_price: let each type build its own cross-set map.
+            b = ev.booster_ev(set_data, t)
             print(f"  {t:14} EV {util.fmt_usd(round(b.ev_usd, 2)):>8}  "
                   f"(coverage {b.coverage:.1%}, {b.n_configs} layout(s))")
         return 0
