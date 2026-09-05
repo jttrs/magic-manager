@@ -19,6 +19,21 @@
             "type": "command",
             "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/manapool-guard.sh",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/tcgcsv-guard.sh",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/tcgapi-guard.sh",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/ebay-guard.sh",
+            "timeout": 5
           }
         ]
       }

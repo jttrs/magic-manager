@@ -145,3 +145,16 @@ re-define them here. Record only this family's product **specifics / gotchas**:
 | Product | Archetype (→ product-types.md) | Family-specific detail |
 |---|---|---|
 | `<SKU name>` | Scene Box | `<CNs, fileName, handling note>` |
+
+**Booster types (for `sealed-value` EV).** MTGJSON carries per-card WotC booster
+weights for this set; the [[sealed-value]] skill reads them at runtime (no weights
+are duplicated here). Record only WHICH booster types exist + any prose MTGJSON
+can't express. Enumerate with:
+
+```bash
+uv run python scripts/sealed_value.py <anchor> --list-boosters
+```
+
+| Booster type | Notes (what MTGJSON can't say) |
+|---|---|
+| `<draft/set/play/collector/beginner/prerelease/…>` | `<e.g. "the Bundle's 9 Play Boosters are pack.code='play'"; "Jumpstart packs are fixed decks → deck value, not booster EV"; "prerelease promo sheet points at an unsynced promo set → low EV coverage until synced">` |

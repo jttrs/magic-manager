@@ -126,9 +126,19 @@ uv run mm query show 'set:<anchor>+related missing' | grep -i arena   # expect n
 
 If arena-stamped cards DO appear, it's a bug in `selectors._is_digital_only` (not a per-family config issue) — flag it rather than papering over it with a family rule.
 
+### 7b. Enumerate booster types (for `sealed-value` EV)
+
+MTGJSON carries per-card WotC booster weights for most sets; the [[sealed-value]] skill reads them at runtime to compute exact booster EV (no weights are duplicated into `selectors.py`). Record which booster types this family exposes into §9 of the doc:
+
+```bash
+uv run python scripts/sealed_value.py <anchor> --list-boosters   # types + per-type EV + coverage
+```
+
+Note any type whose EV **coverage** is low (a sheet points at an unsynced promo/child set — sync it, or note the gap) and any prose MTGJSON can't express (e.g. "the Bundle's Play Boosters are `pack.code='play'`"; "Jumpstart packs are fixed decks → value them as decks, not booster EV"). Sets with no `booster` data (older or precon-only products) simply have no row here.
+
 ### 8. Draft `docs/sets/<anchor>.md`
 
-Copy `docs/sets/_TEMPLATE.md` to `docs/sets/<anchor>.md` and fill each section from steps 1-7. Keep it dense — no filler prose; every row of every table should be a fact you verified.
+Copy `docs/sets/_TEMPLATE.md` to `docs/sets/<anchor>.md` and fill each section from steps 1-7b. Keep it dense — no filler prose; every row of every table should be a fact you verified.
 
 **Do NOT overwrite an existing doc silently** — if `docs/sets/<anchor>.md` already exists, read it first, produce a **proposed diff** for user review, and only apply after confirmation. Update the "Last audit" date at the top.
 
@@ -180,3 +190,4 @@ Update the "Last audit" date at the top of the new doc.
 - `src/magic_manager/selectors.py:_modifier_chase` — chase-variant detection logic.
 - [[missing-from-set]] — the workflow this characterization enables.
 - [[bulk-add]] — where PRM destination knowledge is currently referenced procedurally.
+- [[sealed-value]] — consumes §9's booster-type list to value sealed product card contents (EV).
