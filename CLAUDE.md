@@ -6,6 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `magic-manager` (`mm`) is a local-first MTG collection / set / wishlist / deck manager. Python 3.12, dependencies managed by `uv`, single-file SQLite store. No web service, no cloud — every command operates on `db/magic_manager.db`.
 
+## Core engineering rules
+
+These are standing rules for this repo — follow them without being reminded:
+
+1. **Thin skill wrappers over deterministic scripts.** A user-facing skill / slash-command is a *relay*, not a place for logic. The real work lives in a deterministic `scripts/*.py` (or a `src/magic_manager/*` module it calls) that is the single source of truth; the skill invokes it and relays the output. No business logic, no arithmetic, no valuation math in skill prose. When network I/O is unavoidable (e.g. fetching a URL), do it on the Claude side of the skill and feed the script normalized, offline inputs. See `sealed-value`, `construct-value`, `review-earmarked-products` as the reference shape.
+2. **Don't violate DRY.** Reuse existing engines and helpers instead of copying logic. New valuation reuses `sealed` / `construct` / `sets.card_price_map`; market-provider assembly reuses `sealed.make_market_provider`; artifact/slug writing follows the existing `scripts/*_value.py` helpers. If shared logic lives in a one-off home, **lift it into a shared home** (a module function, `util`, etc.) rather than duplicating it — a refactor that changes no behavior is preferable to a copy.
+
 ## Running the CLI
 
 The `mm` CLI is a `uv` project script (`pyproject.toml` → `mm = "magic_manager.cli:app"`); it is **not** on `PATH`. **Always invoke it as `uv run mm …`** — bare `mm …` will fail with `mm not found`. Skip the `which mm` / bare-`mm --help` probe; go straight to `uv run mm --help` or the specific subcommand.
@@ -25,6 +32,7 @@ uv run mm audit …        # deck-inventory consistency checks (--fix deletes or
 uv run mm intake <set>   # scan-loop REPL for fast bulk entry
 uv run mm export …       # paste-ready blocks for moxfield/manapool/tcgplayer/archidekt/plain/scryfall-json
 uv run mm scryfall <q>   # ad-hoc Scryfall search via the rate-limited wrapper
+uv run mm earmark …      # watchlist of sealed products across storefronts (add/list/rm-link/rm-product)
 ```
 
 There is a pytest suite under `tests/` (`uv run pytest`); fixtures use the
@@ -89,6 +97,7 @@ Inside `src/magic_manager/`:
 - `sets.py` — set family resolution, sync from Scryfall, master-list/jumpstart-list/precon-list writers, ingest readers + the deck-checklist ingest engines: `_apply_acquired_checklist` (add mode — single `acquired_qty`, auto-split) and `_apply_precon_checklist` (modify mode + `add-precon`'s explicit per-state counts), sharing `_build_precon_copies`.
 - `selectors.py` — the selector DSL parser + materializer.
 - `inventory.py`, `wishlist.py`, `decks.py` — V2 fact-table CRUD + value rollups. `decks.py` also holds `import_precon` and the derived `precon_unit_counts[_for]` (built/deconstructed/pool copies counted from the `decks` table's `precon_state`).
+- `earmarks.py` — CRUD over the V12 `earmarked_products` + `earmark_links` tables (a sealed-product watchlist). One product row per MTGJSON identity, N link rows (one per storefront URL) so the same product across stores collates. Stores only the **non-derivable** facts (store URL + asking-price snapshot + capture date); market/intrinsic are **never** stored — `scripts/review_earmarks.py` recomputes them live via the `sealed` engine (DRY). `sealed`/`construct` are the valuation engines behind `sealed-value`/`construct-value` (product tree → EV/deck/singles + market provider; and 3-way construct cost).
 - `intake.py` — scan-loop REPL.
 - `parsers.py` — Moxfield-style block parser (used by `import` commands).
 - `treatments.py` — derives a treatment string (e.g. `b|ff`, `ext`) from Scryfall card fields. Centralized so missing-set, master-list, and ad-hoc queries all agree on what counts as a "distinct printing".
