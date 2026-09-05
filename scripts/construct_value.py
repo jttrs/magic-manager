@@ -52,7 +52,7 @@ def _fmt(v):
 
 
 def _scry_url(set_code: str, cn: str) -> str:
-    return f"https://scryfall.com/card/{set_code.lower()}/{cn}"
+    return construct.scryfall_url(set_code, cn)
 
 
 # ---------- rendering ----------

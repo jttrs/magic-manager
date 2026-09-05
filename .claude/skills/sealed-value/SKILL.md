@@ -63,17 +63,34 @@ For a container it reports **market(whole)** (the box's own price) AND
 `--ebay` adds an ADVISORY sold-comp figure; it is non-deterministic (varies per
 fetch) so it is shown separately and never enters the deterministic artifact.
 
+**Always-on "Top singles" section.** After the tree/TOTALS, the report ALWAYS
+appends a **Top-15 high-value singles table** — the per-card breakdown of *which
+cards carry the value* (name hyperlinked to Scryfall, set, CN, finish, unit $),
+sorted by value descending, plus the full deterministic-singles total. This
+reuses the `construct` engine (`expand_sealed` → `net_against_loose`), so the
+singles total ties out to the tree's deck/singles intrinsic. Only DETERMINISTIC
+cards are listed (fixed decks + explicit card inserts); random booster cards
+can't be itemized and are noted as excluded (their value is the EV above). A
+pure-booster product (a plain booster box) shows an "all random boosters" note
+instead of a table. **You do not need to also run `construct-value` for the
+high-value singles — sealed-value now includes them.** The full (untruncated)
+table is written to the artifacts.
+
 ## Output shape
 
 Two artifacts in `queries/` (ephemeral; pruned by [[cleanup-queries]]):
-- `sealed-value-<code>-<slug>-<ts>.txt` — the indented tree, paste-ready.
+- `sealed-value-<code>-<slug>-<ts>.txt` — the indented tree + the FULL top-value
+  singles table (all priced cards, not just the top 15), paste-ready.
 - `sealed-value-<code>-<slug>-<ts>.xlsx` — sheet `tree` (one row per node:
   depth/name/kind/count/category/market/ev/deck/singles/ebay/tcgId/url/diagnostics)
   + sheet `sheets` (the auditable per-booster-sheet EV breakdown:
-  booster_type/sheet/foil/total_weight/n_cards/n_unpriced/ev_per_pull).
+  booster_type/sheet/foil/total_weight/n_cards/n_unpriced/ev_per_pull)
+  + sheet `singles` (every deterministic single, value-sorted:
+  rank/name/set_code/collector_number/finish/unit_usd/scryfall_url).
 
 Stdout: `## Sealed value — <product>` + the tree + a `TOTALS` line
-(market whole / market parts / intrinsic / coverage) + diagnostics + file paths.
+(market whole / market parts / intrinsic / coverage) + diagnostics + the
+**Top singles (by value)** table + file paths.
 
 ## Determinism guarantees
 
