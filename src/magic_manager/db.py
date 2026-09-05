@@ -421,6 +421,49 @@ CREATE INDEX IF NOT EXISTS decks_precon_state_idx ON decks (source_precon_file_n
 """
 
 
+# V12: a sealed-product WATCHLIST ("earmarks"). Two tables so the same product
+# on multiple storefronts collates to one product identity:
+#   - earmarked_products : one row per MTGJSON sealed-product identity
+#                          (set_code + product_name, uuid when known). Carries
+#                          only high-level facts pulled from mtgjson.sealed_products.
+#   - earmark_links      : one row per storefront URL, joined to a product. Stores
+#                          the NON-DERIVABLE facts only — the store URL and a
+#                          snapshot of the asking price + when it was captured.
+# Market/intrinsic value is deliberately NOT stored here: it's recomputed live by
+# scripts/review_earmarks.py via the sealed engine (DRY — one source of price
+# truth). asking_price is the whole point of an earmark and can't be derived, so
+# it (plus captured_at as a staleness signal) is what we persist.
+SCHEMA_V12 = """
+CREATE TABLE IF NOT EXISTS earmarked_products (
+    product_id    INTEGER PRIMARY KEY AUTOINCREMENT,
+    set_code      TEXT NOT NULL,
+    product_uuid  TEXT,
+    product_name  TEXT NOT NULL,
+    category      TEXT,
+    subtype       TEXT,
+    release_date  TEXT,
+    card_count    INTEGER,
+    notes         TEXT,
+    earmarked_at  TEXT NOT NULL,
+    UNIQUE (set_code, product_name)
+);
+CREATE INDEX IF NOT EXISTS earmarked_products_set_idx ON earmarked_products (set_code);
+
+CREATE TABLE IF NOT EXISTS earmark_links (
+    link_id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id    INTEGER NOT NULL,
+    store_url     TEXT NOT NULL UNIQUE,
+    store_name    TEXT,
+    asking_price  REAL,
+    currency      TEXT NOT NULL DEFAULT 'USD',
+    captured_at   TEXT NOT NULL,
+    notes         TEXT,
+    FOREIGN KEY (product_id) REFERENCES earmarked_products (product_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS earmark_links_product_idx ON earmark_links (product_id);
+"""
+
+
 # ---------- migration-authoring convention ----------
 #
 # Always-safe ops in a migration: CREATE TABLE, ALTER TABLE ADD COLUMN,
@@ -473,6 +516,7 @@ MIGRATIONS: list[str] = [
     SCHEMA_V9,
     SCHEMA_V10,
     SCHEMA_V11,
+    SCHEMA_V12,
 ]
 CURRENT_VERSION = len(MIGRATIONS)
 
