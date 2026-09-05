@@ -17,11 +17,13 @@ import typer
 from . import (
     db,
     decks as decks_mod,
+    earmarks as earmarks_mod,
     exports,
     front_cards as front_cards_mod,
     intake as intake_mod,
     inventory as inv_mod,
     mtgjson as mtgjson_mod,
+    sealed as sealed_mod,
     selectors as sel_mod,
     sets as sets_mod,
     util,
@@ -60,6 +62,8 @@ db_app = typer.Typer(no_args_is_help=True,
                      help="Manage the local SQLite DB: snapshots, restore, integrity.")
 audit_app = typer.Typer(no_args_is_help=True,
                         help="Consistency checks + repair for the local DB.")
+earmark_app = typer.Typer(no_args_is_help=True,
+                          help="Watchlist of sealed products across storefronts.")
 
 app.add_typer(set_app, name="set")
 app.add_typer(inventory_app, name="inventory")
@@ -72,6 +76,7 @@ app.add_typer(checklists_app, name="input")
 app.add_typer(mtgjson_app, name="mtgjson")
 app.add_typer(db_app, name="db")
 app.add_typer(audit_app, name="audit")
+app.add_typer(earmark_app, name="earmark")
 
 
 def _slug(s: str) -> str:
@@ -3614,6 +3619,119 @@ def input_list(
         if f["prior_failed"]:
             pf = f["prior_failed"]
             typer.echo(f"    ⚠ previously failed at {pf['at']}: {pf['error']}")
+
+
+# ---------- earmark ----------
+
+@earmark_app.command("add")
+def earmark_add_cmd(
+    set_code: str = typer.Argument(..., help="Set code the product belongs to (e.g. c19, acr)."),
+    name: str = typer.Option(..., "--name", "-n",
+                             help="MTGJSON product name (or a unique substring)."),
+    url: str = typer.Option(..., "--url", "-u", help="Storefront product URL."),
+    price: float = typer.Option(None, "--price", "-p", help="Store's asking price (snapshot)."),
+    currency: str = typer.Option("USD", "--currency", help="Asking-price currency."),
+    store: str = typer.Option(None, "--store", help="Store label (default: derived from URL host)."),
+    notes: str = typer.Option(None, "--notes", help="Free-text note on this link."),
+    json_out: bool = typer.Option(False, "--json", help="Emit the result as JSON."),
+):
+    """Earmark a sealed product on a storefront.
+
+    Validates that ``name`` resolves to a real MTGJSON sealed product in
+    ``set_code`` (exit 2 if not — every earmark must be identity-resolvable so
+    the review can value it), then upserts the product + this storefront link.
+    Re-run with a different --url to add another store for the same product.
+    """
+    try:
+        product = sealed_mod.identify_product(set_code, name)
+    except LookupError as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+
+    ids = product.get("identifiers") or {}
+    result = earmarks_mod.earmark_add(
+        set_code, product["name"], url,
+        product_uuid=product.get("uuid"),
+        category=product.get("category"),
+        subtype=product.get("subtype"),
+        release_date=product.get("releaseDate"),
+        card_count=product.get("cardCount"),
+        store_name=store,
+        asking_price=price,
+        currency=currency,
+        link_notes=notes,
+    )
+    if json_out:
+        json.dump({**result, "product_name": product["name"], "set_code": set_code.lower()},
+                  sys.stdout, indent=2)
+        sys.stdout.write("\n")
+        return
+    px = f" @ {price:.2f} {currency}" if price is not None else ""
+    typer.echo(f"{result['product_action']} product / {result['link_action']} link: "
+               f"{product['name']} ({set_code.lower()}){px}")
+
+
+@earmark_app.command("list")
+def earmark_list_cmd(
+    json_out: bool = typer.Option(False, "--json", help="Emit as JSON."),
+):
+    """List earmarked products and their storefront links (plain text).
+
+    High-level facts + asking-price snapshots only. For live market/intrinsic
+    valuation and the deal table, run the ``review-earmarked-products`` skill
+    (``scripts/review_earmarks.py``)."""
+    products = earmarks_mod.earmark_list()
+    if json_out:
+        json.dump([
+            {
+                "set_code": p.set_code, "product_name": p.product_name,
+                "category": p.category, "release_date": p.release_date,
+                "best_asking": p.best_asking,
+                "links": [
+                    {"store_name": l.store_name, "store_url": l.store_url,
+                     "asking_price": l.asking_price, "currency": l.currency,
+                     "captured_at": l.captured_at}
+                    for l in p.links
+                ],
+            }
+            for p in products
+        ], sys.stdout, indent=2, default=str)
+        sys.stdout.write("\n")
+        return
+    if not products:
+        typer.echo("(no earmarked products)")
+        return
+    for p in products:
+        best = f"${p.best_asking:.2f}" if p.best_asking is not None else "—"
+        typer.echo(f"{p.product_name}  ({p.set_code})  [{p.category or '?'}]  best {best}")
+        for l in p.links:
+            px = f"${l.asking_price:.2f} {l.currency}" if l.asking_price is not None else "—"
+            typer.echo(f"    {(l.store_name or '?'):24} {px:>12}  {l.store_url}")
+
+
+@earmark_app.command("rm-link")
+def earmark_rm_link_cmd(
+    url: str = typer.Argument(..., help="Storefront URL to remove."),
+):
+    """Remove one storefront link (the product row + other links survive)."""
+    result = earmarks_mod.earmark_remove_link(url)
+    if not result["removed"]:
+        typer.echo(f"(no earmark link for {url})", err=True)
+        raise typer.Exit(2)
+    typer.echo(f"removed link: {url}")
+
+
+@earmark_app.command("rm-product")
+def earmark_rm_product_cmd(
+    set_code: str = typer.Argument(..., help="Set code."),
+    name: str = typer.Argument(..., help="Exact MTGJSON product name."),
+):
+    """Remove a product and all its storefront links (cascade)."""
+    result = earmarks_mod.earmark_remove_product(set_code, name)
+    if not result["removed"]:
+        typer.echo(f"(no earmarked product {name!r} in {set_code.lower()})", err=True)
+        raise typer.Exit(2)
+    typer.echo(f"removed product: {name} ({set_code.lower()})")
 
 
 # ---------- entry point ----------
