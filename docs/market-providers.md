@@ -23,19 +23,64 @@ intrinsic (EV/deck/singles) valuation always works offline regardless.
 | `--market` | Providers tried | Auth | Keyed by | Role |
 |---|---|---|---|---|
 | `null` (default) | none | — | — | offline; market shows `(manual)` + link |
-| `tcgcsv` | tcgcsv.com | none | group + product id | **primary** |
+| `manapool` | manapool.com API | `X-ManaPool-Email/Token` | MTGJSON **uuid** (exact) | exact join + real sold comps |
+| `tcgcsv` | tcgcsv.com | none | group + product id | broadest coverage |
 | `tcgapi` | tcgapi.dev | `X-API-Key` | product **name** (search) | secondary |
-| `chain` / `compare` | tcgcsv → tcgapi | as above | — | first-hit / side-by-side |
+| `chain` | manapool → tcgcsv → tcgapi | as above | — | first-hit (manapool primary) |
+| `compare` | tcgcsv + tcgapi + manapool | as above | — | side-by-side table |
 | `--ebay` (any mode) | eBay Browse | OAuth app token | product name (search) | **advisory only** |
 
-Every provider request goes through a rate-limited, cached shell wrapper under
+Most provider requests go through a rate-limited, cached shell wrapper under
 `.claude/skills/sealed-value/`; a matching PreToolUse guard hook in
 `.claude/settings.json` blocks ad-hoc `curl` to each host (mirroring the
-scryfall/mtgjson/manapool pattern). Secrets live only in the gitignored `.env`.
+scryfall/mtgjson/manapool pattern). **Mana Pool is the exception** — it reuses
+the pre-existing `.claude/skills/manapool-search/manapool.sh` wrapper +
+`manapool-guard.sh` hook (no new wrapper/guard/settings). Secrets live only in
+the gitignored `.env`.
 
 ---
 
-## 1. tcgcsv.com — primary (no setup)
+## Mana Pool — exact-uuid join + real sold comps (chain primary)
+
+The strongest sealed source: it joins by **exact MTGJSON uuid** (the same
+`node_meta["uuid"]` every sealed `ProductNode` carries — no fuzzy name/id search
+like tcgapi/eBay), and it uniquely returns **real recent-sold comps**. It's the
+primary source in `--market chain`.
+
+**Setup:** none beyond the Mana Pool creds you already use for the cart tools —
+`MANAPOOL_EMAIL` + `MANAPOOL_ACCESS_TOKEN` in `.env` (sent as
+`X-ManaPool-Email` / `X-ManaPool-Access-Token`). Reuses the existing
+`.claude/skills/manapool-search/manapool.sh` wrapper (a new `sealed` subcommand)
+and the existing `manapool-guard.sh` hook — **no new wrapper, guard, or
+`settings.json` change.**
+
+- **Endpoint:** `GET /products/sealed?mtgjson_uuids=<uuid>[&mtgjson_uuids=…]`
+  (`manapool.sh sealed <uuid…>`). A row carries `set_code`, `name`,
+  `tcgplayer_product_id`, `low_price`, `price_market`, `available_quantity`, and
+  `recent_sales[]` — all prices in **cents**.
+- **Deterministic market $** = `price_market` when > 0 (populated on liquid
+  products), else `low_price` (the lowest available ask / floor). Returns `None`
+  on a miss (`{"data":[]}`) or an all-zero illiquid row.
+- **Sold comps (`recent_sales`)** are genuine settled transactions
+  (timestamp + cents) — the data eBay's Browse API can't give. Their median is
+  shown on an **advisory** `Mana Pool: $X market / $Y floor / sold-median $Z
+  (n=…) / N available` line, NOT baked into the deterministic market column (the
+  recent-sales set drifts per fetch). Printed whenever manapool is in play
+  (`manapool`/`chain`/`compare`), independent of `--ebay`.
+- Cache: 24h under `$TMPDIR/manapool-cache` (shared with the singles wrapper).
+
+Verified live 2026-09-06: M15 Booster Box → market/floor via uuid join; CLB
+Commander Decks Set-of-4 → $800 floor (matched the lone eBay sealed listing);
+AFR Commander Deck Display → $399.95, tracking tcgcsv's $367.61 closely.
+
+```bash
+uv run python scripts/sealed_value.py clb "Commander Decks Set of 4" --market manapool
+uv run python scripts/sealed_value.py m15 "booster box" --market chain     # manapool first
+```
+
+---
+
+## 1. tcgcsv.com — broadest coverage (no setup)
 
 Free, no-auth mirror of TCGplayer's public price + product data. **Works out of
 the box** — nothing to configure. Keyed by TCGplayer's `categoryId` (Magic = 1)
@@ -179,15 +224,18 @@ deterministic $375.83 (a sensible eBay active-listing discount).
 
 ## Where the code lives
 
-- Providers: `src/magic_manager/{tcgcsv,tcgapi,ebay}.py` — each a thin client +
-  a `sealed.MarketProvider` (`price(node_meta) -> float | None`), memoized.
-- Wrappers: `.claude/skills/sealed-value/{tcgcsv,tcgapi,ebay}.sh` — cached,
-  rate-limited, `.env`-reading (tcgapi/ebay). Exit 7 = "not configured" (soft;
-  the Python provider catches it and drops itself).
+- Providers: `src/magic_manager/{tcgcsv,tcgapi,ebay,manapool}.py` — each a thin
+  client + a `sealed.MarketProvider` (`price(node_meta) -> float | None`),
+  memoized. `manapool.py` + `ebay.py` also expose `full()` for the advisory line.
+- Wrappers: `.claude/skills/sealed-value/{tcgcsv,tcgapi,ebay}.sh` (cached,
+  rate-limited, `.env`-reading; exit 7 = "not configured"). **Mana Pool reuses
+  `.claude/skills/manapool-search/manapool.sh`** (`sealed` subcommand; exit 2 =
+  missing creds) — not a new wrapper.
 - Guards: `.claude/hooks/{tcgcsv,tcgapi,ebay}-guard.sh`, registered in
-  `.claude/settings.json` — block ad-hoc `curl` to each host.
+  `.claude/settings.json` — block ad-hoc `curl` to each host. Mana Pool reuses
+  the pre-existing `manapool-guard.sh` (already allowlists its wrapper).
 - Seam + assembly: `sealed.MarketProvider` / `NullMarketProvider` /
-  `ChainMarketProvider`; `scripts/sealed_value.py::_make_market_provider`.
+  `ChainMarketProvider` / `CompareMarketProvider`; `sealed.make_market_provider`.
 
 ## Secrets
 

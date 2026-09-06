@@ -47,6 +47,17 @@ def _fmt(v):
     return util.fmt_usd(v)
 
 
+def _find_provider(mp, name: str):
+    """Find a sub-provider by name in a market provider (standalone, or nested in
+    a chain/compare via ``.providers``). Returns it or None."""
+    if getattr(mp, "name", "") == name:
+        return mp
+    for sub in getattr(mp, "providers", []) or []:
+        if getattr(sub, "name", "") == name:
+            return sub
+    return None
+
+
 def _render_tree(node: sealed.ProductNode, *, depth: int = 0) -> list[str]:
     """Indented per-node lines: count× name [kind]   market / EV|deck|singles."""
     indent = "  " * depth
@@ -238,8 +249,9 @@ def main() -> int:
     ap.add_argument("set_code", help="Set code (e.g. m15, fdn).")
     ap.add_argument("product", nargs="?", default=None,
                     help="Product name substring (e.g. 'booster box'). Omit if the set has one product.")
-    ap.add_argument("--market", choices=["null", "tcgcsv", "tcgapi", "chain", "compare"],
-                    default="null", help="Market price source (default: null → manual link).")
+    ap.add_argument("--market", choices=["null", "tcgcsv", "tcgapi", "manapool", "chain", "compare"],
+                    default="null", help="Market price source (default: null → manual link). "
+                                         "manapool joins by exact MTGJSON uuid + shows sold comps.")
     ap.add_argument("--ebay", action="store_true",
                     help="Also fetch eBay advisory prices from active buy-it-now "
                          "listings (NON-deterministic; active listings, not sold comps).")
@@ -323,6 +335,16 @@ def main() -> int:
     elif args.market != "null":
         src = getattr(market_provider, "last_source", None) or market_provider.name
         print(f"Market source: {src}")
+    # Mana Pool advisory: exact-uuid market/floor + real recent-sold-comp median.
+    # Printed whenever manapool is in play (standalone/chain/compare), separate
+    # from the deterministic market column. The top node's uuid isn't on
+    # ProductNode, so reconstruct its meta from the resolved product + set file.
+    mp_prov = _find_provider(market_provider, "manapool")
+    if mp_prov is not None:
+        top_meta = sealed._market_meta(product, mtgjson.set_file(code))
+        snap = mp_prov.full(top_meta)
+        if snap is not None:
+            print(f"Mana Pool: {snap.as_display()}")
     if ebay_provider is not None:
         adv = ebay_provider.full({"name": node.name})
         if adv is not None:

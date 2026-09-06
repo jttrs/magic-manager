@@ -149,21 +149,29 @@ def _build_providers(names: list[str]) -> list[MarketProvider]:
             elif n == "tcgapi":
                 from . import tcgapi
                 providers.append(tcgapi.TcgapiMarketProvider())
+            elif n == "manapool":
+                from . import manapool
+                providers.append(manapool.ManapoolMarketProvider())
         except Exception as e:  # noqa: BLE001 — unconfigured provider degrades to manual
             print(f"  ! market provider {n!r} unavailable: {e}", file=sys.stderr)
     return providers
 
 
 def make_market_provider(mode: str) -> MarketProvider:
-    """Resolve a ``--market`` choice (``null|tcgcsv|tcgapi|chain|compare``) to a
-    :class:`MarketProvider`. Shared by the ``sealed-value`` and ``construct-value``
-    CLIs so the provider-chain assembly lives in exactly one place."""
+    """Resolve a ``--market`` choice (``null|tcgcsv|tcgapi|manapool|chain|compare``)
+    to a :class:`MarketProvider`. Shared by the ``sealed-value`` and
+    ``construct-value`` CLIs so the provider-chain assembly lives in exactly one
+    place.
+
+    ``chain`` puts **manapool first** — it joins by exact MTGJSON uuid (the most
+    robust key), with tcgcsv/tcgapi as backfill. ``compare`` queries all three
+    side-by-side."""
     if mode == "null":
         return NullMarketProvider()
     if mode == "compare":
-        providers = _build_providers(["tcgcsv", "tcgapi"])
+        providers = _build_providers(["tcgcsv", "tcgapi", "manapool"])
         return CompareMarketProvider(providers) if providers else NullMarketProvider()
-    names = ["tcgcsv", "tcgapi"] if mode == "chain" else [mode]
+    names = ["manapool", "tcgcsv", "tcgapi"] if mode == "chain" else [mode]
     providers = _build_providers(names)
     if not providers:
         return NullMarketProvider()
