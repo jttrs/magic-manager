@@ -239,6 +239,14 @@ FAMILY_DUPE_FOIL_PROMO_TYPES: dict[str, frozenset[str]] = {
     # ff), so a DUPE_FOIL entry couldn't catch it anyway (SNC trap). Empty
     # frozenset unblocks the `preferred` filter. See docs/sets/one.md §2/§5.
     "one": frozenset(),
+    # Tarkir: Dragonstorm: halofoil is same-art-as-sibling — the 10 halofoil
+    # mythics (TDM 409-418, halofoil+boosterfun, foil-only, $17-$457, treatment
+    # b|shw|ff) share the exact showcase art of their boosterfun showcase
+    # siblings (Ugin 409↔399 illustration b49ffc89, Elspeth 411↔401 b9668943,
+    # Craterhoof 414↔404 6469e9bf, All-Out Assault 415↔405 5405b6d5). Both key
+    # to {shw} (halofoil adds ff), so the sibling dedup pairs them cleanly.
+    # Keeps the showcase, drops the halofoil dupe. See docs/sets/tdm.md §2.
+    "tdm": frozenset({"halofoil"}),
 }
 
 
@@ -550,6 +558,18 @@ FAMILY_UNOBTAINABLE_RULES: dict[str, list[dict]] = {
         # in the GLOBAL UNOBTAINABLE_PROMO_TYPES, so ONE's serialized prints never
         # reach missing-set regardless. Kept for discoverability. See docs/sets/one.md §5.
         {"promo_types_any_of": frozenset({"serialized"})},
+    ],
+    "tdm": [
+        # Promo-pack STAMP variants — ptdm `Np` promopack+stamped prints, same
+        # card as a kept base/showcase sibling + a stamp; compute to `regular`
+        # (bypass preferred dedup) and would leak ~$689 into missing-set. Mirrors
+        # the ONE family's `stamped` rule. See docs/sets/tdm.md §5.
+        {"promo_types_any_of": frozenset({"stamped"})},
+        # Documented no-op (parity with INR/ACR/ONE): TDM 419 Mox Jasper
+        # (serialized+headliner+doublerainbow, ~$2,750) — `serialized` is already
+        # in the GLOBAL UNOBTAINABLE_PROMO_TYPES, so 419 never reaches missing-set
+        # regardless. Kept for discoverability. See docs/sets/tdm.md §5.
+        {"promo_types_any_of": frozenset({"serialized", "headliner", "doublerainbow"})},
     ],
 }
 
