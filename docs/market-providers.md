@@ -93,17 +93,50 @@ uv run python scripts/sealed_value.py m15 "2015 core set booster box" --market c
 
 ## 3. eBay Browse API — advisory only (non-deterministic)
 
-**Advisory, never deterministic.** eBay prices vary per fetch, so `--ebay`
-populates a separate `ebay_advisory_usd` line/column and NEVER enters the
-deterministic artifact rows. Two important caveats from the API research:
+**Advisory, never deterministic.** eBay has no product-id join (unlike
+tcgcsv/tcgapi), so its price is a title-matched heuristic over noisy keyword
+results — `--ebay` therefore populates a separate `ebay_advisory_usd` line and
+NEVER enters the deterministic artifact rows. It's a rough "street price" sanity
+check, not a source of truth. Caveats from the API research + live testing:
 
 - **Browse returns ACTIVE listings, not sold comps.** It's a "what it's listed
-  at" ceiling. Real sold prices require eBay's **Marketplace Insights API**, a
-  restricted/limited-release API needing separate approval — out of scope here.
-  We take the **median** of active-listing prices to resist lot/lowball outliers.
+  at" signal. Real *settled/sold* prices require eBay's **Marketplace Insights
+  API**, a restricted/approval-gated API (separate from Browse) — out of scope.
+  So the advisory is labeled `active listings, not sold comps`.
 - **App tokens expire in ~2 hours.** A static token in `.env` goes stale fast,
   so `ebay.sh` **mints one on demand** from your client id/secret and caches it
   with its expiry.
+- **Production keyset must be activated.** A fresh production keyset returns
+  `invalid_client` on token mint until you complete eBay's **Marketplace Account
+  Deletion/Closure notification** step (configure an endpoint OR claim the
+  exemption) on developer.ebay.com. This is an eBay-account gate, not a code
+  issue — `invalid_client` with correct-format keys means "keyset not yet
+  entitled for the client_credentials grant."
+
+**How the advisory is computed (not a bare median).** A plain median of eBay's
+keyword results is misleading — a "Booster Box" search returns single packs,
+empty display boxes, wrong-set 2015 products (Modern Masters 2015, Fate
+Reforged, Origins…), and foreign-language editions. So `ebay.py`:
+1. **Buy-it-now only** (`filter=buyingOptions:{FIXED_PRICE}`) — no auctions /
+   active bidding wars (and Browse can't see settled auction prices anyway).
+2. **Condition filter** — New/Factory-Sealed by default; `--ebay-inspection`
+   also admits like-new / near-mint "opened for inspection" listings.
+3. **Title match** — requires ALL product-type tokens (a `booster box` query
+   needs both `booster` AND `box`, excluding single packs), a discriminator
+   (year/set-code like `2015`/`m15`), and FULL overlap of the set-identity words
+   (`core`/`set`), so a shared year can't collapse M15 onto Modern Masters 2015.
+   Negative markers (`empty`, `promo booster`, `6-card`, lot `10x`/`5x`, `pack
+   case`…) and non-English editions are excluded.
+4. **Interquartile-trimmed median** over the survivors, with the reported
+   **range** taken over the same trimmed core (so one keyword-bait listing skews
+   neither the median nor the range).
+5. **Confidence + candidates** — returns `EbayAdvisory{price, low, high,
+   n_matched, conditions, confidence (none/low/medium/high from sample size +
+   spread), candidates[]}`. The report prints the price WITH its range,
+   confidence, condition breakdown, and the top matched listings (title + item
+   URL + image URL) so a human — or a vision check on the image — can confirm
+   the SKU before trusting the number. Fewer than 3 matches → `None` (an honest
+   "can't confidently price" over a noisy guess).
 
 **Setup:**
 1. Register at <https://developer.ebay.com> → create a **Production keyset**.
@@ -129,12 +162,18 @@ token.json` and reused until ~60s before expiry.
 
 - Default marketplace `EBAY_US` (override `EBAY_MARKETPLACE`); default scope
   `.../oauth/api_scope` (override `EBAY_OAUTH_SCOPE`).
-- Search: `GET /buy/browse/v1/item_summary/search?q=<name>&limit=50`.
+- Search: `GET /buy/browse/v1/item_summary/search?q=<name>&limit=100&filter=buyingOptions:{FIXED_PRICE}`.
 - Cache: 1h (advisory data is intentionally fresh) under `$TMPDIR/ebay-cache`.
 
 ```bash
 uv run python scripts/sealed_value.py m15 "2015 core set booster box" --market compare --ebay
+uv run python scripts/sealed_value.py m15 "2015 core set booster box" --ebay --ebay-inspection
 ```
+
+Live-verified 2026-09-05: M15 Booster Box → `$349.95 range $325–$380 [medium
+confidence, n=5 Factory Sealed]`, all matched listings confirmed as genuine M15
+English Core Set boxes (title + image cross-check) — vs tcgcsv/tcgapi's
+deterministic $375.83 (a sensible eBay active-listing discount).
 
 ---
 
