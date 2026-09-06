@@ -195,13 +195,14 @@ def sync(set_codes: Iterable[str]) -> int:
     # large set list (e.g. the all-sets precon catalog's ~180 sets) can't build
     # a Scryfall query string past its length limit — batch and sum instead.
     _MAX_CODES_PER_QUERY = 60
+    priced_at = db._utcnow_iso()  # one fetch-time stamp shared across this sync run
     n = 0
     with db.connect() as conn:
         for i in range(0, len(codes), _MAX_CODES_PER_QUERY):
             batch = codes[i:i + _MAX_CODES_PER_QUERY]
             query = "(" + " or ".join(f"e:{c}" for c in batch) + ") lang:en"
             for card in scryfall.search(query, unique="prints"):
-                db.upsert_card(conn, card)
+                db.upsert_card(conn, card, priced_at=priced_at)
                 n += 1
     return n
 
@@ -1256,12 +1257,14 @@ def card_price_map(scryfall_ids: Iterable[str], *, conn=None) -> dict[str, dict]
     """Fetch identity + local Scryfall prices for a set of ``scryfall_id``s.
 
     Returns ``{scryfall_id: {name, set_code, collector_number, prices_usd,
-    prices_usd_foil, color_identity}}`` for every id present in the local
-    ``cards`` table (ids absent from the table are simply omitted — the caller
-    treats them as unpriced/unresolved). Deduplicates the input, so passing a
-    board with repeated printings costs one row each. This is the single source
-    of truth for "price a printing by id", shared by ``_rollup_deck_prices`` and
-    the ``construct`` module so both agree on the price basis and card metadata.
+    prices_usd_foil, color_identity, prices_updated_at}}`` for every id present
+    in the local ``cards`` table (ids absent from the table are simply omitted —
+    the caller treats them as unpriced/unresolved). ``prices_updated_at`` lets
+    callers surface a "prices as of" basis / flag stale runs. Deduplicates the
+    input, so passing a board with repeated printings costs one row each. This is
+    the single source of truth for "price a printing by id", shared by
+    ``_rollup_deck_prices`` and the ``construct`` module so both agree on the
+    price basis and card metadata.
     """
     ids = list(dict.fromkeys(s for s in scryfall_ids if s))  # dedupe, preserve order
     if not ids:
@@ -1277,10 +1280,11 @@ def card_price_map(scryfall_ids: Iterable[str], *, conn=None) -> dict[str, dict]
                 "prices_usd": r["prices_usd"],
                 "prices_usd_foil": r["prices_usd_foil"],
                 "color_identity": r["color_identity"],
+                "prices_updated_at": r["prices_updated_at"],
             }
             for r in c.execute(
                 f"SELECT scryfall_id, name, set_code, collector_number, "
-                f"prices_usd, prices_usd_foil, color_identity "
+                f"prices_usd, prices_usd_foil, color_identity, prices_updated_at "
                 f"FROM cards WHERE scryfall_id IN ({placeholders})",
                 ids,
             ).fetchall()
@@ -1473,6 +1477,102 @@ def unsynced_set_codes(codes: Iterable[str]) -> list[str]:
             ).fetchall()
         }
     return [c for c in wanted if c not in present]
+
+
+# Prices older than this many days are considered stale and trigger a re-sync
+# (or a warning under --no-refresh). MTG singles move week to week, so a week is
+# the freshness budget.
+STALE_AFTER_DAYS = 7
+
+
+def stale_set_codes(codes: Iterable[str], *, today: str | None = None,
+                    max_age_days: int = STALE_AFTER_DAYS) -> list[str]:
+    """Return the subset of ``codes`` (lowercased) whose NEWEST local price is
+    older than ``max_age_days``.
+
+    Freshness is judged by ``MAX(prices_updated_at)`` per set_code — the most
+    recently fetched price in that set. A set with zero local rows is NOT
+    returned here (that's ``unsynced_set_codes``' job); this only flags sets that
+    are present but stale. ``today`` (``YYYY-MM-DD``) is injectable for
+    deterministic tests; it defaults to the current UTC date.
+    """
+    from datetime import date, timedelta
+    wanted = sorted({c.lower() for c in codes if c})
+    if not wanted:
+        return []
+    today_d = date.fromisoformat((today or db._utcnow_iso())[:10])
+    cutoff = (today_d - timedelta(days=max_age_days)).isoformat()
+    with db.connect() as conn:
+        placeholders = ",".join("?" for _ in wanted)
+        rows = conn.execute(
+            f"SELECT set_code, MAX(prices_updated_at) AS newest FROM cards "
+            f"WHERE set_code IN ({placeholders}) GROUP BY set_code",
+            wanted,
+        ).fetchall()
+    newest = {r["set_code"]: (r["newest"] or "") for r in rows}
+    # Present-but-stale: has a row, and its newest price predates the cutoff.
+    return [c for c in wanted if c in newest and newest[c][:10] < cutoff]
+
+
+def plan_sync(codes: Iterable[str], *, today: str | None = None) -> dict[str, list[str]]:
+    """Split ``codes`` into ``{"missing": [...], "stale": [...]}``.
+
+    ``missing`` = sets with no local rows (always need syncing before pricing);
+    ``stale`` = present-but-outdated sets (newest price older than
+    ``STALE_AFTER_DAYS``), with missing sets excluded so they aren't double-counted.
+    Always reports both; the CALLER decides whether to sync stale (auto-refresh)
+    or merely warn about it (--no-refresh). The single source of truth for the
+    sync-or-warn decision, shared by the value scripts (DRY)."""
+    missing = unsynced_set_codes(codes)
+    missing_set = set(missing)
+    stale = [c for c in stale_set_codes(codes, today=today) if c not in missing_set]
+    return {"missing": missing, "stale": stale}
+
+
+def ensure_priced(codes: Iterable[str], *, refresh_stale: bool = True,
+                  today: str | None = None, log=None) -> dict[str, list[str]]:
+    """Make sure ``codes`` have current local prices before a valuation.
+
+    ALWAYS syncs missing sets (can't price what isn't there). Under
+    ``refresh_stale`` (default), ALSO re-syncs sets whose newest price is older
+    than ``STALE_AFTER_DAYS``; otherwise it leaves them and reports them so the
+    caller can warn. ``log`` (a ``print``-like callable) receives human progress
+    lines; pass ``None`` to stay silent. Best-effort — a sync failure is logged
+    and swallowed (the valuation just under-reports). Returns the ``plan_sync``
+    dict (``{"missing", "stale"}``) so the caller can render a warning for stale
+    sets it chose not to refresh. Shared by the value scripts (DRY)."""
+    plan = plan_sync(codes, today=today)
+    to_sync = list(plan["missing"]) + (list(plan["stale"]) if refresh_stale else [])
+    if to_sync and log:
+        bits = []
+        if plan["missing"]:
+            bits.append(f"{len(plan['missing'])} missing")
+        if refresh_stale and plan["stale"]:
+            bits.append(f"{len(plan['stale'])} stale (>{STALE_AFTER_DAYS}d)")
+        log(f"Syncing {len(to_sync)} set(s) [{', '.join(bits)}]: {', '.join(sorted(to_sync))}…")
+    if to_sync:
+        try:
+            sync(to_sync)
+        except Exception as e:  # noqa: BLE001 — a sync failure just under-reports
+            if log:
+                log(f"  ! sync failed: {e} (prices may under-report)")
+    if not refresh_stale and plan["stale"] and log:
+        log(f"  ! {len(plan['stale'])} set(s) have stale prices (>{STALE_AFTER_DAYS}d), "
+            f"not refreshed (--no-refresh): {', '.join(sorted(plan['stale']))}")
+    return plan
+
+
+def prices_as_of(scryfall_ids: Iterable[str]) -> tuple[str | None, str | None]:
+    """Return ``(newest, oldest)`` ``prices_updated_at`` (date part) across the
+    given printings' local rows — the price-freshness basis for a valuation.
+    Both ``None`` when nothing resolves. Lets a report print a "prices fetched"
+    footer so a stale run is visible even when auto-refresh was skipped."""
+    pm = card_price_map(scryfall_ids)
+    stamps = sorted(m["prices_updated_at"][:10] for m in pm.values()
+                    if m.get("prices_updated_at"))
+    if not stamps:
+        return None, None
+    return stamps[-1], stamps[0]
 
 
 def _build_precon_rows(

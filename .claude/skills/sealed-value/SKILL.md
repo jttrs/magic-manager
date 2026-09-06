@@ -98,10 +98,13 @@ Stdout: `## Sealed value — <product>` + the tree + a `TOTALS` line
   source of truth, never hand-cataloged. Different booster types (draft/set/
   play/collector/beginner) are selected automatically by each pack's
   `contents.pack[].code`.
-- Prices come from the local `cards` table (the script syncs referenced sets
-  first). Unpriced cards stay in the EV denominator, so EV *under*-reports and
-  the shortfall is surfaced as `coverage` + a per-node diagnostic — never
-  silently absorbed.
+- Prices come from the local `cards` table. The script **auto-refreshes** any
+  referenced set whose prices are missing OR stale (>7 days old) before valuing,
+  so numbers stay current; the report ends with a `Prices fetched: <date>` footer
+  as the freshness basis. Pass `--no-refresh` to skip the re-sync (offline/fast)
+  and use local prices as-is — it warns which sets are stale. Unpriced cards stay
+  in the EV denominator, so EV *under*-reports and the shortfall is surfaced as
+  `coverage` + a per-node diagnostic — never silently absorbed.
 - `other` contents (dice, guides, playmats, storage) are ignored — cards only.
 - No `Date.now()`/random in any row; timestamps appear only in filenames.
 

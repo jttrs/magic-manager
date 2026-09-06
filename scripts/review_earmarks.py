@@ -56,29 +56,25 @@ def _age_days(captured_at: str, today: str) -> int | None:
 
 # ---------- per-product live valuation (reuses the sealed engine) ----------
 
-def _value_product(set_code: str, product_name: str, market_provider) -> dict:
+def _value_product(set_code: str, product_name: str, market_provider,
+                   *, refresh_stale: bool = True) -> dict:
     """Recompute market + intrinsic for one product via the sealed engine.
 
     Mirrors ``sealed_value.py``'s flow: identify → scout-build to discover
-    referenced sets → sync → rebuild with the market provider → aggregate.
-    Returns ``{"market": float|None, "intrinsic": float|None, "error": str|None}``.
+    referenced sets → sync missing+stale → rebuild with the market provider →
+    aggregate. Returns ``{"market", "intrinsic", "error"}``.
     """
     try:
         product = sealed.identify_product(set_code, product_name)
     except LookupError as e:
         return {"market": None, "intrinsic": None, "error": str(e)}
 
-    # Discover + sync referenced sets so local prices resolve (best-effort).
-    # referenced_set_codes also folds in each booster's cross-set sourceSetCodes
-    # (e.g. a bundle's collector booster pulling from a Commander set), so those
-    # get synced too and EV doesn't under-report.
+    # Ensure referenced sets have current prices (missing always; stale unless
+    # --no-refresh). referenced_set_codes folds in cross-set booster sourceSetCodes.
     scout = sealed.build_product_tree(set_code, product)
-    unsynced = sets.unsynced_set_codes(sealed.referenced_set_codes(scout))
-    if unsynced:
-        try:
-            sets.sync(unsynced)
-        except Exception as e:  # noqa: BLE001 — a sync failure just under-reports
-            print(f"  ! sync failed for {set_code}: {e}", file=sys.stderr)
+    sets.ensure_priced(sealed.referenced_set_codes(scout),
+                       refresh_stale=refresh_stale,
+                       log=lambda m: print(m, file=sys.stderr))
 
     node = sealed.build_product_tree(set_code, product, market_provider=market_provider)
     totals = sealed.aggregate(node)
@@ -102,11 +98,13 @@ def _product_cell(p) -> str:
     return cell + "<br>" + " · ".join(store_bits)
 
 
-def _build_rows(products, market_provider, today: str) -> list[dict]:
+def _build_rows(products, market_provider, today: str,
+                *, refresh_stale: bool = True) -> list[dict]:
     """Value every product and assemble sortable row dicts."""
     rows = []
     for p in products:
-        val = _value_product(p.set_code, p.product_name, market_provider)
+        val = _value_product(p.set_code, p.product_name, market_provider,
+                             refresh_stale=refresh_stale)
         best = p.best_asking
         market = val["market"]
         delta = (market - best) if (market is not None and best is not None) else None
@@ -199,6 +197,9 @@ def main() -> int:
                     default="tcgcsv", help="Live market price source (default: tcgcsv).")
     ap.add_argument("--format", choices=["txt", "xlsx", "all"], default="all",
                     help="Artifact(s) to write (default: all).")
+    ap.add_argument("--no-refresh", action="store_true",
+                    help="Don't re-sync sets with stale (>7d) prices; use local "
+                         "prices as-is and warn. Faster/offline, but may under-report.")
     ap.add_argument("--out-dir", type=Path, default=QUERIES_DIR,
                     help=f"Output dir (default: {QUERIES_DIR.relative_to(ROOT)}).")
     args = ap.parse_args()
@@ -213,7 +214,7 @@ def main() -> int:
     today = now.strftime("%Y-%m-%d")
 
     market_provider = sealed.make_market_provider(args.market)
-    rows = _build_rows(products, market_provider, today)
+    rows = _build_rows(products, market_provider, today, refresh_stale=not args.no_refresh)
     lines = _render_lines(rows, today)
     print("\n" + "\n".join(lines))
 
