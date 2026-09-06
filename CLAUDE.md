@@ -86,6 +86,8 @@ SQLite at `db/magic_manager.db`, with `-wal`/`-shm` siblings colocated. Snapshot
 
 Set the `MAGIC_MANAGER_DB` env var to a file path to redirect the entire DB (used by `scripts/rehearse_migration.py` and any future tests).
 
+**Price freshness.** `cards.prices_updated_at` stores the **fetch time** (when `mm set sync` last pulled that card's price), NOT the card's release date — `sets.sync` stamps one timestamp per run. Prices older than `sets.STALE_AFTER_DAYS` (**7 days**) are "stale". The value scripts (`sealed_value.py` / `construct_value.py` / `review_earmarks.py`) **auto-refresh** stale (and missing) referenced sets before pricing via the shared `sets.ensure_priced` (plan = `sets.plan_sync` → `unsynced_set_codes` ∪ `stale_set_codes`); pass `--no-refresh` to skip the re-sync, use local prices as-is, and just warn. Every report prints a `Prices fetched: <date>` footer, and `mm set is-synced` shows each code's newest price date + a `(stale)` mark. `sets.card_price_map` returns `prices_updated_at` so callers can surface the basis.
+
 V2 fact tables: `cards`, `inventory`, `wishlist_entries`, `decks` (with V10 `source_precon_file_name` + V11 `precon_state` built/deconstructed/pool — precon unit counts derive from these), `deck_cards`, `ingest_log`, `set_targets`. (The V7 `precon_ledger` was replaced by those derived counts and dropped in V10.) Pre-V2 used a single conflated `list_rows` table; see `docs/pre-v2-inventory-snapshot.md` for the migration baseline.
 
 ### Module map

@@ -212,22 +212,20 @@ def _walk_product_contents(
 
 # ---------- pricing ----------
 
-def _price_raw_needs(raw: list[dict]) -> list[CardNeed]:
+def _price_raw_needs(raw: list[dict], *, refresh_stale: bool = True) -> list[CardNeed]:
     """Sync referenced sets, then resolve every raw need to a priced
     :class:`CardNeed` via the shared :func:`sets.card_price_map`. Card identity
     (name/set/cn) prefers the local ``cards`` row; falls back to the source's own
-    fields when a printing isn't in the local table (then ``unit_usd`` is None)."""
+    fields when a printing isn't in the local table (then ``unit_usd`` is None).
+
+    Syncs missing sets always, and stale (>7d) sets unless ``refresh_stale`` is
+    False — via the shared :func:`sets.ensure_priced` (DRY)."""
     if not raw:
         return []
-    # Sync sets referenced by the needs so local prices resolve.
+    import sys
     codes = {r["fb_set"] for r in raw if r.get("fb_set")}
-    unsynced = sets.unsynced_set_codes(codes)
-    if unsynced:
-        try:
-            sets.sync(unsynced)
-        except Exception as e:  # noqa: BLE001 — a sync failure just under-reports
-            import sys
-            print(f"  ! sync failed: {e} (prices may under-report)", file=sys.stderr)
+    sets.ensure_priced(codes, refresh_stale=refresh_stale,
+                       log=lambda m: print(m, file=sys.stderr))
 
     price_map = sets.card_price_map(r["scryfall_id"] for r in raw)
     needs: list[CardNeed] = []
@@ -255,12 +253,13 @@ def _price_raw_needs(raw: list[dict]) -> list[CardNeed]:
 # ---------- source expansion (public) ----------
 
 def expand_sealed(set_code: str, product_substr: str | None,
-                  *, market: str = "null") -> Expansion:
+                  *, market: str = "null", refresh_stale: bool = True) -> Expansion:
     """Expand a sealed product into priced card needs + its sealed market price.
 
     Random boosters are recorded in ``packs_skipped``; deterministic contents
     (decks, explicit cards) feed ``needs``. ``sealed_market`` is the whole
     product's external price from the chosen provider (``None`` if unpriced/manual).
+    ``refresh_stale`` (default True) re-syncs stale referenced sets before pricing.
     """
     product = sealed.identify_product(set_code, product_substr)  # raises LookupError
     exp = Expansion(label=product.get("name") or set_code.upper())
@@ -271,7 +270,7 @@ def expand_sealed(set_code: str, product_substr: str | None,
         set_code, product, exp.label,
         raw=raw, packs=exp.packs_skipped, diags=exp.diagnostics,
     )
-    exp.needs = _price_raw_needs(raw)
+    exp.needs = _price_raw_needs(raw, refresh_stale=refresh_stale)
 
     # Sealed market price — reuse the sealed valuation engine's whole-product price.
     provider = sealed.make_market_provider(market)
@@ -286,17 +285,17 @@ def expand_sealed(set_code: str, product_substr: str | None,
     return exp
 
 
-def expand_deck_file(file_name: str) -> Expansion:
+def expand_deck_file(file_name: str, *, refresh_stale: bool = True) -> Expansion:
     """Expand an MTGJSON precon deck fileName (e.g. ``AncientArsenal_ACR``)."""
     deck_data = mtgjson.deck(file_name)
     if not deck_data:
         raise LookupError(f"no MTGJSON deck file {file_name!r}")
     label = deck_data.get("name") or file_name
     raw = _needs_from_deck_json(deck_data, label)
-    return Expansion(needs=_price_raw_needs(raw), label=label)
+    return Expansion(needs=_price_raw_needs(raw, refresh_stale=refresh_stale), label=label)
 
 
-def expand_slug(slug: str) -> Expansion:
+def expand_slug(slug: str, *, refresh_stale: bool = True) -> Expansion:
     """Expand a local deck by slug, using its stored ``deck_cards`` recipe."""
     from . import decks
     rows = decks.deck_show(slug)  # raises LookupError if unknown
@@ -311,10 +310,11 @@ def expand_slug(slug: str) -> Expansion:
         "fb_set": (r.set_code or "").lower(),
         "fb_cn": r.collector_number,
     } for r in rows]
-    return Expansion(needs=_price_raw_needs(raw), label=slug)
+    return Expansion(needs=_price_raw_needs(raw, refresh_stale=refresh_stale), label=slug)
 
 
-def expand_decklist_text(text: str, *, label: str = "decklist") -> Expansion:
+def expand_decklist_text(text: str, *, label: str = "decklist",
+                         refresh_stale: bool = True) -> Expansion:
     """Expand a pasted Moxfield-style block (``1 Sol Ring (LTR) 123``).
 
     Reuses :func:`parsers.parse_text` + :func:`parsers.resolve` to turn names
@@ -338,7 +338,7 @@ def expand_decklist_text(text: str, *, label: str = "decklist") -> Expansion:
             "fb_set": (card.get("set") or "").lower(),
             "fb_cn": card.get("collector_number"),
         })
-    exp.needs = _price_raw_needs(raw)
+    exp.needs = _price_raw_needs(raw, refresh_stale=refresh_stale)
     return exp
 
 

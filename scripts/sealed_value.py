@@ -65,7 +65,8 @@ def _render_tree(node: sealed.ProductNode, *, depth: int = 0) -> list[str]:
 
 # ---------- top singles (reuses the construct engine — DRY) ----------
 
-def _compute_top_singles(code: str, product_substr: str | None):
+def _compute_top_singles(code: str, product_substr: str | None,
+                         *, refresh_stale: bool = True):
     """Expand the product into deterministic per-card singles, sorted by value
     desc, by REUSING ``construct``. Returns ``(rows, packs_skipped, error)``:
     ``rows`` is a list of ``construct.NetRow`` (finish-aware unit prices),
@@ -74,9 +75,12 @@ def _compute_top_singles(code: str, product_substr: str | None):
 
     Market is forced ``null`` here — the sealed *market* price is already shown
     in the tree above; this section is the deterministic local-price singles
-    breakdown ("which cards carry the value")."""
+    breakdown ("which cards carry the value"). ``refresh_stale`` flows to
+    construct's pricing so a --no-refresh run stays offline (the scout pass has
+    already synced when refreshing, so this is a cheap no-op then)."""
     try:
-        exp = construct.expand_sealed(code, product_substr, market="null")
+        exp = construct.expand_sealed(code, product_substr, market="null",
+                                      refresh_stale=refresh_stale)
     except Exception as e:  # noqa: BLE001 — never break the sealed report
         return [], [], str(e)
     rows = construct.net_against_loose(exp.needs)
@@ -218,18 +222,12 @@ def _write_xlsx(node: sealed.ProductNode, market_source: str, out_path: Path,
 
 # ---------- sync helper ----------
 
-def _sync_referenced_sets(node: sealed.ProductNode) -> None:
-    """Sync every set code referenced anywhere in the tree so local prices
-    resolve. Best-effort — a sync failure just under-reports (surfaced as low
-    coverage)."""
-    codes = sealed.referenced_set_codes(node)
-    unsynced = sets.unsynced_set_codes(codes)
-    if unsynced:
-        print(f"Syncing {len(unsynced)} referenced set(s): {', '.join(sorted(unsynced))}…")
-        try:
-            sets.sync(unsynced)
-        except Exception as e:  # noqa: BLE001
-            print(f"  ! sync failed: {e} (prices may under-report)", file=sys.stderr)
+def _sync_referenced_sets(node: sealed.ProductNode, *, refresh_stale: bool = True) -> None:
+    """Ensure every set referenced anywhere in the tree has current local prices.
+    Syncs missing sets always, and stale (>7d) sets unless ``--no-refresh``.
+    Delegates to the shared ``sets.ensure_priced`` (DRY)."""
+    sets.ensure_priced(sealed.referenced_set_codes(node),
+                       refresh_stale=refresh_stale, log=print)
 
 
 # ---------- main ----------
@@ -243,15 +241,23 @@ def main() -> int:
     ap.add_argument("--market", choices=["null", "tcgcsv", "tcgapi", "chain", "compare"],
                     default="null", help="Market price source (default: null → manual link).")
     ap.add_argument("--ebay", action="store_true",
-                    help="Also fetch eBay sold-comp advisory prices (NON-deterministic).")
+                    help="Also fetch eBay advisory prices from active buy-it-now "
+                         "listings (NON-deterministic; active listings, not sold comps).")
+    ap.add_argument("--ebay-inspection", action="store_true",
+                    help="With --ebay, also include like-new/near-mint 'opened for "
+                         "inspection' listings, not just factory-sealed.")
     ap.add_argument("--list-boosters", action="store_true",
                     help="List the set's booster types with per-type EV, then exit.")
     ap.add_argument("--format", choices=["txt", "xlsx", "all"], default="all",
                     help="Artifact(s) to write (default: all).")
+    ap.add_argument("--no-refresh", action="store_true",
+                    help="Don't re-sync sets with stale (>7d) prices; use local "
+                         "prices as-is and warn. Faster/offline, but may under-report.")
     ap.add_argument("--out-dir", type=Path, default=QUERIES_DIR,
                     help=f"Output dir (default: {QUERIES_DIR.relative_to(ROOT)}).")
     args = ap.parse_args()
     code = args.set_code.lower()
+    refresh_stale = not args.no_refresh
 
     # --list-boosters: enumerate booster types + per-type EV (used by characterize-set).
     if args.list_boosters:
@@ -268,10 +274,7 @@ def main() -> int:
             for c in (boosters.get(t) or {}).get("sourceSetCodes") or []:
                 if c:
                     wanted.add(c.lower())
-        try:
-            sets.sync(sets.unsynced_set_codes(wanted))
-        except Exception as e:  # noqa: BLE001
-            print(f"  ! sync failed: {e}", file=sys.stderr)
+        sets.ensure_priced(wanted, refresh_stale=refresh_stale, log=print)
         set_data = mtgjson.set_file(code)
         print(f"{code.upper()} booster types ({len(types)}):")
         for t in types:
@@ -293,13 +296,14 @@ def main() -> int:
     if args.ebay:
         try:
             from magic_manager import ebay
-            ebay_provider = ebay.EbayAdvisoryProvider()
+            ebay_provider = ebay.EbayAdvisoryProvider(
+                allow_inspection=args.ebay_inspection)
         except Exception as e:  # noqa: BLE001
             print(f"  ! eBay provider unavailable: {e}", file=sys.stderr)
 
     # Build once with a null provider to discover referenced sets, sync, rebuild.
     scout = sealed.build_product_tree(code, product)
-    _sync_referenced_sets(scout)
+    _sync_referenced_sets(scout, refresh_stale=refresh_stale)
     node = sealed.build_product_tree(
         code, product, market_provider=market_provider, ebay_provider=ebay_provider)
     totals = sealed.aggregate(node)
@@ -319,8 +323,21 @@ def main() -> int:
     elif args.market != "null":
         src = getattr(market_provider, "last_source", None) or market_provider.name
         print(f"Market source: {src}")
-    if node.ebay_advisory_usd is not None:
-        print(f"eBay advisory (non-deterministic): {_fmt(node.ebay_advisory_usd)}")
+    if ebay_provider is not None:
+        adv = ebay_provider.full({"name": node.name})
+        if adv is not None:
+            print(f"eBay advisory (non-deterministic): {adv.as_display()}")
+            if adv.conditions:
+                conds = ", ".join(f"{c}×{n}" for c, n in adv.conditions.items())
+                print(f"  conditions: {conds}")
+            # Surface top matched listings so their identity can be reviewed
+            # (title + item URL); the image URL enables a vision cross-check.
+            if adv.candidates:
+                print("  matched listings (review to confirm identity):")
+                for c in adv.candidates[:8]:
+                    print(f"    ${c.price:>7.2f}  {c.condition:<18} {c.title[:52]}")
+                    if c.item_url:
+                        print(f"             {c.item_url}")
     # Compare mode: show each provider's price side-by-side for accuracy checking.
     if isinstance(market_provider, sealed.CompareMarketProvider) and market_provider.seen:
         prov_names = [p.name for p in market_provider.providers]
@@ -338,10 +355,19 @@ def main() -> int:
 
     # Top singles — always shown: reuse the construct engine to itemize which
     # cards carry the value (the per-card complement to the summed tree above).
-    singles_rows, packs_skipped, singles_err = _compute_top_singles(code, args.product)
+    singles_rows, packs_skipped, singles_err = _compute_top_singles(
+        code, args.product, refresh_stale=refresh_stale)
     singles_lines = _render_top_singles(singles_rows, packs_skipped, singles_err)
     for line in singles_lines:
         print(line)
+
+    # Prices-as-of footer: surface the freshness basis so a stale run is visible.
+    newest, oldest = sets.prices_as_of(r.scryfall_id for r in singles_rows)
+    if newest:
+        basis = f"Prices fetched: {newest}"
+        if oldest and oldest != newest:
+            basis += f" (oldest referenced: {oldest})"
+        print(basis)
 
     # Artifacts.
     args.out_dir.mkdir(parents=True, exist_ok=True)

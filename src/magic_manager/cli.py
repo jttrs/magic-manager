@@ -150,17 +150,24 @@ def set_is_synced(
     placeholders = ",".join("?" for _ in codes)
     with db.connect() as conn:
         rows = conn.execute(
-            f"SELECT set_code, COUNT(*) AS n FROM cards "
+            f"SELECT set_code, COUNT(*) AS n, MAX(prices_updated_at) AS newest FROM cards "
             f"WHERE set_code IN ({placeholders}) GROUP BY set_code",
             [c.lower() for c in codes],
         ).fetchall()
     counts = {row["set_code"]: row["n"] for row in rows}
+    newest = {row["set_code"]: row["newest"] for row in rows}
+    stale = set(sets_mod.stale_set_codes(codes))
     total = sum(counts.values())
     typer.echo(f"{r.name} (anchor {r.code}) — {total} cards across {len(codes)} code(s):")
     for c in codes:
-        n = counts.get(c.lower(), 0)
-        mark = " " if n else " (not synced)"
-        typer.echo(f"  {c:8} {n:>5}{mark}")
+        cl = c.lower()
+        n = counts.get(cl, 0)
+        if not n:
+            typer.echo(f"  {c:8} {0:>5}  (not synced)")
+            continue
+        priced = (newest.get(cl) or "?")[:10]
+        mark = "  (stale)" if cl in stale else ""
+        typer.echo(f"  {c:8} {n:>5}  priced {priced}{mark}")
     if total == 0:
         raise typer.Exit(1)
 

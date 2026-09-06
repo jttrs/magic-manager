@@ -42,7 +42,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from magic_manager import construct, mtgjson, util  # noqa: E402
+from magic_manager import construct, mtgjson, sets, util  # noqa: E402
 
 QUERIES_DIR = ROOT / "queries"
 
@@ -90,6 +90,13 @@ def _render_lines(exp: construct.Expansion, rows: list[construct.NetRow],
                      f"(scratch/with-collection under-report by their value)")
     for d in exp.diagnostics:
         lines.append(f"  · {d}")
+    # Prices-as-of footer — the price-freshness basis for this valuation.
+    newest, oldest = sets.prices_as_of(r.scryfall_id for r in rows)
+    if newest:
+        basis = f"Prices fetched: {newest}"
+        if oldest and oldest != newest:
+            basis += f" (oldest referenced: {oldest})"
+        lines.append(basis)
     return lines
 
 
@@ -177,9 +184,13 @@ def main() -> int:
                     help="Sealed market price source (default: tcgcsv; sealed input only).")
     ap.add_argument("--format", choices=["txt", "xlsx", "all"], default="all",
                     help="Artifact(s) to write (default: all).")
+    ap.add_argument("--no-refresh", action="store_true",
+                    help="Don't re-sync sets with stale (>7d) prices; use local "
+                         "prices as-is and warn. Faster/offline, but may under-report.")
     ap.add_argument("--out-dir", type=Path, default=QUERIES_DIR,
                     help=f"Output dir (default: {QUERIES_DIR.relative_to(ROOT)}).")
     args = ap.parse_args()
+    refresh_stale = not args.no_refresh
 
     # Exactly one input form.
     forms = [bool(args.set_code), bool(args.deck_file), bool(args.slug), bool(args.decklist)]
@@ -192,15 +203,15 @@ def main() -> int:
     try:
         if is_sealed:
             exp = construct.expand_sealed(args.set_code.lower(), args.product,
-                                          market=args.market)
+                                          market=args.market, refresh_stale=refresh_stale)
         elif args.deck_file:
-            exp = construct.expand_deck_file(args.deck_file)
+            exp = construct.expand_deck_file(args.deck_file, refresh_stale=refresh_stale)
         elif args.slug:
-            exp = construct.expand_slug(args.slug)
+            exp = construct.expand_slug(args.slug, refresh_stale=refresh_stale)
         else:
             text = _read_text_or_stdin(args.decklist)
             label = "decklist" if args.decklist == "-" else Path(args.decklist).stem
-            exp = construct.expand_decklist_text(text, label=label)
+            exp = construct.expand_decklist_text(text, label=label, refresh_stale=refresh_stale)
     except (LookupError, FileNotFoundError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2

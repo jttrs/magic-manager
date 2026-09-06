@@ -960,8 +960,14 @@ def list_snapshots() -> list[Path]:
 
 # ---------- card upserts ----------
 
-def upsert_card(conn: sqlite3.Connection, card: dict) -> None:
-    """Insert or update a single Scryfall card row."""
+def upsert_card(conn: sqlite3.Connection, card: dict,
+                *, priced_at: str | None = None) -> None:
+    """Insert or update a single Scryfall card row.
+
+    ``priced_at`` stamps ``prices_updated_at`` with the moment the price was
+    fetched (defaults to now). Callers syncing a whole set should compute ONE
+    timestamp per run and pass it to every card, so a batch shares a coherent
+    fetch time (see ``sets.sync``)."""
     conn.execute(
         """
         INSERT INTO cards (
@@ -1009,20 +1015,28 @@ def upsert_card(conn: sqlite3.Connection, card: dict) -> None:
             security_stamp     = excluded.security_stamp,
             is_reskin          = excluded.is_reskin
         """,
-        _card_row(card),
+        _card_row(card, priced_at=priced_at),
     )
 
 
-def upsert_cards(conn: sqlite3.Connection, cards: Iterable[dict]) -> int:
+def upsert_cards(conn: sqlite3.Connection, cards: Iterable[dict],
+                 *, priced_at: str | None = None) -> int:
+    """Upsert many cards, sharing one ``priced_at`` fetch timestamp across the
+    batch (defaults to a single now-stamp computed here)."""
+    stamp = priced_at or _utcnow_iso()
     n = 0
     for c in cards:
-        upsert_card(conn, c)
+        upsert_card(conn, c, priced_at=stamp)
         n += 1
     return n
 
 
-def _card_row(c: dict) -> dict:
-    """Project a raw Scryfall card JSON into our row schema."""
+def _card_row(c: dict, *, priced_at: str | None = None) -> dict:
+    """Project a raw Scryfall card JSON into our row schema.
+
+    ``prices_updated_at`` is stamped with ``priced_at`` (the fetch moment),
+    defaulting to now — NOT the card's ``released_at`` (the old proxy, which made
+    staleness undetectable)."""
     def f(key: str, default=None):
         return c.get(key, default)
 
@@ -1060,7 +1074,7 @@ def _card_row(c: dict) -> dict:
         "color_identity":   json.dumps(f("color_identity") or []),
         "prices_usd":       usd(prices.get("usd")),
         "prices_usd_foil":  usd(prices.get("usd_foil")),
-        "prices_updated_at": f("released_at"),  # close-enough proxy; refine later
+        "prices_updated_at": priced_at or _utcnow_iso(),  # fetch time, not release date
         "image_uri":        image_uris.get("normal") or image_uris.get("large"),
         "scryfall_uri":     f("scryfall_uri"),
         "is_promo":         1 if f("promo") else 0,

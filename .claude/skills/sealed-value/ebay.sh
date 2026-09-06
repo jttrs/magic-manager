@@ -158,8 +158,14 @@ call_api() {
 
 cmd="${1:-}"; shift || true
 case "$cmd" in
-  search) [ -z "${1:-}" ] && { echo "usage: ebay.sh search '<query>'" >&2; exit 1; }
-          call_api "/buy/browse/v1/item_summary/search?q=$(urlencode "$1")&limit=50" ;;
+  search) [ -z "${1:-}" ] && { echo "usage: ebay.sh search '<query>' [any|fixed]" >&2; exit 1; }
+          # Buy-It-Now only by default (no auctions / active bidding wars) — the
+          # Browse API can't see settled auction prices anyway, so fixed-price
+          # listings are the cleanest active-market signal. Pass 'any' to widen.
+          mode="${2:-fixed}"
+          flt=""
+          [ "$mode" = "fixed" ] && flt="&filter=$(urlencode 'buyingOptions:{FIXED_PRICE}')"
+          call_api "/buy/browse/v1/item_summary/search?q=$(urlencode "$1")&limit=100${flt}" ;;
   raw)    [ -z "${1:-}" ] && { echo "usage: ebay.sh raw '/buy/...'" >&2; exit 1; }
           call_api "$1" ;;
   *) echo "ebay.sh: unknown subcommand '$cmd' (search|raw)" >&2; exit 1 ;;
