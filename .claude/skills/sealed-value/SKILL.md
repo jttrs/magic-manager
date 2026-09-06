@@ -36,6 +36,7 @@ uv run python scripts/sealed_value.py m15 "2015 core set booster box"
 uv run python scripts/sealed_value.py fdn --list-boosters                # booster types + per-type EV
 uv run python scripts/sealed_value.py m15 "clash pack" --format xlsx
 uv run python scripts/sealed_value.py m15 "booster box" --market tcgcsv  # add external market $
+uv run python scripts/sealed_value.py m15 "booster box" --market manapool # exact-uuid $ + sold comps
 uv run python scripts/sealed_value.py m15 "booster box" --market compare --ebay
 ```
 
@@ -54,14 +55,19 @@ Per node, two independent valuations:
   configs (flagged as an approximation); a `sealed` container → Σ of its
   children × their counts.
 - **market** (external, opt-in): a per-unit sealed price from a provider
-  (`--market tcgcsv|tcgapi|chain|compare`). Default `null` → market shows
-  `(manual)` and the report surfaces the product's TCGplayer link.
+  (`--market manapool|tcgcsv|tcgapi|chain|compare`). Default `null` → market
+  shows `(manual)` and the report surfaces the product's TCGplayer link.
+  `manapool` joins by exact MTGJSON uuid; `chain` tries manapool→tcgcsv→tcgapi;
+  `compare` shows all three side-by-side.
 
 For a container it reports **market(whole)** (the box's own price) AND
 **market(parts)** (Σ component prices) — value the whole and the components.
 
-`--ebay` adds an ADVISORY sold-comp figure; it is non-deterministic (varies per
-fetch) so it is shown separately and never enters the deterministic artifact.
+`--market manapool` (or chain/compare) also prints a **Mana Pool** advisory line
+with the real recent-**sold**-comp median (`recent_sales`) — settled prices, not
+just listings — joined by exact uuid. `--ebay` adds an eBay advisory from active
+buy-it-now listings. Both are non-deterministic (vary per fetch), shown as
+separate lines and never entered into the deterministic artifact.
 
 **Always-on "Top singles" section.** After the tree/TOTALS, the report ALWAYS
 appends a **Top-15 high-value singles table** — the per-card breakdown of *which

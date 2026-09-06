@@ -11,6 +11,7 @@
 # Usage:
 #   manapool.sh products <scryfall_id> [<scryfall_id> ...]   # GET /products/singles
 #   manapool.sh product-ids <product_id> [...]               # GET /products/singles by MP product_id
+#   manapool.sh sealed <mtgjson_uuid> [...]                  # GET /products/sealed by MTGJSON uuid
 #   manapool.sh optimizer <body.json>                        # POST /buyer/optimizer (body from file or stdin)
 #   manapool.sh raw GET|POST '/path' [qs] [body]
 #
@@ -173,6 +174,10 @@ case "$cmd" in
     [ "$#" -eq 0 ] && { echo "usage: manapool.sh product-ids <product_id> [...]" >&2; exit 1; }
     call_api GET /products/singles "$(repeated_qs product_ids "$@")" ""
     ;;
+  sealed)
+    [ "$#" -eq 0 ] && { echo "usage: manapool.sh sealed <mtgjson_uuid> [...]" >&2; exit 1; }
+    call_api GET /products/sealed "$(repeated_qs mtgjson_uuids "$@")" ""
+    ;;
   optimizer)
     src="${1:-}"
     if [ -n "$src" ] && [ -f "$src" ]; then body=$(cat "$src"); else body=$(cat); fi
@@ -190,6 +195,7 @@ manapool.sh: unknown subcommand '$cmd'
 Subcommands:
   products     <scryfall_id> [...]   GET /products/singles?scryfall_ids=... (repeated)
   product-ids  <product_id> [...]    GET /products/singles?product_ids=...  (repeated)
+  sealed       <mtgjson_uuid> [...]  GET /products/sealed?mtgjson_uuids=...  (repeated)
   optimizer    <body.json>           POST /buyer/optimizer   (body from file or stdin)
   raw          GET|POST '/path' [qs] [body]
 EOF
