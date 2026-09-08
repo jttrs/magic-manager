@@ -119,7 +119,14 @@ The **7-print Spectacular Spider-Man textured series** is the SPM chase story: 7
 
 ## 5. Unobtainable rules
 
-`selectors.FAMILY_UNOBTAINABLE_RULES["spm"]` — not configured. No LTR-style scroll-frame equivalent surfaced yet.
+Mirrors `selectors.FAMILY_UNOBTAINABLE_RULES["spm"]` (configured 2026-09-07, user directive).
+
+| Rule | Rationale |
+|---|---|
+| `promo_types_any_of: {textured}` | The 7 Spectacular Spider-Man textured comic-panel foils (SPM 235-241, textured+boosterfun, foil-only, $199-$446 ea, ~$1,950). DISTINCT art — 7 different `illustration_id`s, a themed multi-art chase, NOT dupes of the base #14 (which is why they're correctly OUT of `FAMILY_DUPE_FOIL_PROMO_TYPES` — see §2). A fancy-foil masterpiece scarcity tier the user won't chase. |
+| `collector_numbers: {243}, border_color: borderless` | The Soul Stone borderless foil (SPM 243, ~$1,839) — the family's flagship $ chase. Distinct borderless-inverted `boosterfun` art; no promo_type distinguishes it from ordinary boosterfun mythics, so pinned by CN + border_color (same technique as MSH Mind Stone 386). The base/other Soul Stone prints (om1 69, pspm 66s, spm 242) stay in scope. |
+
+**Missing-set impact (recorded 2026-09-07):** `missing treatment=preferred` dropped from **$4,229.94 / 112 prints** → **$441.19 / 104 prints**. The ~$3,788 removed is exactly these 8 chase cards (The Soul Stone 243 ~$1,839 + the 7 textured foils ~$1,950). After the rule the list tops out at genuinely attainable prints (Eddie Brock foil 233 $143, Peter Parker foil 232 $118). This is the classic "family whose missing total is thousands has a scarcity tier" pattern flagged by the characterize-set skill.
 
 Globally filtered (not SPM-specific):
 - `serialized` promo_type.
@@ -157,6 +164,6 @@ SPM's PRM-stamped physical promo cards can land in these Scryfall set codes. **T
 ## 8. Code refs
 
 - `selectors.py:FAMILY_DUPE_FOIL_PROMO_TYPES["spm"]` — **not configured.** `mm query missing-set spm` will raise `SelectorParseError` until an entry is added. Recommended: `"spm": frozenset()` (audit shows no dupe-foil signals; empty set unblocks the query without filtering).
-- `selectors.py:FAMILY_UNOBTAINABLE_RULES["spm"]` — not configured (no rule needed).
+- `selectors.py:FAMILY_UNOBTAINABLE_RULES["spm"]` — **configured** (2026-09-07): `[{"promo_types_any_of": frozenset({"textured"})}, {"collector_numbers": frozenset({"243"}), "border_color": "borderless"}]` (the 7 textured Spectacular Spider-Man foils + The Soul Stone 243 borderless — the ~$3,788 scarcity chase tier). See §5.
 - `selectors.py:_modifier_chase` — surfaces the textured Spider-Man 235–241 cluster + Gwenom + Radioactive Spider.
 - Related docs: [`../scryfall-set-families-and-bonus-sheets.md`](../scryfall-set-families-and-bonus-sheets.md) §1 (family topology, mentions mar-not-a-child-of-spm at line 60), [`../scryfall-printing-treatments.md`](../scryfall-printing-treatments.md) §6.5 (full_art convention flip).

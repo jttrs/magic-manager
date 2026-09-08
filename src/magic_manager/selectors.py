@@ -571,6 +571,22 @@ FAMILY_UNOBTAINABLE_RULES: dict[str, list[dict]] = {
         # regardless. Kept for discoverability. See docs/sets/tdm.md §5.
         {"promo_types_any_of": frozenset({"serialized", "headliner", "doublerainbow"})},
     ],
+    "spm": [
+        # Textured comic-panel masterpiece foils — the 7 Spectacular Spider-Man
+        # textured prints (SPM 235-241, textured+boosterfun, foil-only,
+        # $199-$446 ea, ~$1,950 total). DISTINCT art (7 different illustration_ids,
+        # a themed multi-art chase — NOT dupes of the base #14, which is why they
+        # are correctly OUT of FAMILY_DUPE_FOIL_PROMO_TYPES per docs/sets/spm.md
+        # §2). A fancy-foil scarcity tier the user won't chase; any_of:{textured}
+        # catches exactly these 7. (2026-09-07 user directive.)
+        {"promo_types_any_of": frozenset({"textured"})},
+        # The Soul Stone borderless foil (SPM 243, ~$1,839) — the family's flagship
+        # $ chase. Distinct borderless-inverted boosterfun art; no promo_type
+        # distinguishes it from ordinary boosterfun mythics, so pinned by CN +
+        # border_color (same technique as MSH Mind Stone 386). The base/other
+        # prints of The Soul Stone stay in scope. (2026-09-07 user directive.)
+        {"collector_numbers": frozenset({"243"}), "border_color": "borderless"},
+    ],
 }
 
 
