@@ -5,7 +5,9 @@ description: Concise, script-driven status report for a Magic set FAMILY — fam
 
 # set-status
 
-Deterministic, script-driven family status. Claude invokes `scripts/set_status.py <anchor>`, then **relays the script's stdout markdown block verbatim into chat**. No inline computation, no eyeballing counts or prices — the script is the single source of truth. Any stderr notes (unsynced family, "not configured", heuristic fallback) are surfaced briefly beneath the table.
+Deterministic, script-driven family status. Claude invokes `scripts/set_status.py <anchor>`, then **relays the script's stdout markdown block verbatim into chat**. No inline computation, no eyeballing counts or prices — the script is the single source of truth. Any stderr notes (unsynced family, "not configured", heuristic fallback, **scarcity-tier concentration ⚠**) are surfaced briefly beneath the table.
+
+**Scarcity-tier concentration warning.** When a family's missing $ is dominated by a few very pricey prints, the script emits a `⚠ missing $ is concentrated…` note to stderr (the pattern that made SPM's missing read $4,230 when the attainable gap was ~$440). Surface it beneath the table. It is a **review prompt, not a verdict** — it never excludes anything. A 2026-09 back-test found no price-distribution stat separates exclude-from-keep, because it's the user's per-family preference: expensive *attainable* chase (fin's borderless anime cards, tmt's foils) legitimately stays in missing and will also trip the warning — that's expected, not a false alarm. If the concentrated cards are ones the user won't chase, the fix is a `FAMILY_UNOBTAINABLE_RULES` entry via [[characterize-set]] §9; otherwise leave it. Don't auto-act on the warning.
 
 The `<anchor>` may be the family parent (`snc`, `tmt`) **or any member** (`ncc`, `tle`, `eoc`, `pncc`) — the script resolves the member up to the true parent automatically and reports the whole family.
 

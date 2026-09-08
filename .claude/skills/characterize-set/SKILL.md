@@ -152,13 +152,16 @@ Emit the proposed diff for `src/magic_manager/selectors.py` and let the user app
 
 **Never** apply code diffs before showing the diff and getting explicit approval — silent selector changes affect `mm query missing-set` output for real acquisitions.
 
-**Scarcity-tier sanity check (do this before finalizing the diffs).** After proposing the config, look at the top of the missing list by value:
+**Scarcity-tier sanity check (do this before finalizing the diffs — do NOT skip it).** This step was historically eyeballed and got missed (SPM shipped characterized with a $3,788 chase tier still in missing). It's now mechanical: `scripts/set_status.py <anchor>` emits a `⚠ missing $ is concentrated…` stderr note (via `missing.is_concentrated`) exactly when the missing $ is dominated by a few pricey prints. Run it, and if it fires, look at the offending tier:
 
 ```bash
+uv run python scripts/set_status.py <anchor>              # ⚠ concentration note on stderr if a tier dominates
 uv run mm query show 'set:<anchor>+related missing treatment=preferred' --sort value-desc --first 30
 ```
 
-If the top ~30 is dominated by a single tier priced $100+ each — promo-pack/prerelease **stamped** promos with no non-stamped sibling in the family graph (SNC found $1,697 of these), or a fancy-foil masterpiece tier (EOE's galaxyfoil lands / headliner found ~$5,800) — that's a **scarcity tier** the user won't realistically chase. Propose it for `FAMILY_UNOBTAINABLE_RULES[anchor]` (usually `promo_types_any_of`). **Record the before/after `mm query missing-set <anchor>` total** in the doc's §5 so the exclusion's impact is auditable, and so an over-aggressive rule is easy to spot later. A family whose missing total is thousands of dollars almost always has such a tier — don't accept a huge total at face value.
+If the top of the list is dominated by a single tier priced $100+ each — promo-pack/prerelease **stamped** promos with no non-stamped sibling in the family graph (SNC found $1,697 of these), or a fancy-foil masterpiece tier (EOE's galaxyfoil lands / headliner found ~$5,800; SPM's 7 textured foils + The Soul Stone ~$3,788) — that's a **scarcity tier** the user won't realistically chase. Propose it for `FAMILY_UNOBTAINABLE_RULES[anchor]` (usually `promo_types_any_of`, or `collector_numbers`+`border_color` to pin a single distinct-art chase like SPM 243 / MSH 386). **Record the before/after missing total** in the doc's §5.
+
+**But concentration ≠ exclude — it's a REVIEW prompt, don't reflexively act on it.** A 2026-09 back-test over all characterized families proved no price-distribution statistic separates "exclude" from "keep": `fin` (borderless anime chase, $10.9k missing, top5=0.70) and `tmt` (top5=0.90) are MORE concentrated than families that got exclusions, yet are correctly KEPT because the user wants those cards. The ⚠ warning fires for them too — that's expected, not a false alarm. "Unobtainable" is the user's per-family preference, not a property of the curve. So when the warning fires: look at the tier, decide with the user whether it's wanted-chase (keep) or scarcity-junk (exclude), and only then propose a rule. Never auto-apply, and never treat a big missing total as automatically wrong.
 
 ### 10. Report
 
