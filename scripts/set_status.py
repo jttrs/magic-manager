@@ -299,19 +299,23 @@ def precon_summary(family_codes: list[str]) -> dict[str, int]:
     return dict(buckets)
 
 
-def missing_summary(parent_code: str) -> tuple[int, float] | None:
-    """(count, live_usd) of missing family printings, or None if the family is
-    unconfigured (SelectorParseError) or unresolvable. Side-effect-free —
-    calls missing.missing_printings directly (never shells `mm query
-    missing-set`, which writes files to queries/)."""
+def missing_summary(parent_code: str) -> tuple[int, float, dict] | None:
+    """(count, live_usd, concentration) of missing family printings, or None if
+    the family is unconfigured (SelectorParseError) or unresolvable. The third
+    element is ``missing.concentration(...)`` over the same live prices, so
+    ``main`` can flag a likely scarcity chase tier. Side-effect-free — calls
+    missing.missing_printings directly (never shells `mm query missing-set`,
+    which writes files to queries/)."""
     try:
         rows = missing_mod.missing_printings(parent_code)
     except (selectors.SelectorParseError, LookupError) as e:
         print(f"note: missing-set not available for {parent_code!r}: {e}", file=sys.stderr)
         return None
     prices = _live_prices([r.scryfall_id for r in rows])
-    usd = sum(_unit(prices.get(r.scryfall_id, {}), r.finish) for r in rows)
-    return len(rows), usd
+    price_fn = lambda sid, finish: _unit(prices.get(sid, {}), finish)  # noqa: E731
+    usd = sum(price_fn(r.scryfall_id, r.finish) for r in rows)
+    conc = missing_mod.concentration(rows, price_fn)
+    return len(rows), usd, conc
 
 
 def is_characterized(parent_code: str) -> bool:
@@ -331,7 +335,7 @@ def render(parent_code, parent_name, codes_types, ingests, owned, precons,
     if missing is None:
         missing_str = "not configured"
     else:
-        m_n, m_usd = missing
+        m_n, m_usd = missing[0], missing[1]
         missing_str = f"{util.fmt_usd(m_usd)} / {m_n} prints"
     char_str = f"yes → docs/sets/{parent_code}.md" if characterized else "no"
 
@@ -507,6 +511,30 @@ def main() -> int:
 
     print(render(parent_code, parent_name, codes_types, ingests, owned, precons,
                  missing, characterized))
+
+    # Advisory: flag a likely scarcity chase tier concentrated in a few pricey
+    # prints (the pattern that made SPM show $4,230 for a ~$440 attainable gap).
+    # Never auto-excludes — just prompts a value-sorted review. See the note in
+    # missing.py: concentration ≠ a decision (fin/tmt are concentrated but KEPT).
+    if missing is not None:
+        conc = missing[2]
+        if missing_mod.is_concentrated(conc):
+            top = conc["top_prints"][0] if conc["top_prints"] else None
+            top_str = f" (top: {top[0]} {top[1]} {top[2]} {top[3]} {util.fmt_usd(top[4])})" if top else ""
+            print(
+                f"⚠ missing $ is concentrated: top 5 prints = {conc['top5_share']:.0%} of "
+                f"{util.fmt_usd(conc['total_usd'])}, {conc['n_over_100']} print(s) over $100"
+                f"{top_str}.",
+                file=sys.stderr)
+            print(
+                f"   Likely a scarcity chase tier — review with:\n"
+                f"     uv run mm query show 'set:{parent_code}+related missing "
+                f"treatment=preferred' --sort value-desc --first 20\n"
+                f"   If they're cards you won't chase, add a "
+                f"FAMILY_UNOBTAINABLE_RULES['{parent_code}'] entry (characterize-set §9). "
+                f"Concentration is a REVIEW prompt, not a verdict — expensive attainable "
+                f"chase (e.g. fin/tmt) is legitimately kept.",
+                file=sys.stderr)
     return 0
 
 

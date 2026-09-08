@@ -201,3 +201,79 @@ def _drop_meld_back_faces(
         if cns and all(cn.endswith("b") for cn in cns)
     }
     return [r for r in rows if r.card.get("name") not in meld_back_names]
+
+
+# ---------- scarcity-tier concentration flag (advisory, never an action) ----------
+#
+# When a family's missing $ is dominated by a few very expensive prints, that's
+# usually a "scarcity chase tier" the collector won't realistically buy (a
+# fancy-foil masterpiece run, a serialized headliner, etc.) — the pattern that
+# made SPM's missing show $4,230 when the realistically-attainable gap was ~$440.
+#
+# CRITICAL: concentration does NOT decide exclude-vs-keep. A 2026-09 back-test
+# over all 20 characterized families (reconstructing each family's before-rules
+# missing distribution, labeled by how much $ its rules actually removed) found
+# NO distribution statistic separates the two: `fin` (KEPT, borderless anime
+# chase the user WANTS: $10.9k missing, top5=0.70, >$100-share=0.80) and `tmt`
+# (KEPT, top5=0.90) are MORE concentrated than several families that got scarcity
+# exclusions (`snc` top5=0.25, `one` 0.28). "Unobtainable" is the user's
+# preference, not a property of the price curve. So this only FLAGS concentration
+# for a human review; the exclude/keep call stays with the user (per family).
+#
+# Thresholds calibrated from that back-test to fire on the real scarcity tiers
+# (spm-before, blb, eoe, lci, ltr, tla, …) and stay quiet on flat families
+# (acr $288, inr $659, sos $905, ecl $733). fin/tmt also fire — acceptable: the
+# warning says "review," and reviewing a wanted chase correctly concludes "keep."
+CONCENTRATION_MIN_USD = 750.0     # below this, a concentrated shape isn't worth flagging
+CONCENTRATION_OVER = 100.0        # a print above this $ counts as "high-value"
+CONCENTRATION_OVER_SHARE = 0.50   # OR: high-value prints are ≥ this share of total $
+CONCENTRATION_TOP5_SHARE = 0.60   # OR: the top 5 prints are ≥ this share of total $
+
+
+def concentration(rows, price_fn) -> dict:
+    """Summarize how concentrated a missing-list's $ value is, for a review prompt.
+
+    ``rows`` are ``selectors.MaterializedRow`` (from ``missing_printings``);
+    ``price_fn(scryfall_id, finish) -> float`` supplies the unit price (callers
+    inject their own source — set-status uses live Scryfall prices, an offline
+    caller can use the local ``cards`` table). Pure + side-effect-free.
+
+    Returns ``{total_usd, n, top5_share, n_over_100, over_100_share, top_prints}``
+    where ``top_prints`` is the 5 priciest as ``(name, set, cn, finish, usd)``.
+    No decision is made here — see :func:`is_concentrated`.
+    """
+    priced = []
+    for r in rows:
+        usd = price_fn(r.scryfall_id, r.finish) or 0.0
+        if usd > 0:
+            c = r.card
+            priced.append((usd, c.get("name") or "?", (c.get("set") or "").upper(),
+                           c.get("collector_number") or "?", r.finish))
+    priced.sort(reverse=True, key=lambda t: t[0])
+    total = sum(p[0] for p in priced)
+    n = len(priced)
+    if not total:
+        return {"total_usd": 0.0, "n": n, "top5_share": 0.0, "n_over_100": 0,
+                "over_100_share": 0.0, "top_prints": []}
+    over = [p for p in priced if p[0] > CONCENTRATION_OVER]
+    return {
+        "total_usd": round(total, 2),
+        "n": n,
+        "top5_share": sum(p[0] for p in priced[:5]) / total,
+        "n_over_100": len(over),
+        "over_100_share": sum(p[0] for p in over) / total,
+        "top_prints": [(name, st, cn, fin, round(usd, 2))
+                       for usd, name, st, cn, fin in priced[:5]],
+    }
+
+
+def is_concentrated(conc: dict) -> bool:
+    """Advisory trigger: True iff the missing $ looks like a scarcity chase tier
+    worth a human review. Fires when the total is non-trivial AND the value is
+    concentrated (by high-value share OR top-5 share). NOT a classifier — a
+    prompt to review; the exclude/keep decision is the user's (see the module
+    note above; fin/tmt are the standing 'concentrated but KEPT' examples)."""
+    if conc.get("total_usd", 0.0) < CONCENTRATION_MIN_USD:
+        return False
+    return (conc.get("over_100_share", 0.0) >= CONCENTRATION_OVER_SHARE
+            or conc.get("top5_share", 0.0) >= CONCENTRATION_TOP5_SHARE)
