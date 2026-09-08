@@ -60,7 +60,16 @@ SPM (Spider-Man)
   om1   expansion       Through the Omenpaths            (parent_set_code: spm — IS in the SPM family)
 
   (Note: `mar` "Marvel Universe" is NOT a child of `spm`. It's its own
-   family root with its own children: `lmar` promo and `omb` masterpiece.)
+   family root with its own children: `lmar` promo and `omb` masterpiece.
+   MODELED (2026-09-07) as its OWN cross-set masterpiece entity — a
+   NON_FAMILY_SETS anchor grouping mar+omb+lmar — because it feeds the
+   boosters of MULTIPLE Marvel sets (SPM + MSH + 4 more to come, 6 total),
+   like SLD spans the whole game. It's the first "spans many sets like SLD
+   but has its own children" case: reported owned-$ only, never characterized,
+   NOT folded into spm/msh. Its 100 cards split by wave — CN 1-40 (boosterfun)
+   shipped with SPM, CN 41-100 with MSH — but that split is informational only;
+   MAR is counted once as its own entity, NOT partitioned per-family, since
+   with 6 feeder sets "which booster" isn't a membership worth tracking.)
 
 TLA (Avatar: The Last Airbender)
   tla   expansion       Avatar: The Last Airbender

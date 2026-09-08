@@ -49,27 +49,28 @@
 | `tspm` | token | 7 | 2025-09-26 |  |
 | `om1` | expansion | 189 | 2025-09-23 | **Through the Omenpaths** — sibling release, shares release window; despite `set_type: expansion` and `parent_set_code: spm` it's NOT strictly a Spider-Man set (crossover title). Whether to include in a Spider-Man checklist is a per-user choice — the user's canonical Spider-Man checklist uses `--only spm,pspm,spe` and excludes OM1. |
 
-### Separately-rooted bonus sheets (linked to SPM by product but not by Scryfall)
+### `mar` is its OWN cross-set masterpiece entity — NOT a Spider-Man bonus sheet (revised 2026-09-07)
 
-**⚠️ `mar` "Marvel Universe" is a separately-rooted Spider-Man bonus sheet.** Scryfall lists `parent_set_code: null`, so `mm set list-related spm` does NOT include it. The user's canonical Spider-Man collection needs it added explicitly via `--only`.
+**⚠️ `mar` "Marvel Universe" is NOT part of the SPM family.** It's a cross-set masterpiece
+series that feeds the booster packs of MULTIPLE Marvel expansions — SPM and MSH today, plus 4
+more Marvel sets to come (6 total). Like SLD/SPG span the whole game, MAR spans the Marvel block,
+so it's modeled as its **own non-family anchor** (in `NON_FAMILY_SETS`, reported owned-$ only, no
+Char/Missing), NOT folded into any one expansion. It was previously (mis)registered under `spm`'s
+`set_targets`, which made `spm` over-claim all 100 MAR cards including the 60 that shipped with
+MSH — corrected 2026-09-07.
+
+MAR is its own small root family (`set_targets["mar"] = [mar, omb, lmar]`):
 
 | Code | `set_type` | Cards | Released | Notes |
 |---|---|---:|---|---|
-| `mar` | masterpiece | 100 | 2025-09-26 | UB reskin sheet with `sourcematerial` promo_type. This is the Marvel-Universe-to-MtG reskin equivalent of FIN's `fca` or TMT's `pza`. |
-| `omb` | masterpiece | 40 | 2025-09-23 | Through the Omenpaths Bonus Sheet — **child of `mar`, not of `spm`**. `parent_set_code: mar`. |
-| `lmar` | promo | 4 | 2025-09-30 | Marvel Legends Series Inserts — 4-card promo insert sold inside Hasbro Marvel Legends action figure boxes. Also separately rooted. Cards: 1 Anti-Venom (Lordigan), 2 Spectacular Spider-Man (Alex Horley-Orlandelli), 3 Huntmaster of the Fells (Mark Spears), 4 Iron Spider (Bachzim). All foil. See `docs/sets/spm.md` §6 for PRM handling. |
+| `mar` | masterpiece | 100 | (waves) | UB reskin sheet, `sourcematerial` promo_type. **CN 1-40** (carry `boosterfun`) shipped 2025-09-26 with **SPM** boosters; **CN 41-100** (no `boosterfun`) shipped 2026-06-26 with **MSH** boosters. This CN/wave split is informational only — MAR is counted as ONE entity, not partitioned into per-family ranges (with 6 Marvel sets feeding it, per-set attribution isn't a membership the user tracks). |
+| `omb` | masterpiece | 40 | 2025-09-23 | Through the Omenpaths Bonus Sheet — child of `mar` (`parent_set_code: mar`). Folds into the `mar` anchor row. |
+| `lmar` | promo | 4 | 2025-09-30 | Marvel Legends Series Inserts — 4-card promo insert in Hasbro Marvel Legends figure boxes. `parent_set_code: mar`. Cards: 1 Anti-Venom (Lordigan), 2 Spectacular Spider-Man (Alex Horley-Orlandelli), 3 Huntmaster of the Fells (Mark Spears), 4 Iron Spider (Bachzim). All foil. See §6 for PRM handling. |
 
-**`mm` invocations that need `--only`:**
-
-```bash
-# Include the Marvel Universe bonus sheet
-mm set master-list spm --only spm,pspm,spe,mar
-
-# Include everything Spider-Man-adjacent (including OM1 + all bonus sheets)
-mm set master-list spm --only spm,pspm,spe,om1,mar,omb,lmar
-```
-
-Fix landed in `751e627` predecessor commit — `_resolve_codes` now honors `--only` codes verbatim even when they're outside the parent's related-set graph.
+`mm set list-related spm` correctly does NOT include mar; `set:spm+related` and
+`mm query missing-set spm` correctly exclude it. To catalog MAR, treat it as its own set:
+`mm set master-list mar` (covers mar+omb+lmar). If a user asks about *Spider-Man* completion,
+MAR is a SEPARATE Marvel-masterpiece checklist, not part of the SPM gap.
 
 ---
 
@@ -151,8 +152,8 @@ SPM's PRM-stamped physical promo cards can land in these Scryfall set codes. **T
 
 ## 7. Edge cases & gotchas
 
-- **MAR is separately rooted** — the single biggest gotcha. `mm set list-related spm` does NOT list mar; `set:spm+related` selectors do NOT include mar cards; `mm query missing-set spm` does NOT check for missing mar cards. The user's canonical Spider-Man checklist adds mar via `--only spm,pspm,spe,mar`. If a user asks about Spider-Man completion, always mention MAR explicitly.
-- **OMB is child of MAR** — Through the Omenpaths Bonus Sheet is `parent_set_code: mar`. It's transitively "in the SPM family" via product association but Scryfall's graph splits it under mar.
+- **MAR is its own cross-set masterpiece entity, NOT a Spider-Man bonus sheet** (revised 2026-09-07 — see §1). It's a `NON_FAMILY_SETS` anchor grouping `mar`+`omb`+`lmar`, spanning 6 Marvel sets. `mm set list-related spm` / `set:spm+related` / `mm query missing-set spm` all correctly exclude it. MAR is a SEPARATE checklist (`mm set master-list mar`); it is NOT part of Spider-Man completion. (Historical note: MAR was briefly folded into `spm`'s `set_targets`, which over-claimed the 60 MSH-wave MAR cards — corrected.)
+- **OMB + LMAR are children of MAR** (`parent_set_code: mar`) — they fold into the `mar` anchor row, not spm.
 - **`om1` is a sibling but not really Spider-Man** — Through the Omenpaths (parent expansion set_type despite being an omenpath crossover release). User excludes it from Spider-Man-specific checklists.
 - **Full-art convention flip** — SPM borderless-inverted has `full_art: true` (see §2); this differs from LTR/FIN. Affects treatment audit heuristics if you're reusing FIN/LTR logic.
 - **`cosmicfoil` singleton** — one print in the family. If encountered, visual-audit whether it's a dupe of another print.
@@ -166,4 +167,5 @@ SPM's PRM-stamped physical promo cards can land in these Scryfall set codes. **T
 - `selectors.py:FAMILY_DUPE_FOIL_PROMO_TYPES["spm"]` — **not configured.** `mm query missing-set spm` will raise `SelectorParseError` until an entry is added. Recommended: `"spm": frozenset()` (audit shows no dupe-foil signals; empty set unblocks the query without filtering).
 - `selectors.py:FAMILY_UNOBTAINABLE_RULES["spm"]` — **configured** (2026-09-07): `[{"promo_types_any_of": frozenset({"textured"})}, {"collector_numbers": frozenset({"243"}), "border_color": "borderless"}]` (the 7 textured Spectacular Spider-Man foils + The Soul Stone 243 borderless — the ~$3,788 scarcity chase tier). See §5.
 - `selectors.py:_modifier_chase` — surfaces the textured Spider-Man 235–241 cluster + Gwenom + Radioactive Spider.
-- Related docs: [`../scryfall-set-families-and-bonus-sheets.md`](../scryfall-set-families-and-bonus-sheets.md) §1 (family topology, mentions mar-not-a-child-of-spm at line 60), [`../scryfall-printing-treatments.md`](../scryfall-printing-treatments.md) §6.5 (full_art convention flip).
+- `scripts/set_status.py:NON_FAMILY_SETS` — includes `mar` (its own cross-set masterpiece entity, not folded into spm); `set_targets["mar"] = [mar, omb, lmar]`, `set_targets["spm"]` no longer lists mar (corrected 2026-09-07).
+- Related docs: [`../scryfall-set-families-and-bonus-sheets.md`](../scryfall-set-families-and-bonus-sheets.md) §1 (family topology + the MAR-as-cross-set-entity note), [`../scryfall-printing-treatments.md`](../scryfall-printing-treatments.md) §6.5 (full_art convention flip).
