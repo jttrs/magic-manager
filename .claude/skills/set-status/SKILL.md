@@ -57,7 +57,7 @@ Two deliberate differences from the single-family report, worth stating in one l
 - **Missing is a print COUNT** (`165 prints`), not a live $ — the overview does ONE bulk owned-price fetch and skips the per-family missing-$ call to stay fast. For the live missing $ of one family, run `/set-status <anchor>`.
 - **Char column is 3-state:** `✓` = characterized · `✗` = characterizable but not yet done · **`-` = n/a** (not a characterizable family). `-` is the universal n/a marker in these chart outputs (also appears in Missing/Precons when not applicable). Only offer to characterize a `✗` family the user names (see below) — NEVER a `-` family.
 
-**`-` (non-family) sets** are grab-bag collector/promo products that reprint cards from many OTHER sets and don't form a coherent family — `sld` (Secret Lair Drop), `spg` (Special Guests), `pw25`, `pmei`, `sch` (the `NON_FAMILY_SETS` frozenset in `scripts/set_status.py`). They have no meaningful "missing from set" notion and are never characterized. Their owned $/counts are still real and shown.
+**`-` (non-family) sets** are grab-bag collector/promo products that reprint cards from many OTHER sets and don't form a coherent family — `sld` (Secret Lair Drop), `spg` (Special Guests), `pw25`, `pmei`, `sch`, `mar` (Marvel Universe — a cross-set masterpiece series feeding 6 Marvel sets' boosters; unlike the flat grab-bags it has its own children `omb`/`lmar` folded under it) — the `NON_FAMILY_SETS` frozenset in `scripts/set_status.py`. They have no meaningful "missing from set" notion and are never characterized. Their owned $/counts are still real and shown. (This applies in single-anchor mode too: `set_status.py mar` reports owned-only, no missing/characterize prompt.)
 
 **Family grouping is set_targets-authoritative.** The overview (and single-anchor metrics) honor the user's registered `set_targets.related_codes` over the raw Scryfall `parent_set_code` graph — so e.g. `mar` (Marvel Universe, which Scryfall roots separately) folds into the `spm` row instead of floating as its own family. A code the user grouped under an anchor counts under that anchor everywhere.
 
@@ -67,7 +67,7 @@ If the report shows **Characterized: no** and/or **Missing: not configured**, th
 
 This applies to the single-anchor mode. In the **no-arg overview**, do NOT auto-characterize every `✗` family (that could be a dozen at once) — instead auto-characterize only when the user names a specific `✗` family to act on.
 
-**NEVER auto-characterize a `-` (non-family) set** — `sld`/`spg`/`pw25`/`pmei`/`sch` are grab-bag collector/promo sets that reprint cards from other sets; they don't form a family and have no missing-from-set notion. If the user asks to characterize one, explain it's not a characterizable family rather than running the protocol.
+**NEVER auto-characterize a `-` (non-family) set** — `sld`/`spg`/`pw25`/`pmei`/`sch`/`mar` are grab-bag or cross-set collector/promo/masterpiece sets that reprint cards from other sets; they don't form a family and have no missing-from-set notion. If the user asks to characterize one, explain it's not a characterizable family rather than running the protocol.
 
 ## Guardrails
 

@@ -36,7 +36,15 @@ from magic_manager import (  # noqa: E402
 # not yet done"). Hardcoded because no set_type/topology rule cleanly separates
 # these from real masterpiece/expansion families (spg is masterpiece like mar;
 # sld resolves to a real Scryfall family + is a registered set_target).
-NON_FAMILY_SETS: frozenset[str] = frozenset({"sld", "spg", "pw25", "pmei", "sch"})
+#
+# `mar` "Marvel Universe" is here because it's a cross-set masterpiece series
+# feeding the booster packs of MULTIPLE Marvel expansions (SPM, MSH, + 4 more to
+# come) — like SLD spanning the whole game, not one family. Unlike the flat
+# grab-bags it has its OWN children (`omb` masterpiece + `lmar` promo,
+# parent_set_code: mar), so it's registered as its own set_target anchor
+# grouping mar+omb+lmar; NON_FAMILY membership just means owned-only reporting
+# (no Char/Missing). See docs/sets/spm.md §1 + docs/scryfall-set-families-and-bonus-sheets.md.
+NON_FAMILY_SETS: frozenset[str] = frozenset({"sld", "spg", "pw25", "pmei", "sch", "mar"})
 
 
 # ---------- family resolution (member → parent normalization) ----------
@@ -325,19 +333,25 @@ def is_characterized(parent_code: str) -> bool:
 # ---------- render ----------
 
 def render(parent_code, parent_name, codes_types, ingests, owned, precons,
-           missing, characterized) -> str:
+           missing, characterized, *, non_family: bool = False) -> str:
     prints, qty, owned_usd = owned
     codes_str = ", ".join(f"{c} ({t})" for c, t in codes_types)
     if precons:
         precon_str = " · ".join(f"{n} {fmt}" for fmt, n in sorted(precons.items()))
     else:
         precon_str = "none"
-    if missing is None:
-        missing_str = "not configured"
+    # Non-family sets (SLD/SPG/MAR/…) have no missing-from-set or characterization
+    # notion → the universal `-` (n/a) glyph, matching the overview.
+    if non_family:
+        missing_str = "— (cross-set; n/a)"
+        char_str = "— (cross-set; n/a)"
     else:
-        m_n, m_usd = missing[0], missing[1]
-        missing_str = f"{util.fmt_usd(m_usd)} / {m_n} prints"
-    char_str = f"yes → docs/sets/{parent_code}.md" if characterized else "no"
+        if missing is None:
+            missing_str = "not configured"
+        else:
+            m_n, m_usd = missing[0], missing[1]
+            missing_str = f"{util.fmt_usd(m_usd)} / {m_n} prints"
+        char_str = f"yes → docs/sets/{parent_code}.md" if characterized else "no"
 
     lines = [
         f"## {parent_code} — {parent_name} · family status",
@@ -506,11 +520,16 @@ def main() -> int:
             print(f"note: {synced} cards synced for the family but none owned yet.",
                   file=sys.stderr)
     precons = precon_summary(family_codes)
-    missing = missing_summary(parent_code)
-    characterized = is_characterized(parent_code)
+    # Non-family sets (SLD, SPG, MAR, …) reprint cards from many OTHER sets and
+    # have no meaningful "missing from set" / characterization notion — report
+    # owned-only, and skip the missing_summary call (its "go characterize" note
+    # would be noise). render() shows Missing/Characterized as n/a for these.
+    non_family = parent_code in NON_FAMILY_SETS
+    missing = None if non_family else missing_summary(parent_code)
+    characterized = False if non_family else is_characterized(parent_code)
 
     print(render(parent_code, parent_name, codes_types, ingests, owned, precons,
-                 missing, characterized))
+                 missing, characterized, non_family=non_family))
 
     # Advisory: flag a likely scarcity chase tier concentrated in a few pricey
     # prints (the pattern that made SPM show $4,230 for a ~$440 attainable gap).
