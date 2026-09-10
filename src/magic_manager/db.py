@@ -464,6 +464,15 @@ CREATE INDEX IF NOT EXISTS earmark_links_product_idx ON earmark_links (product_i
 """
 
 
+# V13: index cards.oracle_id — the "mechanically-unique card" key. The functional-
+# completeness metric (missing.functional_missing) groups printings by oracle_id
+# (own ≥1 printing of every mechanically-unique card) and joins inventory→cards on
+# it; without an index those are full scans. Re-derivable table, always-safe op.
+SCHEMA_V13 = """
+CREATE INDEX IF NOT EXISTS cards_oracle_idx ON cards (oracle_id);
+"""
+
+
 # ---------- migration-authoring convention ----------
 #
 # Always-safe ops in a migration: CREATE TABLE, ALTER TABLE ADD COLUMN,
@@ -517,6 +526,7 @@ MIGRATIONS: list[str] = [
     SCHEMA_V10,
     SCHEMA_V11,
     SCHEMA_V12,
+    SCHEMA_V13,
 ]
 CURRENT_VERSION = len(MIGRATIONS)
 

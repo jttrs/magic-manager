@@ -4,8 +4,11 @@ Takes a family anchor OR any member code (snc, ncc, tmt, tle, …), normalizes t
 the true family parent, and prints ONE compact markdown metrics block to stdout
 (relayed verbatim to chat). Commentary/warnings go to stderr.
 
-Metrics: family set codes (+types), # checklist ingests, owned prints/qty/$,
-precons by format, missing $ (+count), characterization status.
+Metrics: family set codes (+types), # checklist ingests, owned printings/qty/$,
+precons by format, TWO missing figures — distinct-printing missing (every art/
+frame variant, live $) and functional missing (mechanically-unique cards owned
+in zero printings, cheapest fill: in-family + anywhere floors) — and
+characterization status.
 
 Prices are LIVE (fetched from Scryfall via the rate-limited wrapper each run),
 so the $ figures are current — output is therefore NOT byte-identical across
@@ -182,6 +185,45 @@ def _unit(prices: dict, finish: str) -> float:
         return 0.0
 
 
+# ---------- anywhere-floor (cheapest printing of a card in ANY set) ----------
+
+_ANYWHERE_FLOOR_CACHE: dict[str, tuple[float | None, str | None]] = {}
+
+
+def _anywhere_floor(oracle_id: str) -> tuple[float | None, str | None] | None:
+    """Cheapest ``(usd, finish)`` across EVERY printing of a card (any set), via
+    a live ``oracleid:`` Scryfall search. Memoized across families (a card
+    reprinted in several families costs one lookup). Prefers nonfoil on tie."""
+    if oracle_id in _ANYWHERE_FLOOR_CACHE:
+        return _ANYWHERE_FLOOR_CACHE[oracle_id]
+    nf: list[float] = []
+    ff: list[float] = []
+    try:
+        for p in scryfall.search(f"oracleid:{oracle_id}", unique="prints"):
+            pr = p.get("prices") or {}
+            for key, bucket in (("usd", nf), ("usd_foil", ff)):
+                v = pr.get(key)
+                if v not in (None, ""):
+                    try:
+                        bucket.append(float(v))
+                    except (TypeError, ValueError):
+                        pass
+    except Exception:  # noqa: BLE001 — a lookup failure just leaves anywhere unresolved
+        _ANYWHERE_FLOOR_CACHE[oracle_id] = (None, None)
+        return None
+    res = _cheapest_pair(min(nf) if nf else None, min(ff) if ff else None)
+    _ANYWHERE_FLOOR_CACHE[oracle_id] = res
+    return res if res[0] is not None else None
+
+
+def _cheapest_pair(nonfoil: float | None, foil: float | None) -> tuple[float | None, str | None]:
+    if nonfoil is not None and (foil is None or nonfoil <= foil):
+        return nonfoil, "nonfoil"
+    if foil is not None:
+        return foil, "foil"
+    return None, None
+
+
 # ---------- metrics ----------
 
 def family_codes_with_types(parent_code: str, related: list[dict],
@@ -326,6 +368,18 @@ def missing_summary(parent_code: str) -> tuple[int, float, dict] | None:
     return len(rows), usd, conc
 
 
+def functional_missing_summary(parent_code: str) -> tuple[int, float, float] | None:
+    """(n_cards, in_family_usd, anywhere_usd) of FUNCTIONALLY-missing cards
+    (mechanically-unique cards owned in zero printings), or None when unconfigured.
+    The anywhere floor uses the memoized live ``oracleid:`` lookup. Delegates to
+    ``missing.functional_missing`` — the in-family price is local (no fetch)."""
+    try:
+        fm = missing_mod.functional_missing(parent_code, anywhere_floor_fn=_anywhere_floor)
+    except (selectors.SelectorParseError, LookupError):
+        return None
+    return fm.n_cards, fm.family_total_usd, fm.anywhere_total_usd
+
+
 def is_characterized(parent_code: str) -> bool:
     return (ROOT / "docs" / "sets" / f"{parent_code}.md").exists()
 
@@ -333,7 +387,7 @@ def is_characterized(parent_code: str) -> bool:
 # ---------- render ----------
 
 def render(parent_code, parent_name, codes_types, ingests, owned, precons,
-           missing, characterized, *, non_family: bool = False) -> str:
+           missing, characterized, *, functional=None, non_family: bool = False) -> str:
     prints, qty, owned_usd = owned
     codes_str = ", ".join(f"{c} ({t})" for c, t in codes_types)
     if precons:
@@ -343,14 +397,20 @@ def render(parent_code, parent_name, codes_types, ingests, owned, precons,
     # Non-family sets (SLD/SPG/MAR/…) have no missing-from-set or characterization
     # notion → the universal `-` (n/a) glyph, matching the overview.
     if non_family:
-        missing_str = "— (cross-set; n/a)"
+        dist_str = func_str = "— (cross-set; n/a)"
         char_str = "— (cross-set; n/a)"
     else:
         if missing is None:
-            missing_str = "not configured"
+            dist_str = "not configured"
         else:
             m_n, m_usd = missing[0], missing[1]
-            missing_str = f"{util.fmt_usd(m_usd)} / {m_n} prints"
+            dist_str = f"{m_n} prints · {util.fmt_usd(m_usd)}"
+        if functional is None:
+            func_str = "not configured" if missing is None else "—"
+        else:
+            f_n, f_fam, f_any = functional
+            any_part = "" if f_any == f_fam else f" / anywhere {util.fmt_usd(f_any)}"
+            func_str = f"{f_n} cards · in-family {util.fmt_usd(f_fam)}{any_part}"
         char_str = f"yes → docs/sets/{parent_code}.md" if characterized else "no"
 
     lines = [
@@ -361,9 +421,10 @@ def render(parent_code, parent_name, codes_types, ingests, owned, precons,
         f"| Family | {parent_code} (parent) + {len(codes_types) - 1} codes |",
         f"| Set codes | {codes_str} |",
         f"| Ingests | {ingests} |",
-        f"| Owned | {prints} prints / {qty} cards · {util.fmt_usd(owned_usd)} |",
+        f"| Owned | {prints} printings / {qty} cards · {util.fmt_usd(owned_usd)} |",
         f"| Precons | {precon_str} |",
-        f"| Missing | {missing_str} |",
+        f"| Missing (distinct) | {dist_str} |",
+        f"| Missing (functional) | {func_str} |",
         f"| Characterized | {char_str} |",
     ]
     return "\n".join(lines)
@@ -432,50 +493,97 @@ def render_overview() -> str:
             related = [{"code": pc}]
         fam_codes_by_parent[pc] = _family_code_set(pc, related)
 
-    # ONE bulk price fetch for every owned card across all families (deduped ids).
+    # Materialize each family's distinct-printing missing ONCE (reused for the
+    # distinct-$ sum and as the candidate set for functional_missing).
+    missing_rows_by_parent: dict[str, list] = {}
+    for pc in parents:
+        if pc in NON_FAMILY_SETS:
+            continue
+        try:
+            missing_rows_by_parent[pc] = missing_mod.missing_printings(pc)
+        except (selectors.SelectorParseError, LookupError):
+            missing_rows_by_parent[pc] = None  # unconfigured
+
+    # ONE bulk price fetch: owned ids ∪ every family's distinct-missing ids.
     all_rows = _owned_rows_for_codes(
         {c for codes in fam_codes_by_parent.values() for c in codes}
     )
-    price_map = _live_prices([r.scryfall_id for r in all_rows])
+    ids = {r.scryfall_id for r in all_rows}
+    for mrows in missing_rows_by_parent.values():
+        if mrows:
+            ids.update(r.scryfall_id for r in mrows)
+    price_map = _live_prices(list(ids))
 
     rows_data = []
     tot_prints = tot_qty = 0
-    tot_usd = 0.0
+    tot_usd = tot_dist_usd = tot_func_fam = tot_func_any = 0.0
+    tot_miss_prints = tot_func_cards = 0
     for pc, pn in parents.items():
         codes = fam_codes_by_parent[pc]
         prints, qty, usd = _owned_summary_for_codes(codes, price_map)
         precons = precon_summary(sorted(codes))
         n_precon = sum(precons.values())
         non_family = pc in NON_FAMILY_SETS
-        miss = None if non_family else _missing_count(pc)
-        rows_data.append((pc, pn, prints, qty, usd, n_precon, miss, non_family))
+        mrows = missing_rows_by_parent.get(pc)
+        # distinct-missing: count + live $ (from the bulk price_map).
+        if non_family or mrows is None:
+            dist = None
+        else:
+            dist_usd = sum(_unit(price_map.get(r.scryfall_id, {}), r.finish) for r in mrows)
+            dist = (len(mrows), dist_usd)
+        # functional-missing: reuse the materialized rows as the candidate set.
+        # IN-FAMILY floor only here (local, instant) — the anywhere floor does a
+        # rate-limited oracleid: search per missing card, which across ~20
+        # families would make the overview take many minutes. Single-family mode
+        # (`set_status.py <anchor>`) adds the anywhere floor (cheap for one family).
+        if non_family or mrows is None:
+            func = None
+        else:
+            fm = missing_mod.functional_missing(pc, precomputed_missing=mrows)
+            func = (fm.n_cards, fm.family_total_usd, fm.family_total_usd)
+        rows_data.append((pc, pn, prints, qty, usd, n_precon, dist, func, non_family))
         tot_prints += prints
         tot_qty += qty
         tot_usd += usd
+        if dist:
+            tot_miss_prints += dist[0]
+            tot_dist_usd += dist[1]
+        if func:
+            tot_func_cards += func[0]
+            tot_func_fam += func[1]
+            tot_func_any += func[2]
 
     rows_data.sort(key=lambda t: t[4], reverse=True)  # by owned-$ desc
 
     lines = [
         f"## Collection overview · {len(rows_data)} families",
         "",
-        "| Family | Owned | $ (owned) | Precons | Missing | Char |",
-        "|---|---|---|---|---|---|",
+        "| Family | Printings | Cards | $ (owned) | Precons | Miss prints ($) | Miss func ($ in-fam) | Char |",
+        "|---|---:|---:|---:|---:|---|---|---|",
     ]
-    for pc, pn, prints, qty, usd, n_precon, miss, non_family in rows_data:
-        # Universal `-` = n/a in these chart outputs.
+    for pc, pn, prints, qty, usd, n_precon, dist, func, non_family in rows_data:
         if non_family:
-            char_cell = "-"      # not a characterizable family
-            miss_cell = "-"
+            char_cell = "-"
+            dist_cell = func_cell = "-"
         else:
             char_cell = "✓" if is_characterized(pc) else "✗"
-            miss_cell = "-" if miss is None else f"{miss} prints"
+            dist_cell = "-" if dist is None else f"{dist[0]}p · {util.fmt_usd(dist[1])}"
+            if func is None:
+                func_cell = "-"
+            else:
+                f_n, f_fam, f_any = func
+                any_part = "" if f_any == f_fam else f"→{util.fmt_usd(f_any)}"
+                func_cell = f"{f_n}c · {util.fmt_usd(f_fam)}{any_part}"
         precon_cell = str(n_precon) if n_precon else "-"
         lines.append(
-            f"| {pc} — {pn} | {prints} / {qty} | {util.fmt_usd(usd)} | "
-            f"{precon_cell} | {miss_cell} | {char_cell} |"
+            f"| {pc} — {pn} | {prints} | {qty} | {util.fmt_usd(usd)} | "
+            f"{precon_cell} | {dist_cell} | {func_cell} | {char_cell} |"
         )
+    any_part = "" if tot_func_any == tot_func_fam else f"→{util.fmt_usd(tot_func_any)}"
     lines.append(
-        f"| **Total** | **{tot_prints} / {tot_qty}** | **{util.fmt_usd(tot_usd)}** | | | |"
+        f"| **Total** | **{tot_prints}** | **{tot_qty}** | **{util.fmt_usd(tot_usd)}** | | "
+        f"**{tot_miss_prints}p · {util.fmt_usd(tot_dist_usd)}** | "
+        f"**{tot_func_cards}c · {util.fmt_usd(tot_func_fam)}{any_part}** | |"
     )
     return "\n".join(lines)
 
@@ -526,10 +634,11 @@ def main() -> int:
     # would be noise). render() shows Missing/Characterized as n/a for these.
     non_family = parent_code in NON_FAMILY_SETS
     missing = None if non_family else missing_summary(parent_code)
+    functional = None if non_family else functional_missing_summary(parent_code)
     characterized = False if non_family else is_characterized(parent_code)
 
     print(render(parent_code, parent_name, codes_types, ingests, owned, precons,
-                 missing, characterized, non_family=non_family))
+                 missing, characterized, functional=functional, non_family=non_family))
 
     # Advisory: flag a likely scarcity chase tier concentrated in a few pricey
     # prints (the pattern that made SPM show $4,230 for a ~$440 attainable gap).

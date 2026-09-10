@@ -13,6 +13,9 @@ The two post-filter helpers (`_apply_preferred_post_filter`,
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+from typing import Callable
+
 from . import db, sets as sets_mod, selectors as sel_mod
 
 
@@ -277,3 +280,146 @@ def is_concentrated(conc: dict) -> bool:
         return False
     return (conc.get("over_100_share", 0.0) >= CONCENTRATION_OVER_SHARE
             or conc.get("top5_share", 0.0) >= CONCENTRATION_TOP5_SHARE)
+
+
+# ---------- functional completeness (own ≥1 printing of each mechanically-unique card) ----------
+#
+# `functional_missing` answers a DIFFERENT question than `missing_printings`:
+# not "which distinct art/frame printings do I lack" but "which MECHANICALLY-
+# UNIQUE cards (by oracle_id) do I own ZERO copies of, in ANY printing/finish,
+# and what's the cheapest way to get one." A card whose base you own but whose
+# borderless variant you lack IS in missing_printings (variant unowned) yet is
+# functionally OWNED — so this is computed from ownership-by-oracle across the
+# family, NOT by collapsing the printing-missing list.
+#
+# Candidate cards = the oracle_ids appearing in missing_printings (which already
+# applies the digital-only / family-unobtainable / meld-back / preferred filters),
+# minus the oracle_ids the user owns any printing of. SCOPE NOTE: missing_printings
+# only unions rare/mythic/uncommon-chase + the preferred alt class, so a COMMON
+# owned in zero printings won't appear here — matching set-status's "don't chase
+# every common" stance. Documented limit, not a bug.
+
+@dataclass
+class FunctionalMissingCard:
+    """One mechanically-unique card the user owns in zero printings, with the
+    cheapest fill price at two scopes."""
+    oracle_id: str
+    name: str
+    set_code: str | None = None          # set of the cheapest IN-FAMILY printing
+    family_cn: str | None = None         # its collector_number
+    family_usd: float | None = None      # cheapest IN-FAMILY printing (either finish)
+    family_finish: str | None = None     # 'nonfoil' | 'foil'
+    anywhere_usd: float | None = None    # cheapest printing ANY set (None if unresolved)
+    anywhere_finish: str | None = None
+
+
+@dataclass
+class FunctionalMissing:
+    cards: list[FunctionalMissingCard] = field(default_factory=list)
+    n_cards: int = 0
+    family_total_usd: float = 0.0        # Σ family_usd (unpriced card → $0, still counted)
+    anywhere_total_usd: float = 0.0      # Σ anywhere_usd, falling back to family_usd when unresolved
+
+
+def _cheapest(nonfoil: float | None, foil: float | None) -> tuple[float | None, str | None]:
+    """Cheaper of (nonfoil, foil); prefer nonfoil on tie, foil only if no nonfoil.
+    Returns (price, finish) or (None, None) if neither priced."""
+    if nonfoil is not None and (foil is None or nonfoil <= foil):
+        return nonfoil, "nonfoil"
+    if foil is not None:
+        return foil, "foil"
+    return None, None
+
+
+def functional_missing(
+    code: str,
+    treatment_class: str = "preferred",
+    *,
+    precomputed_missing: list | None = None,
+    anywhere_floor_fn: Callable[[str], tuple[float | None, str | None] | None] | None = None,
+) -> FunctionalMissing:
+    """Mechanically-unique cards (by oracle_id) in the family owned in ZERO
+    printings, each with its cheapest in-family fill price (and, if
+    ``anywhere_floor_fn`` is supplied, the cheapest-anywhere fill).
+
+    ``precomputed_missing`` lets a caller that already ran ``missing_printings``
+    pass those rows in (avoids recompute — the overview does this).
+    ``anywhere_floor_fn(oracle_id) -> (usd, finish)|None`` supplies the cross-set
+    floor; when ``None`` the anywhere fields stay ``None`` and ``anywhere_total_usd``
+    falls back to the in-family price. Family scope matches ``missing_printings``
+    (Scryfall graph via ``sets.resolve``), so the two figures are comparable.
+    """
+    rows = precomputed_missing if precomputed_missing is not None \
+        else missing_printings(code, treatment_class)
+    # Candidate oracle_ids from the (already-filtered) printing-missing list.
+    candidate_oids = {
+        oid for r in rows
+        if (oid := (r.card or {}).get("oracle_id"))
+    }
+    if not candidate_oids:
+        return FunctionalMissing()
+
+    try:
+        family_codes = {c.lower() for c in sets_mod.resolve(code).all_codes}
+    except LookupError:
+        family_codes = {code.lower()}
+
+    with db.connect() as conn:
+        fam_ph = ",".join("?" for _ in family_codes)
+        # oracle_ids the user owns ANY printing/finish of, within the family.
+        owned = {
+            r[0] for r in conn.execute(
+                f"SELECT DISTINCT c.oracle_id FROM inventory i "
+                f"JOIN cards c ON c.scryfall_id = i.scryfall_id "
+                f"WHERE i.quantity > 0 AND LOWER(c.set_code) IN ({fam_ph}) "
+                f"AND c.oracle_id IS NOT NULL",
+                list(family_codes),
+            ).fetchall()
+        }
+        missing_oids = candidate_oids - owned
+        if not missing_oids:
+            return FunctionalMissing()
+        # Cheapest in-family printing per missing oracle_id (local prices).
+        oid_ph = ",".join("?" for _ in missing_oids)
+        price_rows = conn.execute(
+            f"SELECT oracle_id, name, set_code, collector_number, "
+            f"prices_usd, prices_usd_foil FROM cards "
+            f"WHERE LOWER(set_code) IN ({fam_ph}) AND oracle_id IN ({oid_ph})",
+            list(family_codes) + list(missing_oids),
+        ).fetchall()
+
+    # Per oracle: pick the cheapest printing (either finish) across its family prints.
+    best: dict[str, FunctionalMissingCard] = {}
+    for r in price_rows:
+        oid = r["oracle_id"]
+        price, finish = _cheapest(r["prices_usd"], r["prices_usd_foil"])
+        cur = best.get(oid)
+        if cur is None:
+            best[oid] = FunctionalMissingCard(
+                oracle_id=oid, name=r["name"], set_code=r["set_code"],
+                family_cn=r["collector_number"], family_usd=price, family_finish=finish,
+            )
+        elif price is not None and (cur.family_usd is None or price < cur.family_usd):
+            cur.family_usd, cur.family_finish = price, finish
+            cur.set_code, cur.family_cn = r["set_code"], r["collector_number"]
+    # Missing oracles with NO family printing row at all (shouldn't happen — they
+    # came from the family — but guard): still count them, $0.
+    for oid in missing_oids:
+        if oid not in best:
+            best[oid] = FunctionalMissingCard(oracle_id=oid, name="(unknown)")
+
+    # Anywhere floor (opt-in, injected + cached by the caller).
+    if anywhere_floor_fn is not None:
+        for card in best.values():
+            res = anywhere_floor_fn(card.oracle_id)
+            if res is not None:
+                card.anywhere_usd, card.anywhere_finish = res
+
+    cards = list(best.values())
+    fam_total = round(sum(c.family_usd or 0.0 for c in cards), 2)
+    any_total = round(sum(
+        (c.anywhere_usd if c.anywhere_usd is not None else (c.family_usd or 0.0))
+        for c in cards
+    ), 2)
+    return FunctionalMissing(cards=cards, n_cards=len(cards),
+                             family_total_usd=fam_total, anywhere_total_usd=any_total)
