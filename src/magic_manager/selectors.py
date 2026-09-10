@@ -1024,7 +1024,7 @@ def _materialize_term(term: Term) -> list[MaterializedRow]:
 
 
 _CARD_COLS = (
-    "c.scryfall_id, c.name, c.flavor_name, c.set_code, c.collector_number, "
+    "c.scryfall_id, c.oracle_id, c.name, c.flavor_name, c.set_code, c.collector_number, "
     "c.rarity, c.prices_usd, c.prices_usd_foil, c.cmc, c.type_line, c.mana_cost, "
     "c.frame_effects, c.full_art, c.promo_types, c.border_color, c.scryfall_uri, "
     "c.colors, c.color_identity, c.is_promo, c.is_token, c.finishes, c.security_stamp"
@@ -1814,6 +1814,7 @@ def _card_dict(row) -> dict:
     """
     return {
         "scryfall_id":      row["scryfall_id"],
+        "oracle_id":        row["oracle_id"],
         "name":             row["name"],
         "flavor_name":      row["flavor_name"],
         "set":              row["set_code"],
@@ -1838,6 +1839,9 @@ def _card_dict(row) -> dict:
 def _card_dict_from_scryfall(c: dict) -> dict:
     return {
         "scryfall_id":      c.get("id"),
+        "oracle_id":        c.get("oracle_id") or (
+            ((c.get("card_faces") or [{}])[0] or {}).get("oracle_id")
+        ),
         "name":             c.get("name"),
         "flavor_name":      c.get("flavor_name") or (
             ((c.get("card_faces") or [{}])[0] or {}).get("flavor_name")
