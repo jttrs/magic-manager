@@ -280,6 +280,17 @@ FAMILY_DUPE_FOIL_PROMO_TYPES: dict[str, frozenset[str]] = {
 # `scripts/survey_treatment_signature.py` (added 2026-06-14), then write the
 # rule that matches the user's "I will never shop for these" criteria.
 FAMILY_UNOBTAINABLE_RULES: dict[str, list[dict]] = {
+    "fin": [
+        # The 4 Neon Ink Traveling Chocobo prints (FIN 551a-d, foil-only,
+        # ~$1,820-$1,932 each, ~$7,450 total — ~70% of fin's missing $). DISTINCT
+        # art per neon colorway (each its own illustration), so the dupe-foil
+        # filter KEEPS them; this rule is what removes them. Direct analog of
+        # TLA/NEO/LCI neonink. `neonink` appears on Traveling Chocobo ONLY in this
+        # family (verified 4 prints, DB). The serialized 551f auto-drops globally;
+        # the base (210) + boosterfun (406/568) + chocobotrackfoil Chocobos stay.
+        # See docs/sets/fin.md §5.
+        {"promo_types_any_of": frozenset({"neonink"})},
+    ],
     "ltr": [
         # Showcase scroll-frame silverfoil prints (LTR 452-490, LTC 411-431):
         # parchment-style scroll frame, foil-only, distributed via Bundle/special
@@ -288,6 +299,15 @@ FAMILY_UNOBTAINABLE_RULES: dict[str, list[dict]] = {
         # family; matching on both rules out a few non-scroll silverfoils
         # (LTC 517, 525, etc.) that ARE in standard distribution.
         {"promo_types_all_of": frozenset({"silverfoil", "scroll"})},
+        # Poster-series scene panels (LTR 731-750, borderless mythic, poster+
+        # boosterfun). 20 prints — The One Ring 748 ~$883, Sauron 744 ~$609, Tom
+        # Bombadil 745 ~$280, … ~$4,300 nonfoil. Sealed 5-card poster inserts; the
+        # user has decided not to shop for these (2026-09-10). These are REAL
+        # distinct-art singles (not fake variants) — an explicit taste call, unlike
+        # fin's neonink. `poster` appears ONLY on 731-750 in the family (the 20 `z`
+        # serialized twins 731z-750z already drop globally), so any_of:{poster} is
+        # exact. See docs/sets/ltr.md §4b/§5.
+        {"promo_types_any_of": frozenset({"poster"})},
     ],
     "tla": [
         # Chase-tier premiums the user does not shop for. All foil-only,

@@ -117,6 +117,8 @@ Each panel has both nonfoil and foil finishes plus a serialized `z`-suffix versi
 
 **Scryfall doesn't tag** which specific poster (Fellowship / Two Towers / Return of the King / etc.) each panel belongs to — the CN grouping (contiguous 5-CN blocks) is the only signal.
 
+**Excluded from missing-set as of 2026-09-10** — all 20 panels (731–750) are dropped via the `promo_types_any_of: {poster}` unobtainable rule (§5). They're real distinct-art singles, but the user has decided not to shop for them; the base-frame versions of these cards (Sauron 329, Tom Bombadil 331, Mount Doom 343, The One Ring 451, …) remain in scope for functional completeness.
+
 ---
 
 ## 5. Unobtainable rules
@@ -126,6 +128,9 @@ Each panel has both nonfoil and foil finishes plus a serialized `z`-suffix versi
 | Rule | Rationale |
 |---|---|
 | `promo_types_all_of: {silverfoil, scroll}` | Scroll-frame showcase prints (LTR 452–490, LTC 411–431). Distinct parchment-scroll art but bundle-only distribution, priced $50–$130 each, rarely surface on secondary market. User has personally decided not to shop for these. Matches both `silverfoil` AND `scroll` promo_types AND'd; a single-promo-type match would over-shoot into other silverfoil prints that ARE in standard distribution (LTC 517, 525, etc.). |
+| `promo_types_any_of: {poster}` (added 2026-09-10) | The 20 poster-series scene panels (LTR 731–750, borderless mythic; see §4b) — The One Ring 748 ~$883, Sauron 744 ~$609, Tom Bombadil 745 ~$280, … ~$4,300 nonfoil. Sealed 5-card poster inserts; the user has decided not to shop for them. Unlike the scroll rule, these are REAL distinct-art singles (an explicit taste call, not a fake-variant drop). `poster` appears ONLY on 731–750 in the family (the 20 `z` serialized twins already drop globally), so `any_of:{poster}` is exact — verified no over-catch into the borderless "Scene Cards" of §4a (CN 399–451, which carry no `poster` token and remain in scope). |
+
+**Effect of the `poster` rule:** `mm query missing-set ltr` dropped from **192 prints · $9,583.71** → **172 prints · $5,731.89** (2026-09-10).
 
 Also filtered **globally** (not via LTR-specific rules):
 - `serialized` promo_type → LTR 731z–750z poster series serialized chase, LTC 378z–407z borderless land serialized. See `selectors.UNOBTAINABLE_PROMO_TYPES` (`selectors.py:202`).
@@ -160,7 +165,7 @@ For any PRM-stamped card the user presents, resolve by name+artist first (see `.
 ## 8. Code refs
 
 - `selectors.py:78-90` — `FAMILY_DUPE_FOIL_PROMO_TYPES["ltr"] = frozenset({"surgefoil", "doublerainbow"})`
-- `selectors.py:118-128` — `FAMILY_UNOBTAINABLE_RULES["ltr"]` with the `silverfoil+scroll` rule
+- `selectors.py` — `FAMILY_UNOBTAINABLE_RULES["ltr"]` with two rules: `silverfoil+scroll` (scroll-frame showcase, §5) and `any_of:{poster}` (the 20 poster panels 731–750, §4b/§5)
 - `selectors.py:_modifier_chase` — surfaces the Nazgûl chase via `mm query missing-set ltr`
 - `selectors.py:FAMILY_SCENES["ltr"]` — the 7 scene groupings (§4a) as `{name, artist, set, cn_lo, cn_hi}` dicts. Consumed by `scripts/scene_table.py ltr` for the standardized ownership + live-price scene table. **Keep in sync with §4a.**
 - Related docs: [`ltr-borderless-scenes.md`](../ltr-borderless-scenes.md) — the original one-off scene analysis (superseded for live use by `scripts/scene_table.py`, kept as narrative reference).
