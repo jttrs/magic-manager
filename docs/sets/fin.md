@@ -106,6 +106,8 @@ None are extended-art — all four use the standard bordered frame. All four are
 
 **Effect:** `mm query missing-set fin` dropped from **165 prints · $10,872.65** → **161 prints · $3,419.12** (2026-09-10). The concentration ⚠ (previously "top 5 prints = 70%") no longer dominates.
 
+**`chocobotrackfoil` — considered and KEPT (2026-09-11).** The 25 `chocobotrackfoil` foil-only prints (Vivi 570 ~$228, Cloud 564 ~$191, Tataru fic 466 ~$179, … ~$1,900 total, the bulk of fin's remaining `b|ff` bucket) were reviewed as a candidate exclusion tier and deliberately kept — they're distinct-art fancy foils (see §2), and the user opted to keep them in scope. The residual $3,419 is legitimate borderless / FCA-masterpiece alt-art of cards whose base frame is owned; the "functional whole" figure (own ≥1 printing of each mechanically-unique card) is only ~$777, which is the actionable number for fin.
+
 FIN's `rfin` regional promos (2 cards, Japan-only distribution) are functionally unobtainable for English collectors but are handled generically by `sets.py:180-188` (non-English-only imports get zero rows).
 
 Also filtered globally (not via FIN-specific rules):

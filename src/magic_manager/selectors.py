@@ -308,6 +308,13 @@ FAMILY_UNOBTAINABLE_RULES: dict[str, list[dict]] = {
         # serialized twins 731z-750z already drop globally), so any_of:{poster} is
         # exact. See docs/sets/ltr.md §4b/§5.
         {"promo_types_any_of": frozenset({"poster"})},
+        # WPN Play Promo (added 2026-09-11). LTR 299 Gandalf the White —
+        # `playpromo`, nonfoil ~$2,999.99, the SOLE `playpromo` in the family
+        # (verified 1 print, DB) and ~52% of ltr's post-poster missing $. A scarce
+        # WPN store-play promo the user won't realistically buy; the base (LTR 19)
+        # and other Gandalf the White prints stay in scope. any_of:{playpromo}
+        # catches exactly this one card. See docs/sets/ltr.md §5.
+        {"promo_types_any_of": frozenset({"playpromo"})},
     ],
     "tla": [
         # Chase-tier premiums the user does not shop for. All foil-only,
