@@ -129,8 +129,9 @@ Each panel has both nonfoil and foil finishes plus a serialized `z`-suffix versi
 |---|---|
 | `promo_types_all_of: {silverfoil, scroll}` | Scroll-frame showcase prints (LTR 452–490, LTC 411–431). Distinct parchment-scroll art but bundle-only distribution, priced $50–$130 each, rarely surface on secondary market. User has personally decided not to shop for these. Matches both `silverfoil` AND `scroll` promo_types AND'd; a single-promo-type match would over-shoot into other silverfoil prints that ARE in standard distribution (LTC 517, 525, etc.). |
 | `promo_types_any_of: {poster}` (added 2026-09-10) | The 20 poster-series scene panels (LTR 731–750, borderless mythic; see §4b) — The One Ring 748 ~$883, Sauron 744 ~$609, Tom Bombadil 745 ~$280, … ~$4,300 nonfoil. Sealed 5-card poster inserts; the user has decided not to shop for them. Unlike the scroll rule, these are REAL distinct-art singles (an explicit taste call, not a fake-variant drop). `poster` appears ONLY on 731–750 in the family (the 20 `z` serialized twins already drop globally), so `any_of:{poster}` is exact — verified no over-catch into the borderless "Scene Cards" of §4a (CN 399–451, which carry no `poster` token and remain in scope). |
+| `promo_types_any_of: {playpromo}` (added 2026-09-11) | **LTR 299 Gandalf the White** — WPN Play Promo, nonfoil ~$2,999.99, the SOLE `playpromo` in the family (verified 1 print, DB) and ~52% of ltr's post-poster missing $. A scarce store-play promo the user won't realistically buy; `any_of:{playpromo}` catches exactly this one card. The base (LTR 19) and other Gandalf the White prints (e.g. mythic 305) stay in scope. |
 
-**Effect of the `poster` rule:** `mm query missing-set ltr` dropped from **192 prints · $9,583.71** → **172 prints · $5,731.89** (2026-09-10).
+**Effect of the curation rules:** `mm query missing-set ltr` dropped from **192 prints · $9,583.71** → **172 prints · $5,731.89** (poster rule, 2026-09-10) → **171 prints · $2,731.90** (playpromo rule, 2026-09-11).
 
 Also filtered **globally** (not via LTR-specific rules):
 - `serialized` promo_type → LTR 731z–750z poster series serialized chase, LTC 378z–407z borderless land serialized. See `selectors.UNOBTAINABLE_PROMO_TYPES` (`selectors.py:202`).
@@ -165,7 +166,7 @@ For any PRM-stamped card the user presents, resolve by name+artist first (see `.
 ## 8. Code refs
 
 - `selectors.py:78-90` — `FAMILY_DUPE_FOIL_PROMO_TYPES["ltr"] = frozenset({"surgefoil", "doublerainbow"})`
-- `selectors.py` — `FAMILY_UNOBTAINABLE_RULES["ltr"]` with two rules: `silverfoil+scroll` (scroll-frame showcase, §5) and `any_of:{poster}` (the 20 poster panels 731–750, §4b/§5)
+- `selectors.py` — `FAMILY_UNOBTAINABLE_RULES["ltr"]` with three rules: `silverfoil+scroll` (scroll-frame showcase, §5), `any_of:{poster}` (the 20 poster panels 731–750, §4b/§5), and `any_of:{playpromo}` (LTR 299 Gandalf the White WPN promo, §5)
 - `selectors.py:_modifier_chase` — surfaces the Nazgûl chase via `mm query missing-set ltr`
 - `selectors.py:FAMILY_SCENES["ltr"]` — the 7 scene groupings (§4a) as `{name, artist, set, cn_lo, cn_hi}` dicts. Consumed by `scripts/scene_table.py ltr` for the standardized ownership + live-price scene table. **Keep in sync with §4a.**
 - Related docs: [`ltr-borderless-scenes.md`](../ltr-borderless-scenes.md) — the original one-off scene analysis (superseded for live use by `scripts/scene_table.py`, kept as narrative reference).
