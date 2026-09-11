@@ -98,7 +98,13 @@ None are extended-art — all four use the standard bordered frame. All four are
 
 ## 5. Unobtainable rules
 
-`selectors.FAMILY_UNOBTAINABLE_RULES["fin"]` — **not configured** (no LTR-style scroll-frame equivalent surfaced yet).
+`selectors.FAMILY_UNOBTAINABLE_RULES["fin"]` (added 2026-09-10).
+
+| Rule | Rationale |
+|---|---|
+| `promo_types_any_of: {neonink}` | The 4 **Neon Ink Traveling Chocobo** prints (FIN 551a–d, borderless mythic, foil-only, ~$1,820–$1,932 each, **~$7,450 total ≈ 70% of fin's missing $**). DISTINCT art per neon colorway (each its own illustration) ⇒ the fancy-foil dupe filter would KEEP them; this rule is what removes them. Direct analog of the TLA/NEO/LCI `neonink` chase tiers. Verified `neonink` appears on Traveling Chocobo ONLY in the fin family (4 prints, DB). The base (210) + boosterfun (406/568) + chocobotrackfoil Chocobos stay in scope; the serialized 551f auto-drops globally. |
+
+**Effect:** `mm query missing-set fin` dropped from **165 prints · $10,872.65** → **161 prints · $3,419.12** (2026-09-10). The concentration ⚠ (previously "top 5 prints = 70%") no longer dominates.
 
 FIN's `rfin` regional promos (2 cards, Japan-only distribution) are functionally unobtainable for English collectors but are handled generically by `sets.py:180-188` (non-English-only imports get zero rows).
 
@@ -135,6 +141,7 @@ Physical CN often doesn't match Scryfall CN (leading zeros stripped, or `Ns` suf
 ## 8. Code refs
 
 - `selectors.py:78-90` — `FAMILY_DUPE_FOIL_PROMO_TYPES["fin"] = frozenset({"surgefoil"})`.
+- `selectors.py` `FAMILY_UNOBTAINABLE_RULES["fin"]` — the `neonink` rule (§5): drops the 4 Neon Ink Traveling Chocobo prints (FIN 551a–d) from `mm query missing-set`.
 - **Finish-aware `ff`** — `treatments.compute_treatment(card, finish=...)` applies foil-finish promo types (surgefoil et al.) only on the foil finish. The selector row-level calls pass `finish=r.finish`; the family-wide treatment indexes (`_modifier_chase`, `_filter_treatment_preferred` sibling index) key on `_effective_finish(fr)` (nonfoil if the printing offers it). This is what lets a nonfoil+surgefoil FIC collector card's nonfoil copy flow through as `regular` while its surgefoil foil copy is excluded. See §2a and `docs/scryfall-printing-treatments.md`.
 - `selectors.py:_modifier_chase` — surfaces Cid + Secret Rendezvous chases (incl. 253 nonfoil) via `mm query missing-set fin`.
 - FCA reskin sheet handling — no per-family code; discovered via `sourcematerial` promo_type in `treatments.py:114`.
