@@ -908,6 +908,161 @@ def deck_assign_from_composition(
     return result
 
 
+def _existing_built_slug_for_file(file_name: str, *, conn=None) -> str | None:
+    """The slug of an existing ``built`` deck for this MTGJSON fileName, if any.
+
+    Used by :func:`construct_precon_from_loose` to reuse a recipe on re-run
+    instead of minting a ``-2`` clone. Picks the oldest matching row so re-runs
+    are deterministic. Returns ``None`` if no built deck references the file.
+    """
+    with db.transaction(conn) as conn:
+        row = conn.execute(
+            "SELECT slug FROM decks WHERE source_precon_file_name = ? "
+            "AND precon_state = 'built' ORDER BY deck_id LIMIT 1",
+            (file_name,),
+        ).fetchone()
+    return row["slug"] if row else None
+
+
+def construct_precon_from_loose(
+    file_name: str,
+    *,
+    slug: str | None = None,
+    name: str | None = None,
+    foil_first: bool = False,
+    allow_shortfall: bool = False,
+    new_copy: bool = False,
+    dry_run: bool = False,
+) -> dict:
+    """Register an MTGJSON precon as a tracked ``built`` deck and pledge the
+    cards the user already owns LOOSE to it — WITHOUT adding those cards to
+    inventory (no double-count).
+
+    This composes two existing primitives:
+      1. :func:`import_precon` with ``add_inventory=False, precon_state="built"``
+         to create the recipe (``deck_cards``) + a built deck row, touching
+         nothing in ``inventory`` — the no-double-count guard.
+      2. :func:`deck_assign_from_composition` to pledge free inventory to that
+         recipe (writes ``deck_assignments`` only; inventory qty preserved).
+
+    Re-run safety: unless ``new_copy=True``, an existing ``built`` deck for the
+    same ``file_name`` is reused (no ``-2`` clone). Composing an already-composed
+    deck writes 0 new rows (the recipe cap in :func:`deck_assign_batch`).
+
+    Atomicity: recipe-create and compose are SEPARATE transactions. If the recipe
+    is created but compose then refuses (shortfalls without ``allow_shortfall``),
+    the result is a legitimate built deck with 0 pledged — a re-run reuses it and
+    composes. No orphan, no double-count.
+
+    Args:
+      file_name: MTGJSON deck fileName (e.g. ``BlueBlack_FIN``).
+      slug/name: overrides passed to :func:`import_precon` when creating.
+      foil_first: prefer foil for ``'either'`` recipe slots.
+      allow_shortfall: pledge whatever inventory covers, leaving the rest as
+        shortfalls. Without it, refuse to pledge if ANY row would overflow.
+      new_copy: force a fresh deck row even if one exists for this fileName.
+      dry_run: create the recipe if needed, then only PREVIEW the pledge
+        (no ``deck_assignments`` writes).
+
+    Returns:
+      {
+        "slug": str, "created_recipe": bool, "reused_existing": bool,
+        "recipe_card_qty": int,
+        "plan": {"rows", "shortfalls", "either_choices"},
+        "assigned_rows": int, "assigned_qty": int,
+        "shortfalls": list[dict], "either_choices": list[dict],
+        "fully_covered": bool,
+      }
+
+    Raises:
+      - ``mtgjson_mod.MtgJsonError`` if the deck JSON can't be fetched.
+      - ``ValueError`` if the slug can't be derived / conflicts.
+      - ``AssignmentOverflow`` if shortfalls exist and ``allow_shortfall`` is
+        False (nothing is pledged; the recipe may have just been created).
+    """
+    existing = None if new_copy else _existing_built_slug_for_file(file_name)
+    created_recipe = False
+    if existing is not None:
+        eff_slug = existing
+    else:
+        imp = import_precon(
+            file_name, slug=slug, name=name,
+            add_inventory=False, precon_state="built",
+        )
+        if not imp["effective_slugs"]:
+            # Defensive: built import always makes exactly one row.
+            raise ValueError(
+                f"import_precon created no deck row for {file_name!r}"
+            )
+        eff_slug = imp["effective_slugs"][0]
+        created_recipe = True
+
+    plan = deck_compose_plan(eff_slug, foil_first=foil_first)
+    recipe_card_qty = sum(r["need"] for r in plan["rows"])
+
+    # Net-remaining need: subtract what THIS deck already holds. `free_quantity`
+    # (behind plan["rows"][*]["free"]) already excludes this deck's own pledges,
+    # so a re-run of a fully-pledged deck must NOT re-count those as work/short.
+    # remaining = recipe need − already pledged to this deck; a card is a REAL
+    # shortfall only when remaining still exceeds free inventory (not owned).
+    assigned_here: dict[tuple[str, str], int] = {}
+    for row in deck_assignments_list(eff_slug):
+        assigned_here[(row.scryfall_id, row.finish)] = (
+            assigned_here.get((row.scryfall_id, row.finish), 0) + row.count
+        )
+
+    remaining_rows: list[tuple[str, str, int]] = []
+    real_shortfalls: list[dict] = []
+    for r in plan["rows"]:
+        sid, finish, need, free = r["scryfall_id"], r["finish"], r["need"], r["free"]
+        remaining = need - assigned_here.get((sid, finish), 0)
+        if remaining <= 0:
+            continue  # this deck already holds the full recipe of this slot
+        if remaining > free:
+            real_shortfalls.append({
+                "scryfall_id": sid, "finish": finish,
+                "need": remaining, "free": free, "kind": "inventory",
+            })
+        else:
+            remaining_rows.append((sid, finish, remaining))
+
+    fully_covered = not real_shortfalls
+    base = {
+        "slug": eff_slug,
+        "created_recipe": created_recipe,
+        "reused_existing": existing is not None,
+        "recipe_card_qty": recipe_card_qty,
+        "plan": plan,
+        "assigned_rows": 0,
+        "assigned_qty": 0,
+        "shortfalls": real_shortfalls,
+        "either_choices": plan["either_choices"],
+        "fully_covered": fully_covered,
+    }
+
+    if dry_run:
+        return base
+
+    if real_shortfalls and not allow_shortfall:
+        # Refuse to pledge partial. The recipe (if just created) is a valid
+        # built deck with whatever was already pledged; a later run with
+        # --allow-shortfall (or after acquiring the cards) reuses it and
+        # pledges the rest. Mirrors deck_compose's refuse-unless-explicit.
+        raise AssignmentOverflow(real_shortfalls)
+
+    if remaining_rows:
+        # Pass only the net-remaining deltas: this exactly equals the recipe
+        # headroom (cap − already-pledged) per printing, so deck_assign_batch's
+        # recipe cap is never tripped by this deck's own prior pledges. Under
+        # allow_shortfall it skips rows free can't cover (the real_shortfalls).
+        result = deck_assign_batch(
+            eff_slug, remaining_rows, allow_shortfall=allow_shortfall,
+        )
+        base["assigned_rows"] = result["assigned_rows"]
+        base["assigned_qty"] = result["assigned_qty"]
+    return base
+
+
 def _assignment_hash(rows: list[tuple[str, str, int]]) -> str:
     """Stable SHA-256 of the sorted (sid, finish, qty) tuples.
 

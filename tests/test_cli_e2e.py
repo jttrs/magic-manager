@@ -123,3 +123,50 @@ def test_db_unlock_no_sidecars(tmp_db, app):
     res = runner.invoke(app, ["db", "unlock"])
     assert res.exit_code == 0
     assert "nothing to unlock" in res.stdout.lower()
+
+
+def _seed_loose_precon(app, fake_scryfall, fake_mtgjson, make_card, make_precon_deck):
+    """Seed a 2-card precon's cards + full loose inventory; prime the fakes."""
+    from magic_manager import db, inventory
+    sids = ["e2e-a", "e2e-b"]
+    cards = [
+        make_card(id=sids[0], set="tst", collector_number="1", name="A"),
+        make_card(id=sids[1], set="tst", collector_number="2", name="B"),
+    ]
+    with db.connect() as conn:
+        db.upsert_cards(conn, cards)
+        inventory.inventory_add(sids[0], "nonfoil", 1, conn=conn)
+        inventory.inventory_add(sids[1], "nonfoil", 2, conn=conn)
+    fake_mtgjson(deck=make_precon_deck(
+        "Loose Kit", "Starter Kit",
+        [{"sid": sids[0], "name": "A", "set": "tst", "cn": "1", "count": 1, "board": "commander"},
+         {"sid": sids[1], "name": "B", "set": "tst", "cn": "2", "count": 2, "board": "mainBoard"}],
+    ))
+    fake_scryfall(search=cards)
+    return sids
+
+
+def test_construct_from_loose_e2e_happy_path(tmp_db, app, fake_scryfall, fake_mtgjson,
+                                             make_card, make_precon_deck):
+    _seed_loose_precon(app, fake_scryfall, fake_mtgjson, make_card, make_precon_deck)
+    res = runner.invoke(app, ["deck", "construct-from-loose", "LooseKit_TST"])
+    assert res.exit_code == 0, res.stdout
+    assert "pledged" in res.stdout.lower()
+    from magic_manager import db
+    with db.connect() as conn:
+        assert conn.execute(
+            "SELECT precon_state FROM decks WHERE source_precon_file_name='LooseKit_TST'"
+        ).fetchone()["precon_state"] == "built"
+        assert conn.execute("SELECT COALESCE(SUM(count),0) FROM deck_assignments").fetchone()[0] == 3
+        assert conn.execute("SELECT COALESCE(SUM(quantity),0) FROM inventory").fetchone()[0] == 3
+
+
+def test_construct_from_loose_e2e_dry_run_writes_nothing(tmp_db, app, fake_scryfall, fake_mtgjson,
+                                                         make_card, make_precon_deck):
+    _seed_loose_precon(app, fake_scryfall, fake_mtgjson, make_card, make_precon_deck)
+    res = runner.invoke(app, ["deck", "construct-from-loose", "LooseKit_TST", "--dry-run"])
+    assert res.exit_code == 0, res.stdout
+    assert "dry run" in res.stdout.lower()
+    from magic_manager import db
+    with db.connect() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM deck_assignments").fetchone()[0] == 0

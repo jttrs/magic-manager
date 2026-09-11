@@ -106,3 +106,4 @@ Summarize:
 
 - [[decompose-deck]] — the inverse.
 - [[import-precon]] — creates the recipe (and adds inventory); run compose *after* to pledge.
+- [[construct-from-loose]] — one-step "register a precon + pledge cards I already own loose" (recipe-create with NO inventory add, then compose) — for a precon assembled from singles you already had.

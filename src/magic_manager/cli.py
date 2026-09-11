@@ -2306,6 +2306,95 @@ def deck_compose_cmd(
         )
 
 
+@deck_app.command("construct-from-loose")
+def deck_construct_from_loose_cmd(
+    file_name: str = typer.Argument(..., help="MTGJSON deck fileName, e.g. BlueBlack_FIN. Find via `mm mtgjson decks --set <code>`."),
+    slug: str = typer.Option(None, "--slug", help="Override the derived deck slug (only when creating a new recipe)."),
+    name: str = typer.Option(None, "--name", help="Override the deck display name (only when creating)."),
+    foil_first: bool = typer.Option(
+        False, "--foil-first",
+        help="For 'either'-finish recipe slots, prefer foil over nonfoil (default: nonfoil first).",
+    ),
+    allow_shortfall: bool = typer.Option(
+        False, "--allow-shortfall",
+        help="Pledge whatever loose inventory covers, leaving the rest as shortfalls. Default: refuse to pledge if ANY card is short.",
+    ),
+    new_copy: bool = typer.Option(
+        False, "--new-copy",
+        help="Force a fresh deck row even if a built deck already exists for this fileName (a second physical copy).",
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run",
+        help="Create the recipe if needed, then only PREVIEW the pledge (no assignments written).",
+    ),
+    json_out: bool = typer.Option(False, "--json", help="Emit the result dict as JSON."),
+):
+    """Register an MTGJSON precon as a tracked ``built`` deck and pledge the
+    cards you already own LOOSE to it — WITHOUT adding them to inventory (no
+    double-count).
+
+    For a precon you assembled from singles you already had (e.g. the FIN
+    Starter Kit decks). Creates the recipe if it doesn't exist yet (reusing an
+    existing one for the same fileName on re-run — no ``-2`` clone), previews
+    coverage vs your free inventory, and with ``--allow-shortfall`` pledges
+    whatever is covered, leaving the rest visible as shortfalls.
+
+    Contrast: `import-precon` ADDS the cards to inventory (a precon you just
+    bought); this pledges cards ALREADY in inventory and adds nothing.
+    """
+    try:
+        result = decks_mod.construct_precon_from_loose(
+            file_name, slug=slug, name=name, foil_first=foil_first,
+            allow_shortfall=allow_shortfall, new_copy=new_copy, dry_run=dry_run,
+        )
+    except mtgjson_mod.MtgJsonError as e:
+        typer.echo(f"error: {e}", err=True); raise typer.Exit(2)
+    except decks_mod.AssignmentOverflow as e:
+        typer.echo(f"error: {e}", err=True)
+        typer.echo(
+            "Retry with --allow-shortfall to pledge what you own and leave the "
+            "rest as shortfalls, or add the missing cards to inventory first. "
+            "(The built deck row was created; a later run will reuse it.)",
+            err=True,
+        )
+        raise typer.Exit(3)
+    except (ValueError, LookupError) as e:
+        typer.echo(f"error: {e}", err=True); raise typer.Exit(2)
+
+    if json_out:
+        typer.echo(json.dumps(result, indent=2)); return
+
+    origin = "reused existing" if result["reused_existing"] else "created"
+    typer.echo(
+        f"Deck {result['slug']!r} ({origin} recipe, {result['recipe_card_qty']} "
+        f"card-qty): {result['assigned_rows']} rows pledged "
+        f"({result['assigned_qty']} card-qty)."
+    )
+    if result.get("either_choices"):
+        typer.echo(f"  Resolved {len(result['either_choices'])} 'either'-finish slot(s).")
+    sf = result.get("shortfalls") or []
+    if dry_run:
+        n = len(result["plan"]["shortfalls"])
+        typer.echo(
+            f"  DRY RUN — no assignments written. Coverage: "
+            f"{len(result['plan']['rows']) - n}/{len(result['plan']['rows'])} rows "
+            f"fully covered, {n} short."
+        )
+        for s in result["plan"]["shortfalls"][:20]:
+            typer.echo(f"    short: {s['scryfall_id'][:8]}/{s['finish']}: need {s['need']}, free {s['free']}")
+        if n > 20:
+            typer.echo(f"    ...and {n - 20} more")
+    elif sf:
+        typer.echo(
+            f"warning: {len(sf)} card(s) not covered by loose inventory and left "
+            f"as shortfalls (--allow-shortfall). Run "
+            f"`mm deck compose {result['slug']} --dry-run` to see them.",
+            err=True,
+        )
+    elif result["fully_covered"]:
+        typer.echo("  Fully covered — every recipe card pledged from loose inventory.")
+
+
 @deck_app.command("decompose")
 def deck_decompose_cmd(
     slug: str = typer.Argument(..., help="Deck slug to physically disassemble; recipe survives."),
