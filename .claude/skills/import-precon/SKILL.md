@@ -134,4 +134,5 @@ After `mm deck import-precon X --copies N` (default flags):
 - [[mtgjson-search]] — underlying data source. `mm mtgjson decks --set <CODE>` lists available precons; `mm mtgjson deck <fileName>` inspects one before import.
 - [[inventory-query]] — `mm query show 'inventory available'` shows what's free for new decks. `mm deck find <card>` shows which deck contains a specific printing.
 - [[bulk-add]] — for cards opened OUTSIDE a precon (booster packs, singles, etc.).
+- [[construct-from-loose]] — the OPPOSITE-direction sibling: register a precon whose cards you ALREADY own loose, pledging them to a new built deck WITHOUT adding inventory (no double-count). Use it when the cards are already in inventory; use import-precon when they're a fresh purchase.
 - [[missing-from-set]] — for "what am I missing from <set>?"; honors the printing-level missing convention but does NOT subtract decked cards. If you want the gap report relative to "uncommitted inventory only," that's a different question; ask the user explicitly.
