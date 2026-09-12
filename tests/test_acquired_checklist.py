@@ -2,10 +2,11 @@
 (``sets._apply_acquired_checklist``, 2026-09-03).
 
 Add-mode jumpstart/precon checklists carry ONE ``acquired_qty`` per row; ingest
-splits it deterministically into built / deconstructed / pool so the user never
-has to know their prior collection at fill time:
+splits it deterministically into built / deconstructed so the user never has
+to know their prior collection at fill time:
 
-  - pool products (Starter Collection, Scene Box) → all copies pool,
+  - products with no real decklist (Starter Collection, Scene Box) → all
+    copies deconstructed,
   - net-new buildable → 1 built + rest deconstructed,
   - already own ≥1 built copy → all deconstructed.
 
@@ -45,12 +46,11 @@ def test_net_new_buildable_keeps_one_built_rest_deconstructed(
 
     assert summary["built"] == 1
     assert summary["deconstructed"] == 2
-    assert summary["pool"] == 0
     pr = summary["per_row"][0]
     assert pr["net_new"] is True
     assert pr["acquired_qty"] == 3
     # Derived counts: 1 built + 2 deconstructed.
-    assert decks.precon_unit_counts_for("IronMan_MSH") == (1, 2, 0)
+    assert decks.precon_unit_counts_for("IronMan_MSH") == (1, 2)
     with db.connect() as conn:
         slugs = [r[0] for r in conn.execute("SELECT slug FROM decks ORDER BY slug").fetchall()]
         # Base slug + -2 + -3, all pack:*-msh, one built + two deconstructed.
@@ -84,20 +84,21 @@ def test_already_built_makes_every_copy_deconstructed(
             parsed, slug_fn=_jumpstart_slug_fn("msh"), deck_format="jumpstart")
 
     _run(1)  # net-new: 1 built
-    assert decks.precon_unit_counts_for("Wild_MSH") == (1, 0, 0)
+    assert decks.precon_unit_counts_for("Wild_MSH") == (1, 0)
 
     summary = _run(2)  # already own built → both deconstructed
     assert summary["built"] == 0
     assert summary["deconstructed"] == 2
     assert summary["per_row"][0]["net_new"] is False
-    assert decks.precon_unit_counts_for("Wild_MSH") == (1, 2, 0)
+    assert decks.precon_unit_counts_for("Wild_MSH") == (1, 2)
 
 
-def test_pool_product_sends_all_copies_to_pool(
+def test_pool_product_sends_all_copies_to_deconstructed(
     tmp_db, fake_scryfall, fake_mtgjson, make_card, make_precon_deck,
 ):
-    """A pool product (name matches POOL_NAME_PATTERNS) with acquired_qty=2 →
-    both copies pool, none built, cards loose (no deck_assignments)."""
+    """A pool-shaped product (name matches POOL_NAME_PATTERNS) with
+    acquired_qty=2 → both copies deconstructed, none built, cards loose (no
+    deck_assignments)."""
     from magic_manager import sets as sets_mod, decks, db, parsers
 
     deck = make_precon_deck(
@@ -115,15 +116,14 @@ def test_pool_product_sends_all_copies_to_pool(
     summary = sets_mod._apply_acquired_checklist(
         parsed, slug_fn=decks._slug, deck_format=None)
 
-    assert summary["pool"] == 2
     assert summary["built"] == 0
-    assert summary["deconstructed"] == 0
+    assert summary["deconstructed"] == 2
     assert summary["per_row"][0]["net_new"] is False
-    assert decks.precon_unit_counts_for("StarterCollection_FDN") == (0, 0, 2)
+    assert decks.precon_unit_counts_for("StarterCollection_FDN") == (0, 2)
     with db.connect() as conn:
         assert conn.execute(
-            "SELECT COUNT(*) FROM decks WHERE precon_state = 'pool'").fetchone()[0] == 2
-        # Pool cards are loose — never pledged.
+            "SELECT COUNT(*) FROM decks WHERE precon_state = 'deconstructed'").fetchone()[0] == 2
+        # Cards are loose — never pledged.
         assert conn.execute("SELECT COUNT(*) FROM deck_assignments").fetchone()[0] == 0
 
 
@@ -148,8 +148,8 @@ def test_acquired_one_is_single_built(
     summary = sets_mod._apply_acquired_checklist(
         parsed, slug_fn=_jumpstart_slug_fn("msh"), deck_format="jumpstart")
 
-    assert (summary["built"], summary["deconstructed"], summary["pool"]) == (1, 0, 0)
-    assert decks.precon_unit_counts_for("Fantastic_MSH") == (1, 0, 0)
+    assert (summary["built"], summary["deconstructed"]) == (1, 0)
+    assert decks.precon_unit_counts_for("Fantastic_MSH") == (1, 0)
 
 
 def test_zero_acquired_is_noop(
@@ -170,4 +170,4 @@ def test_zero_acquired_is_noop(
         parsed, slug_fn=_jumpstart_slug_fn("msh"), deck_format="jumpstart")
 
     assert summary["rows_acted"] == 0
-    assert decks.precon_unit_counts_for("Speedy_MSH") == (0, 0, 0)
+    assert decks.precon_unit_counts_for("Speedy_MSH") == (0, 0)

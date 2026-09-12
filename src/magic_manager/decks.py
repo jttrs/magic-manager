@@ -21,8 +21,8 @@ _ALLOWED_BOARDS = ("main", "side", "commander", "companion", "maybe")
 _ALLOWED_FINISHES = ("nonfoil", "foil", "either")
 
 # V11 precon states (see the Deck dataclass). 'built' = assembled deck (pledged),
-# 'deconstructed' = torn-down deck (loose), 'pool' = never-a-deck card pool (loose).
-_PRECON_STATES = ("built", "deconstructed", "pool")
+# 'deconstructed' = torn-down deck (loose).
+_PRECON_STATES = ("built", "deconstructed")
 
 # Canonical board ordering for ``deck_show``: commanders first, then the
 # main 60/100, then companion (sits beside the deck during play), then side,
@@ -53,10 +53,8 @@ class Deck:
     # V10/V11: precon provenance. source_precon_file_name is the MTGJSON deck
     # fileName this deck was imported from (NULL for hand-built decks); it's
     # the join key that makes precon unit counts derivable. precon_state is one
-    # of 'built' (assembled deck, cards pledged), 'deconstructed' (a deck torn
-    # down for parts — recipe kept, cards loose), or 'pool' (cards that were
-    # never a deck — Starter Collection / Scene Box — loose in inventory, the
-    # deck row is just a unit-owned marker).
+    # of 'built' (assembled deck, cards pledged) or 'deconstructed' (a deck torn
+    # down for parts — recipe kept, cards loose).
     source_precon_file_name: str | None = None
     precon_state: str = "built"
 
@@ -175,8 +173,8 @@ def deck_create(
 
     ``source_precon_file_name`` (V10) is the MTGJSON deck fileName the deck was
     imported from — the join key that makes precon unit counts derivable.
-    ``precon_state`` (V11) is one of ``built`` / ``deconstructed`` / ``pool``
-    (see the ``Deck`` dataclass).
+    ``precon_state`` (V11) is one of ``built`` / ``deconstructed`` (see the
+    ``Deck`` dataclass).
     """
     if precon_state not in _PRECON_STATES:
         raise ValueError(f"invalid precon_state {precon_state!r}; expected one of {_PRECON_STATES}")
@@ -1128,10 +1126,10 @@ def import_precon(
         composes separately — but the cards still go to inventory.
       - ``precon_state`` (V11) controls the deck ROW: ``None`` → create a normal
         ``built`` row UNLESS ``deconstruct`` (the jumpstart "loose packs, no
-        row" path). A non-None state (``"built"``/``"deconstructed"``/``"pool"``)
-        forces a deck row IN THAT STATE — this is how precon tracking records a
-        torn-down copy (``"deconstructed"``) or a card pool (``"pool"``) as a
-        countable unit. ``merge_inventory`` overrides both (no row at all).
+        row" path). A non-None state (``"built"``/``"deconstructed"``) forces a
+        deck row IN THAT STATE — this is how precon tracking records a
+        torn-down copy (``"deconstructed"``) as a countable unit.
+        ``merge_inventory`` overrides both (no row at all).
 
     Returns a summary dict with these fields:
       - ``deck_name``       (str) display name used
@@ -1284,30 +1282,29 @@ def import_precon(
 #
 # Preconstructed products are tracked AS UNITS entirely by the `decks` table:
 # each copy is a deck row carrying source_precon_file_name (the MTGJSON
-# fileName) and precon_state ('built' | 'deconstructed' | 'pool'). The counts
-# below are DERIVED — there is no separate ledger to drift from reality. The V7
-# precon_ledger was dropped in V10; precon_state is the V11 3-value widening.
+# fileName) and precon_state ('built' | 'deconstructed'). The counts below are
+# DERIVED — there is no separate ledger to drift from reality. The V7
+# precon_ledger was dropped in V10; precon_state is the V11 widening.
 
 _COUNT_SELECT = (
     "SUM(CASE WHEN precon_state = 'built' THEN 1 ELSE 0 END) AS c, "
-    "SUM(CASE WHEN precon_state = 'deconstructed' THEN 1 ELSE 0 END) AS d, "
-    "SUM(CASE WHEN precon_state = 'pool' THEN 1 ELSE 0 END) AS p"
+    "SUM(CASE WHEN precon_state = 'deconstructed' THEN 1 ELSE 0 END) AS d"
 )
 
 
-def precon_unit_counts_for(file_name: str, *, conn=None) -> tuple[int, int, int]:
-    """Return ``(built, deconstructed, pool)`` for one precon fileName, counted
-    live from the ``decks`` table. ``(0, 0, 0)`` if none exist."""
+def precon_unit_counts_for(file_name: str, *, conn=None) -> tuple[int, int]:
+    """Return ``(built, deconstructed)`` for one precon fileName, counted
+    live from the ``decks`` table. ``(0, 0)`` if none exist."""
     with db.transaction(conn) as conn:
         row = conn.execute(
             f"SELECT {_COUNT_SELECT} FROM decks WHERE source_precon_file_name = ?",
             (file_name,),
         ).fetchone()
-    return (row["c"] or 0, row["d"] or 0, row["p"] or 0)
+    return (row["c"] or 0, row["d"] or 0)
 
 
-def precon_unit_counts() -> dict[str, tuple[int, int, int]]:
-    """Whole collection as ``{file_name: (built, deconstructed, pool)}``, derived
+def precon_unit_counts() -> dict[str, tuple[int, int]]:
+    """Whole collection as ``{file_name: (built, deconstructed)}``, derived
     from ``decks`` in one GROUP BY. Used by the `modify` precon checklist to
     prefill every row from the REAL deck collection (no ledger)."""
     with db.connect() as conn:
@@ -1319,4 +1316,4 @@ def precon_unit_counts() -> dict[str, tuple[int, int, int]]:
             GROUP BY source_precon_file_name
             """
         ).fetchall()
-    return {r["fn"]: (r["c"] or 0, r["d"] or 0, r["p"] or 0) for r in rows}
+    return {r["fn"]: (r["c"] or 0, r["d"] or 0) for r in rows}

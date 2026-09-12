@@ -71,7 +71,7 @@ built-vs-deconstructed. It has ONE fill column, **`acquired_qty`** (`[A:n]` in
 markdown) = how many copies of that product you acquired. Ingest SPLITS it
 deterministically, so you never need to know your prior collection at fill time:
 
-- **card-pool products** (Starter Collection, Scene Box) → all copies → `pool`;
+- **products with no real decklist** (Starter Collection, Scene Box) → all copies → `deconstructed`;
 - **buildable, net-new** → 1st copy kept `built` (recipe + auto-composed), the rest
   `deconstructed`;
 - **buildable, you already own a built copy** → every acquired copy `deconstructed`.
@@ -79,8 +79,8 @@ deterministically, so you never need to know your prior collection at fill time:
 Every copy — including jumpstart — becomes a tracked `decks` row (distinct `-2`/`-3`
 slugs), so built vs deconstructed counts stay derivable from the decks table. There
 is no silent "already exists" skip: a redundant copy becomes a tracked deconstructed
-row. Precon `modify` mode keeps the explicit three-column layout
-(`constructed_qty`/`deconstructed_qty`/`pool_qty`, `[C:c D:d P:p]`) for correcting
+row. Precon `modify` mode keeps the explicit two-column layout
+(`constructed_qty`/`deconstructed_qty`, `[C:c D:d]`) for correcting
 absolute per-state counts.
 
 Both flavors carry a colored **README banner sheet** (green `add` / red `modify`) in

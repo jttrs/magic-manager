@@ -663,11 +663,12 @@ def set_precon_list(
         "add", "--mode",
         help="'add' (default): a single blank acquired_qty column; enter how "
              "many copies you got and ingest SPLITS them (net-new buildable → 1 "
-             "built + rest deconstructed; already-built → all deconstructed; pool "
-             "products → pool). 'modify': constructed_qty/deconstructed_qty/"
-             "pool_qty columns prefilled from your current deck collection "
-             "(counts derived from the decks table); ingest applies the signed "
-             "delta. Use 'modify' to correct absolute per-state counts.",
+             "built + rest deconstructed; already-built → all deconstructed; "
+             "products with no real decklist → all deconstructed). 'modify': "
+             "constructed_qty/deconstructed_qty columns prefilled from your "
+             "current deck collection (counts derived from the decks table); "
+             "ingest applies the signed delta. Use 'modify' to correct absolute "
+             "per-state counts.",
     ),
     sync_all: bool = typer.Option(
         False, "--sync-all",
@@ -698,13 +699,13 @@ def set_precon_list(
 
     Track precon decks AS UNITS. In ``--mode add`` (default) fill a single
     ``acquired_qty`` per product — how many copies you got — and ingest SPLITS
-    them into built / deconstructed / pool for you (net-new buildable → 1 built +
-    rest deconstructed; already-built → all deconstructed; card-pool products →
-    pool), so you never have to know your prior collection at fill time. In
-    ``--mode modify`` three per-state columns (``constructed_qty`` /
-    ``deconstructed_qty`` / ``pool_qty``) are prefilled from your current deck
-    collection (counts derived from the decks table) and ingest applies the
-    signed delta — use it to correct absolute counts.
+    them into built / deconstructed for you (net-new buildable → 1 built + rest
+    deconstructed; already-built → all deconstructed; products with no real
+    decklist → all deconstructed), so you never have to know your prior
+    collection at fill time. In ``--mode modify`` two per-state columns
+    (``constructed_qty`` / ``deconstructed_qty``) are prefilled from your
+    current deck collection (counts derived from the decks table) and ingest
+    applies the signed delta — use it to correct absolute counts.
 
     Scope defaults to the modern-constructed precon types; ``--type`` narrows to
     one, ``--all-physical`` opens it to everything. Collector's Edition variants
@@ -746,7 +747,7 @@ def set_precon_list(
 
     typer.echo("Cataloging precons across all sets (reading MTGJSON per-deck files; first run may take a moment)…")
     if mode == "modify":
-        typer.echo("  --mode modify: constructed_qty/deconstructed_qty/pool_qty prefilled from your current deck collection.")
+        typer.echo("  --mode modify: constructed_qty/deconstructed_qty prefilled from your current deck collection.")
     if sync_all:
         typer.echo("  --sync-all: will sync every referenced set from Scryfall first (this is the slow part)…")
     writer = (
@@ -767,14 +768,14 @@ def set_precon_list(
     typer.echo("Next steps:")
     if mode == "modify":
         if fmt == "md":
-            typer.echo(f"  1. Open {out_path} in any text editor and edit the `[C:c D:d P:p]` brackets (absolute per-state counts).")
+            typer.echo(f"  1. Open {out_path} in any text editor and edit the `[C:c D:d]` brackets (absolute per-state counts).")
         else:
-            typer.echo(f"  1. Open {out_path} in Excel/Numbers — edit constructed_qty/deconstructed_qty/pool_qty per deck (absolute counts).")
+            typer.echo(f"  1. Open {out_path} in Excel/Numbers — edit constructed_qty/deconstructed_qty per deck (absolute counts).")
     else:
         if fmt == "md":
             typer.echo(f"  1. Open {out_path} in any text editor and edit the `[A:n]` brackets (A=copies acquired; ingest splits the states).")
         else:
-            typer.echo(f"  1. Open {out_path} in Excel/Numbers — fill acquired_qty per deck (copies acquired; ingest splits built/deconstructed/pool).")
+            typer.echo(f"  1. Open {out_path} in Excel/Numbers — fill acquired_qty per deck (copies acquired; ingest splits built/deconstructed).")
     typer.echo(f"  2. When done: mm set ingest --path {out_path}")
 
 
@@ -836,11 +837,10 @@ def _ingest_deck_checklist(src: Path, *, kind: str, sha: str, force: bool,
     # set); its rows each name their own set. Fall back to a bare kind label.
     set_code = meta.get("anchor_code") or meta.get("set_codes") or ""
     log_label = f"{kind}:{set_code}" if set_code else kind
-    # Unified summary shape: ``built`` copies added, ``deconstructed`` + ``pool``
+    # Unified summary shape: ``built`` copies added, ``deconstructed``
     # torn-down/loose copies added.
     rows_added = (summary or {}).get("built", 0)
-    rows_updated = ((summary or {}).get("deconstructed", 0)
-                    + (summary or {}).get("pool", 0))
+    rows_updated = (summary or {}).get("deconstructed", 0)
     with db.connect() as conn:
         db.record_ingest_log(
             conn,
@@ -882,7 +882,7 @@ def _ingest_deck_checklist(src: Path, *, kind: str, sha: str, force: bool,
         raise typer.Exit(2)
 
     scope_seg = f" ({set_code})" if set_code else ""
-    # Two summary shapes share the unified built/deconstructed/pool tallies:
+    # Two summary shapes share the unified built/deconstructed tallies:
     #   - MODIFY precon rows carry ``count_before``/``count_after`` (signed delta).
     #   - ADD rows (jumpstart + precon add) carry ``acquired_qty``/``net_new``.
     is_modify = bool(summary["per_row"]) and "count_before" in summary["per_row"][0]
@@ -891,7 +891,6 @@ def _ingest_deck_checklist(src: Path, *, kind: str, sha: str, force: bool,
         f"{summary['rows_acted']}/{summary['rows_total']} rows acted on, "
         f"{summary['built']} built, "
         f"{summary['deconstructed']} deconstructed, "
-        f"{summary['pool']} pooled, "
         f"{summary['inv_qty_total']} card-qty added to inventory."
     )
     for row in summary["per_row"]:
@@ -899,24 +898,21 @@ def _ingest_deck_checklist(src: Path, *, kind: str, sha: str, force: bool,
             typer.echo(f"  ! {row['file_name']}: {row['error']}", err=True)
             continue
         if is_modify:
-            bc, bd, bp = row["count_before"]
-            ac, ad, ap = row["count_after"]
+            bc, bd = row["count_before"]
+            ac, ad = row["count_after"]
             typer.echo(
                 f"  {row['file_name']} ({row['label']}): "
-                f"built {bc}→{ac}, deconstructed {bd}→{ad}, pool {bp}→{ap}"
+                f"built {bc}→{ac}, deconstructed {bd}→{ad}"
                 + (f"  [+{row['built']} built]" if row["built"] else "")
                 + (f"  [+{row['torn_down']} torn down]" if row["torn_down"] else "")
-                + (f"  [+{row['pooled']} pooled]" if row["pooled"] else "")
             )
         else:
-            # add mode: acquired copies split into built/decon/pool.
+            # add mode: acquired copies split into built/deconstructed.
             parts = []
             if row["built"]:
                 parts.append(f"{row['built']} built → {row['slug']}")
             if row["torn_down"]:
                 parts.append(f"{row['torn_down']} deconstructed")
-            if row["pooled"]:
-                parts.append(f"{row['pooled']} pooled")
             tag = "net-new" if row.get("net_new") else "duplicate → auto-deconstructed"
             typer.echo(
                 f"  {row['file_name']} ({row['label']}): "
@@ -1582,12 +1578,12 @@ def wishlist_import_cmd(
 @deck_app.command("ls")
 def deck_ls_cmd():
     """List every deck. The ``state`` column flags precon units that aren't
-    built playable decks: ``decon`` (torn down for parts) or ``pool`` (a card
-    pool — Starter Collection / Scene Box — that was never a deck)."""
+    built playable decks: ``decon`` (torn down for parts, or a product with no
+    real decklist — Starter Collection / Scene Box)."""
     ds = decks_mod.deck_list()
     if not ds:
         typer.echo("(no decks)"); return
-    _state_flag = {"built": "", "deconstructed": "decon", "pool": "pool"}
+    _state_flag = {"built": "", "deconstructed": "decon"}
     typer.echo(f"{'slug':30} {'name':40} {'format':12} {'state':6} {'updated_at'}")
     for d in ds:
         flags = _state_flag.get(getattr(d, "precon_state", "built"), "")
@@ -1796,11 +1792,10 @@ def deck_import_precon_cmd(
     ),
     state: str = typer.Option(
         None, "--state",
-        help="Precon unit state: 'built' (assembled deck, cards pledged), "
-             "'deconstructed' (torn down for parts — recipe kept, cards loose), "
-             "or 'pool' (a card pool like the Starter Collection / a Scene Box "
-             "— never a deck; cards loose, marker row). Default: auto-detected "
-             "(pool for pool-like products, else built).",
+        help="Precon unit state: 'built' (assembled deck, cards pledged) or "
+             "'deconstructed' (torn down for parts — recipe kept, cards loose). "
+             "Default: auto-detected (deconstructed for products with no real "
+             "decklist — Starter Collection, Scene Box — else built).",
     ),
     deconstruct: bool = typer.Option(
         False, "--deconstruct", hidden=True,
@@ -1816,10 +1811,11 @@ def deck_import_precon_cmd(
     Creates one deck row (carrying the MTGJSON fileName, so precon unit counts
     derive straight from the decks table) AND adds the cards to inventory. The
     row's ``--state`` decides handling: ``built`` pledges a physical copy;
-    ``deconstructed`` / ``pool`` leave cards loose. When ``--state`` is omitted
-    it's auto-detected — pool-like products (Starter Collection, Scene Box)
-    default to ``pool``, everything else to ``built`` — and the choice is
-    printed. This and the precon checklist feed one source of truth (no ledger).
+    ``deconstructed`` leaves cards loose. When ``--state`` is omitted it's
+    auto-detected — products with no real decklist (Starter Collection, Scene
+    Box) default to ``deconstructed``, everything else to ``built`` — and the
+    choice is printed. This and the precon checklist feed one source of truth
+    (no ledger).
 
     The MTGJSON Card(Deck) entries carry `identifiers.scryfallId` which maps
     directly to our cards table. No Scryfall API calls; the precon JSON is
@@ -1827,8 +1823,8 @@ def deck_import_precon_cmd(
     """
     # Resolve the state: explicit --state > --deconstruct alias > auto-detect.
     if state is not None:
-        if state not in ("built", "deconstructed", "pool"):
-            typer.echo(f"error: --state must be built|deconstructed|pool, got {state!r}", err=True)
+        if state not in ("built", "deconstructed"):
+            typer.echo(f"error: --state must be built|deconstructed, got {state!r}", err=True)
             raise typer.Exit(2)
         resolved_state = state
     elif deconstruct:
@@ -1837,11 +1833,12 @@ def deck_import_precon_cmd(
         resolved_state = "built"  # unused (no row created), keep valid
     else:
         resolved_state = mtgjson_mod.default_precon_state(file_name, name=name)
-        if resolved_state == "pool":
+        if resolved_state == "deconstructed":
             typer.echo(
-                f"ℹ auto-detected a card POOL (not a playable deck) → recording as "
-                f"pool: cards go loose in inventory, no pledged deck. "
-                f"Override with --state built if you really want a deck.",
+                f"ℹ auto-detected a product with no real decklist (not a playable "
+                f"deck) → recording as deconstructed: cards go loose in inventory, "
+                f"no pledged deck. Override with --state built if you really want "
+                f"a deck.",
             )
     try:
         result = decks_mod.import_precon(
@@ -1865,7 +1862,7 @@ def deck_import_precon_cmd(
     effective_slugs = result["effective_slugs"]
     if not merge_inventory and resolved_state != "built":
         slug_list = ", ".join(effective_slugs) or "(none)"
-        label = "torn-down copy" if resolved_state == "deconstructed" else "card pool"
+        label = "torn-down copy"
         typer.echo(
             f"Imported precon {deck_name!r} as {resolved_state} ({label}): "
             f"marker deck {slug_list}, cards loose in inventory — "
@@ -2073,10 +2070,6 @@ def deck_add_precon_cmd(
         None, "--deconstructed", "-d", min=0,
         help="Torn-down copies to add per deck (loose cards, marker deck row).",
     ),
-    pool: int = typer.Option(
-        None, "--pool", "-p", min=0,
-        help="Card-pool copies to add per deck (Starter Collection / Scene Box — cards loose, marker row).",
-    ),
     want_all: bool = typer.Option(
         False, "--all",
         help="With a set code: add EVERY physical precon in the set (no name query).",
@@ -2096,8 +2089,8 @@ def deck_add_precon_cmd(
     The one-liner form of filling a precon checklist: resolve the deck(s), then
     run the same deck+inventory transaction the checklist ingest uses. Precon
     unit counts are DERIVED from the ``decks`` table (each copy is a deck row
-    carrying the MTGJSON fileName + a precon_state of built/deconstructed/pool),
-    so both this and ``mm deck import-precon`` feed the same single source of
+    carrying the MTGJSON fileName + a precon_state of built/deconstructed), so
+    both this and ``mm deck import-precon`` feed the same single source of
     truth — there's no separate ledger to keep in sync.
 
     Selection:
@@ -2111,12 +2104,13 @@ def deck_add_precon_cmd(
 
     Additive: re-running adds ANOTHER copy (built 1→2). Remove a copy with
     ``mm deck delete <slug>``. If you pass NO count flags, the state is
-    auto-detected per deck — pool-like products (Starter Collection, Scene Box)
-    default to one ``pool`` copy, everything else to one ``built`` copy.
+    auto-detected per deck — products with no real decklist (Starter
+    Collection, Scene Box) default to one ``deconstructed`` copy, everything
+    else to one ``built`` copy.
     """
-    explicit = any(v is not None for v in (constructed, deconstructed, pool))
-    if explicit and not (constructed or deconstructed or pool):
-        typer.echo("error: nothing to add — pass --constructed / --deconstructed / --pool > 0.", err=True)
+    explicit = any(v is not None for v in (constructed, deconstructed))
+    if explicit and not (constructed or deconstructed):
+        typer.echo("error: nothing to add — pass --constructed / --deconstructed > 0.", err=True)
         raise typer.Exit(2)
 
     try:
@@ -2131,21 +2125,21 @@ def deck_add_precon_cmd(
     # Build the in-memory precon checklist (add mode) and run the shared engine —
     # the deck+inventory transaction the checklist ingest uses. No XLSX round-trip.
     # When the user gave explicit counts, use them verbatim for every deck.
-    # Otherwise auto-detect per deck: pool-like → pool 1, else built 1.
+    # Otherwise auto-detect per deck: no-real-decklist → deconstructed 1, else built 1.
     from . import parsers as _parsers
     rows = []
-    auto_pooled = []
+    auto_deconstructed = []
     for d in decks:
         if explicit:
-            c, dq, p = (constructed or 0), (deconstructed or 0), (pool or 0)
+            c, dq = (constructed or 0), (deconstructed or 0)
         else:
             st = mtgjson_mod.default_precon_state(d["fileName"], name=d.get("name"))
-            c, dq, p = (0, 0, 1) if st == "pool" else (1, 0, 0)
-            if st == "pool":
-                auto_pooled.append(d.get("name") or d["fileName"])
+            c, dq = (0, 1) if st == "deconstructed" else (1, 0)
+            if st == "deconstructed":
+                auto_deconstructed.append(d.get("name") or d["fileName"])
         rows.append(_parsers.JumpstartRow(
             file_name=d["fileName"], theme=d.get("name") or "",
-            keep_qty=c, deconstructed_qty=dq, pool_qty=p,
+            keep_qty=c, deconstructed_qty=dq,
         ))
     parsed = _parsers.JumpstartParseResult(
         rows=rows, warnings=[], meta={"kind": "precon", "mode": "add"},
@@ -2157,23 +2151,23 @@ def deck_add_precon_cmd(
         sys.stdout.write("\n")
         return
 
-    if auto_pooled:
+    if auto_deconstructed:
         typer.echo(
-            f"ℹ auto-detected {len(auto_pooled)} card pool(s) (not playable decks) → "
-            f"recorded as pool (cards loose): {', '.join(auto_pooled)}. "
-            f"Override with --constructed/-c."
+            f"ℹ auto-detected {len(auto_deconstructed)} product(s) with no real "
+            f"decklist (not playable decks) → recorded as deconstructed (cards "
+            f"loose): {', '.join(auto_deconstructed)}. Override with --constructed/-c."
         )
     typer.echo(
         f"Added precons: {summary['rows_acted']} deck(s) changed — "
         f"{summary['built']} built, {summary['deconstructed']} torn down, "
-        f"{summary['pool']} pooled, {summary['inv_qty_total']} cards added."
+        f"{summary['inv_qty_total']} cards added."
     )
     for pr in summary["per_row"]:
-        bc, bd, bp = pr["count_before"]
-        ac, ad, ap = pr["count_after"]
+        bc, bd = pr["count_before"]
+        ac, ad = pr["count_after"]
         typer.echo(
             f"  {pr['label']} ({pr['file_name']}): "
-            f"built {bc}→{ac}, deconstructed {bd}→{ad}, pool {bp}→{ap}"
+            f"built {bc}→{ac}, deconstructed {bd}→{ad}"
         )
         if pr.get("warning"):
             typer.echo(f"    warning: {pr['warning']}", err=True)

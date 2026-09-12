@@ -83,7 +83,7 @@ def test_jumpstart_md_roundtrips_A_bracket(tmp_db, tmp_path, monkeypatch):
 
 
 def test_md_parser_accepts_both_brackets():
-    """The shared MD regex reads add-mode [A:n] AND modify-mode [C:c D:d P:p]."""
+    """The shared MD regex reads add-mode [A:n] AND modify-mode [C:c D:d]."""
     from magic_manager import parsers
     import tempfile
     from pathlib import Path
@@ -91,7 +91,7 @@ def test_md_parser_accepts_both_brackets():
     body = (
         "---\nkind: precon\nmode: add\n---\n\n"
         "- IronMan_MSH — Iron Man — R — 20 cards — $7.00 [A:3]\n"
-        "- Wild_MSH — Wild — G — 20 cards — $8.00 [C:1 D:2 P:0]\n"
+        "- Wild_MSH — Wild — G — 20 cards — $8.00 [C:1 D:2]\n"
     )
     with tempfile.TemporaryDirectory() as d:
         p = Path(d) / "x.md"
@@ -100,7 +100,6 @@ def test_md_parser_accepts_both_brackets():
     by_fn = {r.file_name: r for r in parsed.rows}
     assert by_fn["IronMan_MSH"].acquired_qty == 3
     assert (by_fn["IronMan_MSH"].keep_qty, by_fn["IronMan_MSH"].deconstructed_qty) == (0, 0)
-    # Modify-style line: construct/decon/pool populated, acquired stays 0.
+    # Modify-style line: construct/decon populated, acquired stays 0.
     assert by_fn["Wild_MSH"].acquired_qty == 0
-    assert (by_fn["Wild_MSH"].keep_qty, by_fn["Wild_MSH"].deconstructed_qty,
-            by_fn["Wild_MSH"].pool_qty) == (1, 2, 0)
+    assert (by_fn["Wild_MSH"].keep_qty, by_fn["Wild_MSH"].deconstructed_qty) == (1, 2)
