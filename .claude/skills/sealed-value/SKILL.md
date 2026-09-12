@@ -7,10 +7,12 @@ description: Deterministic card-value estimate for sealed MTG product(s) — Boo
 
 Deterministic, script-driven sealed-product card valuator — for ONE product or
 MANY. Claude routes the request (below), runs the deterministic script(s), and
-relays the stdout table + `queries/` artifact paths. No inline arithmetic — the
-scripts are the single source of truth. EV weights come from MTGJSON's published
-per-card booster sheets (exact WotC weighting, not a rarity average), so the
-historically-hard "how likely is each card" problem is solved by data.
+presents the result as a clean markdown chart + the `queries/` artifact paths.
+The scripts do all the arithmetic (single source of truth); the agent's job is to
+render their numbers as a **complete, well-formatted table in chat** — every
+requested product a row, nothing silently dropped. EV weights come from MTGJSON's
+published per-card booster sheets (exact WotC weighting, not a rarity average),
+so the historically-hard "how likely is each card" problem is solved by data.
 
 ## Input routing — decide this FIRST
 
@@ -59,20 +61,40 @@ A thin chain over three existing deterministic pieces — no new logic:
      ```
    - Pasted list of links / a cart page → use those URLs directly (WebFetch the
      cart page for its line-item links if needed).
-2. **Resolve each product URL to an MTGJSON identity** via the shared recipe in
+2. **Classify EVERY tab, then resolve the product ones.** First split the tabs
+   into **product tabs** (a specific sealed product / SLD drop for sale) and
+   **non-product tabs** (Gmail, docs, searches, *cart* pages, single-card pages).
+   Keep an explicit list of both — you must account for every tab in the final
+   output, not silently drop any. For each product tab, resolve to an MTGJSON
+   identity via the shared recipe in
    [`_shared/resolve-storefront-product.md`](../_shared/resolve-storefront-product.md)
    (WebFetch/eBay-fallback → propose `set_code`+name or `sld`+drop →
-   `uv run mm resolve-product <set_code> --name "<substr>" [--url <u>]`). Skip
-   non-product tabs (Gmail, docs, searches). Keep the asking price the page shows.
+   `uv run mm resolve-product <set_code> --name "<substr>" [--url <u>]`), keeping
+   the asking price the page shows and an `edition` hint for SLD foil/nonfoil.
 3. **Batch-value the resolved list** — build a JSON array and pipe it in:
    ```bash
    echo '[{"set_code":"afc","product":"Commander Deck Display","asking_price":434.99,"url":"..."},
-          {"set_code":"sld","drop":"Far Out, Man","asking_price":29.99}]' \
+          {"set_code":"sld","drop":"Far Out, Man","asking_price":29.99,"edition":"foil"}]' \
      | uv run python scripts/sealed_value_batch.py --market chain
    ```
-   Relay the single combined deal table (asking / market / intrinsic / deal-Δ) +
-   the `queries/` artifact. Items that don't resolve appear as error rows (with a
-   candidate list) — refine their `--name` and re-run just those if the user cares.
+4. **Relay a COMPLETE, well-formatted chart in chat — always.** Do NOT paste the
+   raw script stdout; render your own clean markdown table so it displays nicely,
+   and make it EXHAUSTIVE — **every product tab is a row**, in a stable order
+   (group by store or by value; your call, but include them all). The columns are
+   fixed: **Product | Listing | Sealed mkt (±) | Exact singles (±) | Floor (±)**,
+   copying the script's `fmt_delta_cell` cells verbatim (value with the in-paren
+   delta). Rows the batch couldn't value still appear — with `—` in the value
+   cells and a short reason (delisted/404, no market comp, unresolved name). After
+   the table, add:
+   - a **one-line coverage note**: `N tabs → M valued, K product tabs unpriced
+     (reason), P non-product tabs skipped (listed below)`, so nothing is silently
+     missing;
+   - the skipped **non-product tabs** named briefly (so the user sees they were
+     considered, not lost);
+   - a short **deal read** (best deals = positive Sealed-mkt delta; overpriced =
+     negative), then the `queries/` artifact path.
+   If a product tab won't resolve, try once more with a better `--name` substring
+   before listing it as unpriced; never omit it.
 
 ## The canonical recipe (single product — the bypass branch)
 
