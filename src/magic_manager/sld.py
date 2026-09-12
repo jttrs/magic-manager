@@ -152,8 +152,11 @@ def identify_drop(name_substr: str) -> dict:
 
     Matching is PUNCTUATION-INSENSITIVE (store titles drop the comma in "Far Out,
     Man"): exact match on the normalized canonical name wins; else a unique
-    normalized-substring match. Raises ``LookupError`` (with candidates) on no
-    match or ambiguity."""
+    normalized-substring match. When several names contain the query (e.g. the
+    query "… Beholder I" is a substring of "… Beholder II"), a candidate whose
+    name ENDS WITH the query — a suffix match, meaning the query is the full
+    trailing title — wins if unique. Raises ``LookupError`` (with candidates) on
+    no match or genuine ambiguity."""
     groups = all_drops()
     want = _norm_name(name_substr)
     exact = [g for g in groups.values() if _norm_name(g.get("name")) == want]
@@ -162,6 +165,12 @@ def identify_drop(name_substr: str) -> dict:
     subs = [g for g in groups.values() if want in _norm_name(g.get("name"))]
     if len(subs) == 1:
         return subs[0]
+    # Disambiguate "X I" vs "X II": prefer a candidate ending exactly with the
+    # query (so "… Beholder I" doesn't ambiguously match "… Beholder II").
+    if len(subs) > 1:
+        suffix = [g for g in subs if _norm_name(g.get("name")).endswith(want)]
+        if len(suffix) == 1:
+            return suffix[0]
     if not subs:
         raise LookupError(
             f"no Secret Lair drop matching {name_substr!r}. "
@@ -251,6 +260,18 @@ def value_drop(drop: dict, *, floors: bool = True,
     if _floors_cache is None:
         _floors_cache = {}
 
+    # Pre-warm ALL this drop's floors in ONE batched pass (chunked OR-search),
+    # not one Scryfall call per card. Only the oracle_ids not already cached from
+    # an earlier drop are fetched; the shared _floors_cache dedups across drops.
+    if floors:
+        need_oids = [
+            oid for sid in ids
+            if (card := _card_by_id.get(sid)) is not None
+            and (oid := card.get("oracle_id")) and oid not in _floors_cache
+        ]
+        if need_oids:
+            _floors_cache.update(card_floors_many(need_oids))
+
     nf_total = foil_total = nf_floor_total = foil_floor_total = 0.0
     nf_ct = foil_ct = nf_floor_ct = foil_floor_ct = 0
     cns: list[str] = []
@@ -269,8 +290,6 @@ def value_drop(drop: dict, *, floors: bool = True,
             foil_ct += 1
         if floors:
             oid = card.get("oracle_id")
-            if oid and oid not in _floors_cache:
-                _floors_cache[oid] = card_floors(oid)
             nf_floor, foil_floor = _floors_cache.get(oid, (None, None))
             if nf_floor is not None:
                 nf_floor_total += nf_floor
