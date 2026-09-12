@@ -90,9 +90,53 @@ def card_floors_many(oracle_ids: list[str]) -> dict[str, tuple[float | None, flo
 # ---------- drop discovery / identity ----------
 
 def strip_foil_edition(name: str) -> str:
-    """Drop the ``" Foil Edition"`` suffix (for merging base+foil siblings)."""
+    """Drop the ``" Foil Edition"`` suffix (for merging base+foil siblings in the
+    DeckList, where the foil variant is named exactly ``… Foil Edition``)."""
     suffix = " Foil Edition"
     return name[: -len(suffix)] if name.endswith(suffix) else name
+
+
+def normalize_name(s: str) -> str:
+    """Canonical match key for Secret Lair names across data sources.
+
+    Store titles, MTGJSON DeckList names, and MTGJSON sealedProduct names spell
+    the same drop differently (``"Far Out, Man"`` vs ``"Far Out Man"``;
+    ``"Dungeons & Dragons"`` vs ``"Dungeons and Dragons"``; ``"Marvel's Storm"``
+    vs ``"Marvels Storm"``). Normalize by mapping ``&`` → ``and``, DELETING
+    apostrophes (so a possessive ``'s`` stays one token: ``marvels``, not
+    ``marvel s``), then collapsing every run of non-alphanumerics to one space,
+    lowercased. The single source of matching truth for ``identify_drop`` and the
+    sealed-market resolver."""
+    s = (s or "").lower().replace("&", " and ").replace("'", "").replace("’", "")
+    return re.sub(r"[^a-z0-9]+", " ", s).strip()
+
+
+# Finish markers a sealedProduct name may carry (the DeckList uses only "Foil
+# Edition", but sealedProduct names use "Rainbow Foil", bare "Foil", etc.).
+# Stripped ONLY when matching a sealedProduct to a drop (not in group_drops).
+_FINISH_MARKERS = (
+    "rainbow foil edition", "rainbow foil", "traditional foil edition",
+    "traditional foil", "foil edition", "non foil edition", "non foil", "foil",
+)
+
+
+def strip_finish_marker(normalized: str) -> str:
+    """From an already-``normalize_name``d string, drop a trailing finish marker
+    (rainbow/traditional/plain foil, non-foil) so a foil sealedProduct's core
+    name matches its base drop. Also drops a leading ``secret lair x`` /
+    ``secret lair drop`` / ``secret lair promo x`` scaffold the sealedProduct
+    names carry but the drop names don't."""
+    s = normalized
+    for prefix in ("secret lair drop secret lair x ", "secret lair drop secret lair promo x ",
+                   "secret lair drop ", "secret lair x ", "secret lair promo x "):
+        if s.startswith(prefix):
+            s = s[len(prefix):]
+            break
+    for m in _FINISH_MARKERS:
+        if s.endswith(" " + m):
+            s = s[: -len(m) - 1]
+            break
+    return s.strip()
 
 
 def group_drops(entries: list[dict]) -> dict[str, dict]:
@@ -139,13 +183,6 @@ def recent_drops(n: int) -> tuple[list[dict], int]:
     return chosen[:n], len(groups)
 
 
-def _norm_name(s: str) -> str:
-    """Punctuation-insensitive name key: lowercased, non-alphanumerics collapsed
-    to single spaces. So a store's 'Far Out Man' matches the canonical 'Far Out,
-    Man' (and 'Death is in the Eyes of the Beholder I' isn't tripped by commas)."""
-    return re.sub(r"[^a-z0-9]+", " ", (s or "").lower()).strip()
-
-
 def identify_drop(name_substr: str) -> dict:
     """Resolve a SLD drop by name (exact→unique-substring), mirroring
     ``sealed.identify_product``'s contract.
@@ -158,17 +195,17 @@ def identify_drop(name_substr: str) -> dict:
     trailing title — wins if unique. Raises ``LookupError`` (with candidates) on
     no match or genuine ambiguity."""
     groups = all_drops()
-    want = _norm_name(name_substr)
-    exact = [g for g in groups.values() if _norm_name(g.get("name")) == want]
+    want = normalize_name(name_substr)
+    exact = [g for g in groups.values() if normalize_name(g.get("name")) == want]
     if exact:
         return exact[0]
-    subs = [g for g in groups.values() if want in _norm_name(g.get("name"))]
+    subs = [g for g in groups.values() if want in normalize_name(g.get("name"))]
     if len(subs) == 1:
         return subs[0]
     # Disambiguate "X I" vs "X II": prefer a candidate ending exactly with the
     # query (so "… Beholder I" doesn't ambiguously match "… Beholder II").
     if len(subs) > 1:
-        suffix = [g for g in subs if _norm_name(g.get("name")).endswith(want)]
+        suffix = [g for g in subs if normalize_name(g.get("name")).endswith(want)]
         if len(suffix) == 1:
             return suffix[0]
     if not subs:

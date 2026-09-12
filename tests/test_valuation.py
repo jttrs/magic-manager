@@ -171,3 +171,49 @@ def test_value_sld_drop_maps_columns(monkeypatch):
     pv2 = valuation.value_sld_drop("far out", listing=45.0, market="stub", edition="foil")
     assert pv2.finish == "foil"
     assert pv2.exact_singles == 79.43 and pv2.floor_singles == 28.23
+
+
+# ---------- regression: the real-name matching bugs behind blank cells ----------
+
+def test_sld_sealed_market_marvels_storm_x_scaffold_apostrophe(monkeypatch):
+    # Drop "Marvel's Storm" vs product "… Secret Lair x Marvels Storm": the x
+    # scaffold + apostrophe broke the old whole-string match.
+    products = [
+        {"name": "Secret Lair Drop Secret Lair x Marvels Storm",
+         "identifiers": {"tcgplayerProductId": 111}},
+        {"name": "Secret Lair Drop Secret Lair x Marvels Storm Rainbow Foil",
+         "identifiers": {"tcgplayerProductId": 112}},
+    ]
+    _patch_sld_market(monkeypatch, products, _Provider({111: 90.0, 112: 96.98}))
+    assert valuation.sld_sealed_market("Marvel's Storm", "foil", market="stub")[0] == 96.98
+    assert valuation.sld_sealed_market("Marvel's Storm", "auto", market="stub")[0] == 90.0
+
+
+def test_sld_sealed_market_beholder_amp_and(monkeypatch):
+    # "Dungeons & Dragons" (drop) vs "Dungeons and Dragons" (product).
+    products = [
+        {"name": "Secret Lair Drop Secret Lair x Dungeons and Dragons Death is in the Eyes of the Beholder I",
+         "identifiers": {"tcgplayerProductId": 201}},
+        {"name": "Secret Lair Drop Secret Lair x Dungeons and Dragons Death is in the Eyes of the Beholder I Rainbow Foil",
+         "identifiers": {"tcgplayerProductId": 202}},
+    ]
+    _patch_sld_market(monkeypatch, products, _Provider({201: 49.99, 202: 55.0}))
+    price, _ = valuation.sld_sealed_market(
+        "Dungeons & Dragons: Death is in the Eyes of the Beholder I", "foil", market="stub")
+    assert price == 55.0
+
+
+def test_value_sld_drop_foil_fallback_to_nonfoil(monkeypatch):
+    # Foil edition, but the cards are only priced nonfoil (usd_foil null → foil
+    # totals are 0). Must fall back to the nonfoil sum, not blank it.
+    from magic_manager import sld
+    monkeypatch.setattr(sld, "identify_drop", lambda s: {"name": "Featuring: Julie Bell"})
+    monkeypatch.setattr(sld, "value_drop", lambda drop, **k: type("V", (), {
+        "name": "Featuring: Julie Bell", "nonfoil_total": 59.65, "foil_total": 0.0,
+        "nf_floor_total": 41.16, "foil_floor_total": 0.0})())
+    monkeypatch.setattr(valuation, "sld_sealed_market", lambda name, ed, **k: (44.99, "stub"))
+    pv = valuation.value_sld_drop("julie bell", market="stub", edition="foil")
+    assert pv.exact_singles == 59.65          # fell back to nonfoil, not $0/blank
+    assert pv.floor_singles == 41.16
+    assert pv.finish == "nonfoil"             # reflects what was actually used
+    assert any("nonfoil" in d for d in pv.diagnostics)   # transparency diagnostic

@@ -159,3 +159,25 @@ def test_search_url_sorted_cns(monkeypatch):
     # strips ★/space, sorts numerically → cn:1 or cn:2 or cn:3
     assert "cn%3A1" in url and "cn%3A2" in url and "cn%3A3" in url
     assert url.index("cn%3A1") < url.index("cn%3A3")
+
+
+# ---------- normalize_name + strip_finish_marker (matching robustness) ----------
+
+def test_normalize_name_handles_punct_amp_apostrophe():
+    n = sld.normalize_name
+    assert n("Far Out, Man") == "far out man"                    # comma dropped
+    assert n("Dungeons & Dragons") == "dungeons and dragons"     # & → and
+    assert n("Marvel's Storm") == "marvels storm"                # apostrophe deleted, not split
+    assert n("Marvel’s Storm") == "marvels storm"                # curly apostrophe too
+
+
+def test_strip_finish_marker_prefix_and_suffix():
+    s = sld.strip_finish_marker
+    N = sld.normalize_name
+    # DeckList drop vs sealedProduct name reduce to the same core:
+    assert s(N("Marvel's Storm")) == "marvels storm"
+    assert s(N("Secret Lair Drop Secret Lair x Marvels Storm")) == "marvels storm"
+    assert s(N("Secret Lair Drop Secret Lair x Marvels Storm Rainbow Foil")) == "marvels storm"
+    # Dungeons & Dragons ↔ and, plus the x-scaffold:
+    assert (s(N("Dungeons & Dragons: Death is in the Eyes of the Beholder I"))
+            == s(N("Secret Lair Drop Secret Lair x Dungeons and Dragons Death is in the Eyes of the Beholder I")))

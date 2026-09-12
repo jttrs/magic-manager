@@ -163,42 +163,41 @@ def sld_sealed_market(drop_name: str, edition: str = "auto",
 
     Secret Lair drops DO have MTGJSON ``sealedProduct`` entries (base + foil
     editions, carrying tcgplayerProductId/uuid), so they price through the same
-    provider seam as any sealed product. Matches ``sealed_products("sld")`` names
-    to ``drop_name`` (stripping the ``"Secret Lair Drop "`` prefix + ``" Foil
-    Edition"`` suffix), picks base vs foil per ``edition`` ("foil" → foil product,
-    else base), and prices via ``sealed._market_meta`` + the provider chain.
-    Returns ``(price_or_None, source_or_None)`` — None when no sealedProduct
-    matches (older drops predate the entries) or nothing prices it."""
+    provider seam as any sealed product. Matching is robust to the naming
+    differences between the DeckList drop name and the sealedProduct name — the
+    shared ``sld.normalize_name`` (``&``→``and``, punctuation-insensitive) plus
+    ``sld.strip_finish_marker`` (drops the ``Secret Lair x`` scaffold + a trailing
+    Rainbow/Traditional/plain Foil / Non-Foil marker), compared by CONTAINMENT so
+    e.g. the drop "Marvel's Storm" matches "Secret Lair Drop Secret Lair x Marvels
+    Storm". Picks base vs foil per ``edition``; prices via ``sealed._market_meta``
+    + the provider chain. Returns ``(price_or_None, source_or_None)`` — None when
+    no sealedProduct matches (older drops predate the entries) or nothing prices it."""
     try:
         products = mtgjson.sealed_products("sld")
         set_data = mtgjson.set_file("sld")
     except Exception:  # noqa: BLE001
         return None, None
 
-    import re
+    # Reduce the drop name and each sealedProduct name to a shared core.
+    want = sld.strip_finish_marker(sld.normalize_name(drop_name))
 
-    def _norm(s: str) -> str:
-        # Punctuation-insensitive: the drop name ("Far Out, Man") and the sealed
-        # product name ("Far Out Man") differ only in punctuation/spacing.
-        return re.sub(r"[^a-z0-9]+", " ", s.lower()).strip()
-
-    want = _norm(sld.strip_foil_edition(drop_name))
-
-    def _canon(p: dict) -> str:
-        n = p.get("name") or ""
-        # MTGJSON SLD sealed names look like "Secret Lair Drop <Name>[ Foil]".
-        n = n[len("Secret Lair Drop "):] if n.lower().startswith("secret lair drop ") else n
-        return _norm(sld.strip_foil_edition(n))
+    def _core(p: dict) -> str:
+        return sld.strip_finish_marker(sld.normalize_name(p.get("name") or ""))
 
     def _is_foil(p: dict) -> bool:
-        return "foil" in (p.get("name") or "").lower()
+        n = (p.get("name") or "").lower()
+        return "foil" in n and "non foil" not in n and "non-foil" not in n
 
-    matches = [p for p in products if _canon(p) == want]
+    # Match by containment (either direction) so prefix/suffix scaffolding a
+    # normalize+strip missed doesn't break an otherwise-clear match.
+    matches = [p for p in products
+               if (c := _core(p)) and (c == want or c.endswith(want) or want in c)]
     if not matches:
         return None, None
     want_foil = edition == "foil"
-    # Prefer the edition that matches; fall back to the other if only one exists.
-    picked = next((p for p in matches if _is_foil(p) == want_foil), matches[0])
+    # Prefer the requested edition; else take any match (base if present).
+    picked = next((p for p in matches if _is_foil(p) == want_foil),
+                  next((p for p in matches if not _is_foil(p)), matches[0]))
 
     provider = sealed.make_market_provider(market)
     meta = sealed._market_meta(picked, set_data)
@@ -226,19 +225,40 @@ def value_sld_drop(
     v = sld.value_drop(drop, floors=floors, _card_by_id=_card_by_id,
                        _floors_cache=_floors_cache)
     foil = edition == "foil"
-    exact = v.foil_total if foil else v.nonfoil_total
-    floor = v.foil_floor_total if foil else v.nf_floor_total
-    sealed_mkt, source = sld_sealed_market(v.name, edition, market=market)
     diagnostics = []
+    # Finish handling with fallback: Secret Lair cards come in both finishes but
+    # Scryfall often prices them under a single `usd` (usd_foil null), so a foil
+    # edition's foil_total can be $0 while nonfoil_total is the real value. Use
+    # the requested finish when it has a value, else fall back to the other —
+    # never blank a perfectly-good priced sum.
+    exact, used_finish = _pick_with_fallback(
+        v.foil_total, v.nonfoil_total, "foil" if foil else "nonfoil")
+    floor, _ = _pick_with_fallback(
+        v.foil_floor_total, v.nf_floor_total, "foil" if foil else "nonfoil")
+    if foil and used_finish == "nonfoil":
+        diagnostics.append("foil edition, but Scryfall prices these cards under "
+                           "nonfoil (usd_foil null) — singles/floor use nonfoil")
+
+    sealed_mkt, source = sld_sealed_market(v.name, edition, market=market)
     if sealed_mkt is None:
-        diagnostics.append("no matching Secret Lair sealedProduct on the market "
-                           "(older drop, or not stocked) — sealed-market blank")
+        diagnostics.append("no matching Secret Lair sealedProduct priced on the "
+                           "market (older drop, or not stocked) — sealed-market blank")
     return sealed.ProductValuation(
         label=v.name, kind="sld", listing=listing,
         sealed_market=sealed_mkt, sealed_market_source=source,
         exact_singles=round(exact, 2) if exact else None,
         floor_singles=round(floor, 2) if floor else None,
-        finish="foil" if foil else "nonfoil",
+        finish=used_finish,
         diagnostics=diagnostics,
         note="live Scryfall singles; sealed-market via tcgcsv/manapool by product id",
     )
+
+
+def _pick_with_fallback(foil_val: float, nonfoil_val: float,
+                        prefer: str) -> tuple[float, str]:
+    """Pick the ``prefer`` finish's value if it's truthy, else fall back to the
+    other finish. Returns ``(value, finish_actually_used)`` — so a foil edition
+    whose cards are only priced nonfoil reports the nonfoil sum, not $0."""
+    if prefer == "foil":
+        return (foil_val, "foil") if foil_val else (nonfoil_val, "nonfoil")
+    return (nonfoil_val, "nonfoil") if nonfoil_val else (foil_val, "foil")
