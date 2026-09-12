@@ -36,7 +36,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from magic_manager import construct, ev, mtgjson, scryfall, sealed, sets, sld, util  # noqa: E402
+from magic_manager import construct, ev, mtgjson, scryfall, sealed, sets, sld, util, valuation  # noqa: E402
 
 QUERIES_DIR = ROOT / "queries"
 
@@ -45,6 +45,26 @@ QUERIES_DIR = ROOT / "queries"
 
 def _fmt(v):
     return util.fmt_usd(v)
+
+
+def _render_valuation_summary(pv) -> list[str]:
+    """The unified 4-column summary block (shared by the sealed + SLD paths).
+
+    Listing / Sealed market / Exact singles / Floor singles, with an in-cell delta
+    vs listing (value − listing) in cols 2-4 via util.fmt_delta_cell. Booster-only
+    products tag cols 3/4 'EV' (the value is booster EV, not a fixed-singles sum)."""
+    c3 = util.fmt_delta_cell(pv.exact_singles, pv.listing)
+    c4 = util.fmt_delta_cell(pv.floor_singles, pv.listing)
+    if pv.booster_only:
+        c3, c4 = f"{c3} EV", f"{c4} EV"
+    src = f" ({pv.sealed_market_source})" if pv.sealed_market_source else ""
+    lines = [
+        f"  Listing:        {util.fmt_usd(pv.listing)}",
+        f"  Sealed market:  {util.fmt_delta_cell(pv.sealed_market, pv.listing)}{src}",
+        f"  Exact singles:  {c3}",
+        f"  Floor singles:  {c4}",
+    ]
+    return lines
 
 
 def _find_provider(mp, name: str):
@@ -65,62 +85,44 @@ def _find_provider(mp, name: str):
 # columns. So `sealed_value.py sld "<drop>"` routes here (to the shared sld
 # engine) instead of the sealedProduct tree / booster-EV / local-price path.
 
-def _render_sld(v: "sld.DropValue") -> list[str]:
-    """Render one drop's own-printing totals + floor figures in a sealed-value-
-    shaped block (a drop is all fixed singles, so no tree/EV — just the value)."""
-    own_nf = sld.cell(v.nonfoil_total, v.nonfoil_ct, v.card_count)
-    own_ff = sld.cell(v.foil_total, v.foil_ct, v.card_count)
-    flr_nf = sld.cell(v.nf_floor_total, v.nf_floor_ct, v.card_count)
-    flr_ff = sld.cell(v.foil_floor_total, v.foil_floor_ct, v.card_count)
-    return [
-        f"{v.name}  ({v.card_count} cards, released {v.release_date})",
-        f"  Secret Lair printings   nonfoil {own_nf:>10}   foil {own_ff:>10}",
-        f"  cheapest-anywhere floor  nonfoil {flr_nf:>10}   foil {flr_ff:>10}",
-    ]
-
-
 def _run_sld(args) -> int:
-    """Value ONE named Secret Lair drop (live Scryfall + floor columns)."""
-    try:
-        drop = sld.identify_drop(args.product) if args.product else None
-    except LookupError as e:
-        print(f"error: {e}", file=sys.stderr)
-        return 2
-    if drop is None:
+    """Value ONE named Secret Lair drop via the unified 4-column schema."""
+    if not args.product:
         print("error: `sealed_value.py sld` needs a drop name substring "
               "(e.g. 'far out man'). Use secret_lair_value.py for the recent-N table.",
               file=sys.stderr)
         return 2
-
+    edition = "foil" if args.edition == "foil" else "auto"
     try:
-        v = sld.value_drop(drop, floors=True)
+        pv = valuation.value_sld_drop(args.product, listing=args.listing,
+                                      market=args.market, edition=edition)
+    except LookupError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
     except (mtgjson.MtgJsonError, scryfall.ScryfallError) as e:
         print(f"error: SLD lookup failed: {e}", file=sys.stderr)
         return 2
 
     meta = mtgjson.meta()
-    print(f"\n## Sealed value — {v.name} (Secret Lair Drop)"
+    print(f"\n## Sealed value — {pv.label} (Secret Lair Drop, {pv.finish})"
           f"   [prices as of {meta.get('date', '?')}]")
-    for line in _render_sld(v):
+    summary = _render_valuation_summary(pv)
+    for line in summary:
         print(line)
-    print()
-    print(f"TOTALS  own-printing nonfoil {_fmt(round(v.nonfoil_total, 2))} / "
-          f"foil {_fmt(round(v.foil_total, 2))}   ·   floor nonfoil "
-          f"{_fmt(round(v.nf_floor_total, 2))} / foil {_fmt(round(v.foil_floor_total, 2))}")
-    print(f"Drop singles: {v.search_url}")
-    print("(Secret Lair prices are LIVE Scryfall; floor = cheapest printing of each "
-          "card anywhere — no local sync needed.)")
+    if pv.note:
+        print(f"  · {pv.note}")
+    for d in pv.diagnostics:
+        print(f"  · {d}")
 
-    # Artifact: a small txt with the block + the drop's Scryfall search link.
     args.out_dir.mkdir(parents=True, exist_ok=True)
     from datetime import UTC, datetime
     ts = datetime.now(UTC).strftime("%Y-%m-%d-%H%M%S")
-    slug = "".join(c if c.isalnum() else "-" for c in v.name.lower()).strip("-")
+    slug = "".join(c if c.isalnum() else "-" for c in pv.label.lower()).strip("-")
     slug = "-".join(filter(None, slug.split("-")))[:60]
     if args.format in ("txt", "all"):
         p = args.out_dir / f"sealed-value-sld-{slug}-{ts}.txt"
-        body = _render_sld(v) + ["", f"Drop singles: {v.search_url}"]
-        p.write_text("\n".join(body) + "\n", encoding="utf-8")
+        p.write_text("\n".join([f"## {pv.label} (Secret Lair Drop, {pv.finish})"]
+                               + summary) + "\n", encoding="utf-8")
         print(f"  → {p}")
     return 0
 
@@ -325,6 +327,10 @@ def main() -> int:
     ap.add_argument("--ebay-inspection", action="store_true",
                     help="With --ebay, also include like-new/near-mint 'opened for "
                          "inspection' listings, not just factory-sealed.")
+    ap.add_argument("--listing", "--asking", type=float, default=None, dest="listing",
+                    help="The store's asking/listing price; cols 2-4 show a delta vs it.")
+    ap.add_argument("--edition", choices=["auto", "foil", "nonfoil"], default="auto",
+                    help="For a Secret Lair drop: which finish to value (default auto/nonfoil).")
     ap.add_argument("--list-boosters", action="store_true",
                     help="List the set's booster types with per-type EV, then exit.")
     ap.add_argument("--format", choices=["txt", "xlsx", "all"], default="all",
@@ -402,6 +408,17 @@ def main() -> int:
     whole = _fmt(totals.market_whole) if totals.market_whole is not None else "(manual)"
     print(f"TOTALS  market(whole) {whole}   market(parts) {parts}   "
           f"intrinsic {_fmt(totals.intrinsic)}   coverage {totals.coverage:.1%}")
+    # Unified 4-column summary (Listing / Sealed market / Exact singles / Floor
+    # singles) with per-cell deltas vs --listing — the schema shared with batch.
+    try:
+        pv = valuation.value_sealed_product(
+            code, args.product, listing=args.listing, market=args.market,
+            refresh_stale=False)
+        print()
+        for line in _render_valuation_summary(pv):
+            print(line)
+    except Exception as e:  # noqa: BLE001 — summary is additive; never break the report
+        print(f"  (4-column summary unavailable: {e})", file=sys.stderr)
     if node.market_usd is None and node.purchase_url:
         print(f"Market: manual — buy/price at {node.purchase_url}")
     elif args.market != "null":

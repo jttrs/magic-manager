@@ -31,6 +31,23 @@ def test_fmt_usd():
     assert util.fmt_usd(None) == "—"
 
 
+def test_fmt_delta_cell():
+    f = util.fmt_delta_cell
+    # value None → em dash regardless of listing
+    assert f(None, 10.0) == "—"
+    assert f(None, None) == "—"
+    # listing None → bare value, no delta
+    assert f(45.87, None) == "$45.87"
+    # positive delta (value exceeds listing → good deal)
+    assert f(45.87, 45.00) == "$45.87 (+$0.87)"
+    # negative delta (listing above value)
+    assert f(399.95, 434.99) == "$399.95 (-$35.04)"
+    # exactly equal → +$0.00
+    assert f(50.0, 50.0) == "$50.00 (+$0.00)"
+    # delta rounds to cents
+    assert f(12.50, 10.25) == "$12.50 (+$2.25)"
+
+
 # ---------- format_color_identity ----------
 
 def test_color_identity_card_rule_collapses_multicolor():

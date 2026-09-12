@@ -18,14 +18,16 @@ Input:
     recent drops to render. ``--limit`` wins if both are given.
 
 Output:
-  - stdout: a markdown title line, a legend line, then a table with columns
-    Drop (hyperlinked to a Scryfall search for that drop's exact collector
-    numbers), Release, Cards, Nonfoil $, Foil $, NF floor $, Foil floor $.
-    The two "floor" columns sum, per card, the CHEAPEST printing of that same
-    card anywhere on Scryfall (matched by oracle id) — i.e. the cheapest way
-    to assemble the drop's cards for a deck, regardless of the Secret Lair
-    treatment. The plain Nonfoil/Foil columns value the Secret Lair printings
-    themselves.
+  - stdout: a markdown title + legend, then the UNIFIED 4-column value table
+    (shared with sealed_value / sealed_value_batch): Drop (hyperlinked to a
+    Scryfall search for the drop's exact collector numbers), Release, Cards,
+    Listing, Sealed mkt, Exact singles, Floor singles. Listing is N/A for this
+    recent-drops survey (no per-drop asking price), so cols show bare values with
+    no delta. Sealed mkt = the drop's sealed product on the wider secondary
+    market (via the market providers). Exact singles = the drop's own Secret Lair
+    printings (nonfoil). Floor singles = the CHEAPEST printing of each card
+    anywhere (matched by oracle id) — the cheapest way to assemble the cards for
+    a deck regardless of the Secret Lair treatment.
   - stderr: a one-line summary of how many drops were rendered out of the
     total known SLD drops, how many distinct printings were fetched, and how
     many distinct cards were priced for the floor lookup.
@@ -61,7 +63,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from magic_manager import mtgjson, scryfall, sld  # noqa: E402
+from magic_manager import mtgjson, scryfall, sld, util, valuation  # noqa: E402
 
 
 def main() -> int:
@@ -75,6 +77,10 @@ def main() -> int:
     ap.add_argument(
         "--limit", type=int, default=None, dest="limit_opt",
         help="Same as the positional argument; wins if both are given.",
+    )
+    ap.add_argument(
+        "--market", choices=["null", "tcgcsv", "tcgapi", "manapool", "chain", "compare"],
+        default="chain", help="Sealed-market source for the Sealed mkt column (default: chain).",
     )
     args = ap.parse_args()
 
@@ -106,15 +112,18 @@ def main() -> int:
     card_by_id = {c["id"]: c for c in found}
     floors_cache: dict[str, tuple[float | None, float | None]] = {}
 
-    # Value each drop through the shared engine, sharing the fetch + floor cache.
+    # Value each drop through the unified 4-column producer, sharing the batch
+    # fetch + floor cache. Keep the DropValue too (for the Cards + search-URL cols).
     try:
-        values = [
-            sld.value_drop(g, floors=True, _card_by_id=card_by_id,
-                           _floors_cache=floors_cache)
-            for g in chosen
-        ]
+        rows = []
+        for g in chosen:
+            dv = sld.value_drop(g, floors=True, _card_by_id=card_by_id,
+                                _floors_cache=floors_cache)
+            pv = valuation.value_sld_drop(g, listing=None, market=args.market,
+                                          _card_by_id=card_by_id, _floors_cache=floors_cache)
+            rows.append((g, dv, pv))
     except scryfall.ScryfallError as e:
-        print(f"error: scryfall floor lookup failed: {e}", file=sys.stderr)
+        print(f"error: scryfall lookup failed: {e}", file=sys.stderr)
         return 2
 
     print(
@@ -127,23 +136,24 @@ def main() -> int:
     print(f"## Secret Lair Drop value — top {n} by release (newest first)")
     print()
     print(
-        "*Nonfoil $ / Foil $ sum live Scryfall singles for the drop's own "
-        "Secret Lair printings. NF floor $ / Foil floor $ sum, per card, the "
-        "CHEAPEST printing of that same card anywhere on Scryfall — the "
-        "cheapest way to get these cards into a deck regardless of treatment. "
-        "`$X (n)` = only n of the drop's cards are priced in that finish.*"
+        "*Listing = N/A here (this is a recent-drops survey, no per-drop asking). "
+        "Sealed mkt = the drop's sealed product on the wider secondary market. "
+        "Exact singles = the drop's own Secret Lair printings (nonfoil). Floor "
+        "singles = cheapest printing of each card anywhere (nonfoil) — the "
+        "cheapest way to get the cards into a deck regardless of treatment.*"
     )
     print()
-    print("| Drop | Release | Cards | Nonfoil $ | Foil $ | NF floor $ | Foil floor $ |")
+    print("| Drop | Release | Cards | Listing | Sealed mkt | Exact singles | Floor singles |")
     print("|---|---|---:|---:|---:|---:|---:|")
-    for v in values:
-        safe = v.name.replace("|", "\\|")
+    for g, dv, pv in rows:
+        safe = pv.label.replace("|", "\\|")
+        # Listing is None for the survey → fmt_delta_cell renders bare values.
         print(
-            f"| [{safe}]({v.search_url}) | {v.release_date} | {v.card_count} | "
-            f"{sld.cell(v.nonfoil_total, v.nonfoil_ct, v.card_count)} | "
-            f"{sld.cell(v.foil_total, v.foil_ct, v.card_count)} | "
-            f"{sld.cell(v.nf_floor_total, v.nf_floor_ct, v.card_count)} | "
-            f"{sld.cell(v.foil_floor_total, v.foil_floor_ct, v.card_count)} |"
+            f"| [{safe}]({dv.search_url}) | {dv.release_date} | {dv.card_count} | "
+            f"{util.fmt_usd(pv.listing)} | "
+            f"{util.fmt_delta_cell(pv.sealed_market, pv.listing)} | "
+            f"{util.fmt_delta_cell(pv.exact_singles, pv.listing)} | "
+            f"{util.fmt_delta_cell(pv.floor_singles, pv.listing)} |"
         )
 
     return 0

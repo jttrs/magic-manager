@@ -42,14 +42,29 @@ _CARDS = {
 }
 
 # oracle_id → list of printings for the floor search (cheaper reprints exist).
+# Each printing carries its oracle_id so the batched card_floors_many can group.
+def _pr(oid, usd, foil):
+    return {"oracle_id": oid, "prices": {"usd": usd, "usd_foil": foil}}
+
+
 _PRINTS = {
-    "o1": [{"prices": {"usd": "1.00", "usd_foil": "3.00"}},
-           {"prices": {"usd": "0.50", "usd_foil": "2.00"}}],   # floor 0.50 / 2.00
-    "o2": [{"prices": {"usd": "2.00", "usd_foil": "5.00"}}],    # floor 2.00 / 5.00
-    "o3": [{"prices": {"usd": "4.00", "usd_foil": None}},
-           {"prices": {"usd": "3.00", "usd_foil": "9.00"}}],    # floor 3.00 / 9.00
-    "o4": [{"prices": {"usd": "10.00", "usd_foil": "12.00"}}],
+    "o1": [_pr("o1", "1.00", "3.00"), _pr("o1", "0.50", "2.00")],   # floor 0.50 / 2.00
+    "o2": [_pr("o2", "2.00", "5.00")],                              # floor 2.00 / 5.00
+    "o3": [_pr("o3", "4.00", None), _pr("o3", "3.00", "9.00")],     # floor 3.00 / 9.00
+    "o4": [_pr("o4", "10.00", "12.00")],
 }
+
+
+def _search_stub(q, **k):
+    """Return the union of printings for every oracle_id named in the query.
+    Handles both a single ``oracleid:<id>`` and the batched
+    ``(oracleid:a or oracleid:b …)`` form that card_floors_many now sends."""
+    import re
+    oids = re.findall(r"oracleid:([0-9a-zA-Z-]+)", q)
+    out = []
+    for oid in oids:
+        out.extend(_PRINTS.get(oid, []))
+    return out
 
 
 def _patch(monkeypatch):
@@ -63,8 +78,7 @@ def _patch(monkeypatch):
     monkeypatch.setattr(scryfall, "collection",
                         lambda ids: ([_CARDS[i["id"]] for i in ids if i["id"] in _CARDS],
                                      [i for i in ids if i["id"] not in _CARDS]))
-    monkeypatch.setattr(scryfall, "search",
-                        lambda q, **k: list(_PRINTS.get(q.split(":", 1)[1], [])))
+    monkeypatch.setattr(scryfall, "search", _search_stub)
 
 
 # ---------- discovery / identity ----------

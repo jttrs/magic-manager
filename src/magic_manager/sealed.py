@@ -76,6 +76,34 @@ class Totals:
     diagnostics: list[str]
 
 
+@dataclass
+class ProductValuation:
+    """The unified 4-column valuation of ONE product (sealed product OR SLD drop).
+
+    Every sealed-value renderer (single / batch / recent-N) reports these four
+    figures in this order, so the schema is consistent across tools:
+      1. ``listing``        — the store's asking price (provenance; may be None).
+      2. ``sealed_market``  — the sealed product's own wider-secondary-market price.
+      3. ``exact_singles``  — Σ market of the product's EXACT card printings.
+      4. ``floor_singles``  — Σ cheapest printing of each card anywhere (by oracle_id).
+    Columns 2/3/4 render an in-cell delta vs ``listing`` (``value − listing``).
+
+    Produced by ``valuation.value_sealed_product`` / ``valuation.value_sld_drop``.
+    """
+    label: str
+    kind: str                            # "sealed" | "sld"
+    listing: float | None = None
+    sealed_market: float | None = None
+    sealed_market_source: str | None = None
+    exact_singles: float | None = None
+    floor_singles: float | None = None
+    finish: str = "nonfoil"              # which finish cols 3/4 reflect (SLD foil editions)
+    coverage: float = 1.0
+    booster_only: bool = False           # True ⇒ exact/floor are EV-only (no fixed singles)
+    diagnostics: list[str] = field(default_factory=list)
+    note: str = ""
+
+
 # ---------- market provider seam ----------
 
 @runtime_checkable

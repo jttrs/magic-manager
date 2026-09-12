@@ -85,8 +85,12 @@ uv run python scripts/sealed_value.py m15 "clash pack" --format xlsx
 uv run python scripts/sealed_value.py m15 "booster box" --market tcgcsv  # add external market $
 uv run python scripts/sealed_value.py m15 "booster box" --market manapool # exact-uuid $ + sold comps
 uv run python scripts/sealed_value.py m15 "booster box" --market compare --ebay
-uv run python scripts/sealed_value.py sld "far out man"                  # a Secret Lair drop
+uv run python scripts/sealed_value.py afc "commander deck display" --market chain --listing 434.99  # 4-col + deltas vs asking
+uv run python scripts/sealed_value.py sld "far out man" --listing 45 --edition foil  # a Secret Lair drop (foil edition)
 ```
+
+Pass `--listing/--asking <price>` to show the delta vs the store's asking price in
+cols 2-4; `--edition foil` values a Secret Lair's foil printings + foil sealed product.
 
 `set_code` is required; the product substring is optional when a set has one
 product (else the script lists candidates and exits 2 — pick a more specific
@@ -106,7 +110,28 @@ table; use this for ONE named drop (or as part of a batch/tab valuation).
 products and/or SLD drops, optional `asking_price`) and emits one combined deal
 table. That's what the tabs/links/cart branch funnels into.
 
-## What it computes
+## The unified 4-column schema
+
+Every renderer (single / batch / recent-N) reports the SAME four columns, in
+this order, so a product reads the same everywhere:
+
+1. **Listing** — the store's asking price (from `--listing`/`--asking`, or a
+   batch item's `asking_price`; blank if unknown).
+2. **Sealed market** — the product's own price on the wider secondary market
+   (the `--market` providers). SLD drops resolve to their MTGJSON `sealedProduct`
+   (base + foil editions) and price through the same seam.
+3. **Exact singles** — Σ market of the product's EXACT card printings.
+4. **Floor singles** — Σ cheapest printing of each card ANYWHERE (by oracle_id).
+
+Columns 2/3/4 render an **in-cell delta vs the listing** — `$399.95 (-$35.04)`,
+where the delta is `value − listing` (positive ⇒ that measure exceeds the
+listing ⇒ the listing is a good deal). A pure random-booster product has no fixed
+singles, so cols 3/4 show the booster **EV** (labeled `EV`). SLD/foil editions:
+pass `--edition foil` (single) or an `edition` hint (batch) to value the foil
+printings + foil sealed product. The shared producer is `valuation.value_sealed_product`
+/ `valuation.value_sld_drop`; the shared cell formatter is `util.fmt_delta_cell`.
+
+## What it computes (the intrinsic engine behind cols 3/4)
 
 Per node, two independent valuations:
 - **intrinsic** (deterministic, offline): `pack` → `ev.booster_ev` (Σ over pack
