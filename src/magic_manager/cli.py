@@ -26,6 +26,7 @@ from . import (
     sealed as sealed_mod,
     selectors as sel_mod,
     sets as sets_mod,
+    sld as sld_mod,
     util,
     wishlist as wishlist_mod,
 )
@@ -3718,6 +3719,59 @@ def input_list(
 
 
 # ---------- earmark ----------
+
+def _resolve_identity(set_code: str, name: str | None) -> dict:
+    """Validate a proposed sealed-product / SLD-drop identity → canonical dict.
+
+    The single deterministic checkpoint shared by `mm resolve-product` and
+    `mm earmark add` (and the sealed-value URL/tab flow): the AGENT proposes a
+    ``set_code`` + product/drop ``name`` (the non-deterministic store-page→identity
+    step), and this confirms it resolves to a real MTGJSON product (or SLD drop),
+    returning the canonical identity. Raises ``LookupError`` on no/ambiguous match.
+
+    Returns a uniform dict: ``{kind, set_code, name, uuid?, category?, subtype?,
+    release_date?, card_count?}`` (``kind`` is ``"sld"`` or ``"sealed"``)."""
+    if set_code.lower() == "sld":
+        drop = sld_mod.identify_drop(name or "")
+        return {"kind": "sld", "set_code": "sld", "name": drop["name"],
+                "release_date": drop.get("release_date")}
+    product = sealed_mod.identify_product(set_code, name)
+    return {
+        "kind": "sealed", "set_code": set_code.lower(), "name": product["name"],
+        "uuid": product.get("uuid"), "category": product.get("category"),
+        "subtype": product.get("subtype"),
+        "release_date": product.get("releaseDate"),
+        "card_count": product.get("cardCount"),
+    }
+
+
+@app.command("resolve-product")
+def resolve_product_cmd(
+    set_code: str = typer.Argument(..., help="Set code (e.g. afc, m15) or 'sld' for a Secret Lair drop."),
+    name: str = typer.Option(..., "--name", "-n",
+                             help="MTGJSON product name / SLD drop name (or a unique substring)."),
+    url: str = typer.Option(None, "--url", "-u", help="Optional storefront URL to echo back (for provenance)."),
+):
+    """Validate + canonicalize a sealed-product or SLD-drop identity, as JSON.
+
+    The shared deterministic checkpoint for the agent-mediated "storefront URL →
+    MTGJSON identity" step (see the resolve-storefront-product shared recipe). The
+    agent proposes ``set_code`` + ``--name`` from a store page; this confirms it
+    resolves and echoes the canonical identity (plus the URL if given) as JSON for
+    feeding into `sealed-value` / batch / `earmark add`. Exits 2 if unresolved."""
+    try:
+        identity = _resolve_identity(set_code, name)
+    except LookupError as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+    if url:
+        identity["url"] = url
+        host = earmarks_mod.store_name_from_url(url)
+        if host:
+            identity["store"] = host
+    json.dump(identity, sys.stdout, indent=2)
+    sys.stdout.write("\n")
+
 
 @earmark_app.command("add")
 def earmark_add_cmd(
