@@ -172,18 +172,18 @@ def _patch_deck(monkeypatch, name, cards):
     monkeypatch.setattr(mtgjson, "deck", lambda fn: {"name": name, "mainBoard": mb})
 
 
-def test_default_precon_state_pool_by_name(monkeypatch):
+def test_default_precon_state_deconstructed_by_name(monkeypatch):
     from magic_manager import mtgjson
     # Small card count, but the name matches POOL_NAME_PATTERNS.
     _patch_deck(monkeypatch, "Starter Collection", cards=10)
-    assert mtgjson.default_precon_state("StarterCollection_FDN") == "pool"
+    assert mtgjson.default_precon_state("StarterCollection_FDN") == "deconstructed"
 
 
-def test_default_precon_state_pool_by_card_count(monkeypatch):
+def test_default_precon_state_deconstructed_by_card_count(monkeypatch):
     from magic_manager import mtgjson
-    # Name doesn't match, but 387 cards > threshold → pool.
+    # Name doesn't match, but 387 cards > threshold → deconstructed.
     _patch_deck(monkeypatch, "Some Big Thing", cards=387)
-    assert mtgjson.default_precon_state("SomeBigThing_XYZ") == "pool"
+    assert mtgjson.default_precon_state("SomeBigThing_XYZ") == "deconstructed"
 
 
 def test_default_precon_state_built_default(monkeypatch):
@@ -192,16 +192,17 @@ def test_default_precon_state_built_default(monkeypatch):
     assert mtgjson.default_precon_state("CounterBlitz_FIC") == "built"
 
 
-def test_default_precon_state_pool_via_sealedproduct(monkeypatch):
-    """A Scene Box's component deck (small, plainly-named) is a pool because it's
-    listed in a pool-named sealedProduct's contents.deck."""
+def test_default_precon_state_deconstructed_via_sealedproduct(monkeypatch):
+    """A Scene Box's component deck (small, plainly-named) defaults to
+    deconstructed because it's listed in a pool-named sealedProduct's
+    contents.deck."""
     from magic_manager import mtgjson
     _patch_deck(monkeypatch, "The Black Sun Invasion", cards=6)
     monkeypatch.setattr(mtgjson, "sealed_products", lambda code, **k: [
         {"name": "Avatar The Last Airbender Scene Box The Black Sun Invasion",
          "contents": {"deck": [{"name": "The Black Sun Invasion", "set": "tla"}]}},
     ])
-    assert mtgjson.default_precon_state("TheBlackSunInvasion_TLA") == "pool"
+    assert mtgjson.default_precon_state("TheBlackSunInvasion_TLA") == "deconstructed"
 
 
 # ---------- V11 migration backfill ----------
@@ -216,11 +217,11 @@ def test_v11_backfill_maps_is_deconstructed(tmp_path, monkeypatch):
     # so the column exists; seed rows in each state and confirm the query buckets.
     with db.connect() as conn:
         now = db._utcnow_iso()
-        for slug, state in (("a", "built"), ("b", "deconstructed"), ("c", "pool")):
+        for slug, state in (("a", "built"), ("b", "deconstructed")):
             conn.execute(
                 "INSERT INTO decks (slug, name, source_precon_file_name, precon_state, "
                 "created_at, updated_at) VALUES (?, ?, 'FN_X', ?, ?, ?)",
                 (slug, slug, state, now, now),
             )
     from magic_manager import decks
-    assert decks.precon_unit_counts_for("FN_X") == (1, 1, 1)
+    assert decks.precon_unit_counts_for("FN_X") == (1, 1)

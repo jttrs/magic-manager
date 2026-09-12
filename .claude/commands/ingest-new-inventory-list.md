@@ -13,7 +13,7 @@ Walk the user through ingesting every active checklist currently in `checklists/
 
 - **Inventory checklists** (`kind: "inventory"`, or absent for legacy files) — from `mm set master-list`. These carry `qty_normal`/`qty_foil` and ingest into the `inventory` table.
 - **Jumpstart checklists** (`kind: "jumpstart"`) — from `mm set jumpstart-list`. Carry a single `acquired_qty` per pack; ingest SPLITS it (net-new → 1 built + rest deconstructed; already-built → all deconstructed) into tracked `pack:*` deck rows + inventory. Always additive.
-- **Precon checklists** (`kind: "precon"`) — from `mm set precon-list`. Track precon decks AS UNITS; counts are DERIVED from the `decks` table (each built/torn-down/pool copy is a deck row), so there's no separate ledger to drift. Two flavors via `_meta.mode`: **`add`** carries a single `acquired_qty` — ingest splits it deterministically (net-new buildable → 1 built + rest deconstructed; already-built → all deconstructed; card-pool products → all pool), so the user never pre-declares states; **`modify`** carries three per-state columns prefilled from the live deck counts and ingest applies the SIGNED DELTA. Raising a count builds copies / records torn-down copies; **lowering a count in `modify` is NOT applied** — removing a copy is an explicit `mm deck delete <slug>` (the derived count then updates itself), so ingest just warns.
+- **Precon checklists** (`kind: "precon"`) — from `mm set precon-list`. Track precon decks AS UNITS; counts are DERIVED from the `decks` table (each built/torn-down copy is a deck row), so there's no separate ledger to drift. Two flavors via `_meta.mode`: **`add`** carries a single `acquired_qty` — ingest splits it deterministically (net-new buildable → 1 built + rest deconstructed; already-built → all deconstructed; products with no real decklist → all deconstructed), so the user never pre-declares states; **`modify`** carries two per-state columns prefilled from the live deck counts and ingest applies the SIGNED DELTA. Raising a count builds copies / records torn-down copies; **lowering a count in `modify` is NOT applied** — removing a copy is an explicit `mm deck delete <slug>` (the derived count then updates itself), so ingest just warns.
 
 **Mode/kind is declared by the file, not the user.** For inventory checklists, `_meta.mode` says how to apply: `modify` → `replace` (signed per-row; untouched/absent rows left alone unless you opt into zeroing), `add` → `additive`. Jumpstart is always additive. Precon reads its own `_meta.mode` (add/modify) internally. This command does NOT ask replace-vs-additive per file. Legacy inventory files (no `_meta.mode`) need an explicit `--mode` — see step 3b. In all cases the ingest command is the same: `mm set ingest --path "<file>" --json`.
 
@@ -32,7 +32,7 @@ Parse the JSON. The shape is `{ "input_dir": "...", "files": [...] }` where each
 - `path`, `name`, `sha256`, `size_bytes`
 - `summary`: always has `kind` (`"inventory"`, `"precon"`, or `"jumpstart"`), `rows_total`, `rows_with_qty`, `total_qty`, `estimated_value`, `warnings[]`. **Branch on `summary.kind`:**
   - `kind == "inventory"` → also has `{anchor_code, set_codes[], rarity_filter[], top_value[]}`.
-  - `kind in ("precon","jumpstart")` → also has `{mode, decks_to_construct, loose_copies, pool_copies, filled[]}` where each `filled[i]` is `{file_name, label, acquired_qty, constructed_qty, deconstructed_qty, pool_qty, delta, set, usd_total}`. `rows_with_qty` = rows that will act. For **add** files the preview mirrors ingest's split of `acquired_qty` — `constructed_qty`/`deconstructed_qty`/`pool_qty` are the *resulting* per-state copies (`delta` = that `(Δbuilt, Δdecon, Δpool)`). For a precon **modify** file the entered numbers are absolute targets prefilled from the live deck counts, so a row acts only when it differs (`delta` = the applied per-state delta). `decks_to_construct`/`loose_copies`/`pool_copies` are the positive deltas; `estimated_value` = summed `usd_total` over rows that build a new copy.
+  - `kind in ("precon","jumpstart")` → also has `{mode, decks_to_construct, loose_copies, filled[]}` where each `filled[i]` is `{file_name, label, acquired_qty, constructed_qty, deconstructed_qty, delta, set, usd_total}`. `rows_with_qty` = rows that will act. For **add** files the preview mirrors ingest's split of `acquired_qty` — `constructed_qty`/`deconstructed_qty` are the *resulting* per-state copies (`delta` = that `(Δbuilt, Δdecon)`). For a precon **modify** file the entered numbers are absolute targets prefilled from the live deck counts, so a row acts only when it differs (`delta` = the applied per-state delta). `decks_to_construct`/`loose_copies` are the positive deltas; `estimated_value` = summed `usd_total` over rows that build a new copy.
 - `duplicate_of_log_id`: integer or `null`. **Non-null means this file's content matches a prior successful ingest** (almost certainly a failed cleanup from a previous run — the file should already have been archived but ended up back in `checklists/`).
 - `prior_success`: the matching log row if duplicate, else `null`.
 - `prior_failed`: a prior FAILED ingest with the same hash, if any.
@@ -46,7 +46,7 @@ Print a compact bulleted list, one line per file. **Format the line by `summary.
 - Inventory:
   > 1. `final-fantasy-through-the-ages-rare.xlsx` — inventory / fca / rare-only / **42 cells filled / $312.40 estimated**
 - Precon / jumpstart (use `summary.mode` if present; for a precon `modify` file the counts are net changes vs the current deck collection):
-  > 2. `precons-modify-checklist.xlsx` — precon (modify) / **3 precons changed → 2 to build, 1 loose / $214.60 estimated**
+  > 2. `precons-modify-checklist.xlsx` — precon (modify) / **3 precons changed → 2 to build, 1 torn down / $214.60 estimated**
 
 If any file has `duplicate_of_log_id != null`, surface that VERY prominently before walking the user into per-file ingest:
 
@@ -91,16 +91,16 @@ Parse the JSON output and surface it to the user. **The `kind` field (also in th
 4. **All `extras`** entries (cards not in the seeded set list — the user needs to run `mm set master-list` for the relevant set first).
 5. The label_summary: `set:<anchor> now: X distinct rows, qty Y, value $Z`.
 
-**Add mode** (`kind: "jumpstart"`, or `kind: "precon"` + `mode: "add"`) — a single `acquired_qty` per row, split by ingest. The JSON `summary` has `rows_acted`, `rows_total`, `built`, `deconstructed`, `pool`, `inv_qty_total`, `per_row[]`, `warnings[]`. Each `per_row[i]` has `acquired_qty`, `net_new` (bool — a copy was kept built), `built`, `torn_down`, `pooled`, `slug`, `missing_sids`, `error`. Surface:
+**Add mode** (`kind: "jumpstart"`, or `kind: "precon"` + `mode: "add"`) — a single `acquired_qty` per row, split by ingest. The JSON `summary` has `rows_acted`, `rows_total`, `built`, `deconstructed`, `inv_qty_total`, `per_row[]`, `warnings[]`. Each `per_row[i]` has `acquired_qty`, `net_new` (bool — a copy was kept built), `built`, `torn_down`, `slug`, `missing_sids`, `error`. Surface:
 
-1. Headline: `<filename>: <rows_acted>/<rows_total> rows — <built> built, <deconstructed> deconstructed, <pool> pooled, <inv_qty_total> cards added → archived to <archived_path>`.
-2. Per acted row: `<file_name> (<label>): acquired <acquired_qty> → <built> built → <slug>, <torn_down> deconstructed, <pooled> pooled` with a `[net-new]` or `[duplicate → auto-deconstructed]` tag (from `net_new`).
+1. Headline: `<filename>: <rows_acted>/<rows_total> rows — <built> built, <deconstructed> deconstructed, <inv_qty_total> cards added → archived to <archived_path>`.
+2. Per acted row: `<file_name> (<label>): acquired <acquired_qty> → <built> built → <slug>, <torn_down> deconstructed` with a `[net-new]` or `[duplicate → auto-deconstructed]` tag (from `net_new`).
 3. Any `per_row[i].error` verbatim; any `per_row[i].missing_sids` count; all `summary.warnings`.
 
-**Precon modify** (`kind: "precon"` + `mode: "modify"`) — the JSON `summary` has `rows_acted`, `rows_total`, `built`, `deconstructed`, `pool`, `inv_qty_total`, `per_row[]`, `warnings[]`. Each `per_row[i]` has `count_before` `[c,d,p]`, `count_after` `[c,d,p]`, `delta` `[Δc,Δd,Δp]`, `built`, `torn_down`, `pooled`, `warning`, `error`, `missing_sids`. Surface:
+**Precon modify** (`kind: "precon"` + `mode: "modify"`) — the JSON `summary` has `rows_acted`, `rows_total`, `built`, `deconstructed`, `inv_qty_total`, `per_row[]`, `warnings[]`. Each `per_row[i]` has `count_before` `[c,d]`, `count_after` `[c,d]`, `delta` `[Δc,Δd]`, `built`, `torn_down`, `warning`, `error`, `missing_sids`. Surface:
 
-1. Headline: `<filename>: <rows_acted>/<rows_total> precons changed — <built> built, <deconstructed> torn down, <pool> pooled, <inv_qty_total> cards added → archived to <archived_path>`.
-2. Per acted row: `<file_name> (<label>): built <before_c>→<after_c>, deconstructed <before_d>→<after_d>, pool <before_p>→<after_p>`.
+1. Headline: `<filename>: <rows_acted>/<rows_total> precons changed — <built> built, <deconstructed> torn down, <inv_qty_total> cards added → archived to <archived_path>`.
+2. Per acted row: `<file_name> (<label>): built <before_c>→<after_c>, deconstructed <before_d>→<after_d>`.
 3. **Any `per_row[i].warning`** verbatim — this is where "lowered a count; not applied — run `mm deck delete <slug>`" appears. Show it; it's expected, not an error.
 4. Any `per_row[i].error` verbatim; any `per_row[i].missing_sids` count; all `summary.warnings`.
 
@@ -113,6 +113,7 @@ After all files are processed (skipped or ingested), print a single combined sum
 Omit whichever family had no files.
 
 If any file failed (status=`failed` in the JSON), call that out explicitly and tell the user the error from the JSON's `error` field.
+
 
 ## Hard rules
 

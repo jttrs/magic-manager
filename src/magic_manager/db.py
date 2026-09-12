@@ -402,19 +402,19 @@ CREATE INDEX IF NOT EXISTS decks_precon_fn_idx ON decks (source_precon_file_name
 """
 
 
-# V11: widen the built/torn-down BOOLEAN into a 3-value precon STATE, so
-# card-POOL products (Foundations Starter Collection, Scene Boxes) — which were
-# never playable decks — stop being mis-modeled as a giant "built" deck or a
-# "deconstructed" one. States:
+# V11: widen the built/torn-down BOOLEAN into a named precon STATE. Originally a
+# 3-value enum ('built', 'deconstructed', 'pool') where 'pool' marked card-POOL
+# products (Starter Collection, Scene Boxes) that were never playable decks. The
+# 'pool' state was later RETIRED — the live model is 2-value ('built' /
+# 'deconstructed'), and pool-shaped products now default to 'deconstructed'
+# (a Scene Box kept intact is just 'built'). See decks._PRECON_STATES.
 #   - 'built'         : a real deck, assembled (cards pledged via deck_assignments)
-#   - 'deconstructed' : a real deck torn down for parts (recipe kept, cards loose)
-#   - 'pool'          : cards that were never a deck (loose in inventory); the
-#                       deck row is just a "unit-owned" marker so counting /
-#                       de-dup / checklist-prefill keep working.
+#   - 'deconstructed' : a deck torn down for parts (recipe kept, cards loose)
 # The V11 Python hook backfills precon_state from is_deconstructed (0→built,
-# 1→deconstructed); no 'pool' rows exist pre-migration. The old is_deconstructed
-# column is LEFT IN PLACE (deprecated dead column — a DROP needs the
-# copy-rebuild dance and isn't worth it); precon_state is the source of truth.
+# 1→deconstructed); no 'pool' rows ever existed pre-migration, and pool was
+# retired before any were written, so no data migration was needed. The old
+# is_deconstructed column is LEFT IN PLACE (deprecated dead column — a DROP needs
+# the copy-rebuild dance and isn't worth it); precon_state is the source of truth.
 SCHEMA_V11 = """
 ALTER TABLE decks ADD COLUMN precon_state TEXT NOT NULL DEFAULT 'built';
 CREATE INDEX IF NOT EXISTS decks_precon_state_idx ON decks (source_precon_file_name, precon_state);

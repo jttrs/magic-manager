@@ -1,6 +1,6 @@
 ---
 name: add-precon
-description: One-liner wrapper around `mm deck add-precon` — adds preconstructed decks (Commander decks, Box Set decks, Planeswalker decks, etc.) as TRACKED UNITS in one shot, building the deck AND adding its cards to inventory. Each copy is recorded in one of three states — built / deconstructed / pool (card pools like the Starter Collection or a Scene Box) — auto-detected when no count flag is given. Precon unit counts derive from the decks table, so the added copies show up under /set-status and prefill the precon checklist's modify flavor. Selection is by set code (+ optional --all / fuzzy name query) or an exact MTGJSON fileName. Triggers: "add each BLC commander deck constructed", "I built the Family Matters precon", "add the Foundations Starter Collection", "add a (Foundations) Beginner Box", "I opened a Bundle / sealed box", "add 2 copies of X deconstructed", "I opened another copy of the Y precon". For a sealed box/bundle (Beginner Box, Bundle) — a multi-deck product with no decklist — resolve its component decks from `sealedProduct` first (see the "Sealed boxes" section); never conclude the product doesn't exist from a DeckList scan.
+description: One-liner wrapper around `mm deck add-precon` — adds preconstructed decks (Commander decks, Box Set decks, Planeswalker decks, etc.) as TRACKED UNITS in one shot, building the deck AND adding its cards to inventory. Each copy is recorded in one of two states — built / deconstructed — auto-detected when no count flag is given. Precon unit counts derive from the decks table, so the added copies show up under /set-status and prefill the precon checklist's modify flavor. Selection is by set code (+ optional --all / fuzzy name query) or an exact MTGJSON fileName. Triggers: "add each BLC commander deck constructed", "I built the Family Matters precon", "add the Foundations Starter Collection", "add a (Foundations) Beginner Box", "I opened a Bundle / sealed box", "add 2 copies of X deconstructed", "I opened another copy of the Y precon". For a sealed box/bundle (Beginner Box, Bundle) — a multi-deck product with no decklist — resolve its component decks from `sealedProduct` first (see the "Sealed boxes" section); never conclude the product doesn't exist from a DeckList scan.
 ---
 
 # Add Precon
@@ -28,7 +28,6 @@ The mechanical wrapper around `mm deck add-precon`. The user names a precon or a
 mm deck add-precon <TARGET> [NAME_QUERY]
     [--constructed/-c N]     built copies (assembled decks)
     [--deconstructed/-d M]   torn-down copies (loose cards, marker row)
-    [--pool/-p P]            card-pool copies (Starter Collection / Scene Box)
     [--all]
     [--type "Commander Deck"]
     [--include-collector]
@@ -37,7 +36,7 @@ mm deck add-precon <TARGET> [NAME_QUERY]
 
 `TARGET` is EITHER an exact MTGJSON fileName (e.g. `FamilyMatters_BLC`) OR a set code (e.g. `blc`). Find fileNames/types via `uv run mm mtgjson decks --set <code>`.
 
-**Pass NO count flag and the state auto-detects per deck:** pool-like products (Starter Collection, Scene Box — via `mtgjson.default_precon_state`) default to one `pool` copy, everything else to one `built` copy. The command prints an `ℹ auto-detected a card pool` note when it does. Only pass `-c/-d/-p` to override or to add more than one.
+**Pass NO count flag and the state auto-detects per deck:** products with no real decklist (Starter Collection, Scene Box — via `mtgjson.default_precon_state`) default to one `deconstructed` copy (cards loose, marker row), everything else to one `built` copy. The user can flip to `built` manually if keeping a copy intact. Only pass `-c/-d` to override or to add more than one.
 
 ## Selection forms — map the NL request to the right form
 
@@ -48,7 +47,7 @@ mm deck add-precon <TARGET> [NAME_QUERY]
 | an exact fileName the user already has | that fileName, no name query |
 | "I built it" / "keep constructed" | `--constructed` (or nothing — a normal deck auto-defaults to built 1) |
 | "deconstructed" / "tore down for parts" / "loose" | `--deconstructed` |
-| "the Starter Collection" / "a Scene Box" / any card pool | nothing (auto → pool), or explicit `--pool` |
+| "the Starter Collection" / "a Scene Box" / any card pool | nothing (auto → deconstructed), or explicit `-c` if keeping intact |
 | a **sealed box / bundle** ("a Beginner Box", "the Foundations Beginner Box") | set code + the box name — the CLI expands it to its component decks |
 
 ### Sealed boxes (Beginner Box, Bundle, …) — one command
@@ -78,11 +77,11 @@ A name query that matches 0 or more than 1 deck exits 2 and prints the candidate
 
 ## Additive semantics — re-running adds ANOTHER copy
 
-Re-running `add-precon` on the same deck is additive: built 1→2, not a reset (it creates another deck row — distinct slug `<slug>-2`). This is correct for "I opened/built another copy." It has no downward/correction form: `--constructed`/`--deconstructed`/`--pool` are ≥ 0. To REMOVE a copy (sold/miscounted), delete its deck row with `mm deck delete <slug>` — the derived count drops automatically.
+Re-running `add-precon` on the same deck is additive: built 1→2, not a reset (it creates another deck row — distinct slug `<slug>-2`). This is correct for "I opened/built another copy." It has no downward/correction form: `--constructed`/`--deconstructed` are ≥ 0. To REMOVE a copy (sold/miscounted), delete its deck row with `mm deck delete <slug>` — the derived count drops automatically.
 
 ## Output
 
-The command prints, per deck, a `built X→Y, deconstructed X→Y, pool X→Y` line plus a headline summarizing rows changed and totals built / torn down / pooled. Relay these to the user. `--json` emits the summary dict: `rows_acted`, `built`, `deconstructed`, `pool`, `inv_qty_total`, `per_row[]` (each with `label`, `file_name`, `count_before`/`count_after` as 3-tuples `(built, deconstructed, pool)`, and optional `warning`/`error`). Counts are derived live from the decks table.
+The command prints, per deck, a `built X→Y, deconstructed X→Y` line plus a headline summarizing rows changed and totals built / torn down. Relay these to the user. `--json` emits the summary dict: `rows_acted`, `built`, `deconstructed`, `inv_qty_total`, `per_row[]` (each with `label`, `file_name`, `count_before`/`count_after` as 2-tuples `(built, deconstructed)`, and optional `warning`/`error`). Counts are derived live from the decks table.
 
 ## Guardrails
 
