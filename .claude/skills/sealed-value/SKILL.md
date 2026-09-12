@@ -38,12 +38,26 @@ uv run python scripts/sealed_value.py m15 "clash pack" --format xlsx
 uv run python scripts/sealed_value.py m15 "booster box" --market tcgcsv  # add external market $
 uv run python scripts/sealed_value.py m15 "booster box" --market manapool # exact-uuid $ + sold comps
 uv run python scripts/sealed_value.py m15 "booster box" --market compare --ebay
+uv run python scripts/sealed_value.py sld "far out man"                  # a Secret Lair drop
 ```
 
 `set_code` is required; the product substring is optional when a set has one
 product (else the script lists candidates and exits 2 — pick a more specific
 substring). Relay the whole stdout block (the indented tree + the `TOTALS` line)
 and the written file paths.
+
+**Secret Lair drops** (`set_code == sld`) route to the shared `sld` engine
+(same source as [[secret-lair-value]]): pass a drop-name substring
+(`sealed_value.py sld "<drop>"`). SLD prices LIVE from Scryfall (no local sync)
+and reports the drop's own Secret Lair printings PLUS the "cheapest-anywhere
+floor" (the cheapest printing of each card across all sets — the cheapest way to
+get the cards into a deck). Use [[secret-lair-value]] for the recent-N-drops
+table; use this for ONE named drop (or as part of a batch/tab valuation).
+
+**Batch mode** — to value many products at once (e.g. a cart or a set of browser
+tabs), resolve each to its identity and feed a JSON list to
+`scripts/sealed_value_batch.py` (see [[scrape-browser-tab-urls]] for the
+tab-scraping front end). One combined deal table instead of N separate runs.
 
 ## What it computes
 
