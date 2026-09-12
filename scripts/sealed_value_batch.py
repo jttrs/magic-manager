@@ -39,7 +39,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from magic_manager import mtgjson, scryfall, sealed, sets, sld, util  # noqa: E402
+from magic_manager import mtgjson, scryfall, sealed, sld, util, valuation  # noqa: E402
 
 QUERIES_DIR = ROOT / "queries"
 
@@ -50,86 +50,69 @@ def _fmt(v) -> str:
 
 @dataclass
 class BatchRow:
+    """One row = one product's unified 4-column valuation (or an error)."""
     label: str
     kind: str                     # "sealed" | "sld" | "error"
-    asking: float | None
-    market: float | None          # sealed: market_whole; sld: own-nonfoil total
-    intrinsic: float | None       # sealed: intrinsic; sld: floor-nonfoil (cheapest to build)
-    note: str = ""                # error message or a short qualifier
+    valuation: "sealed.ProductValuation | None" = None
+    note: str = ""                # error message
 
 
-def _value_sealed(item: dict, market_provider) -> BatchRow:
+def _value_sealed(item: dict, market: str, floors_cache: dict) -> BatchRow:
     code = item["set_code"].lower()
     substr = item.get("product")
     label = item.get("label") or f"{code.upper()} {substr or ''}".strip()
     try:
-        product = sealed.identify_product(code, substr)
+        pv = valuation.value_sealed_product(
+            code, substr, listing=item.get("asking_price"), market=market,
+            refresh_stale=False, floors_cache=floors_cache)
     except LookupError as e:
-        return BatchRow(label, "error", item.get("asking_price"), None, None, str(e))
-    # Sync referenced sets (best-effort) so intrinsic prices resolve.
-    scout = sealed.build_product_tree(code, product)
-    try:
-        sets.ensure_priced(sealed.referenced_set_codes(scout), refresh_stale=False, log=None)
-    except Exception:  # noqa: BLE001 — pricing degrades, never fatal in a batch
-        pass
-    node = sealed.build_product_tree(code, product, market_provider=market_provider)
-    totals = sealed.aggregate(node)
-    return BatchRow(
-        label=node.name, kind="sealed", asking=item.get("asking_price"),
-        market=totals.market_whole, intrinsic=totals.intrinsic,
-        note="" if totals.coverage >= 0.999 else f"coverage {totals.coverage:.0%}",
-    )
+        return BatchRow(label, "error", note=str(e))
+    return BatchRow(pv.label, "sealed", pv)
 
 
-def _value_sld(item: dict) -> BatchRow:
+def _value_sld(item: dict, market: str, floors_cache: dict) -> BatchRow:
     substr = item.get("drop") or item.get("product")
     label = item.get("label") or f"SLD {substr or ''}".strip()
+    edition = "foil" if str(item.get("edition", "")).lower() in ("foil", "traditional foil",
+                                                                 "rainbow foil") else "auto"
     try:
-        drop = sld.identify_drop(substr or "")
-        v = sld.value_drop(drop, floors=True)
+        pv = valuation.value_sld_drop(
+            substr or "", listing=item.get("asking_price"), market=market,
+            edition=edition, _floors_cache=floors_cache)
     except LookupError as e:
-        return BatchRow(label, "error", item.get("asking_price"), None, None, str(e))
+        return BatchRow(label, "error", note=str(e))
     except (mtgjson.MtgJsonError, scryfall.ScryfallError) as e:
-        return BatchRow(label, "error", item.get("asking_price"), None, None, str(e))
-    # For an SLD drop: "market" = its own-printing nonfoil total; "intrinsic" =
-    # the cheapest-anywhere nonfoil floor (cheapest way to get the cards).
-    return BatchRow(
-        label=v.name, kind="sld", asking=item.get("asking_price"),
-        market=round(v.nonfoil_total, 2), intrinsic=round(v.nf_floor_total, 2),
-        note="live Scryfall; market=own-nonfoil, intrinsic=nonfoil floor",
-    )
+        return BatchRow(label, "error", note=str(e))
+    return BatchRow(pv.label, "sld", pv)
 
 
-def value_item(item: dict, market_provider) -> BatchRow:
-    """Route one input item to the sealed or SLD engine."""
+def value_item(item: dict, market: str, floors_cache: dict) -> BatchRow:
+    """Route one input item to the sealed or SLD 4-column producer."""
     if (item.get("set_code") or "").lower() == "sld":
-        return _value_sld(item)
-    return _value_sealed(item, market_provider)
+        return _value_sld(item, market, floors_cache)
+    return _value_sealed(item, market, floors_cache)
 
 
-def _render(rows: list[BatchRow], *, show_asking: bool) -> list[str]:
-    """One combined markdown table. Deal-delta = market − asking (sealed) so a
-    good deal (market above asking) is positive; only shown when asking present."""
-    lines = ["| Product | Kind | Market | Intrinsic |"]
-    sep = "|---|---|---:|---:|"
-    if show_asking:
-        lines = ["| Product | Kind | Asking | Market | Intrinsic | Deal Δ |"]
-        sep = "|---|---|---:|---:|---:|---:|"
-    lines.append(sep)
+# The unified 4-column schema (listing / sealed market / exact singles / floor),
+# with an in-cell delta vs listing in columns 2-4 (util.fmt_delta_cell).
+def _render(rows: list[BatchRow]) -> list[str]:
+    lines = ["| Product | Listing | Sealed mkt | Exact singles | Floor singles |",
+             "|---|---:|---:|---:|---:|"]
     for r in rows:
-        name = r.label.replace("|", "\\|")[:52]
-        if r.kind == "error":
-            cells = (f"| {name} | error | " + ("— | " if show_asking else "")
-                     + "— | — |" + (" — |" if show_asking else ""))
-            lines.append(cells)
+        name = r.label.replace("|", "\\|")[:50]
+        if r.kind == "error" or r.valuation is None:
+            lines.append(f"| {name} | — | — | — | — |")
             continue
-        if show_asking:
-            delta = (r.market - r.asking) if (r.market is not None and r.asking is not None) else None
-            dcell = _fmt(round(delta, 2)) if delta is not None else "—"
-            lines.append(f"| {name} | {r.kind} | {_fmt(r.asking)} | {_fmt(r.market)} | "
-                         f"{_fmt(r.intrinsic)} | {dcell} |")
-        else:
-            lines.append(f"| {name} | {r.kind} | {_fmt(r.market)} | {_fmt(r.intrinsic)} |")
+        pv = r.valuation
+        listing = _fmt(pv.listing)
+        # Booster-only products: cols 3/4 are the booster EV (labeled), not singles.
+        c3 = util.fmt_delta_cell(pv.exact_singles, pv.listing)
+        c4 = util.fmt_delta_cell(pv.floor_singles, pv.listing)
+        if pv.booster_only:
+            c3 = f"{c3} EV"
+            c4 = f"{c4} EV"
+        lines.append(f"| {name} | {listing} | "
+                     f"{util.fmt_delta_cell(pv.sealed_market, pv.listing)} | {c3} | {c4} |")
     return lines
 
 
@@ -155,19 +138,25 @@ def main() -> int:
         print("error: input must be a non-empty JSON array of items.", file=sys.stderr)
         return 2
 
-    market_provider = sealed.make_market_provider(args.market)
-    rows = [value_item(it, market_provider) for it in items]
-    show_asking = any(r.asking is not None for r in rows)
+    # Shared floor cache across all items (a card recurring across products is
+    # priced once); market is a mode string passed through to the producers.
+    floors_cache: dict = {}
+    rows = [value_item(it, args.market, floors_cache) for it in items]
 
     meta = mtgjson.meta()
     header = f"## Sealed value — batch of {len(rows)}   [prices as of {meta.get('date', '?')}]"
-    table = _render(rows, show_asking=show_asking)
+    table = _render(rows)
     print(header)
     print()
     for line in table:
         print(line)
+    print()
+    print("*Cols: Listing = asking price · Sealed mkt = wider secondary market · "
+          "Exact singles = the product's own printings · Floor singles = cheapest "
+          "printing of each card anywhere. (±$) in cols 2-4 = value − listing.*")
     # Surface per-row notes/errors below the table.
-    notes = [(r.label, r.note) for r in rows if r.note]
+    notes = [(r.label, r.note or (r.valuation.note if r.valuation else "")) for r in rows]
+    notes = [(lbl, n) for lbl, n in notes if n]
     if notes:
         print()
         for label, note in notes:

@@ -65,6 +65,30 @@ def fmt_usd(v: float | None) -> str:
     return f"${v:.2f}" if v is not None else "—"
 
 
+def fmt_delta_cell(value: float | None, listing: float | None) -> str:
+    """Render a price cell with an in-parens delta vs a listing/reference price.
+
+    Used by the sealed-value renderers so every price column reads the same:
+    the value, then how far it sits above/below the listing. Sign convention is
+    ``value − listing`` (positive ⇒ the value EXCEEDS the listing, i.e. the
+    listing is a good deal / underpriced vs this measure).
+
+    - ``value`` is ``None`` → ``"—"`` (nothing to show).
+    - ``listing`` is ``None`` → bare ``fmt_usd(value)`` (no reference to delta against).
+    - else → ``"$X.XX (+$Y.YY)"`` / ``"$X.XX (-$Y.YY)"`` with
+      ``Y = round(value − listing, 2)`` (``(+$0.00)`` when exactly equal).
+
+    Pure arithmetic on numbers already shown elsewhere — introduces no new data.
+    """
+    if value is None:
+        return "—"
+    if listing is None:
+        return fmt_usd(value)
+    d = round(value - listing, 2)
+    sign = "+" if d >= 0 else "-"
+    return f"{fmt_usd(value)} ({sign}${abs(d):.2f})"
+
+
 def fmt_mana_cost(raw: str | None) -> str:
     """Render a Scryfall mana_cost string (``'{2}{U}{U}'``) as a compact symbol
     string (``'2UU'``).

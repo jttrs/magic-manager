@@ -20,6 +20,7 @@ A logical drop merges a base printing with any ``… Foil Edition`` sibling
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from urllib.parse import quote_plus
 
@@ -47,17 +48,43 @@ def card_floors(oracle_id: str) -> tuple[float | None, float | None]:
     Enumerates all printings via ``oracleid:<id> unique=prints`` and returns the
     min non-null price in each finish (None if no printing has that finish
     priced) — the "cheapest to buy for a deck" figure, ignoring which set the
-    cheapest copy lives in."""
-    nf: list[float] = []
-    ff: list[float] = []
-    for p in scryfall.search(f"oracleid:{oracle_id}", unique="prints"):
-        v = price(p, "usd")
-        if v is not None:
-            nf.append(v)
-        v = price(p, "usd_foil")
-        if v is not None:
-            ff.append(v)
-    return (min(nf) if nf else None), (min(ff) if ff else None)
+    cheapest copy lives in. For MANY cards prefer :func:`card_floors_many`, which
+    batches the searches (one query per chunk instead of one per id)."""
+    return card_floors_many([oracle_id]).get(oracle_id, (None, None))
+
+
+# Scryfall caps boolean clauses per query (fails >~20 with HTTP 400); stay under.
+_FLOOR_CHUNK = 20
+
+
+def card_floors_many(oracle_ids: list[str]) -> dict[str, tuple[float | None, float | None]]:
+    """Batched :func:`card_floors` — ``{oracle_id: (min_usd, min_usd_foil)}``.
+
+    ORs many oracle_ids into one ``(oracleid:a or oracleid:b …) unique=prints``
+    search per chunk (≤ ``_FLOOR_CHUNK`` ids), then groups the printings back by
+    each card's ``oracle_id`` and takes the per-finish min. Collapses N per-card
+    searches into ⌈N/60⌉ — the difference between a 400-card display taking one
+    call vs. hundreds. Oracle_ids with no priced printing map to ``(None, None)``."""
+    ids = [o for o in dict.fromkeys(oracle_ids) if o]
+    out: dict[str, tuple[float | None, float | None]] = {o: (None, None) for o in ids}
+    nf: dict[str, list[float]] = {o: [] for o in ids}
+    ff: dict[str, list[float]] = {o: [] for o in ids}
+    for i in range(0, len(ids), _FLOOR_CHUNK):
+        chunk = ids[i:i + _FLOOR_CHUNK]
+        q = "(" + " or ".join(f"oracleid:{o}" for o in chunk) + ")"
+        for p in scryfall.search(q, unique="prints"):
+            oid = p.get("oracle_id")
+            if oid not in nf:
+                continue
+            v = price(p, "usd")
+            if v is not None:
+                nf[oid].append(v)
+            v = price(p, "usd_foil")
+            if v is not None:
+                ff[oid].append(v)
+    for o in ids:
+        out[o] = (min(nf[o]) if nf[o] else None, min(ff[o]) if ff[o] else None)
+    return out
 
 
 # ---------- drop discovery / identity ----------
@@ -112,19 +139,27 @@ def recent_drops(n: int) -> tuple[list[dict], int]:
     return chosen[:n], len(groups)
 
 
+def _norm_name(s: str) -> str:
+    """Punctuation-insensitive name key: lowercased, non-alphanumerics collapsed
+    to single spaces. So a store's 'Far Out Man' matches the canonical 'Far Out,
+    Man' (and 'Death is in the Eyes of the Beholder I' isn't tripped by commas)."""
+    return re.sub(r"[^a-z0-9]+", " ", (s or "").lower()).strip()
+
+
 def identify_drop(name_substr: str) -> dict:
     """Resolve a SLD drop by name (exact→unique-substring), mirroring
     ``sealed.identify_product``'s contract.
 
-    Exact (case-insensitive) match on the canonical drop name wins; else a unique
-    case-insensitive substring match. Raises ``LookupError`` (with candidates) on
-    no match or ambiguity."""
+    Matching is PUNCTUATION-INSENSITIVE (store titles drop the comma in "Far Out,
+    Man"): exact match on the normalized canonical name wins; else a unique
+    normalized-substring match. Raises ``LookupError`` (with candidates) on no
+    match or ambiguity."""
     groups = all_drops()
-    want = name_substr.strip().lower()
-    exact = [g for g in groups.values() if (g.get("name") or "").lower() == want]
+    want = _norm_name(name_substr)
+    exact = [g for g in groups.values() if _norm_name(g.get("name")) == want]
     if exact:
         return exact[0]
-    subs = [g for g in groups.values() if want in (g.get("name") or "").lower()]
+    subs = [g for g in groups.values() if want in _norm_name(g.get("name"))]
     if len(subs) == 1:
         return subs[0]
     if not subs:

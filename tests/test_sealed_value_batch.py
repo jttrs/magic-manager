@@ -1,15 +1,13 @@
 """Tests for scripts/sealed_value_batch.py — the multi-product batch valuer.
 
-Offline: monkeypatch the engine calls the batch script routes to (sealed.* and
-sld.*) so no network/DB is needed. Verifies routing, deal-delta math, error
-rows, and the asking-column toggle. The script is imported as a module.
+Offline: monkeypatch the `valuation.*` producers the batch script routes to, so
+no network/DB is needed. Verifies routing (sealed vs SLD), the 4-column render
+with per-cell deltas, the booster-only EV labeling, and error rows.
 """
 
 import importlib.util
 import sys
 from pathlib import Path
-
-import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
@@ -22,94 +20,106 @@ svb = importlib.util.module_from_spec(_spec)
 sys.modules["sealed_value_batch"] = svb
 _spec.loader.exec_module(svb)
 
-
-class _FakeTotals:
-    def __init__(self, whole, intrinsic, coverage=1.0):
-        self.market_whole = whole
-        self.market_sum_of_parts = None
-        self.intrinsic = intrinsic
-        self.coverage = coverage
-        self.diagnostics = []
+from magic_manager import sealed  # noqa: E402
 
 
-def _patch_sealed(monkeypatch, *, market, intrinsic, coverage=1.0, name="AFR Display"):
-    from magic_manager import sealed, sets
-    monkeypatch.setattr(sealed, "identify_product",
-                        lambda code, substr: {"name": name, "uuid": "u"})
-    monkeypatch.setattr(sealed, "build_product_tree",
-                        lambda *a, **k: type("N", (), {"name": name})())
-    monkeypatch.setattr(sealed, "referenced_set_codes", lambda node: {"afc"})
-    monkeypatch.setattr(sealed, "aggregate",
-                        lambda node: _FakeTotals(market, intrinsic, coverage))
-    monkeypatch.setattr(sealed, "make_market_provider", lambda mode: object())
-    monkeypatch.setattr(sets, "ensure_priced", lambda *a, **k: {})
+def _pv(**kw):
+    """A ProductValuation with sensible defaults for rendering tests."""
+    base = dict(label="X", kind="sealed", listing=None, sealed_market=None,
+                exact_singles=None, floor_singles=None)
+    base.update(kw)
+    return sealed.ProductValuation(**base)
 
 
-def test_value_sealed_row(monkeypatch):
-    _patch_sealed(monkeypatch, market=399.95, intrinsic=470.51, name="AFR Display")
-    from magic_manager import sealed
+# ---------- routing + producer delegation ----------
+
+def test_value_sealed_delegates_to_valuation(monkeypatch):
+    from magic_manager import valuation
+    captured = {}
+    def fake(code, substr, **kw):
+        captured.update(code=code, substr=substr, **kw)
+        return _pv(label="AFR Display", kind="sealed", listing=kw.get("listing"),
+                   sealed_market=399.95, exact_singles=470.51, floor_singles=375.53)
+    monkeypatch.setattr(valuation, "value_sealed_product", fake)
     row = svb._value_sealed({"set_code": "afc", "product": "Display", "asking_price": 434.99},
-                            sealed.make_market_provider("null"))
+                            "chain", {})
     assert row.kind == "sealed"
-    assert row.market == 399.95 and row.intrinsic == 470.51
-    assert row.asking == 434.99
-    assert row.note == ""            # full coverage → no note
-
-
-def test_value_sealed_low_coverage_note(monkeypatch):
-    _patch_sealed(monkeypatch, market=800.0, intrinsic=678.78, coverage=0.98, name="CLB")
-    from magic_manager import sealed
-    row = svb._value_sealed({"set_code": "clb", "product": "Set of 4"},
-                            sealed.make_market_provider("null"))
-    assert "coverage 98%" in row.note
+    assert row.valuation.sealed_market == 399.95 and row.valuation.listing == 434.99
+    assert captured["code"] == "afc" and captured["listing"] == 434.99
 
 
 def test_value_sealed_unresolved_is_error_row(monkeypatch):
-    from magic_manager import sealed
-    def boom(code, substr):
+    from magic_manager import valuation
+    def boom(code, substr, **kw):
         raise LookupError("no product matching 'zzz'")
-    monkeypatch.setattr(sealed, "identify_product", boom)
-    monkeypatch.setattr(sealed, "make_market_provider", lambda mode: object())
-    row = svb._value_sealed({"set_code": "afc", "product": "zzz"},
-                            sealed.make_market_provider("null"))
+    monkeypatch.setattr(valuation, "value_sealed_product", boom)
+    row = svb._value_sealed({"set_code": "afc", "product": "zzz"}, "chain", {})
     assert row.kind == "error" and "no product matching" in row.note
 
 
-def test_value_sld_row(monkeypatch):
-    from magic_manager import sld
-    monkeypatch.setattr(sld, "identify_drop", lambda s: {"name": "Spinner Rack"})
-    monkeypatch.setattr(sld, "value_drop", lambda drop, **k: type("V", (), {
-        "name": "Spinner Rack", "nonfoil_total": 37.37, "nf_floor_total": 4.38})())
-    row = svb._value_sld({"set_code": "sld", "drop": "Spinner", "asking_price": 29.99})
+def test_value_sld_delegates_and_edition_hint(monkeypatch):
+    from magic_manager import valuation
+    captured = {}
+    def fake(substr, **kw):
+        captured.update(substr=substr, **kw)
+        return _pv(label="Far Out, Man", kind="sld", listing=kw.get("listing"),
+                   sealed_market=45.87, exact_singles=61.44, floor_singles=23.45,
+                   finish="foil" if kw.get("edition") == "foil" else "nonfoil")
+    monkeypatch.setattr(valuation, "value_sld_drop", fake)
+    row = svb._value_sld({"set_code": "sld", "drop": "Far Out", "asking_price": 45.0,
+                          "edition": "Rainbow Foil"}, "chain", {})
     assert row.kind == "sld"
-    assert row.market == 37.37 and row.intrinsic == 4.38   # own-nonfoil / nonfoil-floor
+    assert captured["edition"] == "foil"        # "Rainbow Foil" → foil edition hint
+    assert row.valuation.sealed_market == 45.87
 
 
 def test_value_item_routes_sld_vs_sealed(monkeypatch):
-    from magic_manager import sld
-    monkeypatch.setattr(sld, "identify_drop", lambda s: {"name": "D"})
-    monkeypatch.setattr(sld, "value_drop", lambda drop, **k: type("V", (), {
-        "name": "D", "nonfoil_total": 1.0, "nf_floor_total": 0.5})())
-    r = svb.value_item({"set_code": "sld", "drop": "D"}, object())
-    assert r.kind == "sld"
+    from magic_manager import valuation
+    monkeypatch.setattr(valuation, "value_sld_drop",
+                        lambda s, **k: _pv(label="D", kind="sld"))
+    monkeypatch.setattr(valuation, "value_sealed_product",
+                        lambda c, s, **k: _pv(label="P", kind="sealed"))
+    assert svb.value_item({"set_code": "sld", "drop": "D"}, "chain", {}).kind == "sld"
+    assert svb.value_item({"set_code": "afc", "product": "P"}, "chain", {}).kind == "sealed"
 
 
-def test_render_deal_delta_and_asking_toggle():
+# ---------- 4-column render with per-cell deltas ----------
+
+def test_render_four_columns_with_deltas():
     rows = [
-        svb.BatchRow("Good Deal", "sealed", asking=700.0, market=800.0, intrinsic=650.0),
-        svb.BatchRow("Overpay", "sealed", asking=435.0, market=400.0, intrinsic=470.0),
+        svb.BatchRow("Good Deal", "sealed", _pv(
+            label="Good Deal", listing=700.0, sealed_market=800.0,
+            exact_singles=650.0, floor_singles=500.0)),
+        svb.BatchRow("Overpay", "sealed", _pv(
+            label="Overpay", listing=435.0, sealed_market=400.0,
+            exact_singles=470.0, floor_singles=375.0)),
     ]
-    out = "\n".join(svb._render(rows, show_asking=True))
-    assert "Deal Δ" in out
-    assert "$100.00" in out    # 800 - 700
-    assert "$-35.00" in out    # 400 - 435
-    # Without asking, the deal column is gone.
-    out2 = "\n".join(svb._render(rows, show_asking=False))
-    assert "Deal Δ" not in out2 and "Asking" not in out2
+    out = "\n".join(svb._render(rows))
+    # 4-column header
+    assert "Listing" in out and "Sealed mkt" in out
+    assert "Exact singles" in out and "Floor singles" in out
+    # per-cell deltas: sealed_market − listing
+    assert "$800.00 (+$100.00)" in out   # 800 - 700
+    assert "$400.00 (-$35.00)" in out    # 400 - 435
 
 
-def test_error_row_renders_without_crashing():
-    rows = [svb.BatchRow("Bad", "error", asking=None, market=None, intrinsic=None,
-                         note="no product matching")]
-    out = "\n".join(svb._render(rows, show_asking=False))
-    assert "error" in out
+def test_render_listing_none_shows_bare_values():
+    rows = [svb.BatchRow("No Listing", "sld", _pv(
+        label="No Listing", kind="sld", listing=None,
+        sealed_market=45.87, exact_singles=61.44, floor_singles=23.45))]
+    out = "\n".join(svb._render(rows))
+    assert "$45.87" in out and "(+" not in out and "(-" not in out   # no delta w/o listing
+
+
+def test_render_booster_only_labels_ev():
+    rows = [svb.BatchRow("Booster Box", "sealed", _pv(
+        label="Booster Box", listing=300.0, sealed_market=350.0,
+        exact_singles=88.4, floor_singles=88.4, booster_only=True))]
+    out = "\n".join(svb._render(rows))
+    assert "EV" in out            # cols 3/4 tagged EV for a pure-booster product
+
+
+def test_render_error_row_no_crash():
+    rows = [svb.BatchRow("Bad", "error", None, note="no product matching")]
+    out = "\n".join(svb._render(rows))
+    assert "Bad" in out and "—" in out
