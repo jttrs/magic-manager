@@ -1,25 +1,45 @@
 ---
 name: sealed-value
-description: Deterministic card-value estimate for a sealed MTG product — Booster Box, Bundle, Intro/Planeswalker/Clash Pack, Beginner Box, Gift/Deck-Builder's Toolkit, etc. Identifies the product from MTGJSON, walks its contents RECURSIVELY (a Booster Box → 36 Booster Packs → per-card booster EV), and reports two independent valuations per node: INTRINSIC (booster EV from MTGJSON's per-card WotC weights + precon deck singles + explicit card singles) and MARKET (external sealed price, provider-pluggable). Writes a txt + XLSX breakdown to queries/. Script-driven via `scripts/sealed_value.py <set_code> [product-substr]`. Triggers: "/sealed-value", "value this sealed product", "what are the cards in <product> worth", "EV of a draft/set/play/collector booster", "how much are the singles in a <booster box / bundle / intro pack>", "is this sealed product worth it", "value the M15 booster box".
+description: Deterministic card-value estimate for sealed MTG product(s) — Booster Box, Bundle, Intro/Planeswalker/Clash Pack, Beginner Box, Commander deck display, Secret Lair drop, etc. ONE product or MANY at once. Identifies each product from MTGJSON, walks its contents RECURSIVELY (a Booster Box → 36 Booster Packs → per-card booster EV), and reports INTRINSIC (booster EV from MTGJSON's per-card WotC weights + precon deck singles) and MARKET (external sealed price, provider-pluggable) valuations. Handles storefront URLs, a pasted list of links, a cart page, OR the user's open browser tabs — resolving each to its identity and emitting one combined deal table. Script-driven via `scripts/sealed_value.py` / `scripts/sealed_value_batch.py`. Triggers: "/sealed-value", "value this sealed product / booster box / this URL", "value my open tabs / these links / my cart / my watchlist", "what are the cards in <product> worth", "which of these products is the best deal", "EV of a draft/collector booster", "is this sealed product worth it".
 ---
 
 # sealed-value
 
-Deterministic, script-driven sealed-product card valuator. Claude invokes
-`scripts/sealed_value.py <set_code> [product-substr]`, relays the stdout tree +
-totals, and hands the user the `queries/` artifact paths. No inline arithmetic —
-the script is the single source of truth. The EV weights come from MTGJSON's
-published per-card booster sheets (exact WotC weighting, not a rarity average),
-so the historically-hard "how likely is each card" problem is solved by data.
+Deterministic, script-driven sealed-product card valuator — for ONE product or
+MANY. Claude routes the request (below), runs the deterministic script(s), and
+relays the stdout table + `queries/` artifact paths. No inline arithmetic — the
+scripts are the single source of truth. EV weights come from MTGJSON's published
+per-card booster sheets (exact WotC weighting, not a rarity average), so the
+historically-hard "how likely is each card" problem is solved by data.
+
+## Input routing — decide this FIRST
+
+This skill is orchestration-first with a single-product bypass. Look at what the
+user gave you and pick the branch:
+
+1. **One product, already named** ("value the M15 booster box", "value afc
+   Commander Deck Display") → **BYPASS** to the single-product recipe below
+   (`sealed_value.py <set_code> "<substr>"`). No resolution needed.
+2. **One storefront URL in chat** ("value this: <url>") → resolve that ONE URL to
+   its identity (shared recipe → `mm resolve-product`), then run the
+   single-product recipe. A quick one-off; no batch.
+3. **MANY inputs — open browser tabs, a pasted list of links, or a cart page**
+   ("value my open tabs", "value these links", "which of these is the best deal")
+   → **ORCHESTRATE** (see "Multi-product orchestration"): gather URLs → resolve
+   each → one combined batch table. This is the default for anything plural.
+
+When in doubt between (2) and (3): one URL → bypass; two or more, or "my tabs/
+cart/list" → orchestrate.
 
 ## When to use
 
-- "What are the cards in this **Booster Box / Bundle / Intro Pack / Clash Pack /
-  Beginner Box** worth?" / "value this sealed product" / "is it worth it?"
-- "What's the **EV of an M15 draft booster** / a **FDN collector booster**?"
-  (use `--list-boosters` to enumerate a set's booster types + per-type EV).
-- Recursive products: a Box that contains N packs, a Toolkit that nests packs
-  from OTHER sets — the tree resolves and values each component and the whole.
+- Single: "what are the cards in this **Booster Box / Bundle / Intro Pack /
+  Commander display / Secret Lair drop** worth?" / "value this sealed product" /
+  "value this <url>" / "is it worth it?"
+- Many: "**value my open tabs**", "value **these links** / **my cart** / **my
+  watchlist**", "which of these products is the best deal?"
+- "What's the **EV of an M15 draft booster**?" (`--list-boosters` enumerates a
+  set's booster types + per-type EV).
 
 **Don't** use for:
 - Ingesting a precon you BOUGHT into inventory/decks — that's [[import-precon]] /
@@ -27,7 +47,34 @@ so the historically-hard "how likely is each card" problem is solved by data.
 - Just listing what ships in a product (no prices) — that's [[mtgjson-search]].
 - Valuing loose singles you already own — that's `mm query value <selector>`.
 
-## The canonical recipe
+## Multi-product orchestration (tabs / links / cart)
+
+A thin chain over three existing deterministic pieces — no new logic:
+
+1. **Gather the URLs.**
+   - Open browser tabs → run the personal [[scrape-browser-tab-urls]] script,
+     narrowing with `--filter` when the task names a store/domain:
+     ```bash
+     uv run --no-project python "$HOME/.claude/scripts/scrape_browser_tab_urls.py" --filter <store-or-mtg> --format json
+     ```
+   - Pasted list of links / a cart page → use those URLs directly (WebFetch the
+     cart page for its line-item links if needed).
+2. **Resolve each product URL to an MTGJSON identity** via the shared recipe in
+   [`_shared/resolve-storefront-product.md`](../_shared/resolve-storefront-product.md)
+   (WebFetch/eBay-fallback → propose `set_code`+name or `sld`+drop →
+   `uv run mm resolve-product <set_code> --name "<substr>" [--url <u>]`). Skip
+   non-product tabs (Gmail, docs, searches). Keep the asking price the page shows.
+3. **Batch-value the resolved list** — build a JSON array and pipe it in:
+   ```bash
+   echo '[{"set_code":"afc","product":"Commander Deck Display","asking_price":434.99,"url":"..."},
+          {"set_code":"sld","drop":"Far Out, Man","asking_price":29.99}]' \
+     | uv run python scripts/sealed_value_batch.py --market chain
+   ```
+   Relay the single combined deal table (asking / market / intrinsic / deal-Δ) +
+   the `queries/` artifact. Items that don't resolve appear as error rows (with a
+   candidate list) — refine their `--name` and re-run just those if the user cares.
+
+## The canonical recipe (single product — the bypass branch)
 
 ```bash
 uv run python scripts/sealed_value.py <set_code> "<product substring>"   # txt + xlsx (default)
@@ -54,10 +101,10 @@ floor" (the cheapest printing of each card across all sets — the cheapest way 
 get the cards into a deck). Use [[secret-lair-value]] for the recent-N-drops
 table; use this for ONE named drop (or as part of a batch/tab valuation).
 
-**Batch mode** — to value many products at once (e.g. a cart or a set of browser
-tabs), resolve each to its identity and feed a JSON list to
-`scripts/sealed_value_batch.py` (see [[scrape-browser-tab-urls]] for the
-tab-scraping front end). One combined deal table instead of N separate runs.
+**Batch mode** is the "Multi-product orchestration" section above —
+`scripts/sealed_value_batch.py` takes a JSON list of resolved items (sealed
+products and/or SLD drops, optional `asking_price`) and emits one combined deal
+table. That's what the tabs/links/cart branch funnels into.
 
 ## What it computes
 
@@ -149,11 +196,15 @@ Stdout: `## Sealed value — <product>` + the tree + a `TOTALS` line
 
 ## Cross-references
 
-- `scripts/sealed_value.py` — the script this skill drives.
+- `scripts/sealed_value.py` (single product / SLD drop) + `scripts/sealed_value_batch.py`
+  (many, one combined table) — the scripts this skill drives.
+- [`_shared/resolve-storefront-product.md`](../_shared/resolve-storefront-product.md)
+  + `mm resolve-product` — the URL→MTGJSON-identity checkpoint (shared with
+  [[earmark-product]]); [[scrape-browser-tab-urls]] — the open-tabs front end.
 - `src/magic_manager/ev.py` (`booster_ev`, `sheet_ev`, `build_uuid_price_map`),
   `src/magic_manager/sealed.py` (`identify_product`, `build_product_tree`,
-  `aggregate`, market providers), `sets._rollup_deck_prices`,
-  `mtgjson.sealed_products` / `set_file` / `deck`.
+  `aggregate`, market providers), `src/magic_manager/sld.py` (SLD drops),
+  `sets._rollup_deck_prices`, `mtgjson.sealed_products` / `set_file` / `deck`.
 - [`docs/market-providers.md`](../../../docs/market-providers.md) — market-price
   provider setup (tcgcsv/tcgapi/eBay auth + `.env` keys) and the pluggable seam.
 - [[characterize-set]] — records a family's booster types in `docs/sets/<anchor>.md` §9.
