@@ -173,11 +173,15 @@ def sld_sealed_market(drop_name: str, edition: str = "auto",
     differences between the DeckList drop name and the sealedProduct name — the
     shared ``sld.normalize_name`` (``&``→``and``, punctuation-insensitive) plus
     ``sld.strip_finish_marker`` (drops the ``Secret Lair x`` scaffold + a trailing
-    Rainbow/Traditional/plain Foil / Non-Foil marker), compared by CONTAINMENT so
-    e.g. the drop "Marvel's Storm" matches "Secret Lair Drop Secret Lair x Marvels
-    Storm". Picks base vs foil per ``edition``; prices via ``sealed._market_meta``
-    + the provider chain. Returns ``(price_or_None, source_or_None)`` — None when
-    no sealedProduct matches (older drops predate the entries) or nothing prices it."""
+    Rainbow/Traditional/plain Foil / Non-Foil marker). Matching is TIERED —
+    exact-core > suffix > loose containment — and only the STRONGEST non-empty tier
+    is considered, so a short drop name never bleeds into a longer sibling (the
+    drop "City Styles" must not match the sealedProduct "City Styles 2 Dressed to
+    Kill"; "Marvel's Storm" still matches "Secret Lair x Marvels Storm" via the
+    weaker tiers when no exact core exists). Picks base vs foil per ``edition``;
+    prices via ``sealed._market_meta`` + the provider chain. Returns
+    ``(price_or_None, source_or_None)`` — None when no sealedProduct matches (older
+    drops predate the entries) or nothing prices it."""
     try:
         products = mtgjson.sealed_products("sld")
         set_data = mtgjson.set_file("sld")
@@ -194,10 +198,15 @@ def sld_sealed_market(drop_name: str, edition: str = "auto",
         n = (p.get("name") or "").lower()
         return "foil" in n and "non foil" not in n and "non-foil" not in n
 
-    # Match by containment (either direction) so prefix/suffix scaffolding a
-    # normalize+strip missed doesn't break an otherwise-clear match.
-    matches = [p for p in products
-               if (c := _core(p)) and (c == want or c.endswith(want) or want in c)]
+    # Tiered match (mirrors sld.identify_drop's exact→suffix→containment
+    # preference): take only the STRONGEST non-empty tier. Loose containment is a
+    # last resort so "City Styles" doesn't fuse with "City Styles 2 Dressed to
+    # Kill" (a distinct drop whose foil twin would otherwise mis-price this one).
+    cored = [(p, c) for p in products if (c := _core(p))]
+    exact = [p for p, c in cored if c == want]
+    suffix = [p for p, c in cored if c != want and c.endswith(want)]
+    contains = [p for p, c in cored if want != c and not c.endswith(want) and want in c]
+    matches = exact or suffix or contains
     if not matches:
         return None, None
     want_foil = edition == "foil"
