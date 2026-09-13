@@ -171,7 +171,7 @@ Per node, two independent valuations:
 - **market** (external, opt-in): a per-unit sealed price from a provider
   (`--market manapool|tcgcsv|tcgapi|chain|compare`). Default `null` → market
   shows `(manual)` and the report surfaces the product's TCGplayer link.
-  `manapool` joins by exact MTGJSON uuid; `chain` tries manapool→tcgcsv→tcgapi;
+  `manapool` joins by exact MTGJSON uuid; `chain` tries tcgcsv→manapool→tcgapi;
   `compare` shows all three side-by-side.
 
 For a container it reports **market(whole)** (the box's own price) AND

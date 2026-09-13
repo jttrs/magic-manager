@@ -191,15 +191,16 @@ def make_market_provider(mode: str) -> MarketProvider:
     ``construct-value`` CLIs so the provider-chain assembly lives in exactly one
     place.
 
-    ``chain`` puts **manapool first** — it joins by exact MTGJSON uuid (the most
-    robust key), with tcgcsv/tcgapi as backfill. ``compare`` queries all three
-    side-by-side."""
+    ``chain`` puts **tcgcsv (TCGplayer market data) first** — the broadest,
+    most-recognized sealed pricing — then manapool (exact MTGJSON-uuid join) and
+    tcgapi as backfill for anything TCGplayer doesn't cover. ``compare`` queries
+    all three side-by-side."""
     if mode == "null":
         return NullMarketProvider()
     if mode == "compare":
         providers = _build_providers(["tcgcsv", "tcgapi", "manapool"])
         return CompareMarketProvider(providers) if providers else NullMarketProvider()
-    names = ["manapool", "tcgcsv", "tcgapi"] if mode == "chain" else [mode]
+    names = ["tcgcsv", "manapool", "tcgapi"] if mode == "chain" else [mode]
     providers = _build_providers(names)
     if not providers:
         return NullMarketProvider()

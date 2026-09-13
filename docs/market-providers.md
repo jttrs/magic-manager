@@ -26,7 +26,7 @@ intrinsic (EV/deck/singles) valuation always works offline regardless.
 | `manapool` | manapool.com API | `X-ManaPool-Email/Token` | MTGJSON **uuid** (exact) | exact join + real sold comps |
 | `tcgcsv` | tcgcsv.com | none | group + product id | broadest coverage |
 | `tcgapi` | tcgapi.dev | `X-API-Key` | product **name** (search) | secondary |
-| `chain` | manapool → tcgcsv → tcgapi | as above | — | first-hit (manapool primary) |
+| `chain` | tcgcsv → manapool → tcgapi | as above | — | first-hit (tcgcsv/TCGplayer primary) |
 | `compare` | tcgcsv + tcgapi + manapool | as above | — | side-by-side table |
 | `--ebay` (any mode) | eBay Browse | OAuth app token | product name (search) | **advisory only** |
 
@@ -75,7 +75,7 @@ AFR Commander Deck Display → $399.95, tracking tcgcsv's $367.61 closely.
 
 ```bash
 uv run python scripts/sealed_value.py clb "Commander Decks Set of 4" --market manapool
-uv run python scripts/sealed_value.py m15 "booster box" --market chain     # manapool first
+uv run python scripts/sealed_value.py m15 "booster box" --market chain     # tcgcsv (TCGplayer) first
 ```
 
 ---
