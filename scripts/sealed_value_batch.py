@@ -105,6 +105,16 @@ def _md_link(label: str, url: str | None) -> str:
     return f"[{safe}]({url})" if url else safe
 
 
+def _sort_key(r: BatchRow):
+    """Default ordering: steepest sealed-market discount first. The listings
+    furthest BELOW sealed mkt (most-negative ``listing − sealed`` delta) sort to
+    the top (best deals), up to overpays. Rows with no computable sealed-mkt
+    delta (no listing, or unpriced/error) sort last, original order preserved."""
+    pv = r.valuation
+    d = util.delta_of(pv.sealed_market, pv.listing) if pv else None
+    return (0, d) if d is not None else (1, 0.0)
+
+
 def _render(rows: list[BatchRow]) -> list[str]:
     lines = ["| Product | Finish | Listing | Sealed mkt | Exact singles | Floor singles |",
              "|---|---|---:|---:|---:|---:|"]
@@ -156,6 +166,9 @@ def main() -> int:
     floors_cache: dict = {}
     rows = [value_item(it, args.market, floors_cache) for it in items]
 
+    # Default sort: steepest discount from sealed market first (see _sort_key).
+    rows.sort(key=_sort_key)
+
     meta = mtgjson.meta()
     header = f"## Sealed value — batch of {len(rows)}   [prices as of {meta.get('date', '?')}]"
     table = _render(rows)
@@ -166,7 +179,9 @@ def main() -> int:
     print()
     print("*Cols: Listing = asking price · Sealed mkt = wider secondary market · "
           "Exact singles = the product's own printings · Floor singles = cheapest "
-          "printing of each card anywhere. (±$) in cols 2-4 = value − listing.*")
+          "printing of each card anywhere. (±$) in cols 2-4 = listing − value: "
+          "NEGATIVE = the listing is BELOW that measure (a discount). Sorted by "
+          "steepest sealed-mkt discount first.*")
     # Surface per-row notes/errors below the table.
     notes = [(r.label, r.note or (r.valuation.note if r.valuation else "")) for r in rows]
     notes = [(lbl, n) for lbl, n in notes if n]

@@ -65,18 +65,29 @@ def fmt_usd(v: float | None) -> str:
     return f"${v:.2f}" if v is not None else "—"
 
 
-def fmt_delta_cell(value: float | None, listing: float | None) -> str:
-    """Render a price cell with an in-parens delta vs a listing/reference price.
+def delta_of(value: float | None, listing: float | None) -> float | None:
+    """The signed delta a cell shows: ``listing − value`` (None if either side is
+    None). NEGATIVE ⇒ the listing is BELOW this measure (a discount vs it);
+    POSITIVE ⇒ the listing is ABOVE it (paying a premium vs it). Exposed so
+    renderers can sort by the same number the cells display."""
+    if value is None or listing is None:
+        return None
+    return round(listing - value, 2)
 
-    Used by the sealed-value renderers so every price column reads the same:
-    the value, then how far it sits above/below the listing. Sign convention is
-    ``value − listing`` (positive ⇒ the value EXCEEDS the listing, i.e. the
-    listing is a good deal / underpriced vs this measure).
+
+def fmt_delta_cell(value: float | None, listing: float | None) -> str:
+    """Render a price cell with an in-parens delta of the LISTING vs this value.
+
+    Used by the sealed-value renderers so every price column reads the same: the
+    value, then where the listing sits relative to it. Sign convention is
+    ``listing − value`` — NEGATIVE ⇒ the listing is BELOW this measure (a discount
+    vs it, e.g. sealed mkt $75 with a $60 listing → ``$75.00 (-$15.00)``);
+    POSITIVE ⇒ the listing is ABOVE it (a premium vs it).
 
     - ``value`` is ``None`` → ``"—"`` (nothing to show).
     - ``listing`` is ``None`` → bare ``fmt_usd(value)`` (no reference to delta against).
-    - else → ``"$X.XX (+$Y.YY)"`` / ``"$X.XX (-$Y.YY)"`` with
-      ``Y = round(value − listing, 2)`` (``(+$0.00)`` when exactly equal).
+    - else → ``"$X.XX (+$Y.YY)"`` / ``"$X.XX (-$Y.YY)"`` with ``Y = listing − value``
+      (``(+$0.00)`` when exactly equal).
 
     Pure arithmetic on numbers already shown elsewhere — introduces no new data.
     """
@@ -84,7 +95,7 @@ def fmt_delta_cell(value: float | None, listing: float | None) -> str:
         return "—"
     if listing is None:
         return fmt_usd(value)
-    d = round(value - listing, 2)
+    d = delta_of(value, listing)
     sign = "+" if d >= 0 else "-"
     return f"{fmt_usd(value)} ({sign}${abs(d):.2f})"
 

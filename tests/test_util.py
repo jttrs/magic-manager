@@ -33,19 +33,27 @@ def test_fmt_usd():
 
 def test_fmt_delta_cell():
     f = util.fmt_delta_cell
+    # sign convention is listing − value (negative = listing below that measure)
     # value None → em dash regardless of listing
     assert f(None, 10.0) == "—"
     assert f(None, None) == "—"
     # listing None → bare value, no delta
     assert f(45.87, None) == "$45.87"
-    # positive delta (value exceeds listing → good deal)
-    assert f(45.87, 45.00) == "$45.87 (+$0.87)"
-    # negative delta (listing above value)
-    assert f(399.95, 434.99) == "$399.95 (-$35.04)"
+    # sealed mkt $75, listing $60 → listing is $15 BELOW market (a discount)
+    assert f(75.0, 60.0) == "$75.00 (-$15.00)"
+    # value below listing → positive (listing above that measure / premium)
+    assert f(399.95, 434.99) == "$399.95 (+$35.04)"
     # exactly equal → +$0.00
     assert f(50.0, 50.0) == "$50.00 (+$0.00)"
     # delta rounds to cents
-    assert f(12.50, 10.25) == "$12.50 (+$2.25)"
+    assert f(10.25, 12.50) == "$10.25 (+$2.25)"
+
+
+def test_delta_of_sign():
+    assert util.delta_of(75.0, 60.0) == -15.0     # listing below value → negative
+    assert util.delta_of(60.0, 75.0) == 15.0      # listing above value → positive
+    assert util.delta_of(None, 60.0) is None
+    assert util.delta_of(75.0, None) is None
 
 
 # ---------- format_color_identity ----------

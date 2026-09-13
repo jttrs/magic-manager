@@ -98,9 +98,11 @@ def test_render_four_columns_with_deltas():
     # header carries Finish + the 4 value columns
     assert "Finish" in out and "Listing" in out and "Sealed mkt" in out
     assert "Exact singles" in out and "Floor singles" in out
-    # per-cell deltas: sealed_market − listing
-    assert "$800.00 (+$100.00)" in out   # 800 - 700
-    assert "$400.00 (-$35.00)" in out    # 400 - 435
+    # per-cell deltas are listing − value: Good Deal listing $700 vs mkt $800 →
+    # listing is $100 below market (discount, negative); Overpay $435 vs $400 →
+    # listing $35 above market (premium, positive).
+    assert "$800.00 (-$100.00)" in out   # 700 - 800
+    assert "$400.00 (+$35.00)" in out    # 435 - 400
 
 
 def test_render_name_hyperlinks_to_url():
@@ -134,6 +136,21 @@ def test_render_booster_only_labels_ev():
         exact_singles=88.4, floor_singles=88.4, booster_only=True))]
     out = "\n".join(svb._render(rows))
     assert "EV" in out            # cols 3/4 tagged EV for a pure-booster product
+
+
+def test_sort_key_steepest_discount_first():
+    # deltas (listing − sealed): discount=-40, small=-5, overpay=+25, none=—
+    discount = svb.BatchRow("Discount", "sld", _pv(listing=60.0, sealed_market=100.0))
+    small = svb.BatchRow("Small", "sld", _pv(listing=95.0, sealed_market=100.0))
+    overpay = svb.BatchRow("Overpay", "sld", _pv(listing=125.0, sealed_market=100.0))
+    nodelta = svb.BatchRow("NoMkt", "sld", _pv(listing=50.0, sealed_market=None))
+    err = svb.BatchRow("Err", "error", None)
+    rows = [small, overpay, nodelta, discount, err]
+    rows.sort(key=svb._sort_key)
+    labels = [r.label for r in rows]
+    # steepest discount (-40) first, then -5, then +25, then no-delta rows last
+    assert labels[:3] == ["Discount", "Small", "Overpay"]
+    assert set(labels[3:]) == {"NoMkt", "Err"}
 
 
 def test_render_error_row_no_crash():
