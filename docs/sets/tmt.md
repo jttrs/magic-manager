@@ -42,7 +42,7 @@ TMT ships two dupe-foil signals per audit:
 | `fracturefoil` | `ff` | **yes** → add to DUPE_FOIL | Example: TMT 291 Leonardo (A4Mitsuori, `fracturefoil+japanshowcase+universesbeyond`) has TMT 281 Leonardo (A4Mitsuori, `japanshowcase+universesbeyond`) — same art, fancy-foil sheet. |
 | `japanshowcase` | (base treatment, unique art) | **no — unique art** | TMT 281 Leonardo (A4Mitsuori) is a DIFFERENT art than TMT 15 (Chris Seaman, base) and TMT 211 (Jim Cheung, boosterfun). Japan-showcase-frame chases carry unique art. Filtered from master-list output by `sets.py:EXCLUDED_PROMO_TYPES` (japanshowcase excluded there), but selectors-side these ARE in scope for missing-set. |
 | `sourcematerial` | `sm` | n/a (part of pza masterpiece sheet) | 20 prints on the `pza` "TMNT Source Material" reskin sheet. |
-| `headliner` | (attached to premium) | n/a | 3 prints, standard chase premium. |
+| `headliner` | (attached to premium) | **excluded** → UNOBTAINABLE | 4 prints — the borderless Turtle headliners TMT 301-304 (Leonardo/Donatello/Raphael/Michelangelo), foil-only, ~$2,175-$2,957 each. Ultra-rare chase; excluded from missing-set via `FAMILY_UNOBTAINABLE_RULES["tmt"]` (see §5). `headliner` matches exactly these 4 in the family. |
 
 **Full-art convention:** unknown; TMT hasn't been synced to local DB so `treatments.compute_treatment` behavior isn't observed. Likely follows the newer UB convention (`full_art: true` on borderless-inverted, like SPM/TLA) but verify on first sync.
 
@@ -88,7 +88,10 @@ Update this section when a scene audit runs.
 
 ## 5. Unobtainable rules
 
-`selectors.FAMILY_UNOBTAINABLE_RULES["tmt"]` — not configured. No LTR-style scroll-frame equivalent surfaced yet.
+`selectors.FAMILY_UNOBTAINABLE_RULES["tmt"]`:
+- `{"promo_types_any_of": frozenset({"headliner"})}` (added 2026-09-13) — the 4 borderless Turtle headliners TMT 301-304 (Leonardo/Donatello/Raphael/Michelangelo), foil-only, ~$2,175-$2,957 each, ~$10,232 total = ~92% of tmt's distinct-missing $. Distinct borderless art (dupe-foil filter keeps them; this rule removes them). Direct analog of TLA Avatar Aang / EOE Sothera / ECL / SOS headliner chase. `headliner` matches exactly these 4 prints in the family and nothing else (verified DB); each Turtle keeps its base + showcase prints (e.g. Leonardo TMT 17/215) in scope. The user does not chase these.
+
+Not configured: no LTR-style scroll-frame equivalent surfaced yet; `japanshowcase` prints remain in scope pending user preference (see §7).
 
 Globally filtered:
 - `serialized` promo_type.
@@ -116,5 +119,5 @@ Fill this section on next audit.
 ## 8. Code refs
 
 - `selectors.py:FAMILY_DUPE_FOIL_PROMO_TYPES["tmt"]` — **not configured.** Recommended: `"tmt": frozenset({"surgefoil", "fracturefoil"})` (both are same-art dupes of siblings per audit).
-- `selectors.py:FAMILY_UNOBTAINABLE_RULES["tmt"]` — not configured. If the user wants japanshowcase excluded, add `[{"promo_types_any_of": frozenset({"japanshowcase"})}]`.
+- `selectors.py:FAMILY_UNOBTAINABLE_RULES["tmt"]` — `[{"promo_types_any_of": frozenset({"headliner"})}]` (the 4 Turtle headliners TMT 301-304; see §5). If the user later wants japanshowcase excluded too, add `{"promo_types_any_of": frozenset({"japanshowcase"})}`.
 - Related docs: [`../scryfall-set-families-and-bonus-sheets.md`](../scryfall-set-families-and-bonus-sheets.md) §3 (the tmc set_type-eternal gotcha).
