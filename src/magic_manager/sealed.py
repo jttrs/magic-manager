@@ -210,13 +210,36 @@ def make_market_provider(mode: str) -> MarketProvider:
 
 # ---------- product identification ----------
 
+# Storefront/marketing synonyms → the word MTGJSON actually uses in product
+# names. A "Commander Deck Case" on eBay/TCGplayer is a "… Commander Deck
+# Display" in MTGJSON; normalizing the query term lets a store-derived name
+# resolve without the caller knowing MTGJSON's exact wording.
+_NAME_SYNONYMS = {
+    "commander deck case": "commander deck display",
+    "deck case": "deck display",
+}
+
+
+def _apply_synonyms(want: str) -> str:
+    for term, canon in _NAME_SYNONYMS.items():
+        if term in want:
+            return want.replace(term, canon)
+    return want
+
+
 def identify_product(set_code: str, product_name_substr: str | None) -> dict:
     """Resolve one ``sealedProduct`` dict in ``set_code``.
 
     With ``product_name_substr=None`` and exactly one product, returns it; else
     raises ``LookupError`` listing the available names. With a substring: exact
-    (case-insensitive) match wins, else a unique substring match; ambiguous or
-    absent raises ``LookupError`` with the candidate list."""
+    (case-insensitive) match wins, else a unique substring match.
+
+    Two robustness aids for store-derived names: (1) marketing synonyms are
+    normalized (e.g. "Commander Deck Case" → "… Display"); (2) when a substring
+    matches MULTIPLE products, Collector's Edition variants are dropped (the
+    collection doesn't track them) and, if that leaves exactly one, it wins —
+    so "Commander Deck Display" resolves past its "… Collectors Edition" twin.
+    Genuinely ambiguous or absent raises ``LookupError`` with the candidate list."""
     products = mtgjson.sealed_products(set_code)
     if not products:
         raise LookupError(f"no sealedProduct data for set {set_code.upper()!r}")
@@ -228,13 +251,19 @@ def identify_product(set_code: str, product_name_substr: str | None) -> dict:
             f"{len(products)} products in {set_code.upper()}; name a substring. "
             f"Available: {names}"
         )
-    want = product_name_substr.strip().lower()
+    want = _apply_synonyms(product_name_substr.strip().lower())
     exact = [p for p in products if (p.get("name") or "").lower() == want]
     if exact:
         return exact[0]
     subs = [p for p in products if want in (p.get("name") or "").lower()]
     if len(subs) == 1:
         return subs[0]
+    if len(subs) > 1:
+        # Ambiguous → drop Collector's Edition twins (untracked); if that leaves
+        # exactly one, it's the base product the store name meant.
+        non_ce = [p for p in subs if not mtgjson._is_collector_edition(p.get("name") or "")]
+        if len(non_ce) == 1:
+            return non_ce[0]
     names = ", ".join(sorted(p.get("name", "?") for p in products))
     if not subs:
         raise LookupError(

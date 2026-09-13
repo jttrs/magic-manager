@@ -271,13 +271,16 @@ PRECON_MODERN_TYPES: frozenset[str] = frozenset({
 def _is_collector_edition(name: str) -> bool:
     """True if a deck name marks a Collector's Edition product.
 
-    Catches both the modern premium-variant twins (``… Collector's Edition``,
-    e.g. ``Counter Blitz Collector's Edition``) and the 1993 standalone box
-    sets whose apostrophe sits differently (``Collectors' Edition``,
-    ``Intl. Collectors' Edition``). All are premium/collector product the
-    collection doesn't track.
+    Catches the modern premium-variant twins (``… Collector's Edition``, e.g.
+    ``Counter Blitz Collector's Edition``), the apostrophe-less form MTGJSON uses
+    in some sealedProduct names (``… Commander Deck Display Collectors Edition``),
+    and the 1993 standalone box sets whose apostrophe sits differently
+    (``Collectors' Edition``, ``Intl. Collectors' Edition``). All are premium/
+    collector product the collection doesn't track.
     """
-    return "collector's edition" in name.lower() or "collectors' edition" in name.lower()
+    n = name.lower()
+    return ("collector's edition" in n or "collectors' edition" in n
+            or "collectors edition" in n)
 
 
 # ---------- precon "pool-shaped" classification ----------
