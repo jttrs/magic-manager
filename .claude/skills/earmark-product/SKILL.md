@@ -38,10 +38,14 @@ review's job); this skill just captures the link + the asking-price snapshot.
      --url "<the store URL>" \
      --price <asking price> [--currency USD] [--store "<label>"] [--notes "…"]
    ```
-   `add` re-validates via the same `sealed.identify_product` checkpoint (exit 2 on
-   an unresolved name — refine `--name` from the candidate list). `--store`
-   defaults to the URL host. Re-run `add` with a new `--url` to collate another
-   storefront under the same product.
+   `add` re-validates via the **same `_resolve_identity` checkpoint** as
+   `mm resolve-product` (exit 2 on an unresolved name — refine `--name` from the
+   candidate list). For a normal set that's `sealed.identify_product`; for **`sld`**
+   it's `sld.identify_drop` (the engine that also PRICES the drop), with the finish
+   (foil/nonfoil, inferred from the name) baked into the canonical name +
+   `subtype`, so a drop's two editions collate as distinct rows. `--store` defaults
+   to the URL host. Re-run `add` with a new `--url` to collate another storefront
+   under the same product.
 3. **Relay** the CLI's one-line result (inserted/updated product + link).
 
 ## Not to be confused with
@@ -57,5 +61,7 @@ review's job); this skill just captures the link + the asking-price snapshot.
 - `mm resolve-product` / `mm earmark add|list|rm-link|rm-product` — the CLI (`cli.py`).
 - `src/magic_manager/earmarks.py` — the CRUD module (V12 `earmarked_products` +
   `earmark_links` tables). Stores only the non-derivable asking-price snapshot.
-- `sealed.identify_product` — the MTGJSON-identity validator the `add` command
-  enforces. `mtgjson.sealed_products(code)` — the product-name source.
+- `cli._resolve_identity` — the shared MTGJSON-identity validator both `add` and
+  `resolve-product` enforce (dispatches `sld` → `sld.identify_drop`, else
+  `sealed.identify_product`). `mtgjson.sealed_products(code)` — the sealed-product
+  name source; `sld.all_drops()` — the Secret Lair drop-name source.

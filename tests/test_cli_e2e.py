@@ -170,3 +170,30 @@ def test_construct_from_loose_e2e_dry_run_writes_nothing(tmp_db, app, fake_scryf
     from magic_manager import db
     with db.connect() as conn:
         assert conn.execute("SELECT COUNT(*) FROM deck_assignments").fetchone()[0] == 0
+
+
+# ---------- unified SLD identity resolution (earmark add == resolve-product) ----------
+
+def test_resolve_identity_sld_unifies_name_shapes(monkeypatch):
+    """The shared checkpoint resolves BOTH the bare drop name and the store /
+    sealedProduct name (scaffold + finish marker), preserving the finish — so
+    `mm earmark add` and `mm resolve-product sld` accept the same names and the
+    two editions of a drop stay distinct. Regression for the resolver seam."""
+    from magic_manager import cli, sld
+    monkeypatch.setattr(sld, "identify_drop",
+                        lambda s: {"name": "Far Out, Man", "release_date": "2022-05-06"})
+
+    # Bare, unmarked drop name → nonfoil, canonical name unchanged.
+    nf = cli._resolve_identity("sld", "Far Out, Man")
+    assert nf["kind"] == "sld" and nf["subtype"] == "nonfoil"
+    assert nf["name"] == "Far Out, Man" and nf["category"] == "secret_lair"
+
+    # Store/sealedProduct name w/ scaffold + finish marker (was broken pre-unify)
+    # → foil, canonical name gains a " (Foil Edition)" discriminator.
+    foil = cli._resolve_identity(
+        "sld", "Secret Lair Drop Secret Lair x Far Out Man Rainbow Foil")
+    assert foil["subtype"] == "foil"
+    assert foil["name"] == "Far Out, Man (Foil Edition)"
+
+    # The two editions produce DISTINCT canonical names (distinct earmark rows).
+    assert nf["name"] != foil["name"]

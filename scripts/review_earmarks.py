@@ -31,7 +31,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from magic_manager import earmarks, sealed, sets, util  # noqa: E402
+from magic_manager import earmarks, sealed, sets, sld, util, valuation  # noqa: E402
 
 QUERIES_DIR = ROOT / "queries"
 
@@ -57,13 +57,37 @@ def _age_days(captured_at: str, today: str) -> int | None:
 # ---------- per-product live valuation (reuses the sealed engine) ----------
 
 def _value_product(set_code: str, product_name: str, market_provider,
-                   *, refresh_stale: bool = True) -> dict:
-    """Recompute market + intrinsic for one product via the sealed engine.
+                   *, edition: str | None = None,
+                   market_name: str = "tcgcsv", refresh_stale: bool = True) -> dict:
+    """Recompute market + intrinsic for one earmarked product.
 
-    Mirrors ``sealed_value.py``'s flow: identify → scout-build to discover
-    referenced sets → sync missing+stale → rebuild with the market provider →
-    aggregate. Returns ``{"market", "intrinsic", "error"}``.
+    Dispatches on ``set_code`` exactly like the other sealed-value tools:
+
+    - **Secret Lair drops** (``sld``) are MTGJSON *DeckList* entries, NOT walkable
+      ``sealedProduct`` trees — the tree engine would price them by the shared
+      ``dnd-50th-anniversary`` booster EV and report an identical (wrong) figure
+      for every drop. Route them through ``valuation.value_sld_drop`` instead:
+      market ← the drop's own sealedProduct price (``sealed_market``); intrinsic ←
+      Σ the drop's exact Secret Lair printings (``exact_singles``). The stored name
+      is the sealedProduct name (with a ``Secret Lair x`` scaffold + finish marker),
+      so strip it back to a drop substring for ``sld.identify_drop``.
+    - **Everything else** takes the sealed tree engine: identify → scout-build to
+      discover referenced sets → sync missing+stale → rebuild with the provider →
+      aggregate (mirrors ``sealed_value.py``).
+
+    Returns ``{"market", "intrinsic", "error"}``.
     """
+    if set_code.lower() == "sld":
+        drop_substr = sld.strip_finish_marker(sld.normalize_name(product_name))
+        # Prefer the stored edition (subtype, set by the unified resolver);
+        # fall back to sniffing the name for pre-unification earmark rows.
+        ed = edition if edition in ("foil", "nonfoil") else sld.edition_from_name(product_name)
+        try:
+            v = valuation.value_sld_drop(drop_substr, market=market_name, edition=ed)
+        except LookupError as e:
+            return {"market": None, "intrinsic": None, "error": str(e)}
+        return {"market": v.sealed_market, "intrinsic": v.exact_singles, "error": None}
+
     try:
         product = sealed.identify_product(set_code, product_name)
     except LookupError as e:
@@ -99,12 +123,13 @@ def _product_cell(p) -> str:
 
 
 def _build_rows(products, market_provider, today: str,
-                *, refresh_stale: bool = True) -> list[dict]:
+                *, market_name: str = "tcgcsv", refresh_stale: bool = True) -> list[dict]:
     """Value every product and assemble sortable row dicts."""
     rows = []
     for p in products:
         val = _value_product(p.set_code, p.product_name, market_provider,
-                             refresh_stale=refresh_stale)
+                             edition=p.subtype,
+                             market_name=market_name, refresh_stale=refresh_stale)
         best = p.best_asking
         market = val["market"]
         delta = (market - best) if (market is not None and best is not None) else None
@@ -214,7 +239,8 @@ def main() -> int:
     today = now.strftime("%Y-%m-%d")
 
     market_provider = sealed.make_market_provider(args.market)
-    rows = _build_rows(products, market_provider, today, refresh_stale=not args.no_refresh)
+    rows = _build_rows(products, market_provider, today,
+                       market_name=args.market, refresh_stale=not args.no_refresh)
     lines = _render_lines(rows, today)
     print("\n" + "\n".join(lines))
 

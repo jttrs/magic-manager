@@ -173,6 +173,45 @@ def test_value_sld_drop_maps_columns(monkeypatch):
     assert pv2.exact_singles == 79.43 and pv2.floor_singles == 28.23
 
 
+# ---------- sanity guard: container-size mismatch ----------
+
+def _pv(*, listing, sealed_market, exact_singles, booster_only=False):
+    return sealed.ProductValuation(
+        label="x", kind="sealed", listing=listing, sealed_market=sealed_market,
+        exact_singles=exact_singles, floor_singles=None, booster_only=booster_only)
+
+
+def test_container_mismatch_fires_on_high_singles_no_market():
+    # Duel Decks trap: singles ($220) ≫ listing ($29.99) AND no market comp.
+    w = valuation.container_mismatch_warning(
+        _pv(listing=29.99, sealed_market=None, exact_singles=220.0))
+    assert w is not None and "larger container" in w and "7.3×" in w
+
+
+def test_container_mismatch_silent_when_market_present():
+    # A market comp means the size resolved fine — not a mismatch, just a deal.
+    assert valuation.container_mismatch_warning(
+        _pv(listing=29.99, sealed_market=26.89, exact_singles=220.0)) is None
+
+
+def test_container_mismatch_silent_on_modest_ratio():
+    # Singles only ~2× the listing → a normal good deal, below the 3× threshold.
+    assert valuation.container_mismatch_warning(
+        _pv(listing=30.0, sealed_market=None, exact_singles=60.0)) is None
+
+
+def test_container_mismatch_exempts_booster_only():
+    # Booster-only cols 3/4 are EV, not a fixed-singles sum — never flagged.
+    assert valuation.container_mismatch_warning(
+        _pv(listing=10.0, sealed_market=None, exact_singles=999.0,
+            booster_only=True)) is None
+
+
+def test_container_mismatch_needs_a_listing():
+    assert valuation.container_mismatch_warning(
+        _pv(listing=None, sealed_market=None, exact_singles=220.0)) is None
+
+
 # ---------- regression: the real-name matching bugs behind blank cells ----------
 
 def test_sld_sealed_market_marvels_storm_x_scaffold_apostrophe(monkeypatch):

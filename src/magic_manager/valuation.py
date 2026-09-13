@@ -26,7 +26,7 @@ Two capabilities this module adds on top of the engines:
 
 from __future__ import annotations
 
-from . import construct, db, mtgjson, sealed, sets, sld
+from . import construct, db, mtgjson, sealed, sets, sld, util
 
 
 # ---------- shared floor helpers (sealed-product col4) ----------
@@ -262,6 +262,41 @@ def value_sld_drop(
         diagnostics=diagnostics,
         note="live Scryfall singles; sealed-market via tcgcsv/manapool by product id",
     )
+
+
+# ---------- sanity guard: container-size mismatch ----------
+
+# When singles exceed the listing by more than this factor AND no sealed-market
+# comp was found, the resolved product is probably a larger CONTAINER (e.g. a
+# 6-deck Display case) than the single unit the listing is priced for.
+_CONTAINER_MISMATCH_FACTOR = 3.0
+
+
+def container_mismatch_warning(pv: "sealed.ProductValuation") -> str | None:
+    """Flag a likely container-size resolution error, else ``None``.
+
+    The tell (learned from a Duel Decks listing resolving to the 6-count Display
+    case instead of one deck): the product's exact singles dwarf the listing
+    (> ``_CONTAINER_MISMATCH_FACTOR`` ×) AND there is NO sealed-market comp. Both
+    conditions matter — singles far above the listing is otherwise just a great
+    deal, but a real single-unit product that cheap would still HAVE a market
+    price; the missing comp is what fingers a wrong-size container. A booster-only
+    product's cols 3/4 are EV, not a fixed-singles sum, so it's exempt. Returns a
+    human-readable warning string a renderer can surface, or ``None``."""
+    if pv.booster_only:
+        return None
+    listing, singles = pv.listing, pv.exact_singles
+    if listing is None or listing <= 0 or singles is None:
+        return None
+    if pv.sealed_market is not None:
+        return None
+    if singles > _CONTAINER_MISMATCH_FACTOR * listing:
+        return (f"sanity: exact singles ({util.fmt_usd(singles)}) are "
+                f"{singles / listing:.1f}× the listing ({util.fmt_usd(listing)}) with no "
+                f"sealed-market comp — likely resolved to a larger container "
+                f"(e.g. a multi-deck display) than the listed unit; re-check the "
+                f"product name/size")
+    return None
 
 
 def _pick_with_fallback(foil_val: float, nonfoil_val: float,
