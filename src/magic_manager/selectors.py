@@ -330,6 +330,17 @@ FAMILY_UNOBTAINABLE_RULES: dict[str, list[dict]] = {
         # cards and nothing else in the TLA family (verified 2026-07-21).
         {"promo_types_any_of": frozenset({"neonink", "headliner", "raisedfoil"})},
     ],
+    "tmt": [
+        # The 4 borderless Turtle headliners (TMT 301-304 — Leonardo/Donatello/
+        # Raphael/Michelangelo), foil-only, ~$2,175-$2,957 each, ~$10,232 total
+        # (~92% of tmt's missing $). Direct analog of TLA's Avatar Aang / EOE
+        # Sothera headliner chase: distinct borderless art (so the dupe-foil
+        # filter KEEPS them; this rule is what removes them). `headliner` matches
+        # exactly these 4 prints in the family and nothing else (verified DB,
+        # 2026-09-13); each Turtle keeps its base + showcase prints (e.g. Leonardo
+        # TMT 17/215) in scope. The user does not chase these. See docs/sets/tmt.md §5.
+        {"promo_types_any_of": frozenset({"headliner"})},
+    ],
     "snc": [
         # Promo-pack + prerelease STAMP variants the user does not shop for
         # (2026-08-24). Prints across pncc (NCC commander promos), psnc
