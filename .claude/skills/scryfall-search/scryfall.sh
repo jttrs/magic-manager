@@ -107,30 +107,43 @@ call_api() {
   # shellcheck disable=SC2064
   trap "rm -f '$tmp_body'; rmdir '$LOCK_FILE' 2>/dev/null || true" EXIT
 
-  local http_code
-  if [ "$method" = "POST" ]; then
-    http_code=$(curl -sS -X POST \
-      -H "User-Agent: $UA" \
-      -H 'Accept: application/json;q=0.9,*/*;q=0.8' \
-      -H 'Content-Type: application/json' \
-      --data-binary "$body" \
-      -o "$tmp_body" \
-      -w '%{http_code}' \
-      "$url") || {
-        echo "scryfall.sh: curl POST failed for $url" >&2
-        exit 4
-      }
-  else
-    http_code=$(curl -sS \
-      -H "User-Agent: $UA" \
-      -H 'Accept: application/json;q=0.9,*/*;q=0.8' \
-      -o "$tmp_body" \
-      -w '%{http_code}' \
-      "$url") || {
-        echo "scryfall.sh: curl failed for $url" >&2
-        exit 4
-      }
-  fi
+  # Transient server errors (500/502/503/504) get a few retries with backoff —
+  # Scryfall occasionally 503s mid-run and a bare abort would kill a whole batch.
+  local http_code attempt=0
+  while : ; do
+    if [ "$method" = "POST" ]; then
+      http_code=$(curl -sS -X POST \
+        -H "User-Agent: $UA" \
+        -H 'Accept: application/json;q=0.9,*/*;q=0.8' \
+        -H 'Content-Type: application/json' \
+        --data-binary "$body" \
+        -o "$tmp_body" \
+        -w '%{http_code}' \
+        "$url") || {
+          echo "scryfall.sh: curl POST failed for $url" >&2
+          exit 4
+        }
+    else
+      http_code=$(curl -sS \
+        -H "User-Agent: $UA" \
+        -H 'Accept: application/json;q=0.9,*/*;q=0.8' \
+        -o "$tmp_body" \
+        -w '%{http_code}' \
+        "$url") || {
+          echo "scryfall.sh: curl failed for $url" >&2
+          exit 4
+        }
+    fi
+    case "$http_code" in
+      500|502|503|504)
+        attempt=$((attempt+1))
+        if [ "$attempt" -ge 3 ]; then break; fi
+        echo "scryfall.sh: HTTP $http_code (transient), retry $attempt/2 after ${attempt}s…" >&2
+        python3 -c "import time; time.sleep($attempt)"
+        ;;
+      *) break ;;
+    esac
+  done
 
   if [ "$http_code" = "429" ]; then
     # Per Scryfall: 30s lockout. Persist a backoff window of 35s to be safe.

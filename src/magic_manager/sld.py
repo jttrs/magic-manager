@@ -307,7 +307,12 @@ def value_drop(drop: dict, *, floors: bool = True,
             and (oid := card.get("oracle_id")) and oid not in _floors_cache
         ]
         if need_oids:
-            _floors_cache.update(card_floors_many(need_oids))
+            # A Scryfall failure degrades this drop's floor to unpriced — never
+            # aborts a multi-drop batch mid-run.
+            try:
+                _floors_cache.update(card_floors_many(need_oids))
+            except scryfall.ScryfallError:
+                _floors_cache.update({o: (None, None) for o in need_oids})
 
     nf_total = foil_total = nf_floor_total = foil_floor_total = 0.0
     nf_ct = foil_ct = nf_floor_ct = foil_floor_ct = 0
