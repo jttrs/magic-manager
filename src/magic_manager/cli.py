@@ -3724,10 +3724,26 @@ def _resolve_identity(set_code: str, name: str | None) -> dict:
     returning the canonical identity. Raises ``LookupError`` on no/ambiguous match.
 
     Returns a uniform dict: ``{kind, set_code, name, uuid?, category?, subtype?,
-    release_date?, card_count?}`` (``kind`` is ``"sld"`` or ``"sealed"``)."""
+    release_date?, card_count?}`` (``kind`` is ``"sld"`` or ``"sealed"``).
+
+    Secret Lair drops resolve through the SAME engine that PRICES them
+    (``sld.identify_drop`` — the ``sealed`` booster-tree engine would misprice a
+    drop by its shared booster EV). Store / sealedProduct names carry a
+    ``Secret Lair x`` scaffold + a finish marker that the bare DeckList drop name
+    lacks, so the input is normalized + stripped before matching (this is what lets
+    a store name like "… Beholder I Rainbow Foil" resolve where a raw
+    ``identify_drop`` fails). The finish is preserved separately — inferred from the
+    ORIGINAL name into ``subtype`` and appended to the canonical ``name`` (" (Foil
+    Edition)") — so the two editions of one drop stay distinct earmark rows AND the
+    review can price the right finish deterministically instead of re-sniffing a
+    store string."""
     if set_code.lower() == "sld":
-        drop = sld_mod.identify_drop(name or "")
-        return {"kind": "sld", "set_code": "sld", "name": drop["name"],
+        raw = name or ""
+        drop = sld_mod.identify_drop(sld_mod.strip_finish_marker(sld_mod.normalize_name(raw)))
+        edition = sld_mod.edition_from_name(raw)
+        canonical = drop["name"] + (" (Foil Edition)" if edition == "foil" else "")
+        return {"kind": "sld", "set_code": "sld", "name": canonical,
+                "subtype": edition, "category": "secret_lair",
                 "release_date": drop.get("release_date")}
     product = sealed_mod.identify_product(set_code, name)
     return {
@@ -3779,40 +3795,44 @@ def earmark_add_cmd(
     notes: str = typer.Option(None, "--notes", help="Free-text note on this link."),
     json_out: bool = typer.Option(False, "--json", help="Emit the result as JSON."),
 ):
-    """Earmark a sealed product on a storefront.
+    """Earmark a sealed product (or Secret Lair drop) on a storefront.
 
-    Validates that ``name`` resolves to a real MTGJSON sealed product in
-    ``set_code`` (exit 2 if not — every earmark must be identity-resolvable so
-    the review can value it), then upserts the product + this storefront link.
-    Re-run with a different --url to add another store for the same product.
+    Validates ``name`` through the SAME shared checkpoint as ``mm resolve-product``
+    (``_resolve_identity``) — a sealed product for a normal set, a Secret Lair drop
+    for ``sld`` — exiting 2 if it doesn't resolve, since every earmark must be
+    identity-resolvable for the review to value it. For an SLD drop the finish
+    (foil/nonfoil, inferred from the name) is baked into the canonical name +
+    ``subtype`` so the two editions collate as distinct rows and the review prices
+    the right finish. Then upserts the product + this storefront link. Re-run with a
+    different --url to add another store for the same product.
     """
     try:
-        product = sealed_mod.identify_product(set_code, name)
+        identity = _resolve_identity(set_code, name)
     except LookupError as e:
         typer.echo(f"error: {e}", err=True)
         raise typer.Exit(2)
 
-    ids = product.get("identifiers") or {}
+    canonical_name = identity["name"]
     result = earmarks_mod.earmark_add(
-        set_code, product["name"], url,
-        product_uuid=product.get("uuid"),
-        category=product.get("category"),
-        subtype=product.get("subtype"),
-        release_date=product.get("releaseDate"),
-        card_count=product.get("cardCount"),
+        identity["set_code"], canonical_name, url,
+        product_uuid=identity.get("uuid"),
+        category=identity.get("category"),
+        subtype=identity.get("subtype"),
+        release_date=identity.get("release_date"),
+        card_count=identity.get("card_count"),
         store_name=store,
         asking_price=price,
         currency=currency,
         link_notes=notes,
     )
     if json_out:
-        json.dump({**result, "product_name": product["name"], "set_code": set_code.lower()},
+        json.dump({**result, "product_name": canonical_name, "set_code": identity["set_code"]},
                   sys.stdout, indent=2)
         sys.stdout.write("\n")
         return
     px = f" @ {price:.2f} {currency}" if price is not None else ""
     typer.echo(f"{result['product_action']} product / {result['link_action']} link: "
-               f"{product['name']} ({set_code.lower()}){px}")
+               f"{canonical_name} ({identity['set_code']}){px}")
 
 
 @earmark_app.command("list")

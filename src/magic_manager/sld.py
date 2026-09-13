@@ -120,6 +120,20 @@ _FINISH_MARKERS = (
 )
 
 
+def edition_from_name(name: str) -> str:
+    """Infer a Secret Lair listing's finish from its (raw, un-normalized) name.
+
+    Store / MTGJSON ``sealedProduct`` names carry the finish (``… Rainbow Foil``,
+    ``… Traditional Foil``, ``… Non-Foil Edition``); the bare DeckList drop name
+    does not. Returns ``"foil"`` unless the name is an explicit non-foil (default
+    ``"nonfoil"`` for an unmarked drop name). The single source of finish-sniffing
+    truth for the earmark resolver + review."""
+    n = (name or "").lower()
+    if "foil" in n and "non foil" not in n and "non-foil" not in n:
+        return "foil"
+    return "nonfoil"
+
+
 def strip_finish_marker(normalized: str) -> str:
     """From an already-``normalize_name``d string, drop a trailing finish marker
     (rainbow/traditional/plain foil, non-foil) so a foil sealedProduct's core

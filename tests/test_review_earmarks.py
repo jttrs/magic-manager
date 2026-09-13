@@ -48,13 +48,13 @@ def test_sld_earmark_routes_to_sld_engine(monkeypatch):
         "sld",
         "Secret Lair Drop Secret Lair x Dungeons and Dragons "
         "Death is in the Eyes of the Beholder I Rainbow Foil",
-        market_provider=None, market_name="tcgcsv")
+        market_provider=None, edition="foil", market_name="tcgcsv")
 
     # market ← sealed_market, intrinsic ← exact_singles (NOT the booster-EV tree).
     assert out == {"market": 47.58, "intrinsic": 40.35, "error": None}
     # Name stripped to a drop substring (scaffold + finish marker removed).
     assert captured["substr"] == "dungeons and dragons death is in the eyes of the beholder i"
-    # Finish inferred as foil from the "Rainbow Foil" marker in the stored name.
+    # Finish comes from the stored subtype (unified resolver), passed through.
     assert captured["edition"] == "foil"
 
 
@@ -73,7 +73,9 @@ def test_sld_earmark_lookup_error_is_soft(monkeypatch):
     assert "no Secret Lair drop" in out["error"]
 
 
-def test_nonfoil_edition_inferred(monkeypatch):
+def test_edition_falls_back_to_name_sniff_when_no_subtype(monkeypatch):
+    # Pre-unification rows have no subtype; the finish is sniffed from the stored
+    # (sealedProduct) name so old earmarks still price the right finish.
     monkeypatch.setattr(sealed, "identify_product", _boom)
     captured = {}
 
@@ -84,5 +86,10 @@ def test_nonfoil_edition_inferred(monkeypatch):
 
     monkeypatch.setattr(valuation, "value_sld_drop", fake)
     review_earmarks._value_product("sld", "Some Drop Non-Foil Edition",
-                                   market_provider=None, market_name="tcgcsv")
+                                   market_provider=None, edition=None,
+                                   market_name="tcgcsv")
     assert captured["edition"] == "nonfoil"
+    review_earmarks._value_product("sld", "Some Drop Rainbow Foil",
+                                   market_provider=None, edition=None,
+                                   market_name="tcgcsv")
+    assert captured["edition"] == "foil"

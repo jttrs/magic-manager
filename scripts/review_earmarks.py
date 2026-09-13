@@ -56,19 +56,9 @@ def _age_days(captured_at: str, today: str) -> int | None:
 
 # ---------- per-product live valuation (reuses the sealed engine) ----------
 
-def _sld_edition_from_name(name: str) -> str:
-    """Infer a Secret Lair earmark's finish from its stored (sealedProduct) name.
-
-    Earmarks store the storefront/sealedProduct name (e.g. ``… Beholder I Rainbow
-    Foil``), which carries the finish; ``foil`` unless it's an explicit non-foil."""
-    n = (name or "").lower()
-    if "foil" in n and "non foil" not in n and "non-foil" not in n:
-        return "foil"
-    return "nonfoil"
-
-
 def _value_product(set_code: str, product_name: str, market_provider,
-                   *, market_name: str = "tcgcsv", refresh_stale: bool = True) -> dict:
+                   *, edition: str | None = None,
+                   market_name: str = "tcgcsv", refresh_stale: bool = True) -> dict:
     """Recompute market + intrinsic for one earmarked product.
 
     Dispatches on ``set_code`` exactly like the other sealed-value tools:
@@ -89,10 +79,11 @@ def _value_product(set_code: str, product_name: str, market_provider,
     """
     if set_code.lower() == "sld":
         drop_substr = sld.strip_finish_marker(sld.normalize_name(product_name))
+        # Prefer the stored edition (subtype, set by the unified resolver);
+        # fall back to sniffing the name for pre-unification earmark rows.
+        ed = edition if edition in ("foil", "nonfoil") else sld.edition_from_name(product_name)
         try:
-            v = valuation.value_sld_drop(
-                drop_substr, market=market_name,
-                edition=_sld_edition_from_name(product_name))
+            v = valuation.value_sld_drop(drop_substr, market=market_name, edition=ed)
         except LookupError as e:
             return {"market": None, "intrinsic": None, "error": str(e)}
         return {"market": v.sealed_market, "intrinsic": v.exact_singles, "error": None}
@@ -137,6 +128,7 @@ def _build_rows(products, market_provider, today: str,
     rows = []
     for p in products:
         val = _value_product(p.set_code, p.product_name, market_provider,
+                             edition=p.subtype,
                              market_name=market_name, refresh_stale=refresh_stale)
         best = p.best_asking
         market = val["market"]
