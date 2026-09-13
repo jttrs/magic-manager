@@ -62,10 +62,16 @@ def _floor_sum(needs, *, floors_cache: dict) -> tuple[float | None, int, int]:
     per card) and memoized in ``floors_cache`` across the run. Returns
     ``(total_or_None, n_priced, n_unpriced)``; total is None when nothing priced."""
     oid_by_sid = _oracle_ids_for([n.scryfall_id for n in needs])
-    # Batch-fetch any oracle_ids not already cached (one query per ~60 ids).
+    # Batch-fetch any oracle_ids not already cached (one query per ~60 ids). A
+    # transient/persistent Scryfall failure here degrades the FLOOR column to
+    # unpriced for this product — it must never abort the whole batch run.
     missing = [o for o in dict.fromkeys(oid_by_sid.values()) if o not in floors_cache]
     if missing:
-        floors_cache.update(sld.card_floors_many(missing))
+        from . import scryfall
+        try:
+            floors_cache.update(sld.card_floors_many(missing))
+        except scryfall.ScryfallError:
+            floors_cache.update({o: (None, None) for o in missing})
     total = 0.0
     n_priced = n_unpriced = 0
     for n in needs:
