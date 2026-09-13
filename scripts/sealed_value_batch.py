@@ -182,9 +182,15 @@ def main() -> int:
           "printing of each card anywhere. (±$) in cols 2-4 = listing − value: "
           "NEGATIVE = the listing is BELOW that measure (a discount). Sorted by "
           "steepest sealed-mkt discount first.*")
-    # Surface per-row notes/errors below the table.
-    notes = [(r.label, r.note or (r.valuation.note if r.valuation else "")) for r in rows]
-    notes = [(lbl, n) for lbl, n in notes if n]
+    # Surface per-row notes/errors below the table. A container-size-mismatch
+    # sanity warning (singles ≫ listing with no market comp — likely resolved to a
+    # multi-unit display) takes precedence over the row's informational note.
+    notes = []
+    for r in rows:
+        warn = valuation.container_mismatch_warning(r.valuation) if r.valuation else None
+        note = warn or r.note or (r.valuation.note if r.valuation else "")
+        if note:
+            notes.append((r.label, note))
     if notes:
         print()
         for label, note in notes:
