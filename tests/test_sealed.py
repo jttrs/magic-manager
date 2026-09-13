@@ -99,6 +99,31 @@ def test_identify_product_ambiguous_raises(monkeypatch, tmp_path):
         sealed.identify_product("tst", "pack")
 
 
+def test_identify_product_marketing_synonym_and_ce_drop(monkeypatch):
+    """A store's 'Commander Deck Case' resolves to MTGJSON's '… Commander Deck
+    Display', and the Display-vs-Collectors-Edition ambiguity drops the CE twin."""
+    from magic_manager import mtgjson
+    products = [
+        {"name": "Warhammer 40000 Commander Deck Display", "uuid": "d"},
+        {"name": "Warhammer 40000 Commander Deck Display Collectors Edition", "uuid": "d-ce"},
+    ]
+    monkeypatch.setattr(mtgjson, "sealed_products", lambda code: products)
+    # marketing name "Case" → Display; CE twin dropped → base wins
+    assert sealed.identify_product("40k", "Commander Deck Case")["uuid"] == "d"
+    # plain "Commander Deck Display" also disambiguates past the CE twin
+    assert sealed.identify_product("40k", "Commander Deck Display")["uuid"] == "d"
+    # explicitly asking for the CE still returns it (exact match wins)
+    assert sealed.identify_product(
+        "40k", "Warhammer 40000 Commander Deck Display Collectors Edition")["uuid"] == "d-ce"
+
+
+def test_is_collector_edition_apostropheless(monkeypatch):
+    from magic_manager import mtgjson
+    assert mtgjson._is_collector_edition("X Collectors Edition")       # MTGJSON sealed form
+    assert mtgjson._is_collector_edition("X Collector's Edition")      # apostrophe form
+    assert not mtgjson._is_collector_edition("X Commander Deck Display")
+
+
 def test_pack_ev_intrinsic(monkeypatch, tmp_path):
     """A Booster Pack's intrinsic = draft booster EV = common($0.25) + rare($4) = $4.25."""
     _patch(monkeypatch, tmp_path=tmp_path)
