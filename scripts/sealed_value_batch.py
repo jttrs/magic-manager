@@ -55,24 +55,27 @@ class BatchRow:
     kind: str                     # "sealed" | "sld" | "error"
     valuation: "sealed.ProductValuation | None" = None
     note: str = ""                # error message
+    url: str | None = None        # the item's storefront URL (name links to it)
 
 
 def _value_sealed(item: dict, market: str, floors_cache: dict) -> BatchRow:
     code = item["set_code"].lower()
     substr = item.get("product")
     label = item.get("label") or f"{code.upper()} {substr or ''}".strip()
+    url = item.get("url")
     try:
         pv = valuation.value_sealed_product(
             code, substr, listing=item.get("asking_price"), market=market,
             refresh_stale=False, floors_cache=floors_cache)
     except LookupError as e:
-        return BatchRow(label, "error", note=str(e))
-    return BatchRow(pv.label, "sealed", pv)
+        return BatchRow(label, "error", note=str(e), url=url)
+    return BatchRow(pv.label, "sealed", pv, url=url)
 
 
 def _value_sld(item: dict, market: str, floors_cache: dict) -> BatchRow:
     substr = item.get("drop") or item.get("product")
     label = item.get("label") or f"SLD {substr or ''}".strip()
+    url = item.get("url")
     edition = "foil" if str(item.get("edition", "")).lower() in ("foil", "traditional foil",
                                                                  "rainbow foil") else "auto"
     try:
@@ -80,10 +83,10 @@ def _value_sld(item: dict, market: str, floors_cache: dict) -> BatchRow:
             substr or "", listing=item.get("asking_price"), market=market,
             edition=edition, _floors_cache=floors_cache)
     except LookupError as e:
-        return BatchRow(label, "error", note=str(e))
+        return BatchRow(label, "error", note=str(e), url=url)
     except (mtgjson.MtgJsonError, scryfall.ScryfallError) as e:
-        return BatchRow(label, "error", note=str(e))
-    return BatchRow(pv.label, "sld", pv)
+        return BatchRow(label, "error", note=str(e), url=url)
+    return BatchRow(pv.label, "sld", pv, url=url)
 
 
 def value_item(item: dict, market: str, floors_cache: dict) -> BatchRow:
@@ -95,15 +98,25 @@ def value_item(item: dict, market: str, floors_cache: dict) -> BatchRow:
 
 # The unified 4-column schema (listing / sealed market / exact singles / floor),
 # with an in-cell delta vs listing in columns 2-4 (util.fmt_delta_cell).
+def _md_link(label: str, url: str | None) -> str:
+    """Markdown link `[label](url)` when a URL is present, else the bare label.
+    Pipes/brackets in the label are escaped so the table cell stays intact."""
+    safe = label.replace("|", "\\|").replace("[", "(").replace("]", ")")[:50]
+    return f"[{safe}]({url})" if url else safe
+
+
 def _render(rows: list[BatchRow]) -> list[str]:
-    lines = ["| Product | Listing | Sealed mkt | Exact singles | Floor singles |",
-             "|---|---:|---:|---:|---:|"]
+    lines = ["| Product | Finish | Listing | Sealed mkt | Exact singles | Floor singles |",
+             "|---|---|---:|---:|---:|---:|"]
     for r in rows:
-        name = r.label.replace("|", "\\|")[:50]
+        name = _md_link(r.label, r.url)
         if r.kind == "error" or r.valuation is None:
-            lines.append(f"| {name} | — | — | — | — |")
+            lines.append(f"| {name} | — | — | — | — | — |")
             continue
         pv = r.valuation
+        # Explicit finish per row (esp. Secret Lairs, which ship foil AND nonfoil
+        # editions at very different prices). Sealed products are nonfoil by default.
+        finish = pv.finish or "nonfoil"
         listing = _fmt(pv.listing)
         # Booster-only products: cols 3/4 are the booster EV (labeled), not singles.
         c3 = util.fmt_delta_cell(pv.exact_singles, pv.listing)
@@ -111,7 +124,7 @@ def _render(rows: list[BatchRow]) -> list[str]:
         if pv.booster_only:
             c3 = f"{c3} EV"
             c4 = f"{c4} EV"
-        lines.append(f"| {name} | {listing} | "
+        lines.append(f"| {name} | {finish} | {listing} | "
                      f"{util.fmt_delta_cell(pv.sealed_market, pv.listing)} | {c3} | {c4} |")
     return lines
 

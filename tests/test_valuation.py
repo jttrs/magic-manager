@@ -215,5 +215,7 @@ def test_value_sld_drop_foil_fallback_to_nonfoil(monkeypatch):
     pv = valuation.value_sld_drop("julie bell", market="stub", edition="foil")
     assert pv.exact_singles == 59.65          # fell back to nonfoil, not $0/blank
     assert pv.floor_singles == 41.16
-    assert pv.finish == "nonfoil"             # reflects what was actually used
+    # finish reflects the EDITION being valued (foil product), not the price basis;
+    # the nonfoil-pricing fallback is disclosed in diagnostics, not by relabeling.
+    assert pv.finish == "foil"
     assert any("nonfoil" in d for d in pv.diagnostics)   # transparency diagnostic
