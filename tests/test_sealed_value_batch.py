@@ -95,12 +95,29 @@ def test_render_four_columns_with_deltas():
             exact_singles=470.0, floor_singles=375.0)),
     ]
     out = "\n".join(svb._render(rows))
-    # 4-column header
-    assert "Listing" in out and "Sealed mkt" in out
+    # header carries Finish + the 4 value columns
+    assert "Finish" in out and "Listing" in out and "Sealed mkt" in out
     assert "Exact singles" in out and "Floor singles" in out
     # per-cell deltas: sealed_market − listing
     assert "$800.00 (+$100.00)" in out   # 800 - 700
     assert "$400.00 (-$35.00)" in out    # 400 - 435
+
+
+def test_render_name_hyperlinks_to_url():
+    rows = [svb.BatchRow("Far Out, Man", "sld", _pv(
+        label="Far Out, Man", kind="sld", listing=60.0, sealed_market=75.0,
+        exact_singles=79.43, floor_singles=28.23, finish="foil"),
+        url="https://store.example/far-out-man")]
+    out = "\n".join(svb._render(rows))
+    assert "[Far Out, Man](https://store.example/far-out-man)" in out
+    assert "| foil |" in out              # finish explicit per row
+
+
+def test_render_no_url_leaves_bare_label():
+    rows = [svb.BatchRow("Bare", "sld", _pv(label="Bare", kind="sld",
+            listing=10.0, sealed_market=12.0, exact_singles=8.0, floor_singles=5.0))]
+    out = "\n".join(svb._render(rows))
+    assert "Bare" in out and "](" not in out   # no link syntax when no url
 
 
 def test_render_listing_none_shows_bare_values():

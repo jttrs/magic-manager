@@ -69,23 +69,29 @@ A thin chain over three existing deterministic pieces — no new logic:
    identity via the shared recipe in
    [`_shared/resolve-storefront-product.md`](../_shared/resolve-storefront-product.md)
    (WebFetch/eBay-fallback → propose `set_code`+name or `sld`+drop →
-   `uv run mm resolve-product <set_code> --name "<substr>" [--url <u>]`), keeping
-   the asking price the page shows and an `edition` hint for SLD foil/nonfoil.
-3. **Batch-value the resolved list** — build a JSON array and pipe it in:
+   `uv run mm resolve-product <set_code> --name "<substr>" [--url <u>]`). For EACH
+   item keep three things: the asking price the page shows, the exact `url` (the
+   name column links to it), and — for every Secret Lair — an explicit `edition`
+   of `foil` or `nonfoil` (never leave it implicit; the foil and nonfoil editions
+   price very differently).
+3. **Batch-value the resolved list** — build a JSON array and pipe it in. Include
+   `url` and (for SLD) `edition` on every item:
    ```bash
-   echo '[{"set_code":"afc","product":"Commander Deck Display","asking_price":434.99,"url":"..."},
-          {"set_code":"sld","drop":"Far Out, Man","asking_price":29.99,"edition":"foil"}]' \
+   echo '[{"set_code":"afc","product":"Commander Deck Display","asking_price":434.99,"url":"https://…"},
+          {"set_code":"sld","drop":"Far Out, Man","asking_price":29.99,"edition":"foil","url":"https://…"}]' \
      | uv run python scripts/sealed_value_batch.py --market chain
    ```
 4. **Relay a COMPLETE, well-formatted chart in chat — always.** Do NOT paste the
    raw script stdout; render your own clean markdown table so it displays nicely,
    and make it EXHAUSTIVE — **every product tab is a row**, in a stable order
    (group by store or by value; your call, but include them all). The columns are
-   fixed: **Product | Listing | Sealed mkt (±) | Exact singles (±) | Floor (±)**,
-   copying the script's `fmt_delta_cell` cells verbatim (value with the in-paren
-   delta). Rows the batch couldn't value still appear — with `—` in the value
-   cells and a short reason (delisted/404, no market comp, unresolved name). After
-   the table, add:
+   fixed: **Product | Finish | Listing | Sealed mkt (±) | Exact singles (±) |
+   Floor (±)**. The **Product cell is a markdown link to the item's URL**
+   (`[name](url)`); the **Finish cell is explicit `foil`/`nonfoil` for every row**
+   (Secret Lairs especially). Copy the script's `fmt_delta_cell` cells verbatim
+   (value with the in-paren delta). Rows the batch couldn't value still appear —
+   with `—` in the value cells and a short reason (delisted/404, no market comp,
+   unresolved name). After the table, add:
    - a **one-line coverage note**: `N tabs → M valued, K product tabs unpriced
      (reason), P non-product tabs skipped (listed below)`, so nothing is silently
      missing;

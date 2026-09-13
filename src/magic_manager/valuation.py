@@ -243,12 +243,16 @@ def value_sld_drop(
     if sealed_mkt is None:
         diagnostics.append("no matching Secret Lair sealedProduct priced on the "
                            "market (older drop, or not stocked) — sealed-market blank")
+    # `finish` reflects the EDITION the user is valuing (foil vs nonfoil product) —
+    # the honest label for the report. When the singles price had to fall back to
+    # the other finish (usd_foil null), that's noted in `diagnostics`, not hidden
+    # by relabeling the edition.
     return sealed.ProductValuation(
         label=v.name, kind="sld", listing=listing,
         sealed_market=sealed_mkt, sealed_market_source=source,
         exact_singles=round(exact, 2) if exact else None,
         floor_singles=round(floor, 2) if floor else None,
-        finish=used_finish,
+        finish="foil" if foil else "nonfoil",
         diagnostics=diagnostics,
         note="live Scryfall singles; sealed-market via tcgcsv/manapool by product id",
     )
