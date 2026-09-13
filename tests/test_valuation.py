@@ -146,6 +146,33 @@ def test_sld_sealed_market_foil_edition(monkeypatch):
     assert price == 79.97                            # foil edition picked
 
 
+def test_sld_sealed_market_prefix_sibling_not_fused(monkeypatch):
+    # Regression: the drop "City Styles" must NOT match the DISTINCT drop
+    # "City Styles 2 Dressed to Kill" — loose containment fused them and the foil
+    # picker grabbed the sibling's Rainbow Foil ($120), mispricing this drop. The
+    # tiered exact>suffix>containment match isolates the exact-core products.
+    products = [
+        {"name": "Secret Lair Drop City Styles",
+         "identifiers": {"tcgplayerProductId": 480469}},
+        {"name": "Secret Lair Drop City Styles Foil",
+         "identifiers": {"tcgplayerProductId": 480467}},
+        {"name": "Secret Lair Drop City Styles 2 Dressed to Kill",
+         "identifiers": {"tcgplayerProductId": 618103}},
+        {"name": "Secret Lair Drop City Styles 2 Dressed to Kill Rainbow Foil",
+         "identifiers": {"tcgplayerProductId": 618102}},
+    ]
+    _patch_sld_market(monkeypatch, products,
+                      _Provider({480469: 246.23, 480467: 321.64,
+                                 618103: 90.0, 618102: 120.15}))
+    # foil edition of "City Styles" → the City Styles Foil SKU (480467 = 321.64),
+    # NEVER the City Styles 2 Rainbow Foil sibling (618102 = 120.15).
+    assert valuation.sld_sealed_market("City Styles", "foil", market="stub")[0] == 321.64
+    assert valuation.sld_sealed_market("City Styles", "auto", market="stub")[0] == 246.23
+    # The longer sibling still resolves to ITS own products (exact-core on it).
+    assert valuation.sld_sealed_market(
+        "City Styles 2: Dressed to Kill", "foil", market="stub")[0] == 120.15
+
+
 def test_sld_sealed_market_no_match_returns_none(monkeypatch):
     _patch_sld_market(monkeypatch, [{"name": "Secret Lair Drop Something Else",
                                      "identifiers": {"tcgplayerProductId": 1}}],
