@@ -67,8 +67,9 @@ uv run mm deck import-precon ScionsSpellcraftFinalFantasyXiv_FIC --copies 1
 What this does:
 
 - Creates `N` `decks` rows (slug derived from the precon's MTGJSON name).
-- Walks `commander` + `mainBoard` + `sideBoard`, inserts `deck_cards` rows for each Card(Deck) entry × N copies.
-- Aggregates by `(scryfall_id, finish)` across boards and copies, then calls `inventory_add` once per aggregated entry. So buying 2 Counter Blitz adds 2 of every shared land/staple, but a card unique to one precon copy increments by 2.
+- Walks `commander` + `mainBoard` + `sideBoard` + `tokens`, inserts `deck_cards` rows for each entry × N copies. The `tokens` board (V14) lands on the `'token'` `deck_cards.board` — precon tokens/emblems are kept WITH the deck (the user collects tokens) and count toward `deck_value`. Its token set (e.g. `ttmc`) auto-syncs (its `setCode` is collected alongside the playable cards), so no manual `mm set sync` is needed.
+- Aggregates by `(scryfall_id, finish)` across ALL boards (tokens included) and copies, then calls `inventory_add` once per aggregated entry. So buying 2 Counter Blitz adds 2 of every shared land/staple/token, but a card unique to one precon copy increments by 2.
+- **Note:** tokens are tracked but NEVER surface in `mm query missing-set` (you don't buy tokens to complete a set) — an explicit `is_token` guard in the missing pipeline drops them regardless of rarity.
 
 ### 4. Slug naming convention
 

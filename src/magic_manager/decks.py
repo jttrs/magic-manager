@@ -17,7 +17,7 @@ from . import db, inventory as inv_mod, mtgjson as mtgjson_mod
 
 
 # Allowed values mirror the V4 CHECK constraints on ``deck_cards``.
-_ALLOWED_BOARDS = ("main", "side", "commander", "companion", "maybe")
+_ALLOWED_BOARDS = ("main", "side", "commander", "companion", "maybe", "token")
 _ALLOWED_FINISHES = ("nonfoil", "foil", "either")
 
 # V11 precon states (see the Deck dataclass). 'built' = assembled deck (pledged),
@@ -34,6 +34,7 @@ _BOARD_ORDER_SQL = (
     "WHEN 'companion' THEN 2 "
     "WHEN 'side' THEN 3 "
     "WHEN 'maybe' THEN 4 "
+    "WHEN 'token' THEN 5 "
     "END"
 )
 
@@ -310,6 +311,54 @@ def backfill_source_set_codes(*, conn=None) -> int:
                 )
                 updated += 1
     return updated
+
+
+def backfill_token_board(*, conn=None) -> int:
+    """Move token cards mis-filed on the ``'main'`` board to ``'token'``.
+
+    One-off repair for precon decks imported BEFORE the V14 ``'token'`` board
+    existed (their MTGJSON ``tokens`` cards were manually added to ``'main'``).
+    Moves only rows whose printing is a token (``cards.is_token = 1``) from
+    ``main`` → ``token``. Idempotent: once moved, a re-run finds nothing on
+    ``main`` that is a token and is a no-op. Inventory is untouched (the tokens
+    are already there). Returns the number of deck_cards rows moved.
+
+    Guarded against a PK collision (a token already present on BOTH boards for
+    the same deck/finish): such rows are left on ``main`` and reported to stderr
+    rather than crashing the UPDATE.
+    """
+    import sys as _sys
+
+    with db.transaction(conn) as conn:
+        candidates = conn.execute(
+            """
+            SELECT dc.deck_id, dc.scryfall_id, dc.finish, dc.count
+            FROM deck_cards dc
+            JOIN cards c ON c.scryfall_id = dc.scryfall_id
+            WHERE dc.board = 'main' AND c.is_token = 1
+            """
+        ).fetchall()
+        moved = 0
+        for r in candidates:
+            clash = conn.execute(
+                "SELECT 1 FROM deck_cards WHERE deck_id = ? AND scryfall_id = ? "
+                "AND board = 'token' AND finish = ?",
+                (r["deck_id"], r["scryfall_id"], r["finish"]),
+            ).fetchone()
+            if clash:
+                print(
+                    f"warning: {r['scryfall_id']}/{r['finish']} already on 'token' "
+                    f"board for deck {r['deck_id']}; left the 'main' copy in place",
+                    file=_sys.stderr,
+                )
+                continue
+            conn.execute(
+                "UPDATE deck_cards SET board = 'token' WHERE deck_id = ? "
+                "AND scryfall_id = ? AND board = 'main' AND finish = ?",
+                (r["deck_id"], r["scryfall_id"], r["finish"]),
+            )
+            moved += 1
+    return moved
 
 
 def deck_delete(slug: str) -> int:
@@ -1078,11 +1127,16 @@ def _assignment_hash(rows: list[tuple[str, str, int]]) -> str:
 
 # ---------- precon / pack import ----------
 
-# MTGJSON deck JSON has these board keys; map to our V4 ``deck_cards.board``.
+# MTGJSON deck JSON has these board keys; map to our ``deck_cards.board``.
+# `tokens` (V14) captures the tokens/emblems that ship with a precon — they ride
+# the deck on the 'token' board AND flow to inventory (the user collects tokens,
+# and precon tokens are kept with the deck). Their setCode (e.g. ttmc) is picked
+# up by the same collection loop, so the token set auto-syncs before the FK write.
 _BOARD_KEY_TO_NAME = (
     ("commander", "commander"),
     ("mainBoard", "main"),
     ("sideBoard", "side"),
+    ("tokens", "token"),
 )
 
 

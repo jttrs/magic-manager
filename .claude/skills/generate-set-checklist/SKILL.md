@@ -61,7 +61,7 @@ The XLSX carries a hidden `_meta` sheet recording the slice, so ingest knows whi
 
 ## Other flags (rarely needed)
 
-- `--include token,memorabilia` — opt extra `set_type`s into the family. Use only when the user explicitly asks for tokens, art series, or scene boxes.
+- `--include token,memorabilia` — opt extra `set_type`s into the family. The user **collects tokens** (V14 token tracking), so `--include token` is a legitimate, supported path for cataloguing a family's tokens into inventory; use it whenever they ask for tokens (also art series / scene boxes via `memorabilia`). Note: tokens are tracked but never appear in `missing-set` output. If the family's token child set isn't synced yet, `mm set sync <fam> --with-tokens` pulls it first (or `master-list --include token` syncs it as part of generation).
 - `--include-variants` — opt prerelease, store-stamped, japanshowcase, serialized, and white/yellow-bordered printings back in. **Off by default** — these are filtered out of the master-list output and from set-missing math via the registered `set_targets` row. The user said they don't catalog these and there are too few to keep around.
 - `--out <path>` — redirect output to a non-default path (skips collision detection). Almost never the right answer.
 - `--force` — overwrite an existing intake XLSX. Only after the user has explicitly chosen "discard partial work" via the exit-3 prompt.
