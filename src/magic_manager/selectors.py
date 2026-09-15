@@ -1871,6 +1871,10 @@ def _card_dict(row) -> dict:
         # security_stamp: "arena" marks Alchemy-original digital-only cards that
         # carry no rebalanced/alchemy promo_type — _is_digital_only needs it.
         "security_stamp":   row["security_stamp"],
+        # is_token: tokens/emblems/DFC-tokens. The missing-set pipeline uses this
+        # to hard-exclude tokens from buy-lists (the user won't buy tokens to
+        # complete a set); a rarity gate alone is fragile (rare/mythic tokens exist).
+        "is_token":         row["is_token"],
     }
 
 
@@ -1898,6 +1902,7 @@ def _card_dict_from_scryfall(c: dict) -> dict:
         "border_color":     c.get("border_color"),
         "scryfall_uri":     c.get("scryfall_uri"),
         "security_stamp":   c.get("security_stamp"),
+        "is_token":         1 if c.get("layout") in ("token", "double_faced_token", "emblem") else 0,
     }
 
 

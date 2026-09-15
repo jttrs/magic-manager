@@ -111,6 +111,10 @@ def set_sync(
     name_or_code: str = typer.Argument(...),
     include_related: bool = typer.Option(False, "--include-related",
                                          help="Sync parent + every sibling/child set."),
+    with_tokens: bool = typer.Option(False, "--with-tokens",
+                                     help="Also sync the family's token child set(s) "
+                                          "(set_type='token', e.g. ttmc alongside tmt). "
+                                          "Off by default; --include-related already covers them."),
     only: list[str] = typer.Option(None, "--only", help="Restrict to these set codes (comma-separated)."),
 ):
     """Resolve and sync set(s) into the local cards table."""
@@ -120,6 +124,12 @@ def set_sync(
         typer.echo(f"error: {e}", err=True); raise typer.Exit(2)
 
     codes = r.all_codes if include_related else [r.code]
+    if with_tokens:
+        # Fold in the family's token child sets (the same set_type=='token'
+        # signal filtered_codes uses). --include-related already includes them
+        # (all_codes = the whole family graph); this covers the anchor-only case.
+        token_codes = [s["code"] for s in r.related if s.get("set_type") == "token"]
+        codes = list(dict.fromkeys(codes + token_codes))
     if only:
         wanted = {c.strip().lower() for raw in only for c in raw.split(",")}
         codes = [c for c in codes if c in wanted]

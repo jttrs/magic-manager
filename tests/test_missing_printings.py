@@ -80,6 +80,28 @@ def test_arena_stamped_alchemy_originals_excluded(tmp_db, tla_family, seed_cards
     assert "arena1" not in sids, "arena-stamped Alchemy original leaked into missing-set"
 
 
+def test_tokens_excluded_even_when_rare_or_emblem(tmp_db, tla_family, seed_cards, make_card):
+    """Tokens NEVER belong in a missing-set buy-list. The rarity gate alone is
+    fragile — rare/mythic tokens exist — so an explicit is_token guard drops them.
+    Also covers the broadened is_token (layout emblem / double_faced_token)."""
+    from magic_manager import missing
+    seed_cards([
+        make_card(id="rare1", set="tla", collector_number="5", rarity="rare",
+                  name="Real Rare"),                                   # normal → missing
+        make_card(id="tok", set="tla", collector_number="20", rarity="rare",
+                  name="Angel Token", layout="token"),                 # rare TOKEN → excluded
+        make_card(id="emb", set="tla", collector_number="21", rarity="rare",
+                  name="The Ring Emblem", layout="emblem"),            # emblem → excluded
+        make_card(id="dft", set="tla", collector_number="22", rarity="mythic",
+                  name="DFC Token", layout="double_faced_token"),      # dfc token → excluded
+    ])
+    sids = {r.scryfall_id for r in missing.missing_printings("tla")}
+    assert "rare1" in sids
+    assert "tok" not in sids, "rare token leaked into missing-set"
+    assert "emb" not in sids, "emblem leaked into missing-set"
+    assert "dft" not in sids, "double-faced token leaked into missing-set"
+
+
 def test_stamped_excluded_but_promopack_altart_kept(tmp_db, seed_cards, make_card, monkeypatch):
     """The scarcity-stamp exclusion must key on `stamped`, NOT `promopack`:
     a promo-pack STAMP (carries `stamped`) is a scarcity dupe → excluded, but a

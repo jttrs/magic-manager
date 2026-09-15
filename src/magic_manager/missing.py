@@ -77,6 +77,15 @@ def missing_printings(
     for slug_key in list(sub_rows.keys()):
         sub_rows[slug_key] = _drop_meld_back_faces(sub_rows[slug_key], code_l)
 
+    # 1c. Tokens NEVER belong in a missing-set buy-list — the user won't buy
+    # tokens (or emblems) to "complete" a set. Explicit is_token guard rather
+    # than relying on the rarity gate: the sub-selectors filter to rare/mythic/
+    # uncommon-chase, but rare/mythic tokens DO exist and would otherwise leak.
+    # One chokepoint over all four sub-selectors (they all funnel through
+    # sub_rows before the union), so no per-selector scattering.
+    for slug_key in list(sub_rows.keys()):
+        sub_rows[slug_key] = [r for r in sub_rows[slug_key] if not r.card.get("is_token")]
+
     # 2. Union by scryfall_id (printing-level dedup).
     union: dict[str, sel_mod.MaterializedRow] = {}
     for slug_key in sub_rows:

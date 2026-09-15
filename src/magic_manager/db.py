@@ -472,6 +472,30 @@ SCHEMA_V13 = """
 CREATE INDEX IF NOT EXISTS cards_oracle_idx ON cards (oracle_id);
 """
 
+# V14: add 'token' to deck_cards.board CHECK so precon token cards (the MTGJSON
+# `tokens` board) can ride the deck recipe. SQLite can't alter a CHECK in place,
+# so rebuild the table (copy-rebuild dance). Safe: no other table FK-references
+# deck_cards (deck_assignments references decks), so DROP has no cascade; the
+# table's own outbound FKs are re-declared verbatim. Both indexes recreated.
+SCHEMA_V14 = """
+CREATE TABLE deck_cards__new (
+    deck_id       INTEGER NOT NULL,
+    scryfall_id   TEXT NOT NULL,
+    board         TEXT NOT NULL CHECK (board IN ('main','side','commander','companion','maybe','token')),
+    finish        TEXT NOT NULL CHECK (finish IN ('nonfoil','foil','either')),
+    count         INTEGER NOT NULL CHECK (count > 0),
+    PRIMARY KEY (deck_id, scryfall_id, board, finish),
+    FOREIGN KEY (deck_id) REFERENCES decks(deck_id) ON DELETE CASCADE,
+    FOREIGN KEY (scryfall_id) REFERENCES cards(scryfall_id)
+);
+INSERT INTO deck_cards__new (deck_id, scryfall_id, board, finish, count)
+    SELECT deck_id, scryfall_id, board, finish, count FROM deck_cards;
+DROP TABLE deck_cards;
+ALTER TABLE deck_cards__new RENAME TO deck_cards;
+CREATE INDEX IF NOT EXISTS deck_cards_deck_idx ON deck_cards (deck_id);
+CREATE INDEX IF NOT EXISTS deck_cards_scryfall_idx ON deck_cards (scryfall_id);
+"""
+
 
 # ---------- migration-authoring convention ----------
 #
@@ -527,6 +551,7 @@ MIGRATIONS: list[str] = [
     SCHEMA_V11,
     SCHEMA_V12,
     SCHEMA_V13,
+    SCHEMA_V14,
 ]
 CURRENT_VERSION = len(MIGRATIONS)
 
@@ -1088,7 +1113,7 @@ def _card_row(c: dict, *, priced_at: str | None = None) -> dict:
         "image_uri":        image_uris.get("normal") or image_uris.get("large"),
         "scryfall_uri":     f("scryfall_uri"),
         "is_promo":         1 if f("promo") else 0,
-        "is_token":         1 if (f("layout") == "token") else 0,
+        "is_token":         1 if f("layout") in ("token", "double_faced_token", "emblem") else 0,
         "frame_effects":    json.dumps(f("frame_effects") or []),
         "finishes":         json.dumps(f("finishes") or []),
         "oracle_text":      f("oracle_text"),
