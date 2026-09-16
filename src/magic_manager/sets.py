@@ -803,12 +803,21 @@ def _summarize_deck_checklist(path: Path, meta: dict) -> dict:
     Returns a dict sharing the inventory summary's key names where they carry
     over (``rows_total``, ``rows_with_qty``, ``total_qty``, ``estimated_value``,
     ``warnings``) plus a ``kind`` discriminator and deck-specific fields:
-    ``decks_to_construct``, ``loose_copies``, and ``filled`` (per-acted-row
-    ``{file_name, label, constructed_qty, deconstructed_qty, delta, set,
-    usd_total}``). For a precon ``modify`` file the entered numbers are absolute
-    targets prefilled from the live deck counts, so a row is "acted on" only
-    when it differs from its current count; the reported construct/loose counts
-    are the positive deltas (what this ingest would build/tear down).
+    ``decks_to_construct``, ``loose_copies``, and ``filled``.
+
+    Each ``filled[]`` entry speaks the SAME absolute-count vocabulary as the
+    ingest's ``per_row[]`` so the preview matches what ingest will do:
+    ``{file_name, label, count_before [built,decon], count_after [built,decon],
+    constructed_qty (== count_after[0]), deconstructed_qty (== count_after[1]),
+    delta (Δbuilt,Δdecon), set, usd_total}``. ``constructed_qty`` /
+    ``deconstructed_qty`` are the RESULTING per-state counts (NOT the delta) — a
+    modify row that keeps an existing built copy and adds a deconstructed one
+    shows ``count_before=[1,0] count_after=[1,1] delta=[0,1]`` (previously the
+    delta was mis-reported into ``constructed_qty``, reading as "0 constructed").
+    For a precon ``modify`` file the entered numbers are absolute targets
+    prefilled from the live deck counts, so a row is "acted on" only when it
+    differs from its current count; ``decks_to_construct``/``loose_copies`` are
+    the positive deltas (what this ingest would build/tear down).
     ``estimated_value`` sums ``usd_total`` over rows that build a new copy.
     """
     from . import parsers
@@ -875,6 +884,7 @@ def _summarize_deck_checklist(path: Path, meta: dict) -> dict:
         else:
             n = r.acquired_qty
             acts = n > 0
+            before = decks_mod.precon_unit_counts_for(r.file_name)  # (c, d)
             if acts:
                 # Mirror _apply_acquired_checklist's split (best-effort; network
                 # failures fall back to buildable). No DB writes here.
@@ -884,7 +894,7 @@ def _summarize_deck_checklist(path: Path, meta: dict) -> dict:
                         r.file_name, name=(r.theme or None)) == "built"
                 except Exception:
                     buildable = True
-                existing_built = decks_mod.precon_unit_counts_for(r.file_name)[0]
+                existing_built = before[0]
                 if not buildable:
                     delta = (0, n)
                 elif existing_built == 0:
@@ -896,16 +906,24 @@ def _summarize_deck_checklist(path: Path, meta: dict) -> dict:
         if not acts:
             continue
         delta_c, delta_d = delta
+        # Report in the SAME absolute-count vocabulary as the ingest's per_row
+        # (count_before / count_after), so the preview can't be misread as
+        # "constructed=0" when a row keeps an existing built copy and only ADDS a
+        # deconstructed one. `constructed_qty`/`deconstructed_qty` are the
+        # RESULTING per-state counts (== count_after), matching the field names;
+        # `delta` carries the signed change this ingest applies.
+        after_c, after_d = (before[0] + delta_c, before[1] + delta_d)
         info = extra.get(r.file_name, {})
         usd = info.get("usd_total")
         filled.append({
             "file_name": r.file_name,
             "label": r.theme or r.file_name,
             "acquired_qty": r.acquired_qty,
-            "keep_qty": delta_c,             # net builds this ingest (for legacy consumers)
-            "constructed_qty": delta_c,
-            "deconstructed_qty": delta_d,
-            "delta": delta,
+            "count_before": list(before),    # (built, deconstructed) before this ingest
+            "count_after": [after_c, after_d],  # resulting (built, deconstructed)
+            "constructed_qty": after_c,      # resulting built count (== count_after[0])
+            "deconstructed_qty": after_d,    # resulting deconstructed count (== count_after[1])
+            "delta": delta,                  # signed change applied (Δbuilt, Δdecon)
             "set": info.get("set", ""),
             "usd_total": usd,
         })
