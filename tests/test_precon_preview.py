@@ -66,9 +66,7 @@ def test_modify_preview_matches_ingest_keep_plus_add(
     assert len(summary["filled"]) == 1
     row = summary["filled"][0]
     assert row["count_before"] == [1, 0]
-    assert row["count_after"] == [1, 1]
-    assert row["constructed_qty"] == 1, "resulting built count must be 1, not the delta 0"
-    assert row["deconstructed_qty"] == 1
+    assert row["count_after"] == [1, 1], "resulting counts must be [1,1], not the delta"
     assert tuple(row["delta"]) == (0, 1)
 
     # INGEST — same file, must agree on before/after/delta
@@ -118,7 +116,6 @@ def test_add_preview_splits_into_resulting_counts(
     assert row["acquired_qty"] == 2
     assert row["count_before"] == [0, 0]
     assert row["count_after"] == [1, 1]
-    assert row["constructed_qty"] == 1 and row["deconstructed_qty"] == 1
     assert tuple(row["delta"]) == (1, 1)
     # (add-mode INGEST goes through _apply_acquired_checklist, which reports a
     # different built/torn_down shape — parity with _apply_precon_checklist only

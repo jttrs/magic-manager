@@ -1137,13 +1137,18 @@ def _materialize_deck(slug: str) -> list[MaterializedRow]:
         ).fetchone()
         if deck is None:
             raise LookupError(f"no deck with slug {slug!r}")
+        # Exclude the 'token' board: the deck:<slug> selector feeds exports
+        # (Moxfield/Archidekt/TCGplayer/ManaPool paste blocks) and value/query
+        # rollups — none of which should include the tokens that ride a precon
+        # for record-keeping. `mm deck show` uses decks.deck_show directly (all
+        # boards), so tokens stay visible there.
         rows = conn.execute(
             f"""
             SELECT dc.scryfall_id AS d_scryfall_id, dc.finish AS d_finish,
                    dc.count AS d_count, {_CARD_COLS}
             FROM deck_cards dc
             JOIN cards c ON c.scryfall_id = dc.scryfall_id
-            WHERE dc.deck_id = ?
+            WHERE dc.deck_id = ? AND dc.board != 'token'
             ORDER BY c.set_code, c.collector_number, dc.finish
             """,
             (deck["deck_id"],),
@@ -1902,7 +1907,7 @@ def _card_dict_from_scryfall(c: dict) -> dict:
         "border_color":     c.get("border_color"),
         "scryfall_uri":     c.get("scryfall_uri"),
         "security_stamp":   c.get("security_stamp"),
-        "is_token":         1 if c.get("layout") in ("token", "double_faced_token", "emblem") else 0,
+        "is_token":         1 if util.is_token_layout(c.get("layout")) else 0,
     }
 
 

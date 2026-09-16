@@ -807,13 +807,12 @@ def _summarize_deck_checklist(path: Path, meta: dict) -> dict:
 
     Each ``filled[]`` entry speaks the SAME absolute-count vocabulary as the
     ingest's ``per_row[]`` so the preview matches what ingest will do:
-    ``{file_name, label, count_before [built,decon], count_after [built,decon],
-    constructed_qty (== count_after[0]), deconstructed_qty (== count_after[1]),
-    delta (Δbuilt,Δdecon), set, usd_total}``. ``constructed_qty`` /
-    ``deconstructed_qty`` are the RESULTING per-state counts (NOT the delta) — a
-    modify row that keeps an existing built copy and adds a deconstructed one
-    shows ``count_before=[1,0] count_after=[1,1] delta=[0,1]`` (previously the
-    delta was mis-reported into ``constructed_qty``, reading as "0 constructed").
+    ``{file_name, label, acquired_qty, count_before [built,decon],
+    count_after [built,decon], delta (Δbuilt,Δdecon), set, usd_total}``.
+    ``count_after`` is the RESULTING per-state count and ``delta`` the signed
+    change — so a modify row that keeps an existing built copy and adds a
+    deconstructed one shows ``count_before=[1,0] count_after=[1,1] delta=[0,1]``
+    (never a bare "0 constructed" that reads as the delta).
     For a precon ``modify`` file the entered numbers are absolute targets
     prefilled from the live deck counts, so a row is "acted on" only when it
     differs from its current count; ``decks_to_construct``/``loose_copies`` are
@@ -863,12 +862,13 @@ def _summarize_deck_checklist(path: Path, meta: dict) -> dict:
     #     prefilled from the real counts, so a row acts only on a nonzero delta.
     file_mode = (meta.get("mode") or "add").lower()
     is_modify = kind == "precon" and file_mode == "modify"
-    counts = {}
-    if is_modify:
-        from . import decks as decks_mod
-        counts = decks_mod.precon_unit_counts()
-    else:
-        from . import decks as decks_mod, mtgjson as mtgjson_mod
+    from . import decks as decks_mod
+    # One bulk snapshot of current (built, deconstructed) counts for ALL precons,
+    # used by both modes — the add branch used to do a per-row DB query (one
+    # connection per row → hundreds for the all-sets catalog); this is a single
+    # GROUP BY. `precon_unit_counts` keys on the same fileNames, so a `.get`
+    # lookup is a drop-in for the old `precon_unit_counts_for(fn)`.
+    counts = decks_mod.precon_unit_counts()
 
     filled: list[dict] = []
     decks_to_construct = 0
@@ -876,31 +876,20 @@ def _summarize_deck_checklist(path: Path, meta: dict) -> dict:
     total_qty = 0
     estimated_value = 0.0
     for r in parsed.rows:
+        before = counts.get(r.file_name, (0, 0))
         if is_modify:
             entered = (r.keep_qty, r.deconstructed_qty)  # (c, d)
-            before = counts.get(r.file_name, (0, 0))
             delta = tuple(e - b for e, b in zip(entered, before))
             acts = any(x != 0 for x in delta)
         else:
             n = r.acquired_qty
             acts = n > 0
-            before = decks_mod.precon_unit_counts_for(r.file_name)  # (c, d)
             if acts:
-                # Mirror _apply_acquired_checklist's split (best-effort; network
-                # failures fall back to buildable). No DB writes here.
-                deck_name = r.theme or r.file_name
-                try:
-                    buildable = mtgjson_mod.default_precon_state(
-                        r.file_name, name=(r.theme or None)) == "built"
-                except Exception:
-                    buildable = True
-                existing_built = before[0]
-                if not buildable:
-                    delta = (0, n)
-                elif existing_built == 0:
-                    delta = (1, n - 1)
-                else:
-                    delta = (0, n)
+                # Same split as ingest — via the shared plan_precon_split so the
+                # preview can't diverge from _apply_acquired_checklist.
+                delta = plan_precon_split(
+                    r.file_name, name=(r.theme or None), n=n,
+                    existing_built=before[0])
             else:
                 delta = (0, 0)
         if not acts:
@@ -909,9 +898,7 @@ def _summarize_deck_checklist(path: Path, meta: dict) -> dict:
         # Report in the SAME absolute-count vocabulary as the ingest's per_row
         # (count_before / count_after), so the preview can't be misread as
         # "constructed=0" when a row keeps an existing built copy and only ADDS a
-        # deconstructed one. `constructed_qty`/`deconstructed_qty` are the
-        # RESULTING per-state counts (== count_after), matching the field names;
-        # `delta` carries the signed change this ingest applies.
+        # deconstructed one. `delta` carries the signed change this ingest applies.
         after_c, after_d = (before[0] + delta_c, before[1] + delta_d)
         info = extra.get(r.file_name, {})
         usd = info.get("usd_total")
@@ -919,11 +906,9 @@ def _summarize_deck_checklist(path: Path, meta: dict) -> dict:
             "file_name": r.file_name,
             "label": r.theme or r.file_name,
             "acquired_qty": r.acquired_qty,
-            "count_before": list(before),    # (built, deconstructed) before this ingest
+            "count_before": list(before),       # (built, deconstructed) before this ingest
             "count_after": [after_c, after_d],  # resulting (built, deconstructed)
-            "constructed_qty": after_c,      # resulting built count (== count_after[0])
-            "deconstructed_qty": after_d,    # resulting deconstructed count (== count_after[1])
-            "delta": delta,                  # signed change applied (Δbuilt, Δdecon)
+            "delta": delta,                     # signed change applied (Δbuilt, Δdecon)
             "set": info.get("set", ""),
             "usd_total": usd,
         })
@@ -2213,6 +2198,35 @@ def _deck_checklist_kind_config(kind: str, set_code: str):
     raise ValueError(f"unknown deck-checklist kind: {kind!r}")
 
 
+def plan_precon_split(file_name: str, *, name: str | None, n: int,
+                      existing_built: int) -> tuple[int, int]:
+    """Split ``n`` acquired copies into ``(built, deconstructed)`` counts — the
+    single source of truth for ADD-mode state assignment.
+
+    Rules (shared by the ingest engine :func:`_apply_acquired_checklist` and the
+    pre-ingest preview :func:`_summarize_deck_checklist`, so the two can never
+    disagree about what an add-mode fill will do):
+      - product with no real decklist (``default_precon_state != "built"``) →
+        ``(0, n)`` (all deconstructed / loose);
+      - buildable & none built yet (``existing_built == 0``) → ``(1, n-1)``
+        (keep one built, rest deconstructed);
+      - buildable & already own a built copy → ``(0, n)``.
+
+    ``default_precon_state`` is a best-effort MTGJSON lookup; a network failure
+    falls back to buildable (the common case). Pure — no DB writes.
+    """
+    from . import mtgjson as mtgjson_mod  # lazy: avoids sets↔mtgjson import cycle
+    try:
+        buildable = mtgjson_mod.default_precon_state(file_name, name=name) == "built"
+    except mtgjson_mod.MtgJsonError:
+        buildable = True  # network/data failure → assume buildable (common case)
+    if not buildable:
+        return (0, n)
+    if existing_built == 0:
+        return (1, n - 1)
+    return (0, n)
+
+
 def _apply_acquired_checklist(parsed, *, slug_fn, deck_format) -> dict:
     """Apply an ADD-mode deck checklist: one ``acquired_qty`` per row, split
     deterministically into built / deconstructed units (the shared add-mode
@@ -2286,17 +2300,9 @@ def _apply_acquired_checklist(parsed, *, slug_fn, deck_format) -> dict:
         base_slug = slug_fn(deck_name)
 
         try:
-            buildable = mtgjson_mod.default_precon_state(
-                row.file_name, name=deck_name) == "built"
             existing_built = decks_mod.precon_unit_counts_for(row.file_name)[0]
-            if not buildable:
-                n_built, n_decon = 0, n
-            elif existing_built == 0:
-                # Net-new buildable product: keep exactly one constructed.
-                n_built, n_decon = 1, n - 1
-            else:
-                # Already own a built copy: every acquired copy is a spare.
-                n_built, n_decon = 0, n
+            n_built, n_decon = plan_precon_split(
+                row.file_name, name=deck_name, n=n, existing_built=existing_built)
             per_row["net_new"] = n_built == 1
 
             if n_built:

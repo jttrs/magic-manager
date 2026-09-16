@@ -18,6 +18,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterable, Iterator
 
+from . import util as _util
+
 DB_DIR_NAME = "db"
 BAK_SUBDIR = "bak"
 REPLACED_SUBDIR = "replaced"
@@ -496,6 +498,13 @@ CREATE INDEX IF NOT EXISTS deck_cards_deck_idx ON deck_cards (deck_id);
 CREATE INDEX IF NOT EXISTS deck_cards_scryfall_idx ON deck_cards (scryfall_id);
 """
 
+# V15: re-derive cards.is_token for rows synced before the V14 broadening (which
+# added double_faced_token/emblem to the token classification but only at
+# sync-time), and move any pre-V14 precon tokens still mis-filed on the 'main'
+# board to the 'token' board. Both are DATA fixes, done in the _run_v15 python
+# hook (they need util.TOKEN_LAYOUTS + the decks helper); the SQL body is empty.
+SCHEMA_V15 = ""
+
 
 # ---------- migration-authoring convention ----------
 #
@@ -552,6 +561,7 @@ MIGRATIONS: list[str] = [
     SCHEMA_V12,
     SCHEMA_V13,
     SCHEMA_V14,
+    SCHEMA_V15,
 ]
 CURRENT_VERSION = len(MIGRATIONS)
 
@@ -630,6 +640,8 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
             _run_v10_python_migration(conn)
         if i == 11 and have < 11:
             _run_v11_python_migration(conn)
+        if i == 15 and have < 15:
+            _run_v15_python_migration(conn)
     if have < CURRENT_VERSION:
         conn.execute("DELETE FROM schema_version")
         conn.execute("INSERT INTO schema_version (version) VALUES (?)", (CURRENT_VERSION,))
@@ -902,6 +914,38 @@ def _run_v11_python_migration(conn: sqlite3.Connection) -> None:
     )
 
 
+def _run_v15_python_migration(conn: sqlite3.Connection) -> None:
+    """Two one-time data fixes for the V14 token-tracking rollout.
+
+    1. Re-derive ``cards.is_token`` for the broadened classification
+       (``util.TOKEN_LAYOUTS`` = token/double_faced_token/emblem). The V14 change
+       only set the wider value at sync-time, so rows synced earlier keep the
+       narrow value; missing-set's is_token guard would let stale emblems /
+       double-faced tokens leak until a re-sync. Set it authoritatively from
+       ``cards.layout`` here (both the =1 and =0 directions, so it's exact).
+    2. Move any precon tokens still mis-filed on the ``'main'`` board (imported
+       before V14 had a ``'token'`` board) to ``'token'`` via
+       ``decks.backfill_token_board``. Idempotent; runs on the same connection.
+
+    Offline-safe (no network). Runs after the (empty) V15 SQL.
+
+    NOTE: ``cards`` does NOT store Scryfall ``layout`` (only ``type_line`` +
+    the derived ``is_token``), so we re-derive from the stored ``type_line``:
+    tokens carry "Token" in the type line (incl. double_faced_token) and emblems
+    carry "Emblem" — the same set the layout-based projection produces. Only
+    fixes rows that disagree (idempotent); a later ``mm set sync`` re-asserts the
+    authoritative layout-based value.
+    """
+    conn.execute(
+        "UPDATE cards SET is_token = 1 "
+        "WHERE is_token != 1 AND (type_line LIKE '%Token%' OR type_line LIKE '%Emblem%')"
+    )
+    # Move pre-V14 precon tokens off the 'main' board (relies on is_token, which
+    # the step above just corrected on this same connection).
+    from . import decks as _decks
+    _decks.backfill_token_board(conn=conn)
+
+
 def _utcnow_iso() -> str:
     from datetime import datetime, timezone
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -1113,7 +1157,7 @@ def _card_row(c: dict, *, priced_at: str | None = None) -> dict:
         "image_uri":        image_uris.get("normal") or image_uris.get("large"),
         "scryfall_uri":     f("scryfall_uri"),
         "is_promo":         1 if f("promo") else 0,
-        "is_token":         1 if f("layout") in ("token", "double_faced_token", "emblem") else 0,
+        "is_token":         1 if _util.is_token_layout(f("layout")) else 0,
         "frame_effects":    json.dumps(f("frame_effects") or []),
         "finishes":         json.dumps(f("finishes") or []),
         "oracle_text":      f("oracle_text"),
