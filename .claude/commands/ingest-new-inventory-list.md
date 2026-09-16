@@ -32,7 +32,7 @@ Parse the JSON. The shape is `{ "input_dir": "...", "files": [...] }` where each
 - `path`, `name`, `sha256`, `size_bytes`
 - `summary`: always has `kind` (`"inventory"`, `"precon"`, or `"jumpstart"`), `rows_total`, `rows_with_qty`, `total_qty`, `estimated_value`, `warnings[]`. **Branch on `summary.kind`:**
   - `kind == "inventory"` → also has `{anchor_code, set_codes[], rarity_filter[], top_value[]}`.
-  - `kind in ("precon","jumpstart")` → also has `{mode, decks_to_construct, loose_copies, filled[]}` where each `filled[i]` is `{file_name, label, acquired_qty, constructed_qty, deconstructed_qty, delta, set, usd_total}`. `rows_with_qty` = rows that will act. For **add** files the preview mirrors ingest's split of `acquired_qty` — `constructed_qty`/`deconstructed_qty` are the *resulting* per-state copies (`delta` = that `(Δbuilt, Δdecon)`). For a precon **modify** file the entered numbers are absolute targets prefilled from the live deck counts, so a row acts only when it differs (`delta` = the applied per-state delta). `decks_to_construct`/`loose_copies` are the positive deltas; `estimated_value` = summed `usd_total` over rows that build a new copy.
+  - `kind in ("precon","jumpstart")` → also has `{mode, decks_to_construct, loose_copies, filled[]}` where each `filled[i]` is `{file_name, label, acquired_qty, count_before [built,decon], count_after [built,decon], constructed_qty, deconstructed_qty, delta, set, usd_total}`. `rows_with_qty` = rows that will act. **The `filled[]` entry speaks the SAME absolute-count vocabulary as the ingest's `per_row[]`** — `count_before`/`count_after` are the before→after per-state counts, `constructed_qty`/`deconstructed_qty` are the **resulting** counts (`== count_after[0]`/`[1]`, NOT the delta), and `delta` is the signed change `(Δbuilt, Δdecon)` this ingest applies. This holds for BOTH add and modify. ⚠ **Do NOT read `constructed_qty` as "how many are being built now"** — it's the resulting total; a modify row that keeps an existing built copy and adds a deconstructed one shows `count_before=[1,0] count_after=[1,1] constructed_qty=1 deconstructed_qty=1 delta=[0,1]`. For **add** files the split of `acquired_qty` is mirrored into `count_after`/`delta`; for **modify** the entered numbers are the absolute `count_after` targets (a row acts only when it differs from `count_before`). `decks_to_construct`/`loose_copies` are the positive deltas; `estimated_value` = summed `usd_total` over rows that build a new copy.
 - `duplicate_of_log_id`: integer or `null`. **Non-null means this file's content matches a prior successful ingest** (almost certainly a failed cleanup from a previous run — the file should already have been archived but ended up back in `checklists/`).
 - `prior_success`: the matching log row if duplicate, else `null`.
 - `prior_failed`: a prior FAILED ingest with the same hash, if any.
@@ -45,8 +45,10 @@ Print a compact bulleted list, one line per file. **Format the line by `summary.
 
 - Inventory:
   > 1. `final-fantasy-through-the-ages-rare.xlsx` — inventory / fca / rare-only / **42 cells filled / $312.40 estimated**
-- Precon / jumpstart (use `summary.mode` if present; for a precon `modify` file the counts are net changes vs the current deck collection):
+- Precon / jumpstart (use `summary.mode` if present). The `decks_to_construct`/`loose_copies` totals are the positive deltas (what this ingest WILL build/tear down); per-row, prefer the `count_before → count_after` framing so you never conflate a resulting count with a delta:
   > 2. `precons-modify-checklist.xlsx` — precon (modify) / **3 precons changed → 2 to build, 1 torn down / $214.60 estimated**
+
+  When it helps (e.g. a row keeps a built copy AND adds a deconstructed one), show the per-deck before→after from `filled[]`, matching the post-ingest report: `<file_name>: built <count_before[0]>→<count_after[0]>, deconstructed <count_before[1]>→<count_after[1]>`.
 
 If any file has `duplicate_of_log_id != null`, surface that VERY prominently before walking the user into per-file ingest:
 
