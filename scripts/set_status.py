@@ -47,7 +47,12 @@ from magic_manager import (  # noqa: E402
 # parent_set_code: mar), so it's registered as its own set_target anchor
 # grouping mar+omb+lmar; NON_FAMILY membership just means owned-only reporting
 # (no Char/Missing). See docs/sets/spm.md §1 + docs/scryfall-set-families-and-bonus-sheets.md.
-NON_FAMILY_SETS: frozenset[str] = frozenset({"sld", "spg", "pw25", "pmei", "sch", "mar"})
+# `cmm`/`scd`/`plst` (2026-09-15): reprint-only Masters / starter / grab-bag
+# products the user holds incidentally — "missing from set" = "buy the entire
+# reprint set's variant tiers" ($4.7k for cmm, a 5,595-card pool for plst, $0 for
+# the reprint-starter scd), which is not a completion target. Owned-only, like sld.
+NON_FAMILY_SETS: frozenset[str] = frozenset({"sld", "spg", "pw25", "pmei", "sch", "mar",
+                                             "cmm", "scd", "plst"})
 
 
 # ---------- family resolution (member → parent normalization) ----------
