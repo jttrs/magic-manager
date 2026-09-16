@@ -247,6 +247,44 @@ FAMILY_DUPE_FOIL_PROMO_TYPES: dict[str, frozenset[str]] = {
     # to {shw} (halofoil adds ff), so the sibling dedup pairs them cleanly.
     # Keeps the showcase, drops the halofoil dupe. See docs/sets/tdm.md §2.
     "tdm": frozenset({"halofoil"}),
+    # Duskmourn: fracturefoil (DSK 396-405) = same-art dupe of the japanshowcase
+    # sibling (all 10 illustration_ids verified identical); japanshowcase/
+    # doubleexposure/textured are unique art, kept. See docs/sets/dsk.md §2.
+    "dsk": frozenset({"fracturefoil"}),
+    # March of the Machine: halofoil (mul 131-195, Multiverse Legends) = same-art
+    # dupe of the base-showcase sibling (65 pairs, verified by illustration_id);
+    # the mul etched prints are distinct art, kept. See docs/sets/mom.md §2.
+    "mom": frozenset({"halofoil"}),
+    # Murders at Karlov Manor: NO fancy-foil sheet — empty set unblocks the
+    # preferred filter without dropping anything (invisibleink is same-art but
+    # computes to shw not ff, so it's handled in UNOBTAINABLE). See docs/sets/mkm.md §2.
+    "mkm": frozenset(),
+    # Wilds of Eldraine: confettifoil (wot 84-103, Enchanting Tales) = same-art
+    # dupe of the borderless boosterfun sibling (wot 64-83), foil-only ~$5,495;
+    # keeps the borderless print. See docs/sets/woe.md §2.
+    "woe": frozenset({"confettifoil"}),
+    # Crimson Vow: 2021 pre-fancy-foil-sheet set — no same-art dupe-foil signal.
+    # Empty set unblocks the preferred filter. See docs/sets/vow.md §2.
+    "vow": frozenset(),
+    # Aetherdrift: fracturefoil (DFT 407-416) = same-art dupe of the japanshowcase
+    # sibling (10 pairs, verified illustration_id). See docs/sets/dft.md §2.
+    "dft": frozenset({"fracturefoil"}),
+    # Modern Horizons 3: ripplefoil (m3c same-art twins) + textured (5 DFC
+    # planeswalkers 468-472, same borderless art as the bundle twin). The pure
+    # ripplefoil m3c reprints (no plain twin) are already ff-excluded, so this
+    # only drops true dupes. See docs/sets/mh3.md §2.
+    "mh3": frozenset({"ripplefoil", "textured"}),
+    # Warhammer 40K Commander: surgefoil (308 prints) = the Collector's Edition
+    # foil sheet, same art as the plain-frame base sibling (FIN-style clean dupe:
+    # base regular / surgefoil ff both key to no_ff=∅). See docs/sets/40k.md §2.
+    "40k": frozenset({"surgefoil"}),
+    # Fallout: surgefoil (528 prints) = collector-foil twins of a universesbeyond
+    # sibling, same art. See docs/sets/pip.md §2.
+    "pip": frozenset({"surgefoil"}),
+    # Commander 2021 (AFR): no fancy-foil sheet — the only fancy tier is
+    # extended-art (a distinct treatment class, not a foil dupe). Empty set
+    # unblocks the preferred filter. See docs/sets/c21.md §2.
+    "c21": frozenset(),
 }
 
 
@@ -624,6 +662,51 @@ FAMILY_UNOBTAINABLE_RULES: dict[str, list[dict]] = {
         # border_color (same technique as MSH Mind Stone 386). The base/other
         # prints of The Soul Stone stay in scope. (2026-09-07 user directive.)
         {"collector_numbers": frozenset({"243"}), "border_color": "borderless"},
+    ],
+    "mom": [
+        # pmom promo-pack STAMP dupes — 54 `Np` promopack+stamped prints, same card
+        # as a kept base/showcase sibling + a stamp; compute to `regular` so they
+        # leak into the rare/mythic-regular sub-selectors (~$127). Signal is
+        # `stamped` ONLY (the Ns prerelease twins carry `datestamped`, caught by the
+        # built-in datestamped-with-sibling filter); validated 0 promopack-only
+        # alt-arts. See docs/sets/mom.md §5.
+        {"promo_types_any_of": frozenset({"stamped"})},
+        # Documented no-op (parity with INR/ECL/SOS/TDM): the Praetor transform
+        # duals (mom 338-342) + mul `z` twins are serialized, already dropped by the
+        # GLOBAL serialized filter; doublerainbow never occurs without serialized.
+        {"promo_types_any_of": frozenset({"serialized", "doublerainbow"})},
+    ],
+    "mkm": [
+        # pmkm promo-pack / prerelease STAMP dupes — all 180 pmkm prints (90 Np
+        # promopack+stamped, 90 Ns prerelease+datestamped) are a kept base/showcase
+        # card + a stamp; compute to bare `regular` and leak ~$825. BOTH tokens
+        # needed: Np carries `stamped`, Ns carries only `datestamped`. See docs/sets/mkm.md §5.
+        {"promo_types_any_of": frozenset({"stamped", "datestamped"})},
+        # invisibleink (MKM 377-389, 433) — 14 hidden-clue glow-ink FOIL overlays of
+        # the dossier showcase, same illustration_id as the plain dossier sibling.
+        # Same-art dupe, but computes to shw (not ff) so DUPE_FOIL can't catch it;
+        # invisibleink is MKM-exclusive (14 prints), so any_of is exact. ~$133.
+        # See docs/sets/mkm.md §5.
+        {"promo_types_any_of": frozenset({"invisibleink"})},
+    ],
+    "dft": [
+        # firstplacefoil (DFT 427-553) — 127 "First Place" box-topper foils, same
+        # art as the BASE (not boosterfun) on a podium-inverted foil sheet; compute
+        # to b|ff while base is empty, so DUPE_FOIL can't pair them (MAT/MSH frame-
+        # mismatch trap). All have a base sibling; ~$1,041 the user won't chase.
+        # firstplacefoil is dft+spg only globally. See docs/sets/dft.md §5.
+        {"promo_types_any_of": frozenset({"firstplacefoil"})},
+        # Documented no-op (parity): DFT 376 The Aetherspark is serialized+headliner,
+        # already dropped by the GLOBAL serialized filter. rainbowfoil never occurs
+        # without serialized here. See docs/sets/dft.md §5.
+        {"promo_types_any_of": frozenset({"serialized", "headliner", "rainbowfoil"})},
+    ],
+    "mh3": [
+        # Documented no-op (parity with TDM/INR headliner families): the 3 serialized
+        # Eldrazi (mh3 381z-383z, up to ~$2,335) are already dropped by the GLOBAL
+        # serialized filter; doublerainbow adds nothing. The ripplefoil/textured
+        # dupes are handled in DUPE_FOIL. See docs/sets/mh3.md §5.
+        {"promo_types_any_of": frozenset({"serialized", "doublerainbow"})},
     ],
 }
 
