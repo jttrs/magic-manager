@@ -15,6 +15,17 @@ _CN_RE = re.compile(r"^(\d+)(.*)$")
 # MTG's canonical color order. Multicolor collapses to 'M', colorless to 'C'.
 WUBRG_ORDER = "WUBRG"
 
+# Scryfall `layout` values that mean "this is a token, not a real card." Single
+# source of truth for the is_token classification, shared by the DB upsert
+# projection (db.py) and the live-Scryfall card-dict path (selectors.py) so the
+# stored `cards.is_token` and any live-materialized value can't disagree.
+TOKEN_LAYOUTS = frozenset({"token", "double_faced_token", "emblem"})
+
+
+def is_token_layout(layout: str | None) -> bool:
+    """True when a Scryfall ``layout`` denotes a token/emblem (not a real card)."""
+    return layout in TOKEN_LAYOUTS
+
 
 def format_color_identity(identity, *, collapse_multicolor: bool) -> str:
     """Render a color identity as a WUBRG-ordered code.

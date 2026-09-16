@@ -229,12 +229,24 @@ def deck_get(slug: str, *, conn=None) -> Deck | None:
     return _deck_row_to_dataclass(row) if row else None
 
 
-def deck_show(slug: str) -> list[DeckCardRow]:
-    """Every card in the deck, all boards, joined to ``cards``.
+def deck_show(slug: str, *, exclude_boards: tuple[str, ...] = ()) -> list[DeckCardRow]:
+    """Every card in the deck, joined to ``cards``.
 
     Ordering: canonical board order (commander → main → companion → side →
-    maybe), then by set_code, collector_number, finish.
+    maybe → token), then by set_code, collector_number, finish.
+
+    ``exclude_boards`` drops rows on the named boards. Callers that treat the
+    deck as its PLAYABLE recipe (compose/pledge, value, the ``deck:`` selector
+    feeding exports) pass ``("token",)`` so token/emblem rows — which ride the
+    deck for record-keeping but aren't pledged, bought, or exported as deck
+    cards — don't leak in. ``deck show`` itself passes nothing (shows all boards).
     """
+    board_filter = ""
+    params: list = [slug]
+    if exclude_boards:
+        placeholders = ",".join("?" for _ in exclude_boards)
+        board_filter = f" AND dc.board NOT IN ({placeholders})"
+        params.extend(exclude_boards)
     with db.connect() as conn:
         deck = _fetch_deck(conn, slug)
         if deck is None:
@@ -248,10 +260,10 @@ def deck_show(slug: str) -> list[DeckCardRow]:
             FROM deck_cards dc
             JOIN decks d ON d.deck_id = dc.deck_id
             JOIN cards c ON c.scryfall_id = dc.scryfall_id
-            WHERE d.slug = ?
+            WHERE d.slug = ?{board_filter}
             ORDER BY {_BOARD_ORDER_SQL}, c.set_code, c.collector_number, dc.finish
             """,
-            (slug,),
+            params,
         ).fetchall()
     return [DeckCardRow(**dict(r)) for r in rows]
 
@@ -261,8 +273,12 @@ def deck_value(slug: str) -> dict:
 
     Returns ``{"total": float, "rows": int, "missing_price": [(display_name,
     set_code, collector_number, finish), ...]}``.
+
+    Token/emblem boards are EXCLUDED — a deck's $ reflects its playable cards,
+    not the tokens that ride along (which are usually $0 and not what a
+    collector values the deck by).
     """
-    rows = deck_show(slug)
+    rows = deck_show(slug, exclude_boards=("token",))
     total = 0.0
     missing_price: list[tuple] = []
     for r in rows:
@@ -662,15 +678,16 @@ def deck_assign_batch(
         deck_id = deck["deck_id"]
 
         # Recipe cap: an assignment for a printing can't exceed what the
-        # deck's recipe (deck_cards, summed across all boards+finishes for
-        # that scryfall_id) calls for, minus what's already assigned to this
-        # deck for the same printing. This catches "compose the same deck
-        # twice" — inventory might still have free copies, but the recipe
-        # already has as many pledged as it wants.
+        # deck's PLAYABLE recipe (deck_cards, summed across boards+finishes for
+        # that scryfall_id, EXCLUDING the 'token' board) calls for, minus what's
+        # already assigned to this deck for the same printing. This catches
+        # "compose the same deck twice" — inventory might still have free copies,
+        # but the recipe already has as many pledged as it wants. Tokens are
+        # excluded so they're never pledged (matches deck_compose_plan).
         recipe_caps: dict[str, int] = {}
         for r in conn.execute(
             "SELECT scryfall_id, SUM(count) AS total FROM deck_cards "
-            "WHERE deck_id = ? GROUP BY scryfall_id",
+            "WHERE deck_id = ? AND board != 'token' GROUP BY scryfall_id",
             (deck_id,),
         ).fetchall():
             recipe_caps[r["scryfall_id"]] = r["total"]
@@ -890,7 +907,11 @@ def deck_compose_plan(slug: str, *, foil_first: bool = False) -> dict:
     """
     from .inventory import free_quantity
 
-    recipe = deck_show(slug)  # already validates the slug
+    # Compose against the PLAYABLE recipe only — tokens ride the deck for
+    # record-keeping but are never pledged from inventory (they'd otherwise
+    # surface as spurious shortfalls, since token printings aren't tracked as
+    # loose singles). deck_assign_batch's recipe_caps applies the same exclusion.
+    recipe = deck_show(slug, exclude_boards=("token",))  # already validates the slug
 
     # Collapse recipe rows into per-(sid, finish) needs, resolving 'either'.
     needs: dict[tuple[str, str], int] = {}

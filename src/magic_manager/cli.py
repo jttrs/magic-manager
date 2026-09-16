@@ -125,11 +125,15 @@ def set_sync(
 
     codes = r.all_codes if include_related else [r.code]
     if with_tokens:
-        # Fold in the family's token child sets (the same set_type=='token'
-        # signal filtered_codes uses). --include-related already includes them
-        # (all_codes = the whole family graph); this covers the anchor-only case.
-        token_codes = [s["code"] for s in r.related if s.get("set_type") == "token"]
-        codes = list(dict.fromkeys(codes + token_codes))
+        # Fold in the family's token child sets via the canonical filtered_codes
+        # helper rather than re-encoding the set_type=='token' signal by hand.
+        # The set difference isolates exactly the token-typed codes (token is
+        # never in the default bundle, and the anchor cancels out), so this
+        # preserves set_sync's base semantics (all_codes vs [code]) — unlike a
+        # bare filtered_codes() call, which would swap in the default bundle.
+        token_codes = (set(r.filtered_codes(include_kinds=("token",)))
+                       - set(r.filtered_codes()))
+        codes = list(dict.fromkeys(codes + sorted(token_codes)))
     if only:
         wanted = {c.strip().lower() for raw in only for c in raw.split(",")}
         codes = [c for c in codes if c in wanted]
