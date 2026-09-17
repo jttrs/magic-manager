@@ -285,6 +285,16 @@ FAMILY_DUPE_FOIL_PROMO_TYPES: dict[str, frozenset[str]] = {
     # extended-art (a distinct treatment class, not a foil dupe). Empty set
     # unblocks the preferred filter. See docs/sets/c21.md §2.
     "c21": frozenset(),
+    # The Hobbit (UB Tolkien, 2026): surgefoil = same-art collector-foil dupes.
+    # All 60 family surgefoils share an illustration_id with a non-surgefoil twin
+    # (0 lone): showcase surgefoils (hob 250-274, shw|ff) dupe the plain showcase
+    # siblings, and inverted-poster surgefoils (275-284, b|ff) dupe the POSTER
+    # panels (239-248). Both compute to a treatment containing ff and pair on
+    # (name, codes-minus-ff), so DUPE_FOIL drops the surgefoil and keeps the
+    # showcase/poster representative. The distinct-art posters (treatment b) are
+    # KEPT; headliner 249 Smaug (~$22k) self-excludes via empty treatment.
+    # See docs/sets/hob.md §2/§5.
+    "hob": frozenset({"surgefoil"}),
 }
 
 
@@ -707,6 +717,17 @@ FAMILY_UNOBTAINABLE_RULES: dict[str, list[dict]] = {
         # serialized filter; doublerainbow adds nothing. The ripplefoil/textured
         # dupes are handled in DUPE_FOIL. See docs/sets/mh3.md §5.
         {"promo_types_any_of": frozenset({"serialized", "doublerainbow"})},
+    ],
+    "hob": [
+        # Smaug the Magnificent (hob 249) — headliner+gleaminggold, foil-only,
+        # ~$22,250, the set's headline ultra-rare (analog of TLA Avatar Aang /
+        # EOE Sothera / ECL Bitterbloom Bearer / MSH Mind Stone). It computes to
+        # an EMPTY treatment (not `regular`-excluded, not `ff`-dupe), so it leaks
+        # into the mythic-regular sub-selector — 93% of hob's raw missing $. Both
+        # `headliner` and `gleaminggold` are exclusive to this one print in the
+        # family (verified 1 each), so any_of catches exactly Smaug 249. See
+        # docs/sets/hob.md §5.
+        {"promo_types_any_of": frozenset({"headliner", "gleaminggold"})},
     ],
 }
 
