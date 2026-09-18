@@ -2,6 +2,14 @@
 
 How to map a Special Guests or Magazine Insert printing to its parent release. **Documented but not implemented as of V1.5.** This file captures the approach so future work can pick it up without rediscovering the audit. Both SPG and PMEI follow the same pattern — see the dedicated section near the end for PMEI specifics.
 
+> **Update (2026-09-17):** SPG was promoted to a normal characterized family
+> (removed from `NON_FAMILY_SETS`; see `docs/sets/spg.md`). The wave→companion-
+> expansion mapping below is now recorded in `docs/sets/spg.md` §9 as **informative
+> metadata only** — spg stays its own standalone set (missing-set/status treat it as
+> one finite set). Cross-family folding (attributing each wave into its companion
+> expansion's family) remains DEFERRED per this doc. PMEI is unchanged (still
+> owned-only / NON_FAMILY).
+
 ## The problem
 
 Special Guests is a long-running set of ~165 cards (and growing) released alongside specific main expansions:

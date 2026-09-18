@@ -295,6 +295,15 @@ FAMILY_DUPE_FOIL_PROMO_TYPES: dict[str, frozenset[str]] = {
     # KEPT; headliner 249 Smaug (~$22k) self-excludes via empty treatment.
     # See docs/sets/hob.md §2/§5.
     "hob": frozenset({"surgefoil"}),
+    # Special Guests (masterpiece reprint sheet, 175 cards): firstplacefoil (10)
+    # and textured (5) are same-art dupes of a boosterfun sibling — verified by
+    # illustration_id (Bone Miser 97↔87 share 38893c08; all 10 firstplacefoil +
+    # 5 textured match their boosterfun twin, 0 diff). Both compute to b|ff and
+    # pair on (name, codes-minus-ff), so DUPE_FOIL drops the fancy foil, keeps the
+    # boosterfun print. The neonink (6 Mana Crypt colorways) + dragonscalefoil
+    # (5 fetchlands) foils are DISTINCT art (0 illustration_id match) — handled in
+    # FAMILY_UNOBTAINABLE_RULES, not here. See docs/sets/spg.md §2.
+    "spg": frozenset({"firstplacefoil", "textured"}),
 }
 
 
@@ -728,6 +737,21 @@ FAMILY_UNOBTAINABLE_RULES: dict[str, list[dict]] = {
         # family (verified 1 each), so any_of catches exactly Smaug 249. See
         # docs/sets/hob.md §5.
         {"promo_types_any_of": frozenset({"headliner", "gleaminggold"})},
+    ],
+    "spg": [
+        # Two DISTINCT-ART ultra-premium foil tiers the user won't chase (~$4,800):
+        #   - neonink: 6 Mana Crypt neon colorways (spg 17a-d etc., foil-only,
+        #     up to ~$496 ea). Distinct art per colorway (0 illustration_id match
+        #     to the boosterfun 17), so NOT a dupe — the dupe filter would keep
+        #     them; this rule removes them. Direct analog of the fin/lci/neo
+        #     neonink exclusions.
+        #   - dragonscalefoil: 5 fetchlands (spg 114-118, foil-only, $369-$594).
+        #     Distinct art (0 illustration_id match to the boosterfun fetch), a
+        #     premium foil tier not chased.
+        # any_of because the two tokens never co-occur; matching either catches
+        # exactly these 11 prints. The boosterfun base prints of every card stay
+        # in scope. See docs/sets/spg.md §5.
+        {"promo_types_any_of": frozenset({"neonink", "dragonscalefoil"})},
     ],
 }
 
