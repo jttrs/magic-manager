@@ -37,8 +37,14 @@ from magic_manager import (  # noqa: E402
 # and they should never be characterized. Rendered with the `-` (n/a) glyph in
 # the overview's Char + Missing columns, distinct from `✗` ("characterizable but
 # not yet done"). Hardcoded because no set_type/topology rule cleanly separates
-# these from real masterpiece/expansion families (spg is masterpiece like mar;
-# sld resolves to a real Scryfall family + is a registered set_target).
+# these from real masterpiece/expansion families.
+#
+# NOTE (2026-09-17): `spg` (Special Guests) was REMOVED from this set — it's a
+# finite, completable 175-card masterpiece set (13 release waves, each an exact
+# released_at match to a companion expansion), so it's now a normal characterized
+# family (docs/sets/spg.md) with real missing-set/status. `sld` stays: it's a
+# 2,757-card ever-growing box whose only sane completion unit is the DROP (MTGJSON
+# deck-per-drop, via the secret-lair-value tooling), not the whole set.
 #
 # `mar` "Marvel Universe" is here because it's a cross-set masterpiece series
 # feeding the booster packs of MULTIPLE Marvel expansions (SPM, MSH, + 4 more to
@@ -51,7 +57,7 @@ from magic_manager import (  # noqa: E402
 # products the user holds incidentally — "missing from set" = "buy the entire
 # reprint set's variant tiers" ($4.7k for cmm, a 5,595-card pool for plst, $0 for
 # the reprint-starter scd), which is not a completion target. Owned-only, like sld.
-NON_FAMILY_SETS: frozenset[str] = frozenset({"sld", "spg", "pw25", "pmei", "sch", "mar",
+NON_FAMILY_SETS: frozenset[str] = frozenset({"sld", "pw25", "pmei", "sch", "mar",
                                              "cmm", "scd", "plst"})
 
 
