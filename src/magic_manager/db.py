@@ -506,6 +506,104 @@ CREATE INDEX IF NOT EXISTS deck_cards_scryfall_idx ON deck_cards (scryfall_id);
 SCHEMA_V15 = ""
 
 
+# V16: card fields needed for deck-legality validation + Commander-bracket
+# classification. All three are pulled from the Scryfall card JSON but were
+# previously discarded by ``_card_row``. Always-safe ADD COLUMNs; populated on
+# the next ``mm set sync`` (re-sync required — pre-V16 rows read legalities=NULL
+# / game_changer=0, so legality/bracket code emits a freshness warning when a
+# referenced card's ``legalities IS NULL``). Re-derivable (``cards`` is rebuilt
+# by sync), so no data migration.
+#   - legalities   : JSON obj {format: legal|not_legal|banned|restricted}. Answers
+#                    per-format legality (incl. vintage 'restricted' → max 1) for
+#                    every format in one field.
+#   - keywords     : JSON array of keyword abilities (e.g. 'Companion', 'Partner').
+#   - game_changer : Scryfall's boolean flag mirroring the official Commander
+#                    "Game Changers" list (the bracket-3+ gate). Named to match
+#                    the Scryfall field 1:1 (a deliberate exception to the
+#                    is_/has_ boolean convention — see docs/data-model.md).
+SCHEMA_V16 = """
+ALTER TABLE cards ADD COLUMN legalities   TEXT;   -- JSON {format: legal|not_legal|banned|restricted}
+ALTER TABLE cards ADD COLUMN keywords     TEXT;   -- JSON array
+ALTER TABLE cards ADD COLUMN game_changer INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX IF NOT EXISTS cards_game_changer_idx ON cards (game_changer);
+"""
+
+
+# V17: deck VERSIONING via a Slowly Changing Dimension Type 2 table. A deck's
+# card composition changes over time (brewing → tuning → rebrewing); we keep
+# EVERY version as an immutable snapshot so any two can be diffed. The `decks`
+# row is the durable logical identity (stable slug across all versions); each
+# `deck_versions` row is one version of that deck, and (after V18) `deck_cards`
+# hangs off `deck_version_id`.
+#   - status ('brew'/'tuned') : per-version composition-lifecycle confidence
+#     label. Finalizing (brew→tuned) runs legality+bracket validation and
+#     records the report on the row (warn-only; never blocks).
+#   - is_current + effective_from/effective_to : SCD-2 dating. Exactly one
+#     current version per deck (effective_to IS NULL). `decks.current_version_id`
+#     is the fast pointer every read path resolves through.
+#   - legality_report / suggested_bracket / bracket_detail : derived, warn-only
+#     metadata written at finalize time (NULL until then).
+# The PHYSICAL-state axis (built/deconstructed) needs no new column — it reuses
+# the existing deck-level `decks.precon_state` (generalized from precon-only to
+# all decks) and, per design, stays deck-level (assignments reconcile against the
+# deck's CURRENT version). The V17 Python hook creates a v1 'tuned' current
+# version for every existing deck and points `decks.current_version_id` at it.
+SCHEMA_V17 = """
+CREATE TABLE IF NOT EXISTS deck_versions (
+    deck_version_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    deck_id           INTEGER NOT NULL,
+    version_number    INTEGER NOT NULL,
+    status            TEXT NOT NULL DEFAULT 'brew' CHECK (status IN ('brew','tuned')),
+    is_current        INTEGER NOT NULL DEFAULT 1,
+    effective_from    TEXT NOT NULL,
+    effective_to      TEXT,                 -- NULL = current version
+    change_reason     TEXT,
+    legality_report   TEXT,                 -- JSON; NULL until finalized
+    suggested_bracket INTEGER,              -- 1..5; NULL until finalized / non-commander
+    bracket_detail    TEXT,                 -- JSON; NULL until finalized
+    created_at        TEXT NOT NULL,
+    FOREIGN KEY (deck_id) REFERENCES decks(deck_id) ON DELETE CASCADE,
+    UNIQUE (deck_id, version_number)
+);
+CREATE INDEX IF NOT EXISTS deck_versions_deck_idx    ON deck_versions (deck_id);
+CREATE INDEX IF NOT EXISTS deck_versions_current_idx ON deck_versions (deck_id, is_current);
+ALTER TABLE decks ADD COLUMN current_version_id INTEGER REFERENCES deck_versions(deck_version_id);
+"""
+
+
+# V18: version-scope `deck_cards`. Composition now belongs to a VERSION, not a
+# deck: the `deck_id` column is replaced by `deck_version_id`. SQLite can't drop
+# a column / change a PK in place, so rebuild the table (copy-rebuild dance, as
+# V14 did for the board CHECK). The INSERT...SELECT re-homes every existing row
+# onto its deck's v1 version (created by the V17 hook) via a join on
+# (deck_id, version_number=1) — so V17 MUST precede V18 (guaranteed by list
+# order + the UNIQUE(deck_id, version_number) constraint). Safe: no other table
+# FK-references deck_cards (deck_assignments references `decks`, not `deck_cards`,
+# and is therefore untouched by this rebuild); the table's own outbound FKs are
+# re-declared (scryfall_id kept; deck_id→deck_version_id). Both non-PK indexes
+# recreated (the old deck_cards_deck_idx is replaced by deck_cards_version_idx).
+SCHEMA_V18 = """
+CREATE TABLE deck_cards__new (
+    deck_version_id INTEGER NOT NULL,
+    scryfall_id     TEXT NOT NULL,
+    board           TEXT NOT NULL CHECK (board IN ('main','side','commander','companion','maybe','token')),
+    finish          TEXT NOT NULL CHECK (finish IN ('nonfoil','foil','either')),
+    count           INTEGER NOT NULL CHECK (count > 0),
+    PRIMARY KEY (deck_version_id, scryfall_id, board, finish),
+    FOREIGN KEY (deck_version_id) REFERENCES deck_versions(deck_version_id) ON DELETE CASCADE,
+    FOREIGN KEY (scryfall_id) REFERENCES cards(scryfall_id)
+);
+INSERT INTO deck_cards__new (deck_version_id, scryfall_id, board, finish, count)
+    SELECT dv.deck_version_id, dc.scryfall_id, dc.board, dc.finish, dc.count
+    FROM deck_cards dc
+    JOIN deck_versions dv ON dv.deck_id = dc.deck_id AND dv.version_number = 1;
+DROP TABLE deck_cards;
+ALTER TABLE deck_cards__new RENAME TO deck_cards;
+CREATE INDEX IF NOT EXISTS deck_cards_version_idx  ON deck_cards (deck_version_id);
+CREATE INDEX IF NOT EXISTS deck_cards_scryfall_idx ON deck_cards (scryfall_id);
+"""
+
+
 # ---------- migration-authoring convention ----------
 #
 # Always-safe ops in a migration: CREATE TABLE, ALTER TABLE ADD COLUMN,
@@ -519,10 +617,14 @@ SCHEMA_V15 = ""
 #   - list_rows         the inventory the user typed in
 #   - lists             labels + their kind/source
 #   - ingest_log        audit trail of which checklist landed when
-#   - decks / deck_cards  compositions + the source_precon_file_name /
-#                         precon_state columns that make precon unit counts
-#                         derivable (replaced the V7 precon_ledger, dropped in V10;
-#                         precon_state is the V11 3-value widening of is_deconstructed)
+#   - decks / deck_versions / deck_cards  compositions + version history. `decks`
+#                         is the durable identity (slug, source_precon_file_name,
+#                         precon_state — the last two make precon unit counts
+#                         derivable, replacing the V7 precon_ledger dropped in V10;
+#                         precon_state is the V11 widening of is_deconstructed).
+#                         `deck_versions` (V17) is the SCD-2 version history;
+#                         `deck_cards` (version-scoped as of V18) is one version's
+#                         composition. The user typed these in — not re-derivable.
 #   - precons / precon_cards    (when V2 ships them)
 #
 # Re-derivable tables (recovery = re-run a sync):
@@ -562,6 +664,9 @@ MIGRATIONS: list[str] = [
     SCHEMA_V13,
     SCHEMA_V14,
     SCHEMA_V15,
+    SCHEMA_V16,
+    SCHEMA_V17,
+    SCHEMA_V18,
 ]
 CURRENT_VERSION = len(MIGRATIONS)
 
@@ -642,6 +747,8 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
             _run_v11_python_migration(conn)
         if i == 15 and have < 15:
             _run_v15_python_migration(conn)
+        if i == 17 and have < 17:
+            _run_v17_python_migration(conn)
     if have < CURRENT_VERSION:
         conn.execute("DELETE FROM schema_version")
         conn.execute("INSERT INTO schema_version (version) VALUES (?)", (CURRENT_VERSION,))
@@ -946,6 +1053,44 @@ def _run_v15_python_migration(conn: sqlite3.Connection) -> None:
     _decks.backfill_token_board(conn=conn)
 
 
+# ---------- V17 Python post-migration ----------
+
+def _run_v17_python_migration(conn: sqlite3.Connection) -> None:
+    """Give every existing deck an SCD-2 v1 version and point the deck at it.
+
+    Runs AFTER the V17 SQL (which created ``deck_versions`` + added
+    ``decks.current_version_id``) and BEFORE V18 (which re-homes ``deck_cards``
+    onto ``deck_versions`` by joining on ``version_number = 1``). For each deck
+    with no version yet, INSERT a v1 row and stamp ``current_version_id``:
+
+      - status='tuned'  : existing decks are settled lists, not in-progress
+        brews. (A user can flip one back to 'brew' with ``mm deck status``.)
+      - is_current=1, effective_from = decks.created_at, effective_to = NULL.
+      - legality_report / suggested_bracket / bracket_detail left NULL (they're
+        written only when a version is explicitly finalized).
+
+    Idempotent: skips any deck that already has a version row (guards a re-run).
+    Offline-safe (no network).
+    """
+    decks = conn.execute(
+        "SELECT deck_id, created_at FROM decks "
+        "WHERE deck_id NOT IN (SELECT deck_id FROM deck_versions)"
+    ).fetchall()
+    for d in decks:
+        created = d["created_at"] or _utcnow_iso()
+        cur = conn.execute(
+            "INSERT INTO deck_versions "
+            "(deck_id, version_number, status, is_current, effective_from, "
+            " effective_to, change_reason, created_at) "
+            "VALUES (?, 1, 'tuned', 1, ?, NULL, ?, ?)",
+            (d["deck_id"], created, "initial version (v17 backfill)", created),
+        )
+        conn.execute(
+            "UPDATE decks SET current_version_id = ? WHERE deck_id = ?",
+            (cur.lastrowid, d["deck_id"]),
+        )
+
+
 def _utcnow_iso() -> str:
     from datetime import datetime, timezone
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -1056,7 +1201,8 @@ def upsert_card(conn: sqlite3.Connection, card: dict,
             image_uri, scryfall_uri, is_promo, is_token,
             frame_effects, finishes, oracle_text,
             flavor_name, promo_types, border_color, full_art,
-            security_stamp, is_reskin
+            security_stamp, is_reskin,
+            legalities, keywords, game_changer
         ) VALUES (
             :scryfall_id, :oracle_id, :name, :set_code, :collector_number,
             :rarity, :mana_cost, :cmc, :type_line, :colors, :color_identity,
@@ -1064,7 +1210,8 @@ def upsert_card(conn: sqlite3.Connection, card: dict,
             :image_uri, :scryfall_uri, :is_promo, :is_token,
             :frame_effects, :finishes, :oracle_text,
             :flavor_name, :promo_types, :border_color, :full_art,
-            :security_stamp, :is_reskin
+            :security_stamp, :is_reskin,
+            :legalities, :keywords, :game_changer
         )
         ON CONFLICT(scryfall_id) DO UPDATE SET
             oracle_id          = excluded.oracle_id,
@@ -1092,7 +1239,10 @@ def upsert_card(conn: sqlite3.Connection, card: dict,
             border_color       = excluded.border_color,
             full_art           = excluded.full_art,
             security_stamp     = excluded.security_stamp,
-            is_reskin          = excluded.is_reskin
+            is_reskin          = excluded.is_reskin,
+            legalities         = excluded.legalities,
+            keywords           = excluded.keywords,
+            game_changer       = excluded.game_changer
         """,
         _card_row(card, priced_at=priced_at),
     )
@@ -1181,6 +1331,13 @@ def _card_row(c: dict, *, priced_at: str | None = None) -> dict:
         #     Punishment", promo_types ["ffx","universesbeyond"]).
         # See docs/scryfall-set-families-and-bonus-sheets.md §4a.
         "is_reskin":        1 if ("sourcematerial" in promo_types or flavor_name) else 0,
+        # V16 — deck-legality + Commander-bracket source fields. legalities and
+        # keywords are stored as JSON TEXT (queried/decoded by legality.py /
+        # brackets.py); game_changer mirrors Scryfall's boolean 1:1 (deliberate
+        # exception to the is_/has_ convention — see docs/data-model.md).
+        "legalities":       json.dumps(f("legalities") or {}),
+        "keywords":         json.dumps(f("keywords") or []),
+        "game_changer":     1 if f("game_changer") else 0,
     }
 
 

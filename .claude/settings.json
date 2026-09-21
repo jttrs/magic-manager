@@ -34,6 +34,11 @@
             "type": "command",
             "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/ebay-guard.sh",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/commander-spellbook-guard.sh",
+            "timeout": 5
           }
         ]
       }

@@ -1591,17 +1591,29 @@ def wishlist_import_cmd(
 
 @deck_app.command("ls")
 def deck_ls_cmd():
-    """List every deck. The ``state`` column flags precon units that aren't
-    built playable decks: ``decon`` (torn down for parts, or a product with no
-    real decklist — Starter Collection / Scene Box)."""
+    """List every deck. Columns:
+      - ``status`` — the CURRENT version's composition-lifecycle state
+        (``brew`` = in progress, ``tuned`` = finalized).
+      - ``ver`` — the current version number (v1, v2, …).
+      - ``state`` — physical state: ``decon`` flags a deck torn down for parts
+        (or a product with no real decklist — Starter Collection / Scene Box).
+    """
     ds = decks_mod.deck_list()
     if not ds:
         typer.echo("(no decks)"); return
     _state_flag = {"built": "", "deconstructed": "decon"}
-    typer.echo(f"{'slug':30} {'name':40} {'format':12} {'state':6} {'updated_at'}")
+    # Fetch each deck's current version (status + number) in one pass.
+    status_by_slug: dict[str, tuple[str, int]] = {}
+    for d in ds:
+        cur = next((v for v in decks_mod.version_list(d.slug) if v.is_current), None)
+        status_by_slug[d.slug] = (cur.status, cur.version_number) if cur else ("—", 0)
+    typer.echo(f"{'slug':30} {'name':36} {'format':12} {'status':6} {'ver':>4} {'state':6} {'updated_at'}")
     for d in ds:
         flags = _state_flag.get(getattr(d, "precon_state", "built"), "")
-        typer.echo(f"{d.slug:30} {d.name:40} {(d.format or '—'):12} {flags:6} {d.updated_at}")
+        status, vnum = status_by_slug[d.slug]
+        vlabel = f"v{vnum}" if vnum else "—"
+        typer.echo(f"{d.slug:30} {d.name:36} {(d.format or '—'):12} {status:6} "
+                   f"{vlabel:>4} {flags:6} {d.updated_at}")
 
 
 @deck_app.command("show")
@@ -1628,12 +1640,246 @@ def deck_create_cmd(
     archetype: str = typer.Option(None, "--archetype"),
     notes: str = typer.Option(None, "--notes"),
 ):
-    """Create a new (empty) deck."""
+    """Create a new (empty) deck. Starts at version 1 with status ``brew``."""
     try:
         d = decks_mod.deck_create(slug, name, format=format, archetype=archetype, notes=notes)
     except ValueError as e:
         typer.echo(f"error: {e}", err=True); raise typer.Exit(2)
-    typer.echo(f"Created deck #{d.deck_id}: {d.slug} ({d.name})")
+    typer.echo(f"Created deck #{d.deck_id}: {d.slug} ({d.name}) — v1 (brew)")
+
+
+# ---------- versioning (SCD-2) ----------
+
+@deck_app.command("versions")
+def deck_versions_cmd(slug: str = typer.Argument(...)):
+    """List every version of a deck (SCD-2 history), oldest first."""
+    try:
+        vs = decks_mod.version_list(slug)
+    except LookupError as e:
+        typer.echo(f"error: {e}", err=True); raise typer.Exit(2)
+    if not vs:
+        typer.echo("(no versions)"); return
+    typer.echo(f"{'ver':>4} {'status':6} {'cur':>3} {'bracket':>7} {'from':25} {'reason'}")
+    for v in vs:
+        cur = "*" if v.is_current else ""
+        br = f"B{v.suggested_bracket}" if v.suggested_bracket else "—"
+        typer.echo(f"v{v.version_number:<3} {v.status:6} {cur:>3} {br:>7} "
+                   f"{v.effective_from:25} {v.change_reason or ''}")
+
+
+@deck_app.command("draft")
+def deck_draft_cmd(
+    slug: str = typer.Argument(...),
+    reason: str = typer.Option(None, "--reason", help="Why you're cutting a new draft."),
+):
+    """Start a new ``brew`` version seeded from the current version's cards (a
+    working copy to tweak). The prior version is kept as immutable history."""
+    try:
+        v = decks_mod.new_draft_from_current(slug, change_reason=reason)
+    except LookupError as e:
+        typer.echo(f"error: {e}", err=True); raise typer.Exit(2)
+    typer.echo(f"Started v{v.version_number} (brew) of {slug} from the current version.")
+
+
+@deck_app.command("version-new")
+def deck_version_new_cmd(
+    slug: str = typer.Argument(...),
+    reason: str = typer.Option(None, "--reason"),
+    empty: bool = typer.Option(False, "--empty", help="Start blank instead of copying current cards."),
+):
+    """Cut a new version. Copies the current version's cards unless ``--empty``."""
+    try:
+        v = decks_mod.create_version(slug, status="brew", change_reason=reason,
+                                     copy_from_current=not empty)
+    except LookupError as e:
+        typer.echo(f"error: {e}", err=True); raise typer.Exit(2)
+    how = "empty" if empty else "copied from current"
+    typer.echo(f"Created v{v.version_number} (brew, {how}) of {slug}.")
+
+
+@deck_app.command("status")
+def deck_status_cmd(
+    slug: str = typer.Argument(...),
+    status: str = typer.Argument(None, help="brew | tuned. Omit to just show the current status."),
+):
+    """Get or set the current version's status (``brew``/``tuned``) directly.
+
+    Setting status here does NOT run legality/bracket validation — use
+    ``deck finalize`` for that. Use this to flip a finalized list back to
+    ``brew`` for more editing."""
+    try:
+        if status is None:
+            cur = next((v for v in decks_mod.version_list(slug) if v.is_current), None)
+            if cur is None:
+                typer.echo("(no current version)"); return
+            typer.echo(f"{slug}: v{cur.version_number} status={cur.status}")
+            return
+        v = decks_mod.set_status(slug, status)
+    except (LookupError, ValueError) as e:
+        typer.echo(f"error: {e}", err=True); raise typer.Exit(2)
+    typer.echo(f"{slug}: v{v.version_number} status set to {v.status}")
+
+
+@deck_app.command("state")
+def deck_state_cmd(
+    slug: str = typer.Argument(...),
+    state: str = typer.Argument(None, help="built | decon(structed). Omit to show current physical state."),
+):
+    """Get or set a deck's PHYSICAL state (``built`` / ``deconstructed``) — the
+    deck-level axis independent of composition status/versioning."""
+    d = decks_mod.deck_get(slug)
+    if d is None:
+        typer.echo(f"error: deck {slug!r} not found", err=True); raise typer.Exit(2)
+    if state is None:
+        typer.echo(f"{slug}: state={d.precon_state}")
+        return
+    norm = "deconstructed" if state in ("decon", "deconstructed") else state
+    if norm not in ("built", "deconstructed"):
+        typer.echo(f"error: state must be built|decon, got {state!r}", err=True); raise typer.Exit(2)
+    with db.connect() as conn:
+        conn.execute("UPDATE decks SET precon_state = ?, updated_at = ? WHERE slug = ?",
+                     (norm, db._utcnow_iso(), slug))
+    typer.echo(f"{slug}: state set to {norm}")
+
+
+@deck_app.command("finalize")
+def deck_finalize_cmd(
+    slug: str = typer.Argument(...),
+    reason: str = typer.Option(None, "--reason"),
+    size: int = typer.Option(None, "--size", help="Override the expected deck size (e.g. a Brawl variant)."),
+    no_spellbook: bool = typer.Option(False, "--no-spellbook", help="Skip the Commander Spellbook combo lookup (offline)."),
+):
+    """Mark the current version ``tuned`` and record legality + bracket metadata.
+
+    WARN-ONLY: finalizing always succeeds. It prints the legality report (with
+    any violations) and, for Commander decks, a SUGGESTED bracket floor + the
+    cards that gate it — but never blocks. You are the authority."""
+    try:
+        res = decks_mod.finalize(slug, change_reason=reason, size_override=size,
+                                 use_spellbook=not no_spellbook)
+    except LookupError as e:
+        typer.echo(f"error: {e}", err=True); raise typer.Exit(2)
+    _print_legality(res["legality"])
+    if res["bracket"] is not None:
+        _print_bracket(res["bracket"])
+    typer.echo(f"\n{slug}: v{res['version_number']} finalized (tuned).")
+
+
+@deck_app.command("version-diff")
+def deck_version_diff_cmd(
+    slug: str = typer.Argument(...),
+    version_a: int = typer.Argument(..., help="Earlier version number."),
+    version_b: int = typer.Argument(..., help="Later version number."),
+):
+    """Show what changed between two versions of a deck (added / removed / changed)."""
+    try:
+        diff = decks_mod.version_diff(slug, version_a, version_b)
+    except LookupError as e:
+        typer.echo(f"error: {e}", err=True); raise typer.Exit(2)
+    typer.echo(f"v{version_a} → v{version_b}: "
+               f"+{len(diff['added'])} / -{len(diff['removed'])} / "
+               f"~{len(diff['changed'])} changed / {diff['unchanged_count']} unchanged")
+    for r in diff["added"]:
+        typer.echo(f"  + {r['count']}x {r['name']} [{r['board']}/{r['finish']}]")
+    for r in diff["removed"]:
+        typer.echo(f"  - {r['count']}x {r['name']} [{r['board']}/{r['finish']}]")
+    for r in diff["changed"]:
+        typer.echo(f"  ~ {r['name']} [{r['board']}/{r['finish']}]: {r['count_a']} → {r['count_b']}")
+
+
+@deck_app.command("legality")
+def deck_legality_cmd(
+    slug: str = typer.Argument(...),
+    version: int = typer.Option(None, "--version", help="Version number (default: current)."),
+    size: int = typer.Option(None, "--size"),
+):
+    """Check the current (or a specific) version's legality WITHOUT finalizing.
+
+    Runs the deck's ``format`` through the legality validator and prints the
+    report. Read-only — does not change status or write metadata."""
+    from magic_manager import legality as legality_mod
+    d = decks_mod.deck_get(slug)
+    if d is None:
+        typer.echo(f"error: deck {slug!r} not found", err=True); raise typer.Exit(2)
+    with db.connect() as conn:
+        if version is not None:
+            vrow = conn.execute(
+                "SELECT deck_version_id FROM deck_versions WHERE deck_id=? AND version_number=?",
+                (d.deck_id, version)).fetchone()
+            if vrow is None:
+                typer.echo(f"error: {slug!r} has no version {version}", err=True); raise typer.Exit(2)
+            vid = vrow["deck_version_id"]
+        else:
+            vid = d.current_version_id
+        cards = decks_mod._materialize_for_checks(conn, vid)
+    report = legality_mod.validate(cards, format=(d.format or "commander"), size_override=size)
+    _print_legality(report.to_json())
+
+
+@deck_app.command("bracket")
+def deck_bracket_cmd(
+    slug: str = typer.Argument(...),
+    version: int = typer.Option(None, "--version"),
+    no_spellbook: bool = typer.Option(False, "--no-spellbook"),
+):
+    """Suggest a Commander bracket FLOOR for the current (or a specific) version.
+
+    Counts Game Changers, detects mass-land-denial / extra-turn cards, and (unless
+    ``--no-spellbook``) queries Commander Spellbook for two-card combos. The result
+    is a suggestion + the gating cards — never authoritative (you declare the bracket)."""
+    from magic_manager import brackets as brackets_mod
+    d = decks_mod.deck_get(slug)
+    if d is None:
+        typer.echo(f"error: deck {slug!r} not found", err=True); raise typer.Exit(2)
+    with db.connect() as conn:
+        if version is not None:
+            vrow = conn.execute(
+                "SELECT deck_version_id FROM deck_versions WHERE deck_id=? AND version_number=?",
+                (d.deck_id, version)).fetchone()
+            if vrow is None:
+                typer.echo(f"error: {slug!r} has no version {version}", err=True); raise typer.Exit(2)
+            vid = vrow["deck_version_id"]
+        else:
+            vid = d.current_version_id
+        cards = decks_mod._materialize_for_checks(conn, vid)
+    spellbook = None
+    if not no_spellbook:
+        from magic_manager import commander_spellbook as _sb
+        spellbook = _sb
+    detail = brackets_mod.suggest(cards, spellbook=spellbook)
+    _print_bracket(detail.to_json())
+
+
+def _print_legality(report: dict) -> None:
+    """Render a legality report dict (from legality.LegalityReport.to_json)."""
+    verdict = "LEGAL" if report["legal"] else "ILLEGAL"
+    typer.echo(f"Legality [{report['format']}]: {verdict} ({report['checked_count']} cards checked)")
+    for v in report["violations"]:
+        marker = {"error": "✗", "warning": "!", "info": "·"}.get(v["severity"], "·")
+        typer.echo(f"  {marker} [{v['code']}] {v['message']}")
+        if v["cards"]:
+            shown = ", ".join(v["cards"][:8])
+            more = f" (+{len(v['cards'])-8} more)" if len(v["cards"]) > 8 else ""
+            typer.echo(f"      {shown}{more}")
+
+
+def _print_bracket(detail: dict) -> None:
+    """Render a bracket detail dict (from brackets.BracketDetail.to_json)."""
+    b = detail["suggested_bracket"]
+    if b is None:
+        typer.echo("Bracket: n/a (not a Commander deck)")
+    else:
+        typer.echo(f"Suggested bracket FLOOR: {b}  (a suggestion — you declare the actual bracket)")
+    typer.echo(f"  Game Changers: {detail['game_changer_count']}"
+               + (f" — {', '.join(detail['game_changers'])}" if detail["game_changers"] else ""))
+    if detail["mass_land_denial"]:
+        typer.echo(f"  Mass land denial: {', '.join(detail['mass_land_denial'])}")
+    if detail["extra_turns"]:
+        typer.echo(f"  Extra turns: {', '.join(detail['extra_turns'])}")
+    if detail["two_card_combos"]:
+        typer.echo(f"  Two-card combos: {detail['two_card_combos']}")
+    for line in detail["rationale"]:
+        typer.echo(f"  · {line}")
 
 
 @deck_app.command("delete")
@@ -1709,9 +1955,12 @@ def deck_find_cmd(
                 "SELECT name, flavor_name, set_code, collector_number, rarity FROM cards WHERE scryfall_id=?",
                 (sid,),
             ).fetchone()
+            # Version-scoped (V18): a printing "in a deck" means in the deck's
+            # CURRENT version's composition — join deck_cards on the deck's
+            # current_version_id pointer.
             deck_rows = conn.execute(
                 "SELECT d.slug, dc.board, dc.finish, dc.count "
-                "FROM deck_cards dc JOIN decks d ON d.deck_id = dc.deck_id "
+                "FROM deck_cards dc JOIN decks d ON d.current_version_id = dc.deck_version_id "
                 "WHERE dc.scryfall_id = ? "
                 "ORDER BY d.slug, dc.board, dc.finish",
                 (sid,),
@@ -3493,20 +3742,38 @@ def audit_deck_inventory_cmd(
     the safe ones.
 
     Detects:
-      - **orphan decks** — deck rows with zero ``deck_cards`` (e.g. an
-        interrupted import before the atomicity fix). ``--fix`` deletes these
-        (cascades to any stray rows) — automates the manual ``deck delete``
-        recovery.
+      - **orphan decks** — deck rows whose CURRENT version has zero
+        ``deck_cards`` (e.g. an interrupted import before the atomicity fix).
+        ``--fix`` deletes these (cascades to versions + stray rows) — automates
+        the manual ``deck delete`` recovery.
+      - **version-integrity** — decks with a NULL ``current_version_id`` or not
+        exactly one ``is_current`` version (an SCD-2 invariant violation;
+        report-only).
       - **over-assignment** — printings whose ``deck_assignments`` total exceeds
         the owned inventory quantity (report-only; never auto-changed).
     """
     with db.connect() as conn:
+        # Orphan = the deck's CURRENT version (V18: deck_cards hangs off
+        # deck_version_id) has no cards. LEFT JOIN on the current-version pointer.
         orphans = conn.execute(
             """
             SELECT d.slug, d.name
             FROM decks d
-            LEFT JOIN deck_cards dc ON dc.deck_id = d.deck_id
-            WHERE dc.deck_id IS NULL
+            LEFT JOIN deck_cards dc ON dc.deck_version_id = d.current_version_id
+            WHERE dc.scryfall_id IS NULL
+            ORDER BY d.slug
+            """
+        ).fetchall()
+        # Version-integrity: NULL pointer, or a current-version count != 1.
+        version_issues = conn.execute(
+            """
+            SELECT d.slug, d.name, d.current_version_id,
+                   (SELECT COUNT(*) FROM deck_versions v
+                    WHERE v.deck_id = d.deck_id AND v.is_current = 1) AS n_current
+            FROM decks d
+            WHERE d.current_version_id IS NULL
+               OR (SELECT COUNT(*) FROM deck_versions v
+                   WHERE v.deck_id = d.deck_id AND v.is_current = 1) != 1
             ORDER BY d.slug
             """
         ).fetchall()
@@ -3526,6 +3793,11 @@ def audit_deck_inventory_cmd(
     typer.echo(f"Orphan decks (0 cards): {len(orphans)}")
     for o in orphans:
         typer.echo(f"  {o['slug']}  ({o['name']})")
+    typer.echo(f"Version-integrity issues: {len(version_issues)}")
+    for v in version_issues:
+        detail = ("no current version" if v["current_version_id"] is None
+                  else f"{v['n_current']} current versions")
+        typer.echo(f"  {v['slug']}  ({v['name']}) — {detail}")
     typer.echo(f"Over-assigned printings (assigned > owned): {len(over)}")
     for o in over:
         typer.echo(f"  {o['scryfall_id']} [{o['finish']}]  assigned {o['assigned']} > owned {o['owned']}")

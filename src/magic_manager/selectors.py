@@ -1261,25 +1261,31 @@ def _materialize_deck(slug: str) -> list[MaterializedRow]:
     out: list[MaterializedRow] = []
     with db.connect() as conn:
         deck = conn.execute(
-            "SELECT deck_id FROM decks WHERE slug = ?", (slug,)
+            "SELECT deck_id, current_version_id FROM decks WHERE slug = ?", (slug,)
         ).fetchone()
         if deck is None:
             raise LookupError(f"no deck with slug {slug!r}")
+        # V18: composition is version-scoped — deck_cards hangs off
+        # deck_version_id, not deck_id. Resolve the deck's CURRENT version via
+        # the decks.current_version_id pointer (a NULL pointer means a
+        # migration/creation invariant was violated; treat as an empty deck).
         # Exclude the 'token' board: the deck:<slug> selector feeds exports
         # (Moxfield/Archidekt/TCGplayer/ManaPool paste blocks) and value/query
         # rollups — none of which should include the tokens that ride a precon
         # for record-keeping. `mm deck show` uses decks.deck_show directly (all
         # boards), so tokens stay visible there.
+        if deck["current_version_id"] is None:
+            return out
         rows = conn.execute(
             f"""
             SELECT dc.scryfall_id AS d_scryfall_id, dc.finish AS d_finish,
                    dc.count AS d_count, {_CARD_COLS}
             FROM deck_cards dc
             JOIN cards c ON c.scryfall_id = dc.scryfall_id
-            WHERE dc.deck_id = ? AND dc.board != 'token'
+            WHERE dc.deck_version_id = ? AND dc.board != 'token'
             ORDER BY c.set_code, c.collector_number, dc.finish
             """,
-            (deck["deck_id"],),
+            (deck["current_version_id"],),
         ).fetchall()
     for r in rows:
         finish = r["d_finish"] if r["d_finish"] in VALID_FINISHES else "nonfoil"
