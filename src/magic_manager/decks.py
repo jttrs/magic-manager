@@ -11,6 +11,7 @@ existing tooling that consumed ``ListRow`` can transition with minimal churn.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 
 from . import db, inventory as inv_mod, mtgjson as mtgjson_mod
@@ -23,6 +24,11 @@ _ALLOWED_FINISHES = ("nonfoil", "foil", "either")
 # V11 precon states (see the Deck dataclass). 'built' = assembled deck (pledged),
 # 'deconstructed' = torn-down deck (loose).
 _PRECON_STATES = ("built", "deconstructed")
+
+# V17 composition-lifecycle statuses (per deck VERSION, not the deck). 'brew' =
+# in-progress list; 'tuned' = locked-in (finalized, legality/bracket recorded).
+# Mirrors the deck_versions.status CHECK constraint.
+_VERSION_STATUSES = ("brew", "tuned")
 
 # Canonical board ordering for ``deck_show``: commanders first, then the
 # main 60/100, then companion (sits beside the deck during play), then side,
@@ -58,6 +64,38 @@ class Deck:
     # down for parts — recipe kept, cards loose).
     source_precon_file_name: str | None = None
     precon_state: str = "built"
+    # V17: pointer to the deck's CURRENT version (deck_versions.deck_version_id).
+    # Every deck_cards read resolves composition through this. NULL only in the
+    # (invalid) window before a deck's first version exists.
+    current_version_id: int | None = None
+
+
+@dataclass
+class DeckVersion:
+    """One SCD-2 version of a deck's composition (a ``deck_versions`` row).
+
+    A deck's card composition (``deck_cards``) hangs off ``deck_version_id``,
+    so each version is an immutable snapshot. ``status`` is the composition-
+    lifecycle label (``brew`` → ``tuned``); ``is_current`` + ``effective_from``
+    / ``effective_to`` are the SCD-2 dating (exactly one current version per
+    deck, its ``effective_to`` NULL). ``legality_report`` / ``bracket_detail``
+    are JSON blobs written when the version is finalized (NULL until then);
+    ``suggested_bracket`` is duplicated out of ``bracket_detail`` as an INTEGER
+    column for cheap listing/querying.
+    """
+
+    deck_version_id: int
+    deck_id: int
+    version_number: int
+    status: str
+    is_current: int
+    effective_from: str
+    effective_to: str | None
+    change_reason: str | None
+    legality_report: str | None
+    suggested_bracket: int | None
+    bracket_detail: str | None
+    created_at: str
 
 
 @dataclass
@@ -129,16 +167,71 @@ def _deck_row_to_dataclass(row) -> Deck:
         source_precon_file_name=(row["source_precon_file_name"]
                                  if "source_precon_file_name" in keys else None),
         precon_state=(row["precon_state"] if "precon_state" in keys else "built"),
+        current_version_id=(row["current_version_id"]
+                            if "current_version_id" in keys else None),
     )
 
 
 def _fetch_deck(conn, slug: str):
     return conn.execute(
         "SELECT deck_id, slug, name, format, archetype, notes, "
-        "created_at, updated_at, source_precon_file_name, precon_state "
+        "created_at, updated_at, source_precon_file_name, precon_state, "
+        "current_version_id "
         "FROM decks WHERE slug = ?",
         (slug,),
     ).fetchone()
+
+
+def _version_row_to_dataclass(row) -> DeckVersion:
+    return DeckVersion(
+        deck_version_id=row["deck_version_id"],
+        deck_id=row["deck_id"],
+        version_number=row["version_number"],
+        status=row["status"],
+        is_current=row["is_current"],
+        effective_from=row["effective_from"],
+        effective_to=row["effective_to"],
+        change_reason=row["change_reason"],
+        legality_report=row["legality_report"],
+        suggested_bracket=row["suggested_bracket"],
+        bracket_detail=row["bracket_detail"],
+        created_at=row["created_at"],
+    )
+
+
+# ---------- current-version resolution (V17/V18) ----------
+#
+# Composition is version-scoped: deck_cards hangs off deck_version_id. Every
+# read path resolves "the deck's cards" through decks.current_version_id (a fast
+# indexed pointer to the one current deck_versions row). These helpers DRY that
+# hop so no consumer hand-writes the join.
+
+
+def _current_version_id(conn, deck_id: int) -> int:
+    """The deck's current ``deck_version_id`` via the ``current_version_id``
+    pointer. Raises ``LookupError`` if the deck has no current version (an
+    invariant violation — every deck gets a v1 at creation / V17 backfill)."""
+    row = conn.execute(
+        "SELECT current_version_id FROM decks WHERE deck_id = ?", (deck_id,)
+    ).fetchone()
+    if row is None:
+        raise LookupError(f"no deck with deck_id {deck_id}")
+    if row["current_version_id"] is None:
+        raise LookupError(f"deck {deck_id} has no current version")
+    return row["current_version_id"]
+
+
+def _current_version_id_for_slug(conn, slug: str) -> tuple[int, int]:
+    """``(deck_id, current_version_id)`` for a slug in one hop. Raises
+    ``LookupError`` if the slug is unknown or has no current version."""
+    row = conn.execute(
+        "SELECT deck_id, current_version_id FROM decks WHERE slug = ?", (slug,)
+    ).fetchone()
+    if row is None:
+        raise LookupError(f"deck with slug {slug!r} not found")
+    if row["current_version_id"] is None:
+        raise LookupError(f"deck {slug!r} has no current version")
+    return row["deck_id"], row["current_version_id"]
 
 
 def _touch_deck(conn, deck_id: int) -> None:
@@ -147,6 +240,45 @@ def _touch_deck(conn, deck_id: int) -> None:
         "UPDATE decks SET updated_at = ? WHERE deck_id = ?",
         (db._utcnow_iso(), deck_id),
     )
+
+
+def _insert_version(
+    conn,
+    deck_id: int,
+    *,
+    version_number: int,
+    status: str,
+    change_reason: str | None,
+    now: str,
+) -> int:
+    """Insert a ``deck_versions`` row, clear any prior current flag for the
+    deck (cutting its ``effective_to``), mark the new row current, and repoint
+    ``decks.current_version_id``. Returns the new ``deck_version_id``.
+
+    The single place the "exactly one current version per deck" invariant is
+    maintained — used by both :func:`deck_create` (v1) and :func:`create_version`.
+    """
+    if status not in _VERSION_STATUSES:
+        raise ValueError(f"invalid status {status!r}; expected one of {_VERSION_STATUSES}")
+    # Retire the previous current version (if any).
+    conn.execute(
+        "UPDATE deck_versions SET is_current = 0, effective_to = ? "
+        "WHERE deck_id = ? AND is_current = 1",
+        (now, deck_id),
+    )
+    cur = conn.execute(
+        "INSERT INTO deck_versions "
+        "(deck_id, version_number, status, is_current, effective_from, "
+        " effective_to, change_reason, created_at) "
+        "VALUES (?, ?, ?, 1, ?, NULL, ?, ?)",
+        (deck_id, version_number, status, now, change_reason, now),
+    )
+    version_id = cur.lastrowid
+    conn.execute(
+        "UPDATE decks SET current_version_id = ? WHERE deck_id = ?",
+        (version_id, deck_id),
+    )
+    return version_id
 
 
 # ---------- deck CRUD ----------
@@ -161,6 +293,7 @@ def deck_create(
     source_set_code: str | None = None,
     source_precon_file_name: str | None = None,
     precon_state: str = "built",
+    status: str = "brew",
     conn=None,
 ) -> Deck:
     """Insert a new deck. Raises ``ValueError`` if ``slug`` is already in use.
@@ -176,9 +309,16 @@ def deck_create(
     imported from — the join key that makes precon unit counts derivable.
     ``precon_state`` (V11) is one of ``built`` / ``deconstructed`` (see the
     ``Deck`` dataclass).
+
+    ``status`` (V17) seeds the deck's initial (v1) composition-lifecycle state
+    (``brew``/``tuned``). Every new deck gets exactly one ``deck_versions`` row
+    here, and ``decks.current_version_id`` is pointed at it, so the deck has a
+    resolvable current version from creation on.
     """
     if precon_state not in _PRECON_STATES:
         raise ValueError(f"invalid precon_state {precon_state!r}; expected one of {_PRECON_STATES}")
+    if status not in _VERSION_STATUSES:
+        raise ValueError(f"invalid status {status!r}; expected one of {_VERSION_STATUSES}")
     now = db._utcnow_iso()
     with db.transaction(conn) as conn:
         existing = _fetch_deck(conn, slug)
@@ -196,6 +336,11 @@ def deck_create(
              precon_state, now, now),
         )
         deck_id = cur.lastrowid
+        # V17: every deck has a v1 version from birth; point the deck at it.
+        version_id = _insert_version(
+            conn, deck_id, version_number=1, status=status,
+            change_reason="initial version", now=now,
+        )
     return Deck(
         deck_id=deck_id,
         slug=slug,
@@ -207,6 +352,7 @@ def deck_create(
         updated_at=now,
         source_precon_file_name=(source_precon_file_name or None),
         precon_state=precon_state,
+        current_version_id=version_id,
     )
 
 
@@ -215,7 +361,8 @@ def deck_list() -> list[Deck]:
         rows = conn.execute(
             """
             SELECT deck_id, slug, name, format, archetype, notes,
-                   created_at, updated_at, source_precon_file_name, precon_state
+                   created_at, updated_at, source_precon_file_name, precon_state,
+                   current_version_id
             FROM decks
             ORDER BY slug
             """
@@ -229,8 +376,13 @@ def deck_get(slug: str, *, conn=None) -> Deck | None:
     return _deck_row_to_dataclass(row) if row else None
 
 
-def deck_show(slug: str, *, exclude_boards: tuple[str, ...] = ()) -> list[DeckCardRow]:
-    """Every card in the deck, joined to ``cards``.
+def deck_show(
+    slug: str,
+    *,
+    exclude_boards: tuple[str, ...] = (),
+    version_id: int | None = None,
+) -> list[DeckCardRow]:
+    """Every card in one version of the deck, joined to ``cards``.
 
     Ordering: canonical board order (commander → main → companion → side →
     maybe → token), then by set_code, collector_number, finish.
@@ -240,30 +392,37 @@ def deck_show(slug: str, *, exclude_boards: tuple[str, ...] = ()) -> list[DeckCa
     feeding exports) pass ``("token",)`` so token/emblem rows — which ride the
     deck for record-keeping but aren't pledged, bought, or exported as deck
     cards — don't leak in. ``deck show`` itself passes nothing (shows all boards).
+
+    ``version_id`` (V18) selects a specific ``deck_versions`` snapshot; the
+    default (``None``) resolves the deck's CURRENT version via
+    ``decks.current_version_id``. Composition is version-scoped, so ``deck_cards``
+    is joined on ``deck_version_id``.
     """
     board_filter = ""
-    params: list = [slug]
+    extra_params: list = []
     if exclude_boards:
         placeholders = ",".join("?" for _ in exclude_boards)
         board_filter = f" AND dc.board NOT IN ({placeholders})"
-        params.extend(exclude_boards)
+        extra_params.extend(exclude_boards)
     with db.connect() as conn:
         deck = _fetch_deck(conn, slug)
         if deck is None:
             raise LookupError(f"deck with slug {slug!r} not found")
+        vid = version_id if version_id is not None else deck["current_version_id"]
+        if vid is None:
+            return []  # deck with no current version (invalid state) → empty
         rows = conn.execute(
             f"""
-            SELECT dc.deck_id, d.slug, dc.scryfall_id, dc.board, dc.finish,
+            SELECT ? AS deck_id, ? AS slug, dc.scryfall_id, dc.board, dc.finish,
                    dc.count,
                    c.name, c.flavor_name, c.set_code, c.collector_number,
                    c.rarity, c.prices_usd, c.prices_usd_foil, c.cmc
             FROM deck_cards dc
-            JOIN decks d ON d.deck_id = dc.deck_id
             JOIN cards c ON c.scryfall_id = dc.scryfall_id
-            WHERE d.slug = ?{board_filter}
+            WHERE dc.deck_version_id = ?{board_filter}
             ORDER BY {_BOARD_ORDER_SQL}, c.set_code, c.collector_number, dc.finish
             """,
-            params,
+            [deck["deck_id"], slug, vid, *extra_params],
         ).fetchall()
     return [DeckCardRow(**dict(r)) for r in rows]
 
@@ -308,12 +467,15 @@ def backfill_source_set_codes(*, conn=None) -> int:
         updated = 0
         for row in null_decks:
             deck_id = row["deck_id"]
+            # Composition is version-scoped (V18): weigh the deck's CURRENT
+            # version's cards. A deck with no current version contributes nothing.
             modal = conn.execute(
                 """
                 SELECT LOWER(c.set_code) AS sc, SUM(dc.count) AS n
                 FROM deck_cards dc
+                JOIN decks d ON d.current_version_id = dc.deck_version_id
                 JOIN cards c ON c.scryfall_id = dc.scryfall_id
-                WHERE dc.deck_id = ?
+                WHERE d.deck_id = ?
                 GROUP BY LOWER(c.set_code)
                 ORDER BY n DESC, sc ASC
                 LIMIT 1
@@ -342,13 +504,22 @@ def backfill_token_board(*, conn=None) -> int:
     Guarded against a PK collision (a token already present on BOTH boards for
     the same deck/finish): such rows are left on ``main`` and reported to stderr
     rather than crashing the UPDATE.
+
+    SCHEMA-ADAPTIVE: ``deck_cards`` was version-scoped in V18 (its ``deck_id``
+    column became ``deck_version_id``). This runs both as a post-migration repair
+    (new shape) AND from the V15 migration hook — which fires BEFORE V18 applies,
+    when the table still carries ``deck_id``. We detect the key column via
+    ``PRAGMA table_info`` and operate on whichever exists, so the same helper is
+    correct across the migration boundary.
     """
     import sys as _sys
 
     with db.transaction(conn) as conn:
+        cols = {r["name"] for r in conn.execute("PRAGMA table_info(deck_cards)").fetchall()}
+        key = "deck_version_id" if "deck_version_id" in cols else "deck_id"
         candidates = conn.execute(
-            """
-            SELECT dc.deck_id, dc.scryfall_id, dc.finish, dc.count
+            f"""
+            SELECT dc.{key} AS owner, dc.scryfall_id, dc.finish, dc.count
             FROM deck_cards dc
             JOIN cards c ON c.scryfall_id = dc.scryfall_id
             WHERE dc.board = 'main' AND c.is_token = 1
@@ -357,21 +528,21 @@ def backfill_token_board(*, conn=None) -> int:
         moved = 0
         for r in candidates:
             clash = conn.execute(
-                "SELECT 1 FROM deck_cards WHERE deck_id = ? AND scryfall_id = ? "
+                f"SELECT 1 FROM deck_cards WHERE {key} = ? AND scryfall_id = ? "
                 "AND board = 'token' AND finish = ?",
-                (r["deck_id"], r["scryfall_id"], r["finish"]),
+                (r["owner"], r["scryfall_id"], r["finish"]),
             ).fetchone()
             if clash:
                 print(
                     f"warning: {r['scryfall_id']}/{r['finish']} already on 'token' "
-                    f"board for deck {r['deck_id']}; left the 'main' copy in place",
+                    f"board for {key} {r['owner']}; left the 'main' copy in place",
                     file=_sys.stderr,
                 )
                 continue
             conn.execute(
-                "UPDATE deck_cards SET board = 'token' WHERE deck_id = ? "
+                f"UPDATE deck_cards SET board = 'token' WHERE {key} = ? "
                 "AND scryfall_id = ? AND board = 'main' AND finish = ?",
-                (r["deck_id"], r["scryfall_id"], r["finish"]),
+                (r["owner"], r["scryfall_id"], r["finish"]),
             )
             moved += 1
     return moved
@@ -429,6 +600,318 @@ def deck_update(
     return _deck_row_to_dataclass(row)
 
 
+# ---------- versioning engine (SCD-2; V17/V18) ----------
+#
+# A deck's composition is version-scoped: each deck_versions row is an immutable
+# snapshot, and deck_cards hangs off deck_version_id. The `decks.current_version_id`
+# pointer names the one live version. These functions maintain the SCD-2
+# invariants (exactly one current version; contiguous effective_from/effective_to
+# dating) and drive the brew→tuned lifecycle.
+
+
+def version_list(slug: str) -> list[DeckVersion]:
+    """Every version of a deck, oldest first. Raises ``LookupError`` if unknown."""
+    with db.connect() as conn:
+        deck = _fetch_deck(conn, slug)
+        if deck is None:
+            raise LookupError(f"deck with slug {slug!r} not found")
+        rows = conn.execute(
+            "SELECT deck_version_id, deck_id, version_number, status, is_current, "
+            "effective_from, effective_to, change_reason, legality_report, "
+            "suggested_bracket, bracket_detail, created_at "
+            "FROM deck_versions WHERE deck_id = ? ORDER BY version_number",
+            (deck["deck_id"],),
+        ).fetchall()
+    return [_version_row_to_dataclass(r) for r in rows]
+
+
+def version_get(slug: str, version_number: int, *, conn=None) -> DeckVersion | None:
+    """One version of a deck by its ``version_number`` (1-based)."""
+    with db.transaction(conn) as conn:
+        deck = _fetch_deck(conn, slug)
+        if deck is None:
+            raise LookupError(f"deck with slug {slug!r} not found")
+        row = conn.execute(
+            "SELECT deck_version_id, deck_id, version_number, status, is_current, "
+            "effective_from, effective_to, change_reason, legality_report, "
+            "suggested_bracket, bracket_detail, created_at "
+            "FROM deck_versions WHERE deck_id = ? AND version_number = ?",
+            (deck["deck_id"], version_number),
+        ).fetchone()
+    return _version_row_to_dataclass(row) if row else None
+
+
+def create_version(
+    slug: str,
+    *,
+    status: str = "brew",
+    change_reason: str | None = None,
+    copy_from_current: bool = False,
+    conn=None,
+) -> DeckVersion:
+    """Cut a NEW version of a deck and make it current.
+
+    Retires the deck's prior current version (cuts its ``effective_to``), inserts
+    a fresh ``deck_versions`` row with the next ``version_number``, points
+    ``decks.current_version_id`` at it, and — if ``copy_from_current`` — clones
+    the prior current version's ``deck_cards`` into the new version so editing
+    starts from the existing list (a working copy). With ``copy_from_current``
+    False, the new version starts empty.
+
+    Returns the new :class:`DeckVersion`.
+    """
+    if status not in _VERSION_STATUSES:
+        raise ValueError(f"invalid status {status!r}; expected one of {_VERSION_STATUSES}")
+    now = db._utcnow_iso()
+    with db.transaction(conn) as conn:
+        deck = _fetch_deck(conn, slug)
+        if deck is None:
+            raise LookupError(f"deck with slug {slug!r} not found")
+        deck_id = deck["deck_id"]
+        prior_version_id = deck["current_version_id"]
+        next_num = conn.execute(
+            "SELECT COALESCE(MAX(version_number), 0) + 1 AS n FROM deck_versions WHERE deck_id = ?",
+            (deck_id,),
+        ).fetchone()["n"]
+        new_version_id = _insert_version(
+            conn, deck_id, version_number=next_num, status=status,
+            change_reason=change_reason, now=now,
+        )
+        if copy_from_current and prior_version_id is not None:
+            conn.execute(
+                "INSERT INTO deck_cards (deck_version_id, scryfall_id, board, finish, count) "
+                "SELECT ?, scryfall_id, board, finish, count "
+                "FROM deck_cards WHERE deck_version_id = ?",
+                (new_version_id, prior_version_id),
+            )
+        _touch_deck(conn, deck_id)
+        row = conn.execute(
+            "SELECT deck_version_id, deck_id, version_number, status, is_current, "
+            "effective_from, effective_to, change_reason, legality_report, "
+            "suggested_bracket, bracket_detail, created_at "
+            "FROM deck_versions WHERE deck_version_id = ?",
+            (new_version_id,),
+        ).fetchone()
+    return _version_row_to_dataclass(row)
+
+
+def new_draft_from_current(
+    slug: str, *, change_reason: str | None = None, conn=None
+) -> DeckVersion:
+    """Start a new ``brew`` version seeded with the current version's cards.
+
+    The common "I want to tweak this finalized list" flow: clone the current
+    composition into a fresh editable brew (the old version stays as history).
+    """
+    return create_version(
+        slug, status="brew", change_reason=change_reason,
+        copy_from_current=True, conn=conn,
+    )
+
+
+def set_status(slug: str, status: str, *, conn=None) -> DeckVersion:
+    """Set the current version's ``status`` (``brew``/``tuned``) directly, with
+    NO validation side effects (unlike :func:`finalize`). Use to flip a version
+    back to ``brew`` for more editing, or to mark ``tuned`` without re-running
+    legality/bracket. Returns the updated current :class:`DeckVersion`."""
+    if status not in _VERSION_STATUSES:
+        raise ValueError(f"invalid status {status!r}; expected one of {_VERSION_STATUSES}")
+    with db.transaction(conn) as conn:
+        deck_id, version_id = _current_version_id_for_slug(conn, slug)
+        conn.execute(
+            "UPDATE deck_versions SET status = ? WHERE deck_version_id = ?",
+            (status, version_id),
+        )
+        _touch_deck(conn, deck_id)
+        row = conn.execute(
+            "SELECT deck_version_id, deck_id, version_number, status, is_current, "
+            "effective_from, effective_to, change_reason, legality_report, "
+            "suggested_bracket, bracket_detail, created_at "
+            "FROM deck_versions WHERE deck_version_id = ?",
+            (version_id,),
+        ).fetchone()
+    return _version_row_to_dataclass(row)
+
+
+def _materialize_for_checks(conn, version_id: int) -> list[dict]:
+    """All cards of a version as legality/bracket-shaped dicts (JSON columns
+    decoded to native types). Includes every board — legality.py / brackets.py
+    exclude tokens internally."""
+    rows = conn.execute(
+        """
+        SELECT dc.scryfall_id, dc.board, dc.finish, dc.count,
+               c.oracle_id, c.name, c.type_line, c.oracle_text,
+               c.color_identity, c.keywords, c.legalities, c.game_changer
+        FROM deck_cards dc
+        JOIN cards c ON c.scryfall_id = dc.scryfall_id
+        WHERE dc.deck_version_id = ?
+        """,
+        (version_id,),
+    ).fetchall()
+    out: list[dict] = []
+    for r in rows:
+        out.append({
+            "scryfall_id": r["scryfall_id"],
+            "oracle_id": r["oracle_id"],
+            "name": r["name"],
+            "board": r["board"],
+            "finish": r["finish"],
+            "count": r["count"],
+            "type_line": r["type_line"],
+            "oracle_text": r["oracle_text"],
+            "color_identity": json.loads(r["color_identity"]) if r["color_identity"] else [],
+            "keywords": json.loads(r["keywords"]) if r["keywords"] else [],
+            "legalities": json.loads(r["legalities"]) if r["legalities"] else None,
+            "game_changer": r["game_changer"] or 0,
+        })
+    return out
+
+
+def finalize(
+    slug: str,
+    *,
+    change_reason: str | None = None,
+    size_override: int | None = None,
+    use_spellbook: bool = True,
+    conn=None,
+) -> dict:
+    """Mark the current version ``tuned`` and record legality + bracket metadata.
+
+    WARN-ONLY: finalizing ALWAYS succeeds even if the deck is illegal — the
+    legality report (and, for Commander decks, the suggested bracket) is computed
+    and stored on the version, and returned for display, but nothing is blocked.
+    The user is the authority; this just surfaces what's wrong.
+
+    Runs the deck's ``format`` through :mod:`magic_manager.legality`, and (for
+    commander-format decks) :mod:`magic_manager.brackets` — with the Commander
+    Spellbook client injected for two-card-combo detection unless
+    ``use_spellbook=False`` (or the network is unavailable, which degrades
+    gracefully). Results are written to ``deck_versions.legality_report`` /
+    ``suggested_bracket`` / ``bracket_detail`` and the status flips to ``tuned``.
+
+    Returns ``{"slug", "version_number", "status", "format", "legality":
+    LegalityReport-dict, "bracket": BracketDetail-dict|None}``.
+    """
+    from . import legality as legality_mod
+
+    with db.transaction(conn) as conn:
+        deck = _fetch_deck(conn, slug)
+        if deck is None:
+            raise LookupError(f"deck with slug {slug!r} not found")
+        deck_id = deck["deck_id"]
+        version_id = _current_version_id(conn, deck_id)
+        fmt = deck["format"] or "commander"
+        cards = _materialize_for_checks(conn, version_id)
+
+        report = legality_mod.validate(cards, format=fmt, size_override=size_override)
+        report_json = report.to_json()
+
+        bracket_json = None
+        suggested = None
+        if fmt.lower() in legality_mod._COMMANDER_LIKE_FORMATS:
+            from . import brackets as brackets_mod
+            spellbook = None
+            if use_spellbook:
+                from . import commander_spellbook as _sb
+                spellbook = _sb
+            detail = brackets_mod.suggest(cards, spellbook=spellbook)
+            bracket_json = detail.to_json()
+            suggested = detail.suggested_bracket
+
+        version_row = conn.execute(
+            "SELECT version_number FROM deck_versions WHERE deck_version_id = ?",
+            (version_id,),
+        ).fetchone()
+        conn.execute(
+            "UPDATE deck_versions SET status = 'tuned', legality_report = ?, "
+            "suggested_bracket = ?, bracket_detail = ?, "
+            "change_reason = COALESCE(?, change_reason) "
+            "WHERE deck_version_id = ?",
+            (json.dumps(report_json), suggested,
+             json.dumps(bracket_json) if bracket_json is not None else None,
+             change_reason, version_id),
+        )
+        _touch_deck(conn, deck_id)
+
+    return {
+        "slug": slug,
+        "version_number": version_row["version_number"],
+        "status": "tuned",
+        "format": fmt,
+        "legality": report_json,
+        "bracket": bracket_json,
+    }
+
+
+def version_diff(slug: str, version_a: int, version_b: int) -> dict:
+    """Diff two versions of a deck by ``version_number``.
+
+    Keyed on ``(scryfall_id, board, finish)``. Returns ``{"added": [...],
+    "removed": [...], "changed": [...], "unchanged_count": int}`` where added/
+    removed carry ``{scryfall_id, board, finish, count, name}`` and changed
+    carries ``{scryfall_id, board, finish, name, count_a, count_b}``. "Added"
+    means present in B but not A (and vice-versa for removed).
+    """
+    with db.connect() as conn:
+        deck = _fetch_deck(conn, slug)
+        if deck is None:
+            raise LookupError(f"deck with slug {slug!r} not found")
+        deck_id = deck["deck_id"]
+
+        def _load(vnum: int) -> dict[tuple[str, str, str], dict]:
+            vrow = conn.execute(
+                "SELECT deck_version_id FROM deck_versions "
+                "WHERE deck_id = ? AND version_number = ?",
+                (deck_id, vnum),
+            ).fetchone()
+            if vrow is None:
+                raise LookupError(f"deck {slug!r} has no version {vnum}")
+            rows = conn.execute(
+                "SELECT dc.scryfall_id, dc.board, dc.finish, dc.count, c.name "
+                "FROM deck_cards dc JOIN cards c ON c.scryfall_id = dc.scryfall_id "
+                "WHERE dc.deck_version_id = ?",
+                (vrow["deck_version_id"],),
+            ).fetchall()
+            return {
+                (r["scryfall_id"], r["board"], r["finish"]): dict(r)
+                for r in rows
+            }
+
+        a = _load(version_a)
+        b = _load(version_b)
+
+    added: list[dict] = []
+    removed: list[dict] = []
+    changed: list[dict] = []
+    unchanged = 0
+    for key, brow in b.items():
+        if key not in a:
+            added.append({
+                "scryfall_id": brow["scryfall_id"], "board": brow["board"],
+                "finish": brow["finish"], "count": brow["count"], "name": brow["name"],
+            })
+        elif a[key]["count"] != brow["count"]:
+            changed.append({
+                "scryfall_id": brow["scryfall_id"], "board": brow["board"],
+                "finish": brow["finish"], "name": brow["name"],
+                "count_a": a[key]["count"], "count_b": brow["count"],
+            })
+        else:
+            unchanged += 1
+    for key, arow in a.items():
+        if key not in b:
+            removed.append({
+                "scryfall_id": arow["scryfall_id"], "board": arow["board"],
+                "finish": arow["finish"], "count": arow["count"], "name": arow["name"],
+            })
+    return {
+        "added": added,
+        "removed": removed,
+        "changed": changed,
+        "unchanged_count": unchanged,
+    }
+
+
 # ---------- deck_cards CRUD ----------
 
 def deck_add_card(
@@ -459,12 +942,13 @@ def deck_add_card(
         if deck is None:
             raise LookupError(f"deck with slug {slug!r} not found")
         deck_id = deck["deck_id"]
+        version_id = _current_version_id(conn, deck_id)
         existing = conn.execute(
             """
             SELECT count FROM deck_cards
-            WHERE deck_id = ? AND scryfall_id = ? AND board = ? AND finish = ?
+            WHERE deck_version_id = ? AND scryfall_id = ? AND board = ? AND finish = ?
             """,
-            (deck_id, scryfall_id, board, finish),
+            (version_id, scryfall_id, board, finish),
         ).fetchone()
         if existing is None:
             old_count = None
@@ -476,12 +960,12 @@ def deck_add_card(
             action = "updated"
         conn.execute(
             """
-            INSERT INTO deck_cards (deck_id, scryfall_id, board, finish, count)
+            INSERT INTO deck_cards (deck_version_id, scryfall_id, board, finish, count)
             VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(deck_id, scryfall_id, board, finish) DO UPDATE SET
+            ON CONFLICT(deck_version_id, scryfall_id, board, finish) DO UPDATE SET
                 count = ?
             """,
-            (deck_id, scryfall_id, board, finish, new_count, new_count),
+            (version_id, scryfall_id, board, finish, new_count, new_count),
         )
         _touch_deck(conn, deck_id)
 
@@ -511,12 +995,13 @@ def deck_remove_card(
         if deck is None:
             raise LookupError(f"deck with slug {slug!r} not found")
         deck_id = deck["deck_id"]
+        version_id = _current_version_id(conn, deck_id)
         existing = conn.execute(
             """
             SELECT count FROM deck_cards
-            WHERE deck_id = ? AND scryfall_id = ? AND board = ? AND finish = ?
+            WHERE deck_version_id = ? AND scryfall_id = ? AND board = ? AND finish = ?
             """,
-            (deck_id, scryfall_id, board, finish),
+            (version_id, scryfall_id, board, finish),
         ).fetchone()
         if existing is None:
             return {"action": "not_found", "old_count": None, "new_count": 0}
@@ -525,9 +1010,9 @@ def deck_remove_card(
             conn.execute(
                 """
                 DELETE FROM deck_cards
-                WHERE deck_id = ? AND scryfall_id = ? AND board = ? AND finish = ?
+                WHERE deck_version_id = ? AND scryfall_id = ? AND board = ? AND finish = ?
                 """,
-                (deck_id, scryfall_id, board, finish),
+                (version_id, scryfall_id, board, finish),
             )
             _touch_deck(conn, deck_id)
             return {"action": "deleted", "old_count": old_count, "new_count": 0}
@@ -535,9 +1020,9 @@ def deck_remove_card(
         conn.execute(
             """
             UPDATE deck_cards SET count = ?
-            WHERE deck_id = ? AND scryfall_id = ? AND board = ? AND finish = ?
+            WHERE deck_version_id = ? AND scryfall_id = ? AND board = ? AND finish = ?
             """,
-            (new_count, deck_id, scryfall_id, board, finish),
+            (new_count, version_id, scryfall_id, board, finish),
         )
         _touch_deck(conn, deck_id)
     return {"action": "decremented", "old_count": old_count, "new_count": new_count}
@@ -565,12 +1050,13 @@ def deck_set_card(
         if deck is None:
             raise LookupError(f"deck with slug {slug!r} not found")
         deck_id = deck["deck_id"]
+        version_id = _current_version_id(conn, deck_id)
         existing = conn.execute(
             """
             SELECT count FROM deck_cards
-            WHERE deck_id = ? AND scryfall_id = ? AND board = ? AND finish = ?
+            WHERE deck_version_id = ? AND scryfall_id = ? AND board = ? AND finish = ?
             """,
-            (deck_id, scryfall_id, board, finish),
+            (version_id, scryfall_id, board, finish),
         ).fetchone()
         old_count = existing["count"] if existing else None
 
@@ -580,9 +1066,9 @@ def deck_set_card(
             conn.execute(
                 """
                 DELETE FROM deck_cards
-                WHERE deck_id = ? AND scryfall_id = ? AND board = ? AND finish = ?
+                WHERE deck_version_id = ? AND scryfall_id = ? AND board = ? AND finish = ?
                 """,
-                (deck_id, scryfall_id, board, finish),
+                (version_id, scryfall_id, board, finish),
             )
             _touch_deck(conn, deck_id)
             return {"action": "deleted", "old_count": old_count, "new_count": 0}
@@ -590,12 +1076,12 @@ def deck_set_card(
         action = "updated" if existing else "inserted"
         conn.execute(
             """
-            INSERT INTO deck_cards (deck_id, scryfall_id, board, finish, count)
+            INSERT INTO deck_cards (deck_version_id, scryfall_id, board, finish, count)
             VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(deck_id, scryfall_id, board, finish) DO UPDATE SET
+            ON CONFLICT(deck_version_id, scryfall_id, board, finish) DO UPDATE SET
                 count = ?
             """,
-            (deck_id, scryfall_id, board, finish, count, count),
+            (version_id, scryfall_id, board, finish, count, count),
         )
         _touch_deck(conn, deck_id)
     return {"action": action, "old_count": old_count, "new_count": count}
@@ -676,6 +1162,7 @@ def deck_assign_batch(
         if deck is None:
             raise LookupError(f"deck with slug {slug!r} not found")
         deck_id = deck["deck_id"]
+        version_id = _current_version_id(conn, deck_id)
 
         # Recipe cap: an assignment for a printing can't exceed what the
         # deck's PLAYABLE recipe (deck_cards, summed across boards+finishes for
@@ -683,12 +1170,14 @@ def deck_assign_batch(
         # already assigned to this deck for the same printing. This catches
         # "compose the same deck twice" — inventory might still have free copies,
         # but the recipe already has as many pledged as it wants. Tokens are
-        # excluded so they're never pledged (matches deck_compose_plan).
+        # excluded so they're never pledged (matches deck_compose_plan). The
+        # recipe is version-scoped (V18): pledges reconcile against the deck's
+        # CURRENT version's composition.
         recipe_caps: dict[str, int] = {}
         for r in conn.execute(
             "SELECT scryfall_id, SUM(count) AS total FROM deck_cards "
-            "WHERE deck_id = ? AND board != 'token' GROUP BY scryfall_id",
-            (deck_id,),
+            "WHERE deck_version_id = ? AND board != 'token' GROUP BY scryfall_id",
+            (version_id,),
         ).fetchall():
             recipe_caps[r["scryfall_id"]] = r["total"]
 

@@ -38,7 +38,8 @@ def test_import_precon_captures_token_board(
 
     with db.connect() as conn:
         board = conn.execute(
-            "SELECT board, count FROM deck_cards dc JOIN decks d ON d.deck_id=dc.deck_id "
+            "SELECT board, count FROM deck_cards dc "
+            "JOIN decks d ON d.current_version_id=dc.deck_version_id "
             "WHERE d.slug=? AND dc.scryfall_id=?", (result["effective_slugs"][0], "tok1")
         ).fetchone()
         assert board is not None, "token card not added to the deck recipe"

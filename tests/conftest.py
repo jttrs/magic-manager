@@ -72,6 +72,10 @@ def _make_card(**overrides) -> dict:
         "border_color": "black",
         "full_art": False,
         "security_stamp": None,
+        # V16 — deck-legality + Commander-bracket source fields.
+        "legalities": {},
+        "keywords": [],
+        "game_changer": False,
     }
     card.update(overrides)
     return card
@@ -148,6 +152,47 @@ def fake_mtgjson(monkeypatch):
             state["deck"] = deck
 
     monkeypatch.setattr(mtgjson, "deck", lambda file_name: dict(state["deck"]))
+    return configure
+
+
+@pytest.fixture
+def fake_spellbook(monkeypatch):
+    """Stub commander_spellbook.find_my_combos/estimate_bracket with canned
+    dicts, mirroring ``fake_mtgjson``.
+
+    Call configure(find_my_combos={...}, estimate_bracket={...}) with the
+    canned response each wrapper call should return. Either may also be
+    configured to raise by passing a callable/exception instance instead of
+    a dict; ``brackets.suggest`` degrades gracefully on any exception.
+    """
+    from magic_manager import commander_spellbook
+
+    state = {"find_my_combos": {}, "estimate_bracket": {}}
+
+    def configure(*, find_my_combos=None, estimate_bracket=None):
+        if find_my_combos is not None:
+            state["find_my_combos"] = find_my_combos
+        if estimate_bracket is not None:
+            state["estimate_bracket"] = estimate_bracket
+
+    def _find_my_combos(*, commander=None, main=None):
+        result = state["find_my_combos"]
+        if isinstance(result, BaseException):
+            raise result
+        if callable(result) and not isinstance(result, dict):
+            return result(commander=commander, main=main)
+        return result
+
+    def _estimate_bracket(*, commander=None, main=None):
+        result = state["estimate_bracket"]
+        if isinstance(result, BaseException):
+            raise result
+        if callable(result) and not isinstance(result, dict):
+            return result(commander=commander, main=main)
+        return result
+
+    monkeypatch.setattr(commander_spellbook, "find_my_combos", _find_my_combos)
+    monkeypatch.setattr(commander_spellbook, "estimate_bracket", _estimate_bracket)
     return configure
 
 
