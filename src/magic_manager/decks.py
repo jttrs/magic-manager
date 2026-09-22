@@ -1624,6 +1624,83 @@ def construct_precon_from_loose(
     return base
 
 
+def precon_recipe_needs(file_name: str) -> dict[tuple[str, str], int]:
+    """Return a precon's PLAYABLE recipe as ``{(scryfall_id, finish): count}``.
+
+    Reads the MTGJSON deck (all boards except tokens — tokens ride a deck for
+    record-keeping but aren't tracked as loose singles, mirroring
+    :func:`deck_compose_plan`'s exclusion). Finish is ``'nonfoil'``/``'foil'``
+    from ``isFoil``. This is the read-only recipe extraction the pool true-up
+    matches free inventory against, without creating any deck row.
+    """
+    deck_data = mtgjson_mod.deck(file_name)
+    needs: dict[tuple[str, str], int] = {}
+    for mj_key, board_name in _BOARD_KEY_TO_NAME:
+        if board_name == "token":
+            continue
+        for entry in deck_data.get(mj_key, []) or []:
+            sid = (entry.get("identifiers") or {}).get("scryfallId")
+            if not sid:
+                continue
+            finish = "foil" if entry.get("isFoil") else "nonfoil"
+            needs[(sid, finish)] = needs.get((sid, finish), 0) + int(entry.get("count", 1) or 1)
+    return needs
+
+
+def register_precon_from_loose(
+    file_name: str,
+    *,
+    slug: str | None = None,
+    name: str | None = None,
+    new_copy: bool = False,
+) -> dict:
+    """Register a precon as a tracked ``deconstructed`` deck row from cards the
+    user already owns LOOSE — the deconstructed sibling of
+    :func:`construct_precon_from_loose`.
+
+    Deconstructed means the recipe is kept as a deck row but its cards stay
+    LOOSE (unpledged) — so unlike the built sibling this creates NO
+    ``deck_assignments`` and adds NOTHING to ``inventory``
+    (``import_precon(add_inventory=False, precon_state="deconstructed")``). It
+    is the write primitive the pool true-up uses once a product's full recipe is
+    confirmed present in free inventory: it makes the precon COUNT (via
+    ``precon_unit_counts``) without double-counting or pledging the loose cards.
+
+    Re-run safety: unless ``new_copy=True``, if a deconstructed deck for this
+    fileName already exists this is a no-op that returns the existing slug. When
+    a row DOES need creating and the base slug is taken (e.g. a ``built`` copy
+    already exists at it), a distinct ``-2``/``-3`` slug is minted — mirroring
+    the add-mode engine's ``_build_precon_copies``.
+
+    Returns ``{"slug": str, "created": bool, "reused_existing": bool}``.
+    """
+    if not new_copy:
+        with db.connect() as conn:
+            row = conn.execute(
+                "SELECT slug FROM decks WHERE source_precon_file_name = ? "
+                "AND precon_state = 'deconstructed' ORDER BY deck_id LIMIT 1",
+                (file_name,),
+            ).fetchone()
+        if row is not None:
+            return {"slug": row["slug"], "created": False, "reused_existing": True}
+
+    # Pick a non-colliding slug: base, else base-2/-3/… (a built copy or an
+    # unrelated deck may already hold the base slug).
+    base = slug or _slug(name or file_name)
+    copy_slug = base
+    i = 2
+    while deck_get(copy_slug) is not None:
+        copy_slug = f"{base}-{i}"
+        i += 1
+
+    imp = import_precon(
+        file_name, slug=copy_slug, name=name,
+        add_inventory=False, precon_state="deconstructed",
+    )
+    eff = imp["effective_slugs"][0] if imp["effective_slugs"] else copy_slug
+    return {"slug": eff, "created": True, "reused_existing": False}
+
+
 def _assignment_hash(rows: list[tuple[str, str, int]]) -> str:
     """Stable SHA-256 of the sorted (sid, finish, qty) tuples.
 

@@ -2759,6 +2759,65 @@ def deck_construct_from_loose_cmd(
         typer.echo("  Fully covered — every recipe card pledged from loose inventory.")
 
 
+def _load_trueup_module():
+    """Import scripts/trueup_pools.py as a module (it lives outside the package,
+    like the other deterministic scripts). Cached on the function object."""
+    import importlib.util
+    from pathlib import Path as _P
+    cached = getattr(_load_trueup_module, "_mod", None)
+    if cached is not None:
+        return cached
+    path = _P(__file__).resolve().parent.parent.parent / "scripts" / "trueup_pools.py"
+    spec = importlib.util.spec_from_file_location("trueup_pools", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    _load_trueup_module._mod = mod
+    return mod
+
+
+@deck_app.command("trueup")
+def deck_trueup_cmd(
+    target: str = typer.Argument(
+        None, help="Set code/family or product-name substring to scope to. "
+        "Omit for --from-unattributed (default).",
+    ),
+    from_unattributed: bool = typer.Option(
+        False, "--from-unattributed",
+        help="(default when no target/--all) Only sets with unattributed-backfill copies.",
+    ),
+    all_sets: bool = typer.Option(
+        False, "--all", help="Every set you own loose cards from (full sweep).",
+    ),
+    apply: bool = typer.Option(
+        False, "--apply", help="Write the changes (default is a dry-run preview).",
+    ),
+    pick: str = typer.Option(
+        "", "--pick", help="Comma-separated fileNames to claim from the conflict list.",
+    ),
+    sld_partial_threshold: float = typer.Option(
+        0.9, "--sld-partial-threshold",
+        help="Flag Secret Lair drops with at least this fraction of CNs owned as near-complete.",
+    ),
+    json_out: bool = typer.Option(False, "--json", help="Emit the result dict as JSON."),
+):
+    """True up the deconstructed-precon collection: attribute LOOSE cards to the
+    products they came from (scene boxes, precon/jumpstart decks, card pools,
+    complete Secret Lair drops) and re-label their provenance in the ledger.
+
+    Only claims a product when its FULL recipe is present in free (unpledged)
+    inventory; reports conflicts (shared loose cards) instead of auto-resolving —
+    resolve with ``--pick``. Dry-run by default; ``--apply`` registers each
+    matched product as a ``deconstructed`` deck row (fixing precon unit counts,
+    no inventory double-count) and moves its copies from the
+    ``unattributed-backfill`` ledger bucket into a ``precon`` event.
+    """
+    tp = _load_trueup_module()
+    mode = "all" if all_sets else ("target" if target else "from-unattributed")
+    picks = {s.strip() for s in pick.split(",") if s.strip()}
+    tp.run(mode=mode, target=target, apply=apply, picks=picks,
+           sld_threshold=sld_partial_threshold, json_out=json_out)
+
+
 @deck_app.command("decompose")
 def deck_decompose_cmd(
     slug: str = typer.Argument(..., help="Deck slug to physically disassemble; recipe survives."),

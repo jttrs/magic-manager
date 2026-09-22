@@ -269,6 +269,41 @@ def find_events_by_sha(conn, source_sha256: str) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+# ---------- re-attribution (move provenance between events, net-zero) ----------
+
+
+def reattribute(
+    conn,
+    *,
+    from_ingest_id: int,
+    to_method: str,
+    deltas: list[tuple[str, str, int]],
+    to_label: str | None = None,
+    to_notes: str | None = None,
+) -> int:
+    """Move provenance for ``deltas`` from one event to a NEW event, net-zero.
+
+    For each ``(scryfall_id, finish, qty)`` (qty > 0): append a ``-qty`` delta to
+    ``from_ingest_id`` and a ``+qty`` delta to a freshly-created ``to_method``
+    event. The two cancel, so ``inventory.quantity == SUM(delta)`` is unchanged —
+    this reclassifies WHERE copies came from without touching the cache. Used by
+    the pool true-up to move copies out of the ``unattributed-backfill`` bucket
+    into a real ``precon`` event once their product is identified.
+
+    Caller must verify ``reconcile_inventory_ledger`` is still clean and cap each
+    ``qty`` to what the source event actually holds (so the source can't go
+    negative for that printing). Returns the new event's ``ingest_id``.
+    """
+    _validate_method(to_method)
+    to_id = create_event(conn, to_method, label=to_label, notes=to_notes)
+    for sid, finish, qty in deltas:
+        if qty <= 0:
+            continue
+        record_delta(conn, from_ingest_id, sid, finish, -qty)
+        record_delta(conn, to_id, sid, finish, qty)
+    return to_id
+
+
 # ---------- reconciliation + rebuild (root inventory in the ledger) ----------
 
 

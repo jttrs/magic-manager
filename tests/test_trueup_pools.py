@@ -1,0 +1,288 @@
+"""Pool true-up — match loose cards to products, report conflicts, and
+re-attribute the ledger on apply.
+
+Offline: stubs mtgjson.deck_list + mtgjson.deck, seeds inventory + an
+unattributed-backfill ledger event, then drives scripts/trueup_pools.py's core.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import sys
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "src"))
+
+
+def _load():
+    path = ROOT / "scripts" / "trueup_pools.py"
+    spec = importlib.util.spec_from_file_location("trueup_pools", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _seed_unattributed(conn, deltas):
+    """Create an unattributed-backfill event + inventory rows == its deltas, so
+    inventory == SUM(ledger) holds and the bucket looks like a fresh backfill."""
+    from magic_manager import ingest
+    uid = ingest.create_event(conn, "unattributed-backfill",
+                              label="backfill:unattributed", status="backfill")
+    for sid, fin, qty in deltas:
+        ingest.record_delta(conn, uid, sid, fin, qty)
+        conn.execute(
+            "INSERT INTO inventory (scryfall_id, finish, quantity, acquired_at) "
+            "VALUES (?, ?, ?, '2021-01-01T00:00:00+00:00')", (sid, fin, qty))
+    return uid
+
+
+@pytest.fixture
+def stub_products(monkeypatch):
+    """Stub mtgjson.deck_list (per set) + mtgjson.deck (per fileName)."""
+    from magic_manager import mtgjson
+    state = {"decklist": {}, "decks": {}}  # set_code -> [entries]; fileName -> deck
+
+    def configure(*, decklist=None, decks=None):
+        if decklist is not None:
+            state["decklist"] = decklist
+        if decks is not None:
+            state["decks"] = decks
+
+    monkeypatch.setattr(mtgjson, "deck_list",
+                        lambda *, set_code=None: list(state["decklist"].get((set_code or "").lower(), [])))
+    monkeypatch.setattr(mtgjson, "deck", lambda fn: dict(state["decks"].get(fn, {})))
+    # default_precon_state is called by import_precon-adjacent paths; keep simple.
+    return configure
+
+
+def _deck(name, code, dtype, cards):
+    """cards: list of (scryfallId, count, isFoil, setCode) → MTGJSON mainBoard."""
+    return {
+        "name": name, "code": code, "type": dtype,
+        "mainBoard": [{"count": c, "isFoil": f, "setCode": sc,
+                       "identifiers": {"scryfallId": sid}} for sid, c, f, sc in cards],
+        "commander": [], "sideBoard": [], "tokens": [],
+    }
+
+
+# ---------- full-coverage claim ----------
+
+def test_full_coverage_claim_and_reattribute(tmp_db, seed_cards, make_card, stub_products, fake_scryfall):
+    from magic_manager import db, ingest, decks
+    fake_scryfall()  # sync() is a no-op; cards already seeded
+
+    a = "aaaa0000-0000-0000-0000-000000000001"
+    b = "aaaa0000-0000-0000-0000-000000000002"
+    seed_cards([
+        make_card(id=a, set="tla", collector_number="62", name="Scene A"),
+        make_card(id=b, set="tle", collector_number="63", name="Scene B"),
+    ])
+    with db.connect() as conn:
+        uid = _seed_unattributed(conn, [(a, "nonfoil", 1), (b, "nonfoil", 1)])
+
+    stub_products(
+        decklist={"tla": [{"fileName": "SceneBox_TLA", "name": "The Scene Box",
+                           "code": "TLA", "type": "Box Set"}]},
+        decks={"SceneBox_TLA": _deck("The Scene Box", "TLA", "Box Set",
+                                     [(a, 1, False, "tla"), (b, 1, False, "tle")])},
+    )
+
+    tp = _load()
+    # dry-run: lists ready, writes nothing
+    tp.run(mode="from-unattributed", target=None, apply=False, picks=set(),
+           sld_threshold=0.9, json_out=True)
+    with db.connect() as conn:
+        assert conn.execute("SELECT COUNT(*) c FROM decks WHERE source_precon_file_name='SceneBox_TLA'").fetchone()["c"] == 0
+
+    # apply: registers deconstructed deck + re-attributes both copies
+    tp.run(mode="from-unattributed", target=None, apply=True, picks=set(),
+           sld_threshold=0.9, json_out=True)
+    with db.connect() as conn:
+        built, decon = decks.precon_unit_counts_for("SceneBox_TLA", conn=conn)
+        assert (built, decon) == (0, 1)
+        # ledger still reconciles (net-zero re-attribution)
+        assert ingest.reconcile_inventory_ledger(conn) == []
+        # unattributed bucket drained for these cards
+        uatt = conn.execute(
+            "SELECT COALESCE(SUM(ie.delta),0) s FROM inventory_events ie "
+            "JOIN ingest_events ev ON ev.ingest_id=ie.ingest_id "
+            "WHERE ev.method='unattributed-backfill'").fetchone()["s"]
+        assert uatt == 0
+        # a precon trueup event now holds them
+        pre = conn.execute(
+            "SELECT COALESCE(SUM(ie.delta),0) s FROM inventory_events ie "
+            "JOIN ingest_events ev ON ev.ingest_id=ie.ingest_id "
+            "WHERE ev.method='precon' AND ev.label LIKE 'trueup:%'").fetchone()["s"]
+        assert pre == 2
+        # inventory quantities untouched (no double count)
+        assert conn.execute("SELECT quantity FROM inventory WHERE scryfall_id=?", (a,)).fetchone()["quantity"] == 1
+
+
+# ---------- conflict: two products need the same single loose copy ----------
+
+def test_conflict_reported_not_written(tmp_db, seed_cards, make_card, stub_products, fake_scryfall):
+    from magic_manager import db
+    fake_scryfall()
+
+    shared = "bbbb0000-0000-0000-0000-000000000001"
+    seed_cards([make_card(id=shared, set="tla", collector_number="1", name="Shared")])
+    with db.connect() as conn:
+        _seed_unattributed(conn, [(shared, "nonfoil", 1)])  # only ONE copy
+
+    # Two products each need the one shared copy.
+    stub_products(
+        decklist={"tla": [
+            {"fileName": "P1_TLA", "name": "Product One", "code": "TLA", "type": "Box Set"},
+            {"fileName": "P2_TLA", "name": "Product Two", "code": "TLA", "type": "Box Set"},
+        ]},
+        decks={
+            "P1_TLA": _deck("Product One", "TLA", "Box Set", [(shared, 1, False, "tla")]),
+            "P2_TLA": _deck("Product Two", "TLA", "Box Set", [(shared, 1, False, "tla")]),
+        },
+    )
+
+    tp = _load()
+    # Capture result via json path by calling run() and re-querying: both conflicted, none written.
+    tp.run(mode="from-unattributed", target=None, apply=True, picks=set(),
+           sld_threshold=0.9, json_out=True)
+    with db.connect() as conn:
+        n = conn.execute("SELECT COUNT(*) c FROM decks WHERE source_precon_file_name IN ('P1_TLA','P2_TLA')").fetchone()["c"]
+        assert n == 0  # neither written — conflict
+
+    # --pick one → that one writes
+    tp.run(mode="from-unattributed", target=None, apply=True, picks={"P1_TLA"},
+           sld_threshold=0.9, json_out=True)
+    with db.connect() as conn:
+        assert conn.execute("SELECT COUNT(*) c FROM decks WHERE source_precon_file_name='P1_TLA'").fetchone()["c"] == 1
+        assert conn.execute("SELECT COUNT(*) c FROM decks WHERE source_precon_file_name='P2_TLA'").fetchone()["c"] == 0
+
+
+# ---------- no double-count: a pledged card isn't claimable ----------
+
+def test_pledged_card_not_claimable(tmp_db, seed_cards, make_card, stub_products, fake_scryfall):
+    from magic_manager import db, decks
+    fake_scryfall()
+
+    x = "cccc0000-0000-0000-0000-000000000001"
+    seed_cards([make_card(id=x, set="tla", collector_number="5", name="Pledged")])
+    with db.connect() as conn:
+        _seed_unattributed(conn, [(x, "nonfoil", 1)])
+
+    # Build a deck that pledges the single copy, so free_quantity == 0.
+    with db.connect() as conn:
+        decks.deck_create("holder", "Holder", conn=conn)
+        decks.deck_add_card("holder", x, "main", "nonfoil", 1, conn=conn)
+    decks.deck_assign_batch("holder", [(x, "nonfoil", 1)])
+
+    stub_products(
+        decklist={"tla": [{"fileName": "NeedsX_TLA", "name": "Needs X", "code": "TLA", "type": "Box Set"}]},
+        decks={"NeedsX_TLA": _deck("Needs X", "TLA", "Box Set", [(x, 1, False, "tla")])},
+    )
+
+    tp = _load()
+    tp.run(mode="from-unattributed", target=None, apply=True, picks=set(),
+           sld_threshold=0.9, json_out=True)
+    with db.connect() as conn:
+        # Not claimed (free was 0).
+        assert conn.execute("SELECT COUNT(*) c FROM decks WHERE source_precon_file_name='NeedsX_TLA'").fetchone()["c"] == 0
+        # Inventory unchanged.
+        assert conn.execute("SELECT quantity FROM inventory WHERE scryfall_id=?", (x,)).fetchone()["quantity"] == 1
+
+
+# ---------- re-attribution is capped to the unattributed balance ----------
+
+def test_reattribution_capped_to_unattributed_balance(tmp_db, seed_cards, make_card,
+                                                       stub_products, fake_scryfall):
+    """A ready product whose recipe card is only PARTLY in the unattributed
+    bucket (the rest already attributed to a checklist) must not over-drain the
+    bucket. The deck row registers; the ledger move is capped; reconcile holds."""
+    from magic_manager import db, ingest, decks
+    fake_scryfall()
+
+    z = "dddd0000-0000-0000-0000-000000000001"
+    seed_cards([make_card(id=z, set="tla", collector_number="9", name="Split Prov")])
+
+    # Own 3 copies: 1 attributed to a checklist event, 2 to unattributed.
+    with db.connect() as conn:
+        chk = ingest.create_event(conn, "checklist", label="set:tla", mode="additive")
+        ingest.record_delta(conn, chk, z, "nonfoil", 1)
+        uid = ingest.create_event(conn, "unattributed-backfill",
+                                  label="backfill:unattributed", status="backfill")
+        ingest.record_delta(conn, uid, z, "nonfoil", 2)
+        conn.execute("INSERT INTO inventory (scryfall_id, finish, quantity, acquired_at) "
+                     "VALUES (?, 'nonfoil', 3, '2021-01-01T00:00:00+00:00')", (z,))
+        assert ingest.reconcile_inventory_ledger(conn) == []  # 3 == 1 + 2
+
+    # A product needing 3 of z (fully covered by free inventory=3).
+    stub_products(
+        decklist={"tla": [{"fileName": "SplitBox_TLA", "name": "Split Box",
+                           "code": "TLA", "type": "Box Set"}]},
+        decks={"SplitBox_TLA": _deck("Split Box", "TLA", "Box Set", [(z, 3, False, "tla")])},
+    )
+
+    tp = _load()
+    tp.run(mode="from-unattributed", target=None, apply=True, picks=set(),
+           sld_threshold=0.9, json_out=True)
+
+    with db.connect() as conn:
+        # Deck row registered.
+        assert decks.precon_unit_counts_for("SplitBox_TLA", conn=conn) == (0, 1)
+        # Ledger still reconciles — the move was capped to 2 (the unattributed
+        # balance), NOT the full recipe of 3.
+        assert ingest.reconcile_inventory_ledger(conn) == []
+        # Unattributed drained to 0 for z (moved its 2); checklist's 1 untouched.
+        uatt = conn.execute(
+            "SELECT COALESCE(SUM(ie.delta),0) s FROM inventory_events ie "
+            "JOIN ingest_events ev ON ev.ingest_id=ie.ingest_id "
+            "WHERE ev.method='unattributed-backfill' AND ie.scryfall_id=?", (z,)).fetchone()["s"]
+        assert uatt == 0
+        chk_bal = conn.execute(
+            "SELECT COALESCE(SUM(ie.delta),0) s FROM inventory_events ie "
+            "JOIN ingest_events ev ON ev.ingest_id=ie.ingest_id "
+            "WHERE ev.method='checklist' AND ie.scryfall_id=?", (z,)).fetchone()["s"]
+        assert chk_bal == 1  # untouched
+        # inventory unchanged
+        assert conn.execute("SELECT quantity FROM inventory WHERE scryfall_id=?", (z,)).fetchone()["quantity"] == 3
+
+
+# ---------- SLD: complete vs partial by CN ownership ----------
+
+def test_sld_complete_vs_partial(tmp_db, seed_cards, make_card, monkeypatch):
+    from magic_manager import db, sld
+
+    # Drop has 2 CNs; own both = complete. A second drop: own 1 of 2 = 50% (< 0.9).
+    d1 = ["sld-0001", "sld-0002"]
+    d2 = ["sld-1001", "sld-1002"]
+    seed_cards([
+        make_card(id=d1[0], set="sld", collector_number="1", name="D1a"),
+        make_card(id=d1[1], set="sld", collector_number="2", name="D1b"),
+        make_card(id=d2[0], set="sld", collector_number="1001", name="D2a"),
+        make_card(id=d2[1], set="sld", collector_number="1002", name="D2b"),
+    ])
+    with db.connect() as conn:
+        # Own both of drop 1; only one of drop 2.
+        for sid in (d1[0], d1[1], d2[0]):
+            conn.execute("INSERT INTO inventory (scryfall_id, finish, quantity, acquired_at) "
+                         "VALUES (?, 'nonfoil', 1, '2021-01-01T00:00:00+00:00')", (sid,))
+
+    monkeypatch.setattr(sld, "all_drops", lambda: {
+        "Drop One": {"file_names": ["DropOne_SLD"]},
+        "Drop Two": {"file_names": ["DropTwo_SLD"]},
+    })
+    monkeypatch.setattr(sld, "collect_drop_ids",
+                        lambda fns: d1 if fns == ["DropOne_SLD"] else d2)
+
+    tp = _load()
+    with db.connect() as conn:
+        complete, partial = tp._sld_status(conn, 0.9)
+    names_c = {c["name"] for c in complete}
+    names_p = {p["name"] for p in partial}
+    assert "Drop One" in names_c
+    assert "Drop Two" not in names_c and "Drop Two" not in names_p  # 50% < 0.9 threshold
+
+    with db.connect() as conn:
+        complete2, partial2 = tp._sld_status(conn, 0.5)  # lower threshold surfaces it
+    assert "Drop Two" in {p["name"] for p in partial2}
