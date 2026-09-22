@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-from . import db, inventory as inv_mod, mtgjson as mtgjson_mod
+from . import db, ingest as ingest_mod, inventory as inv_mod, mtgjson as mtgjson_mod
 
 
 # Allowed values mirror the V4 CHECK constraints on ``deck_cards``.
@@ -1245,13 +1245,16 @@ def deck_assign_batch(
             assigned_qty += qty
         if assigned_rows:
             _touch_deck(conn, deck_id)
-            db.record_ingest_log(
-                conn,
+            # A deck-assign event moves deck_assignments, NOT inventory — the
+            # owned quantity is unchanged — so it records NO inventory_events;
+            # it exists in the dimension for the audit trail (and dedup via the
+            # assignment hash as source_sha256).
+            ingest_mod.create_event(
+                conn, "deck-assign",
                 label=f"deck-assigned:{slug}",
                 mode="additive",
                 source_path=f"deck:{slug}",
-                archived_path=None,
-                file_sha256=_assignment_hash(writable),
+                source_sha256=_assignment_hash(writable),
                 rows_added=assigned_rows,
                 rows_updated=0,
                 rows_zeroed=0,
@@ -1332,13 +1335,14 @@ def deck_unassign_batch(
 
         if unassigned_rows:
             _touch_deck(conn, deck_id)
-            db.record_ingest_log(
-                conn,
+            # Unassign also moves only deck_assignments, not inventory — no
+            # inventory_events; audit-trail dimension row only.
+            ingest_mod.create_event(
+                conn, "deck-unassign",
                 label=f"deck-unassigned:{slug}",
                 mode="additive",
                 source_path=f"deck:{slug}",
-                archived_path=None,
-                file_sha256=_assignment_hash(
+                source_sha256=_assignment_hash(
                     [] if rows == "all" else rows  # type: ignore[arg-type]
                 ),
                 rows_added=0,
@@ -1818,14 +1822,25 @@ def import_precon(
                     deck_updated += 1
             inv_aggregate[(sid, finish)] = inv_aggregate.get((sid, finish), 0) + count * copies
 
-        if add_inventory:
+        if add_inventory and inv_aggregate:
+            # One `precon` ingest event for this import; every card's inventory
+            # add is attributed to it (signed +delta), in this same transaction.
+            precon_ingest_id = ingest_mod.create_event(
+                conn, "precon",
+                label=f"precon:{file_name}",
+                source_path=file_name,
+                notes=f"import_precon copies={copies} state={row_state}",
+            )
             for (sid, finish), qty in inv_aggregate.items():
-                r = inv_mod.inventory_add(sid, finish, qty, conn=conn)
+                r = inv_mod.inventory_add(sid, finish, qty, conn=conn,
+                                          ingest_id=precon_ingest_id)
                 inv_qty_total += qty
                 if r["action"] == "inserted":
                     inv_added += 1
                 else:
                     inv_updated += 1
+            ingest_mod.finalize_event(conn, precon_ingest_id,
+                                      rows_added=inv_added, rows_updated=inv_updated)
 
     return {
         "deck_name": deck_name,

@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from . import db
+from . import ingest as ingest_mod
 
 
 # ---------- row dataclass ----------
@@ -178,6 +179,8 @@ def inventory_add(
     replace: bool = False,
     notes: str | None = None,
     conn=None,
+    ingest_id: int | None = None,
+    method: str = "adhoc",
 ) -> dict:
     """Insert or merge an inventory row.
 
@@ -195,6 +198,13 @@ def inventory_add(
     ``import_precon`` adding all precon cards atomically); omit it for a
     standalone add.
 
+    Provenance (V19): every change appends a SIGNED delta to the ledger in the
+    SAME transaction. Pass ``ingest_id`` to attribute the delta to a caller's
+    already-open event (e.g. ``import_precon``'s single precon event); if
+    omitted, a fresh event of ``method`` (default ``'adhoc'``) is created here so
+    a bare ``mm inventory add`` is still fully logged. ``inventory.quantity``
+    therefore stays equal to ``SUM(delta)``.
+
     Returns ``{"action": "inserted"|"updated", "old_qty": int|None,
     "new_qty": int}``.
     """
@@ -202,6 +212,9 @@ def inventory_add(
     _validate_qty_positive(qty)
 
     with db.transaction(conn) as conn:
+        if ingest_id is None:
+            ingest_id = ingest_mod.create_event(conn, method)
+
         existing = conn.execute(
             "SELECT quantity FROM inventory WHERE scryfall_id = ? AND finish = ?",
             (scryfall_id, finish),
@@ -216,6 +229,7 @@ def inventory_add(
                 """,
                 (scryfall_id, finish, qty, now, notes),
             )
+            ingest_mod.record_delta(conn, ingest_id, scryfall_id, finish, qty)
             return {"action": "inserted", "old_qty": None, "new_qty": qty}
 
         old_qty = existing["quantity"]
@@ -240,6 +254,10 @@ def inventory_add(
                 """,
                 (new_qty, scryfall_id, finish),
             )
+        # Signed delta = the change actually applied (replace can move down).
+        if new_qty != old_qty:
+            ingest_mod.record_delta(conn, ingest_id, scryfall_id, finish,
+                                    new_qty - old_qty)
         return {"action": "updated", "old_qty": old_qty, "new_qty": new_qty}
 
 
@@ -247,6 +265,10 @@ def inventory_remove(
     scryfall_id: str,
     finish: str,
     qty: int | None = None,
+    *,
+    conn=None,
+    ingest_id: int | None = None,
+    method: str = "adhoc",
 ) -> dict:
     """Remove inventory: full delete (``qty=None``) or decrement.
 
@@ -255,6 +277,11 @@ def inventory_remove(
       ``<= 0``, the row is deleted (the CHECK ``quantity > 0`` would
       reject any zero-or-negative UPDATE anyway).
 
+    Provenance (V19): the removal appends a NEGATIVE delta to the ledger in the
+    same transaction (``ingest_id`` to attribute to a caller's event, else a
+    fresh ``method`` event). This is what makes a manual removal that drops
+    inventory below a deck's pledged count explainable after the fact.
+
     Returns ``{"action": "deleted"|"decremented"|"not_found", "old_qty":
     int|None, "new_qty": int}``. ``new_qty`` is 0 for delete/not_found.
     """
@@ -262,7 +289,7 @@ def inventory_remove(
     if qty is not None:
         _validate_qty_positive(qty)
 
-    with db.connect() as conn:
+    with db.transaction(conn) as conn:
         existing = conn.execute(
             "SELECT quantity FROM inventory WHERE scryfall_id = ? AND finish = ?",
             (scryfall_id, finish),
@@ -272,12 +299,15 @@ def inventory_remove(
             return {"action": "not_found", "old_qty": None, "new_qty": 0}
 
         old_qty = existing["quantity"]
+        if ingest_id is None:
+            ingest_id = ingest_mod.create_event(conn, method)
 
         if qty is None or old_qty - qty <= 0:
             conn.execute(
                 "DELETE FROM inventory WHERE scryfall_id = ? AND finish = ?",
                 (scryfall_id, finish),
             )
+            ingest_mod.record_delta(conn, ingest_id, scryfall_id, finish, -old_qty)
             return {"action": "deleted", "old_qty": old_qty, "new_qty": 0}
 
         new_qty = old_qty - qty
@@ -289,6 +319,7 @@ def inventory_remove(
             """,
             (new_qty, scryfall_id, finish),
         )
+        ingest_mod.record_delta(conn, ingest_id, scryfall_id, finish, -qty)
         return {"action": "decremented", "old_qty": old_qty, "new_qty": new_qty}
 
 
@@ -298,8 +329,11 @@ def inventory_set(
     qty: int,
     *,
     notes: str | None = None,
+    conn=None,
+    ingest_id: int | None = None,
+    method: str = "intake",
 ) -> dict:
-    """Atomic replace: cell-driven set used by ``mm set ingest`` (Phase 4c).
+    """Atomic replace: cell-driven set used by the intake REPL.
 
     - ``qty == 0`` deletes the row (matching the XLSX cell-emptied semantic).
     - ``qty > 0`` upserts the row to exactly ``qty``.
@@ -307,6 +341,12 @@ def inventory_set(
     On first INSERT, ``acquired_at`` is stamped; on update, it is preserved
     via ``COALESCE``-equivalent branch logic (we don't touch ``acquired_at``
     on the UPDATE path).
+
+    Provenance (V19): the signed change (``qty - old_qty``) is appended to the
+    ledger in the same transaction. Pass ``ingest_id`` to attribute to a
+    caller's open event (the intake session opens ONE ``intake`` event and
+    threads it through every line); if omitted a fresh ``method`` (default
+    ``'intake'``) event is created.
 
     Raises ``ValueError`` for invalid ``finish`` or negative ``qty``.
 
@@ -317,20 +357,25 @@ def inventory_set(
     if not isinstance(qty, int) or qty < 0:
         raise ValueError(f"quantity must be a non-negative integer, got {qty!r}")
 
-    with db.connect() as conn:
+    with db.transaction(conn) as conn:
         existing = conn.execute(
             "SELECT quantity FROM inventory WHERE scryfall_id = ? AND finish = ?",
             (scryfall_id, finish),
         ).fetchone()
 
+        def _event() -> int:
+            return ingest_id if ingest_id is not None else ingest_mod.create_event(conn, method)
+
         if qty == 0:
             if existing is None:
                 return {"action": "not_found", "old_qty": None, "new_qty": 0}
+            old_qty = existing["quantity"]
             conn.execute(
                 "DELETE FROM inventory WHERE scryfall_id = ? AND finish = ?",
                 (scryfall_id, finish),
             )
-            return {"action": "deleted", "old_qty": existing["quantity"], "new_qty": 0}
+            ingest_mod.record_delta(conn, _event(), scryfall_id, finish, -old_qty)
+            return {"action": "deleted", "old_qty": old_qty, "new_qty": 0}
 
         if existing is None:
             now = db._utcnow_iso()
@@ -341,6 +386,7 @@ def inventory_set(
                 """,
                 (scryfall_id, finish, qty, now, notes),
             )
+            ingest_mod.record_delta(conn, _event(), scryfall_id, finish, qty)
             return {"action": "inserted", "old_qty": None, "new_qty": qty}
 
         old_qty = existing["quantity"]
@@ -362,4 +408,6 @@ def inventory_set(
                 """,
                 (qty, scryfall_id, finish),
             )
+        if qty != old_qty:
+            ingest_mod.record_delta(conn, _event(), scryfall_id, finish, qty - old_qty)
         return {"action": "updated", "old_qty": old_qty, "new_qty": qty}

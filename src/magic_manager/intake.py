@@ -114,6 +114,21 @@ def run_repl(resolved: ResolvedSet, prompt: str = "> ") -> None:
     session_count = 0
     anchor = resolved.code
 
+    # One `intake` ingest event for the whole session — created lazily on the
+    # first accepted write (empty sessions leave no event). Every line's
+    # inventory change is attributed to it. `_session` is a 1-slot holder so the
+    # nested helpers can populate it once.
+    _session: list[int] = []
+
+    def session_ingest_id() -> int:
+        if not _session:
+            from . import ingest as ingest_mod
+            with db.connect() as conn:
+                _session.append(ingest_mod.create_event(
+                    conn, "intake", label=f"intake:{anchor}",
+                    notes=f"intake REPL session, family {anchor}"))
+        return _session[0]
+
     print(f"mm intake — bound to family {anchor!r} ({' '.join(resolved.all_codes)})")
     print(f"sticky set: {sticky_set!r}.  Writes to inventory.  '?' for help, 'q' to quit.\n")
 
@@ -131,7 +146,7 @@ def run_repl(resolved: ResolvedSet, prompt: str = "> ") -> None:
             _print_help(sticky_set, undo_stack, session_count)
             continue
         if cmd in ("u", "undo"):
-            sticky_set = _do_undo(undo_stack, sticky_set)
+            sticky_set = _do_undo(undo_stack, sticky_set, session_ingest_id())
             continue
         if cmd.startswith("s ") or cmd.startswith("set "):
             new_set = cmd.split(maxsplit=1)[1].strip().lower()
@@ -160,7 +175,7 @@ def run_repl(resolved: ResolvedSet, prompt: str = "> ") -> None:
                   f"Family: {sorted(family)}.")
             continue
 
-        entry = _apply(parsed)
+        entry = _apply(parsed, session_ingest_id())
         if entry is None:
             continue
 
@@ -193,8 +208,12 @@ def _print_help(sticky_set: str | None, undo_stack: list[Entry], count: int) -> 
     print()
 
 
-def _apply(parsed: ParsedLine) -> Entry | None:
-    """Run one entry against the inventory table. Returns the Entry on success."""
+def _apply(parsed: ParsedLine, ingest_id: int) -> Entry | None:
+    """Run one entry against the inventory table. Returns the Entry on success.
+
+    ``ingest_id`` is the session's `intake` event; the inventory change is
+    attributed to it in the ledger.
+    """
     from .treatments import compute_treatment
     finish = "foil" if parsed.foil else "nonfoil"
     with db.connect() as conn:
@@ -236,9 +255,11 @@ def _apply(parsed: ParsedLine) -> Entry | None:
     # Outside the connection: route through inventory module so behavior
     # (acquired_at, replace semantics) stays consistent.
     if new_qty == 0:
-        inv_mod.inventory_remove(card["scryfall_id"], finish, qty=prev_qty)
+        inv_mod.inventory_remove(card["scryfall_id"], finish, qty=prev_qty,
+                                 ingest_id=ingest_id)
     else:
-        inv_mod.inventory_set(card["scryfall_id"], finish, new_qty)
+        inv_mod.inventory_set(card["scryfall_id"], finish, new_qty,
+                              ingest_id=ingest_id)
 
     flavor = card["flavor_name"]
     display = f"{flavor} / {card['name']}" if flavor else card["name"]
@@ -261,7 +282,8 @@ def _apply(parsed: ParsedLine) -> Entry | None:
     )
 
 
-def _do_undo(undo_stack: list[Entry], sticky_set: str | None) -> str | None:
+def _do_undo(undo_stack: list[Entry], sticky_set: str | None,
+             ingest_id: int) -> str | None:
     if not undo_stack:
         print("  [undo] nothing to undo")
         return sticky_set
@@ -274,10 +296,14 @@ def _do_undo(undo_stack: list[Entry], sticky_set: str | None) -> str | None:
         if card is None:
             print("  [undo] couldn't re-find card; aborting")
             return sticky_set
+    # Undo is itself a ledger movement (the reverse delta), attributed to the
+    # same intake session event.
     if last.prev_qty == 0:
-        inv_mod.inventory_remove(card["scryfall_id"], last.finish, qty=last.new_qty)
+        inv_mod.inventory_remove(card["scryfall_id"], last.finish, qty=last.new_qty,
+                                 ingest_id=ingest_id)
     else:
-        inv_mod.inventory_set(card["scryfall_id"], last.finish, last.prev_qty)
+        inv_mod.inventory_set(card["scryfall_id"], last.finish, last.prev_qty,
+                              ingest_id=ingest_id)
     print(f"  [UNDO] {last.set_code.upper()} {last.collector_number} {last.finish}: "
           f"{last.new_qty} → {last.prev_qty}")
     return sticky_set

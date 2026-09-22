@@ -1,8 +1,11 @@
 """Migration rehearsal harness — run before merging a new MIGRATIONS entry.
 
 Copies the live DB to a temp file, runs the schema migrations against the
-copy, and asserts that the precious tables (``list_rows``, ``lists``,
-``ingest_log``) still hold every row they did before.
+copy, and asserts that the precious tables (``list_rows``, ``lists``, and —
+for V19+ DBs — ``ingest_events``/``inventory_events``) still hold every row
+they did before. Across the V19 boundary the pre-migration ``ingest_log`` is
+validated by a bespoke subsume check (its rows must survive as
+``ingest_events`` rows), since byte-equivalence can't span a schema change.
 
 When the rehearsal actually exercises the V4 migration (i.e. pre-version
 < 4 and post-version >= 4), it ALSO verifies that V4's new tables
@@ -49,8 +52,18 @@ from pathlib import Path
 from magic_manager import db
 
 
-PRECIOUS_TABLES = ("lists", "list_rows", "ingest_log")
+PRECIOUS_TABLES = ("lists", "list_rows")
 V4_NEW_TABLES = ("inventory", "wishlist_entries", "decks", "deck_cards", "set_targets")
+# V19 subsumed ingest_log into the provenance ledger. Once a DB is at V19+, these
+# are the precious audit tables (irreplaceable — adhoc/intake provenance lives
+# nowhere else). Across the V19 boundary, ingest_log is instead validated by the
+# bespoke subsume check (_verify_v19_subsume): its rows must survive as
+# ingest_events rows. The columns ingest_events copies verbatim from ingest_log:
+_LEDGER_TABLES = ("ingest_events", "inventory_events")
+_INGEST_LOG_CARRIED_COLS = (
+    "at", "label", "source_path", "archived_path", "mode",
+    "rows_added", "rows_updated", "rows_zeroed", "status", "error",
+)
 
 
 def _row_hashes(conn: sqlite3.Connection, table: str) -> tuple[int, str]:
@@ -244,6 +257,54 @@ def _verify_v4_population(
     return ok, lines
 
 
+def _projected_hash(rows: list[tuple]) -> tuple[int, str]:
+    """(count, order-independent sha256) of a list of value-tuples."""
+    rows = sorted(rows, key=lambda r: tuple("" if v is None else str(v) for v in r))
+    h = hashlib.sha256()
+    for r in rows:
+        h.update("\x1f".join("" if v is None else str(v) for v in r).encode("utf-8"))
+        h.update(b"\x1e")
+    return len(rows), h.hexdigest()
+
+
+def _verify_v19_subsume(
+    pre_conn: sqlite3.Connection, post_conn: sqlite3.Connection
+) -> tuple[bool, list[str]]:
+    """Verify V19 preserved every ingest_log row into ingest_events.
+
+    Byte-equivalence no longer applies across a schema change, so instead we
+    assert: (a) row COUNT matches, and (b) the multiset of the columns
+    ingest_events copies verbatim from ingest_log is identical (hashed
+    order-independently). ``source_sha256`` (was ``file_sha256``) is checked
+    separately since the column was renamed.
+    """
+    cols = ", ".join(_INGEST_LOG_CARRIED_COLS)
+    pre_rows = [tuple(r) for r in pre_conn.execute(f"SELECT {cols} FROM ingest_log")]
+    post_rows = [tuple(r) for r in post_conn.execute(f"SELECT {cols} FROM ingest_events")]
+    n_pre, h_pre = _projected_hash(pre_rows)
+    n_post, h_post = _projected_hash(post_rows)
+
+    # file_sha256 → source_sha256 multiset (NULLs allowed).
+    pre_sha = [r[0] for r in pre_conn.execute("SELECT file_sha256 FROM ingest_log")]
+    post_sha = [r[0] for r in post_conn.execute("SELECT source_sha256 FROM ingest_events")]
+    sha_ok = sorted("" if v is None else v for v in pre_sha) == \
+             sorted("" if v is None else v for v in post_sha)
+
+    ok = (n_pre == n_post and h_pre == h_post and sha_ok)
+    status = "OK" if ok else "DIVERGED"
+    lines = [
+        f"  ingest_log→ingest_events  {n_pre:>6} rows → {n_post:>6} rows  {status}",
+    ]
+    if not ok:
+        if n_pre != n_post:
+            lines.append(f"     COUNT changed: {n_pre} → {n_post}")
+        if h_pre != h_post:
+            lines.append(f"     carried-column hash mismatch:\n       pre {h_pre}\n       post {h_post}")
+        if not sha_ok:
+            lines.append("     source_sha256 multiset differs from file_sha256")
+    return ok, lines
+
+
 def main(argv: list[str] | None = None) -> int:
     # Tiny argparse just for --help / -h. The rehearsal itself takes no
     # arguments — it operates on the live DB at db.db_path() unconditionally.
@@ -276,15 +337,22 @@ def main(argv: list[str] | None = None) -> int:
     #    directly (don't go through db.connect — that would run migrations).
     src = sqlite3.connect(str(live))
     src.row_factory = sqlite3.Row
+    pre_version_row = src.execute("SELECT version FROM schema_version").fetchone()
+    pre_version = pre_version_row["version"] if pre_version_row else 0
+
+    # The precious set is version-dependent: pre-V19 DBs carry ingest_log (checked
+    # via the subsume verifier, not byte-hash); V19+ DBs carry the ledger tables.
+    precious = list(PRECIOUS_TABLES)
+    if pre_version >= 19:
+        precious += list(_LEDGER_TABLES)
+
     pre: dict[str, tuple[int, str]] = {}
-    for t in PRECIOUS_TABLES:
+    for t in precious:
         try:
             pre[t] = _row_hashes(src, t)
         except sqlite3.OperationalError:
             # Table doesn't exist yet — that's fine, just record absence.
             pre[t] = (0, "<absent>")
-    pre_version_row = src.execute("SELECT version FROM schema_version").fetchone()
-    pre_version = pre_version_row["version"] if pre_version_row else 0
 
     # 2. Copy live DB to a temp location and point MAGIC_MANAGER_DB at it.
     with tempfile.TemporaryDirectory(prefix="mm-rehearsal-") as tmp:
@@ -305,7 +373,7 @@ def main(argv: list[str] | None = None) -> int:
 
             # 4. Hash precious tables AFTER migration.
             post: dict[str, tuple[int, str]] = {}
-            for t in PRECIOUS_TABLES:
+            for t in precious:
                 try:
                     post[t] = _row_hashes(conn, t)
                 except sqlite3.OperationalError:
@@ -318,18 +386,25 @@ def main(argv: list[str] | None = None) -> int:
             if post_version >= 4 and pre_version < 4:
                 v4_ok, v4_lines = _verify_v4_population(src, conn)
 
+            # 5b. V19 subsume check — ingest_log → ingest_events preservation,
+            #     only when this rehearsal actually crosses the V19 boundary.
+            v19_ok: bool | None = None
+            v19_lines: list[str] = []
+            if post_version >= 19 and pre_version < 19:
+                v19_ok, v19_lines = _verify_v19_subsume(src, conn)
+
     src.close()
 
     # 6. Compare precious tables.
     print(f"schema_version: {pre_version} → {post_version}")
     fail = False
-    for t in PRECIOUS_TABLES:
+    for t in precious:
         n_pre, h_pre = pre[t]
         n_post, h_post = post[t]
         status = "OK" if (n_pre == n_post and h_pre == h_post) else "DIVERGED"
         if status != "OK":
             fail = True
-        print(f"  {t:14}  {n_pre:>6} rows → {n_post:>6} rows  {status}")
+        print(f"  {t:16}  {n_pre:>6} rows → {n_post:>6} rows  {status}")
         if status == "DIVERGED":
             print(f"     pre  hash: {h_pre}")
             print(f"     post hash: {h_post}")
@@ -337,6 +412,17 @@ def main(argv: list[str] | None = None) -> int:
     if fail:
         print("\nFAIL: precious-table contents diverged across migration.", file=sys.stderr)
         return 1
+
+    # V19 subsume block.
+    if v19_ok is not None:
+        print()
+        print("V19 subsume check (ingest_log → ingest_events):")
+        for line in v19_lines:
+            print(line)
+        if not v19_ok:
+            print("\nFAIL: V19 did not preserve ingest_log rows into ingest_events.",
+                  file=sys.stderr)
+            return 1
 
     # 7. V4 population block.
     print()
