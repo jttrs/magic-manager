@@ -249,12 +249,45 @@ def _sld_status(conn, threshold: float) -> tuple[list[dict], list[dict]]:
             continue
         owned = cns & owned_cn
         frac = len(owned) / len(cns)
-        entry = {"name": name, "cns": len(cns), "owned": len(owned), "frac": round(frac, 3)}
+        entry = {"name": name, "cns": len(cns), "owned": len(owned), "frac": round(frac, 3),
+                 "file_names": list(drop.get("file_names", []))}
         if frac >= 1.0:
             complete.append(entry)
         elif frac >= threshold:
             partial.append(entry)
     return complete, partial
+
+
+def _sld_products(conn, sld_complete: list[dict]) -> list[dict]:
+    """Turn complete SLD drops into matchable products — ONE per logical drop.
+
+    A drop merges base + Foil-Edition siblings (same cards, different finish).
+    Emitting both would double-count if the user owns both finishes, so we pick
+    a SINGLE representative fileName per drop: the first sibling whose recipe is
+    fully covered by free inventory (base preferred by file_names order). This
+    keeps a physical drop as one product through the coverage/conflict/apply
+    path — exactly like any other precon.
+    """
+    products: list[dict] = []
+    for d in sld_complete:
+        chosen = None
+        for fn in d["file_names"]:  # base first (group_drops order)
+            try:
+                needs = decks_mod.precon_recipe_needs(fn)
+            except Exception:  # noqa: BLE001
+                continue
+            if needs and all(free_quantity(sid, fin, conn=conn) >= qty
+                             for (sid, fin), qty in needs.items()):
+                chosen = fn
+                break
+        if chosen is None:
+            # No single edition fully covered on its own — fall back to the
+            # first sibling so the drop still surfaces (may land in conflicts).
+            chosen = d["file_names"][0] if d["file_names"] else None
+        if chosen:
+            products.append({"fileName": chosen, "name": d["name"],
+                             "code": "SLD", "type": "Secret Lair Drop"})
+    return products
 
 
 # ---------- apply ----------
@@ -334,13 +367,17 @@ def run(*, mode: str, target: str | None, apply: bool, picks: set[str],
             set_codes = _unattributed_set_codes(conn)
 
         products = _enumerate_products(set_codes)
-        covered, need_map = _match_products(conn, products)
-        ready, conflicted, contested = _partition_ready_conflicts(conn, covered, need_map, picks)
 
-        # SLD (only when sld is in scope or --all).
+        # SLD (only when sld is in scope or --all). Complete drops become
+        # matchable products (one per sibling fileName) folded into the same
+        # coverage/conflict/apply pipeline; partials are advisory-only.
         sld_complete, sld_partial = ([], [])
         if "sld" in set_codes or mode == "all":
             sld_complete, sld_partial = _sld_status(conn, sld_threshold)
+            products = products + _sld_products(conn, sld_complete)
+
+        covered, need_map = _match_products(conn, products)
+        ready, conflicted, contested = _partition_ready_conflicts(conn, covered, need_map, picks)
 
         result = {
             "mode": mode, "target": target, "set_codes": sorted(set_codes),

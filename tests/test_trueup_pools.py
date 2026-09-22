@@ -286,3 +286,83 @@ def test_sld_complete_vs_partial(tmp_db, seed_cards, make_card, monkeypatch):
     with db.connect() as conn:
         complete2, partial2 = tp._sld_status(conn, 0.5)  # lower threshold surfaces it
     assert "Drop Two" in {p["name"] for p in partial2}
+
+
+def test_sld_complete_drop_registered_on_apply(tmp_db, seed_cards, make_card,
+                                               stub_products, fake_scryfall, monkeypatch):
+    """A complete SLD drop flows through the same apply path: registers a
+    deconstructed deck row + re-attributes its copies from unattributed."""
+    from magic_manager import db, ingest, decks, sld
+
+    fake_scryfall()
+    s1 = "eeee0000-0000-0000-0000-000000000001"
+    s2 = "eeee0000-0000-0000-0000-000000000002"
+    seed_cards([
+        make_card(id=s1, set="sld", collector_number="9001", name="Drop Card 1"),
+        make_card(id=s2, set="sld", collector_number="9002", name="Drop Card 2"),
+    ])
+    with db.connect() as conn:
+        _seed_unattributed(conn, [(s1, "nonfoil", 1), (s2, "nonfoil", 1)])
+
+    # SLD drop of 2 cards, both owned → complete.
+    monkeypatch.setattr(sld, "all_drops", lambda: {
+        "My Drop": {"file_names": ["MyDrop_SLD"]},
+    })
+    monkeypatch.setattr(sld, "collect_drop_ids", lambda fns: [s1, s2])
+    # The drop's fileName recipe (via mtgjson.deck) — both cards, nonfoil.
+    stub_products(
+        decklist={"sld": []},  # deck_list(sld) filtered to Secret Lair Drop → none here
+        decks={"MyDrop_SLD": _deck("My Drop", "SLD", "Secret Lair Drop",
+                                   [(s1, 1, False, "sld"), (s2, 1, False, "sld")])},
+    )
+
+    tp = _load()
+    tp.run(mode="from-unattributed", target=None, apply=True, picks=set(),
+           sld_threshold=0.9, json_out=True)
+
+    with db.connect() as conn:
+        assert decks.precon_unit_counts_for("MyDrop_SLD", conn=conn) == (0, 1)
+        assert ingest.reconcile_inventory_ledger(conn) == []
+        uatt = conn.execute(
+            "SELECT COALESCE(SUM(ie.delta),0) s FROM inventory_events ie "
+            "JOIN ingest_events ev ON ev.ingest_id=ie.ingest_id "
+            "WHERE ev.method='unattributed-backfill'").fetchone()["s"]
+        assert uatt == 0
+
+
+def test_sld_drop_not_double_registered_across_editions(tmp_db, seed_cards, make_card,
+                                                        stub_products, fake_scryfall, monkeypatch):
+    """A drop with base + Foil-Edition siblings referencing the SAME printings
+    must register ONCE, not once per edition (no double-count)."""
+    from magic_manager import db, ingest, decks, sld
+
+    fake_scryfall()
+    s = "ffff0000-0000-0000-0000-000000000001"
+    seed_cards([make_card(id=s, set="sld", collector_number="7777", name="Shared Drop Card")])
+    with db.connect() as conn:
+        _seed_unattributed(conn, [(s, "nonfoil", 1)])
+
+    monkeypatch.setattr(sld, "all_drops", lambda: {
+        "Twin Drop": {"file_names": ["TwinDrop_SLD", "TwinDropFoilEdition_SLD"]},
+    })
+    monkeypatch.setattr(sld, "collect_drop_ids", lambda fns: [s])
+    # BOTH editions' recipes reference the same nonfoil printing.
+    stub_products(
+        decklist={"sld": []},
+        decks={
+            "TwinDrop_SLD": _deck("Twin Drop", "SLD", "Secret Lair Drop", [(s, 1, False, "sld")]),
+            "TwinDropFoilEdition_SLD": _deck("Twin Drop", "SLD", "Secret Lair Drop", [(s, 1, False, "sld")]),
+        },
+    )
+
+    tp = _load()
+    tp.run(mode="from-unattributed", target=None, apply=True, picks=set(),
+           sld_threshold=0.9, json_out=True)
+
+    with db.connect() as conn:
+        # Registered exactly ONE deck row (the chosen edition), not two.
+        n = conn.execute(
+            "SELECT COUNT(*) c FROM decks WHERE source_precon_file_name IN "
+            "('TwinDrop_SLD','TwinDropFoilEdition_SLD')").fetchone()["c"]
+        assert n == 1
+        assert ingest.reconcile_inventory_ledger(conn) == []
