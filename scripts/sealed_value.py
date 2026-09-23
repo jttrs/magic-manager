@@ -34,11 +34,10 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+_OUTPUT_TYPE = "sealed-value"  # → output/sealed-value/reports/
 sys.path.insert(0, str(ROOT / "src"))
 
 from magic_manager import construct, ev, mtgjson, scryfall, sealed, sets, sld, util, valuation  # noqa: E402
-
-QUERIES_DIR = ROOT / "queries"
 
 
 # ---------- rendering ----------
@@ -338,9 +337,11 @@ def main() -> int:
     ap.add_argument("--no-refresh", action="store_true",
                     help="Don't re-sync sets with stale (>7d) prices; use local "
                          "prices as-is and warn. Faster/offline, but may under-report.")
-    ap.add_argument("--out-dir", type=Path, default=QUERIES_DIR,
-                    help=f"Output dir (default: {QUERIES_DIR.relative_to(ROOT)}).")
+    ap.add_argument("--out-dir", type=Path, default=None,
+                    help="Override output dir (default: output/sealed-value/reports/).")
     args = ap.parse_args()
+    if args.out_dir is None:
+        args.out_dir = util.output_dir(_OUTPUT_TYPE, "reports")
     code = args.set_code.lower()
     refresh_stale = not args.no_refresh
 

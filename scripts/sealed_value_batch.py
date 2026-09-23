@@ -41,8 +41,6 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from magic_manager import mtgjson, scryfall, sealed, sld, util, valuation  # noqa: E402
 
-QUERIES_DIR = ROOT / "queries"
-
 
 def _fmt(v) -> str:
     return util.fmt_usd(v)
@@ -148,8 +146,11 @@ def main() -> int:
                     default="chain", help="Market source for sealed products (default: chain).")
     ap.add_argument("--format", choices=["txt", "none"], default="txt",
                     help="Also write a combined txt artifact (default: txt).")
-    ap.add_argument("--out-dir", type=Path, default=QUERIES_DIR)
+    ap.add_argument("--out-dir", type=Path, default=None,
+                    help="Override output dir (default: output/sealed-value/reports/).")
     args = ap.parse_args()
+    if args.out_dir is None:
+        args.out_dir = util.output_dir("sealed-value", "reports")
 
     raw = args.infile.read_text() if args.infile else sys.stdin.read()
     try:

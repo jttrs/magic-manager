@@ -9,8 +9,30 @@ from __future__ import annotations
 
 import json
 import re
+from pathlib import Path
 
 _CN_RE = re.compile(r"^(\d+)(.*)$")
+
+# Ephemeral generated artifacts (reports / buy-lists / checklists) live under a
+# single repo-root-relative tree, segmented output/<type>/<category>/. This is
+# the ONE home for that path — replaces the per-script ``QUERIES_DIR`` constants
+# that had drifted into 8 independent definitions. Repo-root-relative (resolved
+# against CWD, like the tree's siblings).
+OUTPUT_ROOT = Path("output")
+
+
+def output_dir(type_: str, category: str) -> Path:
+    """Return (and create) ``output/<type>/<category>/`` for a generated artifact.
+
+    ``type_`` is the producing command/skill (``sealed-value``, ``missing-set``,
+    ``cart-check``, …); ``category`` is the artifact's purpose (``reports``,
+    ``buy-lists``, ``checklists``). Made on demand so callers just build a
+    filename inside the returned dir. Single source of truth for artifact
+    locations — see ``scripts/cleanup_queries.py`` which prunes the whole tree.
+    """
+    d = OUTPUT_ROOT / type_ / category
+    d.mkdir(parents=True, exist_ok=True)
+    return d
 
 # MTG's canonical color order. Multicolor collapses to 'M', colorless to 'C'.
 WUBRG_ORDER = "WUBRG"

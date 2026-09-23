@@ -44,8 +44,6 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from magic_manager import db, exports, mtgjson, selectors, sets, util  # noqa: E402
 
-QUERIES_DIR = ROOT / "queries"
-
 # A version suffix is a trailing integer, with or without parentheses:
 #   'Angels (1)'    → 'Angels'   (parenthesized — e.g. J25/MSH naming)
 #   'Corruption 1'  → 'Corruption' (bare space-number — e.g. ONE naming)
@@ -191,8 +189,10 @@ def main() -> int:
     ap.add_argument("set_code", help="Jumpstart set code (e.g. j25).")
     ap.add_argument("--format", choices=["manapool", "tcgplayer", "xlsx", "all"],
                     default="all", help="Which artifact(s) to write (default: all).")
-    ap.add_argument("--out-dir", type=Path, default=QUERIES_DIR,
-                    help=f"Output dir (default: {QUERIES_DIR.relative_to(ROOT)}).")
+    ap.add_argument("--out-dir", type=Path, default=None,
+                    help="Override output dir for ALL artifacts (default: segments "
+                         "buy-lists → output/jumpstart-buildable/buy-lists/, checklist "
+                         "→ output/jumpstart-buildable/checklists/).")
     args = ap.parse_args()
     code = args.set_code.lower()
 
@@ -231,20 +231,25 @@ def main() -> int:
     rows.sort(key=lambda r: ((r.card.get("set") or ""),
                              util.cn_sort_key(r.card.get("collector_number"))))
 
-    args.out_dir.mkdir(parents=True, exist_ok=True)
     from datetime import UTC, datetime
     ts = datetime.now(UTC).strftime("%Y-%m-%d-%H%M%S")
+    # Buy-lists (manapool/tcgplayer) and the checklist land in different
+    # categories; --out-dir (if given) overrides both to one dir.
+    buylist_dir = args.out_dir or util.output_dir("jumpstart-buildable", "buy-lists")
+    checklist_dir = args.out_dir or util.output_dir("jumpstart-buildable", "checklists")
+    buylist_dir.mkdir(parents=True, exist_ok=True)
+    checklist_dir.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
     if args.format in ("manapool", "all"):
-        p = args.out_dir / f"buildable-{code}-manapool-{ts}.txt"
+        p = buylist_dir / f"buildable-{code}-manapool-{ts}.txt"
         p.write_text(exports.build("manapool", rows), encoding="utf-8")
         written.append(p)
     if args.format in ("tcgplayer", "all"):
-        p = args.out_dir / f"buildable-{code}-tcgplayer-{ts}.txt"
+        p = buylist_dir / f"buildable-{code}-tcgplayer-{ts}.txt"
         p.write_text(exports.build("tcgplayer", rows), encoding="utf-8")
         written.append(p)
     if args.format in ("xlsx", "all"):
-        p = args.out_dir / f"buildable-{code}-checklist-{ts}.xlsx"
+        p = checklist_dir / f"buildable-{code}-checklist-{ts}.xlsx"
         _write_xlsx(rows, p)
         written.append(p)
 

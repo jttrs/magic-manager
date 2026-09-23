@@ -44,8 +44,6 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from magic_manager import construct, mtgjson, sets, util  # noqa: E402
 
-QUERIES_DIR = ROOT / "queries"
-
 
 def _fmt(v):
     return util.fmt_usd(v)
@@ -187,9 +185,11 @@ def main() -> int:
     ap.add_argument("--no-refresh", action="store_true",
                     help="Don't re-sync sets with stale (>7d) prices; use local "
                          "prices as-is and warn. Faster/offline, but may under-report.")
-    ap.add_argument("--out-dir", type=Path, default=QUERIES_DIR,
-                    help=f"Output dir (default: {QUERIES_DIR.relative_to(ROOT)}).")
+    ap.add_argument("--out-dir", type=Path, default=None,
+                    help="Override output dir (default: output/construct-value/reports/).")
     args = ap.parse_args()
+    if args.out_dir is None:
+        args.out_dir = util.output_dir("construct-value", "reports")
     refresh_stale = not args.no_refresh
 
     # Exactly one input form.

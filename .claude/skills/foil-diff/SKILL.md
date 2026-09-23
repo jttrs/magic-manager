@@ -9,7 +9,7 @@ Deterministic script-driven skill. Claude parses the user's intent to pick the i
 
 ## When to use
 
-- **Purchase-list review** — the user has a `queries/missing-<code>-manapool-<ts>.txt` (or the corresponding `-checklist-<ts>.xlsx`) and wants to know which of those cards have foils that aren't a meaningful upgrade cost.
+- **Purchase-list review** — the user has a `output/missing-set/buy-lists/missing-<code>-manapool-<ts>.txt` (or the corresponding `output/missing-set/checklists/missing-<code>-checklist-<ts>.xlsx`) and wants to know which of those cards have foils that aren't a meaningful upgrade cost.
 - **Ad-hoc chat list** — the user pastes a Moxfield-style block of cards and asks "which of these should I foil?"
 - **Selector output** — the user asks "for everything missing from LTR, which foils are cheap?" — pipe an `mm export moxfield` output into the script.
 
@@ -26,12 +26,12 @@ uv run python scripts/foil_price_diff.py [--file PATH]
 
 Three input modes; pick based on what the user provided.
 
-### Mode A: user references a `queries/` file
+### Mode A: user references an `output/` file
 
 ```bash
-uv run python scripts/foil_price_diff.py --file queries/missing-ltr-manapool-2026-07-08-004128.txt
+uv run python scripts/foil_price_diff.py --file output/missing-set/buy-lists/missing-ltr-manapool-2026-07-08-004128.txt
 # or
-uv run python scripts/foil_price_diff.py --file queries/missing-ltr-checklist-2026-07-08-004128.xlsx
+uv run python scripts/foil_price_diff.py --file output/missing-set/checklists/missing-ltr-checklist-2026-07-08-004128.xlsx
 ```
 
 The script auto-detects `.txt` (Moxfield-style parse) vs `.xlsx` (reads the `set` + `collector_number` columns from the first data sheet). Works for both master-list checklists and missing-set results.
@@ -109,7 +109,7 @@ Filters apply **after** the fancy-foil / foil-only / nonfoil-only / unpriced buc
 
 ## Guardrails
 
-- Read-only: no DB writes, no artifact files under `queries/`.
+- Read-only: no DB writes, no artifact files under `output/`.
 - Never fails on unresolved rows — one typo doesn't nuke a 165-row run. Unresolved cards are counted in the stderr summary.
 - Empty input → exit 0 with `Ranked 0 cards. …` on stderr.
 - The script never touches the DB. It re-fetches prices from Scryfall on every invocation (subject to the 24h wrapper cache).
@@ -120,5 +120,5 @@ Filters apply **after** the fancy-foil / foil-only / nonfoil-only / unpriced buc
 - `src/magic_manager/parsers.py:CARD_RE` — the Moxfield-style parse regex the script reuses.
 - `src/magic_manager/scryfall.py:collection()` — the batch price fetch.
 - `src/magic_manager/treatments.py:compute_treatment()` — the `ff` discriminator used for the fancy-foil filter.
-- [[missing-from-set]] — produces the `queries/missing-*` files that this skill most often runs against.
+- [[missing-from-set]] — produces the `output/missing-set/` files that this skill most often runs against.
 - [[bulk-add]] — the natural upstream skill for "I just decided which foils to buy, now let me add them to inventory."

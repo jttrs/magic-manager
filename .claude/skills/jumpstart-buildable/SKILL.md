@@ -1,13 +1,13 @@
 ---
 name: jumpstart-buildable
-description: Deterministic buy list for the cards needed to make EVERY theme of a Jumpstart set buildable — hold one built copy of each theme at once, plus each theme's other-version unique cards so any version is assemblable on demand, with no unnecessary cards. Reports what's still MISSING (target minus what you own) as ManaPool + TCGplayer + XLSX artifacts under queries/. Script-driven via `scripts/jumpstart_buildable.py <set_code>`. Triggers: "/jumpstart-buildable", "what cards do I need to build every jumpstart theme", "finish out my j25 jumpstart", "buildable set for <set>", "cards missing to construct every jumpstart theme", "efficient jumpstart catalog", "minimum cards for all <set> jumpstart themes".
+description: Deterministic buy list for the cards needed to make EVERY theme of a Jumpstart set buildable — hold one built copy of each theme at once, plus each theme's other-version unique cards so any version is assemblable on demand, with no unnecessary cards. Reports what's still MISSING (target minus what you own) as ManaPool + TCGplayer + XLSX artifacts under output/jumpstart-buildable/{buy-lists,checklists}/. Script-driven via `scripts/jumpstart_buildable.py <set_code>`. Triggers: "/jumpstart-buildable", "what cards do I need to build every jumpstart theme", "finish out my j25 jumpstart", "buildable set for <set>", "cards missing to construct every jumpstart theme", "efficient jumpstart catalog", "minimum cards for all <set> jumpstart themes".
 ---
 
 # jumpstart-buildable
 
 Deterministic, script-driven "buildable set" buy list. Claude invokes
 `scripts/jumpstart_buildable.py <set_code>`, relays the stdout summary, and hands the user the
-`queries/` artifact paths. No inline computation — the script is the single source of truth.
+`output/jumpstart-buildable/{buy-lists,checklists}/` artifact paths. No inline computation — the script is the single source of truth.
 
 ## When to use
 
@@ -42,7 +42,7 @@ included**; finish is not tracked (a foil you own satisfies the need; the buy li
 
 ## Output shape
 
-Three artifacts in `queries/` (ephemeral; pruned by [[cleanup-queries]]):
+Three artifacts in `output/jumpstart-buildable/{buy-lists,checklists}/` (ephemeral; pruned by [[cleanup-queries]]):
 - `buildable-<code>-manapool-<ts>.txt` — ManaPool bulk-add (flat, paste-ready)
 - `buildable-<code>-tcgplayer-<ts>.txt` — TCGplayer Mass Entry
 - `buildable-<code>-checklist-<ts>.xlsx` — set / cn / name / rarity / finish / qty / unit_usd / line_value
@@ -59,7 +59,7 @@ and the file paths. Cards not in the local `cards` table are reported by name to
 
 ## Guardrails
 
-- Read-only against inventory; writes only ephemeral `queries/` artifacts.
+- Read-only against inventory; writes only ephemeral `output/jumpstart-buildable/{buy-lists,checklists}/` artifacts.
 - Exit 0 on success (even if nothing missing); exit 2 on bad set code / no Jumpstart variants.
 
 ## Not to be confused with

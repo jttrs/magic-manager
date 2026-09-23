@@ -29,7 +29,7 @@ uv run python scripts/review_earmarks.py --market compare  # show tcgcsv vs tcga
 uv run python scripts/review_earmarks.py --format txt
 ```
 
-Relay the whole markdown table + the `TOTALS` line, and hand over the `queries/`
+Relay the whole markdown table + the `TOTALS` line, and hand over the `output/earmarks-review/reports/`
 artifact paths. If the watchlist is empty the script says so (exit 0) — suggest
 [[earmark-product]].
 
@@ -48,7 +48,7 @@ Per earmarked product (one row, links collated):
 
 ## Output shape
 
-Two artifacts in `queries/` (ephemeral; pruned by [[cleanup-queries]]):
+Two artifacts in `output/earmarks-review/reports/` (ephemeral; pruned by [[cleanup-queries]]):
 - `earmarks-review-<ts>.txt` — the markdown deal table, paste-ready.
 - `earmarks-review-<ts>.xlsx` — one row per product (name/set/category/release/
   best_asking/market/intrinsic/deal_delta/ask_age/n_stores/store_urls).

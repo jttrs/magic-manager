@@ -124,7 +124,7 @@ uv run python scripts/manapool_cart_check.py --set tla --check overpay --file ca
 
 **Output contract (deterministic; chat report + full file artifact).** Mirrors
 the [[missing-from-set]] split — a concise, chat-ready report to STDOUT and the
-full detail written to `queries/`:
+full detail written to `output/cart-check/reports/`:
 
 - **STDOUT (chat)** — a `## Summary` metrics table, then the **actionable subset**:
   the full `## Owned` and `## Missing` tables (row-capped at 40 with a
@@ -132,7 +132,7 @@ full detail written to `queries/`:
   showing **only** lines ≥ the threshold (Total row reads `N/total`). Every table
   is closed by a bold **Total (N)** row; empty sections still emit header +
   `Total (0)`. No prose. A `🧾 Full cart check … (file://…)` link is printed last.
-- **File** — `queries/cart-check-<anchor>-<ts>.md` holds the same report with the
+- **File** — `output/cart-check/reports/cart-check-<anchor>-<ts>.md` holds the same report with the
   **complete, uncapped** `## Overpay` table (every priced line, sorted %-over
   desc), so the deep price detail is one click away without flooding chat.
 - **STDERR** — all commentary (family scoping, skipped/unmapped/no-market lines).

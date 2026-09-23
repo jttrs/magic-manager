@@ -52,6 +52,8 @@ A title line + one compact `Metric | Value` table:
 
 **Prices are live** (fetched each run via the rate-limited Scryfall wrapper), so the $ figures are current and the output is NOT byte-identical day-to-day — that's intended.
 
+(Note: set-status is read-only and does not write artifacts to `output/`; see cross-references below for the value-writing skills like sealed-value.)
+
 ### Overview shape (no-arg mode)
 
 `scripts/set_status.py` with no anchor emits `## Collection overview · N families` + a table: `Family | Printings | Cards | $ (owned) | Precons | Miss prints ($) | Miss func ($) | Char`, sorted by owned $ desc, ending in a bold **Total** row. Relay it verbatim, same as the single-family table.
@@ -74,7 +76,7 @@ This applies to the single-anchor mode. In the **no-arg overview**, do NOT auto-
 
 ## Guardrails
 
-- **Read-only.** No DB writes, no `queries/` artifacts (unlike cart-check / missing-set). The only external calls are read-side Scryfall price fetches via the rate-limited wrapper.
+- **Read-only.** No DB writes, no `output/` artifacts (unlike cart-check / missing-set). The only external calls are read-side Scryfall price fetches via the rate-limited wrapper.
 - **Live prices** come from `/cards/collection` (batched, 24h-cached at the wrapper) — current as of the run, subject to the cache window.
 - **Member normalization** is automatic; always report the parent the script resolved (shown in the title), not the member the user typed.
 

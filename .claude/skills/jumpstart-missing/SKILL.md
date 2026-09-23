@@ -1,13 +1,13 @@
 ---
 name: jumpstart-missing
-description: Build a buy list for the Jumpstart packs you DON'T own from a set — every pack with no pack:* deck, emitted as combined ManaPool + TCGplayer + XLSX shopping artifacts under queries/, each pack's full singles plus its front/title card. Read-only shopping list, not an ingestible checklist. Mechanical workflow: invoke `mm query missing-jumpstart <code>` and relay the result. Triggers: "what jumpstart packs am I missing", "buy list for the jumpstart packs I don't have", "missing jumpstart packs for msh", "shopping list for j25 jumpstarts", "which jumpstart packs do I still need".
+description: Build a buy list for the Jumpstart packs you DON'T own from a set — every pack with no pack:* deck, emitted as combined ManaPool + TCGplayer + XLSX shopping artifacts under output/missing-jumpstart/{checklists,buy-lists}/, each pack's full singles plus its front/title card. Read-only shopping list, not an ingestible checklist. Mechanical workflow: invoke `mm query missing-jumpstart <code>` and relay the result. Triggers: "what jumpstart packs am I missing", "buy list for the jumpstart packs I don't have", "missing jumpstart packs for msh", "shopping list for j25 jumpstarts", "which jumpstart packs do I still need".
 ---
 
 # Jumpstart Missing (buy list)
 
 The mechanical wrapper around `mm query missing-jumpstart <code>`. For a Jumpstart set,
 it finds every pack the user does **not** own (no `pack:<theme>-<code>` deck) and emits
-the combined singles as a shopping list under `queries/`.
+the combined singles as a shopping list under `output/missing-jumpstart/{checklists,buy-lists}/`.
 
 This is the Jumpstart analogue of [[missing-from-set]] (`mm query missing-set`), which
 does the same for a set family's singles. It is the *shopping* sibling of
@@ -19,17 +19,17 @@ does the same for a set family's singles. It is the *shopping* sibling of
 2. Diffs against owned `pack:<theme>-<code>` decks → the packs you're missing.
 3. For each missing pack, lists its full contents — gameplay singles **plus the pack's
    front/title card** (from the quarantined `front_cards` table, e.g. FMSC for MSH).
-4. Emits three combined artifacts under `queries/` (named `missing-jumpstart-<code>-*`
+4. Emits three combined artifacts under `output/missing-jumpstart/{checklists,buy-lists}/` (named `missing-jumpstart-<code>-*`
    so they never collide with `missing-set`'s files):
    - XLSX checklist, ManaPool bulk-add `.txt`, TCGplayer Mass Entry `.txt`.
-   - Plus a per-pack summary table + `file://` links to chat.
+   - Plus a per-pack summary table + `file://` links to chat. (The full contents are the combined singles as a shopping list under `output/missing-jumpstart/`.)
 
 ## Steps
 
 1. Run `uv run mm query missing-jumpstart <code>`.
 2. Exit codes: **0** success (or "you own all N packs" — nothing missing); **2** bad
    code / no Jumpstart variants for the set. There's no exit-3 collision — artifacts are
-   timestamped and land in ephemeral `queries/`.
+   timestamped and land in ephemeral `output/missing-jumpstart/`.
 3. Relay the per-pack summary and the three `file://` links to the user.
 
 ## Important scope notes
@@ -41,7 +41,7 @@ does the same for a set family's singles. It is the *shopping* sibling of
   complete singles, with no cross-pack dedup and without subtracting cards you already
   own. A future workflow will shrink the "must buy" list by constructing packs from free
   inventory — that reduction is deliberately NOT part of this command.
-- `queries/` is ephemeral (pruned by [[cleanup-queries]] / [[clear-queries]]).
+- The artifacts are ephemeral (pruned by [[cleanup-queries]] / [[clear-queries]]).
 
 ## Not to be confused with
 

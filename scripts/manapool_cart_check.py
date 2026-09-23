@@ -37,14 +37,13 @@ from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-QUERIES_DIR = ROOT / "queries"
 sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "src"))
 
 from manapool_common import (  # noqa: E402
     CartLine, load_cart, map_cart, overpay_rows, _fmt,
 )
-from magic_manager import db, missing as missing_mod, sets as sets_mod  # noqa: E402
+from magic_manager import db, missing as missing_mod, sets as sets_mod, util  # noqa: E402
 from magic_manager.selectors import _cn_sort_key  # noqa: E402
 
 
@@ -266,7 +265,7 @@ def infer_set_anchors(mapped: list[CartLine]) -> list[str]:
 # Chat vs file split (mirrors the missing-from-set skill): the chat report is the
 # ACTIONABLE subset — full owned/missing lists (capped for safety) plus only the
 # FLAGGED overpay rows — while the full report (every overpay row) is written to
-# queries/ and linked. Prevents a 100+-row overpay table from flooding chat.
+# output/cart-check/reports/ and linked. Prevents a 100+-row overpay table from flooding chat.
 
 _CHAT_ROW_CAP = 40  # per-table row cap for the chat report; the file is uncapped
 
@@ -475,16 +474,16 @@ def main() -> int:
 
     title = f"# Mana Pool cart check — {len(mapped)} line(s)"
 
-    # Write the FULL report (every row, uncapped) to queries/ so the chat report
+    # Write the FULL report (every row, uncapped) to output/cart-check/reports/ so the chat report
     # can stay concise. Worth writing whenever a big table ran (overpay or dupes).
     file_link = None
     if "overpay" in results or "dupes" in results:
         full = [title, ""] + _report_blocks(
             args.set_code, len(mapped), results, args.over_market_pct, chat=False)
-        QUERIES_DIR.mkdir(parents=True, exist_ok=True)
+        out_dir = util.output_dir("cart-check", "reports")
         ts = datetime.now().strftime("%Y-%m-%d-%H%M%S")
         anchor = (args.set_code or "cart").lower()
-        out_path = QUERIES_DIR / f"cart-check-{anchor}-{ts}.md"
+        out_path = out_dir / f"cart-check-{anchor}-{ts}.md"
         out_path.write_text("\n".join(full) + "\n", encoding="utf-8")
         file_link = out_path
 

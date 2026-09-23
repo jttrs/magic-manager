@@ -12,7 +12,7 @@ characterization status.
 
 Prices are LIVE (fetched from Scryfall via the rate-limited wrapper each run),
 so the $ figures are current — output is therefore NOT byte-identical across
-days. Read-only: no DB writes, no queries/ artifacts.
+days. Read-only: no DB writes, no output/ artifacts.
 
 Exit codes: 0 = rendered (including uncharacterized families), 2 = bad anchor.
 """
@@ -369,7 +369,7 @@ def missing_summary(parent_code: str) -> tuple[int, float, dict] | None:
     element is ``missing.concentration(...)`` over the same live prices, so
     ``main`` can flag a likely scarcity chase tier. Side-effect-free — calls
     missing.missing_printings directly (never shells `mm query missing-set`,
-    which writes files to queries/)."""
+    which writes files to output/)."""
     try:
         rows = missing_mod.missing_printings(parent_code)
     except (selectors.SelectorParseError, LookupError) as e:
