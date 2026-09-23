@@ -1,0 +1,38 @@
+# Product-coverage contest priority (mm deck product-coverage).
+#
+# When several products FULLY cover from the unattributed-backfill balance but
+# share cards — and there aren't enough copies for all of them — the allocator
+# awards each shared card to the HIGHEST-priority claimant, consuming the copy so
+# lower-priority products drop to partial. This resolves contests deterministically
+# instead of dumping them on the user.
+#
+# `tiers` maps an MTGJSON product `type` (as it appears in DeckList.json / the
+# enumerated products) to a priority number. HIGHER wins. A type not listed here
+# falls to `default_tier`. This file is OPTIONAL — the script ships the same
+# defaults baked in; edit here to override without touching code.
+#
+# Rationale for the shipped defaults:
+#   - Bundle Land Pack is basic-land filler that overlaps everything; it should
+#     NOT out-compete a real themed product for a shared basic, so it sits LOW.
+#   - Jumpstart / precon / box / pool / Secret Lair are real curated products and
+#     share the top tier.
+# Genuine same-tier ties (two real products of equal priority contesting a card
+# with no version-number tiebreak) still surface for the user to `--pick`.
+
+default_tier = 50
+
+[tiers]
+"Commander Deck"        = 100
+"Box Set"               = 90
+"Starter Kit"           = 90
+"Jumpstart"             = 80
+"Secret Lair Drop"      = 80
+"Arena Starter Deck"    = 60
+"Bundle Land Pack"      = 10   # basic-land filler — loses shared basics to real products
+
+# Version-number tiebreak: when two variants of the same theme (e.g. "Adept (1)"
+# vs "Adept (2)", or fileNames Gliding1_TLE / Gliding2_TLE) contest a shared card
+# at the same tier, the LOWER version number wins by default — you're more likely
+# to own the (1). This is an automatic quirk-handler, not a hard rule; override
+# any specific case with `--pick`. Set to false to disable.
+prefer_lower_version = true

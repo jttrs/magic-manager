@@ -47,11 +47,75 @@ from magic_manager import (  # noqa: E402
     db, decks as decks_mod, ingest as ingest_mod, mtgjson as mtgjson_mod,
     sets as sets_mod, sld as sld_mod,
 )
-from magic_manager.inventory import free_quantity  # noqa: E402
 
 # Jumpstart + precon-shaped DeckList types worth matching (Secret Lair handled
 # separately via sld.py; digital/MTGO excluded like precon-list does).
 _MATCHABLE_TYPES_EXCLUDED = {"MTGO", "Secret Lair Drop"}
+
+
+# ---------- contest-priority config ----------
+
+# Baked-in defaults (mirror config/product_priority.toml). Higher tier wins a
+# contested shared card; unlisted types fall to DEFAULT_TIER. Overridable by the
+# TOML file so the user can retune without code changes.
+_DEFAULT_TIER = 50
+_DEFAULT_TIERS = {
+    "Commander Deck": 100,
+    "Box Set": 90,
+    "Starter Kit": 90,
+    "Jumpstart": 80,
+    "Secret Lair Drop": 80,
+    "Arena Starter Deck": 60,
+    "Bundle Land Pack": 10,  # basic-land filler — loses shared basics to real products
+}
+_CONFIG_PATH = ROOT / "config" / "product_priority.toml"
+
+
+def _load_priority_config() -> dict:
+    """Load contest-priority config (TOML), falling back to baked-in defaults so
+    the tool works with no file. Returns {tiers, default_tier, prefer_lower_version}."""
+    cfg = {"tiers": dict(_DEFAULT_TIERS), "default_tier": _DEFAULT_TIER,
+           "prefer_lower_version": True}
+    try:
+        import tomllib
+        with open(_CONFIG_PATH, "rb") as f:
+            data = tomllib.load(f)
+        if isinstance(data.get("tiers"), dict):
+            cfg["tiers"] = {str(k): int(v) for k, v in data["tiers"].items()}
+        if "default_tier" in data:
+            cfg["default_tier"] = int(data["default_tier"])
+        if "prefer_lower_version" in data:
+            cfg["prefer_lower_version"] = bool(data["prefer_lower_version"])
+    except FileNotFoundError:
+        pass
+    except Exception as e:  # noqa: BLE001 — bad config shouldn't break the run
+        print(f"  warn: could not parse {_CONFIG_PATH} ({e!r}); using defaults", file=sys.stderr)
+    return cfg
+
+
+def _version_number(product: dict) -> int:
+    """Trailing version number of a variant product (Adept (2) / Gliding2_TLE → 2),
+    else 0. Used as the same-tier tiebreak (lower version preferred)."""
+    import re
+    name = product.get("name") or ""
+    m = re.search(r"\((\d+)\)\s*$", name)
+    if m:
+        return int(m.group(1))
+    fn = product.get("fileName") or ""
+    stem = fn.rsplit("_", 1)[0] if "_" in fn else fn
+    m = re.search(r"(\d+)$", stem)
+    return int(m.group(1)) if m else 0
+
+
+def _priority_key(product: dict, cfg: dict) -> tuple:
+    """Sort key for contest allocation: HIGHER priority first. Returns a tuple
+    ordered so Python's ascending sort puts the winner first:
+      (−tier, version, release_date, fileName).
+    Higher tier wins; among equal tiers a LOWER version number wins (the '(2)'
+    quirk); then earlier release; then fileName for determinism."""
+    tier = cfg["tiers"].get(product.get("type"), cfg["default_tier"])
+    ver = _version_number(product) if cfg.get("prefer_lower_version", True) else 0
+    return (-tier, ver, product.get("releaseDate") or "", product.get("fileName") or "")
 
 
 # ---------- candidate enumeration ----------
@@ -82,18 +146,18 @@ def _unattributed_set_codes(conn) -> set[str]:
 
 
 def _loose_set_codes(conn) -> set[str]:
-    """Every set code the user owns at least one FREE (unpledged) copy from."""
-    rows = conn.execute(
-        """
-        SELECT c.set_code, i.scryfall_id, i.finish, i.quantity
-        FROM inventory i JOIN cards c ON c.scryfall_id = i.scryfall_id
-        """
-    ).fetchall()
-    out: set[str] = set()
-    for r in rows:
-        if free_quantity(r["scryfall_id"], r["finish"], conn=conn) > 0:
-            out.add(r["set_code"].lower())
-    return out
+    """Every set code the user owns at least one copy from (the ``--all`` scope).
+
+    Scope only — the actual coverage check runs against the unattributed balance
+    per card, so a set with only fully-attributed cards simply yields no
+    coverable products. Owning ≥1 copy is a cheap superset filter."""
+    return {
+        r["set_code"].lower()
+        for r in conn.execute(
+            "SELECT DISTINCT c.set_code FROM inventory i "
+            "JOIN cards c ON c.scryfall_id = i.scryfall_id"
+        )
+    }
 
 
 def _enumerate_products(set_codes: set[str]) -> list[dict]:
@@ -182,43 +246,61 @@ def _match_products(conn, products: list[dict], supply: dict) -> tuple[list[dict
 
 
 def _partition_ready_conflicts(covered: list[dict], need_map: dict, supply: dict,
-                               picks: set[str]) -> tuple[list[dict], list[dict], list[dict]]:
-    """Split covered products into (ready, conflicted, contested_cards) against
-    the unattributed ``supply``.
+                               picks: set[str], cfg: dict | None = None
+                               ) -> tuple[list[dict], list[dict], list[dict]]:
+    """Allocate the unattributed ``supply`` to covered products by PRIORITY.
 
-    A card is CONTESTED when total demand across covered products exceeds its
-    supply. A product needing any contested card is CONFLICTED (reported, NOT
-    auto-claimed) unless the user ``--pick``ed it. Picked products reserve their
-    demand from the supply first, so picking one resolves the contest for the
-    rest. Uncontested full-coverage products auto-claim.
+    One physical copy backs at most one product, so when several full-coverage
+    products share a card that can't cover them all, the contest is resolved by
+    priority (``cfg`` tiers → version tiebreak → release → fileName; see
+    ``_priority_key``) instead of dumping every clash on the user. Walk products
+    in priority order over a running ``balance`` (copy of ``supply``); a product
+    whose full recipe still fits the balance is claimed (**ready**) and consumes
+    its cards; one that no longer fits — because a higher-priority product took a
+    shared card — is **conflicted**.
+
+    ``--pick`` forces a product to the FRONT of the order (user override beats
+    priority). A conflicted product is reported with the specific cards it lost
+    and to whom, so a genuine same-tier tie is actionable via ``--pick``.
     """
-    remaining_need = dict(need_map)
-    reserved: dict[tuple[str, str], int] = defaultdict(int)
-    picked_products = [p for p in covered if p["fileName"] in picks or _slug_of(p) in picks]
-    for p in picked_products:
-        for key, qty in p["needs"].items():
-            remaining_need[key] = remaining_need.get(key, 0) - qty
-            reserved[key] += qty
+    cfg = cfg or _load_priority_config()
+    picked = [p for p in covered if p["fileName"] in picks or _slug_of(p) in picks]
+    rest = sorted((p for p in covered if p not in picked),
+                  key=lambda p: _priority_key(p, cfg))
+    ordered = picked + rest  # picks first, then priority order
 
-    contested = {key for key, dem in remaining_need.items()
-                 if dem > supply.get(key, 0) - reserved.get(key, 0)}
-
-    ready = list(picked_products)
+    balance = dict(supply)
+    claimed_by: dict[tuple[str, str], list[str]] = defaultdict(list)  # key -> winner names
+    ready: list[dict] = []
     conflicted: list[dict] = []
-    for p in covered:
-        if p in picked_products:
-            continue
-        if any(key in contested for key in p["needs"]):
-            conflicted.append(p)
-        else:
+    for p in ordered:
+        if all(balance.get(k, 0) >= qty for k, qty in p["needs"].items()):
+            for k, qty in p["needs"].items():
+                balance[k] -= qty
+                claimed_by[k].append(p["name"])
             ready.append(p)
+        else:
+            # Record which cards it lost and to whom (the current claimants).
+            lost = [{"scryfall_id": k[0], "finish": k[1], "need": qty,
+                     "remaining": balance.get(k, 0),
+                     "lost_to": claimed_by.get(k, [])}
+                    for k, qty in p["needs"].items() if balance.get(k, 0) < qty]
+            conflicted.append({**p, "lost": lost})
 
-    contested_cards = [
-        {"scryfall_id": k[0], "finish": k[1], "demand": need_map[k],
-         "free": supply.get(k, 0),
-         "products": [p["name"] for p in covered if k in p["needs"]]}
-        for k in sorted(contested)
-    ]
+    contested_cards = []
+    seen = set()
+    for p in conflicted:
+        for lo in p["lost"]:
+            key = (lo["scryfall_id"], lo["finish"])
+            if key in seen:
+                continue
+            seen.add(key)
+            contested_cards.append({
+                "scryfall_id": lo["scryfall_id"], "finish": lo["finish"],
+                "demand": need_map.get(key, 0), "free": supply.get(key, 0),
+                "products": [pp["name"] for pp in covered if key in pp["needs"]],
+                "won_by": claimed_by.get(key, []),
+            })
     return ready, conflicted, contested_cards
 
 
@@ -395,8 +477,9 @@ def run(*, mode: str, target: str | None, apply: bool, picks: set[str],
             products = products + _sld_products(sld_complete, supply)
 
         covered, need_map = _match_products(conn, products, supply)
+        cfg = _load_priority_config()
         ready, conflicted, contested = _partition_ready_conflicts(
-            covered, need_map, supply, picks)
+            covered, need_map, supply, picks, cfg)
 
         result = {
             "mode": mode, "target": target, "set_codes": sorted(set_codes),
@@ -436,13 +519,13 @@ def _report(result: dict, *, json_out: bool, apply: bool) -> None:
     for p in ready:
         print(f"  {p['name']}  [{p['fileName']}]  {p['recipe_qty']} cards")
     if conflicts:
-        print(f"\nCONTESTED ({len(conflicts)} product(s) share cards — one copy can back only "
-              f"one product; pick which you actually opened with --pick):")
+        print(f"\nNOT COVERED — lost a shared card to a higher-priority product "
+              f"({len(conflicts)} product(s)). Priority auto-resolved these; "
+              f"override with --pick <fileName> if you actually opened one:")
         for p in conflicts:
-            print(f"  {p['name']}  [{p['fileName']}]")
-        for c in contested[:15]:
-            print(f"    shared: {c['scryfall_id']} [{c['finish']}] "
-                  f"demand {c['demand']} > unattributed {c['free']}  ({', '.join(c['products'][:4])})")
+            won = sorted({w for lo in p.get("lost", []) for w in lo.get("lost_to", [])})
+            tail = f"  (cards went to: {', '.join(won[:3])}{'…' if len(won) > 3 else ''})" if won else ""
+            print(f"  {p['name']}  [{p['fileName']}]{tail}")
     if sld_c:
         print(f"\nSECRET LAIR — complete drops owned ({len(sld_c)}):")
         for d in sld_c:

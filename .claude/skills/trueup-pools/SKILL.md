@@ -39,10 +39,13 @@ product grain of the V19 star schema: an imputed product-acquisition event
   later + add its cards → they enter the unattributed pool → it becomes coverable.
 - **Full coverage only.** A product is "owned (covered)" only if its ENTIRE
   recipe fits the unattributed balance.
-- **Contested products are reported, never auto-claimed.** When two products
-  share a card and there aren't enough unattributed copies for both (e.g. the
-  jumpstart "(1)"/"(2)" version pairs), both are listed under CONTESTED — you
-  choose which you actually opened with `--pick <fileName>`.
+- **Contests resolve by PRIORITY, automatically.** When full-coverage products
+  share a card the balance can't cover for all, the highest-priority claimant
+  wins it (config `config/product_priority.toml`): Bundle Land Packs sit LOW
+  (basic-land filler shouldn't beat a real product for a shared basic); same-tier
+  version variants prefer the LOWER number (the "(1)" beats "(2)" quirk). Losers
+  drop to NOT COVERED. Override a specific case with `--pick <fileName>` (you
+  know you opened it) — pick beats priority.
 
 ## The recipe
 
@@ -59,8 +62,9 @@ uv run mm deck product-coverage --json          # machine-readable
 
 - **OWNED — covered from unattributed cards** — products whose full recipe fits
   the unattributed balance → likely purchased; imputed on `--apply`.
-- **CONTESTED** — products sharing cards where one copy can't cover both; pick
-  which you opened. Shows the shared card + demand vs unattributed.
+- **NOT COVERED** — products that lost a shared card to a higher-priority
+  competitor (priority auto-resolved). Shows which product the cards went to;
+  override with `--pick <fileName>` if you actually opened this one.
 - **SECRET LAIR** — complete drops (every CN owned → treated as a covered
   product) and near-complete (≥ `--sld-partial-threshold`, advisory).
 
@@ -77,9 +81,10 @@ For each OWNED-covered product, in one transaction:
 
 ## Workflow
 
-1. Run the read-only report for the chosen scope; relay OWNED / CONTESTED /
+1. Run the read-only report for the chosen scope; relay OWNED / NOT COVERED /
    SECRET LAIR sections + the summary as a short markdown list.
-2. Help the user resolve CONTESTED products (`--pick`) if any matter.
+2. If any NOT-COVERED product is one the user actually opened, override with
+   `--pick <fileName>`.
 3. On the user's go-ahead, `mm db snapshot` then `--apply`; relay the write summary.
 4. Confirm `mm audit ingest-ledger` exits 0 and `mm audit provenance` shows the
    unattributed bucket shrank by the imputed products' copies.

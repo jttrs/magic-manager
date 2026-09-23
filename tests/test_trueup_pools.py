@@ -121,43 +121,99 @@ def test_full_coverage_claim_and_reattribute(tmp_db, seed_cards, make_card, stub
         assert conn.execute("SELECT quantity FROM inventory WHERE scryfall_id=?", (a,)).fetchone()["quantity"] == 1
 
 
-# ---------- conflict: two products need the same single loose copy ----------
+# ---------- priority allocation: shared card goes to higher-priority product ----------
 
-def test_conflict_reported_not_written(tmp_db, seed_cards, make_card, stub_products, fake_scryfall):
+def test_priority_resolves_land_pack_vs_jumpstart(tmp_db, seed_cards, make_card,
+                                                  stub_products, fake_scryfall):
+    """A Bundle Land Pack (low tier) loses a shared basic to a Jumpstart (high
+    tier) automatically — no --pick needed. The land pack drops to NOT COVERED."""
     from magic_manager import db
     fake_scryfall()
 
     shared = "bbbb0000-0000-0000-0000-000000000001"
-    seed_cards([make_card(id=shared, set="tla", collector_number="1", name="Shared")])
+    seed_cards([make_card(id=shared, set="tla", collector_number="1", name="Island")])
     with db.connect() as conn:
         _seed_unattributed(conn, [(shared, "nonfoil", 1)])  # only ONE copy
 
-    # Two products each need the one shared copy.
     stub_products(
         decklist={"tla": [
-            {"fileName": "P1_TLA", "name": "Product One", "code": "TLA", "type": "Box Set"},
-            {"fileName": "P2_TLA", "name": "Product Two", "code": "TLA", "type": "Box Set"},
+            {"fileName": "LandPack_TLA", "name": "Land Pack", "code": "TLA", "type": "Bundle Land Pack"},
+            {"fileName": "Jumpstart_TLA", "name": "A Jumpstart", "code": "TLA", "type": "Jumpstart"},
         ]},
         decks={
-            "P1_TLA": _deck("Product One", "TLA", "Box Set", [(shared, 1, False, "tla")]),
-            "P2_TLA": _deck("Product Two", "TLA", "Box Set", [(shared, 1, False, "tla")]),
+            "LandPack_TLA": _deck("Land Pack", "TLA", "Bundle Land Pack", [(shared, 1, False, "tla")]),
+            "Jumpstart_TLA": _deck("A Jumpstart", "TLA", "Jumpstart", [(shared, 1, False, "tla")]),
         },
     )
 
     tp = _load()
-    # Capture result via json path by calling run() and re-querying: both conflicted, none written.
     tp.run(mode="from-unattributed", target=None, apply=True, picks=set(),
            sld_threshold=0.9, json_out=True)
     with db.connect() as conn:
-        n = conn.execute("SELECT COUNT(*) c FROM decks WHERE source_precon_file_name IN ('P1_TLA','P2_TLA')").fetchone()["c"]
-        assert n == 0  # neither written — conflict
+        # Jumpstart (tier 80) won the Island; Land Pack (tier 10) lost.
+        assert conn.execute("SELECT COUNT(*) c FROM decks WHERE source_precon_file_name='Jumpstart_TLA'").fetchone()["c"] == 1
+        assert conn.execute("SELECT COUNT(*) c FROM decks WHERE source_precon_file_name='LandPack_TLA'").fetchone()["c"] == 0
 
-    # --pick one → that one writes
-    tp.run(mode="from-unattributed", target=None, apply=True, picks={"P1_TLA"},
+
+def test_pick_overrides_priority(tmp_db, seed_cards, make_card, stub_products, fake_scryfall):
+    """--pick forces a product to win the shared card even against a
+    higher-priority competitor (the user knows they opened it)."""
+    from magic_manager import db
+    fake_scryfall()
+
+    shared = "bbbb0000-0000-0000-0000-000000000002"
+    seed_cards([make_card(id=shared, set="tla", collector_number="2", name="Island2")])
+    with db.connect() as conn:
+        _seed_unattributed(conn, [(shared, "nonfoil", 1)])
+
+    stub_products(
+        decklist={"tla": [
+            {"fileName": "LandPack_TLA", "name": "Land Pack", "code": "TLA", "type": "Bundle Land Pack"},
+            {"fileName": "Jumpstart_TLA", "name": "A Jumpstart", "code": "TLA", "type": "Jumpstart"},
+        ]},
+        decks={
+            "LandPack_TLA": _deck("Land Pack", "TLA", "Bundle Land Pack", [(shared, 1, False, "tla")]),
+            "Jumpstart_TLA": _deck("A Jumpstart", "TLA", "Jumpstart", [(shared, 1, False, "tla")]),
+        },
+    )
+
+    tp = _load()
+    # Pick the land pack — it should win despite lower tier.
+    tp.run(mode="from-unattributed", target=None, apply=True, picks={"LandPack_TLA"},
            sld_threshold=0.9, json_out=True)
     with db.connect() as conn:
-        assert conn.execute("SELECT COUNT(*) c FROM decks WHERE source_precon_file_name='P1_TLA'").fetchone()["c"] == 1
-        assert conn.execute("SELECT COUNT(*) c FROM decks WHERE source_precon_file_name='P2_TLA'").fetchone()["c"] == 0
+        assert conn.execute("SELECT COUNT(*) c FROM decks WHERE source_precon_file_name='LandPack_TLA'").fetchone()["c"] == 1
+        assert conn.execute("SELECT COUNT(*) c FROM decks WHERE source_precon_file_name='Jumpstart_TLA'").fetchone()["c"] == 0
+
+
+def test_version_tiebreak_prefers_lower(tmp_db, seed_cards, make_card, stub_products, fake_scryfall):
+    """Same-tier version variants: '(1)' wins the shared card over '(2)'."""
+    from magic_manager import db
+    fake_scryfall()
+
+    shared = "bbbb0000-0000-0000-0000-000000000003"
+    seed_cards([make_card(id=shared, set="tle", collector_number="3", name="SharedJS")])
+    with db.connect() as conn:
+        _seed_unattributed(conn, [(shared, "nonfoil", 1)])
+
+    stub_products(
+        decklist={"tle": [
+            {"fileName": "Gliding2_TLE", "name": "Gliding (2)", "code": "TLE", "type": "Jumpstart"},
+            {"fileName": "Gliding1_TLE", "name": "Gliding (1)", "code": "TLE", "type": "Jumpstart"},
+        ]},
+        decks={
+            "Gliding1_TLE": _deck("Gliding (1)", "TLE", "Jumpstart", [(shared, 1, False, "tle")]),
+            "Gliding2_TLE": _deck("Gliding (2)", "TLE", "Jumpstart", [(shared, 1, False, "tle")]),
+        },
+    )
+
+    tp = _load()
+    tp.run(mode="from-unattributed", target=None, apply=True, picks=set(),
+           sld_threshold=0.9, json_out=True)
+    with db.connect() as conn:
+        # (1) wins the shared card despite (2) appearing first in the decklist.
+        assert conn.execute("SELECT COUNT(*) c FROM decks WHERE source_precon_file_name='Gliding1_TLE'").fetchone()["c"] == 1
+        assert conn.execute("SELECT COUNT(*) c FROM decks WHERE source_precon_file_name='Gliding2_TLE'").fetchone()["c"] == 0
 
 
 # ---------- no double-count: a pledged card isn't claimable ----------
