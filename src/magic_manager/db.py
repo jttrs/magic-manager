@@ -695,6 +695,23 @@ ALTER TABLE decks DROP COLUMN is_deconstructed;
 """
 
 
+# V20: a "not-owned" product registry for the pool true-up. When a product's
+# cards OVERLAP something the user owns (an LTR jumpstart deck borrowing cards
+# from an LTR starter kit the user actually owns; a TLE jumpstart "(2)" variant
+# borrowing from the "(1)" the user owns), card-overlap matching falsely claims
+# it. Only the user knows they never opened it — so they record it ONCE here and
+# `mm deck trueup` skips it on every future run (the mirror of how an
+# already-registered deck is skipped). Keyed by MTGJSON fileName. Pure additive.
+SCHEMA_V20 = """
+CREATE TABLE IF NOT EXISTS excluded_products (
+    file_name     TEXT PRIMARY KEY,   -- MTGJSON deck fileName, e.g. Marauders1_LTR
+    name          TEXT,               -- display name at exclude time (informational)
+    reason        TEXT,               -- optional user note / the pattern that added it
+    excluded_at   TEXT NOT NULL
+);
+"""
+
+
 # ---------- migration-authoring convention ----------
 #
 # Always-safe ops in a migration: CREATE TABLE, ALTER TABLE ADD COLUMN,
@@ -764,6 +781,7 @@ MIGRATIONS: list[str] = [
     SCHEMA_V17,
     SCHEMA_V18,
     SCHEMA_V19,
+    SCHEMA_V20,
 ]
 CURRENT_VERSION = len(MIGRATIONS)
 

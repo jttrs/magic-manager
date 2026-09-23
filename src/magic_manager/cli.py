@@ -2798,6 +2798,18 @@ def deck_trueup_cmd(
         0.9, "--sld-partial-threshold",
         help="Flag Secret Lair drops with at least this fraction of CNs owned as near-complete.",
     ),
+    exclude: list[str] = typer.Option(
+        None, "--exclude",
+        help="Mark product(s) NOT-owned (persistent, remembered across runs). "
+        "Pattern: exact fileName, '<setcode>:<type>' (e.g. ltr:jumpstart), or "
+        "'<setcode>:<name-substr>' (e.g. 'tle:(2)'). Repeatable.",
+    ),
+    unexclude: list[str] = typer.Option(
+        None, "--unexclude", help="Remove product(s) from the not-owned registry (same patterns).",
+    ),
+    list_excluded: bool = typer.Option(
+        False, "--list-excluded", help="List the not-owned registry and exit.",
+    ),
     json_out: bool = typer.Option(False, "--json", help="Emit the result dict as JSON."),
 ):
     """True up the deconstructed-precon collection: attribute LOOSE cards to the
@@ -2810,12 +2822,20 @@ def deck_trueup_cmd(
     matched product as a ``deconstructed`` deck row (fixing precon unit counts,
     no inventory double-count) and moves its copies from the
     ``unattributed-backfill`` ledger bucket into a ``precon`` event.
+
+    Products whose cards OVERLAP something you own (an LTR jumpstart deck sharing
+    cards with your LTR starter kit; a jumpstart '(2)' variant sharing the '(1)'
+    you opened) will falsely match on card-ownership alone. Mark those NOT-owned
+    once with ``--exclude`` — the registry is persistent, so they're skipped on
+    every future run (``--list-excluded`` / ``--unexclude`` to inspect/undo).
     """
     tp = _load_trueup_module()
     mode = "all" if all_sets else ("target" if target else "from-unattributed")
     picks = {s.strip() for s in pick.split(",") if s.strip()}
     tp.run(mode=mode, target=target, apply=apply, picks=picks,
-           sld_threshold=sld_partial_threshold, json_out=json_out)
+           sld_threshold=sld_partial_threshold, json_out=json_out,
+           exclude=list(exclude or []), unexclude=list(unexclude or []),
+           list_excluded=list_excluded)
 
 
 @deck_app.command("decompose")

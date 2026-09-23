@@ -85,7 +85,7 @@ def test_migration_v16_to_v18(tmp_path, monkeypatch):
 
     with db_mod.connect() as conn:
         version = conn.execute("SELECT version FROM schema_version").fetchone()[0]
-        assert version == 19
+        assert version == 20
 
         # V16: cards has the new columns.
         card_cols = {r["name"] for r in conn.execute("PRAGMA table_info(cards)").fetchall()}
@@ -144,6 +144,12 @@ def test_migration_v16_to_v18(tmp_path, monkeypatch):
             "PRAGMA table_info(decks)").fetchall()}
         assert "is_deconstructed" not in decks_cols
         assert "precon_state" in decks_cols
+
+        # V20: not-owned exclusion registry exists.
+        assert "excluded_products" in tables
+        ep_cols = {r["name"] for r in conn.execute(
+            "PRAGMA table_info(excluded_products)").fetchall()}
+        assert {"file_name", "name", "reason", "excluded_at"} <= ep_cols
 
         # No dangling FK references anywhere in the migrated DB.
         fk_problems = conn.execute("PRAGMA foreign_key_check").fetchall()

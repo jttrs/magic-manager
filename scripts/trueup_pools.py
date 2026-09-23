@@ -96,19 +96,82 @@ def _loose_set_codes(conn) -> set[str]:
     return out
 
 
-def _enumerate_products(set_codes: set[str]) -> list[dict]:
+# ---------- not-owned exclusions (persistent registry) ----------
+
+def _excluded_file_names(conn) -> set[str]:
+    """Every fileName the user has marked not-owned (skipped by the true-up)."""
+    return {r["file_name"] for r in conn.execute("SELECT file_name FROM excluded_products")}
+
+
+def resolve_exclude_pattern(conn, pattern: str) -> list[dict]:
+    """Resolve an --exclude pattern to concrete DeckList products.
+
+    A pattern matches a product if:
+      - it equals the product's fileName exactly (e.g. ``Marauders1_LTR``); OR
+      - it is ``<setcode>:<selector>`` where selector is either a product TYPE
+        (case-insensitive, e.g. ``ltr:jumpstart``) or a name substring
+        (``tle:(2)``); OR
+      - it is a bare name substring matched across all DeckList products
+        (slower; scoped forms are preferred).
+    Returns matching ``{fileName, name, code, type}`` dicts.
+    """
+    pat = pattern.strip()
+    # setcode:selector
+    if ":" in pat:
+        sc, sel = pat.split(":", 1)
+        sc, sel = sc.strip().lower(), sel.strip()
+        entries = mtgjson_mod.deck_list(set_code=sc)
+        sel_l = sel.lower()
+        by_type = [e for e in entries if (e.get("type") or "").lower() == sel_l]
+        if by_type:
+            return by_type
+        return [e for e in entries if sel_l in (e.get("name") or "").lower()]
+    # exact fileName
+    sc_guess = pat.rsplit("_", 1)[-1].lower() if "_" in pat else None
+    if sc_guess:
+        for e in mtgjson_mod.deck_list(set_code=sc_guess):
+            if e.get("fileName") == pat:
+                return [e]
+    # bare name substring across everything the user has loose cards from
+    hits: list[dict] = []
+    for sc in sorted(_loose_set_codes(conn)):
+        hits += [e for e in mtgjson_mod.deck_list(set_code=sc)
+                 if pat.lower() in (e.get("name") or "").lower()]
+    return hits
+
+
+def add_exclusions(conn, file_names: list[dict], *, reason: str) -> int:
+    """Persist products to the not-owned registry. Returns rows inserted."""
+    from magic_manager import db as _db
+    n = 0
+    for e in file_names:
+        fn = e.get("fileName")
+        if not fn:
+            continue
+        cur = conn.execute(
+            "INSERT OR IGNORE INTO excluded_products (file_name, name, reason, excluded_at) "
+            "VALUES (?, ?, ?, ?)",
+            (fn, e.get("name"), reason, _db._utcnow_iso()),
+        )
+        n += cur.rowcount
+    return n
+
+
+def _enumerate_products(set_codes: set[str], *, excluded: set[str] | None = None) -> list[dict]:
     """DeckList products (precon/jumpstart/pool decks) for the given sets.
 
-    Returns entries ``{fileName, name, code, type}`` excluding SLD/MTGO. SLD
-    drops are enumerated separately.
+    Returns entries ``{fileName, name, code, type}`` excluding SLD/MTGO and any
+    fileName in ``excluded`` (the not-owned registry). SLD drops are enumerated
+    separately.
     """
+    excluded = excluded or set()
     products: list[dict] = []
     seen: set[str] = set()
     for sc in sorted(set_codes):
         try:
             for d in mtgjson_mod.deck_list(set_code=sc):
                 fn = d.get("fileName")
-                if not fn or fn in seen:
+                if not fn or fn in seen or fn in excluded:
                     continue
                 if d.get("type") in _MATCHABLE_TYPES_EXCLUDED:
                     continue
@@ -269,9 +332,12 @@ def _sld_products(conn, sld_complete: list[dict]) -> list[dict]:
     path — exactly like any other precon.
     """
     products: list[dict] = []
+    excluded = _excluded_file_names(conn)
     for d in sld_complete:
         chosen = None
         for fn in d["file_names"]:  # base first (group_drops order)
+            if fn in excluded:
+                continue
             try:
                 needs = decks_mod.precon_recipe_needs(fn)
             except Exception:  # noqa: BLE001
@@ -351,9 +417,52 @@ def _apply(conn, ready: list[dict], uid: int) -> dict:
 # ---------- orchestration ----------
 
 def run(*, mode: str, target: str | None, apply: bool, picks: set[str],
-        sld_threshold: float, json_out: bool) -> int:
+        sld_threshold: float, json_out: bool,
+        exclude: list[str] | None = None, unexclude: list[str] | None = None,
+        list_excluded: bool = False) -> int:
     with db.connect() as conn:
+        # --- exclusion management (persistent not-owned registry) ---
+        if exclude:
+            added_total = 0
+            resolved: list[dict] = []
+            for pat in exclude:
+                matches = resolve_exclude_pattern(conn, pat)
+                resolved += matches
+                added_total += add_exclusions(conn, matches, reason=f"pattern:{pat}")
+            if json_out:
+                json.dump({"excluded_added": added_total,
+                           "resolved": [{"fileName": m["fileName"], "name": m.get("name")}
+                                        for m in resolved]}, sys.stdout, indent=2, default=str)
+                sys.stdout.write("\n")
+            else:
+                print(f"Excluded {added_total} product(s) (marked not-owned):")
+                for m in resolved:
+                    print(f"  {m.get('name')}  [{m['fileName']}]")
+            return 0
+        if unexclude:
+            removed = 0
+            for pat in unexclude:
+                for m in resolve_exclude_pattern(conn, pat):
+                    removed += conn.execute(
+                        "DELETE FROM excluded_products WHERE file_name = ?",
+                        (m["fileName"],)).rowcount
+            print(f"Un-excluded {removed} product(s).")
+            return 0
+        if list_excluded:
+            rows = conn.execute(
+                "SELECT file_name, name, reason, excluded_at FROM excluded_products "
+                "ORDER BY file_name").fetchall()
+            if json_out:
+                json.dump([dict(r) for r in rows], sys.stdout, indent=2, default=str)
+                sys.stdout.write("\n")
+            else:
+                print(f"Excluded (not-owned) products: {len(rows)}")
+                for r in rows:
+                    print(f"  {r['name']}  [{r['file_name']}]  ({r['reason'] or '—'})")
+            return 0
+
         uid = _unattributed_event_id(conn)
+        excluded_fns = _excluded_file_names(conn)
         # Determine candidate set codes.
         if target:
             try:
@@ -366,7 +475,7 @@ def run(*, mode: str, target: str | None, apply: bool, picks: set[str],
         else:  # from-unattributed (default)
             set_codes = _unattributed_set_codes(conn)
 
-        products = _enumerate_products(set_codes)
+        products = _enumerate_products(set_codes, excluded=excluded_fns)
 
         # SLD (only when sld is in scope or --all). Complete drops become
         # matchable products (one per sibling fileName) folded into the same
@@ -458,13 +567,22 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--apply", action="store_true", help="Write (default is dry-run).")
     parser.add_argument("--pick", default="", help="Comma-separated fileNames/slugs to claim from conflicts.")
     parser.add_argument("--sld-partial-threshold", type=float, default=0.9)
+    parser.add_argument("--exclude", action="append", default=[],
+                        help="Mark products NOT-owned (persistent). Pattern: fileName, "
+                             "<setcode>:<type> (e.g. ltr:jumpstart), or <setcode>:<name-substr>.")
+    parser.add_argument("--unexclude", action="append", default=[],
+                        help="Remove products from the not-owned registry (same patterns).")
+    parser.add_argument("--list-excluded", action="store_true",
+                        help="List the not-owned registry and exit.")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
 
     mode = "all" if args.all else ("target" if args.target else "from-unattributed")
     picks = {s.strip() for s in args.pick.split(",") if s.strip()}
     return run(mode=mode, target=args.target, apply=args.apply, picks=picks,
-               sld_threshold=args.sld_partial_threshold, json_out=args.json)
+               sld_threshold=args.sld_partial_threshold, json_out=args.json,
+               exclude=args.exclude, unexclude=args.unexclude,
+               list_excluded=args.list_excluded)
 
 
 if __name__ == "__main__":

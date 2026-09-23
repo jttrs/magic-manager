@@ -248,6 +248,78 @@ def test_reattribution_capped_to_unattributed_balance(tmp_db, seed_cards, make_c
         assert conn.execute("SELECT quantity FROM inventory WHERE scryfall_id=?", (z,)).fetchone()["quantity"] == 3
 
 
+# ---------- not-owned exclusion registry ----------
+
+def test_exclude_suppresses_falsely_covered_product(tmp_db, seed_cards, make_card,
+                                                     stub_products, fake_scryfall):
+    """A product falsely covered via card-overlap (e.g. a jumpstart sharing cards
+    with an owned starter kit) is skipped once marked not-owned — persistently."""
+    from magic_manager import db, decks
+
+    fake_scryfall()
+    shared = "1111aaaa-0000-0000-0000-000000000001"
+    seed_cards([make_card(id=shared, set="ltr", collector_number="140", name="Olog-hai Crusher")])
+    with db.connect() as conn:
+        _seed_unattributed(conn, [(shared, "nonfoil", 1)])
+
+    # A jumpstart deck (not owned) whose recipe is one shared card.
+    stub_products(
+        decklist={"ltr": [{"fileName": "Marauders1_LTR", "name": "Marauders 1",
+                           "code": "LTR", "type": "Jumpstart"}]},
+        decks={"Marauders1_LTR": _deck("Marauders 1", "LTR", "Jumpstart",
+                                       [(shared, 1, False, "ltr")])},
+    )
+    tp = _load()
+
+    # Before exclude: it's READY (falsely covered).
+    import io, json as _json
+    from contextlib import redirect_stdout
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        tp.run(mode="from-unattributed", target=None, apply=False, picks=set(),
+               sld_threshold=0.9, json_out=True)
+    assert "Marauders1_LTR" in buf.getvalue()
+
+    # Exclude by fileName; persists to the registry.
+    tp.run(mode="from-unattributed", target=None, apply=False, picks=set(),
+           sld_threshold=0.9, json_out=True, exclude=["Marauders1_LTR"])
+    with db.connect() as conn:
+        assert conn.execute("SELECT COUNT(*) c FROM excluded_products").fetchone()["c"] == 1
+
+    # After exclude: no longer proposed, even on --apply.
+    tp.run(mode="from-unattributed", target=None, apply=True, picks=set(),
+           sld_threshold=0.9, json_out=True)
+    with db.connect() as conn:
+        assert conn.execute(
+            "SELECT COUNT(*) c FROM decks WHERE source_precon_file_name='Marauders1_LTR'"
+        ).fetchone()["c"] == 0
+
+
+def test_exclude_pattern_setcode_type(tmp_db, seed_cards, make_card, stub_products, fake_scryfall):
+    """`<setcode>:<type>` resolves to every product of that type in the set."""
+    from magic_manager import db
+
+    fake_scryfall()
+    seed_cards([make_card(id="2222aaaa-0000-0000-0000-000000000001", set="ltr",
+                          collector_number="1", name="X")])
+    stub_products(
+        decklist={"ltr": [
+            {"fileName": "Marauders1_LTR", "name": "Marauders 1", "code": "LTR", "type": "Jumpstart"},
+            {"fileName": "Mordor1_LTR", "name": "Mordor 1", "code": "LTR", "type": "Jumpstart"},
+            {"fileName": "GondorGreenWhite_LTR", "name": "Gondor: Green-White",
+             "code": "LTR", "type": "Starter Kit"},
+        ]},
+        decks={},
+    )
+    tp = _load()
+    tp.run(mode="from-unattributed", target=None, apply=False, picks=set(),
+           sld_threshold=0.9, json_out=True, exclude=["ltr:jumpstart"])
+    with db.connect() as conn:
+        excl = {r["file_name"] for r in conn.execute("SELECT file_name FROM excluded_products")}
+    # Both jumpstart products excluded; the starter kit is NOT.
+    assert excl == {"Marauders1_LTR", "Mordor1_LTR"}
+
+
 # ---------- SLD: complete vs partial by CN ownership ----------
 
 def test_sld_complete_vs_partial(tmp_db, seed_cards, make_card, monkeypatch):
