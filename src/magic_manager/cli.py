@@ -20,6 +20,7 @@ from . import (
     earmarks as earmarks_mod,
     exports,
     front_cards as front_cards_mod,
+    ingest as ingest_mod,
     intake as intake_mod,
     inventory as inv_mod,
     mtgjson as mtgjson_mod,
@@ -173,6 +174,34 @@ def set_is_synced(
     newest = {row["set_code"]: row["newest"] for row in rows}
     stale = set(sets_mod.stale_set_codes(codes))
     total = sum(counts.values())
+
+    # Family-topology drift: if a set_targets row exists and its cached
+    # related_codes differs from the live resolve, the tracked family is stale
+    # (Scryfall added/removed a sibling). Surface it — the fix is
+    # `mm set refresh-family <anchor>`.
+    import json as _json
+    with db.connect() as conn:
+        tgt = conn.execute(
+            "SELECT related_codes FROM set_targets WHERE anchor_code = ?",
+            (r.code.lower(),),
+        ).fetchone()
+    if tgt is not None:
+        stored = set(_json.loads(tgt["related_codes"]))
+        live = {c.lower() for c in codes}
+        if stored != live:
+            newly = sorted(live - stored)
+            gone = sorted(stored - live)
+            bits = []
+            if newly:
+                bits.append(f"+{', '.join(newly)}")
+            if gone:
+                bits.append(f"-{', '.join(gone)}")
+            typer.echo(
+                f"  ⚠ tracked family is stale ({'; '.join(bits)}); "
+                f"run `mm set refresh-family {r.code}`.",
+                err=True,
+            )
+
     typer.echo(f"{r.name} (anchor {r.code}) — {total} cards across {len(codes)} code(s):")
     for c in codes:
         cl = c.lower()
@@ -185,6 +214,68 @@ def set_is_synced(
         typer.echo(f"  {c:8} {n:>5}  priced {priced}{mark}")
     if total == 0:
         raise typer.Exit(1)
+
+
+@set_app.command("refresh-family")
+def set_refresh_family_cmd(
+    name_or_code: str = typer.Argument(...),
+    json_out: bool = typer.Option(False, "--json", help="Emit result as JSON."),
+):
+    """Re-resolve a family's topology from Scryfall and refresh its set_targets row.
+
+    ``set_targets.related_codes`` is a CACHED snapshot of the family taken when
+    ``mm set master-list`` last ran; it goes stale when Scryfall adds a sibling
+    set (a new masterpiece sheet, promo code, …). This re-runs ``sets.resolve``
+    (live topology) and re-registers the target, preserving the stored
+    ``include_variants`` / ``rarity_filter``. Reports what changed.
+    """
+    import json as _json
+    try:
+        r = sets_mod.resolve(name_or_code)
+    except LookupError as e:
+        typer.echo(f"error: {e}", err=True); raise typer.Exit(2)
+
+    fresh_codes = sorted({c.lower() for c in r.all_codes})
+    with db.connect() as conn:
+        existing = conn.execute(
+            "SELECT related_codes, include_variants, rarity_filter FROM set_targets "
+            "WHERE anchor_code = ?", (r.code.lower(),),
+        ).fetchone()
+
+    if existing is None:
+        typer.echo(f"error: no set_targets row for anchor {r.code!r}; run "
+                   f"`mm set master-list {r.code}` first to register it.", err=True)
+        raise typer.Exit(2)
+
+    stored_codes = sorted(_json.loads(existing["related_codes"]))
+    added = [c for c in fresh_codes if c not in stored_codes]
+    removed = [c for c in stored_codes if c not in fresh_codes]
+    rarity_filter = _json.loads(existing["rarity_filter"]) if existing["rarity_filter"] else None
+
+    result = sets_mod.register_set_target(
+        r.code, fresh_codes,
+        include_variants=bool(existing["include_variants"]),
+        rarity_filter=rarity_filter,
+    )
+
+    if json_out:
+        json.dump({
+            "anchor": r.code, "action": result["action"],
+            "stored_codes": stored_codes, "fresh_codes": fresh_codes,
+            "added": added, "removed": removed,
+        }, sys.stdout, indent=2)
+        sys.stdout.write("\n")
+        return
+
+    if not added and not removed:
+        typer.echo(f"{r.name} (anchor {r.code}): family topology unchanged "
+                   f"({len(fresh_codes)} code(s)).")
+    else:
+        typer.echo(f"{r.name} (anchor {r.code}): refreshed family topology.")
+        if added:
+            typer.echo(f"  + added:   {', '.join(added)}")
+        if removed:
+            typer.echo(f"  - removed: {', '.join(removed)}")
 
 
 def _slice_suffix(*, only_codes: list[str], rarities: list[str]) -> str:
@@ -800,19 +891,19 @@ def _ingest_deck_checklist(src: Path, *, kind: str, sha: str, force: bool,
 
     A precon is the base concept; Jumpstart is a species of it — so both share
     this one consumer, parameterized by ``kind`` for the log label and the
-    human-facing noun. Logs an ingest_log row with label ``<kind>:<setcode>``,
+    human-facing noun. Logs an ingest_events row with label ``<kind>:<setcode>``,
     archives the file under processed/. Mirrors the duplicate-detection +
     archive shape of the inventory ingest path so all checklists look the same
     on disk.
     """
     noun = "Jumpstart" if kind == "jumpstart" else "Precon"
     with db.connect() as conn:
-        prior = db.find_ingest_log_by_hash(conn, sha)
+        prior = ingest_mod.find_events_by_sha(conn, sha)
     prior_success = next((p for p in prior if p["status"] == "success"), None)
     if prior_success and not force:
         msg = (
             f"this file's SHA-256 matches a previous successful ingest "
-            f"(log id {prior_success['id']}, "
+            f"(event id {prior_success['id']}, "
             f"mode {prior_success['mode']}, at {prior_success['at']})."
         )
         if json_out:
@@ -855,18 +946,18 @@ def _ingest_deck_checklist(src: Path, *, kind: str, sha: str, force: bool,
     # torn-down/loose copies added.
     rows_added = (summary or {}).get("built", 0)
     rows_updated = (summary or {}).get("deconstructed", 0)
+    # Record a `precon` ingest event for the checklist as a whole. The per-card
+    # inventory deltas are emitted by import_precon (which each deck copy routes
+    # through); this event is the file-level audit row (label/sha/archive +
+    # built/deconstructed copy counts). Deck-checklist ingest is additive.
     with db.connect() as conn:
-        db.record_ingest_log(
-            conn,
+        ingest_mod.create_event(
+            conn, "precon",
             label=log_label,
-            # Deck-checklist ingest is semantically additive (only adds decks +
-            # inventory; never zeroes). The ``label`` already encodes the kind
-            # so this row is distinguishable from inventory ingests sharing the
-            # same mode.
-            mode="additive",
             source_path=str(src),
             archived_path=str(archived) if archived else None,
-            file_sha256=sha,
+            source_sha256=sha,
+            mode="additive",
             rows_added=rows_added,
             rows_updated=rows_updated,
             rows_zeroed=0,
@@ -1121,13 +1212,14 @@ def set_ingest(
                 default=False,
             )
     sha = _file_sha256(src)
+    log_label = f"set:{anchor}"
     with db.connect() as conn:
-        prior = db.find_ingest_log_by_hash(conn, sha)
+        prior = ingest_mod.find_events_by_sha(conn, sha)
     prior_success = next((p for p in prior if p["status"] == "success"), None)
     if prior_success and not force:
         msg = (
             f"this file's SHA-256 matches a previous successful ingest "
-            f"(log id {prior_success['id']}, "
+            f"(event id {prior_success['id']}, "
             f"mode {prior_success['mode']}, at {prior_success['at']})."
         )
         if json_out:
@@ -1147,10 +1239,16 @@ def set_ingest(
 
     # Run the actual import — V2 path writes directly to the inventory table,
     # honoring the file's partition (set codes + rarity from _meta or rows).
+    # The engine opens the `checklist` ingest event and appends signed ledger
+    # deltas in its own transaction; it returns the ingest_id so we can stamp
+    # the archived_path after renaming the file.
     error: str | None = None
     result: dict | None = None
     try:
-        result = sets_mod.ingest_inventory_from_xlsx(src, mode=mode, zero_untouched=do_zero)
+        result = sets_mod.ingest_inventory_from_xlsx(
+            src, mode=mode, zero_untouched=do_zero,
+            label=log_label, source_sha256=sha,
+        )
     except Exception as e:
         error = repr(e)
 
@@ -1177,24 +1275,17 @@ def set_ingest(
         archived.parent.mkdir(parents=True, exist_ok=True)
         src.rename(archived)
 
-    # Persist the log entry. The label column now records the set anchor as
-    # a 'set:<code>' string for backwards compatibility with the ingest_log
-    # schema; the row no longer means a list_rows row exists.
-    log_label = f"set:{anchor}"
-    with db.connect() as conn:
-        db.record_ingest_log(
-            conn,
-            label=log_label,
-            mode=mode,
-            source_path=str(src),
-            archived_path=str(archived) if archived else None,
-            file_sha256=sha,
-            rows_added=(result or {}).get("added", 0),
-            rows_updated=(result or {}).get("updated", 0),
-            rows_zeroed=(result or {}).get("zeroed", 0),
-            status="success" if error is None else "failed",
-            error=error,
-        )
+    # The `checklist` ingest event + its signed deltas were already written by
+    # the engine (atomic with the inventory mutation). Here we only stamp the
+    # archived_path now that the file has been renamed under processed/. On a
+    # failed ingest the engine raised before creating an event, so there's
+    # nothing to finalize.
+    if result is not None and result.get("ingest_id") is not None:
+        with db.connect() as conn:
+            ingest_mod.finalize_event(
+                conn, result["ingest_id"],
+                archived_path=str(archived) if archived else None,
+            )
 
     # Snapshot inventory in this set's family post-ingest.
     inv_summary = None
@@ -1390,26 +1481,33 @@ def inventory_add_card_cmd(
 
     added = updated = 0
     cards_out = []
+    # One `adhoc` ingest event for the whole add-card batch, and one transaction
+    # so every card's insert + its ledger delta commit together.
     with db.connect() as conn:
         for entry in result.entries:
             if entry.card is None:
                 continue
             db.upsert_card(conn, entry.card)
-    for entry in result.entries:
-        if entry.card is None:
-            continue
-        finish = "foil" if entry.foil else "nonfoil"
-        r = inv_mod.inventory_add(entry.card["id"], finish, entry.qty, replace=replace)
-        if r["action"] == "inserted":
-            added += 1
-        else:
-            updated += 1
-        cards_out.append({
-            "set": entry.set, "cn": entry.collector_number, "finish": finish,
-            "qty": r["new_qty"], "name": entry.card.get("name"), "action": r["action"],
-        })
-        if not json_out:
-            typer.echo(f"  {r['action']}: {entry.card.get('name')} ({entry.set} {entry.collector_number}) [{finish}] qty={r['new_qty']}")
+        with ingest_mod.open_ingest_event(
+            "adhoc", label="inventory add-card", conn=conn,
+        ) as rec:
+            for entry in result.entries:
+                if entry.card is None:
+                    continue
+                finish = "foil" if entry.foil else "nonfoil"
+                r = inv_mod.inventory_add(entry.card["id"], finish, entry.qty,
+                                          replace=replace, conn=conn,
+                                          ingest_id=rec.ingest_id)
+                if r["action"] == "inserted":
+                    added += 1
+                else:
+                    updated += 1
+                cards_out.append({
+                    "set": entry.set, "cn": entry.collector_number, "finish": finish,
+                    "qty": r["new_qty"], "name": entry.card.get("name"), "action": r["action"],
+                })
+                if not json_out:
+                    typer.echo(f"  {r['action']}: {entry.card.get('name')} ({entry.set} {entry.collector_number}) [{finish}] qty={r['new_qty']}")
 
     if json_out:
         json.dump({
@@ -1452,20 +1550,28 @@ def inventory_import_cmd(
     text, path = _read_text_or_path(source)
     result = _resolve_block(text, path)
     added = updated = 0
+    # One `import-block` ingest event for the pasted block, in one transaction.
     with db.connect() as conn:
         for entry in result.entries:
             if entry.card is None:
                 continue
             db.upsert_card(conn, entry.card)
-    for entry in result.entries:
-        if entry.card is None:
-            continue
-        finish = "foil" if entry.foil else "nonfoil"
-        r = inv_mod.inventory_add(entry.card["id"], finish, entry.qty)
-        if r["action"] == "inserted":
-            added += 1
-        else:
-            updated += 1
+        with ingest_mod.open_ingest_event(
+            "import-block",
+            label="inventory import",
+            source_path=str(path) if path else None,
+            conn=conn,
+        ) as rec:
+            for entry in result.entries:
+                if entry.card is None:
+                    continue
+                finish = "foil" if entry.foil else "nonfoil"
+                r = inv_mod.inventory_add(entry.card["id"], finish, entry.qty,
+                                          conn=conn, ingest_id=rec.ingest_id)
+                if r["action"] == "inserted":
+                    added += 1
+                else:
+                    updated += 1
     typer.echo(f"Inventory: {added} added, {updated} updated")
     for w in result.warnings:
         typer.echo(f"  warning: {w}", err=True)
@@ -2653,6 +2759,82 @@ def deck_construct_from_loose_cmd(
         typer.echo("  Fully covered — every recipe card pledged from loose inventory.")
 
 
+def _load_trueup_module():
+    """Import scripts/trueup_pools.py as a module (it lives outside the package,
+    like the other deterministic scripts). Cached on the function object."""
+    import importlib.util
+    from pathlib import Path as _P
+    cached = getattr(_load_trueup_module, "_mod", None)
+    if cached is not None:
+        return cached
+    path = _P(__file__).resolve().parent.parent.parent / "scripts" / "trueup_pools.py"
+    spec = importlib.util.spec_from_file_location("trueup_pools", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    _load_trueup_module._mod = mod
+    return mod
+
+
+@deck_app.command("product-coverage")
+@deck_app.command("trueup")  # back-compat alias for muscle memory
+def deck_product_coverage_cmd(
+    target: str = typer.Argument(
+        None, help="Set code/family or product-name substring to scope to. "
+        "Omit for --from-unattributed (default).",
+    ),
+    from_unattributed: bool = typer.Option(
+        False, "--from-unattributed",
+        help="(default when no target/--all) Only sets with unattributed-backfill copies.",
+    ),
+    all_sets: bool = typer.Option(
+        False, "--all", help="Every set you own loose cards from (full sweep).",
+    ),
+    apply: bool = typer.Option(
+        False, "--apply", help="Write: impute the covered products as acquisition "
+        "events (default is a read-only report).",
+    ),
+    pick: str = typer.Option(
+        "", "--pick", help="Comma-separated fileNames to claim from the conflict list.",
+    ),
+    refute: str = typer.Option(
+        "", "--refute",
+        help="Comma-separated fileNames you did NOT buy — dropped from candidates so "
+        "they're never imputed (their cards stay available for other products). "
+        "Review the OWNED list first, then refute any erroneous one.",
+    ),
+    sld_partial_threshold: float = typer.Option(
+        0.9, "--sld-partial-threshold",
+        help="Flag Secret Lair drops with at least this fraction of CNs owned as near-complete.",
+    ),
+    json_out: bool = typer.Option(False, "--json", help="Emit the result dict as JSON."),
+):
+    """Product-coverage: impute which deterministic-content PRODUCTS (precon /
+    jumpstart / scene box / card pool / complete Secret Lair drop) your loose
+    cards came from — a product-level view of what you've bought and what to buy.
+
+    Coverage is measured against the UNATTRIBUTED-BACKFILL ledger balance (owned
+    minus what's already attributed to products you own), so ONE physical copy
+    backs at most ONE product (a card already accounted for can't be double-
+    claimed). Overlap cases self-correct: an LTR jumpstart whose Mountains are all
+    attributed to your LTR starter kit shows 0 balance → not claimable, until you
+    actually buy it and add its cards.
+
+    A product is claimed only on FULL coverage from the balance. Products that
+    contend for a shared copy are REPORTED (not auto-resolved) — resolve with
+    ``--pick <fileName>``. Read-only by default; ``--apply`` registers each
+    covered product as a ``deconstructed`` deck row (fixing precon unit counts,
+    no inventory double-count) AND records the product-grain acquisition as a
+    ``precon`` ingest event linked (by ingest_id) to the exact card copies it
+    moves out of the unattributed bucket — completing the star schema.
+    """
+    tp = _load_trueup_module()
+    mode = "all" if all_sets else ("target" if target else "from-unattributed")
+    picks = {s.strip() for s in pick.split(",") if s.strip()}
+    refute_set = {s.strip() for s in refute.split(",") if s.strip()}
+    tp.run(mode=mode, target=target, apply=apply, picks=picks,
+           sld_threshold=sld_partial_threshold, json_out=json_out, refute=refute_set)
+
+
 @deck_app.command("decompose")
 def deck_decompose_cmd(
     slug: str = typer.Argument(..., help="Deck slug to physically disassemble; recipe survives."),
@@ -3799,8 +3981,32 @@ def audit_deck_inventory_cmd(
                   else f"{v['n_current']} current versions")
         typer.echo(f"  {v['slug']}  ({v['name']}) — {detail}")
     typer.echo(f"Over-assigned printings (assigned > owned): {len(over)}")
-    for o in over:
-        typer.echo(f"  {o['scryfall_id']} [{o['finish']}]  assigned {o['assigned']} > owned {o['owned']}")
+    if over:
+        with db.connect() as conn:
+            for o in over:
+                # Explain WHEN inventory last dropped below the pledged count:
+                # the most recent negative ledger delta for this printing, with
+                # the method of the event that caused it.
+                last_removal = conn.execute(
+                    """
+                    SELECT ie.at, ie.delta, ev.method, ev.label
+                    FROM inventory_events ie
+                    JOIN ingest_events ev ON ev.ingest_id = ie.ingest_id
+                    WHERE ie.scryfall_id = ? AND ie.finish = ? AND ie.delta < 0
+                    ORDER BY ie.at DESC LIMIT 1
+                    """,
+                    (o["scryfall_id"], o["finish"]),
+                ).fetchone()
+                typer.echo(
+                    f"  {o['scryfall_id']} [{o['finish']}]  "
+                    f"assigned {o['assigned']} > owned {o['owned']}"
+                )
+                if last_removal:
+                    typer.echo(
+                        f"      last removal: {last_removal['delta']} via "
+                        f"{last_removal['method']} ({last_removal['label'] or '—'}) "
+                        f"at {last_removal['at']}"
+                    )
 
     if fix and orphans:
         for o in orphans:
@@ -3813,6 +4019,113 @@ def audit_deck_inventory_cmd(
         # Over-assignment is a data-integrity smell but auto-fixing it (which
         # copies to keep?) needs human judgment — report only.
         raise typer.Exit(1)
+
+
+@audit_app.command("ingest-ledger")
+def audit_ingest_ledger_cmd(
+    rebuild: bool = typer.Option(
+        False, "--rebuild",
+        help="Rebuild inventory from the ledger (SUM of deltas) if drift is found.",
+    ),
+    json_out: bool = typer.Option(False, "--json", help="Emit result as JSON."),
+):
+    """Prove the invariant ``inventory.quantity == SUM(inventory_events.delta)``.
+
+    The ledger (``inventory_events``) is ground truth; ``inventory`` is a
+    materialized cache. This reconciles the two and exits non-zero on any drift
+    (so it can be wired into CI / a pre-commit check, like the migration
+    rehearsal). ``--rebuild`` deterministically re-derives ``inventory`` from the
+    ledger to repair drift.
+    """
+    from . import ingest as _ingest
+    with db.connect() as conn:
+        drift = _ingest.reconcile_inventory_ledger(conn)
+        rebuilt = None
+        if drift and rebuild:
+            rebuilt = _ingest.rebuild_inventory_from_ledger(conn)
+            drift = _ingest.reconcile_inventory_ledger(conn)  # re-check post-rebuild
+
+    if json_out:
+        json.dump({
+            "in_sync": not drift,
+            "drift_rows": drift,
+            "rebuilt": rebuilt,
+        }, sys.stdout, indent=2, default=str)
+        sys.stdout.write("\n")
+    else:
+        if not drift:
+            typer.echo("ingest-ledger: OK — inventory == SUM(ledger deltas).")
+            if rebuilt:
+                typer.echo(f"  (rebuilt {rebuilt['rebuilt_rows']} inventory row(s) from the ledger)")
+        else:
+            typer.echo(f"ingest-ledger: DRIFT — {len(drift)} printing(s) disagree:")
+            for d in drift[:20]:
+                typer.echo(
+                    f"  {d['scryfall_id']} [{d['finish']}]  "
+                    f"inventory {d['inventory_qty']} != ledger {d['ledger_qty']}"
+                )
+            if len(drift) > 20:
+                typer.echo(f"  … +{len(drift) - 20} more")
+            typer.echo("  Re-run with --rebuild to re-derive inventory from the ledger.")
+
+    if drift:
+        raise typer.Exit(1)
+
+
+@audit_app.command("provenance")
+def audit_provenance_cmd(
+    json_out: bool = typer.Option(False, "--json", help="Emit result as JSON."),
+):
+    """Report inventory provenance from the ledger: per-method copy breakdown
+    and the size of the ``unattributed-backfill`` bucket (the honest
+    "provenance unknown" residual from the one-off historical backfill).
+    """
+    with db.connect() as conn:
+        by_method = conn.execute(
+            """
+            SELECT ev.method,
+                   COUNT(DISTINCT ev.ingest_id) AS events,
+                   COALESCE(SUM(ie.delta), 0) AS net_copies
+            FROM ingest_events ev
+            LEFT JOIN inventory_events ie ON ie.ingest_id = ev.ingest_id
+            GROUP BY ev.method
+            ORDER BY net_copies DESC
+            """
+        ).fetchall()
+        total = conn.execute(
+            "SELECT COALESCE(SUM(delta), 0) AS s FROM inventory_events"
+        ).fetchone()["s"]
+        unattributed = conn.execute(
+            """
+            SELECT COALESCE(SUM(ie.delta), 0) AS s
+            FROM inventory_events ie
+            JOIN ingest_events ev ON ev.ingest_id = ie.ingest_id
+            WHERE ev.method = 'unattributed-backfill'
+            """
+        ).fetchone()["s"]
+
+    rows = [{"method": r["method"], "events": r["events"],
+             "net_copies": r["net_copies"]} for r in by_method]
+    pct = (unattributed / total * 100) if total else 0.0
+
+    if json_out:
+        json.dump({
+            "total_copies": total,
+            "unattributed_copies": unattributed,
+            "unattributed_pct": round(pct, 2),
+            "by_method": rows,
+        }, sys.stdout, indent=2, default=str)
+        sys.stdout.write("\n")
+        return
+
+    typer.echo(f"Inventory provenance ({total} net copies across the ledger):")
+    for r in rows:
+        typer.echo(f"  {r['method']:<22} {r['net_copies']:>7} copies  "
+                   f"({r['events']} event(s))")
+    typer.echo(
+        f"\nUnattributed (provenance unknown): {unattributed} copies "
+        f"({pct:.1f}% of collection)."
+    )
 
 
 # ---------- intake (scan-loop REPL) ----------
@@ -3932,7 +4245,7 @@ def input_list(
     for f in files:
         sha = _file_sha256(f)
         with db.connect() as conn:
-            prior = db.find_ingest_log_by_hash(conn, sha)
+            prior = ingest_mod.find_events_by_sha(conn, sha)
         prior_success = next((p for p in prior if p["status"] == "success"), None)
         prior_failed = next((p for p in prior if p["status"] == "failed"), None)
         try:

@@ -1,12 +1,13 @@
 """Migration correctness for V16 (cards.legalities/keywords/game_changer),
-V17 (deck_versions + decks.current_version_id) and V18 (deck_cards
-re-homed onto deck_version_id).
+V17 (deck_versions + decks.current_version_id), V18 (deck_cards re-homed onto
+deck_version_id), and V19 (provenance ledger: ingest_log subsumed into
+ingest_events + inventory_events; decks.is_deconstructed dropped).
 
 Builds a pre-V16 DB by hand (raw sqlite3, applying MIGRATIONS[:15] — i.e.
 V1..V15 — directly, mirroring db._ensure_schema's own bootstrap loop), seeds a
 deck with the OLD deck_cards shape (deck_id column, no deck_versions table
-yet), stamps schema_version=15, then opens it via db.connect() — which
-triggers the V16/V17/V18 migrations (and the V17 python hook) in one pass.
+yet) plus an ingest_log row, stamps schema_version=15, then opens it via
+db.connect() — which triggers V16..V19 (and the V17 python hook) in one pass.
 """
 
 from __future__ import annotations
@@ -58,6 +59,15 @@ def _build_pre_v16_db(db_file, db_mod) -> None:
             "VALUES (?, 'pre2', 'main', 'nonfoil', 3)",
             (deck_id,),
         )
+
+        # Seed an ingest_log row (pre-V19) so the V19 subsume has data to
+        # preserve into ingest_events.
+        raw.execute(
+            "INSERT INTO ingest_log (at, label, mode, source_path, file_sha256, "
+            "rows_added, rows_updated, rows_zeroed, status) VALUES "
+            "('2021-01-01T00:00:00+00:00', 'set:tst', 'additive', "
+            "'checklists/tst.xlsx', 'abc123', 5, 0, 0, 'success')"
+        )
         raw.commit()
     finally:
         raw.close()
@@ -75,7 +85,7 @@ def test_migration_v16_to_v18(tmp_path, monkeypatch):
 
     with db_mod.connect() as conn:
         version = conn.execute("SELECT version FROM schema_version").fetchone()[0]
-        assert version == 18
+        assert version == 21
 
         # V16: cards has the new columns.
         card_cols = {r["name"] for r in conn.execute("PRAGMA table_info(cards)").fetchall()}
@@ -112,6 +122,33 @@ def test_migration_v16_to_v18(tmp_path, monkeypatch):
         assert [(r["scryfall_id"], r["count"]) for r in rows] == [
             ("pre1", 2), ("pre2", 3),
         ]
+
+        # V19: ingest_log subsumed into ingest_events; the seeded row survived
+        # with method derived from its 'set:' label prefix.
+        tables = {r["name"] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'")}
+        assert "ingest_log" not in tables
+        assert {"ingest_events", "inventory_events"} <= tables
+        ev = conn.execute(
+            "SELECT method, label, source_sha256, rows_added, status "
+            "FROM ingest_events WHERE label='set:tst'"
+        ).fetchone()
+        assert ev is not None
+        assert ev["method"] == "checklist"        # 'set:' → checklist
+        assert ev["source_sha256"] == "abc123"    # file_sha256 carried forward
+        assert ev["rows_added"] == 5
+        assert ev["status"] == "success"
+
+        # V19: dead is_deconstructed column dropped from decks.
+        decks_cols = {r["name"] for r in conn.execute(
+            "PRAGMA table_info(decks)").fetchall()}
+        assert "is_deconstructed" not in decks_cols
+        assert "precon_state" in decks_cols
+
+        # V20 created excluded_products; V21 dropped it (the "not-owned" registry
+        # was superseded by unattributed-balance copy-accounting). After the full
+        # migration chain the table must be GONE.
+        assert "excluded_products" not in tables
 
         # No dangling FK references anywhere in the migrated DB.
         fk_problems = conn.execute("PRAGMA foreign_key_check").fetchall()

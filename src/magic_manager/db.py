@@ -415,8 +415,9 @@ CREATE INDEX IF NOT EXISTS decks_precon_fn_idx ON decks (source_precon_file_name
 # The V11 Python hook backfills precon_state from is_deconstructed (0→built,
 # 1→deconstructed); no 'pool' rows ever existed pre-migration, and pool was
 # retired before any were written, so no data migration was needed. The old
-# is_deconstructed column is LEFT IN PLACE (deprecated dead column — a DROP needs
-# the copy-rebuild dance and isn't worth it); precon_state is the source of truth.
+# is_deconstructed column was left in place as a deprecated dead column through
+# V18 and DROPPED in V19 (SQLite ≥3.35 ALTER TABLE DROP COLUMN); precon_state is
+# the source of truth.
 SCHEMA_V11 = """
 ALTER TABLE decks ADD COLUMN precon_state TEXT NOT NULL DEFAULT 'built';
 CREATE INDEX IF NOT EXISTS decks_precon_state_idx ON decks (source_precon_file_name, precon_state);
@@ -604,6 +605,126 @@ CREATE INDEX IF NOT EXISTS deck_cards_scryfall_idx ON deck_cards (scryfall_id);
 """
 
 
+# V19: provenance ledger. Two goals in one migration.
+#
+# (1) SUBSUME ingest_log into a universal star schema:
+#     - ingest_events  (dimension): ONE row per ingest INSTANCE, for EVERY write
+#       path (checklist/precon/intake/adhoc/import-block/deck-assign/…), not just
+#       the 4 that ingest_log covered. Carries ingest_log's file-ingest columns
+#       (mode/sha/rows_*) so nothing is lost.
+#     - inventory_events (fact): append-only SIGNED deltas. inventory.quantity
+#       becomes the deterministic projection SUM(delta) GROUP BY (scryfall_id,
+#       finish). The ledger is ground truth; inventory is a rebuildable cache.
+#   The 247 existing ingest_log rows are COPIED FORWARD (not dropped) into
+#   ingest_events, deriving `method` from the label prefix, before ingest_log is
+#   dropped — a data-preserving copy-rebuild (cf. V14/V18). The carried rows get
+#   NO inventory_events here; their per-card deltas are reconstructed by the
+#   one-off scripts/backfill_provenance.py from the archived checklist files.
+#
+# (2) DROP the dead decks.is_deconstructed column (deprecated by precon_state
+#     since V11; zero readers outside this file). SQLite ≥3.35 supports ALTER
+#     TABLE DROP COLUMN directly — used here INSTEAD of a decks table rebuild,
+#     because rebuilding `decks` would cascade-delete deck_versions/
+#     deck_assignments via their ON DELETE CASCADE FKs. DROP COLUMN is in-place
+#     and touches no other table.
+#
+# Pure-additive otherwise; no Python hook (kept dependency-light — the historical
+# backfill lives in scripts/backfill_provenance.py, which needs openpyxl/mtgjson).
+SCHEMA_V19 = """
+CREATE TABLE IF NOT EXISTS ingest_events (
+    ingest_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    at            TEXT NOT NULL,                    -- ISO UTC
+    method        TEXT NOT NULL CHECK (method IN (
+                    'checklist','precon','intake','adhoc','import-block',
+                    'deck-assign','deck-unassign','migration-backfill',
+                    'unattributed-backfill')),
+    label         TEXT,                             -- 'set:fin', 'deck:atraxa', …
+    source_path   TEXT,                             -- nullable (adhoc/intake have none)
+    archived_path TEXT,                             -- carried from ingest_log
+    source_sha256 TEXT,                             -- = old ingest_log.file_sha256
+    mode          TEXT,                             -- 'replace'|'additive'|NULL
+    rows_added    INTEGER NOT NULL DEFAULT 0,
+    rows_updated  INTEGER NOT NULL DEFAULT 0,
+    rows_zeroed   INTEGER NOT NULL DEFAULT 0,
+    status        TEXT NOT NULL DEFAULT 'success'
+                    CHECK (status IN ('success','failed','backfill')),
+    error         TEXT,
+    notes         TEXT
+);
+CREATE INDEX IF NOT EXISTS ingest_events_method_idx ON ingest_events (method);
+CREATE INDEX IF NOT EXISTS ingest_events_at_idx     ON ingest_events (at);
+CREATE INDEX IF NOT EXISTS ingest_events_sha_idx    ON ingest_events (source_sha256);
+
+CREATE TABLE IF NOT EXISTS inventory_events (
+    event_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    ingest_id     INTEGER NOT NULL,
+    scryfall_id   TEXT NOT NULL,
+    finish        TEXT NOT NULL CHECK (finish IN ('nonfoil','foil')),
+    delta         INTEGER NOT NULL CHECK (delta <> 0),   -- signed: +N add, -N remove
+    at            TEXT NOT NULL,
+    FOREIGN KEY (ingest_id)   REFERENCES ingest_events(ingest_id),
+    FOREIGN KEY (scryfall_id) REFERENCES cards(scryfall_id)
+);
+CREATE INDEX IF NOT EXISTS inventory_events_ingest_idx ON inventory_events (ingest_id);
+CREATE INDEX IF NOT EXISTS inventory_events_card_idx   ON inventory_events (scryfall_id, finish);
+
+-- Copy the 247 ingest_log rows forward, deriving `method` from the label prefix.
+-- ORDER BY id so ingest_id ordering follows original chronology.
+INSERT INTO ingest_events
+    (at, method, label, source_path, archived_path, source_sha256,
+     mode, rows_added, rows_updated, rows_zeroed, status, error)
+SELECT
+    at,
+    CASE
+        WHEN label LIKE 'deck-assigned:%'   THEN 'deck-assign'
+        WHEN label LIKE 'deck-unassigned:%' THEN 'deck-unassign'
+        WHEN label LIKE 'set:%'             THEN 'checklist'
+        WHEN label LIKE 'jumpstart:%'       THEN 'precon'
+        WHEN label LIKE 'precon:%'          THEN 'precon'
+        WHEN label LIKE 'global_precons:%'  THEN 'precon'
+        ELSE 'checklist'
+    END,
+    label, source_path, archived_path, file_sha256,
+    mode, rows_added, rows_updated, rows_zeroed, status, error
+FROM ingest_log
+ORDER BY id;
+
+DROP TABLE ingest_log;
+
+ALTER TABLE decks DROP COLUMN is_deconstructed;
+"""
+
+
+# V20: a "not-owned" product registry for the pool true-up. When a product's
+# cards OVERLAP something the user owns (an LTR jumpstart deck borrowing cards
+# from an LTR starter kit the user actually owns; a TLE jumpstart "(2)" variant
+# borrowing from the "(1)" the user owns), card-overlap matching falsely claims
+# it. Only the user knows they never opened it — so they record it ONCE here and
+# `mm deck trueup` skips it on every future run (the mirror of how an
+# already-registered deck is skipped). Keyed by MTGJSON fileName. Pure additive.
+SCHEMA_V20 = """
+CREATE TABLE IF NOT EXISTS excluded_products (
+    file_name     TEXT PRIMARY KEY,   -- MTGJSON deck fileName, e.g. Marauders1_LTR
+    name          TEXT,               -- display name at exclude time (informational)
+    reason        TEXT,               -- optional user note / the pattern that added it
+    excluded_at   TEXT NOT NULL
+);
+"""
+
+
+# V21: drop the V20 "not-owned" registry. It encoded a NEGATIVE assertion
+# ("I don't own product X") that goes stale the moment the user buys it. The
+# pool true-up was reworked to match candidate products against the
+# unattributed-backfill LEDGER BALANCE (copy-accounting: a card already
+# attributed to a product you own has 0 balance, so overlapping products can't
+# falsely claim it) — which handles the LTR-jumpstart / TLE-(2) false positives
+# automatically and self-correctingly. The registry is now redundant. Safe to
+# DROP: brand-new in V20, not precious, not referenced by any FK.
+SCHEMA_V21 = """
+DROP TABLE IF EXISTS excluded_products;
+"""
+
+
 # ---------- migration-authoring convention ----------
 #
 # Always-safe ops in a migration: CREATE TABLE, ALTER TABLE ADD COLUMN,
@@ -616,7 +737,12 @@ CREATE INDEX IF NOT EXISTS deck_cards_scryfall_idx ON deck_cards (scryfall_id);
 # Precious tables (data the user can't reconstruct):
 #   - list_rows         the inventory the user typed in
 #   - lists             labels + their kind/source
-#   - ingest_log        audit trail of which checklist landed when
+#   - ingest_events     universal ingest audit trail (V19; subsumed ingest_log —
+#                         one row per ingest INSTANCE across every write path)
+#   - inventory_events  append-only signed inventory deltas (V19); the LEDGER that
+#                         is ground truth — inventory.quantity = SUM(delta). Cannot
+#                         be reconstructed once written (adhoc/intake provenance is
+#                         nowhere else), so it is precious.
 #   - decks / deck_versions / deck_cards  compositions + version history. `decks`
 #                         is the durable identity (slug, source_precon_file_name,
 #                         precon_state — the last two make precon unit counts
@@ -667,6 +793,9 @@ MIGRATIONS: list[str] = [
     SCHEMA_V16,
     SCHEMA_V17,
     SCHEMA_V18,
+    SCHEMA_V19,
+    SCHEMA_V20,
+    SCHEMA_V21,
 ]
 CURRENT_VERSION = len(MIGRATIONS)
 
@@ -1393,47 +1522,8 @@ def record_import(conn: sqlite3.Connection, command: str, source_path: str | Non
     )
 
 
-def record_ingest_log(
-    conn: sqlite3.Connection, *,
-    label: str,
-    mode: str,
-    source_path: str,
-    archived_path: str | None,
-    file_sha256: str,
-    rows_added: int,
-    rows_updated: int,
-    rows_zeroed: int,
-    status: str,
-    error: str | None = None,
-) -> int:
-    from datetime import datetime, timezone
-    cur = conn.execute(
-        """
-        INSERT INTO ingest_log
-            (at, label, mode, source_path, archived_path, file_sha256,
-             rows_added, rows_updated, rows_zeroed, status, error)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            datetime.now(timezone.utc).isoformat(timespec="seconds"),
-            label, mode, source_path, archived_path, file_sha256,
-            rows_added, rows_updated, rows_zeroed, status, error,
-        ),
-    )
-    return cur.lastrowid
-
-
-def find_ingest_log_by_hash(conn: sqlite3.Connection, file_sha256: str) -> list[dict]:
-    """Return prior ingest_log entries with this file hash, newest first."""
-    rows = conn.execute(
-        """
-        SELECT id, at, label, mode, source_path, archived_path, status, error,
-               rows_added, rows_updated, rows_zeroed
-        FROM ingest_log
-        WHERE file_sha256 = ?
-        ORDER BY id DESC
-        """,
-        (file_sha256,),
-    ).fetchall()
-    return [dict(r) for r in rows]
+# NOTE: record_ingest_log / find_ingest_log_by_hash were removed in V19. The
+# ingest_log table was subsumed by ingest_events + inventory_events (the
+# provenance ledger); all write paths now route through the `ingest` module
+# (ingest.open_ingest_event / create_event / record_delta / find_events_by_sha).
 

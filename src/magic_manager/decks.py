@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-from . import db, inventory as inv_mod, mtgjson as mtgjson_mod
+from . import db, ingest as ingest_mod, inventory as inv_mod, mtgjson as mtgjson_mod
 
 
 # Allowed values mirror the V4 CHECK constraints on ``deck_cards``.
@@ -1245,13 +1245,16 @@ def deck_assign_batch(
             assigned_qty += qty
         if assigned_rows:
             _touch_deck(conn, deck_id)
-            db.record_ingest_log(
-                conn,
+            # A deck-assign event moves deck_assignments, NOT inventory — the
+            # owned quantity is unchanged — so it records NO inventory_events;
+            # it exists in the dimension for the audit trail (and dedup via the
+            # assignment hash as source_sha256).
+            ingest_mod.create_event(
+                conn, "deck-assign",
                 label=f"deck-assigned:{slug}",
                 mode="additive",
                 source_path=f"deck:{slug}",
-                archived_path=None,
-                file_sha256=_assignment_hash(writable),
+                source_sha256=_assignment_hash(writable),
                 rows_added=assigned_rows,
                 rows_updated=0,
                 rows_zeroed=0,
@@ -1332,13 +1335,14 @@ def deck_unassign_batch(
 
         if unassigned_rows:
             _touch_deck(conn, deck_id)
-            db.record_ingest_log(
-                conn,
+            # Unassign also moves only deck_assignments, not inventory — no
+            # inventory_events; audit-trail dimension row only.
+            ingest_mod.create_event(
+                conn, "deck-unassign",
                 label=f"deck-unassigned:{slug}",
                 mode="additive",
                 source_path=f"deck:{slug}",
-                archived_path=None,
-                file_sha256=_assignment_hash(
+                source_sha256=_assignment_hash(
                     [] if rows == "all" else rows  # type: ignore[arg-type]
                 ),
                 rows_added=0,
@@ -1620,6 +1624,91 @@ def construct_precon_from_loose(
     return base
 
 
+def precon_recipe_needs(file_name: str, *, include_tokens: bool = False
+                        ) -> dict[tuple[str, str], int]:
+    """Return a precon's recipe as ``{(scryfall_id, finish): count}``.
+
+    Reads the MTGJSON deck via the canonical ``_BOARD_KEY_TO_NAME`` board-walk.
+    By default excludes the ``token`` board (tokens ride a deck for
+    record-keeping but aren't tracked as loose singles, mirroring
+    :func:`deck_compose_plan`'s exclusion) — this is the recipe the pool true-up
+    matches free inventory against. Pass ``include_tokens=True`` to also count
+    the token board (the backfill wants tokens, since ``import_precon`` writes
+    them to inventory too). Finish is ``'nonfoil'``/``'foil'`` from ``isFoil``.
+    The single home for precon board-walk extraction.
+    """
+    deck_data = mtgjson_mod.deck(file_name)
+    needs: dict[tuple[str, str], int] = {}
+    for mj_key, board_name in _BOARD_KEY_TO_NAME:
+        if board_name == "token" and not include_tokens:
+            continue
+        for entry in deck_data.get(mj_key, []) or []:
+            sid = (entry.get("identifiers") or {}).get("scryfallId")
+            if not sid:
+                continue
+            finish = "foil" if entry.get("isFoil") else "nonfoil"
+            needs[(sid, finish)] = needs.get((sid, finish), 0) + int(entry.get("count", 1) or 1)
+    return needs
+
+
+def register_precon_from_loose(
+    file_name: str,
+    *,
+    slug: str | None = None,
+    name: str | None = None,
+    new_copy: bool = False,
+    conn=None,
+) -> dict:
+    """Register a precon as a tracked ``deconstructed`` deck row from cards the
+    user already owns LOOSE — the deconstructed sibling of
+    :func:`construct_precon_from_loose`.
+
+    Deconstructed means the recipe is kept as a deck row but its cards stay
+    LOOSE (unpledged) — so unlike the built sibling this creates NO
+    ``deck_assignments`` and adds NOTHING to ``inventory``
+    (``import_precon(add_inventory=False, precon_state="deconstructed")``). It
+    is the write primitive the pool true-up uses once a product's full recipe is
+    confirmed present in free inventory: it makes the precon COUNT (via
+    ``precon_unit_counts``) without double-counting or pledging the loose cards.
+
+    Re-run safety: unless ``new_copy=True``, if a deconstructed deck for this
+    fileName already exists this is a no-op that returns the existing slug. When
+    a row DOES need creating and the base slug is taken (e.g. a ``built`` copy
+    already exists at it), a distinct ``-2``/``-3`` slug is minted — mirroring
+    the add-mode engine's ``_build_precon_copies``.
+
+    Pass ``conn`` to run inside a caller's open transaction (the product-coverage
+    ``--apply`` uses this so deck-row creation is atomic with its ledger moves).
+
+    Returns ``{"slug": str, "created": bool, "reused_existing": bool}``.
+    """
+    with db.transaction(conn) as conn:
+        if not new_copy:
+            row = conn.execute(
+                "SELECT slug FROM decks WHERE source_precon_file_name = ? "
+                "AND precon_state = 'deconstructed' ORDER BY deck_id LIMIT 1",
+                (file_name,),
+            ).fetchone()
+            if row is not None:
+                return {"slug": row["slug"], "created": False, "reused_existing": True}
+
+        # Pick a non-colliding slug: base, else base-2/-3/… (a built copy or an
+        # unrelated deck may already hold the base slug).
+        base = slug or _slug(name or file_name)
+        copy_slug = base
+        i = 2
+        while deck_get(copy_slug, conn=conn) is not None:
+            copy_slug = f"{base}-{i}"
+            i += 1
+
+        imp = import_precon(
+            file_name, slug=copy_slug, name=name,
+            add_inventory=False, precon_state="deconstructed", conn=conn,
+        )
+    eff = imp["effective_slugs"][0] if imp["effective_slugs"] else copy_slug
+    return {"slug": eff, "created": True, "reused_existing": False}
+
+
 def _assignment_hash(rows: list[tuple[str, str, int]]) -> str:
     """Stable SHA-256 of the sorted (sid, finish, qty) tuples.
 
@@ -1668,6 +1757,7 @@ def import_precon(
     deconstruct: bool = False,
     precon_state: str | None = None,
     merge_inventory: bool = False,
+    conn=None,
 ) -> dict:
     """Import an MTGJSON precon (or Jumpstart pack — same shape) into the DB.
 
@@ -1708,6 +1798,14 @@ def import_precon(
       - ``inv_distinct``    (int) distinct (printing, finish) pairs touched
       - ``copies``          (int) copies parameter (preserved for caller)
       - ``missing_sids``    (list[dict]) entries with no scryfallId, skipped
+
+    Pass ``conn`` to enlist the deck-row + inventory writes in a caller's open
+    transaction (borrow-or-open, like ``inventory_add``) — this is what lets the
+    product-coverage ``--apply`` register deck rows and move ledger deltas
+    ATOMICALLY in one transaction, so a drift-abort rolls back BOTH. When
+    ``conn`` is borrowed the sync-before-use step is SKIPPED (the caller is
+    responsible for having synced the referenced sets) — syncing opens its own
+    connections and must never run inside a borrowed write transaction.
 
     Raises:
       - ``mtgjson_mod.MtgJsonError`` if the deck JSON cannot be fetched
@@ -1753,8 +1851,10 @@ def import_precon(
     # that's never been synced (the historical FK-failure bug). We sync here,
     # OUTSIDE the atomic write below, because syncing is a precondition — not
     # part of the deck-creation unit — and mirrors the sync-first pattern in
-    # master-list / jumpstart-list / precon-list.
-    if set_codes:
+    # master-list / jumpstart-list / precon-list. SKIP when a conn is borrowed:
+    # sync opens its own connections (and hits the network), which must not run
+    # inside the caller's open write transaction — the caller pre-syncs instead.
+    if set_codes and conn is None:
         sets_mod.sync(sorted(set_codes))
 
     # V5: one composition per import, regardless of copies. Callers who
@@ -1787,7 +1887,7 @@ def import_precon(
     # (deconstruct=True with no explicit precon_state) or --merge-inventory.
     make_deck_row = (not merge_inventory) and (precon_state is not None or not deconstruct)
 
-    with db.connect() as conn:
+    with db.transaction(conn) as conn:
         if make_deck_row:
             if deck_get(base_slug, conn=conn) is not None:
                 raise ValueError(
@@ -1818,14 +1918,25 @@ def import_precon(
                     deck_updated += 1
             inv_aggregate[(sid, finish)] = inv_aggregate.get((sid, finish), 0) + count * copies
 
-        if add_inventory:
+        if add_inventory and inv_aggregate:
+            # One `precon` ingest event for this import; every card's inventory
+            # add is attributed to it (signed +delta), in this same transaction.
+            precon_ingest_id = ingest_mod.create_event(
+                conn, "precon",
+                label=f"precon:{file_name}",
+                source_path=file_name,
+                notes=f"import_precon copies={copies} state={row_state}",
+            )
             for (sid, finish), qty in inv_aggregate.items():
-                r = inv_mod.inventory_add(sid, finish, qty, conn=conn)
+                r = inv_mod.inventory_add(sid, finish, qty, conn=conn,
+                                          ingest_id=precon_ingest_id)
                 inv_qty_total += qty
                 if r["action"] == "inserted":
                     inv_added += 1
                 else:
                     inv_updated += 1
+            ingest_mod.finalize_event(conn, precon_ingest_id,
+                                      rows_added=inv_added, rows_updated=inv_updated)
 
     return {
         "deck_name": deck_name,

@@ -610,7 +610,9 @@ def read_master_list_meta(path: Path) -> dict | None:
 # ---------- V2 inventory ingest ----------
 
 def ingest_inventory_from_xlsx(path: Path, *, mode: str = "replace",
-                               zero_untouched: bool = False) -> dict:
+                               zero_untouched: bool = False,
+                               label: str | None = None,
+                               source_sha256: str | None = None) -> dict:
     """Parse a filled-in master-list XLSX/MD and write qty cells to inventory.
 
     Per-cell semantics by ``mode``:
@@ -632,10 +634,17 @@ def ingest_inventory_from_xlsx(path: Path, *, mode: str = "replace",
     aren't in the partition's set codes are flagged as 'extras' (the user
     pasted unrelated cards into a set's checklist).
 
-    Returns ``{"added": N, "updated": N, "zeroed": N, "warnings": [...],
-    "not_found": [...], "extras": [...]}``.
+    Provenance: the write happens under a single ``checklist`` ingest event
+    (``ingest`` module). Every per-cell change appends a SIGNED delta to
+    ``inventory_events`` in the SAME transaction, so the ledger and the
+    ``inventory`` cache can't diverge. ``label``/``source_sha256`` are passed
+    from the CLI caller (which computed them for dedup); the returned
+    ``ingest_id`` lets the caller finalize ``archived_path`` after renaming.
+
+    Returns ``{"added": N, "updated": N, "zeroed": N, "ingest_id": int,
+    "warnings": [...], "not_found": [...], "extras": [...]}``.
     """
-    from . import db, parsers
+    from . import db, ingest as ingest_mod, parsers
     if mode not in ("replace", "additive"):
         raise ValueError(f"unknown mode {mode!r}; expected 'replace' or 'additive'")
 
@@ -657,6 +666,16 @@ def ingest_inventory_from_xlsx(path: Path, *, mode: str = "replace",
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
     with db.connect() as conn:
+        # One checklist event spans every per-cell delta below, in this same
+        # transaction — the ledger append and the inventory mutation commit
+        # together (or roll back together).
+        ingest_id = ingest_mod.create_event(
+            conn, "checklist",
+            label=label or f"checklist:{path.stem}",
+            source_path=str(path),
+            source_sha256=source_sha256,
+            mode=mode,
+        )
         for entry in result.entries:
             if entry.card is None:
                 continue
@@ -701,12 +720,16 @@ def ingest_inventory_from_xlsx(path: Path, *, mode: str = "replace",
                         "DELETE FROM inventory WHERE scryfall_id = ? AND finish = ?",
                         (scry_id, finish),
                     )
+                    ingest_mod.record_delta(conn, ingest_id, scry_id, finish,
+                                            -current_qty, at=now)
                     zeroed += 1
             elif row:
                 conn.execute(
                     "UPDATE inventory SET quantity = ? WHERE scryfall_id = ? AND finish = ?",
                     (new_qty, scry_id, finish),
                 )
+                ingest_mod.record_delta(conn, ingest_id, scry_id, finish,
+                                        new_qty - current_qty, at=now)
                 updated += 1
             else:
                 conn.execute(
@@ -716,6 +739,8 @@ def ingest_inventory_from_xlsx(path: Path, *, mode: str = "replace",
                     """,
                     (scry_id, finish, new_qty, now),
                 )
+                ingest_mod.record_delta(conn, ingest_id, scry_id, finish,
+                                        new_qty, at=now)
                 added += 1
 
         # Replace mode, opt-in only: zero out in-partition inventory rows not
@@ -743,8 +768,23 @@ def ingest_inventory_from_xlsx(path: Path, *, mode: str = "replace",
                     "DELETE FROM inventory WHERE scryfall_id = ? AND finish = ?",
                     (r["scryfall_id"], r["finish"]),
                 )
+                ingest_mod.record_delta(conn, ingest_id, r["scryfall_id"],
+                                        r["finish"], -r["quantity"], at=now)
                 zeroed += 1
 
+        if added + updated + zeroed == 0:
+            # No-op ingest (empty/unresolved file, or a modify file whose cells
+            # all equal current qty). Delete the dangling event rather than leave
+            # a status='success' row stamped with the file SHA — otherwise a later
+            # legitimate re-ingest of the same file is falsely refused as a
+            # duplicate (find_events_by_sha → prior_success). No inventory_events
+            # were recorded, so the DELETE can't violate the FK. Mirrors
+            # open_ingest_event's no-op handling.
+            conn.execute("DELETE FROM ingest_events WHERE ingest_id = ?", (ingest_id,))
+            ingest_id = None
+        else:
+            ingest_mod.finalize_event(conn, ingest_id, rows_added=added,
+                                      rows_updated=updated, rows_zeroed=zeroed)
         db.record_import(conn,
                          command=f"ingest_inventory_from_xlsx mode={mode}",
                          source_path=str(path),
@@ -754,6 +794,7 @@ def ingest_inventory_from_xlsx(path: Path, *, mode: str = "replace",
         "added": added,
         "updated": updated,
         "zeroed": zeroed,
+        "ingest_id": ingest_id,
         "warnings": result.warnings,
         "not_found": result.not_found,
         "extras": extras,
