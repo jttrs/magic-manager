@@ -40,6 +40,72 @@ def test_set_sync_populates_cards(tmp_db, app, fake_scryfall, make_card, monkeyp
         assert conn.execute("SELECT COUNT(*) FROM cards WHERE set_code='ncc'").fetchone()[0] == 2
 
 
+def test_set_sync_all_enumerates_distinct_codes(tmp_db, app, monkeypatch):
+    """`set sync-all` syncs every DISTINCT set_code present in cards, and only
+    those — enumerated from the table, deduped, not a family resolve."""
+    from magic_manager import db, sets as sets_mod
+    # Seed cards across two set codes (one code twice) with no network.
+    with db.connect() as conn:
+        conn.executemany(
+            "INSERT INTO cards (scryfall_id, oracle_id, name, set_code, "
+            "collector_number, rarity) VALUES (?,?,?,?,?,?)",
+            [("a", "oa", "A", "ncc", "1", "rare"),
+             ("b", "ob", "B", "ncc", "2", "rare"),
+             ("c", "oc", "C", "clb", "1", "mythic")],
+        )
+    captured = []
+    monkeypatch.setattr(sets_mod, "sync", lambda codes: captured.append(sorted(codes)) or 0)
+    res = runner.invoke(app, ["set", "sync-all"])
+    assert res.exit_code == 0, res.stdout
+    assert captured == [["clb", "ncc"]]  # distinct, sorted; ncc not duplicated
+
+
+def test_set_sync_all_dry_run_syncs_nothing(tmp_db, app, monkeypatch):
+    from magic_manager import db, sets as sets_mod
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT INTO cards (scryfall_id, oracle_id, name, set_code, "
+            "collector_number, rarity) VALUES ('a','oa','A','ncc','1','rare')")
+    called = []
+    monkeypatch.setattr(sets_mod, "sync", lambda codes: called.append(codes) or 0)
+    res = runner.invoke(app, ["set", "sync-all", "--dry-run"])
+    assert res.exit_code == 0, res.stdout
+    assert "ncc" in res.stdout and "Would sync 1" in res.stdout
+    assert called == []  # dry-run must not sync
+
+
+def test_set_sync_all_empty_cards_table(tmp_db, app):
+    res = runner.invoke(app, ["set", "sync-all"])
+    assert res.exit_code == 0, res.stdout
+    assert "nothing to sync" in res.stdout.lower()
+
+
+def test_set_sync_all_repopulates_new_columns(tmp_db, app, fake_scryfall, make_card):
+    """End-to-end: a card with NULL legalities gets repopulated by sync-all when
+    Scryfall returns fresh data carrying legalities + game_changer (the whole
+    point of the un-lazy re-sync)."""
+    from magic_manager import db
+    # Seed a card with the OLD/empty shape: no legalities, no game_changer.
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT INTO cards (scryfall_id, oracle_id, name, set_code, "
+            "collector_number, rarity, legalities, game_changer) "
+            "VALUES ('rh','orh','Rhystic Study','clb','1','uncommon', NULL, 0)")
+    # sync-all re-pulls clb; Scryfall returns the same card WITH the new fields.
+    fake_scryfall(search=[
+        make_card(id="rh", set="clb", collector_number="1", name="Rhystic Study",
+                  legalities={"commander": "legal"}, game_changer=True),
+    ])
+    res = runner.invoke(app, ["set", "sync-all"])
+    assert res.exit_code == 0, res.stdout
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT legalities, game_changer FROM cards WHERE scryfall_id='rh'"
+        ).fetchone()
+    assert row["legalities"] is not None and "commander" in row["legalities"]
+    assert row["game_changer"] == 1
+
+
 def test_import_precon_e2e_autosync(tmp_db, app, fake_scryfall, fake_mtgjson,
                                     make_card, make_precon_deck):
     """The whole fix, through the CLI: an unsynced family imports cleanly."""

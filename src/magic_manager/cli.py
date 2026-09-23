@@ -146,6 +146,44 @@ def set_sync(
     typer.echo(f"  → {n} cards upserted")
 
 
+@set_app.command("sync-all")
+def set_sync_all(
+    dry_run: bool = typer.Option(False, "--dry-run",
+                                 help="List the set codes that would be synced, without syncing."),
+):
+    """Re-sync EVERY distinct set code already present in the local cards table.
+
+    The apply-everywhere companion to per-family ``set sync``: enumerates every
+    ``set_code`` in ``cards`` and re-pulls it from Scryfall, RE-PROJECTING every
+    matched card (``db.upsert_card`` does ``ON CONFLICT DO UPDATE`` on all
+    columns). That repopulates fields added by later migrations — the V16
+    ``legalities`` / ``keywords`` / ``game_changer`` columns used by
+    ``deck legality`` / ``deck bracket`` — and refreshes prices, across the whole
+    collection in one run.
+
+    ``cards`` is a re-derivable table, so this is safe to run anytime (e.g. after
+    a schema addition that widens the card projection). Distinct from
+    ``set refresh-family``, which re-resolves family TOPOLOGY (``set_targets``),
+    not card data.
+    """
+    with db.connect() as conn:
+        codes = [r["set_code"] for r in conn.execute(
+            "SELECT DISTINCT set_code FROM cards ORDER BY set_code"
+        ).fetchall()]
+
+    if not codes:
+        typer.echo("No sets in the local cards table — nothing to sync.")
+        return
+
+    if dry_run:
+        typer.echo(f"Would sync {len(codes)} set code(s): {' '.join(codes)}")
+        return
+
+    typer.echo(f"Syncing {len(codes)} set code(s) from the cards table…")
+    n = sets_mod.sync(codes)
+    typer.echo(f"  → {n} cards upserted")
+
+
 @set_app.command("is-synced")
 def set_is_synced(
     name_or_code: str = typer.Argument(...),
