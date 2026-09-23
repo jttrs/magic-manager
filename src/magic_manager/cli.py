@@ -2796,6 +2796,12 @@ def deck_product_coverage_cmd(
     pick: str = typer.Option(
         "", "--pick", help="Comma-separated fileNames to claim from the conflict list.",
     ),
+    refute: str = typer.Option(
+        "", "--refute",
+        help="Comma-separated fileNames you did NOT buy — dropped from candidates so "
+        "they're never imputed (their cards stay available for other products). "
+        "Review the OWNED list first, then refute any erroneous one.",
+    ),
     sld_partial_threshold: float = typer.Option(
         0.9, "--sld-partial-threshold",
         help="Flag Secret Lair drops with at least this fraction of CNs owned as near-complete.",
@@ -2824,8 +2830,9 @@ def deck_product_coverage_cmd(
     tp = _load_trueup_module()
     mode = "all" if all_sets else ("target" if target else "from-unattributed")
     picks = {s.strip() for s in pick.split(",") if s.strip()}
+    refute_set = {s.strip() for s in refute.split(",") if s.strip()}
     tp.run(mode=mode, target=target, apply=apply, picks=picks,
-           sld_threshold=sld_partial_threshold, json_out=json_out)
+           sld_threshold=sld_partial_threshold, json_out=json_out, refute=refute_set)
 
 
 @deck_app.command("decompose")

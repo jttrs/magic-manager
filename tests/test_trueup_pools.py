@@ -39,6 +39,22 @@ def _seed_unattributed(conn, deltas):
     return uid
 
 
+def _seed_backfill(conn, method, label, deltas):
+    """Seed a backfill event of a given method (e.g. 'checklist' / 'precon')
+    with inventory rows to match — simulating the V19 backfill having attributed
+    these cards to a generic best-effort bucket."""
+    from magic_manager import ingest
+    eid = ingest.create_event(conn, method, label=label, status="backfill")
+    for sid, fin, qty in deltas:
+        ingest.record_delta(conn, eid, sid, fin, qty)
+        conn.execute(
+            "INSERT INTO inventory (scryfall_id, finish, quantity, acquired_at) "
+            "VALUES (?, ?, ?, '2021-01-01T00:00:00+00:00') "
+            "ON CONFLICT(scryfall_id, finish) DO UPDATE SET quantity = quantity + excluded.quantity",
+            (sid, fin, qty))
+    return eid
+
+
 @pytest.fixture
 def stub_products(monkeypatch):
     """Stub mtgjson.deck_list (per set) + mtgjson.deck (per fileName)."""
@@ -121,6 +137,94 @@ def test_full_coverage_claim_and_reattribute(tmp_db, seed_cards, make_card, stub
         assert conn.execute("SELECT quantity FROM inventory WHERE scryfall_id=?", (a,)).fetchone()["quantity"] == 1
 
 
+# ---------- supply spans all backfill buckets, not just unattributed ----------
+
+def test_scene_box_covered_from_checklist_backfill(tmp_db, seed_cards, make_card,
+                                                   stub_products, fake_scryfall):
+    """A product whose cards were backfilled to the CHECKLIST bucket (not
+    unattributed) is still coverable — the supply spans all status='backfill'
+    events. This is the live scene-box scenario (cards catalogued via a set
+    checklist, so backfilled to backfill:checklist)."""
+    from magic_manager import db, ingest, decks
+    fake_scryfall()
+
+    a = "5ce00000-0000-0000-0000-000000000001"
+    b = "5ce00000-0000-0000-0000-000000000002"
+    seed_cards([
+        make_card(id=a, set="tle", collector_number="62", name="Scene A"),
+        make_card(id=b, set="tle", collector_number="63", name="Scene B"),
+    ])
+    # Both cards were backfilled to the CHECKLIST bucket (unattributed is empty).
+    with db.connect() as conn:
+        _seed_backfill(conn, "checklist", "backfill:checklist",
+                       [(a, "nonfoil", 1), (b, "nonfoil", 1)])
+        # A (real, empty) unattributed event exists too.
+        ingest.create_event(conn, "unattributed-backfill",
+                            label="backfill:unattributed", status="backfill")
+        assert ingest.reconcile_inventory_ledger(conn) == []
+
+    stub_products(
+        decklist={"tle": [{"fileName": "SceneBox_TLE", "name": "A Scene Box",
+                           "code": "TLE", "type": "Box Set"}]},
+        decks={"SceneBox_TLE": _deck("A Scene Box", "TLE", "Box Set",
+                                     [(a, 1, False, "tle"), (b, 1, False, "tle")])},
+    )
+    tp = _load()
+    tp.run(mode="from-unattributed", target=None, apply=True, picks=set(),
+           sld_threshold=0.9, json_out=True)
+
+    with db.connect() as conn:
+        # Covered + registered, pulling from the checklist backfill bucket.
+        assert decks.precon_unit_counts_for("SceneBox_TLE", conn=conn) == (0, 1)
+        assert ingest.reconcile_inventory_ledger(conn) == []
+        # The checklist backfill bucket drained for these cards.
+        chk = conn.execute(
+            "SELECT COALESCE(SUM(ie.delta),0) s FROM inventory_events ie "
+            "JOIN ingest_events ev ON ev.ingest_id=ie.ingest_id "
+            "WHERE ev.label='backfill:checklist'").fetchone()["s"]
+        assert chk == 0
+        # A trueup precon event now holds them.
+        pre = conn.execute(
+            "SELECT COALESCE(SUM(ie.delta),0) s FROM inventory_events ie "
+            "JOIN ingest_events ev ON ev.ingest_id=ie.ingest_id "
+            "WHERE ev.label LIKE 'trueup:%'").fetchone()["s"]
+        assert pre == 2
+
+
+def test_real_ingest_not_reattributable(tmp_db, seed_cards, make_card,
+                                        stub_products, fake_scryfall):
+    """Cards attributed by a REAL (status='success') ingest are NOT
+    re-attributable — the product can't claim them, protecting genuine
+    provenance."""
+    from magic_manager import db, ingest, decks
+    fake_scryfall()
+
+    x = "5ce00000-0000-0000-0000-000000000010"
+    seed_cards([make_card(id=x, set="tle", collector_number="70", name="RealCard")])
+    with db.connect() as conn:
+        ev = ingest.create_event(conn, "checklist", label="set:tle",
+                                 mode="additive", status="success")  # REAL ingest
+        ingest.record_delta(conn, ev, x, "nonfoil", 1)
+        conn.execute("INSERT INTO inventory (scryfall_id, finish, quantity, acquired_at) "
+                     "VALUES (?, 'nonfoil', 1, '2021-01-01T00:00:00+00:00')", (x,))
+        ingest.create_event(conn, "unattributed-backfill",
+                            label="backfill:unattributed", status="backfill")
+        assert ingest.reconcile_inventory_ledger(conn) == []
+
+    stub_products(
+        decklist={"tle": [{"fileName": "NeedsReal_TLE", "name": "Needs Real",
+                           "code": "TLE", "type": "Box Set"}]},
+        decks={"NeedsReal_TLE": _deck("Needs Real", "TLE", "Box Set", [(x, 1, False, "tle")])},
+    )
+    tp = _load()
+    tp.run(mode="all", target=None, apply=True, picks=set(),
+           sld_threshold=0.9, json_out=True)
+    with db.connect() as conn:
+        # Not claimed — the card's provenance is a real ingest, not backfill.
+        assert conn.execute("SELECT COUNT(*) c FROM decks WHERE source_precon_file_name='NeedsReal_TLE'").fetchone()["c"] == 0
+        assert ingest.reconcile_inventory_ledger(conn) == []
+
+
 # ---------- priority allocation: shared card goes to higher-priority product ----------
 
 def test_priority_resolves_land_pack_vs_jumpstart(tmp_db, seed_cards, make_card,
@@ -184,6 +288,38 @@ def test_pick_overrides_priority(tmp_db, seed_cards, make_card, stub_products, f
     with db.connect() as conn:
         assert conn.execute("SELECT COUNT(*) c FROM decks WHERE source_precon_file_name='LandPack_TLA'").fetchone()["c"] == 1
         assert conn.execute("SELECT COUNT(*) c FROM decks WHERE source_precon_file_name='Jumpstart_TLA'").fetchone()["c"] == 0
+
+
+def test_refute_drops_product_and_frees_cards(tmp_db, seed_cards, make_card,
+                                              stub_products, fake_scryfall):
+    """--refute removes a product from candidates entirely; its cards stay
+    available so a legitimate lower-priority claimant can take them."""
+    from magic_manager import db
+    fake_scryfall()
+
+    shared = "bbbb0000-0000-0000-0000-000000000004"
+    seed_cards([make_card(id=shared, set="tla", collector_number="4", name="Isl")])
+    with db.connect() as conn:
+        _seed_unattributed(conn, [(shared, "nonfoil", 1)])
+
+    # Higher-priority Box Set would normally win; refute it → Jumpstart gets it.
+    stub_products(
+        decklist={"tla": [
+            {"fileName": "Box_TLA", "name": "A Box", "code": "TLA", "type": "Box Set"},
+            {"fileName": "JS_TLA", "name": "A JS", "code": "TLA", "type": "Jumpstart"},
+        ]},
+        decks={
+            "Box_TLA": _deck("A Box", "TLA", "Box Set", [(shared, 1, False, "tla")]),
+            "JS_TLA": _deck("A JS", "TLA", "Jumpstart", [(shared, 1, False, "tla")]),
+        },
+    )
+    tp = _load()
+    tp.run(mode="from-unattributed", target=None, apply=True, picks=set(),
+           sld_threshold=0.9, json_out=True, refute={"Box_TLA"})
+    with db.connect() as conn:
+        # Box refuted → not imputed; its card went to the Jumpstart.
+        assert conn.execute("SELECT COUNT(*) c FROM decks WHERE source_precon_file_name='Box_TLA'").fetchone()["c"] == 0
+        assert conn.execute("SELECT COUNT(*) c FROM decks WHERE source_precon_file_name='JS_TLA'").fetchone()["c"] == 1
 
 
 def test_version_tiebreak_prefers_lower(tmp_db, seed_cards, make_card, stub_products, fake_scryfall):

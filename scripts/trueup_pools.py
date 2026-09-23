@@ -120,27 +120,19 @@ def _priority_key(product: dict, cfg: dict) -> tuple:
 
 # ---------- candidate enumeration ----------
 
-def _unattributed_event_id(conn) -> int | None:
-    row = conn.execute(
-        "SELECT ingest_id FROM ingest_events WHERE method='unattributed-backfill' "
-        "ORDER BY ingest_id LIMIT 1"
-    ).fetchone()
-    return row["ingest_id"] if row else None
-
-
-def _unattributed_set_codes(conn) -> set[str]:
-    """Set codes that still have copies in the unattributed bucket."""
-    uid = _unattributed_event_id(conn)
-    if uid is None:
-        return set()
+def _backfill_set_codes(conn) -> set[str]:
+    """Set codes with any RE-ATTRIBUTABLE balance — cards still held by a
+    best-effort backfill event (``status='backfill'``). The default
+    ``--from-unattributed`` scope: sets whose provenance is still a backfill
+    guess and could be refined into product attributions."""
     rows = conn.execute(
         """
         SELECT DISTINCT c.set_code
         FROM inventory_events ie
+        JOIN ingest_events ev ON ev.ingest_id = ie.ingest_id
         JOIN cards c ON c.scryfall_id = ie.scryfall_id
-        WHERE ie.ingest_id = ? AND ie.delta > 0
-        """,
-        (uid,),
+        WHERE ev.status = 'backfill' AND ie.delta > 0
+        """
     ).fetchall()
     return {r["set_code"].lower() for r in rows}
 
@@ -384,57 +376,94 @@ def _sld_products(sld_complete: list[dict], supply: dict) -> list[dict]:
     return products
 
 
-# ---------- apply ----------
+# ---------- supply (re-attributable backfill balance) ----------
 
-def _unattributed_balance(conn, uid: int) -> dict[tuple[str, str], int]:
-    """Current per-printing balance held by the unattributed-backfill event."""
+def _backfill_supply(conn) -> dict[tuple[str, str], int]:
+    """Per-printing copies that are still RE-ATTRIBUTABLE — held by any
+    best-effort backfill event (``status='backfill'``: the unattributed bucket
+    PLUS the generic backfill:precon / backfill:checklist reconstructions). These
+    were all guesses the product-coverage pass refines; real post-V19 ingests
+    (``status!='backfill'``) are NOT re-attributable and are excluded.
+    """
     bal: dict[tuple[str, str], int] = defaultdict(int)
     for r in conn.execute(
-        "SELECT scryfall_id, finish, SUM(delta) s FROM inventory_events "
-        "WHERE ingest_id = ? GROUP BY scryfall_id, finish", (uid,)
+        "SELECT ie.scryfall_id, ie.finish, SUM(ie.delta) s "
+        "FROM inventory_events ie JOIN ingest_events ev ON ev.ingest_id = ie.ingest_id "
+        "WHERE ev.status = 'backfill' GROUP BY ie.scryfall_id, ie.finish"
     ):
-        bal[(r["scryfall_id"], r["finish"])] = r["s"]
+        if r["s"]:
+            bal[(r["scryfall_id"], r["finish"])] = r["s"]
     return bal
 
 
-def _apply(conn, ready: list[dict], uid: int) -> dict:
-    """Register each ready product as a deconstructed deck + re-attribute its
-    copies in the ledger (unattributed → new precon event). One transaction
-    (the caller's). Verifies reconciliation before returning.
+def _backfill_events_holding(conn) -> list[int]:
+    """The backfill event ids that hold re-attributable copies, in draw order:
+    unattributed FIRST (least-committed), then precon, then checklist."""
+    rows = conn.execute(
+        "SELECT ingest_id, method FROM ingest_events WHERE status = 'backfill'"
+    ).fetchall()
+    order = {"unattributed-backfill": 0, "precon": 1, "checklist": 2}
+    return [r["ingest_id"] for r in sorted(rows, key=lambda r: order.get(r["method"], 9))]
 
-    Re-attribution is CAPPED to what the unattributed-backfill event actually
-    holds per printing (decremented as products consume it): a product's recipe
-    card may already be attributed to a checklist/precon event, in which case we
-    must NOT move it (that would push the unattributed balance negative and
-    break inventory==SUM(delta)). The DECK ROW is still registered regardless —
-    the product is genuinely owned; only the ledger move is balance-limited.
+
+# ---------- apply ----------
+
+def _apply(conn, ready: list[dict]) -> dict:
+    """Register each ready product as a deconstructed deck + re-attribute its
+    copies from the BACKFILL buckets onto a per-product precon event. One
+    transaction (the caller's). Verifies reconciliation before returning.
+
+    Each recipe card is drawn from the backfill events that hold it (unattributed
+    first, then precon, then checklist), capped to what each holds, decrementing
+    a running per-event balance so no source goes negative and no copy is moved
+    twice. The DECK ROW registers regardless; the ledger move is balance-limited
+    (a card with no backfill balance left just isn't moved — inventory==SUM(delta)
+    always holds).
     """
-    balance = _unattributed_balance(conn, uid)
+    # Per-event, per-card balances we can draw down.
+    event_ids = _backfill_events_holding(conn)
+    ev_bal: dict[int, dict[tuple[str, str], int]] = {}
+    for eid in event_ids:
+        m: dict[tuple[str, str], int] = defaultdict(int)
+        for r in conn.execute(
+            "SELECT scryfall_id, finish, SUM(delta) s FROM inventory_events "
+            "WHERE ingest_id = ? GROUP BY scryfall_id, finish", (eid,)
+        ):
+            if r["s"] > 0:
+                m[(r["scryfall_id"], r["finish"])] = r["s"]
+        ev_bal[eid] = m
+
     registered = 0
     reattributed = 0
     partial_products = 0
     for p in ready:
         decks_mod.register_precon_from_loose(p["fileName"], name=p["name"])
         registered += 1
-        # Cap each printing to the remaining unattributed balance.
-        deltas: list[tuple[str, str, int]] = []
+        to_id = ingest_mod.create_event(
+            conn, "precon", label=f"trueup:{p['fileName']}",
+            notes="product-coverage — attributed from backfill buckets",
+        )
+        moved_total = 0
         capped = False
         for (sid, fin), qty in p["needs"].items():
-            take = min(qty, max(0, balance.get((sid, fin), 0)))
-            if take < qty:
+            need = qty
+            for eid in event_ids:
+                if need <= 0:
+                    break
+                avail = ev_bal[eid].get((sid, fin), 0)
+                take = min(need, avail)
+                if take > 0:
+                    ingest_mod.record_delta(conn, eid, sid, fin, -take)
+                    ingest_mod.record_delta(conn, to_id, sid, fin, take)
+                    ev_bal[eid][(sid, fin)] -= take
+                    need -= take
+                    moved_total += take
+            if need > 0:
                 capped = True
-            if take > 0:
-                deltas.append((sid, fin, take))
-                balance[(sid, fin)] -= take
         if capped:
             partial_products += 1
-        if deltas:
-            ingest_mod.reattribute(
-                conn, from_ingest_id=uid, to_method="precon",
-                deltas=deltas, to_label=f"trueup:{p['fileName']}",
-                to_notes="pool true-up — attributed from unattributed-backfill",
-            )
-            reattributed += sum(q for _, _, q in deltas)
+        reattributed += moved_total
+
     drift = ingest_mod.reconcile_inventory_ledger(conn)
     if drift:
         raise SystemExit(f"FAIL: ledger drift after true-up ({len(drift)} rows); rolled back")
@@ -445,14 +474,15 @@ def _apply(conn, ready: list[dict], uid: int) -> dict:
 # ---------- orchestration ----------
 
 def run(*, mode: str, target: str | None, apply: bool, picks: set[str],
-        sld_threshold: float, json_out: bool) -> int:
+        sld_threshold: float, json_out: bool, refute: set[str] | None = None) -> int:
     with db.connect() as conn:
-        uid = _unattributed_event_id(conn)
-        # Supply = the unattributed-backfill balance per (sid, finish): copies not
-        # yet attributed to any product. Matching against THIS (not free inventory)
-        # is what enforces one-copy-one-product and self-corrects (a card already
-        # attributed to a precon/checklist has 0 balance).
-        supply = _unattributed_balance(conn, uid) if uid is not None else {}
+        # Supply = per-(sid,finish) copies still held by BEST-EFFORT backfill
+        # events (status='backfill': unattributed + generic precon/checklist
+        # reconstructions). These are all guesses this pass refines into concrete
+        # product attributions. Real post-V19 ingests are excluded (not
+        # re-attributable). Matching against this — not free inventory — enforces
+        # one-copy-one-product.
+        supply = _backfill_supply(conn)
 
         # Determine candidate set codes.
         if target:
@@ -463,8 +493,8 @@ def run(*, mode: str, target: str | None, apply: bool, picks: set[str],
                 set_codes = {target.lower()}
         elif mode == "all":
             set_codes = _loose_set_codes(conn)
-        else:  # from-unattributed (default)
-            set_codes = _unattributed_set_codes(conn)
+        else:  # from-unattributed (default): sets with any re-attributable balance
+            set_codes = _backfill_set_codes(conn)
 
         products = _enumerate_products(set_codes)
 
@@ -475,6 +505,14 @@ def run(*, mode: str, target: str | None, apply: bool, picks: set[str],
         if "sld" in set_codes or mode == "all":
             sld_complete, sld_partial = _sld_status(conn, sld_threshold)
             products = products + _sld_products(sld_complete, supply)
+
+        # --refute: products the user reviewed and says they did NOT buy. Drop
+        # them from the candidate pool entirely (before matching), so their cards
+        # stay in the unattributed pool for a legitimate lower-priority claimant.
+        refute = refute or set()
+        if refute:
+            products = [p for p in products
+                        if p["fileName"] not in refute and _slug_of(p) not in refute]
 
         covered, need_map = _match_products(conn, products, supply)
         cfg = _load_priority_config()
@@ -492,9 +530,7 @@ def run(*, mode: str, target: str | None, apply: bool, picks: set[str],
         }
 
         if apply and ready:
-            if uid is None:
-                raise SystemExit("no unattributed-backfill event to attribute from")
-            result.update(_apply(conn, ready, uid))
+            result.update(_apply(conn, ready))
             result["applied"] = True
 
     _report(result, json_out=json_out, apply=apply)
@@ -546,8 +582,10 @@ def _report(result: dict, *, json_out: bool, apply: bool) -> None:
                     f"attribution capped to the unattributed balance.)")
         print(msg)
     else:
-        print(f"(read-only report — no writes. Re-run with --apply to impute the {len(ready)} "
-              f"covered product(s)." + (" Resolve contested products with --pick." if conflicts else "") + ")")
+        print(f"(read-only report — no writes. Review the OWNED list above, then re-run "
+              f"with --apply to impute the {len(ready)} covered product(s). Strike any "
+              f"erroneous one with --refute <fileName>."
+              + (" Override a NOT-COVERED loss with --pick <fileName>." if conflicts else "") + ")")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -559,14 +597,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--all", action="store_true", help="Every set with loose cards.")
     parser.add_argument("--apply", action="store_true", help="Write (default is dry-run).")
     parser.add_argument("--pick", default="", help="Comma-separated fileNames/slugs to claim from conflicts.")
+    parser.add_argument("--refute", default="",
+                        help="Comma-separated fileNames/slugs you did NOT buy — dropped from "
+                             "candidates (their cards stay available for other products).")
     parser.add_argument("--sld-partial-threshold", type=float, default=0.9)
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
 
     mode = "all" if args.all else ("target" if args.target else "from-unattributed")
     picks = {s.strip() for s in args.pick.split(",") if s.strip()}
+    refute = {s.strip() for s in args.refute.split(",") if s.strip()}
     return run(mode=mode, target=args.target, apply=args.apply, picks=picks,
-               sld_threshold=args.sld_partial_threshold, json_out=args.json)
+               sld_threshold=args.sld_partial_threshold, json_out=args.json, refute=refute)
 
 
 if __name__ == "__main__":
