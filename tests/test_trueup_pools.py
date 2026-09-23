@@ -162,43 +162,55 @@ def test_conflict_reported_not_written(tmp_db, seed_cards, make_card, stub_produ
 
 # ---------- no double-count: a pledged card isn't claimable ----------
 
-def test_pledged_card_not_claimable(tmp_db, seed_cards, make_card, stub_products, fake_scryfall):
-    from magic_manager import db, decks
+def test_card_attributed_elsewhere_not_claimable(tmp_db, seed_cards, make_card,
+                                                 stub_products, fake_scryfall):
+    """A card whose unattributed balance is 0 (already attributed to a precon —
+    e.g. an owned starter kit's card) can't back a new product. This is the LTR
+    'Mountain' scenario: owned but not available in the unattributed pool."""
+    from magic_manager import db, ingest
     fake_scryfall()
 
     x = "cccc0000-0000-0000-0000-000000000001"
-    seed_cards([make_card(id=x, set="tla", collector_number="5", name="Pledged")])
-    with db.connect() as conn:
-        _seed_unattributed(conn, [(x, "nonfoil", 1)])
+    seed_cards([make_card(id=x, set="ltr", collector_number="269", name="Mountain")])
 
-    # Build a deck that pledges the single copy, so free_quantity == 0.
+    # Own 1 copy, fully attributed to a precon (an owned starter kit) → the
+    # unattributed balance for it is 0.
     with db.connect() as conn:
-        decks.deck_create("holder", "Holder", conn=conn)
-        decks.deck_add_card("holder", x, "main", "nonfoil", 1, conn=conn)
-    decks.deck_assign_batch("holder", [(x, "nonfoil", 1)])
+        ev = ingest.create_event(conn, "precon", label="precon:GondorGreenWhite_LTR")
+        ingest.record_delta(conn, ev, x, "nonfoil", 1)
+        conn.execute("INSERT INTO inventory (scryfall_id, finish, quantity, acquired_at) "
+                     "VALUES (?, 'nonfoil', 1, '2021-01-01T00:00:00+00:00')", (x,))
+        # A (real but empty) unattributed event must exist for the run.
+        ingest.create_event(conn, "unattributed-backfill",
+                            label="backfill:unattributed", status="backfill")
+        assert ingest.reconcile_inventory_ledger(conn) == []
 
+    # A jumpstart deck needing that Mountain — but its balance is 0.
     stub_products(
-        decklist={"tla": [{"fileName": "NeedsX_TLA", "name": "Needs X", "code": "TLA", "type": "Box Set"}]},
-        decks={"NeedsX_TLA": _deck("Needs X", "TLA", "Box Set", [(x, 1, False, "tla")])},
+        decklist={"ltr": [{"fileName": "Marauders1_LTR", "name": "Marauders 1",
+                           "code": "LTR", "type": "Jumpstart"}]},
+        decks={"Marauders1_LTR": _deck("Marauders 1", "LTR", "Jumpstart",
+                                       [(x, 1, False, "ltr")])},
     )
-
     tp = _load()
-    tp.run(mode="from-unattributed", target=None, apply=True, picks=set(),
+    tp.run(mode="all", target=None, apply=True, picks=set(),
            sld_threshold=0.9, json_out=True)
     with db.connect() as conn:
-        # Not claimed (free was 0).
-        assert conn.execute("SELECT COUNT(*) c FROM decks WHERE source_precon_file_name='NeedsX_TLA'").fetchone()["c"] == 0
-        # Inventory unchanged.
-        assert conn.execute("SELECT quantity FROM inventory WHERE scryfall_id=?", (x,)).fetchone()["quantity"] == 1
+        # Not claimed — the Mountain is already spoken for.
+        assert conn.execute(
+            "SELECT COUNT(*) c FROM decks WHERE source_precon_file_name='Marauders1_LTR'"
+        ).fetchone()["c"] == 0
+        assert ingest.reconcile_inventory_ledger(conn) == []
 
 
-# ---------- re-attribution is capped to the unattributed balance ----------
+# ---------- coverage requires the recipe to fit the UNATTRIBUTED balance ----------
 
-def test_reattribution_capped_to_unattributed_balance(tmp_db, seed_cards, make_card,
-                                                       stub_products, fake_scryfall):
-    """A ready product whose recipe card is only PARTLY in the unattributed
-    bucket (the rest already attributed to a checklist) must not over-drain the
-    bucket. The deck row registers; the ledger move is capped; reconcile holds."""
+def test_recipe_exceeding_unattributed_balance_not_covered(tmp_db, seed_cards, make_card,
+                                                           stub_products, fake_scryfall):
+    """A product is coverable only if its FULL recipe fits the unattributed
+    balance. Owning 3 copies of a card but with only 2 unattributed (1 already
+    on a checklist) does NOT cover a product needing 3 — the 1 checklist copy is
+    already spoken for, so it can't back this product too."""
     from magic_manager import db, ingest, decks
     fake_scryfall()
 
@@ -216,7 +228,7 @@ def test_reattribution_capped_to_unattributed_balance(tmp_db, seed_cards, make_c
                      "VALUES (?, 'nonfoil', 3, '2021-01-01T00:00:00+00:00')", (z,))
         assert ingest.reconcile_inventory_ledger(conn) == []  # 3 == 1 + 2
 
-    # A product needing 3 of z (fully covered by free inventory=3).
+    # A product needing 3 of z — but only 2 are unattributed.
     stub_products(
         decklist={"tla": [{"fileName": "SplitBox_TLA", "name": "Split Box",
                            "code": "TLA", "type": "Box Set"}]},
@@ -228,96 +240,15 @@ def test_reattribution_capped_to_unattributed_balance(tmp_db, seed_cards, make_c
            sld_threshold=0.9, json_out=True)
 
     with db.connect() as conn:
-        # Deck row registered.
-        assert decks.precon_unit_counts_for("SplitBox_TLA", conn=conn) == (0, 1)
-        # Ledger still reconciles — the move was capped to 2 (the unattributed
-        # balance), NOT the full recipe of 3.
+        # NOT covered/claimed — recipe (3) exceeds unattributed balance (2).
+        assert decks.precon_unit_counts_for("SplitBox_TLA", conn=conn) == (0, 0)
         assert ingest.reconcile_inventory_ledger(conn) == []
-        # Unattributed drained to 0 for z (moved its 2); checklist's 1 untouched.
+        # Balances untouched.
         uatt = conn.execute(
             "SELECT COALESCE(SUM(ie.delta),0) s FROM inventory_events ie "
             "JOIN ingest_events ev ON ev.ingest_id=ie.ingest_id "
             "WHERE ev.method='unattributed-backfill' AND ie.scryfall_id=?", (z,)).fetchone()["s"]
-        assert uatt == 0
-        chk_bal = conn.execute(
-            "SELECT COALESCE(SUM(ie.delta),0) s FROM inventory_events ie "
-            "JOIN ingest_events ev ON ev.ingest_id=ie.ingest_id "
-            "WHERE ev.method='checklist' AND ie.scryfall_id=?", (z,)).fetchone()["s"]
-        assert chk_bal == 1  # untouched
-        # inventory unchanged
-        assert conn.execute("SELECT quantity FROM inventory WHERE scryfall_id=?", (z,)).fetchone()["quantity"] == 3
-
-
-# ---------- not-owned exclusion registry ----------
-
-def test_exclude_suppresses_falsely_covered_product(tmp_db, seed_cards, make_card,
-                                                     stub_products, fake_scryfall):
-    """A product falsely covered via card-overlap (e.g. a jumpstart sharing cards
-    with an owned starter kit) is skipped once marked not-owned — persistently."""
-    from magic_manager import db, decks
-
-    fake_scryfall()
-    shared = "1111aaaa-0000-0000-0000-000000000001"
-    seed_cards([make_card(id=shared, set="ltr", collector_number="140", name="Olog-hai Crusher")])
-    with db.connect() as conn:
-        _seed_unattributed(conn, [(shared, "nonfoil", 1)])
-
-    # A jumpstart deck (not owned) whose recipe is one shared card.
-    stub_products(
-        decklist={"ltr": [{"fileName": "Marauders1_LTR", "name": "Marauders 1",
-                           "code": "LTR", "type": "Jumpstart"}]},
-        decks={"Marauders1_LTR": _deck("Marauders 1", "LTR", "Jumpstart",
-                                       [(shared, 1, False, "ltr")])},
-    )
-    tp = _load()
-
-    # Before exclude: it's READY (falsely covered).
-    import io, json as _json
-    from contextlib import redirect_stdout
-    buf = io.StringIO()
-    with redirect_stdout(buf):
-        tp.run(mode="from-unattributed", target=None, apply=False, picks=set(),
-               sld_threshold=0.9, json_out=True)
-    assert "Marauders1_LTR" in buf.getvalue()
-
-    # Exclude by fileName; persists to the registry.
-    tp.run(mode="from-unattributed", target=None, apply=False, picks=set(),
-           sld_threshold=0.9, json_out=True, exclude=["Marauders1_LTR"])
-    with db.connect() as conn:
-        assert conn.execute("SELECT COUNT(*) c FROM excluded_products").fetchone()["c"] == 1
-
-    # After exclude: no longer proposed, even on --apply.
-    tp.run(mode="from-unattributed", target=None, apply=True, picks=set(),
-           sld_threshold=0.9, json_out=True)
-    with db.connect() as conn:
-        assert conn.execute(
-            "SELECT COUNT(*) c FROM decks WHERE source_precon_file_name='Marauders1_LTR'"
-        ).fetchone()["c"] == 0
-
-
-def test_exclude_pattern_setcode_type(tmp_db, seed_cards, make_card, stub_products, fake_scryfall):
-    """`<setcode>:<type>` resolves to every product of that type in the set."""
-    from magic_manager import db
-
-    fake_scryfall()
-    seed_cards([make_card(id="2222aaaa-0000-0000-0000-000000000001", set="ltr",
-                          collector_number="1", name="X")])
-    stub_products(
-        decklist={"ltr": [
-            {"fileName": "Marauders1_LTR", "name": "Marauders 1", "code": "LTR", "type": "Jumpstart"},
-            {"fileName": "Mordor1_LTR", "name": "Mordor 1", "code": "LTR", "type": "Jumpstart"},
-            {"fileName": "GondorGreenWhite_LTR", "name": "Gondor: Green-White",
-             "code": "LTR", "type": "Starter Kit"},
-        ]},
-        decks={},
-    )
-    tp = _load()
-    tp.run(mode="from-unattributed", target=None, apply=False, picks=set(),
-           sld_threshold=0.9, json_out=True, exclude=["ltr:jumpstart"])
-    with db.connect() as conn:
-        excl = {r["file_name"] for r in conn.execute("SELECT file_name FROM excluded_products")}
-    # Both jumpstart products excluded; the starter kit is NOT.
-    assert excl == {"Marauders1_LTR", "Mordor1_LTR"}
+        assert uatt == 2
 
 
 # ---------- SLD: complete vs partial by CN ownership ----------

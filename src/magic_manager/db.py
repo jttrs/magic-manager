@@ -712,6 +712,19 @@ CREATE TABLE IF NOT EXISTS excluded_products (
 """
 
 
+# V21: drop the V20 "not-owned" registry. It encoded a NEGATIVE assertion
+# ("I don't own product X") that goes stale the moment the user buys it. The
+# pool true-up was reworked to match candidate products against the
+# unattributed-backfill LEDGER BALANCE (copy-accounting: a card already
+# attributed to a product you own has 0 balance, so overlapping products can't
+# falsely claim it) — which handles the LTR-jumpstart / TLE-(2) false positives
+# automatically and self-correctingly. The registry is now redundant. Safe to
+# DROP: brand-new in V20, not precious, not referenced by any FK.
+SCHEMA_V21 = """
+DROP TABLE IF EXISTS excluded_products;
+"""
+
+
 # ---------- migration-authoring convention ----------
 #
 # Always-safe ops in a migration: CREATE TABLE, ALTER TABLE ADD COLUMN,
@@ -782,6 +795,7 @@ MIGRATIONS: list[str] = [
     SCHEMA_V18,
     SCHEMA_V19,
     SCHEMA_V20,
+    SCHEMA_V21,
 ]
 CURRENT_VERSION = len(MIGRATIONS)
 

@@ -1,91 +1,94 @@
 ---
 name: trueup-pools
 description: >-
-  True up the deconstructed-precon collection by attributing LOOSE cards to the
-  products they actually came from — scene boxes, precon/jumpstart decks, card
-  pools, and complete Secret Lair drops — and re-labelling their provenance in
-  the V19 ledger (moving copies out of the `unattributed-backfill` bucket into a
-  real `precon` event). Only claims a product when its FULL recipe is present in
-  free inventory; reports conflicts instead of guessing; dry-run by default.
-  Triggers: "true up my precons", "which of my loose cards are actually scene
-  boxes / jumpstart packs / drops", "attribute my unknown cards", "reconcile the
-  unattributed bucket", "what products are sitting loose in my collection".
+  Product-coverage — impute which deterministic-content PRODUCTS (precon /
+  jumpstart / scene box / card pool / complete Secret Lair drop) your loose cards
+  came from, so you know what you've bought and what to buy at the PRODUCT level
+  rather than card-by-card. Coverage is measured against the V19 ledger's
+  unattributed-backfill balance (owned minus what's already attributed to
+  products you own), so one physical copy backs at most one product and overlap
+  cases self-correct. Read-only report by default; --apply imputes the covered
+  products as acquisition events (deck row + precon ingest event). Triggers:
+  "product coverage", "what products have I bought", "which of my loose cards are
+  scene boxes / jumpstart packs / drops", "what should I buy at the product
+  level", "reconcile / attribute my unknown cards", "true up my precons".
 ---
 
-# trueup-pools
+# trueup-pools (product-coverage)
 
 Thin relay over the deterministic `scripts/trueup_pools.py` (invoked as
-`mm deck trueup`). The script does ALL logic (enumeration, recipe matching,
-conflict detection, ledger re-attribution); this skill just picks the mode and
-relays the output.
+`mm deck product-coverage`; `mm deck trueup` is a back-compat alias). The script
+does ALL logic; this skill picks the mode and relays the tiered output.
 
-## When to use
+## What it answers
 
-The V19 provenance backfill left some owned copies in the `unattributed-backfill`
-bucket (surfaced by `mm audit provenance`). Many are real **products never
-registered as tracked deck rows** — a scene box's cards sitting loose, a
-jumpstart pack's `tle` half, a Secret Lair drop bought whole. This tool finds
-them in the user's FREE (unpledged) inventory and, on `--apply`, registers each
-as a `deconstructed` deck row (so precon unit counts become correct — no
-inventory double-count) AND moves its copies into a `precon` ledger event.
+"Which sealed products can my collection account for (→ likely purchased), and
+what should I consider buying — at the product level, not card-by-card." It's the
+product grain of the V19 star schema: an imputed product-acquisition event
+(`ingest_events`) linked by `ingest_id` to the exact card copies
+(`inventory_events`) it explains.
 
-**Don't** use for:
-- Registering a precon you kept ASSEMBLED from loose singles → [[construct-from-loose]] (built + pledged).
-- Ingesting a newly-bought precon's cards → [[import-precon]] / [[add-precon]].
-- Just checking provenance numbers → `mm audit provenance` (read-only).
+## The model (relay faithfully)
+
+- **Coverage is measured against the UNATTRIBUTED-BACKFILL balance**, not raw
+  free inventory: owned − what's already attributed to products you own. So a
+  card already accounted for (e.g. a Mountain in your owned LTR starter kit) has
+  0 balance and can't back a new product. **One copy → at most one product.**
+- **Self-correcting, no "not-owned" flags.** An LTR jumpstart whose Mountains are
+  all attributed to your starter kit shows 0 balance → not claimable. Buy it
+  later + add its cards → they enter the unattributed pool → it becomes coverable.
+- **Full coverage only.** A product is "owned (covered)" only if its ENTIRE
+  recipe fits the unattributed balance.
+- **Contested products are reported, never auto-claimed.** When two products
+  share a card and there aren't enough unattributed copies for both (e.g. the
+  jumpstart "(1)"/"(2)" version pairs), both are listed under CONTESTED — you
+  choose which you actually opened with `--pick <fileName>`.
 
 ## The recipe
 
 ```bash
-uv run mm deck trueup                      # dry-run, --from-unattributed (default scope)
-uv run mm deck trueup tla                  # scope to one set/family or product-name substring
-uv run mm deck trueup --all                # every set with loose cards (full sweep)
-uv run mm deck trueup --apply              # WRITE the ready products (default is dry-run)
-uv run mm deck trueup --pick SceneBox_TLA,Battalion_MSH --apply   # resolve conflicts, then write
-uv run mm deck trueup --sld-partial-threshold 0.8   # widen the near-complete SLD flag
-uv run mm deck trueup --json               # machine-readable result
+uv run mm deck product-coverage                 # read-only report, --from-unattributed (default)
+uv run mm deck product-coverage tla             # scope to one set/family or product-name substring
+uv run mm deck product-coverage --all           # every set you own cards from
+uv run mm deck product-coverage --apply         # IMPUTE covered products (writes; default is read-only)
+uv run mm deck product-coverage --pick P1_LTR,P2_LTR --apply   # resolve contested, then impute
+uv run mm deck product-coverage --json          # machine-readable
 ```
 
-## Behavior contract (relay these faithfully)
+## Output sections
 
-- **Dry-run by default.** Nothing is written unless `--apply` is passed. Always
-  show the user the dry-run preview first and let them confirm before `--apply`.
-- **Three report sections:**
-  - **READY** — products whose FULL recipe is present in uncontested free
-    inventory; these get registered on `--apply`.
-  - **CONFLICTS** — products contending for the same loose card when copies are
-    insufficient for all. NOT written. The user resolves by re-running with
-    `--pick <fileName>,...` to choose which product(s) claim the contested cards.
-  - **SECRET LAIR** — `complete` drops (every CN owned → registered like any
-    product) and `near-complete` partials (≥ threshold, flagged for the user to
-    confirm whether they bought the drop or just some singles).
-- **Full-coverage only.** A product is never claimed on partial ownership (except
-  the SLD near-complete *flag*, which is advisory, not a write).
-- **No double-count / no over-attribution.** A loose card backs at most as many
-  products as the user owns copies of it; cards already pledged to a built deck
-  have `free = 0` and can't be claimed. `--apply` verifies the ledger still
-  reconciles (`inventory == SUM(delta)`) before committing.
+- **OWNED — covered from unattributed cards** — products whose full recipe fits
+  the unattributed balance → likely purchased; imputed on `--apply`.
+- **CONTESTED** — products sharing cards where one copy can't cover both; pick
+  which you opened. Shows the shared card + demand vs unattributed.
+- **SECRET LAIR** — complete drops (every CN owned → treated as a covered
+  product) and near-complete (≥ `--sld-partial-threshold`, advisory).
+
+## `--apply` (writes)
+
+For each OWNED-covered product, in one transaction:
+1. Registers a `deconstructed` deck row (`register_precon_from_loose`) — makes
+   `precon_unit_counts` correct; NO inventory add, NO pledge.
+2. Records the product-grain acquisition as a `precon` ingest event and moves the
+   card copies from the `unattributed-backfill` bucket onto it (`ingest.reattribute`,
+   net-zero, capped to the balance) — so `inventory == SUM(delta)` still holds and
+   no copy is double-attributed. Self-improving: next run sees those copies gone
+   from the unattributed pool.
 
 ## Workflow
 
-1. Run the dry-run for the chosen scope; relay the READY / CONFLICTS / SECRET
-   LAIR sections + the summary line verbatim (clean them into a short markdown
-   list, don't dump raw stdout).
-2. If there are CONFLICTS the user cares about, help them choose and re-run with
-   `--pick`.
-3. On the user's go-ahead, run `--apply` (suggest `mm db snapshot` first for a
-   large sweep) and relay the write summary.
-4. Confirm with `mm audit provenance` that the `unattributed-backfill` bucket
-   shrank by the attributed copies, and `mm audit ingest-ledger` still exits 0.
+1. Run the read-only report for the chosen scope; relay OWNED / CONTESTED /
+   SECRET LAIR sections + the summary as a short markdown list.
+2. Help the user resolve CONTESTED products (`--pick`) if any matter.
+3. On the user's go-ahead, `mm db snapshot` then `--apply`; relay the write summary.
+4. Confirm `mm audit ingest-ledger` exits 0 and `mm audit provenance` shows the
+   unattributed bucket shrank by the imputed products' copies.
 
 ## Cross-references
 
-- `scripts/trueup_pools.py` — the deterministic engine this skill drives.
-- `decks.register_precon_from_loose` (deconstructed sibling of
-  `construct_precon_from_loose`) + `decks.precon_recipe_needs` — the write
-  primitive + recipe extraction.
-- `ingest.reattribute` — moves ledger provenance between events (net-zero).
-- `mtgjson.default_precon_state` / `POOL_NAME_PATTERNS` — pool classification.
-- `sld.identify_drop` / `collect_drop_ids` — Secret Lair drop CN membership.
-- [[import-precon]] / [[add-precon]] / [[construct-from-loose]] — the write-side
-  siblings; `mm audit provenance` / `mm audit ingest-ledger` — the guards.
+- `scripts/trueup_pools.py` — the deterministic engine.
+- `decks.precon_recipe_needs` / `register_precon_from_loose` / `precon_unit_counts_for`.
+- `ingest.reattribute` / `reconcile_inventory_ledger`; `sld.all_drops` / `collect_drop_ids`.
+- `mm audit provenance` / `mm audit ingest-ledger` — the standing guards.
+- [[import-precon]] / [[add-precon]] / [[construct-from-loose]] — the explicit
+  write-side siblings (when you KNOW you bought/built something).
