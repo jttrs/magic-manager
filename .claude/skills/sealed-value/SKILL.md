@@ -7,7 +7,7 @@ description: Deterministic card-value estimate for sealed MTG product(s) — Boo
 
 Deterministic, script-driven sealed-product card valuator — for ONE product or
 MANY. Claude routes the request (below), runs the deterministic script(s), and
-presents the result as a clean markdown chart + the `queries/` artifact paths.
+presents the result as a clean markdown chart + the `output/sealed-value/reports/` artifact paths.
 The scripts do all the arithmetic (single source of truth); the agent's job is to
 render their numbers as a **complete, well-formatted table in chat** — every
 requested product a row, nothing silently dropped. EV weights come from MTGJSON's
@@ -98,7 +98,7 @@ A thin chain over three existing deterministic pieces — no new logic:
    - the skipped **non-product tabs** named briefly (so the user sees they were
      considered, not lost);
    - a short **deal read** (best deals = positive Sealed-mkt delta; overpriced =
-     negative), then the `queries/` artifact path.
+     negative), then the `output/sealed-value/reports/` artifact path.
    If a product tab won't resolve, try once more with a better `--name` substring
    before listing it as unpriced; never omit it.
 
@@ -198,7 +198,7 @@ table is written to the artifacts.
 
 ## Output shape
 
-Two artifacts in `queries/` (ephemeral; pruned by [[cleanup-queries]]):
+Two artifacts in `output/sealed-value/reports/` (ephemeral; pruned by [[cleanup-queries]]):
 - `sealed-value-<code>-<slug>-<ts>.txt` — the indented tree + the FULL top-value
   singles table (all priced cards, not just the top 15), paste-ready.
 - `sealed-value-<code>-<slug>-<ts>.xlsx` — sheet `tree` (one row per node:
@@ -231,7 +231,7 @@ Stdout: `## Sealed value — <product>` + the tree + a `TOTALS` line
 ## Guardrails
 
 - Read-only against the DB (values, never writes). Writes only ephemeral
-  `queries/` artifacts.
+  `output/sealed-value/reports/` artifacts.
 - Market defaults to manual (offline). External providers are opt-in and degrade
   to `(manual)` if unconfigured/unreachable. eBay is advisory-only. Provider
   setup (tcgcsv/tcgapi/eBay signup + `.env` keys) is in

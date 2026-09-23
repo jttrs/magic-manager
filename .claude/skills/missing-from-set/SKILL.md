@@ -8,9 +8,9 @@ description: Canonical "what am I missing from set X?" workflow for any set/fami
 Set-agnostic, deterministic, file-driven. The user has a strong opinion about output format that this skill exists to enforce:
 
 - **Scryfall URL chunks** → in chat, every time, as the canonical printing-specific table.
-- **Missing checklist (XLSX)** → file artifact in `queries/`, referenced by `file://` link in chat. **Never rendered inline.** Distinct from the "inventory checklist" produced by `mm set master-list` ([[generate-set-checklist]]); see [Not to be confused with](#not-to-be-confused-with-inventory-checklists) below.
-- **ManaPool bulk-add (.txt)** → file artifact in `queries/`, referenced by `file://` link in chat. Plain text, paste-ready (no comments / headers / fences — portals reject extra characters). `*F*` per-line foil marker.
-- **TCGplayer Mass Entry (.txt)** → file artifact in `queries/`, paste-ready. Plain text, single flat list of all rows regardless of finish. TCGplayer doesn't accept a per-line foil marker; the user runs the cart optimizer afterward to choose finish per row.
+- **Missing checklist (XLSX)** → file artifact in `output/missing-set/checklists/`, referenced by `file://` link in chat. **Never rendered inline.** Distinct from the "inventory checklist" produced by `mm set master-list` ([[generate-set-checklist]]); see [Not to be confused with](#not-to-be-confused-with-inventory-checklists) below.
+- **ManaPool bulk-add (.txt)** → file artifact in `output/missing-set/buy-lists/`, referenced by `file://` link in chat. Plain text, paste-ready (no comments / headers / fences — portals reject extra characters). `*F*` per-line foil marker.
+- **TCGplayer Mass Entry (.txt)** → file artifact in `output/missing-set/buy-lists/`, paste-ready. Plain text, single flat list of all rows regardless of finish. TCGplayer doesn't accept a per-line foil marker; the user runs the cart optimizer afterward to choose finish per row.
 
 That's the whole output. Don't render the checklist as a markdown table in chat. Don't paste the bulk-add file contents as fenced code in chat. Don't ask which format the user wants — they want all three artifact files (XLSX + ManaPool .txt + TCGplayer .txt), with chat-rendering only for the URLs.
 
@@ -45,9 +45,9 @@ That's it. One command. Set-agnostic AS LONG AS the family is configured (see [N
    Net rule: "unique art the user can't get any cheaper way." Surgefoil reprints of borderless cards are dupes; chocobo-track foils with their own art are kept; PFIN prerelease stamps of regular cards are dupes; etc.
 3. **Materialize the union** by `scryfall_id`, dropping cards owned in any finish (printing-level missing semantics).
 4. **Emit Scryfall printing-specific URLs** to stdout as a chunked markdown table — sorted cheapest-first, 20 printings per chunk (matches Scryfall web UI's nested-condition cap), `unique=prints&order=usd&dir=asc` so each chunk shows the exact missing printings sorted by cheapest-first within the chunk.
-5. **Write missing checklist** (XLSX) to `queries/missing-<code>-checklist-<timestamp>.xlsx` (set-grouped, sorted by CN within each set). The hidden `_meta` sheet records `kind: "missing"` so consumers can distinguish this from inventory checklists (which carry `kind: "inventory"`).
-6. **Write ManaPool bulk-add .txt** to `queries/missing-<code>-manapool-<timestamp>.txt` (single flat list of all rows, sorted by set/CN/finish, `*F*` foil marker per line — Moxfield's documented import token, which ManaPool consumes natively). Plain text, no headers/comments/fences — portals reject anything that's not a card row.
-7. **Write TCGplayer Mass Entry .txt** to `queries/missing-<code>-tcgplayer-<timestamp>.txt` — single flat list of all rows, format `<qty> <Card Name> [SETCODE] CN`. No per-line foil marker; the user runs TCGplayer's cart optimizer afterward to pick finish per row. Plain text, no headers/comments.
+5. **Write missing checklist** (XLSX) to `output/missing-set/checklists/missing-<code>-checklist-<timestamp>.xlsx` (set-grouped, sorted by CN within each set). The hidden `_meta` sheet records `kind: "missing"` so consumers can distinguish this from inventory checklists (which carry `kind: "inventory"`).
+6. **Write ManaPool bulk-add .txt** to `output/missing-set/buy-lists/missing-<code>-manapool-<timestamp>.txt` (single flat list of all rows, sorted by set/CN/finish, `*F*` foil marker per line — Moxfield's documented import token, which ManaPool consumes natively). Plain text, no headers/comments/fences — portals reject anything that's not a card row.
+7. **Write TCGplayer Mass Entry .txt** to `output/missing-set/buy-lists/missing-<code>-tcgplayer-<timestamp>.txt` — single flat list of all rows, format `<qty> <Card Name> [SETCODE] CN`. No per-line foil marker; the user runs TCGplayer's cart optimizer afterward to pick finish per row. Plain text, no headers/comments.
 8. **Print three `file://` link lines** at the end of stdout (XLSX + ManaPool + TCGplayer) so the user can click to open each artifact.
 
 The chat rendering is automatically capped at the URL table + file links — the orchestrator never includes the inventory of cards or the bulk-add file contents inline.
@@ -95,9 +95,9 @@ Just relay the orchestrator's stdout verbatim — don't add summary tables, don'
 ...
 | 15 | 6 | $1979.40 → — | [chunk 15](https://scryfall.com/...) |
 
-📋 Checklist (xlsx): [queries/missing-fin-checklist-2026-06-06-192352.xlsx](file:///Users/torre/.../queries/missing-fin-checklist-2026-06-06-192352.xlsx)
-🛒 ManaPool bulk-add (149 rows): [queries/missing-fin-manapool-2026-06-06-192352.txt](file:///Users/torre/.../queries/missing-fin-manapool-2026-06-06-192352.txt)
-🛒 TCGplayer Mass Entry (149 rows): [queries/missing-fin-tcgplayer-2026-06-06-192352.txt](file:///Users/torre/.../queries/missing-fin-tcgplayer-2026-06-06-192352.txt)
+📋 Checklist (xlsx): [output/missing-set/checklists/missing-fin-checklist-2026-06-06-192352.xlsx](file:///Users/torre/.../output/missing-set/checklists/missing-fin-checklist-2026-06-06-192352.xlsx)
+🛒 ManaPool bulk-add (149 rows): [output/missing-set/buy-lists/missing-fin-manapool-2026-06-06-192352.txt](file:///Users/torre/.../output/missing-set/buy-lists/missing-fin-manapool-2026-06-06-192352.txt)
+🛒 TCGplayer Mass Entry (149 rows): [output/missing-set/buy-lists/missing-fin-tcgplayer-2026-06-06-192352.txt](file:///Users/torre/.../output/missing-set/buy-lists/missing-fin-tcgplayer-2026-06-06-192352.txt)
 ```
 
 ## When the user wants something different
@@ -107,7 +107,7 @@ These are the explicit overrides that REQUIRE the user to ask for them. Default 
 | User says | Action |
 |---|---|
 | "Show the checklist in chat" / "render it inline" / "I don't want a file" | Run `mm query missing-set <CODE>`, then ALSO run `mm query show '<one of the sub-selectors>' --first N` and render those rows in chat. Confirm with the user which sub-selector they care about — there are 3, and rendering all 286 inline is rarely useful. |
-| "Show the ManaPool block in chat" | Same idea: run the canonical recipe (artifacts written), then `cat queries/missing-<code>-manapool-<ts>.txt` and inline the contents in fenced code. Or `mm export manapool '<sub-selector>'` for one specific subset. |
+| "Show the ManaPool block in chat" | Same idea: run the canonical recipe (artifacts written), then `cat output/missing-set/buy-lists/missing-<code>-manapool-<ts>.txt` and inline the contents in fenced code. Or `mm export manapool '<sub-selector>'` for one specific subset. |
 | "Include extended art" | Run `mm query missing-set <CODE> --treatment-class any-alt`. Document the change in chat ("Used `any-alt` per request — extended-art rows are included"). |
 | "Include fancy-foil-only reprints" | `mm query missing-set <CODE> --treatment-class alt`. Same documentation note. |
 | "Just the rare/mythics, skip alt" | NOT supported by `mm query missing-set`. Run `mm query xlsx 'set:<CODE>+related missing rarity=rare treatment=regular' --sort value-asc` and `mm query xlsx 'set:<CODE>+related missing rarity=mythic treatment=regular' --sort value-asc` separately — pass the resulting file links to the user. Mention this is a non-default ask. |
@@ -129,7 +129,7 @@ The XLSX written by this skill is a **missing checklist** — purpose: shopping 
 | | Missing checklist (this skill) | Inventory checklist ([[generate-set-checklist]]) |
 |---|---|---|
 | **Produced by** | `mm query missing-set` | `mm set master-list` |
-| **File location** | `queries/missing-<code>-checklist-<ts>.xlsx` | `checklists/<slug>-checklist.xlsx` |
+| **File location** | `output/missing-set/checklists/missing-<code>-checklist-<ts>.xlsx` | `checklists/<slug>-checklist.xlsx` |
 | **`_meta.kind`** | `missing` | `inventory` |
 | **Spine** | printing-level union of what's missing from inventory | full family universe (with safe variant exclusions) |
 | **Columns** | set, cn, name, rarity, **finish**, qty, **unit_usd**, **line_value**, scryfall_id | set, cn, name, rarity, treatment, mana_value, usd, usd_foil, **qty_normal, qty_foil** |

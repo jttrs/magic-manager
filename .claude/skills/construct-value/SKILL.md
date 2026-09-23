@@ -1,13 +1,13 @@
 ---
 name: construct-value
-description: Deterministic three-way cost to CONSTRUCT a decklist or sealed product from singles — (1) buy it SEALED, (2) buy every card NET-NEW, (3) use your LOOSE (unpledged) collection first and buy net-new only for the shortfall — plus a per-card table (Scryfall-linked name, set code, collector number, need/loose/buy qty, unit + line $, sorted by value desc). Identifies sealed products via MTGJSON (recursing Case → Kit → decks) or takes a decklist by MTGJSON fileName, local slug, pasted Moxfield block, or deck URL. Writes txt + XLSX to queries/. Script-driven via `scripts/construct_value.py`. Triggers: "/construct-value", "how much to build <deck/precon/product> from singles", "cost to construct X from scratch", "…using my collection", "what would this decklist cost me", "value the singles in this Starter Kit and how much do I already have".
+description: Deterministic three-way cost to CONSTRUCT a decklist or sealed product from singles — (1) buy it SEALED, (2) buy every card NET-NEW, (3) use your LOOSE (unpledged) collection first and buy net-new only for the shortfall — plus a per-card table (Scryfall-linked name, set code, collector number, need/loose/buy qty, unit + line $, sorted by value desc). Identifies sealed products via MTGJSON (recursing Case → Kit → decks) or takes a decklist by MTGJSON fileName, local slug, pasted Moxfield block, or deck URL. Writes txt + XLSX to output/construct-value/reports/. Script-driven via `scripts/construct_value.py`. Triggers: "/construct-value", "how much to build <deck/precon/product> from singles", "cost to construct X from scratch", "…using my collection", "what would this decklist cost me", "value the singles in this Starter Kit and how much do I already have".
 ---
 
 # construct-value
 
 Deterministic, script-driven "cost to build" valuator. Claude invokes
 `scripts/construct_value.py …`, relays the stdout table + `TOTALS` line, and
-hands over the `queries/` artifact paths. No inline arithmetic — the script is
+hands over the `output/construct-value/reports/` artifact paths. No inline arithmetic — the script is
 the single source of truth. All valuation logic lives in
 `magic_manager.construct`, which **reuses** the sealed engine
 (`sealed.build_product_tree`/`aggregate` for the sealed price), the deck-price
@@ -86,7 +86,7 @@ collector number, finish, need/loose/buy qty, unit $ and buy (line) $.
 
 ## Output shape
 
-Two artifacts in `queries/` (ephemeral; pruned by [[cleanup-queries]]):
+Two artifacts in `output/construct-value/reports/` (ephemeral; pruned by [[cleanup-queries]]):
 - `construct-value-<label>-<ts>.txt` — the markdown table + `TOTALS` line, paste-ready.
 - `construct-value-<label>-<ts>.xlsx` — sheet `cards` (one row per printing:
   name/set/cn/finish/need/loose/buy/unit/scratch/buy/scryfall_url) + sheet
@@ -113,7 +113,7 @@ Stdout: `## Construct value — <label>` + the table + a `TOTALS` line
 ## Guardrails
 
 - Read-only against the DB (values + loose counts, never writes). Writes only
-  ephemeral `queries/` artifacts. URL fetching happens on the Claude side, not in
+  ephemeral `output/construct-value/reports/` artifacts. URL fetching happens on the Claude side, not in
   the script.
 - Exactly one input form required; sealed market defaults to `tcgcsv` and degrades
   to `(manual)` if a provider is unconfigured. Provider setup (tcgcsv/tcgapi keys)

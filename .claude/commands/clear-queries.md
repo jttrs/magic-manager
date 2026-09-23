@@ -1,13 +1,13 @@
 ---
-description: Clear ALL classified artifacts in queries/ (missing checklists, ManaPool MDs, ad-hoc XLSXs). Aggressive sibling of /cleanup-queries — keeps nothing by default.
+description: Clear ALL classified artifacts in output/ (missing checklists, ManaPool MDs, ad-hoc XLSXs). Aggressive sibling of /cleanup-queries — keeps nothing by default.
 allowed-tools:
   - Bash
   - AskUserQuestion
 ---
 
-# Clear queries/
+# Clear output/
 
-Aggressive sibling of [[cleanup-queries]]. Where `/cleanup-queries` keeps the newest of each `(set, kind)` group and leaves ad-hoc XLSXs alone, this command clears **all classified files** in `queries/` (missing-* checklists, missing-* ManaPool MDs, AND ad-hoc query XLSXs). Unclassified files (hand-written notes that don't match any pattern) are still skipped silently — that safety net is enforced by the script itself.
+Aggressive sibling of [[cleanup-queries]]. Where `/cleanup-queries` keeps the newest of each `(set, kind)` group and leaves ad-hoc XLSXs alone, this command clears **all classified files** in `output/` (missing-* checklists, missing-* ManaPool MDs, AND ad-hoc query XLSXs). Unclassified files (hand-written notes that don't match any pattern) are still skipped silently — that safety net is enforced by the script itself.
 
 Use this when the user wants a clean slate — e.g. starting a new investigation, or after archiving the artifacts they cared about elsewhere.
 
@@ -21,7 +21,7 @@ uv run python -m scripts.cleanup_queries --keep 0 --include-adhoc --dry-run
 
 Surface the output verbatim. The header line tells the user how many files will be deleted; the bulleted list shows each one with its size.
 
-If "Will delete: 0" — tell the user "queries/ is already empty (or contains only unclassified files); nothing to do" and stop.
+If "Will delete: 0" — tell the user "output/ is already empty (or contains only unclassified files); nothing to do" and stop.
 
 ### 2. Confirm
 
@@ -32,7 +32,7 @@ Use `AskUserQuestion`:
 - **Options**:
   - **Yes, clear everything (Recommended)** — runs the dry-run command above without `--dry-run`. Matches the listing above exactly.
   - **Keep ad-hoc XLSXs** — fall back to `/cleanup-queries` semantics (`--keep 0` only, no `--include-adhoc`). Drops missing-* files but preserves any user-named XLSXs from `mm query xlsx`.
-  - **Cancel** — don't delete anything. Tell the user the queries/ directory is untouched.
+  - **Cancel** — don't delete anything. Tell the user the output/ tree is untouched.
 
 If the user picks "Keep ad-hoc XLSXs", re-run the dry-run with just `--keep 0` and confirm the (smaller) selection before applying.
 
@@ -54,12 +54,12 @@ Surface the final summary line ("Deleted N files, freed X.X KB"). If any failure
 uv run python -m scripts.cleanup_queries --dry-run
 ```
 
-Should report "queries/ inventory: 0 files across 0 groups" (or only unclassified files remaining).
+Should report "output/ inventory: 0 files across 0 groups" (or only unclassified files remaining).
 
 ## Hard rules
 
 - **Always dry-run first.** Even though this is the aggressive variant, the user should see the file list before deletion.
-- **Don't reach outside `queries/`.** Same as `/cleanup-queries` — never pass `--queries-dir` overrides unless the user explicitly asks.
+- **Don't reach outside `output/`.** Same as `/cleanup-queries` — never pass `--queries-dir` overrides unless the user explicitly asks.
 - **Surface errors verbatim.** Permission/open-file errors should be reported with the exact filename.
 - **The unclassified-skip safety net still applies.** Hand-written notes files (anything not matching the missing-* / `<...>-<ts>.xlsx` patterns) are NEVER deleted, even with `--include-adhoc`. The script enforces this; you don't need to.
 

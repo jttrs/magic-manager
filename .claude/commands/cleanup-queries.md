@@ -1,13 +1,13 @@
 ---
-description: Prune accumulated artifacts in queries/ (missing checklists + ManaPool MDs from `mm query missing-set`). Default keeps the newest of each set+kind group.
+description: Prune accumulated artifacts in output/ (missing checklists + ManaPool MDs from `mm query missing-set`). Default keeps the newest of each set+kind group.
 allowed-tools:
   - Bash
   - AskUserQuestion
 ---
 
-# Cleanup queries/
+# Cleanup output/
 
-Walk the user through pruning the `queries/` directory. Each `mm query missing-set <CODE>` invocation writes a fresh timestamped set of artifacts (XLSX checklist + ManaPool .txt + up to two TCGplayer .txt files); these accumulate without bound. This command runs `scripts/cleanup_queries.py` which keeps the newest of each `(set, kind)` group by default.
+Walk the user through pruning the `output/` tree. Each `mm query missing-set <CODE>` invocation writes a fresh timestamped set of artifacts (XLSX checklist + ManaPool .txt + up to two TCGplayer .txt files); these accumulate without bound. This command runs `scripts/cleanup_queries.py` which keeps the newest of each `(set, kind)` group by default.
 
 ## Steps (do these in order, deterministically)
 
@@ -21,9 +21,9 @@ uv run python -m scripts.cleanup_queries --dry-run
 
 Surface the output verbatim. Three signals to watch for:
 
-- **"queries/ inventory: N files across M groups"** — header line. Tells the user how many distinct artifact groups are present. M of 1–3 is normal; >3 means multiple sets have been queried this session.
+- **"output/ inventory: N files across M groups"** — header line. Tells the user how many distinct artifact groups are present. M of 1–3 is normal; >3 means multiple sets have been queried this session.
 - **"Will keep: K"** — files that will survive the default rule (newest of each missing-* group + all ad-hoc XLSXs).
-- **"Will delete: J (size)"** — total candidate count. If J=0, tell the user "queries/ is already at minimum; nothing to do" and stop.
+- **"Will delete: J (size)"** — total candidate count. If J=0, tell the user "output/ is already at minimum; nothing to do" and stop.
 
 ### 2. Confirm what they want pruned
 
@@ -52,14 +52,14 @@ uv run python -m scripts.cleanup_queries [--keep N] [--include-adhoc] [--older-t
 If the user wants to verify, run:
 
 ```bash
-ls -la queries/
+ls -la output/
 ```
 
 …or, equivalently, `uv run python -m scripts.cleanup_queries --dry-run` again — should now show 0 files to delete.
 
 ## What the script keeps and drops
 
-The script classifies every file in `queries/` into one of three "kinds" based on filename:
+The script classifies every file in `output/` into one of three "kinds" based on filename:
 
 | Filename pattern | Kind | Default behavior |
 |---|---|---|
@@ -69,17 +69,17 @@ The script classifies every file in `queries/` into one of three "kinds" based o
 | `<anything-else>-<ts>.xlsx`          | `adhoc`             | Keep all (unless `--include-adhoc`) |
 | Files that don't match any pattern   | (unclassified)      | Skipped silently — never touched |
 
-The unclassified-skip rule is the safety net: if you put a hand-written notes file in `queries/`, the script won't delete it.
+The unclassified-skip rule is the safety net: if you put a hand-written notes file in `output/`, the script won't delete it.
 
 ## Hard rules
 
 - **Always dry-run first.** Don't apply without showing the user what will be deleted.
 - **Never run with `--include-adhoc` by default.** Ad-hoc query XLSXs are user-named one-off reports; deleting them silently is a foot-gun.
-- **Don't reach outside `queries/`.** The script enforces this internally; don't pass `--queries-dir` overrides unless the user explicitly asks.
+- **Don't reach outside `output/`.** The script enforces this internally; don't pass `--queries-dir` overrides unless the user explicitly asks.
 - **Surface errors verbatim.** Permission errors or open-file errors (Excel having the file open) should be reported to the user with the exact filename so they can resolve.
 
 ## Cross-references
 
 - `scripts/cleanup_queries.py` — the script itself. Has its own `--help`; run `uv run python -m scripts.cleanup_queries --help` for the canonical reference.
-- `[[missing-from-set]]` — the source of most artifacts in `queries/`. Each `mm query missing-set <CODE>` invocation produces 2 files; running it 10 times leaves 20 stale files this command can clean up.
+- `[[missing-from-set]]` — the source of most artifacts in `output/`. Each `mm query missing-set <CODE>` invocation produces 2 files; running it 10 times leaves 20 stale files this command can clean up.
 - `[[feedback-checklist-artifacts]]` (memory) — the artifact-type definitions this script uses to classify filenames.

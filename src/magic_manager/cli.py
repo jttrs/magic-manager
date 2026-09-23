@@ -2959,7 +2959,8 @@ def deck_free_cmd(
 
 # ---------- query (V2 selectors) ----------
 
-QUERIES_DIR = Path("queries")
+# Artifact output paths come from util.output_dir(<type>, <category>) — the one
+# home for the output/ tree (replaced the old flat QUERIES_DIR = Path("queries")).
 
 
 # _selector_slug merged into _slug (identical implementation) — use _slug.
@@ -3363,7 +3364,7 @@ def query_xlsx_cmd(
     sort: str = typer.Option("default", "--sort",
         help="Sort order: default (set,cn,finish) | value-desc | value-asc | rarity."),
 ):
-    """Write the selector's rows to a queries/<slug>-<timestamp>.xlsx artifact.
+    """Write the selector's rows to an output/query/reports/<slug>-<timestamp>.xlsx artifact.
 
     The XLSX has columns: set, collector_number, name, rarity, finish, qty,
     unit_usd, line_value. A hidden _meta sheet records the selector verbatim.
@@ -3373,7 +3374,7 @@ def query_xlsx_cmd(
     rows = _apply_sort(rows, sort)
     slug = name or _slug(selector)
     ts = datetime.now().strftime("%Y-%m-%d-%H%M%S")
-    target = out if out else QUERIES_DIR / f"{slug}-{ts}.xlsx"
+    target = out if out else util.output_dir("query", "reports") / f"{slug}-{ts}.xlsx"
     _write_query_xlsx(rows, target, selector, slug)
     if not rows:
         typer.echo(f"warning: selector matched 0 rows; wrote empty file {target}", err=True)
@@ -3407,10 +3408,10 @@ def query_missing_set_cmd(
     1. Scryfall printing-specific URL chunks (markdown table → STDOUT for chat).
        Sorted cheapest-first; uses (set:CODE cn:"CN") form with unique=prints
        and order=usd&dir=asc so each URL renders the EXACT missing printings.
-    2. XLSX checklist (set-grouped, sorted by CN within each set) → queries/.
-    3. ManaPool bulk-add .txt (flat list, *F* foil markers per line) → queries/.
+    2. XLSX checklist (set-grouped, sorted by CN within each set) → output/missing-set/checklists/.
+    3. ManaPool bulk-add .txt (flat list, *F* foil markers per line) → output/missing-set/buy-lists/.
     4. TCGplayer Mass Entry .txt (flat list, no per-line foil marker — user runs
-       TCGplayer's cart optimizer to select foil/nonfoil per row) → queries/.
+       TCGplayer's cart optimizer to select foil/nonfoil per row) → output/missing-set/buy-lists/.
 
     The chat output is always just the URL table + file:// link lines so the
     user can click to open the artifacts. The bulk-add files are NEVER rendered
@@ -3468,8 +3469,7 @@ def query_missing_set_cmd(
         r.finish,
     ))
     ts = datetime.now().strftime("%Y-%m-%d-%H%M%S")
-    QUERIES_DIR.mkdir(parents=True, exist_ok=True)
-    xlsx_path = QUERIES_DIR / f"missing-{code_l}-checklist-{ts}.xlsx"
+    xlsx_path = util.output_dir("missing-set", "checklists") / f"missing-{code_l}-checklist-{ts}.xlsx"
     _subs = missing_mod.sub_selectors(code_l, treatment_class)
     union_selector_repr = (
         f"({_subs[0][1]}) ∪ ({_subs[1][1]}) ∪ ({_subs[2][1]})  [printing-level union]"
@@ -3490,13 +3490,14 @@ def query_missing_set_cmd(
     ))
     total_value = sum((_row_line_value(r) or 0.0) for r in rows_union)
 
+    _buylists = util.output_dir("missing-set", "buy-lists")
     # ManaPool: single flat list, *F* foil markers preserved per-line.
-    mp_path = QUERIES_DIR / f"missing-{code_l}-manapool-{ts}.txt"
+    mp_path = _buylists / f"missing-{code_l}-manapool-{ts}.txt"
     mp_path.write_text(exports.build("manapool", rows_for_bulk), encoding="utf-8")
 
     # TCGplayer: single flat list. Foil/nonfoil isn't marked per-line — the
     # user runs TCGplayer's cart optimizer afterward to pick finish per row.
-    tcg_path = QUERIES_DIR / f"missing-{code_l}-tcgplayer-{ts}.txt"
+    tcg_path = _buylists / f"missing-{code_l}-tcgplayer-{ts}.txt"
     tcg_path.write_text(exports.build("tcgplayer", rows_for_bulk), encoding="utf-8")
 
     # 5. Emit chat output: URL table + file:// links. Nothing else.
@@ -3535,7 +3536,7 @@ def query_missing_jumpstart_cmd(
     A pack is "missing" when you have no ``pack:<theme>-<code>`` deck for it
     (i.e. you never opened/ingested it). For every such pack this emits the
     full singles list — gameplay cards plus the pack's front/title card — as
-    three combined artifacts under ``queries/``: an XLSX checklist, a ManaPool
+    three combined artifacts under ``output/missing-jumpstart/``: an XLSX checklist, a ManaPool
     bulk-add ``.txt``, and a TCGplayer Mass Entry ``.txt``.
 
     Contents are NOT deduped across packs and NOT reduced by cards you already
@@ -3606,7 +3607,6 @@ def query_missing_jumpstart_cmd(
         raise typer.Exit(2)
 
     ts = datetime.now().strftime("%Y-%m-%d-%H%M%S")
-    QUERIES_DIR.mkdir(parents=True, exist_ok=True)
 
     # Artifacts are named `missing-jumpstart-<code>-*` so they never collide
     # with `query missing-set`'s `missing-<code>-*` files.
@@ -3615,17 +3615,19 @@ def query_missing_jumpstart_cmd(
         util.cn_sort_key(r.card.get("collector_number")),
         r.finish,
     ))
-    xlsx_path = QUERIES_DIR / f"missing-jumpstart-{code_l}-checklist-{ts}.xlsx"
+    xlsx_path = (util.output_dir("missing-jumpstart", "checklists")
+                 / f"missing-jumpstart-{code_l}-checklist-{ts}.xlsx")
     _write_query_xlsx(
         rows_for_xlsx, xlsx_path,
         f"jumpstart-missing:{code_l} ({len(missing_variants)} un-owned packs)",
         f"missing-jumpstart-{code_l}-checklist", kind="missing",
     )
 
-    mp_path = QUERIES_DIR / f"missing-jumpstart-{code_l}-manapool-{ts}.txt"
+    _buylists = util.output_dir("missing-jumpstart", "buy-lists")
+    mp_path = _buylists / f"missing-jumpstart-{code_l}-manapool-{ts}.txt"
     mp_path.write_text(exports.build("manapool", rows_for_xlsx), encoding="utf-8")
 
-    tcg_path = QUERIES_DIR / f"missing-jumpstart-{code_l}-tcgplayer-{ts}.txt"
+    tcg_path = _buylists / f"missing-jumpstart-{code_l}-tcgplayer-{ts}.txt"
     tcg_path.write_text(exports.build("tcgplayer", rows_for_xlsx), encoding="utf-8")
 
     total_value = sum((_row_line_value(r) or 0.0) for r in all_rows)

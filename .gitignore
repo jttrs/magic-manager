@@ -31,13 +31,17 @@ npm-debug.log*
 
 # Claude Code per-machine overrides
 .claude/settings.local.json
+# Plan-mode scratch (plan mode writes to the global ~/.claude/plans; a repo copy
+# is stray and never wanted)
+.claude/plans/
 
 # magic-manager local state
 db/
 checklists/
 input/
 inventory/
-queries/
+# generated artifacts: output/<type>/<category>/
+output/
 .venv/
 uv.lock
 

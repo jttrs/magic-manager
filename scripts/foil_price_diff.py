@@ -50,7 +50,7 @@ Determinism notes:
 
 Usage:
     printf '1 Nazgûl (LTR) 100\\n' | uv run python scripts/foil_price_diff.py
-    uv run python scripts/foil_price_diff.py --file queries/missing-ltr-manapool-<ts>.txt
+    uv run python scripts/foil_price_diff.py --file output/missing-set/buy-lists/missing-ltr-manapool-<ts>.txt
     uv run mm export moxfield 'set:ltr+related missing' | uv run python scripts/foil_price_diff.py
 """
 from __future__ import annotations

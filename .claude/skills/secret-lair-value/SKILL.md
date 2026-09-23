@@ -52,7 +52,7 @@ The `Nonfoil $`/`Foil $` columns price the Secret Lair printing itself; the `flo
 
 ## Guardrails
 
-- Read-only: no DB access, no `queries/` artifacts.
+- Read-only: no DB access, no `output/` artifacts.
 - Exit 0 on success; exit 2 on an MTGJSON or Scryfall lookup failure.
 - A drop with no priced cards in a given finish renders `—` for that column — never crashes.
 

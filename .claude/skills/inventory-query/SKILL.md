@@ -128,7 +128,7 @@ All subcommands accept `--json` for machine-readable output and exit 0 on succes
 
 - **`mm query show '<selector>' [--first N] [--sort default|value-desc|value-asc|rarity]`** — tabular dump. Columns: qty, finish, set, cn, rarity, name (with `flavor_name / oracle_name` form when applicable), unit_usd, line_value. `--first N` caps display; total count is always printed. `--sort` overrides the default `(set, cn, finish)` ordering; `value-desc`/`value-asc` push unpriced rows to the bottom regardless of direction.
 - **`mm query value '<selector>'`** — emits total USD, row count, count of rows with no price, and top-5 by line value.
-- **`mm query xlsx '<selector>' [--name SLUG] [--out PATH] [--sort default|value-desc|value-asc|rarity]`** — writes `queries/<slug>-<timestamp>.xlsx`. Columns: set, collector_number, name, rarity, finish, qty, unit_usd, line_value, scryfall_id. Hidden `_meta` sheet records the selector verbatim, slug, timestamp, and row count. `--sort` matches `mm query show`. Empty results still write a file with headers and emit a stderr warning.
+- **`mm query xlsx '<selector>' [--name SLUG] [--out PATH] [--sort default|value-desc|value-asc|rarity]`** — writes `output/query/reports/<slug>-<timestamp>.xlsx`. Columns: set, collector_number, name, rarity, finish, qty, unit_usd, line_value, scryfall_id. Hidden `_meta` sheet records the selector verbatim, slug, timestamp, and row count. `--sort` matches `mm query show`. Empty results still write a file with headers and emit a stderr warning.
 - **`mm query url '<selector>' [--mode oracle|prints] [--chunk-size 20] [--sort default|value-desc|value-asc|rarity]`** — synthesizes Scryfall search URLs from a selector's results. Two modes:
   - `--mode oracle` (default): emits `!"<oracle name>"` ORed terms, deduped by oracle name. Multiple finishes/printings of the same card collapse to one URL term. Best for shopping by name (let Scryfall show every printing so you can pick whichever is cheapest).
   - `--mode prints`: emits `(set:CODE cn:"CN")` ORed terms, one per distinct printing, with `unique=prints&order=usd&dir=asc` appended so Scryfall returns each printing as a separate result sorted cheapest-first within the chunk. Best for set-completion / "which exact printings am I missing." Honors quoted CNs so hyphenated CNs (PMEI 2025-13) and A-prefix variants (FIN A-248) work correctly.
@@ -138,13 +138,13 @@ All subcommands accept `--json` for machine-readable output and exit 0 on succes
 - **`mm query total`** — shorthand for `mm query value 'inventory'`.
 - **`mm query multiples`** — inventory rows with `qty>=2`, ordered by qty desc.
 - **`mm query stats`** — inventory rollup: totals, by-rarity, by-set, by-finish.
-- **`mm query missing-set <CODE> [--chunk-size 20] [--treatment-class collectible-alt|alt|any-alt|preferred]`** — canonical "what am I missing from set `<CODE>`?" orchestrator. Materializes the printing-level union of (rare-regular, mythic-regular, treatment-class) sub-selectors, then emits Scryfall URL chunks to stdout AND writes two artifacts to `queries/`: a **missing checklist** XLSX (set-grouped, CN-sorted, `_meta.kind: "missing"`) and a ManaPool bulk-add MD (3 fenced blocks, one per sub-selector). Stdout shows the URL table + two `file://` links — nothing else. The XLSX and MD are never rendered inline. Set-agnostic: works for FIN today, Avatar/TMNT/etc. tomorrow with the same invocation. The missing checklist is **NOT** the same as the inventory checklist from `mm set master-list`; see [[missing-from-set]] and [[generate-set-checklist]] for the distinction.
+- **`mm query missing-set <CODE> [--chunk-size 20] [--treatment-class collectible-alt|alt|any-alt|preferred]`** — canonical "what am I missing from set `<CODE>`?" orchestrator. Materializes the printing-level union of (rare-regular, mythic-regular, treatment-class) sub-selectors, then emits Scryfall URL chunks to stdout AND writes two artifacts to `output/missing-set/{checklists,buy-lists}/`: a **missing checklist** XLSX (set-grouped, CN-sorted, `_meta.kind: "missing"`) and a ManaPool bulk-add MD (3 fenced blocks, one per sub-selector). Stdout shows the URL table + two `file://` links — nothing else. The XLSX and MD are never rendered inline. Set-agnostic: works for FIN today, Avatar/TMNT/etc. tomorrow with the same invocation. The missing checklist is **NOT** the same as the inventory checklist from `mm set master-list`; see [[missing-from-set]] and [[generate-set-checklist]] for the distinction.
 
-`xlsx` writes to `queries/`, which is gitignored. Use `--out` to write somewhere else (e.g. into a deck-building project alongside an export).
+`xlsx` writes to `output/query/reports/`, which is gitignored. Use `--out` to write somewhere else (e.g. into a deck-building project alongside an export).
 
 ## Artifact lifecycle
 
-XLSX files at `queries/<slug>-<timestamp>.xlsx` live forever until the user deletes them. The skill never auto-cleans. The slug is deterministic — `_selector_slug()` lowercases, keeps alphanumerics, collapses everything else to single hyphens, trims edges. So `set:fca missing rarity=mythic value<=20` always slugifies to `set-fca-missing-rarity-mythic-value-20`. Same selector → same slug → predictable filename, with the timestamp differentiating runs.
+XLSX files at `output/query/reports/<slug>-<timestamp>.xlsx` live forever until the user deletes them. The skill never auto-cleans. The slug is deterministic — `_selector_slug()` lowercases, keeps alphanumerics, collapses everything else to single hyphens, trims edges. So `set:fca missing rarity=mythic value<=20` always slugifies to `set-fca-missing-rarity-mythic-value-20`. Same selector → same slug → predictable filename, with the timestamp differentiating runs.
 
 To overwrite a fixed name, pass `--name <slug>` or `--out <path>`.
 
@@ -174,7 +174,7 @@ uv run mm query xlsx 'set:fca missing rarity=mythic value<=20'
 Output:
 
 ```
-wrote queries/set-fca-missing-rarity-mythic-value-20-2026-05-30-141322.xlsx (12 rows)
+wrote output/query/reports/set-fca-missing-rarity-mythic-value-20-2026-05-30-141322.xlsx (12 rows)
 ```
 
 Open the XLSX to scan; the `_meta` sheet records the selector verbatim so future-you remembers what generated the file.

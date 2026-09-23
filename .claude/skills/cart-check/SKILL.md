@@ -1,6 +1,6 @@
 ---
 name: cart-check
-description: Audit a live Mana Pool cart against your collection and a set family — four atomic checks in one pass. (1) DUPES — cart lines that duplicate a printing you're already buying (×N same finish, or foil+nonfoil of the same art collated); (2) OWNED — cart lines you already own (redundant, remove them); (3) MISSING — set-family gaps NOT in the cart (should-add); (4) OVERPAY — lines priced over true Scryfall/TCG market. Runs with NO --set (dupes + overpay + imputes the family); pass --set to add owned + missing. Deterministic, well-formatted markdown tables relayed to chat, with the full uncapped report written to queries/. Triggers "/cart-check", "audit my manapool cart", "what can I remove from my cart", "any duplicates in my cart", "what am I still missing from my cart for <set>", "is my cart complete / am I overpaying", "check my cart against my collection".
+description: Audit a live Mana Pool cart against your collection and a set family — four atomic checks in one pass. (1) DUPES — cart lines that duplicate a printing you're already buying (×N same finish, or foil+nonfoil of the same art collated); (2) OWNED — cart lines you already own (redundant, remove them); (3) MISSING — set-family gaps NOT in the cart (should-add); (4) OVERPAY — lines priced over true Scryfall/TCG market. Runs with NO --set (dupes + overpay + imputes the family); pass --set to add owned + missing. Deterministic, well-formatted markdown tables relayed to chat, with the full uncapped report written to output/cart-check/reports/. Triggers "/cart-check", "audit my manapool cart", "what can I remove from my cart", "any duplicates in my cart", "what am I still missing from my cart for <set>", "is my cart complete / am I overpaying", "check my cart against my collection".
 ---
 
 # cart-check
@@ -29,7 +29,7 @@ uv run python scripts/manapool_cart_check.py --set <CODE> --check all   # all fo
 uv run python scripts/manapool_cart_check.py                            # no set: dupes + overpay + impute family
 ```
 
-That's the whole happy path: it fetches the live cart (headless, else stdin), does ONE cart→card mapping pass, runs the requested checks, prints the concise chat report to stdout, and writes the full report to `queries/cart-check-<anchor>-<ts>.md`.
+That's the whole happy path: it fetches the live cart (headless, else stdin), does ONE cart→card mapping pass, runs the requested checks, prints the concise chat report to stdout, and writes the full report to `output/cart-check/reports/cart-check-<anchor>-<ts>.md`.
 
 **When no `--set` is given**, the script skips the anchor-only checks (`owned`/`missing`) and instead prints an `imputed set famil…: <anchor>` line on **stderr**. Surface that anchor to the user and offer to re-run with `--set <anchor>` to add the owned + missing checks. If it imputes *several* families (a cart spanning e.g. FIN + TLA), list them and ask which to scope to — never silently pick.
 
@@ -66,7 +66,7 @@ STDOUT is a concise, chat-ready markdown report — relay it verbatim:
 3. `## Owned` — full list, row-capped at 40 with a `_+N more (see file)_` marker beyond that; closed by a bold `Total (N)` row.
 4. `## Missing` — same shape.
 5. `## Overpay (flagged)` — **only** lines ≥ threshold; the Total row reads `N/total` so the full denominator is visible.
-6. A `🧾 Full cart check (…): [queries/cart-check-<anchor>-<ts>.md](file://…)` link — the file holds the **complete, uncapped** tables. (`<anchor>` is the `--set` code, or `cart` when unscoped.)
+6. A `🧾 Full cart check (…): [output/cart-check/reports/cart-check-<anchor>-<ts>.md](file://…)` link — the file holds the **complete, uncapped** tables. (`<anchor>` is the `--set` code, or `cart` when unscoped.)
 
 STDERR carries commentary (family scoping, imputed family when `--set` omitted, skipped out-of-family / unmapped / no-market lines). Surface it briefly beneath the tables if it's non-trivial; don't let it clutter the report. **Always** surface the `imputed set famil…` line and offer the `--set` re-run.
 
@@ -81,7 +81,7 @@ Every table is data-only (no prose, empty sections still emit header + `Total (0
 
 ## Guardrails
 
-- **Read-only**: never writes the DB or modifies the cart. The only write is the `queries/cart-check-*.md` report artifact (ephemeral; pruned by [[cleanup-queries]]).
+- **Read-only**: never writes the DB or modifies the cart. The only write is the `output/cart-check/reports/cart-check-*.md` report artifact (ephemeral; pruned by [[cleanup-queries]]).
 - **Secrets only from `.env`** (gitignored): `MANAPOOL_*`. The headless session JWT is held in memory only — never logged or written.
 - **Sanctioned API via the rate-limited wrapper** (`manapool-search/manapool.sh`); the Supabase cart fetch lives in `scripts/manapool_cart.py`, which handles the short-lived JWT correctly.
 - **Undocumented-backend caveat**: the headless cart path reads Mana Pool's Supabase backend, subject to change. If it breaks, fall back to the bookmarklet (`--file -`), same as the `price-check` skill.
@@ -94,4 +94,4 @@ Every table is data-only (no prose, empty sections still emit header + `Total (0
 - [[price-check]] — the overpay-only sibling (two-script pipeline, no `--set` needed).
 - [[missing-from-set]] — the family buy-list this cart is usually built from.
 - [[foil-diff]] — sibling deterministic script-driven price skill.
-- [[cleanup-queries]] — prunes the `queries/cart-check-*.md` artifacts this skill writes.
+- [[cleanup-queries]] — prunes the `output/cart-check/reports/cart-check-*.md` artifacts this skill writes.

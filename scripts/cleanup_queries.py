@@ -1,9 +1,9 @@
-"""Prune accumulated artifacts in ``queries/``.
+"""Prune accumulated artifacts in ``output/``.
 
-The ``queries/`` directory holds several artifact types produced by ``mm
-query`` commands. All are timestamped, regenerable, and gitignored — they
-accumulate without bound until something cleans them up. This script is
-that something.
+The ``output/<type>/<category>/`` tree holds several artifact types produced by
+``mm query`` commands and the value/report scripts. All are timestamped,
+regenerable, and gitignored — they accumulate without bound until something
+cleans them up. This script is that something (walks the tree recursively).
 
 | Artifact | Filename pattern | Source |
 |---|---|---|
@@ -58,9 +58,9 @@ Exit codes
 
     0  — success (whether or not anything was deleted).
     1  — partial failure (some files couldn't be deleted; details on stderr).
-    2  — bad arguments / queries/ directory missing.
+    2  — bad arguments / output/ directory missing.
 
-The script never reaches outside ``queries/`` and never touches any file that
+The script never reaches outside ``output/`` and never touches any file that
 doesn't match the documented patterns.
 """
 
@@ -77,7 +77,10 @@ from pathlib import Path
 # its parent's parent. Resolve once and use absolute paths from there to make
 # behavior independent of the caller's CWD.
 REPO_ROOT = Path(__file__).resolve().parent.parent
-QUERIES_DIR = REPO_ROOT / "queries"
+# Generated artifacts live under output/<type>/<category>/ (segmented by
+# producer + purpose). We walk this tree RECURSIVELY; classification keys on the
+# filename only, so the subfolders don't affect grouping.
+OUTPUT_DIR = REPO_ROOT / "output"
 
 # Filename patterns. Group key = everything up to and including the artifact's
 # logical identity, before the timestamp suffix. The timestamp is the last
@@ -113,7 +116,7 @@ def _parse_older_than(spec: str) -> float:
 
 
 def _classify(path: Path) -> tuple[str, str] | None:
-    """Return (group_key, kind) for a file in queries/, or None if it doesn't
+    """Return (group_key, kind) for a file in output/, or None if it doesn't
     match a recognized pattern. ``group_key`` is the per-set logical group
     (e.g. ``missing-fin-checklist``); ``kind`` is one of
     ``missing-checklist``, ``missing-manapool``, ``missing-tcgplayer``,
@@ -134,17 +137,19 @@ def _classify(path: Path) -> tuple[str, str] | None:
 
 
 def _collect_groups(
-    queries_dir: Path, pattern: str | None
+    output_root: Path, pattern: str | None
 ) -> dict[str, list[Path]]:
-    """Walk queries/ and group files by logical identity.
+    """Walk the output tree RECURSIVELY and group files by logical identity.
 
     Returns a dict ``group_key -> [Path, ...]`` sorted newest-first within
     each group (by mtime descending). ``pattern``, if given, is a glob
-    applied against filenames as a pre-filter.
+    applied against filenames as a pre-filter. Recursive so the
+    output/<type>/<category>/ subfolders are all seen; ``_classify`` keys on the
+    filename, so grouping is unaffected by which subfolder a file sits in.
     """
     groups: dict[str, list[Path]] = defaultdict(list)
     iter_paths = (
-        queries_dir.glob(pattern) if pattern else queries_dir.iterdir()
+        output_root.rglob(pattern) if pattern else output_root.rglob("*")
     )
     for p in iter_paths:
         if not p.is_file():
@@ -212,7 +217,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="cleanup_queries",
         description=(
-            "Prune accumulated artifacts in queries/. Default: keep the newest "
+            "Prune accumulated artifacts in output/. Default: keep the newest "
             "missing-* file in each group; leave ad-hoc query files untouched."
         ),
         epilog=(
@@ -250,8 +255,9 @@ def main(argv: list[str] | None = None) -> int:
              "Exit code is still 0 on success.",
     )
     parser.add_argument(
-        "--queries-dir", default=str(QUERIES_DIR), metavar="PATH",
-        help=f"Override the queries/ directory location. Default: {QUERIES_DIR}",
+        "--output-dir", dest="output_dir",
+        default=str(OUTPUT_DIR), metavar="PATH",
+        help=f"Override the output/ directory location. Default: {OUTPUT_DIR}",
     )
     args = parser.parse_args(argv)
 
@@ -259,14 +265,14 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: --keep must be >= 0, got {args.keep}", file=sys.stderr)
         return 2
 
-    queries_dir = Path(args.queries_dir).resolve()
-    if not queries_dir.is_dir():
-        print(f"error: queries directory not found: {queries_dir}", file=sys.stderr)
+    output_root = Path(args.output_dir).resolve()
+    if not output_root.is_dir():
+        print(f"error: output directory not found: {output_root}", file=sys.stderr)
         return 2
 
-    groups = _collect_groups(queries_dir, args.pattern)
+    groups = _collect_groups(output_root, args.pattern)
     if not groups:
-        print(f"(no recognized artifacts in {queries_dir})")
+        print(f"(no recognized artifacts in {output_root})")
         return 0
 
     to_delete = _select_for_deletion(
@@ -282,7 +288,7 @@ def main(argv: list[str] | None = None) -> int:
     keep_count = total_files - len(to_delete)
     total_bytes_deleted = sum(p.stat().st_size for p in to_delete)
     print(
-        f"queries/ inventory: {total_files} files across {len(groups)} groups."
+        f"output/ inventory: {total_files} files across {len(groups)} groups."
     )
     print(
         f"  Will keep:   {keep_count}"

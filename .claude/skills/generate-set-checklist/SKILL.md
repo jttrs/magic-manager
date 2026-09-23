@@ -158,7 +158,7 @@ The XLSX written by `mm set master-list` is an **inventory checklist** — purpo
 | | Inventory checklist (add) | Inventory checklist (modify) | Missing checklist |
 |---|---|---|---|
 | **Produced by** | `mm set master-list` (default) | `mm set master-list --mode modify` | `mm query missing-set` |
-| **File location** | `checklists/<slug>-add-checklist.xlsx` | `checklists/<slug>-modify-checklist.xlsx` | `queries/missing-<code>-checklist-<ts>.xlsx` |
+| **File location** | `checklists/<slug>-add-checklist.xlsx` | `checklists/<slug>-modify-checklist.xlsx` | `output/missing-set/checklists/missing-<code>-checklist-<ts>.xlsx` |
 | **`_meta.kind`** | `inventory` | `inventory` | `missing` |
 | **`_meta.mode`** | `add` | `modify` | (n/a) |
 | **Qty cells at gen** | Blank | Pre-filled from `inventory` | Pre-filled with quantity needed |

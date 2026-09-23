@@ -5,7 +5,7 @@ Reads the earmark watchlist (`earmarks.earmark_list`) and, for each product,
 (`sealed.build_product_tree` / `aggregate`, the same path `sealed_value.py`
 drives) — the DB stores only the non-derivable asking-price snapshot, never
 derived values. Emits a markdown deal table (product names hyperlinked to their
-storefronts, collated across stores) + a txt/xlsx to `queries/`.
+storefronts, collated across stores) + a txt/xlsx to `output/earmarks-review/reports/`.
 
 Columns: product (+ per-store links & asking prices), set, category, release,
 best asking $, live market $, live intrinsic $, deal delta (market − best
@@ -32,8 +32,6 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from magic_manager import earmarks, sealed, sets, sld, util, valuation  # noqa: E402
-
-QUERIES_DIR = ROOT / "queries"
 
 
 def _fmt(v) -> str:
@@ -225,9 +223,11 @@ def main() -> int:
     ap.add_argument("--no-refresh", action="store_true",
                     help="Don't re-sync sets with stale (>7d) prices; use local "
                          "prices as-is and warn. Faster/offline, but may under-report.")
-    ap.add_argument("--out-dir", type=Path, default=QUERIES_DIR,
-                    help=f"Output dir (default: {QUERIES_DIR.relative_to(ROOT)}).")
+    ap.add_argument("--out-dir", type=Path, default=None,
+                    help="Override output dir (default: output/earmarks-review/reports/).")
     args = ap.parse_args()
+    if args.out_dir is None:
+        args.out_dir = util.output_dir("earmarks-review", "reports")
 
     products = earmarks.earmark_list()
     if not products:
