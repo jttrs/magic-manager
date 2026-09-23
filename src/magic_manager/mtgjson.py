@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+from functools import lru_cache
 from pathlib import Path
 from typing import Iterable
 
@@ -96,11 +97,18 @@ def set_file(set_code: str) -> dict:
     return body.get("data", {})
 
 
+@lru_cache(maxsize=None)
 def deck(file_name: str) -> dict:
     """Return ``decks/<file_name>.json``'s ``data`` block.
 
     ``file_name`` is the MTGJSON deck filename (e.g. ``CounterBlitzFinalFantasyX_FIC``);
-    the ``.json`` suffix is optional. Cached forever — precon decks don't change.
+    the ``.json`` suffix is optional. Cached forever — precon decklists are
+    immutable — via ``lru_cache`` on top of mtgjson.sh's own disk cache, so
+    repeated lookups in one run (e.g. product-coverage matching the same deck in
+    ``_sld_products`` then ``_match_products``, or ``_apply`` re-reading a recipe
+    through ``import_precon``) skip the redundant subprocess spawn + JSON parse.
+    All callers treat the result as READ-ONLY (``.get()`` / iteration only), so
+    sharing one dict instance across calls is safe.
     """
     body = _run_json(["deck", file_name])
     return body.get("data", {})

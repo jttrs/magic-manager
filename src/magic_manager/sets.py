@@ -772,8 +772,19 @@ def ingest_inventory_from_xlsx(path: Path, *, mode: str = "replace",
                                         r["finish"], -r["quantity"], at=now)
                 zeroed += 1
 
-        ingest_mod.finalize_event(conn, ingest_id, rows_added=added,
-                                  rows_updated=updated, rows_zeroed=zeroed)
+        if added + updated + zeroed == 0:
+            # No-op ingest (empty/unresolved file, or a modify file whose cells
+            # all equal current qty). Delete the dangling event rather than leave
+            # a status='success' row stamped with the file SHA — otherwise a later
+            # legitimate re-ingest of the same file is falsely refused as a
+            # duplicate (find_events_by_sha → prior_success). No inventory_events
+            # were recorded, so the DELETE can't violate the FK. Mirrors
+            # open_ingest_event's no-op handling.
+            conn.execute("DELETE FROM ingest_events WHERE ingest_id = ?", (ingest_id,))
+            ingest_id = None
+        else:
+            ingest_mod.finalize_event(conn, ingest_id, rows_added=added,
+                                      rows_updated=updated, rows_zeroed=zeroed)
         db.record_import(conn,
                          command=f"ingest_inventory_from_xlsx mode={mode}",
                          source_path=str(path),

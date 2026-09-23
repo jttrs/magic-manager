@@ -1624,19 +1624,23 @@ def construct_precon_from_loose(
     return base
 
 
-def precon_recipe_needs(file_name: str) -> dict[tuple[str, str], int]:
-    """Return a precon's PLAYABLE recipe as ``{(scryfall_id, finish): count}``.
+def precon_recipe_needs(file_name: str, *, include_tokens: bool = False
+                        ) -> dict[tuple[str, str], int]:
+    """Return a precon's recipe as ``{(scryfall_id, finish): count}``.
 
-    Reads the MTGJSON deck (all boards except tokens — tokens ride a deck for
+    Reads the MTGJSON deck via the canonical ``_BOARD_KEY_TO_NAME`` board-walk.
+    By default excludes the ``token`` board (tokens ride a deck for
     record-keeping but aren't tracked as loose singles, mirroring
-    :func:`deck_compose_plan`'s exclusion). Finish is ``'nonfoil'``/``'foil'``
-    from ``isFoil``. This is the read-only recipe extraction the pool true-up
-    matches free inventory against, without creating any deck row.
+    :func:`deck_compose_plan`'s exclusion) — this is the recipe the pool true-up
+    matches free inventory against. Pass ``include_tokens=True`` to also count
+    the token board (the backfill wants tokens, since ``import_precon`` writes
+    them to inventory too). Finish is ``'nonfoil'``/``'foil'`` from ``isFoil``.
+    The single home for precon board-walk extraction.
     """
     deck_data = mtgjson_mod.deck(file_name)
     needs: dict[tuple[str, str], int] = {}
     for mj_key, board_name in _BOARD_KEY_TO_NAME:
-        if board_name == "token":
+        if board_name == "token" and not include_tokens:
             continue
         for entry in deck_data.get(mj_key, []) or []:
             sid = (entry.get("identifiers") or {}).get("scryfallId")
@@ -1653,6 +1657,7 @@ def register_precon_from_loose(
     slug: str | None = None,
     name: str | None = None,
     new_copy: bool = False,
+    conn=None,
 ) -> dict:
     """Register a precon as a tracked ``deconstructed`` deck row from cards the
     user already owns LOOSE — the deconstructed sibling of
@@ -1672,31 +1677,34 @@ def register_precon_from_loose(
     already exists at it), a distinct ``-2``/``-3`` slug is minted — mirroring
     the add-mode engine's ``_build_precon_copies``.
 
+    Pass ``conn`` to run inside a caller's open transaction (the product-coverage
+    ``--apply`` uses this so deck-row creation is atomic with its ledger moves).
+
     Returns ``{"slug": str, "created": bool, "reused_existing": bool}``.
     """
-    if not new_copy:
-        with db.connect() as conn:
+    with db.transaction(conn) as conn:
+        if not new_copy:
             row = conn.execute(
                 "SELECT slug FROM decks WHERE source_precon_file_name = ? "
                 "AND precon_state = 'deconstructed' ORDER BY deck_id LIMIT 1",
                 (file_name,),
             ).fetchone()
-        if row is not None:
-            return {"slug": row["slug"], "created": False, "reused_existing": True}
+            if row is not None:
+                return {"slug": row["slug"], "created": False, "reused_existing": True}
 
-    # Pick a non-colliding slug: base, else base-2/-3/… (a built copy or an
-    # unrelated deck may already hold the base slug).
-    base = slug or _slug(name or file_name)
-    copy_slug = base
-    i = 2
-    while deck_get(copy_slug) is not None:
-        copy_slug = f"{base}-{i}"
-        i += 1
+        # Pick a non-colliding slug: base, else base-2/-3/… (a built copy or an
+        # unrelated deck may already hold the base slug).
+        base = slug or _slug(name or file_name)
+        copy_slug = base
+        i = 2
+        while deck_get(copy_slug, conn=conn) is not None:
+            copy_slug = f"{base}-{i}"
+            i += 1
 
-    imp = import_precon(
-        file_name, slug=copy_slug, name=name,
-        add_inventory=False, precon_state="deconstructed",
-    )
+        imp = import_precon(
+            file_name, slug=copy_slug, name=name,
+            add_inventory=False, precon_state="deconstructed", conn=conn,
+        )
     eff = imp["effective_slugs"][0] if imp["effective_slugs"] else copy_slug
     return {"slug": eff, "created": True, "reused_existing": False}
 
@@ -1749,6 +1757,7 @@ def import_precon(
     deconstruct: bool = False,
     precon_state: str | None = None,
     merge_inventory: bool = False,
+    conn=None,
 ) -> dict:
     """Import an MTGJSON precon (or Jumpstart pack — same shape) into the DB.
 
@@ -1789,6 +1798,14 @@ def import_precon(
       - ``inv_distinct``    (int) distinct (printing, finish) pairs touched
       - ``copies``          (int) copies parameter (preserved for caller)
       - ``missing_sids``    (list[dict]) entries with no scryfallId, skipped
+
+    Pass ``conn`` to enlist the deck-row + inventory writes in a caller's open
+    transaction (borrow-or-open, like ``inventory_add``) — this is what lets the
+    product-coverage ``--apply`` register deck rows and move ledger deltas
+    ATOMICALLY in one transaction, so a drift-abort rolls back BOTH. When
+    ``conn`` is borrowed the sync-before-use step is SKIPPED (the caller is
+    responsible for having synced the referenced sets) — syncing opens its own
+    connections and must never run inside a borrowed write transaction.
 
     Raises:
       - ``mtgjson_mod.MtgJsonError`` if the deck JSON cannot be fetched
@@ -1834,8 +1851,10 @@ def import_precon(
     # that's never been synced (the historical FK-failure bug). We sync here,
     # OUTSIDE the atomic write below, because syncing is a precondition — not
     # part of the deck-creation unit — and mirrors the sync-first pattern in
-    # master-list / jumpstart-list / precon-list.
-    if set_codes:
+    # master-list / jumpstart-list / precon-list. SKIP when a conn is borrowed:
+    # sync opens its own connections (and hits the network), which must not run
+    # inside the caller's open write transaction — the caller pre-syncs instead.
+    if set_codes and conn is None:
         sets_mod.sync(sorted(set_codes))
 
     # V5: one composition per import, regardless of copies. Callers who
@@ -1868,7 +1887,7 @@ def import_precon(
     # (deconstruct=True with no explicit precon_state) or --merge-inventory.
     make_deck_row = (not merge_inventory) and (precon_state is not None or not deconstruct)
 
-    with db.connect() as conn:
+    with db.transaction(conn) as conn:
         if make_deck_row:
             if deck_get(base_slug, conn=conn) is not None:
                 raise ValueError(

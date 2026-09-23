@@ -891,7 +891,7 @@ def _ingest_deck_checklist(src: Path, *, kind: str, sha: str, force: bool,
 
     A precon is the base concept; Jumpstart is a species of it — so both share
     this one consumer, parameterized by ``kind`` for the log label and the
-    human-facing noun. Logs an ingest_log row with label ``<kind>:<setcode>``,
+    human-facing noun. Logs an ingest_events row with label ``<kind>:<setcode>``,
     archives the file under processed/. Mirrors the duplicate-detection +
     archive shape of the inventory ingest path so all checklists look the same
     on disk.
@@ -4084,7 +4084,7 @@ def audit_provenance_cmd(
         by_method = conn.execute(
             """
             SELECT ev.method,
-                   COUNT(DISTINCT ie.event_id) AS events,
+                   COUNT(DISTINCT ev.ingest_id) AS events,
                    COALESCE(SUM(ie.delta), 0) AS net_copies
             FROM ingest_events ev
             LEFT JOIN inventory_events ie ON ie.ingest_id = ev.ingest_id

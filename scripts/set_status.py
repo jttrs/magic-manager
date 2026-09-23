@@ -256,13 +256,16 @@ def family_codes_with_types(parent_code: str, related: list[dict],
 
 
 def ingest_count(family_codes: list[str]) -> int:
-    """# distinct successful ingest_log rows referencing a family code via an
+    """# distinct successful ingest_events rows referencing a family code via an
     exact prefix (set:/jumpstart:/precon:). Excludes deck-assigned:* to avoid
-    double-counting a precon ingest."""
+    double-counting a precon ingest.
+
+    Reads ``ingest_events`` (the V19 provenance ledger's dimension table, which
+    subsumed the old ``ingest_log``; labels were carried forward verbatim)."""
     fam = set(family_codes)
     with db.connect() as conn:
         rows = conn.execute(
-            "SELECT id, label FROM ingest_log WHERE status = 'success'"
+            "SELECT ingest_id AS id, label FROM ingest_events WHERE status = 'success'"
         ).fetchall()
     n = 0
     for r in rows:

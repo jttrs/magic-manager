@@ -25,7 +25,7 @@ event. No write path hand-writes ledger SQL — they all route through here.
 from __future__ import annotations
 
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Iterator
 
 from . import db
@@ -166,7 +166,6 @@ class IngestRecorder:
     rows_added: int = 0      # distinct (sid, finish) pairs newly created (old_qty 0)
     rows_updated: int = 0    # distinct pairs whose existing qty changed
     rows_zeroed: int = 0     # distinct pairs driven to 0
-    _touched: set = field(default_factory=set)
 
     def record(
         self,
@@ -186,8 +185,6 @@ class IngestRecorder:
         if delta == 0:
             return
         record_delta(self.conn, self.ingest_id, scryfall_id, finish, delta)
-        key = (scryfall_id, finish)
-        self._touched.add(key)
         if new_qty == 0:
             self.rows_zeroed += 1
         elif old_qty in (None, 0) and delta > 0:
@@ -233,10 +230,17 @@ def open_ingest_event(
         except Exception as e:
             finalize_event(c, ingest_id, status="failed", error=repr(e))
             raise
-        if not rec._touched:
-            # A no-op event (nothing was recorded — e.g. every card in a batch
-            # failed to resolve) is noise; delete the dimension row rather than
-            # leave a dangling event. No inventory_events reference it.
+        # No-op event → delete the dangling dimension row. "No-op" is judged by
+        # whether any inventory_events actually reference this event, NOT by the
+        # recorder's tallies: callers may write deltas OUT OF BAND via
+        # inventory_add(..., ingest_id=)/record_delta (bypassing rec.record), so
+        # the ground truth is the child table. Deleting a parent that still has
+        # children would violate the FK (inventory_events.ingest_id) and roll the
+        # whole transaction back — the add-card/import crash this guards against.
+        has_children = c.execute(
+            "SELECT 1 FROM inventory_events WHERE ingest_id = ? LIMIT 1", (ingest_id,)
+        ).fetchone() is not None
+        if not has_children:
             c.execute("DELETE FROM ingest_events WHERE ingest_id = ?", (ingest_id,))
             return
         finalize_event(
@@ -275,33 +279,42 @@ def find_events_by_sha(conn, source_sha256: str) -> list[dict]:
 def reattribute(
     conn,
     *,
-    from_ingest_id: int,
-    to_method: str,
-    deltas: list[tuple[str, str, int]],
-    to_label: str | None = None,
-    to_notes: str | None = None,
+    to_ingest_id: int,
+    needs: dict[tuple[str, str], int],
+    sources: list[tuple[int, dict[tuple[str, str], int]]],
 ) -> int:
-    """Move provenance for ``deltas`` from one event to a NEW event, net-zero.
+    """Move provenance for ``needs`` onto ``to_ingest_id``, net-zero, drawing
+    from one or more SOURCE events in order and capped to each source's balance.
 
-    For each ``(scryfall_id, finish, qty)`` (qty > 0): append a ``-qty`` delta to
-    ``from_ingest_id`` and a ``+qty`` delta to a freshly-created ``to_method``
-    event. The two cancel, so ``inventory.quantity == SUM(delta)`` is unchanged —
-    this reclassifies WHERE copies came from without touching the cache. Used by
-    the pool true-up to move copies out of the ``unattributed-backfill`` bucket
-    into a real ``precon`` event once their product is identified.
+    This is the single home for the "reclassify where copies came from without
+    touching the inventory cache" invariant. For each ``(scryfall_id, finish) ->
+    qty`` in ``needs``, it walks ``sources`` (an ordered list of
+    ``(source_ingest_id, balance_map)`` where balance_map is the source event's
+    remaining per-``(sid, finish)`` copies) and, for each, moves
+    ``min(remaining_need, source_balance)`` copies: a ``-take`` delta on the
+    source event and a ``+take`` delta on ``to_ingest_id``. The pair cancels, so
+    ``inventory.quantity == SUM(delta)`` is unchanged. Each source's balance_map
+    is DECREMENTED in place so no source is drawn negative and no copy is moved
+    twice across calls that share the same balance maps.
 
-    Caller must verify ``reconcile_inventory_ledger`` is still clean and cap each
-    ``qty`` to what the source event actually holds (so the source can't go
-    negative for that printing). Returns the new event's ``ingest_id``.
+    A card whose need exceeds the total available across all sources is moved as
+    far as the balances allow (the rest simply stays where it is). Returns the
+    number of copies actually moved.
     """
-    _validate_method(to_method)
-    to_id = create_event(conn, to_method, label=to_label, notes=to_notes)
-    for sid, finish, qty in deltas:
-        if qty <= 0:
-            continue
-        record_delta(conn, from_ingest_id, sid, finish, -qty)
-        record_delta(conn, to_id, sid, finish, qty)
-    return to_id
+    moved = 0
+    for (sid, finish), qty in needs.items():
+        need = qty
+        for src_id, bal in sources:
+            if need <= 0:
+                break
+            take = min(need, max(0, bal.get((sid, finish), 0)))
+            if take > 0:
+                record_delta(conn, src_id, sid, finish, -take)
+                record_delta(conn, to_ingest_id, sid, finish, take)
+                bal[(sid, finish)] -= take
+                need -= take
+                moved += take
+    return moved
 
 
 # ---------- reconciliation + rebuild (root inventory in the ledger) ----------

@@ -104,6 +104,54 @@ def test_set_is_synced_reports_counts(tmp_db, app, seed_cards, make_card, monkey
     assert "1 cards" in res2.stdout
 
 
+def test_inventory_add_card_e2e_records_ledger(tmp_db, app, fake_scryfall, make_card):
+    """Regression (F1): `mm inventory add-card` through the real CLI wrapper must
+    add the card AND its ledger event without the no-op-delete FK crash. The
+    batch routes writes through inventory_add(ingest_id=...) (direct record_delta,
+    bypassing rec.record), so the no-op check must consult inventory_events, not
+    the recorder tallies — else open_ingest_event's DELETE hits the FK and rolls
+    everything back."""
+    card = make_card(id="ac1", set="tla", collector_number="5", name="Add Me")
+    # add-card resolves specs via scryfall.collection.
+    fake_scryfall(collection_found=[card])
+
+    res = runner.invoke(app, ["inventory", "add-card", "tla:5:nonfoil:1"])
+    assert res.exit_code == 0, res.stdout
+
+    from magic_manager import db, ingest
+    with db.connect() as conn:
+        # Card landed in inventory.
+        assert conn.execute(
+            "SELECT quantity FROM inventory WHERE scryfall_id='ac1' AND finish='nonfoil'"
+        ).fetchone()["quantity"] == 1
+        # Exactly one adhoc event + its inventory_events delta survived (not deleted).
+        ev = conn.execute(
+            "SELECT ingest_id FROM ingest_events WHERE method='adhoc'"
+        ).fetchall()
+        assert len(ev) == 1
+        assert conn.execute(
+            "SELECT COALESCE(SUM(delta),0) s FROM inventory_events WHERE ingest_id=?",
+            (ev[0]["ingest_id"],),
+        ).fetchone()["s"] == 1
+        # Ledger invariant intact.
+        assert ingest.reconcile_inventory_ledger(conn) == []
+
+
+def test_inventory_add_card_e2e_all_unresolved_no_crash(tmp_db, app, fake_scryfall):
+    """A batch where every spec fails to resolve records NO deltas → the no-op
+    event must be cleanly deleted (no children, so the DELETE is safe) and the
+    command must still succeed."""
+    fake_scryfall(collection_found=[], collection_not_found=[{"set": "tla", "collector_number": "999"}])
+    res = runner.invoke(app, ["inventory", "add-card", "tla:999:nonfoil:1"])
+    assert res.exit_code == 0, res.stdout
+    from magic_manager import db
+    with db.connect() as conn:
+        # No dangling adhoc event (deleted as a true no-op).
+        assert conn.execute(
+            "SELECT COUNT(*) c FROM ingest_events WHERE method='adhoc'"
+        ).fetchone()["c"] == 0
+
+
 def test_audit_deck_inventory_finds_and_fixes_orphan(tmp_db, app):
     from magic_manager import db, decks
     # create an orphan deck (row with no deck_cards) — the pre-fix failure state

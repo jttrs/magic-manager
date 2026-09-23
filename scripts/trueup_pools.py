@@ -433,40 +433,31 @@ def _apply(conn, ready: list[dict]) -> dict:
                 m[(r["scryfall_id"], r["finish"])] = r["s"]
         ev_bal[eid] = m
 
+    sources = [(eid, ev_bal[eid]) for eid in event_ids]  # shared, decremented across products
+
     registered = 0
     reattributed = 0
     partial_products = 0
     for p in ready:
-        decks_mod.register_precon_from_loose(p["fileName"], name=p["name"])
+        # Deck row + ledger move share the caller's transaction (conn) — atomic.
+        decks_mod.register_precon_from_loose(p["fileName"], name=p["name"], conn=conn)
         registered += 1
         to_id = ingest_mod.create_event(
             conn, "precon", label=f"trueup:{p['fileName']}",
             notes="product-coverage — attributed from backfill buckets",
         )
-        moved_total = 0
-        capped = False
-        for (sid, fin), qty in p["needs"].items():
-            need = qty
-            for eid in event_ids:
-                if need <= 0:
-                    break
-                avail = ev_bal[eid].get((sid, fin), 0)
-                take = min(need, avail)
-                if take > 0:
-                    ingest_mod.record_delta(conn, eid, sid, fin, -take)
-                    ingest_mod.record_delta(conn, to_id, sid, fin, take)
-                    ev_bal[eid][(sid, fin)] -= take
-                    need -= take
-                    moved_total += take
-            if need > 0:
-                capped = True
-        if capped:
+        # ingest.reattribute owns the capped, net-zero, multi-source draw.
+        moved = ingest_mod.reattribute(conn, to_ingest_id=to_id, needs=p["needs"],
+                                       sources=sources)
+        if moved < sum(p["needs"].values()):
             partial_products += 1
-        reattributed += moved_total
+        reattributed += moved
 
     drift = ingest_mod.reconcile_inventory_ledger(conn)
     if drift:
-        raise SystemExit(f"FAIL: ledger drift after true-up ({len(drift)} rows); rolled back")
+        # Normal Exception (NOT SystemExit) so db.connect()'s `except Exception`
+        # rolls back the whole transaction — deck rows AND ledger moves together.
+        raise RuntimeError(f"ledger drift after true-up ({len(drift)} rows); rolled back")
     return {"registered": registered, "reattributed": reattributed,
             "partial_ledger_moves": partial_products}
 

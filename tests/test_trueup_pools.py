@@ -84,6 +84,52 @@ def _deck(name, code, dtype, cards):
     }
 
 
+# ---------- atomicity: drift on --apply rolls back deck rows AND ledger ----------
+
+def test_apply_drift_rolls_back_deck_rows(tmp_db, seed_cards, make_card,
+                                          stub_products, fake_scryfall, monkeypatch):
+    """Regression (F3): if reconcile finds drift during --apply, BOTH the
+    deconstructed deck rows and the ledger moves must roll back — no orphan deck.
+    Previously register_precon_from_loose committed deck rows on its own
+    connection and the SystemExit guard didn't roll them back."""
+    from magic_manager import db, ingest, decks
+    fake_scryfall()
+
+    a = "d1000000-0000-0000-0000-000000000001"
+    seed_cards([make_card(id=a, set="tla", collector_number="62", name="Scene A")])
+    with db.connect() as conn:
+        _seed_unattributed(conn, [(a, "nonfoil", 1)])
+
+    stub_products(
+        decklist={"tla": [{"fileName": "SceneBox_TLA", "name": "Scene Box",
+                           "code": "TLA", "type": "Box Set"}]},
+        decks={"SceneBox_TLA": _deck("Scene Box", "TLA", "Box Set", [(a, 1, False, "tla")])},
+    )
+
+    tp = _load()
+    # Force drift: make reconcile (as seen by _apply via the ingest module) report a mismatch.
+    monkeypatch.setattr(tp.ingest_mod, "reconcile_inventory_ledger",
+                        lambda conn: [{"scryfall_id": a, "finish": "nonfoil",
+                                       "inventory_qty": 1, "ledger_qty": 0}])
+    import pytest
+    with pytest.raises(Exception):  # RuntimeError bubbles → db.connect rolls back
+        tp.run(mode="from-unattributed", target=None, apply=True, picks=set(),
+               sld_threshold=0.9, json_out=True)
+
+    monkeypatch.undo()  # restore the real reconcile before asserting DB state
+    with db.connect() as conn:
+        # No orphan deck row, and the ledger move rolled back too.
+        assert conn.execute(
+            "SELECT COUNT(*) c FROM decks WHERE source_precon_file_name='SceneBox_TLA'"
+        ).fetchone()["c"] == 0
+        assert conn.execute(
+            "SELECT COUNT(*) c FROM ingest_events WHERE label='trueup:SceneBox_TLA'"
+        ).fetchone()["c"] == 0
+        # Real reconcile is clean — nothing was half-written; the unattributed
+        # copy stayed put.
+        assert ingest.reconcile_inventory_ledger(conn) == []
+
+
 # ---------- full-coverage claim ----------
 
 def test_full_coverage_claim_and_reattribute(tmp_db, seed_cards, make_card, stub_products, fake_scryfall):

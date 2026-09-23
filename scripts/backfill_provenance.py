@@ -48,9 +48,6 @@ from magic_manager import db, ingest as ingest_mod  # noqa: E402
 
 PROCESSED_DIR = Path("checklists/processed")
 
-# The MTGJSON board keys import_precon walks (decks._BOARD_KEY_TO_NAME).
-_BOARD_KEYS = ("commander", "mainBoard", "sideBoard", "tokens")
-
 
 def _current_inventory(conn) -> dict[tuple[str, str], int]:
     return {
@@ -73,8 +70,12 @@ def _sid_by_set_cn(conn) -> dict[tuple[str, str], str]:
 
 def _precon_contributions(conn) -> dict[tuple[str, str], int]:
     """Sum every precon-sourced deck copy's MTGJSON decklist into per-printing
-    contributions. ``count of deck rows for fileName`` × ``decklist qty``."""
-    from magic_manager import mtgjson as mtgjson_mod
+    contributions. ``count of deck rows for fileName`` × ``decklist qty``.
+
+    Reuses ``decks.precon_recipe_needs(include_tokens=True)`` — the single home
+    for the MTGJSON board-walk (tokens INCLUDED here because import_precon writes
+    them to inventory too), rather than forking the board keys + extraction."""
+    from magic_manager import decks as decks_mod
 
     file_counts: dict[str, int] = defaultdict(int)
     for r in conn.execute(
@@ -86,19 +87,13 @@ def _precon_contributions(conn) -> dict[tuple[str, str], int]:
     contrib: dict[tuple[str, str], int] = defaultdict(int)
     for file_name, copies in file_counts.items():
         try:
-            deck = mtgjson_mod.deck(file_name)
+            needs = decks_mod.precon_recipe_needs(file_name, include_tokens=True)
         except Exception as e:  # missing/renamed precon JSON — skip, don't crash
             print(f"  warn: could not fetch MTGJSON deck {file_name!r}: {e!r}",
                   file=sys.stderr)
             continue
-        for key in _BOARD_KEYS:
-            for entry in deck.get(key, []) or []:
-                sid = (entry.get("identifiers") or {}).get("scryfallId")
-                if not sid:
-                    continue
-                qty = int(entry.get("count", 1) or 1)
-                finish = "foil" if entry.get("isFoil") else "nonfoil"
-                contrib[(sid, finish)] += qty * copies
+        for (sid, finish), qty in needs.items():
+            contrib[(sid, finish)] += qty * copies
     return contrib
 
 
