@@ -2656,6 +2656,83 @@ def deck_import_cmd(
             typer.echo(f"  not found: {nf}", err=True)
 
 
+@deck_app.command("import-deck")
+def deck_import_deck_cmd(
+    source: str = typer.Argument(None, help="Path to normalized-cards JSON, or '-' for stdin."),
+    slug: str = typer.Option(..., "--slug", help="Deck slug to create-or-append to."),
+    name: str = typer.Option(None, "--name", help="Deck name (defaults to slug on create)."),
+):
+    """Ingest a normalized deck (JSON) fetched from Moxfield/Archidekt/MTGGoldfish.
+
+    The JSON is produced by ``scripts/import_deck.py <url>`` (which owns all the
+    network I/O per the repo's sanctioned-wrapper rule); this command does NO
+    external fetch except the rate-limited Scryfall resolution inside
+    ``decksource.import_deck``. Pipeline:
+
+        uv run python scripts/import_deck.py <url> \\
+            | uv run mm deck import-deck --slug my-deck -
+
+    The JSON is either a bare list of normalized-card dicts or an object with a
+    ``"cards"`` key (and optional ``"name"``); see ``decksource`` for the schema.
+    """
+    from . import decksource as _decksource
+
+    text, path = _read_text_or_path(source)
+    raw = path.read_text(encoding="utf-8") if path is not None else (text or "")
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as e:
+        typer.echo(f"error: input is not valid JSON: {e}", err=True)
+        raise typer.Exit(2)
+    if isinstance(payload, dict):
+        cards = payload.get("cards") or []
+        name = name or payload.get("name")
+    else:
+        cards = payload
+    if not isinstance(cards, list) or not cards:
+        typer.echo("error: no cards in input (expected a list of normalized-card dicts)", err=True)
+        raise typer.Exit(2)
+
+    res = _decksource.import_deck(cards, slug=slug, name=name)
+    verb = "created" if res["created"] else "updated"
+    typer.echo(f"Deck {res['slug']!r} ({verb}): {res['added']} added, {res['updated']} updated")
+    for w in res["warnings"]:
+        typer.echo(f"  warning: {w}", err=True)
+    for nf in res["not_found"]:
+        typer.echo(
+            f"  not found: {nf['qty']}x {nf.get('name') or ''} "
+            f"({nf.get('set')}) {nf.get('collector_number')} ({nf['reason']})",
+            err=True,
+        )
+
+
+@deck_app.command("push-moxfield")
+def deck_push_moxfield_cmd(
+    slug: str = typer.Argument(..., help="Local deck slug to push."),
+    name: str = typer.Option(None, "--name", help="Name for the new Moxfield deck."),
+):
+    """Push a local deck to Moxfield by driving the deck-builder UI (best-effort).
+
+    Moxfield has no write API, so this renders the deck to Moxfield's import-text
+    format via the existing exporter and hands it to ``scripts/moxfield_push.py``,
+    which pastes it into the bulk-import textarea with Playwright. Fragile by
+    nature (UI selectors drift); confirm the result on Moxfield.
+    """
+    import subprocess
+
+    if decks_mod.deck_get(slug) is None:
+        typer.echo(f"error: no deck {slug!r}", err=True)
+        raise typer.Exit(2)
+    rows = sel_mod.materialize(f"deck:{slug}")
+    block = exports.build("moxfield", rows)
+    script = Path(__file__).resolve().parent.parent.parent / "scripts" / "moxfield_push.py"
+    cmd = ["uv", "run", "python", str(script)]
+    if name:
+        cmd += ["--name", name]
+    proc = subprocess.run(cmd, input=block, text=True)
+    raise typer.Exit(proc.returncode)
+
+
 # ---------- V5: physical composition (deck_assignments) ----------
 
 @deck_app.command("compose")

@@ -9,6 +9,10 @@ requires-python = ">=3.12"
 dependencies = [
     "openpyxl>=3.1.5",
     "typer>=0.25.1",
+    # Moxfield deck import/push: its api2 endpoint is Cloudflare-gated, so only a
+    # real browser engine gets through. Chromium is NOT pulled by `uv sync` — run
+    # `uv run playwright install chromium` once. Archidekt/MTGGoldfish don't need it.
+    "playwright>=1.48",
 ]
 
 [project.scripts]

@@ -23,7 +23,7 @@ Top-level subcommand groups (each `--help` lists its own subcommands):
 uv run mm set …          # sync sets, is-synced, build/ingest inventory checklists, jumpstart-list, precon-list
 uv run mm inventory …    # show / value / add / remove / import (V2 fact table)
 uv run mm wishlist …     # categories of cards I want
-uv run mm deck …         # decks (composition independent of ownership), import-precon
+uv run mm deck …         # decks (composition independent of ownership), import-precon, import-deck (moxfield/archidekt/mtggoldfish), push-moxfield
 uv run mm query …        # selector queries: show, value, top, total, multiples, stats, url, xlsx, missing-set
 uv run mm checklists …   # inspect files in checklists/ (alias: `mm input …`)
 uv run mm mtgjson …      # MTGJSON precon/set lookups (cached)
@@ -128,6 +128,7 @@ Inside `src/magic_manager/`:
 - `.claude/skills/mtgjson-search/mtgjson.sh` (cached under `$TMPDIR/mtgjson-cache` with `.sha256` sidecars) — or `uv run mm mtgjson …`
 - `.claude/skills/manapool-search/manapool.sh` (Mana Pool sanctioned API — catalog/prices; rate-limited, 24h cache, 429 backoff; reads `MANAPOOL_*` from `.env`). The `manapool-guard.sh` hook blocks ad-hoc curl to `manapool.com/api` and `sb-api.manapool.com`; the cart tiers in `scripts/manapool_cart.py` are allowlisted (they handle the short-lived Supabase session JWT correctly — that JWT is held in memory only, never persisted).
 - `.claude/skills/sealed-value/{tcgcsv,tcgapi,ebay}.sh` — **sealed-product market prices** (MTGJSON has none), for the `sealed-value` skill. `tcgcsv.sh` (no auth, primary) and `tcgapi.sh` (`X-API-Key`, secondary) price TCGplayer products; `ebay.sh` fetches advisory active-listing comps (mints an OAuth app token from `EBAY_CLIENT_ID`/`EBAY_CLIENT_SECRET`). The `{tcgcsv,tcgapi,ebay}-guard.sh` hooks block ad-hoc curl to each host. **Full provider setup (signup, `.env` keys, auth model, caveats): [`docs/market-providers.md`](docs/market-providers.md).**
+- `scripts/import_deck.py` — **external deck import** (Moxfield / Archidekt / MTGGoldfish → `deck_cards`), for the `import-deck` skill. Archidekt (open JSON API) and MTGGoldfish (per-deck text download) fetch directly; **Moxfield is Cloudflare-gated** so its `api2.moxfield.com` deck endpoint is read through a real Playwright/Chromium browser (session cascade in `scripts/moxfield_session.py`: persisted → auto-login → headed manual; persisted state in gitignored `.deck-sessions/`). The `deck-import-guard.sh` hook blocks ad-hoc curl to those hosts and allowlists `scripts/import_deck.py` / `moxfield_push.py` / `moxfield_session.py`. `scripts/moxfield_push.py` is the **best-effort** reverse path (DB → Moxfield via deck-builder UI automation — no write API exists). Playwright is a core dep; run `uv run playwright install chromium` once. Optional `MOXFIELD_EMAIL`/`MOXFIELD_PASSWORD` in `.env` (memory-only).
 
 The Python clients (`scryfall.py`, `mtgjson.py`, and the `sealed-value` providers `tcgcsv.py`/`tcgapi.py`/`ebay.py`) ultimately call these wrappers, so the CLI is always safe.
 
