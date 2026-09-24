@@ -142,8 +142,26 @@ def set_sync(
             typer.echo("error: --only filtered out all sets", err=True); raise typer.Exit(2)
 
     typer.echo(f"Syncing {len(codes)} set(s): {' '.join(codes)}")
-    n = sets_mod.sync(codes)
+    try:
+        n = sets_mod.sync(codes)
+    except sets_mod.SyncBatchError as e:
+        _report_sync_batch_error(e); raise typer.Exit(1)
     typer.echo(f"  → {n} cards upserted")
+
+
+def _report_sync_batch_error(e: "sets_mod.SyncBatchError") -> None:
+    """Print an actionable partial-progress message for a mid-run sync failure.
+
+    ``sets.sync`` commits per batch, so the batches before the failing one are
+    already saved. Surface how far it got + that a re-run (cheap, 24h cache) only
+    redoes the tail. Shared by ``set sync`` and ``set sync-all``.
+    """
+    typer.echo(
+        f"✗ sync stopped at batch {e.batch_index}/{e.batch_count} after "
+        f"{e.cards_done} card(s) — sets already synced are saved.", err=True)
+    typer.echo(f"  Failed batch: {' '.join(e.failed_codes)}", err=True)
+    typer.echo(f"  Cause: {e.__cause__}", err=True)
+    typer.echo("  Safe to re-run — cached batches are instant.", err=True)
 
 
 @set_app.command("sync-all")
@@ -180,7 +198,14 @@ def set_sync_all(
         return
 
     typer.echo(f"Syncing {len(codes)} set code(s) from the cards table…")
-    n = sets_mod.sync(codes)
+
+    def _progress(bi: int, bcount: int, cards_done: int) -> None:
+        typer.echo(f"  batch {bi}/{bcount} done — {cards_done} cards so far")
+
+    try:
+        n = sets_mod.sync(codes, progress=_progress)
+    except sets_mod.SyncBatchError as e:
+        _report_sync_batch_error(e); raise typer.Exit(1)
     typer.echo(f"  → {n} cards upserted")
 
 
