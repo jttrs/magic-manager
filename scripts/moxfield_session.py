@@ -98,9 +98,15 @@ class MoxfieldSession:
             resp = ctx.request.get("https://api2.moxfield.com/v3/decks/all/<id>")
     """
 
-    def __init__(self, *, fresh: bool = False, headless: bool = True):
+    def __init__(self, *, fresh: bool = False, headless: bool = True,
+                 anonymous: bool = False):
+        # anonymous=True skips the login cascade entirely and yields a fresh,
+        # logged-OUT context — enough to clear Cloudflare and read a PUBLIC deck.
+        # This is the default first attempt for reads; callers escalate to a
+        # full (authenticated) session only when the anonymous fetch 401/403s.
         self.fresh = fresh
         self.headless = headless
+        self.anonymous = anonymous
         self._pw = None
         self._browser = None
         self.context = None
@@ -108,13 +114,17 @@ class MoxfieldSession:
     def __enter__(self):
         sync_playwright = _require_playwright()
         self._pw = sync_playwright().start()
-        self._browser = self._pw.chromium.launch(headless=self.headless)
-        self.context = self._authenticate()
+        self._browser = self._launch()
+        if self.anonymous:
+            self.context = self._new_context(with_state=False)
+            self.context.new_page().goto(HOME_URL, wait_until="domcontentloaded")
+        else:
+            self.context = self._authenticate()
         return self.context
 
     def __exit__(self, *exc):
         try:
-            if self.context is not None:
+            if self.context is not None and not self.anonymous:
                 self._persist()
         finally:
             if self._browser is not None:
@@ -124,8 +134,30 @@ class MoxfieldSession:
 
     # -- internals --------------------------------------------------------
 
+    def _launch(self):
+        """Launch Chromium, preferring the real installed Chrome channel — the
+        bundled headless Chromium trips Cloudflare's bot interstitial ("Attention
+        Required!"), whereas real Chrome (esp. headed) clears the managed
+        challenge automatically. Falls back to bundled Chromium if Chrome is
+        absent. ``--disable-blink-features=AutomationControlled`` drops the most
+        obvious automation tell."""
+        args = ["--disable-blink-features=AutomationControlled"]
+        for channel in ("chrome", None):
+            try:
+                kw = {"headless": self.headless, "args": args}
+                if channel:
+                    kw["channel"] = channel
+                return self._pw.chromium.launch(**kw)
+            except Exception:
+                continue
+        # last resort: default bundled chromium, no channel
+        return self._pw.chromium.launch(headless=self.headless)
+
     def _new_context(self, *, with_state: bool):
-        kwargs = {}
+        kwargs = {
+            # a realistic UA/viewport further reduces the automation fingerprint
+            "viewport": {"width": 1280, "height": 900},
+        }
         if with_state and SESSION_FILE.exists():
             kwargs["storage_state"] = str(SESSION_FILE)
         return self._browser.new_context(**kwargs)

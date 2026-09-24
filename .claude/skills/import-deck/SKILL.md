@@ -25,10 +25,12 @@ uv run python scripts/import_deck.py <deck-url> \
   categories (Commander/Sideboard/Maybeboard → boards; others → main).
 - **MTGGoldfish** (`mtggoldfish.com/deck/<id>`) — per-deck text download, plain fetch.
 - **Moxfield** (`moxfield.com/decks/<id>`) — Cloudflare-gated; `import_deck.py` drives
-  a real Playwright/Chromium browser. First run may open a **visible window to log in**
-  (solve any captcha, press Enter); the session is persisted to `.deck-sessions/`
-  (gitignored) so later runs are headless and hands-off. `MOXFIELD_EMAIL`/
-  `MOXFIELD_PASSWORD` in `.env` enable headless auto-login. `--fresh` forces re-login.
+  a real (headed) Chrome via Playwright and intercepts the deck page's own api2 call
+  (clears Cloudflare with no interaction). A browser window flashes briefly — that's
+  expected. **PUBLIC decks need no login at all.** For a PRIVATE deck the script
+  escalates to a login cascade: persisted session (`.deck-sessions/`, gitignored) →
+  `MOXFIELD_EMAIL`/`MOXFIELD_PASSWORD` auto-login → a visible window for manual login
+  (needs an interactive terminal). `--fresh` forces re-login.
 
 The importer is **additive** (create-or-append, summing counts) and maps all boards
 (main/side/commander/companion/maybe/token). Relay the `added/updated`, any

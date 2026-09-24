@@ -68,20 +68,67 @@ def fetch_mtggoldfish(deck_id: str) -> tuple[list[dict], str | None]:
 
 def fetch_moxfield(deck_id: str, *, fresh: bool) -> tuple[list[dict], str | None]:
     from moxfield_session import MoxfieldSession
+    from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
-    api = f"https://api2.moxfield.com/v3/decks/all/{deck_id}"
+    deck_page = f"https://www.moxfield.com/decks/{deck_id}"
+
+    def _read(ctx):
+        # Piggyback on the request the SPA ITSELF makes: visiting the deck page
+        # triggers the app's own GET to api2/decks/all/<id> to render the deck.
+        # We intercept THAT response — it carries the correct origin, CORS,
+        # cookies, and Cloudflare clearance automatically. This is far more robust
+        # than injecting our own fetch (which trips CORS/CSP → "Failed to fetch")
+        # or ctx.request (a separate HTTP stack that lacks CF clearance → 403).
+        page = ctx.pages[0] if ctx.pages else ctx.new_page()
+        matcher = lambda r: ("/decks/all/" in r.url) and (deck_id in r.url)
+        try:
+            with page.expect_response(matcher, timeout=30_000) as info:
+                page.goto(deck_page, wait_until="domcontentloaded")
+            resp = info.value
+            status = resp.status
+            body = resp.json() if status < 400 else None
+            return status, body
+        except PlaywrightTimeout:
+            # No api2 call fired — likely a Cloudflare interstitial or an empty
+            # SPA shell. Report what we landed on for diagnosis.
+            print(f"moxfield: no api2 deck response seen; page title={page.title()!r} "
+                  f"url={page.url!r}", file=sys.stderr)
+            return 0, None
+
+    # 1. Anonymous browser first — a real browser clears Cloudflare, and PUBLIC
+    #    decks need no login. This is the common case and avoids any login prompt.
+    if not fresh:
+        # Headed real-Chrome clears Cloudflare's managed challenge without any
+        # interaction for a public deck; headless is what gets the interstitial.
+        with MoxfieldSession(anonymous=True, headless=False) as ctx:
+            status, data = _read(ctx)
+        if status and status < 400 and data is not None:
+            print("moxfield: read as public deck (no login)", file=sys.stderr)
+            return decksource.parse_moxfield(data), data.get("name")
+        if status and status not in (401, 403):
+            raise RuntimeError(f"Moxfield api2 returned HTTP {status}")
+        why = "is private" if status in (401, 403) else "did not load (timeout)"
+        print(f"moxfield: anonymous read {why} — authenticating…", file=sys.stderr)
+
+    # 2. Private (or --fresh): escalate to the authenticated session cascade.
     with MoxfieldSession(fresh=fresh) as ctx:
-        resp = ctx.request.get(api, headers={"Accept": "application/json"})
-        if resp.status == 403:
+        status, data = _read(ctx)
+        if status == 403:
             raise RuntimeError(
-                "Moxfield returned 403 even through the browser context — Cloudflare "
-                "likely changed its challenge. Use the bookmarklet fallback: click it "
-                "on the deck page, then `pbpaste | uv run python scripts/import_deck.py "
-                "--file -`."
+                "Moxfield returned 403 even through an authenticated browser context "
+                "— Cloudflare likely changed its challenge. Use the bookmarklet "
+                "fallback: click it on the deck page, then `pbpaste | uv run python "
+                "scripts/import_deck.py --file -`."
             )
-        if resp.status >= 400:
-            raise RuntimeError(f"Moxfield api2 returned HTTP {resp.status}")
-        data = resp.json()
+        if not status:
+            raise RuntimeError(
+                "Moxfield deck page never fired its api2 call (Cloudflare "
+                "interstitial or private deck you're not logged into). Use the "
+                "bookmarklet fallback: click it on the deck page, then `pbpaste | "
+                "uv run python scripts/import_deck.py --file -`."
+            )
+        if status >= 400 or data is None:
+            raise RuntimeError(f"Moxfield api2 returned HTTP {status}")
     return decksource.parse_moxfield(data), data.get("name")
 
 
