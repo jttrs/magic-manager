@@ -77,8 +77,9 @@
       return;
     }
 
+    const author = (data.createdByUser && (data.createdByUser.userName || data.createdByUser.username)) || null;
     const payload = JSON.stringify(
-      { source: "moxfield-bookmarklet", id, name: data.name || null, cards }, null, 2);
+      { source: "moxfield-bookmarklet", id, name: data.name || null, author, cards }, null, 2);
     await navigator.clipboard.writeText(payload);
     alert("Moxfield export: copied " + cards.length + " cards to clipboard.\nNow run:\n" +
       "  pbpaste | uv run python scripts/import_deck.py --file - | uv run mm deck import-deck --slug my-deck -");

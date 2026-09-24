@@ -725,6 +725,16 @@ DROP TABLE IF EXISTS excluded_products;
 """
 
 
+# V22: record a deck's AUTHOR — the original creator/owner as reported by the
+# source it was imported from (Moxfield ``createdByUser.userName``, Archidekt
+# ``owner.username``). NULL for hand-built decks, precons (the "author" is WotC,
+# not meaningful here), and MTGGoldfish text imports (the download carries no
+# author). Informational provenance; no FK, no behavior keys off it.
+SCHEMA_V22 = """
+ALTER TABLE decks ADD COLUMN author TEXT;
+"""
+
+
 # ---------- migration-authoring convention ----------
 #
 # Always-safe ops in a migration: CREATE TABLE, ALTER TABLE ADD COLUMN,
@@ -796,6 +806,7 @@ MIGRATIONS: list[str] = [
     SCHEMA_V19,
     SCHEMA_V20,
     SCHEMA_V21,
+    SCHEMA_V22,
 ]
 CURRENT_VERSION = len(MIGRATIONS)
 

@@ -1776,12 +1776,12 @@ def deck_ls_cmd():
     for d in ds:
         cur = next((v for v in decks_mod.version_list(d.slug) if v.is_current), None)
         status_by_slug[d.slug] = (cur.status, cur.version_number) if cur else ("—", 0)
-    typer.echo(f"{'slug':30} {'name':36} {'format':12} {'status':6} {'ver':>4} {'state':6} {'updated_at'}")
+    typer.echo(f"{'slug':30} {'name':36} {'format':12} {'author':16} {'status':6} {'ver':>4} {'state':6} {'updated_at'}")
     for d in ds:
         flags = _state_flag.get(getattr(d, "precon_state", "built"), "")
         status, vnum = status_by_slug[d.slug]
         vlabel = f"v{vnum}" if vnum else "—"
-        typer.echo(f"{d.slug:30} {d.name:36} {(d.format or '—'):12} {status:6} "
+        typer.echo(f"{d.slug:30} {d.name:36} {(d.format or '—'):12} {(d.author or '—'):16} {status:6} "
                    f"{vlabel:>4} {flags:6} {d.updated_at}")
 
 
@@ -1794,6 +1794,9 @@ def deck_show_cmd(slug: str = typer.Argument(...)):
         typer.echo(f"error: {e}", err=True); raise typer.Exit(2)
     if not rows:
         typer.echo(f"(deck {slug!r} is empty)"); return
+    d = decks_mod.deck_get(slug)
+    if d is not None and d.author:
+        typer.echo(f"# author: {d.author}", err=True)
     typer.echo(f"{'cnt':>4} {'finish':>7} {'board':>10} {'set':>6} {'cn':>6}  name (rarity, usd)")
     for r in rows:
         usd = f"${r.unit_price:.2f}" if r.unit_price is not None else "—"
@@ -2684,18 +2687,21 @@ def deck_import_deck_cmd(
     except json.JSONDecodeError as e:
         typer.echo(f"error: input is not valid JSON: {e}", err=True)
         raise typer.Exit(2)
+    author = None
     if isinstance(payload, dict):
         cards = payload.get("cards") or []
         name = name or payload.get("name")
+        author = payload.get("author")
     else:
         cards = payload
     if not isinstance(cards, list) or not cards:
         typer.echo("error: no cards in input (expected a list of normalized-card dicts)", err=True)
         raise typer.Exit(2)
 
-    res = _decksource.import_deck(cards, slug=slug, name=name)
+    res = _decksource.import_deck(cards, slug=slug, name=name, author=author)
     verb = "created" if res["created"] else "updated"
-    typer.echo(f"Deck {res['slug']!r} ({verb}): {res['added']} added, {res['updated']} updated")
+    by = f" by {author}" if (author and res["created"]) else ""
+    typer.echo(f"Deck {res['slug']!r} ({verb}){by}: {res['added']} added, {res['updated']} updated")
     for w in res["warnings"]:
         typer.echo(f"  warning: {w}", err=True)
     for nf in res["not_found"]:

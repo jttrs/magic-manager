@@ -254,6 +254,22 @@ PARSERS = {
 }
 
 
+def author_moxfield(data: dict) -> str | None:
+    """Moxfield deck creator: ``createdByUser.userName`` (defensive to key drift)."""
+    u = data.get("createdByUser") or data.get("author") or {}
+    if isinstance(u, dict):
+        return _first(u, "userName", "username", "displayName", "name")
+    return u if isinstance(u, str) else None
+
+
+def author_archidekt(data: dict) -> str | None:
+    """Archidekt deck owner: ``owner.username``."""
+    o = data.get("owner") or {}
+    if isinstance(o, dict):
+        return _first(o, "username", "userName", "name")
+    return o if isinstance(o, str) else None
+
+
 # ---------------------------------------------------------------------------
 # Shared resolve + write orchestrator
 # ---------------------------------------------------------------------------
@@ -322,12 +338,16 @@ def _resolve_cards(cards: list[dict]) -> tuple[dict, dict, dict, list[str]]:
 
 
 def import_deck(cards: list[dict], *, slug: str, name: str | None = None,
-                source_set_code: str | None = None, conn=None) -> dict:
+                source_set_code: str | None = None, author: str | None = None,
+                conn=None) -> dict:
     """Resolve normalized cards and write them into a deck (create-or-find).
 
     Every source funnels through here. Cards are resolved (id first, set+cn
     fallback), upserted into ``cards``, then written with ``decks.deck_add_card``
     (which owns board/finish validation, conflict-summing, and version routing).
+
+    ``author`` (the source's deck creator/owner) is stamped on the deck row ONLY
+    at creation — re-importing into an existing deck never overwrites it.
 
     Returns ``{"slug", "created", "added", "updated", "not_found", "warnings"}``.
     """
@@ -337,7 +357,8 @@ def import_deck(cards: list[dict], *, slug: str, name: str | None = None,
         created = False
         if decks_mod.deck_get(slug, conn=conn) is None:
             decks_mod.deck_create(
-                slug, name or slug, source_set_code=source_set_code, conn=conn,
+                slug, name or slug, source_set_code=source_set_code,
+                author=author, conn=conn,
             )
             created = True
 

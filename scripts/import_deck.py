@@ -50,23 +50,24 @@ def _http_get(url: str, *, accept: str) -> str:
 
 # ---------- Archidekt: open JSON API ----------
 
-def fetch_archidekt(deck_id: str) -> tuple[list[dict], str | None]:
+def fetch_archidekt(deck_id: str) -> tuple[list[dict], str | None, str | None]:
     url = f"https://archidekt.com/api/decks/{deck_id}/"
     data = json.loads(_http_get(url, accept="application/json"))
-    return decksource.parse_archidekt(data), data.get("name")
+    return decksource.parse_archidekt(data), data.get("name"), decksource.author_archidekt(data)
 
 
 # ---------- MTGGoldfish: per-deck text download ----------
 
-def fetch_mtggoldfish(deck_id: str) -> tuple[list[dict], str | None]:
+def fetch_mtggoldfish(deck_id: str) -> tuple[list[dict], str | None, str | None]:
     url = f"https://www.mtggoldfish.com/deck/download/{deck_id}"
     text = _http_get(url, accept="text/plain")
-    return decksource.parse_mtggoldfish(text), None
+    # The text download carries no author.
+    return decksource.parse_mtggoldfish(text), None, None
 
 
 # ---------- Moxfield: Playwright authed context ----------
 
-def fetch_moxfield(deck_id: str, *, fresh: bool) -> tuple[list[dict], str | None]:
+def fetch_moxfield(deck_id: str, *, fresh: bool) -> tuple[list[dict], str | None, str | None]:
     from moxfield_session import MoxfieldSession
     from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
@@ -104,7 +105,7 @@ def fetch_moxfield(deck_id: str, *, fresh: bool) -> tuple[list[dict], str | None
             status, data = _read(ctx)
         if status and status < 400 and data is not None:
             print("moxfield: read as public deck (no login)", file=sys.stderr)
-            return decksource.parse_moxfield(data), data.get("name")
+            return decksource.parse_moxfield(data), data.get("name"), decksource.author_moxfield(data)
         if status and status not in (401, 403):
             raise RuntimeError(f"Moxfield api2 returned HTTP {status}")
         why = "is private" if status in (401, 403) else "did not load (timeout)"
@@ -129,18 +130,18 @@ def fetch_moxfield(deck_id: str, *, fresh: bool) -> tuple[list[dict], str | None
             )
         if status >= 400 or data is None:
             raise RuntimeError(f"Moxfield api2 returned HTTP {status}")
-    return decksource.parse_moxfield(data), data.get("name")
+    return decksource.parse_moxfield(data), data.get("name"), decksource.author_moxfield(data)
 
 
 # ---------- --file passthrough (bookmarklet / manual JSON) ----------
 
-def fetch_from_file(path: str) -> tuple[list[dict], str | None]:
+def fetch_from_file(path: str) -> tuple[list[dict], str | None, str | None]:
     raw = sys.stdin.read() if path == "-" else Path(path).read_text(encoding="utf-8")
     payload = json.loads(raw)
     if isinstance(payload, dict):
         cards = payload.get("cards") or []
-        return cards, payload.get("name")
-    return payload, None
+        return cards, payload.get("name"), payload.get("author")
+    return payload, None, None
 
 
 def main() -> int:
@@ -151,7 +152,7 @@ def main() -> int:
     args = ap.parse_args()
 
     if args.file is not None:
-        cards, name = fetch_from_file(args.file)
+        cards, name, author = fetch_from_file(args.file)
         source, deck_id = "file", None
     elif args.url:
         source = decksource.source_of(args.url)
@@ -159,11 +160,11 @@ def main() -> int:
         print(f"import_deck: source={source} id={deck_id}", file=sys.stderr)
         try:
             if source == "archidekt":
-                cards, name = fetch_archidekt(deck_id)
+                cards, name, author = fetch_archidekt(deck_id)
             elif source == "mtggoldfish":
-                cards, name = fetch_mtggoldfish(deck_id)
+                cards, name, author = fetch_mtggoldfish(deck_id)
             else:
-                cards, name = fetch_moxfield(deck_id, fresh=args.fresh)
+                cards, name, author = fetch_moxfield(deck_id, fresh=args.fresh)
         except (urllib.error.HTTPError, urllib.error.URLError) as e:
             print(f"import_deck: fetch failed: {e}", file=sys.stderr)
             return 1
@@ -178,8 +179,9 @@ def main() -> int:
         print("import_deck: no cards parsed (empty deck, or the payload shape changed)", file=sys.stderr)
         return 1
 
-    print(f"import_deck: parsed {len(cards)} card rows", file=sys.stderr)
-    json.dump({"source": source, "id": deck_id, "name": name, "cards": cards},
+    print(f"import_deck: parsed {len(cards)} card rows"
+          + (f" (author: {author})" if author else ""), file=sys.stderr)
+    json.dump({"source": source, "id": deck_id, "name": name, "author": author, "cards": cards},
               sys.stdout, indent=2)
     sys.stdout.write("\n")
     return 0

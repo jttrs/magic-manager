@@ -85,7 +85,7 @@ def test_migration_v16_to_v18(tmp_path, monkeypatch):
 
     with db_mod.connect() as conn:
         version = conn.execute("SELECT version FROM schema_version").fetchone()[0]
-        assert version == 21
+        assert version == db_mod.CURRENT_VERSION
 
         # V16: cards has the new columns.
         card_cols = {r["name"] for r in conn.execute("PRAGMA table_info(cards)").fetchall()}

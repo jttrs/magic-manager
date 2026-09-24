@@ -39,9 +39,17 @@ def test_source_of_rejects_unknown():
 # Per-source parsers → normalized cards
 # ---------------------------------------------------------------------------
 
+def test_author_extractors():
+    assert decksource.author_moxfield({"createdByUser": {"userName": "alice"}}) == "alice"
+    assert decksource.author_archidekt({"owner": {"username": "bob"}}) == "bob"
+    assert decksource.author_moxfield({}) is None
+    assert decksource.author_archidekt({}) is None
+
+
 def test_parse_moxfield_boards_and_finishes():
     data = {
         "name": "Mox Test",
+        "createdByUser": {"userName": "alice"},
         "boards": {
             "mainboard": {"cards": {
                 "e1": {"quantity": 3, "card": {"scryfall_id": "sid-main", "set": "tst", "cn": "1", "name": "Main Card"}},
@@ -141,7 +149,7 @@ def test_import_deck_end_to_end(tmp_db, fake_scryfall, make_card):
         {"qty": 3, "board": "main", "finish": "foil", "scryfall_id": "sid-main",
          "set": "tst", "collector_number": "1", "name": "Main Card", "category": None},
     ]
-    res = decksource.import_deck(cards, slug="my-deck", name="My Deck")
+    res = decksource.import_deck(cards, slug="my-deck", name="My Deck", author="alice")
     assert res["created"] is True
     assert res["added"] == 2
     assert res["updated"] == 0
@@ -154,19 +162,21 @@ def test_import_deck_end_to_end(tmp_db, fake_scryfall, make_card):
         ("sid-cmd", "commander", "nonfoil", 1),
         ("sid-main", "main", "foil", 3),
     }
+    # author is stamped on the deck row at creation
+    assert decks_mod.deck_get("my-deck").author == "alice"
 
 
 def test_import_deck_appends_and_reports_unresolved(tmp_db, fake_scryfall, make_card):
     fake_scryfall(collection_found=[make_card(id="sid-main", set="tst", collector_number="1", name="Main Card")])
     base = [{"qty": 1, "board": "main", "finish": "nonfoil", "scryfall_id": "sid-main",
              "set": "tst", "collector_number": "1", "name": "Main Card", "category": None}]
-    decksource.import_deck(base, slug="d", name="D")
+    decksource.import_deck(base, slug="d", name="D", author="alice")
 
     # Re-import: same card sums (updated), plus one that Scryfall can't resolve.
     fake_scryfall(collection_found=[make_card(id="sid-main", set="tst", collector_number="1", name="Main Card")])
     more = base + [{"qty": 1, "board": "main", "finish": "nonfoil", "scryfall_id": "sid-missing",
                     "set": "zzz", "collector_number": "999", "name": "Ghost", "category": None}]
-    res = decksource.import_deck(more, slug="d")
+    res = decksource.import_deck(more, slug="d", author="someone-else")
     assert res["created"] is False
     assert res["updated"] == 1
     assert len(res["not_found"]) == 1
@@ -175,6 +185,8 @@ def test_import_deck_appends_and_reports_unresolved(tmp_db, fake_scryfall, make_
     from magic_manager import decks as decks_mod
     rows = decks_mod.deck_show("d")
     assert {(r.scryfall_id, r.count) for r in rows} == {("sid-main", 2)}
+    # re-import must NOT overwrite the author stamped at creation
+    assert decks_mod.deck_get("d").author == "alice"
 
 
 def test_import_deck_resolves_name_only(tmp_db, fake_scryfall, make_card):
