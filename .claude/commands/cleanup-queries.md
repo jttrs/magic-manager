@@ -75,7 +75,7 @@ The unclassified-skip rule is the safety net: if you put a hand-written notes fi
 
 - **Always dry-run first.** Don't apply without showing the user what will be deleted.
 - **Never run with `--include-adhoc` by default.** Ad-hoc query XLSXs are user-named one-off reports; deleting them silently is a foot-gun.
-- **Don't reach outside `output/`.** The script enforces this internally; don't pass `--queries-dir` overrides unless the user explicitly asks.
+- **Don't reach outside `output/`.** The script enforces this internally; don't pass `--output-dir` overrides unless the user explicitly asks.
 - **Surface errors verbatim.** Permission errors or open-file errors (Excel having the file open) should be reported to the user with the exact filename so they can resolve.
 
 ## Cross-references

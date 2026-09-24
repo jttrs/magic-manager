@@ -59,7 +59,7 @@ Should report "output/ inventory: 0 files across 0 groups" (or only unclassified
 ## Hard rules
 
 - **Always dry-run first.** Even though this is the aggressive variant, the user should see the file list before deletion.
-- **Don't reach outside `output/`.** Same as `/cleanup-queries` — never pass `--queries-dir` overrides unless the user explicitly asks.
+- **Don't reach outside `output/`.** Same as `/cleanup-queries` — never pass `--output-dir` overrides unless the user explicitly asks.
 - **Surface errors verbatim.** Permission/open-file errors should be reported with the exact filename.
 - **The unclassified-skip safety net still applies.** Hand-written notes files (anything not matching the missing-* / `<...>-<ts>.xlsx` patterns) are NEVER deleted, even with `--include-adhoc`. The script enforces this; you don't need to.
 

@@ -73,14 +73,14 @@ import time
 from collections import defaultdict
 from pathlib import Path
 
-# The script lives at <repo>/scripts/cleanup_queries.py, so the repo root is
-# its parent's parent. Resolve once and use absolute paths from there to make
-# behavior independent of the caller's CWD.
-REPO_ROOT = Path(__file__).resolve().parent.parent
-# Generated artifacts live under output/<type>/<category>/ (segmented by
-# producer + purpose). We walk this tree RECURSIVELY; classification keys on the
-# filename only, so the subfolders don't affect grouping.
-OUTPUT_DIR = REPO_ROOT / "output"
+# The script lives at <repo>/scripts/cleanup_queries.py. Import the ONE
+# artifact-root definition from the package (util.OUTPUT_ROOT, itself repo-root
+# anchored) so the pruner and every writer resolve "the output tree" to the
+# exact same absolute path — no second, drifting definition. Generated artifacts
+# live under output/<type>/<category>/; we walk this tree RECURSIVELY and
+# classification keys on the filename only, so the subfolders don't affect grouping.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+from magic_manager.util import OUTPUT_ROOT as OUTPUT_DIR  # noqa: E402
 
 # Filename patterns. Group key = everything up to and including the artifact's
 # logical identity, before the timestamp suffix. The timestamp is the last

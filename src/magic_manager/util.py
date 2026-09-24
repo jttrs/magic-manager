@@ -14,11 +14,14 @@ from pathlib import Path
 _CN_RE = re.compile(r"^(\d+)(.*)$")
 
 # Ephemeral generated artifacts (reports / buy-lists / checklists) live under a
-# single repo-root-relative tree, segmented output/<type>/<category>/. This is
-# the ONE home for that path — replaces the per-script ``QUERIES_DIR`` constants
-# that had drifted into 8 independent definitions. Repo-root-relative (resolved
-# against CWD, like the tree's siblings).
-OUTPUT_ROOT = Path("output")
+# single tree, segmented output/<type>/<category>/. This is the ONE home for that
+# path — replaces the per-script ``QUERIES_DIR`` constants that had drifted into
+# 8 independent definitions. Anchored to the REPO ROOT (this file is at
+# src/magic_manager/util.py, so parents[2] is the repo root), NOT CWD — so
+# artifacts always land in the same place regardless of the caller's working
+# directory, and the writers agree with cleanup_queries' prune root (which
+# imports this same constant).
+OUTPUT_ROOT = Path(__file__).resolve().parents[2] / "output"
 
 
 def output_dir(type_: str, category: str) -> Path:
