@@ -179,31 +179,81 @@ def _descendants_of(all_sets: list[dict], parent_code: str) -> list[dict]:
 
 # ---------- syncing ----------
 
-def sync(set_codes: Iterable[str]) -> int:
+class SyncBatchError(RuntimeError):
+    """Raised when a Scryfall batch fails mid-``sync``.
+
+    Because ``sync`` commits each batch in its own transaction, the batches
+    BEFORE the failing one are already persisted — this error carries where we
+    stopped (``batch_index`` of ``batch_count``, ``cards_done`` already written,
+    the ``failed_codes`` in the aborted batch) so the caller can report partial
+    progress and tell the user it's safe to re-run. The original Scryfall/DB
+    error is chained (``__cause__``).
+    """
+
+    def __init__(self, *, batch_index: int, batch_count: int,
+                 cards_done: int, failed_codes: list[str]):
+        self.batch_index = batch_index
+        self.batch_count = batch_count
+        self.cards_done = cards_done
+        self.failed_codes = failed_codes
+        super().__init__(
+            f"sync stopped at batch {batch_index}/{batch_count} after "
+            f"{cards_done} card(s); failed batch: {' '.join(failed_codes)}"
+        )
+
+
+def sync(set_codes: Iterable[str], *, progress=None) -> int:
     """Pull every printing in ``set_codes`` into the cards table. Returns rows synced.
 
     English-only: sets that ship only in non-English (e.g. ``rfin`` regional
     promos which are JP-only) will simply have zero rows imported. The user
     catalogs English copies; non-English-only prints don't belong in the checklist.
+
+    Resilient to mid-run failures: each Scryfall batch commits in its OWN
+    transaction (one ``db.connect()`` per batch), so a transient failure on a
+    later batch does NOT discard the batches that already succeeded. On such a
+    failure this raises :class:`SyncBatchError` (carrying how far it got) rather
+    than continuing — the completed batches are committed and a re-run (cheap,
+    24h Scryfall cache) only redoes the tail. ``cards`` is a re-derivable
+    projection with no cross-row invariant, so per-batch commit is safe here
+    (unlike ``import_precon``, whose single transaction prevents orphan rows).
+
+    ``progress``, if given, is called ``progress(batch_index, batch_count,
+    cards_done)`` after each batch commits — lets a long run (e.g. ``set
+    sync-all``) show liveness. Optional and additive; existing callers unaffected.
     """
     codes = [c.lower() for c in set_codes]
     if not codes:
         return 0
-    # Build a single search query using `or` so we paginate once. ``lang:en``
-    # filters out the Japanese-only rfin J1/J2 prints (and any future non-English
-    # variants Scryfall adds to a release). Cap the codes-per-query so a very
-    # large set list (e.g. the all-sets precon catalog's ~180 sets) can't build
-    # a Scryfall query string past its length limit — batch and sum instead.
+    # Build a single search query per batch using `or` so we paginate once.
+    # ``lang:en`` filters out the Japanese-only rfin J1/J2 prints (and any future
+    # non-English variants Scryfall adds to a release). Cap the codes-per-query so
+    # a very large set list (e.g. the all-sets precon catalog's ~180 sets, or
+    # `set sync-all`'s ~336) can't build a Scryfall query string past its length
+    # limit — batch and sum instead.
     _MAX_CODES_PER_QUERY = 60
     priced_at = db._utcnow_iso()  # one fetch-time stamp shared across this sync run
+    batches = [codes[i:i + _MAX_CODES_PER_QUERY]
+               for i in range(0, len(codes), _MAX_CODES_PER_QUERY)]
     n = 0
-    with db.connect() as conn:
-        for i in range(0, len(codes), _MAX_CODES_PER_QUERY):
-            batch = codes[i:i + _MAX_CODES_PER_QUERY]
-            query = "(" + " or ".join(f"e:{c}" for c in batch) + ") lang:en"
-            for card in scryfall.search(query, unique="prints"):
-                db.upsert_card(conn, card, priced_at=priced_at)
-                n += 1
+    for bi, batch in enumerate(batches, start=1):
+        query = "(" + " or ".join(f"e:{c}" for c in batch) + ") lang:en"
+        try:
+            # One transaction PER batch: db.connect() commits on clean exit, so a
+            # completed batch is durable before the next one starts. (Per-batch
+            # db.connect() re-runs _ensure_schema each time, but that's idempotent
+            # CREATE-IF-NOT-EXISTS work — negligible vs. the network fetch.)
+            with db.connect() as conn:
+                for card in scryfall.search(query, unique="prints"):
+                    db.upsert_card(conn, card, priced_at=priced_at)
+                    n += 1
+        except Exception as e:
+            # Prior batches are already committed. Surface where we stopped and
+            # re-raise so the caller (and process exit code) still see the failure.
+            raise SyncBatchError(batch_index=bi, batch_count=len(batches),
+                                 cards_done=n, failed_codes=batch) from e
+        if progress is not None:
+            progress(bi, len(batches), n)
     return n
 
 

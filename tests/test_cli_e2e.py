@@ -54,7 +54,9 @@ def test_set_sync_all_enumerates_distinct_codes(tmp_db, app, monkeypatch):
              ("c", "oc", "C", "clb", "1", "mythic")],
         )
     captured = []
-    monkeypatch.setattr(sets_mod, "sync", lambda codes: captured.append(sorted(codes)) or 0)
+    # set_sync_all now calls sync(codes, progress=...); stub accepts the kwarg.
+    monkeypatch.setattr(sets_mod, "sync",
+                        lambda codes, **kw: captured.append(sorted(codes)) or 0)
     res = runner.invoke(app, ["set", "sync-all"])
     assert res.exit_code == 0, res.stdout
     assert captured == [["clb", "ncc"]]  # distinct, sorted; ncc not duplicated
@@ -67,7 +69,7 @@ def test_set_sync_all_dry_run_syncs_nothing(tmp_db, app, monkeypatch):
             "INSERT INTO cards (scryfall_id, oracle_id, name, set_code, "
             "collector_number, rarity) VALUES ('a','oa','A','ncc','1','rare')")
     called = []
-    monkeypatch.setattr(sets_mod, "sync", lambda codes: called.append(codes) or 0)
+    monkeypatch.setattr(sets_mod, "sync", lambda codes, **kw: called.append(codes) or 0)
     res = runner.invoke(app, ["set", "sync-all", "--dry-run"])
     assert res.exit_code == 0, res.stdout
     assert "ncc" in res.stdout and "Would sync 1" in res.stdout
@@ -131,9 +133,11 @@ def test_query_missing_set_e2e(tmp_db, app, fake_scryfall, seed_cards, make_card
                                monkeypatch, tmp_path):
     """query missing-set on a configured family (tla) emits its report; the
     unowned rare shows up, the owned one doesn't."""
-    # missing-set writes artifacts to a relative Path("queries") — chdir into a
-    # throwaway dir so the test never pollutes the repo's queries/.
-    monkeypatch.chdir(tmp_path)
+    # missing-set writes artifacts under util.OUTPUT_ROOT (repo-root anchored,
+    # so CWD-independent). Redirect that ROOT to a throwaway dir so the test
+    # isolates its artifacts instead of polluting the real repo output/ tree.
+    import magic_manager.util as util
+    monkeypatch.setattr(util, "OUTPUT_ROOT", tmp_path / "output")
     import magic_manager.scryfall as scry
     monkeypatch.setattr(scry, "all_sets",
                         lambda: [{"code": "tla", "parent_set_code": None,
@@ -148,8 +152,16 @@ def test_query_missing_set_e2e(tmp_db, app, fake_scryfall, seed_cards, make_card
                      "VALUES ('q2','nonfoil',1,'2025-01-01')")
     res = runner.invoke(app, ["query", "missing-set", "tla"])
     assert res.exit_code == 0, res.stdout
-    # headline reflects 1 missing printing; artifacts written to queries/
+    # headline reflects 1 missing printing
     assert "Missing from set:tla" in res.stdout
+    # Artifacts land in the segmented output/missing-set/{checklists,buy-lists}/
+    # tree (guards the write path — a regression to a wrong dir fails here).
+    checklists = list((tmp_path / "output" / "missing-set" / "checklists").glob(
+        "missing-tla-checklist-*.xlsx"))
+    assert checklists, "expected a missing-tla checklist under output/missing-set/checklists/"
+    buylists = list((tmp_path / "output" / "missing-set" / "buy-lists").glob(
+        "missing-tla-*.txt"))
+    assert buylists, "expected missing-tla buy-list txt under output/missing-set/buy-lists/"
 
 
 # ---------- Phase 5: audit/debug commands ----------
