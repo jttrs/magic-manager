@@ -68,6 +68,9 @@ class Deck:
     # Every deck_cards read resolves composition through this. NULL only in the
     # (invalid) window before a deck's first version exists.
     current_version_id: int | None = None
+    # V22: original creator/owner as reported by the import source (Moxfield /
+    # Archidekt). NULL for hand-built decks, precons, and MTGGoldfish imports.
+    author: str | None = None
 
 
 @dataclass
@@ -169,6 +172,7 @@ def _deck_row_to_dataclass(row) -> Deck:
         precon_state=(row["precon_state"] if "precon_state" in keys else "built"),
         current_version_id=(row["current_version_id"]
                             if "current_version_id" in keys else None),
+        author=(row["author"] if "author" in keys else None),
     )
 
 
@@ -176,7 +180,7 @@ def _fetch_deck(conn, slug: str):
     return conn.execute(
         "SELECT deck_id, slug, name, format, archetype, notes, "
         "created_at, updated_at, source_precon_file_name, precon_state, "
-        "current_version_id "
+        "current_version_id, author "
         "FROM decks WHERE slug = ?",
         (slug,),
     ).fetchone()
@@ -294,6 +298,7 @@ def deck_create(
     source_precon_file_name: str | None = None,
     precon_state: str = "built",
     status: str = "brew",
+    author: str | None = None,
     conn=None,
 ) -> Deck:
     """Insert a new deck. Raises ``ValueError`` if ``slug`` is already in use.
@@ -328,12 +333,12 @@ def deck_create(
             """
             INSERT INTO decks (slug, name, format, archetype, notes,
                                source_set_code, source_precon_file_name,
-                               precon_state, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                               precon_state, created_at, updated_at, author)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (slug, name, format, archetype, notes,
              (source_set_code or None), (source_precon_file_name or None),
-             precon_state, now, now),
+             precon_state, now, now, (author or None)),
         )
         deck_id = cur.lastrowid
         # V17: every deck has a v1 version from birth; point the deck at it.
@@ -353,6 +358,7 @@ def deck_create(
         source_precon_file_name=(source_precon_file_name or None),
         precon_state=precon_state,
         current_version_id=version_id,
+        author=(author or None),
     )
 
 
@@ -362,7 +368,7 @@ def deck_list() -> list[Deck]:
             """
             SELECT deck_id, slug, name, format, archetype, notes,
                    created_at, updated_at, source_precon_file_name, precon_state,
-                   current_version_id
+                   current_version_id, author
             FROM decks
             ORDER BY slug
             """
