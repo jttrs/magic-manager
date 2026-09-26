@@ -735,6 +735,91 @@ ALTER TABLE decks ADD COLUMN author TEXT;
 """
 
 
+# V23: EDHREC community-signal cache. EDHREC has no official API; its Next.js
+# front-end fetches name-keyed JSON from json.edhrec.com/pages/… (no scryfall/
+# oracle id anywhere on EDHREC — the join key is the sanitized card name). These
+# tables are a REBUILDABLE CACHE over that source (re-fetchable any time), so they
+# are NOT precious like inventory_events.
+#
+#   edhrec_pages           raw snapshot, one row per fetched page — the source of
+#                          truth from which the normalized tables are re-derivable
+#                          (so a later migration can normalize new metrics without
+#                          re-hitting EDHREC). page_type ∈ commander|card|top|commanders.
+#   edhrec_commander_cards workflow A: for a commander, the cards its decks run
+#                          (one row per (commander, card, list_tag)). synergy is
+#                          the commander-page relevance metric.
+#   edhrec_card_commanders workflow B: for a card, the commanders that run it in
+#                          the 99. lift is the card-page relevance metric.
+#   edhrec_rankings        workflow C: general rankings — top commanders, top
+#                          cards, saltiest cards. scope ∈ commanders|cards|salt.
+#
+# oracle_id columns are the join back to cards (V13 cards_oracle_idx); NULL when a
+# name can't be resolved locally or via the lazy Scryfall by-name fill.
+SCHEMA_V23 = """
+CREATE TABLE IF NOT EXISTS edhrec_pages (
+    slug        TEXT NOT NULL,
+    page_type   TEXT NOT NULL CHECK (page_type IN ('commander','card','top','commanders')),
+    timeframe   TEXT NOT NULL DEFAULT '',      -- rankings only; '' otherwise (part of PK)
+    json        TEXT NOT NULL,                 -- full raw page body
+    http_status INTEGER,
+    fetched_at  TEXT NOT NULL,                 -- ISO UTC
+    PRIMARY KEY (page_type, slug, timeframe)
+);
+
+CREATE TABLE IF NOT EXISTS edhrec_commander_cards (
+    commander_oracle_id TEXT,                  -- resolved; NULL if unresolvable
+    commander_slug      TEXT NOT NULL,
+    commander_name      TEXT NOT NULL,
+    card_oracle_id      TEXT,
+    card_slug           TEXT NOT NULL,
+    card_name           TEXT NOT NULL,
+    list_tag            TEXT NOT NULL,         -- topcards|highsynergycards|creatures|lands|…
+    num_decks           INTEGER,
+    potential_decks     INTEGER,
+    inclusion_pct       REAL,                  -- derived: num_decks/potential_decks
+    synergy             REAL,
+    trend_zscore        REAL,
+    fetched_at          TEXT NOT NULL,
+    PRIMARY KEY (commander_slug, card_slug, list_tag)
+);
+
+CREATE TABLE IF NOT EXISTS edhrec_card_commanders (
+    card_oracle_id      TEXT,
+    card_slug           TEXT NOT NULL,
+    card_name           TEXT NOT NULL,
+    commander_oracle_id TEXT,
+    commander_slug      TEXT NOT NULL,
+    commander_name      TEXT NOT NULL,
+    list_tag            TEXT NOT NULL,         -- topcommanders|newcommanders
+    num_decks           INTEGER,
+    potential_decks     INTEGER,
+    inclusion_pct       REAL,
+    lift                REAL,                  -- card-page relevance metric
+    fetched_at          TEXT NOT NULL,
+    PRIMARY KEY (card_slug, commander_slug, list_tag)
+);
+
+CREATE TABLE IF NOT EXISTS edhrec_rankings (
+    scope            TEXT NOT NULL CHECK (scope IN ('commanders','cards','salt')),
+    timeframe        TEXT NOT NULL,            -- 'week' | 'all' | …
+    entity_oracle_id TEXT,
+    entity_slug      TEXT NOT NULL,
+    entity_name      TEXT NOT NULL,
+    rank             INTEGER,
+    num_decks        INTEGER,
+    salt             REAL,
+    trend_zscore     REAL,
+    fetched_at       TEXT NOT NULL,
+    PRIMARY KEY (scope, timeframe, entity_slug)
+);
+
+CREATE INDEX IF NOT EXISTS edhrec_cmd_cards_cmd_idx  ON edhrec_commander_cards (commander_oracle_id);
+CREATE INDEX IF NOT EXISTS edhrec_cmd_cards_card_idx ON edhrec_commander_cards (card_oracle_id);
+CREATE INDEX IF NOT EXISTS edhrec_card_cmds_card_idx ON edhrec_card_commanders (card_oracle_id);
+CREATE INDEX IF NOT EXISTS edhrec_rank_scope_idx     ON edhrec_rankings (scope, timeframe, rank);
+"""
+
+
 # ---------- migration-authoring convention ----------
 #
 # Always-safe ops in a migration: CREATE TABLE, ALTER TABLE ADD COLUMN,
@@ -768,6 +853,9 @@ ALTER TABLE decks ADD COLUMN author TEXT;
 #   - schema_version    bookkeeping
 #   - settings          flags; nothing irreplaceable
 #   - front_cards       rebuilt by `front_cards.sync_front_cards()` (a Scryfall fetch)
+#   - edhrec_pages / edhrec_commander_cards / edhrec_card_commanders /
+#                       edhrec_rankings   (V23) rebuilt by `mm edhrec sync` — a
+#                       cache over json.edhrec.com, re-fetchable any time
 #
 # Copy-rebuild dance for destructive changes:
 #   BEGIN;
@@ -807,6 +895,7 @@ MIGRATIONS: list[str] = [
     SCHEMA_V20,
     SCHEMA_V21,
     SCHEMA_V22,
+    SCHEMA_V23,
 ]
 CURRENT_VERSION = len(MIGRATIONS)
 

@@ -66,6 +66,8 @@ audit_app = typer.Typer(no_args_is_help=True,
                         help="Consistency checks + repair for the local DB.")
 earmark_app = typer.Typer(no_args_is_help=True,
                           help="Watchlist of sealed products across storefronts.")
+edhrec_app = typer.Typer(no_args_is_help=True,
+                         help="EDHREC community signal: commander/card inclusion + rankings.")
 
 app.add_typer(set_app, name="set")
 app.add_typer(inventory_app, name="inventory")
@@ -79,6 +81,7 @@ app.add_typer(mtgjson_app, name="mtgjson")
 app.add_typer(db_app, name="db")
 app.add_typer(audit_app, name="audit")
 app.add_typer(earmark_app, name="earmark")
+app.add_typer(edhrec_app, name="edhrec")
 
 
 def _slug(s: str) -> str:
@@ -4643,6 +4646,90 @@ def earmark_rm_product_cmd(
         typer.echo(f"(no earmarked product {name!r} in {set_code.lower()})", err=True)
         raise typer.Exit(2)
     typer.echo(f"removed product: {name} ({set_code.lower()})")
+
+
+# ---------- EDHREC community signal ----------
+
+def _run_edhrec_report(report_args: list[str]) -> None:
+    """Relay to scripts/edhrec_report.py — the deterministic single source of
+    truth for EDHREC report math + artifacts (thin-wrapper rule). Streams its
+    markdown/JSON/XLSX output straight through and mirrors its exit code."""
+    import subprocess
+    script = Path(__file__).resolve().parent.parent.parent / "scripts" / "edhrec_report.py"
+    proc = subprocess.run(["uv", "run", "python", str(script), *report_args])
+    raise typer.Exit(proc.returncode)
+
+
+@edhrec_app.command("commander")
+def edhrec_commander_cmd(
+    card: str = typer.Argument(..., help="Commander card — name (\"Atraxa, Praetors' Voice\") or printing (\"SET CN\")."),
+    top: int = typer.Option(25, "--top", help="Show at most N cards."),
+    no_refresh: bool = typer.Option(False, "--no-refresh", help="Use local prices as-is; don't re-sync stale sets."),
+):
+    """Workflow A: cards with the highest inclusion rate when CARD is the commander.
+
+    Up-levels the printing to its oracle name, fetches EDHREC, and emits a
+    markdown table (inclusion %, synergy, type, mana value, lowest USD) plus
+    JSON + XLSX artifacts under output/edhrec/reports/.
+    """
+    args = ["commander", card, "--top", str(top)]
+    if no_refresh:
+        args.append("--no-refresh")
+    _run_edhrec_report(args)
+
+
+@edhrec_app.command("card")
+def edhrec_card_cmd(
+    card: str = typer.Argument(..., help="Card — name (\"Sol Ring\") or printing (\"SET CN\")."),
+    top: int = typer.Option(25, "--top", help="Show at most N commanders."),
+    no_refresh: bool = typer.Option(False, "--no-refresh", help="Use local prices as-is; don't re-sync stale sets."),
+):
+    """Workflow B: the most common commanders that run CARD in the 99."""
+    args = ["card", card, "--top", str(top)]
+    if no_refresh:
+        args.append("--no-refresh")
+    _run_edhrec_report(args)
+
+
+@edhrec_app.command("rankings")
+def edhrec_rankings_cmd(
+    scope: str = typer.Argument(..., help="commanders | cards | salt."),
+    timeframe: str = typer.Option("week", "--timeframe", help="week | month | year (ignored for salt)."),
+    top: int = typer.Option(50, "--top", help="Show at most N entries."),
+    no_refresh: bool = typer.Option(False, "--no-refresh", help="Use local prices as-is; don't re-sync stale sets."),
+):
+    """Workflow C: general rankings — top commanders, top cards, or saltiest cards."""
+    if scope not in ("commanders", "cards", "salt"):
+        typer.echo(f"error: scope must be commanders|cards|salt, got {scope!r}", err=True)
+        raise typer.Exit(2)
+    args = ["rankings", scope, "--timeframe", timeframe, "--top", str(top)]
+    if no_refresh:
+        args.append("--no-refresh")
+    _run_edhrec_report(args)
+
+
+@edhrec_app.command("sync")
+def edhrec_sync_cmd(
+    card: str = typer.Argument(..., help="Card/commander to warm the EDHREC cache for (name or printing)."),
+):
+    """Fetch + persist a card's EDHREC commander AND card pages without a report.
+
+    Warms edhrec_pages + the normalized tables (useful before an offline report
+    run, or to refresh the cached signal for a card).
+    """
+    from . import edhrec as edhrec_mod
+
+    name = edhrec_mod.resolve_oracle_name(card)
+    try:
+        c = edhrec_mod.sync_commander(name)
+        typer.echo(f"synced commander {c.name!r}: {len(c.rows)} recommendation rows")
+    except edhrec_mod.EdhrecError as e:
+        typer.echo(f"  (no commander page for {name!r}: {e})", err=True)
+    try:
+        d = edhrec_mod.sync_card(name)
+        typer.echo(f"synced card {d.name!r}: {len(d.rows)} commander rows")
+    except edhrec_mod.EdhrecError as e:
+        typer.echo(f"  (no card page for {name!r}: {e})", err=True)
 
 
 # ---------- entry point ----------
