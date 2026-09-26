@@ -1387,6 +1387,78 @@ def card_price_map(scryfall_ids: Iterable[str], *, conn=None) -> dict[str, dict]
         return _q(c)
 
 
+def lowest_price_by_oracle(oracle_ids: Iterable[str], *, conn=None) -> dict[str, dict]:
+    """Enriched per-oracle metadata + the CHEAPEST USD across all local printings.
+
+    EDHREC (and any oracle-level view) keys on the functional card, not a
+    printing — so "how much does this card cost" is best answered by the cheapest
+    printing the user could buy. Returns ``{oracle_id: {name, type_line, cmc,
+    mana_cost, color_identity, rarity, lowest_usd, lowest_usd_foil,
+    prices_updated_at}}`` for every ``oracle_id`` present in the local ``cards``
+    table (ids absent are omitted — the caller treats them as unpriced). The
+    metadata columns (name/type_line/cmc/…) are taken from the cheapest-nonfoil
+    printing so a card's face data comes from a single coherent row; ``lowest_usd``
+    / ``lowest_usd_foil`` are the ``MIN`` across every printing of that oracle.
+
+    Complements :func:`card_price_map` (price a specific printing by id) — this is
+    the oracle-grain sibling, the single source of truth for "lowest USD for a
+    functional card". ``prices_updated_at`` is the newest stamp across the printings
+    so callers can surface a freshness basis.
+    """
+    ids = list(dict.fromkeys(o for o in oracle_ids if o))  # dedupe, preserve order
+    if not ids:
+        return {}
+
+    def _q(c):
+        placeholders = ",".join("?" for _ in ids)
+        # One pass: MIN prices per oracle_id, plus the identity/type of the
+        # cheapest-nonfoil printing (NULLs sort last so a priced printing wins;
+        # if none is priced, any printing's metadata is used).
+        rows = c.execute(
+            f"""
+            WITH ranked AS (
+                SELECT
+                    oracle_id, name, type_line, cmc, mana_cost,
+                    color_identity, rarity,
+                    MIN(prices_usd)        OVER (PARTITION BY oracle_id) AS lowest_usd,
+                    MIN(prices_usd_foil)   OVER (PARTITION BY oracle_id) AS lowest_usd_foil,
+                    MAX(prices_updated_at) OVER (PARTITION BY oracle_id) AS newest_stamp,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY oracle_id
+                        ORDER BY (prices_usd IS NULL), prices_usd, collector_number
+                    ) AS rn
+                FROM cards
+                WHERE oracle_id IN ({placeholders})
+            )
+            SELECT
+                oracle_id, name, type_line, cmc, mana_cost,
+                color_identity, rarity, lowest_usd, lowest_usd_foil, newest_stamp
+            FROM ranked
+            WHERE rn = 1
+            """,
+            ids,
+        ).fetchall()
+        return {
+            r["oracle_id"]: {
+                "name": r["name"],
+                "type_line": r["type_line"],
+                "cmc": r["cmc"],
+                "mana_cost": r["mana_cost"],
+                "color_identity": r["color_identity"],
+                "rarity": r["rarity"],
+                "lowest_usd": r["lowest_usd"],
+                "lowest_usd_foil": r["lowest_usd_foil"],
+                "prices_updated_at": r["newest_stamp"],
+            }
+            for r in rows
+        }
+
+    if conn is not None:
+        return _q(conn)
+    with db.connect() as c:
+        return _q(c)
+
+
 def _rollup_deck_prices(
     deck_data: dict,
 ) -> tuple[int, float | None, str | None, float | None, set[str]]:

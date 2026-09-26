@@ -96,6 +96,12 @@ def cn_sort_key(cn: str | None) -> tuple[int, str]:
     return (int(m.group(1)), m.group(2))
 
 
+def front_face(name: str | None) -> str:
+    """Front face of a double-faced card name ('Front // Back' -> 'Front');
+    pass-through for single-faced. Tolerates None."""
+    return (name or "").split(" // ")[0].strip()
+
+
 def fmt_usd(v: float | None) -> str:
     """Render a USD amount as ``$X.XX``, or ``—`` when ``None``."""
     return f"${v:.2f}" if v is not None else "—"
