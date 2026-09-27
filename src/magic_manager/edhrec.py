@@ -30,7 +30,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
 
-from . import db, scryfall, sets, util
+from . import db, legality, scryfall, sets, util
 
 WRAPPER = (
     Path(__file__).resolve().parents[2]
@@ -82,6 +82,29 @@ def commanders_ranking(timeframe: str = "week") -> dict:
 def top_ranking(segment: str = "week") -> dict:
     """GET /pages/top/<segment>.json — top cards (week|month|year) or 'salt'."""
     return _run(["top", segment])
+
+
+def color_ranking(color_slug: str, timeframe: str | None = None) -> dict:
+    """GET /pages/commanders/<color-slug>[/<timeframe>].json — commanders of a
+    color identity (e.g. ``mono-red``, ``azorius``, ``bant``, ``five-color``)."""
+    path = f"commanders/{color_slug}"
+    if timeframe:
+        path += f"/{timeframe}"
+    return _run(["raw", path])
+
+
+def tag_ranking(tag_slug: str) -> dict:
+    """GET /pages/tags/<slug>.json — the tag/theme/creature-type page (one
+    namespace for both themes and typals); carries a ``topcommanders`` ranking
+    list. Unlike color pages, tag pages do NOT accept a timeframe segment (a
+    ``tags/<slug>/<tf>`` request 403s), so this is all-time only."""
+    return _run(["raw", f"tags/{tag_slug}"])
+
+
+def set_page(set_code: str) -> dict:
+    """GET /pages/sets/<code>.json — a set's page; carries per-set-code
+    ``commanders(<code>)`` ranking lists."""
+    return _run(["raw", f"sets/{set_code.lower()}"])
 
 
 # ---------- slug + parse helpers ----------
@@ -138,6 +161,62 @@ COMMANDER_CARD_TAGS = (
 
 # Card-page cardlist tags that list COMMANDERS running the card (workflow B).
 CARD_COMMANDER_TAGS = ("topcommanders", "newcommanders")
+
+
+# EDHREC's color-identity → ranking-slug map. Keyed by the frozenset of WUBRG
+# letters so any letter order resolves the same (a color IDENTITY, not a
+# sequence). 0/1/2/3/4/5-color all have a canonical EDHREC slug:
+# colorless, the mono-* set, the ten guilds, the ten shards/wedges, the five
+# nephilim names, and five-color. (Verified live against json.edhrec.com.)
+_COLOR_SLUGS: dict[frozenset[str], str] = {
+    frozenset(): "colorless",
+    frozenset("W"): "mono-white", frozenset("U"): "mono-blue",
+    frozenset("B"): "mono-black", frozenset("R"): "mono-red",
+    frozenset("G"): "mono-green",
+    frozenset("WU"): "azorius", frozenset("UB"): "dimir",
+    frozenset("BR"): "rakdos", frozenset("RG"): "gruul",
+    frozenset("GW"): "selesnya", frozenset("WB"): "orzhov",
+    frozenset("UR"): "izzet", frozenset("BG"): "golgari",
+    frozenset("RW"): "boros", frozenset("GU"): "simic",
+    frozenset("GWU"): "bant", frozenset("WUB"): "esper",
+    frozenset("UBR"): "grixis", frozenset("BRG"): "jund",
+    frozenset("RGW"): "naya", frozenset("WBG"): "abzan",
+    frozenset("URW"): "jeskai", frozenset("BRW"): "mardu",
+    frozenset("UBG"): "sultai", frozenset("URG"): "temur",
+    frozenset("WUBR"): "yore-tiller", frozenset("UBRG"): "glint-eye",
+    frozenset("WBRG"): "dune-brood", frozenset("WURG"): "ink-treader",
+    frozenset("WUBG"): "witch-maw",
+    frozenset("WUBRG"): "five-color",
+}
+
+# All EDHREC color slugs (for accepting a slug/name passed through directly).
+_COLOR_SLUG_NAMES: frozenset[str] = frozenset(_COLOR_SLUGS.values())
+
+
+def color_filter_slug(spec: str) -> str:
+    """Map a color spec to its EDHREC color-ranking slug.
+
+    Accepts WUBRG letters in any order (``"wu"``, ``"rgw"``, ``"wubrg"``), the
+    guild/shard/wedge/nephilim/mono-* names or ``five-color``/``colorless``
+    themselves (passed through), and ``"c"``/empty → ``colorless``. Raises
+    :class:`EdhrecError` on anything unrecognized."""
+    s = spec.strip().lower()
+    if s in _COLOR_SLUG_NAMES:
+        return s
+    if s in ("c", "colourless", ""):
+        return "colorless"
+    letters = frozenset(ch.upper() for ch in s if ch.upper() in "WUBRG")
+    # only treat as a letter-spec if EVERY char was a color letter (else it's a
+    # misspelled name, which should error rather than silently drop chars)
+    if letters and all(ch.upper() in "WUBRG" for ch in s):
+        slug = _COLOR_SLUGS.get(letters)
+        if slug:
+            return slug
+    raise EdhrecError(
+        f"unrecognized color spec {spec!r} — use WUBRG letters (e.g. 'wu'), a "
+        f"guild/shard/wedge name (e.g. 'azorius', 'bant'), 'mono-red', "
+        f"'five-color', or 'colorless'"
+    )
 
 
 # ---------- name -> oracle resolution ----------
@@ -209,28 +288,35 @@ def resolve_names_to_oracle(names: Iterable[str]) -> dict[str, dict]:
     return out
 
 
-def resolve_oracle_name(ref: str) -> str:
-    """Up-level a user card reference (a name, or a 'SET CN' printing) to its
-    ORACLE name via Scryfall, so reprints all collapse to one EDHREC page.
+def resolve_oracle_card(ref: str) -> tuple[str, dict | None]:
+    """Up-level a card reference to ``(oracle_name, scryfall_card_dict)``.
 
     Accepts a bare name ("Sol Ring") or a printing "SET CN" ("cmm 425"). A
-    printing is resolved via Scryfall's exact endpoint; a bare name is looked up
-    by the fuzzy/named endpoint. Returns the oracle name (front face for DFCs).
-    """
+    printing is resolved via Scryfall's exact endpoint; a bare name via the
+    fuzzy/named endpoint. The name is the front face (so reprints and DFCs
+    collapse to one EDHREC page); the card dict carries ``type_line``/
+    ``oracle_text`` so callers can gate on commander eligibility. ``card`` is
+    ``None`` only when Scryfall can't resolve the ref (then ``name`` falls back
+    to the raw input — the slug is still derivable for an exact name)."""
     parts = ref.split()
     # "SET CN" form: 2 tokens, second is a collector-number-ish token.
     if len(parts) == 2 and any(ch.isdigit() for ch in parts[1]):
         set_code, cn = parts[0].lower(), parts[1]
         found, _ = scryfall.collection([{"set": set_code, "collector_number": cn}])
         if found:
-            return util.front_face(found[0].get("name") or ref)
+            return util.front_face(found[0].get("name") or ref), found[0]
     # bare name → Scryfall named (exact if possible; tolerant fuzzy fallback)
     try:
         card = scryfall.named(ref)
-        return util.front_face(card.get("name") or ref)
+        return util.front_face(card.get("name") or ref), card
     except scryfall.ScryfallError:
         # last resort: use the raw input; slugify still works for exact names
-        return ref
+        return ref, None
+
+
+def resolve_oracle_name(ref: str) -> str:
+    """Front-face ORACLE name for a card reference (see :func:`resolve_oracle_card`)."""
+    return resolve_oracle_card(ref)[0]
 
 
 def _inclusion_pct(num: int | None, pot: int | None) -> float | None:
@@ -276,6 +362,21 @@ class SyncResult:
     timeframe: str | None = None   # rankings only
     rows: list[EnrichedCardRow] = field(default_factory=list)
     raw: dict = field(default_factory=dict)
+
+
+@dataclass
+class DualSyncResult:
+    """Outcome of a symmetric ingest (:func:`sync_both`).
+
+    ``commander`` is the commander-page ``SyncResult`` (``None`` when the card is
+    not commander-eligible, or — rarely — eligible but EDHREC has no page yet).
+    ``card`` is the card-in-the-99 ``SyncResult`` (``None`` only on an unexpected
+    card-page miss). ``eligible`` records whether the card cleared the
+    commander-eligibility gate."""
+    name: str
+    commander: SyncResult | None = None
+    card: SyncResult | None = None
+    eligible: bool = False
 
 
 # ---------- sync engines ----------
@@ -425,37 +526,143 @@ def sync_card(card_name: str) -> SyncResult:
 _RANKING_SCOPES = frozenset({"commanders", "cards", "salt"})
 
 
-def sync_rankings(scope: str, timeframe: str = "week") -> SyncResult:
-    """Workflow C: general rankings — 'commanders' | 'cards' | 'salt'.
+@dataclass
+class _RankingPlan:
+    """Resolved fetch for one rankings request — filled by :func:`_plan_rankings`."""
+    cardviews: list[dict]                  # the ranking list (deck-count-ordered)
+    filter_key: str                        # '' | 'color:…' | 'tag:…' | 'set:…'
+    result_slug: str                       # SyncResult.slug (used in artifact names)
+    display_name: str                      # human title for the report header
+    timeframe: str                         # effective timeframe stored on rows
+    snapshots: list[tuple[str, str, dict]] # (page_type, slug, page) to _store_page
+    primary_page: dict                     # SyncResult.raw
 
-    'commanders'/'cards' take a timeframe (week/month/year); 'salt' ignores it
-    (the endpoint is ``/pages/top/salt.json``). Rank is taken from the cardview
-    when present (commanders pages), else derived from array position (cards/salt).
-    """
-    if scope not in _RANKING_SCOPES:
-        raise EdhrecError(f"unknown ranking scope {scope!r} (expected commanders|cards|salt)")
 
+def _dedupe_cardviews(cardviews: list[dict]) -> list[dict]:
+    """Merge cardviews by slug, first-wins, then sort by num_decks desc so a
+    unioned/merged list ranks meaningfully."""
+    by_slug: dict[str, dict] = {}
+    for cv in cardviews:
+        key = cv.get("slug") or slugify(cv.get("name") or "")
+        if key and key not in by_slug:
+            by_slug[key] = cv
+    return sorted(by_slug.values(), key=lambda c: -(c.get("num_decks") or 0))
+
+
+def _plan_rankings(scope: str, timeframe: str, *,
+                   color: str | None, tag: str | None,
+                   set_family: str | None) -> _RankingPlan:
+    """Fetch the right EDHREC page(s) for a (scope, filter) request and select
+    the correct ranking cardlist. Filters are commander-only and mutually
+    exclusive (enforced by the caller). List selection is EXPLICIT per filter —
+    a tags page's first non-empty list is ``newcommanders`` (5), not the
+    ``topcommanders`` (24) we want."""
+    if color is not None:
+        slug = color_filter_slug(color)
+        page = color_ranking(slug, timeframe)
+        lists = cardlists(page)
+        # color pages carry a single '<slug>commanders' list.
+        cardviews = lists.get(f"{slug}commanders") or next((cv for cv in lists.values() if cv), [])
+        return _RankingPlan(
+            cardviews=cardviews, filter_key=f"color:{slug}", result_slug=slug,
+            display_name=page.get("header") or f"{slug} commanders",
+            timeframe=timeframe, snapshots=[("commanders", slug, page)],
+            primary_page=page,
+        )
+
+    if tag is not None:
+        tslug = slugify(tag)
+        # tag pages are all-time only (no timeframe segment — a tf 403s).
+        page = tag_ranking(tslug)
+        lists = cardlists(page)
+        # EXPLICIT: topcommanders (24) then newcommanders (5), deduped.
+        cardviews = _dedupe_cardviews(list(lists.get("topcommanders") or [])
+                                      + list(lists.get("newcommanders") or []))
+        return _RankingPlan(
+            cardviews=cardviews, filter_key=f"tag:{tslug}", result_slug=f"tag-{tslug}",
+            display_name=f"{page.get('header') or tslug} commanders (tag)",
+            timeframe="all", snapshots=[("commanders", f"tags/{tslug}", page)],
+            primary_page=page,
+        )
+
+    if set_family is not None:
+        resolved_set = sets.resolve(set_family)
+        anchor = resolved_set.code
+        codes = resolved_set.all_codes
+        snapshots: list[tuple[str, str, dict]] = []
+        merged: list[dict] = []
+        primary: dict = {}
+        for code in codes:
+            page = set_page(code)
+            if not primary:
+                primary = page
+            snapshots.append(("commanders", f"sets/{code}", page))
+            lists = cardlists(page)
+            # a set page carries per-code 'commanders(<code>)' lists — take them all.
+            for tagname, cvs in lists.items():
+                if tagname.startswith("commanders(") and cvs:
+                    merged.extend(cvs)
+        return _RankingPlan(
+            cardviews=_dedupe_cardviews(merged), filter_key=f"set:{anchor}",
+            result_slug=f"set-{anchor}",
+            display_name=f"{(primary.get('header') if primary else None) or anchor} commanders (set)",
+            timeframe="", snapshots=snapshots, primary_page=primary,
+        )
+
+    # unfiltered: the original three global scopes.
     if scope == "commanders":
         page = commanders_ranking(timeframe)
+        tf = timeframe
     elif scope == "salt":
         page = top_ranking("salt")
-        timeframe = "all"
+        tf = "all"
     else:  # cards
         page = top_ranking(timeframe)
-
-    at = db._utcnow_iso()
+        tf = timeframe
     lists = cardlists(page)
-    # rankings pages carry a single cardlist; take the first non-empty one.
-    cardviews: list[dict] = next((cv for cv in lists.values() if cv), [])
+    cardviews = next((cv for cv in lists.values() if cv), [])
+    return _RankingPlan(
+        cardviews=cardviews, filter_key="", result_slug=scope,
+        display_name=f"{scope} ({tf})", timeframe=tf,
+        snapshots=[(("commanders" if scope == "commanders" else "top"), scope, page)],
+        primary_page=page,
+    )
 
-    names = [cv["name"] for cv in cardviews if cv.get("name")]
+
+def sync_rankings(scope: str = "commanders", timeframe: str = "week", *,
+                  color: str | None = None, tag: str | None = None,
+                  set_family: str | None = None) -> SyncResult:
+    """Workflow C: commander/card/salt rankings, optionally FILTERED.
+
+    Unfiltered scopes: 'commanders' | 'cards' | 'salt' (salt ignores timeframe).
+    Filters (commander-only, MUTUALLY EXCLUSIVE — at most one): ``color`` (a WUBRG
+    letter spec or guild/shard/wedge/mono-*/five-color/colorless name), ``tag`` (a
+    theme OR creature type — EDHREC serves both from /tags/<slug>), ``set_family``
+    (a set name/code, expanded via :func:`sets.resolve` and unioned across the
+    family's codes). Rank derives from array position within the deck-count-ordered
+    list. Each filtered ranking is persisted under its own ``filter`` key."""
+    n_filters = sum(x is not None for x in (color, tag, set_family))
+    if n_filters > 1:
+        raise EdhrecError("color/tag/set filters are mutually exclusive — pass at most one")
+    if n_filters == 1 and scope != "commanders":
+        raise EdhrecError(f"filters apply only to the 'commanders' scope, not {scope!r}")
+    if n_filters == 0 and scope not in _RANKING_SCOPES:
+        raise EdhrecError(f"unknown ranking scope {scope!r} (expected commanders|cards|salt)")
+
+    plan = _plan_rankings(scope, timeframe, color=color, tag=tag, set_family=set_family)
+    # Filtered rankings are always commander rankings; unfiltered keeps its scope.
+    row_scope = "commanders" if n_filters == 1 else scope
+    at = db._utcnow_iso()
+
+    names = [cv["name"] for cv in plan.cardviews if cv.get("name")]
     resolved = resolve_names_to_oracle(names)
 
     rows: list[EnrichedCardRow] = []
     with db.transaction() as conn:
-        _store_page(conn, page_type=("commanders" if scope == "commanders" else "top"),
-                    slug=scope, timeframe=timeframe, page=page, at=at)
-        for i, cv in enumerate(cardviews, start=1):
+        for page_type, slug, page in plan.snapshots:
+            _store_page(conn, page_type=page_type, slug=slug,
+                        timeframe=plan.timeframe, page=page, at=at)
+        for i, cv in enumerate(plan.cardviews, start=1):
             name = cv.get("name")
             if not name:
                 continue
@@ -464,10 +671,10 @@ def sync_rankings(scope: str, timeframe: str = "week") -> SyncResult:
             conn.execute(
                 """
                 INSERT INTO edhrec_rankings
-                    (scope, timeframe, entity_oracle_id, entity_slug, entity_name,
-                     rank, num_decks, salt, trend_zscore, fetched_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?)
-                ON CONFLICT(scope, timeframe, entity_slug) DO UPDATE SET
+                    (scope, timeframe, filter, entity_oracle_id, entity_slug,
+                     entity_name, rank, num_decks, salt, trend_zscore, fetched_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(scope, timeframe, filter, entity_slug) DO UPDATE SET
                     entity_oracle_id=excluded.entity_oracle_id,
                     entity_name=excluded.entity_name,
                     rank=excluded.rank,
@@ -476,16 +683,48 @@ def sync_rankings(scope: str, timeframe: str = "week") -> SyncResult:
                     trend_zscore=excluded.trend_zscore,
                     fetched_at=excluded.fetched_at
                 """,
-                (scope, timeframe, oid, cv.get("slug") or slugify(name), name,
-                 rank, cv.get("num_decks"), cv.get("salt"), cv.get("trend_zscore"), at),
+                (row_scope, plan.timeframe, plan.filter_key, oid,
+                 cv.get("slug") or slugify(name), name, rank,
+                 cv.get("num_decks"), cv.get("salt"), cv.get("trend_zscore"), at),
             )
             rows.append(EnrichedCardRow(
                 name=name, slug=cv.get("slug") or slugify(name), oracle_id=oid,
-                list_tag=scope, num_decks=cv.get("num_decks"),
+                list_tag=row_scope, num_decks=cv.get("num_decks"),
                 salt=cv.get("salt"), rank=rank, trend_zscore=cv.get("trend_zscore"),
             ))
-    return SyncResult(kind="rankings", slug=scope, name=f"{scope} ({timeframe})",
-                      scope=scope, timeframe=timeframe, rows=rows, raw=page)
+    return SyncResult(kind="rankings", slug=plan.result_slug, name=plan.display_name,
+                      scope=row_scope, timeframe=plan.timeframe, rows=rows,
+                      raw=plan.primary_page)
+
+
+def sync_both(ref: str) -> DualSyncResult:
+    """Ingest a card as BOTH its EDHREC views in one pass — the symmetric-ingest
+    seam every ingest path routes through.
+
+    Always ingests the card-in-the-99 page (every card has one). Ingests the
+    commander page ONLY if the card is commander-eligible — a deterministic gate
+    via :func:`legality.is_commander_eligible` on the resolved Scryfall card, NOT
+    a 404 probe, so we never fetch a commander page EDHREC can't serve. The
+    commander ``try/except`` is a belt-and-suspenders fallback for the rare
+    eligible-but-not-yet-on-EDHREC case (a brand-new legendary)."""
+    name, card = resolve_oracle_card(ref)
+    eligible = card is not None and legality.is_commander_eligible(card)
+
+    commander_res: SyncResult | None = None
+    if eligible:
+        try:
+            commander_res = sync_commander(name)
+        except EdhrecError:
+            commander_res = None
+
+    card_res: SyncResult | None = None
+    try:
+        card_res = sync_card(name)
+    except EdhrecError:
+        card_res = None
+
+    return DualSyncResult(name=name, commander=commander_res,
+                          card=card_res, eligible=eligible)
 
 
 def enrich_rows(rows: list[EnrichedCardRow]) -> list[EnrichedCardRow]:

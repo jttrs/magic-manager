@@ -125,6 +125,24 @@ def _as_text(v) -> str:
     return v if v is not None else ""
 
 
+def is_commander_eligible(card: dict) -> bool:
+    """True if a card can legally be a commander.
+
+    A card qualifies if it's a Legendary Creature, its oracle text says
+    "can be your commander" (the planeswalker/other-type commanders), or it's a
+    Background. Reads top-level ``type_line``/``oracle_text`` — for a
+    double-faced card Scryfall puts the front face's values there, which is the
+    oracle identity we want. Single source of truth, shared by deck-finalize
+    validation (:func:`_validate_commander`) and the EDHREC dual-ingest gate."""
+    type_line = _as_text(card.get("type_line")).lower()
+    oracle_text = _as_text(card.get("oracle_text")).lower()
+    return (
+        ("legendary" in type_line and "creature" in type_line)
+        or "can be your commander" in oracle_text
+        or "background" in type_line
+    )
+
+
 def _name(card: dict) -> str:
     """Coerce a card's ``name`` to ``str`` (defensive against a missing key)."""
     return str(card.get("name") or "")
@@ -203,14 +221,7 @@ def _validate_commander(cards: list[dict], size_override: int | None) -> list[Vi
         ))
     else:
         for c in commanders:
-            type_line = _as_text(c.get("type_line")).lower()
-            oracle_text = _as_text(c.get("oracle_text")).lower()
-            eligible = (
-                ("legendary" in type_line and "creature" in type_line)
-                or "can be your commander" in oracle_text
-                or "background" in type_line
-            )
-            if not eligible:
+            if not is_commander_eligible(c):
                 violations.append(Violation(
                     code="commander_eligibility",
                     severity="error",

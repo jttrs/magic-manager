@@ -105,10 +105,13 @@ def _md_rankings(res, top: int, prices_note: str) -> str:
     is_salt = res.scope == "salt"
     metric_hdr = "Salt" if is_salt else "Decks"
     entity_hdr = "Commander" if res.scope == "commanders" else "Card"
+    # res.name carries the EDHREC page header for a filtered ranking (e.g.
+    # "Top Mono-Red Commanders"); fall back to scope for the unfiltered case.
+    title = res.name if res.name and res.name[:1].isupper() else f"{res.scope} ({res.timeframe})"
     out = [
-        f"## EDHREC rankings — {res.scope} ({res.timeframe})",
+        f"## EDHREC rankings — {title}",
         "",
-        f"General {res.scope} ranking (workflow C). {prices_note}",
+        f"Ranking (workflow C). {prices_note}",
         "",
         f"| Rank | {entity_hdr} | {metric_hdr} | Type | MV | Lowest $ |",
         "|-----:|------------|------:|------|---:|---------:|",
@@ -235,10 +238,18 @@ def main() -> int:
     p_card.add_argument("--top", type=int, default=25)
 
     p_rank = sub.add_parser("rankings", parents=[common],
-                            help="Workflow C: general rankings.")
+                            help="Workflow C: general rankings (optionally filtered).")
     p_rank.add_argument("scope", choices=["commanders", "cards", "salt"])
     p_rank.add_argument("--timeframe", default="week")
     p_rank.add_argument("--top", type=int, default=50)
+    # Commander-only, mutually-exclusive filters (enforced below).
+    p_rank.add_argument("--color", help="Color identity: WUBRG letters ('wu'), a "
+                        "guild/shard/wedge name ('azorius','bant'), 'mono-red', "
+                        "'five-color', or 'colorless'.")
+    p_rank.add_argument("--tag", help="Creature type OR theme (EDHREC serves both "
+                        "from /tags/<slug>): e.g. 'goblins', 'treasure'.")
+    p_rank.add_argument("--set", dest="set_family",
+                        help="Set name or code (family-expanded, e.g. 'fin').")
 
     args = ap.parse_args()
     refresh = not args.no_refresh
@@ -246,15 +257,41 @@ def main() -> int:
     out_dir = util.output_dir(_OUTPUT_TYPE, "reports")
 
     try:
-        if args.cmd == "commander":
-            res = edhrec.sync_commander(edhrec.resolve_oracle_name(args.card))
-            renderer, base = _md_commander, f"{res.slug}-commander-{ts}"
-        elif args.cmd == "card":
-            res = edhrec.sync_card(edhrec.resolve_oracle_name(args.card))
-            renderer, base = _md_card, f"{res.slug}-card-{ts}"
+        if args.cmd in ("commander", "card"):
+            # Symmetric ingest: warm BOTH EDHREC views (gated by eligibility),
+            # then render from the one the user asked for.
+            dual = edhrec.sync_both(args.card)
+            if args.cmd == "commander":
+                res = dual.commander
+                if res is None:
+                    why = ("not commander-eligible" if not dual.eligible
+                           else "EDHREC has no commander page for it yet")
+                    print(f"error: {dual.name!r} — {why}; no commander report.",
+                          file=sys.stderr)
+                    return 2
+                renderer, base = _md_commander, f"{res.slug}-commander-{ts}"
+            else:  # card
+                res = dual.card
+                if res is None:
+                    print(f"error: EDHREC has no card page for {dual.name!r}.",
+                          file=sys.stderr)
+                    return 2
+                renderer, base = _md_card, f"{res.slug}-card-{ts}"
         else:  # rankings
-            res = edhrec.sync_rankings(args.scope, args.timeframe)
-            renderer, base = _md_rankings, f"rankings-{res.scope}-{res.timeframe}-{ts}"
+            filters = [f for f in (args.color, args.tag, args.set_family) if f]
+            if len(filters) > 1:
+                print("error: --color / --tag / --set are mutually exclusive.",
+                      file=sys.stderr)
+                return 2
+            if filters and args.scope != "commanders":
+                print(f"error: filters apply only to the 'commanders' scope, not {args.scope!r}.",
+                      file=sys.stderr)
+                return 2
+            res = edhrec.sync_rankings(args.scope, args.timeframe,
+                                       color=args.color, tag=args.tag,
+                                       set_family=args.set_family)
+            renderer = _md_rankings
+            base = f"rankings-{res.scope}-{res.slug}-{res.timeframe or 'all'}-{ts}"
     except edhrec.EdhrecError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
