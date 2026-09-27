@@ -4696,13 +4696,38 @@ def edhrec_rankings_cmd(
     scope: str = typer.Argument(..., help="commanders | cards | salt."),
     timeframe: str = typer.Option("week", "--timeframe", help="week | month | year (ignored for salt)."),
     top: int = typer.Option(50, "--top", help="Show at most N entries."),
+    color: str = typer.Option(None, "--color", help="Filter commanders by color identity: "
+                              "WUBRG letters ('wu'), a guild/shard/wedge name ('azorius','bant'), "
+                              "'mono-red', 'five-color', or 'colorless'."),
+    tag: str = typer.Option(None, "--tag", help="Filter commanders by creature type OR theme "
+                            "(EDHREC serves both from one namespace): e.g. 'goblins', 'treasure'."),
+    set_family: str = typer.Option(None, "--set", help="Filter commanders by set name/code "
+                                   "(family-expanded, e.g. 'fin')."),
     no_refresh: bool = typer.Option(False, "--no-refresh", help="Use local prices as-is; don't re-sync stale sets."),
 ):
-    """Workflow C: general rankings — top commanders, top cards, or saltiest cards."""
+    """Workflow C: rankings — top commanders/cards/salt, optionally filtered.
+
+    Filters (--color / --tag / --set) narrow the COMMANDER ranking and are
+    mutually exclusive. Colors, tags/creature-types, and sets each map to a
+    dedicated EDHREC ranking page.
+    """
     if scope not in ("commanders", "cards", "salt"):
         typer.echo(f"error: scope must be commanders|cards|salt, got {scope!r}", err=True)
         raise typer.Exit(2)
+    filters = [f for f in (color, tag, set_family) if f]
+    if len(filters) > 1:
+        typer.echo("error: --color / --tag / --set are mutually exclusive.", err=True)
+        raise typer.Exit(2)
+    if filters and scope != "commanders":
+        typer.echo(f"error: filters apply only to the 'commanders' scope, not {scope!r}.", err=True)
+        raise typer.Exit(2)
     args = ["rankings", scope, "--timeframe", timeframe, "--top", str(top)]
+    if color:
+        args += ["--color", color]
+    if tag:
+        args += ["--tag", tag]
+    if set_family:
+        args += ["--set", set_family]
     if no_refresh:
         args.append("--no-refresh")
     _run_edhrec_report(args)
@@ -4714,22 +4739,23 @@ def edhrec_sync_cmd(
 ):
     """Fetch + persist a card's EDHREC commander AND card pages without a report.
 
-    Warms edhrec_pages + the normalized tables (useful before an offline report
-    run, or to refresh the cached signal for a card).
+    Symmetric ingest: always warms the card-in-the-99 page, and — when the card
+    is commander-eligible — the commander page too (via the shared
+    ``edhrec.sync_both`` gate). Warms edhrec_pages + the normalized tables.
     """
     from . import edhrec as edhrec_mod
 
-    name = edhrec_mod.resolve_oracle_name(card)
-    try:
-        c = edhrec_mod.sync_commander(name)
-        typer.echo(f"synced commander {c.name!r}: {len(c.rows)} recommendation rows")
-    except edhrec_mod.EdhrecError as e:
-        typer.echo(f"  (no commander page for {name!r}: {e})", err=True)
-    try:
-        d = edhrec_mod.sync_card(name)
-        typer.echo(f"synced card {d.name!r}: {len(d.rows)} commander rows")
-    except edhrec_mod.EdhrecError as e:
-        typer.echo(f"  (no card page for {name!r}: {e})", err=True)
+    res = edhrec_mod.sync_both(card)
+    if res.commander is not None:
+        typer.echo(f"synced commander {res.commander.name!r}: {len(res.commander.rows)} recommendation rows")
+    elif res.eligible:
+        typer.echo(f"  (commander-eligible, but EDHREC has no commander page for {res.name!r} yet)", err=True)
+    else:
+        typer.echo(f"  ({res.name!r} is not commander-eligible — card page only)", err=True)
+    if res.card is not None:
+        typer.echo(f"synced card {res.card.name!r}: {len(res.card.rows)} commander rows")
+    else:
+        typer.echo(f"  (no card page for {res.name!r})", err=True)
 
 
 # ---------- entry point ----------

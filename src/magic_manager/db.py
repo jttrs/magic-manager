@@ -820,6 +820,45 @@ CREATE INDEX IF NOT EXISTS edhrec_rank_scope_idx     ON edhrec_rankings (scope, 
 """
 
 
+# V24: FILTERED commander rankings. EDHREC serves commander rankings narrowed by
+# color identity (`commanders/<color-slug>`), tag/creature-type (`tags/<slug>`),
+# and set (`sets/<code>`). The `filter` column keys each filtered ranking as a
+# distinct row-set: '' (unfiltered, the V23 default), 'color:mono-red',
+# 'tag:goblins', 'set:fin'. edhrec_rankings is a REBUILDABLE cache (re-fetchable),
+# NOT precious — but a PK change still needs the copy-rebuild dance (SQLite can't
+# alter a PK in place). Existing rows carry forward with filter=''.
+SCHEMA_V24 = """
+CREATE TABLE edhrec_rankings__new (
+    scope            TEXT NOT NULL CHECK (scope IN ('commanders','cards','salt')),
+    timeframe        TEXT NOT NULL,
+    filter           TEXT NOT NULL DEFAULT '',   -- '' | 'color:…' | 'tag:…' | 'set:…'
+    entity_oracle_id TEXT,
+    entity_slug      TEXT NOT NULL,
+    entity_name      TEXT NOT NULL,
+    rank             INTEGER,
+    num_decks        INTEGER,
+    salt             REAL,
+    trend_zscore     REAL,
+    fetched_at       TEXT NOT NULL,
+    PRIMARY KEY (scope, timeframe, filter, entity_slug)
+);
+
+INSERT INTO edhrec_rankings__new
+    (scope, timeframe, filter, entity_oracle_id, entity_slug, entity_name,
+     rank, num_decks, salt, trend_zscore, fetched_at)
+SELECT
+    scope, timeframe, '', entity_oracle_id, entity_slug, entity_name,
+    rank, num_decks, salt, trend_zscore, fetched_at
+FROM edhrec_rankings;
+
+DROP TABLE edhrec_rankings;
+ALTER TABLE edhrec_rankings__new RENAME TO edhrec_rankings;
+
+CREATE INDEX IF NOT EXISTS edhrec_rank_scope_idx
+    ON edhrec_rankings (scope, timeframe, filter, rank);
+"""
+
+
 # ---------- migration-authoring convention ----------
 #
 # Always-safe ops in a migration: CREATE TABLE, ALTER TABLE ADD COLUMN,
@@ -896,6 +935,7 @@ MIGRATIONS: list[str] = [
     SCHEMA_V21,
     SCHEMA_V22,
     SCHEMA_V23,
+    SCHEMA_V24,
 ]
 CURRENT_VERSION = len(MIGRATIONS)
 
