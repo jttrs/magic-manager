@@ -80,6 +80,7 @@ def set_list() -> list[dict]:
     return body.get("data", [])
 
 
+@lru_cache(maxsize=None)
 def set_file(set_code: str) -> dict:
     """Return ``<SETCODE>.json``'s ``data`` block.
 
@@ -344,6 +345,46 @@ def _pool_named_product_decks(set_code: str) -> set[str]:
     return out
 
 
+def _scene_box_component(file_name: str, display: str, *, entry_code: str | None = None) -> bool:
+    """True if a precon deck is a component of a pool-named (Scene Box / Starter
+    Collection) sealedProduct — resolved via _pool_named_product_decks.
+
+    The 'Scene Box' marker is on the PRODUCT name, not the component deck, so we
+    check the deck's lowercased display name against the pool-named products'
+    component-deck sets. Checks the deck's OWN set code first (derived from
+    entry_code or the Words_CODE fileName suffix, lowercased), then — for a
+    CROSS-SET scene box whose product lives in a sibling set file — falls back to
+    scanning the whole set family via sets.resolve. Network-tolerant: any lookup
+    failure degrades to False.
+
+    ``display`` must already be lowercased by the caller.
+    """
+    if not display:
+        return False
+    code = (entry_code or (file_name.rsplit("_", 1)[1] if "_" in file_name else "")).lower()
+    if not code:
+        return False
+    try:
+        if display in _pool_named_product_decks(code):
+            return True
+    except Exception:
+        pass
+    # Cross-set fallback: the pool-named product may live in a SIBLING set file
+    # (e.g. an SPM scene box whose component deck is coded SPE). Scan the family.
+    # Lazy import — `sets` lazily imports `mtgjson`, never the reverse; importing
+    # `sets` at module level here would create a cycle (see sets.py comment).
+    try:
+        from . import sets as _sets
+        for member in _sets.resolve(code).all_codes:
+            if member.lower() == code:
+                continue  # already checked above
+            if display in _pool_named_product_decks(member):
+                return True
+    except Exception:
+        pass
+    return False
+
+
 def default_precon_state(file_name: str, *, name: str | None = None) -> str:
     """Recommend the default ingest state for a precon: ``"deconstructed"`` or
     ``"built"``.
@@ -370,11 +411,8 @@ def default_precon_state(file_name: str, *, name: str | None = None) -> str:
     if display and any(pat in display for pat in POOL_NAME_PATTERNS):
         return "deconstructed"
     # Scene-Box-style: the deck is a component of a pool-named sealedProduct.
-    # Derive the set code from the Words_CODE fileName suffix.
-    if "_" in file_name and display:
-        set_code = file_name.rsplit("_", 1)[1]
-        if display in _pool_named_product_decks(set_code):
-            return "deconstructed"
+    if _scene_box_component(file_name, display):
+        return "deconstructed"
     try:
         if _deck_total_cards(deck(file_name)) > POOL_CARD_COUNT_THRESHOLD:
             return "deconstructed"
@@ -415,15 +453,16 @@ def deck_archetype(file_name: str, *, name: str | None = None) -> str:
     except Exception:
         pass
     display = (name or entry.get("name") or "").lower()
-    # Scene Box: the "Scene Box" marker is on the PRODUCT name, so a scene-box
-    # component deck is typed a generic "Box Set" — resolve via sealedProduct.
-    code = (entry.get("code") or (file_name.rsplit("_", 1)[1] if "_" in file_name else "")).lower()
-    if code and display:
-        try:
-            if display in _pool_named_product_decks(code):
-                return "scene box"
-        except Exception:
-            pass
+    # Scene Box fast path: the deck's OWN name matches a pool pattern
+    # ("Scene Box", "Starter Collection") — mirrors default_precon_state, and is
+    # why that sibling never mislabels a cross-set scene box.
+    if display and any(pat in display for pat in POOL_NAME_PATTERNS):
+        for pat in POOL_NAME_PATTERNS:
+            if pat in display:
+                return pat
+    # Otherwise resolve component membership (same-set + cross-set family scan).
+    if _scene_box_component(file_name, display, entry_code=entry.get("code")):
+        return "scene box"
     return (entry.get("type") or "").lower() or "other"
 
 
