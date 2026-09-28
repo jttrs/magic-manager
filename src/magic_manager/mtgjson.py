@@ -383,6 +383,50 @@ def default_precon_state(file_name: str, *, name: str | None = None) -> str:
     return "built"
 
 
+@lru_cache(maxsize=1)
+def _decklist_by_filename() -> dict[str, dict]:
+    """``{fileName: DeckList entry}`` over the whole DeckList — one cached fetch.
+
+    Lets ``deck_archetype`` classify many decks (e.g. the collection-overview's
+    per-family precon summaries) from a SINGLE ``deck_list()`` call instead of a
+    per-deck ``deck(file_name)`` fetch each.
+    """
+    return {r["fileName"]: r for r in deck_list() if r.get("fileName")}
+
+
+def deck_archetype(file_name: str, *, name: str | None = None) -> str:
+    """Human-facing product archetype for a precon deck, for grouping/reporting.
+
+    Returns a lowercased archetype label from MTGJSON:
+      - ``"scene box"`` when the deck is a component of a pool-named *Scene Box*
+        sealedProduct — the marker lives on the PRODUCT name, not the deck, so
+        it's resolved through ``_pool_named_product_decks`` exactly like
+        ``default_precon_state`` (both share that one source of truth).
+      - otherwise the DeckList ``type`` string lowercased (``"Starter Kit"`` ->
+        ``"starter kit"``, ``"Box Set"`` -> ``"box set"``, ``"Commander Deck"``
+        -> ``"commander deck"``).
+      - ``"other"`` as a last resort when the fileName is unknown / type absent.
+
+    Network-tolerant: degrades to ``"other"`` on any lookup failure.
+    """
+    entry = {}
+    try:
+        entry = _decklist_by_filename().get(file_name, {})
+    except Exception:
+        pass
+    display = (name or entry.get("name") or "").lower()
+    # Scene Box: the "Scene Box" marker is on the PRODUCT name, so a scene-box
+    # component deck is typed a generic "Box Set" — resolve via sealedProduct.
+    code = (entry.get("code") or (file_name.rsplit("_", 1)[1] if "_" in file_name else "")).lower()
+    if code and display:
+        try:
+            if display in _pool_named_product_decks(code):
+                return "scene box"
+        except Exception:
+            pass
+    return (entry.get("type") or "").lower() or "other"
+
+
 def precon_variants(
     set_code: str | None = None,
     *,

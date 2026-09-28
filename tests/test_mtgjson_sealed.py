@@ -225,3 +225,57 @@ def test_v11_backfill_maps_is_deconstructed(tmp_path, monkeypatch):
             )
     from magic_manager import decks
     assert decks.precon_unit_counts_for("FN_X") == (1, 1)
+
+
+# ---------- deck_archetype (product-type bucketing for reports) ----------
+
+# A set with: a plain Commander Deck, a Starter Kit, and a Scene Box whose
+# component deck is generically typed "Box Set" (the "Scene Box" marker is on
+# the PRODUCT name, mirroring the FDN Beginner-Box lesson above).
+_ARCH_SEALED = [
+    {
+        "name": "Tarkir Scene Box",
+        "contents": {"deck": [{"name": "The Dragon Tempest", "set": "tdm"}]},
+    },
+]
+_ARCH_DECKLIST = [
+    {"code": "TDM", "fileName": "AbzanArmy_TDM", "name": "Abzan Army", "type": "Commander Deck"},
+    {"code": "TDM", "fileName": "StarterKit_TDM", "name": "Starter Kit", "type": "Starter Kit"},
+    {"code": "TDM", "fileName": "DragonTempest_TDM", "name": "The Dragon Tempest", "type": "Box Set"},
+]
+
+
+def _patch_arch(monkeypatch):
+    from magic_manager import mtgjson
+    # deck_archetype reads the whole DeckList through a module-level lru_cache;
+    # clear it so the monkeypatched deck_list is what gets cached this test.
+    mtgjson._decklist_by_filename.cache_clear()
+    monkeypatch.setattr(mtgjson, "set_file",
+                        lambda code: {"sealedProduct": list(_ARCH_SEALED)} if code.lower() == "tdm" else {})
+    monkeypatch.setattr(mtgjson, "deck_list",
+                        lambda *, set_code=None: [d for d in _ARCH_DECKLIST
+                                                  if set_code is None or d["code"] == set_code.upper()])
+
+
+def test_deck_archetype_uses_decklist_type(monkeypatch):
+    from magic_manager import mtgjson
+    _patch_arch(monkeypatch)
+    assert mtgjson.deck_archetype("AbzanArmy_TDM") == "commander deck"
+    assert mtgjson.deck_archetype("StarterKit_TDM") == "starter kit"
+    mtgjson._decklist_by_filename.cache_clear()
+
+
+def test_deck_archetype_scene_box_overrides_type(monkeypatch):
+    """A scene-box component deck is generically typed "Box Set" in the DeckList;
+    deck_archetype resolves it to 'scene box' via the pool-named sealedProduct."""
+    from magic_manager import mtgjson
+    _patch_arch(monkeypatch)
+    assert mtgjson.deck_archetype("DragonTempest_TDM", name="The Dragon Tempest") == "scene box"
+    mtgjson._decklist_by_filename.cache_clear()
+
+
+def test_deck_archetype_unknown_filename(monkeypatch):
+    from magic_manager import mtgjson
+    _patch_arch(monkeypatch)
+    assert mtgjson.deck_archetype("NoSuchDeck_ZZZ") == "other"
+    mtgjson._decklist_by_filename.cache_clear()
