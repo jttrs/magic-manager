@@ -250,6 +250,9 @@ def _patch_arch(monkeypatch):
     # deck_archetype reads the whole DeckList through a module-level lru_cache;
     # clear it so the monkeypatched deck_list is what gets cached this test.
     mtgjson._decklist_by_filename.cache_clear()
+    # set_file is now @lru_cache'd too — clear it before swapping in the fixture
+    # below so a stale set_file cached by a prior test can't leak in here.
+    mtgjson.set_file.cache_clear()
     monkeypatch.setattr(mtgjson, "set_file",
                         lambda code: {"sealedProduct": list(_ARCH_SEALED)} if code.lower() == "tdm" else {})
     monkeypatch.setattr(mtgjson, "deck_list",
@@ -278,4 +281,77 @@ def test_deck_archetype_unknown_filename(monkeypatch):
     from magic_manager import mtgjson
     _patch_arch(monkeypatch)
     assert mtgjson.deck_archetype("NoSuchDeck_ZZZ") == "other"
+    mtgjson._decklist_by_filename.cache_clear()
+
+
+# ---------- deck_archetype cross-set Scene Box regression (F1) ----------
+#
+# The bug: a Scene Box's sealedProduct sometimes lives in a DIFFERENT set file
+# than its component deck's DeckList entry (e.g. the "Marvels Spider Man Scene
+# Box" sealedProduct lives in `spm`, while its component deck's DeckList entry
+# is coded `SPE` — SPE has no sealedProduct of its own). Before the fix,
+# deck_archetype checked only `_pool_named_product_decks(<deck's own code>)`
+# and fell through to the generic DeckList `type` ("box set"). The fix adds a
+# NAME fast path (matches when the deck itself is literally named "Scene Box")
+# plus a family-wide fallback via `sets.resolve` for real-named decks whose
+# product lives in a sibling set.
+
+def test_deck_archetype_scene_box_name_fast_path_cross_set(monkeypatch):
+    """A cross-set scene box whose component deck is literally NAMED "Scene
+    Box" resolves via the NAME fast path — no need to even find the sibling
+    sealedProduct, since the deck's own display name matches
+    POOL_NAME_PATTERNS directly."""
+    from magic_manager import mtgjson
+
+    mtgjson._decklist_by_filename.cache_clear()
+    mtgjson.set_file.cache_clear()
+
+    decklist = [
+        {"code": "BBB", "fileName": "SceneBox_BBB", "name": "Scene Box", "type": "Box Set"},
+    ]
+    monkeypatch.setattr(mtgjson, "set_file", lambda code: {})
+    monkeypatch.setattr(mtgjson, "deck_list",
+                        lambda *, set_code=None: [d for d in decklist
+                                                  if set_code is None or d["code"] == set_code.upper()])
+
+    assert mtgjson.deck_archetype("SceneBox_BBB", name="Scene Box") == "scene box"
+    mtgjson._decklist_by_filename.cache_clear()
+
+
+def test_deck_archetype_scene_box_family_fallback_cross_set(monkeypatch):
+    """The deeper regression: a component deck with a REAL name (not matching
+    POOL_NAME_PATTERNS) whose Scene Box sealedProduct lives in a SIBLING set
+    file. The name fast path can't save it; resolution requires scanning the
+    whole family (via sets.resolve) for a sibling sealedProduct that lists
+    this deck under contents.deck."""
+    from magic_manager import mtgjson
+    from magic_manager import sets as sets_mod
+
+    mtgjson._decklist_by_filename.cache_clear()
+    mtgjson.set_file.cache_clear()
+
+    # SPE (the deck's own code) has no sealedProduct; the Scene Box SKU lives
+    # in the sibling SPM set file instead.
+    sealed_by_code = {
+        "spm": [{
+            "name": "Marvels Spider Man Scene Box",
+            "contents": {"deck": [{"name": "The Dragon Tempest", "set": "spe"}]},
+        }],
+        "spe": [],
+    }
+    decklist = [
+        {"code": "SPE", "fileName": "DragonTempest_SPE", "name": "The Dragon Tempest", "type": "Box Set"},
+    ]
+    monkeypatch.setattr(mtgjson, "set_file",
+                        lambda code: {"sealedProduct": list(sealed_by_code.get(code.lower(), []))})
+    monkeypatch.setattr(mtgjson, "deck_list",
+                        lambda *, set_code=None: [d for d in decklist
+                                                  if set_code is None or d["code"] == set_code.upper()])
+
+    class _FakeResolved:
+        all_codes = ["spe", "spm"]
+
+    monkeypatch.setattr(sets_mod, "resolve", lambda code: _FakeResolved())
+
+    assert mtgjson.deck_archetype("DragonTempest_SPE", name="The Dragon Tempest") == "scene box"
     mtgjson._decklist_by_filename.cache_clear()

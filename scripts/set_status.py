@@ -336,7 +336,7 @@ def _precon_bucket(fmt: str | None, file_name: str | None, name: str | None) -> 
         return "commander"
     if file_name:
         arch = mtgjson.deck_archetype(file_name, name=name)
-        if arch and arch != "other":
+        if arch != "other":
             return arch
     return fmt or "other"
 
