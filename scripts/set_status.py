@@ -29,6 +29,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from magic_manager import (  # noqa: E402
     db, scryfall, sets as sets_mod, selectors, missing as missing_mod, util,
+    mtgjson,
 )
 
 
@@ -324,24 +325,44 @@ def _owned_summary_for_codes(codes, price_map: dict[str, dict] | None = None) ->
     return prints, qty, usd
 
 
+def _precon_bucket(fmt: str | None, file_name: str | None, name: str | None) -> str:
+    """Bucket label for one precon deck row. Commander-format decks stay in the
+    ``commander`` bucket; everything non-commander is split by its MTGJSON
+    product archetype (``starter kit`` / ``box set`` / ``scene box`` / …) via
+    ``mtgjson.deck_archetype`` so the report enumerates real product types
+    instead of one opaque ``other`` bucket. Falls back to ``format or 'other'``
+    when there's no fileName to classify by (network-tolerant)."""
+    if fmt == "commander":
+        return "commander"
+    if file_name:
+        arch = mtgjson.deck_archetype(file_name, name=name)
+        if arch and arch != "other":
+            return arch
+    return fmt or "other"
+
+
 def precon_summary(family_codes: list[str]) -> dict[str, int]:
-    """{format_bucket: count} of decks hard-linked (source_set_code) to the
-    family. Falls back to the >=50%-of-cards heuristic for any deck whose
-    source_set_code is still NULL (pre-backfill), noting the fallback on stderr."""
+    """{bucket: count} of decks hard-linked (source_set_code) to the family.
+    Commander decks bucket by format; non-commander decks bucket by MTGJSON
+    product archetype (Starter Kit / Box Set / Scene Box / …). Falls back to the
+    >=50%-of-cards heuristic for any deck whose source_set_code is still NULL
+    (pre-backfill), noting the fallback on stderr."""
     fam = set(family_codes)
     placeholders = ",".join("?" for _ in fam)
     buckets: Counter = Counter()
     fallback_used = 0
     with db.connect() as conn:
         linked = conn.execute(
-            f"SELECT format FROM decks WHERE LOWER(source_set_code) IN ({placeholders})",
+            f"SELECT format, source_precon_file_name, name FROM decks "
+            f"WHERE LOWER(source_set_code) IN ({placeholders})",
             list(fam),
         ).fetchall()
         for r in linked:
-            buckets[r["format"] or "other"] += 1
+            buckets[_precon_bucket(r["format"], r["source_precon_file_name"], r["name"])] += 1
         # Heuristic fallback for NULL-source decks (should be none post-backfill).
         null_decks = conn.execute(
-            "SELECT deck_id, format FROM decks WHERE source_set_code IS NULL"
+            "SELECT deck_id, format, source_precon_file_name, name FROM decks "
+            "WHERE source_set_code IS NULL"
         ).fetchall()
         for d in null_decks:
             share = conn.execute(
@@ -355,7 +376,7 @@ def precon_summary(family_codes: list[str]) -> dict[str, int]:
                 list(fam) + [d["deck_id"]],
             ).fetchone()
             if share and share["total"] and (share["in_fam"] or 0) / share["total"] >= 0.5:
-                buckets[d["format"] or "other"] += 1
+                buckets[_precon_bucket(d["format"], d["source_precon_file_name"], d["name"])] += 1
                 fallback_used += 1
     if fallback_used:
         print(f"note: {fallback_used} deck(s) matched via the >=50% card heuristic "
