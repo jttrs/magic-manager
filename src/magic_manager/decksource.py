@@ -31,12 +31,14 @@ Scryfall id directly. The dict schema above is the DRY seam instead.
 
 from __future__ import annotations
 
+import html
+import re
 from typing import Literal
 from urllib.parse import urlparse
 
 from . import db, decks as decks_mod, scryfall
 
-Source = Literal["moxfield", "archidekt", "mtggoldfish"]
+Source = Literal["moxfield", "archidekt", "mtggoldfish", "manabox", "scryfall"]
 
 # ---------------------------------------------------------------------------
 # Board vocab — the target is deck_cards' CHECK set (decks._ALLOWED_BOARDS):
@@ -71,6 +73,28 @@ ARCHIDEKT_CATEGORY_BOARD_MAP = {
 
 _FOIL_MODIFIERS = {"foil", "etched"}
 
+# ManaBox keys board membership by an integer ``boardCategory`` in its embedded
+# payload. Observed on Commander decks: 0 = commander, 3 = mainboard. Codes for
+# sideboard/companion/maybe are UNVERIFIED (only Commander decks were sampled);
+# unknown codes fall back to "main" via the .get() default in parse_manabox — add
+# a mapping here if a 60-card deck later surfaces a sideboard code.
+MANABOX_BOARD_MAP = {
+    0: "commander",
+    3: "main",
+}
+
+# Scryfall's deck export keys entries by section name. commanders → commander,
+# nonlands+lands → mainboard, maybeboard → maybe. The "outside" section is
+# Scryfall's out-of-deck "considering" bucket (not part of the 100) and is
+# SKIPPED — a section absent from this map is dropped, not defaulted to main, so
+# `outside` cards don't leak into the deck.
+SCRYFALL_SECTION_BOARD_MAP = {
+    "commanders": "commander",
+    "nonlands": "main",
+    "lands": "main",
+    "maybeboard": "maybe",
+}
+
 
 # ---------------------------------------------------------------------------
 # Source detection
@@ -85,9 +109,13 @@ def source_of(url_or_id: str) -> Source:
         return "archidekt"
     if "mtggoldfish.com" in host:
         return "mtggoldfish"
+    if "manabox.app" in host:
+        return "manabox"
+    if "scryfall.com" in host:
+        return "scryfall"
     raise ValueError(
         f"unrecognized deck source in {url_or_id!r}; expected a moxfield.com / "
-        f"archidekt.com / mtggoldfish.com URL"
+        f"archidekt.com / mtggoldfish.com / manabox.app / scryfall.com URL"
     )
 
 
@@ -97,9 +125,14 @@ def deck_id_from_url(url: str) -> str:
     Moxfield:    moxfield.com/decks/<publicId>[/anything]
     Archidekt:   archidekt.com/decks/<id>[-slug]
     MTGGoldfish: mtggoldfish.com/deck/<id>[#...]
+    ManaBox:     manabox.app/decks/<base64url-id>
+    Scryfall:    scryfall.com/@<user>/decks/<uuid>
 
     The id is the segment immediately AFTER the ``decks``/``deck`` marker (so a
-    trailing ``/primer`` etc. doesn't get mistaken for the id).
+    trailing ``/primer`` etc. doesn't get mistaken for the id, and Scryfall's
+    ``@user`` segment before ``decks`` is ignored). ManaBox's base64url ids and
+    Scryfall's uuids can contain ``-``/``_``; the Archidekt slug-strip below only
+    fires when the head is all-digits, so those ids are returned intact.
     """
     parts = [p for p in urlparse(url).path.split("/") if p]
     if not parts:
@@ -247,10 +280,109 @@ def parse_mtggoldfish(text: str) -> list[dict]:
     return out
 
 
+# ManaBox (manabox.app) — plain-GET SSR page with an embedded Astro island-
+# hydration payload. Fields are HTML-escaped (``&quot;``) and encoded as
+# ``"key":[0, value]`` tuples, one card object per ``"internalId":[0,N]``. This is
+# an Archidekt-tier source (no Cloudflare / auth / browser) that nonetheless
+# carries full printing data (setId + collectorNumber + variant), so it resolves
+# via the exact ``(set, cn)`` tier — no name-only degradation.
+_MB_CARD_SPLIT = re.compile(r'(?="internalId":\[0,)')
+
+
+def _mb_str(chunk: str, key: str) -> str | None:
+    m = re.search(r'"' + re.escape(key) + r'":\[0,"([^"]*)"\]', chunk)
+    return m.group(1) if m else None
+
+
+def _mb_int(chunk: str, key: str) -> int | None:
+    m = re.search(r'"' + re.escape(key) + r'":\[0,(\d+)\]', chunk)
+    return int(m.group(1)) if m else None
+
+
+def parse_manabox(html_text: str) -> list[dict]:
+    """ManaBox ``manabox.app/decks/{id}`` SSR HTML → normalized cards.
+
+    Un-escapes the page (the payload ships HTML-escaped), splits it into per-card
+    chunks at each ``"internalId"`` boundary — chunking keeps a card's fields
+    aligned, where a single flat regex over the whole doc would desync when a
+    field is absent — and lifts ``name``/``collectorNumber``/``setId``/
+    ``quantity``/``variant``/``boardCategory`` from each. The pre-first-card chunk
+    (deck metadata: name/format/…) has no ``"internalId"`` and yields no card.
+    """
+    text = html.unescape(html_text)
+    out: list[dict] = []
+    for chunk in _MB_CARD_SPLIT.split(text):
+        if '"internalId":[0,' not in chunk:
+            continue  # deck-metadata preamble, not a card
+        qty = _mb_int(chunk, "quantity")
+        name = _mb_str(chunk, "name")
+        if not qty or not name:
+            continue
+        bc = _mb_int(chunk, "boardCategory")
+        variant = (_mb_str(chunk, "variant") or "").lower()
+        out.append(_norm(
+            qty,
+            MANABOX_BOARD_MAP.get(bc, "main"),
+            "foil" if variant in _FOIL_MODIFIERS else "nonfoil",
+            set_code=_mb_str(chunk, "setId"),
+            collector_number=_mb_str(chunk, "collectorNumber"),
+            name=name,
+        ))
+    return out
+
+
+def deck_name_manabox(html_text: str) -> str | None:
+    """ManaBox deck name — the page ``<title>`` (carries the deck name verbatim)."""
+    m = re.search(r"<title>([^<]*)</title>", html_text)
+    if not m:
+        return None
+    name = html.unescape(m.group(1)).strip()
+    return name or None
+
+
+def parse_scryfall(deck: dict) -> list[dict]:
+    """Scryfall ``/decks/{id}/export/json`` payload → normalized cards.
+
+    ``deck["entries"]`` is keyed by section; each entry is a ``deck_entry`` with
+    ``count``, ``finish`` (``false``/``null``/``"nonfoil"``/``"foil"`` — only
+    ``"foil"`` is foil), and a nested ``card_digest`` (``id``/``set``/
+    ``collector_number``/``name``) giving the exact printing. Two filters:
+    **placeholder rows** (``found:false``, ``card_digest:null`` — every section
+    carries some) are skipped, and sections not in ``SCRYFALL_SECTION_BOARD_MAP``
+    (i.e. ``outside``) are dropped. The ``card_digest.id`` flows through the
+    ``scryfall_id`` resolution tier — the strongest key.
+    """
+    out: list[dict] = []
+    for section, rows in (deck.get("entries") or {}).items():
+        board = SCRYFALL_SECTION_BOARD_MAP.get(section)
+        if board is None:
+            continue  # e.g. "outside" — not part of the deck
+        for row in rows or []:
+            if not (row.get("found") and row.get("card_digest")):
+                continue  # placeholder / unresolved row
+            cd = row["card_digest"]
+            out.append(_norm(
+                _first(row, "count", default=1), board,
+                "foil" if row.get("finish") == "foil" else "nonfoil",
+                scryfall_id=cd.get("id"),
+                set_code=cd.get("set"),
+                collector_number=cd.get("collector_number"),
+                name=cd.get("name"),
+            ))
+    return out
+
+
+def deck_name_scryfall(deck: dict) -> str | None:
+    """Scryfall deck name — the export's top-level ``name`` (no author field)."""
+    return deck.get("name") or None
+
+
 PARSERS = {
     "moxfield": parse_moxfield,
     "archidekt": parse_archidekt,
     "mtggoldfish": parse_mtggoldfish,
+    "manabox": parse_manabox,
+    "scryfall": parse_scryfall,
 }
 
 
@@ -339,7 +471,8 @@ def _resolve_cards(cards: list[dict]) -> tuple[dict, dict, dict, list[str]]:
 
 def import_deck(cards: list[dict], *, slug: str, name: str | None = None,
                 source_set_code: str | None = None, author: str | None = None,
-                conn=None) -> dict:
+                source: str | None = None, source_deck_id: str | None = None,
+                force: bool = False, conn=None) -> dict:
     """Resolve normalized cards and write them into a deck (create-or-find).
 
     Every source funnels through here. Cards are resolved (id first, set+cn
@@ -349,18 +482,47 @@ def import_deck(cards: list[dict], *, slug: str, name: str | None = None,
     ``author`` (the source's deck creator/owner) is stamped on the deck row ONLY
     at creation — re-importing into an existing deck never overwrites it.
 
-    Returns ``{"slug", "created", "added", "updated", "not_found", "warnings"}``.
-    """
-    by_sid, by_setcn, by_name, warnings = _resolve_cards(cards)
+    **Re-pull dedup (V25).** When both ``source`` and ``source_deck_id`` are given,
+    a deck already imported from that upstream is detected via
+    ``decks.deck_find_by_source``:
+      * without ``force`` → return ``{"duplicate": True, "existing_slug": …}`` and
+        write NOTHING (the caller refuses). This is what stops a second pull of the
+        same deck from silently doubling every card (``deck_add_card`` sums).
+      * with ``force`` → target the EXISTING deck's slug, clear its current-version
+        cards (``deck_replace_cards``), and re-add the fresh pull — a REPLACE, not a
+        sum. The ``slug`` argument is ignored in this case (the dedup match wins).
+    With no source keys (e.g. a hand-fed ``--file`` import) the historical
+    create-or-append behavior is unchanged.
 
+    Returns ``{"slug", "created", "added", "updated", "not_found", "warnings"}``,
+    plus ``"replaced": bool``; or ``{"duplicate": True, "existing_slug", "source",
+    "source_deck_id"}`` on a refused re-pull.
+    """
     with db.transaction(conn) as conn:
-        created = False
+        # Dedup gate — only when the caller supplied both source keys.
+        existing = decks_mod.deck_find_by_source(source, source_deck_id, conn=conn)
+        if existing is not None:
+            if not force:
+                return {
+                    "duplicate": True, "existing_slug": existing.slug,
+                    "source": source, "source_deck_id": source_deck_id,
+                }
+            slug = existing.slug  # a forced re-pull targets the matched deck
+
+        by_sid, by_setcn, by_name, warnings = _resolve_cards(cards)
+
+        created = replaced = False
         if decks_mod.deck_get(slug, conn=conn) is None:
             decks_mod.deck_create(
                 slug, name or slug, source_set_code=source_set_code,
-                author=author, conn=conn,
+                author=author, source=source, source_deck_id=source_deck_id,
+                conn=conn,
             )
             created = True
+        elif force and existing is not None:
+            # Replace the matched deck's composition rather than summing onto it.
+            decks_mod.deck_replace_cards(slug, conn=conn)
+            replaced = True
 
         added = updated = 0
         not_found: list[dict] = []
@@ -382,7 +544,8 @@ def import_deck(cards: list[dict], *, slug: str, name: str | None = None,
                 updated += 1
 
     return {
-        "slug": slug, "created": created, "added": added, "updated": updated,
+        "slug": slug, "created": created, "replaced": replaced,
+        "added": added, "updated": updated,
         "not_found": not_found, "warnings": warnings,
     }
 

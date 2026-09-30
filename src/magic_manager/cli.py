@@ -2664,11 +2664,13 @@ def deck_import_cmd(
 
 @deck_app.command("import-deck")
 def deck_import_deck_cmd(
-    source: str = typer.Argument(None, help="Path to normalized-cards JSON, or '-' for stdin."),
+    source_arg: str = typer.Argument(None, help="Path to normalized-cards JSON, or '-' for stdin."),
     slug: str = typer.Option(..., "--slug", help="Deck slug to create-or-append to."),
     name: str = typer.Option(None, "--name", help="Deck name (defaults to slug on create)."),
+    force: bool = typer.Option(False, "--force", help="Re-import a deck already pulled from this source: "
+                               "REPLACE its cards with the fresh pull (instead of refusing)."),
 ):
-    """Ingest a normalized deck (JSON) fetched from Moxfield/Archidekt/MTGGoldfish.
+    """Ingest a normalized deck (JSON) fetched from Moxfield/Archidekt/MTGGoldfish/ManaBox/Scryfall.
 
     The JSON is produced by ``scripts/import_deck.py <url>`` (which owns all the
     network I/O per the repo's sanctioned-wrapper rule); this command does NO
@@ -2679,30 +2681,48 @@ def deck_import_deck_cmd(
             | uv run mm deck import-deck --slug my-deck -
 
     The JSON is either a bare list of normalized-card dicts or an object with a
-    ``"cards"`` key (and optional ``"name"``); see ``decksource`` for the schema.
+    ``"cards"`` key (plus optional ``"name"``/``"author"``/``"source"``/``"id"``);
+    see ``decksource`` for the schema.
+
+    **Re-pull safety:** when the JSON carries ``source`` + ``id`` (every
+    ``import_deck.py`` URL fetch does), re-importing a deck already pulled from that
+    upstream is REFUSED (exit 3) so a second pull can't silently double every card;
+    pass ``--force`` to replace the existing deck's cards with the fresh pull.
     """
     from . import decksource as _decksource
 
-    text, path = _read_text_or_path(source)
+    text, path = _read_text_or_path(source_arg)
     raw = path.read_text(encoding="utf-8") if path is not None else (text or "")
     try:
         payload = json.loads(raw)
     except json.JSONDecodeError as e:
         typer.echo(f"error: input is not valid JSON: {e}", err=True)
         raise typer.Exit(2)
-    author = None
+    author = src = source_deck_id = None
     if isinstance(payload, dict):
         cards = payload.get("cards") or []
         name = name or payload.get("name")
         author = payload.get("author")
+        src = payload.get("source")
+        source_deck_id = payload.get("id")
     else:
         cards = payload
     if not isinstance(cards, list) or not cards:
         typer.echo("error: no cards in input (expected a list of normalized-card dicts)", err=True)
         raise typer.Exit(2)
 
-    res = _decksource.import_deck(cards, slug=slug, name=name, author=author)
-    verb = "created" if res["created"] else "updated"
+    res = _decksource.import_deck(
+        cards, slug=slug, name=name, author=author,
+        source=src, source_deck_id=source_deck_id, force=force,
+    )
+    if res.get("duplicate"):
+        typer.echo(
+            f"error: deck already imported from {src}:{source_deck_id} as slug "
+            f"{res['existing_slug']!r}; re-run with --force to replace its cards.",
+            err=True,
+        )
+        raise typer.Exit(3)
+    verb = "created" if res["created"] else ("replaced" if res.get("replaced") else "updated")
     by = f" by {author}" if (author and res["created"]) else ""
     typer.echo(f"Deck {res['slug']!r} ({verb}){by}: {res['added']} added, {res['updated']} updated")
     for w in res["warnings"]:

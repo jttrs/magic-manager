@@ -91,6 +91,19 @@ def all_sets() -> list[dict]:
     return body.get("data", [])
 
 
+def deck_export(deck_id: str) -> dict:
+    """GET /decks/<id>/export/json — a public, anonymous deck export.
+
+    Returns the ``object:"deck"`` payload: ``name``/``format`` plus ``entries``
+    keyed by section (commanders/nonlands/lands/maybeboard/outside), each a
+    ``deck_entry`` carrying ``count``, ``finish``, and a nested ``card_digest``
+    (id/set/collector_number/name) for full printing fidelity. This ``export/*``
+    sub-route is public even though the bare ``/decks/<id>`` route is auth-gated;
+    it is undocumented, so ``decksource.parse_scryfall`` localizes the shape.
+    """
+    return _run(["raw", f"/decks/{deck_id}/export/json", ""])
+
+
 # ---------- bulk identifier lookup ----------
 
 def collection(identifiers: Iterable[dict]) -> tuple[list[dict], list[dict]]:

@@ -71,6 +71,12 @@ class Deck:
     # V22: original creator/owner as reported by the import source (Moxfield /
     # Archidekt). NULL for hand-built decks, precons, and MTGGoldfish imports.
     author: str | None = None
+    # V25: import provenance. source is the external builder the deck came from
+    # (moxfield|archidekt|mtggoldfish|manabox|scryfall); source_deck_id is that
+    # source's native deck id. Together they key a re-pull for dedup. NULL for
+    # hand-built/precon decks and pre-V25 imports.
+    source: str | None = None
+    source_deck_id: str | None = None
 
 
 @dataclass
@@ -173,6 +179,8 @@ def _deck_row_to_dataclass(row) -> Deck:
         current_version_id=(row["current_version_id"]
                             if "current_version_id" in keys else None),
         author=(row["author"] if "author" in keys else None),
+        source=(row["source"] if "source" in keys else None),
+        source_deck_id=(row["source_deck_id"] if "source_deck_id" in keys else None),
     )
 
 
@@ -180,7 +188,7 @@ def _fetch_deck(conn, slug: str):
     return conn.execute(
         "SELECT deck_id, slug, name, format, archetype, notes, "
         "created_at, updated_at, source_precon_file_name, precon_state, "
-        "current_version_id, author "
+        "current_version_id, author, source, source_deck_id "
         "FROM decks WHERE slug = ?",
         (slug,),
     ).fetchone()
@@ -299,6 +307,8 @@ def deck_create(
     precon_state: str = "built",
     status: str = "brew",
     author: str | None = None,
+    source: str | None = None,
+    source_deck_id: str | None = None,
     conn=None,
 ) -> Deck:
     """Insert a new deck. Raises ``ValueError`` if ``slug`` is already in use.
@@ -319,6 +329,10 @@ def deck_create(
     (``brew``/``tuned``). Every new deck gets exactly one ``deck_versions`` row
     here, and ``decks.current_version_id`` is pointed at it, so the deck has a
     resolvable current version from creation on.
+
+    ``source``/``source_deck_id`` (V25) record the external builder + its native
+    deck id an imported deck came from — the key a re-pull is deduped against.
+    NULL for hand-built decks.
     """
     if precon_state not in _PRECON_STATES:
         raise ValueError(f"invalid precon_state {precon_state!r}; expected one of {_PRECON_STATES}")
@@ -333,12 +347,14 @@ def deck_create(
             """
             INSERT INTO decks (slug, name, format, archetype, notes,
                                source_set_code, source_precon_file_name,
-                               precon_state, created_at, updated_at, author)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                               precon_state, created_at, updated_at, author,
+                               source, source_deck_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (slug, name, format, archetype, notes,
              (source_set_code or None), (source_precon_file_name or None),
-             precon_state, now, now, (author or None)),
+             precon_state, now, now, (author or None),
+             (source or None), (source_deck_id or None)),
         )
         deck_id = cur.lastrowid
         # V17: every deck has a v1 version from birth; point the deck at it.
@@ -359,6 +375,8 @@ def deck_create(
         precon_state=precon_state,
         current_version_id=version_id,
         author=(author or None),
+        source=(source or None),
+        source_deck_id=(source_deck_id or None),
     )
 
 
@@ -380,6 +398,44 @@ def deck_get(slug: str, *, conn=None) -> Deck | None:
     with db.transaction(conn) as conn:
         row = _fetch_deck(conn, slug)
     return _deck_row_to_dataclass(row) if row else None
+
+
+def deck_find_by_source(source: str, source_deck_id: str, *, conn=None) -> Deck | None:
+    """The deck previously imported from this ``(source, source_deck_id)``, if any.
+
+    The dedup seam (V25): a re-pull of the same upstream deck is detected here so
+    the caller can refuse it (or replace, under --force) instead of double-counting.
+    Uses the ``decks_source_idx`` index. Returns ``None`` when either key is falsy.
+    """
+    if not source or not source_deck_id:
+        return None
+    with db.transaction(conn) as conn:
+        row = conn.execute(
+            "SELECT deck_id, slug, name, format, archetype, notes, "
+            "created_at, updated_at, source_precon_file_name, precon_state, "
+            "current_version_id, author, source, source_deck_id "
+            "FROM decks WHERE source = ? AND source_deck_id = ? LIMIT 1",
+            (source, source_deck_id),
+        ).fetchone()
+    return _deck_row_to_dataclass(row) if row else None
+
+
+def deck_replace_cards(slug: str, *, conn=None) -> int:
+    """Clear every card in the deck's CURRENT version. Returns the row count deleted.
+
+    Used by the --force re-pull path so a refreshed import REPLACES the deck's
+    composition rather than summing onto it. Operates in place on the current
+    version (no new version is cut), matching the importer's existing model.
+    """
+    with db.transaction(conn) as conn:
+        deck = _fetch_deck(conn, slug)
+        if deck is None:
+            raise LookupError(f"deck with slug {slug!r} not found")
+        version_id = _current_version_id(conn, deck["deck_id"])
+        cur = conn.execute(
+            "DELETE FROM deck_cards WHERE deck_version_id = ?", (version_id,)
+        )
+        return cur.rowcount
 
 
 def deck_show(
