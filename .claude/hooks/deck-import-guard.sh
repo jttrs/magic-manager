@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # PreToolUse Bash hook: blocks direct HTTP calls to external deck builders
-# (Moxfield / Archidekt / MTGGoldfish) that don't go through the project's
-# sanctioned deck-import scripts. Mirrors manapool-guard.sh.
+# (Moxfield / Archidekt / MTGGoldfish / ManaBox) that don't go through the
+# project's sanctioned deck-import scripts. Mirrors manapool-guard.sh.
 #
 # Rationale: Moxfield's api2 is Cloudflare-gated and needs the Playwright session
 # handling in scripts/import_deck.py + scripts/moxfield_session.py (which manage
@@ -20,7 +20,7 @@ cmd=$(printf '%s' "$input" | python3 -c 'import sys,json; print(json.load(sys.st
 
 # Only care about commands issuing HTTP to a deck-builder host (URL form).
 case "$cmd" in
-  *://api2.moxfield.com*|*://www.moxfield.com/decks*|*://moxfield.com/decks*|*://archidekt.com/api*|*://www.archidekt.com/api*|*mtggoldfish.com/deck*) ;;
+  *://api2.moxfield.com*|*://www.moxfield.com/decks*|*://moxfield.com/decks*|*://archidekt.com/api*|*://www.archidekt.com/api*|*mtggoldfish.com/deck*|*manabox.app/decks*) ;;
   *) exit 0 ;;
 esac
 
@@ -36,7 +36,7 @@ cat <<'JSON'
   "hookSpecificOutput": {
     "hookEventName": "PreToolUse",
     "permissionDecision": "deny",
-    "permissionDecisionReason": "Direct HTTP to Moxfield/Archidekt/MTGGoldfish is blocked. Use `scripts/import_deck.py <deck-url>` — it dispatches by source (Archidekt/MTGGoldfish plain fetch, Moxfield via a Playwright authed context) and emits normalized-cards JSON for `uv run mm deck import-deck`. For Moxfield when the browser path is blocked, use the bookmarklet in .claude/skills/import-deck/ and `--file -`."
+    "permissionDecisionReason": "Direct HTTP to Moxfield/Archidekt/MTGGoldfish/ManaBox is blocked. Use `scripts/import_deck.py <deck-url>` — it dispatches by source (Archidekt/MTGGoldfish/ManaBox plain fetch, Moxfield via a Playwright authed context) and emits normalized-cards JSON for `uv run mm deck import-deck`. For Moxfield when the browser path is blocked, use the bookmarklet in .claude/skills/import-deck/ and `--file -`."
   }
 }
 JSON

@@ -21,9 +21,54 @@ from magic_manager import edhrec
     ("Jace, Vryn's Prodigy // Jace, Telepath Unbound", "jace-vryns-prodigy"),
     ("Tibalt, Cosmic Impostor", "tibalt-cosmic-impostor"),
     ("Kongming, “Sleeping Dragon”", "kongming-sleeping-dragon"),
+    # Accent fold (NFKD → drop combining marks): EDHREC folds é→e, û→u, etc.
+    # Without the fold the accented letter is dropped ("owyn-…") and 403s.
+    ("Éowyn, Shieldmaiden", "eowyn-shieldmaiden"),
+    ("Sméagol, Helpful Guide", "smeagol-helpful-guide"),
+    ("Théoden, King of Rohan", "theoden-king-of-rohan"),
+    ("The Balrog, Flame of Udûn", "the-balrog-flame-of-udun"),
 ])
 def test_slugify(name, expected):
     assert edhrec.slugify(name) == expected
+
+
+# ---------- resolve_oracle_card: SET CN heuristic ----------
+
+def test_resolve_oracle_card_hyphenated_name_not_treated_as_printing(monkeypatch):
+    """A two-token name whose second token is numeric ("Spider-Man 2099") must
+    NOT be parsed as a "SET CN" printing — the hyphenated first token isn't a
+    set code. Regression: it used to fire the collection() path with
+    set='spider-man', producing an HTTP 400 that crashed the whole sync."""
+    def _boom(*a, **k):
+        raise AssertionError("collection() must not be called for a card name")
+    monkeypatch.setattr(edhrec.scryfall, "collection", _boom)
+    monkeypatch.setattr(edhrec.scryfall, "named",
+                        lambda ref: {"name": "Spider-Man 2099", "type_line": "Legendary Creature"})
+    name, card = edhrec.resolve_oracle_card("Spider-Man 2099")
+    assert name == "Spider-Man 2099"
+    assert card is not None
+
+
+def test_resolve_oracle_card_set_cn_still_resolves(monkeypatch):
+    """A genuine "SET CN" printing ("fin 3") still resolves via collection()."""
+    monkeypatch.setattr(edhrec.scryfall, "collection",
+                        lambda ids: ([{"name": "Adelbert Steiner", "type_line": "Legendary Creature"}], []))
+    name, card = edhrec.resolve_oracle_card("fin 3")
+    assert name == "Adelbert Steiner"
+    assert card is not None
+
+
+def test_resolve_oracle_card_set_cn_failsoft_to_name(monkeypatch):
+    """If the SET CN guess raises (malformed/hiccup), fall through to name
+    resolution instead of crashing."""
+    def _boom(*a, **k):
+        raise edhrec.scryfall.ScryfallError("HTTP 400")
+    monkeypatch.setattr(edhrec.scryfall, "collection", _boom)
+    monkeypatch.setattr(edhrec.scryfall, "named",
+                        lambda ref: {"name": "Kav 2000", "type_line": "Artifact Creature"})
+    name, card = edhrec.resolve_oracle_card("Kav 2000")
+    assert name == "Kav 2000"
+    assert card is not None
 
 
 # ---------- canned EDHREC pages ----------
@@ -438,3 +483,102 @@ def test_sync_both_unresolved_ref_still_ingests_card(tmp_db, fake_edhrec, fake_s
     assert res.eligible is False
     assert res.commander is None
     assert res.card is not None and len(res.card.rows) == 1
+
+
+# ---------- names_from_selector: token + digital-only exclusion ----------
+
+def test_names_from_selector_excludes_tokens_and_digital(tmp_db, seed_cards, make_card):
+    # A set-family selector must drop tokens (no EDHREC page for a Treasure) and
+    # digital-only cards — including an Alchemy ORIGINAL that carries only the
+    # arena stamp and NO 'A-' name prefix (the case a name-prefix check misses).
+    seed_cards([
+        make_card(id="c1", oracle_id="o-legend", name="Real Legend", set="tst",
+                  collector_number="1", type_line="Legendary Creature — Hero"),
+        make_card(id="c2", oracle_id="o-token", name="Treasure", set="tst",
+                  collector_number="2", type_line="Token Artifact — Treasure",
+                  layout="token"),
+        make_card(id="c3", oracle_id="o-alch", name="Herald of Vengeance", set="tst",
+                  collector_number="3", type_line="Legendary Creature — Angel",
+                  security_stamp="arena"),
+        make_card(id="c4", oracle_id="o-reb", name="A-Rebalanced One", set="tst",
+                  collector_number="4", type_line="Legendary Creature — Wizard",
+                  promo_types=["rebalanced"], security_stamp="arena"),
+    ])
+    names = edhrec.names_from_selector("set:tst")
+    assert names == ["Real Legend"]  # token, Alchemy-original, and A- reprint all dropped
+
+
+def test_names_from_selector_type_filter(tmp_db, seed_cards, make_card):
+    seed_cards([
+        make_card(id="c1", oracle_id="o1", name="Legend One", set="tst",
+                  collector_number="1", type_line="Legendary Creature — Hero"),
+        make_card(id="c2", oracle_id="o2", name="Plain Bolt", set="tst",
+                  collector_number="2", type_line="Instant"),
+    ])
+    assert edhrec.names_from_selector("set:tst", card_type="legendary creature") == ["Legend One"]
+
+
+# ---------- sync_bulk: per-eligibility resume + bug/transient split ----------
+
+def test_sync_bulk_resume_skips_card_only_when_card_page_cached(tmp_db, fake_edhrec, fake_scryfall, monkeypatch):
+    # A card-only (ineligible) card is "done" once its card page is cached — the
+    # commander-slug-only key used to re-fetch it every run.
+    monkeypatch.setattr(edhrec, "resolve_oracle_card",
+                        lambda ref: ("Sol Ring", {"type_line": "Artifact", "oracle_text": ""}))
+    fake_scryfall(collection_found=[])
+    fake_edhrec(card=_page({"topcommanders": [_cardview("Edgar Markov", "edgar-markov", num_decks=5, potential_decks=9)]}))
+    first = edhrec.sync_bulk(["Sol Ring"])
+    assert first.ok == 1 and first.card_only == 1 and first.already == 0
+    # Second run: card page is cached, card is ineligible → skipped, no re-fetch.
+    monkeypatch.setattr(edhrec, "sync_both",
+                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not re-fetch a fully-cached card-only card")))
+    second = edhrec.sync_bulk(["Sol Ring"])
+    assert second.already == 1 and second.ok == 0
+
+
+def test_sync_bulk_resume_refetches_eligible_missing_commander_page(tmp_db, fake_edhrec, fake_scryfall, monkeypatch):
+    # An ELIGIBLE card with only its card page cached (commander page missing, as
+    # after an interrupted run) is NOT skipped — both pages are required.
+    monkeypatch.setattr(edhrec, "resolve_oracle_card",
+                        lambda ref: ("Atraxa", {"type_line": "Legendary Creature — Angel", "oracle_text": ""}))
+    fake_scryfall(collection_found=[])
+    # Warm ONLY the card page by faking an ineligible-looking first pass is awkward;
+    # instead store a card page directly, then run bulk and assert it fetches the commander page.
+    from magic_manager import db
+    with db.transaction() as conn:
+        edhrec._store_page(conn, page_type="card", slug="atraxa", timeframe="", page={}, at=db._utcnow_iso())
+    fake_edhrec(
+        commander=_page({"topcards": [_cardview("Sol Ring", "sol-ring", num_decks=10, potential_decks=20)]}),
+        card=_page({"topcommanders": [_cardview("Edgar Markov", "edgar-markov", num_decks=5, potential_decks=9)]}),
+    )
+    res = edhrec.sync_bulk(["Atraxa"])
+    assert res.already == 0 and res.ok == 1 and res.eligible == 1
+
+
+def test_sync_bulk_tags_unexpected_exception_as_bug(tmp_db, fake_scryfall, monkeypatch):
+    # A non-network exception (a code/parse bug) must be tagged distinctly, not
+    # tallied as flaky-fetch noise — and the loop still continues.
+    monkeypatch.setattr(edhrec, "resolve_oracle_card",
+                        lambda ref: ("Buggy Card", {"type_line": "Instant", "oracle_text": ""}))
+    def _boom(*a, **k):
+        raise TypeError("NoneType has no attribute get")
+    monkeypatch.setattr(edhrec, "sync_both", _boom)
+    tags = []
+    res = edhrec.sync_bulk(["Buggy Card"], resume=False,
+                           progress=lambda i, t, n, tag: tags.append(tag))
+    assert res.failed == 1 and res.ok == 0
+    assert tags and tags[0].startswith("BUG: TypeError")
+    assert res.failures[0][1].startswith("UNEXPECTED TypeError")
+
+
+def test_sync_bulk_tags_edhrec_error_as_transient(tmp_db, fake_scryfall, monkeypatch):
+    monkeypatch.setattr(edhrec, "resolve_oracle_card",
+                        lambda ref: ("Net Card", {"type_line": "Instant", "oracle_text": ""}))
+    def _boom(*a, **k):
+        raise edhrec.EdhrecError("HTTP 429")
+    monkeypatch.setattr(edhrec, "sync_both", _boom)
+    tags = []
+    res = edhrec.sync_bulk(["Net Card"], resume=False,
+                           progress=lambda i, t, n, tag: tags.append(tag))
+    assert res.failed == 1
+    assert tags and tags[0].startswith("ERROR:") and "BUG" not in tags[0]

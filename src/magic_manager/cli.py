@@ -2664,11 +2664,13 @@ def deck_import_cmd(
 
 @deck_app.command("import-deck")
 def deck_import_deck_cmd(
-    source: str = typer.Argument(None, help="Path to normalized-cards JSON, or '-' for stdin."),
+    source_arg: str = typer.Argument(None, help="Path to normalized-cards JSON, or '-' for stdin."),
     slug: str = typer.Option(..., "--slug", help="Deck slug to create-or-append to."),
     name: str = typer.Option(None, "--name", help="Deck name (defaults to slug on create)."),
+    force: bool = typer.Option(False, "--force", help="Re-import a deck already pulled from this source: "
+                               "REPLACE its cards with the fresh pull (instead of refusing)."),
 ):
-    """Ingest a normalized deck (JSON) fetched from Moxfield/Archidekt/MTGGoldfish.
+    """Ingest a normalized deck (JSON) fetched from Moxfield/Archidekt/MTGGoldfish/ManaBox/Scryfall.
 
     The JSON is produced by ``scripts/import_deck.py <url>`` (which owns all the
     network I/O per the repo's sanctioned-wrapper rule); this command does NO
@@ -2679,30 +2681,48 @@ def deck_import_deck_cmd(
             | uv run mm deck import-deck --slug my-deck -
 
     The JSON is either a bare list of normalized-card dicts or an object with a
-    ``"cards"`` key (and optional ``"name"``); see ``decksource`` for the schema.
+    ``"cards"`` key (plus optional ``"name"``/``"author"``/``"source"``/``"id"``);
+    see ``decksource`` for the schema.
+
+    **Re-pull safety:** when the JSON carries ``source`` + ``id`` (every
+    ``import_deck.py`` URL fetch does), re-importing a deck already pulled from that
+    upstream is REFUSED (exit 3) so a second pull can't silently double every card;
+    pass ``--force`` to replace the existing deck's cards with the fresh pull.
     """
     from . import decksource as _decksource
 
-    text, path = _read_text_or_path(source)
+    text, path = _read_text_or_path(source_arg)
     raw = path.read_text(encoding="utf-8") if path is not None else (text or "")
     try:
         payload = json.loads(raw)
     except json.JSONDecodeError as e:
         typer.echo(f"error: input is not valid JSON: {e}", err=True)
         raise typer.Exit(2)
-    author = None
+    author = src = source_deck_id = None
     if isinstance(payload, dict):
         cards = payload.get("cards") or []
         name = name or payload.get("name")
         author = payload.get("author")
+        src = payload.get("source")
+        source_deck_id = payload.get("id")
     else:
         cards = payload
     if not isinstance(cards, list) or not cards:
         typer.echo("error: no cards in input (expected a list of normalized-card dicts)", err=True)
         raise typer.Exit(2)
 
-    res = _decksource.import_deck(cards, slug=slug, name=name, author=author)
-    verb = "created" if res["created"] else "updated"
+    res = _decksource.import_deck(
+        cards, slug=slug, name=name, author=author,
+        source=src, source_deck_id=source_deck_id, force=force,
+    )
+    if res.get("duplicate"):
+        typer.echo(
+            f"error: deck already imported from {src}:{source_deck_id} as slug "
+            f"{res['existing_slug']!r}; re-run with --force to replace its cards.",
+            err=True,
+        )
+        raise typer.Exit(3)
+    verb = "created" if res["created"] else ("replaced" if res.get("replaced") else "updated")
     by = f" by {author}" if (author and res["created"]) else ""
     typer.echo(f"Deck {res['slug']!r} ({verb}){by}: {res['added']} added, {res['updated']} updated")
     for w in res["warnings"]:
@@ -4735,27 +4755,88 @@ def edhrec_rankings_cmd(
 
 @edhrec_app.command("sync")
 def edhrec_sync_cmd(
-    card: str = typer.Argument(..., help="Card/commander to warm the EDHREC cache for (name or printing)."),
+    card: str = typer.Argument(None, help="Single card to warm (name or 'SET CN'). Omit when using --selector/--family."),
+    selector: str = typer.Option(None, "--selector", "-s", help="Bulk: a selector string, e.g. 'set:fin+related', "
+                                 "'cards:t:legendary e:msh', 'deck:<slug>', 'inventory'."),
+    family: str = typer.Option(None, "--family", help="Bulk sugar: comma-separated set anchors (e.g. 'fin,msh,ltr') "
+                               "— unions each 'set:<code>+related'."),
+    card_type: str = typer.Option(None, "--type", help="Bulk: filter materialized cards by a case-insensitive "
+                                  "type_line substring (e.g. 'legendary creature', 'creature')."),
+    no_resume: bool = typer.Option(False, "--no-resume", help="Bulk: re-fetch even names whose commander page is already cached."),
 ):
-    """Fetch + persist a card's EDHREC commander AND card pages without a report.
+    """Fetch + persist EDHREC pages without a report (cache-warming).
 
     Symmetric ingest: always warms the card-in-the-99 page, and — when the card
     is commander-eligible — the commander page too (via the shared
     ``edhrec.sync_both`` gate). Warms edhrec_pages + the normalized tables.
+
+    Single card (default): ``mm edhrec sync "Tifa Lockhart"``.
+    Bulk (selector-driven, resumable): ``mm edhrec sync -s "set:fin+related" --type "legendary creature"``
+    or the ``--family`` sugar: ``mm edhrec sync --family fin,msh,ltr --type "legendary creature"``.
     """
     from . import edhrec as edhrec_mod
 
-    res = edhrec_mod.sync_both(card)
-    if res.commander is not None:
-        typer.echo(f"synced commander {res.commander.name!r}: {len(res.commander.rows)} recommendation rows")
-    elif res.eligible:
-        typer.echo(f"  (commander-eligible, but EDHREC has no commander page for {res.name!r} yet)", err=True)
-    else:
-        typer.echo(f"  ({res.name!r} is not commander-eligible — card page only)", err=True)
-    if res.card is not None:
-        typer.echo(f"synced card {res.card.name!r}: {len(res.card.rows)} commander rows")
-    else:
-        typer.echo(f"  (no card page for {res.name!r})", err=True)
+    modes = [m for m in (card, selector, family) if m]
+    if len(modes) != 1:
+        typer.echo("error: provide exactly one of CARD (positional), --selector/-s, or --family.", err=True)
+        raise typer.Exit(2)
+    if card and (card_type or no_resume):
+        typer.echo("error: --type / --no-resume apply to bulk mode (--selector/--family), not a single CARD.", err=True)
+        raise typer.Exit(2)
+
+    # ---- single-card mode (unchanged behavior) ----
+    if card:
+        res = edhrec_mod.sync_both(card)
+        if res.commander is not None:
+            typer.echo(f"synced commander {res.commander.name!r}: {len(res.commander.rows)} recommendation rows")
+        elif res.eligible:
+            typer.echo(f"  (commander-eligible, but EDHREC has no commander page for {res.name!r} yet)", err=True)
+        else:
+            typer.echo(f"  ({res.name!r} is not commander-eligible — card page only)", err=True)
+        if res.card is not None:
+            typer.echo(f"synced card {res.card.name!r}: {len(res.card.rows)} commander rows")
+        else:
+            typer.echo(f"  (no card page for {res.name!r})", err=True)
+        return
+
+    # ---- bulk mode: resolve names from the selector (or --family sugar) ----
+    # A malformed selector must exit cleanly like every other selector command
+    # (mirrors _materialize_or_die), not dump a raw traceback.
+    try:
+        if family:
+            anchors = [a.strip() for a in family.split(",") if a.strip()]
+            name_set: set[str] = set()
+            for anchor in anchors:
+                name_set.update(edhrec_mod.names_from_selector(f"set:{anchor}+related", card_type=card_type))
+            names = sorted(name_set)
+            src = f"--family {family}"
+        else:
+            names = edhrec_mod.names_from_selector(selector, card_type=card_type)
+            src = f"selector {selector!r}"
+    except sel_mod.SelectorParseError as e:
+        typer.echo(f"error: invalid selector: {e}", err=True)
+        raise typer.Exit(2)
+    except LookupError as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+
+    if not names:
+        typer.echo(f"no cards matched {src}"
+                   + (f" with type ~ {card_type!r}" if card_type else "") + ".", err=True)
+        raise typer.Exit(1)
+
+    type_note = f" (type ~ {card_type!r})" if card_type else ""
+    typer.echo(f"{len(names)} cards from {src}{type_note} — warming EDHREC "
+               f"(up to {2 * len(names)} pages through the rate-limiter).", err=True)
+
+    def _progress(i: int, total: int, name: str, tag: str) -> None:
+        typer.echo(f"[{i}/{total}] {name}  -> {tag}", err=True)
+
+    res = edhrec_mod.sync_bulk(names, resume=not no_resume, progress=_progress)
+    typer.echo(f"done: {res.ok} synced ({res.eligible} with commander page, "
+               f"{res.card_only} card-only), {res.already} already cached, {res.failed} failed.")
+    for name, err in res.failures:
+        typer.echo(f"  FAILED {name}: {err}", err=True)
 
 
 # ---------- entry point ----------

@@ -1,6 +1,6 @@
 ---
 name: import-deck
-description: Read a deck from Moxfield, Archidekt, or MTGGoldfish into the local DB (creating/appending a deck), or push a local deck back to Moxfield. Archidekt/MTGGoldfish fetch directly; Moxfield uses a Playwright browser session (Cloudflare-gated) with a clipboard-bookmarklet + UI-export fallback. Triggers: "import my moxfield/archidekt/mtggoldfish deck", "pull this deck <url>", "add this decklist from <url>", "load <deck url> into a deck", "push <deck> to moxfield", "sync <deck> to moxfield".
+description: Read a deck from Moxfield, Archidekt, MTGGoldfish, ManaBox, or Scryfall into the local DB (creating/appending a deck), or push a local deck back to Moxfield. Archidekt/MTGGoldfish/ManaBox/Scryfall fetch directly; Moxfield uses a Playwright browser session (Cloudflare-gated) with a clipboard-bookmarklet + UI-export fallback. Re-pulling a deck already imported from a source is refused unless --force (which replaces its cards). Triggers: "import my moxfield/archidekt/mtggoldfish/manabox/scryfall deck", "pull this deck <url>", "add this decklist from <url>", "load <deck url> into a deck", "push <deck> to moxfield", "sync <deck> to moxfield".
 ---
 
 # import-deck
@@ -11,19 +11,28 @@ lives in `scripts/import_deck.py`, the resolve+write lives in
 `src/magic_manager/decksource.py` behind `mm deck import-deck`, and this skill only
 wires the pipeline and relays output.
 
-## Read a deck (Moxfield / Archidekt / MTGGoldfish → DB)
+## Read a deck (Moxfield / Archidekt / MTGGoldfish / ManaBox / Scryfall → DB)
 
-One pipeline for all three. `import_deck.py` detects the source from the URL and
+One pipeline for all five. `import_deck.py` detects the source from the URL and
 fetches; the CLI resolves cards against Scryfall and writes them:
 
 ```
 uv run python scripts/import_deck.py <deck-url> \
-  | uv run mm deck import-deck --slug <deck-slug> [--name "Deck Name"] -
+  | uv run mm deck import-deck --slug <deck-slug> [--name "Deck Name"] [--force] -
 ```
 
 - **Archidekt** (`archidekt.com/decks/<id>`) — open JSON API, plain fetch. Carries
   categories (Commander/Sideboard/Maybeboard → boards; others → main).
 - **MTGGoldfish** (`mtggoldfish.com/deck/<id>`) — per-deck text download, plain fetch.
+- **ManaBox** (`manabox.app/decks/<id>`) — plain fetch, no browser. The SSR page
+  embeds a full card payload (set code + collector number + foil/etched variant +
+  board), so it imports at full printing fidelity like Archidekt. No auth needed
+  for a public deck; carries no author.
+- **Scryfall** (`scryfall.com/@<user>/decks/<uuid>`) — public deck export
+  (`/decks/<id>/export/json`) via the rate-limited Scryfall wrapper, no browser.
+  Full printing fidelity (scryfall_id + set + CN + foil). Sections map
+  commanders→commander, nonlands/lands→main, maybeboard→maybe; the "outside"
+  (considering) bucket is skipped. Carries no author.
 - **Moxfield** (`moxfield.com/decks/<id>`) — Cloudflare-gated; `import_deck.py` drives
   a real (headed) Chrome via Playwright and intercepts the deck page's own api2 call
   (clears Cloudflare with no interaction). A browser window flashes briefly — that's
@@ -35,6 +44,13 @@ uv run python scripts/import_deck.py <deck-url> \
 The importer is **additive** (create-or-append, summing counts) and maps all boards
 (main/side/commander/companion/maybe/token). Relay the `added/updated`, any
 `warning:` lines, and any `not found:` lines verbatim.
+
+**Re-pull dedup.** URL fetches carry the deck's `source` + `id`, so a deck already
+imported from that upstream is **refused** (exit 3) rather than double-counted —
+re-run with `--force` to REPLACE its cards with the fresh pull (a refreshed list is
+synced cleanly, not summed). `--force` targets the originally-imported deck
+regardless of the `--slug` you pass. Hand-fed `--file` imports (no source id) are
+unaffected and still create-or-append.
 
 ### Moxfield fallbacks (if the browser path breaks)
 

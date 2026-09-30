@@ -1,4 +1,4 @@
-"""Fetch a deck from Moxfield / Archidekt / MTGGoldfish and emit normalized cards.
+"""Fetch a deck from Moxfield / Archidekt / MTGGoldfish / ManaBox / Scryfall and emit normalized cards.
 
 This is the NETWORK front door for deck import. It owns all external fetching (per
 the repo's sanctioned-wrapper rule: the CLI does no network except rate-limited
@@ -10,6 +10,10 @@ Scryfall). It emits a normalized-cards JSON object to stdout; feed that to the C
 Per-source strategy (see the module-level design doc in decksource.py):
   - ARCHIDEKT   — plain GET archidekt.com/api/decks/{id}/  (open JSON API)
   - MTGGOLDFISH — plain GET mtggoldfish.com/deck/download/{id}  (text block)
+  - MANABOX     — plain GET manabox.app/decks/{id}  (SSR page with an embedded
+                  Astro hydration payload carrying full printing data; no browser)
+  - SCRYFALL    — GET api.scryfall.com/decks/{id}/export/json via the scryfall
+                  wrapper  (public export, full printing fidelity; no browser)
   - MOXFIELD    — Playwright authed context → api2.moxfield.com/v3/decks/all/{id}
                   (Cloudflare-gated; needs a real browser). Session cascade lives
                   in moxfield_session.py: persisted → auto-login → headed manual.
@@ -63,6 +67,27 @@ def fetch_mtggoldfish(deck_id: str) -> tuple[list[dict], str | None, str | None]
     text = _http_get(url, accept="text/plain")
     # The text download carries no author.
     return decksource.parse_mtggoldfish(text), None, None
+
+
+# ---------- ManaBox: plain-GET SSR page with embedded payload ----------
+
+def fetch_manabox(deck_id: str) -> tuple[list[dict], str | None, str | None]:
+    # manabox.app is Archidekt-tier (no Cloudflare/auth/browser): the deck page's
+    # SSR HTML embeds the full card payload. The payload carries no author.
+    url = f"https://manabox.app/decks/{deck_id}"
+    html_text = _http_get(url, accept="text/html")
+    return decksource.parse_manabox(html_text), decksource.deck_name_manabox(html_text), None
+
+
+# ---------- Scryfall: public deck export via the sanctioned wrapper ----------
+
+def fetch_scryfall(deck_id: str) -> tuple[list[dict], str | None, str | None]:
+    # Scryfall's /decks/{id}/export/json is public + full-fidelity. It's on
+    # api.scryfall.com, so it MUST go through the rate-limited/cached scryfall
+    # wrapper (a bare GET would trip the scryfall guard hook), not _http_get.
+    from magic_manager import scryfall
+    deck = scryfall.deck_export(deck_id)
+    return decksource.parse_scryfall(deck), decksource.deck_name_scryfall(deck), None
 
 
 # ---------- Moxfield: Playwright authed context ----------
@@ -146,7 +171,7 @@ def fetch_from_file(path: str) -> tuple[list[dict], str | None, str | None]:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Fetch a deck from Moxfield/Archidekt/MTGGoldfish.")
-    ap.add_argument("url", nargs="?", help="Deck URL (moxfield/archidekt/mtggoldfish).")
+    ap.add_argument("url", nargs="?", help="Deck URL (moxfield/archidekt/mtggoldfish/manabox/scryfall).")
     ap.add_argument("--file", help="Read normalized-cards JSON from a file, or '-' for stdin (bookmarklet path).")
     ap.add_argument("--fresh", action="store_true", help="Moxfield: force re-login (ignore persisted session).")
     args = ap.parse_args()
@@ -163,6 +188,10 @@ def main() -> int:
                 cards, name, author = fetch_archidekt(deck_id)
             elif source == "mtggoldfish":
                 cards, name, author = fetch_mtggoldfish(deck_id)
+            elif source == "manabox":
+                cards, name, author = fetch_manabox(deck_id)
+            elif source == "scryfall":
+                cards, name, author = fetch_scryfall(deck_id)
             else:
                 cards, name, author = fetch_moxfield(deck_id, fresh=args.fresh)
         except (urllib.error.HTTPError, urllib.error.URLError) as e:

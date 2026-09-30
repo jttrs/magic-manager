@@ -859,6 +859,21 @@ CREATE INDEX IF NOT EXISTS edhrec_rank_scope_idx
 """
 
 
+# V25: deck import provenance + re-pull dedup. `source` is the external builder a
+# deck was imported from (moxfield|archidekt|mtggoldfish|manabox|scryfall; NULL for
+# hand-built/precon decks); `source_deck_id` is that source's native deck id
+# (Moxfield publicId, Archidekt/Scryfall id, ManaBox base64url). Together they key
+# a deck to its upstream so a re-pull is DETECTED (refused without --force, which
+# then replaces cards rather than double-counting) instead of silently summing.
+# NULL for pre-V25 imports — dedup simply won't fire for them (the source id isn't
+# recoverable for past pulls).
+SCHEMA_V25 = """
+ALTER TABLE decks ADD COLUMN source TEXT;
+ALTER TABLE decks ADD COLUMN source_deck_id TEXT;
+CREATE INDEX IF NOT EXISTS decks_source_idx ON decks (source, source_deck_id);
+"""
+
+
 # ---------- migration-authoring convention ----------
 #
 # Always-safe ops in a migration: CREATE TABLE, ALTER TABLE ADD COLUMN,
@@ -936,6 +951,7 @@ MIGRATIONS: list[str] = [
     SCHEMA_V22,
     SCHEMA_V23,
     SCHEMA_V24,
+    SCHEMA_V25,
 ]
 CURRENT_VERSION = len(MIGRATIONS)
 
