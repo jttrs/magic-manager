@@ -26,6 +26,7 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
@@ -113,18 +114,32 @@ def slugify(name: str) -> str:
     """Turn a card NAME into the EDHREC page slug.
 
     The canonical rule (matches EDHREC's front-end and the pyedhrec library):
-    lowercase → strip apostrophes and commas → non-alphanumerics collapse to a
-    single hyphen → trim leading/trailing hyphens. Double-faced ``A // B`` names
-    use the FRONT face only (EDHREC pages a DFC under its front face).
+    ASCII-fold accents → lowercase → strip apostrophes and commas →
+    non-alphanumerics collapse to a single hyphen → trim leading/trailing
+    hyphens. Double-faced ``A // B`` names use the FRONT face only (EDHREC pages
+    a DFC under its front face).
+
+    The accent fold (NFKD-decompose, then drop combining marks) is load-bearing:
+    EDHREC folds ``é``→``e``, so ``Éowyn, Shieldmaiden`` pages at
+    ``eowyn-shieldmaiden``. Without the fold the accented letter would hit the
+    ``[^a-z0-9]`` catch-all and be *dropped* (``owyn-…``), 403ing the fetch.
 
     Examples::
 
         "Atraxa, Praetors' Voice" -> "atraxa-praetors-voice"
         "Ragavan, Nimble Pilferer" -> "ragavan-nimble-pilferer"
         "Jace, Vryn's Prodigy // Jace, Telepath Unbound" -> "jace-vryns-prodigy"
+        "Éowyn, Shieldmaiden" -> "eowyn-shieldmaiden"
+        "Sméagol, Helpful Guide" -> "smeagol-helpful-guide"
     """
     front = util.front_face(name)
-    s = front.lower()
+    # NFKD splits accented letters into base + combining mark; dropping the
+    # marks (category "Mn") leaves the ASCII base (é→e, û→u, ó→o).
+    folded = "".join(
+        ch for ch in unicodedata.normalize("NFKD", front)
+        if unicodedata.category(ch) != "Mn"
+    )
+    s = folded.lower()
     s = s.replace("'", "").replace("’", "")  # straight + curly apostrophes
     s = s.replace(",", "")
     s = re.sub(r"[^a-z0-9]+", "-", s)
@@ -299,12 +314,23 @@ def resolve_oracle_card(ref: str) -> tuple[str, dict | None]:
     ``None`` only when Scryfall can't resolve the ref (then ``name`` falls back
     to the raw input — the slug is still derivable for an exact name)."""
     parts = ref.split()
-    # "SET CN" form: 2 tokens, second is a collector-number-ish token.
-    if len(parts) == 2 and any(ch.isdigit() for ch in parts[1]):
+    # "SET CN" form: 2 tokens, first is a set-code-shaped token (3-6
+    # alphanumerics, no hyphen — so a hyphenated card name like "Spider-Man
+    # 2099" is NOT mistaken for a printing), second is collector-number-ish.
+    if (
+        len(parts) == 2
+        and re.fullmatch(r"[A-Za-z0-9]{3,6}", parts[0])
+        and any(ch.isdigit() for ch in parts[1])
+    ):
         set_code, cn = parts[0].lower(), parts[1]
-        found, _ = scryfall.collection([{"set": set_code, "collector_number": cn}])
-        if found:
-            return util.front_face(found[0].get("name") or ref), found[0]
+        # Fail-soft: a malformed guess (or Scryfall hiccup) falls through to
+        # bare-name resolution rather than crashing the whole sync.
+        try:
+            found, _ = scryfall.collection([{"set": set_code, "collector_number": cn}])
+            if found:
+                return util.front_face(found[0].get("name") or ref), found[0]
+        except scryfall.ScryfallError:
+            pass
     # bare name → Scryfall named (exact if possible; tolerant fuzzy fallback)
     try:
         card = scryfall.named(ref)
@@ -377,6 +403,18 @@ class DualSyncResult:
     commander: SyncResult | None = None
     card: SyncResult | None = None
     eligible: bool = False
+
+
+@dataclass
+class BulkSyncResult:
+    """Tally of a :func:`sync_bulk` run over a list of names."""
+    total: int                        # names considered (before resume-skip)
+    already: int = 0                  # skipped — commander page already cached
+    ok: int = 0                       # sync_both succeeded (didn't raise)
+    eligible: int = 0                 # of ok, had a commander page
+    card_only: int = 0                # of ok, card page only (no commander page)
+    failed: int = 0
+    failures: list[tuple[str, str]] = field(default_factory=list)  # (name, error)
 
 
 # ---------- sync engines ----------
@@ -697,7 +735,7 @@ def sync_rankings(scope: str = "commanders", timeframe: str = "week", *,
                       raw=plan.primary_page)
 
 
-def sync_both(ref: str) -> DualSyncResult:
+def sync_both(ref: str, *, resolved: tuple[str, dict | None] | None = None) -> DualSyncResult:
     """Ingest a card as BOTH its EDHREC views in one pass — the symmetric-ingest
     seam every ingest path routes through.
 
@@ -706,8 +744,13 @@ def sync_both(ref: str) -> DualSyncResult:
     via :func:`legality.is_commander_eligible` on the resolved Scryfall card, NOT
     a 404 probe, so we never fetch a commander page EDHREC can't serve. The
     commander ``try/except`` is a belt-and-suspenders fallback for the rare
-    eligible-but-not-yet-on-EDHREC case (a brand-new legendary)."""
-    name, card = resolve_oracle_card(ref)
+    eligible-but-not-yet-on-EDHREC case (a brand-new legendary).
+
+    ``resolved`` lets a caller that has ALREADY up-levelled the ref pass in the
+    ``(oracle_name, scryfall_card)`` pair so the resolve isn't repeated — e.g.
+    :func:`sync_bulk`, which resolves each name to decide the resume-skip and then
+    threads the result straight through."""
+    name, card = resolved if resolved is not None else resolve_oracle_card(ref)
     eligible = card is not None and legality.is_commander_eligible(card)
 
     commander_res: SyncResult | None = None
@@ -725,6 +768,151 @@ def sync_both(ref: str) -> DualSyncResult:
 
     return DualSyncResult(name=name, commander=commander_res,
                           card=card_res, eligible=eligible)
+
+
+# ---------- bulk cache-warming (selector-driven) ----------
+
+def _cached_slugs() -> tuple[set[str], set[str]]:
+    """``(commander_slugs, card_slugs)`` already present in ``edhrec_pages``.
+
+    Both sets are needed for a correct resume: an eligible card is only fully
+    warmed once BOTH its commander and card pages are cached, while a card-only
+    card is done once its card page is. Keyed on the stored slug (``slugify`` of
+    the resolved oracle name), which is what the resume check re-derives."""
+    with db.connect() as conn:
+        commander = {
+            r[0] for r in conn.execute(
+                "SELECT DISTINCT slug FROM edhrec_pages WHERE page_type='commander'"
+            ).fetchall()
+        }
+        card = {
+            r[0] for r in conn.execute(
+                "SELECT DISTINCT slug FROM edhrec_pages WHERE page_type='card'"
+            ).fetchall()
+        }
+    return commander, card
+
+
+def names_from_selector(selector: str, *, card_type: str | None = None) -> list[str]:
+    """Materialize a selector to a deduped, sorted list of oracle card names.
+
+    The selector DSL (``set:CODE+related``, ``cards:Q``, ``deck:SLUG``,
+    ``inventory``, …) is the repo's universal "set of cards" input, so bulk
+    EDHREC warming rides it rather than a bespoke family+type query. Each
+    materialized row already carries ``type_line``, so ``card_type`` filters
+    OFFLINE via a case-insensitive substring (``"legendary creature"``,
+    ``"creature"``, ``"planeswalker"``, …).
+
+    Two classes are dropped because they have no paper EDHREC page: **tokens**
+    (``is_token`` — the same hard-exclude the missing-set pipeline applies; you
+    don't warm EDHREC for a Treasure or a Goblin token) and **digital-only**
+    cards (``selectors._is_digital_only`` — Arena/Alchemy rebalanced reprints AND
+    the arena-stamped Alchemy *originals* that carry no ``A-`` prefix, plus
+    serialized 1-of-N). Reusing ``_is_digital_only`` keeps this in lockstep with
+    the one canonical unobtainable-card predicate rather than a weaker name-prefix
+    heuristic.
+    """
+    from . import selectors  # local import: selectors imports heavy siblings
+
+    names: set[str] = set()
+    for row in selectors.materialize(selector):
+        if row.card.get("is_token") or selectors._is_digital_only(row.card):
+            continue
+        type_line = row.card.get("type_line") or ""
+        if card_type and card_type.lower() not in type_line.lower():
+            continue
+        name = row.card.get("name") or ""
+        if name:
+            names.add(name)
+    return sorted(names)
+
+
+def sync_bulk(
+    names: Iterable[str],
+    *,
+    resume: bool = True,
+    progress=None,
+) -> BulkSyncResult:
+    """Warm the EDHREC cache for every name via :func:`sync_both`.
+
+    Loops the per-card symmetric-ingest seam, so each name warms its
+    card-in-99 page and (when commander-eligible) its commander page, into
+    ``edhrec_pages`` + the normalized tables.
+
+    **Resumable (per-eligibility).** When ``resume``, a name is skipped only when
+    its EDHREC pages are already fully cached — and "fully" depends on
+    eligibility: a commander-eligible card needs BOTH its commander and card
+    pages; a card-only card needs just its card page. We therefore resolve each
+    name up front (to know eligibility) and thread that resolve straight into
+    :func:`sync_both` so it isn't repeated. Resolves are 24h-cached in
+    ``scryfall.sh``, so the pre-pass is cheap on a re-run. (The earlier
+    commander-slug-only key silently re-fetched every card-only card each run —
+    the bulk of a ``set:X+related`` universe.)
+
+    **Fail-soft, with a bug/transient split.** Expected transient failures
+    (``EdhrecError`` / ``ScryfallError``) are tallied into ``failed``/``failures``
+    and the loop continues. Any OTHER exception (an ``AttributeError`` /
+    ``KeyError`` from a changed EDHREC page shape, a ``sqlite3`` error, …) is a
+    code/parse bug, not flaky network — it's tagged distinctly (``BUG: <type>``)
+    so a deterministic failure that resume can never repair reads as a bug rather
+    than fetch noise. The loop still continues (one bad card shouldn't abort a
+    1000-item batch).
+
+    ``progress(i, total, name, tag)`` — optional callback per attempted name;
+    ``tag`` is ``"cmd+card"`` / ``"card-only"`` / ``"none"`` / ``"ERROR: …"`` /
+    ``"BUG: …"`` / ``"skip (cached)"``.
+    """
+    names = list(names)
+    result = BulkSyncResult(total=len(names))
+    cmd_cached, card_cached = _cached_slugs() if resume else (set(), set())
+
+    # Resolve-then-partition: resolve each name once (24h-cached), decide the
+    # resume-skip against the correct page-set for its eligibility, and carry the
+    # resolve into sync_both so it isn't repeated. Skipped names are counted but
+    # not progress-logged (a large resume shouldn't spam a line per cache hit).
+    todo: list[tuple[str, tuple[str, dict | None]]] = []
+    for name in names:
+        try:
+            oracle_name, card = resolve_oracle_card(name)
+        except scryfall.ScryfallError:
+            # Couldn't resolve to decide skip — let sync_both re-attempt and tally.
+            todo.append((name, (name, None)))
+            continue
+        eligible = card is not None and legality.is_commander_eligible(card)
+        slug = slugify(oracle_name)
+        # A card-only card is done once its card page is cached; an eligible card
+        # needs BOTH pages (an interrupted run may have written only one).
+        fully_cached = slug in card_cached and (not eligible or slug in cmd_cached)
+        if resume and fully_cached:
+            result.already += 1
+        else:
+            todo.append((name, (oracle_name, card)))
+
+    for i, (name, resolved) in enumerate(todo, 1):
+        try:
+            res = sync_both(name, resolved=resolved)
+            result.ok += 1
+            if res.commander is not None:
+                result.eligible += 1
+                tag = "cmd+card"
+            elif res.card is not None:
+                result.card_only += 1
+                tag = "card-only"
+            else:
+                tag = "none"
+        except (EdhrecError, scryfall.ScryfallError) as e:
+            # Expected transient (network / API / missing page) — flaky, retryable.
+            result.failed += 1
+            result.failures.append((name, str(e)))
+            tag = f"ERROR: {e}"
+        except Exception as e:  # noqa: BLE001 — unexpected: a code/parse bug, surface it
+            result.failed += 1
+            result.failures.append((name, f"UNEXPECTED {type(e).__name__}: {e}"))
+            tag = f"BUG: {type(e).__name__}: {e}"
+        if progress is not None:
+            progress(i, len(todo), name, tag)
+
+    return result
 
 
 def enrich_rows(rows: list[EnrichedCardRow]) -> list[EnrichedCardRow]:
