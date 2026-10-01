@@ -340,6 +340,23 @@ def _cheapest(nonfoil: float | None, foil: float | None) -> tuple[float | None, 
     return None, None
 
 
+def owned_oracle_ids(family_codes: set[str]) -> set[str]:
+    """oracle_ids the user owns ANY printing/finish of, within the given family
+    set codes. ``family_codes`` must already be lowercased (callers resolve the
+    family via ``sets.resolve(...).all_codes`` and lowercase them)."""
+    with db.connect() as conn:
+        fam_ph = ",".join("?" for _ in family_codes)
+        return {
+            r[0] for r in conn.execute(
+                f"SELECT DISTINCT c.oracle_id FROM inventory i "
+                f"JOIN cards c ON c.scryfall_id = i.scryfall_id "
+                f"WHERE i.quantity > 0 AND LOWER(c.set_code) IN ({fam_ph}) "
+                f"AND c.oracle_id IS NOT NULL",
+                list(family_codes),
+            ).fetchall()
+        }
+
+
 def functional_missing(
     code: str,
     treatment_class: str = "preferred",
@@ -373,18 +390,9 @@ def functional_missing(
     except LookupError:
         family_codes = {code.lower()}
 
+    owned = owned_oracle_ids(family_codes)
     with db.connect() as conn:
         fam_ph = ",".join("?" for _ in family_codes)
-        # oracle_ids the user owns ANY printing/finish of, within the family.
-        owned = {
-            r[0] for r in conn.execute(
-                f"SELECT DISTINCT c.oracle_id FROM inventory i "
-                f"JOIN cards c ON c.scryfall_id = i.scryfall_id "
-                f"WHERE i.quantity > 0 AND LOWER(c.set_code) IN ({fam_ph}) "
-                f"AND c.oracle_id IS NOT NULL",
-                list(family_codes),
-            ).fetchall()
-        }
         missing_oids = candidate_oids - owned
         if not missing_oids:
             return FunctionalMissing()
@@ -432,3 +440,35 @@ def functional_missing(
     ), 2)
     return FunctionalMissing(cards=cards, n_cards=len(cards),
                              family_total_usd=fam_total, anywhere_total_usd=any_total)
+
+
+# ---------- variant-chase (missing printings whose card you already own) ----------
+#
+# `variant_chase_printings` answers a THIRD question, the complement of
+# functional_missing within missing_printings: not "cards I own zero printings
+# of" but "printings I lack of a card I DO already own" — the borderless /
+# alt-art / fancy-foil chase for a card whose base copy is already in hand.
+# Formally: missing_printings rows whose oracle_id ∈ owned_oracle_ids(family) —
+# i.e. (printing-missing) ∩ (owned-oracle), the mirror image of
+# functional_missing's (candidate-oracle) − (owned-oracle) set subtraction.
+
+def variant_chase_printings(
+    code: str,
+    treatment_class: str = "preferred",
+    *,
+    precomputed_missing: list | None = None,
+) -> list:
+    """missing_printings rows whose oracle_id the user ALREADY owns in the
+    family (the printing-missing ∩ owned-oracle diff — variant/alt-art/fancy-
+    foil printings of cards you have). ``precomputed_missing`` reuses rows if
+    the caller already ran ``missing_printings``."""
+    rows = precomputed_missing if precomputed_missing is not None \
+        else missing_printings(code, treatment_class)
+    if not rows:
+        return []
+    try:
+        family_codes = {c.lower() for c in sets_mod.resolve(code).all_codes}
+    except LookupError:
+        family_codes = {code.lower()}
+    owned = owned_oracle_ids(family_codes)
+    return [r for r in rows if (r.card or {}).get("oracle_id") in owned]

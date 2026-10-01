@@ -24,7 +24,7 @@ uv run mm set …          # sync sets, is-synced, build/ingest inventory checkl
 uv run mm inventory …    # show / value / add / remove / import (V2 fact table)
 uv run mm wishlist …     # categories of cards I want
 uv run mm deck …         # decks (composition independent of ownership), import-precon, import-deck (moxfield/archidekt/mtggoldfish/manabox/scryfall; re-pull deduped, --force replaces), push-moxfield
-uv run mm query …        # selector queries: show, value, top, total, multiples, stats, url, xlsx, missing-set
+uv run mm query …        # selector queries: show, value, top, total, multiples, stats, url, xlsx, missing-set, card-diff
 uv run mm checklists …   # inspect files in checklists/ (alias: `mm input …`)
 uv run mm mtgjson …      # MTGJSON precon/set lookups (cached)
 uv run mm db …           # snapshot, snapshots, restore, integrity, unlock (clear stale -wal/-shm)
