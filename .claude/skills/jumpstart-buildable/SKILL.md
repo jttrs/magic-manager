@@ -9,6 +9,8 @@ Deterministic, script-driven "buildable set" buy list. Claude invokes
 `scripts/jumpstart_buildable.py <set_code>`, relays the stdout summary, and hands the user the
 `output/jumpstart-buildable/{buy-lists,checklists}/` artifact paths. No inline computation — the script is the single source of truth.
 
+**Clipboard:** the ManaPool `.txt` is auto-copied to the macOS clipboard by the `clipboard-buylist` `PostToolUse` hook (`.claude/hooks/clipboard-buylist.sh`) — paste straight into ManaPool, no manual copy step. Relay the hook's "Copied … to the clipboard" confirmation.
+
 ## When to use
 
 - "What do I still need to build every theme of <Jumpstart set>?" / "finish out my j25 jumpstart"
