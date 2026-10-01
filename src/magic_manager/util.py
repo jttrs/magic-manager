@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
+from typing import Any, Iterable
 
 _CN_RE = re.compile(r"^(\d+)(.*)$")
 
@@ -50,6 +51,31 @@ TOKEN_LAYOUTS = frozenset({"token", "double_faced_token", "emblem"})
 def is_token_layout(layout: str | None) -> bool:
     """True when a Scryfall ``layout`` denotes a token/emblem (not a real card)."""
     return layout in TOKEN_LAYOUTS
+
+
+def decode_json_list(v: Any) -> list[str]:
+    """Coerce a card-row value to a list of strings.
+
+    Card rows may carry these fields as Python lists (when fed straight from
+    Scryfall) or as JSON-encoded TEXT (when read from our SQLite ``cards``
+    table). Handle both transparently.
+    """
+    if v is None:
+        return []
+    if isinstance(v, str):
+        s = v.strip()
+        if not s:
+            return []
+        if s.startswith("["):
+            try:
+                parsed = json.loads(s)
+                return [str(x) for x in parsed] if isinstance(parsed, list) else [s]
+            except json.JSONDecodeError:
+                return [s]
+        return [s]
+    if isinstance(v, Iterable):
+        return [str(x) for x in v]
+    return [str(v)]
 
 
 def format_color_identity(identity, *, collapse_multicolor: bool) -> str:

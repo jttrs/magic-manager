@@ -37,22 +37,40 @@ Capture parent + all related codes with their `set_type`, `card_count`, `release
 
 Cross-check the family's known-good structure against `docs/scryfall-set-families-and-bonus-sheets.md` §1 which catalogs verified topologies.
 
-### 2. Run the treatment-signature audit
+### 2. Run the treatment-signature audit — read ALL THREE axes
 
 ```bash
 uv run python scripts/survey_treatment_signature.py <ANCHOR>
 ```
 
-Output includes:
-- Every `promo_types` token frequency across the family.
-- Top co-occurrence pairs (catches AND-of-tokens treatments like LTR's `silverfoil+scroll`).
-- Per-token examples: 3 prints with the token + their same-name siblings WITHOUT it, plus Scryfall URLs for visual comparison.
+⚠️ **Do NOT stop at the `promo_types` section.** WotC tags every special printing with a single umbrella `promo_types` token (`boosterfun`, `universesbeyond`), which the per-token section deliberately *skips as too generic*. The real treatment structure — **showcase, extended-art, etched** — lives in `frame_effects` and `finishes`, NOT in `promo_types`. A promo_types-only read collapses all of it into one "distinct, kept" bucket. This is exactly how CLB and AFR were first mis-characterized (2026-09-30): the audit reported "one boosterfun bucket, all kept" and the committed config left 76 CLB + 60 AFR unwanted D&D-showcase prints in `missing-set`.
 
-**Interpret each fancy-foil token:**
-- If the token-bearing print is **visually identical** to a same-name sibling without the token → it's a **dupe foil** → add to `FAMILY_DUPE_FOIL_PROMO_TYPES[anchor]`.
-- If the token-bearing print has **unique art** → keep it out of DUPE_FOIL. Note in the doc's Treatments section as "kept — unique art despite fancy foil" (e.g. FIN chocobotrackfoil).
-- If a token co-occurs with another (like `silverfoil+scroll` for LTR scroll frames) AND the user won't shop for the print → propose an entry in `FAMILY_UNOBTAINABLE_RULES[anchor]` with `promo_types_all_of: frozenset(...)`.
-- ⚠️ **DUPE_FOIL is gated on the `ff` treatment keyword.** The dupe-foil drop in `selectors._filter_treatment_preferred` (Step 3 of that function) only inspects prints whose computed treatment contains `ff`. So a same-art fancy foil is only caught by `FAMILY_DUPE_FOIL_PROMO_TYPES` if `treatments.compute_treatment` classifies it as `ff`. If the print is same-art-on-a-fancy-sheet but its promo_type does **not** compute to `ff` (e.g. SNC `stepandcompleat` → treatment `b`, not `b|ff`; verified 2026-08-24), the DUPE_FOIL entry silently misses it — route it to `FAMILY_UNOBTAINABLE_RULES[anchor]` (a `promo_types_any_of` rule) instead, and note in the doc which treatment the print actually computes to. Quick check: `uv run python -c "import sys;sys.path.insert(0,'src');from magic_manager import db,treatments; ... print(treatments.compute_treatment(row))"` — if there's no `ff`, use UNOBTAINABLE_RULES.
+The script now emits **three axes** — read every one:
+
+1. **`promo_types` frequency + co-occurrence + per-token examples** (the original sections) — still the right tool for dupe-foil / stamped-promo signals.
+2. **TREATMENT-FIRST AXIS** (the section headed `TREATMENT-FIRST AXIS`):
+   - *computed treatment class × finish* — what `missing-set` actually sorts on (`regular`/`b`/`shw`/`ext`/`ff`/`fa`), via `treatments.compute_treatment`.
+   - *frame_effects + finishes combos* — `boosterfun` is NOT skipped here; showcase/extendedart/etched surface as real counts.
+   - **PREFERRED PREVIEW** — the decisive view: it runs the REAL `selectors._filter_treatment_preferred` over `set:<anchor>+related missing` and buckets survivors by `(treatment, frame_effects, border_color)`. **This is literally the per-tier list of what `mm query missing-set` will tell the user to buy.** (Before the family is configured it falls back to `collectible-alt` with a warning — still informative.)
+
+**MANDATORY review — do this with the user, do not skip it.** Take the PREFERRED PREVIEW buckets and, for EVERY alt-treatment tier present (showcase, extended-art, etched, borderless, …), get an explicit **keep / exclude** decision. "Unobtainable" is the user's per-family *taste*, not a property of the price curve (see Step 9) — so this is a question to ask, not a judgment to make silently. Record each decision in the doc §2/§5.
+
+Pipeline facts that scope the review (so you ask about the right tiers):
+- **`ext` and pure-`ff` are auto-dropped** by `_filter_treatment_preferred` — they will NOT appear in the preview. No rule needed; just note them in §2.
+- **`shw` (showcase) and borderless are KEPT by default** — they DO appear in the preview. If the user doesn't want a showcase tier, it needs an explicit `FAMILY_UNOBTAINABLE_RULES` entry. **Black-bordered showcase** is the high-risk class (a separate frame that's easy to overlook, like the D&D rulebook frame); **borderless-showcase** is usually just the family's ordinary borderless treatment.
+- **The UB:D&D "rulebook/module-page" showcase frame is shared across CLB, AFR, and any future D&D set, and the user does NOT collect it.** For a D&D family, default to proposing `{"frame_effects_all_of": frozenset({"showcase"}), "border_color": "black"}` (excludes the black-bordered showcase, spares the wanted borderless). Confirm, don't assume.
+
+**Interpret each fancy-foil `promo_types` token (dupe-foil decision, axis 1):**
+- If the token-bearing print is **visually identical** to a same-name sibling without the token → **dupe foil** → add to `FAMILY_DUPE_FOIL_PROMO_TYPES[anchor]`.
+- If the token-bearing print has **unique art** → keep it out of DUPE_FOIL; note in §2 as "kept — unique art despite fancy foil" (e.g. FIN chocobotrackfoil).
+- If a token co-occurs with another (like `silverfoil+scroll` for LTR scroll frames) AND the user won't shop for the print → `FAMILY_UNOBTAINABLE_RULES[anchor]` with `promo_types_all_of: frozenset(...)`.
+- ⚠️ **DUPE_FOIL is gated on the `ff` treatment keyword.** The dupe-foil drop in `selectors._filter_treatment_preferred` only inspects prints whose computed treatment contains `ff`. So a same-art fancy foil is only caught by `FAMILY_DUPE_FOIL_PROMO_TYPES` if `treatments.compute_treatment` classifies it as `ff`. If the print is same-art-on-a-fancy-sheet but its promo_type does **not** compute to `ff` (e.g. SNC `stepandcompleat` → treatment `b`, not `b|ff`; verified 2026-08-24), the DUPE_FOIL entry silently misses it — route it to `FAMILY_UNOBTAINABLE_RULES[anchor]` (a `promo_types_any_of` rule) instead, and note in the doc which treatment the print actually computes to.
+
+**Backstop (run after drafting the doc):**
+```bash
+uv run python scripts/audit_treatment_coverage.py <ANCHOR>
+```
+Confirms every treatment class present in the data is *named* in the doc §2. A `⚠ HIGH` line means a KEPT-by-default class (showcase/borderless) is undocumented — the CLB/AFR failure mode; go back and address it. A lowercase `gap` (auto-dropped `ext`/`etched`) is a documentation nit, not a correctness bug.
 
 ### 3. Enumerate chase-variant candidates
 

@@ -43,6 +43,8 @@ Tiny, clean topology — no separately-rooted bonus sheets, no promo/prerelease 
 
 **Full-art convention:** `full_art` is **FALSE** on the borderless showcases here (checked PIP 722/194/617 → `full_art=0`). Fallout's borderless treatment rides on `frame_effects: ["inverted"]` (± `showcase`), not the `full_art` flag. Treatment classification keys off `inverted`/`showcase`, so this is fine.
 
+**Auto-dropped classes (noted for `audit_treatment_coverage.py` coverage):** `extendedart` prints (treatment `ext`) and `etched`-finish prints (treatment `b|ff`) exist in this family but are **auto-dropped by the preferred filter** — `ext` is excluded as its own class and `etched` collapses in the ff-dupe step — so they never reach `missing-set` and need no per-family rule.
+
 ---
 
 ## 3. Chase variants

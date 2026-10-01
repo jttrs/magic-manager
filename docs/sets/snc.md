@@ -49,6 +49,8 @@ gotcha.
 **Full-art convention:** standard-era (2022) — borderless-inverted showcase cards
 do NOT set `full_art: true` (predates the SPM/TLA convention flip).
 
+**Auto-dropped classes (noted for `audit_treatment_coverage.py` coverage):** `extendedart` prints (treatment `ext`) and `etched`-finish prints (treatment `b|ff`) exist in this family but are **auto-dropped by the preferred filter** — `ext` is excluded as its own class and `etched` collapses in the ff-dupe step — so they never reach `missing-set` and need no per-family rule.
+
 ---
 
 ## 3. Chase variants

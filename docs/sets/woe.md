@@ -57,6 +57,8 @@ premium-foil dupe tier on the Enchanting Tales sheet.
 **Full-art convention:** standard (borderless/showcase carry `border_color:
 borderless` or `frame_effects: showcase`/`inverted`; `full_art` only on basics).
 
+**Auto-dropped classes (noted for `audit_treatment_coverage.py` coverage):** `extendedart` prints (treatment `ext`) and `etched`-finish prints (treatment `b|ff`) exist in this family but are **auto-dropped by the preferred filter** — `ext` is excluded as its own class and `etched` collapses in the ff-dupe step — so they never reach `missing-set` and need no per-family rule.
+
 ---
 
 ## 3. Chase variants

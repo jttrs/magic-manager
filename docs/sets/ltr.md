@@ -51,6 +51,8 @@ mm query missing-set ltr
 
 **Full-art convention:** LTR's borderless-inverted prints have `full_art: false` and `frame_effects: ["inverted"]`. See `docs/scryfall-printing-treatments.md` §6.5 for the SPM/TLA/TMT convention flip.
 
+**Auto-dropped classes (noted for `audit_treatment_coverage.py` coverage):** `extendedart` prints (treatment `ext`) and `etched`-finish prints (treatment `b|ff`) exist in this family but are **auto-dropped by the preferred filter** — `ext` is excluded as its own class and `etched` collapses in the ff-dupe step — so they never reach `missing-set` and need no per-family rule.
+
 ---
 
 ## 3. Chase variants

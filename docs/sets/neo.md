@@ -56,6 +56,8 @@ distinct-art, so nothing goes in DUPE_FOIL. The chase tiers are excluded via §5
 
 **Full-art convention:** boosterfun showcase (ninja / soulscar / ukiyo-e frames).
 
+**Auto-dropped classes (noted for `audit_treatment_coverage.py` coverage):** `extendedart` prints (treatment `ext`) and `etched`-finish prints (treatment `b|ff`) exist in this family but are **auto-dropped by the preferred filter** — `ext` is excluded as its own class and `etched` collapses in the ff-dupe step — so they never reach `missing-set` and need no per-family rule.
+
 ---
 
 ## 3. Chase variants
