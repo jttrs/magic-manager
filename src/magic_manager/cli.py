@@ -3721,60 +3721,60 @@ def query_card_diff_cmd(
     typer.echo(f"")
     typer.echo(f"Owned: {fd.owned_prints} printings / {fd.owned_qty} cards · {util.fmt_usd(fd.owned_usd)}")
 
-    def _echo_printing_table(rows, label: str) -> None:
-        if not rows:
-            typer.echo(f"\n## {label} — 0 prints · $0.00\n\n(none)")
+    def _echo_url_table(header: str, printings: list, prices: list) -> None:
+        """Emit a `## header` + chunked Scryfall-URL table for already-extracted,
+        already-sorted (set, cn) printings with parallel per-printing prices.
+        The single table renderer behind every pool — printing/variant-chase feed
+        it from MaterializedRows, functional from FunctionalMissingCards."""
+        typer.echo(f"\n## {header}")
+        if not printings:
+            typer.echo("\n(none)")
             return
+        typer.echo(f"")
+        typer.echo(f"| # | Printings | Price band | URL |")
+        typer.echo(f"|---:|---:|---|---|")
+        for uc in scryfall_urls_mod.printing_url_chunks(
+            printings, chunk_size=chunk_size, prices=prices,
+        ):
+            cs = f"${uc.price_lo:.2f}" if uc.price_lo is not None else "—"
+            ms = f"${uc.price_hi:.2f}" if uc.price_hi is not None else "—"
+            typer.echo(f"| {uc.index} | {uc.n} | {cs} → {ms} | [chunk {uc.index}]({uc.url}) |")
+
+    def _echo_printing_pool(rows, label: str) -> None:
+        """Printing / variant-chase pool: sort rows cheapest-first (same key as
+        missing-set), then render via the shared table."""
         rows_by_value = sorted(rows, key=lambda r: (
             0 if _row_line_value(r) is not None else 1,
             _row_line_value(r) or 0.0,
             r.card.get("set") or "", util.cn_sort_key(r.card.get("collector_number")),
         ))
         total = sum((_row_line_value(r) or 0.0) for r in rows_by_value)
-        url_chunks = scryfall_urls_mod.printing_url_chunks(
+        _echo_url_table(
+            f"{label} — {len(rows_by_value)} prints · {util.fmt_usd(total)}",
             [(r.card.get("set"), r.card.get("collector_number")) for r in rows_by_value],
-            chunk_size=chunk_size,
-            prices=[_row_line_value(r) for r in rows_by_value],
+            [_row_line_value(r) for r in rows_by_value],
         )
-        typer.echo(f"\n## {label} — {len(rows_by_value)} prints · {util.fmt_usd(total)}")
-        typer.echo(f"")
-        typer.echo(f"| # | Printings | Price band | URL |")
-        typer.echo(f"|---:|---:|---|---|")
-        for uc in url_chunks:
-            cs = f"${uc.price_lo:.2f}" if uc.price_lo is not None else "—"
-            ms = f"${uc.price_hi:.2f}" if uc.price_hi is not None else "—"
-            typer.echo(f"| {uc.index} | {uc.n} | {cs} → {ms} | [chunk {uc.index}]({uc.url}) |")
 
     if "printing" in pools:
-        _echo_printing_table(fd.printing.rows, "Missing printing")
+        _echo_printing_pool(fd.printing.rows, "Missing printing")
 
     if "functional" in pools:
-        f_cards = fd.functional.rows
-        if not f_cards:
-            typer.echo(f"\n## Missing functional — 0 cards · $0.00\n\n(none)")
-        else:
-            cards_by_value = sorted(f_cards, key=lambda c: (
-                0 if c.family_usd is not None else 1,
-                c.family_usd or 0.0,
-                c.set_code or "", util.cn_sort_key(c.family_cn),
-            ))
-            printings = [(c.set_code, c.family_cn) for c in cards_by_value
-                        if c.set_code and c.family_cn]
-            prices = [c.family_usd for c in cards_by_value if c.set_code and c.family_cn]
-            url_chunks = scryfall_urls_mod.printing_url_chunks(
-                printings, chunk_size=chunk_size, prices=prices,
-            )
-            typer.echo(f"\n## Missing functional — {fd.functional.count} cards · {util.fmt_usd(fd.functional.usd)}")
-            typer.echo(f"")
-            typer.echo(f"| # | Printings | Price band | URL |")
-            typer.echo(f"|---:|---:|---|---|")
-            for uc in url_chunks:
-                cs = f"${uc.price_lo:.2f}" if uc.price_lo is not None else "—"
-                ms = f"${uc.price_hi:.2f}" if uc.price_hi is not None else "—"
-                typer.echo(f"| {uc.index} | {uc.n} | {cs} → {ms} | [chunk {uc.index}]({uc.url}) |")
+        # Functional cards carry their cheapest in-family printing (set_code +
+        # family_cn + family_usd); sort cheapest-first and feed the same table.
+        cards_by_value = sorted(fd.functional.rows, key=lambda c: (
+            0 if c.family_usd is not None else 1,
+            c.family_usd or 0.0,
+            c.set_code or "", util.cn_sort_key(c.family_cn),
+        ))
+        resolvable = [c for c in cards_by_value if c.set_code and c.family_cn]
+        _echo_url_table(
+            f"Missing functional — {fd.functional.count} cards · {util.fmt_usd(fd.functional.usd)}",
+            [(c.set_code, c.family_cn) for c in resolvable],
+            [c.family_usd for c in resolvable],
+        )
 
     if "variant-chase" in pools:
-        _echo_printing_table(fd.variant_chase.rows, "Variant-chase")
+        _echo_printing_pool(fd.variant_chase.rows, "Variant-chase")
 
 
 @query_app.command("missing-jumpstart")

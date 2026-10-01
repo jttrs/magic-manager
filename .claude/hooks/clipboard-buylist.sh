@@ -17,15 +17,24 @@ set -euo pipefail
 
 input=$(cat)
 
-# Extract command + tool stdout in one exception-safe pass. tool_response may be
-# a dict ({"stdout": ...}) or a bare string depending on the Bash tool schema —
-# handle both. Any malformed input degrades to empty strings so the hook simply
-# no-ops rather than erroring the tool. Emitted as: line 1 = command (always
-# single-line), remaining lines = stdout — bash can't hold NUL, so we split on
-# the first newline instead.
+# Classify the command + extract tool stdout in one exception-safe pass.
+# tool_response may be a dict ({"stdout": ...}) or a bare string depending on the
+# Bash tool schema — handle both. Any malformed input degrades to a no-op rather
+# than erroring the tool.
+#
+# CRITICAL: a bulk-order invocation is matched by STRUCTURE, not loose substring —
+# the producer must appear at a command boundary (start of string, or after
+# && / || / ; / | / newline), with an optional `uv run` prefix. This mirrors the
+# guard hooks' URL-form matching, and prevents false positives where the text
+# appears only inside an argument to another command (e.g. a `git commit -m` whose
+# message mentions `mm export manapool`, or an `echo`).
+#
+# Output: line 1 = "<kind>:<target>" (kind ∈ file|stdout|none; target ∈
+# manapool|tcgplayer|-), remaining lines = stdout. bash can't hold NUL, so we
+# split on the first newline.
 parsed=$(printf '%s' "$input" | python3 -c '
-import sys, json
-cmd = out = ""
+import sys, json, re
+kind, target, out = "none", "-", ""
 try:
     d = json.load(sys.stdin)
     cmd = (d.get("tool_input", {}).get("command", "") or "").replace("\n", " ")
@@ -34,22 +43,26 @@ try:
         out = r.get("stdout", "") or ""
     elif isinstance(r, str):
         out = r
+    # Command boundary: start, or after a shell separator (&& || ; | newline).
+    boundary = r"(?:^|&&|\|\||[;|])\s*(?:uv\s+run\s+)?"
+    if re.search(boundary + r"mm\s+query\s+missing-set\b", cmd) \
+            or re.search(boundary + r"mm\s+query\s+missing-jumpstart\b", cmd) \
+            or re.search(boundary + r"(?:uv\s+run\s+)?python\S*\s+scripts/jumpstart_buildable\.py\b", cmd):
+        kind = "file"
+    elif re.search(boundary + r"mm\s+export\s+manapool\b", cmd):
+        kind, target = "stdout", "manapool"
+    elif re.search(boundary + r"mm\s+export\s+tcgplayer\b", cmd):
+        kind, target = "stdout", "tcgplayer"
 except Exception:
     pass
-sys.stdout.write(cmd + "\n" + out)
-' 2>/dev/null || printf '\n')
-cmd=${parsed%%$'\n'*}
+sys.stdout.write(f"{kind}:{target}\n" + out)
+' 2>/dev/null || printf 'none:-\n')
+header=${parsed%%$'\n'*}
 out=${parsed#*$'\n'}
+kind=${header%%:*}
+target=${header#*:}
 
-# Only act on the bulk-order producers / exports.
-case "$cmd" in
-  *"mm query missing-set"*|*"mm query missing-jumpstart"*|*jumpstart_buildable.py*)
-    kind=file ;;
-  *"mm export manapool"*|*"mm export tcgplayer"*)
-    kind=stdout ;;
-  *)
-    exit 0 ;;
-esac
+[ "$kind" = "none" ] && exit 0
 
 # pbcopy is macOS-only; degrade gracefully elsewhere.
 command -v pbcopy >/dev/null 2>&1 || exit 0
@@ -84,9 +97,6 @@ fi
 # passed, so text went to a file) → nothing to copy.
 [ -n "$out" ] || exit 0
 printf '%s' "$out" | pbcopy
-case "$cmd" in
-  *"mm export tcgplayer"*) target="TCGplayer" ;;
-  *) target="ManaPool" ;;
-esac
-emit "Copied the $target export to the clipboard — paste directly into the portal."
+[ "$target" = "tcgplayer" ] && label="TCGplayer" || label="ManaPool"
+emit "Copied the $label export to the clipboard — paste directly into the portal."
 exit 0
