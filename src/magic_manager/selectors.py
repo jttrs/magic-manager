@@ -38,7 +38,7 @@ import re
 import shlex
 from dataclasses import dataclass, field
 
-from . import db, scryfall, sets as sets_mod, util
+from . import config as _config, db, scryfall, sets as sets_mod, util
 
 
 # ---------- AST ----------
@@ -75,255 +75,11 @@ VALID_TREATMENT_CLASSES = (
 # (and `mm query missing-set`) refuse to silently fall back to a less-strict
 # class when a family is unconfigured — instead they error out with a clear
 # instruction for the user to configure or to opt into a looser class.
-FAMILY_DUPE_FOIL_PROMO_TYPES: dict[str, frozenset[str]] = {
-    # Final Fantasy: surgefoil is "same art, fancy-foil sheet" (FIN 532-ish).
-    # chocobotrackfoil is intentionally NOT here — it marks unique art (FIN 564 etc.).
-    "fin": frozenset({"surgefoil"}),
-    # Lord of the Rings: surgefoil and doublerainbow are both same-art-as-sibling
-    # dupe foils. surgefoil prints (e.g. LTC 378 The Great Henge) match the
-    # borderless inverted siblings (LTC 348). doublerainbow serialized prints
-    # (e.g. LTC 378z) likewise match. silverfoil/scroll showcase prints (LTC
-    # 411-431) are intentionally NOT here — those are a unique scroll-frame art
-    # treatment, not a dupe of any other print. poster prints (LTR 731-746)
-    # are unique poster-art treatment, also intentionally not in this set.
-    "ltr": frozenset({"surgefoil", "doublerainbow"}),
-    # Spider-Man: no dupe-foil signals per survey_treatment_signature.py audit
-    # (2026-07-08). textured (SPM 235-241) is a 7-print series of DISTINCT
-    # comic-panel arts, not a dupe of any base print. cosmicfoil is a singleton
-    # (needs visual audit if encountered but not worth a rule for one print).
-    # Empty frozenset satisfies the `treatment=preferred` config requirement
-    # without filtering anything. See docs/sets/spm.md §2.
-    "spm": frozenset(),
-    # Avatar: The Last Airbender: no dupe-foil signals per audit (2026-07-08).
-    # neonink (TLA 359-362) is a 4-print themed chase (Aang/Zuko/Katara/Toph
-    # by Flavio Girón) with distinct art, not a dupe. raisedfoil singleton
-    # (TLA 363 Avatar Aang, Bryan Konietzko + headliner) probably unique-art.
-    # Empty frozenset per docs/sets/tla.md §2.
-    "tla": frozenset(),
-    # TMNT: surgefoil is same-art-as-sibling (TMT 309 Forest BEMOCS surgefoil
-    # matches TMT 195 Forest BEMOCS base). fracturefoil is same-art-as-sibling
-    # (TMT 291 Leonardo A4Mitsuori fracturefoil+japanshowcase matches TMT 281
-    # Leonardo A4Mitsuori japanshowcase). japanshowcase itself is unique art
-    # (different artist from base) — kept. See docs/sets/tmt.md §2.
-    "tmt": frozenset({"surgefoil", "fracturefoil"}),
-    # Streets of New Capenna: gilded is same-art-as-sibling — the 45 gilded
-    # golden-showcase foils (SNC 361-405, gilded+boosterfun, foil-only) share the
-    # exact art + showcase+inverted frame of their boosterfun showcase siblings
-    # (SNC 296-340). Verified on Brazen Upstart 361↔296, Ziatora 404↔339. The
-    # gilded print is the dupe; the boosterfun showcase is kept as preferred.
-    # (stepandcompleat is NOT here — it doesn't map to the `ff` treatment keyword
-    # the dupe-foil step gates on, so it's handled via FAMILY_UNOBTAINABLE_RULES
-    # instead. See docs/sets/snc.md §5.)
-    # See docs/sets/snc.md §2.
-    "snc": frozenset({"gilded"}),
-    # Edge of Eternities: fracturefoil is same-art-as-sibling — the
-    # fracturefoil+japanshowcase showcase mythics (EOE 383-392, treatment
-    # b|shw|ff) are the same showcase art as the plain japanshowcase prints
-    # (EOE 357-366, treatment b|shw), just on a fracture-foil sheet. Verified
-    # on The Dominion Bracelet: 364 (b|shw) and 390 (b|shw|ff) share art.
-    # japanshowcase itself is NOT a dupe — it's a distinct showcase treatment
-    # the user WANTS in missing-set output (2026-08-23 directive). So this
-    # entry keeps 357-366 as the preferred representative and drops the
-    # 383-392 fracturefoil dupes. Mirrors the TMNT case exactly.
-    # See docs/sets/eoe.md §2/§5.
-    "eoe": frozenset({"fracturefoil"}),
-    # Lorwyn Eclipsed: fracturefoil is same-art-as-sibling (same pattern as EOE).
-    # The 10 fracturefoil+japanshowcase showcase mythics (treatment b|shw|ff) are
-    # the same art as their japanshowcase-only siblings (b|shw), just on a
-    # fracture-foil sheet. Verified on Bloodline Bidding: 385 (b|shw) ↔ 395
-    # (b|shw|ff). Keeps the japanshowcase print, drops the fracturefoil dupe.
-    # See docs/sets/ecl.md §2.
-    "ecl": frozenset({"fracturefoil"}),
-    # Secrets of Strixhaven: no fancy-foil-sheet dupe signal. The soa Mystical
-    # Archive foils are distinct art (not dupes), and the only other foils are
-    # the 1-off serialized headliner (§5 unobtainable). Empty set unblocks the
-    # `preferred` filter without dropping anything — like TLA/SPM.
-    # See docs/sets/sos.md §2.
-    "sos": frozenset(),
-    # Bloomburrow: no dupe-foil signal retained. raisedfoil (the 21 showcase-
-    # legend premium foils) is a fancy-foil CHASE tier the user does not shop for
-    # (2026-08-30 directive — same stance as SNC gilded/stepandcompleat), so it's
-    # excluded wholesale via FAMILY_UNOBTAINABLE_RULES rather than DUPE_FOIL. A
-    # DUPE_FOIL entry would only drop the 7 raisedfoils that dupe a boosterfun-
-    # showcase twin; the 14 sole-showcase raisedfoils (Ms. Bumbleflower $1,380,
-    # Lumra $802, …) print ONLY in raisedfoil (no regular-foil of that art), so
-    # they'd survive. The any_of:{raisedfoil} rule catches all 21. imagine (28 BLC
-    # borderless legends) is DISTINCT art, KEPT. Empty set unblocks the `preferred`
-    # filter without filtering (like TLA/SPM/SOS). See docs/sets/blb.md §2/§5.
-    "blb": frozenset(),
-    # Foundations: TWO same-art fancy-foil dupe signals (both compute to ff).
-    #   - manafoil: 60 prints (+boosterfun), the "mana foil" premium sheet over
-    #     the boosterfun art. Verified Abyssal Harvester 381 (manafoil, b|ff)
-    #     shares illustration_id f13f17e1 with 316 (boosterfun, b). Dupe.
-    #   - fracturefoil: 10 prints (+japanshowcase+boosterfun), the EOE/ECL-style
-    #     fracture-foil over the japanshowcase art. Verified Bloodthirsty
-    #     Conqueror 436 (shw|ff) shares illustration_id d9a581b0 with the
-    #     japanshowcase 426 (shw). Dupe; keeps the japanshowcase print.
-    # The base + boosterfun + japanshowcase + startercollection/beginnerbox/
-    # setextension prints (all `regular`/`b`/`shw` treatments, distinct or
-    # structural) are KEPT. See docs/sets/fdn.md §2.
-    "fdn": frozenset({"manafoil", "fracturefoil"}),
-    # March of the Machine: The Aftermath: no dupe-foil signal retained.
-    # halofoil (43 same-art fancy foils) is excluded WHOLESALE via
-    # FAMILY_UNOBTAINABLE_RULES instead of DUPE_FOIL — a DUPE_FOIL entry drops
-    # 42/43 but MISSES Tyvar the Bellicose 227, whose halofoil is a showcase
-    # frame (shw|ff) while its same-art sibling 98 is showcase+inverted (b|shw):
-    # the codes-minus-ff keys ({shw} vs {b,shw}) don't match, so the sibling
-    # dedup can't pair them. Since all 43 halofoils have a same-art non-halofoil
-    # sibling and the user doesn't chase fancy foils, any_of:{halofoil} is exact
-    # and robust. Empty set unblocks the `preferred` filter (like TLA/SPM/SOS/BLB).
-    # See docs/sets/mat.md §2/§5.
-    "mat": frozenset(),
-    # Kamigawa: Neon Dynasty (2022, pre-fancy-foil-era): NO same-art dupe-foil
-    # signal. neonink (4 Hidetsugu prints) is DISTINCT art (4 neon colorways,
-    # each a different illustration_id — verified 429/430/431 all differ from the
-    # showcase 378), a foil-only chase the user doesn't shop for → excluded via
-    # FAMILY_UNOBTAINABLE_RULES, not here. thick (2 nec display commanders) is a
-    # niche oversized-stock variant, also §5. Empty set unblocks the `preferred`
-    # filter without filtering (like TLA/SPM/SOS/MAT). See docs/sets/neo.md §2.
-    "neo": frozenset(),
-    # Marvel Super Heroes (UB, 2026): NO dupe-foil signal retained. surgefoil
-    # (335 prints, the commander-deck collector-foil treatment) is excluded
-    # WHOLESALE via FAMILY_UNOBTAINABLE_RULES, not here — a DUPE_FOIL entry
-    # misfires: the surgefoil prints compute to bare `ff` (plain frame), but
-    # their same-art non-foil siblings compute to `ext` (extended-art frame), so
-    # the `(name, codes-minus-ff)` sibling match ({} vs {ext}) never pairs them
-    # (same class of frame-mismatch as MAT halofoil / neo). The user doesn't
-    # chase surgefoil at all, so any_of:{surgefoil} in §5 is exact. Empty set
-    # unblocks the `preferred` filter (like TLA/SPM/SOS/MAT/NEO).
-    # See docs/sets/msh.md §2/§5.
-    "msh": frozenset(),
-    # Outlaws of Thunder Junction: raisedfoil is same-art-as-sibling — the 5
-    # "vault" raised-foil showcase prints (BIG 61-65, vault+raisedfoil+boosterfun,
-    # treatment shw|ff) share the exact showcase art of their vault-only siblings
-    # (BIG 50/51/54/56/60, vault+boosterfun, shw). Verified all 5 pair cleanly
-    # (Vaultborn Tyrant 61↔50, illustration 486388b6). Keeps the vault showcase,
-    # drops the raisedfoil dupe. textured (OTP masterpieces) is NOT here — it
-    # can't pair via the sibling dedup (frame mismatch b vs shw) so it's handled
-    # via FAMILY_UNOBTAINABLE_RULES instead; vault itself is DISTINCT showcase
-    # art (illustration 486388b6 vs base 5fbc04c1), KEPT. See docs/sets/otj.md §2.
-    "otj": frozenset({"raisedfoil"}),
-    # The Lost Caverns of Ixalan: embossed is same-art-as-sibling — the 19
-    # `embossed` Jurassic World Collection foils (rex 27-45, universesbeyond+
-    # embossed+boosterfun, treatment b|ff) share the exact art of their
-    # boosterfun base siblings (rex 2-26, treatment b). Verified all 19 pair
-    # cleanly via illustration_id (Blue 33↔8 df362086, Compy Swarm 34↔9
-    # 88132924, …). Keeps the boosterfun print, drops the embossed dupe. neonink
-    # (LCI 410a-f Cavern of Souls) is NOT here — distinct art, routed to
-    # FAMILY_UNOBTAINABLE_RULES; boxtopper (LCC 101-120) is distinct borderless
-    # art, KEPT. See docs/sets/lci.md §2.
-    "lci": frozenset({"embossed"}),
-    # Innistrad Remastered (masters reprint set): NO same-art fancy-foil dupe
-    # signal. The poster+boosterfun showcases (INR 481-490 Avacyn/Emrakul/Edgar/
-    # Meathook Massacre, treatment shw) are DISTINCT showcase art, KEPT. The lone
-    # ultra-rare — INR 491 Edgar Markov (serialized+headliner+doublerainbow,
-    # ~$2,825) — is caught by the GLOBAL UNOBTAINABLE_PROMO_TYPES (serialized), so
-    # no per-family rule is strictly needed (the §5 headliner rule is documented
-    # for parity with ECL/SOS but is a no-op). Empty frozenset unblocks the
-    # `preferred` filter without filtering (like TLA/SPM/SOS/MAT/NEO/BLB).
-    # See docs/sets/inr.md §2/§5.
-    "inr": frozenset(),
-    # Commander Legends: Battle for Baldur's Gate (2022, pre-fancy-foil-era D&D
-    # draft_innovation set): NO fancy-foil-sheet dupe signal. The treatment audit
-    # (2026-09-30) found only boosterfun (distinct showcase/borderless art, KEPT),
-    # prerelease/datestamped + promopack/stamped promo-pack stamps (handled by the
-    # GLOBAL preferred filter — each has a clb base sibling), and 4 thick oversized
-    # display commanders (931-934). Empty frozenset unblocks the `preferred` filter
-    # without dropping anything (like TLA/SPM/SOS/MAT/NEO/INR). See docs/sets/clb.md §2.
-    "clb": frozenset(),
-    # Adventures in the Forgotten Realms (2021, pre-fancy-foil-era expansion): NO
-    # dupe-foil signal. The only treatment token is `boosterfun`, which marks
-    # DISTINCT frames — 5 borderless planeswalkers (afr 282-286), 11 borderless D&D
-    # monsters/dragons (287-298), 60 module/rulebook `showcase` prints (299-358),
-    # 37 `extendedart` mythics/rares (359-395). None is a same-art fancy-foil sheet;
-    # the premium foil is just the ordinary foil of these distinct prints. The pafr
-    # stamped promos (datestamped/embossed/promopack) are same-art stamped reprints,
-    # already dropped as promos by the treatment filter. Empty frozenset unblocks the
-    # `preferred` filter without filtering (like TLA/SPM/SOS/MAT/NEO/INR).
-    # See docs/sets/afr.md §2.
-    "afr": frozenset(),
-    # Assassin's Creed (UB draft_innovation): textured is same-art-as-sibling —
-    # the 5 protagonist textured foils (ACR 267-271 Ezio/Altaïr/Edward/Eivor/
-    # Kassandra, textured+boosterfun, treatment shw|ff) share the exact showcase
-    # art of their showcase siblings (Ezio 267↔131 illustration 42171712, Altaïr
-    # 268↔137 c99db07c, …). Both key to {shw} (textured adds ff), so the sibling
-    # dedup pairs them cleanly. Keeps the showcase, drops the textured dupe.
-    # See docs/sets/acr.md §2.
-    "acr": frozenset({"textured"}),
-    # Phyrexia: All Will Be One: NO same-art fancy-foil dupe signal. The two
-    # premium tiers — oilslick raised-foil borderless mythics (ONE 352-371) and
-    # stepandcompleat Phyrexian-showcase foils (ONE 417-473) — are BOTH distinct
-    # art (dupe filter would keep them), so they're excluded via
-    # FAMILY_UNOBTAINABLE_RULES, not here. stepandcompleat computes to b|shw (not
-    # ff), so a DUPE_FOIL entry couldn't catch it anyway (SNC trap). Empty
-    # frozenset unblocks the `preferred` filter. See docs/sets/one.md §2/§5.
-    "one": frozenset(),
-    # Tarkir: Dragonstorm: halofoil is same-art-as-sibling — the 10 halofoil
-    # mythics (TDM 409-418, halofoil+boosterfun, foil-only, $17-$457, treatment
-    # b|shw|ff) share the exact showcase art of their boosterfun showcase
-    # siblings (Ugin 409↔399 illustration b49ffc89, Elspeth 411↔401 b9668943,
-    # Craterhoof 414↔404 6469e9bf, All-Out Assault 415↔405 5405b6d5). Both key
-    # to {shw} (halofoil adds ff), so the sibling dedup pairs them cleanly.
-    # Keeps the showcase, drops the halofoil dupe. See docs/sets/tdm.md §2.
-    "tdm": frozenset({"halofoil"}),
-    # Duskmourn: fracturefoil (DSK 396-405) = same-art dupe of the japanshowcase
-    # sibling (all 10 illustration_ids verified identical); japanshowcase/
-    # doubleexposure/textured are unique art, kept. See docs/sets/dsk.md §2.
-    "dsk": frozenset({"fracturefoil"}),
-    # March of the Machine: halofoil (mul 131-195, Multiverse Legends) = same-art
-    # dupe of the base-showcase sibling (65 pairs, verified by illustration_id);
-    # the mul etched prints are distinct art, kept. See docs/sets/mom.md §2.
-    "mom": frozenset({"halofoil"}),
-    # Murders at Karlov Manor: NO fancy-foil sheet — empty set unblocks the
-    # preferred filter without dropping anything (invisibleink is same-art but
-    # computes to shw not ff, so it's handled in UNOBTAINABLE). See docs/sets/mkm.md §2.
-    "mkm": frozenset(),
-    # Wilds of Eldraine: confettifoil (wot 84-103, Enchanting Tales) = same-art
-    # dupe of the borderless boosterfun sibling (wot 64-83), foil-only ~$5,495;
-    # keeps the borderless print. See docs/sets/woe.md §2.
-    "woe": frozenset({"confettifoil"}),
-    # Crimson Vow: 2021 pre-fancy-foil-sheet set — no same-art dupe-foil signal.
-    # Empty set unblocks the preferred filter. See docs/sets/vow.md §2.
-    "vow": frozenset(),
-    # Aetherdrift: fracturefoil (DFT 407-416) = same-art dupe of the japanshowcase
-    # sibling (10 pairs, verified illustration_id). See docs/sets/dft.md §2.
-    "dft": frozenset({"fracturefoil"}),
-    # Modern Horizons 3: ripplefoil (m3c same-art twins) + textured (5 DFC
-    # planeswalkers 468-472, same borderless art as the bundle twin). The pure
-    # ripplefoil m3c reprints (no plain twin) are already ff-excluded, so this
-    # only drops true dupes. See docs/sets/mh3.md §2.
-    "mh3": frozenset({"ripplefoil", "textured"}),
-    # Warhammer 40K Commander: surgefoil (308 prints) = the Collector's Edition
-    # foil sheet, same art as the plain-frame base sibling (FIN-style clean dupe:
-    # base regular / surgefoil ff both key to no_ff=∅). See docs/sets/40k.md §2.
-    "40k": frozenset({"surgefoil"}),
-    # Fallout: surgefoil (528 prints) = collector-foil twins of a universesbeyond
-    # sibling, same art. See docs/sets/pip.md §2.
-    "pip": frozenset({"surgefoil"}),
-    # Commander 2021 (AFR): no fancy-foil sheet — the only fancy tier is
-    # extended-art (a distinct treatment class, not a foil dupe). Empty set
-    # unblocks the preferred filter. See docs/sets/c21.md §2.
-    "c21": frozenset(),
-    # The Hobbit (UB Tolkien, 2026): surgefoil = same-art collector-foil dupes.
-    # All 60 family surgefoils share an illustration_id with a non-surgefoil twin
-    # (0 lone): showcase surgefoils (hob 250-274, shw|ff) dupe the plain showcase
-    # siblings, and inverted-poster surgefoils (275-284, b|ff) dupe the POSTER
-    # panels (239-248). Both compute to a treatment containing ff and pair on
-    # (name, codes-minus-ff), so DUPE_FOIL drops the surgefoil and keeps the
-    # showcase/poster representative. The distinct-art posters (treatment b) are
-    # KEPT; headliner 249 Smaug (~$22k) self-excludes via empty treatment.
-    # See docs/sets/hob.md §2/§5.
-    "hob": frozenset({"surgefoil"}),
-    # Special Guests (masterpiece reprint sheet, 175 cards): firstplacefoil (10)
-    # and textured (5) are same-art dupes of a boosterfun sibling — verified by
-    # illustration_id (Bone Miser 97↔87 share 38893c08; all 10 firstplacefoil +
-    # 5 textured match their boosterfun twin, 0 diff). Both compute to b|ff and
-    # pair on (name, codes-minus-ff), so DUPE_FOIL drops the fancy foil, keeps the
-    # boosterfun print. The neonink (6 Mana Crypt colorways) + dragonscalefoil
-    # (5 fetchlands) foils are DISTINCT art (0 illustration_id match) — handled in
-    # FAMILY_UNOBTAINABLE_RULES, not here. See docs/sets/spg.md §2.
-    "spg": frozenset({"firstplacefoil", "textured"}),
-}
+# Loaded from config/families.toml [dupe_foil] (see config.family_dupe_foil).
+# An empty list = CONFIGURED family with no dupe-foil signal (present key),
+# distinct from an absent family (unconfigured) — the preferred filter keys on
+# membership. See the schema comment above.
+FAMILY_DUPE_FOIL_PROMO_TYPES: dict[str, frozenset[str]] = _config.family_dupe_foil()
 
 
 # Per-family "unobtainable in practice" rules — prints the user has decided
@@ -355,452 +111,9 @@ FAMILY_DUPE_FOIL_PROMO_TYPES: dict[str, frozenset[str]] = {
 # When adding a new family: survey its prints with the script in
 # `scripts/survey_treatment_signature.py` (added 2026-06-14), then write the
 # rule that matches the user's "I will never shop for these" criteria.
-FAMILY_UNOBTAINABLE_RULES: dict[str, list[dict]] = {
-    "fin": [
-        # The 4 Neon Ink Traveling Chocobo prints (FIN 551a-d, foil-only,
-        # ~$1,820-$1,932 each, ~$7,450 total — ~70% of fin's missing $). DISTINCT
-        # art per neon colorway (each its own illustration), so the dupe-foil
-        # filter KEEPS them; this rule is what removes them. Direct analog of
-        # TLA/NEO/LCI neonink. `neonink` appears on Traveling Chocobo ONLY in this
-        # family (verified 4 prints, DB). The serialized 551f auto-drops globally;
-        # the base (210) + boosterfun (406/568) + chocobotrackfoil Chocobos stay.
-        # See docs/sets/fin.md §5.
-        {"promo_types_any_of": frozenset({"neonink"})},
-    ],
-    "ltr": [
-        # Showcase scroll-frame silverfoil prints (LTR 452-490, LTC 411-431):
-        # parchment-style scroll frame, foil-only, distributed via Bundle/special
-        # products and rarely surfaced on the secondary market in the user's
-        # experience. The two promo_types co-occur on 349 prints in the LTR
-        # family; matching on both rules out a few non-scroll silverfoils
-        # (LTC 517, 525, etc.) that ARE in standard distribution.
-        {"promo_types_all_of": frozenset({"silverfoil", "scroll"})},
-        # Poster-series scene panels (LTR 731-750, borderless mythic, poster+
-        # boosterfun). 20 prints — The One Ring 748 ~$883, Sauron 744 ~$609, Tom
-        # Bombadil 745 ~$280, … ~$4,300 nonfoil. Sealed 5-card poster inserts; the
-        # user has decided not to shop for these (2026-09-10). These are REAL
-        # distinct-art singles (not fake variants) — an explicit taste call, unlike
-        # fin's neonink. `poster` appears ONLY on 731-750 in the family (the 20 `z`
-        # serialized twins 731z-750z already drop globally), so any_of:{poster} is
-        # exact. See docs/sets/ltr.md §4b/§5.
-        {"promo_types_any_of": frozenset({"poster"})},
-        # WPN Play Promo (added 2026-09-11). LTR 299 Gandalf the White —
-        # `playpromo`, nonfoil ~$2,999.99, the SOLE `playpromo` in the family
-        # (verified 1 print, DB) and ~52% of ltr's post-poster missing $. A scarce
-        # WPN store-play promo the user won't realistically buy; the base (LTR 19)
-        # and other Gandalf the White prints stay in scope. any_of:{playpromo}
-        # catches exactly this one card. See docs/sets/ltr.md §5.
-        {"promo_types_any_of": frozenset({"playpromo"})},
-    ],
-    "tla": [
-        # Chase-tier premiums the user does not shop for. All foil-only,
-        # extreme-rarity Play Booster pulls with unique art (so they're NOT
-        # fancy-foil dupes — the dupe filter would keep them; this rule is what
-        # removes them from missing-set):
-        #   - neonink: the 4-card themed premium (TLA 359-362, Aang/Zuko/
-        #     Katara/Toph by Flavio Girón), ~$460-$890 each.
-        #   - headliner + raisedfoil: TLA 363 Avatar Aang (Bryan Konietzko,
-        #     the show's co-creator), the set's headline ultra-rare, ~$3,900.
-        # any_of because neonink and headliner/raisedfoil never co-occur on the
-        # same print; matching any one of the three catches exactly these 5
-        # cards and nothing else in the TLA family (verified 2026-07-21).
-        {"promo_types_any_of": frozenset({"neonink", "headliner", "raisedfoil"})},
-    ],
-    "tmt": [
-        # The 4 borderless Turtle headliners (TMT 301-304 — Leonardo/Donatello/
-        # Raphael/Michelangelo), foil-only, ~$2,175-$2,957 each, ~$10,232 total
-        # (~92% of tmt's missing $). Direct analog of TLA's Avatar Aang / EOE
-        # Sothera headliner chase: distinct borderless art (so the dupe-foil
-        # filter KEEPS them; this rule is what removes them). `headliner` matches
-        # exactly these 4 prints in the family and nothing else (verified DB,
-        # 2026-09-13); each Turtle keeps its base + showcase prints (e.g. Leonardo
-        # TMT 17/215) in scope. The user does not chase these. See docs/sets/tmt.md §5.
-        {"promo_types_any_of": frozenset({"headliner"})},
-    ],
-    "snc": [
-        # Promo-pack + prerelease STAMP variants the user does not shop for
-        # (2026-08-24). Prints across pncc (NCC commander promos), psnc
-        # (prerelease/promo-pack), snc. They're the same card as the base with a
-        # promo stamp, priced 10-30x on scarcity (Currency Converter pncc 81p
-        # ~$182 vs base ncc 81 ~$5). Normally the global preferred filter drops
-        # promopack/stamped, but these lack a non-stamped sibling in the family
-        # graph so they survive — this rule removes them explicitly.
-        #
-        # Signal is `stamped` ONLY, not `promopack` (corrected 2026-08-26): the
-        # promo-pack STAMP always carries `stamped`; but 5 borderless alt-arts
-        # (snc 463-467, inverted frame) are `promopack` WITHOUT `stamped` — a
-        # distinct art the user WANTS. Matching on `promopack` would wrongly drop
-        # those 5. See docs/sets/snc.md §5.
-        {"promo_types_any_of": frozenset({"stamped"})},
-        # stepandcompleat: the Phyrexian "Step-and-Compleat" premium foil — SNC
-        # 469 Urabrask is the same borderless concept art as SNC 468, just that
-        # fancy foil process (foil-only, ~2x price). It computes to treatment
-        # 'b' (not 'ff'), so the dupe-foil step doesn't catch it; exclude it here
-        # as a fancy-foil variant the user doesn't chase. Single print in family.
-        # See docs/sets/snc.md §2/§5.
-        {"promo_types_any_of": frozenset({"stepandcompleat"})},
-    ],
-    "eoe": [
-        # Chase-tier premiums the user does not shop for (2026-08-23 directive).
-        #   - headliner / singularityfoil: EOE 382 Sothera, the Supervoid — the
-        #     set's headline ultra-rare (poster + singularityfoil), ~$1,223.
-        #     Direct analog of TLA's Avatar Aang headliner. Exactly 1 print.
-        #   - galaxyfoil: the "Stellar Sights" (EOS) premium foil masterpiece
-        #     lands + a few EOE galaxyfoil mythics (Ancient Tomb, Mana
-        #     Confluence, Gemstone Caverns, etc.), ~$60-$475 each — 105 prints
-        #     across eoe+eos. These are the fancy-foil versions; the user still
-        #     sees the non-galaxyfoil EOS/EOE print of the same card if one
-        #     exists (e.g. EOS 1/46 Ancient Tomb boosterfun remain in the list).
-        # any_of because headliner/singularityfoil and galaxyfoil never co-occur;
-        # matching any one catches exactly these chase prints.
-        {"promo_types_any_of": frozenset({"headliner", "singularityfoil", "galaxyfoil"})},
-        # Promo-pack/prerelease STAMP variants (added 2026-08-26, mirroring SNC).
-        # 80 stamped prints (mostly peoe) — same card as a kept base/boosterfun
-        # sibling, priced on scarcity (Quantum Riddler peoe 72p ~$38 vs base
-        # eoe 72 ~$33 + boosterfun eoe 305, both kept). Signal is `stamped` ONLY:
-        # validated that all 80 dupes carry `stamped`, while 5 borderless alt-arts
-        # (eoe 393-397, inverted frame) are `promopack` WITHOUT `stamped` and must
-        # stay. Effect: missing-set drops ~$291 (217→137 prints). See docs/sets/eoe.md §5.
-        {"promo_types_any_of": frozenset({"stamped"})},
-    ],
-    "ecl": [
-        # Lorwyn Eclipsed headline serialized chase (added 2026-08-26). ecl 352
-        # Bitterbloom Bearer — doublerainbow + headliner + serialized, foil-only,
-        # the set's ultra-rare. Analog of EOE Sothera / TLA Avatar Aang. any_of
-        # catches this single print (headliner and serialized co-occur here); the
-        # base/showcase Bitterbloom Bearer prints (ecl 88, 310) stay in scope.
-        # See docs/sets/ecl.md §5.
-        {"promo_types_any_of": frozenset({"headliner", "serialized"})},
-        # Promo-pack STAMP variants (added 2026-08-28 — corrects a
-        # characterization error that wrongly claimed pecl had 0 stamped). All 80
-        # `pecl` cards are `promopack`+`stamped` — same card as a kept base/showcase
-        # sibling, priced on scarcity. Validated all 80 have a non-stamped sibling
-        # (safe to drop) and that the 5 `promopack`-ONLY alt-arts (ecl 402-406,
-        # inverted frame, no `stamped`) are KEPT. Signal is `stamped` ONLY, like
-        # SNC/EOE. Effect: missing-set 252→~172 prints. See docs/sets/ecl.md §5.
-        {"promo_types_any_of": frozenset({"stamped"})},
-    ],
-    "sos": [
-        # Secrets of Strixhaven serialized headline chase (added 2026-08-28).
-        # sos 306 Emeritus of Ideation // Ancestral Recall — headliner +
-        # rainbowfoil + serialized, foil-only, ~$2,900. Analog of EOE Sothera /
-        # ECL Bitterbloom Bearer.
-        {"promo_types_any_of": frozenset({"headliner", "serialized"})},
-        # Promo-pack STAMP variants: all 80 `psos` cards are `promopack`+`stamped`
-        # — same card as a kept base sibling + a stamp. Validated all 80 have a
-        # non-stamped sibling (safe to drop); the 5 `promopack`-ONLY guild Charm
-        # alt-arts (sos 363-367, no `stamped`) are KEPT. Signal is `stamped` ONLY,
-        # like SNC/EOE/ECL. See docs/sets/sos.md §5.
-        {"promo_types_any_of": frozenset({"stamped"})},
-    ],
-    "blb": [
-        # Promo-pack STAMP variants (added 2026-08-30). All 80 `pblb`
-        # `promopack`+`stamped` `Np` prints are the same card as a kept base
-        # sibling + a promo-pack stamp, priced on scarcity. They compute to
-        # `regular` treatment, so the rare/mythic-regular sub-selectors pick them
-        # up (they bypass the `preferred` dedup) — this rule removes them.
-        # Validated: all 80 promopack cards also carry `stamped`, so a `stamped`
-        # rule catches every one; the 5 `promopack`-ONLY inverted-frame alt-arts
-        # (blb 381-385 Hop to It / Shoreline Looter / Fell / Wear Down /
-        # Stormcatch Mentor — distinct art, base siblings at blb 16/70/95/203/234)
-        # carry NO `stamped` and are KEPT. Signal is `stamped` ONLY, like
-        # SNC/EOE/ECL/SOS.
-        {"promo_types_any_of": frozenset({"stamped"})},
-        # raisedfoil premium-foil chase tier (added 2026-08-30). The 21
-        # `raisedfoil` showcase-legend foils are a fancy-foil variant the user
-        # does not shop for — same stance as SNC gilded/stepandcompleat. Unlike
-        # a DUPE_FOIL entry (which only drops the 7 that dupe a boosterfun-
-        # showcase twin), the 14 sole-showcase raisedfoils print ONLY in
-        # raisedfoil (no regular-foil of that art) — Ms. Bumbleflower blc 103
-        # ~$1,380, Lumra blb 343 ~$802, Bello blc 101 ~$559, etc., $5,701 of the
-        # $7,016 total. any_of:{raisedfoil} catches all 21; the base and
-        # boosterfun-showcase prints of each card stay in scope. Effect combined
-        # with the stamped rule: missing-set 484→383 prints ($7,302→~$1,315).
-        # See docs/sets/blb.md §2/§5.
-        {"promo_types_any_of": frozenset({"raisedfoil"})},
-    ],
-    "fdn": [
-        # Promo-pack STAMP variants (added 2026-08-30). All 25 `pfdn`
-        # `promopack`+`stamped` prints are the same card as a kept base sibling +
-        # a promo-pack stamp; they compute to `regular` so the rare/mythic-regular
-        # sub-selectors pick them up (bypassing the `preferred` dedup) — this rule
-        # removes them. Validated: all 25 promopack cards ALSO carry `stamped`
-        # (signal is `stamped`), and Foundations has NO `promopack`-only alt-art
-        # trap (unlike SNC/EOE/ECL/BLB — zero promopack-without-stamped prints in
-        # the family), so `{stamped}` is exact. See docs/sets/fdn.md §5.
-        {"promo_types_any_of": frozenset({"stamped"})},
-        # NOTE: no serialized/headliner rule — Foundations has no such ultra-rare
-        # tier (0 serialized/headliner prints in the family). The lone
-        # `doublerainbow` (pfdn 1 Sol Ring, a buyabox promo) is distinct art, kept.
-    ],
-    "mat": [
-        # Promo-pack STAMP variants (added 2026-08-30). All 8 `pmat`
-        # `promopack`+`stamped` `Np` prints are the same card as a kept base
-        # sibling + a promo-pack stamp; they compute to `regular` so the
-        # rare/mythic-regular sub-selectors pick them up (bypassing the
-        # `preferred` dedup) — this rule removes them. Validated: all 8 have a
-        # non-stamped base sibling in `mat` (50p→50, 4p→4, 22p→22, …), and there
-        # is NO `promopack`-only alt-art trap (all 8 carry both tokens). No
-        # serialized/headliner tier in this family. See docs/sets/mat.md §5.
-        {"promo_types_any_of": frozenset({"stamped"})},
-        # halofoil fancy-foil dupes (added 2026-08-30). All 43 `halofoil` prints
-        # are same-art as a non-halofoil sibling (verified Arni 200 shares
-        # illustration_id 732292ff with boosterfun-showcase 66). DUPE_FOIL would
-        # drop 42 but miss Tyvar 227 (frame-effect codes mismatch — see §2), so
-        # exclude the whole treatment here instead. any_of:{halofoil} catches all
-        # 43; the boosterfun/showcase/base prints of each card stay in scope.
-        {"promo_types_any_of": frozenset({"halofoil"})},
-    ],
-    "neo": [
-        # Chase-tier premiums the user does not shop for (added 2026-08-30).
-        #   - neonink: the 4 Hidetsugu, Devouring Chaos "neon ink" prints
-        #     (neo 429-432, foil-only, ~$35-$514 each). DISTINCT art — 4 neon
-        #     colorways, each its own illustration_id (verified all differ from
-        #     the boosterfun showcase 378), so NOT a dupe; the dupe filter would
-        #     keep them. Direct analog of TLA's neonink chase. neonink appears on
-        #     Hidetsugu ONLY in this family.
-        #   - thick: the 2 `nec` oversized "thick stock" display commanders
-        #     (Chishiro 77, Kotori 78, b|ff) — a display product, not a playable
-        #     the user catalogs. No plain-showcase sibling (only base + extended),
-        #     so DUPE_FOIL wouldn't pair them anyway.
-        # any_of because neonink and thick never co-occur; matching any one
-        # catches exactly these 6 prints. The base/showcase/extended/promopack
-        # prints of every card stay in scope (promopack 508-512 carry NO stamped
-        # — distinct alt-arts, kept). See docs/sets/neo.md §5.
-        {"promo_types_any_of": frozenset({"neonink", "thick"})},
-        # Promo-pack STAMP variants (added 2026-08-30). 69 `pneo`
-        # `promopack`+`stamped` `Np` prints — same card as a kept `neo` base
-        # sibling + a promo-pack stamp (2p→neo 2, 134p→neo 134, …); compute to
-        # `regular`, so the rare/mythic-regular sub-selectors pick them up
-        # (bypassing the `preferred` dedup). Validated: all 69 have a non-stamped
-        # base sibling, and the 5 `promopack`-ONLY in-set alt-arts (neo 508-512,
-        # no `stamped`) are KEPT — signal is `stamped` ONLY (SNC/EOE/ECL/BLB/FDN
-        # lesson). The 77 `Ns` prerelease+datestamped promos auto-drop via the
-        # Step-2 datestamped filter; the 2 `resale` ★ promos are distinct art,
-        # kept. Effect: missing-set 373→293 prints. See docs/sets/neo.md §5.
-        {"promo_types_any_of": frozenset({"stamped"})},
-    ],
-    "msh": [
-        # Headline chase the user does not shop for (added 2026-08-31). MSH 385
-        # The Mind Stone — `headliner`+`cosmicfoil`, the set's headline ultra-rare
-        # (analog of TLA Avatar Aang / EOE Sothera / ECL Bitterbloom Bearer).
-        # Exactly 1 print carries `headliner` in the family. any_of catches it.
-        {"promo_types_any_of": frozenset({"headliner"})},
-        # surgefoil collector-foil treatment (335 prints, near-zero foil value) —
-        # the commander-deck foil version the user doesn't chase. Excluded
-        # wholesale (NOT DUPE_FOIL — frame-mismatch, see §2). 264 dupe a non-foil
-        # sibling; 71 are foil-only staples (Arcane Signet, Command Tower) — the
-        # user opted to drop ALL surgefoil (2026-08-31). any_of:{surgefoil}.
-        {"promo_types_any_of": frozenset({"surgefoil"})},
-        # The Mind Stone borderless foil (msh 386, ~$1,699) — the set's flagship
-        # $ chase. Distinct borderless-inverted art (not the headliner 385), so no
-        # promo_type distinguishes it; pinned by CN + border_color. The base (21)
-        # and other prints stay in scope. (2026-08-31 user directive.)
-        {"collector_numbers": frozenset({"386"}), "border_color": "borderless"},
-        # NOTE: NO `{stamped}` rule — `stamped` does not occur in this family
-        # (0 prints); the `poster` showcase cards (msh 387/391/394, distinct art)
-        # are KEPT. See docs/sets/msh.md §5.
-    ],
-    "otj": [
-        # "Breaking News" textured-foil masterpieces (added 2026-09-03). The 15
-        # OTP textured prints (CN 66-80, textured+boosterfun) are the same art as
-        # their showcase masterpiece siblings (OTP 22-65, boosterfun) — verified
-        # Anguished Unmaking 74↔35 share illustration f4d16fc6 — but DUPE_FOIL
-        # can't pair them: the textured print computes to `b` (inverted frame)
-        # while the sibling is `shw` (showcase), so the codes-minus-ff keys
-        # ({b} vs {shw}) never match (same frame-mismatch class as MAT halofoil /
-        # MSH surgefoil). A fancy-foil masterpiece tier the user doesn't chase.
-        # any_of:{textured} catches exactly these 15.
-        {"promo_types_any_of": frozenset({"textured"})},
-        # Promo-pack/prerelease STAMP variants (mirrors SNC/EOE/ECL/SOS). 94
-        # stamped prints (pbig 14 + potj 80) — same card as a kept base/showcase
-        # sibling + a stamp, priced on scarcity. Signal is `stamped` ONLY:
-        # validated the 5 `promopack`-WITHOUT-`stamped` OTJ alt-arts (368-372,
-        # inverted-frame DISTINCT art) are KEPT. (datestamped prerelease prints
-        # are already dropped by the global preferred Step-2 filter — all 80 have
-        # a non-stamped OTJ sibling.) See docs/sets/otj.md §5.
-        {"promo_types_any_of": frozenset({"stamped"})},
-    ],
-    "lci": [
-        # The 6 serialized neon-ink Cavern of Souls (LCI 410a-f), foil-only,
-        # $74-$4,900 each (~$7,200 total). DISTINCT art (each neon colorway its
-        # own illustration), so the dupe-foil filter would KEEP them — this rule
-        # is what removes them. A chase tier the user does not shop for; direct
-        # analog of TLA/NEO neonink. any_of:{neonink} catches exactly these 6
-        # prints (LCI 410b also carries wizardsplaynetwork; still matched). The
-        # base (LCI 269) and boosterfun showcase (LCI 345) Caverns stay in scope.
-        # No `stamped` rule needed — every plci promo-pack/prerelease stamp has a
-        # non-stamped sibling, so the global preferred filter already drops them
-        # (0 promopack-without-stamped trap prints). See docs/sets/lci.md §5.
-        {"promo_types_any_of": frozenset({"neonink"})},
-    ],
-    "inr": [
-        # Innistrad Remastered headline serialized chase — INR 491 Edgar Markov
-        # (serialized + headliner + doublerainbow + poster + boosterfun,
-        # foil-only, ~$2,825). Analog of EOE Sothera / ECL Bitterbloom Bearer /
-        # SOS Emeritus. NOTE: this rule is a documented no-op — `serialized` is
-        # already in the GLOBAL UNOBTAINABLE_PROMO_TYPES, so Edgar 491 never
-        # reaches missing-set regardless (verified: identical 178-print/$940
-        # result with and without this rule). Kept for parity/discoverability
-        # with the other headliner families. See docs/sets/inr.md §5.
-        {"promo_types_any_of": frozenset({"headliner", "serialized"})},
-    ],
-    "acr": [
-        # Assassin's Creed headline serialized chase — ACR 120z Mary Read and
-        # Anne Bonny (serialized + doublerainbow, foil-only, ~$600). NOTE: a
-        # documented no-op — `serialized` is already in the GLOBAL
-        # UNOBTAINABLE_PROMO_TYPES, so 120z never reaches missing-set regardless
-        # (verified identical result with/without). Kept for parity with the
-        # INR/ECL/SOS headliner families. See docs/sets/acr.md §5.
-        {"promo_types_any_of": frozenset({"serialized", "doublerainbow"})},
-    ],
-    "clb": [
-        # Showcase frame is UNWANTED for CLB (2026-09-30 user directive): the
-        # Universes Beyond: D&D "rulebook/module-page" showcase style isn't liked.
-        # The 76 showcase prints (clb 375-450) all carry frame_effects:showcase +
-        # border_color:black and compute to treatment `shw`, which `preferred`
-        # otherwise KEEPS as a separately-wanted printing. The `border_color:black`
-        # guard SPARES the 3 borderless-showcase planeswalkers (clb 362-364
-        # Elminster/Minsc & Boo/Tasha) and the 10 borderless Dragons/legends
-        # (365-374) — borderless is the chase the user DOES want (keep).
-        # NOTE: etched-foil (clb 471-534, finishes:etched → treatment `b|ff`) and
-        # BOTH extended-art bands (set 553-645 + deck-card 936, frame `ext`) are
-        # ALREADY dropped by the generic pipeline (ff-dupe collapse + the `ext`
-        # exclusion in `preferred`), so no rule is needed for them. See docs/sets/clb.md §2/§5.
-        {"frame_effects_all_of": frozenset({"showcase"}), "border_color": "black"},
-    ],
-    "afr": [
-        # Same UNWANTED showcase as CLB — AFR and CLB share the SAME Universes
-        # Beyond: D&D "rulebook/module-page" showcase frame (verified 2026-09-30:
-        # both frame_effects:showcase[+legendary], promo_types:boosterfun, same
-        # D&D block). The 60 showcase prints (afr 299-358) are black-bordered and
-        # compute to `shw`, which `preferred` otherwise keeps. The border_color
-        # guard SPARES the 17 borderless planeswalkers + Dragons (afr 282-298,
-        # incl. Tiamat / Old Gnawbone) — borderless is the chase the user keeps.
-        # The 38 extendedart (afr 359-396) + the afc commander-deck extendedart
-        # (afc 274-329) already drop via the generic `ext` exclusion; afc has NO
-        # showcase. See docs/sets/afr.md §2/§5.
-        {"frame_effects_all_of": frozenset({"showcase"}), "border_color": "black"},
-    ],
-    "one": [
-        # Promo-pack STAMP variants — 80 `pone` promopack+stamped `Np` prints,
-        # same card as a kept base/showcase sibling + a stamp; compute to
-        # `regular` (bypass preferred dedup). Signal is `stamped` ONLY: the 5
-        # `promopack`-WITHOUT-`stamped` inverted alt-arts (one 277-281 Ossification/
-        # Sheoldred's Edict/Slaughter Singer/Bladehold War-Whip/Experimental
-        # Augury) are KEPT (verified 5 traps survive the rule).
-        {"promo_types_any_of": frozenset({"stamped"})},
-        # Premium DISTINCT-ART foil tiers the user doesn't chase (2026-09-03):
-        # oilslick raised-foil borderless mythics (one 352-371, ~$796) +
-        # stepandcompleat Phyrexian showcase foils (one 417-473, ~$1,000+). Both
-        # distinct art (the dupe filter would keep them); any_of catches all 77.
-        # The base/boosterfun/concept prints of each card stay in scope.
-        {"promo_types_any_of": frozenset({"oilslick", "stepandcompleat"})},
-        # Documented no-op (parity with INR/ACR/ECL/SOS): `serialized` is already
-        # in the GLOBAL UNOBTAINABLE_PROMO_TYPES, so ONE's serialized prints never
-        # reach missing-set regardless. Kept for discoverability. See docs/sets/one.md §5.
-        {"promo_types_any_of": frozenset({"serialized"})},
-    ],
-    "tdm": [
-        # Promo-pack STAMP variants — ptdm `Np` promopack+stamped prints, same
-        # card as a kept base/showcase sibling + a stamp; compute to `regular`
-        # (bypass preferred dedup) and would leak ~$689 into missing-set. Mirrors
-        # the ONE family's `stamped` rule. See docs/sets/tdm.md §5.
-        {"promo_types_any_of": frozenset({"stamped"})},
-        # Documented no-op (parity with INR/ACR/ONE): TDM 419 Mox Jasper
-        # (serialized+headliner+doublerainbow, ~$2,750) — `serialized` is already
-        # in the GLOBAL UNOBTAINABLE_PROMO_TYPES, so 419 never reaches missing-set
-        # regardless. Kept for discoverability. See docs/sets/tdm.md §5.
-        {"promo_types_any_of": frozenset({"serialized", "headliner", "doublerainbow"})},
-    ],
-    "spm": [
-        # Textured comic-panel masterpiece foils — the 7 Spectacular Spider-Man
-        # textured prints (SPM 235-241, textured+boosterfun, foil-only,
-        # $199-$446 ea, ~$1,950 total). DISTINCT art (7 different illustration_ids,
-        # a themed multi-art chase — NOT dupes of the base #14, which is why they
-        # are correctly OUT of FAMILY_DUPE_FOIL_PROMO_TYPES per docs/sets/spm.md
-        # §2). A fancy-foil scarcity tier the user won't chase; any_of:{textured}
-        # catches exactly these 7. (2026-09-07 user directive.)
-        {"promo_types_any_of": frozenset({"textured"})},
-        # The Soul Stone borderless foil (SPM 243, ~$1,839) — the family's flagship
-        # $ chase. Distinct borderless-inverted boosterfun art; no promo_type
-        # distinguishes it from ordinary boosterfun mythics, so pinned by CN +
-        # border_color (same technique as MSH Mind Stone 386). The base/other
-        # prints of The Soul Stone stay in scope. (2026-09-07 user directive.)
-        {"collector_numbers": frozenset({"243"}), "border_color": "borderless"},
-    ],
-    "mom": [
-        # pmom promo-pack STAMP dupes — 54 `Np` promopack+stamped prints, same card
-        # as a kept base/showcase sibling + a stamp; compute to `regular` so they
-        # leak into the rare/mythic-regular sub-selectors (~$127). Signal is
-        # `stamped` ONLY (the Ns prerelease twins carry `datestamped`, caught by the
-        # built-in datestamped-with-sibling filter); validated 0 promopack-only
-        # alt-arts. See docs/sets/mom.md §5.
-        {"promo_types_any_of": frozenset({"stamped"})},
-        # Documented no-op (parity with INR/ECL/SOS/TDM): the Praetor transform
-        # duals (mom 338-342) + mul `z` twins are serialized, already dropped by the
-        # GLOBAL serialized filter; doublerainbow never occurs without serialized.
-        {"promo_types_any_of": frozenset({"serialized", "doublerainbow"})},
-    ],
-    "mkm": [
-        # pmkm promo-pack / prerelease STAMP dupes — all 180 pmkm prints (90 Np
-        # promopack+stamped, 90 Ns prerelease+datestamped) are a kept base/showcase
-        # card + a stamp; compute to bare `regular` and leak ~$825. BOTH tokens
-        # needed: Np carries `stamped`, Ns carries only `datestamped`. See docs/sets/mkm.md §5.
-        {"promo_types_any_of": frozenset({"stamped", "datestamped"})},
-        # invisibleink (MKM 377-389, 433) — 14 hidden-clue glow-ink FOIL overlays of
-        # the dossier showcase, same illustration_id as the plain dossier sibling.
-        # Same-art dupe, but computes to shw (not ff) so DUPE_FOIL can't catch it;
-        # invisibleink is MKM-exclusive (14 prints), so any_of is exact. ~$133.
-        # See docs/sets/mkm.md §5.
-        {"promo_types_any_of": frozenset({"invisibleink"})},
-    ],
-    "dft": [
-        # firstplacefoil (DFT 427-553) — 127 "First Place" box-topper foils, same
-        # art as the BASE (not boosterfun) on a podium-inverted foil sheet; compute
-        # to b|ff while base is empty, so DUPE_FOIL can't pair them (MAT/MSH frame-
-        # mismatch trap). All have a base sibling; ~$1,041 the user won't chase.
-        # firstplacefoil is dft+spg only globally. See docs/sets/dft.md §5.
-        {"promo_types_any_of": frozenset({"firstplacefoil"})},
-        # Documented no-op (parity): DFT 376 The Aetherspark is serialized+headliner,
-        # already dropped by the GLOBAL serialized filter. rainbowfoil never occurs
-        # without serialized here. See docs/sets/dft.md §5.
-        {"promo_types_any_of": frozenset({"serialized", "headliner", "rainbowfoil"})},
-    ],
-    "mh3": [
-        # Documented no-op (parity with TDM/INR headliner families): the 3 serialized
-        # Eldrazi (mh3 381z-383z, up to ~$2,335) are already dropped by the GLOBAL
-        # serialized filter; doublerainbow adds nothing. The ripplefoil/textured
-        # dupes are handled in DUPE_FOIL. See docs/sets/mh3.md §5.
-        {"promo_types_any_of": frozenset({"serialized", "doublerainbow"})},
-    ],
-    "hob": [
-        # Smaug the Magnificent (hob 249) — headliner+gleaminggold, foil-only,
-        # ~$22,250, the set's headline ultra-rare (analog of TLA Avatar Aang /
-        # EOE Sothera / ECL Bitterbloom Bearer / MSH Mind Stone). It computes to
-        # an EMPTY treatment (not `regular`-excluded, not `ff`-dupe), so it leaks
-        # into the mythic-regular sub-selector — 93% of hob's raw missing $. Both
-        # `headliner` and `gleaminggold` are exclusive to this one print in the
-        # family (verified 1 each), so any_of catches exactly Smaug 249. See
-        # docs/sets/hob.md §5.
-        {"promo_types_any_of": frozenset({"headliner", "gleaminggold"})},
-    ],
-    "spg": [
-        # Two DISTINCT-ART ultra-premium foil tiers the user won't chase (~$4,800):
-        #   - neonink: 6 Mana Crypt neon colorways (spg 17a-d etc., foil-only,
-        #     up to ~$496 ea). Distinct art per colorway (0 illustration_id match
-        #     to the boosterfun 17), so NOT a dupe — the dupe filter would keep
-        #     them; this rule removes them. Direct analog of the fin/lci/neo
-        #     neonink exclusions.
-        #   - dragonscalefoil: 5 fetchlands (spg 114-118, foil-only, $369-$594).
-        #     Distinct art (0 illustration_id match to the boosterfun fetch), a
-        #     premium foil tier not chased.
-        # any_of because the two tokens never co-occur; matching either catches
-        # exactly these 11 prints. The boosterfun base prints of every card stay
-        # in scope. See docs/sets/spg.md §5.
-        {"promo_types_any_of": frozenset({"neonink", "dragonscalefoil"})},
-    ],
-}
+# Loaded from config/families.toml [[unobtainable.<fam>.rules]] (see
+# config.family_unobtainable_rules). Schema documented in the comment above.
+FAMILY_UNOBTAINABLE_RULES: dict[str, list[dict]] = _config.family_unobtainable_rules()
 
 
 # Per-family "scene" groupings — sets of collector numbers that form a single
@@ -815,19 +128,8 @@ FAMILY_UNOBTAINABLE_RULES: dict[str, list[dict]] = {
 #   {"name": str, "artist": str|None, "set": str, "cn_lo": int, "cn_hi": int}
 # The (set, cn_lo..cn_hi) range is inclusive and numeric-CN-only. Scenes are
 # listed in the order they should render.
-FAMILY_SCENES: dict[str, list[dict]] = {
-    # LTR borderless-inverted "Scene Cards" (Scryfall UI CN range 399-451),
-    # 7 artist-run scenes. See docs/sets/ltr.md §4a.
-    "ltr": [
-        {"name": "Shire / Hobbits",             "artist": "Livia Prima",     "set": "ltr", "cn_lo": 399, "cn_hi": 404},
-        {"name": "Balrog / Moria",              "artist": "Colin Boyer",     "set": "ltr", "cn_lo": 405, "cn_hi": 410},
-        {"name": "Isengard / Ents",             "artist": "David Rapoza",    "set": "ltr", "cn_lo": 411, "cn_hi": 419},
-        {"name": "Minas Tirith / Pelennor",     "artist": "Tyler Jacobson",  "set": "ltr", "cn_lo": 420, "cn_hi": 437},
-        {"name": "Scouring of the Shire",       "artist": "Martina Fačková", "set": "ltr", "cn_lo": 438, "cn_hi": 441},
-        {"name": "Grey Havens",                 "artist": "Kieran Yanner",   "set": "ltr", "cn_lo": 442, "cn_hi": 447},
-        {"name": "Mount Doom climax",           "artist": "Marta Nael",      "set": "ltr", "cn_lo": 448, "cn_hi": 451},
-    ],
-}
+# Loaded from config/families.toml [[scenes.<fam>]] (see config.family_scenes).
+FAMILY_SCENES: dict[str, list[dict]] = _config.family_scenes()
 
 
 def _card_promo_types(card: dict) -> set[str]:
@@ -904,13 +206,15 @@ def _is_family_unobtainable(card: dict, anchor_code: str) -> bool:
 # master-list writer in sets.py also drops 'serialized' via
 # EXCLUDED_PROMO_TYPES; this list is the selectors-side equivalent so the
 # query path matches.
-UNOBTAINABLE_PROMO_TYPES: frozenset[str] = frozenset({
-    "rebalanced", "alchemy",  # Arena/Alchemy digital-only
-    "serialized",             # 1-of-N chase prints
-})
+# Externalized to config/promo_types.toml ([unobtainable]/[digital_only]) with
+# the baked-in defaults below (code works with no config file).
+UNOBTAINABLE_PROMO_TYPES: frozenset[str] = _config.as_frozenset_setting(
+    "promo_types.toml", "unobtainable",
+    frozenset({"rebalanced", "alchemy", "serialized"}))  # digital + 1-of-N chase
 
 # Backwards-compat alias — older callers import this name.
-DIGITAL_ONLY_PROMO_TYPES: frozenset[str] = frozenset({"rebalanced", "alchemy"})
+DIGITAL_ONLY_PROMO_TYPES: frozenset[str] = _config.as_frozenset_setting(
+    "promo_types.toml", "digital_only", frozenset({"rebalanced", "alchemy"}))
 
 
 def _is_digital_only(card: dict) -> bool:
@@ -1214,6 +518,38 @@ def materialize(sel_or_str: Selector | str) -> list[MaterializedRow]:
 
     rows.sort(key=lambda r: (r.card.get("set") or "", _cn_sort_key(r.card.get("collector_number") or ""), r.finish))
     return rows
+
+
+class SelectorInputError(ValueError):
+    """A selector the user supplied could not be parsed or resolved.
+
+    Carries a ready-to-print, user-facing ``message`` (already prefixed with
+    ``error:``) plus the conventional CLI ``exit_code`` (2 — bad invocation).
+    Lets every caller — the typer CLI and the standalone scripts — share ONE
+    materialize-or-fail policy instead of each re-wrapping
+    ``SelectorParseError`` / ``LookupError``: the CLI maps it to
+    ``typer.Exit(e.exit_code)``, a script to ``print(e.message); return e.exit_code``.
+    """
+
+    def __init__(self, message: str, *, exit_code: int = 2):
+        super().__init__(message)
+        self.message = message
+        self.exit_code = exit_code
+
+
+def materialize_or_raise(selector: str) -> list[MaterializedRow]:
+    """``materialize`` but normalize both failure modes into one
+    :class:`SelectorInputError` with a user-facing message + exit code 2.
+
+    ``SelectorParseError`` → ``error: invalid selector: …``; ``LookupError``
+    (e.g. an unknown set code) → ``error: …``. Any other exception propagates
+    unchanged (a real bug, not bad user input)."""
+    try:
+        return materialize(selector)
+    except SelectorParseError as e:
+        raise SelectorInputError(f"error: invalid selector: {e}") from e
+    except LookupError as e:
+        raise SelectorInputError(f"error: {e}") from e
 
 
 def _materialize_term(term: Term) -> list[MaterializedRow]:
@@ -1834,6 +1170,29 @@ def _filter_treatment(rows: list[MaterializedRow], cls: str) -> list[Materialize
     return out
 
 
+def preferred_exclusions(
+    rows: list[MaterializedRow], anchor_code: str,
+) -> list[MaterializedRow]:
+    """Drop prints categorically unobtainable for a physical collector:
+    digital-only (Arena/Alchemy rebalanced + serialized 1-of-N, via
+    :func:`_is_digital_only`) and the family's hand-ruled unobtainable prints
+    (via :func:`_is_family_unobtainable`).
+
+    This is the row-wise, DB-free core shared by BOTH preferred-filter sites —
+    ``_filter_treatment_preferred`` (the selector grammar's ``treatment=preferred``,
+    on collectible-alt rows) and ``missing._apply_preferred_post_filter`` (on the
+    regular rare/mythic/uncommon-chase sub-selectors). Previously these two
+    byte-identical comprehensions lived in both places; now there is one home.
+    (The datestamped-with-sibling scan is NOT folded in here: the two sites build
+    their family sibling-index with different finish-modes — printing-level in
+    ``missing``, finish-aware in the selector — so merging it would change which
+    prints get dropped. Each keeps its own scan; see the note at each site.)
+    """
+    rows = [r for r in rows if not _is_digital_only(r.card)]
+    rows = [r for r in rows if not _is_family_unobtainable(r.card, anchor_code)]
+    return rows
+
+
 def _filter_treatment_preferred(rows: list[MaterializedRow]) -> list[MaterializedRow]:
     """`preferred` = collectible-alt MINUS (datestamped-with-sibling) MINUS (ff-dupes).
 
@@ -1876,10 +1235,10 @@ def _filter_treatment_preferred(rows: list[MaterializedRow]) -> list[Materialize
             f"Configured anchors: {sorted(FAMILY_DUPE_FOIL_PROMO_TYPES.keys())}. "
             f"Fix: run the characterize-set skill to onboard this family "
             f"(`/characterize-set {primary}` — it audits the family and proposes "
-            f"the FAMILY_DUPE_FOIL_PROMO_TYPES / FAMILY_UNOBTAINABLE_RULES entries), "
-            f"or add a FAMILY_DUPE_FOIL_PROMO_TYPES['{primary}'] entry in "
-            f"selectors.py by hand (see the Final Fantasy entry as a template — "
-            f"which promo_types signal 'same art, just on a fancy-foil sheet'). "
+            f"the config/families.toml entries), or add a `[dupe_foil]` entry for "
+            f"'{primary}' to config/families.toml by hand (see the 'fin' entry as a "
+            f"template — which promo_types signal 'same art, just on a fancy-foil "
+            f"sheet'; use an empty list `[]` if the family has none). "
             f"To bypass the filter entirely, use 'treatment=collectible-alt'."
         )
     if len(configured) > 1:
@@ -1897,16 +1256,12 @@ def _filter_treatment_preferred(rows: list[MaterializedRow]) -> list[Materialize
     except LookupError:
         family_codes = {anchor}
 
-    # Step 0: drop digital-only (Arena / Alchemy rebalanced) prints AND
-    # serialized 1-of-N chase prints up-front. Both are categorically
-    # unobtainable for a physical collector. Also apply per-family
-    # unobtainable rules (FAMILY_UNOBTAINABLE_RULES) which encode set-specific
-    # treatments the user has decided not to pursue (e.g. LTR's showcase
-    # scroll-frame silverfoil prints, distributed via products the user
-    # doesn't engage with). These are NOT dupes of other prints — they're
-    # distinct art that the user has personally ruled out of their want list.
-    rows = [r for r in rows if not _is_digital_only(r.card)]
-    rows = [r for r in rows if not _is_family_unobtainable(r.card, anchor)]
+    # Step 0: drop digital-only (Arena / Alchemy rebalanced + serialized 1-of-N)
+    # and the family's hand-ruled unobtainable prints (FAMILY_UNOBTAINABLE_RULES,
+    # e.g. LTR's scroll-frame silverfoils). These are NOT dupes of other prints —
+    # distinct art the user has categorically ruled out. Shared with
+    # missing._apply_preferred_post_filter via the one home below.
+    rows = preferred_exclusions(rows, anchor)
 
     # Step 1: filter to collectible-alt rows. Treatment is finish-aware, so the
     # cache is keyed by (scryfall_id, finish): a nonfoil+surgefoil FIC collector

@@ -663,3 +663,85 @@ def _identifier_for(entry: Entry) -> dict:
     if entry.set and entry.collector_number:
         return {"set": entry.set, "collector_number": entry.collector_number}
     return {"name": entry.name}
+
+
+# ---------- collector-number range spec parsing (bulk-add) ----------
+#
+# Turns the freeform bulk-add spec a user types ("1858-1872, 7001-7003 foil")
+# into an explicit, deterministic list of (collector_number, finish) pairs — the
+# step the bulk-add skill currently has the agent do by interpretation. A
+# deterministic parser lets a widget / CLI drive it with no agent in the loop.
+
+# A finish token at the END of a segment (or the whole spec) sets that
+# segment's finish; default nonfoil. "+foil" after a nonfoil segment means
+# "one of EACH finish" (handled by the caller via the returned `both` flag).
+_RANGE_RE = re.compile(r"^\s*(\d+)\s*-\s*(\d+)\s*$")
+_SINGLE_RE = re.compile(r"^\s*(\d+)\s*$")
+_FINISH_TOKENS = {"foil", "nonfoil"}
+
+
+@dataclass
+class CnSpec:
+    """One parsed collector-number request: a concrete CN string and finish."""
+    collector_number: str
+    finish: str  # "foil" | "nonfoil"
+
+
+def parse_cn_ranges(spec: str) -> list[CnSpec]:
+    """Parse a bulk-add collector-number spec into explicit ``CnSpec`` rows.
+
+    Grammar (comma-separated segments; a trailing finish token applies to its
+    segment, falling back to the spec-wide trailing finish, else nonfoil)::
+
+        "1858-1872"                      → 1858..1872, nonfoil
+        "1858-1860 foil"                 → 1858..1860, foil
+        "1858-1872 nonfoil, 7001-7003 foil"  → mixed per-segment finish
+        "246, 380, 451"                  → three singletons, nonfoil
+        "1858-1860 nonfoil +foil"        → each CN once nonfoil AND once foil
+
+    Ranges are INCLUSIVE and numeric only (collector numbers with letter
+    suffixes aren't range-expandable — pass them as explicit singletons via the
+    add-card path). Raises ``ValueError`` on an unparseable segment or an
+    inverted range so a caller can surface a clear error rather than silently
+    dropping input. Deterministic + offline (no DB/network) — unit-testable.
+    """
+    text = (spec or "").strip()
+    if not text:
+        return []
+
+    # A spec-wide trailing "+foil" means "both finishes for every segment".
+    both_all = False
+    m = re.search(r"\+\s*foil\s*$", text, re.IGNORECASE)
+    if m:
+        both_all = True
+        text = text[:m.start()].strip()
+
+    out: list[CnSpec] = []
+    for seg in text.split(","):
+        seg = seg.strip()
+        if not seg:
+            continue
+        finish = "nonfoil"
+        # Trailing finish token on this segment?
+        parts = seg.rsplit(None, 1)
+        if len(parts) == 2 and parts[1].lower() in _FINISH_TOKENS:
+            finish = parts[1].lower()
+            seg = parts[0].strip()
+        finishes = ["nonfoil", "foil"] if both_all else [finish]
+        rng = _RANGE_RE.match(seg)
+        single = _SINGLE_RE.match(seg)
+        if rng:
+            lo, hi = int(rng.group(1)), int(rng.group(2))
+            if hi < lo:
+                raise ValueError(f"inverted collector-number range: {seg!r}")
+            cns = [str(n) for n in range(lo, hi + 1)]
+        elif single:
+            cns = [single.group(1)]
+        else:
+            raise ValueError(
+                f"unparseable collector-number segment {seg!r} "
+                f"(expected 'N', 'N-M', optionally followed by foil/nonfoil)")
+        for cn in cns:
+            for f in finishes:
+                out.append(CnSpec(collector_number=cn, finish=f))
+    return out

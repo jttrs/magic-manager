@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Callable
 
-from . import db, sets as sets_mod, selectors as sel_mod
+from . import db, ownership as _ownership, sets as sets_mod, selectors as sel_mod
 
 
 def sub_selectors(code: str, treatment_class: str = "preferred") -> list[tuple[str, str]]:
@@ -78,13 +78,10 @@ def missing_printings(
         sub_rows[slug_key] = _drop_meld_back_faces(sub_rows[slug_key], code_l)
 
     # 1c. Tokens NEVER belong in a missing-set buy-list — the user won't buy
-    # tokens (or emblems) to "complete" a set. Explicit is_token guard rather
-    # than relying on the rarity gate: the sub-selectors filter to rare/mythic/
-    # uncommon-chase, but rare/mythic tokens DO exist and would otherwise leak.
-    # One chokepoint over all four sub-selectors (they all funnel through
-    # sub_rows before the union), so no per-selector scattering.
+    # tokens (or emblems) to "complete" a set. One chokepoint over all four
+    # sub-selectors (they all funnel through sub_rows before the union).
     for slug_key in list(sub_rows.keys()):
-        sub_rows[slug_key] = [r for r in sub_rows[slug_key] if not r.card.get("is_token")]
+        sub_rows[slug_key] = _drop_tokens(sub_rows[slug_key])
 
     # 2. Union by scryfall_id (printing-level dedup).
     union: dict[str, sel_mod.MaterializedRow] = {}
@@ -94,47 +91,140 @@ def missing_printings(
     return list(union.values())
 
 
+def _drop_tokens(
+    rows: list[sel_mod.MaterializedRow],
+) -> list[sel_mod.MaterializedRow]:
+    """Drop tokens/emblems. Explicit ``is_token`` guard rather than a rarity
+    gate: rare/mythic tokens DO exist and would otherwise leak into a buy-list.
+    The single token chokepoint, shared by ``missing_printings`` and
+    ``physical_buyable``."""
+    return [r for r in rows if not r.card.get("is_token")]
+
+
+def physical_buyable(
+    rows: list[sel_mod.MaterializedRow],
+    anchor_code: str,
+    *,
+    drop_tokens: bool = True,
+    drop_digital: bool = True,
+    drop_family_unobtainable: bool = True,
+    drop_datestamped_siblings: bool = True,
+    drop_meld_backs: bool = True,
+) -> list[sel_mod.MaterializedRow]:
+    """The 'would a physical collector actually buy this printing?' gate for a
+    FLAT list of rows — the intentional, uniform filter every buy-list producer
+    (jumpstart-buildable, etc.) runs so none of them silently leak tokens,
+    digital-only prints, hand-ruled unobtainable prints, or meld-back faces.
+
+    Composes the same primitives ``missing_printings`` applies, each toggleable
+    so a producer can opt out of a single exclusion (the ``--no-filter`` escape
+    hatch disables the whole gate): digital-only + family-unobtainable
+    (:func:`selectors.preferred_exclusions`), datestamped-with-sibling
+    (:func:`drop_datestamped_with_sibling`), meld-backs
+    (:func:`_drop_meld_back_faces`), tokens (:func:`_drop_tokens`).
+
+    NOTE: this is for flat producers, NOT a drop-in for ``missing_printings`` —
+    that function applies the digital/unobtainable/datestamped filter only to
+    its REGULAR sub-selectors (the alt sub-selector was already filtered,
+    finish-aware, at materialize time), so routing its union through this gate
+    would double-apply the datestamped scan. The two share primitives, not the
+    composition.
+    """
+    # Digital-only + family-unobtainable are the two independent row-wise steps
+    # that selectors.preferred_exclusions composes; apply each only if its toggle
+    # is on. (No branch for "both on" — the two guards together ARE
+    # preferred_exclusions, so there's nothing to special-case.)
+    if drop_digital:
+        rows = [r for r in rows if not sel_mod._is_digital_only(r.card)]
+    if drop_family_unobtainable:
+        rows = [r for r in rows if not sel_mod._is_family_unobtainable(r.card, anchor_code)]
+    # The two family-index sub-filters both need the family's set codes; resolve
+    # ONCE here and thread it in so they don't each re-run sets.resolve (an
+    # uncached subprocess) + a family-wide card scan.
+    family_codes = None
+    if drop_datestamped_siblings or drop_meld_backs:
+        try:
+            family_codes = set(sets_mod.resolve(anchor_code).all_codes)
+        except LookupError:
+            family_codes = {anchor_code}
+    if drop_datestamped_siblings:
+        rows = drop_datestamped_with_sibling(rows, anchor_code, family_codes=family_codes)
+    if drop_meld_backs:
+        rows = _drop_meld_back_faces(rows, anchor_code, family_codes=family_codes)
+    if drop_tokens:
+        rows = _drop_tokens(rows)
+    return rows
+
+
 def _apply_preferred_post_filter(
     rows: list[sel_mod.MaterializedRow],
     anchor_code: str,
 ) -> list[sel_mod.MaterializedRow]:
     """Post-filter rows for `mm query missing-set` regular sub-selectors when
-    `--treatment-class=preferred`. Applies two exclusions that the selector
-    grammar's `treatment=preferred` already applies to the alt sub-selector,
-    but which need to be applied to the regular sub-selectors here:
+    `--treatment-class=preferred`. The selector grammar's `treatment=preferred`
+    already applies these to the alt sub-selector; the regular (rare/mythic/
+    uncommon-chase) sub-selectors need them here so the two agree. Composed of
+    the two shared steps:
 
-    1. **Digital-only (Arena/Alchemy rebalanced)** — drop unconditionally.
-       Same rule the selector applies; these never have physical counterparts.
+    1. :func:`selectors.preferred_exclusions` — digital-only (Arena/Alchemy
+       rebalanced + serialized) and family-unobtainable prints.
+    2. :func:`drop_datestamped_with_sibling` — datestamped reprints that have a
+       non-stamped same-name same-codes sibling (e.g. PFIN's prerelease-stamped
+       FIN cards, visually identical to the FIN versions).
+    """
+    if not rows:
+        return rows
+    # Step 1: digital-only + serialized + family-unobtainable. ONE home shared
+    # with the selector-side preferred filter (selectors._filter_treatment_preferred
+    # Step 0) so the rare/mythic-regular sub-selectors of `mm query missing-set`
+    # match the alt sub-selector.
+    rows = sel_mod.preferred_exclusions(rows, anchor_code)
+    if not rows:
+        return rows
+    # Step 2: datestamped reprints with a non-stamped sibling.
+    return drop_datestamped_with_sibling(rows, anchor_code)
 
-    2. **Datestamped reprints with a non-stamped sibling** at the same name and
-       same treatment codes in the family. Catches PFIN's prerelease-stamped
-       FIN cards that are visually identical to the FIN versions.
+
+def _family_codes_for(anchor_code: str) -> set[str]:
+    """Resolve the family's set codes, falling back to just ``anchor_code`` when
+    the anchor isn't a resolvable Scryfall set. Shared fallback for the two
+    family-index filters (and so ``physical_buyable`` can resolve once + thread)."""
+    try:
+        return set(sets_mod.resolve(anchor_code).all_codes)
+    except LookupError:
+        return {anchor_code}
+
+
+def drop_datestamped_with_sibling(
+    rows: list[sel_mod.MaterializedRow],
+    anchor_code: str,
+    *,
+    family_codes: set[str] | None = None,
+) -> list[sel_mod.MaterializedRow]:
+    """Drop datestamped (prerelease-stamped) reprints that have a non-stamped
+    sibling at the same name + same treatment codes anywhere in the family —
+    the stamped print is a visual dupe of a cheaper obtainable one (e.g. PFIN's
+    prerelease-stamped FIN cards). A datestamped print with NO non-stamped
+    sibling is kept (nothing cheaper to substitute).
+
+    ``family_codes`` (the family's set codes) is resolved lazily when ``None``;
+    ``physical_buyable`` resolves it once and threads it into both family-index
+    filters to avoid a redundant ``sets.resolve`` per filter.
+
+    NOTE (intentional deviation from the selector-side scan in
+    ``selectors._filter_treatment_preferred``): here the sibling index computes
+    treatment PRINTING-LEVEL (finish-unaware) because the regular missing-set
+    sub-selectors are already printing-grained; the selector side keys
+    finish-aware on collectible-alt rows. Same datestamped rule, different row
+    population — so the two scans are deliberately NOT merged into one call.
     """
     import json as _json
     from . import treatments as _treatments
-    from .selectors import (
-        _is_digital_only as _digital_only,
-        _is_family_unobtainable as _family_unobtainable,
-    )
 
     if not rows:
         return rows
-
-    # Step 1: drop digital-only + serialized prints unconditionally, then
-    # apply the family's unobtainable-rules (e.g. LTR's scroll-frame
-    # silverfoils). Same exclusions the selector-side preferred filter
-    # applies; we run them here so the rare/mythic-regular sub-selectors
-    # of `mm query missing-set` match.
-    rows = [r for r in rows if not _digital_only(r.card)]
-    rows = [r for r in rows if not _family_unobtainable(r.card, anchor_code)]
-    if not rows:
-        return rows
-
-    # Step 2: build family index for datestamped-with-sibling check.
-    try:
-        family_codes = set(sets_mod.resolve(anchor_code).all_codes)
-    except LookupError:
-        family_codes = {anchor_code}
+    if family_codes is None:
+        family_codes = _family_codes_for(anchor_code)
     placeholders = ",".join("?" for _ in family_codes)
     with db.connect() as conn:
         fam_rows = conn.execute(
@@ -175,6 +265,8 @@ def _apply_preferred_post_filter(
 def _drop_meld_back_faces(
     rows: list[sel_mod.MaterializedRow],
     anchor_code: str,
+    *,
+    family_codes: set[str] | None = None,
 ) -> list[sel_mod.MaterializedRow]:
     """Drop rows whose card name has ALL its family printings on a 'b'-suffix
     collector number — these are meld-back faces (not real products).
@@ -191,13 +283,14 @@ def _drop_meld_back_faces(
     ``Traveling Chocobo`` 551b) ALSO have non-'b' siblings under the same
     name, so they pass through. Robust across families without a per-set
     allowlist.
+
+    ``family_codes`` is resolved lazily when ``None`` (see
+    :func:`drop_datestamped_with_sibling`).
     """
     if not rows:
         return rows
-    try:
-        family_codes = set(sets_mod.resolve(anchor_code).all_codes)
-    except LookupError:
-        family_codes = {anchor_code}
+    if family_codes is None:
+        family_codes = _family_codes_for(anchor_code)
     placeholders = ",".join("?" for _ in family_codes)
     with db.connect() as conn:
         fam_rows = conn.execute(
@@ -343,18 +436,12 @@ def _cheapest(nonfoil: float | None, foil: float | None) -> tuple[float | None, 
 def owned_oracle_ids(family_codes: set[str]) -> set[str]:
     """oracle_ids the user owns ANY printing/finish of, within the given family
     set codes. ``family_codes`` must already be lowercased (callers resolve the
-    family via ``sets.resolve(...).all_codes`` and lowercase them)."""
-    with db.connect() as conn:
-        fam_ph = ",".join("?" for _ in family_codes)
-        return {
-            r[0] for r in conn.execute(
-                f"SELECT DISTINCT c.oracle_id FROM inventory i "
-                f"JOIN cards c ON c.scryfall_id = i.scryfall_id "
-                f"WHERE i.quantity > 0 AND LOWER(c.set_code) IN ({fam_ph}) "
-                f"AND c.oracle_id IS NOT NULL",
-                list(family_codes),
-            ).fetchall()
-        }
+    family via ``sets.resolve(...).all_codes`` and lowercase them).
+
+    Re-export of :func:`ownership.owned_oracle_ids` — kept here as the historical
+    name its callers (``functional_missing``, ``variant_chase_printings``,
+    ``card_diff``, tests) already import."""
+    return _ownership.owned_oracle_ids(family_codes)
 
 
 def functional_missing(

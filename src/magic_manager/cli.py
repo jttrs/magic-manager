@@ -3100,11 +3100,9 @@ def deck_free_cmd(
 
 def _materialize_or_die(selector: str):
     try:
-        return sel_mod.materialize(selector)
-    except sel_mod.SelectorParseError as e:
-        typer.echo(f"error: invalid selector: {e}", err=True); raise typer.Exit(2)
-    except LookupError as e:
-        typer.echo(f"error: {e}", err=True); raise typer.Exit(2)
+        return sel_mod.materialize_or_raise(selector)
+    except sel_mod.SelectorInputError as e:
+        typer.echo(e.message, err=True); raise typer.Exit(e.exit_code)
 
 
 def _row_unit_price(r: sel_mod.MaterializedRow) -> float | None:
@@ -3361,7 +3359,6 @@ def query_url_cmd(
     queries at 20 nested conditions; chunks larger than 20 will fail in the
     browser even if the API accepts them.
     """
-    from urllib.parse import quote_plus
     rows = _materialize_or_die(selector)
     rows = _apply_sort(rows, sort)
     if not rows:
@@ -3384,7 +3381,7 @@ def query_url_cmd(
         typer.echo(f"{len(names)} distinct cards → {len(chunks)} URL(s) (mode=oracle)")
         for i, chunk in enumerate(chunks, start=1):
             terms = " or ".join(f'!"{nm}"' for nm in chunk)
-            url = f"https://scryfall.com/search?q={quote_plus(terms)}"
+            url = scryfall_urls_mod.scryfall_search_url(terms)
             typer.echo(f"Chunk {i}/{len(chunks)} ({len(chunk)} cards): {url}")
         return
 
@@ -3421,58 +3418,31 @@ def _write_query_xlsx(
     through to the printing without copying a UUID. Hidden _meta sheet
     records the originating selector and timestamp.
     """
-    from openpyxl import Workbook
-    from openpyxl.styles import Font
-    from openpyxl.utils import get_column_letter
-
-    target.parent.mkdir(parents=True, exist_ok=True)
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "results"
     headers = ["set", "collector_number", "name", "mana_cost", "rarity", "finish",
                "qty", "unit_usd", "line_value"]
-    ws.append(headers)
-    for col, _ in enumerate(headers, start=1):
-        ws.cell(row=1, column=col).font = Font(bold=True)
-    # Match master-list's hyperlink styling: blue + underline mimics web links.
-    link_font = Font(color="0563C1", underline="single")
+    cell_rows = []
+    uris: list[str | None] = []
     for r in rows:
-        unit = _row_unit_price(r); line = _row_line_value(r)
-        ws.append([
+        cell_rows.append([
             r.card.get("set"), r.card.get("collector_number"),
             _row_display_name(r), util.fmt_mana_cost(r.card.get("mana_cost")),
             r.card.get("rarity"), r.finish,
-            r.quantity, unit, line,
+            r.quantity, _row_unit_price(r), _row_line_value(r),
         ])
-        # Force CN to text to avoid Excel's "Number Stored as Text" warning.
-        ws.cell(row=ws.max_row, column=2).number_format = "@"
-        uri = r.card.get("scryfall_uri")
-        if uri:
-            name_cell = ws.cell(row=ws.max_row, column=3)
-            name_cell.hyperlink = uri
-            name_cell.font = link_font
-    last = ws.max_row
-    # With mana_cost inserted at col 4, unit_usd/line_value shift to cols 8/9.
-    for col_idx in (8, 9):
-        for row_idx in range(2, last + 1):
-            ws.cell(row=row_idx, column=col_idx).number_format = '"$"#,##0.00'
-    widths = {1: 6, 2: 8, 3: 48, 4: 10, 5: 10, 6: 8, 7: 5, 8: 9, 9: 11}
-    for col_idx, w in widths.items():
-        ws.column_dimensions[get_column_letter(col_idx)].width = w
-    ws.freeze_panes = "A2"
-
-    meta_ws = wb.create_sheet("_meta")
-    meta_ws.sheet_state = "hidden"
-    meta_ws.append(["key", "value"])
-    meta_ws.append(["kind", kind])
-    meta_ws.append(["selector", selector])
-    meta_ws.append(["slug", slug])
-    meta_ws.append(["generated_at", datetime.now().isoformat(timespec="seconds")])
-    meta_ws.append(["row_count", str(len(rows))])
-
-    for _ws in wb.worksheets:
-        util.apply_base_font_size(_ws)
-    wb.save(target)
+        uris.append(r.card.get("scryfall_uri"))
+    results = exports.xlsx.SheetSpec(
+        title="results", headers=headers, rows=cell_rows,
+        widths={1: 6, 2: 8, 3: 48, 4: 10, 5: 10, 6: 8, 7: 5, 8: 9, 9: 11},
+        money_cols=(8, 9), text_cols=(2,),
+        # name cell (col 3) hyperlinks to the printing's Scryfall page.
+        hyperlinks={3: lambda _row, i: uris[i]},
+    )
+    meta = exports.xlsx.meta_sheet([
+        ("kind", kind), ("selector", selector), ("slug", slug),
+        ("generated_at", datetime.now().isoformat(timespec="seconds")),
+        ("row_count", str(len(rows))),
+    ])
+    exports.xlsx.write_workbook(target, [results, meta])
 
 
 @query_app.command("xlsx")
@@ -4466,12 +4436,7 @@ def export_cmd(
     out: Path = typer.Option(None, "--out", help="Optional output path; otherwise prints to stdout."),
 ):
     """Materialize a V2 selector and emit a paste-ready block for the target service."""
-    try:
-        rows = sel_mod.materialize(selector)
-    except sel_mod.SelectorParseError as e:
-        typer.echo(f"error: invalid selector: {e}", err=True); raise typer.Exit(2)
-    except LookupError as e:
-        typer.echo(f"error: {e}", err=True); raise typer.Exit(2)
+    rows = _materialize_or_die(selector)
     if not rows:
         typer.echo(f"(selector matched 0 rows: {selector})", err=True)
         raise typer.Exit(1)

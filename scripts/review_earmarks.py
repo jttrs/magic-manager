@@ -31,7 +31,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from magic_manager import earmarks, sealed, sets, sld, util, valuation  # noqa: E402
+from magic_manager import earmarks, exports, sealed, sets, sld, util, valuation  # noqa: E402
 
 
 def _fmt(v) -> str:
@@ -179,36 +179,22 @@ def _render_lines(rows, today: str) -> list[str]:
 # ---------- XLSX artifact ----------
 
 def _write_xlsx(rows, today: str, out_path: Path) -> None:
-    from openpyxl import Workbook
-    from openpyxl.styles import Alignment, Font
-    from openpyxl.utils import get_column_letter
-
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "earmarks"
     headers = ["product_name", "set_code", "category", "release_date", "best_asking",
                "market", "intrinsic", "deal_delta", "ask_age_days", "n_stores",
                "store_urls"]
-    ws.append(headers)
+    cell_rows = []
     for r in rows:
         p = r["product"]
-        ws.append([
+        cell_rows.append([
             p.product_name, p.set_code.upper(), p.category, p.release_date,
             r["best_asking"], r["market"], r["intrinsic"], r["delta"], r["age"],
             len(p.links), " | ".join(l.store_url for l in p.links),
         ])
-    for row_idx in range(2, ws.max_row + 1):
-        for col in (5, 6, 7, 8):
-            ws.cell(row=row_idx, column=col).number_format = '"$"#,##0.00'
-    for ci, w in {1: 42, 3: 14, 11: 60}.items():
-        ws.column_dimensions[get_column_letter(ci)].width = w
-    for col in range(1, ws.max_column + 1):
-        ws.cell(row=1, column=col).font = Font(bold=True)
-        ws.cell(row=1, column=col).alignment = Alignment(horizontal="left")
-    ws.freeze_panes = "A2"
-    util.apply_base_font_size(ws)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    wb.save(out_path)
+    earmarks_sheet = exports.xlsx.SheetSpec(
+        title="earmarks", headers=headers, rows=cell_rows,
+        money_cols=(5, 6, 7, 8), widths={1: 42, 3: 14, 11: 60},
+    )
+    exports.xlsx.write_workbook(out_path, [earmarks_sheet])
 
 
 # ---------- main ----------

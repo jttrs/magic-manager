@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
-from . import db, scryfall, util
+from . import config as _config, db, scryfall, util
 
 
 RARITY_ORDER = {
@@ -43,16 +43,17 @@ DEFAULT_INVENTORY_SET_TYPES = frozenset({"expansion", "commander", "masterpiece"
 # excluded from default master-list output so the user only sees printings
 # they actually catalog. Toggled by --include-variants on master-list.
 EXCLUDED_BORDERS = frozenset({"white", "yellow"})
-EXCLUDED_PROMO_TYPES = frozenset({
+# Prerelease/store-stamped/japanshowcase/serialized + Arena/Alchemy rebalanced
+# (digital-only, no physical counterpart) prints are dropped from default
+# master-list output. Externalized to config/promo_types.toml ([excluded]) with
+# the baked-in default below so the code works with no config file. Mirrors
+# selectors.DIGITAL_ONLY_PROMO_TYPES on the missing-set side.
+_EXCLUDED_PROMO_TYPES_DEFAULT = frozenset({
     "prerelease", "datestamped", "stamped", "promopack",
-    "japanshowcase", "serialized",
-    # Arena/Alchemy rebalanced cards exist only as digital re-tunings — they
-    # have no physical counterpart, no foil finish, no secondary-market price,
-    # and a literal "arena" security_stamp. Always filtered from physical
-    # collection workflows. Mirrors selectors.DIGITAL_ONLY_PROMO_TYPES on the
-    # missing-set side; both signals are universal across MTG (not set-specific).
-    "rebalanced", "alchemy",
+    "japanshowcase", "serialized", "rebalanced", "alchemy",
 })
+EXCLUDED_PROMO_TYPES = _config.as_frozenset_setting(
+    "promo_types.toml", "excluded", _EXCLUDED_PROMO_TYPES_DEFAULT)
 
 
 def is_excluded_variant(card_row) -> bool:
@@ -1736,6 +1737,40 @@ def prices_as_of(scryfall_ids: Iterable[str]) -> tuple[str | None, str | None]:
     if not stamps:
         return None, None
     return stamps[-1], stamps[0]
+
+
+def prices_fetched_note(
+    scryfall_ids: Iterable[str],
+    *,
+    prefix: str = "Prices fetched",
+    oldest_style: str = "parenthetical",
+    period: bool = False,
+    local_fallback: str | None = None,
+) -> str | None:
+    """Render the one-line price-freshness footer every value report prints.
+
+    Wraps :func:`prices_as_of` + the newest/oldest branch that
+    ``construct_value``, ``sealed_value``, and ``edhrec_report`` each
+    hand-rolled. The two existing shapes are both reproducible:
+
+    - ``oldest_style="parenthetical"`` (construct/sealed): ``"Prices fetched: NEW"``,
+      or ``"Prices fetched: NEW (oldest referenced: OLD)"`` when they differ.
+    - ``oldest_style="range"`` (edhrec): ``"Prices fetched: OLD–NEW"`` when they
+      differ, else ``"Prices fetched: NEW"``.
+
+    ``period=True`` appends a trailing ``.``. When nothing resolves, returns
+    ``local_fallback`` (``None`` → caller omits the line entirely, matching
+    construct/sealed; a string → edhrec's ``"Prices: local (best-effort)."``).
+    """
+    newest, oldest = prices_as_of(scryfall_ids)
+    dot = "." if period else ""
+    if not newest:
+        return local_fallback
+    if not oldest or oldest == newest:
+        return f"{prefix}: {newest}{dot}"
+    if oldest_style == "range":
+        return f"{prefix}: {oldest}–{newest}{dot}"
+    return f"{prefix}: {newest} (oldest referenced: {oldest}){dot}"
 
 
 def _build_precon_rows(

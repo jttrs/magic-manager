@@ -1,0 +1,33 @@
+# Global promo-type classification sets (NOT per-family — these apply everywhere).
+#
+# Externalized from Python constants so the web app can retune without code
+# edits; the code ships identical baked-in defaults, so this file is OPTIONAL.
+# Values are lowercased on load.
+
+# Prints dropped WHOLESALE from the master-list writer (sets.EXCLUDED_PROMO_TYPES).
+# Prerelease/datestamped/stamped/promopack stamps + japanshowcase same-art
+# reprints + digital (rebalanced/alchemy) + serialized 1-of-N chase.
+excluded = [
+    "prerelease", "datestamped", "stamped", "promopack",
+    "japanshowcase", "serialized", "rebalanced", "alchemy",
+]
+
+# Prints unobtainable for a physical collector, filtered from the selector/query
+# path (selectors.UNOBTAINABLE_PROMO_TYPES): Arena/Alchemy digital + serialized.
+unobtainable = ["rebalanced", "alchemy", "serialized"]
+
+# Strict digital-only subset (selectors.DIGITAL_ONLY_PROMO_TYPES) — Arena/Alchemy
+# rebalanced cards with no physical counterpart. (Backwards-compat alias.)
+digital_only = ["rebalanced", "alchemy"]
+
+# Foil-finish promo types that compute the `ff` treatment code
+# (treatments.FANCY_FOIL_PROMO_TYPES). A foil-only finish of an otherwise-plain
+# print; drives the fancy-foil dupe collapse. ADD a new foil name here when a set
+# introduces one (verify via survey_treatment_signature.py).
+fancy_foil = [
+    "surgefoil", "rainbowfoil", "firstplacefoil", "raisedfoil",
+    "doublerainbow", "confettifoil", "fracturefoil", "ripplefoil",
+    "galaxyfoil", "oilslick", "texturedfoil", "halofoil", "dazzlefoil",
+    "dragonscalefoil", "cosmicfoil", "silverfoil", "chocobotrackfoil",
+    "gilded", "neonink", "embossed", "manafoil", "textured",
+]

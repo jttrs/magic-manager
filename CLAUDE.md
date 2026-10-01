@@ -63,7 +63,7 @@ When adding a query-shaped feature, prefer a new modifier/term over a one-off co
 
 A Magic "set" is rarely one Scryfall code. `sets_mod.resolve(name_or_code)` returns the parent + every set whose `parent_set_code` traces back to it (e.g. `fin` resolves to `fin` plus 8 siblings). The `set:CODE+related` term and `mm query missing-set <CODE>` build on this.
 
-`mm query missing-set` is a flagship workflow (also exposed as the `missing-from-set` skill). It unions three printing-level sub-selectors (rare-regular, mythic-regular, treatment-class) and emits four artifacts: Scryfall URL chunks (chat output), an XLSX checklist (`output/missing-set/checklists/`) + ManaPool bulk-add `.txt` + TCGplayer Mass Entry `.txt` (`output/missing-set/buy-lists/`). Per-family configuration lives in `selectors.py` near `FAMILY_DUPE_FOIL_PROMO_TYPES` / `FAMILY_UNOBTAINABLE_RULES` — when supporting a new family, look there first.
+`mm query missing-set` is a flagship workflow (also exposed as the `missing-from-set` skill). It unions three printing-level sub-selectors (rare-regular, mythic-regular, treatment-class) and emits four artifacts: Scryfall URL chunks (chat output), an XLSX checklist (`output/missing-set/checklists/`) + ManaPool bulk-add `.txt` + TCGplayer Mass Entry `.txt` (`output/missing-set/buy-lists/`). Per-family configuration lives in `config/families.toml` (the `[dupe_foil]` / `[[unobtainable.<anchor>.rules]]` / `[[scenes.<anchor>]]` tables, loaded by `magic_manager.config` and exposed as `selectors.FAMILY_*`) — when supporting a new family, add its entry there first.
 
 ### Inventory checklists — generate → fill → ingest → archive
 
@@ -167,4 +167,4 @@ Secrets live only in the gitignored `.env` at repo root (`MANAPOOL_EMAIL`, `MANA
 
 **Update when you learn something new.** If a session surfaces a new per-set fact — a chase variant we hadn't catalogued, a scene grouping, an unusual `promo_types` behavior, a new PRM destination, a family-topology gotcha — add it to the appropriate section of `docs/sets/<anchor>.md` before ending the session. Keep entries dense and factual (every row of every table should be verifiable via `mm scryfall` or the survey script).
 
-**Code + doc stay in sync.** `docs/sets/<anchor>.md` §8 "Code refs" points at `FAMILY_DUPE_FOIL_PROMO_TYPES` / `FAMILY_UNOBTAINABLE_RULES` entries in `src/magic_manager/selectors.py`. If you add/remove those constants, update the doc's §8 in the same commit.
+**Code + doc + config stay in sync.** `docs/sets/<anchor>.md` §8 "Code refs" points at a family's `config/families.toml` entries (`[dupe_foil]` / `[[unobtainable.<anchor>.rules]]` / `[[scenes.<anchor>]]`). If you add/remove a family's config, update the doc's §8 in the same commit — `tests/test_config_schema.py` enforces the config↔docs §8 sync as a standing CI guard (a configured family with no doc, or a doc §8 referencing absent config, fails the suite).

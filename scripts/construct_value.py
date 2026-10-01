@@ -42,7 +42,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from magic_manager import construct, mtgjson, sets, util  # noqa: E402
+from magic_manager import construct, exports, mtgjson, sets, util  # noqa: E402
 
 
 def _fmt(v):
@@ -89,11 +89,8 @@ def _render_lines(exp: construct.Expansion, rows: list[construct.NetRow],
     for d in exp.diagnostics:
         lines.append(f"  · {d}")
     # Prices-as-of footer — the price-freshness basis for this valuation.
-    newest, oldest = sets.prices_as_of(r.scryfall_id for r in rows)
-    if newest:
-        basis = f"Prices fetched: {newest}"
-        if oldest and oldest != newest:
-            basis += f" (oldest referenced: {oldest})"
+    basis = sets.prices_fetched_note(r.scryfall_id for r in rows)
+    if basis:
         lines.append(basis)
     return lines
 
@@ -102,54 +99,41 @@ def _render_lines(exp: construct.Expansion, rows: list[construct.NetRow],
 
 def _write_xlsx(exp: construct.Expansion, rows: list[construct.NetRow],
                 summary: dict, *, is_sealed: bool, out_path: Path) -> None:
-    from openpyxl import Workbook
-    from openpyxl.styles import Alignment, Font
-    from openpyxl.utils import get_column_letter
-
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "cards"
     headers = ["name", "set_code", "collector_number", "finish", "need_qty",
                "loose_qty", "buy_qty", "unit_usd", "scratch_usd", "buy_usd",
                "scryfall_url"]
-    ws.append(headers)
-    for r in rows:
-        ws.append([
-            r.name, r.set_code.upper(), r.collector_number, r.finish,
-            r.need_qty, r.loose_qty, r.buy_qty, r.unit_usd,
-            r.scratch_usd, r.buy_usd, _scry_url(r.set_code, r.collector_number),
-        ])
-    for row_idx in range(2, ws.max_row + 1):
-        for col in (8, 9, 10):
-            ws.cell(row=row_idx, column=col).number_format = '"$"#,##0.00'
+    cell_rows = [
+        [r.name, r.set_code.upper(), r.collector_number, r.finish,
+         r.need_qty, r.loose_qty, r.buy_qty, r.unit_usd,
+         r.scratch_usd, r.buy_usd, _scry_url(r.set_code, r.collector_number)]
+        for r in rows
+    ]
+    cards = exports.xlsx.SheetSpec(
+        title="cards", headers=headers, rows=cell_rows,
+        widths={1: 34, 2: 10, 4: 10, 11: 46}, money_cols=(8, 9, 10),
+    )
 
     # Second sheet: the three headline totals + diagnostics.
-    ws2 = wb.create_sheet("summary")
-    ws2.append(["metric", "value"])
-    ws2.append(["input", exp.label])
-    ws2.append(["kind", "sealed product" if is_sealed else "decklist"])
-    ws2.append(["sealed_usd", summary["sealed"]])
-    ws2.append(["scratch_usd", summary["scratch"]])
-    ws2.append(["with_collection_usd", summary["with_collection"]])
-    ws2.append(["coverage", round(summary["coverage"], 4)])
-    ws2.append(["n_unpriced", summary["n_unpriced"]])
-    ws2.append(["total_need", summary["total_need"]])
+    summary_rows = [
+        ["input", exp.label],
+        ["kind", "sealed product" if is_sealed else "decklist"],
+        ["sealed_usd", summary["sealed"]],
+        ["scratch_usd", summary["scratch"]],
+        ["with_collection_usd", summary["with_collection"]],
+        ["coverage", round(summary["coverage"], 4)],
+        ["n_unpriced", summary["n_unpriced"]],
+        ["total_need", summary["total_need"]],
+    ]
     for label in exp.packs_skipped:
-        ws2.append(["random_pack_excluded", label])
+        summary_rows.append(["random_pack_excluded", label])
     for d in exp.diagnostics:
-        ws2.append(["diagnostic", d])
+        summary_rows.append(["diagnostic", d])
+    summary_sheet = exports.xlsx.SheetSpec(
+        title="summary", headers=["metric", "value"], rows=summary_rows,
+        widths={1: 24, 2: 46},
+    )
 
-    for ws_, widths in ((ws, {1: 34, 2: 10, 4: 10, 11: 46}),
-                        (ws2, {1: 24, 2: 46})):
-        for ci, w in widths.items():
-            ws_.column_dimensions[get_column_letter(ci)].width = w
-        for col in range(1, ws_.max_column + 1):
-            ws_.cell(row=1, column=col).font = Font(bold=True)
-            ws_.cell(row=1, column=col).alignment = Alignment(horizontal="left")
-        ws_.freeze_panes = "A2"
-        util.apply_base_font_size(ws_)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    wb.save(out_path)
+    exports.xlsx.write_workbook(out_path, [cards, summary_sheet])
 
 
 # ---------- main ----------

@@ -2,7 +2,7 @@
 verbose flag, and returns a string ready to copy/paste into the target service.
 """
 
-from . import moxfield, tcgplayer, archidekt, plain, scryfall_json
+from . import moxfield, tcgplayer, archidekt, plain, scryfall_json, xlsx  # noqa: F401
 
 TARGETS = {
     "moxfield":      moxfield.build,

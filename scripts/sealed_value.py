@@ -37,7 +37,7 @@ ROOT = Path(__file__).resolve().parent.parent
 _OUTPUT_TYPE = "sealed-value"  # → output/sealed-value/reports/
 sys.path.insert(0, str(ROOT / "src"))
 
-from magic_manager import construct, ev, mtgjson, scryfall, sealed, sets, sld, util, valuation  # noqa: E402
+from magic_manager import construct, ev, exports, mtgjson, scryfall, sealed, sets, sld, util, valuation  # noqa: E402
 
 
 # ---------- rendering ----------
@@ -222,81 +222,66 @@ def _flatten(node: sealed.ProductNode, depth: int = 0, out=None):
 
 def _write_xlsx(node: sealed.ProductNode, market_source: str, out_path: Path,
                 singles_rows=None) -> None:
-    from openpyxl import Workbook
-    from openpyxl.styles import Alignment, Font
-    from openpyxl.utils import get_column_letter
-
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "tree"
     headers = ["depth", "name", "kind", "count", "category", "market_usd",
                "market_source", "ev_usd", "deck_usd", "singles_usd",
                "ebay_advisory_usd", "tcgplayer_product_id", "purchase_url",
                "diagnostics"]
-    ws.append(headers)
+    tree_rows = []
     for depth, n in _flatten(node):
         ev_usd = n.intrinsic_usd if n.intrinsic_kind == "ev" else None
         deck_usd = n.intrinsic_usd if n.intrinsic_kind == "deck" else None
         singles_usd = n.intrinsic_usd if n.intrinsic_kind in ("singles", "variable") else None
-        ws.append([
+        tree_rows.append([
             depth, n.name, n.intrinsic_kind or n.kind, n.count, n.category,
             n.market_usd, market_source if n.market_usd is not None else None,
             ev_usd, deck_usd, singles_usd, n.ebay_advisory_usd,
             n.tcgplayer_product_id, n.purchase_url, "; ".join(n.diagnostics),
         ])
-    for row_idx in range(2, ws.max_row + 1):
-        for col in (6, 8, 9, 10, 11):
-            ws.cell(row=row_idx, column=col).number_format = '"$"#,##0.00'
-        ws.cell(row=row_idx, column=12).number_format = "@"  # product id as text
+    tree = exports.xlsx.SheetSpec(
+        title="tree", headers=headers, rows=tree_rows,
+        money_cols=(6, 8, 9, 10, 11), text_cols=(12,),
+        widths={2: 42, 3: 14, 5: 18, 7: 16, 13: 40, 14: 40},
+    )
 
     # Second sheet: the auditable per-sheet EV breakdown for every pack node.
-    ws2 = wb.create_sheet("sheets")
-    ws2.append(["node", "booster_type", "sheet", "foil", "total_weight",
-                "n_cards", "n_unpriced", "ev_per_pull"])
+    sheet_rows = []
     for _, n in _flatten(node):
         if n.ev_detail is None:
             continue
         for sname, se in n.ev_detail.sheets.items():
-            ws2.append([n.name, n.ev_detail.booster_type, sname, se.foil,
-                        se.total_weight, se.n_cards, se.n_unpriced,
-                        round(se.ev_per_pull, 4)])
+            sheet_rows.append([n.name, n.ev_detail.booster_type, sname, se.foil,
+                               se.total_weight, se.n_cards, se.n_unpriced,
+                               round(se.ev_per_pull, 4)])
+    sheets_spec = exports.xlsx.SheetSpec(
+        title="sheets",
+        headers=["node", "booster_type", "sheet", "foil", "total_weight",
+                 "n_cards", "n_unpriced", "ev_per_pull"],
+        rows=sheet_rows, widths={1: 30, 2: 14, 3: 16},
+    )
 
-    for ws_, widths in ((ws, {2: 42, 3: 14, 5: 18, 7: 16, 13: 40, 14: 40}),
-                        (ws2, {1: 30, 2: 14, 3: 16})):
-        for ci, w in widths.items():
-            ws_.column_dimensions[get_column_letter(ci)].width = w
-        for col in range(1, ws_.max_column + 1):
-            ws_.cell(row=1, column=col).font = Font(bold=True)
-            ws_.cell(row=1, column=col).alignment = Alignment(horizontal="left")
-        ws_.freeze_panes = "A2"
-        util.apply_base_font_size(ws_)
+    specs = [tree, sheets_spec]
 
     # Third sheet: the FULL deterministic singles table (top-value first), the
     # per-card complement to the tree's summed deck/singles nodes.
     if singles_rows:
-        ws3 = wb.create_sheet("singles")
-        ws3.append(["rank", "name", "set_code", "collector_number", "finish",
-                    "unit_usd", "scryfall_url"])
+        singles_cell_rows = []
         rank = 0
         for r in singles_rows:
             if r.unit_usd is None:
                 continue
             rank += 1
-            ws3.append([rank, r.name, r.set_code.upper(), r.collector_number,
-                        r.finish, r.unit_usd,
-                        construct.scryfall_url(r.set_code, r.collector_number)])
-        for row_idx in range(2, ws3.max_row + 1):
-            ws3.cell(row=row_idx, column=6).number_format = '"$"#,##0.00'
-        for ci, w in {2: 34, 7: 46}.items():
-            ws3.column_dimensions[get_column_letter(ci)].width = w
-        for col in range(1, ws3.max_column + 1):
-            ws3.cell(row=1, column=col).font = Font(bold=True)
-            ws3.cell(row=1, column=col).alignment = Alignment(horizontal="left")
-        ws3.freeze_panes = "A2"
-        util.apply_base_font_size(ws3)
+            singles_cell_rows.append([rank, r.name, r.set_code.upper(), r.collector_number,
+                                      r.finish, r.unit_usd,
+                                      construct.scryfall_url(r.set_code, r.collector_number)])
+        singles = exports.xlsx.SheetSpec(
+            title="singles",
+            headers=["rank", "name", "set_code", "collector_number", "finish",
+                     "unit_usd", "scryfall_url"],
+            rows=singles_cell_rows, money_cols=(6,), widths={2: 34, 7: 46},
+        )
+        specs.append(singles)
 
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    wb.save(out_path)
+    exports.xlsx.write_workbook(out_path, specs)
 
 
 # ---------- sync helper ----------
@@ -474,11 +459,8 @@ def main() -> int:
         print(line)
 
     # Prices-as-of footer: surface the freshness basis so a stale run is visible.
-    newest, oldest = sets.prices_as_of(r.scryfall_id for r in singles_rows)
-    if newest:
-        basis = f"Prices fetched: {newest}"
-        if oldest and oldest != newest:
-            basis += f" (oldest referenced: {oldest})"
+    basis = sets.prices_fetched_note(r.scryfall_id for r in singles_rows)
+    if basis:
         print(basis)
 
     # Artifacts.
