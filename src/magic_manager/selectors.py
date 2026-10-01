@@ -1866,6 +1866,29 @@ def _filter_treatment(rows: list[MaterializedRow], cls: str) -> list[Materialize
     return out
 
 
+def preferred_exclusions(
+    rows: list[MaterializedRow], anchor_code: str,
+) -> list[MaterializedRow]:
+    """Drop prints categorically unobtainable for a physical collector:
+    digital-only (Arena/Alchemy rebalanced + serialized 1-of-N, via
+    :func:`_is_digital_only`) and the family's hand-ruled unobtainable prints
+    (via :func:`_is_family_unobtainable`).
+
+    This is the row-wise, DB-free core shared by BOTH preferred-filter sites —
+    ``_filter_treatment_preferred`` (the selector grammar's ``treatment=preferred``,
+    on collectible-alt rows) and ``missing._apply_preferred_post_filter`` (on the
+    regular rare/mythic/uncommon-chase sub-selectors). Previously these two
+    byte-identical comprehensions lived in both places; now there is one home.
+    (The datestamped-with-sibling scan is NOT folded in here: the two sites build
+    their family sibling-index with different finish-modes — printing-level in
+    ``missing``, finish-aware in the selector — so merging it would change which
+    prints get dropped. Each keeps its own scan; see the note at each site.)
+    """
+    rows = [r for r in rows if not _is_digital_only(r.card)]
+    rows = [r for r in rows if not _is_family_unobtainable(r.card, anchor_code)]
+    return rows
+
+
 def _filter_treatment_preferred(rows: list[MaterializedRow]) -> list[MaterializedRow]:
     """`preferred` = collectible-alt MINUS (datestamped-with-sibling) MINUS (ff-dupes).
 
@@ -1929,16 +1952,12 @@ def _filter_treatment_preferred(rows: list[MaterializedRow]) -> list[Materialize
     except LookupError:
         family_codes = {anchor}
 
-    # Step 0: drop digital-only (Arena / Alchemy rebalanced) prints AND
-    # serialized 1-of-N chase prints up-front. Both are categorically
-    # unobtainable for a physical collector. Also apply per-family
-    # unobtainable rules (FAMILY_UNOBTAINABLE_RULES) which encode set-specific
-    # treatments the user has decided not to pursue (e.g. LTR's showcase
-    # scroll-frame silverfoil prints, distributed via products the user
-    # doesn't engage with). These are NOT dupes of other prints — they're
-    # distinct art that the user has personally ruled out of their want list.
-    rows = [r for r in rows if not _is_digital_only(r.card)]
-    rows = [r for r in rows if not _is_family_unobtainable(r.card, anchor)]
+    # Step 0: drop digital-only (Arena / Alchemy rebalanced + serialized 1-of-N)
+    # and the family's hand-ruled unobtainable prints (FAMILY_UNOBTAINABLE_RULES,
+    # e.g. LTR's scroll-frame silverfoils). These are NOT dupes of other prints —
+    # distinct art the user has categorically ruled out. Shared with
+    # missing._apply_preferred_post_filter via the one home below.
+    rows = preferred_exclusions(rows, anchor)
 
     # Step 1: filter to collectible-alt rows. Treatment is finish-aware, so the
     # cache is keyed by (scryfall_id, finish): a nonfoil+surgefoil FIC collector
