@@ -654,6 +654,34 @@ FAMILY_UNOBTAINABLE_RULES: dict[str, list[dict]] = {
         # INR/ECL/SOS headliner families. See docs/sets/acr.md §5.
         {"promo_types_any_of": frozenset({"serialized", "doublerainbow"})},
     ],
+    "clb": [
+        # Showcase frame is UNWANTED for CLB (2026-09-30 user directive): the
+        # Universes Beyond: D&D "rulebook/module-page" showcase style isn't liked.
+        # The 76 showcase prints (clb 375-450) all carry frame_effects:showcase +
+        # border_color:black and compute to treatment `shw`, which `preferred`
+        # otherwise KEEPS as a separately-wanted printing. The `border_color:black`
+        # guard SPARES the 3 borderless-showcase planeswalkers (clb 362-364
+        # Elminster/Minsc & Boo/Tasha) and the 10 borderless Dragons/legends
+        # (365-374) — borderless is the chase the user DOES want (keep).
+        # NOTE: etched-foil (clb 471-534, finishes:etched → treatment `b|ff`) and
+        # BOTH extended-art bands (set 553-645 + deck-card 936, frame `ext`) are
+        # ALREADY dropped by the generic pipeline (ff-dupe collapse + the `ext`
+        # exclusion in `preferred`), so no rule is needed for them. See docs/sets/clb.md §2/§5.
+        {"frame_effects_all_of": frozenset({"showcase"}), "border_color": "black"},
+    ],
+    "afr": [
+        # Same UNWANTED showcase as CLB — AFR and CLB share the SAME Universes
+        # Beyond: D&D "rulebook/module-page" showcase frame (verified 2026-09-30:
+        # both frame_effects:showcase[+legendary], promo_types:boosterfun, same
+        # D&D block). The 60 showcase prints (afr 299-358) are black-bordered and
+        # compute to `shw`, which `preferred` otherwise keeps. The border_color
+        # guard SPARES the 17 borderless planeswalkers + Dragons (afr 282-298,
+        # incl. Tiamat / Old Gnawbone) — borderless is the chase the user keeps.
+        # The 38 extendedart (afr 359-396) + the afc commander-deck extendedart
+        # (afc 274-329) already drop via the generic `ext` exclusion; afc has NO
+        # showcase. See docs/sets/afr.md §2/§5.
+        {"frame_effects_all_of": frozenset({"showcase"}), "border_color": "black"},
+    ],
     "one": [
         # Promo-pack STAMP variants — 80 `pone` promopack+stamped `Np` prints,
         # same card as a kept base/showcase sibling + a stamp; compute to
