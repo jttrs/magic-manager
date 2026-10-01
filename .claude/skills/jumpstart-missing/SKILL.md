@@ -13,6 +13,8 @@ This is the Jumpstart analogue of [[missing-from-set]] (`mm query missing-set`),
 does the same for a set family's singles. It is the *shopping* sibling of
 [[generate-jumpstart-checklist]] (the *cataloging* checklist for packs you opened).
 
+**Clipboard:** the ManaPool `.txt` is auto-copied to the macOS clipboard by the `clipboard-buylist` `PostToolUse` hook (`.claude/hooks/clipboard-buylist.sh`) — paste straight into ManaPool, no manual copy step. Relay the hook's "Copied … to the clipboard" confirmation.
+
 ## What it does
 
 1. Syncs the family + front cards, enumerates the set's MTGJSON Jumpstart variants.

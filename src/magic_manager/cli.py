@@ -24,6 +24,7 @@ from . import (
     intake as intake_mod,
     inventory as inv_mod,
     mtgjson as mtgjson_mod,
+    scryfall_urls as scryfall_urls_mod,
     sealed as sealed_mod,
     selectors as sel_mod,
     sets as sets_mod,
@@ -3390,25 +3391,12 @@ def query_url_cmd(
     # mode == "prints"
     # Collapse to one entry per (set, cn) — within a printing, multiple finishes
     # are the same Scryfall card. Preserve sort order from _apply_sort.
-    seen_printings: set[tuple[str, str]] = set()
-    printings: list[tuple[str, str]] = []  # [(set_code, cn), ...]
-    for r in rows:
-        setc = r.card.get("set") or ""
-        cn = r.card.get("collector_number") or ""
-        if not setc or not cn:
-            continue
-        key = (setc, cn)
-        if key in seen_printings:
-            continue
-        seen_printings.add(key)
-        printings.append(key)
+    printings = scryfall_urls_mod.dedupe_printings(rows)
 
-    chunks = [printings[i:i+chunk_size] for i in range(0, len(printings), chunk_size)]
+    chunks = scryfall_urls_mod.printing_url_chunks(printings, chunk_size=chunk_size)
     typer.echo(f"{len(printings)} distinct printings → {len(chunks)} URL(s) (mode=prints)")
-    for i, chunk in enumerate(chunks, start=1):
-        terms = " or ".join(f'(set:{s} cn:"{cn}")' for s, cn in chunk)
-        url = f"https://scryfall.com/search?q={quote_plus(terms)}&unique=prints&order=usd&dir=asc"
-        typer.echo(f"Chunk {i}/{len(chunks)} ({len(chunk)} printings): {url}")
+    for uc in chunks:
+        typer.echo(f"Chunk {uc.index}/{len(chunks)} ({uc.n} printings): {uc.url}")
 
 
 def _write_query_xlsx(
@@ -3566,7 +3554,6 @@ def query_missing_set_cmd(
     """
     import re as _re
     import json as _json
-    from urllib.parse import quote_plus as _quote_plus
 
     from . import missing as missing_mod
 
@@ -3591,7 +3578,11 @@ def query_missing_set_cmd(
         _row_line_value(r) or 0.0,
         r.card.get("set") or "", util.cn_sort_key(r.card.get("collector_number")),
     ))
-    chunks = [rows_by_value[i:i+chunk_size] for i in range(0, len(rows_by_value), chunk_size)]
+    url_chunks = scryfall_urls_mod.printing_url_chunks(
+        [(r.card.get("set"), r.card.get("collector_number")) for r in rows_by_value],
+        chunk_size=chunk_size,
+        prices=[_row_line_value(r) for r in rows_by_value],
+    )
 
     # 3. Build the XLSX checklist artifact (grouped by set, sorted by CN within each).
     rows_for_xlsx = sorted(rows_union, key=lambda r: (
@@ -3634,24 +3625,156 @@ def query_missing_set_cmd(
     # 5. Emit chat output: URL table + file:// links. Nothing else.
     typer.echo(f"# Missing from set:{code_l}+related — {len(rows_union)} distinct printings · ${total_value:,.2f}")
     typer.echo(f"")
-    typer.echo(f"## Scryfall URLs ({len(chunks)} chunks, cheapest first)")
+    typer.echo(f"## Scryfall URLs ({len(url_chunks)} chunks, cheapest first)")
     typer.echo(f"")
     typer.echo(f"| # | Printings | Price band | URL |")
     typer.echo(f"|---:|---:|---|---|")
-    for i, chunk in enumerate(chunks, start=1):
-        cheap = _row_line_value(chunk[0])
-        most = _row_line_value(chunk[-1])
-        cs = f"${cheap:.2f}" if cheap is not None else "—"
-        ms = f"${most:.2f}" if most is not None else "—"
-        terms = " or ".join(
-            f'(set:{r.card.get("set")} cn:"{r.card.get("collector_number")}")' for r in chunk
-        )
-        url = f"https://scryfall.com/search?q={_quote_plus(terms)}&unique=prints&order=usd&dir=asc"
-        typer.echo(f"| {i} | {len(chunk)} | {cs} → {ms} | [chunk {i}]({url}) |")
+    for uc in url_chunks:
+        cs = f"${uc.price_lo:.2f}" if uc.price_lo is not None else "—"
+        ms = f"${uc.price_hi:.2f}" if uc.price_hi is not None else "—"
+        typer.echo(f"| {uc.index} | {uc.n} | {cs} → {ms} | [chunk {uc.index}]({uc.url}) |")
     typer.echo(f"")
     typer.echo(f"📋 Checklist (xlsx): [{xlsx_path}](file://{xlsx_path.resolve()})")
     typer.echo(f"🛒 ManaPool bulk-add ({len(rows_for_bulk)} rows): [{mp_path}](file://{mp_path.resolve()})")
     typer.echo(f"🛒 TCGplayer Mass Entry ({len(rows_for_bulk)} rows): [{tcg_path}](file://{tcg_path.resolve()})")
+
+
+@query_app.command("card-diff")
+def query_card_diff_cmd(
+    code: str = typer.Argument(
+        None,
+        help="Family anchor/member code. Omit for a collection-wide chart.",
+    ),
+    pool: str = typer.Option(
+        "all", "--pool",
+        help="Which pool(s) to show: printing|functional|variant-chase|all.",
+    ),
+    chunk_size: int = typer.Option(
+        20, "--chunk-size",
+        help="Printings per Scryfall URL chunk (default 20; matches Scryfall web UI's nested-conditions cap).",
+    ),
+):
+    """Three-pool "diff vs collection" report for a family (or every owned
+    family at once).
+
+    \b
+    - printing: missing_printings — every art/frame variant not owned.
+    - functional: functional_missing — mechanically-unique cards (by oracle_id)
+      owned in ZERO printings.
+    - variant-chase: variant_chase_printings — printing-missing rows whose
+      card you ALREADY own (borderless/alt-art/fancy-foil chase).
+
+    No CODE → a collection-wide chart (one row per owned+configured family):
+    counts/$ only, no URLs — use the single-family mode below to drill into a
+    specific family's Scryfall shopping URLs.
+
+    WITH a CODE → a single-family report: for each requested pool (--pool,
+    default all three), a header + a chunked Scryfall-URL table (sorted
+    cheapest-first), matching `mm query missing-set`'s table shape.
+    """
+    from . import card_diff as card_diff_mod
+
+    valid_pools = ("printing", "functional", "variant-chase")
+    if pool not in ("all", *valid_pools):
+        typer.echo(f"error: --pool must be one of all|{'|'.join(valid_pools)}, got {pool!r}", err=True)
+        raise typer.Exit(2)
+    pools = list(valid_pools) if pool == "all" else [pool]
+
+    if code is None:
+        diffs = card_diff_mod.collection_diff()
+        if not diffs:
+            typer.echo("## Collection card-diff\n\nNo owned families yet.")
+            raise typer.Exit(0)
+        typer.echo(f"## Collection card-diff · {len(diffs)} families")
+        typer.echo(f"")
+        typer.echo(f"| Family | Collection $ | Missing printing (n·$) | Missing functional (n·$) | Variant-chase (n·$) |")
+        typer.echo(f"|---|---:|---|---|---|")
+        tot_owned = 0.0
+        tot_p_n = tot_f_n = tot_v_n = 0
+        tot_p_usd = tot_f_usd = tot_v_usd = 0.0
+        for d in diffs:
+            typer.echo(
+                f"| {d.code} — {d.name} | {util.fmt_usd(d.owned_usd)} | "
+                f"{d.printing.count}p · {util.fmt_usd(d.printing.usd)} | "
+                f"{d.functional.count}c · {util.fmt_usd(d.functional.usd)} | "
+                f"{d.variant_chase.count}p · {util.fmt_usd(d.variant_chase.usd)} |"
+            )
+            tot_owned += d.owned_usd
+            tot_p_n += d.printing.count; tot_p_usd += d.printing.usd
+            tot_f_n += d.functional.count; tot_f_usd += d.functional.usd
+            tot_v_n += d.variant_chase.count; tot_v_usd += d.variant_chase.usd
+        typer.echo(
+            f"| **Total** | **{util.fmt_usd(tot_owned)}** | "
+            f"**{tot_p_n}p · {util.fmt_usd(tot_p_usd)}** | "
+            f"**{tot_f_n}c · {util.fmt_usd(tot_f_usd)}** | "
+            f"**{tot_v_n}p · {util.fmt_usd(tot_v_usd)}** |"
+        )
+        return
+
+    fd = card_diff_mod.family_diff(code)
+    if fd is None:
+        typer.echo(f"error: {code!r} is not a resolvable/configured family (unknown code, or no "
+                    f"missing-set rules — see FAMILY_DUPE_FOIL_PROMO_TYPES).", err=True)
+        raise typer.Exit(2)
+
+    typer.echo(f"# Card diff: {fd.code} — {fd.name}")
+    typer.echo(f"")
+    typer.echo(f"Owned: {fd.owned_prints} printings / {fd.owned_qty} cards · {util.fmt_usd(fd.owned_usd)}")
+
+    def _echo_url_table(header: str, printings: list, prices: list) -> None:
+        """Emit a `## header` + chunked Scryfall-URL table for already-extracted,
+        already-sorted (set, cn) printings with parallel per-printing prices.
+        The single table renderer behind every pool — printing/variant-chase feed
+        it from MaterializedRows, functional from FunctionalMissingCards."""
+        typer.echo(f"\n## {header}")
+        if not printings:
+            typer.echo("\n(none)")
+            return
+        typer.echo(f"")
+        typer.echo(f"| # | Printings | Price band | URL |")
+        typer.echo(f"|---:|---:|---|---|")
+        for uc in scryfall_urls_mod.printing_url_chunks(
+            printings, chunk_size=chunk_size, prices=prices,
+        ):
+            cs = f"${uc.price_lo:.2f}" if uc.price_lo is not None else "—"
+            ms = f"${uc.price_hi:.2f}" if uc.price_hi is not None else "—"
+            typer.echo(f"| {uc.index} | {uc.n} | {cs} → {ms} | [chunk {uc.index}]({uc.url}) |")
+
+    def _echo_printing_pool(rows, label: str) -> None:
+        """Printing / variant-chase pool: sort rows cheapest-first (same key as
+        missing-set), then render via the shared table."""
+        rows_by_value = sorted(rows, key=lambda r: (
+            0 if _row_line_value(r) is not None else 1,
+            _row_line_value(r) or 0.0,
+            r.card.get("set") or "", util.cn_sort_key(r.card.get("collector_number")),
+        ))
+        total = sum((_row_line_value(r) or 0.0) for r in rows_by_value)
+        _echo_url_table(
+            f"{label} — {len(rows_by_value)} prints · {util.fmt_usd(total)}",
+            [(r.card.get("set"), r.card.get("collector_number")) for r in rows_by_value],
+            [_row_line_value(r) for r in rows_by_value],
+        )
+
+    if "printing" in pools:
+        _echo_printing_pool(fd.printing.rows, "Missing printing")
+
+    if "functional" in pools:
+        # Functional cards carry their cheapest in-family printing (set_code +
+        # family_cn + family_usd); sort cheapest-first and feed the same table.
+        cards_by_value = sorted(fd.functional.rows, key=lambda c: (
+            0 if c.family_usd is not None else 1,
+            c.family_usd or 0.0,
+            c.set_code or "", util.cn_sort_key(c.family_cn),
+        ))
+        resolvable = [c for c in cards_by_value if c.set_code and c.family_cn]
+        _echo_url_table(
+            f"Missing functional — {fd.functional.count} cards · {util.fmt_usd(fd.functional.usd)}",
+            [(c.set_code, c.family_cn) for c in resolvable],
+            [c.family_usd for c in resolvable],
+        )
+
+    if "variant-chase" in pools:
+        _echo_printing_pool(fd.variant_chase.rows, "Variant-chase")
 
 
 @query_app.command("missing-jumpstart")

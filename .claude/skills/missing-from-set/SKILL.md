@@ -14,6 +14,8 @@ Set-agnostic, deterministic, file-driven. The user has a strong opinion about ou
 
 That's the whole output. Don't render the checklist as a markdown table in chat. Don't paste the bulk-add file contents as fenced code in chat. Don't ask which format the user wants — they want all three artifact files (XLSX + ManaPool .txt + TCGplayer .txt), with chat-rendering only for the URLs.
 
+**Clipboard:** the ManaPool `.txt` is auto-copied to the macOS clipboard by the `clipboard-buylist` `PostToolUse` hook (`.claude/hooks/clipboard-buylist.sh`) — the user can paste it straight into ManaPool. No manual `pbcopy` / `copy-output-to-clipboard` step needed; relay the hook's "Copied … to the clipboard" confirmation.
+
 ## When to use
 
 - "What am I missing from `<set>`?" / "What's left to buy from `<set>`?"
