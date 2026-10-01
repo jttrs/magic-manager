@@ -45,8 +45,8 @@ prints — there is no second "fancy sheet" print to dedup against.
 |---|---|---|---|
 | `boosterfun` (borderless, no frame_effect) | `b` | **no — distinct art** | 5 borderless planeswalkers (CN 282-286: Grand Master of Flowers, Mordenkainen, Lolth, Zariel, Ellywick) |
 | `boosterfun` + `inverted` | `b` | **no — distinct art** | 11 borderless D&D monsters/dragons (CN 287-298: Tiamat, Old Gnawbone, the mono-color Dragons, Ebondeath, …) |
-| `boosterfun` + `showcase` | `shw` | **no — distinct art** | 60 "module/rulebook showcase" frame prints (CN 299-358) — the D&D parchment-panel frame; distinct showcase art |
-| `boosterfun` + `extendedart` | `ext` | **no — distinct art** | 37 extended-art mythics/rares (CN 359-395) |
+| `boosterfun` + `showcase` | `shw` | distinct art, but **EXCLUDED** | 60 "module/rulebook showcase" frame prints (CN 299-358) — the UB:D&D parchment-panel frame. **SAME frame family as CLB's showcase** (verified 2026-09-30: both `frame_effects: showcase[+legendary]`, `promo_types: boosterfun`, same D&D block). The user doesn't collect this showcase style → `FAMILY_UNOBTAINABLE_RULES["afr"]` drops them. See §5. |
+| `boosterfun` + `extendedart` | `ext` | distinct art, auto-dropped | 38 extended-art mythics/rares (CN 359-396); `preferred` excludes the `ext` class automatically (the user doesn't want ext). Plus `afc` 274-329 commander-deck extendedart (56 prints) — same auto-drop. |
 | `prerelease` + `datestamped` | (promo) | yes — stamped reprint of base art | `pafr Ns`; same art as base, date stamp only (filtered as a promo, not a distinct print) |
 | `embossed` + `instore` | (promo) | yes — stamped reprint | `pafr Na`; "promo stamp" art, same base art |
 | `promopack` + `stamped` | (promo) | yes — stamped reprint | `pafr Np`; promo-pack stamp, same base art |
@@ -59,13 +59,7 @@ prints — there is no second "fancy sheet" print to dedup against.
 prints are `border_color: borderless` but `full_art: false`, the normal
 modern-borderless convention). No full-art basics beyond the showcase lands.
 
-**No `FAMILY_DUPE_FOIL_PROMO_TYPES` dupe signal.** AFR mirrors the
-TLA/SPM/SOS/MAT/NEO/BLB "empty frozenset" pattern: there is nothing to dedup,
-but `treatment=preferred` / `mm query missing-set` refuse to run until the
-anchor is present in the config. Proposed entry is an **empty frozenset** (see
-§8). The `pafr` stamped promos (datestamped/embossed/promopack) are not distinct
-art and are already dropped as promos by the treatment filter — they do not need
-a dupe-foil rule.
+**Config:** `FAMILY_DUPE_FOIL_PROMO_TYPES["afr"]` is an **empty frozenset** (no same-art fancy-foil sheet to dedup; unblocks `treatment=preferred`). The real taste filter is a **`FAMILY_UNOBTAINABLE_RULES["afr"]`** entry excluding the 60 D&D-showcase prints — identical to CLB (§5/§8). The `pafr` stamped promos (datestamped/embossed/promopack) are same-art and already dropped as promos by the treatment filter.
 
 ---
 
@@ -77,15 +71,15 @@ foil combinations push many prints over 3, but these are the ordinary
 boosterfun variants catalogued in §2, not a special chase tier. There is no
 `uncommon-chase`-only phenomenon in AFR worth pinning.
 
-The genuine high-value distinct-art prints (all boosterfun, all KEPT in
-missing-set) are the borderless dragons/PWs:
+The genuine high-value distinct-art prints that are **KEPT** in missing-set are
+the borderless dragons/PWs (the module-showcase prints are EXCLUDED per §5):
 
-| Card name | Count | CN | Rarity | Treatment |
-|---|---:|---|---|---|
-| `Old Gnawbone` | borderless | `afr` 296 | mythic | `b` (boosterfun+inverted) — ~$68, top missing-$ card |
-| `Tiamat` | borderless | `afr` 298 | mythic | `b` — ~$40 |
-| `Xorn` | module-showcase | `afr` 322 | rare | `shw` — ~$10 |
-| `Ebondeath, Dracolich` / `Iymrith` / `Inferno of the Star Mounts` | borderless | `afr` 287-293 | mythic | `b` — $3-5 |
+| Card name | Count | CN | Rarity | Treatment | Kept? |
+|---|---:|---|---|---|---|
+| `Old Gnawbone` | borderless | `afr` 296 | mythic | `b` (boosterfun+inverted) — ~$68, top kept missing-$ card | ✅ kept |
+| `Tiamat` | borderless | `afr` 298 | mythic | `b` — ~$40 | ✅ kept |
+| `Ebondeath, Dracolich` / `Iymrith` / `Inferno of the Star Mounts` | borderless | `afr` 287-293 | mythic | `b` — $3-5 | ✅ kept |
+| `Xorn` | module-showcase | `afr` 322 | rare | `shw` — ~$10 | ❌ excluded (§5) |
 
 ---
 
@@ -101,18 +95,15 @@ is warranted, and `scripts/scene_table.py afr` would be empty.
 
 ## 5. Unobtainable rules
 
-**None proposed.** `scripts/set_status.py afr` did NOT fire a concentration ⚠
-(it stopped at the "not configured" gate). Inspecting the missing picture via
-the `treatment=collectible-alt` bypass (`set:afr+related missing
-treatment=collectible-alt`, 77 rows), the top of the list is Old Gnawbone
-(~$68) and Tiamat (~$40) — genuine distinct-art borderless chases the user
-WOULD want, not a scarcity-junk tier. There is no stamped-promo-only or
-fancy-foil-sheet tier dominating the missing $ (the `pafr` stamped promos are
-already dropped as promos). No `FAMILY_UNOBTAINABLE_RULES["afr"]` entry.
+**One rule configured — the D&D showcase frame is unwanted** (user directive, 2026-09-30, extended from CLB after validating the frames match). AFR and CLB share the **same** Universes Beyond: D&D "rulebook/module-page" showcase frame (verified: both `frame_effects: showcase[+legendary]`, `promo_types: boosterfun`, same block), so the CLB "this showcase style is not great" directive applies here too.
 
-| Rule | Rationale |
-|---|---|
-| (none) | No scarcity tier the user has ruled out; the costly prints are wanted distinct-art borderless mythics. |
+| Rule | Catches | Spares | Rationale |
+|---|---|---|---|
+| `frame_effects_all_of: {showcase}` + `border_color: black` | 60 module-showcase prints (afr 299–358) | the 17 borderless (afr 282–298: planeswalkers + Dragons incl. Tiamat / Old Gnawbone — `border_color: borderless`, excluded by the black guard) | UB:D&D showcase frame the user doesn't collect; borderless mythics ARE wanted |
+
+**Measured effect:** `mm query missing-set afr` preferred-class rows went **77 → 17** (60 showcase removed; 12 borderless + 5 base kept). The costly KEPT prints are the borderless mythics (Old Gnawbone ~$68, Tiamat ~$40) — genuine distinct-art chases the user wants.
+
+**Not excluded (handled elsewhere):** extended art (afr 359–396 + afc 274–329) auto-drops via `preferred`'s `ext`-class exclusion; the `pafr` stamped promos (datestamped/embossed/promopack) drop as promos. No fancy-foil scarcity tier (pre-fancy-foil 2021 set). `scripts/set_status.py afr` fires no concentration ⚠ beyond the wanted borderless mythics.
 
 ---
 
@@ -166,7 +157,7 @@ resolution above covers it.
 ## 8. Code refs
 
 - `selectors.py:FAMILY_DUPE_FOIL_PROMO_TYPES["afr"]` — **configured: empty `frozenset()`** (applied 2026-09-30; no dupe-foil signal; unblocks `treatment=preferred`, mirrors TLA/SPM/SOS/MAT/NEO/BLB/INR).
-- `selectors.py:FAMILY_UNOBTAINABLE_RULES["afr"]` — not configured, and none needed (§5).
+- `selectors.py:FAMILY_UNOBTAINABLE_RULES["afr"]` — **configured** (applied 2026-09-30): one rule `{frame_effects_all_of: {showcase}, border_color: black}` excluding the 60 unwanted D&D-showcase prints (299–358) while sparing the 17 borderless. Identical rule to CLB. See §5.
 - `selectors.FAMILY_SCENES["afr"]` — not configured; no scenes exist (§4).
 - Related test data: none.
 

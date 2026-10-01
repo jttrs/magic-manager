@@ -38,20 +38,20 @@ mm query missing-set clb        # once DUPE_FOIL is configured (see §8)
 
 ## 2. Treatments
 
-CLB is a **2022, pre-fancy-foil-era** set. The `scripts/survey_treatment_signature.py CLB` audit (2026-09-30) found **NO fancy-foil-sheet tokens at all** — no surgefoil / fracturefoil / halofoil / textured / neonink / etc. The complete `promo_types` frequency across the 1176 family prints:
+CLB is a **2022, pre-fancy-foil-era** set: no fancy-foil-sheet tokens (no surgefoil / fracturefoil / halofoil / textured / neonink / etc.). ⚠️ **But do NOT read "no fancy-foil" as "nothing to filter."** WotC tags every special printing with the single `promo_types: boosterfun` umbrella token (264 prints) — the ACTUAL treatment structure lives in **`frame_effects`** and **`finishes`**, which a promo_types-only survey flattens. The real decomposition (all 936 `clb` parent cards, from the local DB):
 
-| promo_type | Count | Treatment keyword | Dupe of a sibling? | Notes |
+| Treatment class | Count | CN band | Signal | `preferred` disposition |
 |---|---:|---|---|---|
-| `boosterfun` | 264 | `b` / `ext` / `shw` | **no — distinct art** | the showcase + borderless + extended-art legends/dragons. KEPT (preferred representatives). |
-| `prerelease` | 99 | (stamped) | — | the 99 `pclb` `Ns` datestamped prerelease promos (co-occurs with `datestamped`). |
-| `datestamped` | 99 | (stamped) | — | always paired with `prerelease` (99 co-occurrences). Global preferred filter drops stamped vs. the clb base sibling. |
-| `promopack` | 5 | (stamped) | — | the 5 `pclb` `Np` promo-pack cards (9p/63p/162p/167p/285p); co-occur with `stamped`; each has a clb base sibling. |
-| `stamped` | 5 | (stamped) | — | same 5 promo-pack prints. |
-| `thick` | 4 | — | — | the 4 oversized display commanders (clb 931–934); not booster-obtainable singles. |
-| `buyabox` | 1 | — | — | singleton buy-a-box promo. |
-| `bundle` | 1 | — | — | singleton bundle promo. |
+| **base** | 667 | 1–361 (draft) + 646–930 (deck) + 451–470 (lands) | plain black border, nonfoil/foil | computes `regular` → handled by rare/mythic/base sub-selectors, not `preferred` |
+| **showcase** | 76 | 375–450 | `frame_effects: showcase` (±`legendary`), black border | **EXCLUDED (user directive, 2026-09-30)** — the UB:D&D "rulebook/module-page" showcase style the user doesn't want. `preferred` would otherwise KEEP it as treatment `shw`. See §5. |
+| **extended art (set)** | 81 | 553–645 | `frame_effects: extendedart` | dropped automatically — `preferred` excludes the `ext` treatment class |
+| **extended art (deck card)** | 13 | 936 band | `frame_effects: extendedart` | same — `ext`, auto-dropped |
+| **etched foil** | 86 | 471–534 | `finishes: etched`, computes `b\|ff` | dropped automatically — same-art foil, collapses in the ff-dupe step |
+| **borderless** | 13 | 362–374 | `border_color: borderless` | **KEPT** — the Ancient Dragons + 3 planeswalkers; the chase the user DOES want (treatment `b`/`shw`, not caught by the showcase rule's `border_color:black` guard) |
 
-**No DUPE_FOIL entry is needed to describe actual dupes** — there is no same-art fancy-foil sheet in this family. But `treatment=preferred` / `mm query missing-set` still **refuse to run** until the family has a (possibly empty) `FAMILY_DUPE_FOIL_PROMO_TYPES["clb"]` entry. Propose an **empty frozenset** (the TLA/SPM/SOS/VOW/C21/NEO pattern) to unblock the preferred filter without dropping anything. See §8.
+Promo-channel tokens (separate from the above): `prerelease`+`datestamped` (99 `pclb` `Ns`), `promopack`+`stamped` (5 `pclb` `Np`: 9p/63p/162p/167p/285p) — each has a `clb` base sibling so the global preferred filter drops the stamp; `thick` (4 oversized display commanders 931–934); singleton `buyabox`/`bundle`.
+
+**Config consequence:** `FAMILY_DUPE_FOIL_PROMO_TYPES["clb"]` is an **empty frozenset** (there is genuinely no same-art fancy-foil sheet; etched collapses via the generic ff step, not a family dupe-foil entry). The showcase exclusion is a **`FAMILY_UNOBTAINABLE_RULES["clb"]`** entry — `{frame_effects_all_of: {showcase}, border_color: black}` — see §5/§8.
 
 **Full-art convention:** standard — `full_art` TRUE only on the full-art basic lands (clb 451–467 range), FALSE elsewhere. No UB convention flip observed.
 
@@ -65,7 +65,7 @@ The `set:clb+related chase` (threshold 3) list surfaces **no distinct-art chase 
 - **Art Series multi-prints** (aclb Ancient Gold Dragon 5/28/44 etc.) — the DFC art cards.
 - **Full-art basic lands** (clb 451–467) across finishes.
 
-`set:clb+related chase:5` returns **0 rows** — no strong-signal chase. CLB legends/dragons each print at base + one or two boosterfun treatments (showcase + borderless), which is below the distinct-art chase bar. **No `uncommon-chase` tier to document.**
+`set:clb+related chase:5` returns **0 rows** — no strong-signal chase. CLB legends/dragons each print at base + showcase + (for 13) borderless, but these are the SAME art in different frames (one illustration per card), not the multi-distinct-art runs the chase modifier is built to catch. **No `uncommon-chase` tier to document.** (The borderless Dragons/planeswalkers ARE a desirable premium, but they're handled as kept `preferred` prints — see §2/§5 — not as a chase tier.)
 
 ---
 
@@ -79,17 +79,21 @@ The `set:clb+related chase` (threshold 3) list surfaces **no distinct-art chase 
 
 ## 5. Unobtainable rules
 
-**None proposed.** The audit surfaced no scarcity tier the user would rule out:
+**One rule configured — the D&D showcase frame is unwanted** (user directive, 2026-09-30): "the showcase style differs per set and this one is not great." The 76 showcase prints (`clb` 375–450) carry `frame_effects: showcase` (±`legendary`) and black border, and `preferred` would otherwise keep them as treatment `shw`. The rule drops them while sparing the borderless chase.
 
-- The 5 promo-pack `stamped` prints (`pclb` 9p/63p/162p/167p/285p) each have a **non-stamped clb base sibling** in the family graph, so the **global** preferred filter (which drops `stamped`/`promopack` when a non-stamped sibling exists) handles them — unlike SNC/EOE/ECL where the stamped promos had no in-family base sibling and needed an explicit `promo_types_any_of: {stamped}` rule. Here only 5 prints and all paired, so no per-family `stamped` rule is warranted.
-- No fancy-foil masterpiece/galaxyfoil/headliner tier exists (pre-fancy-foil era).
-- The `thick` oversized display commanders (clb 931–934) and the `oclb`/`mclb` memorabilia are not booster-obtainable singles; they fall outside normal missing-set scope by rarity/product, not needing a taste rule.
+| Rule | Catches | Spares | Rationale |
+|---|---|---|---|
+| `frame_effects_all_of: {showcase}` + `border_color: black` | 76 showcase prints (clb 375–450) | the 13 borderless (clb 362–374: Ancient Dragons + Elminster/Minsc & Boo/Tasha — these are `border_color: borderless`, so the black guard excludes them) | UB:D&D rulebook/module showcase frame the user doesn't collect; borderless Dragons/planeswalkers ARE wanted |
 
-**Scarcity-concentration check:** `scripts/set_status.py clb` could **not** compute a missing-$ figure (missing requires `treatment=preferred`, which is unconfigured), so the `⚠ missing $ concentrated` note did not fire. Once the empty-DUPE_FOIL entry (§8) lands, re-run `set_status.py clb`; CLB's priciest missing prints are low-dollar ($30-ish Displacer Kitten / Battle Angels showcases), so no concentration exclusion is anticipated. **No before/after missing total recorded** (family not yet configured).
+**Measured effect:** `mm query missing-set clb` preferred-class rows went **88 → 12** (76 showcase removed; 10 borderless + 2 promo-pack siblings kept). The full missing-set run is 118 distinct printings / ~$1,179 (base draft + deck gaps + borderless + promo-pack stamps).
 
-| Rule | Rationale |
-|---|---|
-| *(none)* | 2022 set, no fancy-foil chase, promo-pack stamps handled by the global filter via their in-family base siblings. |
+**Not excluded (handled elsewhere, no rule needed):**
+- **Extended art** (set 553–645 + deck-card 936) — dropped automatically by `preferred`'s `ext`-class exclusion. The user confirmed ext is unwanted; the generic pipeline already does this.
+- **Etched foil** (471–534) — computes `b|ff`, same art as its base sibling, collapses in the generic ff-dupe step.
+- The 5 promo-pack `stamped` prints (`pclb` 9p/63p/162p/167p/285p) each have a non-stamped `clb` base sibling, so the global preferred filter drops the stamp (no per-family `stamped` rule needed).
+- The `thick` oversized display commanders (931–934) + `oclb`/`mclb` memorabilia — not booster-obtainable singles; outside normal scope by product.
+
+**Scarcity-concentration check:** `scripts/set_status.py clb` — CLB's priciest kept missing prints are the borderless Ancient Dragons ($17–$160) in chunk 6; no fancy-foil scarcity tier (pre-fancy-foil era). No further concentration exclusion warranted.
 
 ---
 
@@ -108,6 +112,13 @@ Both promo channels live in the single `pclb` set (CLB has no `pw22`/showdown/re
 
 ## 7. Edge cases & gotchas
 
+- **Draft pool vs. Commander-deck-only cards (CLB's defining structure).** The `clb` numbering splits cleanly into two non-overlapping card pools:
+  - **CN 1–361** — the draftable main set (the ~361 cards that appear in Draft Boosters).
+  - **CN 646–930** — **285 Commander-deck-exclusive cards** (the reprints + new cards that ship only in the 4 Commander precons / collector-booster commander slots). **Verified 0 name-overlap** with the draft pool (1–361) — these are entirely distinct cards, not alternate prints of draft cards.
+  - CN 451–470 full-art basics, 471–645 the alt-treatment bands (etched/showcase/extended), 931–935 oversized/misc.
+
+  This matters for completion math: "the set" a drafter completes (1–361) is a different target from "every card in the product" (which includes the 285 deck-only cards). Owning the 4 Commander precons (added 2026-09-30) covers the 646–930 band — which is why those show 0 missing.
+- **`boosterfun` is an umbrella, not a treatment.** All 264 special prints carry `promo_types: boosterfun`; the real axis is in `frame_effects`/`finishes` (see §2). A promo_types-only audit will mis-report CLB as "one bucket, all distinct" — don't.
 - **Family root is `draft_innovation`, not `expansion`.** CLB is a draftable Commander product (the Commander Legends line). Any code that keys on `set_type == "expansion"` must account for this.
 - **`thick` oversized display commanders** (clb 931–934: Captain N'ghathrod, Faldorn, Firkraag, Nalia de'Arnise) — oversized stock, not booster singles. Each has a normal base/boosterfun print at a lower CN.
 - **`oclb` single oversized card** — "Undercity // The Initiative" (CN 20), the oversized dungeon card. `set_type: memorabilia`.
@@ -121,7 +132,7 @@ Both promo channels live in the single `pclb` set (CLB has no `pw22`/showdown/re
 ## 8. Code refs
 
 - `selectors.py:FAMILY_DUPE_FOIL_PROMO_TYPES["clb"]` — **configured: empty `frozenset()`** (applied 2026-09-30). Unblocks `treatment=preferred` / `mm query missing-set clb`; drops nothing (no fancy-foil dupe exists). Mirrors TLA/SPM/SOS/VOW/C21/NEO.
-- `selectors.py:FAMILY_UNOBTAINABLE_RULES["clb"]` — **not configured; none needed** (promo-pack stamps handled by the global filter; no scarcity tier).
+- `selectors.py:FAMILY_UNOBTAINABLE_RULES["clb"]` — **configured** (applied 2026-09-30): one rule `{frame_effects_all_of: {showcase}, border_color: black}` excluding the 76 unwanted D&D-showcase prints (375–450) while sparing the 13 borderless. See §5.
 - `selectors.FAMILY_SCENES["clb"]` — **not configured; N/A** (no scenes).
 - Related test data: none.
 
