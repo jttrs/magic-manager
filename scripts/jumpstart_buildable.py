@@ -42,7 +42,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from magic_manager import db, exports, mtgjson, ownership, selectors, sets, util  # noqa: E402
+from magic_manager import (  # noqa: E402
+    db, exports, missing as missing_mod, mtgjson, ownership, selectors, sets, util,
+)
 
 # A version suffix is a trailing integer, with or without parentheses:
 #   'Angels (1)'    → 'Angels'   (parenthesized — e.g. J25/MSH naming)
@@ -127,43 +129,23 @@ def _card_dicts(scryfall_ids: list[str]) -> dict[str, dict]:
 
 
 def _write_xlsx(rows: list, out_path: Path) -> None:
-    from openpyxl import Workbook
-    from openpyxl.styles import Alignment, Font
-    from openpyxl.utils import get_column_letter
-
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "buildable-missing"
     headers = ["set", "collector_number", "name", "rarity", "finish",
                "qty", "unit_usd", "line_value"]
-    ws.append(headers)
+    cell_rows = []
     for r in rows:
         c = r.card
         unit = c.get("prices_usd")
         line = (unit * r.quantity) if unit is not None else None
-        ws.append([
-            (c.get("set") or "").upper(),
-            c.get("collector_number"),
-            c.get("name"),
-            c.get("rarity"),
-            r.finish,
-            r.quantity,
-            unit,
-            line,
+        cell_rows.append([
+            (c.get("set") or "").upper(), c.get("collector_number"),
+            c.get("name"), c.get("rarity"), r.finish, r.quantity, unit, line,
         ])
-        ws.cell(row=ws.max_row, column=2).number_format = "@"  # CN as text
-    for row_idx in range(2, ws.max_row + 1):
-        ws.cell(row=row_idx, column=7).number_format = '"$"#,##0.00'
-        ws.cell(row=row_idx, column=8).number_format = '"$"#,##0.00'
-    for ci, w in {1: 6, 2: 8, 3: 40, 4: 10, 5: 9, 6: 6, 7: 10, 8: 11}.items():
-        ws.column_dimensions[get_column_letter(ci)].width = w
-    for col in range(1, ws.max_column + 1):
-        ws.cell(row=1, column=col).font = Font(bold=True)
-        ws.cell(row=1, column=col).alignment = Alignment(horizontal="left")
-    ws.freeze_panes = "A2"
-    util.apply_base_font_size(ws)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    wb.save(out_path)
+    spec = exports.xlsx.SheetSpec(
+        title="buildable-missing", headers=headers, rows=cell_rows,
+        widths={1: 6, 2: 8, 3: 40, 4: 10, 5: 9, 6: 6, 7: 10, 8: 11},
+        money_cols=(7, 8), text_cols=(2,),
+    )
+    exports.xlsx.write_workbook(out_path, [spec])
 
 
 def main() -> int:
@@ -176,6 +158,10 @@ def main() -> int:
                     help="Override output dir for ALL artifacts (default: segments "
                          "buy-lists → output/jumpstart-buildable/buy-lists/, checklist "
                          "→ output/jumpstart-buildable/checklists/).")
+    ap.add_argument("--no-filter", action="store_true",
+                    help="Skip the physical-buyable gate (don't drop tokens / "
+                         "digital-only / family-unobtainable / meld-back prints). "
+                         "Default is to filter, matching every other buy-list.")
     args = ap.parse_args()
     code = args.set_code.lower()
 
@@ -210,6 +196,14 @@ def main() -> int:
             continue
         rows.append(selectors.MaterializedRow(
             scryfall_id=sid, quantity=qty, finish="nonfoil", card=card))
+    # Physical-buyable gate: drop tokens / digital-only / family-unobtainable /
+    # meld-back prints — the same filter every other buy-list runs, so a theme's
+    # token or an Alchemy-rebalanced reprint can't leak into the shopping list.
+    # --no-filter opts out (raw target output).
+    n_before = len(rows)
+    if not args.no_filter:
+        rows = missing_mod.physical_buyable(rows, code)
+    n_filtered = n_before - len(rows)
     # Deterministic order: (set, collector-number).
     rows.sort(key=lambda r: ((r.card.get("set") or ""),
                              util.cn_sort_key(r.card.get("collector_number"))))
@@ -237,12 +231,15 @@ def main() -> int:
         written.append(p)
 
     target_total = sum(target.values())
-    missing_total = sum(missing.values())
+    missing_total = sum(r.quantity for r in rows)
     buy_usd = sum((r.card.get("prices_usd") or 0.0) * r.quantity for r in rows)
     print(f"\n{code.upper()} buildable set — {n_themes} theme(s) across {n_variants} variant(s)")
     print(f"  target:  {len(target)} distinct cards / {target_total} copies")
     print(f"  owned:   {sum(owned.values())} copies of target cards")
     print(f"  missing: {len(rows)} distinct / {missing_total} copies · ${buy_usd:,.2f} to buy")
+    if n_filtered:
+        print(f"  (filtered {n_filtered} non-buyable print(s): tokens / digital / "
+              f"unobtainable / meld-backs — pass --no-filter to include)")
     if skipped:
         print(f"  ! {len(skipped)} missing card(s) not in local cards table (name-only): "
               f"{', '.join(sorted(set(skipped))[:10])}"
