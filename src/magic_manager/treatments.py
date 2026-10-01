@@ -13,20 +13,21 @@ from __future__ import annotations
 
 from typing import Any
 
-from . import util
+from . import config as _config, util
 
 
-# Promo-type tags that all visually mean "non-standard foil finish."
-# Collapsed under a single user-facing keyword (``ff``) because they don't
-# co-occur on the same card and the user doesn't need to distinguish e.g.
-# surgefoil from rainbowfoil at-a-glance — Scryfall URL has the detail.
-FANCY_FOIL_PROMO_TYPES = frozenset({
-    "surgefoil", "rainbowfoil", "firstplacefoil", "raisedfoil",
-    "doublerainbow", "confettifoil", "fracturefoil", "ripplefoil",
-    "galaxyfoil", "oilslick", "texturedfoil", "halofoil", "dazzlefoil",
-    "dragonscalefoil", "cosmicfoil", "silverfoil", "chocobotrackfoil",
-    "gilded", "neonink", "embossed", "manafoil", "textured",
-})
+# Promo-type tags that all visually mean "non-standard foil finish." Collapsed
+# under a single user-facing keyword (``ff``). Externalized to
+# config/promo_types.toml ([fancy_foil]) with the baked-in default below (code
+# works with no config file); add a new foil name there when a set ships one.
+FANCY_FOIL_PROMO_TYPES = _config.as_frozenset_setting(
+    "promo_types.toml", "fancy_foil", frozenset({
+        "surgefoil", "rainbowfoil", "firstplacefoil", "raisedfoil",
+        "doublerainbow", "confettifoil", "fracturefoil", "ripplefoil",
+        "galaxyfoil", "oilslick", "texturedfoil", "halofoil", "dazzlefoil",
+        "dragonscalefoil", "cosmicfoil", "silverfoil", "chocobotrackfoil",
+        "gilded", "neonink", "embossed", "manafoil", "textured",
+    }))
 
 
 def _as_list(v: Any) -> list[str]:

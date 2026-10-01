@@ -1,0 +1,26 @@
+# Precon / sealed-pool classification constants (mtgjson.py).
+#
+# Externalized from Python constants; code ships identical baked-in defaults, so
+# this file is OPTIONAL. Edit here to retune without code changes.
+
+# The product `type` strings `mm set precon-list` lists by default — the
+# constructed-deck products a collector tracks (mtgjson.PRECON_MODERN_TYPES).
+# When a product line is reported missing from precon-list, add its exact MTGJSON
+# `type` string here.
+modern_types = [
+    "Commander Deck", "Box Set", "Duel Deck", "Planeswalker Deck",
+    "Starter Deck", "Starter Kit", "Spellslinger Starter Kit", "Welcome Deck",
+    "Intro Pack", "Challenger Deck", "Pioneer Challenger Deck", "Guild Kit",
+    "Brawl Deck", "Clash Pack", "Game Night Deck", "Archenemy Deck",
+    "Planechase Deck",
+]
+
+# A product whose name matches one of these substrings (case-insensitive) has NO
+# real decklist → its loose cards default to `deconstructed`
+# (mtgjson.POOL_NAME_PATTERNS).
+pool_name_patterns = ["scene box", "starter collection"]
+
+# A single-deck product with more than this many cards is pool-shaped (a card
+# dump, not an assembled deck) → defaults to deconstructed
+# (mtgjson.POOL_CARD_COUNT_THRESHOLD).
+pool_card_count_threshold = 150

@@ -31,6 +31,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Iterable
 
+from . import config as _config
+
 WRAPPER = (
     Path(__file__).resolve().parents[2]
     / ".claude" / "skills" / "mtgjson-search" / "mtgjson.sh"
@@ -256,25 +258,17 @@ PRECON_EXCLUDED_TYPES: frozenset[str] = frozenset({"Jumpstart", "Secret Lair Dro
 # NOTE: this is the one knob that decides what "counts" as a precon. When the
 # user says a product line is missing, the fix is almost always adding its
 # exact MTGJSON ``type`` string here (see `mm mtgjson decks` / DeckList types).
-PRECON_MODERN_TYPES: frozenset[str] = frozenset({
-    "Commander Deck",
-    "Box Set",
-    "Duel Deck",
-    "Planeswalker Deck",
-    "Starter Kit",
-    "Starter Deck",
-    "Spellslinger Starter Kit",
-    "Welcome Deck",
-    "Intro Pack",
-    "Challenger Deck",
-    "Pioneer Challenger Deck",
-    "Guild Kit",
-    "Brawl Deck",
-    "Clash Pack",
-    "Game Night Deck",
-    "Archenemy Deck",
-    "Planechase Deck",
-})
+# Externalized to config/precon.toml ([modern_types]); the type strings are
+# case-sensitive (they match MTGJSON `type` verbatim), so this one is NOT
+# lowercased — loaded via get_setting with the baked-in default below.
+PRECON_MODERN_TYPES: frozenset[str] = frozenset(_config.get_setting(
+    "precon.toml", "modern_types", [
+        "Commander Deck", "Box Set", "Duel Deck", "Planeswalker Deck",
+        "Starter Kit", "Starter Deck", "Spellslinger Starter Kit",
+        "Welcome Deck", "Intro Pack", "Challenger Deck",
+        "Pioneer Challenger Deck", "Guild Kit", "Brawl Deck", "Clash Pack",
+        "Game Night Deck", "Archenemy Deck", "Planechase Deck",
+    ]))
 
 
 def _is_collector_edition(name: str) -> bool:
@@ -306,14 +300,16 @@ def _is_collector_edition(name: str) -> bool:
 # box_set/starter_deck). So classification is name-pattern + a card-count
 # backstop. This is the single knob — when a new pool-shaped product appears,
 # add its name substring here.
-POOL_NAME_PATTERNS: frozenset[str] = frozenset({
-    "scene box",
-    "starter collection",
-})
+# Externalized to config/precon.toml ([pool_name_patterns]); baked-in default below.
+POOL_NAME_PATTERNS: frozenset[str] = _config.as_frozenset_setting(
+    "precon.toml", "pool_name_patterns",
+    frozenset({"scene box", "starter collection"}))
 
 # A single deck this large isn't a playable deck — it's a build-your-own pool.
 # Playable decks top out at 100 (Commander); the Starter Collection is 387.
-POOL_CARD_COUNT_THRESHOLD = 150
+# Externalized to config/precon.toml ([pool_card_count_threshold]).
+POOL_CARD_COUNT_THRESHOLD = _config.get_setting(
+    "precon.toml", "pool_card_count_threshold", 150)
 
 
 def _deck_total_cards(deck_data: dict) -> int:

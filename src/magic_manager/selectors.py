@@ -38,7 +38,7 @@ import re
 import shlex
 from dataclasses import dataclass, field
 
-from . import db, scryfall, sets as sets_mod, util
+from . import config as _config, db, scryfall, sets as sets_mod, util
 
 
 # ---------- AST ----------
@@ -904,13 +904,15 @@ def _is_family_unobtainable(card: dict, anchor_code: str) -> bool:
 # master-list writer in sets.py also drops 'serialized' via
 # EXCLUDED_PROMO_TYPES; this list is the selectors-side equivalent so the
 # query path matches.
-UNOBTAINABLE_PROMO_TYPES: frozenset[str] = frozenset({
-    "rebalanced", "alchemy",  # Arena/Alchemy digital-only
-    "serialized",             # 1-of-N chase prints
-})
+# Externalized to config/promo_types.toml ([unobtainable]/[digital_only]) with
+# the baked-in defaults below (code works with no config file).
+UNOBTAINABLE_PROMO_TYPES: frozenset[str] = _config.as_frozenset_setting(
+    "promo_types.toml", "unobtainable",
+    frozenset({"rebalanced", "alchemy", "serialized"}))  # digital + 1-of-N chase
 
 # Backwards-compat alias — older callers import this name.
-DIGITAL_ONLY_PROMO_TYPES: frozenset[str] = frozenset({"rebalanced", "alchemy"})
+DIGITAL_ONLY_PROMO_TYPES: frozenset[str] = _config.as_frozenset_setting(
+    "promo_types.toml", "digital_only", frozenset({"rebalanced", "alchemy"}))
 
 
 def _is_digital_only(card: dict) -> bool:

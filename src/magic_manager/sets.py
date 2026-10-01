@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
-from . import db, scryfall, util
+from . import config as _config, db, scryfall, util
 
 
 RARITY_ORDER = {
@@ -43,16 +43,17 @@ DEFAULT_INVENTORY_SET_TYPES = frozenset({"expansion", "commander", "masterpiece"
 # excluded from default master-list output so the user only sees printings
 # they actually catalog. Toggled by --include-variants on master-list.
 EXCLUDED_BORDERS = frozenset({"white", "yellow"})
-EXCLUDED_PROMO_TYPES = frozenset({
+# Prerelease/store-stamped/japanshowcase/serialized + Arena/Alchemy rebalanced
+# (digital-only, no physical counterpart) prints are dropped from default
+# master-list output. Externalized to config/promo_types.toml ([excluded]) with
+# the baked-in default below so the code works with no config file. Mirrors
+# selectors.DIGITAL_ONLY_PROMO_TYPES on the missing-set side.
+_EXCLUDED_PROMO_TYPES_DEFAULT = frozenset({
     "prerelease", "datestamped", "stamped", "promopack",
-    "japanshowcase", "serialized",
-    # Arena/Alchemy rebalanced cards exist only as digital re-tunings — they
-    # have no physical counterpart, no foil finish, no secondary-market price,
-    # and a literal "arena" security_stamp. Always filtered from physical
-    # collection workflows. Mirrors selectors.DIGITAL_ONLY_PROMO_TYPES on the
-    # missing-set side; both signals are universal across MTG (not set-specific).
-    "rebalanced", "alchemy",
+    "japanshowcase", "serialized", "rebalanced", "alchemy",
 })
+EXCLUDED_PROMO_TYPES = _config.as_frozenset_setting(
+    "promo_types.toml", "excluded", _EXCLUDED_PROMO_TYPES_DEFAULT)
 
 
 def is_excluded_variant(card_row) -> bool:
