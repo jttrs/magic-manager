@@ -1738,6 +1738,40 @@ def prices_as_of(scryfall_ids: Iterable[str]) -> tuple[str | None, str | None]:
     return stamps[-1], stamps[0]
 
 
+def prices_fetched_note(
+    scryfall_ids: Iterable[str],
+    *,
+    prefix: str = "Prices fetched",
+    oldest_style: str = "parenthetical",
+    period: bool = False,
+    local_fallback: str | None = None,
+) -> str | None:
+    """Render the one-line price-freshness footer every value report prints.
+
+    Wraps :func:`prices_as_of` + the newest/oldest branch that
+    ``construct_value``, ``sealed_value``, and ``edhrec_report`` each
+    hand-rolled. The two existing shapes are both reproducible:
+
+    - ``oldest_style="parenthetical"`` (construct/sealed): ``"Prices fetched: NEW"``,
+      or ``"Prices fetched: NEW (oldest referenced: OLD)"`` when they differ.
+    - ``oldest_style="range"`` (edhrec): ``"Prices fetched: OLD–NEW"`` when they
+      differ, else ``"Prices fetched: NEW"``.
+
+    ``period=True`` appends a trailing ``.``. When nothing resolves, returns
+    ``local_fallback`` (``None`` → caller omits the line entirely, matching
+    construct/sealed; a string → edhrec's ``"Prices: local (best-effort)."``).
+    """
+    newest, oldest = prices_as_of(scryfall_ids)
+    dot = "." if period else ""
+    if not newest:
+        return local_fallback
+    if not oldest or oldest == newest:
+        return f"{prefix}: {newest}{dot}"
+    if oldest_style == "range":
+        return f"{prefix}: {oldest}–{newest}{dot}"
+    return f"{prefix}: {newest} (oldest referenced: {oldest}){dot}"
+
+
 def _build_precon_rows(
     set_code: str | None = None,
     *,

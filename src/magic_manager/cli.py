@@ -3100,11 +3100,9 @@ def deck_free_cmd(
 
 def _materialize_or_die(selector: str):
     try:
-        return sel_mod.materialize(selector)
-    except sel_mod.SelectorParseError as e:
-        typer.echo(f"error: invalid selector: {e}", err=True); raise typer.Exit(2)
-    except LookupError as e:
-        typer.echo(f"error: {e}", err=True); raise typer.Exit(2)
+        return sel_mod.materialize_or_raise(selector)
+    except sel_mod.SelectorInputError as e:
+        typer.echo(e.message, err=True); raise typer.Exit(e.exit_code)
 
 
 def _row_unit_price(r: sel_mod.MaterializedRow) -> float | None:
@@ -3361,7 +3359,6 @@ def query_url_cmd(
     queries at 20 nested conditions; chunks larger than 20 will fail in the
     browser even if the API accepts them.
     """
-    from urllib.parse import quote_plus
     rows = _materialize_or_die(selector)
     rows = _apply_sort(rows, sort)
     if not rows:
@@ -3384,7 +3381,7 @@ def query_url_cmd(
         typer.echo(f"{len(names)} distinct cards → {len(chunks)} URL(s) (mode=oracle)")
         for i, chunk in enumerate(chunks, start=1):
             terms = " or ".join(f'!"{nm}"' for nm in chunk)
-            url = f"https://scryfall.com/search?q={quote_plus(terms)}"
+            url = scryfall_urls_mod.scryfall_search_url(terms)
             typer.echo(f"Chunk {i}/{len(chunks)} ({len(chunk)} cards): {url}")
         return
 
@@ -4466,12 +4463,7 @@ def export_cmd(
     out: Path = typer.Option(None, "--out", help="Optional output path; otherwise prints to stdout."),
 ):
     """Materialize a V2 selector and emit a paste-ready block for the target service."""
-    try:
-        rows = sel_mod.materialize(selector)
-    except sel_mod.SelectorParseError as e:
-        typer.echo(f"error: invalid selector: {e}", err=True); raise typer.Exit(2)
-    except LookupError as e:
-        typer.echo(f"error: {e}", err=True); raise typer.Exit(2)
+    rows = _materialize_or_die(selector)
     if not rows:
         typer.echo(f"(selector matched 0 rows: {selector})", err=True)
         raise typer.Exit(1)

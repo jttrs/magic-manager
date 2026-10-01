@@ -22,9 +22,8 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from urllib.parse import quote_plus
 
-from . import mtgjson, scryfall, util
+from . import mtgjson, scryfall, scryfall_urls, util
 
 
 # ---------- price extraction (live Scryfall) ----------
@@ -256,9 +255,9 @@ def search_url(collector_numbers: list[str]) -> str:
         key=util.cn_sort_key,
     )
     if not cns:
-        return "https://scryfall.com/search?q=" + quote_plus("set:sld")
+        return scryfall_urls.scryfall_search_url("set:sld")
     terms = "set:sld (" + " or ".join(f"cn:{cn}" for cn in cns) + ")"
-    return "https://scryfall.com/search?q=" + quote_plus(terms)
+    return scryfall_urls.scryfall_search_url(terms)
 
 
 def cell(total: float, priced_ct: int, card_ct: int) -> str:

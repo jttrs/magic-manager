@@ -12,6 +12,32 @@ from urllib.parse import quote_plus
 
 CHUNK_DEFAULT = 20  # Scryfall web UI caps OR'd queries at 20 nested conditions.
 
+_SEARCH_BASE = "https://scryfall.com/search?q="
+
+
+def scryfall_search_url(
+    query: str,
+    *,
+    unique: str | None = None,
+    order: str | None = None,
+    dir: str | None = None,
+) -> str:
+    """Build a Scryfall web-search URL for ``query`` (a raw Scryfall search
+    string the caller composes — e.g. ``set:sld (cn:1 or cn:2)`` or ``!"Sol Ring"``).
+
+    The query is ``quote_plus``-encoded (the single home for that encoding, so
+    callers can't drift to the subtly-wrong bare ``quote`` which leaves ``+`` /
+    ``&`` unescaped). The optional ``unique`` / ``order`` / ``dir`` map to the
+    same-named Scryfall URL params and are appended only when given — so a bare
+    name search stays ``?q=…`` and a printing search becomes
+    ``?q=…&unique=prints&order=usd&dir=asc``.
+    """
+    url = _SEARCH_BASE + quote_plus(query)
+    for key, val in (("unique", unique), ("order", order), ("dir", dir)):
+        if val is not None:
+            url += f"&{key}={val}"
+    return url
+
 
 @dataclass
 class UrlChunk:
@@ -46,7 +72,7 @@ def printing_url_chunks(
         chunk = printings[start:start + chunk_size]
         idx = start // chunk_size + 1
         terms = " or ".join(f'(set:{s} cn:"{cn}")' for s, cn in chunk)
-        url = f"https://scryfall.com/search?q={quote_plus(terms)}&unique=prints&order=usd&dir=asc"
+        url = scryfall_search_url(terms, unique="prints", order="usd", dir="asc")
         if prices is not None:
             price_chunk = prices[start:start + chunk_size]
             price_lo = price_chunk[0] if price_chunk else None

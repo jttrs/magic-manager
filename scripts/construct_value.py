@@ -89,11 +89,8 @@ def _render_lines(exp: construct.Expansion, rows: list[construct.NetRow],
     for d in exp.diagnostics:
         lines.append(f"  · {d}")
     # Prices-as-of footer — the price-freshness basis for this valuation.
-    newest, oldest = sets.prices_as_of(r.scryfall_id for r in rows)
-    if newest:
-        basis = f"Prices fetched: {newest}"
-        if oldest and oldest != newest:
-            basis += f" (oldest referenced: {oldest})"
+    basis = sets.prices_fetched_note(r.scryfall_id for r in rows)
+    if basis:
         lines.append(basis)
     return lines
 

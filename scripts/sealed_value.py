@@ -474,11 +474,8 @@ def main() -> int:
         print(line)
 
     # Prices-as-of footer: surface the freshness basis so a stale run is visible.
-    newest, oldest = sets.prices_as_of(r.scryfall_id for r in singles_rows)
-    if newest:
-        basis = f"Prices fetched: {newest}"
-        if oldest and oldest != newest:
-            basis += f" (oldest referenced: {oldest})"
+    basis = sets.prices_fetched_note(r.scryfall_id for r in singles_rows)
+    if basis:
         print(basis)
 
     # Artifacts.

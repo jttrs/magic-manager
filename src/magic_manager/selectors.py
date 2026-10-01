@@ -1216,6 +1216,38 @@ def materialize(sel_or_str: Selector | str) -> list[MaterializedRow]:
     return rows
 
 
+class SelectorInputError(ValueError):
+    """A selector the user supplied could not be parsed or resolved.
+
+    Carries a ready-to-print, user-facing ``message`` (already prefixed with
+    ``error:``) plus the conventional CLI ``exit_code`` (2 — bad invocation).
+    Lets every caller — the typer CLI and the standalone scripts — share ONE
+    materialize-or-fail policy instead of each re-wrapping
+    ``SelectorParseError`` / ``LookupError``: the CLI maps it to
+    ``typer.Exit(e.exit_code)``, a script to ``print(e.message); return e.exit_code``.
+    """
+
+    def __init__(self, message: str, *, exit_code: int = 2):
+        super().__init__(message)
+        self.message = message
+        self.exit_code = exit_code
+
+
+def materialize_or_raise(selector: str) -> list[MaterializedRow]:
+    """``materialize`` but normalize both failure modes into one
+    :class:`SelectorInputError` with a user-facing message + exit code 2.
+
+    ``SelectorParseError`` → ``error: invalid selector: …``; ``LookupError``
+    (e.g. an unknown set code) → ``error: …``. Any other exception propagates
+    unchanged (a real bug, not bad user input)."""
+    try:
+        return materialize(selector)
+    except SelectorParseError as e:
+        raise SelectorInputError(f"error: invalid selector: {e}") from e
+    except LookupError as e:
+        raise SelectorInputError(f"error: {e}") from e
+
+
 def _materialize_term(term: Term) -> list[MaterializedRow]:
     if term.kind == "inventory":
         return _materialize_inventory()

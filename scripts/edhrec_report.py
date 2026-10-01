@@ -41,14 +41,13 @@ ROOT = Path(__file__).resolve().parent.parent
 _OUTPUT_TYPE = "edhrec"  # → output/edhrec/reports/
 sys.path.insert(0, str(ROOT / "src"))
 
-from magic_manager import edhrec, sets, util  # noqa: E402
+from magic_manager import edhrec, scryfall_urls, sets, util  # noqa: E402
 
 
 # ---------- rendering ----------
 
 def _scryfall_search_url(name: str) -> str:
-    from urllib.parse import quote
-    return f"https://scryfall.com/search?q={quote('!\"' + name + '\"')}"
+    return scryfall_urls.scryfall_search_url(f'!"{name}"')
 
 
 def _md_commander(res, top: int, prices_note: str) -> str:
@@ -211,10 +210,10 @@ def _prices_note(oids: list[str], *, refresh: bool) -> str:
     sids = [r[1] for r in rows]
     if codes:
         sets.ensure_priced(codes, refresh_stale=refresh, log=lambda m: print(m, file=sys.stderr))
-    newest, oldest = sets.prices_as_of(sids)
-    if newest:
-        return f"Prices fetched: {newest}." if newest == oldest else f"Prices fetched: {oldest}–{newest}."
-    return "Prices: local (best-effort)."
+    return sets.prices_fetched_note(
+        sids, oldest_style="range", period=True,
+        local_fallback="Prices: local (best-effort).",
+    )
 
 
 def main() -> int:
