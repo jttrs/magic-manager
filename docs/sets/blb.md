@@ -55,6 +55,8 @@ sole-showcase raisedfoils in the list).
 **Full-art convention:** borderless-inverted showcase (2024 Standard set). No
 `textured`/`galaxyfoil`/`fracturefoil` tier.
 
+**Auto-dropped classes (noted for `audit_treatment_coverage.py` coverage):** `extendedart` prints (treatment `ext`) and `etched`-finish prints (treatment `b|ff`) exist in this family but are **auto-dropped by the preferred filter** — `ext` is excluded as its own class and `etched` collapses in the ff-dupe step — so they never reach `missing-set` and need no per-family rule.
+
 ---
 
 ## 3. Chase variants

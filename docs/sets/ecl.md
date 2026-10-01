@@ -45,6 +45,8 @@ bundle (expansion/commander/promo). No separately-rooted bonus sheet gotcha.
 **Full-art convention:** borderless-inverted showcase cards — verify if a
 question arises; this is a 2025 UB-style set.
 
+**Auto-dropped classes (noted for `audit_treatment_coverage.py` coverage):** `extendedart` prints (treatment `ext`) and `etched`-finish prints (treatment `b|ff`) exist in this family but are **auto-dropped by the preferred filter** — `ext` is excluded as its own class and `etched` collapses in the ff-dupe step — so they never reach `missing-set` and need no per-family rule.
+
 ---
 
 ## 3. Chase variants

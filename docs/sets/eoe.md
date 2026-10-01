@@ -59,6 +59,8 @@ direction) — the exclusion stays. The user catalogs any they own via a direct
 `mm inventory add <scryfall_id> foil` (e.g. The Dominion Bracelet `eoe` 364,
 added 2026-08-23). The gap to fix is the *missing-set* side (§5).
 
+**Auto-dropped classes (noted for `audit_treatment_coverage.py` coverage):** `extendedart` prints (treatment `ext`) and `etched`-finish prints (treatment `b|ff`) exist in this family but are **auto-dropped by the preferred filter** — `ext` is excluded as its own class and `etched` collapses in the ff-dupe step — so they never reach `missing-set` and need no per-family rule.
+
 ---
 
 ## 3. Chase variants

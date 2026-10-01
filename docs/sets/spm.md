@@ -90,6 +90,8 @@ MAR is a SEPARATE Marvel-masterpiece checklist, not part of the SPM gap.
 
 **Full-art convention:** SPM follows the newer UB convention — borderless-inverted cards have `full_art: true` (unlike LTR/FIN which have `full_art: false`). See `docs/scryfall-printing-treatments.md` §6.5.
 
+**Auto-dropped classes (noted for `audit_treatment_coverage.py` coverage):** `extendedart` prints (treatment `ext`) and `etched`-finish prints (treatment `b|ff`) exist in this family but are **auto-dropped by the preferred filter** — `ext` is excluded as its own class and `etched` collapses in the ff-dupe step — so they never reach `missing-set` and need no per-family rule.
+
 ---
 
 ## 3. Chase variants

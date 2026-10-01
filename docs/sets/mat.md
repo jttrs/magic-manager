@@ -49,6 +49,8 @@ codes-minus-ff)`; `{shw}` ≠ `{b,shw}`, so the pair never matches and 227 survi
 as a false non-dupe (a $42 foil leak). Excluding the whole `halofoil` treatment
 in §5 is exact (all 43 are same-art) and sidesteps the frame-effect mismatch.
 
+**Auto-dropped classes (noted for `audit_treatment_coverage.py` coverage):** `extendedart` prints (treatment `ext`) and `etched`-finish prints (treatment `b|ff`) exist in this family but are **auto-dropped by the preferred filter** — `ext` is excluded as its own class and `etched` collapses in the ff-dupe step — so they never reach `missing-set` and need no per-family rule.
+
 ---
 
 ## 3. Chase variants

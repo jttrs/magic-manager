@@ -46,6 +46,8 @@ TMT ships two dupe-foil signals per audit:
 
 **Full-art convention:** unknown; TMT hasn't been synced to local DB so `treatments.compute_treatment` behavior isn't observed. Likely follows the newer UB convention (`full_art: true` on borderless-inverted, like SPM/TLA) but verify on first sync.
 
+**Auto-dropped classes (noted for `audit_treatment_coverage.py` coverage):** `extendedart` prints (treatment `ext`) and `etched`-finish prints (treatment `b|ff`) exist in this family but are **auto-dropped by the preferred filter** — `ext` is excluded as its own class and `etched` collapses in the ff-dupe step — so they never reach `missing-set` and need no per-family rule.
+
 ---
 
 ## 3. Chase variants
