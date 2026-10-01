@@ -223,6 +223,25 @@ FAMILY_DUPE_FOIL_PROMO_TYPES: dict[str, frozenset[str]] = {
     # `preferred` filter without filtering (like TLA/SPM/SOS/MAT/NEO/BLB).
     # See docs/sets/inr.md §2/§5.
     "inr": frozenset(),
+    # Commander Legends: Battle for Baldur's Gate (2022, pre-fancy-foil-era D&D
+    # draft_innovation set): NO fancy-foil-sheet dupe signal. The treatment audit
+    # (2026-09-30) found only boosterfun (distinct showcase/borderless art, KEPT),
+    # prerelease/datestamped + promopack/stamped promo-pack stamps (handled by the
+    # GLOBAL preferred filter — each has a clb base sibling), and 4 thick oversized
+    # display commanders (931-934). Empty frozenset unblocks the `preferred` filter
+    # without dropping anything (like TLA/SPM/SOS/MAT/NEO/INR). See docs/sets/clb.md §2.
+    "clb": frozenset(),
+    # Adventures in the Forgotten Realms (2021, pre-fancy-foil-era expansion): NO
+    # dupe-foil signal. The only treatment token is `boosterfun`, which marks
+    # DISTINCT frames — 5 borderless planeswalkers (afr 282-286), 11 borderless D&D
+    # monsters/dragons (287-298), 60 module/rulebook `showcase` prints (299-358),
+    # 37 `extendedart` mythics/rares (359-395). None is a same-art fancy-foil sheet;
+    # the premium foil is just the ordinary foil of these distinct prints. The pafr
+    # stamped promos (datestamped/embossed/promopack) are same-art stamped reprints,
+    # already dropped as promos by the treatment filter. Empty frozenset unblocks the
+    # `preferred` filter without filtering (like TLA/SPM/SOS/MAT/NEO/INR).
+    # See docs/sets/afr.md §2.
+    "afr": frozenset(),
     # Assassin's Creed (UB draft_innovation): textured is same-art-as-sibling —
     # the 5 protagonist textured foils (ACR 267-271 Ezio/Altaïr/Edward/Eivor/
     # Kassandra, textured+boosterfun, treatment shw|ff) share the exact showcase
