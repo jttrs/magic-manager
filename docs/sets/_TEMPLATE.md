@@ -37,7 +37,28 @@ mm set master-list <anchor> --only <anchor>,<sibling1>,<sibling2>,<bonus>
 
 ## 2. Treatments
 
-Which `promo_types` appear in this family, and how they map through `treatments.compute_treatment()` (`src/magic_manager/treatments.py`).
+⚠️ **Characterize ALL THREE axes, not just `promo_types`.** `promo_types` tags
+every special printing with one umbrella token (`boosterfun`); the real
+structure — **showcase, extended-art, etched** — lives in `frame_effects` /
+`finishes`. Fill both tables below from the `survey_treatment_signature.py`
+TREATMENT-FIRST AXIS section, and run `audit_treatment_coverage.py <anchor>`
+to confirm no `⚠ HIGH` class is left un-named.
+
+**Frame/finish treatment classes present** (from the computed-treatment +
+frame_effects/finishes tables; every KEPT class needs an explicit keep/exclude
+note — see §5):
+
+| Class | Count | CN band | Computed treatment | Preferred-filter disposition |
+|---|---:|---|---|---|
+| base | N | … | `regular` | handled by rarity/base sub-selectors |
+| showcase (black border) | N | … | `shw` | KEPT by default — explicit keep/exclude decision in §5 |
+| showcase (borderless) | N | … | `b\|shw` | KEPT — the family's borderless treatment |
+| extended-art | N | … | `ext` | auto-dropped by `preferred` (ext class) |
+| etched | N | … | `b\|ff` | auto-dropped (ff-dupe collapse) |
+| borderless | N | … | `b` | KEPT — usually the wanted chase |
+
+**`promo_types` dupe-foil / stamped signals** (axis 1 — how each maps through
+`treatments.compute_treatment()`):
 
 | promo_type | Treatment keyword | Dupe of a sibling? | Notes |
 |---|---|---|---|
