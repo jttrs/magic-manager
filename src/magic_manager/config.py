@@ -2,15 +2,30 @@
 ``config/`` and the Python constants that used to be hard-coded in
 ``selectors`` / ``mtgjson`` / ``sets`` / ``treatments``.
 
-Mirrors the ``trueup_pools.py`` + ``config/product_priority.toml`` precedent:
-every loader has baked-in defaults equal to the historical constant, so the code
-works with NO config files present; a file (when present) overrides. A parse
-error warns to stderr and falls back to defaults — bad config never breaks a run.
+Two tiers of config, with DIFFERENT absent-file contracts:
 
-The eventual web app sets ONE thing — ``MAGIC_MANAGER_CONFIG_DIR`` (or passes an
-explicit ``override`` dir) — to point the whole system at its own editable config
-without touching code. Family rules carry a ``note=`` rationale field so the
-"why" travels with the rule (no separate prose doc to drift from); a CI check
+- ``promo_types.toml`` / ``precon.toml`` are OPTIONAL — each loader ships a
+  baked-in default equal to the historical constant, so the code works with
+  those files absent; a file (when present) overrides, and a parse error warns
+  to stderr and falls back to the default.
+- ``families.toml`` is REQUIRED — it holds 34 families of per-family rules with
+  no sane baked-in fallback. If it is missing or unparseable the family loaders
+  raise :class:`ConfigError` (fatal) rather than silently returning ``{}`` and
+  disabling ``mm query missing-set`` / ``treatment=preferred`` for every family.
+  A present-but-section-absent file is still a legitimate empty result.
+
+The config DIRECTORY is resolved per call from (precedence) an explicit
+``override`` dir → ``$MAGIC_MANAGER_CONFIG_DIR`` → ``<repo>/config``; the parse
+cache keys on the resolved dir, so changing the env var / passing ``override``
+yields a fresh read. NOTE: the module-level constants that consume these loaders
+(``selectors.FAMILY_*``, ``sets.EXCLUDED_PROMO_TYPES``,
+``mtgjson.PRECON_MODERN_TYPES``, ``treatments.FANCY_FOIL_PROMO_TYPES``) are bound
+at IMPORT TIME, so a process that wants its own config dir must set
+``MAGIC_MANAGER_CONFIG_DIR`` BEFORE importing those modules. Callers that need a
+different dir after import call the loaders directly with ``override=``.
+
+Family rules carry a ``note=`` rationale field so the "why" travels with the
+rule (no separate prose doc to drift from); a CI check
 (tests/test_config_schema.py) keeps config family keys ↔ docs/sets §8 aligned.
 """
 
@@ -24,6 +39,29 @@ from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
+# Single source of truth for the unobtainable-rule predicate vocabulary. Maps
+# each supported rule key to how build_unobtainable_rules coerces its value:
+#   "promo_set"  → frozenset of lowercased strings (membership via issubset/&)
+#   "cn_set"     → frozenset of raw CN strings (case-sensitive)
+#   "scalar"     → passed through verbatim (e.g. border_color)
+#   "note"       → rationale only, stripped from the evaluated rule
+# selectors._matches_unobtainable_rule consumes the predicate keys; the loader
+# derives its coercion from here; tests/test_config_schema validates against it —
+# so adding a key is a ONE-line change here, not a 3-site edit that can silently
+# miss the frozenset coercion and crash the matcher at query time.
+UNOBTAINABLE_RULE_KEYS: dict[str, str] = {
+    "promo_types_any_of": "promo_set",
+    "promo_types_all_of": "promo_set",
+    "frame_effects_all_of": "promo_set",
+    "collector_numbers": "cn_set",
+    "border_color": "scalar",
+    "note": "note",
+}
+
+
+class ConfigError(RuntimeError):
+    """A REQUIRED config file is missing or unparseable."""
+
 
 def config_dir(*, override: str | Path | None = None) -> Path:
     """The directory config TOML files are read from. Precedence:
@@ -34,19 +72,35 @@ def config_dir(*, override: str | Path | None = None) -> Path:
     return Path(env) if env else _REPO_ROOT / "config"
 
 
-def load_toml(name: str, *, override: str | Path | None = None) -> dict:
-    """Load ``config/<name>`` (``name`` includes the ``.toml`` suffix). Missing
-    file → ``{}``; parse error → warn to stderr + ``{}``. Never raises for
-    bad/absent config (callers merge the result onto baked-in defaults)."""
-    path = config_dir(override=override) / name
+@lru_cache(maxsize=None)
+def _cached_toml(dir_str: str, name: str, required: bool) -> dict:
+    """Parse ``<dir>/<name>`` once per (dir, name, required). Keyed on the
+    RESOLVED dir so a changed config dir / override produces a distinct entry
+    (not a stale hit). ``required`` controls the absent/unparseable contract:
+    REQUIRED → raise :class:`ConfigError`; optional → warn/empty + ``{}``.
+    (lru_cache does not memoize exceptions, so a required-missing file simply
+    re-raises on each call.)"""
+    path = Path(dir_str) / name
     try:
         with open(path, "rb") as f:
             return tomllib.load(f)
     except FileNotFoundError:
+        if required:
+            raise ConfigError(f"required config file is missing: {path}") from None
         return {}
-    except Exception as e:  # noqa: BLE001 — bad config must not break a run
+    except tomllib.TOMLDecodeError as e:
+        if required:
+            raise ConfigError(f"required config file is unparseable: {path}: {e}") from e
         print(f"warn: could not parse {path} ({e!r}); using defaults", file=sys.stderr)
         return {}
+
+
+def load_toml(name: str, *, override: str | Path | None = None,
+              required: bool = False) -> dict:
+    """Load (and cache) ``config/<name>`` from the resolved config dir. Optional
+    by default (missing/bad → ``{}``); pass ``required=True`` to make an absent
+    or unparseable file fatal (:class:`ConfigError`)."""
+    return _cached_toml(str(config_dir(override=override)), name, required)
 
 
 def _as_frozenset(value, default: frozenset[str]) -> frozenset[str]:
@@ -60,25 +114,29 @@ def _as_frozenset(value, default: frozenset[str]) -> frozenset[str]:
 
 def as_frozenset_setting(
     file_name: str, key: str, default: frozenset[str],
+    *, override: str | Path | None = None,
 ) -> frozenset[str]:
     """Load ``config/<file_name>``'s top-level ``key`` as a lowercased
     frozenset, falling back to ``default`` when the file/key is absent. The
-    one-liner module-level constants (EXCLUDED_PROMO_TYPES, etc.) use this."""
-    data = _cached_toml(file_name)
+    one-liner module-level constants (EXCLUDED_PROMO_TYPES, etc.) use this.
+    These files are OPTIONAL — the ``default`` is the baked-in historical value."""
+    data = load_toml(file_name, override=override)
     return _as_frozenset(data.get(key), default)
 
 
-def get_setting(file_name: str, key: str, default):
+def get_setting(file_name: str, key: str, default,
+                *, override: str | Path | None = None):
     """Load ``config/<file_name>``'s top-level ``key`` verbatim (scalar/list),
     falling back to ``default`` when absent."""
-    data = _cached_toml(file_name)
+    data = load_toml(file_name, override=override)
     return data.get(key, default)
 
 
 def build_unobtainable_rules(raw: dict) -> dict[str, list[dict]]:
-    """Turn the TOML ``[unobtainable.<fam>]`` tables into the exact nested shape
-    ``selectors._matches_unobtainable_rule`` consumes: ``{anchor: [rule, …]}``
-    where each rule's set-valued predicate keys are rebuilt as ``frozenset``.
+    """Turn the TOML ``[[unobtainable.<fam>.rules]]`` tables into the exact
+    nested shape ``selectors._matches_unobtainable_rule`` consumes:
+    ``{anchor: [rule, …]}`` where each rule's set-valued predicate keys are
+    rebuilt as ``frozenset`` (per :data:`UNOBTAINABLE_RULE_KEYS`).
 
     TOML shape (one array-of-tables per family)::
 
@@ -87,58 +145,48 @@ def build_unobtainable_rules(raw: dict) -> dict[str, list[dict]]:
         border_color = "black"
         note = "76 D&D-rulebook showcase prints the user doesn't pursue; …"
 
-    The ``note`` field is rationale-only (dropped from the evaluated rule — the
-    matcher ignores unknown keys, but we strip it so the shape stays clean).
+    The ``note`` field is rationale-only (dropped from the evaluated rule).
     """
-    _SET_KEYS = {"promo_types_any_of", "promo_types_all_of", "frame_effects_all_of"}
     out: dict[str, list[dict]] = {}
     for fam, body in (raw.get("unobtainable") or {}).items():
-        rules_in = body.get("rules") if isinstance(body, dict) else body
         rules: list[dict] = []
-        for rule in rules_in or []:
+        for rule in (body.get("rules") or []):
             r: dict = {}
             for k, v in rule.items():
-                if k == "note":
+                kind = UNOBTAINABLE_RULE_KEYS.get(k)
+                if kind == "note":
                     continue
-                if k in _SET_KEYS:
+                if kind == "promo_set":
                     r[k] = frozenset(str(x).lower() for x in v)
-                elif k == "collector_numbers":
+                elif kind == "cn_set":
                     r[k] = frozenset(str(x) for x in v)
-                else:
+                else:  # "scalar" or an unknown key — pass through verbatim
                     r[k] = v
             rules.append(r)
         out[fam.lower()] = rules
     return out
 
 
-@lru_cache(maxsize=None)
-def family_dupe_foil() -> dict[str, frozenset[str]]:
+def family_dupe_foil(*, override: str | Path | None = None) -> dict[str, frozenset[str]]:
     """``config/families.toml`` ``[dupe_foil]`` → ``{family: frozenset(promo_types)}``.
     An empty list is a CONFIGURED family with no dupe-foil signal (a present key),
     distinct from an absent family (unconfigured) — the preferred filter keys on
-    membership, so this distinction matters."""
-    raw = _cached_toml("families.toml").get("dupe_foil") or {}
+    membership, so this distinction matters. families.toml is REQUIRED: a
+    missing/unparseable file raises :class:`ConfigError` rather than returning {}."""
+    raw = load_toml("families.toml", override=override, required=True).get("dupe_foil") or {}
     return {k.lower(): frozenset(str(v).lower() for v in vals)
             for k, vals in raw.items()}
 
 
-@lru_cache(maxsize=None)
-def family_unobtainable_rules() -> dict[str, list[dict]]:
+def family_unobtainable_rules(*, override: str | Path | None = None) -> dict[str, list[dict]]:
     """``config/families.toml`` ``[[unobtainable.<fam>.rules]]`` → the nested
     ``{family: [rule, …]}`` the selector matcher consumes (set-valued keys as
-    frozensets, ``note`` stripped)."""
-    return build_unobtainable_rules(_cached_toml("families.toml"))
+    frozensets, ``note`` stripped). families.toml is REQUIRED."""
+    return build_unobtainable_rules(load_toml("families.toml", override=override, required=True))
 
 
-@lru_cache(maxsize=None)
-def family_scenes() -> dict[str, list[dict]]:
+def family_scenes(*, override: str | Path | None = None) -> dict[str, list[dict]]:
     """``config/families.toml`` ``[[scenes.<fam>]]`` → ``{family: [scene-dict, …]}``
-    (plain dicts: name/artist/set/cn_lo/cn_hi)."""
-    raw = _cached_toml("families.toml").get("scenes") or {}
+    (plain dicts: name/artist/set/cn_lo/cn_hi). families.toml is REQUIRED."""
+    raw = load_toml("families.toml", override=override, required=True).get("scenes") or {}
     return {k.lower(): [dict(sc) for sc in scenes] for k, scenes in raw.items()}
-
-
-@lru_cache(maxsize=None)
-def _cached_toml(name: str) -> dict:
-    """Module-level cache (config files don't change within a process)."""
-    return load_toml(name)

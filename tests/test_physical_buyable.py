@@ -74,6 +74,25 @@ def test_physical_buyable_toggles_are_independent(tmp_db, tla_family, seed_cards
     assert kept == {"real", "tok"}
 
 
+def test_physical_buyable_single_digital_flag(tmp_db, tla_family, seed_cards, make_card):
+    """drop_digital alone drops the digital print but NOT the token (the two
+    digital/unobtainable guards are now independent — F3 removed the dead
+    'both-flags' elif, so a single-flag call takes a defined path)."""
+    from magic_manager import missing
+    seed_cards([
+        make_card(id="real", set="tla", collector_number="5", rarity="rare", name="Real Rare"),
+        make_card(id="arena", set="tla", collector_number="6", rarity="rare",
+                  name="Digital Rare", promo_types=[], security_stamp="arena"),
+        make_card(id="tok", set="tla", collector_number="20", rarity="rare",
+                  name="Angel Token", layout="token"),
+    ])
+    rows = _rows_for(["real", "arena", "tok"])
+    kept = {r.scryfall_id for r in missing.physical_buyable(
+        rows, "tla", drop_digital=True, drop_family_unobtainable=False,
+        drop_datestamped_siblings=False, drop_meld_backs=False, drop_tokens=False)}
+    assert kept == {"real", "tok"}  # only the digital print dropped
+
+
 def test_physical_buyable_no_filter_is_identity(tmp_db, tla_family, seed_cards, make_card):
     """All toggles off ⇒ returns rows untouched (the --no-filter escape hatch)."""
     from magic_manager import missing

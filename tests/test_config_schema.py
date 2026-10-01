@@ -22,12 +22,11 @@ ROOT = Path(__file__).resolve().parent.parent
 FAMILIES_TOML = ROOT / "config" / "families.toml"
 DOCS_SETS = ROOT / "docs" / "sets"
 
-# The predicate keys selectors._matches_unobtainable_rule understands, plus the
-# rationale field. Anything else in a rule table is a typo / unsupported.
-_KNOWN_RULE_KEYS = {
-    "promo_types_any_of", "promo_types_all_of", "frame_effects_all_of",
-    "collector_numbers", "border_color", "note",
-}
+# The predicate-key vocabulary is the SINGLE source of truth in config — the
+# loader derives its coercion from it and the matcher references the same keys,
+# so this test can't drift from either (F6). Anything else in a rule table is a
+# typo / unsupported.
+_KNOWN_RULE_KEYS = set(config.UNOBTAINABLE_RULE_KEYS)
 
 # Families intentionally in config without a docs/sets doc, or vice versa.
 # (Keep empty; add with a reason if a legitimate exception arises.)
@@ -63,18 +62,24 @@ def test_every_unobtainable_rule_has_a_predicate(raw):
     assert not empty, f"unobtainable rules with no predicate: {empty}"
 
 
-def test_loader_reproduces_frozenset_shape(raw):
-    """build_unobtainable_rules coerces the set-valued keys to frozensets and
-    strips `note`, matching what the matcher consumes."""
+def test_loader_coerces_every_set_kind_key_to_frozenset(raw):
+    """build_unobtainable_rules must coerce EVERY set-kind key (per the shared
+    config.UNOBTAINABLE_RULE_KEYS vocabulary) to a frozenset and strip `note`.
+
+    Derived from the shared vocabulary — NOT a hardcoded key list — so adding a
+    new set-valued predicate key to UNOBTAINABLE_RULE_KEYS without wiring its
+    coercion fails HERE instead of silently storing a raw list that crashes the
+    matcher's `.issubset`/`&` at query time (the F6 silent-crash gap)."""
+    set_kinds = {"promo_set", "cn_set"}
+    set_keys = {k for k, kind in config.UNOBTAINABLE_RULE_KEYS.items() if kind in set_kinds}
     rules = config.build_unobtainable_rules(raw)
     for fam, rlist in rules.items():
         for r in rlist:
             assert "note" not in r, f"{fam}: note leaked into evaluated rule"
-            for k in ("promo_types_any_of", "promo_types_all_of", "frame_effects_all_of"):
+            for k in set_keys:
                 if k in r:
-                    assert isinstance(r[k], frozenset), f"{fam}.{k} not a frozenset"
-            if "collector_numbers" in r:
-                assert isinstance(r["collector_numbers"], frozenset)
+                    assert isinstance(r[k], frozenset), \
+                        f"{fam}.{k} is a set-kind key but was not coerced to frozenset"
 
 
 def test_dupe_foil_values_are_lists_of_strings(raw):
@@ -132,3 +137,69 @@ def test_docs_config_refs_have_config(raw):
     assert not missing, (
         f"docs/sets §8 reference FAMILY_* config for families absent from "
         f"config/families.toml: {sorted(missing)} — the doc and config drifted.")
+
+
+# ---------- promo_types.toml ↔ baked-in default sync (F7) ----------
+#
+# The flat promo-type constants ship a baked-in Python default AND a committed
+# config/promo_types.toml value; the file is OPTIONAL, so the two must agree or
+# behavior silently depends on whether the file is present. These guards (the
+# un-guarded sibling of the families.toml checks above) fail if either drifts.
+
+PROMO_TYPES_TOML = ROOT / "config" / "promo_types.toml"
+
+# (toml_key, the module constant that carries the baked-in default). Each
+# constant is the frozenset the code binds; the committed TOML list must equal it.
+_PROMO_SYNC_CASES = [
+    ("excluded", "magic_manager.sets", "EXCLUDED_PROMO_TYPES"),
+    ("unobtainable", "magic_manager.selectors", "UNOBTAINABLE_PROMO_TYPES"),
+    ("digital_only", "magic_manager.selectors", "DIGITAL_ONLY_PROMO_TYPES"),
+    ("fancy_foil", "magic_manager.treatments", "FANCY_FOIL_PROMO_TYPES"),
+]
+
+
+@pytest.mark.parametrize("key,module,attr", _PROMO_SYNC_CASES)
+def test_promo_types_toml_matches_baked_in_default(key, module, attr):
+    """The committed config/promo_types.toml value equals the module constant it
+    backs — so an edit to one without the other can't silently diverge."""
+    import importlib
+    const = getattr(importlib.import_module(module), attr)
+    with open(PROMO_TYPES_TOML, "rb") as f:
+        toml_val = frozenset(str(v).lower() for v in tomllib.load(f).get(key, []))
+    assert toml_val == const, (
+        f"config/promo_types.toml [{key}] ({sorted(toml_val)}) diverged from "
+        f"{module}.{attr} ({sorted(const)}) — update both or neither.")
+
+
+# ---------- families.toml is REQUIRED, not optional (F1) ----------
+
+def test_missing_families_toml_raises_not_silently_empty(tmp_path):
+    """A config dir without families.toml makes the family loaders RAISE
+    ConfigError (fatal) rather than silently returning {} and disabling
+    missing-set for every family."""
+    for loader in (config.family_dupe_foil, config.family_unobtainable_rules,
+                   config.family_scenes):
+        with pytest.raises(config.ConfigError):
+            loader(override=tmp_path)
+
+
+def test_unparseable_families_toml_raises(tmp_path):
+    """A corrupt (unparseable) families.toml is fatal for the family loaders,
+    not a silent warn-and-empty."""
+    (tmp_path / "families.toml").write_text("this is = = not valid toml [[[")
+    with pytest.raises(config.ConfigError):
+        config.family_dupe_foil(override=tmp_path)
+
+
+# ---------- override / config dir is honored (F2) ----------
+
+def test_override_dir_yields_distinct_result(tmp_path):
+    """Passing a different config dir reads THAT dir's families.toml (the parse
+    cache keys on the resolved dir, so override isn't a stale-cache no-op)."""
+    (tmp_path / "families.toml").write_text(
+        '[[scenes.zzztest]]\n'
+        'name = "T"\nartist = "N"\nset = "zzztest"\ncn_lo = 1\ncn_hi = 2\n')
+    alt = config.family_scenes(override=tmp_path)
+    assert set(alt) == {"zzztest"}
+    # the real repo config is unaffected (distinct cache entry, not clobbered)
+    assert "zzztest" not in config.family_scenes()

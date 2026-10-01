@@ -130,19 +130,27 @@ def physical_buyable(
     would double-apply the datestamped scan. The two share primitives, not the
     composition.
     """
-    if drop_digital and drop_family_unobtainable:
-        rows = sel_mod.preferred_exclusions(rows, anchor_code)
-    elif drop_digital or drop_family_unobtainable:
-        rows = [
-            r for r in rows
-            if (not drop_digital or not sel_mod._is_digital_only(r.card))
-            and (not drop_family_unobtainable
-                 or not sel_mod._is_family_unobtainable(r.card, anchor_code))
-        ]
+    # Digital-only + family-unobtainable are the two independent row-wise steps
+    # that selectors.preferred_exclusions composes; apply each only if its toggle
+    # is on. (No branch for "both on" — the two guards together ARE
+    # preferred_exclusions, so there's nothing to special-case.)
+    if drop_digital:
+        rows = [r for r in rows if not sel_mod._is_digital_only(r.card)]
+    if drop_family_unobtainable:
+        rows = [r for r in rows if not sel_mod._is_family_unobtainable(r.card, anchor_code)]
+    # The two family-index sub-filters both need the family's set codes; resolve
+    # ONCE here and thread it in so they don't each re-run sets.resolve (an
+    # uncached subprocess) + a family-wide card scan.
+    family_codes = None
+    if drop_datestamped_siblings or drop_meld_backs:
+        try:
+            family_codes = set(sets_mod.resolve(anchor_code).all_codes)
+        except LookupError:
+            family_codes = {anchor_code}
     if drop_datestamped_siblings:
-        rows = drop_datestamped_with_sibling(rows, anchor_code)
+        rows = drop_datestamped_with_sibling(rows, anchor_code, family_codes=family_codes)
     if drop_meld_backs:
-        rows = _drop_meld_back_faces(rows, anchor_code)
+        rows = _drop_meld_back_faces(rows, anchor_code, family_codes=family_codes)
     if drop_tokens:
         rows = _drop_tokens(rows)
     return rows
@@ -177,15 +185,31 @@ def _apply_preferred_post_filter(
     return drop_datestamped_with_sibling(rows, anchor_code)
 
 
+def _family_codes_for(anchor_code: str) -> set[str]:
+    """Resolve the family's set codes, falling back to just ``anchor_code`` when
+    the anchor isn't a resolvable Scryfall set. Shared fallback for the two
+    family-index filters (and so ``physical_buyable`` can resolve once + thread)."""
+    try:
+        return set(sets_mod.resolve(anchor_code).all_codes)
+    except LookupError:
+        return {anchor_code}
+
+
 def drop_datestamped_with_sibling(
     rows: list[sel_mod.MaterializedRow],
     anchor_code: str,
+    *,
+    family_codes: set[str] | None = None,
 ) -> list[sel_mod.MaterializedRow]:
     """Drop datestamped (prerelease-stamped) reprints that have a non-stamped
     sibling at the same name + same treatment codes anywhere in the family —
     the stamped print is a visual dupe of a cheaper obtainable one (e.g. PFIN's
     prerelease-stamped FIN cards). A datestamped print with NO non-stamped
     sibling is kept (nothing cheaper to substitute).
+
+    ``family_codes`` (the family's set codes) is resolved lazily when ``None``;
+    ``physical_buyable`` resolves it once and threads it into both family-index
+    filters to avoid a redundant ``sets.resolve`` per filter.
 
     NOTE (intentional deviation from the selector-side scan in
     ``selectors._filter_treatment_preferred``): here the sibling index computes
@@ -199,10 +223,8 @@ def drop_datestamped_with_sibling(
 
     if not rows:
         return rows
-    try:
-        family_codes = set(sets_mod.resolve(anchor_code).all_codes)
-    except LookupError:
-        family_codes = {anchor_code}
+    if family_codes is None:
+        family_codes = _family_codes_for(anchor_code)
     placeholders = ",".join("?" for _ in family_codes)
     with db.connect() as conn:
         fam_rows = conn.execute(
@@ -243,6 +265,8 @@ def drop_datestamped_with_sibling(
 def _drop_meld_back_faces(
     rows: list[sel_mod.MaterializedRow],
     anchor_code: str,
+    *,
+    family_codes: set[str] | None = None,
 ) -> list[sel_mod.MaterializedRow]:
     """Drop rows whose card name has ALL its family printings on a 'b'-suffix
     collector number — these are meld-back faces (not real products).
@@ -259,13 +283,14 @@ def _drop_meld_back_faces(
     ``Traveling Chocobo`` 551b) ALSO have non-'b' siblings under the same
     name, so they pass through. Robust across families without a per-set
     allowlist.
+
+    ``family_codes`` is resolved lazily when ``None`` (see
+    :func:`drop_datestamped_with_sibling`).
     """
     if not rows:
         return rows
-    try:
-        family_codes = set(sets_mod.resolve(anchor_code).all_codes)
-    except LookupError:
-        family_codes = {anchor_code}
+    if family_codes is None:
+        family_codes = _family_codes_for(anchor_code)
     placeholders = ",".join("?" for _ in family_codes)
     with db.connect() as conn:
         fam_rows = conn.execute(
