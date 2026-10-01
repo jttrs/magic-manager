@@ -41,7 +41,7 @@ ROOT = Path(__file__).resolve().parent.parent
 _OUTPUT_TYPE = "edhrec"  # → output/edhrec/reports/
 sys.path.insert(0, str(ROOT / "src"))
 
-from magic_manager import edhrec, scryfall_urls, sets, util  # noqa: E402
+from magic_manager import edhrec, exports, scryfall_urls, sets, util  # noqa: E402
 
 
 # ---------- rendering ----------
@@ -159,38 +159,23 @@ def _write_json(res, kind: str, out_path: Path, prices_as_of: str | None) -> Non
 
 
 def _write_xlsx(res, kind: str, out_path: Path) -> None:
-    from openpyxl import Workbook
-    from openpyxl.styles import Alignment, Font
-    from openpyxl.utils import get_column_letter
-
-    wb = Workbook()
-    ws = wb.active
-    ws.title = kind
     headers = ["list_tag", "name", "num_decks", "potential_decks", "inclusion_pct",
                "synergy", "lift", "salt", "rank", "type_line", "mana_value",
                "lowest_usd", "lowest_usd_foil", "oracle_id"]
-    ws.append(headers)
-    for r in res.rows:
-        ws.append([
-            r.list_tag, r.name, r.num_decks, r.potential_decks, r.inclusion_pct,
-            r.synergy, r.lift, r.salt, r.rank, r.type_line,
-            int(r.cmc) if r.cmc is not None else None,
-            r.lowest_usd, r.lowest_usd_foil, r.oracle_id,
-        ])
-    for row_idx in range(2, ws.max_row + 1):
-        ws.cell(row=row_idx, column=12).number_format = '"$"#,##0.00'
-        ws.cell(row=row_idx, column=13).number_format = '"$"#,##0.00'
+    cell_rows = [
+        [r.list_tag, r.name, r.num_decks, r.potential_decks, r.inclusion_pct,
+         r.synergy, r.lift, r.salt, r.rank, r.type_line,
+         int(r.cmc) if r.cmc is not None else None,
+         r.lowest_usd, r.lowest_usd_foil, r.oracle_id]
+        for r in res.rows
+    ]
     widths = {1: 16, 2: 34, 3: 10, 4: 12, 5: 11, 6: 9, 7: 8, 8: 8, 9: 6,
               10: 30, 11: 6, 12: 11, 13: 13, 14: 38}
-    for ci, w in widths.items():
-        ws.column_dimensions[get_column_letter(ci)].width = w
-    for col in range(1, ws.max_column + 1):
-        ws.cell(row=1, column=col).font = Font(bold=True)
-        ws.cell(row=1, column=col).alignment = Alignment(horizontal="left")
-    ws.freeze_panes = "A2"
-    util.apply_base_font_size(ws)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    wb.save(out_path)
+    results = exports.xlsx.SheetSpec(
+        title=kind, headers=headers, rows=cell_rows,
+        money_cols=(12, 13), widths=widths,
+    )
+    exports.xlsx.write_workbook(out_path, [results])
 
 
 # ---------- driver ----------

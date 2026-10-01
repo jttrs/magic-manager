@@ -42,7 +42,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from magic_manager import db, mtgjson, sets, util  # noqa: E402
+from magic_manager import db, exports, mtgjson, sets, util  # noqa: E402
 
 DEFAULT_OUT = ROOT / "reference" / "jumpstart-versions.xlsx"
 
@@ -173,10 +173,6 @@ def _gather(codes: list[str]) -> tuple[list[dict], list[dict]]:
 
 
 def _write_xlsx(pack_rows: list[dict], card_rows: list[dict], out_path: Path) -> None:
-    from openpyxl import Workbook
-    from openpyxl.styles import Alignment, Font
-    from openpyxl.utils import get_column_letter
-
     # packs: set code first, then color (C→W→U→B→R→G→multi), then theme A→Z.
     pack_rows.sort(key=lambda r: (r["set"], _color_sort_key(r["color"]), (r["theme"] or "").lower()))
     # cards: set, then theme A→Z, then rarity (mythic→…→special), then collector number.
@@ -186,50 +182,27 @@ def _write_xlsx(pack_rows: list[dict], card_rows: list[dict], out_path: Path) ->
         util.cn_sort_key(r["collector_number"]),
     ))
 
-    wb = Workbook()
-
-    ws_p = wb.active
-    ws_p.title = "packs"
-    p_headers = ["set", "theme", "color", "top_card", "top_card_usd",
-                 "card_count", "usd_total"]
-    ws_p.append(p_headers)
-    for r in pack_rows:
-        ws_p.append([r["set"], r["theme"], r["color"], r["top_card"],
-                     r["top_card_usd"], r["card_count"], r["usd_total"]])
-    # currency: top_card_usd (col 5), usd_total (col 7)
-    for row_idx in range(2, ws_p.max_row + 1):
-        ws_p.cell(row=row_idx, column=5).number_format = '"$"#,##0.00'
-        ws_p.cell(row=row_idx, column=7).number_format = '"$"#,##0.00'
-    _p_widths = {1: 6, 2: 26, 3: 8, 4: 28, 5: 12, 6: 11, 7: 11}
-    for ci, w in _p_widths.items():
-        ws_p.column_dimensions[get_column_letter(ci)].width = w
-
-    ws_c = wb.create_sheet("cards")
-    c_headers = ["set", "theme", "color", "card_name", "card_value", "count",
-                 "rarity", "collector_number"]
-    ws_c.append(c_headers)
-    for r in card_rows:
-        ws_c.append([r["set"], r["theme"], r["color"], r["card_name"],
-                     r["card_value"], r["count"], r["rarity"], r["collector_number"]])
-    for row_idx in range(2, ws_c.max_row + 1):
-        ws_c.cell(row=row_idx, column=5).number_format = '"$"#,##0.00'
-        # Force collector_number (col 8) to text so mixed '4'/'212s' CNs don't
-        # trip Excel's "number stored as text" warning (mirrors master-list).
-        ws_c.cell(row=row_idx, column=8).number_format = "@"
-    _c_widths = {1: 6, 2: 26, 3: 8, 4: 34, 5: 12, 6: 7, 7: 10, 8: 16}
-    for ci, w in _c_widths.items():
-        ws_c.column_dimensions[get_column_letter(ci)].width = w
-
-    for ws in (ws_p, ws_c):
-        for col in range(1, ws.max_column + 1):
-            cell = ws.cell(row=1, column=col)
-            cell.font = Font(bold=True)
-            cell.alignment = Alignment(horizontal="left")
-        ws.freeze_panes = "A2"
-        util.apply_base_font_size(ws)
-
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    wb.save(out_path)
+    packs = exports.xlsx.SheetSpec(
+        title="packs",
+        headers=["set", "theme", "color", "top_card", "top_card_usd",
+                 "card_count", "usd_total"],
+        rows=[[r["set"], r["theme"], r["color"], r["top_card"],
+               r["top_card_usd"], r["card_count"], r["usd_total"]]
+              for r in pack_rows],
+        money_cols=(5, 7),
+        widths={1: 6, 2: 26, 3: 8, 4: 28, 5: 12, 6: 11, 7: 11},
+    )
+    cards = exports.xlsx.SheetSpec(
+        title="cards",
+        headers=["set", "theme", "color", "card_name", "card_value", "count",
+                 "rarity", "collector_number"],
+        rows=[[r["set"], r["theme"], r["color"], r["card_name"],
+               r["card_value"], r["count"], r["rarity"], r["collector_number"]]
+              for r in card_rows],
+        money_cols=(5,), text_cols=(8,),
+        widths={1: 6, 2: 26, 3: 8, 4: 34, 5: 12, 6: 7, 7: 10, 8: 16},
+    )
+    exports.xlsx.write_workbook(out_path, [packs, cards])
 
 
 def main() -> int:
