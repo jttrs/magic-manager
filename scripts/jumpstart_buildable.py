@@ -42,7 +42,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from magic_manager import db, exports, mtgjson, selectors, sets, util  # noqa: E402
+from magic_manager import db, exports, mtgjson, ownership, selectors, sets, util  # noqa: E402
 
 # A version suffix is a trailing integer, with or without parentheses:
 #   'Angels (1)'    → 'Angels'   (parenthesized — e.g. J25/MSH naming)
@@ -108,23 +108,6 @@ def _variant_boards(set_code: str) -> tuple[dict[str, dict[str, int]], dict[str,
                     names_by_sid.setdefault(sid, entry["name"])
         boards[v["name"]] = dict(counts)
     return boards, names_by_sid, len(variants)
-
-
-def _owned_totals(scryfall_ids: list[str]) -> dict[str, int]:
-    """Total inventory quantity per scryfall_id, summed across finishes
-    (includes copies pledged to built decks — deconstructable, so they count)."""
-    if not scryfall_ids:
-        return {}
-    with db.connect() as conn:
-        placeholders = ",".join("?" for _ in scryfall_ids)
-        return {
-            r["scryfall_id"]: r["q"]
-            for r in conn.execute(
-                f"SELECT scryfall_id, SUM(quantity) AS q FROM inventory "
-                f"WHERE scryfall_id IN ({placeholders}) GROUP BY scryfall_id",
-                scryfall_ids,
-            ).fetchall()
-        }
 
 
 def _card_dicts(scryfall_ids: list[str]) -> dict[str, dict]:
@@ -213,7 +196,7 @@ def main() -> int:
     n_themes = len({theme_of(n) for n in boards})
     target = build_target(boards)
 
-    owned = _owned_totals(list(target))
+    owned = ownership.owned_counts(grain="scryfall_id", scryfall_ids=list(target))
     missing = {sid: target[sid] - owned.get(sid, 0)
                for sid in target if target[sid] - owned.get(sid, 0) > 0}
 

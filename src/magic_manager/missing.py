@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Callable
 
-from . import db, sets as sets_mod, selectors as sel_mod
+from . import db, ownership as _ownership, sets as sets_mod, selectors as sel_mod
 
 
 def sub_selectors(code: str, treatment_class: str = "preferred") -> list[tuple[str, str]]:
@@ -411,18 +411,12 @@ def _cheapest(nonfoil: float | None, foil: float | None) -> tuple[float | None, 
 def owned_oracle_ids(family_codes: set[str]) -> set[str]:
     """oracle_ids the user owns ANY printing/finish of, within the given family
     set codes. ``family_codes`` must already be lowercased (callers resolve the
-    family via ``sets.resolve(...).all_codes`` and lowercase them)."""
-    with db.connect() as conn:
-        fam_ph = ",".join("?" for _ in family_codes)
-        return {
-            r[0] for r in conn.execute(
-                f"SELECT DISTINCT c.oracle_id FROM inventory i "
-                f"JOIN cards c ON c.scryfall_id = i.scryfall_id "
-                f"WHERE i.quantity > 0 AND LOWER(c.set_code) IN ({fam_ph}) "
-                f"AND c.oracle_id IS NOT NULL",
-                list(family_codes),
-            ).fetchall()
-        }
+    family via ``sets.resolve(...).all_codes`` and lowercase them).
+
+    Re-export of :func:`ownership.owned_oracle_ids` — kept here as the historical
+    name its callers (``functional_missing``, ``variant_chase_printings``,
+    ``card_diff``, tests) already import."""
+    return _ownership.owned_oracle_ids(family_codes)
 
 
 def functional_missing(
