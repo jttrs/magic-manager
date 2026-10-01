@@ -11,8 +11,9 @@ for the full rationale, audit data, and worked examples.
 
 from __future__ import annotations
 
-import json
-from typing import Any, Iterable
+from typing import Any
+
+from . import util
 
 
 # Promo-type tags that all visually mean "non-standard foil finish."
@@ -33,24 +34,10 @@ def _as_list(v: Any) -> list[str]:
 
     Card rows may carry these fields as Python lists (when fed straight from
     Scryfall) or as JSON-encoded TEXT (when read from our SQLite ``cards``
-    table). Handle both transparently.
+    table). Handle both transparently. Delegates to the shared
+    ``util.decode_json_list`` implementation.
     """
-    if v is None:
-        return []
-    if isinstance(v, str):
-        s = v.strip()
-        if not s:
-            return []
-        if s.startswith("["):
-            try:
-                parsed = json.loads(s)
-                return [str(x) for x in parsed] if isinstance(parsed, list) else [s]
-            except json.JSONDecodeError:
-                return [s]
-        return [s]
-    if isinstance(v, Iterable):
-        return [str(x) for x in v]
-    return [str(v)]
+    return util.decode_json_list(v)
 
 
 def _row_get(row, key, default=None):

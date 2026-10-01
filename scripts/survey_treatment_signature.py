@@ -43,8 +43,6 @@ Then read the output, decide which signatures map to:
 """
 from __future__ import annotations
 
-import json
-import sqlite3
 import sys
 from collections import Counter
 from pathlib import Path
@@ -56,19 +54,15 @@ sys.path.insert(0, str(ROOT / "src"))
 from magic_manager import sets as sets_mod  # noqa: E402
 from magic_manager import selectors as selectors_mod  # noqa: E402
 from magic_manager import treatments as treatments_mod  # noqa: E402
+from magic_manager import scryfall as scryfall_mod  # noqa: E402
+from magic_manager import db as db_mod  # noqa: E402
+from magic_manager import util  # noqa: E402
 
 DB_PATH = ROOT / "db" / "magic_manager.db"
 
 
 def _decode_json_field(raw):
-    if raw is None:
-        return []
-    if isinstance(raw, str):
-        try:
-            return json.loads(raw)
-        except (ValueError, TypeError):
-            return []
-    return list(raw)
+    return util.decode_json_list(raw)
 
 
 def _scryfall_url(uri: str | None) -> str:
@@ -129,7 +123,7 @@ def _treatment_axis(rows, anchor: str) -> None:
     selector = f"set:{anchor}+related missing"
     try:
         materialized = selectors_mod.materialize(selector)
-    except (selectors_mod.SelectorParseError, LookupError) as e:
+    except (selectors_mod.SelectorParseError, LookupError, scryfall_mod.ScryfallError) as e:
         print(f"    could not materialize {selector!r}: {e}")
         return
 
@@ -141,12 +135,7 @@ def _treatment_axis(rows, anchor: str) -> None:
         # preferred filter refuses to run. Fall back to the looser
         # collectible-alt class so the preview still works BEFORE config.
         used_fallback = True
-        preferred = [
-            r for r in materialized
-            if (lambda codes: codes and "ext" not in codes and codes != {"ff"})(
-                set((treatments_mod.compute_treatment(dict(r.card), finish=r.finish) or "").split("|")) - {""}
-            )
-        ]
+        preferred = selectors_mod._filter_treatment(materialized, "collectible-alt")
     if used_fallback:
         print("    ⚠ family NOT configured in FAMILY_DUPE_FOIL_PROMO_TYPES — "
               "showing treatment=collectible-alt (looser) as a fallback.")
@@ -160,7 +149,7 @@ def _treatment_axis(rows, anchor: str) -> None:
     buckets: Counter[tuple[str, str, str]] = Counter()
     examples: dict[tuple[str, str, str], str] = {}
     for r in preferred:
-        card = dict(r.card)
+        card = r.card
         t = treatments_mod.compute_treatment(card, finish=r.finish) or "regular"
         fe = _combo(card.get("frame_effects"))
         bc = card.get("border_color") or "?"
@@ -195,18 +184,17 @@ def survey(anchor_code: str) -> None:
     print(f"  {', '.join(sorted(family))}")
     print()
 
-    con = sqlite3.connect(str(DB_PATH))
-    con.row_factory = sqlite3.Row
     placeholders = ",".join("?" for _ in family)
 
     # Pull every print in the family.
-    rows = con.execute(
-        f"""SELECT scryfall_id, set_code, collector_number, name, rarity,
-                   border_color, frame_effects, finishes, full_art, promo_types,
-                   prices_usd, prices_usd_foil, scryfall_uri
-              FROM cards WHERE set_code IN ({placeholders})""",
-        family,
-    ).fetchall()
+    with db_mod.connect() as con:
+        rows = con.execute(
+            f"""SELECT scryfall_id, set_code, collector_number, name, rarity,
+                       border_color, frame_effects, finishes, full_art, promo_types,
+                       prices_usd, prices_usd_foil, scryfall_uri
+                  FROM cards WHERE set_code IN ({placeholders})""",
+            family,
+        ).fetchall()
     print(f"total prints in family: {len(rows)}")
     print()
 

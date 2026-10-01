@@ -29,7 +29,6 @@ Usage:
 """
 from __future__ import annotations
 
-import json
 import sqlite3
 import sys
 from pathlib import Path
@@ -38,6 +37,9 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from magic_manager import sets as sets_mod  # noqa: E402
+from magic_manager import scryfall as scryfall_mod  # noqa: E402
+from magic_manager import db as db_mod  # noqa: E402
+from magic_manager import util  # noqa: E402
 
 DB_PATH = ROOT / "db" / "magic_manager.db"
 DOCS_DIR = ROOT / "docs" / "sets"
@@ -75,7 +77,7 @@ CLASSES = {
         "severity": "LOW",  # auto-dropped by preferred (ext class)
     },
     "etched": {
-        "detect": lambda fe, fin, bc: "etched" in fin or "etched" in fe,
+        "detect": lambda fe, fin, bc: "etched" in fe,
         "keywords": ("etched",),
         "severity": "LOW",  # collapses as ff-dupe
     },
@@ -88,18 +90,13 @@ CLASSES = {
 
 
 def _decode(raw):
-    if not raw:
-        return []
-    try:
-        return json.loads(raw) if isinstance(raw, str) else list(raw)
-    except (ValueError, TypeError):
-        return []
+    return util.decode_json_list(raw)
 
 
 def _family_class_counts(con: sqlite3.Connection, anchor: str) -> dict[str, int] | None:
     try:
         resolved = sets_mod.resolve(anchor)
-    except LookupError:
+    except (LookupError, scryfall_mod.ScryfallError):
         return None
     family = tuple(resolved.all_codes)
     placeholders = ",".join("?" for _ in family)
@@ -125,9 +122,6 @@ def _doc_names_class(doc_text: str, cls: str) -> bool:
 
 
 def audit(anchors: list[str]) -> int:
-    con = sqlite3.connect(str(DB_PATH))
-    con.row_factory = sqlite3.Row
-
     if not anchors:
         anchors = sorted(
             p.stem for p in DOCS_DIR.glob("*.md") if p.stem != "_TEMPLATE"
@@ -138,37 +132,38 @@ def audit(anchors: list[str]) -> int:
     print(f"Treatment-coverage audit over {len(anchors)} characterized families")
     print("(GAP = a treatment class present in data but not NAMED in the doc §2)")
     print("=" * 78)
-    for anchor in anchors:
-        doc_path = DOCS_DIR / f"{anchor}.md"
-        if not doc_path.exists():
-            print(f"  {anchor.upper():<6} — no doc at {doc_path.name}; skipping")
-            continue
-        counts = _family_class_counts(con, anchor)
-        if counts is None:
-            print(f"  {anchor.upper():<6} — family not resolvable / not synced; skipping")
-            continue
-        doc_text = doc_path.read_text(encoding="utf-8")
-        present = {c: n for c, n in counts.items() if n > 0}
-        high_gaps, low_gaps = [], []
-        for cls, n in present.items():
-            if not _doc_names_class(doc_text, cls):
-                if CLASSES[cls]["severity"] == "HIGH":
-                    high_gaps.append(f"{cls}×{n}")
-                else:
-                    low_gaps.append(f"{cls}×{n}")
-        present_str = ", ".join(f"{c}×{n}" for c, n in present.items()) or "(no alt-treatments)"
-        if high_gaps:
-            gaps_total += 1
-            high_gaps_total += 1
-            print(f"  {anchor.upper():<6} ⚠ HIGH present: {present_str}")
-            print(f"         └─ un-named KEPT class(es): {', '.join(high_gaps)}"
-                  + (f"   (also low: {', '.join(low_gaps)})" if low_gaps else ""))
-        elif low_gaps:
-            gaps_total += 1
-            print(f"  {anchor.upper():<6} gap   present: {present_str}")
-            print(f"         └─ un-named auto-dropped class(es): {', '.join(low_gaps)}")
-        else:
-            print(f"  {anchor.upper():<6} PASS  present: {present_str}")
+    with db_mod.connect() as con:
+        for anchor in anchors:
+            doc_path = DOCS_DIR / f"{anchor}.md"
+            if not doc_path.exists():
+                print(f"  {anchor.upper():<6} — no doc at {doc_path.name}; skipping")
+                continue
+            counts = _family_class_counts(con, anchor)
+            if counts is None:
+                print(f"  {anchor.upper():<6} — family not resolvable / not synced; skipping")
+                continue
+            doc_text = doc_path.read_text(encoding="utf-8")
+            present = {c: n for c, n in counts.items() if n > 0}
+            high_gaps, low_gaps = [], []
+            for cls, n in present.items():
+                if not _doc_names_class(doc_text, cls):
+                    if CLASSES[cls]["severity"] == "HIGH":
+                        high_gaps.append(f"{cls}×{n}")
+                    else:
+                        low_gaps.append(f"{cls}×{n}")
+            present_str = ", ".join(f"{c}×{n}" for c, n in present.items()) or "(no alt-treatments)"
+            if high_gaps:
+                gaps_total += 1
+                high_gaps_total += 1
+                print(f"  {anchor.upper():<6} ⚠ HIGH present: {present_str}")
+                print(f"         └─ un-named KEPT class(es): {', '.join(high_gaps)}"
+                      + (f"   (also low: {', '.join(low_gaps)})" if low_gaps else ""))
+            elif low_gaps:
+                gaps_total += 1
+                print(f"  {anchor.upper():<6} gap   present: {present_str}")
+                print(f"         └─ un-named auto-dropped class(es): {', '.join(low_gaps)}")
+            else:
+                print(f"  {anchor.upper():<6} PASS  present: {present_str}")
 
     print("=" * 78)
     print(f"{high_gaps_total} families with an un-named KEPT-by-default class "
