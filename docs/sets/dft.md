@@ -8,7 +8,10 @@
 **Anchor code:** `dft`
 **Family root type:** `expansion`
 **Family released:** `2025-02-14`
-**Last audit:** `2026-09-15` via `/characterize-set dft`.
+**Last audit:** `2026-09-30` via `/characterize-set dft` (re-validated under the
+treatment-first process — the enhanced survey's PREFERRED PREVIEW reproduced the
+documented 104-print / ~$229 result exactly, and `audit_treatment_coverage.py dft`
+is green; original audit `2026-09-15`).
 
 ---
 
@@ -144,8 +147,8 @@ read the `pdft` CN off the match. No dft-specific PRM notes in the `bulk-add` sk
 
 ## 8. Code refs
 
-- `selectors.py:FAMILY_DUPE_FOIL_PROMO_TYPES["dft"]` — **PROPOSED**: `frozenset({"fracturefoil"})` (10 fracturefoil mythics dupe their japanshowcase siblings).
-- `selectors.py:FAMILY_UNOBTAINABLE_RULES["dft"]` — **PROPOSED**: `[{"promo_types_any_of": frozenset({"firstplacefoil"})}, {"promo_types_any_of": frozenset({"serialized", "headliner", "rainbowfoil"})}]` (First Place box-topper tier + documented-no-op serialized headliner).
+- `selectors.py:FAMILY_DUPE_FOIL_PROMO_TYPES["dft"]` — **configured** (verified live 2026-09-30): `frozenset({"fracturefoil"})` (10 fracturefoil mythics dupe their japanshowcase siblings).
+- `selectors.py:FAMILY_UNOBTAINABLE_RULES["dft"]` — **configured** (verified live 2026-09-30): `[{"promo_types_any_of": frozenset({"firstplacefoil"})}, {"promo_types_any_of": frozenset({"serialized", "headliner", "rainbowfoil"})}]` (First Place box-topper tier + documented-no-op serialized headliner).
 - `FAMILY_SCENES["dft"]` — not configured (no narrative scenes; §4).
 
 ---
