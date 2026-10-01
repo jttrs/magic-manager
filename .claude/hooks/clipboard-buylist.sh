@@ -4,9 +4,10 @@
 # the receiving portal.
 #
 # Two cases:
-#   1. File producers (mm query missing-set / missing-jumpstart, jumpstart_buildable.py)
-#      write both a ManaPool and a TCGplayer .txt. We copy the ManaPool file
-#      (the *-manapool-*.txt whose path the command just printed).
+#   1. File producers (any `mm` subcommand or `python scripts/*.py` that writes
+#      both a ManaPool and a TCGplayer .txt via util.output_dir(type,"buy-lists"))
+#      — we copy the ManaPool file (the *-manapool-*.txt whose file:// path the
+#      command just printed; last match wins on a chained multi-producer run).
 #   2. Ad-hoc `mm export manapool|tcgplayer '<selector>'` prints paste-ready text
 #      to stdout (comments go to stderr). We copy that stdout verbatim.
 #
@@ -45,14 +46,20 @@ try:
         out = r
     # Command boundary: start, or after a shell separator (&& || ; | newline).
     boundary = r"(?:^|&&|\|\||[;|])\s*(?:uv\s+run\s+)?"
-    if re.search(boundary + r"mm\s+query\s+missing-set\b", cmd) \
-            or re.search(boundary + r"mm\s+query\s+missing-jumpstart\b", cmd) \
-            or re.search(boundary + r"(?:uv\s+run\s+)?python\S*\s+scripts/jumpstart_buildable\.py\b", cmd):
-        kind = "file"
-    elif re.search(boundary + r"mm\s+export\s+manapool\b", cmd):
+    # Check the stdout exports FIRST (exact command-name match — irreducible,
+    # since they have no file to grep) so they are not swallowed by the
+    # generic file-producer match below.
+    if re.search(boundary + r"mm\s+export\s+manapool\b", cmd):
         kind, target = "stdout", "manapool"
     elif re.search(boundary + r"mm\s+export\s+tcgplayer\b", cmd):
         kind, target = "stdout", "tcgplayer"
+    # Any other `mm` subcommand or repo python script run at a command
+    # boundary is a candidate file producer. The real determinant is the
+    # file-path grep below (over stdout) — no path found there is a no-op
+    # (the bash `[ -n "$file" ]` guard exits 0), so this stays a loose match
+    # and never needs updating when a new buy-list producer is added.
+    elif re.search(boundary + r"(?:mm|python\S*\s+scripts/)\b", cmd):
+        kind = "file"
 except Exception:
     pass
 sys.stdout.write(f"{kind}:{target}\n" + out)
@@ -79,12 +86,13 @@ print(json.dumps({"hookSpecificOutput": {
 }
 
 if [ "$kind" = file ]; then
-  # Pull the *-manapool-*.txt path the command printed. The stdout embeds it in
-  # a file:// link and/or a bare path; grab the first buy-lists manapool token.
+  # Pull the *-manapool-*.txt path the command printed. The stdout embeds it as
+  # a file:// link; take the LAST match so a chained multi-producer run copies
+  # the most-recently-written file.
   file=$(printf '%s' "$out" | python3 -c '
 import sys, re
-m = re.search(r"(/[^\s()\]]*buy-lists/[^\s()\]]*manapool[^\s()\]]*\.txt)", sys.stdin.read())
-print(m.group(1) if m else "")
+ms = re.findall(r"file://(/[^\s()\]]*buy-lists/[^\s()\]]*manapool[^\s()\]]*\.txt)", sys.stdin.read())
+print(ms[-1] if ms else "")
 ')
   [ -n "$file" ] && [ -f "$file" ] || exit 0
   pbcopy < "$file"
@@ -96,7 +104,7 @@ fi
 # kind = stdout: copy the export's paste-ready stdout. Empty (e.g. --out was
 # passed, so text went to a file) → nothing to copy.
 [ -n "$out" ] || exit 0
-printf '%s' "$out" | pbcopy
+printf '%s\n' "$out" | pbcopy
 [ "$target" = "tcgplayer" ] && label="TCGplayer" || label="ManaPool"
 emit "Copied the $label export to the clipboard — paste directly into the portal."
 exit 0

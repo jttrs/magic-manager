@@ -39,10 +39,9 @@ from magic_manager.family_status import (  # noqa: E402
     _family_code_set,
     _live_prices,
     _unit,
-    _owned_rows_for_codes,
     _owned_summary_for_codes,
     is_characterized,
-    _owned_family_parents,
+    collection_prepass,
 )
 
 
@@ -292,41 +291,12 @@ def _missing_count(parent_code: str) -> int | None:
 
 
 def render_overview() -> str:
-    parents = _owned_family_parents()
+    parents, fam_codes_by_parent, missing_rows_by_parent, price_map, _all_owned_rows = \
+        collection_prepass()
     if not parents:
         return ("## Collection overview\n\n"
                 "No owned families yet — add cards (`mm inventory add-card …`), "
                 "ingest a checklist, or register a family with `mm set master-list <name>`.")
-
-    # Family code set per parent — set_targets-authoritative (spm ∪ mar, etc.).
-    fam_codes_by_parent: dict[str, set[str]] = {}
-    for pc in parents:
-        try:
-            _, _, related = resolve_family(pc)
-        except LookupError:
-            related = [{"code": pc}]
-        fam_codes_by_parent[pc] = _family_code_set(pc, related)
-
-    # Materialize each family's distinct-printing missing ONCE (reused for the
-    # distinct-$ sum and as the candidate set for functional_missing).
-    missing_rows_by_parent: dict[str, list] = {}
-    for pc in parents:
-        if pc in NON_FAMILY_SETS:
-            continue
-        try:
-            missing_rows_by_parent[pc] = missing_mod.missing_printings(pc)
-        except (selectors.SelectorParseError, LookupError):
-            missing_rows_by_parent[pc] = None  # unconfigured
-
-    # ONE bulk price fetch: owned ids ∪ every family's distinct-missing ids.
-    all_rows = _owned_rows_for_codes(
-        {c for codes in fam_codes_by_parent.values() for c in codes}
-    )
-    ids = {r.scryfall_id for r in all_rows}
-    for mrows in missing_rows_by_parent.values():
-        if mrows:
-            ids.update(r.scryfall_id for r in mrows)
-    price_map = _live_prices(list(ids))
 
     rows_data = []
     tot_prints = tot_qty = 0

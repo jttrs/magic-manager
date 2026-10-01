@@ -3627,12 +3627,8 @@ def query_missing_set_cmd(
     typer.echo(f"")
     typer.echo(f"## Scryfall URLs ({len(url_chunks)} chunks, cheapest first)")
     typer.echo(f"")
-    typer.echo(f"| # | Printings | Price band | URL |")
-    typer.echo(f"|---:|---:|---|---|")
-    for uc in url_chunks:
-        cs = f"${uc.price_lo:.2f}" if uc.price_lo is not None else "—"
-        ms = f"${uc.price_hi:.2f}" if uc.price_hi is not None else "—"
-        typer.echo(f"| {uc.index} | {uc.n} | {cs} → {ms} | [chunk {uc.index}]({uc.url}) |")
+    for line in scryfall_urls_mod.render_chunk_table(url_chunks):
+        typer.echo(line)
     typer.echo(f"")
     typer.echo(f"📋 Checklist (xlsx): [{xlsx_path}](file://{xlsx_path.resolve()})")
     typer.echo(f"🛒 ManaPool bulk-add ({len(rows_for_bulk)} rows): [{mp_path}](file://{mp_path.resolve()})")
@@ -3721,24 +3717,25 @@ def query_card_diff_cmd(
     typer.echo(f"")
     typer.echo(f"Owned: {fd.owned_prints} printings / {fd.owned_qty} cards · {util.fmt_usd(fd.owned_usd)}")
 
-    def _echo_url_table(header: str, printings: list, prices: list) -> None:
+    def _echo_url_table(header: str, printings: list, prices: list, note: str | None = None) -> None:
         """Emit a `## header` + chunked Scryfall-URL table for already-extracted,
         already-sorted (set, cn) printings with parallel per-printing prices.
         The single table renderer behind every pool — printing/variant-chase feed
-        it from MaterializedRows, functional from FunctionalMissingCards."""
+        it from MaterializedRows, functional from FunctionalMissingCards.
+        `note`, if given, is a one-line markdown aside echoed right under the
+        header (e.g. functional cards omitted for lack of a resolvable printing)."""
         typer.echo(f"\n## {header}")
+        if note:
+            typer.echo(f"\n{note}")
         if not printings:
             typer.echo("\n(none)")
             return
         typer.echo(f"")
-        typer.echo(f"| # | Printings | Price band | URL |")
-        typer.echo(f"|---:|---:|---|---|")
-        for uc in scryfall_urls_mod.printing_url_chunks(
+        chunks = scryfall_urls_mod.printing_url_chunks(
             printings, chunk_size=chunk_size, prices=prices,
-        ):
-            cs = f"${uc.price_lo:.2f}" if uc.price_lo is not None else "—"
-            ms = f"${uc.price_hi:.2f}" if uc.price_hi is not None else "—"
-            typer.echo(f"| {uc.index} | {uc.n} | {cs} → {ms} | [chunk {uc.index}]({uc.url}) |")
+        )
+        for line in scryfall_urls_mod.render_chunk_table(chunks):
+            typer.echo(line)
 
     def _echo_printing_pool(rows, label: str) -> None:
         """Printing / variant-chase pool: sort rows cheapest-first (same key as
@@ -3767,10 +3764,15 @@ def query_card_diff_cmd(
             c.set_code or "", util.cn_sort_key(c.family_cn),
         ))
         resolvable = [c for c in cards_by_value if c.set_code and c.family_cn]
+        omitted = fd.functional.count - len(resolvable)
         _echo_url_table(
             f"Missing functional — {fd.functional.count} cards · {util.fmt_usd(fd.functional.usd)}",
             [(c.set_code, c.family_cn) for c in resolvable],
             [c.family_usd for c in resolvable],
+            note=(
+                f"_{len(resolvable)} of {fd.functional.count} have a resolvable printing; "
+                f"{omitted} card(s) omitted from the table._"
+            ) if omitted else None,
         )
 
     if "variant-chase" in pools:

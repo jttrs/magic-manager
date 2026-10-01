@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from . import family_status, missing as missing_mod, selectors as sel_mod
+from . import family_status, missing as missing_mod, selectors as sel_mod, sets as sets_mod
 
 
 @dataclass
@@ -49,12 +49,19 @@ def _build_family_diff(
     family_code_set: set[str],
     missing_rows: list,
     prices: dict,
+    owned_rows: list | None = None,
 ) -> FamilyDiff:
     """Assemble a FamilyDiff from already-materialized missing rows + a
     (scryfall_id -> prices dict) price map. Shared by `family_diff` (single
     anchor, fetches its own price map) and `collection_diff` (batches ONE
-    price fetch over every family, per the overview's pattern)."""
-    owned_rows = family_status._owned_rows_for_codes(family_code_set)
+    price fetch over every family, per the overview's pattern).
+
+    ``owned_rows`` lets a caller that already materialized owned rows for this
+    family (e.g. `collection_diff`'s global `_owned_rows_for_codes` call, sliced
+    per family) pass them in directly, avoiding a per-family re-fetch. ``None``
+    falls back to fetching here (unchanged behavior for standalone callers)."""
+    if owned_rows is None:
+        owned_rows = family_status._owned_rows_for_codes(family_code_set)
     owned_prints = len(owned_rows)
     owned_qty = sum(r.quantity for r in owned_rows)
     owned_usd = round(sum(
@@ -68,11 +75,26 @@ def _build_family_diff(
     printing_pool = CardDiffPool(name="printing", count=len(missing_rows),
                                  usd=printing_usd, rows=missing_rows)
 
-    functional = missing_mod.functional_missing(parent_code, precomputed_missing=missing_rows)
+    # Owned-oracle set for this family (same scope `functional_missing`/
+    # `variant_chase_printings` would compute internally from
+    # `sets.resolve(parent_code).all_codes` — NOT `family_code_set`, which can
+    # differ from the Scryfall graph when set_targets groups extra codes under
+    # the anchor). Computed once here and threaded into both calls (F4).
+    try:
+        scryfall_family_codes = {c.lower() for c in sets_mod.resolve(parent_code).all_codes}
+    except LookupError:
+        scryfall_family_codes = {parent_code.lower()}
+    owned_oids = missing_mod.owned_oracle_ids(scryfall_family_codes)
+
+    functional = missing_mod.functional_missing(
+        parent_code, precomputed_missing=missing_rows, precomputed_owned=owned_oids,
+    )
     functional_pool = CardDiffPool(name="functional", count=functional.n_cards,
                                    usd=functional.family_total_usd, rows=functional.cards)
 
-    variant_rows = missing_mod.variant_chase_printings(parent_code, precomputed_missing=missing_rows)
+    variant_rows = missing_mod.variant_chase_printings(
+        parent_code, precomputed_missing=missing_rows, precomputed_owned=owned_oids,
+    )
     variant_usd = round(sum(
         family_status._unit(prices.get(r.scryfall_id, {}), r.finish) for r in variant_rows
     ), 2)
@@ -99,6 +121,7 @@ def family_diff(code: str, *, price_map: dict | None = None) -> FamilyDiff | Non
     except (sel_mod.SelectorParseError, LookupError):
         return None
 
+    owned_rows = None
     if price_map is None:
         owned_rows = family_status._owned_rows_for_codes(family_code_set)
         ids = {r.scryfall_id for r in owned_rows} | {r.scryfall_id for r in missing_rows}
@@ -106,55 +129,51 @@ def family_diff(code: str, *, price_map: dict | None = None) -> FamilyDiff | Non
     else:
         prices = price_map
 
-    return _build_family_diff(parent_code, parent_name, family_code_set, missing_rows, prices)
+    return _build_family_diff(parent_code, parent_name, family_code_set, missing_rows, prices,
+                               owned_rows=owned_rows)
 
 
 def collection_diff() -> list[FamilyDiff]:
     """One FamilyDiff per owned+characterized family, sorted by owned_usd desc.
 
-    Mirrors `family_status.render_overview`'s batching: ONE bulk price fetch
-    over every family's owned ids ∪ missing ids, and `missing_printings` rows
-    are materialized once per family and threaded into both `functional_missing`
-    and `variant_chase_printings` via their `precomputed_missing` params.
+    Shares the 4-step pre-pass (enumerate families → per-family code set →
+    per-family `missing_printings` → ONE bulk price fetch) with
+    `set_status.render_overview` via `family_status.collection_prepass`; each
+    caller keeps only its own final per-family loop. `missing_printings` rows
+    are threaded into both `functional_missing` and `variant_chase_printings`
+    via `precomputed_missing`, and the bulk owned-rows list is grouped by set
+    code ONCE and sliced per family into `_build_family_diff`'s `owned_rows`
+    param, so no family re-fetches owned rows individually.
     """
-    parents = family_status._owned_family_parents()
+    (parents, fam_codes_by_parent, missing_rows_by_parent,
+     price_map, all_rows) = family_status.collection_prepass()
     if not parents:
         return []
 
-    fam_codes_by_parent: dict[str, set[str]] = {}
-    for pc in parents:
-        try:
-            _, _, related = family_status.resolve_family(pc)
-        except LookupError:
-            related = [{"code": pc}]
-        fam_codes_by_parent[pc] = family_status._family_code_set(pc, related)
-
-    missing_rows_by_parent: dict[str, list | None] = {}
-    for pc in parents:
-        if pc in family_status.NON_FAMILY_SETS:
-            continue
-        try:
-            missing_rows_by_parent[pc] = missing_mod.missing_printings(pc)
-        except (sel_mod.SelectorParseError, LookupError):
-            missing_rows_by_parent[pc] = None  # unconfigured
-
-    all_rows = family_status._owned_rows_for_codes(
-        {c for codes in fam_codes_by_parent.values() for c in codes}
-    )
-    ids = {r.scryfall_id for r in all_rows}
-    for mrows in missing_rows_by_parent.values():
-        if mrows:
-            ids.update(r.scryfall_id for r in mrows)
-    price_map = family_status._live_prices(list(ids))
+    # Group the already-materialized owned rows by set code ONCE (F3), so
+    # `_build_family_diff` doesn't re-fetch `_owned_rows_for_codes` per family.
+    # Global dedup by (scryfall_id, finish) over the union equals per-family
+    # dedup here since each card has exactly one set_code and families
+    # partition codes disjointly (no code is grouped under two anchors).
+    owned_rows_by_set: dict[str, list] = {}
+    for r in all_rows:
+        owned_rows_by_set.setdefault((r.card.get("set") or "").lower(), []).append(r)
 
     diffs: list[FamilyDiff] = []
     for pc, pn in parents.items():
+        # DELIBERATE (not drift): card-diff is about the three missing pools, so
+        # non-family (sld/mar/…) and unconfigured families — which have no
+        # missing-set notion — are DROPPED entirely. set_status.render_overview,
+        # sharing the same collection_prepass, instead emits them as owned-only
+        # rows with '-' cells. Both are intended; the final loops differ by design.
         if pc in family_status.NON_FAMILY_SETS:
             continue
         mrows = missing_rows_by_parent.get(pc)
         if mrows is None:
             continue  # unconfigured — no missing-set rules for this family
-        diffs.append(_build_family_diff(pc, pn, fam_codes_by_parent[pc], mrows, price_map))
+        codes = fam_codes_by_parent[pc]
+        owned_rows = [r for c in codes for r in owned_rows_by_set.get(c, [])]
+        diffs.append(_build_family_diff(pc, pn, codes, mrows, price_map, owned_rows=owned_rows))
 
     diffs.sort(key=lambda f: f.owned_usd, reverse=True)
     return diffs

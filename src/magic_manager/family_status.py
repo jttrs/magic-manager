@@ -217,6 +217,63 @@ def is_characterized(parent_code: str) -> bool:
     return (ROOT / "docs" / "sets" / f"{parent_code}.md").exists()
 
 
+# ---------- collection-wide pre-pass (shared by set_status + card_diff) ----------
+
+def collection_prepass() -> tuple[
+    dict[str, str], dict[str, set[str]], dict[str, list | None], dict[str, dict], list
+]:
+    """The 4-step pre-pass both `set_status.render_overview` and
+    `card_diff.collection_diff` need before their own per-family loop:
+
+    1. ``parents`` — every owned+registered family, via `_owned_family_parents`.
+    2. ``fam_codes_by_parent`` — set_targets-authoritative code set per parent.
+    3. ``missing_rows_by_parent`` — `missing.missing_printings` materialized
+       ONCE per family (skipping `NON_FAMILY_SETS`; `None` = unconfigured).
+    4. ``price_map`` — ONE bulk `/cards/collection` fetch over owned ids ∪ every
+       family's missing ids.
+
+    Also returns ``all_owned_rows`` (the flat owned-rows list from step 4's
+    `_owned_rows_for_codes` call) so a caller doing a global dedup (e.g.
+    `card_diff`'s price-fetch id gathering) can group it by `card["set"]`
+    itself instead of re-fetching per family.
+
+    Callers each keep their OWN distinct final per-family loop — this only
+    extracts the shared setup, not the rendering/aggregation that follows."""
+    from . import missing as missing_mod, selectors
+
+    parents = _owned_family_parents()
+    if not parents:
+        return {}, {}, {}, {}, []
+
+    fam_codes_by_parent: dict[str, set[str]] = {}
+    for pc in parents:
+        try:
+            _, _, related = resolve_family(pc)
+        except LookupError:
+            related = [{"code": pc}]
+        fam_codes_by_parent[pc] = _family_code_set(pc, related)
+
+    missing_rows_by_parent: dict[str, list | None] = {}
+    for pc in parents:
+        if pc in NON_FAMILY_SETS:
+            continue
+        try:
+            missing_rows_by_parent[pc] = missing_mod.missing_printings(pc)
+        except (selectors.SelectorParseError, LookupError):
+            missing_rows_by_parent[pc] = None  # unconfigured
+
+    all_owned_rows = _owned_rows_for_codes(
+        {c for codes in fam_codes_by_parent.values() for c in codes}
+    )
+    ids = {r.scryfall_id for r in all_owned_rows}
+    for mrows in missing_rows_by_parent.values():
+        if mrows:
+            ids.update(r.scryfall_id for r in mrows)
+    price_map = _live_prices(list(ids))
+
+    return parents, fam_codes_by_parent, missing_rows_by_parent, price_map, all_owned_rows
+
+
 # ---------- all-families enumeration (no-arg mode) ----------
 
 def _owned_family_parents() -> dict[str, str]:

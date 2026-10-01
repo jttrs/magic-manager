@@ -363,6 +363,7 @@ def functional_missing(
     *,
     precomputed_missing: list | None = None,
     anywhere_floor_fn: Callable[[str], tuple[float | None, str | None] | None] | None = None,
+    precomputed_owned: set[str] | None = None,
 ) -> FunctionalMissing:
     """Mechanically-unique cards (by oracle_id) in the family owned in ZERO
     printings, each with its cheapest in-family fill price (and, if
@@ -370,6 +371,12 @@ def functional_missing(
 
     ``precomputed_missing`` lets a caller that already ran ``missing_printings``
     pass those rows in (avoids recompute — the overview does this).
+    ``precomputed_owned`` lets a caller that already computed
+    ``owned_oracle_ids({c.lower() for c in sets.resolve(code).all_codes})`` pass
+    that set in directly, skipping the resolve + query here (``card_diff``
+    does this — it computes the same owned set once and threads it into both
+    this function and ``variant_chase_printings``). When ``None``, behavior is
+    unchanged — this function resolves the family and queries ownership itself.
     ``anywhere_floor_fn(oracle_id) -> (usd, finish)|None`` supplies the cross-set
     floor; when ``None`` the anywhere fields stay ``None`` and ``anywhere_total_usd``
     falls back to the in-family price. Family scope matches ``missing_printings``
@@ -390,7 +397,7 @@ def functional_missing(
     except LookupError:
         family_codes = {code.lower()}
 
-    owned = owned_oracle_ids(family_codes)
+    owned = precomputed_owned if precomputed_owned is not None else owned_oracle_ids(family_codes)
     with db.connect() as conn:
         fam_ph = ",".join("?" for _ in family_codes)
         missing_oids = candidate_oids - owned
@@ -457,18 +464,26 @@ def variant_chase_printings(
     treatment_class: str = "preferred",
     *,
     precomputed_missing: list | None = None,
+    precomputed_owned: set[str] | None = None,
 ) -> list:
     """missing_printings rows whose oracle_id the user ALREADY owns in the
     family (the printing-missing ∩ owned-oracle diff — variant/alt-art/fancy-
     foil printings of cards you have). ``precomputed_missing`` reuses rows if
-    the caller already ran ``missing_printings``."""
+    the caller already ran ``missing_printings``. ``precomputed_owned`` lets a
+    caller that already computed ``owned_oracle_ids({c.lower() for c in
+    sets.resolve(code).all_codes})`` pass that set in directly (see
+    ``functional_missing``'s matching param); ``None`` preserves current
+    behavior exactly (resolve + query here)."""
     rows = precomputed_missing if precomputed_missing is not None \
         else missing_printings(code, treatment_class)
     if not rows:
         return []
-    try:
-        family_codes = {c.lower() for c in sets_mod.resolve(code).all_codes}
-    except LookupError:
-        family_codes = {code.lower()}
-    owned = owned_oracle_ids(family_codes)
+    if precomputed_owned is not None:
+        owned = precomputed_owned
+    else:
+        try:
+            family_codes = {c.lower() for c in sets_mod.resolve(code).all_codes}
+        except LookupError:
+            family_codes = {code.lower()}
+        owned = owned_oracle_ids(family_codes)
     return [r for r in rows if (r.card or {}).get("oracle_id") in owned]
