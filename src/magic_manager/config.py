@@ -112,6 +112,33 @@ def build_unobtainable_rules(raw: dict) -> dict[str, list[dict]]:
 
 
 @lru_cache(maxsize=None)
+def family_dupe_foil() -> dict[str, frozenset[str]]:
+    """``config/families.toml`` ``[dupe_foil]`` → ``{family: frozenset(promo_types)}``.
+    An empty list is a CONFIGURED family with no dupe-foil signal (a present key),
+    distinct from an absent family (unconfigured) — the preferred filter keys on
+    membership, so this distinction matters."""
+    raw = _cached_toml("families.toml").get("dupe_foil") or {}
+    return {k.lower(): frozenset(str(v).lower() for v in vals)
+            for k, vals in raw.items()}
+
+
+@lru_cache(maxsize=None)
+def family_unobtainable_rules() -> dict[str, list[dict]]:
+    """``config/families.toml`` ``[[unobtainable.<fam>.rules]]`` → the nested
+    ``{family: [rule, …]}`` the selector matcher consumes (set-valued keys as
+    frozensets, ``note`` stripped)."""
+    return build_unobtainable_rules(_cached_toml("families.toml"))
+
+
+@lru_cache(maxsize=None)
+def family_scenes() -> dict[str, list[dict]]:
+    """``config/families.toml`` ``[[scenes.<fam>]]`` → ``{family: [scene-dict, …]}``
+    (plain dicts: name/artist/set/cn_lo/cn_hi)."""
+    raw = _cached_toml("families.toml").get("scenes") or {}
+    return {k.lower(): [dict(sc) for sc in scenes] for k, scenes in raw.items()}
+
+
+@lru_cache(maxsize=None)
 def _cached_toml(name: str) -> dict:
     """Module-level cache (config files don't change within a process)."""
     return load_toml(name)

@@ -1,6 +1,6 @@
 ---
 name: characterize-set
-description: Thorough investigation of one Scryfall set family to produce or update `docs/sets/<anchor>.md` — the durable per-family memory doc. Covers family topology, treatment audit, chase-variant detection, scene/poster grouping, unobtainable candidates, PRM promo destinations, and edge-case card inspection. Also proposes `src/magic_manager/selectors.py` diffs for any FAMILY_DUPE_FOIL_PROMO_TYPES / FAMILY_UNOBTAINABLE_RULES entries the audit surfaces. Triggers: "characterize <set>", "audit <set> family", "onboard <set>", "what do I know about <set>?", "bootstrap docs for <set>", "run the new-family protocol for <set>", any first-time reference to a set that has no `docs/sets/<anchor>.md`.
+description: Thorough investigation of one Scryfall set family to produce or update `docs/sets/<anchor>.md` — the durable per-family memory doc. Covers family topology, treatment audit, chase-variant detection, scene/poster grouping, unobtainable candidates, PRM promo destinations, and edge-case card inspection. Also proposes `config/families.toml` entries for any dupe-foil / unobtainable rules the audit surfaces. Triggers: "characterize <set>", "audit <set> family", "onboard <set>", "what do I know about <set>?", "bootstrap docs for <set>", "run the new-family protocol for <set>", any first-time reference to a set that has no `docs/sets/<anchor>.md`.
 ---
 
 # Characterize-set
@@ -61,10 +61,10 @@ Pipeline facts that scope the review (so you ask about the right tiers):
 - **The UB:D&D "rulebook/module-page" showcase frame is shared across CLB, AFR, and any future D&D set, and the user does NOT collect it.** For a D&D family, default to proposing `{"frame_effects_all_of": frozenset({"showcase"}), "border_color": "black"}` (excludes the black-bordered showcase, spares the wanted borderless). Confirm, don't assume.
 
 **Interpret each fancy-foil `promo_types` token (dupe-foil decision, axis 1):**
-- If the token-bearing print is **visually identical** to a same-name sibling without the token → **dupe foil** → add to `FAMILY_DUPE_FOIL_PROMO_TYPES[anchor]`.
+- If the token-bearing print is **visually identical** to a same-name sibling without the token → **dupe foil** → add the promo_type to the `[dupe_foil]` `<anchor>` list in `config/families.toml`.
 - If the token-bearing print has **unique art** → keep it out of DUPE_FOIL; note in §2 as "kept — unique art despite fancy foil" (e.g. FIN chocobotrackfoil).
-- If a token co-occurs with another (like `silverfoil+scroll` for LTR scroll frames) AND the user won't shop for the print → `FAMILY_UNOBTAINABLE_RULES[anchor]` with `promo_types_all_of: frozenset(...)`.
-- ⚠️ **DUPE_FOIL is gated on the `ff` treatment keyword.** The dupe-foil drop in `selectors._filter_treatment_preferred` only inspects prints whose computed treatment contains `ff`. So a same-art fancy foil is only caught by `FAMILY_DUPE_FOIL_PROMO_TYPES` if `treatments.compute_treatment` classifies it as `ff`. If the print is same-art-on-a-fancy-sheet but its promo_type does **not** compute to `ff` (e.g. SNC `stepandcompleat` → treatment `b`, not `b|ff`; verified 2026-08-24), the DUPE_FOIL entry silently misses it — route it to `FAMILY_UNOBTAINABLE_RULES[anchor]` (a `promo_types_any_of` rule) instead, and note in the doc which treatment the print actually computes to.
+- If a token co-occurs with another (like `silverfoil+scroll` for LTR scroll frames) AND the user won't shop for the print → a `[[unobtainable.<anchor>.rules]]` entry in `config/families.toml` with `promo_types_all_of = [...]`.
+- ⚠️ **DUPE_FOIL is gated on the `ff` treatment keyword.** The dupe-foil drop in `selectors._filter_treatment_preferred` only inspects prints whose computed treatment contains `ff`. So a same-art fancy foil is only caught by the `[dupe_foil]` list if `treatments.compute_treatment` classifies it as `ff`. If the print is same-art-on-a-fancy-sheet but its promo_type does **not** compute to `ff` (e.g. SNC `stepandcompleat` → treatment `b`, not `b|ff`; verified 2026-08-24), the DUPE_FOIL entry silently misses it — route it to a `[[unobtainable.<anchor>.rules]]` entry in `config/families.toml` (a `promo_types_any_of` rule) instead, and note in the doc which treatment the print actually computes to.
 
 **Backstop (run after drafting the doc):**
 ```bash
@@ -163,10 +163,10 @@ Copy `docs/sets/_TEMPLATE.md` to `docs/sets/<anchor>.md` and fill each section f
 ### 9. Propose code diffs (if any)
 
 If the audit revealed:
-- A `FAMILY_DUPE_FOIL_PROMO_TYPES` entry to add (e.g. `"spm": frozenset({"surgefoil"})`).
-- A `FAMILY_UNOBTAINABLE_RULES` entry to add.
+- A `[dupe_foil]` entry to add (e.g. `spm = ["surgefoil"]` in `config/families.toml`).
+- A `[[unobtainable.<anchor>.rules]]` entry to add (with a `note` explaining the rationale).
 
-Emit the proposed diff for `src/magic_manager/selectors.py` and let the user approve before applying. Use `Edit` to apply after approval. Update the new doc's §8 "Code refs" to reflect the new entries.
+Emit the proposed diff for `config/families.toml` and let the user approve before applying. Use `Edit` to apply after approval. Update the new doc's §8 "Code refs" to reflect the new entries.
 
 **Never** apply code diffs before showing the diff and getting explicit approval — silent selector changes affect `mm query missing-set` output for real acquisitions.
 
@@ -177,7 +177,7 @@ uv run python scripts/set_status.py <anchor>              # ⚠ concentration no
 uv run mm query show 'set:<anchor>+related missing treatment=preferred' --sort value-desc --first 30
 ```
 
-If the top of the list is dominated by a single tier priced $100+ each — promo-pack/prerelease **stamped** promos with no non-stamped sibling in the family graph (SNC found $1,697 of these), or a fancy-foil masterpiece tier (EOE's galaxyfoil lands / headliner found ~$5,800; SPM's 7 textured foils + The Soul Stone ~$3,788) — that's a **scarcity tier** the user won't realistically chase. Propose it for `FAMILY_UNOBTAINABLE_RULES[anchor]` (usually `promo_types_any_of`, or `collector_numbers`+`border_color` to pin a single distinct-art chase like SPM 243 / MSH 386). **Record the before/after missing total** in the doc's §5.
+If the top of the list is dominated by a single tier priced $100+ each — promo-pack/prerelease **stamped** promos with no non-stamped sibling in the family graph (SNC found $1,697 of these), or a fancy-foil masterpiece tier (EOE's galaxyfoil lands / headliner found ~$5,800; SPM's 7 textured foils + The Soul Stone ~$3,788) — that's a **scarcity tier** the user won't realistically chase. Propose it for a `[[unobtainable.<anchor>.rules]]` entry in `config/families.toml` (usually `promo_types_any_of`, or `collector_numbers`+`border_color` to pin a single distinct-art chase like SPM 243 / MSH 386). **Record the before/after missing total** in the doc's §5.
 
 **But concentration ≠ exclude — it's a REVIEW prompt, don't reflexively act on it.** A 2026-09 back-test over all characterized families proved no price-distribution statistic separates "exclude" from "keep": `fin` (borderless anime chase, $10.9k missing, top5=0.70) and `tmt` (top5=0.90) are MORE concentrated than families that got exclusions, yet are correctly KEPT because the user wants those cards. The ⚠ warning fires for them too — that's expected, not a false alarm. "Unobtainable" is the user's per-family preference, not a property of the curve. So when the warning fires: look at the tier, decide with the user whether it's wanted-chase (keep) or scarcity-junk (exclude), and only then propose a rule. Never auto-apply, and never treat a big missing total as automatically wrong.
 
@@ -207,7 +207,7 @@ Update the "Last audit" date at the top of the new doc.
 - `docs/scryfall-printing-treatments.md` — the treatment keyword space; per-set full_art convention drift.
 - `docs/spg-source-attribution.md` — release-window mapping for SPG/PMEI (design doc, not implemented).
 - `scripts/survey_treatment_signature.py` — the audit tool this skill orchestrates.
-- `src/magic_manager/selectors.py:78-128` — FAMILY_DUPE_FOIL_PROMO_TYPES and FAMILY_UNOBTAINABLE_RULES.
+- `config/families.toml` — the `[dupe_foil]` / `[[unobtainable.<anchor>.rules]]` / `[[scenes.<anchor>]]` tables (loaded by `magic_manager.config`; exposed as `selectors.FAMILY_*`).
 - `src/magic_manager/selectors.py:_modifier_chase` — chase-variant detection logic.
 - [[missing-from-set]] — the workflow this characterization enables.
 - [[bulk-add]] — where PRM destination knowledge is currently referenced procedurally.
