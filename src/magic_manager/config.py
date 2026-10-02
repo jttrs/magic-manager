@@ -190,3 +190,18 @@ def family_scenes(*, override: str | Path | None = None) -> dict[str, list[dict]
     (plain dicts: name/artist/set/cn_lo/cn_hi). families.toml is REQUIRED."""
     raw = load_toml("families.toml", override=override, required=True).get("scenes") or {}
     return {k.lower(): [dict(sc) for sc in scenes] for k, scenes in raw.items()}
+
+
+def collection_formats(*, override: str | Path | None = None) -> dict[str, dict]:
+    """``config/collection_formats.toml`` → ``{service: format-dict}``.
+
+    The declarative seam behind ``collection_sync.read_csv``/``write_csv``: one
+    ``[<service>]`` block per external collection service (column map,
+    finish/condition maps, write order, ``has_scryfall_id``, ``confidence``).
+    REQUIRED — collection sync has no sane baked-in default (a column map can't
+    be guessed), so a missing/unparseable file raises :class:`ConfigError`
+    rather than silently disabling ``mm collection``. Service keys are
+    lowercased so lookups are case-insensitive; the inner dicts are returned
+    verbatim (plain TOML — collection_sync owns the interpretation)."""
+    raw = load_toml("collection_formats.toml", override=override, required=True)
+    return {str(k).lower(): dict(v) for k, v in raw.items() if isinstance(v, dict)}

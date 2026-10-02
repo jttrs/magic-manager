@@ -1,0 +1,82 @@
+# Collection CSV formats — one declarative [<service>] block per external
+# collection service, loaded by magic_manager.config.collection_formats() and
+# consumed by magic_manager.collection_sync (read_csv / write_csv). Adding a
+# service is CONFIG, not code: declare its column names, finish/condition
+# vocabulary, and write order here; collection_sync is fully service-agnostic.
+#
+# Per-service keys:
+#   has_scryfall_id  bool  — does the CSV carry a Scryfall id column? ManaBox
+#                            does (exact printing, no resolution). Moxfield /
+#                            Archidekt / MTGGoldfish do not → resolve_rows fills
+#                            it via (set, collector_number) against Scryfall.
+#   confidence       str   — "high" (set+cn or scryfall_id present) | "low"
+#                            (name-leaning, e.g. MTGGoldfish). Surfaced in the
+#                            diff summary so the user knows how trustworthy the
+#                            match is before approving.
+#
+#   [service.columns]  maps OUR normalized field → the service's CSV column
+#     header. The read path (csv.DictReader) looks up each header; the write
+#     path emits them. Only `quantity` + `finish` + an identity (scryfall_id OR
+#     set+collector_number) are required; the rest are passthrough/diagnostic.
+#       quantity, finish, scryfall_id, set, collector_number, name,
+#       condition, purchase_price
+#     A field whose column is "" (empty) is absent for that service: skipped on
+#     read, omitted on write.
+#
+#   [service.finish_map]  maps the service's finish token (lowercased) → our
+#     vocabulary ('nonfoil' | 'foil'). Any token absent from the map falls back
+#     to 'nonfoil'. The write path inverts this (first key mapping to each value).
+#
+#   [service.condition_map]  maps the service's condition token (lowercased) →
+#     our canonical condition. Passthrough-only in v1 (condition never enters the
+#     DB — documented future-dimension hook), but normalized here so the round-
+#     trip is stable. `write_default` is the condition emitted on export when a
+#     row has none.
+#
+#   write_header / write_order  — the exact column ORDER emitted by write_csv
+#     (a list of OUR normalized field names). Lets each service's export match
+#     the header its importer expects.
+
+# ---------------------------------------------------------------------------
+# ManaBox (manabox.app) — the clean path: the app's CSV export carries a
+# Scryfall ID column, so no network resolution is needed. Mobile-only app → no
+# web automation (CSV file-exchange is the only transport). Export header:
+#   Name,Set code,Set name,Collector number,Foil,Rarity,Quantity,ManaBox ID,
+#   Scryfall ID,Purchase price,Misprint,Altered,Condition,Language,
+#   Purchase price currency
+# ---------------------------------------------------------------------------
+[manabox]
+has_scryfall_id = true
+confidence = "high"
+
+[manabox.columns]
+quantity         = "Quantity"
+finish           = "Foil"
+scryfall_id      = "Scryfall ID"
+set              = "Set code"
+collector_number = "Collector number"
+name             = "Name"
+condition        = "Condition"
+purchase_price   = "Purchase price"
+
+[manabox.finish_map]
+normal  = "nonfoil"
+foil    = "foil"
+etched  = "foil"
+
+[manabox.condition_map]
+mint              = "mint"
+near_mint         = "near_mint"
+excellent         = "excellent"
+good              = "good"
+light_played      = "light_played"
+played            = "played"
+poor              = "poor"
+
+[manabox.write]
+# Column order emitted by write_csv (our normalized field names, mapped back to
+# the service headers above). Matches the ManaBox import column expectations.
+order = ["name", "set", "collector_number", "finish", "quantity", "scryfall_id",
+         "condition", "purchase_price"]
+# Condition emitted on export when a row carries none (passthrough-only in v1).
+condition_default = "near_mint"

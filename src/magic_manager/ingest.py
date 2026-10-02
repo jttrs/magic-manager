@@ -43,6 +43,8 @@ METHODS = frozenset({
     "deck-unassign",
     "migration-backfill",
     "unattributed-backfill",
+    "collection-import",
+    "collection-export",
 })
 
 

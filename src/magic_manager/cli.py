@@ -69,6 +69,9 @@ earmark_app = typer.Typer(no_args_is_help=True,
                           help="Watchlist of sealed products across storefronts.")
 edhrec_app = typer.Typer(no_args_is_help=True,
                          help="EDHREC community signal: commander/card inclusion + rankings.")
+collection_app = typer.Typer(no_args_is_help=True,
+                             help="Import/export the collection (inventory) to/from external "
+                                  "services via CSV, with a diff-review-and-approve step.")
 
 app.add_typer(set_app, name="set")
 app.add_typer(inventory_app, name="inventory")
@@ -83,6 +86,7 @@ app.add_typer(db_app, name="db")
 app.add_typer(audit_app, name="audit")
 app.add_typer(earmark_app, name="earmark")
 app.add_typer(edhrec_app, name="edhrec")
+app.add_typer(collection_app, name="collection")
 
 
 def _slug(s: str) -> str:
@@ -4927,6 +4931,85 @@ def edhrec_sync_cmd(
                f"{res.card_only} card-only), {res.already} already cached, {res.failed} failed.")
     for name, err in res.failures:
         typer.echo(f"  FAILED {name}: {err}", err=True)
+
+
+# ---------- collection (import/export via CSV + diff-review-and-approve) ----------
+
+def _run_collection_sync(sync_args: list[str]) -> None:
+    """Relay to scripts/collection_sync.py — the deterministic single source of
+    truth for collection CSV read/diff/apply + artifacts (thin-wrapper rule).
+    Streams its markdown/JSON output through and mirrors its exit code."""
+    import subprocess
+    script = Path(__file__).resolve().parent.parent.parent / "scripts" / "collection_sync.py"
+    proc = subprocess.run(["uv", "run", "python", str(script), *sync_args])
+    raise typer.Exit(proc.returncode)
+
+
+@collection_app.command("import")
+def collection_import_cmd(
+    service: str = typer.Argument(..., help="Collection service: manabox (more in later phases)."),
+    csv: str = typer.Argument(..., help="Path to the service's exported collection CSV."),
+    mode: str = typer.Option("add", "--mode", help="add (additive) | modify (replace, absent untouched) "
+                             "| overwrite (replace + zero rows absent from the CSV)."),
+    apply: bool = typer.Option(False, "--apply", help="Write to inventory (default is a dry-run review)."),
+    force: bool = typer.Option(False, "--force", help="Re-import an identical file (bypass the sha256 dedup)."),
+    json_out: bool = typer.Option(False, "--json", help="Emit JSON instead of the markdown review."),
+):
+    """Import a collection CSV into local inventory, with a diff-review-and-approve step.
+
+    Dry-run by default: reads the CSV, resolves it against Scryfall, diffs it
+    against the current inventory, and writes a review artifact (XLSX + JSON)
+    under output/collection-sync/diffs/. Re-run with --apply to write. The three
+    modes mirror the inventory-checklist semantics (add/modify/overwrite).
+    """
+    args = ["import", service, csv, "--mode", mode]
+    if apply:
+        args.append("--apply")
+    if force:
+        args.append("--force")
+    if json_out:
+        args.append("--json")
+    _run_collection_sync(args)
+
+
+@collection_app.command("export")
+def collection_export_cmd(
+    service: str = typer.Argument(..., help="Collection service to render the inventory for."),
+    against: str = typer.Option(None, "--against", help="Service CSV = the landing state to diff against "
+                                "(e.g. a freshly-pulled collection export)."),
+    apply: bool = typer.Option(False, "--apply", help="Emit the reconciled CSV (default is a dry-run diff)."),
+    json_out: bool = typer.Option(False, "--json", help="Emit JSON instead of the markdown review."),
+):
+    """Export the local inventory as a service-format collection CSV.
+
+    Export NEVER writes the DB. Dry-run shows the diff vs the --against landing
+    state (or empty); --apply emits the reconciled CSV under
+    output/collection-sync/exports/.
+    """
+    args = ["export", service]
+    if against:
+        args += ["--against", against]
+    if apply:
+        args.append("--apply")
+    if json_out:
+        args.append("--json")
+    _run_collection_sync(args)
+
+
+@collection_app.command("diff")
+def collection_diff_cmd(
+    service: str = typer.Argument(..., help="Collection service."),
+    csv: str = typer.Argument(..., help="Path to the service's collection CSV."),
+    direction: str = typer.Option("import", "--direction", help="import (CSV vs inventory) | "
+                                  "export (inventory vs CSV)."),
+    json_out: bool = typer.Option(False, "--json"),
+):
+    """Read-only diff between a service CSV and the local inventory, in either
+    direction. Writes the full diff artifact; never touches the DB."""
+    args = ["diff", service, csv, "--direction", direction]
+    if json_out:
+        args.append("--json")
+    _run_collection_sync(args)
 
 
 # ---------- entry point ----------
