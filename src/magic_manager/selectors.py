@@ -162,8 +162,20 @@ def _card_frame_effects(card: dict) -> set[str]:
     return set(raw)
 
 
-def _matches_unobtainable_rule(card: dict, rule: dict) -> bool:
-    """True iff the card matches every condition in the rule."""
+_UNOBTAINABLE_TIERS = frozenset({"hard", "chase"})
+
+
+def _matches_unobtainable_rule(
+    card: dict, rule: dict, tiers: frozenset[str] = _UNOBTAINABLE_TIERS
+) -> bool:
+    """True iff the card matches every condition in the rule AND the rule's tier
+    is in ``tiers``. A rule with no ``tier`` key is treated as ``"hard"`` (the
+    always-excluded default); ``tiers`` defaults to both tiers so existing
+    callers see no behavior change. Pass ``tiers={"chase"}`` to match ONLY
+    grey/chase-tier rules (the inclusion predicate used by ``--chase only``), or
+    ``tiers={"hard"}`` to match only the always-excluded rules."""
+    if (rule.get("tier") or "hard") not in tiers:
+        return False
     if "promo_types_all_of" in rule:
         if not rule["promo_types_all_of"].issubset(_card_promo_types(card)):
             return False
@@ -182,12 +194,16 @@ def _matches_unobtainable_rule(card: dict, rule: dict) -> bool:
     return True
 
 
-def _is_family_unobtainable(card: dict, anchor_code: str) -> bool:
-    """True iff any of the family's unobtainable rules match this card."""
+def _is_family_unobtainable(
+    card: dict, anchor_code: str, tiers: frozenset[str] = _UNOBTAINABLE_TIERS
+) -> bool:
+    """True iff any of the family's unobtainable rules (restricted to ``tiers``)
+    match this card. ``tiers`` defaults to both tiers (hard+chase) so existing
+    exclusion callers are unchanged."""
     rules = FAMILY_UNOBTAINABLE_RULES.get(anchor_code.lower())
     if not rules:
         return False
-    return any(_matches_unobtainable_rule(card, rule) for rule in rules)
+    return any(_matches_unobtainable_rule(card, rule, tiers) for rule in rules)
 
 
 # Global exclusion: prints that are effectively unobtainable for a physical
@@ -1176,7 +1192,13 @@ def preferred_exclusions(
     """Drop prints categorically unobtainable for a physical collector:
     digital-only (Arena/Alchemy rebalanced + serialized 1-of-N, via
     :func:`_is_digital_only`) and the family's hand-ruled unobtainable prints
-    (via :func:`_is_family_unobtainable`).
+    of ANY tier (via :func:`_is_family_unobtainable`).
+
+    Both tiers (hard + chase) are excluded here — this is the default "would a
+    collector see this in a buy-list?" gate. The chase tier is RE-SURFACED, when
+    requested, by ``missing._chase_printings`` (an inclusion predicate that
+    bypasses the art-blind ff-dupe step), NOT by relaxing this gate — so this
+    function stays tier-agnostic and every existing caller is unchanged.
 
     This is the row-wise, DB-free core shared by BOTH preferred-filter sites —
     ``_filter_treatment_preferred`` (the selector grammar's ``treatment=preferred``,

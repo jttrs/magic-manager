@@ -44,6 +44,13 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 #   "promo_set"  → frozenset of lowercased strings (membership via issubset/&)
 #   "cn_set"     → frozenset of raw CN strings (case-sensitive)
 #   "scalar"     → passed through verbatim (e.g. border_color)
+#   "tier"       → the rule's exclusion TIER, lowercased str: "hard" (absent ⇒
+#                  hard) is always-excluded/never-surfaced (prerelease stamps,
+#                  serialized); "chase" is excluded by default but surfaceable
+#                  via `mm query missing-set --chase include|only` (premium-art
+#                  tiers: surgefoil/textured/neonink/headliner showcases). NOT a
+#                  predicate — it gates WHICH tier filter the rule participates
+#                  in (selectors._matches_unobtainable_rule's `tiers` arg).
 #   "note"       → rationale only, stripped from the evaluated rule
 # selectors._matches_unobtainable_rule consumes the predicate keys; the loader
 # derives its coercion from here; tests/test_config_schema validates against it —
@@ -55,6 +62,7 @@ UNOBTAINABLE_RULE_KEYS: dict[str, str] = {
     "frame_effects_all_of": "promo_set",
     "collector_numbers": "cn_set",
     "border_color": "scalar",
+    "tier": "tier",
     "note": "note",
 }
 
@@ -160,6 +168,8 @@ def build_unobtainable_rules(raw: dict) -> dict[str, list[dict]]:
                     r[k] = frozenset(str(x).lower() for x in v)
                 elif kind == "cn_set":
                     r[k] = frozenset(str(x) for x in v)
+                elif kind == "tier":
+                    r[k] = str(v).lower()  # "hard" | "chase"; absence ⇒ hard (matcher's contract)
                 else:  # "scalar" or an unknown key — pass through verbatim
                     r[k] = v
             rules.append(r)

@@ -32,17 +32,20 @@
 
 ## 2. Treatments
 
-`selectors.FAMILY_DUPE_FOIL_PROMO_TYPES["tmt"]` — **not configured yet.** Add: `frozenset({"surgefoil", "fracturefoil"})`. See §8.
+`selectors.FAMILY_DUPE_FOIL_PROMO_TYPES["tmt"]` — **configured** as `frozenset({"fracturefoil", "surgefoil"})` (`config/families.toml` `[dupe_foil] tmt`). See §8.
+
+> **Note (2026-10-02):** `surgefoil` does double duty in this family. As a **dupe-foil** marker it collapses the same-art fancy-foil basic-land twins (e.g. TMT 309 Forest ↔ TMT 195, shared illustration_id). But the `tmc` CN 83-97 **borderless surgefoil showcase sheet** (15 prints) is DISTINCT art, NOT a dupe — it is excluded as a `tier="chase"` unobtainable rule (`surgefoil` + `border_color="borderless"`), surfaceable via `mm query missing-set tmt --chase include|only`. The two uses don't collide: the dupe-foil basics are black-bordered, the chase sheet is borderless. See §5.
 
 TMT ships two dupe-foil signals per audit:
 
 | promo_type | Treatment keyword | Dupe of a sibling? | Notes |
 |---|---|---|---|
-| `surgefoil` | `ff` | **yes** → add to DUPE_FOIL | Example: TMT 309 Forest (BEMOCS artist, `surgefoil+universesbeyond`) has TMT 195 Forest (same BEMOCS artist, no surgefoil) — same art, fancy-foil sheet. |
+| `surgefoil` (black-border) | `ff` | **yes** → DUPE_FOIL | Example: TMT 309 Forest (BEMOCS artist, `surgefoil+universesbeyond`) has TMT 195 Forest (same BEMOCS artist, no surgefoil) — same art, fancy-foil sheet. |
+| `surgefoil` (borderless, tmc 83-97) | `b\|ff` | **no — DISTINCT art** → UNOBTAINABLE (tier=chase) | The 15-print `tmc` CN 83-97 borderless showcase sheet (Leonardo the Balance 83, …, Big Mother Mouser 97), foil-only, $37-$310 each. Distinct illustration_ids from their base siblings — a premium showcase chase, NOT a dupe. Excluded by default via a `surgefoil`+`borderless` `tier="chase"` rule; surfaceable with `--chase include/only`. See §5. |
 | `fracturefoil` | `ff` | **yes** → add to DUPE_FOIL | Example: TMT 291 Leonardo (A4Mitsuori, `fracturefoil+japanshowcase+universesbeyond`) has TMT 281 Leonardo (A4Mitsuori, `japanshowcase+universesbeyond`) — same art, fancy-foil sheet. |
 | `japanshowcase` | (base treatment, unique art) | **no — unique art** | TMT 281 Leonardo (A4Mitsuori) is a DIFFERENT art than TMT 15 (Chris Seaman, base) and TMT 211 (Jim Cheung, boosterfun). Japan-showcase-frame chases carry unique art. Filtered from master-list output by `sets.py:EXCLUDED_PROMO_TYPES` (japanshowcase excluded there), but selectors-side these ARE in scope for missing-set. |
 | `sourcematerial` | `sm` | n/a (part of pza masterpiece sheet) | 20 prints on the `pza` "TMNT Source Material" reskin sheet. |
-| `headliner` | (attached to premium) | **excluded** → UNOBTAINABLE | 4 prints — the borderless Turtle headliners TMT 301-304 (Leonardo/Donatello/Raphael/Michelangelo), foil-only, ~$2,175-$2,957 each. Ultra-rare chase; excluded from missing-set via `FAMILY_UNOBTAINABLE_RULES["tmt"]` (see §5). `headliner` matches exactly these 4 in the family. |
+| `headliner` | (attached to premium) | **excluded** → UNOBTAINABLE (tier=chase) | 4 prints — the borderless Turtle headliners TMT 301-304 (Leonardo/Donatello/Raphael/Michelangelo), foil-only, ~$2,175-$2,957 each. Ultra-rare chase; excluded from missing-set by default via `FAMILY_UNOBTAINABLE_RULES["tmt"]` (see §5), surfaceable via `--chase include/only`. `headliner` matches exactly these 4 in the family. |
 
 **Full-art convention:** unknown; TMT hasn't been synced to local DB so `treatments.compute_treatment` behavior isn't observed. Likely follows the newer UB convention (`full_art: true` on borderless-inverted, like SPM/TLA) but verify on first sync.
 
@@ -90,8 +93,9 @@ Update this section when a scene audit runs.
 
 ## 5. Unobtainable rules
 
-`selectors.FAMILY_UNOBTAINABLE_RULES["tmt"]`:
-- `{"promo_types_any_of": frozenset({"headliner"})}` (added 2026-09-13) — the 4 borderless Turtle headliners TMT 301-304 (Leonardo/Donatello/Raphael/Michelangelo), foil-only, ~$2,175-$2,957 each, ~$10,232 total = ~92% of tmt's distinct-missing $. Distinct borderless art (dupe-foil filter keeps them; this rule removes them). Direct analog of TLA Avatar Aang / EOE Sothera / ECL / SOS headliner chase. `headliner` matches exactly these 4 prints in the family and nothing else (verified DB); each Turtle keeps its base + showcase prints (e.g. Leonardo TMT 17/215) in scope. The user does not chase these.
+`selectors.FAMILY_UNOBTAINABLE_RULES["tmt"]` (both `tier="chase"` — excluded by default, surfaceable via `mm query missing-set tmt --chase include|only`):
+- `{"promo_types_any_of": frozenset({"headliner"}), "tier": "chase"}` (added 2026-09-13; tiered 2026-10-02) — the 4 borderless Turtle headliners TMT 301-304 (Leonardo/Donatello/Raphael/Michelangelo), foil-only, ~$2,175-$2,957 each, ~$10,232 total = ~92% of tmt's distinct-missing $. Distinct borderless art (dupe-foil filter keeps them; this rule removes them). Direct analog of TLA Avatar Aang / EOE Sothera / ECL / SOS headliner chase. `headliner` matches exactly these 4 prints in the family and nothing else (verified DB); each Turtle keeps its base + showcase prints (e.g. Leonardo TMT 17/215) in scope.
+- `{"promo_types_any_of": frozenset({"surgefoil"}), "border_color": "borderless", "tier": "chase"}` (added 2026-10-02) — the `tmc` CN 83-97 borderless surgefoil showcase sheet, 15 prints (Leonardo the Balance 83 … Big Mother Mouser 97), all surgefoil+borderless+inverted, foil-only, $37-$310 each (~$1,870 total). Distinct illustration_ids from their base siblings — a premium showcase chase. The `surgefoil`+`borderless` signature matches exactly these 15 (the black-bordered surgefoil basic-land dupes are untouched — they drop via the dupe-foil step). **Why the rule was needed:** before it, the art-blind dupe-foil filter (`_filter_treatment_preferred` Step 3) wrongly dropped 6 of the 15 (CN 83/85/89/91/92/96, whose base sibling is also borderless → identical treatment codes) and kept the other 9 — an inconsistent split the user flagged. This rule makes the full sheet a coherent chase tier; `--chase only` surfaces all 15 (sourced via the art-aware `missing._chase_printings`, which bypasses Step 3). Analog of MSH surgefoil / OTJ textured. A deferred follow-up (art-aware dupe-foil via `illustration_id`) would fix the Step-3 false positive at its root.
 
 Not configured: no LTR-style scroll-frame equivalent surfaced yet; `japanshowcase` prints remain in scope pending user preference (see §7).
 
@@ -120,6 +124,6 @@ Fill this section on next audit.
 
 ## 8. Code refs
 
-- `selectors.py:FAMILY_DUPE_FOIL_PROMO_TYPES["tmt"]` — **not configured.** Recommended: `"tmt": frozenset({"surgefoil", "fracturefoil"})` (both are same-art dupes of siblings per audit).
-- `selectors.py:FAMILY_UNOBTAINABLE_RULES["tmt"]` — `[{"promo_types_any_of": frozenset({"headliner"})}]` (the 4 Turtle headliners TMT 301-304; see §5). If the user later wants japanshowcase excluded too, add `{"promo_types_any_of": frozenset({"japanshowcase"})}`.
+- `config/families.toml` `[dupe_foil] tmt = ["fracturefoil", "surgefoil"]` → `selectors.FAMILY_DUPE_FOIL_PROMO_TYPES["tmt"]` — **configured** (both are same-art dupes of black-bordered siblings per audit). NOTE: `surgefoil` is also the signal for the borderless `tmc` 83-97 showcase chase, which is handled by a separate `tier="chase"` unobtainable rule (see §5), not dupe-foil.
+- `config/families.toml` `[[unobtainable.tmt.rules]]` → `selectors.FAMILY_UNOBTAINABLE_RULES["tmt"]` — two `tier="chase"` rules: `{"promo_types_any_of": {"headliner"}, "tier": "chase"}` (the 4 Turtle headliners TMT 301-304) and `{"promo_types_any_of": {"surgefoil"}, "border_color": "borderless", "tier": "chase"}` (the 15 tmc 83-97 showcases); see §5. If the user later wants japanshowcase excluded too, add `{"promo_types_any_of": {"japanshowcase"}}` (default tier=hard, or `tier="chase"` to keep it surfaceable).
 - Related docs: [`../scryfall-set-families-and-bonus-sheets.md`](../scryfall-set-families-and-bonus-sheets.md) §3 (the tmc set_type-eternal gotcha).

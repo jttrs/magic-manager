@@ -3106,6 +3106,17 @@ def _materialize_or_die(selector: str):
         typer.echo(e.message, err=True); raise typer.Exit(e.exit_code)
 
 
+def _validate_chase(chase: str) -> None:
+    """Reject an unknown ``--chase`` mode with exit 2. Shared by the two query
+    commands that expose the flag (missing-set + card-diff) so both emit the
+    same message; `missing.missing_printings` keeps its own ValueError as the
+    library-boundary guard."""
+    from . import missing as missing_mod
+    if chase not in missing_mod.CHASE_MODES:
+        typer.echo(f"error: --chase must be one of {missing_mod.CHASE_MODES}, got {chase!r}", err=True)
+        raise typer.Exit(2)
+
+
 def _row_unit_price(r: sel_mod.MaterializedRow) -> float | None:
     if r.finish == "foil":
         return r.card.get("prices_usd_foil")
@@ -3488,6 +3499,13 @@ def query_missing_set_cmd(
              "Pass 'collectible-alt' to skip the dupe filtering, 'alt' to also include pure-ff, "
              "'any-alt' to also include ext.",
     ),
+    chase: str = typer.Option(
+        "exclude", "--chase",
+        help="Grey/chase-tier handling (premium-art showcase/foil tiers configured as "
+             "tier='chase' per family): 'exclude' (default — dropped, today's behavior), "
+             "'include' (normal missing list PLUS the chase prints), or 'only' (ONLY the "
+             "chase prints).",
+    ),
 ):
     """Canonical "what am I missing from set <CODE>?" workflow.
 
@@ -3530,10 +3548,12 @@ def query_missing_set_cmd(
 
     code_l = code.lower()
 
+    _validate_chase(chase)
+
     # 1. Materialize the printing-level union of the missing-set sub-selectors.
     # Shared with scripts/manapool_cart_check.py via magic_manager.missing.
     try:
-        rows_union = missing_mod.missing_printings(code_l, treatment_class)
+        rows_union = missing_mod.missing_printings(code_l, treatment_class, chase=chase)
     except sel_mod.SelectorParseError as e:
         typer.echo(f"error: invalid selector: {e}", err=True); raise typer.Exit(2)
     except LookupError as e:
@@ -3562,11 +3582,21 @@ def query_missing_set_cmd(
         r.finish,
     ))
     ts = datetime.now().strftime("%Y-%m-%d-%H%M%S")
-    xlsx_path = util.output_dir("missing-set", "checklists") / f"missing-{code_l}-checklist-{ts}.xlsx"
-    _subs = missing_mod.sub_selectors(code_l, treatment_class)
-    union_selector_repr = (
-        f"({_subs[0][1]}) ∪ ({_subs[1][1]}) ∪ ({_subs[2][1]})  [printing-level union]"
-    )
+    # Suffix non-default chase modes into every filename so include/only runs
+    # don't overwrite (or get mistaken for) the default checklist/buy-lists.
+    chase_sfx = "" if chase == "exclude" else f"-chase-{chase}"
+    xlsx_path = util.output_dir("missing-set", "checklists") / f"missing-{code_l}{chase_sfx}-checklist-{ts}.xlsx"
+    if chase == "only":
+        union_selector_repr = (
+            f"set:{code_l}+related missing [chase-tier only] "
+            f"(tier='chase' unobtainable rules, art-aware inclusion)"
+        )
+    else:
+        _subs = missing_mod.sub_selectors(code_l, treatment_class)
+        union_selector_repr = (
+            f"({_subs[0][1]}) ∪ ({_subs[1][1]}) ∪ ({_subs[2][1]})  [printing-level union]"
+            + ("  + chase-tier prints" if chase == "include" else "")
+        )
     _write_query_xlsx(
         rows_for_xlsx, xlsx_path, union_selector_repr,
         f"missing-{code_l}-checklist", kind="missing",
@@ -3585,16 +3615,21 @@ def query_missing_set_cmd(
 
     _buylists = util.output_dir("missing-set", "buy-lists")
     # ManaPool: single flat list, *F* foil markers preserved per-line.
-    mp_path = _buylists / f"missing-{code_l}-manapool-{ts}.txt"
+    mp_path = _buylists / f"missing-{code_l}{chase_sfx}-manapool-{ts}.txt"
     mp_path.write_text(exports.build("manapool", rows_for_bulk), encoding="utf-8")
 
     # TCGplayer: single flat list. Foil/nonfoil isn't marked per-line — the
     # user runs TCGplayer's cart optimizer afterward to pick finish per row.
-    tcg_path = _buylists / f"missing-{code_l}-tcgplayer-{ts}.txt"
+    tcg_path = _buylists / f"missing-{code_l}{chase_sfx}-tcgplayer-{ts}.txt"
     tcg_path.write_text(exports.build("tcgplayer", rows_for_bulk), encoding="utf-8")
 
     # 5. Emit chat output: URL table + file:// links. Nothing else.
-    typer.echo(f"# Missing from set:{code_l}+related — {len(rows_union)} distinct printings · ${total_value:,.2f}")
+    _chase_label = {
+        "exclude": "",
+        "include": " · chase-tier included",
+        "only": " · chase-tier ONLY",
+    }[chase]
+    typer.echo(f"# Missing from set:{code_l}+related — {len(rows_union)} distinct printings · ${total_value:,.2f}{_chase_label}")
     typer.echo(f"")
     typer.echo(f"## Scryfall URLs ({len(url_chunks)} chunks, cheapest first)")
     typer.echo(f"")
@@ -3624,6 +3659,12 @@ def query_card_diff_cmd(
         False, "--refresh",
         help="Sync stale (>7d) referenced sets before pricing. Default: local-first "
              "(fast, uses local prices as-is; stale sets are just noted on stderr).",
+    ),
+    chase: str = typer.Option(
+        "exclude", "--chase",
+        help="Grey/chase-tier handling (tier='chase' premium-art rules): 'exclude' "
+             "(default), 'include' (chase prints also feed the pools — e.g. the "
+             "variant-chase pool for cards you own), or 'only' (chase prints only).",
     ),
 ):
     """Three-pool "diff vs collection" report for a family (or every owned
@@ -3655,11 +3696,13 @@ def query_card_diff_cmd(
         raise typer.Exit(2)
     pools = list(valid_pools) if pool == "all" else [pool]
 
+    _validate_chase(chase)
+
     stale_codes: list[str] = []
     log = lambda m: typer.echo(m, err=True)  # noqa: E731
 
     if code is None:
-        diffs = card_diff_mod.collection_diff(refresh=refresh, warn=stale_codes.extend, log=log)
+        diffs = card_diff_mod.collection_diff(refresh=refresh, warn=stale_codes.extend, log=log, chase=chase)
         if not diffs:
             typer.echo("## Collection card-diff\n\nNo owned families yet.")
             raise typer.Exit(0)
@@ -3692,7 +3735,7 @@ def query_card_diff_cmd(
             typer.echo(msg, err=True)
         return
 
-    fd = card_diff_mod.family_diff(code, refresh=refresh, warn=stale_codes.extend, log=log)
+    fd = card_diff_mod.family_diff(code, refresh=refresh, warn=stale_codes.extend, log=log, chase=chase)
     if fd is None:
         typer.echo(f"error: {code!r} is not a resolvable/configured family (unknown code, or no "
                     f"missing-set rules — see FAMILY_DUPE_FOIL_PROMO_TYPES).", err=True)
