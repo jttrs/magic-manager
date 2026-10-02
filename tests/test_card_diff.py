@@ -148,3 +148,49 @@ def test_family_diff_pools_populated_and_counts_match(
 def test_family_diff_none_for_unresolvable_code(tmp_db, tla_family):
     from magic_manager import card_diff
     assert card_diff.family_diff("not-a-real-set-code-xyz") is None
+
+
+def test_multi_family_diff_matches_per_code_and_skips_unresolvable(
+        tmp_db, tla_family, seed_cards, make_card, monkeypatch):
+    """multi_family_diff (batched, one price resolve) returns the SAME FamilyDiff
+    as family_diff per code, and routes an unresolvable code to on_skip (omitting
+    it) — the gallery --codes batching (F4)."""
+    from magic_manager import card_diff, db
+    seed_cards([
+        make_card(id="hero-base", oracle_id="o-hero", set="tla", collector_number="5",
+                  rarity="rare", name="Hero", prices={"usd": "1.00", "usd_foil": "2.00"}),
+        make_card(id="hero-variant", oracle_id="o-hero", set="tla", collector_number="305",
+                  rarity="rare", name="Hero", prices={"usd": "40.00", "usd_foil": "60.00"}),
+        make_card(id="stranger", oracle_id="o-stranger", set="tla", collector_number="6",
+                  rarity="rare", name="Stranger", prices={"usd": "5.00", "usd_foil": None}),
+    ])
+    with db.connect() as conn:
+        _own(conn, "hero-base")
+
+    skipped: list[str] = []
+    diffs = card_diff.multi_family_diff(
+        ["tla", "not-a-real-set-code-xyz"], on_skip=skipped.append)
+
+    # unresolvable code was skipped, not raised; only tla survives.
+    assert skipped == ["not-a-real-set-code-xyz"]
+    assert [d.code for d in diffs] == ["tla"]
+
+    # batched result is identical to the per-code family_diff.
+    single = card_diff.family_diff("tla")
+    batched = diffs[0]
+    assert batched.code == single.code
+    assert batched.owned_prints == single.owned_prints
+    assert batched.owned_qty == single.owned_qty
+    assert batched.owned_usd == single.owned_usd
+    for pool in ("printing", "functional", "variant_chase"):
+        bp, sp = getattr(batched, pool), getattr(single, pool)
+        assert bp.count == sp.count
+        assert bp.usd == sp.usd
+
+
+def test_multi_family_diff_empty_when_all_codes_unresolvable(tmp_db, tla_family):
+    from magic_manager import card_diff
+    skipped: list[str] = []
+    diffs = card_diff.multi_family_diff(["nope-1", "nope-2"], on_skip=skipped.append)
+    assert diffs == []
+    assert skipped == ["nope-1", "nope-2"]

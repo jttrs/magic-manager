@@ -158,30 +158,93 @@ def collection_diff(*, refresh: bool = False, warn=None, log=None) -> list[Famil
     if not parents:
         return []
 
-    # Group the already-materialized owned rows by set code ONCE (F3), so
-    # `_build_family_diff` doesn't re-fetch `_owned_rows_for_codes` per family.
-    # Global dedup by (scryfall_id, finish) over the union equals per-family
-    # dedup here since each card has exactly one set_code and families
-    # partition codes disjointly (no code is grouped under two anchors).
+    # DELIBERATE (not drift): card-diff is about the three missing pools, so
+    # non-family (sld/mar/…) and unconfigured families — which have no missing-set
+    # notion — are DROPPED entirely. set_status.render_overview, sharing the same
+    # collection_prepass, instead emits them as owned-only rows with '-' cells.
+    # Both are intended; the final loops differ by design.
+    resolved = [
+        (pc, pn, fam_codes_by_parent[pc], missing_rows_by_parent[pc])
+        for pc, pn in parents.items()
+        if pc not in family_status.NON_FAMILY_SETS
+        and missing_rows_by_parent.get(pc) is not None
+    ]
+    return _assemble_family_diffs(resolved, price_map=price_map, owned_rows=all_rows)
+
+
+def _assemble_family_diffs(
+    resolved: list[tuple[str, str, set[str], list]],
+    *, price_map: dict, owned_rows: list,
+) -> list[FamilyDiff]:
+    """Build + value a FamilyDiff per already-resolved family, sorted by owned_usd
+    desc. The shared tail of `collection_diff` and `multi_family_diff`: given each
+    family's ``(parent_code, parent_name, family_code_set, missing_rows)`` plus ONE
+    pre-fetched ``price_map`` and the flat ``owned_rows`` list, group owned rows by
+    set code ONCE and slice per family into `_build_family_diff` — so no family
+    re-fetches owned rows or re-resolves prices.
+
+    Grouping is sound because each card has exactly one set_code and families
+    partition set codes disjointly (no code is grouped under two anchors), so the
+    global ``(scryfall_id, finish)`` dedup equals the per-family dedup."""
     owned_rows_by_set: dict[str, list] = {}
-    for r in all_rows:
+    for r in owned_rows:
         owned_rows_by_set.setdefault((r.card.get("set") or "").lower(), []).append(r)
 
     diffs: list[FamilyDiff] = []
-    for pc, pn in parents.items():
-        # DELIBERATE (not drift): card-diff is about the three missing pools, so
-        # non-family (sld/mar/…) and unconfigured families — which have no
-        # missing-set notion — are DROPPED entirely. set_status.render_overview,
-        # sharing the same collection_prepass, instead emits them as owned-only
-        # rows with '-' cells. Both are intended; the final loops differ by design.
-        if pc in family_status.NON_FAMILY_SETS:
-            continue
-        mrows = missing_rows_by_parent.get(pc)
-        if mrows is None:
-            continue  # unconfigured — no missing-set rules for this family
-        codes = fam_codes_by_parent[pc]
-        owned_rows = [r for c in codes for r in owned_rows_by_set.get(c, [])]
-        diffs.append(_build_family_diff(pc, pn, codes, mrows, price_map, owned_rows=owned_rows))
+    for pc, pn, codes, mrows in resolved:
+        fam_owned = [r for c in codes for r in owned_rows_by_set.get(c, [])]
+        diffs.append(_build_family_diff(pc, pn, codes, mrows, price_map, owned_rows=fam_owned))
 
     diffs.sort(key=lambda f: f.owned_usd, reverse=True)
     return diffs
+
+
+def multi_family_diff(codes, *, refresh: bool = False, warn=None, log=None,
+                      on_skip=None) -> list[FamilyDiff]:
+    """FamilyDiffs for an explicit list of family codes, batched like
+    `collection_diff` — ONE local-first price resolve over the union of every
+    requested family's owned + missing ids, instead of a per-family resolve.
+
+    The multi-code sibling of `family_diff` (single anchor) and `collection_diff`
+    (all owned families). Resolves each code's rows ONCE, unions the ids, does one
+    `family_status._local_prices`, then builds each FamilyDiff from the shared
+    price map with no re-materialization (the gallery's `--codes` path, F4).
+
+    ``refresh``/``warn``/``log`` match `family_diff`. ``on_skip(code)`` (optional)
+    is called for each code that doesn't resolve to a configured family (unknown
+    anchor or no missing-set rules), so the caller can warn per code; such codes
+    are omitted from the result."""
+    # Resolve + materialize each family ONCE (parent, name, code set, missing rows).
+    resolved: list[tuple[str, str, set[str], list]] = []
+    for code in codes:
+        try:
+            parent_code, parent_name, related = family_status.resolve_family(code)
+        except LookupError:
+            if on_skip:
+                on_skip(code)
+            continue
+        family_code_set = family_status._family_code_set(parent_code, related)
+        try:
+            missing_rows = missing_mod.missing_printings(parent_code)
+        except (sel_mod.SelectorParseError, LookupError):
+            if on_skip:
+                on_skip(code)
+            continue
+        resolved.append((parent_code, parent_name, family_code_set, missing_rows))
+
+    if not resolved:
+        return []
+
+    # Materialize owned rows per family ONCE, union every id (owned ∪ missing),
+    # then ONE local-first price resolve across the whole set.
+    owned_by_parent = {
+        pc: family_status._owned_rows_for_codes(fcs)
+        for pc, _pn, fcs, _mr in resolved
+    }
+    all_owned_rows = [r for rows in owned_by_parent.values() for r in rows]
+    ids = {r.scryfall_id for r in all_owned_rows}
+    for _pc, _pn, _fcs, mrows in resolved:
+        ids.update(r.scryfall_id for r in mrows)
+    price_map = family_status._local_prices(list(ids), refresh=refresh, warn=warn, log=log)
+
+    return _assemble_family_diffs(resolved, price_map=price_map, owned_rows=all_owned_rows)

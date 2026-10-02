@@ -589,14 +589,14 @@ def main() -> int:
     log = lambda m: print(m, file=sys.stderr)  # noqa: E731
 
     if args.codes:
-        diffs = []
-        for code in args.codes:
-            fd = card_diff_mod.family_diff(code, refresh=args.refresh, warn=stale_codes.extend, log=log)
-            if fd is None:
-                print(f"warning: {code!r} is not a resolvable/configured family — skipped.",
-                      file=sys.stderr)
-                continue
-            diffs.append(fd)
+        # Batched: ONE local-first price resolve over the union of every requested
+        # family's ids (F4), not a per-family resolve.
+        diffs = card_diff_mod.multi_family_diff(
+            args.codes, refresh=args.refresh, warn=stale_codes.extend, log=log,
+            on_skip=lambda c: print(
+                f"warning: {c!r} is not a resolvable/configured family — skipped.",
+                file=sys.stderr),
+        )
         if not diffs:
             print("error: none of the given codes resolved to a configured family.",
                   file=sys.stderr)
