@@ -485,6 +485,95 @@ def test_sync_both_unresolved_ref_still_ingests_card(tmp_db, fake_edhrec, fake_s
     assert res.card is not None and len(res.card.rows) == 1
 
 
+# ---------- workflow D: compare two commanders ----------
+
+def test_compare_commanders_partitions_and_dedupes(tmp_db, fake_scryfall, seed_cards, make_card, monkeypatch):
+    from magic_manager import legality
+    # Two eligible commanders; resolver maps each ref to its own name+card.
+    cards = {
+        "Alpha": "Legendary Creature — Human Wizard",
+        "Beta": "Legendary Creature — Elf Druid",
+    }
+    monkeypatch.setattr(edhrec, "resolve_oracle_card",
+                        lambda ref: (ref, {"type_line": cards[ref], "oracle_text": ""}))
+    assert all(legality.is_commander_eligible({"type_line": t, "oracle_text": ""})
+               for t in cards.values())
+    fake_scryfall(collection_found=[])
+
+    # Per-slug commander pages: Alpha runs {Sol Ring (in two lists), Shared};
+    # Beta runs {Shared, Beta-Only}. Shared is in both → 'both' bucket.
+    pages = {
+        "alpha": _page({
+            "topcards": [_cardview("Sol Ring", "sol-ring", num_decks=90, potential_decks=100),
+                         _cardview("Shared Card", "shared-card", num_decks=80, potential_decks=100)],
+            # Sol Ring ALSO appears under a category list → must dedupe to ONE entry (tags unioned).
+            "manaartifacts": [_cardview("Sol Ring", "sol-ring", num_decks=90, potential_decks=100)],
+        }),
+        "beta": _page({
+            "topcards": [_cardview("Shared Card", "shared-card", num_decks=40, potential_decks=100),
+                         _cardview("Beta Only", "beta-only", num_decks=30, potential_decks=100)],
+        }),
+    }
+    monkeypatch.setattr(edhrec, "commander_page", lambda slug: dict(pages[slug]))
+
+    res = edhrec.compare_commanders("Alpha", "Beta")
+    by_name = {c.name: c for c in res.cards}
+
+    # Buckets: Sol Ring (A-only), Beta Only (B-only), Shared Card (both).
+    assert by_name["Sol Ring"].bucket == "a_only"
+    assert by_name["Beta Only"].bucket == "b_only"
+    assert by_name["Shared Card"].bucket == "both"
+
+    # Dedup: Sol Ring appeared in two of Alpha's lists → ONE CompareCard, tags unioned.
+    assert set(by_name["Sol Ring"].tags) == {"topcards", "manaartifacts"}
+
+    # 'both' carries each side's inclusion % and a delta.
+    shared = by_name["Shared Card"]
+    assert shared.a_pct == pytest.approx(80.0, abs=0.01)
+    assert shared.b_pct == pytest.approx(40.0, abs=0.01)
+    assert shared.delta == pytest.approx(40.0, abs=0.01)
+    # a_only / b_only carry only their own side.
+    assert by_name["Sol Ring"].b_pct is None
+    assert by_name["Beta Only"].a_pct is None
+
+
+def test_compare_commanders_rejects_ineligible(tmp_db, fake_scryfall, monkeypatch):
+    monkeypatch.setattr(edhrec, "resolve_oracle_card",
+                        lambda ref: (ref, {"type_line": "Artifact", "oracle_text": ""}))
+    fake_scryfall(collection_found=[])
+    with pytest.raises(edhrec.EdhrecError):
+        edhrec.compare_commanders("Sol Ring", "Something Else")
+
+
+def test_compare_commanders_reads_cache_without_resync(tmp_db, fake_scryfall, seed_cards, make_card, monkeypatch):
+    """When a commander page is already cached, compare reads the normalized rows
+    and does NOT re-fetch the page (the second commander, uncached, syncs once)."""
+    from magic_manager import legality
+    monkeypatch.setattr(edhrec, "resolve_oracle_card",
+                        lambda ref: (ref, {"type_line": "Legendary Creature — Human", "oracle_text": ""}))
+    fake_scryfall(collection_found=[])
+
+    beta_page = _page({"topcards": [_cardview("Beta Card", "beta-card", num_decks=10, potential_decks=100)]})
+    calls = {"n": 0}
+
+    def _page_for(slug):
+        calls["n"] += 1
+        if slug == "beta":
+            return dict(beta_page)
+        raise AssertionError(f"commander_page unexpectedly called for cached slug {slug!r}")
+
+    # Pre-seed Alpha's cache directly (as if a prior sync ran).
+    monkeypatch.setattr(edhrec, "commander_page",
+                        lambda slug: dict(_page({"topcards": [_cardview("Alpha Card", "alpha-card", num_decks=5, potential_decks=100)]})))
+    edhrec.sync_commander("Alpha")           # caches alpha
+    monkeypatch.setattr(edhrec, "commander_page", _page_for)  # now Alpha must NOT be fetched
+
+    res = edhrec.compare_commanders("Alpha", "Beta")
+    names = {c.name for c in res.cards}
+    assert names == {"Alpha Card", "Beta Card"}
+    assert calls["n"] == 1  # only Beta fetched; Alpha served from cache
+
+
 # ---------- names_from_selector: token + digital-only exclusion ----------
 
 def test_names_from_selector_excludes_tokens_and_digital(tmp_db, seed_cards, make_card):

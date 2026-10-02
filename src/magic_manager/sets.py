@@ -1395,11 +1395,15 @@ def lowest_price_by_oracle(oracle_ids: Iterable[str], *, conn=None) -> dict[str,
     printing — so "how much does this card cost" is best answered by the cheapest
     printing the user could buy. Returns ``{oracle_id: {name, type_line, cmc,
     mana_cost, color_identity, rarity, lowest_usd, lowest_usd_foil,
-    prices_updated_at}}`` for every ``oracle_id`` present in the local ``cards``
-    table (ids absent are omitted — the caller treats them as unpriced). The
-    metadata columns (name/type_line/cmc/…) are taken from the cheapest-nonfoil
-    printing so a card's face data comes from a single coherent row; ``lowest_usd``
-    / ``lowest_usd_foil`` are the ``MIN`` across every printing of that oracle.
+    prices_updated_at, scryfall_id, image_uri, set_code, collector_number}}``
+    for every ``oracle_id`` present in the local ``cards`` table (ids absent are
+    omitted — the caller treats them as unpriced). The metadata columns
+    (name/type_line/cmc/… plus the representative printing's ``scryfall_id`` /
+    ``image_uri`` / ``set_code`` / ``collector_number``, for callers that need an
+    image or a card link) are taken from the cheapest-nonfoil printing so a card's
+    face data comes from a single coherent row; ``lowest_usd`` / ``lowest_usd_foil``
+    are the ``MIN`` across every printing of that oracle (so the min price may
+    come from a *different* printing than the representative-row metadata).
 
     Complements :func:`card_price_map` (price a specific printing by id) — this is
     the oracle-grain sibling, the single source of truth for "lowest USD for a
@@ -1421,6 +1425,7 @@ def lowest_price_by_oracle(oracle_ids: Iterable[str], *, conn=None) -> dict[str,
                 SELECT
                     oracle_id, name, type_line, cmc, mana_cost,
                     color_identity, rarity,
+                    scryfall_id, image_uri, set_code, collector_number,
                     MIN(prices_usd)        OVER (PARTITION BY oracle_id) AS lowest_usd,
                     MIN(prices_usd_foil)   OVER (PARTITION BY oracle_id) AS lowest_usd_foil,
                     MAX(prices_updated_at) OVER (PARTITION BY oracle_id) AS newest_stamp,
@@ -1433,7 +1438,8 @@ def lowest_price_by_oracle(oracle_ids: Iterable[str], *, conn=None) -> dict[str,
             )
             SELECT
                 oracle_id, name, type_line, cmc, mana_cost,
-                color_identity, rarity, lowest_usd, lowest_usd_foil, newest_stamp
+                color_identity, rarity, lowest_usd, lowest_usd_foil, newest_stamp,
+                scryfall_id, image_uri, set_code, collector_number
             FROM ranked
             WHERE rn = 1
             """,
@@ -1450,6 +1456,12 @@ def lowest_price_by_oracle(oracle_ids: Iterable[str], *, conn=None) -> dict[str,
                 "lowest_usd": r["lowest_usd"],
                 "lowest_usd_foil": r["lowest_usd_foil"],
                 "prices_updated_at": r["newest_stamp"],
+                # Representative (cheapest-nonfoil) printing — for callers that
+                # need an image or a Scryfall link at the oracle grain.
+                "scryfall_id": r["scryfall_id"],
+                "image_uri": r["image_uri"],
+                "set_code": r["set_code"],
+                "collector_number": r["collector_number"],
             }
             for r in rows
         }
