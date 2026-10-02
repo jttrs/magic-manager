@@ -110,12 +110,10 @@ def test_variant_chase_empty_when_no_oracle_owned(tmp_db, tla_family, seed_cards
 def test_family_diff_pools_populated_and_counts_match(
         tmp_db, tla_family, seed_cards, make_card, monkeypatch):
     """family_diff assembles the three pools with counts matching the direct
-    missing.py primitives. scryfall.collection (the live-price fetch) is
-    stubbed to return nothing found — family_diff's $ fields fall back to 0.0,
-    which is fine since this test only asserts counts/rows, not $."""
+    missing.py primitives. Pricing is local-first (sets.priced_map reads the
+    seeded cards table directly, no network) — this test only asserts
+    counts/rows, not $."""
     from magic_manager import missing, card_diff, db
-    import magic_manager.scryfall as scry
-    monkeypatch.setattr(scry, "collection", lambda ids: ([], list(ids)))
     seed_cards([
         # Hero: base owned, variant missing → counts toward printing + variant-chase.
         make_card(id="hero-base", oracle_id="o-hero", set="tla", collector_number="5",

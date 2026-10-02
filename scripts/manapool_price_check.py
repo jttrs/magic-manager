@@ -31,6 +31,12 @@ PIPELINE (deterministic):
 Matching is by scryfall_id + finish ONLY — never by name — so a borderless /
 foil / etched variant is always compared to its own market number.
 
+Cross-universe exception: grading a cart against CURRENT market is live by
+definition (step 2 always refreshes via scryfall.collection), so this
+command is NOT subject to the repo's local-first convention — see
+CLAUDE.md § Price freshness: cross-universe exception. ``--refresh`` is
+accepted only for CLI surface consistency; it has no additional effect.
+
 Usage:
     uv run python scripts/manapool_cart.py | uv run python scripts/manapool_price_check.py
     uv run python scripts/manapool_price_check.py --file cart.json
@@ -55,6 +61,14 @@ def main() -> int:
     ap.add_argument("--file", default=None, help="Cart JSON path, or '-'/omit for stdin.")
     ap.add_argument("--over-market-pct", type=float, default=50.0,
                     help="Flag lines priced this %% or more over Scryfall/TCG market. Default 50.")
+    # Cross-universe exception (CLAUDE.md § Price freshness): grading a cart
+    # vs current market is always live, so --refresh is a no-op — accepted
+    # only to keep the CLI surface uniform with local-first commands.
+    ap.add_argument("--refresh", action="store_true",
+                    help="(Prices are always fetched live for this command — "
+                         "it needs current cross-set market data; --refresh "
+                         "is accepted for CLI consistency and has no "
+                         "additional effect.)")
     args = ap.parse_args()
 
     cart = load_cart(args.file, method="bookmarklet")

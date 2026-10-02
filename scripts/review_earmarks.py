@@ -56,7 +56,7 @@ def _age_days(captured_at: str, today: str) -> int | None:
 
 def _value_product(set_code: str, product_name: str, market_provider,
                    *, edition: str | None = None,
-                   market_name: str = "tcgcsv", refresh_stale: bool = True) -> dict:
+                   market_name: str = "tcgcsv", refresh_stale: bool = False) -> dict:
     """Recompute market + intrinsic for one earmarked product.
 
     Dispatches on ``set_code`` exactly like the other sealed-value tools:
@@ -91,8 +91,9 @@ def _value_product(set_code: str, product_name: str, market_provider,
     except LookupError as e:
         return {"market": None, "intrinsic": None, "error": str(e)}
 
-    # Ensure referenced sets have current prices (missing always; stale unless
-    # --no-refresh). referenced_set_codes folds in cross-set booster sourceSetCodes.
+    # Ensure referenced sets have current prices (missing always; stale only
+    # with --refresh — local-first by default). referenced_set_codes folds in
+    # cross-set booster sourceSetCodes.
     scout = sealed.build_product_tree(set_code, product)
     sets.ensure_priced(sealed.referenced_set_codes(scout),
                        refresh_stale=refresh_stale,
@@ -121,7 +122,7 @@ def _product_cell(p) -> str:
 
 
 def _build_rows(products, market_provider, today: str,
-                *, market_name: str = "tcgcsv", refresh_stale: bool = True) -> list[dict]:
+                *, market_name: str = "tcgcsv", refresh_stale: bool = False) -> list[dict]:
     """Value every product and assemble sortable row dicts."""
     rows = []
     for p in products:
@@ -206,9 +207,10 @@ def main() -> int:
                     default="tcgcsv", help="Live market price source (default: tcgcsv).")
     ap.add_argument("--format", choices=["txt", "xlsx", "all"], default="all",
                     help="Artifact(s) to write (default: all).")
-    ap.add_argument("--no-refresh", action="store_true",
-                    help="Don't re-sync sets with stale (>7d) prices; use local "
-                         "prices as-is and warn. Faster/offline, but may under-report.")
+    ap.add_argument("--refresh", action="store_true",
+                    help="Re-sync sets with stale (>7d) prices before pricing; "
+                         "default is local-first (use local prices, warn on stale).")
+    ap.add_argument("--no-refresh", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--out-dir", type=Path, default=None,
                     help="Override output dir (default: output/earmarks-review/reports/).")
     args = ap.parse_args()
@@ -225,8 +227,10 @@ def main() -> int:
     today = now.strftime("%Y-%m-%d")
 
     market_provider = sealed.make_market_provider(args.market)
+    # --no-refresh is a deprecated no-op alias: local-first is now the default,
+    # so "don't refresh" is already the baseline behavior.
     rows = _build_rows(products, market_provider, today,
-                       market_name=args.market, refresh_stale=not args.no_refresh)
+                       market_name=args.market, refresh_stale=args.refresh)
     lines = _render_lines(rows, today)
     print("\n" + "\n".join(lines))
 

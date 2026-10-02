@@ -37,7 +37,7 @@ Note: EDHREC's card-page commander lists carry deck counts but no synergy/lift, 
 | Flag | Effect |
 |---|---|
 | `--top N` | Show at most N commanders (default 25). |
-| `--no-refresh` | Use local prices as-is; don't re-sync stale sets first. |
+| `--refresh` | Pricing is local-first by default (missing sets always sync, stale sets just warn); pass this to also re-sync stale (>7d) sets. |
 
 ## Output
 

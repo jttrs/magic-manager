@@ -18,6 +18,10 @@ Usage:
     uv run python scripts/card_diff_html.py                  # every owned+configured family
     uv run python scripts/card_diff_html.py acr tdm           # just these families
     uv run python scripts/card_diff_html.py --pool functional # narrow which pools render
+    uv run python scripts/card_diff_html.py --refresh         # sync stale sets before pricing
+
+Prices are LOCAL-FIRST (read from the local `cards` table, not re-fetched live
+each run) — pass --refresh to sync stale (>7d) referenced sets before pricing.
 
 Exit codes:
     0 — gallery written (even if a named code has nothing to show)
@@ -574,14 +578,22 @@ def main() -> int:
                      help="Family anchor/member code(s). Omit for every owned+configured family.")
     ap.add_argument("--pool", choices=("printing", "functional", "variant-chase", "all"),
                      default="all", help="Which pool(s) to render (default: all).")
+    ap.add_argument("--refresh", action="store_true",
+                     help="Sync stale (>7d) referenced sets before pricing. Default: "
+                          "local-first (fast, uses local prices as-is).")
     args = ap.parse_args()
 
     pools = list(POOL_CHOICES) if args.pool == "all" else [args.pool]
 
+    stale_codes: list[str] = []
+
+    def _warn(codes: list[str]) -> None:
+        stale_codes.extend(codes)
+
     if args.codes:
         diffs = []
         for code in args.codes:
-            fd = card_diff_mod.family_diff(code)
+            fd = card_diff_mod.family_diff(code, refresh=args.refresh, warn=_warn)
             if fd is None:
                 print(f"warning: {code!r} is not a resolvable/configured family — skipped.",
                       file=sys.stderr)
@@ -592,12 +604,16 @@ def main() -> int:
                   file=sys.stderr)
             return 2
     else:
-        print("Computing collection-wide card diff (this can take a few minutes)…",
-              file=sys.stderr)
-        diffs = card_diff_mod.collection_diff()
+        print("Computing collection-wide card diff (local-first; pass --refresh to sync "
+              "stale sets first)…", file=sys.stderr)
+        diffs = card_diff_mod.collection_diff(refresh=args.refresh, warn=_warn)
         if not diffs:
             print("error: no owned+configured families found.", file=sys.stderr)
             return 2
+
+    if stale_codes:
+        print(f"note: {len(set(stale_codes))} set(s) have stale prices (>7d); showing "
+              f"local — pass --refresh to re-sync.", file=sys.stderr)
 
     all_tiles = build_tiles(diffs, pools)
     tiles_by_family: dict[str, list[dict]] = {}

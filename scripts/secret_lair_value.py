@@ -13,6 +13,12 @@ endpoint through the project's rate-limited wrapper. Prices are cached
 inside the wrapper (24h TTL) so re-runs the same day are instant. Deck
 metadata comes from the MTGJSON wrapper (also cached).
 
+Cross-universe exception: SLD singles valuation is inherently a LIVE
+cross-set lookup (floor singles span every set the SLD cards also print
+in), so this command is NOT subject to the repo's local-first convention —
+see CLAUDE.md § Price freshness: cross-universe exception. ``--refresh`` is
+accepted only for CLI surface consistency; it has no additional effect.
+
 Input:
   - positional ``limit`` (default 10) or ``--limit N`` — how many of the most
     recent drops to render. ``--limit`` wins if both are given.
@@ -81,6 +87,15 @@ def main() -> int:
     ap.add_argument(
         "--market", choices=["null", "tcgcsv", "tcgapi", "manapool", "chain", "compare"],
         default="chain", help="Sealed-market source for the Sealed mkt column (default: chain).",
+    )
+    # Cross-universe exception (CLAUDE.md § Price freshness): SLD valuation is
+    # inherently live/cross-set, so --refresh is a no-op — accepted only to
+    # keep the CLI surface uniform with local-first commands.
+    ap.add_argument(
+        "--refresh", action="store_true",
+        help="(Prices are always fetched live for this command — it needs "
+             "current cross-set market data; --refresh is accepted for CLI "
+             "consistency and has no additional effect.)",
     )
     args = ap.parse_args()
 

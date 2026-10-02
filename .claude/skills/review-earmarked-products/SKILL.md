@@ -60,9 +60,10 @@ Stdout: `## Earmarked products — deal review` + the table + a `TOTALS` line.
 - The DB stores only non-derivable facts (store URL + asking-price snapshot).
   Market/intrinsic are recomputed at review time — one source of price truth.
 - Prices come from the local `cards` table and the chosen market provider;
-  `--market null` is fully offline. The script **auto-refreshes** missing OR
-  stale (>7d) referenced sets before valuing; `--no-refresh` skips the re-sync
-  and warns which sets are stale.
+  `--market null` is fully offline. Pricing is **local-first**: the script
+  always syncs genuinely missing referenced sets before valuing; stale (>7d)
+  sets are left as-is and warned about unless the explicit `--refresh` flag
+  is passed to also re-sync them.
 - No `Date.now()` in row data — "today" is captured once for the age column and
   the filename timestamp only.
 

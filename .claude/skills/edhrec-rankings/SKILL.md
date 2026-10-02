@@ -58,7 +58,7 @@ uv run mm edhrec rankings commanders --set fin           # set family (unions al
 | `--timeframe week\|month\|year` | Ranking window for `commanders`/`cards` (default `week`; ignored for `salt`, `--tag`, `--set`). |
 | `--color` / `--tag` / `--set` | Commander-only filters (mutually exclusive) — see above. |
 | `--top N` | Show at most N entries (default 50). |
-| `--no-refresh` | Use local prices as-is; don't re-sync stale sets first. |
+| `--refresh` | Pricing is local-first by default (missing sets always sync, stale sets just warn); pass this to also re-sync stale (>7d) sets. |
 
 ## Output
 

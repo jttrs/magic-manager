@@ -166,15 +166,18 @@ def main() -> int:
                     help="Sealed market price source (default: tcgcsv; sealed input only).")
     ap.add_argument("--format", choices=["txt", "xlsx", "all"], default="all",
                     help="Artifact(s) to write (default: all).")
-    ap.add_argument("--no-refresh", action="store_true",
-                    help="Don't re-sync sets with stale (>7d) prices; use local "
-                         "prices as-is and warn. Faster/offline, but may under-report.")
+    ap.add_argument("--refresh", action="store_true",
+                    help="Re-sync sets with stale (>7d) prices before pricing; "
+                         "default is local-first (use local prices, warn on stale).")
+    ap.add_argument("--no-refresh", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--out-dir", type=Path, default=None,
                     help="Override output dir (default: output/construct-value/reports/).")
     args = ap.parse_args()
     if args.out_dir is None:
         args.out_dir = util.output_dir("construct-value", "reports")
-    refresh_stale = not args.no_refresh
+    # --no-refresh is a deprecated no-op alias: local-first is now the default,
+    # so "don't refresh" is already the baseline behavior.
+    refresh_stale = args.refresh
 
     # Exactly one input form.
     forms = [bool(args.set_code), bool(args.deck_file), bool(args.slug), bool(args.decklist)]

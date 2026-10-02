@@ -12,7 +12,7 @@ import json as _json
 import sys
 from pathlib import Path
 
-from . import db, scryfall, sets as sets_mod
+from . import db, sets as sets_mod
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -161,14 +161,19 @@ def _family_code_set(parent_code: str, related: list[dict]) -> set[str]:
     return codes
 
 
-# ---------- price helpers (live) ----------
+# ---------- price helpers (local-first) ----------
 
-def _live_prices(scryfall_ids: list[str]) -> dict[str, dict]:
-    """scryfall_id -> prices dict ({'usd':..,'usd_foil':..}), live-fetched."""
+def _live_prices(scryfall_ids: list[str], *, refresh: bool = False, warn=None) -> dict[str, dict]:
+    """scryfall_id -> prices dict ({'usd':..,'usd_foil':..,'prices_updated_at':..}).
+
+    LOCAL-FIRST via `sets.priced_map` — reads prices from the local `cards`
+    table (never a blanket live fetch); syncs ONLY stale sets when
+    `refresh=True`, else warns via `warn([set_codes])` (if given) and uses
+    local as-is. Name kept for its callers (`_owned_summary_for_codes`,
+    `collection_prepass`) even though it no longer fetches live."""
     if not scryfall_ids:
         return {}
-    found, _ = scryfall.collection([{"id": s} for s in sorted(set(scryfall_ids))])
-    return {c["id"]: (c.get("prices") or {}) for c in found}
+    return sets_mod.priced_map(scryfall_ids, refresh=refresh, warn=warn)
 
 
 def _unit(prices: dict, finish: str) -> float:
@@ -201,14 +206,17 @@ def _owned_rows_for_codes(codes) -> list:
     return list(union.values())
 
 
-def _owned_summary_for_codes(codes, price_map: dict[str, dict] | None = None) -> tuple[int, int, float]:
+def _owned_summary_for_codes(codes, price_map: dict[str, dict] | None = None, *,
+                             refresh: bool = False, warn=None) -> tuple[int, int, float]:
     """(distinct_printings, total_qty, live_usd) over an explicit code set —
     the set_targets-authoritative sibling of owned_summary. ``price_map`` supplies
-    pre-batched prices (overview); None fetches for just these codes."""
+    pre-batched prices (overview); None resolves (local-first) for just these
+    codes. ``refresh``/``warn`` are passed through to the local resolve."""
     rows = _owned_rows_for_codes(codes)
     prints = len(rows)
     qty = sum(r.quantity for r in rows)
-    prices = price_map if price_map is not None else _live_prices([r.scryfall_id for r in rows])
+    prices = (price_map if price_map is not None
+              else _live_prices([r.scryfall_id for r in rows], refresh=refresh, warn=warn))
     usd = sum(_unit(prices.get(r.scryfall_id, {}), r.finish) * r.quantity for r in rows)
     return prints, qty, usd
 
@@ -219,7 +227,7 @@ def is_characterized(parent_code: str) -> bool:
 
 # ---------- collection-wide pre-pass (shared by set_status + card_diff) ----------
 
-def collection_prepass() -> tuple[
+def collection_prepass(*, refresh: bool = False, warn=None) -> tuple[
     dict[str, str], dict[str, set[str]], dict[str, list | None], dict[str, dict], list
 ]:
     """The 4-step pre-pass both `set_status.render_overview` and
@@ -229,8 +237,9 @@ def collection_prepass() -> tuple[
     2. ``fam_codes_by_parent`` — set_targets-authoritative code set per parent.
     3. ``missing_rows_by_parent`` — `missing.missing_printings` materialized
        ONCE per family (skipping `NON_FAMILY_SETS`; `None` = unconfigured).
-    4. ``price_map`` — ONE bulk `/cards/collection` fetch over owned ids ∪ every
-       family's missing ids.
+    4. ``price_map`` — ONE local-first resolve (`sets.priced_map`, via
+       `_live_prices`) over owned ids ∪ every family's missing ids. ``refresh``/
+       ``warn`` thread through to that resolve.
 
     Also returns ``all_owned_rows`` (the flat owned-rows list from step 4's
     `_owned_rows_for_codes` call) so a caller doing a global dedup (e.g.
@@ -269,7 +278,7 @@ def collection_prepass() -> tuple[
     for mrows in missing_rows_by_parent.values():
         if mrows:
             ids.update(r.scryfall_id for r in mrows)
-    price_map = _live_prices(list(ids))
+    price_map = _live_prices(list(ids), refresh=refresh, warn=warn)
 
     return parents, fam_codes_by_parent, missing_rows_by_parent, price_map, all_owned_rows
 

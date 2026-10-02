@@ -24,6 +24,13 @@ All floor math lives in ``magic_manager.card_floor`` (the single engine); this
 script is the thin report/formatting layer. Reference output shape:
 ``Card | CN | this-print $ | cheapest-anywhere (set/finish)``.
 
+Cross-universe exception: the default ``--scope anywhere`` is inherently a
+LIVE, cross-every-set lookup (local can't answer "cheapest anywhere"), so it
+is NOT subject to the repo's local-first convention — see CLAUDE.md § Price
+freshness: cross-universe exception. ``--refresh`` is accepted only for CLI
+surface consistency with the local-first commands; it has no additional
+effect here.
+
 Emits (matching set-status's chat relay + edhrec/sealed-value's artifacts):
   * a markdown table to stdout (Scryfall-hyperlinked) for chat relay, and
   * JSON + XLSX under output/card-floor/reports/.
@@ -160,6 +167,14 @@ def main() -> int:
     ap.add_argument("--finish", choices=["either", "preserve"], default="either",
                     help="either = cheaper finish, nonfoil-preferred (default); "
                          "preserve = separate nonfoil/foil floor columns.")
+    # Cross-universe exception (CLAUDE.md § Price freshness): --scope anywhere
+    # is inherently a live, cross-every-set lookup, so --refresh is a no-op
+    # here — accepted only to keep the CLI surface uniform with local-first commands.
+    ap.add_argument("--refresh", action="store_true",
+                    help="(Prices are always fetched live for this command's "
+                         "default --scope anywhere — it needs current "
+                         "cross-set market data; --refresh is accepted for "
+                         "CLI consistency and has no additional effect.)")
     args = ap.parse_args()
 
     if args.stdin == (args.selector is not None):

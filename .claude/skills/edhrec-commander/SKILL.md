@@ -36,7 +36,7 @@ uv run mm edhrec commander "<card>"        # e.g. "Atraxa, Praetors' Voice"
 | Flag | Effect |
 |---|---|
 | `--top N` | Show at most N cards (default 25). |
-| `--no-refresh` | Use local prices as-is; don't re-sync stale sets first. Cards from unsynced sets show blank type/MV/price. |
+| `--refresh` | Pricing is local-first by default (missing sets always sync, stale sets just warn); pass this to also re-sync stale (>7d) sets. Cards from unsynced sets show blank type/MV/price. |
 
 ## Output
 

@@ -98,9 +98,10 @@ Stdout: `## Construct value — <label>` + the table + a `TOTALS` line
 ## Determinism guarantees
 
 - Singles prices come from the local `cards` table via the shared
-  `sets.card_price_map`. The script **auto-refreshes** missing OR stale (>7d)
-  referenced sets before pricing, and prints a `Prices fetched: <date>` footer;
-  `--no-refresh` skips the re-sync (offline) and warns which sets are stale.
+  `sets.card_price_map`. Pricing is **local-first**: the script always syncs
+  genuinely missing referenced sets, and prints a `Prices fetched: <date>`
+  footer; stale (>7d) sets are left as-is and warned about unless the
+  explicit `--refresh` flag is passed to also re-sync them.
   Unpriced printings are counted in the need but contribute $0, surfaced as
   `coverage` + an `! N card(s) unpriced` note — never silently absorbed.
 - `loose` is `inventory.free_quantity` at run time; the with-collection figure is

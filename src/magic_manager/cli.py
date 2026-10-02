@@ -3619,6 +3619,11 @@ def query_card_diff_cmd(
         20, "--chunk-size",
         help="Printings per Scryfall URL chunk (default 20; matches Scryfall web UI's nested-conditions cap).",
     ),
+    refresh: bool = typer.Option(
+        False, "--refresh",
+        help="Sync stale (>7d) referenced sets before pricing. Default: local-first "
+             "(fast, uses local prices as-is; stale sets are just noted on stderr).",
+    ),
 ):
     """Three-pool "diff vs collection" report for a family (or every owned
     family at once).
@@ -3637,6 +3642,9 @@ def query_card_diff_cmd(
     WITH a CODE → a single-family report: for each requested pool (--pool,
     default all three), a header + a chunked Scryfall-URL table (sorted
     cheapest-first), matching `mm query missing-set`'s table shape.
+
+    Prices are LOCAL-FIRST (read from the local `cards` table, not re-fetched
+    live) — pass --refresh to sync stale (>7d) referenced sets first.
     """
     from . import card_diff as card_diff_mod
 
@@ -3646,8 +3654,13 @@ def query_card_diff_cmd(
         raise typer.Exit(2)
     pools = list(valid_pools) if pool == "all" else [pool]
 
+    stale_codes: list[str] = []
+
+    def _warn(codes: list[str]) -> None:
+        stale_codes.extend(codes)
+
     if code is None:
-        diffs = card_diff_mod.collection_diff()
+        diffs = card_diff_mod.collection_diff(refresh=refresh, warn=_warn)
         if not diffs:
             typer.echo("## Collection card-diff\n\nNo owned families yet.")
             raise typer.Exit(0)
@@ -3675,9 +3688,14 @@ def query_card_diff_cmd(
             f"**{tot_f_n}c · {util.fmt_usd(tot_f_usd)}** | "
             f"**{tot_v_n}p · {util.fmt_usd(tot_v_usd)}** |"
         )
+        if stale_codes:
+            typer.echo(
+                f"{len(set(stale_codes))} set(s) have stale prices (>7d); showing local — "
+                f"pass --refresh to re-sync.", err=True,
+            )
         return
 
-    fd = card_diff_mod.family_diff(code)
+    fd = card_diff_mod.family_diff(code, refresh=refresh, warn=_warn)
     if fd is None:
         typer.echo(f"error: {code!r} is not a resolvable/configured family (unknown code, or no "
                     f"missing-set rules — see FAMILY_DUPE_FOIL_PROMO_TYPES).", err=True)
@@ -3747,6 +3765,12 @@ def query_card_diff_cmd(
 
     if "variant-chase" in pools:
         _echo_printing_pool(fd.variant_chase.rows, "Variant-chase")
+
+    if stale_codes:
+        typer.echo(
+            f"{len(set(stale_codes))} set(s) have stale prices (>7d); showing local — "
+            f"pass --refresh to re-sync.", err=True,
+        )
 
 
 @query_app.command("missing-jumpstart")

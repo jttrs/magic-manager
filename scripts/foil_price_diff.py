@@ -11,6 +11,13 @@ Every price is fetched live via Scryfall's ``/cards/collection`` batch
 endpoint through the project's rate-limited wrapper. Prices are cached
 inside the wrapper (24h TTL) so re-runs the same day are instant.
 
+Cross-universe exception: the foil-vs-nonfoil gap is computed from live
+``/cards/collection`` prices for whatever printings are passed in (not a
+local-DB lookup), so this command is NOT subject to the repo's local-first
+convention — see CLAUDE.md § Price freshness: cross-universe exception.
+``--refresh`` is accepted only for CLI surface consistency; it has no
+additional effect.
+
 Input modes:
   - stdin (canonical): Moxfield-style lines like ``1 Card Name (SET) CN``
     or ``1 Card Name (SET) CN *F*``. Quantity and foil marker are ignored;
@@ -228,6 +235,15 @@ def main() -> int:
              "(e.g. Gandalf $195 → $423 = 117%% + $228 is not). "
              "Example: --drop-expensive 100:10 keeps everything unless "
              "%%-diff exceeds 100 AND $-diff is $10 or more.",
+    )
+    # Cross-universe exception (CLAUDE.md § Price freshness): the foil/nonfoil
+    # gap is always computed live, so --refresh is a no-op — accepted only to
+    # keep the CLI surface uniform with local-first commands.
+    ap.add_argument(
+        "--refresh", action="store_true",
+        help="(Prices are always fetched live for this command — it needs "
+             "current cross-set market data; --refresh is accepted for CLI "
+             "consistency and has no additional effect.)",
     )
     args = ap.parse_args()
 

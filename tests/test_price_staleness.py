@@ -91,8 +91,9 @@ def test_plan_sync_splits_missing_and_stale(tmp_db):
 
 
 def test_ensure_priced_syncs_missing_and_stale(tmp_db, monkeypatch):
-    """Default refresh_stale=True syncs BOTH missing and stale; refresh_stale=False
-    syncs only missing and reports stale for the caller to warn."""
+    """refresh_stale=True (the explicit --refresh opt-in) syncs BOTH missing and
+    stale; refresh_stale=False (the local-first DEFAULT) syncs only missing and
+    reports stale for the caller to warn."""
     from magic_manager import db, sets
     with db.connect() as conn:
         _seed(conn, "s1", "staleset", "1", "2020-01-01")
@@ -103,9 +104,62 @@ def test_ensure_priced_syncs_missing_and_stale(tmp_db, monkeypatch):
     sets.ensure_priced(["staleset", "missingset"], refresh_stale=True, today="2026-09-05")
     assert synced_calls and set(synced_calls[0]) == {"staleset", "missingset"}
 
-    # refresh_stale=False → syncs only missing; stale left alone
+    # refresh_stale=False (default) → syncs only missing; stale left alone
     synced_calls.clear()
     plan = sets.ensure_priced(["staleset", "missingset"], refresh_stale=False,
                               today="2026-09-05")
     assert synced_calls == [["missingset"]]
     assert plan["stale"] == ["staleset"]
+
+
+def test_priced_map_reads_local_without_network_when_fresh(tmp_db, make_card, monkeypatch):
+    """priced_map(refresh=False) is local-first: it never calls sets.sync for a
+    set whose newest price is within the freshness window."""
+    from magic_manager import db, sets
+    with db.connect() as conn:
+        db.upsert_card(conn, make_card(id="f1", set="freshset", collector_number="1"),
+                       priced_at="2026-09-04T00:00:00")
+
+    sync_calls = []
+    monkeypatch.setattr(sets, "sync", lambda codes: sync_calls.append(sorted(codes)) or 0)
+
+    result = sets.priced_map(["f1"], refresh=False, today="2026-09-05")
+    assert sync_calls == []
+    assert result["f1"]["usd"] == 1.00
+    assert result["f1"]["usd_foil"] == 2.00
+    assert result["f1"]["prices_updated_at"] == "2026-09-04T00:00:00"
+
+
+def test_priced_map_warns_on_stale_without_refresh(tmp_db, make_card, monkeypatch):
+    """Stale sets trigger the warn callback with their codes when refresh=False,
+    and sync is NOT called — local-first means stale is reported, not fetched."""
+    from magic_manager import db, sets
+    with db.connect() as conn:
+        db.upsert_card(conn, make_card(id="s1", set="staleset", collector_number="1"),
+                       priced_at="2020-01-01T00:00:00")
+
+    sync_calls = []
+    monkeypatch.setattr(sets, "sync", lambda codes: sync_calls.append(sorted(codes)) or 0)
+    warned = []
+
+    result = sets.priced_map(["s1"], refresh=False, today="2026-09-05", warn=warned.append)
+    assert sync_calls == []
+    assert warned == [["staleset"]]
+    # local price is still returned as-is
+    assert result["s1"]["usd"] == 1.00
+
+
+def test_priced_map_refresh_true_syncs_stale(tmp_db, make_card, monkeypatch):
+    """refresh=True re-syncs stale sets (and does not warn)."""
+    from magic_manager import db, sets
+    with db.connect() as conn:
+        db.upsert_card(conn, make_card(id="s1", set="staleset", collector_number="1"),
+                       priced_at="2020-01-01T00:00:00")
+
+    sync_calls = []
+    monkeypatch.setattr(sets, "sync", lambda codes: sync_calls.append(sorted(codes)) or 0)
+    warned = []
+
+    sets.priced_map(["s1"], refresh=True, today="2026-09-05", warn=warned.append)
+    assert sync_calls == [["staleset"]]
+    assert warned == []

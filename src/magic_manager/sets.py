@@ -1693,18 +1693,26 @@ def plan_sync(codes: Iterable[str], *, today: str | None = None) -> dict[str, li
     return {"missing": missing, "stale": stale}
 
 
-def ensure_priced(codes: Iterable[str], *, refresh_stale: bool = True,
+def ensure_priced(codes: Iterable[str], *, refresh_stale: bool = False,
                   today: str | None = None, log=None) -> dict[str, list[str]]:
-    """Make sure ``codes`` have current local prices before a valuation.
+    """Make sure ``codes`` have usable local prices before a valuation.
 
-    ALWAYS syncs missing sets (can't price what isn't there). Under
-    ``refresh_stale`` (default), ALSO re-syncs sets whose newest price is older
-    than ``STALE_AFTER_DAYS``; otherwise it leaves them and reports them so the
-    caller can warn. ``log`` (a ``print``-like callable) receives human progress
-    lines; pass ``None`` to stay silent. Best-effort — a sync failure is logged
-    and swallowed (the valuation just under-reports). Returns the ``plan_sync``
-    dict (``{"missing", "stale"}``) so the caller can render a warning for stale
-    sets it chose not to refresh. Shared by the value scripts (DRY)."""
+    **Local-first (the repo convention).** ALWAYS syncs genuinely MISSING sets
+    (zero local rows — can't price what isn't there). Stale sets (newest price
+    older than ``STALE_AFTER_DAYS``) are **left as-is and WARNED about by
+    default** (``refresh_stale=False``); pass ``refresh_stale=True`` (the
+    explicit ``--refresh`` opt-in) to additionally re-sync them. ``log`` (a
+    ``print``-like callable) receives human progress lines; pass ``None`` to stay
+    silent. Best-effort — a sync failure is logged and swallowed (the valuation
+    just under-reports). Returns the ``plan_sync`` dict (``{"missing", "stale"}``)
+    so the caller can render a stale-prices warning. The single DRY seam for
+    "price from local, fetch only what's missing/explicitly-refreshed" shared by
+    the value scripts; the id-keyed sibling is :func:`priced_map`.
+
+    NOTE (2026-10): the default flipped from ``True`` to ``False`` — price
+    commands are now local-first with an opt-in ``--refresh``, not
+    auto-refresh-stale with an opt-out ``--no-refresh``. See CLAUDE.md
+    § Price freshness."""
     plan = plan_sync(codes, today=today)
     to_sync = list(plan["missing"]) + (list(plan["stale"]) if refresh_stale else [])
     if to_sync and log:
@@ -1722,8 +1730,63 @@ def ensure_priced(codes: Iterable[str], *, refresh_stale: bool = True,
                 log(f"  ! sync failed: {e} (prices may under-report)")
     if not refresh_stale and plan["stale"] and log:
         log(f"  ! {len(plan['stale'])} set(s) have stale prices (>{STALE_AFTER_DAYS}d), "
-            f"not refreshed (--no-refresh): {', '.join(sorted(plan['stale']))}")
+            f"using local as-is (pass --refresh to re-sync): {', '.join(sorted(plan['stale']))}")
     return plan
+
+
+def priced_map(scryfall_ids: Iterable[str], *, refresh: bool = False,
+               today: str | None = None, warn=None, conn=None) -> dict[str, dict]:
+    """Local-first ``{scryfall_id: prices-dict}`` — the id-keyed pricing seam.
+
+    The convention entry point for "price these printings": read prices from the
+    local ``cards`` table (never a blanket live fetch), and touch the network
+    ONLY to fill genuine gaps. Steps:
+
+    1. Read local prices via :func:`card_price_map` (identity + prices + each
+       id's ``set_code`` + ``prices_updated_at``).
+    2. **Missing** ids (no local row at all) → their set codes are unknown
+       locally, so they can't be resolved here; they're simply absent from the
+       result (the caller treats them as unpriced). In practice the collection-
+       scoped callers (card_diff / set_status) pass ids that were themselves
+       materialized FROM ``cards``, so this set is empty — the general guard just
+       keeps the function honest.
+    3. **Stale** sets among the resolved ids (``MAX(prices_updated_at) >
+       STALE_AFTER_DAYS``): if ``refresh`` → ``sync`` them and re-read; else →
+       ``warn([codes])`` (if a callable was given) and use local as-is.
+
+    Returns ``{scryfall_id: {"usd", "usd_foil", "prices_updated_at"}}`` for every
+    id resolvable locally (post-refresh). ``warn`` is a ``print``-like callable
+    for the stale-not-refreshed notice; ``None`` stays silent. ``refresh=False``
+    is the local-first default (the ``--refresh`` opt-in flips it True).
+
+    This replaces the blanket ``scryfall.collection`` live fetch that
+    ``family_status._live_prices`` did — prices are already local, so re-fetching
+    them every run was redundant network work. See CLAUDE.md § Price freshness."""
+    pm = card_price_map(scryfall_ids, conn=conn)
+    if not pm:
+        return {}
+
+    referenced = {m["set_code"].lower() for m in pm.values() if m.get("set_code")}
+    stale = stale_set_codes(referenced, today=today)
+    if stale:
+        if refresh:
+            try:
+                sync(sorted(stale))
+            except Exception as e:  # noqa: BLE001 — a sync failure just leaves local prices
+                if warn:
+                    warn([f"sync failed: {e}"])
+            pm = card_price_map(scryfall_ids, conn=conn)  # re-read post-sync
+        elif warn:
+            warn(sorted(stale))
+
+    return {
+        sid: {
+            "usd": m.get("prices_usd"),
+            "usd_foil": m.get("prices_usd_foil"),
+            "prices_updated_at": m.get("prices_updated_at"),
+        }
+        for sid, m in pm.items()
+    }
 
 
 def prices_as_of(scryfall_ids: Iterable[str]) -> tuple[str | None, str | None]:

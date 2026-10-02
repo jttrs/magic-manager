@@ -145,7 +145,7 @@ def _render_tree(node: sealed.ProductNode, *, depth: int = 0) -> list[str]:
 # ---------- top singles (reuses the construct engine — DRY) ----------
 
 def _compute_top_singles(code: str, product_substr: str | None,
-                         *, refresh_stale: bool = True):
+                         *, refresh_stale: bool = False):
     """Expand the product into deterministic per-card singles, sorted by value
     desc, by REUSING ``construct``. Returns ``(rows, packs_skipped, error)``:
     ``rows`` is a list of ``construct.NetRow`` (finish-aware unit prices),
@@ -155,8 +155,9 @@ def _compute_top_singles(code: str, product_substr: str | None,
     Market is forced ``null`` here — the sealed *market* price is already shown
     in the tree above; this section is the deterministic local-price singles
     breakdown ("which cards carry the value"). ``refresh_stale`` flows to
-    construct's pricing so a --no-refresh run stays offline (the scout pass has
-    already synced when refreshing, so this is a cheap no-op then)."""
+    construct's pricing so a local-first (default) run stays offline (the scout
+    pass has already synced when --refresh is passed, so this is a cheap no-op
+    then)."""
     try:
         exp = construct.expand_sealed(code, product_substr, market="null",
                                       refresh_stale=refresh_stale)
@@ -286,10 +287,11 @@ def _write_xlsx(node: sealed.ProductNode, market_source: str, out_path: Path,
 
 # ---------- sync helper ----------
 
-def _sync_referenced_sets(node: sealed.ProductNode, *, refresh_stale: bool = True) -> None:
+def _sync_referenced_sets(node: sealed.ProductNode, *, refresh_stale: bool = False) -> None:
     """Ensure every set referenced anywhere in the tree has current local prices.
-    Syncs missing sets always, and stale (>7d) sets unless ``--no-refresh``.
-    Delegates to the shared ``sets.ensure_priced`` (DRY)."""
+    Syncs missing sets always, and stale (>7d) sets only when ``--refresh`` is
+    passed (local-first by default). Delegates to the shared ``sets.ensure_priced``
+    (DRY)."""
     sets.ensure_priced(sealed.referenced_set_codes(node),
                        refresh_stale=refresh_stale, log=print)
 
@@ -319,16 +321,19 @@ def main() -> int:
                     help="List the set's booster types with per-type EV, then exit.")
     ap.add_argument("--format", choices=["txt", "xlsx", "all"], default="all",
                     help="Artifact(s) to write (default: all).")
-    ap.add_argument("--no-refresh", action="store_true",
-                    help="Don't re-sync sets with stale (>7d) prices; use local "
-                         "prices as-is and warn. Faster/offline, but may under-report.")
+    ap.add_argument("--refresh", action="store_true",
+                    help="Re-sync sets with stale (>7d) prices before pricing; "
+                         "default is local-first (use local prices, warn on stale).")
+    ap.add_argument("--no-refresh", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--out-dir", type=Path, default=None,
                     help="Override output dir (default: output/sealed-value/reports/).")
     args = ap.parse_args()
     if args.out_dir is None:
         args.out_dir = util.output_dir(_OUTPUT_TYPE, "reports")
     code = args.set_code.lower()
-    refresh_stale = not args.no_refresh
+    # --no-refresh is a deprecated no-op alias: local-first is now the default,
+    # so "don't refresh" is already the baseline behavior.
+    refresh_stale = args.refresh
 
     # Secret Lair drops aren't sealedProducts — route to the live-Scryfall + floor
     # engine (shared with secret_lair_value.py) instead of the sealedProduct tree.

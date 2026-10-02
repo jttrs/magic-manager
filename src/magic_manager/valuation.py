@@ -94,7 +94,7 @@ def _floor_sum(needs, *, floors_cache: dict) -> tuple[float | None, int, int]:
 def value_sealed_product(
     set_code: str, product_substr: str | None, *,
     listing: float | None = None, market: str = "chain",
-    refresh_stale: bool = True, floors: bool = True,
+    refresh_stale: bool = False, floors: bool = True,
     floors_cache: dict | None = None,
 ) -> sealed.ProductValuation:
     """The 4-column valuation of one sealed product.
