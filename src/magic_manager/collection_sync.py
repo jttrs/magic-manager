@@ -124,6 +124,9 @@ def read_csv(path: str | Path, service: str) -> list[CollectionRow]:
     """
     fmt = service_format(service)
     cols = fmt.get("columns") or {}
+    # MTGGoldfish-style set-code remap (service → Scryfall code), lowercased.
+    remap = {str(k).lower(): str(v).lower()
+             for k, v in (fmt.get("set_remap") or {}).items()}
     text = Path(path).read_text(encoding="utf-8-sig")  # tolerate a BOM
     reader = csv.DictReader(io.StringIO(text))
 
@@ -143,14 +146,17 @@ def read_csv(path: str | Path, service: str) -> list[CollectionRow]:
             qty = 0
         sid = cell(raw, "scryfall_id") or None
         setc = (cell(raw, "set") or None)
+        set_lc = setc.lower() if setc else None
+        if set_lc:
+            set_lc = remap.get(set_lc, set_lc)  # apply the remap, if any
         cn = cell(raw, "collector_number") or None
-        if qty <= 0 or not (sid or (setc and cn)):
+        if qty <= 0 or not (sid or (set_lc and cn)):
             continue
         out.append(CollectionRow(
             qty=qty,
             finish=_finish_from(fmt, cell(raw, "finish")),
             scryfall_id=sid,
-            set=(setc.lower() if setc else None),
+            set=set_lc,
             collector_number=cn,
             name=cell(raw, "name") or None,
             condition=_condition_from(fmt, cell(raw, "condition")),
@@ -168,6 +174,31 @@ class ResolveResult:
     resolved: list[CollectionRow] = field(default_factory=list)
     not_found: list[dict] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+
+
+def _safe_collection(idents: list[dict]) -> tuple[list[dict], list[dict], list[dict]]:
+    """``scryfall.collection`` that tolerates a HARD error on a bad identifier.
+
+    Scryfall's /cards/collection returns a clean ``not_found`` list for unknown
+    *cards*, but HTTP 400s the WHOLE request when an identifier is malformed —
+    e.g. a non-existent set code (MTGGoldfish's ``prm-wpn`` pseudo-sets). One bad
+    row must not sink the batch, so on a ``ScryfallError`` we BISECT: split the
+    batch and recurse, isolating the offending identifier(s). A singleton that
+    still errors is the culprit → returned in the third ``errored`` list. Returns
+    ``(found, not_found, errored)``.
+    """
+    if not idents:
+        return [], [], []
+    try:
+        found, not_found = scryfall.collection(idents)
+        return found, not_found, []
+    except scryfall.ScryfallError:
+        if len(idents) == 1:
+            return [], [], list(idents)  # this single identifier is the bad one
+        mid = len(idents) // 2
+        lf, lnf, le = _safe_collection(idents[:mid])
+        rf, rnf, re_ = _safe_collection(idents[mid:])
+        return lf + rf, lnf + rnf, le + re_
 
 
 def resolve_rows(rows: list[CollectionRow], *, conn=None) -> ResolveResult:
@@ -210,10 +241,16 @@ def resolve_rows(rows: list[CollectionRow], *, conn=None) -> ResolveResult:
     for idents in (id_idents, setcn_idents):
         if not idents:
             continue
-        got, not_found = scryfall.collection(idents)
+        got, not_found, errored = _safe_collection(idents)
         found.extend(got)
         for nf in not_found:
             res.warnings.append(f"scryfall could not resolve identifier {nf!r}")
+        for bad in errored:
+            # An identifier Scryfall rejects outright (HTTP 400 — e.g. a
+            # MTGGoldfish PRM-* pseudo-set code that isn't a real Scryfall set).
+            # Isolated by bisection so it doesn't sink the whole batch; the row
+            # degrades to not_found below.
+            res.warnings.append(f"scryfall rejected identifier {bad!r} (bad set code?)")
 
     by_id = {c["id"]: c for c in found if c.get("id")}
     by_setcn = {

@@ -80,3 +80,137 @@ order = ["name", "set", "collector_number", "finish", "quantity", "scryfall_id",
          "condition", "purchase_price"]
 # Condition emitted on export when a row carries none (passthrough-only in v1).
 condition_default = "near_mint"
+
+
+# ---------------------------------------------------------------------------
+# Moxfield (collection / binder CSV export) — the ONLY id-less service. Header
+# (verified against a real export 2026-10-02):
+#   Count,Tradelist Count,Name,Edition,Condition,Language,Foil,Tags,
+#   Last Modified,Collector Number,Alter,Proxy,Purchase Price
+# Identity = Edition (set code) + Collector Number. Foil is "" (nonfoil) or
+# "foil". GOTCHA: Moxfield re-exports a card added to a BINDER as a SEPARATE,
+# byte-identical row (it won't let you move an existing collection card into a
+# binder — you re-add it net-new, and it then shows in BOTH the main collection
+# and the binder). read_csv SUMS same-(set,cn,finish) rows, so such a card
+# imports at qty 2 — the diff-review step is where you catch/correct that before
+# --apply. (Decided: sum, don't auto-dedupe — a legit 2nd copy would be lost.)
+# ---------------------------------------------------------------------------
+[moxfield]
+has_scryfall_id = false
+confidence = "high"              # exact (set, collector_number) printing
+
+[moxfield.columns]
+quantity         = "Count"
+finish           = "Foil"
+set              = "Edition"
+collector_number = "Collector Number"
+name             = "Name"
+condition        = "Condition"
+purchase_price   = "Purchase Price"
+# no scryfall_id column
+
+[moxfield.finish_map]
+# Moxfield leaves the Foil cell empty for nonfoil; "foil"/"etched" are foil.
+foil   = "foil"
+etched = "foil"
+""     = "nonfoil"
+
+[moxfield.condition_map]
+"near mint"    = "near_mint"
+mint           = "mint"
+"lightly played" = "light_played"
+"moderately played" = "played"
+"heavily played" = "played"
+damaged        = "poor"
+
+[moxfield.write]
+order = ["quantity", "name", "set", "condition", "finish", "collector_number",
+         "purchase_price"]
+condition_default = "Near Mint"
+
+
+# ---------------------------------------------------------------------------
+# Archidekt (collection CSV export) — HAS a Scryfall ID (plan assumed it didn't).
+# Two export variants exist (default vs all-fields-checked); both share the
+# columns we map, so ONE block covers both. Verified header (default variant):
+#   Quantity,Name,Finish,Condition,Date Added,Language,Purchase Price,Tags,
+#   Edition Name,Edition Code,Multiverse Id,Scryfall ID,Collector Number
+# (the all-fields variant adds MTGO ID + prices + oracle id after Scryfall ID,
+#  but the mapped headers are identical). Identity = Scryfall ID (exact).
+# Finish tokens: Normal / Foil / Etched. Condition: NM/LP/MP/HP/DMG.
+# ---------------------------------------------------------------------------
+[archidekt]
+has_scryfall_id = true
+confidence = "high"
+
+[archidekt.columns]
+quantity         = "Quantity"
+finish           = "Finish"
+scryfall_id      = "Scryfall ID"
+set              = "Edition Code"
+collector_number = "Collector Number"
+name             = "Name"
+condition        = "Condition"
+purchase_price   = "Purchase Price"
+
+[archidekt.finish_map]
+normal = "nonfoil"
+foil   = "foil"
+etched = "foil"
+
+[archidekt.condition_map]
+nm  = "near_mint"
+m   = "mint"
+lp  = "light_played"
+mp  = "played"
+hp  = "played"
+dmg = "poor"
+
+[archidekt.write]
+order = ["quantity", "name", "finish", "condition", "set", "collector_number",
+         "scryfall_id", "purchase_price"]
+condition_default = "NM"
+
+
+# ---------------------------------------------------------------------------
+# MTGGoldfish (collection CSV export: my_collection.csv) — carries a Scryfall ID
+# but it is BLANK for some promos, and Set ID is a NON-Scryfall code
+# (uppercase "FIN", and PRM-* pseudo-sets like "PRM-WPN" with MTGGoldfish-internal
+# collector numbers). Verified header:
+#   Card UUID,Card,Set ID,Set Name,Quantity,Foil,Tags,Collector Number,Scryfall ID
+# Resolution: Scryfall ID when present (most rows) → else (set, cn) after the
+# set-code remap below. The PRM-* promos have NEITHER a usable id NOR a
+# Scryfall-matching (set, cn) — their internal CN differs from Scryfall's — so
+# they honestly land in not_found (reported, never guessed). confidence=low
+# reflects this tail; the set_remap only fixes code-only mismatches, not the
+# PRM-* internal-numbering ones.
+# ---------------------------------------------------------------------------
+[mtggoldfish]
+has_scryfall_id = true           # present on most rows; blank ones fall back to (set,cn)
+confidence = "low"
+
+[mtggoldfish.columns]
+quantity         = "Quantity"
+finish           = "Foil"
+scryfall_id      = "Scryfall ID"
+set              = "Set ID"
+collector_number = "Collector Number"
+name             = "Card"
+# MTGGoldfish has no per-card condition column.
+
+[mtggoldfish.finish_map]
+regular = "nonfoil"
+foil    = "foil"
+etched  = "foil"
+
+# MTGGoldfish Set ID → Scryfall set code remap. MTGGoldfish uppercases codes
+# (handled by read_csv's lowercasing already) and uses PRM-* pseudo-sets for
+# promos. Only CODE-level differences are fixable here; PRM-* rows whose
+# collector number is MTGGoldfish-internal still won't match a Scryfall printing
+# and will report as not_found. Seed sparingly with VERIFIED mappings only.
+[mtggoldfish.set_remap]
+# (none verified yet — add "mtggoldfish_code" = "scryfall_code" as encountered)
+
+[mtggoldfish.write]
+order = ["quantity", "name", "finish", "set", "collector_number", "scryfall_id"]
+condition_default = "near_mint"

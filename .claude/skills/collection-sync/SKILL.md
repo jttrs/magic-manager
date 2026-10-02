@@ -1,6 +1,6 @@
 ---
 name: collection-sync
-description: Import or export your whole COLLECTION (inventory) to/from an external service via CSV, with a mandatory diff-review-and-approve step. Import reads a service's exported collection CSV into local inventory under one of three modes (add / modify / overwrite); export renders your inventory back out as that service's CSV. Always relays to `mm collection import|export|diff`, which writes a review artifact (XLSX + JSON) and is DRY-RUN by default — nothing hits the DB until you approve with --apply. ManaBox is the supported service in Phase 1 (its CSV carries a Scryfall ID → exact, no fuzzy matching). Triggers: "import my manabox collection", "sync my collection from <service> CSV", "load my collection export into inventory", "export my collection to manabox", "diff my collection CSV against what I own", "bulk-add my whole collection from a CSV".
+description: Import or export your whole COLLECTION (inventory) to/from an external service via CSV, with a mandatory diff-review-and-approve step. Import reads a service's exported collection CSV into local inventory under one of three modes (add / modify / overwrite); export renders your inventory back out as that service's CSV. Always relays to `mm collection import|export|diff`, which writes a review artifact (XLSX + JSON) and is DRY-RUN by default — nothing hits the DB until you approve with --apply. Supported services: manabox, moxfield, archidekt, mtggoldfish (each a declarative config block; manabox/archidekt/mtggoldfish carry a Scryfall ID for exact matching, moxfield resolves by set+collector-number, mtggoldfish is low-confidence for id-less promos). Scryfall has no collection. Triggers: "import my manabox/moxfield/archidekt/mtggoldfish collection", "sync my collection from <service> CSV", "load my collection export into inventory", "export my collection to <service>", "diff my collection CSV against what I own", "bulk-add my whole collection from a CSV".
 ---
 
 # collection-sync
@@ -83,9 +83,23 @@ reads as "added".
 
 ## Notes
 
-- **Services:** `manabox` (Phase 1 — its CSV carries a Scryfall ID, so matching is
-  exact). Moxfield / Archidekt / MTGGoldfish land in later phases (set+collector-
-  number resolution; MTGGoldfish is low-confidence). Scryfall has no collection.
+- **Services + fidelity** (verified against real exports):
+  | Service | Identity | Confidence | Notes |
+  |---|---|---|---|
+  | `manabox` | Scryfall ID | high | mobile app; CSV-only |
+  | `archidekt` | Scryfall ID | high | both export variants (default / all-fields) work |
+  | `moxfield` | set + collector number | high | id-less; see binder gotcha below |
+  | `mtggoldfish` | Scryfall ID, else (set,cn) | **low** | some promos (`PRM-*` pseudo-sets) have no id AND a non-Scryfall set code → reported not_found |
+  Scryfall has no collection feature (excluded).
+- **Moxfield binder gotcha:** Moxfield won't let you move an existing collection card
+  into a binder — you re-add it net-new, and it then exports as a card in BOTH the main
+  collection and the binder (two byte-identical rows). collection-sync SUMS same-printing
+  rows, so such a card shows as qty 2 in the diff. **Review the diff before --apply** and
+  correct if it's really one physical copy.
+- **MTGGoldfish set remap:** `config/collection_formats.toml` has an (initially empty)
+  `[mtggoldfish.set_remap]` for service→Scryfall set-code fixes. Only code-level
+  mismatches are fixable; `PRM-*` promos with MTGGoldfish-internal collector numbers
+  can't be remapped and stay not_found.
 - **Condition / language / purchase price** are passthrough-only: carried in the CSV
   adapter but NOT stored in the DB (a future dimension). Export defaults condition to
   `near_mint`.
