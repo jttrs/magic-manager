@@ -63,6 +63,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from magic_manager import parsers, scryfall, treatments  # noqa: E402
+from magic_manager.card_floor import price as _price  # noqa: E402 — shared extractor
 
 
 def _identifiers_from_stdin() -> list[tuple[str, str]]:
@@ -171,19 +172,6 @@ def _fmt_pct(p: float) -> str:
 def _fmt_raw(v: float) -> str:
     sign = "+" if v >= 0 else "-"
     return f"{sign}${abs(v):.2f}"
-
-
-def _price(card: dict, key: str) -> float | None:
-    """Extract a nested Scryfall price. ``card["prices"][key]`` returns a
-    string or None; we coerce to float or None."""
-    prices = card.get("prices") or {}
-    v = prices.get(key)
-    if v is None or v == "":
-        return None
-    try:
-        return float(v)
-    except (ValueError, TypeError):
-        return None
 
 
 def _is_fancy_foil(card: dict) -> bool:
