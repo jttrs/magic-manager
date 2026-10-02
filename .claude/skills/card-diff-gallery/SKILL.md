@@ -36,14 +36,16 @@ let you toggle visibility after the fact without re-running the script.
 
 ONE file, `output/card-diff/reports/card-diff-gallery-<ts>.html`:
 
-- A sticky header with **family chips** (one per family, toggle show/hide),
-  **pool chips** (printing/functional/variant-chase, color-coded badges),
-  a **search box** (substring match on card name), and a **sort** dropdown
-  (value desc/asc, name A→Z).
+- A collapsible left **sidebar** with checkbox filters for **pool** and
+  **family** (each with Select All/Clear All), a **search box** (substring
+  match on card name), and a **sort** dropdown (value desc/asc, name A→Z,
+  collector number low→high).
 - One section per family (owned $ + each pool's count·$ in the header),
-  containing a responsive image grid — one tile per card: the Scryfall image
-  (lazy-loaded `<img>`, clickable through to the card's Scryfall page) plus a
-  caption line (name, set, collector number, rarity, finish, USD).
+  containing a responsive image grid — one tile PER UNIQUE PRINTING (deduped
+  across pools): the Scryfall image (lazy-loaded `<img>`, clickable through
+  to the card's Scryfall page), a segmented underline bar showing which
+  pool(s) it belongs to, and a caption line (name, set, collector number,
+  rarity, finish, USD, pool membership).
 - Cards with no `image_uri` (shouldn't happen — the local `cards` table has
   it for 100% of rows, but guarded) render a text-only tile instead of a
   broken image.
