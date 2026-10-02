@@ -15,6 +15,11 @@ The exceptions are intentional, not oversights:
   - `mm deck push-moxfield` — pushes a deck's own cards, not a missing-set union.
   - `mm query missing-jumpstart` — emits WHOLE un-owned pack contents (you buy
     the pack, token included); a different semantic from a singles buy-list.
+  - `scripts/card_diff_html.py` — the gallery's "copy buy-list" button exports
+    exactly the tiles currently DISPLAYED, which are the card-diff pools already
+    sourced from `missing.missing_printings` (physical-buyable-filtered upstream)
+    and deduped; it re-formats vetted rows, it doesn't produce a new unfiltered
+    singles union.
 """
 
 from __future__ import annotations
@@ -107,7 +112,11 @@ def test_no_new_unfiltered_buylist_producer():
     # Known filtered producers.
     filtered = {"scripts/jumpstart_buildable.py", "src/magic_manager/cli.py"}
     # Documented exceptions (see module docstring).
-    exceptions: dict[str, str] = {}  # (cli.py covers both filtered + exception sites)
+    exceptions: dict[str, str] = {
+        "scripts/card_diff_html.py": "re-formats the already-filtered, deduped "
+        "card-diff pools currently DISPLAYED (sourced from missing_printings) to "
+        "the clipboard — not a new unfiltered singles union.",
+    }
 
     unaccounted = producers - filtered - set(exceptions)
     assert not unaccounted, (

@@ -38,7 +38,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from magic_manager import card_diff as card_diff_mod, db, sets as sets_mod, util  # noqa: E402
+from magic_manager import (  # noqa: E402
+    card_diff as card_diff_mod, db, exports, sets as sets_mod, util,
+)
 
 POOL_CHOICES = ("printing", "functional", "variant-chase")
 POOL_LABELS = {"printing": "Printing", "functional": "Functional", "variant-chase": "Variant-chase"}
@@ -74,7 +76,24 @@ def _tile_from_materialized(r, pool: str, family_code: str, images: dict) -> dic
         "usd": usd,
         "image_uri": images.get(("sid", r.scryfall_id)),
         "scryfall_url": _scryfall_card_url(set_code, cn),
+        "row": r,  # source MaterializedRow — for exports.build (buy-list lines)
     }
+
+
+class _ExportRow:
+    """Minimal MaterializedRow stand-in so a FunctionalMissingCard can feed
+    ``exports.build`` (which reads ``.card`` / ``.finish`` / ``.quantity``). The
+    functional pool's representative printing is the cheapest in-family one; its
+    full ``cards``-table row is fetched once in ``build_tiles`` and attached here
+    so the TCGplayer formatter (treatment suffix + collision prefix) has the
+    fields it needs — same as a printing-pool row."""
+    __slots__ = ("card", "finish", "quantity", "scryfall_id")
+
+    def __init__(self, card: dict, finish: str):
+        self.card = card
+        self.finish = finish or "nonfoil"
+        self.quantity = 1
+        self.scryfall_id = card.get("scryfall_id")
 
 
 def _tile_from_functional(c, family_code: str, images: dict) -> dict:
@@ -86,11 +105,16 @@ def _tile_from_functional(c, family_code: str, images: dict) -> dict:
     cn = c.family_cn
     image_uri = None
     sid = None
+    card_dict = None
     if set_code and cn:
         setcn_key = (set_code.lower(), cn)
         image_uri = images.get(("setcn-img", setcn_key))
         sid = images.get(("setcn-sid", setcn_key))
+        card_dict = images.get(("setcn-card", setcn_key))
     sid_key = ("sid", sid) if sid else ("fn", set_code or "", cn or "")
+    # Row for exports.build (buy-list lines); None when the printing has no local
+    # cards row (shouldn't happen — functional reps come from cards — but guard).
+    row = _ExportRow(card_dict, c.family_finish) if card_dict else None
     return {
         "sid_key": sid_key,
         "pools": {"functional"},
@@ -103,6 +127,7 @@ def _tile_from_functional(c, family_code: str, images: dict) -> dict:
         "usd": c.family_usd,
         "image_uri": image_uri,
         "scryfall_url": _scryfall_card_url(set_code, cn),
+        "row": row,
     }
 
 
@@ -130,14 +155,27 @@ def _fetch_images(sids: set[str], setcns: set[tuple[str, str]]) -> dict:
             placeholders = ",".join("(?,?)" for _ in setcns)
             params = [p for pair in setcns for p in pair]
             rows = conn.execute(
-                "SELECT scryfall_id, set_code, collector_number, image_uri FROM cards "
-                f"WHERE (LOWER(set_code), collector_number) IN ({placeholders})",
+                "SELECT scryfall_id, oracle_id, name, set_code, collector_number, "
+                "rarity, prices_usd, prices_usd_foil, type_line, promo_types, "
+                "frame_effects, border_color, full_art, finishes, image_uri "
+                f"FROM cards WHERE (LOWER(set_code), collector_number) IN ({placeholders})",
                 params,
             ).fetchall()
             for row in rows:
                 key = ((row["set_code"] or "").lower(), row["collector_number"])
                 images[("setcn-img", key)] = row["image_uri"]
                 images[("setcn-sid", key)] = row["scryfall_id"]
+                # Full card dict (set=lower, mirroring selectors' _card_dict) so a
+                # functional tile can build a proper exports row for the buy-list.
+                images[("setcn-card", key)] = {
+                    "scryfall_id": row["scryfall_id"], "oracle_id": row["oracle_id"],
+                    "name": row["name"], "set": (row["set_code"] or "").lower(),
+                    "collector_number": row["collector_number"], "rarity": row["rarity"],
+                    "prices_usd": row["prices_usd"], "prices_usd_foil": row["prices_usd_foil"],
+                    "type_line": row["type_line"], "promo_types": row["promo_types"],
+                    "frame_effects": row["frame_effects"], "border_color": row["border_color"],
+                    "full_art": row["full_art"], "finishes": row["finishes"],
+                }
     return images
 
 
@@ -182,6 +220,10 @@ def build_tiles(diffs: list, pools: list[str]) -> list[dict]:
             existing["pools"] |= new_tile["pools"]
             if existing.get("rarity") is None and new_tile.get("rarity") is not None:
                 existing["rarity"] = new_tile["rarity"]
+            # Prefer a source row that exists (functional tiles may lack one if the
+            # printing isn't local); keep whichever has it for the buy-list export.
+            if existing.get("row") is None and new_tile.get("row") is not None:
+                existing["row"] = new_tile["row"]
 
         if "printing" in pools:
             for r in fd.printing.rows:
@@ -264,6 +306,13 @@ aside.rail {
   width: 100%; background: var(--card); border: 1px solid var(--border); color: var(--ink);
   border-radius: 6px; padding: 5px 6px; font-size: 12px;
 }
+.export-btn {
+  display: block; width: 100%; margin-bottom: 6px; cursor: pointer;
+  background: var(--accent-soft); color: var(--accent-soft-fg);
+  border: 1px solid var(--accent); border-radius: 6px; padding: 6px 8px; font-size: 12px;
+}
+.export-btn:hover { background: var(--accent); color: var(--bg); }
+.copy-status { display: block; font-size: 11px; color: var(--muted-fg); min-height: 14px; }
 .reopen-tab {
   position: fixed; left: 0; top: 12px; z-index: 20; background: var(--sidebar);
   border: 1px solid var(--border); border-left: none; border-radius: 0 6px 6px 0;
@@ -422,6 +471,51 @@ function setRailCollapsed(collapsed) {
 }
 if (railToggle) railToggle.addEventListener('click', function () { setRailCollapsed(true); });
 if (reopenTab) reopenTab.addEventListener('click', function () { setRailCollapsed(false); });
+
+// --- Export the currently-displayed tiles as a paste-ready buy-list ---
+function collectLines(attr) {
+  var lines = [];
+  document.querySelectorAll('.tile:not(.hidden)').forEach(function (t) {
+    var v = t.getAttribute(attr);
+    if (v) lines.push(v);
+  });
+  return lines;
+}
+function copyText(text, done) {
+  // navigator.clipboard needs a secure context (fails on file://); fall back to
+  // a hidden textarea + execCommand, which works when the page is opened locally.
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function () { done(true); },
+                                              function () { done(fallbackCopy(text)); });
+  } else {
+    done(fallbackCopy(text));
+  }
+}
+function fallbackCopy(text) {
+  try {
+    var ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    var ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  } catch (e) { return false; }
+}
+function wireExport(btnId, attr, label) {
+  var btn = document.getElementById(btnId);
+  var status = document.getElementById('copy-status');
+  if (!btn) return;
+  btn.addEventListener('click', function () {
+    var lines = collectLines(attr);
+    if (!lines.length) { status.textContent = 'Nothing to copy.'; return; }
+    copyText(lines.join('\\n') + '\\n', function (ok) {
+      status.textContent = ok ? ('Copied ' + lines.length + ' ' + label + ' lines.')
+                              : 'Copy failed — select & copy manually.';
+    });
+  });
+}
+wireExport('copy-mp', 'data-mp', 'ManaPool');
+wireExport('copy-tcg', 'data-tcg', 'TCGplayer');
 """
 
 
@@ -444,6 +538,19 @@ def _tile_html(t: dict) -> str:
     meta = " · ".join(meta_bits)
     pools_label = " · ".join(POOL_LABELS[p] for p in pools_sorted)
 
+    # Pre-render the canonical ManaPool + TCGplayer buy-list lines for this tile
+    # (via the ONE exports engine — the TCGplayer formatter needs full-row context
+    # the DOM lacks: treatment-suffix product names + collision (NNNN) prefixes).
+    # The JS "copy buy-list" button collects these from the visible tiles. A tile
+    # with no source row (rare: no local printing) carries empty attrs → skipped.
+    row = t.get("row")
+    mp_line = tcg_line = ""
+    if row is not None:
+        mp_line = exports.build("manapool", [row]).strip()
+        tcg_line = exports.build("tcgplayer", [row]).strip()
+    mp_attr = html.escape(mp_line)
+    tcg_attr = html.escape(tcg_line)
+
     poolbar = "".join(f'<span class="seg {p}"></span>' for p in pools_sorted)
     poolbar_html = f'<div class="poolbar">{poolbar}</div>'
 
@@ -462,7 +569,8 @@ def _tile_html(t: dict) -> str:
 
     return (
         f'<div class="tile" data-family="{family}" data-pools="{pools_attr}" '
-        f'data-name="{name_attr}" data-usd="{usd_attr}" data-set="{set_attr}" data-cn="{cn_attr}">'
+        f'data-name="{name_attr}" data-usd="{usd_attr}" data-set="{set_attr}" data-cn="{cn_attr}" '
+        f'data-mp="{mp_attr}" data-tcg="{tcg_attr}">'
         f'{media}'
         f'{poolbar_html}'
         f'<div class="caption"><span class="name">{name}</span>'
@@ -550,6 +658,12 @@ def render_html(diffs: list, tiles_by_family: dict[str, list[dict]], pools: list
           <option value="cn-asc">Collector no.: low→high</option>
         </select>
       </div>
+      <div class="rail-section">
+        <p class="eyebrow">Export (shown)</p>
+        <button class="export-btn" id="copy-mp">Copy ManaPool list</button>
+        <button class="export-btn" id="copy-tcg">Copy TCGplayer list</button>
+        <span id="copy-status" class="copy-status"></span>
+      </div>
     </aside>
   </div>
   <button class="reopen-tab" id="reopen-tab" aria-label="Show filters" title="Show filters">&#9661;</button>
@@ -581,6 +695,10 @@ def main() -> int:
     ap.add_argument("--refresh", action="store_true",
                      help="Sync stale (>7d) referenced sets before pricing. Default: "
                           "local-first (fast, uses local prices as-is).")
+    ap.add_argument("--chase", choices=("exclude", "include", "only"), default="exclude",
+                     help="Grey/chase-tier handling (tier='chase' premium-art rules): "
+                          "exclude (default), include (chase prints also feed the pools), "
+                          "or only (chase prints only).")
     args = ap.parse_args()
 
     pools = list(POOL_CHOICES) if args.pool == "all" else [args.pool]
@@ -593,6 +711,7 @@ def main() -> int:
         # family's ids (F4), not a per-family resolve.
         diffs = card_diff_mod.multi_family_diff(
             args.codes, refresh=args.refresh, warn=stale_codes.extend, log=log,
+            chase=args.chase,
             on_skip=lambda c: print(
                 f"warning: {c!r} is not a resolvable/configured family — skipped.",
                 file=sys.stderr),
@@ -604,7 +723,7 @@ def main() -> int:
     else:
         print("Computing collection-wide card diff (local-first; pass --refresh to sync "
               "stale sets first)…", file=sys.stderr)
-        diffs = card_diff_mod.collection_diff(refresh=args.refresh, warn=stale_codes.extend, log=log)
+        diffs = card_diff_mod.collection_diff(refresh=args.refresh, warn=stale_codes.extend, log=log, chase=args.chase)
         if not diffs:
             print("error: no owned+configured families found.", file=sys.stderr)
             return 2

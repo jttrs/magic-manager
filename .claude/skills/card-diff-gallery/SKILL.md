@@ -38,8 +38,13 @@ ONE file, `output/card-diff/reports/card-diff-gallery-<ts>.html`:
 
 - A collapsible left **sidebar** with checkbox filters for **pool** and
   **family** (each with Select All/Clear All), a **search box** (substring
-  match on card name), and a **sort** dropdown (value desc/asc, name A→Z,
-  collector number low→high).
+  match on card name), a **sort** dropdown (value desc/asc, name A→Z,
+  collector number low→high), and an **Export (shown)** section with
+  **Copy ManaPool list** / **Copy TCGplayer list** buttons — each copies a
+  paste-ready buy-list of exactly the tiles CURRENTLY DISPLAYED (post-filter)
+  to the clipboard, in the canonical `exports` format (ManaPool `*F*` foil
+  marker; TCGplayer `[SET] cn` with treatment suffixes). Works from a `file://`
+  page (clipboard API with an execCommand fallback).
 - One section per family (owned $ + each pool's count·$ in the header),
   containing a responsive image grid — one tile PER UNIQUE PRINTING (deduped
   across pools): the Scryfall image (lazy-loaded `<img>`, clickable through
