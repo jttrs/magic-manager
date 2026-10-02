@@ -207,10 +207,7 @@ def main() -> int:
                     default="tcgcsv", help="Live market price source (default: tcgcsv).")
     ap.add_argument("--format", choices=["txt", "xlsx", "all"], default="all",
                     help="Artifact(s) to write (default: all).")
-    ap.add_argument("--refresh", action="store_true",
-                    help="Re-sync sets with stale (>7d) prices before pricing; "
-                         "default is local-first (use local prices, warn on stale).")
-    ap.add_argument("--no-refresh", action="store_true", help=argparse.SUPPRESS)
+    util.add_price_refresh_arg(ap)
     ap.add_argument("--out-dir", type=Path, default=None,
                     help="Override output dir (default: output/earmarks-review/reports/).")
     args = ap.parse_args()
@@ -227,8 +224,6 @@ def main() -> int:
     today = now.strftime("%Y-%m-%d")
 
     market_provider = sealed.make_market_provider(args.market)
-    # --no-refresh is a deprecated no-op alias: local-first is now the default,
-    # so "don't refresh" is already the baseline behavior.
     rows = _build_rows(products, market_provider, today,
                        market_name=args.market, refresh_stale=args.refresh)
     lines = _render_lines(rows, today)

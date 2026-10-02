@@ -1,6 +1,6 @@
 ---
 name: set-status
-description: Concise, script-driven status report for a Magic set FAMILY — family topology (set codes + types), # checklist ingests, owned printings/cards/$ value, precon count by format, TWO missing figures (distinct-printing missing $ + count, and functional missing — mechanically-unique cards owned in zero printings, cheapest fill in-family + anywhere), and whether the family is characterized (docs/sets/<parent>.md exists). Accepts the family anchor OR any member code (snc, ncc, tmt, tle, eoc, …) and normalizes to the true parent. With NO argument, prints a collection-wide overview of every owned family (one row each). Prices are live. Triggers: "/set-status", "status of <set>", "how complete is my <set>", "where am I on <set>", "give me a <set> status report", "<set> collection status", "how am I doing on <set>", "collection overview", "all my sets", "how's my whole collection".
+description: Concise, script-driven status report for a Magic set FAMILY — family topology (set codes + types), # checklist ingests, owned printings/cards/$ value, precon count by format, TWO missing figures (distinct-printing missing $ + count, and functional missing — mechanically-unique cards owned in zero printings, cheapest fill in-family + anywhere), and whether the family is characterized (docs/sets/<parent>.md exists). Accepts the family anchor OR any member code (snc, ncc, tmt, tle, eoc, …) and normalizes to the true parent. With NO argument, prints a collection-wide overview of every owned family (one row each). Prices are local-first (as of last sync); pass --refresh to re-sync stale sets. Triggers: "/set-status", "status of <set>", "how complete is my <set>", "where am I on <set>", "give me a <set> status report", "<set> collection status", "how am I doing on <set>", "collection overview", "all my sets", "how's my whole collection".
 ---
 
 # set-status
@@ -27,11 +27,12 @@ The `<anchor>` may be the family parent (`snc`, `tmt`) **or any member** (`ncc`,
 ## The canonical recipe
 
 ```bash
-uv run python scripts/set_status.py <anchor>   # one family
-uv run python scripts/set_status.py             # collection-wide overview (all owned families)
+uv run python scripts/set_status.py <anchor>             # one family
+uv run python scripts/set_status.py                       # collection-wide overview (all owned families)
+uv run python scripts/set_status.py <anchor> --refresh    # also re-sync stale (>7d) sets before pricing
 ```
 
-That's the whole happy path. `<anchor>` = a parent OR member code; omit it for the overview. Relay the entire stdout markdown block verbatim.
+That's the whole happy path. `<anchor>` = a parent OR member code; omit it for the overview. Pricing is local-first by default (missing sets always sync, stale sets just warn); add `--refresh` to also re-sync stale sets. Relay the entire stdout markdown block verbatim.
 
 ## Output shape
 
@@ -42,15 +43,15 @@ A title line + one compact `Metric | Value` table:
 | Family | parent code + # family set codes |
 | Set codes | every family code with its `set_type` |
 | Ingests | # successful checklist ingests for the family (`set:`/`jumpstart:`/`precon:` labels) |
-| Owned | distinct printings **/** total physical cards · **live** $ value (two counts: unique printings owned, then total physical copies) |
+| Owned | distinct printings **/** total physical cards · **local** $ value (as of last sync; two counts: unique printings owned, then total physical copies) |
 | Precons | count by format (commander / jumpstart / …), via the `source_set_code` hard link; omits zero buckets |
-| Missing (distinct) | # distinct-printing missing · **live** $ — every art/frame variant not owned. `not configured` if the family lacks a `FAMILY_DUPE_FOIL_PROMO_TYPES` entry |
+| Missing (distinct) | # distinct-printing missing · **local** $ (as of last sync) — every art/frame variant not owned. `not configured` if the family lacks a `FAMILY_DUPE_FOIL_PROMO_TYPES` entry |
 | Missing (functional) | # mechanically-unique cards owned in ZERO printings · cheapest fill (**in-family** floor / **anywhere** floor) — "cost to have access to every card's mechanics" |
 | Characterized | `yes → docs/sets/<parent>.md` or `no` |
 
-**Two notions of "whole":** *distinct* = own every art/frame printing (variant completionist; can be large — e.g. MSH ≈ $1,766/131p, mostly borderless variants of cards you already own). *functional* = own ≥1 printing (cheapest) of every mechanically-unique card you have zero copies of (e.g. MSH ≈ $178/41c). Both are live-priced; the functional floor is shown at two scopes — cheapest printing **in this family**, and cheapest **anywhere** (any set/reprint). **Scope note:** functional-missing only covers cards that surface in `missing_printings` (rare/mythic/uncommon-chase + the preferred alt class) — a common owned in zero printings won't appear, matching the "don't chase every common" stance. Not a bug.
+**Two notions of "whole":** *distinct* = own every art/frame printing (variant completionist; can be large — e.g. MSH ≈ $1,766/131p, mostly borderless variants of cards you already own). *functional* = own ≥1 printing (cheapest) of every mechanically-unique card you have zero copies of (e.g. MSH ≈ $178/41c). Both are priced from local data (as of last sync); the functional floor is shown at two scopes — cheapest printing **in this family**, and cheapest **anywhere** (any set/reprint). **Scope note:** functional-missing only covers cards that surface in `missing_printings` (rare/mythic/uncommon-chase + the preferred alt class) — a common owned in zero printings won't appear, matching the "don't chase every common" stance. Not a bug.
 
-**Prices are live** (fetched each run via the rate-limited Scryfall wrapper), so the $ figures are current and the output is NOT byte-identical day-to-day — that's intended.
+**Pricing is local-first**: prices come from the local `cards` table (as of the last `mm set sync`), not re-fetched each run. Stale (>7d) sets are flagged with a stderr note; pass `--refresh` to re-sync stale sets before pricing. The output varies only when local prices change (a sync) — not every run.
 
 (Note: set-status is read-only and does not write artifacts to `output/`; see cross-references below for the value-writing skills like sealed-value.)
 
@@ -59,7 +60,7 @@ A title line + one compact `Metric | Value` table:
 `scripts/set_status.py` with no anchor emits `## Collection overview · N families` + a table: `Family | Printings | Cards | $ (owned) | Precons | Miss prints ($) | Miss func ($) | Char`, sorted by owned $ desc, ending in a bold **Total** row. Relay it verbatim, same as the single-family table.
 
 - **Printings** = distinct owned printings; **Cards** = total physical copies (these are the two numbers the single-family Owned row packs as `X / Y` — split into named columns in the overview so they're unambiguous).
-- **Miss prints ($)** = `Np · $X` — distinct-printing missing count + live $ (the overview folds all families' missing ids into the ONE bulk price fetch). **Miss func ($ in-fam)** = `Mc · $Y` — functional missing card count + the **in-family** cheapest-fill floor only. (The overview uses in-family-only because the anywhere floor does a rate-limited `oracleid:` search per missing card — across ~20 families that's minutes. For the **anywhere** floor on a family, run single-family `set_status.py <anchor>`, which shows `in-family $ / anywhere $`.) The `p`/`c` suffixes = prints vs cards.
+- **Miss prints ($)** = `Np · $X` — distinct-printing missing count + local $ (the overview folds all families' missing ids into the ONE bulk local price lookup). **Miss func ($ in-fam)** = `Mc · $Y` — functional missing card count + the **in-family** cheapest-fill floor only. (The overview uses in-family-only because the anywhere floor does a rate-limited `oracleid:` search per missing card — across ~20 families that's minutes. For the **anywhere** floor on a family, run single-family `set_status.py <anchor>`, which shows `in-family $ / anywhere $`.) The `p`/`c` suffixes = prints vs cards.
 - **Char column is 3-state:** `✓` = characterized · `✗` = characterizable but not yet done · **`-` = n/a** (not a characterizable family). `-` is the universal n/a marker (also appears in the Missing columns / Precons when not applicable). Only offer to characterize a `✗` family the user names (see below) — NEVER a `-` family.
 
 **`-` (non-family) sets** are grab-bag collector/promo products that reprint cards from many OTHER sets and don't form a coherent family — `sld` (Secret Lair Drop), `spg` (Special Guests), `pw25`, `pmei`, `sch`, `mar` (Marvel Universe — a cross-set masterpiece series feeding 6 Marvel sets' boosters; unlike the flat grab-bags it has its own children `omb`/`lmar` folded under it) — the `NON_FAMILY_SETS` frozenset in `scripts/set_status.py`. They have no meaningful "missing from set" notion and are never characterized. Their owned $/counts are still real and shown. (This applies in single-anchor mode too: `set_status.py mar` reports owned-only, no missing/characterize prompt.)
@@ -76,8 +77,8 @@ This applies to the single-anchor mode. In the **no-arg overview**, do NOT auto-
 
 ## Guardrails
 
-- **Read-only.** No DB writes, no `output/` artifacts (unlike cart-check / missing-set). The only external calls are read-side Scryfall price fetches via the rate-limited wrapper.
-- **Live prices** come from `/cards/collection` (batched, 24h-cached at the wrapper) — current as of the run, subject to the cache window.
+- **Read-only.** No DB writes, no `output/` artifacts (unlike cart-check / missing-set). The only external calls are read-side Scryfall syncs for genuinely-missing sets (or stale sets, when `--refresh` is passed).
+- **Local-first prices**: read from the local `cards` table (populated by `mm set sync`); only genuinely-missing sets are fetched, stale (>7d) sets are warned, and `--refresh` re-syncs stale sets. No blanket live fetch per run.
 - **Member normalization** is automatic; always report the parent the script resolved (shown in the title), not the member the user typed.
 
 ## Cross-references

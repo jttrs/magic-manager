@@ -321,18 +321,13 @@ def main() -> int:
                     help="List the set's booster types with per-type EV, then exit.")
     ap.add_argument("--format", choices=["txt", "xlsx", "all"], default="all",
                     help="Artifact(s) to write (default: all).")
-    ap.add_argument("--refresh", action="store_true",
-                    help="Re-sync sets with stale (>7d) prices before pricing; "
-                         "default is local-first (use local prices, warn on stale).")
-    ap.add_argument("--no-refresh", action="store_true", help=argparse.SUPPRESS)
+    util.add_price_refresh_arg(ap)
     ap.add_argument("--out-dir", type=Path, default=None,
                     help="Override output dir (default: output/sealed-value/reports/).")
     args = ap.parse_args()
     if args.out_dir is None:
         args.out_dir = util.output_dir(_OUTPUT_TYPE, "reports")
     code = args.set_code.lower()
-    # --no-refresh is a deprecated no-op alias: local-first is now the default,
-    # so "don't refresh" is already the baseline behavior.
     refresh_stale = args.refresh
 
     # Secret Lair drops aren't sealedProducts — route to the live-Scryfall + floor

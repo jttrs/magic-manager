@@ -38,7 +38,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from magic_manager import card_diff as card_diff_mod, db, util  # noqa: E402
+from magic_manager import card_diff as card_diff_mod, db, sets as sets_mod, util  # noqa: E402
 
 POOL_CHOICES = ("printing", "functional", "variant-chase")
 POOL_LABELS = {"printing": "Printing", "functional": "Functional", "variant-chase": "Variant-chase"}
@@ -586,14 +586,12 @@ def main() -> int:
     pools = list(POOL_CHOICES) if args.pool == "all" else [args.pool]
 
     stale_codes: list[str] = []
-
-    def _warn(codes: list[str]) -> None:
-        stale_codes.extend(codes)
+    log = lambda m: print(m, file=sys.stderr)  # noqa: E731
 
     if args.codes:
         diffs = []
         for code in args.codes:
-            fd = card_diff_mod.family_diff(code, refresh=args.refresh, warn=_warn)
+            fd = card_diff_mod.family_diff(code, refresh=args.refresh, warn=stale_codes.extend, log=log)
             if fd is None:
                 print(f"warning: {code!r} is not a resolvable/configured family — skipped.",
                       file=sys.stderr)
@@ -606,14 +604,14 @@ def main() -> int:
     else:
         print("Computing collection-wide card diff (local-first; pass --refresh to sync "
               "stale sets first)…", file=sys.stderr)
-        diffs = card_diff_mod.collection_diff(refresh=args.refresh, warn=_warn)
+        diffs = card_diff_mod.collection_diff(refresh=args.refresh, warn=stale_codes.extend, log=log)
         if not diffs:
             print("error: no owned+configured families found.", file=sys.stderr)
             return 2
 
-    if stale_codes:
-        print(f"note: {len(set(stale_codes))} set(s) have stale prices (>7d); showing "
-              f"local — pass --refresh to re-sync.", file=sys.stderr)
+    msg = sets_mod.stale_warning(stale_codes)
+    if msg:
+        print(msg, file=sys.stderr)
 
     all_tiles = build_tiles(diffs, pools)
     tiles_by_family: dict[str, list[dict]] = {}

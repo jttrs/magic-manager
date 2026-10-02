@@ -1693,6 +1693,23 @@ def plan_sync(codes: Iterable[str], *, today: str | None = None) -> dict[str, li
     return {"missing": missing, "stale": stale}
 
 
+def stale_warning(codes: Iterable[str], *, list_codes: bool = False) -> str | None:
+    """The ONE wording seam for the stale-prices advisory, shared by every
+    ``warn=``/``log=`` consumer (``mm query card-diff``, ``set_status``,
+    ``card_diff_html``, ``ensure_priced``). Returns the message for a collected
+    list of stale set codes, or ``None`` when the list is empty (nothing to warn).
+
+    ``list_codes=True`` appends the sorted codes (what ``ensure_priced`` wants);
+    the terse form (count only) is what the collection reports use. Uses
+    ``STALE_AFTER_DAYS`` so the freshness budget lives in one place."""
+    uniq = sorted(set(codes))
+    if not uniq:
+        return None
+    msg = (f"{len(uniq)} set(s) have stale prices (>{STALE_AFTER_DAYS}d); "
+           f"showing local — pass --refresh to re-sync")
+    return f"{msg}: {', '.join(uniq)}" if list_codes else f"{msg}."
+
+
 def ensure_priced(codes: Iterable[str], *, refresh_stale: bool = False,
                   today: str | None = None, log=None) -> dict[str, list[str]]:
     """Make sure ``codes`` have usable local prices before a valuation.
@@ -1729,13 +1746,12 @@ def ensure_priced(codes: Iterable[str], *, refresh_stale: bool = False,
             if log:
                 log(f"  ! sync failed: {e} (prices may under-report)")
     if not refresh_stale and plan["stale"] and log:
-        log(f"  ! {len(plan['stale'])} set(s) have stale prices (>{STALE_AFTER_DAYS}d), "
-            f"using local as-is (pass --refresh to re-sync): {', '.join(sorted(plan['stale']))}")
+        log(f"  ! {stale_warning(plan['stale'], list_codes=True)}")
     return plan
 
 
 def priced_map(scryfall_ids: Iterable[str], *, refresh: bool = False,
-               today: str | None = None, warn=None, conn=None) -> dict[str, dict]:
+               today: str | None = None, warn=None, log=None, conn=None) -> dict[str, dict]:
     """Local-first ``{scryfall_id: prices-dict}`` — the id-keyed pricing seam.
 
     The convention entry point for "price these printings": read prices from the
@@ -1744,25 +1760,42 @@ def priced_map(scryfall_ids: Iterable[str], *, refresh: bool = False,
 
     1. Read local prices via :func:`card_price_map` (identity + prices + each
        id's ``set_code`` + ``prices_updated_at``).
-    2. **Missing** ids (no local row at all) → their set codes are unknown
-       locally, so they can't be resolved here; they're simply absent from the
-       result (the caller treats them as unpriced). In practice the collection-
-       scoped callers (card_diff / set_status) pass ids that were themselves
-       materialized FROM ``cards``, so this set is empty — the general guard just
-       keeps the function honest.
+    2. **Unresolved** ids (no local ``cards`` row at all) → their set codes are
+       unknown locally, so they can't be priced OR synced here; they're absent
+       from the result (the caller treats them as unpriced). The collection-
+       scoped callers (card_diff / set_status) pass ids materialized FROM
+       ``cards``, so this set is empty by construction — but if any ever reach
+       here (a future caller feeding a non-local id), they are reported via
+       ``log`` rather than silently dropped to $0 (the old blanket live fetch
+       would have priced them; local-first can't, so it says so loudly).
     3. **Stale** sets among the resolved ids (``MAX(prices_updated_at) >
        STALE_AFTER_DAYS``): if ``refresh`` → ``sync`` them and re-read; else →
        ``warn([codes])`` (if a callable was given) and use local as-is.
 
     Returns ``{scryfall_id: {"usd", "usd_foil", "prices_updated_at"}}`` for every
-    id resolvable locally (post-refresh). ``warn`` is a ``print``-like callable
-    for the stale-not-refreshed notice; ``None`` stays silent. ``refresh=False``
-    is the local-first default (the ``--refresh`` opt-in flips it True).
+    id resolvable locally (post-refresh). ``warn`` is a callable receiving the
+    list of STALE set codes (for the stale-not-refreshed notice); ``log`` is a
+    ``print``-like callable for DIAGNOSTICS (a sync failure, unresolved ids) —
+    kept distinct from ``warn`` so an error never pollutes the stale-codes tally.
+    Both ``None`` stay silent. ``refresh=False`` is the local-first default (the
+    ``--refresh`` opt-in flips it True).
 
     This replaces the blanket ``scryfall.collection`` live fetch that
-    ``family_status._live_prices`` did — prices are already local, so re-fetching
-    them every run was redundant network work. See CLAUDE.md § Price freshness."""
-    pm = card_price_map(scryfall_ids, conn=conn)
+    ``family_status._local_prices`` used to do — prices are already local, so
+    re-fetching them every run was redundant network work. See CLAUDE.md
+    § Price freshness."""
+    ids = list(dict.fromkeys(s for s in scryfall_ids if s))  # dedupe, preserve order
+    pm = card_price_map(ids, conn=conn)
+
+    # F5 guard: ids with no local row can't be priced or synced here. Report them
+    # via `log` (loud, not silent $0) rather than dropping — the old live fetch
+    # would have priced them; local-first can't, so a future non-local caller
+    # fails visibly instead of silently under-reporting.
+    unresolved = [s for s in ids if s not in pm]
+    if unresolved and log:
+        log(f"  ! {len(unresolved)} id(s) have no local price row and were skipped "
+            f"(not in the cards table; run `mm set sync` for their set).")
+
     if not pm:
         return {}
 
@@ -1773,9 +1806,9 @@ def priced_map(scryfall_ids: Iterable[str], *, refresh: bool = False,
             try:
                 sync(sorted(stale))
             except Exception as e:  # noqa: BLE001 — a sync failure just leaves local prices
-                if warn:
-                    warn([f"sync failed: {e}"])
-            pm = card_price_map(scryfall_ids, conn=conn)  # re-read post-sync
+                if log:
+                    log(f"  ! sync failed: {e} (prices may under-report)")
+            pm = card_price_map(ids, conn=conn)  # re-read post-sync
         elif warn:
             warn(sorted(stale))
 

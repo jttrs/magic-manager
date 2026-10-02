@@ -133,6 +133,19 @@ def fmt_usd(v: float | None) -> str:
     return f"${v:.2f}" if v is not None else "—"
 
 
+def add_price_refresh_arg(parser) -> None:
+    """Add the standard local-first price `--refresh` opt-in flag (+ a hidden
+    deprecated `--no-refresh` no-op alias) to an argparse parser. The single
+    definition of the price-refresh CLI surface, shared by the value scripts
+    (construct_value / sealed_value / review_earmarks / edhrec_report). Callers
+    read `args.refresh` (local-first default False). See CLAUDE.md § Price freshness."""
+    import argparse
+    parser.add_argument("--refresh", action="store_true",
+                        help="Re-sync sets with stale (>7d) prices before pricing; "
+                             "default is local-first (use local prices, warn on stale).")
+    parser.add_argument("--no-refresh", action="store_true", help=argparse.SUPPRESS)
+
+
 def delta_of(value: float | None, listing: float | None) -> float | None:
     """The signed delta a cell shows: ``listing − value`` (None if either side is
     None). NEGATIVE ⇒ the listing is BELOW this measure (a discount vs it);

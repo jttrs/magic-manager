@@ -109,14 +109,15 @@ def _build_family_diff(
 
 
 def family_diff(code: str, *, price_map: dict | None = None, refresh: bool = False,
-                warn=None) -> FamilyDiff | None:
+                warn=None, log=None) -> FamilyDiff | None:
     """None if the family is unconfigured (SelectorParseError/LookupError from
     missing) or the anchor is unresolvable.
 
-    Prices resolve LOCAL-FIRST via `family_status._live_prices` (→
+    Prices resolve LOCAL-FIRST via `family_status._local_prices` (→
     `sets.priced_map`) unless ``price_map`` is supplied. ``refresh`` syncs
     stale sets before pricing; ``warn`` (a list-of-codes callable) surfaces
-    stale sets left un-refreshed."""
+    stale sets left un-refreshed; ``log`` surfaces diagnostics (unresolved ids,
+    sync failures)."""
     try:
         parent_code, parent_name, related = family_status.resolve_family(code)
     except LookupError:
@@ -131,7 +132,7 @@ def family_diff(code: str, *, price_map: dict | None = None, refresh: bool = Fal
     if price_map is None:
         owned_rows = family_status._owned_rows_for_codes(family_code_set)
         ids = {r.scryfall_id for r in owned_rows} | {r.scryfall_id for r in missing_rows}
-        prices = family_status._live_prices(list(ids), refresh=refresh, warn=warn)
+        prices = family_status._local_prices(list(ids), refresh=refresh, warn=warn, log=log)
     else:
         prices = price_map
 
@@ -139,7 +140,7 @@ def family_diff(code: str, *, price_map: dict | None = None, refresh: bool = Fal
                                owned_rows=owned_rows)
 
 
-def collection_diff(*, refresh: bool = False, warn=None) -> list[FamilyDiff]:
+def collection_diff(*, refresh: bool = False, warn=None, log=None) -> list[FamilyDiff]:
     """One FamilyDiff per owned+characterized family, sorted by owned_usd desc.
 
     Shares the 4-step pre-pass (enumerate families → per-family code set →
@@ -149,11 +150,11 @@ def collection_diff(*, refresh: bool = False, warn=None) -> list[FamilyDiff]:
     are threaded into both `functional_missing` and `variant_chase_printings`
     via `precomputed_missing`, and the bulk owned-rows list is grouped by set
     code ONCE and sliced per family into `_build_family_diff`'s `owned_rows`
-    param, so no family re-fetches owned rows individually. ``refresh``/``warn``
-    pass straight through to `collection_prepass`.
+    param, so no family re-fetches owned rows individually. ``refresh``/``warn``/
+    ``log`` pass straight through to `collection_prepass`.
     """
     (parents, fam_codes_by_parent, missing_rows_by_parent,
-     price_map, all_rows) = family_status.collection_prepass(refresh=refresh, warn=warn)
+     price_map, all_rows) = family_status.collection_prepass(refresh=refresh, warn=warn, log=log)
     if not parents:
         return []
 

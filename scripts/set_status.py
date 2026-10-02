@@ -37,7 +37,7 @@ from magic_manager.family_status import (  # noqa: E402
     _set_targets_index,
     _family_parent,
     _family_code_set,
-    _live_prices,
+    _local_prices,
     _unit,
     _owned_summary_for_codes,
     is_characterized,
@@ -134,18 +134,19 @@ def ingest_count(family_codes: list[str]) -> int:
 
 
 def owned_summary(parent_code: str, price_map: dict[str, dict] | None = None, *,
-                  refresh: bool = False, warn=None) -> tuple[int, int, float]:
+                  refresh: bool = False, warn=None, log=None) -> tuple[int, int, float]:
     """(distinct_printings, total_qty, local_usd) for owned family cards.
 
     ``price_map`` (scryfall_id -> prices dict) lets a caller supply prices it
     already resolved in bulk (the all-families overview batches every owned id
     into ONE local-first resolve). When None, prices resolve here for just
-    this family (the single-anchor path); ``refresh``/``warn`` thread through."""
+    this family (the single-anchor path); ``refresh``/``warn``/``log`` thread
+    through."""
     rows = selectors.materialize(f"set:{parent_code}+related owned")
     prints = len(rows)
     qty = sum(r.quantity for r in rows)
     prices = (price_map if price_map is not None
-              else _live_prices([r.scryfall_id for r in rows], refresh=refresh, warn=warn))
+              else _local_prices([r.scryfall_id for r in rows], refresh=refresh, warn=warn, log=log))
     usd = sum(_unit(prices.get(r.scryfall_id, {}), r.finish) * r.quantity for r in rows)
     return prints, qty, usd
 
@@ -209,7 +210,8 @@ def precon_summary(family_codes: list[str]) -> dict[str, int]:
     return dict(buckets)
 
 
-def missing_summary(parent_code: str, *, refresh: bool = False, warn=None) -> tuple[int, float, dict] | None:
+def missing_summary(parent_code: str, *, refresh: bool = False, warn=None,
+                    log=None) -> tuple[int, float, dict] | None:
     """(count, local_usd, concentration) of missing family printings, or None if
     the family is unconfigured (SelectorParseError) or unresolvable. The third
     element is ``missing.concentration(...)`` over the same local-first prices,
@@ -221,7 +223,7 @@ def missing_summary(parent_code: str, *, refresh: bool = False, warn=None) -> tu
     except (selectors.SelectorParseError, LookupError) as e:
         print(f"note: missing-set not available for {parent_code!r}: {e}", file=sys.stderr)
         return None
-    prices = _live_prices([r.scryfall_id for r in rows], refresh=refresh, warn=warn)
+    prices = _local_prices([r.scryfall_id for r in rows], refresh=refresh, warn=warn, log=log)
     price_fn = lambda sid, finish: _unit(prices.get(sid, {}), finish)  # noqa: E731
     usd = sum(price_fn(r.scryfall_id, r.finish) for r in rows)
     conc = missing_mod.concentration(rows, price_fn)
@@ -406,15 +408,13 @@ def main() -> int:
     args = ap.parse_args()
 
     stale_codes: list[str] = []
-
-    def _warn(codes: list[str]) -> None:
-        stale_codes.extend(codes)
+    log = lambda m: print(m, file=sys.stderr)  # noqa: E731
 
     if args.anchor is None:
-        print(render_overview(refresh=args.refresh, warn=_warn))
-        if stale_codes:
-            print(f"note: {len(set(stale_codes))} set(s) have stale prices (>7d); showing "
-                  f"local — pass --refresh to re-sync.", file=sys.stderr)
+        print(render_overview(refresh=args.refresh, warn=stale_codes.extend))
+        msg = sets_mod.stale_warning(stale_codes)
+        if msg:
+            print(msg, file=sys.stderr)
         return 0
 
     try:
@@ -430,7 +430,8 @@ def main() -> int:
     family_codes = sorted(family_code_set)
     codes_types = family_codes_with_types(parent_code, related, extra_codes=family_code_set)
     ingests = ingest_count(family_codes)
-    owned = _owned_summary_for_codes(family_code_set, refresh=args.refresh, warn=_warn)
+    owned = _owned_summary_for_codes(family_code_set, refresh=args.refresh,
+                                     warn=stale_codes.extend, log=log)
     if owned[0] == 0:
         # Distinguish "never synced" from "synced but nothing owned".
         placeholders = ",".join("?" for _ in family_codes)
@@ -451,15 +452,16 @@ def main() -> int:
     # owned-only, and skip the missing_summary call (its "go characterize" note
     # would be noise). render() shows Missing/Characterized as n/a for these.
     non_family = parent_code in NON_FAMILY_SETS
-    missing = None if non_family else missing_summary(parent_code, refresh=args.refresh, warn=_warn)
+    missing = None if non_family else missing_summary(parent_code, refresh=args.refresh,
+                                                       warn=stale_codes.extend, log=log)
     functional = None if non_family else functional_missing_summary(parent_code)
     characterized = False if non_family else is_characterized(parent_code)
 
     print(render(parent_code, parent_name, codes_types, ingests, owned, precons,
                  missing, characterized, functional=functional, non_family=non_family))
-    if stale_codes:
-        print(f"note: {len(set(stale_codes))} set(s) have stale prices (>7d); showing "
-              f"local — pass --refresh to re-sync.", file=sys.stderr)
+    msg = sets_mod.stale_warning(stale_codes)
+    if msg:
+        print(msg, file=sys.stderr)
 
     # Advisory: flag a likely scarcity chase tier concentrated in a few pricey
     # prints (the pattern that made SPM show $4,230 for a ~$440 attainable gap).

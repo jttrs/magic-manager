@@ -205,10 +205,7 @@ def main() -> int:
     # Shared options live on a parent parser so they can appear AFTER the
     # subcommand (argparse won't accept a top-level flag post-subcommand).
     common = argparse.ArgumentParser(add_help=False)
-    common.add_argument("--refresh", action="store_true",
-                        help="Re-sync sets with stale (>7d) prices before pricing; "
-                             "default is local-first (use local prices, warn on stale).")
-    common.add_argument("--no-refresh", action="store_true", help=argparse.SUPPRESS)
+    util.add_price_refresh_arg(common)
 
     ap = argparse.ArgumentParser(description="EDHREC report generator.")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -238,8 +235,6 @@ def main() -> int:
                         help="Set name or code (family-expanded, e.g. 'fin').")
 
     args = ap.parse_args()
-    # --no-refresh is a deprecated no-op alias: local-first is now the default,
-    # so "don't refresh" is already the baseline behavior.
     refresh = args.refresh
     ts = datetime.now(UTC).strftime("%Y-%m-%d-%H%M%S")
     out_dir = util.output_dir(_OUTPUT_TYPE, "reports")

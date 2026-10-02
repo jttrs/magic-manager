@@ -3655,12 +3655,10 @@ def query_card_diff_cmd(
     pools = list(valid_pools) if pool == "all" else [pool]
 
     stale_codes: list[str] = []
-
-    def _warn(codes: list[str]) -> None:
-        stale_codes.extend(codes)
+    log = lambda m: typer.echo(m, err=True)  # noqa: E731
 
     if code is None:
-        diffs = card_diff_mod.collection_diff(refresh=refresh, warn=_warn)
+        diffs = card_diff_mod.collection_diff(refresh=refresh, warn=stale_codes.extend, log=log)
         if not diffs:
             typer.echo("## Collection card-diff\n\nNo owned families yet.")
             raise typer.Exit(0)
@@ -3688,14 +3686,12 @@ def query_card_diff_cmd(
             f"**{tot_f_n}c · {util.fmt_usd(tot_f_usd)}** | "
             f"**{tot_v_n}p · {util.fmt_usd(tot_v_usd)}** |"
         )
-        if stale_codes:
-            typer.echo(
-                f"{len(set(stale_codes))} set(s) have stale prices (>7d); showing local — "
-                f"pass --refresh to re-sync.", err=True,
-            )
+        msg = sets_mod.stale_warning(stale_codes)
+        if msg:
+            typer.echo(msg, err=True)
         return
 
-    fd = card_diff_mod.family_diff(code, refresh=refresh, warn=_warn)
+    fd = card_diff_mod.family_diff(code, refresh=refresh, warn=stale_codes.extend, log=log)
     if fd is None:
         typer.echo(f"error: {code!r} is not a resolvable/configured family (unknown code, or no "
                     f"missing-set rules — see FAMILY_DUPE_FOIL_PROMO_TYPES).", err=True)
@@ -3766,11 +3762,9 @@ def query_card_diff_cmd(
     if "variant-chase" in pools:
         _echo_printing_pool(fd.variant_chase.rows, "Variant-chase")
 
-    if stale_codes:
-        typer.echo(
-            f"{len(set(stale_codes))} set(s) have stale prices (>7d); showing local — "
-            f"pass --refresh to re-sync.", err=True,
-        )
+    msg = sets_mod.stale_warning(stale_codes)
+    if msg:
+        typer.echo(msg, err=True)
 
 
 @query_app.command("missing-jumpstart")
@@ -4798,7 +4792,8 @@ def _run_edhrec_report(report_args: list[str]) -> None:
 def edhrec_commander_cmd(
     card: str = typer.Argument(..., help="Commander card — name (\"Atraxa, Praetors' Voice\") or printing (\"SET CN\")."),
     top: int = typer.Option(25, "--top", help="Show at most N cards."),
-    no_refresh: bool = typer.Option(False, "--no-refresh", help="Use local prices as-is; don't re-sync stale sets."),
+    refresh: bool = typer.Option(False, "--refresh", help="Re-sync sets with stale (>7d) prices before pricing; default is local-first."),
+    no_refresh: bool = typer.Option(False, "--no-refresh", hidden=True, help="(deprecated no-op; local-first is the default)"),
 ):
     """Workflow A: cards with the highest inclusion rate when CARD is the commander.
 
@@ -4807,8 +4802,8 @@ def edhrec_commander_cmd(
     JSON + XLSX artifacts under output/edhrec/reports/.
     """
     args = ["commander", card, "--top", str(top)]
-    if no_refresh:
-        args.append("--no-refresh")
+    if refresh:
+        args.append("--refresh")
     _run_edhrec_report(args)
 
 
@@ -4816,12 +4811,13 @@ def edhrec_commander_cmd(
 def edhrec_card_cmd(
     card: str = typer.Argument(..., help="Card — name (\"Sol Ring\") or printing (\"SET CN\")."),
     top: int = typer.Option(25, "--top", help="Show at most N commanders."),
-    no_refresh: bool = typer.Option(False, "--no-refresh", help="Use local prices as-is; don't re-sync stale sets."),
+    refresh: bool = typer.Option(False, "--refresh", help="Re-sync sets with stale (>7d) prices before pricing; default is local-first."),
+    no_refresh: bool = typer.Option(False, "--no-refresh", hidden=True, help="(deprecated no-op; local-first is the default)"),
 ):
     """Workflow B: the most common commanders that run CARD in the 99."""
     args = ["card", card, "--top", str(top)]
-    if no_refresh:
-        args.append("--no-refresh")
+    if refresh:
+        args.append("--refresh")
     _run_edhrec_report(args)
 
 
@@ -4837,7 +4833,8 @@ def edhrec_rankings_cmd(
                             "(EDHREC serves both from one namespace): e.g. 'goblins', 'treasure'."),
     set_family: str = typer.Option(None, "--set", help="Filter commanders by set name/code "
                                    "(family-expanded, e.g. 'fin')."),
-    no_refresh: bool = typer.Option(False, "--no-refresh", help="Use local prices as-is; don't re-sync stale sets."),
+    refresh: bool = typer.Option(False, "--refresh", help="Re-sync sets with stale (>7d) prices before pricing; default is local-first."),
+    no_refresh: bool = typer.Option(False, "--no-refresh", hidden=True, help="(deprecated no-op; local-first is the default)"),
 ):
     """Workflow C: rankings — top commanders/cards/salt, optionally filtered.
 
@@ -4862,8 +4859,8 @@ def edhrec_rankings_cmd(
         args += ["--tag", tag]
     if set_family:
         args += ["--set", set_family]
-    if no_refresh:
-        args.append("--no-refresh")
+    if refresh:
+        args.append("--refresh")
     _run_edhrec_report(args)
 
 

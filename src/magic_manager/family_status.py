@@ -163,17 +163,18 @@ def _family_code_set(parent_code: str, related: list[dict]) -> set[str]:
 
 # ---------- price helpers (local-first) ----------
 
-def _live_prices(scryfall_ids: list[str], *, refresh: bool = False, warn=None) -> dict[str, dict]:
+def _local_prices(scryfall_ids: list[str], *, refresh: bool = False, warn=None,
+                   log=None) -> dict[str, dict]:
     """scryfall_id -> prices dict ({'usd':..,'usd_foil':..,'prices_updated_at':..}).
 
     LOCAL-FIRST via `sets.priced_map` — reads prices from the local `cards`
     table (never a blanket live fetch); syncs ONLY stale sets when
     `refresh=True`, else warns via `warn([set_codes])` (if given) and uses
-    local as-is. Name kept for its callers (`_owned_summary_for_codes`,
-    `collection_prepass`) even though it no longer fetches live."""
+    local as-is. `log` is a print-like diagnostics callable passed through to
+    `sets.priced_map` (unresolved ids, sync failures)."""
     if not scryfall_ids:
         return {}
-    return sets_mod.priced_map(scryfall_ids, refresh=refresh, warn=warn)
+    return sets_mod.priced_map(scryfall_ids, refresh=refresh, warn=warn, log=log)
 
 
 def _unit(prices: dict, finish: str) -> float:
@@ -207,16 +208,16 @@ def _owned_rows_for_codes(codes) -> list:
 
 
 def _owned_summary_for_codes(codes, price_map: dict[str, dict] | None = None, *,
-                             refresh: bool = False, warn=None) -> tuple[int, int, float]:
+                             refresh: bool = False, warn=None, log=None) -> tuple[int, int, float]:
     """(distinct_printings, total_qty, live_usd) over an explicit code set —
     the set_targets-authoritative sibling of owned_summary. ``price_map`` supplies
     pre-batched prices (overview); None resolves (local-first) for just these
-    codes. ``refresh``/``warn`` are passed through to the local resolve."""
+    codes. ``refresh``/``warn``/``log`` are passed through to the local resolve."""
     rows = _owned_rows_for_codes(codes)
     prints = len(rows)
     qty = sum(r.quantity for r in rows)
     prices = (price_map if price_map is not None
-              else _live_prices([r.scryfall_id for r in rows], refresh=refresh, warn=warn))
+              else _local_prices([r.scryfall_id for r in rows], refresh=refresh, warn=warn, log=log))
     usd = sum(_unit(prices.get(r.scryfall_id, {}), r.finish) * r.quantity for r in rows)
     return prints, qty, usd
 
@@ -227,7 +228,7 @@ def is_characterized(parent_code: str) -> bool:
 
 # ---------- collection-wide pre-pass (shared by set_status + card_diff) ----------
 
-def collection_prepass(*, refresh: bool = False, warn=None) -> tuple[
+def collection_prepass(*, refresh: bool = False, warn=None, log=None) -> tuple[
     dict[str, str], dict[str, set[str]], dict[str, list | None], dict[str, dict], list
 ]:
     """The 4-step pre-pass both `set_status.render_overview` and
@@ -238,8 +239,8 @@ def collection_prepass(*, refresh: bool = False, warn=None) -> tuple[
     3. ``missing_rows_by_parent`` — `missing.missing_printings` materialized
        ONCE per family (skipping `NON_FAMILY_SETS`; `None` = unconfigured).
     4. ``price_map`` — ONE local-first resolve (`sets.priced_map`, via
-       `_live_prices`) over owned ids ∪ every family's missing ids. ``refresh``/
-       ``warn`` thread through to that resolve.
+       `_local_prices`) over owned ids ∪ every family's missing ids. ``refresh``/
+       ``warn``/``log`` thread through to that resolve.
 
     Also returns ``all_owned_rows`` (the flat owned-rows list from step 4's
     `_owned_rows_for_codes` call) so a caller doing a global dedup (e.g.
@@ -278,7 +279,7 @@ def collection_prepass(*, refresh: bool = False, warn=None) -> tuple[
     for mrows in missing_rows_by_parent.values():
         if mrows:
             ids.update(r.scryfall_id for r in mrows)
-    price_map = _live_prices(list(ids), refresh=refresh, warn=warn)
+    price_map = _local_prices(list(ids), refresh=refresh, warn=warn, log=log)
 
     return parents, fam_codes_by_parent, missing_rows_by_parent, price_map, all_owned_rows
 
