@@ -1017,7 +1017,14 @@ CURRENT_VERSION = len(MIGRATIONS)
 # PK), so their DROP+RENAME must run with foreign_keys temporarily OFF. Unlike
 # V14/V18/V24 (leaf-table rebuilds), V26 rebuilds ingest_events, which
 # inventory_events.ingest_id references — _ensure_schema special-cases these.
-_FK_OFF_MIGRATIONS = frozenset({26})
+# Maps version -> the CHILD table(s) to integrity-check after the rebuild. The
+# risk when rebuilding an FK TARGET is orphaning a row in a table that REFERENCES
+# it, so we check the REFERENCING (child) table — `PRAGMA foreign_key_check(T)`
+# validates the FKs DECLARED IN T, and ingest_events (the parent) declares none.
+# Scoping to the child(ren) also avoids a DB-wide check flagging unrelated
+# PRE-EXISTING dangling FKs (foreign_keys=ON only enforces NEW writes, so a
+# legacy orphan can sit elsewhere) and aborting an otherwise-clean upgrade.
+_FK_OFF_MIGRATIONS: dict[int, tuple[str, ...]] = {26: ("inventory_events",)}
 
 
 @contextmanager
@@ -1094,15 +1101,27 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
                 # commit here to be certain no write txn is open). The rebuild
                 # preserves every PK value, so no FK is actually orphaned — we
                 # verify with foreign_key_check and re-enable before continuing.
+                child_tables = _FK_OFF_MIGRATIONS[i]
                 conn.commit()
                 conn.execute("PRAGMA foreign_keys = OFF")
                 conn.executescript(sql)
                 conn.commit()
-                violations = conn.execute("PRAGMA foreign_key_check").fetchall()
+                # Scope the check to the REFERENCING (child) table(s): a bare
+                # foreign_key_check is DB-wide and would also flag unrelated
+                # pre-existing dangling FKs (tolerated because foreign_keys=ON
+                # only enforces new writes), aborting an upgrade whose own rebuild
+                # is clean. `foreign_key_check(T)` checks the FKs declared in T, so
+                # we pass the child that points at the rebuilt parent.
+                violations: list = []
+                for child in child_tables:
+                    violations += conn.execute(
+                        f"PRAGMA foreign_key_check({child})"
+                    ).fetchall()
                 conn.execute("PRAGMA foreign_keys = ON")
                 if violations:
                     raise RuntimeError(
-                        f"migration v{i} left dangling foreign keys: {violations}"
+                        f"migration v{i} left dangling foreign keys "
+                        f"(child tables {child_tables}): {violations}"
                     )
             else:
                 conn.executescript(sql)

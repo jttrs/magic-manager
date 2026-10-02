@@ -176,50 +176,29 @@ class ResolveResult:
     warnings: list[str] = field(default_factory=list)
 
 
-def _safe_collection(idents: list[dict]) -> tuple[list[dict], list[dict], list[dict]]:
-    """``scryfall.collection`` that tolerates a HARD error on a bad identifier.
-
-    Scryfall's /cards/collection returns a clean ``not_found`` list for unknown
-    *cards*, but HTTP 400s the WHOLE request when an identifier is malformed —
-    e.g. a non-existent set code (MTGGoldfish's ``prm-wpn`` pseudo-sets). One bad
-    row must not sink the batch, so on a ``ScryfallError`` we BISECT: split the
-    batch and recurse, isolating the offending identifier(s). A singleton that
-    still errors is the culprit → returned in the third ``errored`` list. Returns
-    ``(found, not_found, errored)``.
-    """
-    if not idents:
-        return [], [], []
-    try:
-        found, not_found = scryfall.collection(idents)
-        return found, not_found, []
-    except scryfall.ScryfallError:
-        if len(idents) == 1:
-            return [], [], list(idents)  # this single identifier is the bad one
-        mid = len(idents) // 2
-        lf, lnf, le = _safe_collection(idents[:mid])
-        rf, rnf, re_ = _safe_collection(idents[mid:])
-        return lf + rf, lnf + rnf, le + re_
-
-
 def resolve_rows(rows: list[CollectionRow], *, conn=None) -> ResolveResult:
     """Resolve rows against Scryfall and UPSERT each matched card into ``cards``.
 
     Every row needs its card present in ``cards`` before apply (the ledger's
     ``inventory_events.scryfall_id`` FKs there), so this pass runs even for
     ManaBox rows that already carry a ``scryfall_id`` — the id tier just makes
-    the lookup exact. Resolution key per row, in priority order (reusing the
-    rate-limited ``scryfall.collection`` batch wrapper, the same seam
-    ``decksource._resolve_cards`` uses):
+    the lookup exact. The tiered batch-resolve + index-build is the shared
+    ``scryfall.resolve_identifiers`` seam (which also owns the 400-bisection via
+    ``scryfall.collection`` — a MTGGoldfish ``prm-*`` pseudo-set that Scryfall
+    rejects degrades to not_found instead of sinking the batch). Resolution key
+    per row, in priority order:
 
-      1. ``scryfall_id`` — ManaBox carries it (exact printing).
-      2. ``(set, collector_number)`` — exact printing without an id (Moxfield/
-         Archidekt/MTGGoldfish, Phase 2).
+      1. ``scryfall_id`` — ManaBox/Archidekt/MTGGoldfish carry it (exact printing).
+      2. ``(set, collector_number)`` — exact printing. An id-bearing row ALSO
+         contributes a (set, cn) identifier so a STALE/merged id (present but
+         unresolvable) falls back to set+cn instead of being dropped.
 
     A resolved row gets its ``scryfall_id`` filled from the matched card; an
     unresolved row lands in ``not_found`` (reported, never silently dropped).
-    Name-only resolution is intentionally NOT offered here — a collection write
-    must land on an EXACT printing, so a row with neither an id nor set+cn is a
-    hard not_found rather than a fuzzy name guess.
+    Name-only resolution is intentionally NOT offered — a collection write must
+    land on an EXACT printing, so a row with neither an id nor set+cn is a hard
+    not_found rather than a fuzzy name guess (the one tier decksource adds but
+    this does not).
     """
     res = ResolveResult()
     id_idents: list[dict] = []
@@ -227,40 +206,25 @@ def resolve_rows(rows: list[CollectionRow], *, conn=None) -> ResolveResult:
     seen_ids: set[str] = set()
     seen_setcn: set[tuple] = set()
     for r in rows:
-        if r.scryfall_id:
-            if r.scryfall_id not in seen_ids:
-                seen_ids.add(r.scryfall_id)
-                id_idents.append({"id": r.scryfall_id})
-        elif r.set and r.collector_number:
+        if r.scryfall_id and r.scryfall_id not in seen_ids:
+            seen_ids.add(r.scryfall_id)
+            id_idents.append({"id": r.scryfall_id})
+        # NOT an elif: an id-bearing row with set+cn also enqueues the (set, cn)
+        # identifier, so a stale/unresolvable id can fall back to set+cn below.
+        if r.set and r.collector_number:
             key = (r.set.lower(), str(r.collector_number))
             if key not in seen_setcn:
                 seen_setcn.add(key)
                 setcn_idents.append({"set": r.set.lower(), "collector_number": str(r.collector_number)})
 
-    found: list[dict] = []
-    for idents in (id_idents, setcn_idents):
-        if not idents:
-            continue
-        got, not_found, errored = _safe_collection(idents)
-        found.extend(got)
-        for nf in not_found:
-            res.warnings.append(f"scryfall could not resolve identifier {nf!r}")
-        for bad in errored:
-            # An identifier Scryfall rejects outright (HTTP 400 — e.g. a
-            # MTGGoldfish PRM-* pseudo-set code that isn't a real Scryfall set).
-            # Isolated by bisection so it doesn't sink the whole batch; the row
-            # degrades to not_found below.
-            res.warnings.append(f"scryfall rejected identifier {bad!r} (bad set code?)")
+    by_id, by_setcn, _by_name, warnings = scryfall.resolve_identifiers(
+        id_idents, setcn_idents
+    )
+    res.warnings.extend(warnings)
 
-    by_id = {c["id"]: c for c in found if c.get("id")}
-    by_setcn = {
-        ((c.get("set") or "").lower(), str(c.get("collector_number") or "")): c
-        for c in found
-    }
-
-    # Upsert every matched card, then attach ids to rows.
+    # Upsert every matched card so the ledger FK target exists.
     with db.transaction(conn) as c:
-        for card in found:
+        for card in list(by_id.values()):
             db.upsert_card(c, card)
 
     for r in rows:
@@ -366,11 +330,29 @@ def _landing_from_inventory() -> list[CollectionRow]:
     return out
 
 
+DiffKey = Literal["scryfall_id", "set_cn", "auto"]
+
+
+def resolve_diff_key(
+    incoming: list[CollectionRow], landing: list[CollectionRow]
+) -> Literal["scryfall_id", "set_cn"]:
+    """Pick the diff key that both sides can actually match on.
+
+    ``scryfall_id`` is exact but only works when EVERY row on BOTH sides carries
+    one; a single id-less row (an un-resolved moxfield export) keys as a
+    ``(set, cn, finish)`` tuple that can never equal an id-keyed ``(sid, finish)``
+    tuple, so a mixed diff would report everything as added+removed. The common
+    denominator — set+cn, which inventory rows and service CSVs both carry — is
+    the safe fallback. Used so callers don't have to know a service's id-fulness."""
+    both = list(incoming) + list(landing)
+    return "scryfall_id" if both and all(r.scryfall_id for r in both) else "set_cn"
+
+
 def diff_collections(
     incoming: list[CollectionRow],
     landing: list[CollectionRow] | None = None,
     *,
-    key: Literal["scryfall_id", "set_cn"] = "scryfall_id",
+    key: DiffKey = "auto",
 ) -> dict:
     """Diff ``incoming`` against ``landing`` (direction-agnostic).
 
@@ -379,15 +361,20 @@ def diff_collections(
     - export: ``incoming``=local inventory rows, ``landing``=service CSV rows.
 
     Keyed on ``(scryfall_id, finish)`` (``key='scryfall_id'``) or
-    ``(set, cn, finish)`` (``key='set_cn'``). "added" = present in incoming but
-    not landing (what the apply would introduce at the landing side); "removed"
-    = present in landing but not incoming; "changed" = present on both with a
-    different quantity. Each entry carries name/set/cn + both quantities so the
-    review table is self-describing. Mirrors ``decks.version_diff``'s shape.
+    ``(set, cn, finish)`` (``key='set_cn'``). ``key='auto'`` (the default) picks
+    via :func:`resolve_diff_key` — ``scryfall_id`` only when BOTH sides are fully
+    id-ful, else ``set_cn``. This is what makes export/diff against an id-less
+    service (moxfield) correct: without it, id-ful inventory and an id-less CSV
+    key into disjoint tuple arities and every row falsely reads added+removed.
+    "added" = present in incoming but not landing; "removed" = present in landing
+    but not incoming; "changed" = present on both with a different quantity. Each
+    entry carries name/set/cn + both quantities. Mirrors ``decks.version_diff``.
     """
-    prefer_id = key == "scryfall_id"
     if landing is None:
         landing = _landing_from_inventory()
+    if key == "auto":
+        key = resolve_diff_key(incoming, landing)
+    prefer_id = key == "scryfall_id"
     inc = _aggregate(incoming, prefer_id=prefer_id)
     land = _aggregate(landing, prefer_id=prefer_id)
 
@@ -410,6 +397,9 @@ def diff_collections(
     return {
         "added": added, "removed": removed, "changed": changed,
         "unchanged_count": unchanged,
+        # The resolved key, so select_export_rows selects on the SAME basis the
+        # diff was computed with (no second, independently-defaulted choice).
+        "key": key,
     }
 
 
@@ -429,7 +419,7 @@ def select_export_rows(
     diff: dict,
     *,
     mode: ExportMode,
-    key: str = "scryfall_id",
+    key: str | None = None,
 ) -> list[CollectionRow]:
     """Pick which inventory rows the reconciled export CSV should carry.
 
@@ -442,14 +432,17 @@ def select_export_rows(
       that's a service-side manual action), but they ARE surfaced in the diff
       review so the user sees them.
 
-    Keyed the same way as the diff (``scryfall_id`` or ``set_cn``) so the row
-    selection and the diff agree. Returns a subset of ``incoming`` (same row
-    objects), preserving per-row condition/price passthrough.
+    Keyed the SAME way the diff was computed: ``key`` defaults to ``diff['key']``
+    (the key :func:`diff_collections` resolved), so the row selection can't
+    diverge from the diff it's built against. Returns a subset of ``incoming``
+    (same row objects), preserving per-row condition/price passthrough.
     """
     if mode == "full":
         return list(incoming)
     if mode != "delta":
         raise ValueError(f"unknown export mode {mode!r}")
+    if key is None:
+        key = diff.get("key", "scryfall_id")
     prefer_id = key == "scryfall_id"
     delta_keys = {
         (r.get("scryfall_id"), r["finish"]) if prefer_id

@@ -28,7 +28,6 @@ Usage
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import sys
 from datetime import UTC, datetime
@@ -38,18 +37,12 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from magic_manager import collection_sync as cs  # noqa: E402
-from magic_manager import db, ingest  # noqa: E402
+from magic_manager import db, ingest, util  # noqa: E402
 
 # Exit codes (mirror the read-side _materialize_or_die + checklist dedup):
 EXIT_OK = 0
 EXIT_BAD_INPUT = 2        # unknown service / unreadable file / parse error
 EXIT_DUPLICATE = 3        # identical file already imported (no --force)
-
-
-def _sha256(path: Path) -> str:
-    h = hashlib.sha256()
-    h.update(path.read_bytes())
-    return h.hexdigest()
 
 
 def _stamp() -> str:
@@ -72,7 +65,7 @@ def run_import(service: str, csv_path: str, *, mode: str, apply: bool,
         print(f"error: {e}", file=sys.stderr)
         return EXIT_BAD_INPUT
 
-    sha = _sha256(path)
+    sha = util.sha256_file(path)
     # Dedup gate — refuse a re-import of the identical file without --force.
     if not force:
         with db.connect() as conn:

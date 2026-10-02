@@ -80,6 +80,46 @@ def test_select_export_rows_bad_mode():
         cs.select_export_rows([], {"added": [], "changed": []}, mode="bogus")
 
 
+# ---------- F1: id-less landing (moxfield export) auto-keys on set+cn ----------
+
+def test_export_against_idless_service_matches_on_setcn():
+    # Inventory (id-ful) vs an id-LESS moxfield --against CSV for the SAME card.
+    # A correct diff keys on set+cn and reports it unchanged, not added+removed.
+    inventory = [cs.CollectionRow(qty=1, finish="nonfoil", scryfall_id="sid-X",
+                                  set="fin", collector_number="233", name="Lightning")]
+    landing = [cs.CollectionRow(qty=1, finish="nonfoil", scryfall_id=None,
+                                set="fin", collector_number="233", name="Lightning")]
+    diff = cs.diff_collections(inventory, landing)   # key="auto"
+    assert diff["key"] == "set_cn"                    # auto-fell back to set+cn
+    assert diff["unchanged_count"] == 1
+    assert not diff["added"] and not diff["removed"] and not diff["changed"]
+
+
+def test_resolve_diff_key_auto():
+    idful = [cs.CollectionRow(qty=1, finish="nonfoil", scryfall_id="a",
+                              set="fin", collector_number="1", name="X")]
+    idless = [cs.CollectionRow(qty=1, finish="nonfoil", scryfall_id=None,
+                               set="fin", collector_number="1", name="X")]
+    assert cs.resolve_diff_key(idful, idful) == "scryfall_id"   # both fully id-ful
+    assert cs.resolve_diff_key(idful, idless) == "set_cn"       # one side id-less
+    assert cs.resolve_diff_key([], []) == "set_cn"              # empty → safe default
+
+
+def test_export_delta_uses_diff_key_for_idless(tmp_db, make_card):
+    # Delta export against an id-less landing: the selected rows must match on the
+    # same (set,cn) key the diff used, not the stale scryfall_id default.
+    inv = [cs.CollectionRow(qty=1, finish="nonfoil", scryfall_id="sid-1",
+                            set="fin", collector_number="1", name="Have"),
+           cs.CollectionRow(qty=1, finish="nonfoil", scryfall_id="sid-2",
+                            set="fin", collector_number="2", name="New")]
+    landing = [cs.CollectionRow(qty=1, finish="nonfoil", scryfall_id=None,
+                                set="fin", collector_number="1", name="Have")]  # id-less
+    diff = cs.diff_collections(inv, landing)
+    assert diff["key"] == "set_cn"
+    out = cs.select_export_rows(inv, diff, mode="delta")
+    assert {r.name for r in out} == {"New"}   # only the card the service lacks
+
+
 # ---------- export does NOT mutate the DB ----------
 
 def test_export_never_writes_inventory(tmp_db, make_card):

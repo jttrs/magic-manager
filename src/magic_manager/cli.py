@@ -6,7 +6,6 @@ Run via ``uv run mm …`` from the repo root.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import sys
 from datetime import datetime
@@ -385,11 +384,9 @@ def _processed_path(slug: str, slice_suffix: str = "",
 
 
 def _file_sha256(path: Path) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(65536), b""):
-            h.update(chunk)
-    return h.hexdigest()
+    # Thin alias over the shared helper (one fingerprint impl feeds the ingest
+    # dedup gate from both cli and scripts/collection_sync).
+    return util.sha256_file(path)
 
 
 def _split_csv(values: list[str] | None) -> list[str]:

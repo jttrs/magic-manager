@@ -417,7 +417,10 @@ def _resolve_cards(cards: list[dict]) -> tuple[dict, dict, dict, list[str]]:
          name-only (no set/cn), so this tier is what makes those decks import;
          Scryfall returns its default printing for a bare name (like a pasted
          Moxfield block does today via ``parsers.resolve``).
-    Reuses the same rate-limited ``scryfall.collection`` batch wrapper.
+    The tiered batch-resolve + index-build is the shared
+    ``scryfall.resolve_identifiers`` seam; this function owns only the
+    deck-specific tier-building (it submits all three tiers, name included — a
+    name-only MTGGoldfish row is still importable).
     """
     id_idents: list[dict] = []
     setcn_idents: list[dict] = []
@@ -444,28 +447,9 @@ def _resolve_cards(cards: list[dict]) -> tuple[dict, dict, dict, list[str]]:
             seen_names.add(nm.lower())
             name_idents.append({"name": nm})
 
-    warnings: list[str] = []
-    found: list[dict] = []
-    for idents in (id_idents, setcn_idents, name_idents):
-        if not idents:
-            continue
-        got, not_found = scryfall.collection(idents)
-        found.extend(got)
-        for nf in not_found:
-            warnings.append(f"scryfall could not resolve identifier {nf!r}")
-
-    by_sid = {c["id"]: c for c in found if c.get("id")}
-    by_setcn = {
-        ((c.get("set") or "").lower(), str(c.get("collector_number") or "")): c
-        for c in found
-    }
-    # Index by both oracle name and the front face of a split/DFC ("A // B" → "A").
-    by_name: dict[str, dict] = {}
-    for c in found:
-        nm = (c.get("name") or "").lower()
-        if nm:
-            by_name.setdefault(nm, c)
-            by_name.setdefault(nm.split(" // ")[0], c)
+    by_sid, by_setcn, by_name, warnings = scryfall.resolve_identifiers(
+        id_idents, setcn_idents, name_idents
+    )
     return by_sid, by_setcn, by_name, warnings
 
 

@@ -98,18 +98,20 @@ def test_moxfield_resolves_via_setcn_tier(tmp_db, make_card, monkeypatch):
 
 
 def test_bad_set_code_is_quarantined_not_fatal(tmp_db, make_card, monkeypatch):
-    # One good (set,cn) + one bad set code that 400s. Bisection must resolve the
-    # good row and report the bad one as not_found — never raise.
+    # One good (set,cn) + one bad set code that 400s. The bisection in
+    # scryfall.collection (patched at the _run/page level) must resolve the good
+    # row and report the bad one as not_found — resolve_rows never raises.
     good = make_card(id="sid-good", name="Good", set="fin", collector_number="233")
 
-    def fake_collection(idents):
-        idents = list(idents)
+    def fake_run(args, stdin=None):
+        import json as _json
+        idents = _json.loads(stdin)["identifiers"]
         if any(i.get("set") == "prm-wpn" for i in idents):
-            raise scryfall.ScryfallError("HTTP 400: bad set code")
-        hits = [good for i in idents if i.get("set") == "fin"]
-        return hits, [i for i in idents if i.get("set") != "fin"]
+            raise scryfall.ScryfallError("HTTP 400: bad set code")  # whole-page 400
+        data = [good for i in idents if i.get("set") == "fin"]
+        return {"data": data, "not_found": [i for i in idents if i.get("set") != "fin"]}
 
-    monkeypatch.setattr(scryfall, "collection", fake_collection)
+    monkeypatch.setattr(scryfall, "_run", fake_run)
     rows = [
         cs.CollectionRow(qty=1, finish="nonfoil", set="fin", collector_number="233", name="Good"),
         cs.CollectionRow(qty=1, finish="nonfoil", set="prm-wpn", collector_number="1", name="Bad Promo"),
@@ -119,17 +121,28 @@ def test_bad_set_code_is_quarantined_not_fatal(tmp_db, make_card, monkeypatch):
     assert len(res.not_found) == 1 and res.not_found[0]["name"] == "Bad Promo"
 
 
-def test_safe_collection_bisects_to_isolate_culprit(monkeypatch):
-    # Direct test of the bisection helper: 4 idents, 1 bad → the bad one isolated,
-    # the other 3 found, with no exception escaping.
+def test_stale_scryfall_id_falls_back_to_setcn(tmp_db, make_card, monkeypatch):
+    # A row carries a PRESENT-but-unresolvable scryfall_id (stale/merged) AND a
+    # valid set+cn. The id tier misses; the row must fall back to (set, cn) and
+    # resolve, not drop to not_found. (F4: build loop enqueues BOTH identifiers.)
+    real = make_card(id="sid-current", name="Reprinted Card", set="fin", collector_number="233")
+    captured = {"idents": []}
+
     def fake_collection(idents):
         idents = list(idents)
-        if any(i.get("set") == "bad" for i in idents):
-            raise scryfall.ScryfallError("400")
-        return [{"id": i["set"]} for i in idents], []
+        captured["idents"].extend(idents)
+        found = [real for i in idents
+                 if i.get("set") == "fin" and i.get("collector_number") == "233"]
+        # The stale id resolves to nothing (Scryfall no longer serves it).
+        nf = [i for i in idents if i.get("id") == "sid-stale"]
+        return found, nf
 
     monkeypatch.setattr(scryfall, "collection", fake_collection)
-    idents = [{"set": "a"}, {"set": "b"}, {"set": "bad"}, {"set": "d"}]
-    found, not_found, errored = cs._safe_collection(idents)
-    assert {c["id"] for c in found} == {"a", "b", "d"}
-    assert errored == [{"set": "bad"}]
+    rows = [cs.CollectionRow(qty=1, finish="nonfoil", scryfall_id="sid-stale",
+                             set="fin", collector_number="233", name="Reprinted Card")]
+    res = cs.resolve_rows(rows)
+    assert len(res.resolved) == 1
+    assert res.resolved[0].scryfall_id == "sid-current"  # resolved via set+cn fallback
+    # BOTH an id identifier AND a (set,cn) identifier were submitted for the row.
+    assert {"id": "sid-stale"} in captured["idents"]
+    assert {"set": "fin", "collector_number": "233"} in captured["idents"]

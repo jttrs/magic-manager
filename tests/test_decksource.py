@@ -419,3 +419,31 @@ def test_import_deck_no_source_still_appends(tmp_db, fake_scryfall, make_card):
 
     from magic_manager import decks as decks_mod
     assert {(r.scryfall_id, r.count) for r in decks_mod.deck_show("d3")} == {("sid-a", 2)}
+
+
+def test_import_deck_bad_identifier_does_not_sink_batch(tmp_db, monkeypatch, make_card):
+    """A deck with one malformed identifier (bad set code → Scryfall HTTP 400)
+    must still import the good cards — decksource inherits the 400-bisection now
+    that it lives in the shared scryfall.collection seam. Patch _run so the real
+    bisection runs."""
+    import json as _json
+    from magic_manager import scryfall
+    good = make_card(id="sid-good", set="tst", collector_number="1", name="Good")
+
+    def fake_run(args, stdin=None):
+        idents = _json.loads(stdin)["identifiers"]
+        if any(i.get("set") == "bogus" for i in idents):
+            raise scryfall.ScryfallError("HTTP 400: bad set code")  # whole-page 400
+        data = [good for i in idents if i.get("set") == "tst" or i.get("id") == "sid-good"]
+        return {"data": data, "not_found": [i for i in idents
+                                            if i.get("set") not in ("tst", None) and not i.get("id")]}
+
+    monkeypatch.setattr(scryfall, "_run", fake_run)
+    cards = [
+        _one_card("sid-good", "Good", set_code="tst", cn="1"),
+        {"qty": 1, "board": "main", "finish": "nonfoil", "scryfall_id": None,
+         "set": "bogus", "collector_number": "9", "name": "Bad", "category": None},
+    ]
+    res = decksource.import_deck(cards, slug="bad-batch", name="BB")  # must NOT raise
+    assert res["added"] == 1
+    assert len(res["not_found"]) == 1 and res["not_found"][0]["name"] == "Bad"
