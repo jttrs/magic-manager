@@ -39,9 +39,14 @@ def sub_selectors(code: str, treatment_class: str = "preferred") -> list[tuple[s
     ]
 
 
+CHASE_MODES = ("exclude", "include", "only")
+
+
 def missing_printings(
     code: str,
     treatment_class: str = "preferred",
+    *,
+    chase: str = "exclude",
 ) -> list[sel_mod.MaterializedRow]:
     """Printing-level union of the four missing-set sub-selectors for a family.
 
@@ -51,9 +56,19 @@ def missing_printings(
     wins — printing-level dedup). Returns rows in the materializer's native
     order; callers apply their own sort.
 
+    ``chase`` controls grey/chase-tier handling (see :func:`_chase_printings`):
+
+    - ``"exclude"`` (default) — chase-tier prints are dropped (today's behavior).
+    - ``"include"`` — the normal union PLUS every missing chase-tier print.
+    - ``"only"`` — ONLY the missing chase-tier prints (regular/alt pools skipped).
+
     Propagates ``selectors.SelectorParseError`` / ``LookupError`` to the caller.
     """
     code_l = code.lower()
+    if chase not in CHASE_MODES:
+        raise ValueError(f"chase must be one of {CHASE_MODES}, got {chase!r}")
+    if chase == "only":
+        return _chase_printings(code_l)
     SUBS = sub_selectors(code_l, treatment_class)
 
     # 1. Materialize each sub-selector.
@@ -89,7 +104,40 @@ def missing_printings(
     for slug_key in sub_rows:
         for r in sub_rows[slug_key]:
             union[r.scryfall_id] = r
+
+    # 2a. --chase include: fold in the chase-tier prints that the preferred
+    # filter / unobtainable rules excluded above. Sourced via the inclusion
+    # path (_chase_printings), which bypasses the art-blind ff-dupe collapse, so
+    # distinct-art chase prints with a same-codes base sibling surface too.
+    if chase == "include":
+        for r in _chase_printings(code_l):
+            union.setdefault(r.scryfall_id, r)
     return list(union.values())
+
+
+def _chase_printings(code: str) -> list[sel_mod.MaterializedRow]:
+    """The family's missing chase-tier (grey) prints — the inclusion complement
+    of the ``tier="chase"`` unobtainable rules.
+
+    Materializes ``set:<code>+related missing`` at the PRINTING level with NO
+    treatment filter, so it never runs the art-blind ff-dupe collapse
+    (``selectors._filter_treatment_preferred`` Step 3) that silently drops
+    distinct-art chase prints sharing a base sibling's treatment codes (e.g. 6
+    of the 15 tmc CN 83-97 surgefoil showcases). Then keeps only rows the
+    family's chase-tier rules match (``_is_family_unobtainable(..., tiers={"chase"})``
+    — the inclusion predicate), after the same digital/token/meld-back hygiene
+    the normal union applies. Result: ALL chase prints surface, not just the
+    ones that happen to survive the dupe collapse.
+    """
+    rows = sel_mod.materialize(f"set:{code}+related missing")
+    rows = [r for r in rows if not sel_mod._is_digital_only(r.card)]
+    rows = _drop_tokens(rows)
+    rows = _drop_meld_back_faces(rows, code)
+    chase_tier = frozenset({"chase"})
+    return [
+        r for r in rows
+        if sel_mod._is_family_unobtainable(r.card, code, chase_tier)
+    ]
 
 
 def _drop_tokens(

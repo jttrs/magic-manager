@@ -50,6 +50,7 @@ def _build_family_diff(
     missing_rows: list,
     prices: dict,
     owned_rows: list | None = None,
+    chase: str = "exclude",
 ) -> FamilyDiff:
     """Assemble a FamilyDiff from already-materialized missing rows + a
     (scryfall_id -> prices dict) price map. Shared by `family_diff` (single
@@ -59,7 +60,20 @@ def _build_family_diff(
     ``owned_rows`` lets a caller that already materialized owned rows for this
     family (e.g. `collection_diff`'s global `_owned_rows_for_codes` call, sliced
     per family) pass them in directly, avoiding a per-family re-fetch. ``None``
-    falls back to fetching here (unchanged behavior for standalone callers)."""
+    falls back to fetching here (unchanged behavior for standalone callers).
+
+    ``chase`` is the grey-tier FILTER the caller applied when it built
+    ``missing_rows`` (see `missing.missing_printings`). The three pools are
+    TAGS over a card universe, and ``--chase`` filters WHICH printings are in
+    view — it must not redefine the universe each pool is derived from. So the
+    printing + variant-chase pools (printing-grain) reflect the filtered
+    ``missing_rows`` as handed in, but the **functional** pool (oracle-grain
+    "I own ZERO printings of this card") is chase-INDEPENDENT: under a non-
+    default chase mode ``missing_rows`` is a chase subset whose oracle_ids the
+    user already owns the base of, which would collapse functional to a
+    meaningless count. We therefore derive functional from the FULL-family
+    missing universe (``chase="exclude"``), so its count is stable across all
+    three modes while printing/variant-chase vary with the filter."""
     if owned_rows is None:
         owned_rows = family_status._owned_rows_for_codes(family_code_set)
     owned_prints = len(owned_rows)
@@ -86,8 +100,17 @@ def _build_family_diff(
         scryfall_family_codes = {parent_code.lower()}
     owned_oids = missing_mod.owned_oracle_ids(scryfall_family_codes)
 
+    # Functional is chase-INDEPENDENT (see docstring): under a non-default
+    # chase filter, re-derive its candidate universe from the full-family
+    # missing list rather than the filtered `missing_rows`. In the default
+    # (exclude) path `missing_rows` IS the full universe, so pass it straight
+    # through (no extra materialize).
+    functional_missing_rows = (
+        missing_rows if chase == "exclude"
+        else missing_mod.missing_printings(parent_code)
+    )
     functional = missing_mod.functional_missing(
-        parent_code, precomputed_missing=missing_rows, precomputed_owned=owned_oids,
+        parent_code, precomputed_missing=functional_missing_rows, precomputed_owned=owned_oids,
     )
     functional_pool = CardDiffPool(name="functional", count=functional.n_cards,
                                    usd=functional.family_total_usd, rows=functional.cards)
@@ -109,7 +132,7 @@ def _build_family_diff(
 
 
 def family_diff(code: str, *, price_map: dict | None = None, refresh: bool = False,
-                warn=None, log=None) -> FamilyDiff | None:
+                warn=None, log=None, chase: str = "exclude") -> FamilyDiff | None:
     """None if the family is unconfigured (SelectorParseError/LookupError from
     missing) or the anchor is unresolvable.
 
@@ -117,14 +140,16 @@ def family_diff(code: str, *, price_map: dict | None = None, refresh: bool = Fal
     `sets.priced_map`) unless ``price_map`` is supplied. ``refresh`` syncs
     stale sets before pricing; ``warn`` (a list-of-codes callable) surfaces
     stale sets left un-refreshed; ``log`` surfaces diagnostics (unresolved ids,
-    sync failures)."""
+    sync failures). ``chase`` ('exclude'|'include'|'only') controls grey/chase-
+    tier handling in the printing pool; on 'include' the chase prints also feed
+    the variant-chase pool for cards the user already owns."""
     try:
         parent_code, parent_name, related = family_status.resolve_family(code)
     except LookupError:
         return None
     family_code_set = family_status._family_code_set(parent_code, related)
     try:
-        missing_rows = missing_mod.missing_printings(parent_code)
+        missing_rows = missing_mod.missing_printings(parent_code, chase=chase)
     except (sel_mod.SelectorParseError, LookupError):
         return None
 
@@ -137,10 +162,11 @@ def family_diff(code: str, *, price_map: dict | None = None, refresh: bool = Fal
         prices = price_map
 
     return _build_family_diff(parent_code, parent_name, family_code_set, missing_rows, prices,
-                               owned_rows=owned_rows)
+                               owned_rows=owned_rows, chase=chase)
 
 
-def collection_diff(*, refresh: bool = False, warn=None, log=None) -> list[FamilyDiff]:
+def collection_diff(*, refresh: bool = False, warn=None, log=None,
+                    chase: str = "exclude") -> list[FamilyDiff]:
     """One FamilyDiff per owned+characterized family, sorted by owned_usd desc.
 
     Shares the 4-step pre-pass (enumerate families → per-family code set →
@@ -151,10 +177,12 @@ def collection_diff(*, refresh: bool = False, warn=None, log=None) -> list[Famil
     via `precomputed_missing`, and the bulk owned-rows list is grouped by set
     code ONCE and sliced per family into `_build_family_diff`'s `owned_rows`
     param, so no family re-fetches owned rows individually. ``refresh``/``warn``/
-    ``log`` pass straight through to `collection_prepass`.
+    ``log`` pass straight through to `collection_prepass``; ``chase``
+    ('exclude'|'include'|'only') controls grey/chase-tier handling per family.
     """
     (parents, fam_codes_by_parent, missing_rows_by_parent,
-     price_map, all_rows) = family_status.collection_prepass(refresh=refresh, warn=warn, log=log)
+     price_map, all_rows) = family_status.collection_prepass(
+         refresh=refresh, warn=warn, log=log, chase=chase)
     if not parents:
         return []
 
@@ -169,12 +197,12 @@ def collection_diff(*, refresh: bool = False, warn=None, log=None) -> list[Famil
         if pc not in family_status.NON_FAMILY_SETS
         and missing_rows_by_parent.get(pc) is not None
     ]
-    return _assemble_family_diffs(resolved, price_map=price_map, owned_rows=all_rows)
+    return _assemble_family_diffs(resolved, price_map=price_map, owned_rows=all_rows, chase=chase)
 
 
 def _assemble_family_diffs(
     resolved: list[tuple[str, str, set[str], list]],
-    *, price_map: dict, owned_rows: list,
+    *, price_map: dict, owned_rows: list, chase: str = "exclude",
 ) -> list[FamilyDiff]:
     """Build + value a FamilyDiff per already-resolved family, sorted by owned_usd
     desc. The shared tail of `collection_diff` and `multi_family_diff`: given each
@@ -182,6 +210,10 @@ def _assemble_family_diffs(
     pre-fetched ``price_map`` and the flat ``owned_rows`` list, group owned rows by
     set code ONCE and slice per family into `_build_family_diff` — so no family
     re-fetches owned rows or re-resolves prices.
+
+    ``chase`` is forwarded to each `_build_family_diff` so the functional pool
+    stays chase-independent (see its docstring); it must match the mode the
+    caller used to build ``resolved``'s missing rows.
 
     Grouping is sound because each card has exactly one set_code and families
     partition set codes disjointly (no code is grouped under two anchors), so the
@@ -193,14 +225,15 @@ def _assemble_family_diffs(
     diffs: list[FamilyDiff] = []
     for pc, pn, codes, mrows in resolved:
         fam_owned = [r for c in codes for r in owned_rows_by_set.get(c, [])]
-        diffs.append(_build_family_diff(pc, pn, codes, mrows, price_map, owned_rows=fam_owned))
+        diffs.append(_build_family_diff(pc, pn, codes, mrows, price_map,
+                                        owned_rows=fam_owned, chase=chase))
 
     diffs.sort(key=lambda f: f.owned_usd, reverse=True)
     return diffs
 
 
 def multi_family_diff(codes, *, refresh: bool = False, warn=None, log=None,
-                      on_skip=None) -> list[FamilyDiff]:
+                      on_skip=None, chase: str = "exclude") -> list[FamilyDiff]:
     """FamilyDiffs for an explicit list of family codes, batched like
     `collection_diff` — ONE local-first price resolve over the union of every
     requested family's owned + missing ids, instead of a per-family resolve.
@@ -210,10 +243,11 @@ def multi_family_diff(codes, *, refresh: bool = False, warn=None, log=None,
     `family_status._local_prices`, then builds each FamilyDiff from the shared
     price map with no re-materialization (the gallery's `--codes` path, F4).
 
-    ``refresh``/``warn``/``log`` match `family_diff`. ``on_skip(code)`` (optional)
-    is called for each code that doesn't resolve to a configured family (unknown
-    anchor or no missing-set rules), so the caller can warn per code; such codes
-    are omitted from the result."""
+    ``refresh``/``warn``/``log`` match `family_diff`. ``chase``
+    ('exclude'|'include'|'only') controls grey/chase-tier handling per family.
+    ``on_skip(code)`` (optional) is called for each code that doesn't resolve to
+    a configured family (unknown anchor or no missing-set rules), so the caller
+    can warn per code; such codes are omitted from the result."""
     # Resolve + materialize each family ONCE (parent, name, code set, missing rows).
     resolved: list[tuple[str, str, set[str], list]] = []
     for code in codes:
@@ -225,7 +259,7 @@ def multi_family_diff(codes, *, refresh: bool = False, warn=None, log=None,
             continue
         family_code_set = family_status._family_code_set(parent_code, related)
         try:
-            missing_rows = missing_mod.missing_printings(parent_code)
+            missing_rows = missing_mod.missing_printings(parent_code, chase=chase)
         except (sel_mod.SelectorParseError, LookupError):
             if on_skip:
                 on_skip(code)
@@ -247,4 +281,4 @@ def multi_family_diff(codes, *, refresh: bool = False, warn=None, log=None,
         ids.update(r.scryfall_id for r in mrows)
     price_map = family_status._local_prices(list(ids), refresh=refresh, warn=warn, log=log)
 
-    return _assemble_family_diffs(resolved, price_map=price_map, owned_rows=all_owned_rows)
+    return _assemble_family_diffs(resolved, price_map=price_map, owned_rows=all_owned_rows, chase=chase)

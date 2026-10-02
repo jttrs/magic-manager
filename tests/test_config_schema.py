@@ -51,15 +51,30 @@ def test_unobtainable_rules_use_only_known_keys(raw):
 
 
 def test_every_unobtainable_rule_has_a_predicate(raw):
-    """A rule with only `note` and no predicate would match nothing (or, worse,
-    everything if the matcher changed) — every rule must constrain something."""
-    predicate_keys = _KNOWN_RULE_KEYS - {"note"}
+    """A rule with only `note`/`tier` and no predicate would match nothing (or,
+    worse, everything if the matcher changed) — every rule must constrain
+    something. `tier` is a non-predicate key (like `note`): it gates WHICH tier
+    filter the rule participates in, not WHICH cards it matches."""
+    predicate_keys = _KNOWN_RULE_KEYS - {"note", "tier"}
     empty = []
     for fam, body in (raw.get("unobtainable") or {}).items():
         for i, rule in enumerate(body.get("rules", [])):
             if not (set(rule) & predicate_keys):
                 empty.append(f"{fam}[{i}]")
     assert not empty, f"unobtainable rules with no predicate: {empty}"
+
+
+def test_tier_values_are_hard_or_chase(raw):
+    """`tier`, when present, must be exactly 'hard' or 'chase' (the two values the
+    matcher's `tiers` arg recognizes). An unrecognized tier would silently never
+    match any filter — a quiet config bug."""
+    bad = []
+    rules = config.build_unobtainable_rules(raw)
+    for fam, rlist in rules.items():
+        for i, r in enumerate(rlist):
+            if "tier" in r and r["tier"] not in ("hard", "chase"):
+                bad.append(f"{fam}[{i}]: tier={r['tier']!r}")
+    assert not bad, "unobtainable rules with an invalid tier:\n" + "\n".join(bad)
 
 
 def test_loader_coerces_every_set_kind_key_to_frozenset(raw):

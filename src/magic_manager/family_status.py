@@ -228,7 +228,8 @@ def is_characterized(parent_code: str) -> bool:
 
 # ---------- collection-wide pre-pass (shared by set_status + card_diff) ----------
 
-def collection_prepass(*, refresh: bool = False, warn=None, log=None) -> tuple[
+def collection_prepass(*, refresh: bool = False, warn=None, log=None,
+                       chase: str = "exclude") -> tuple[
     dict[str, str], dict[str, set[str]], dict[str, list | None], dict[str, dict], list
 ]:
     """The 4-step pre-pass both `set_status.render_overview` and
@@ -268,7 +269,7 @@ def collection_prepass(*, refresh: bool = False, warn=None, log=None) -> tuple[
         if pc in NON_FAMILY_SETS:
             continue
         try:
-            missing_rows_by_parent[pc] = missing_mod.missing_printings(pc)
+            missing_rows_by_parent[pc] = missing_mod.missing_printings(pc, chase=chase)
         except (selectors.SelectorParseError, LookupError):
             missing_rows_by_parent[pc] = None  # unconfigured
 
