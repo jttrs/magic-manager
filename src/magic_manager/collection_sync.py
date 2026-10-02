@@ -413,6 +413,58 @@ def diff_collections(
     }
 
 
+# Public alias — the driver (and tests) materialize the inventory-as-rows seam.
+def inventory_rows() -> list[CollectionRow]:
+    """Local inventory as :class:`CollectionRow`s — the export's ``incoming``
+    side and an import diff's default ``landing`` side. Thin public wrapper over
+    the shared materializer."""
+    return _landing_from_inventory()
+
+
+ExportMode = Literal["full", "delta"]
+
+
+def select_export_rows(
+    incoming: list[CollectionRow],
+    diff: dict,
+    *,
+    mode: ExportMode,
+    key: str = "scryfall_id",
+) -> list[CollectionRow]:
+    """Pick which inventory rows the reconciled export CSV should carry.
+
+    - ``full`` (default): the entire ``incoming`` inventory, rendered in the
+      service's format. The service's importer then reconciles however it does.
+    - ``delta``: only the rows that DIFFER from the landing state — i.e. the
+      diff's ``added`` + ``changed`` keys (cards the service is missing or has at
+      the wrong count). This is the "just what to add/fix at the service" CSV.
+      ``removed`` rows are NOT emitted (an export CSV can't express a deletion —
+      that's a service-side manual action), but they ARE surfaced in the diff
+      review so the user sees them.
+
+    Keyed the same way as the diff (``scryfall_id`` or ``set_cn``) so the row
+    selection and the diff agree. Returns a subset of ``incoming`` (same row
+    objects), preserving per-row condition/price passthrough.
+    """
+    if mode == "full":
+        return list(incoming)
+    if mode != "delta":
+        raise ValueError(f"unknown export mode {mode!r}")
+    prefer_id = key == "scryfall_id"
+    delta_keys = {
+        (r.get("scryfall_id"), r["finish"]) if prefer_id
+        else ((r.get("set") or "").lower(), str(r.get("collector_number") or ""), r["finish"])
+        for r in (diff.get("added", []) + diff.get("changed", []))
+    }
+    out = []
+    for r in incoming:
+        rk = (r.scryfall_id, r.finish) if prefer_id else \
+             ((r.set or "").lower(), str(r.collector_number or ""), r.finish)
+        if rk in delta_keys:
+            out.append(r)
+    return out
+
+
 # ---------------------------------------------------------------------------
 # apply_import — the three modes, through the V19 ledger seam
 # ---------------------------------------------------------------------------

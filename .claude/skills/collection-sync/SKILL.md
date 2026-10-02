@@ -62,7 +62,8 @@ diff and writes to inventory through the V19 provenance ledger (method
 ```bash
 uv run mm collection export manabox            # dry-run diff vs empty (or --against)
 uv run mm collection export manabox --against <service-export.csv>   # diff vs real state
-uv run mm collection export manabox --apply    # emit reconciled CSV to output/collection-sync/exports/
+uv run mm collection export manabox --apply    # emit full reconciled CSV to output/collection-sync/exports/
+uv run mm collection export manabox --against <csv> --mode delta --apply   # emit ONLY what the service is missing/wrong
 ```
 
 Export **never writes the DB** — it renders your inventory as the service's CSV
@@ -70,11 +71,20 @@ Export **never writes the DB** — it renders your inventory as the service's CS
 current state so the diff shows the true delta; without it, the whole inventory
 reads as "added".
 
+**`--mode` shapes the emitted CSV:**
+- `full` (default): the entire inventory, rendered in the service's format.
+- `delta`: only the rows the service is **missing or has at the wrong count**
+  (the diff's added + changed) — the "just what to add/fix" CSV. **Requires
+  `--against`.** `removed` rows (cards the service has but you don't) are shown in
+  the review but NOT emitted — a CSV can't express a deletion; that's a manual
+  service-side action.
+
 ## Flags
 
 | Flag | Effect |
 |---|---|
-| `--mode add\|modify\|overwrite` | Import semantic (see table). Default `add`. |
+| `--mode add\|modify\|overwrite` | (import) semantic (see table). Default `add`. |
+| `--mode full\|delta` | (export) full inventory, or only added+changed vs `--against`. Default `full`; `delta` requires `--against`. |
 | `--apply` | Write (import) / emit the CSV (export). Default is a dry-run review. |
 | `--force` | Re-import an identical file (bypasses the sha256 dedup that refuses a repeat import). |
 | `--against <csv>` | (export) The landing-state CSV to diff against. |

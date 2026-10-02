@@ -149,35 +149,43 @@ def _report_import(service, mode, diff, resolved, arts, applied, *,
 # export
 # ---------------------------------------------------------------------------
 
-def run_export(service: str, *, against: str | None, apply: bool,
+def run_export(service: str, *, against: str | None, mode: str, apply: bool,
                json_out: bool) -> int:
+    # Validate inputs BEFORE any work (check the file exists before reading it).
+    if against and not Path(against).is_file():
+        print(f"error: no such --against file: {against}", file=sys.stderr)
+        return EXIT_BAD_INPUT
+    if mode == "delta" and not against:
+        print("error: --mode delta requires --against <service-csv> (the landing "
+              "state to compute the delta from).", file=sys.stderr)
+        return EXIT_BAD_INPUT
     try:
-        incoming = cs._landing_from_inventory()  # local inventory IS the incoming
+        incoming = cs.inventory_rows()  # local inventory IS the export's incoming
         landing = cs.read_csv(Path(against), service) if against else []
     except LookupError as e:
         print(f"error: {e}", file=sys.stderr)
-        return EXIT_BAD_INPUT
-    if against and not Path(against).is_file():
-        print(f"error: no such --against file: {against}", file=sys.stderr)
         return EXIT_BAD_INPUT
 
     diff = cs.diff_collections(incoming, landing)
     stamp = _stamp()
     arts = cs.write_diff_artifacts(diff, direction="export", service=service, stamp=stamp)
 
-    # The reconciled CSV = the local inventory rendered in the service's format.
-    # Export never writes our DB; --apply just emits the CSV file.
-    csv_text = cs.write_csv(incoming, service)
+    # The reconciled CSV = the selected inventory rows rendered in the service's
+    # format. Export NEVER writes our DB; --apply just emits the CSV file.
+    out_rows = cs.select_export_rows(incoming, diff, mode=mode)
+    csv_text = cs.write_csv(out_rows, service)
     csv_path = None
     if apply:
         from magic_manager import util
-        csv_path = util.output_dir("collection-sync", "exports") / f"{service}-{stamp}.csv"
+        suffix = "" if mode == "full" else f"-{mode}"
+        csv_path = util.output_dir("collection-sync", "exports") / f"{service}{suffix}-{stamp}.csv"
         csv_path.write_text(csv_text, encoding="utf-8")
 
     if json_out:
         json.dump({
-            "direction": "export", "service": service,
+            "direction": "export", "service": service, "mode": mode,
             "summary": cs.diff_summary_line(diff),
+            "emitted_rows": len(out_rows),
             "artifacts": {k: str(v) for k, v in arts.items()},
             "csv": str(csv_path) if csv_path else None,
         }, sys.stdout, indent=2, default=str)
@@ -185,7 +193,8 @@ def run_export(service: str, *, against: str | None, apply: bool,
         return EXIT_OK
 
     print(cs.diff_markdown(diff, direction="export", service=service))
-    print(f"\nartifacts: {arts['xlsx']}\n           {arts['json']}")
+    print(f"\nreconciled CSV would carry {len(out_rows)} row(s) (mode={mode}).")
+    print(f"artifacts: {arts['xlsx']}\n           {arts['json']}")
     if csv_path:
         print(f"\nAPPLIED: reconciled collection CSV written to {csv_path}")
     else:
@@ -212,7 +221,7 @@ def run_diff(service: str, csv_path: str, *, direction: str, json_out: bool) -> 
         resolved = cs.resolve_rows(rows)
         diff = cs.diff_collections(resolved.resolved)
     else:  # export: inventory vs the CSV
-        diff = cs.diff_collections(cs._landing_from_inventory(), rows)
+        diff = cs.diff_collections(cs.inventory_rows(), rows)
     stamp = _stamp()
     arts = cs.write_diff_artifacts(diff, direction=direction, service=service, stamp=stamp)
     if json_out:
@@ -242,6 +251,8 @@ def main(argv: list[str] | None = None) -> int:
     pe = sub.add_parser("export", help="local inventory → service CSV (dry-run unless --apply).")
     pe.add_argument("service")
     pe.add_argument("--against", default=None, help="Service CSV = the landing state to diff against.")
+    pe.add_argument("--mode", choices=["full", "delta"], default="full",
+                    help="full (entire inventory) | delta (only added+changed vs --against; requires --against).")
     pe.add_argument("--apply", action="store_true")
     pe.add_argument("--json", action="store_true")
 
@@ -256,8 +267,8 @@ def main(argv: list[str] | None = None) -> int:
         return run_import(args.service, args.csv, mode=args.mode, apply=args.apply,
                           force=args.force, json_out=args.json)
     if args.cmd == "export":
-        return run_export(args.service, against=args.against, apply=args.apply,
-                          json_out=args.json)
+        return run_export(args.service, against=args.against, mode=args.mode,
+                          apply=args.apply, json_out=args.json)
     if args.cmd == "diff":
         return run_diff(args.service, args.csv, direction=args.direction,
                         json_out=args.json)

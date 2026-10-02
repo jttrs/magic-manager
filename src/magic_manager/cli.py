@@ -4977,6 +4977,8 @@ def collection_export_cmd(
     service: str = typer.Argument(..., help="Collection service to render the inventory for."),
     against: str = typer.Option(None, "--against", help="Service CSV = the landing state to diff against "
                                 "(e.g. a freshly-pulled collection export)."),
+    mode: str = typer.Option("full", "--mode", help="full (entire inventory) | delta (only cards the "
+                             "service is missing/wrong vs --against; requires --against)."),
     apply: bool = typer.Option(False, "--apply", help="Emit the reconciled CSV (default is a dry-run diff)."),
     json_out: bool = typer.Option(False, "--json", help="Emit JSON instead of the markdown review."),
 ):
@@ -4984,9 +4986,10 @@ def collection_export_cmd(
 
     Export NEVER writes the DB. Dry-run shows the diff vs the --against landing
     state (or empty); --apply emits the reconciled CSV under
-    output/collection-sync/exports/.
+    output/collection-sync/exports/. --mode delta emits only the added+changed
+    rows (what to add/fix at the service) and requires --against.
     """
-    args = ["export", service]
+    args = ["export", service, "--mode", mode]
     if against:
         args += ["--against", against]
     if apply:
