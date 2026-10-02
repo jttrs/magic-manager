@@ -29,7 +29,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from magic_manager import (  # noqa: E402
     db, scryfall, sets as sets_mod, selectors, missing as missing_mod, util,
-    mtgjson,
+    mtgjson, card_floor,
 )
 from magic_manager.family_status import (  # noqa: E402
     NON_FAMILY_SETS,
@@ -46,42 +46,47 @@ from magic_manager.family_status import (  # noqa: E402
 
 
 # ---------- anywhere-floor (cheapest printing of a card in ANY set) ----------
+#
+# The cheapest-printing-anywhere lookup lives in the central card_floor engine
+# (batched: ⌈N/20⌉ Scryfall searches, not one per oracle_id — the old per-id
+# loop here was flagged slow across ~20 families). This module keeps a per-run
+# memo so a card reprinted in several families costs one lookup, and exposes a
+# per-id adapter (`_anywhere_floor`) for the `functional_missing(anywhere_floor_fn=…)`
+# seam — pre-warm the memo in ONE batched call, then the adapter is pure dict reads.
 
 _ANYWHERE_FLOOR_CACHE: dict[str, tuple[float | None, str | None]] = {}
 
 
-def _anywhere_floor(oracle_id: str) -> tuple[float | None, str | None] | None:
-    """Cheapest ``(usd, finish)`` across EVERY printing of a card (any set), via
-    a live ``oracleid:`` Scryfall search. Memoized across families (a card
-    reprinted in several families costs one lookup). Prefers nonfoil on tie."""
-    if oracle_id in _ANYWHERE_FLOOR_CACHE:
-        return _ANYWHERE_FLOOR_CACHE[oracle_id]
-    nf: list[float] = []
-    ff: list[float] = []
+def _prewarm_anywhere_floors(oracle_ids: list[str]) -> None:
+    """Batch-fetch the anywhere floor for every not-yet-cached oracle_id in ONE
+    chunked pass and populate ``_ANYWHERE_FLOOR_CACHE`` with the collapsed
+    ``(usd, finish)`` (cheaper finish, nonfoil preferred on tie). A Scryfall
+    failure degrades the batch to unresolved (``(None, None)``), matching the old
+    per-id loop's fail-soft behavior."""
+    need = [o for o in dict.fromkeys(oracle_ids) if o and o not in _ANYWHERE_FLOOR_CACHE]
+    if not need:
+        return
     try:
-        for p in scryfall.search(f"oracleid:{oracle_id}", unique="prints"):
-            pr = p.get("prices") or {}
-            for key, bucket in (("usd", nf), ("usd_foil", ff)):
-                v = pr.get(key)
-                if v not in (None, ""):
-                    try:
-                        bucket.append(float(v))
-                    except (TypeError, ValueError):
-                        pass
-    except Exception:  # noqa: BLE001 — a lookup failure just leaves anywhere unresolved
-        _ANYWHERE_FLOOR_CACHE[oracle_id] = (None, None)
-        return None
-    res = _cheapest_pair(min(nf) if nf else None, min(ff) if ff else None)
-    _ANYWHERE_FLOOR_CACHE[oracle_id] = res
+        floors = card_floor.anywhere_floors(need, finish_mode="either")
+    except scryfall.ScryfallError:
+        for o in need:
+            _ANYWHERE_FLOOR_CACHE[o] = (None, None)
+        return
+    for o in need:
+        fl = floors.get(o)
+        _ANYWHERE_FLOOR_CACHE[o] = (fl.usd, fl.finish) if fl else (None, None)
+
+
+def _anywhere_floor(oracle_id: str) -> tuple[float | None, str | None] | None:
+    """Per-id adapter over the batched engine for the ``functional_missing``
+    injection seam. Returns the memoized collapsed ``(usd, finish)``, fetching a
+    single id on a cold miss (callers that know their id set should
+    ``_prewarm_anywhere_floors`` first for the batched win). Prefers nonfoil on
+    tie; ``None`` when unresolved/unpriced."""
+    if oracle_id not in _ANYWHERE_FLOOR_CACHE:
+        _prewarm_anywhere_floors([oracle_id])
+    res = _ANYWHERE_FLOOR_CACHE.get(oracle_id, (None, None))
     return res if res[0] is not None else None
-
-
-def _cheapest_pair(nonfoil: float | None, foil: float | None) -> tuple[float | None, str | None]:
-    if nonfoil is not None and (foil is None or nonfoil <= foil):
-        return nonfoil, "nonfoil"
-    if foil is not None:
-        return foil, "foil"
-    return None, None
 
 
 # ---------- metrics ----------
@@ -227,9 +232,24 @@ def functional_missing_summary(parent_code: str) -> tuple[int, float, float] | N
     The anywhere floor uses the memoized live ``oracleid:`` lookup. Delegates to
     ``missing.functional_missing`` — the in-family price is local (no fetch)."""
     try:
-        fm = missing_mod.functional_missing(parent_code, anywhere_floor_fn=_anywhere_floor)
+        rows = missing_mod.missing_printings(parent_code)
     except (selectors.SelectorParseError, LookupError):
         return None
+    # Pre-warm EVERY candidate oracle_id's anywhere floor in ONE batched pass
+    # (⌈N/20⌉ searches) before functional_missing calls the per-id adapter —
+    # that's the batching win over the old per-oracle search loop. Scope the
+    # prewarm to the actually-missing oracles (candidates − owned) so we don't
+    # fetch floors for functionally-owned cards.
+    try:
+        family_codes = {c.lower() for c in sets_mod.resolve(parent_code).all_codes}
+    except LookupError:
+        family_codes = {parent_code.lower()}
+    owned = missing_mod.owned_oracle_ids(family_codes)
+    candidate_oids = {oid for r in rows if (oid := (r.card or {}).get("oracle_id"))}
+    _prewarm_anywhere_floors(sorted(candidate_oids - owned))
+    fm = missing_mod.functional_missing(
+        parent_code, precomputed_missing=rows, precomputed_owned=owned,
+        anywhere_floor_fn=_anywhere_floor)
     return fm.n_cards, fm.family_total_usd, fm.anywhere_total_usd
 
 
@@ -316,10 +336,11 @@ def render_overview() -> str:
             dist_usd = sum(_unit(price_map.get(r.scryfall_id, {}), r.finish) for r in mrows)
             dist = (len(mrows), dist_usd)
         # functional-missing: reuse the materialized rows as the candidate set.
-        # IN-FAMILY floor only here (local, instant) — the anywhere floor does a
-        # rate-limited oracleid: search per missing card, which across ~20
-        # families would make the overview take many minutes. Single-family mode
-        # (`set_status.py <anchor>`) adds the anywhere floor (cheap for one family).
+        # IN-FAMILY floor only here (local, instant) — the overview deliberately
+        # skips the (live) anywhere floor to stay network-light: it already holds
+        # to ONE bulk price call, and layering a live floor search per family on
+        # top isn't worth it for a glance view. Single-family mode
+        # (`set_status.py <anchor>`) adds the anywhere floor (one batched call).
         if non_family or mrows is None:
             func = None
         else:

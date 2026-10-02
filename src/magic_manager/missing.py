@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from . import db, ownership as _ownership, sets as sets_mod, selectors as sel_mod
+from .card_floor import cheapest_floor as _cheapest
 
 
 def sub_selectors(code: str, treatment_class: str = "preferred") -> list[tuple[str, str]]:
@@ -421,16 +422,6 @@ class FunctionalMissing:
     n_cards: int = 0
     family_total_usd: float = 0.0        # Σ family_usd (unpriced card → $0, still counted)
     anywhere_total_usd: float = 0.0      # Σ anywhere_usd, falling back to family_usd when unresolved
-
-
-def _cheapest(nonfoil: float | None, foil: float | None) -> tuple[float | None, str | None]:
-    """Cheaper of (nonfoil, foil); prefer nonfoil on tie, foil only if no nonfoil.
-    Returns (price, finish) or (None, None) if neither priced."""
-    if nonfoil is not None and (foil is None or nonfoil <= foil):
-        return nonfoil, "nonfoil"
-    if foil is not None:
-        return foil, "foil"
-    return None, None
 
 
 def owned_oracle_ids(family_codes: set[str]) -> set[str]:
