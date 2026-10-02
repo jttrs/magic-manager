@@ -7,6 +7,7 @@ the standalone scripts can import it.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -37,6 +38,20 @@ def output_dir(type_: str, category: str) -> Path:
     d = OUTPUT_ROOT / type_ / category
     d.mkdir(parents=True, exist_ok=True)
     return d
+
+
+def sha256_file(path: str | Path) -> str:
+    """Hex SHA-256 of a file's bytes, read in 64KB chunks (memory-safe for large
+    collection exports). The ONE home for the file-fingerprint used by the ingest
+    dedup gate (``ingest.find_events_by_sha`` via ``source_sha256``) — both
+    ``cli`` and ``scripts/collection_sync`` call this so a file hashed on one path
+    is recognized as a duplicate on the other (two copies could silently drift)."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
 
 # MTG's canonical color order. Multicolor collapses to 'M', colorless to 'C'.
 WUBRG_ORDER = "WUBRG"

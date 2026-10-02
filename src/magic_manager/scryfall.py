@@ -111,13 +111,80 @@ def collection(identifiers: Iterable[dict]) -> tuple[list[dict], list[dict]]:
 
     Each ``identifier`` is one of ``{"name": ...}``, ``{"name": ..., "set": ...}``,
     ``{"set": ..., "collector_number": ...}``, or ``{"id": ...}``.
+
+    **Error-tolerant.** Scryfall returns a clean ``not_found`` list for identifiers
+    it can't match, but HTTP 400s the WHOLE request when one is MALFORMED (e.g. a
+    non-existent set code — ``prm-wpn`` and other pseudo-sets). A single bad
+    identifier must not sink the batch, so a page that raises :class:`ScryfallError`
+    is BISECTED to isolate the offender: it splits and recurses until a singleton
+    still errors, and that lone identifier is folded into ``not_found`` (semantics:
+    Scryfall couldn't resolve it). Every caller of this shared seam — deck import,
+    collection sync, EV, price checks — gets this tolerance for free.
     """
     ids = list(identifiers)
     found: list[dict] = []
     not_found: list[dict] = []
     for i in range(0, len(ids), 75):
-        body = json.dumps({"identifiers": ids[i : i + 75]})
-        page = _run(["collection"], stdin=body)
-        found.extend(page.get("data", []))
-        not_found.extend(page.get("not_found", []))
+        f, nf = _collection_page(ids[i : i + 75])
+        found.extend(f)
+        not_found.extend(nf)
     return found, not_found
+
+
+def _collection_page(ids: list[dict]) -> tuple[list[dict], list[dict]]:
+    """One ≤75 /cards/collection call, bisecting on a hard error to quarantine a
+    malformed identifier. Returns ``(found, not_found)`` for this page."""
+    if not ids:
+        return [], []
+    try:
+        page = _run(["collection"], stdin=json.dumps({"identifiers": ids}))
+        return page.get("data", []), page.get("not_found", [])
+    except ScryfallError:
+        if len(ids) == 1:
+            return [], [ids[0]]  # this lone identifier is the malformed one
+        mid = len(ids) // 2
+        lf, lnf = _collection_page(ids[:mid])
+        rf, rnf = _collection_page(ids[mid:])
+        return lf + rf, lnf + rnf
+
+
+def resolve_identifiers(
+    id_idents: list[dict],
+    setcn_idents: list[dict],
+    name_idents: list[dict] | tuple = (),
+) -> tuple[dict, dict, dict, list[str]]:
+    """Batch-resolve pre-built identifier tiers and index the matches.
+
+    The shared resolution core behind ``decksource._resolve_cards`` and
+    ``collection_sync.resolve_rows`` (both built this inline before): runs each
+    non-empty tier through the 400-tolerant :func:`collection`, folds every
+    ``not_found`` into warnings, and builds the three lookup indexes callers match
+    against — ``by_sid`` (``id`` → card), ``by_setcn`` (``(set.lower(), cn)`` →
+    card), and ``by_name`` (lowercased oracle name AND the front face of a split/
+    DFC ``"A // B" → "A"`` → card). TIER-BUILDING stays with the caller (it
+    legitimately differs: decksource submits a name tier, collection_sync does
+    not, and each decides whether an id-bearing row also contributes a (set,cn)
+    fallback), so this helper owns only the duplicated batch+index step.
+    """
+    warnings: list[str] = []
+    found: list[dict] = []
+    for idents in (id_idents, setcn_idents, list(name_idents)):
+        if not idents:
+            continue
+        got, not_found = collection(idents)
+        found.extend(got)
+        for nf in not_found:
+            warnings.append(f"scryfall could not resolve identifier {nf!r}")
+
+    by_sid = {c["id"]: c for c in found if c.get("id")}
+    by_setcn = {
+        ((c.get("set") or "").lower(), str(c.get("collector_number") or "")): c
+        for c in found
+    }
+    by_name: dict[str, dict] = {}
+    for c in found:
+        nm = (c.get("name") or "").lower()
+        if nm:
+            by_name.setdefault(nm, c)
+            by_name.setdefault(nm.split(" // ")[0], c)
+    return by_sid, by_setcn, by_name, warnings

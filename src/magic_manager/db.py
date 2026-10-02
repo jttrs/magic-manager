@@ -874,6 +874,63 @@ CREATE INDEX IF NOT EXISTS decks_source_idx ON decks (source, source_deck_id);
 """
 
 
+# V26: widen the ingest_events.method CHECK to admit the two collection-sync
+# provenance methods ('collection-import' / 'collection-export'), so a collection
+# CSV import routes through the SAME V19 ledger seam as every other write path
+# (open_ingest_event → inventory_add/inventory_set) with its own distinct method
+# tag. SQLite cannot ALTER a CHECK in place, so this is the copy-rebuild dance on
+# the PRECIOUS ingest_events table (db.py's own convention; cf. V14/V18/V24):
+#   - recreate the table with the widened CHECK (all other columns verbatim),
+#   - copy EVERY row forward preserving ingest_id (the AUTOINCREMENT PK that
+#     inventory_events.ingest_id FKs to — the copy lists every column so the
+#     rehearse-migration row-hash is byte-identical and the FK stays intact),
+#   - drop + rename, then recreate the three indexes V19 defined.
+# inventory_events is untouched: its FK targets ingest_events(ingest_id), and
+# preserving the PK values keeps every delta bound to its event. Pure CHECK
+# widening — no data shape change.
+#
+# Because ingest_events is an FK TARGET, the DROP+RENAME must run with FK
+# enforcement OFF — _ensure_schema special-cases this via _FK_OFF_MIGRATIONS
+# (toggles the PRAGMA around the executescript and runs foreign_key_check after).
+SCHEMA_V26 = """
+CREATE TABLE ingest_events__new (
+    ingest_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    at            TEXT NOT NULL,
+    method        TEXT NOT NULL CHECK (method IN (
+                    'checklist','precon','intake','adhoc','import-block',
+                    'deck-assign','deck-unassign','migration-backfill',
+                    'unattributed-backfill','collection-import','collection-export')),
+    label         TEXT,
+    source_path   TEXT,
+    archived_path TEXT,
+    source_sha256 TEXT,
+    mode          TEXT,
+    rows_added    INTEGER NOT NULL DEFAULT 0,
+    rows_updated  INTEGER NOT NULL DEFAULT 0,
+    rows_zeroed   INTEGER NOT NULL DEFAULT 0,
+    status        TEXT NOT NULL DEFAULT 'success'
+                    CHECK (status IN ('success','failed','backfill')),
+    error         TEXT,
+    notes         TEXT
+);
+
+INSERT INTO ingest_events__new
+    (ingest_id, at, method, label, source_path, archived_path, source_sha256,
+     mode, rows_added, rows_updated, rows_zeroed, status, error, notes)
+SELECT
+    ingest_id, at, method, label, source_path, archived_path, source_sha256,
+    mode, rows_added, rows_updated, rows_zeroed, status, error, notes
+FROM ingest_events;
+
+DROP TABLE ingest_events;
+ALTER TABLE ingest_events__new RENAME TO ingest_events;
+
+CREATE INDEX IF NOT EXISTS ingest_events_method_idx ON ingest_events (method);
+CREATE INDEX IF NOT EXISTS ingest_events_at_idx     ON ingest_events (at);
+CREATE INDEX IF NOT EXISTS ingest_events_sha_idx    ON ingest_events (source_sha256);
+"""
+
+
 # ---------- migration-authoring convention ----------
 #
 # Always-safe ops in a migration: CREATE TABLE, ALTER TABLE ADD COLUMN,
@@ -952,8 +1009,22 @@ MIGRATIONS: list[str] = [
     SCHEMA_V23,
     SCHEMA_V24,
     SCHEMA_V25,
+    SCHEMA_V26,
 ]
 CURRENT_VERSION = len(MIGRATIONS)
+
+# Migrations that rebuild a table which is an FK TARGET (something references its
+# PK), so their DROP+RENAME must run with foreign_keys temporarily OFF. Unlike
+# V14/V18/V24 (leaf-table rebuilds), V26 rebuilds ingest_events, which
+# inventory_events.ingest_id references — _ensure_schema special-cases these.
+# Maps version -> the CHILD table(s) to integrity-check after the rebuild. The
+# risk when rebuilding an FK TARGET is orphaning a row in a table that REFERENCES
+# it, so we check the REFERENCING (child) table — `PRAGMA foreign_key_check(T)`
+# validates the FKs DECLARED IN T, and ingest_events (the parent) declares none.
+# Scoping to the child(ren) also avoids a DB-wide check flagging unrelated
+# PRE-EXISTING dangling FKs (foreign_keys=ON only enforces NEW writes, so a
+# legacy orphan can sit elsewhere) and aborting an otherwise-clean upgrade.
+_FK_OFF_MIGRATIONS: dict[int, tuple[str, ...]] = {26: ("inventory_events",)}
 
 
 @contextmanager
@@ -1020,7 +1091,40 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
             ) from e
     for i, sql in enumerate(MIGRATIONS[have:], start=have + 1):
         if i != 1:  # MIGRATIONS[0] already ran above
-            conn.executescript(sql)
+            if i in _FK_OFF_MIGRATIONS:
+                # This migration rebuilds a table that is an FK TARGET (another
+                # table references its PK), so the DROP+RENAME would trip the
+                # foreign_keys=ON enforcement connect() sets. SQLite's sanctioned
+                # recipe is to disable FK enforcement around the rebuild; the
+                # PRAGMA is a no-op inside a transaction, so we must be in
+                # autocommit first (executescript issues its own COMMIT, but we
+                # commit here to be certain no write txn is open). The rebuild
+                # preserves every PK value, so no FK is actually orphaned — we
+                # verify with foreign_key_check and re-enable before continuing.
+                child_tables = _FK_OFF_MIGRATIONS[i]
+                conn.commit()
+                conn.execute("PRAGMA foreign_keys = OFF")
+                conn.executescript(sql)
+                conn.commit()
+                # Scope the check to the REFERENCING (child) table(s): a bare
+                # foreign_key_check is DB-wide and would also flag unrelated
+                # pre-existing dangling FKs (tolerated because foreign_keys=ON
+                # only enforces new writes), aborting an upgrade whose own rebuild
+                # is clean. `foreign_key_check(T)` checks the FKs declared in T, so
+                # we pass the child that points at the rebuilt parent.
+                violations: list = []
+                for child in child_tables:
+                    violations += conn.execute(
+                        f"PRAGMA foreign_key_check({child})"
+                    ).fetchall()
+                conn.execute("PRAGMA foreign_keys = ON")
+                if violations:
+                    raise RuntimeError(
+                        f"migration v{i} left dangling foreign keys "
+                        f"(child tables {child_tables}): {violations}"
+                    )
+            else:
+                conn.executescript(sql)
         # Per-version Python post-migration hooks. SQL alone can't handle
         # operations needing INSERT...RETURNING, JSON building, or external
         # API calls; we run those in Python after the SQL ran.
