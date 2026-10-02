@@ -938,3 +938,219 @@ def enrich_rows(rows: list[EnrichedCardRow]) -> list[EnrichedCardRow]:
         r.lowest_usd = m.get("lowest_usd")
         r.lowest_usd_foil = m.get("lowest_usd_foil")
     return rows
+
+
+# ---------- commander comparison (workflow D) ----------
+
+@dataclass
+class CompareCard:
+    """One card in a two-commander comparison. Carries the per-commander
+    inclusion metrics for whichever side(s) recommend it, the bucket it lands in
+    (``a_only`` / ``both`` / ``b_only``), the EDHREC category ``tags`` it appeared
+    under (deduped across lists), and local enrichment incl. a representative
+    printing's image/link (via the extended ``sets.lowest_price_by_oracle``)."""
+    name: str
+    oracle_id: str | None
+    slug: str
+    bucket: str                       # 'a_only' | 'both' | 'b_only'
+    tags: list[str] = field(default_factory=list)
+    a_pct: float | None = None
+    b_pct: float | None = None
+    a_decks: int | None = None
+    b_decks: int | None = None
+    delta: float | None = None        # abs(a_pct - b_pct); None unless 'both'
+    synergy_a: float | None = None
+    synergy_b: float | None = None
+    trend_a: float | None = None
+    trend_b: float | None = None
+    # local enrichment
+    type_line: str | None = None
+    cmc: float | None = None
+    mana_cost: str | None = None
+    color_identity: list[str] | None = None
+    rarity: str | None = None
+    lowest_usd: float | None = None
+    lowest_usd_foil: float | None = None
+    scryfall_id: str | None = None
+    image_uri: str | None = None
+    set_code: str | None = None
+    collector_number: str | None = None
+
+
+@dataclass
+class CompareResult:
+    """Outcome of :func:`compare_commanders`: both commanders' identities plus
+    the merged, bucketed, enriched card list."""
+    name_a: str
+    name_b: str
+    slug_a: str
+    slug_b: str
+    cards: list[CompareCard] = field(default_factory=list)
+
+
+@dataclass
+class _CmdCard:
+    """A single commander's deduped recommendation for one card (internal)."""
+    name: str
+    oracle_id: str | None
+    slug: str
+    tags: set[str]
+    inclusion_pct: float | None
+    num_decks: int | None
+    synergy: float | None
+    trend_zscore: float | None
+
+
+def _dedupe_commander_cards(rows: Iterable) -> dict:
+    """Collapse a commander's per-``(card, list_tag)`` rows into one entry per
+    card, keyed by ``card_oracle_id`` (fallback ``card_slug`` when unresolved).
+
+    A card appears in several lists (topcards AND creatures AND …); the card-level
+    metrics (inclusion %, deck count) are identical across its lists, so we take
+    the first non-null, union the ``list_tag``s as ``tags``, and keep the MAX
+    synergy / trend across its rows. Accepts either ``EnrichedCardRow`` objects
+    (fresh sync) or sqlite rows (cached read) — the card-identity columns are named
+    differently between the two (``oracle_id``/``slug``/``name`` vs the
+    ``card_``-prefixed table columns), so those are read via the key maps below;
+    the metric columns share names."""
+    def _get(r, attr):
+        if hasattr(r, "keys"):          # sqlite Row (cached read)
+            try:
+                return r[attr]
+            except (KeyError, IndexError):
+                return None
+        return getattr(r, attr, None)   # EnrichedCardRow (fresh sync)
+
+    is_db = (lambda r: hasattr(r, "keys"))
+    by_card: dict = {}
+    for r in rows:
+        oid = _get(r, "card_oracle_id" if is_db(r) else "oracle_id")
+        slug = _get(r, "card_slug" if is_db(r) else "slug")
+        name = _get(r, "card_name" if is_db(r) else "name")
+        key = oid or f"slug:{slug}"
+        tag = _get(r, "list_tag")
+        pct = _get(r, "inclusion_pct")
+        num = _get(r, "num_decks")
+        syn = _get(r, "synergy")
+        trend = _get(r, "trend_zscore")
+        cur = by_card.get(key)
+        if cur is None:
+            by_card[key] = _CmdCard(
+                name=name, oracle_id=oid, slug=slug,
+                tags={tag} if tag else set(),
+                inclusion_pct=pct, num_decks=num, synergy=syn, trend_zscore=trend,
+            )
+        else:
+            if tag:
+                cur.tags.add(tag)
+            if cur.inclusion_pct is None and pct is not None:
+                cur.inclusion_pct = pct
+            if cur.num_decks is None and num is not None:
+                cur.num_decks = num
+            if syn is not None and (cur.synergy is None or syn > cur.synergy):
+                cur.synergy = syn
+            if trend is not None and (cur.trend_zscore is None or trend > cur.trend_zscore):
+                cur.trend_zscore = trend
+    return by_card
+
+
+def _commander_card_entries(ref: str) -> tuple[str, str, dict]:
+    """Resolve a commander ref, ensure its page is cached (sync if absent), and
+    return ``(oracle_name, slug, {card_key: _CmdCard})``.
+
+    Reads the cached ``edhrec_commander_cards`` rows when the commander page is
+    already present (no network); otherwise runs ``sync_commander`` once. Raises
+    :class:`EdhrecError` if the ref isn't commander-eligible or EDHREC has no page."""
+    name, card = resolve_oracle_card(ref)
+    if card is not None and not legality.is_commander_eligible(card):
+        raise EdhrecError(f"{name!r} is not commander-eligible — no commander page to compare.")
+    slug = slugify(name)
+    cmd_cached, _ = _cached_slugs()
+    if slug in cmd_cached:
+        with db.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT card_oracle_id, card_slug, card_name, list_tag,
+                       num_decks, potential_decks, inclusion_pct, synergy, trend_zscore
+                FROM edhrec_commander_cards WHERE commander_slug = ?
+                """,
+                (slug,),
+            ).fetchall()
+        if rows:
+            # Prefer the stored header name if present (nicer casing).
+            with db.connect() as conn:
+                hdr = conn.execute(
+                    "SELECT commander_name FROM edhrec_commander_cards "
+                    "WHERE commander_slug = ? LIMIT 1", (slug,)
+                ).fetchone()
+            display = hdr[0] if hdr and hdr[0] else name
+            return display, slug, _dedupe_commander_cards(rows)
+    # Not cached (or cache empty) — sync once.
+    res = sync_commander(name)
+    return res.name, res.slug, _dedupe_commander_cards(res.rows)
+
+
+def compare_commanders(ref_a: str, ref_b: str) -> CompareResult:
+    """Compare the recommended-card rankings of two commanders (workflow D).
+
+    Each commander's FULL recommendation set (every ``list_tag``) is read from the
+    cache (synced on demand if absent), deduped per commander to one entry per
+    card. The union is partitioned into ``a_only`` / ``both`` / ``b_only`` buckets
+    keyed on ``card_oracle_id`` (fallback slug); ``both`` cards carry each side's
+    inclusion % + deck count and a ``delta`` = ``abs(a_pct - b_pct)``. Every card
+    is enriched in ONE batched ``sets.lowest_price_by_oracle`` call (type / mana /
+    lowest USD + a representative printing's image + Scryfall link).
+    """
+    name_a, slug_a, a_cards = _commander_card_entries(ref_a)
+    name_b, slug_b, b_cards = _commander_card_entries(ref_b)
+
+    keys = list(dict.fromkeys([*a_cards.keys(), *b_cards.keys()]))
+    cards: list[CompareCard] = []
+    for key in keys:
+        a = a_cards.get(key)
+        b = b_cards.get(key)
+        src = a or b
+        if a and b:
+            bucket = "both"
+            delta = (abs(a.inclusion_pct - b.inclusion_pct)
+                     if a.inclusion_pct is not None and b.inclusion_pct is not None else None)
+        elif a:
+            bucket, delta = "a_only", None
+        else:
+            bucket, delta = "b_only", None
+        tags = sorted(((a.tags if a else set()) | (b.tags if b else set())))
+        cards.append(CompareCard(
+            name=src.name, oracle_id=src.oracle_id, slug=src.slug, bucket=bucket,
+            tags=tags,
+            a_pct=a.inclusion_pct if a else None,
+            b_pct=b.inclusion_pct if b else None,
+            a_decks=a.num_decks if a else None,
+            b_decks=b.num_decks if b else None,
+            delta=delta,
+            synergy_a=a.synergy if a else None,
+            synergy_b=b.synergy if b else None,
+            trend_a=a.trend_zscore if a else None,
+            trend_b=b.trend_zscore if b else None,
+        ))
+
+    # Enrich all cards in ONE batched call (incl. representative printing image).
+    oids = [c.oracle_id for c in cards if c.oracle_id]
+    meta = sets.lowest_price_by_oracle(oids)
+    for c in cards:
+        m = meta.get(c.oracle_id or "")
+        if not m:
+            continue
+        c.type_line = m.get("type_line")
+        c.cmc = m.get("cmc")
+        c.mana_cost = m.get("mana_cost")
+        _ci = m.get("color_identity")
+        c.color_identity = json.loads(_ci) if _ci else []
+        c.rarity = m.get("rarity")
+        c.lowest_usd = m.get("lowest_usd")
+        c.lowest_usd_foil = m.get("lowest_usd_foil")
+        c.scryfall_id = m.get("scryfall_id")
+        c.image_uri = m.get("image_uri")
+        c.set_code = m.get("set_code")
+        c.collector_number = m.get("collector_number")
+
+    return CompareResult(name_a=name_a, name_b=name_b, slug_a=slug_a, slug_b=slug_b, cards=cards)

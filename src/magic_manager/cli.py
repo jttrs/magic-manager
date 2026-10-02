@@ -4908,6 +4908,32 @@ def edhrec_rankings_cmd(
     _run_edhrec_report(args)
 
 
+@edhrec_app.command("compare")
+def edhrec_compare_cmd(
+    commander_a: str = typer.Argument(..., help="First commander — name or printing (\"SET CN\")."),
+    commander_b: str = typer.Argument(..., help="Second commander — name or printing (\"SET CN\")."),
+    top: int = typer.Option(25, "--top", help="Rows per bucket table in the markdown."),
+    sort: str = typer.Option("inclusion", "--sort",
+                             help="Markdown bucket-table sort axis: inclusion | synergy | trend | delta."),
+    refresh: bool = typer.Option(False, "--refresh", help="Re-sync sets with stale (>7d) prices before pricing; default is local-first."),
+    no_refresh: bool = typer.Option(False, "--no-refresh", hidden=True, help="(deprecated no-op; local-first is the default)"),
+):
+    """Workflow D: compare two commanders' recommended-card rankings.
+
+    Reads each commander's full EDHREC recommendation set (synced on demand if
+    not cached), partitions the union into A-only / Both / B-only, and emits a
+    markdown report (bucket tables + a biggest-disagreement table) plus JSON,
+    XLSX, and an image-first filterable HTML gallery under output/edhrec/reports/.
+    """
+    if sort not in ("inclusion", "synergy", "trend", "delta"):
+        typer.echo(f"error: --sort must be inclusion|synergy|trend|delta, got {sort!r}", err=True)
+        raise typer.Exit(2)
+    args = ["compare", commander_a, commander_b, "--top", str(top), "--sort", sort]
+    if refresh:
+        args.append("--refresh")
+    _run_edhrec_report(args)
+
+
 @edhrec_app.command("sync")
 def edhrec_sync_cmd(
     card: str = typer.Argument(None, help="Single card to warm (name or 'SET CN'). Omit when using --selector/--family."),

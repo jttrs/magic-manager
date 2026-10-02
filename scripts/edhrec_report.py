@@ -41,7 +41,8 @@ ROOT = Path(__file__).resolve().parent.parent
 _OUTPUT_TYPE = "edhrec"  # → output/edhrec/reports/
 sys.path.insert(0, str(ROOT / "src"))
 
-from magic_manager import edhrec, exports, scryfall_urls, sets, util  # noqa: E402
+from magic_manager import edhrec, exports, gallery, scryfall_urls, sets, util  # noqa: E402
+from magic_manager.gallery import GallerySection, PoolSpec, SortSpec  # noqa: E402
 
 
 # ---------- rendering ----------
@@ -129,6 +130,168 @@ def _md_rankings(res, top: int, prices_note: str) -> str:
     return "\n".join(out)
 
 
+# ---------- compare (workflow D) ----------
+
+# EDHREC category tags → gallery color vars (cycled). Order mirrors
+# edhrec.COMMANDER_CARD_TAGS so the common lists get stable colors.
+_TAG_COLOR_VARS = ("p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8")
+
+_COMPARE_SORTS = {
+    "inclusion": lambda c: -(max(c.a_pct or 0, c.b_pct or 0)),
+    "synergy": lambda c: -(max(c.synergy_a or 0, c.synergy_b or 0)),
+    "trend": lambda c: -(max(c.trend_a or 0, c.trend_b or 0)),
+    "delta": lambda c: -(c.delta or 0),
+}
+
+
+def _pct(v) -> str:
+    return f"{v}" if v is not None else "—"
+
+
+def _md_compare(res, top: int, prices_note: str, sort: str) -> str:
+    """Two views: (1) three bucket tables (Only A / Both / Only B) sorted by the
+    chosen axis; (2) a rank-delta table of shared cards by |A% − B%|."""
+    keyfn = _COMPARE_SORTS.get(sort, _COMPARE_SORTS["inclusion"])
+    a_only = sorted([c for c in res.cards if c.bucket == "a_only"], key=keyfn)[:top]
+    both = sorted([c for c in res.cards if c.bucket == "both"], key=keyfn)[:top]
+    b_only = sorted([c for c in res.cards if c.bucket == "b_only"], key=keyfn)[:top]
+    n_a = sum(1 for c in res.cards if c.bucket in ("a_only", "both"))
+    n_b = sum(1 for c in res.cards if c.bucket in ("b_only", "both"))
+    n_both = sum(1 for c in res.cards if c.bucket == "both")
+
+    out = [
+        f"## EDHREC compare — **{res.name_a}** vs **{res.name_b}**",
+        "",
+        f"Recommended-card overlap (workflow D). {res.name_a}: {n_a} cards · "
+        f"{res.name_b}: {n_b} cards · shared: {n_both}. Sorted by {sort}. {prices_note}",
+    ]
+
+    def _bucket_table(title: str, cards: list, show_both: bool) -> list[str]:
+        lines = ["", f"### {title} ({len(cards)} shown)", ""]
+        if show_both:
+            lines += ["| # | Card | A % | B % | Δ | Type | MV | Lowest $ |",
+                      "|--:|------|----:|----:|--:|------|---:|---------:|"]
+            for i, c in enumerate(cards, 1):
+                lines.append(
+                    f"| {i} | [{c.name}]({_scryfall_search_url(c.name)}) "
+                    f"| {_pct(c.a_pct)} | {_pct(c.b_pct)} "
+                    f"| {round(c.delta, 2) if c.delta is not None else '—'} "
+                    f"| {c.type_line or '—'} "
+                    f"| {int(c.cmc) if c.cmc is not None else '—'} "
+                    f"| {util.fmt_usd(c.lowest_usd)} |"
+                )
+        else:
+            lines += ["| # | Card | Incl % | Type | MV | Lowest $ |",
+                      "|--:|------|-------:|------|---:|---------:|"]
+            for i, c in enumerate(cards, 1):
+                pct = c.a_pct if c.bucket == "a_only" else c.b_pct
+                lines.append(
+                    f"| {i} | [{c.name}]({_scryfall_search_url(c.name)}) "
+                    f"| {_pct(pct)} "
+                    f"| {c.type_line or '—'} "
+                    f"| {int(c.cmc) if c.cmc is not None else '—'} "
+                    f"| {util.fmt_usd(c.lowest_usd)} |"
+                )
+        return lines
+
+    out += _bucket_table(f"Only {res.name_a}", a_only, show_both=False)
+    out += _bucket_table(f"Both", both, show_both=True)
+    out += _bucket_table(f"Only {res.name_b}", b_only, show_both=False)
+
+    # View 2: biggest-disagreement shared cards.
+    by_delta = sorted([c for c in res.cards if c.bucket == "both"],
+                      key=lambda c: -(c.delta or 0))[:top]
+    out += [
+        "", "### Biggest disagreement (shared cards by |A % − B %|)", "",
+        "| # | Card | A % | B % | Δ | Type | Lowest $ |",
+        "|--:|------|----:|----:|--:|------|---------:|",
+    ]
+    for i, c in enumerate(by_delta, 1):
+        out.append(
+            f"| {i} | [{c.name}]({_scryfall_search_url(c.name)}) "
+            f"| {_pct(c.a_pct)} | {_pct(c.b_pct)} "
+            f"| {round(c.delta, 2) if c.delta is not None else '—'} "
+            f"| {c.type_line or '—'} "
+            f"| {util.fmt_usd(c.lowest_usd)} |"
+        )
+    return "\n".join(out)
+
+
+def _compare_tag_pools(res) -> list:
+    """Build the gallery PoolSpec list from the category tags actually present,
+    in edhrec.COMMANDER_CARD_TAGS order, each assigned a cycled color var."""
+    present = {t for c in res.cards for t in c.tags}
+    ordered = [t for t in edhrec.COMMANDER_CARD_TAGS if t in present]
+    ordered += sorted(present - set(ordered))  # any unexpected tags last
+    return [
+        PoolSpec(tag, tag.replace("cards", " cards").replace("utility", "utility ").title(),
+                 _TAG_COLOR_VARS[i % len(_TAG_COLOR_VARS)])
+        for i, tag in enumerate(ordered)
+    ]
+
+
+def _compare_html(res, pools: list) -> str:
+    """Render the comparison as an image-first gallery: sections = buckets
+    (Only A / Both / Only B), pool chips = category tags, per-tile badge = each
+    commander's inclusion %, numeric sorts = inclusion / synergy / trend / delta."""
+    bucket_meta = [
+        ("a_only", f"Only {res.name_a}"),
+        ("both", "Both"),
+        ("b_only", f"Only {res.name_b}"),
+    ]
+    tiles_by_section: dict[str, list[dict]] = {k: [] for k, _ in bucket_meta}
+    for c in res.cards:
+        if c.bucket == "both":
+            badge = f"A {_pct(c.a_pct)}% · B {_pct(c.b_pct)}%"
+        elif c.bucket == "a_only":
+            badge = f"A {_pct(c.a_pct)}%"
+        else:
+            badge = f"B {_pct(c.b_pct)}%"
+        tiles_by_section[c.bucket].append({
+            "sid_key": ("oid", c.oracle_id or c.slug),
+            "pools": set(c.tags) if c.tags else set(),
+            "family": c.bucket,
+            "name": c.name,
+            "set": (c.set_code or "").upper() if c.set_code else None,
+            "cn": c.collector_number,
+            "rarity": c.rarity,
+            "finish": None,
+            "usd": c.lowest_usd,
+            "image_uri": c.image_uri,
+            "scryfall_url": gallery.scryfall_card_url(c.set_code, c.collector_number),
+            "badge": badge,
+            "sort_values": {
+                "inclusion": max(c.a_pct or 0, c.b_pct or 0),
+                "synergy": max(c.synergy_a or 0, c.synergy_b or 0),
+                "trend": max(c.trend_a or 0, c.trend_b or 0),
+                "delta": c.delta or 0,
+            },
+            "row": None,
+        })
+    for k in tiles_by_section:
+        tiles_by_section[k].sort(key=gallery.tile_sort_key)
+
+    sections = []
+    for code, label in bucket_meta:
+        tiles = tiles_by_section[code]
+        total = sum(t["usd"] for t in tiles if t["usd"] is not None)
+        sections.append(GallerySection(code, label, f"{len(tiles)} cards · {util.fmt_usd(total)}"))
+
+    return gallery.render_gallery(
+        sections, tiles_by_section, pools,
+        title=f"EDHREC compare — {res.name_a} vs {res.name_b}",
+        hint="click a card to open on Scryfall · chips = EDHREC category",
+        group_label="Bucket", pool_label="Category",
+        extra_sorts=[
+            SortSpec("Inclusion %: high→low", "inclusion"),
+            SortSpec("Synergy: high→low", "synergy"),
+            SortSpec("Trend: high→low", "trend"),
+            SortSpec("Disagreement Δ: high→low", "delta"),
+        ],
+        generated=datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S"),
+    )
+
+
 # ---------- artifacts ----------
 
 def _row_dict(r) -> dict:
@@ -178,6 +341,53 @@ def _write_xlsx(res, kind: str, out_path: Path) -> None:
     exports.xlsx.write_workbook(out_path, [results])
 
 
+def _compare_card_dict(c) -> dict:
+    return {
+        "name": c.name, "oracle_id": c.oracle_id, "slug": c.slug,
+        "bucket": c.bucket, "tags": c.tags,
+        "a_pct": c.a_pct, "b_pct": c.b_pct, "a_decks": c.a_decks, "b_decks": c.b_decks,
+        "delta": c.delta, "synergy_a": c.synergy_a, "synergy_b": c.synergy_b,
+        "trend_a": c.trend_a, "trend_b": c.trend_b,
+        "type_line": c.type_line, "cmc": c.cmc, "mana_cost": c.mana_cost,
+        "color_identity": c.color_identity, "rarity": c.rarity,
+        "lowest_usd": c.lowest_usd, "lowest_usd_foil": c.lowest_usd_foil,
+        "scryfall_id": c.scryfall_id, "set_code": c.set_code,
+        "collector_number": c.collector_number,
+    }
+
+
+def _write_compare_json(res, out_path: Path, prices_as_of: str | None) -> None:
+    payload = {
+        "kind": "compare",
+        "name_a": res.name_a, "name_b": res.name_b,
+        "slug_a": res.slug_a, "slug_b": res.slug_b,
+        "prices_as_of": prices_as_of,
+        "generated_at": datetime.now(UTC).isoformat(),
+        "cards": [_compare_card_dict(c) for c in res.cards],
+    }
+    out_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def _write_compare_xlsx(res, out_path: Path) -> None:
+    headers = ["bucket", "name", "a_pct", "b_pct", "delta", "a_decks", "b_decks",
+               "tags", "type_line", "mana_value", "lowest_usd", "lowest_usd_foil",
+               "oracle_id"]
+    cell_rows = [
+        [c.bucket, c.name, c.a_pct, c.b_pct, c.delta, c.a_decks, c.b_decks,
+         ", ".join(c.tags), c.type_line,
+         int(c.cmc) if c.cmc is not None else None,
+         c.lowest_usd, c.lowest_usd_foil, c.oracle_id]
+        for c in res.cards
+    ]
+    widths = {1: 9, 2: 34, 3: 8, 4: 8, 5: 8, 6: 9, 7: 9, 8: 28, 9: 30,
+              10: 6, 11: 11, 12: 13, 13: 38}
+    spec = exports.xlsx.SheetSpec(
+        title="compare", headers=headers, rows=cell_rows,
+        money_cols=(11, 12), widths=widths,
+    )
+    exports.xlsx.write_workbook(out_path, [spec])
+
+
 # ---------- driver ----------
 
 def _prices_note(oids: list[str], *, refresh: bool) -> str:
@@ -199,6 +409,42 @@ def _prices_note(oids: list[str], *, refresh: bool) -> str:
         sids, oldest_style="range", period=True,
         local_fallback="Prices: local (best-effort).",
     )
+
+
+def _run_compare(args, ts: str, out_dir: Path, refresh: bool) -> int:
+    """Workflow D driver: build the comparison, ensure prices, emit md + json +
+    xlsx + an image-first HTML gallery under output/edhrec/reports/."""
+    try:
+        res = edhrec.compare_commanders(args.commander_a, args.commander_b)
+    except edhrec.EdhrecError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+
+    oids = [c.oracle_id for c in res.cards if c.oracle_id]
+    note = _prices_note(oids, refresh=refresh)
+    # Re-enrich if we just synced prices (compare_commanders enriched once already
+    # from local; a --refresh may have updated them).
+    if refresh:
+        res = edhrec.compare_commanders(args.commander_a, args.commander_b)
+
+    md = _md_compare(res, args.top, note, args.sort)
+    pools = _compare_tag_pools(res)
+    html_out = _compare_html(res, pools)
+
+    base = f"compare-{res.slug_a}-vs-{res.slug_b}-{ts}"
+    json_path = out_dir / f"{base}.json"
+    xlsx_path = out_dir / f"{base}.xlsx"
+    html_path = out_dir / f"{base}.html"
+    _write_compare_json(res, json_path, note or None)
+    _write_compare_xlsx(res, xlsx_path)
+    html_path.write_text(html_out, encoding="utf-8")
+
+    print(md)
+    print()
+    print(f"→ {json_path}")
+    print(f"→ {xlsx_path}")
+    print(f"→ file://{html_path.resolve()}")
+    return 0
 
 
 def main() -> int:
@@ -234,10 +480,22 @@ def main() -> int:
     p_rank.add_argument("--set", dest="set_family",
                         help="Set name or code (family-expanded, e.g. 'fin').")
 
+    p_cmp = sub.add_parser("compare", parents=[common],
+                           help="Workflow D: compare two commanders' recommended cards.")
+    p_cmp.add_argument("commander_a")
+    p_cmp.add_argument("commander_b")
+    p_cmp.add_argument("--top", type=int, default=25,
+                       help="Rows per bucket table in the markdown (default 25).")
+    p_cmp.add_argument("--sort", choices=list(_COMPARE_SORTS), default="inclusion",
+                       help="Markdown bucket-table sort axis (default: inclusion).")
+
     args = ap.parse_args()
     refresh = args.refresh
     ts = datetime.now(UTC).strftime("%Y-%m-%d-%H%M%S")
     out_dir = util.output_dir(_OUTPUT_TYPE, "reports")
+
+    if args.cmd == "compare":
+        return _run_compare(args, ts, out_dir, refresh)
 
     try:
         if args.cmd in ("commander", "card"):
