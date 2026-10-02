@@ -25,66 +25,10 @@ from dataclasses import dataclass, field
 from urllib.parse import quote_plus
 
 from . import mtgjson, scryfall, util
-
-
-# ---------- price extraction (live Scryfall) ----------
-
-def price(card: dict, key: str) -> float | None:
-    """Extract a nested Scryfall price. ``card["prices"][key]`` is a string or
-    None; coerce to float or None."""
-    prices = card.get("prices") or {}
-    v = prices.get(key)
-    if v is None or v == "":
-        return None
-    try:
-        return float(v)
-    except (ValueError, TypeError):
-        return None
-
-
-def card_floors(oracle_id: str) -> tuple[float | None, float | None]:
-    """Cheapest ``(usd, usd_foil)`` across every printing of a card.
-
-    Enumerates all printings via ``oracleid:<id> unique=prints`` and returns the
-    min non-null price in each finish (None if no printing has that finish
-    priced) — the "cheapest to buy for a deck" figure, ignoring which set the
-    cheapest copy lives in. For MANY cards prefer :func:`card_floors_many`, which
-    batches the searches (one query per chunk instead of one per id)."""
-    return card_floors_many([oracle_id]).get(oracle_id, (None, None))
-
-
-# Scryfall caps boolean clauses per query (fails >~20 with HTTP 400); stay under.
-_FLOOR_CHUNK = 20
-
-
-def card_floors_many(oracle_ids: list[str]) -> dict[str, tuple[float | None, float | None]]:
-    """Batched :func:`card_floors` — ``{oracle_id: (min_usd, min_usd_foil)}``.
-
-    ORs many oracle_ids into one ``(oracleid:a or oracleid:b …) unique=prints``
-    search per chunk (≤ ``_FLOOR_CHUNK`` ids), then groups the printings back by
-    each card's ``oracle_id`` and takes the per-finish min. Collapses N per-card
-    searches into ⌈N/60⌉ — the difference between a 400-card display taking one
-    call vs. hundreds. Oracle_ids with no priced printing map to ``(None, None)``."""
-    ids = [o for o in dict.fromkeys(oracle_ids) if o]
-    out: dict[str, tuple[float | None, float | None]] = {o: (None, None) for o in ids}
-    nf: dict[str, list[float]] = {o: [] for o in ids}
-    ff: dict[str, list[float]] = {o: [] for o in ids}
-    for i in range(0, len(ids), _FLOOR_CHUNK):
-        chunk = ids[i:i + _FLOOR_CHUNK]
-        q = "(" + " or ".join(f"oracleid:{o}" for o in chunk) + ")"
-        for p in scryfall.search(q, unique="prints"):
-            oid = p.get("oracle_id")
-            if oid not in nf:
-                continue
-            v = price(p, "usd")
-            if v is not None:
-                nf[oid].append(v)
-            v = price(p, "usd_foil")
-            if v is not None:
-                ff[oid].append(v)
-    for o in ids:
-        out[o] = (min(nf[o]) if nf[o] else None, min(ff[o]) if ff[o] else None)
-    return out
+# The generic batched floor lookups live in card_floor (the DRY home); re-exported
+# here under their historical names so existing callers (value_drop,
+# valuation._floor_sum) keep importing them from sld unchanged.
+from .card_floor import card_floors, card_floors_many, price  # noqa: F401
 
 
 # ---------- drop discovery / identity ----------
