@@ -8,13 +8,14 @@ import { AddCardsDialog } from '../components/addcards/AddCardsDialog';
 import { CopyTargets } from '../components/CopyButton';
 import { AddCardMark, CardKingdomMark, ManaPoolMark, TcgplayerMark } from '../components/StoreMarks';
 import { MultiSelect } from '../components/MultiSelect';
-import { ChipToggles, Segmented, SideSection, TextField } from '../components/Sidebar';
+import { Segmented, SegmentedToggles, SideSection, TextField } from '../components/Sidebar';
 import { SortBuilder } from '../components/SortBuilder';
 import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../components/States';
 import { VirtualGuide, type GuideSection } from '../components/VirtualGuide';
 import { collectionBuyList, type CollectionCardOut, type CollectionOut } from '../core/api';
 import { CARD_SORT, CARD_SORT_PRESETS, type CardSortKey } from '../core/cardSort';
-import { buyFinish, collectionStats, filterCollection, functionCounts, isMissing, NO_FUNCTION, TRAITS, traitCounts } from '../core/collection';
+import { buyFinish, collectionStats, filterCollection, functionCounts, isMissing, NO_FUNCTION, setGroupIncluded, TRAITS, traitCounts, traitsIn, type TraitGroup } from '../core/collection';
+import { InfoTip } from '../components/InfoTip';
 import { fmtInt, fmtUsd } from '../core/format';
 import { fromCollection, groupCards, type GuideCard } from '../core/guideCard';
 import { SHOW, type CollectionSearch } from '../core/search';
@@ -45,6 +46,16 @@ export function CollectionView() {
 
   const view = useMemo(() => (q.data ? buildView(q.data, search, rules) : null), [q.data, search, rules]);
   const counts = useMemo(() => (q.data ? traitCounts(q.data.cards) : null), [q.data]);
+  const included = (g: TraitGroup) => traitsIn(g).map((t) => t.key).filter((k) => !search.exclude.includes(k));
+  /** A group's options present in the data (or currently excluded), with counts. */
+  const traitOptions = (g: TraitGroup) =>
+    traitsIn(g)
+      .filter((t) => !counts || counts.has(t.key) || search.exclude.includes(t.key))
+      .map((t) => ({ value: t.key, label: t.label, count: counts?.get(t.key) ?? 0 }));
+  const groupSummary = (g: TraitGroup, all: string) => {
+    const off = traitsIn(g).filter((t) => search.exclude.includes(t.key)).map((t) => t.label);
+    return off.length ? `Hiding ${off.slice(0, 2).join(', ')}${off.length > 2 ? ` +${off.length - 2}` : ''}` : all;
+  };
   const fnCounts = useMemo(() => (q.data ? functionCounts(q.data.cards) : null), [q.data]);
   const fnOptions = q.data && fnCounts && fnCounts.size > (fnCounts.has(NO_FUNCTION) ? 1 : 0)
     ? [
@@ -81,8 +92,9 @@ export function CollectionView() {
         )}
       </SideSection>
       <SideSection title="Show">
-        <ChipToggles
-          label="Show cards"
+        <SegmentedToggles
+          label="Cards"
+          showLabel
           value={search.show}
           onChange={(show) => set({ show: SHOW.filter((s) => show.includes(s)) })}
           options={[
@@ -91,13 +103,46 @@ export function CollectionView() {
           ]}
         />
         <MultiSelect
-          label="Card types"
-          noun="card types"
+          label="Rarity"
+          noun="rarities"
           searchable={false}
-          summary={typesSummary(search.exclude)}
-          value={TRAITS.map((t) => t.key).filter((k) => !search.exclude.includes(k))}
-          onChange={(included) => set({ exclude: TRAITS.map((t) => t.key).filter((k) => !included.includes(k)) })}
-          options={TRAITS.filter((t) => !counts || counts.has(t.key) || search.exclude.includes(t.key)).map((t) => ({ value: t.key, label: t.label, group: t.group, count: counts?.get(t.key) ?? 0 }))}
+          keepOrder
+          summary={groupSummary('Rarity', 'All rarities')}
+          value={included('Rarity')}
+          onChange={(v) => set({ exclude: setGroupIncluded(search.exclude, 'Rarity', v) })}
+          options={traitOptions('Rarity')}
+        />
+        <MultiSelect
+          label="Finish"
+          noun="finishes"
+          searchable={false}
+          keepOrder
+          summary={groupSummary('Finish', 'All finishes')}
+          value={included('Finish')}
+          onChange={(v) => set({ exclude: setGroupIncluded(search.exclude, 'Finish', v) })}
+          options={traitOptions('Finish')}
+        />
+        <MultiSelect
+          label="Treatment"
+          noun="treatments"
+          searchable={false}
+          keepOrder
+          summary={groupSummary('Treatment', 'All treatments')}
+          value={included('Treatment')}
+          onChange={(v) => set({ exclude: setGroupIncluded(search.exclude, 'Treatment', v) })}
+          options={traitOptions('Treatment')}
+        />
+        <Segmented
+          label="Chase"
+          showLabel
+          labelExtra={
+            <InfoTip label="What counts as chase?">
+              Chase printings are a set’s ultra-premium variants — raised, galaxy or first-place foils, serialized and headliner cards. They’re rare and expensive, so most collectors leave them out when completing a set.
+            </InfoTip>
+          }
+          value={search.exclude.includes('chase:yes') ? 'exclude' : 'include'}
+          onChange={(mode) => set({ exclude: setGroupIncluded(search.exclude, 'Chase', mode === 'exclude' ? ['chase:no'] : ['chase:yes', 'chase:no']) })}
+          options={[{ value: 'include', label: 'Include' }, { value: 'exclude', label: 'Exclude' }]}
         />
         {fnOptions && (
           <MultiSelect
@@ -164,7 +209,7 @@ export function CollectionView() {
     <ViewLayout label="Collection controls" summary={controlsSummary(search, rules, fams.data)} sidebar={sidebar} startOpen={!search.families.length}>
       <GuideSheet
         title="Collection"
-        titleAction={<AddCardsDialog trigger={<AddCardsButton />} />}
+        actions={<AddCardsDialog trigger={<AddCardsButton />} />}
         summary={
           s
             ? `${famN} set ${famN === 1 ? 'family' : 'families'} · showing ${fmtInt(s.printings)} printings: ${fmtInt(s.owned)} owned (${fmtInt(s.copies)} copies), ${fmtInt(s.missing)} missing · ${fmtUsd(s.missingUsd)} to complete${q.data?.skipped?.length ? ` · skipped ${q.data.skipped.join(', ')}` : ''}`
@@ -177,16 +222,16 @@ export function CollectionView() {
   );
 }
 
-/** The sheet's main action, beside the title: amber-ink card-plus mark + condensed label. */
+/** The sheet's main action: a ghost button — amber-ink card-plus mark + label, no frame. */
 function AddCardsButton(props: ComponentProps<'button'>) {
   return (
     <button
       type="button"
       {...props}
-      className="group inline-flex min-h-9 cursor-pointer items-center gap-2 rounded-pill border border-rule-strong bg-paper-raised py-1 pl-2.5 pr-3.5 text-ink shadow-[0_1px_0_var(--theme-rule)] transition-[background-color,border-color,box-shadow] duration-200 ease-guide hover:border-accent hover:bg-paper-sunk hover:shadow-[0_6px_14px_-8px_var(--theme-scrim)] data-[state=open]:border-accent"
+      className="group inline-flex min-h-8 cursor-pointer items-center gap-1.5 rounded-sm px-2 text-md voice-semi font-medium text-accent-ink no-underline transition-colors duration-200 ease-guide hover:bg-paper-sunk focus-visible:bg-paper-sunk data-[state=open]:bg-paper-sunk"
     >
-      <AddCardMark className="size-5 text-accent-ink transition-transform duration-300 ease-guide group-hover:-translate-y-0.5 group-hover:rotate-[-4deg]" />
-      <span className="text-sm voice-condensed font-bold uppercase tracking-[0.06em]">Add cards</span>
+      <AddCardMark className="size-5 transition-transform duration-300 ease-guide group-hover:-translate-y-0.5 group-hover:rotate-[-4deg]" />
+      <span className="underline-offset-4 group-hover:underline">Add cards</span>
     </button>
   );
 }

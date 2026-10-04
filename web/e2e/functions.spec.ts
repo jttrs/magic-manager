@@ -30,11 +30,11 @@ test('Group by Function regroups each column under Tagger function roots (P4)', 
   await expect(page.getByRole('radio', { name: 'Function' })).toHaveAttribute('aria-checked', 'true');
 });
 
-test('card hover preview lists its functions and Scryfall tags', async ({ page }) => {
+test('card inspector lists its functions and Scryfall tags', async ({ page }) => {
   await page.goto(COMPARE_URL);
   const signet = card('Arcane Signet');
-  await page.locator('section[aria-labelledby="col-both"]').getByRole('link', { name: signet.name }).first().hover();
-  const tags = page.getByRole('list', { name: 'Scryfall tags' });
+  await page.locator('section[aria-labelledby="col-both"]').getByRole('button', { name: `Inspect ${signet.name}` }).first().click();
+  const tags = page.getByRole('dialog', { name: signet.name }).getByRole('list', { name: 'Scryfall tags' });
   await expect(tags).toBeVisible();
   for (const t of signet.oracle_tags) await expect(tags).toContainText(t.label);
   await expect(page.getByText(signet.functions.map(label).join(' · '), { exact: true })).toBeVisible();

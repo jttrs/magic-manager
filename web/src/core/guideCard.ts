@@ -40,6 +40,9 @@ export type GuideCard = {
   oracleTags?: string[];
   /** Short guide-line annotation, e.g. "also: Removal, Lifegain". */
   note?: string | null;
+  /** Inspector facts. */
+  typeLine?: string | null;
+  prices?: { nonfoil: number | null; foil: number | null };
 };
 
 const RARITY_LETTER: Record<string, string> = {
@@ -73,6 +76,8 @@ export function fromCompare(c: CompareCardOut, fnLabels: Readonly<Record<string,
     functions: (c.functions ?? []).map((k) => fnLabels[k] ?? k),
     oracleTags: (c.oracle_tags ?? []).map((t) => t.label),
     note: null,
+    typeLine: c.type_line,
+    prices: { nonfoil: c.lowest_usd, foil: c.lowest_usd_foil },
   };
 }
 
@@ -106,6 +111,8 @@ export function fromCollection(c: CollectionCardOut, missing: boolean, fnLabels:
     tags: [...(c.is_chase ? ['Chase'] : []), ...treatmentLabels(c.treatment)],
     lines: { plain: `1 ${c.name}`, manapool: '', tcgplayer: '' },
     functions: (c.functions ?? []).map((k) => fnLabels[k] ?? k),
+    typeLine: c.type_line,
+    prices: { nonfoil: c.finishes.includes('nonfoil') ? c.price_usd : null, foil: c.finishes.includes('foil') ? c.price_usd_foil : null },
   };
 }
 

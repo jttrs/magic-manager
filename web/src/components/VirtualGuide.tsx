@@ -1,8 +1,9 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Chevron } from './Chevron';
 import type { GuideCard, GuideGroup } from '../core/guideCard';
 import { CardRow } from './CardRow';
+import { CardInspector } from './CardInspector';
 import { CardTile } from './CardTile';
 
 type Density = 'grid' | 'list';
@@ -35,18 +36,26 @@ const GAP = 12;
 
 /** One virtualized scroll region for any grouped card list, in grid or list view. */
 export function VirtualGuide({ sections, density, selected, onToggle, barLabels, label, minCardWidth = 120 }: Props) {
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  // Track the element in state too, so the width observer re-attaches whenever
+  // the scroll region remounts (otherwise the grid can stick at one column).
+  const [regionEl, setRegionEl] = useState<HTMLDivElement | null>(null);
+  const setRegion = useCallback((el: HTMLDivElement | null) => {
+    scrollRef.current = el;
+    setRegionEl(el);
+  }, []);
   const [width, setWidth] = useState(0);
 
   useLayoutEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
+    if (!regionEl) return;
+    setWidth(regionEl.getBoundingClientRect().width);
     const ro = new ResizeObserver(([e]) => setWidth(e.contentRect.width));
-    ro.observe(el);
+    ro.observe(regionEl);
     return () => ro.disconnect();
-  }, []);
+  }, [regionEl]);
 
   const columns = density === 'list' ? 1 : Math.max(1, Math.floor((width + GAP) / (minCardWidth + GAP)));
+  const [inspecting, setInspecting] = useState<GuideCard | null>(null);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
   const toggleSection = (key: string) =>
     setCollapsed((prev) => {
@@ -109,7 +118,9 @@ export function VirtualGuide({ sections, density, selected, onToggle, barLabels,
   };
 
   return (
-    <div ref={scrollRef} role="region" aria-label={label} tabIndex={0} className="@container h-full min-h-0 overflow-y-auto overscroll-contain px-4 pb-6 focus-visible:outline-offset-[-2px]">
+    <>
+    <CardInspector card={inspecting} onClose={() => setInspecting(null)} />
+    <div ref={setRegion} role="region" aria-label={label} tabIndex={0} className="@container h-full min-h-0 overflow-y-auto overscroll-contain px-4 pb-6 focus-visible:outline-offset-[-2px]">
       <div className="relative w-full" style={{ height: virt.getTotalSize() }}>
         {virt.getVirtualItems().map((vi) => {
           const row = rows[vi.index];
@@ -124,16 +135,17 @@ export function VirtualGuide({ sections, density, selected, onToggle, barLabels,
               {row.kind === 'head' ? (
                 <SectionHead
                   row={row}
+                  first={vi.index === 0}
                   onToggle={() => toggleSection(row.section.key)}
                   onPrev={neighbor(vi.index, -1) ? () => jump(vi.index, -1) : undefined}
                   onNext={neighbor(vi.index, 1) ? () => jump(vi.index, 1) : undefined}
                 />
               ) : density === 'list' ? (
-                row.items.map((c) => <CardRow key={c.key} card={c} selected={selected.has(c.key)} onToggle={onToggle} barLabels={barLabels} />)
+                row.items.map((c) => <CardRow key={c.key} card={c} selected={selected.has(c.key)} onToggle={onToggle} onInspect={setInspecting} barLabels={barLabels} />)
               ) : (
                 <div className="grid pb-3" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, columnGap: GAP }}>
                   {row.items.map((c) => (
-                    <CardTile key={c.key} card={c} selected={selected.has(c.key)} onToggle={onToggle} barLabels={barLabels} />
+                    <CardTile key={c.key} card={c} selected={selected.has(c.key)} onToggle={onToggle} onInspect={setInspecting} barLabels={barLabels} />
                   ))}
                 </div>
               )}
@@ -142,10 +154,11 @@ export function VirtualGuide({ sections, density, selected, onToggle, barLabels,
         })}
       </div>
     </div>
+    </>
   );
 }
 
-function SectionHead({ row, onToggle, onPrev, onNext }: { row: Head; onToggle: () => void; onPrev?: () => void; onNext?: () => void }) {
+function SectionHead({ row, first = false, onToggle, onPrev, onNext }: { row: Head; first?: boolean; onToggle: () => void; onPrev?: () => void; onNext?: () => void }) {
   const { section: s, level, collapsed } = row;
   const top = level === 1;
   const H = top ? 'h2' : 'h3';
@@ -155,7 +168,7 @@ function SectionHead({ row, onToggle, onPrev, onNext }: { row: Head; onToggle: (
       data-head={row.key}
       className={
         top
-          ? 'flex flex-wrap items-end gap-x-4 gap-y-1 border-b-2 border-rule-strong pb-1.5 pt-6 text-ink'
+          ? `flex flex-wrap items-end gap-x-4 gap-y-1 border-b-2 border-rule-strong pb-1.5 text-ink ${first ? 'pt-1' : 'pt-6'}`
           : 'flex items-center gap-x-3 border-b border-rule pb-1 pt-3 text-ink-muted'
       }
     >

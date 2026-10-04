@@ -25,19 +25,19 @@ export function functionCounts(cards: readonly CollectionCardOut[]): Map<string,
   return m;
 }
 
-type TraitGroup = 'Finish' | 'Rarity' | 'Treatment' | 'Chase';
+export type TraitGroup = 'Rarity' | 'Finish' | 'Treatment' | 'Chase';
 type TraitDef = { key: string; label: string; group: TraitGroup };
 
-/** Every filterable card-type trait, in display order. Keys are URL-stable. */
+/** Every filterable card-type trait, in display order (Rarity · Finish · Treatment · Chase). Keys are URL-stable. */
 export const TRAITS: readonly TraitDef[] = [
-  { key: 'finish:nonfoil', label: 'Nonfoil', group: 'Finish' },
-  { key: 'finish:foil', label: 'Foil', group: 'Finish' },
-  { key: 'finish:fancy', label: 'Fancy foil (surge, etched…)', group: 'Finish' },
   { key: 'rarity:mythic', label: 'Mythic', group: 'Rarity' },
   { key: 'rarity:rare', label: 'Rare', group: 'Rarity' },
   { key: 'rarity:uncommon', label: 'Uncommon', group: 'Rarity' },
   { key: 'rarity:common', label: 'Common', group: 'Rarity' },
   { key: 'rarity:special', label: 'Special / bonus', group: 'Rarity' },
+  { key: 'finish:nonfoil', label: 'Nonfoil', group: 'Finish' },
+  { key: 'finish:foil', label: 'Foil', group: 'Finish' },
+  { key: 'finish:fancy', label: 'Fancy foil (surge, etched…)', group: 'Finish' },
   { key: 'treat:std', label: 'Standard frame', group: 'Treatment' },
   { key: 'treat:b', label: 'Borderless', group: 'Treatment' },
   { key: 'treat:shw', label: 'Showcase', group: 'Treatment' },
@@ -135,4 +135,13 @@ export function collectionStats(cards: readonly CollectionCardOut[], exclude: re
     }
   }
   return { printings: cards.length, owned, copies, missing, missingUsd };
+}
+
+/** Trait keys of one group. */
+export const traitsIn = (group: TraitGroup) => TRAITS.filter((t) => t.group === group);
+
+/** Replace a group's exclusions so exactly `included` of its keys stay checked. */
+export function setGroupIncluded(exclude: readonly string[], group: TraitGroup, included: readonly string[]): string[] {
+  const keys = traitsIn(group).map((t) => t.key);
+  return [...exclude.filter((k) => !keys.includes(k)), ...keys.filter((k) => !included.includes(k))];
 }

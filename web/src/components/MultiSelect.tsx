@@ -15,6 +15,8 @@ type Props = {
   summary?: string;
   /** Hide the search box (short, grouped lists). */
   searchable?: boolean;
+  /** Keep the authored option order (e.g. rarity) instead of pinning the selection first. */
+  keepOrder?: boolean;
 };
 
 /**
@@ -22,7 +24,7 @@ type Props = {
  * searchable checkbox list. DESIGN.md: chip groups stop at 5 options; anything
  * larger uses this, so long lists never take over the sidebar.
  */
-export function MultiSelect({ label, options, value, onChange, noun, placeholder = 'Filter…', summary: summaryText, searchable = true }: Props) {
+export function MultiSelect({ label, options, value, onChange, noun, placeholder = 'Filter…', summary: summaryText, searchable = true, keepOrder = false }: Props) {
   const [q, setQ] = useState('');
   const id = useId();
   const selected = useMemo(() => new Set(value), [value]);
@@ -30,9 +32,9 @@ export function MultiSelect({ label, options, value, onChange, noun, placeholder
     const ql = q.trim().toLowerCase();
     const hits = ql ? options.filter((o) => o.label.toLowerCase().includes(ql) || o.value.toLowerCase().includes(ql)) : options;
     // Grouped lists keep their authored order; flat lists pin the selection first.
-    if (options.some((o) => o.group)) return hits;
+    if (keepOrder || options.some((o) => o.group)) return hits;
     return [...hits.filter((o) => selected.has(o.value)), ...hits.filter((o) => !selected.has(o.value))];
-  }, [options, q, selected]);
+  }, [options, q, selected, keepOrder]);
   const grouped = options.some((o) => o.group);
   const groups = useMemo(() => {
     const m = new Map<string, MultiOption[]>();
@@ -70,7 +72,7 @@ export function MultiSelect({ label, options, value, onChange, noun, placeholder
               e.preventDefault();
               (e.currentTarget as HTMLElement).focus({ preventScroll: true });
             }}
-            className="z-50 flex focus:outline-none max-h-[min(28rem,70dvh)] w-[max(var(--radix-popover-trigger-width),18rem)] flex-col rounded-sm border border-chrome-line bg-chrome-raised text-on-chrome shadow-[0_12px_28px_-12px_var(--theme-scrim)]"
+            className={`z-50 flex focus:outline-none flex-col ${grouped ? "max-h-[min(36rem,85dvh)] w-[min(34rem,calc(100vw-1.5rem))]" : "max-h-[min(28rem,70dvh)] w-[max(var(--radix-popover-trigger-width),18rem)]"} rounded-sm border border-chrome-line bg-chrome-raised text-on-chrome shadow-[0_12px_28px_-12px_var(--theme-scrim)]`}
           >
             <div className="flex flex-col gap-2 border-b border-chrome-line p-2">
               {searchable && <input
@@ -97,6 +99,11 @@ export function MultiSelect({ label, options, value, onChange, noun, placeholder
                     Select shown
                   </button>
                 )}
+                {!q && value.length < options.length && (
+                  <button type="button" className="cursor-pointer text-on-chrome-muted underline hover:text-on-chrome" onClick={() => onChange(options.map((o) => o.value))}>
+                    Select all
+                  </button>
+                )}
                 <button type="button" className="cursor-pointer text-on-chrome-muted underline hover:text-on-chrome" onClick={() => onChange(q ? value.filter((v) => !shown.some((o) => o.value === v)) : [])}>
                   Clear {q ? 'shown' : 'all'}
                 </button>
@@ -104,10 +111,10 @@ export function MultiSelect({ label, options, value, onChange, noun, placeholder
               </div>
               )}
             </div>
-            <div className="min-h-0 overflow-y-auto overscroll-contain py-1">
+            <div className={`min-h-0 overflow-y-auto overscroll-contain py-1 ${grouped ? "gap-x-2 sm:columns-2" : ""}`}>
               {shown.length === 0 && <p className="px-3 py-2 text-sm text-on-chrome-muted">No {noun} match “{q}”.</p>}
               {groups.map(([group, opts]) => (
-                <fieldset key={group || 'all'} className="py-0.5">
+                <fieldset key={group || 'all'} className="break-inside-avoid py-0.5">
                   <legend className={group ? 'flex w-full items-baseline gap-2 px-3 pb-1 pt-2' : 'sr-only'}>
                     {group ? (
                       <>
