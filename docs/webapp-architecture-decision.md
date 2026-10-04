@@ -403,3 +403,61 @@ These were surfaced but NOT settled — each carries my recommendation and reaso
 5. Scaffold `web/` with the token file (amber) + `app-shell` (header + full-width top-nav +
    below-nav sidebar, F7) + `resizable-panels` (F4) + `card-tile` + the two views.
 6. Evaluate UX in Playwright headed (F9), iterate, THEN write headless pinning tests.
+
+---
+
+# Part III — Decisions locked (2026-10-02, `feat/webapp-chassis`)
+
+Reconciles Parts I–II after a product interview (see `PRODUCT.md`) and research. **Supersedes**
+Part I §6 ("lead with HTMX + Alpine; not React") and §15 D1. Rationale: with the product
+understood as a published, multi-user, *app-like* collection manager (thousands-of-card galleries,
+URL-addressable filters, live inventory mutation, mobile + desktop first-class, deck composition
+next) and agents maintaining the code, migration cost from the prototype is explicitly discounted
+in favor of the best end product.
+
+## 17. Stack
+
+| Concern | Decision | Why |
+|---|---|---|
+| Frontend | **React + TypeScript + Vite SPA** (no Next.js) | Deepest *original* a11y/interaction ecosystem; strongest agent fluency (stable API since 2019 vs Svelte 5 runes churn); React Compiler 1.0 removes manual memoization. No SEO need behind auth → no Node server tier. |
+| URL state | **TanStack Router** + zod-validated search params | Filters, panel layout, diff inputs are deep-linkable and typed. |
+| Server data | **TanStack Query** + a TS client **generated from FastAPI OpenAPI** | One typed contract; optimistic mutations. |
+| Large lists | **TanStack Virtual** | Virtualize >50 items. |
+| F4 panels | **react-resizable-panels** | Collapsible panels + WAI-ARIA Window Splitter keyboard separators. |
+| Primitives | **Radix via shadcn/ui** (owned code) | Accessible combobox/menu/popover/dialog restyled by tokens. |
+| Drag & drop (future deckbuilder) | **Atlassian Pragmatic drag-and-drop** (framework-agnostic core) | Portability. |
+| Tokens | **DTCG JSON → Style Dictionary → CSS variables → Tailwind v4 `@theme`**; default palette disabled; lint bans arbitrary values | Single guarded source; amber (F6). |
+| Backend | **FastAPI + Pydantic v2 + native SSE**; jobs via **Taskiq** (InMemory broker locally, Redis in Phase 3) | arq is maintenance-only; Taskiq runs without Redis today. |
+| Tests | **Vitest** (pure TS) + **Playwright Test (TS)** E2E | E2E pins behavior independent of framework. |
+
+## 18. Portability architecture (React → Svelte stays feasible)
+
+Svelte was judged a modestly better *end product* on phone first-load and large-grid interaction
+smoothness; React won on maturity, a11y originals, typed URL state, and agent fluency. To keep a
+later migration ~30–40% of frontend code and incremental per route:
+
+1. Domain logic stays in Python (engine = single source of truth).
+2. Frontend logic in **plain TS modules** (`web/src/core/`): API client, zod URL schemas, pure
+   view-model derivations — framework-free, Vitest-tested.
+3. Prefer framework-neutral cores (TanStack Query/Virtual, Pragmatic DnD).
+4. Components are presentational (props in, events out); no business logic in components.
+5. Tokens are CSS variables (survive any framework).
+6. Playwright E2E is the migration safety net.
+7. Avoid React-only lock-in (RSC, Next.js). Router glue is the accepted rewrite cost.
+
+## 19. Remaining Part II decisions
+
+- **D2:** live local server (FastAPI) — dropdowns trigger new compares.
+- **D3:** sequence on this branch: typed API/job layer → shell + amber tokens (impeccable
+  new-work) → EDHREC-compare view → card-diff view.
+- **D4:** persist set release dates (small `sets` table backfilled from `scryfall.all_sets()`).
+- **D5:** frontend in top-level `web/`; Python adapter in `src/magic_manager/web/`.
+- **D6:** `gallery.py` keeps working until the app reaches parity; then retire/coexist decision.
+- **IA:** domain-oriented sections (Collection, Sets, Decks, Commanders, Market); long-running
+  jobs are background infrastructure (progress tray), not "run script X" pages.
+
+## 20. Status (end of first build on `feat/webapp-chassis`)
+
+- **Built:** `magic_manager.api` (typed reads + `JobSpec` registry), `magic_manager.web` (FastAPI + Taskiq in-memory + SSE job chassis; vertical slice `edhrec.sync_bulk` end-to-end with progress, incl. a new optional `on_resolve` pre-pass callback), V27 `cards.released_at` + `sets.standard_printing_by_oracle` (F3), card-diff JSON contract (F1), and the `web/` SPA: shell (F7), amber "After-Hours Price Guide" world with light/dark tokens (F6/F10), commander compare with toggleable + resizable columns (F4), missing-set view with exact printings (F2), Grid/Rows density, highlighter marks → buy/pull lists. Visual record: `DESIGN.md`; product record: `PRODUCT.md`.
+- **Guards:** pytest (`tests/test_web_api.py`), vitest (`web/src/core`), Playwright pinning suite (`web/e2e`, offline fixtures), stylelint (no raw colors), dependency-cruiser (`core/` framework-free; no cycles), knip.
+- **Not yet done / honest gaps:** React Compiler is *not* enabled yet (§17 cites it as the memoization answer; enable when the Vite React plugin path is settled — TanStack Virtual is flagged incompatible with compiler memoization and will need an opt-out). Collection/Decks/Market sections, Postgres/auth (Phase 3), shared Scryfall cache + rate limiter (Phase 5) remain future splits. `gallery.py` still ships the `file://` galleries (D6: keep until parity, then decide).

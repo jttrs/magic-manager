@@ -1,0 +1,54 @@
+{
+  "extends": [
+    "stylelint-config-standard"
+  ],
+  "ignoreFiles": [
+    "src/styles/tokens.css",
+    "dist/**"
+  ],
+  "rules": {
+    "color-no-hex": true,
+    "color-named": "never",
+    "function-disallowed-list": [
+      "rgb",
+      "rgba",
+      "hsl",
+      "hsla",
+      "oklch",
+      "oklab",
+      "lab",
+      "lch"
+    ],
+    "declaration-property-value-disallowed-list": {
+      "transition": [
+        "/\\ball\\b/"
+      ]
+    },
+    "at-rule-no-unknown": [
+      true,
+      {
+        "ignoreAtRules": [
+          "theme",
+          "utility",
+          "variant",
+          "custom-variant",
+          "apply",
+          "source",
+          "plugin"
+        ]
+      }
+    ],
+    "import-notation": "string",
+    "custom-property-pattern": null,
+    "declaration-no-important": null,
+    "value-keyword-case": [
+      "lower",
+      {
+        "ignoreKeywords": [
+          "optimizeLegibility"
+        ]
+      }
+    ],
+    "custom-property-empty-line-before": null
+  }
+}

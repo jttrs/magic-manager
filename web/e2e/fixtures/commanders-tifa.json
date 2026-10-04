@@ -1,0 +1,35 @@
+[
+ {
+  "name": "Tifa Lockhart",
+  "oracle_id": "878df304-9d6d-4ce9-b65b-1439c251f3e0",
+  "type_line": "Legendary Creature \u2014 Human Monk",
+  "color_identity": [
+   "G"
+  ],
+  "image_uri": "https://cards.scryfall.io/normal/front/f/b/fb781323-2746-405d-a9b2-e778c037a6e9.jpg?1783906580",
+  "cached": true
+ },
+ {
+  "name": "Tifa, Martial Artist",
+  "oracle_id": "0836c8d1-c453-4a3a-a52a-eb66839b8542",
+  "type_line": "Legendary Creature \u2014 Human Monk",
+  "color_identity": [
+   "G",
+   "R",
+   "W"
+  ],
+  "image_uri": "https://cards.scryfall.io/normal/front/3/1/31513afc-329c-4913-8fcd-945c39ec82b2.jpg?1783906372",
+  "cached": true
+ },
+ {
+  "name": "Lazav, the Multifarious",
+  "oracle_id": "c14bcef2-6d49-4430-86d0-e5a87ba442d9",
+  "type_line": "Legendary Creature \u2014 Shapeshifter",
+  "color_identity": [
+   "B",
+   "U"
+  ],
+  "image_uri": "https://cards.scryfall.io/normal/front/6/6/662758ee-f7c8-4cba-b67b-48ac80c3b5ca.jpg?1783912979",
+  "cached": false
+ }
+]

@@ -1,0 +1,150 @@
+[
+ {
+  "code": "dft",
+  "name": "Aetherdrift"
+ },
+ {
+  "code": "acr",
+  "name": "Assassin's Creed"
+ },
+ {
+  "code": "tla",
+  "name": "Avatar: The Last Airbender"
+ },
+ {
+  "code": "blb",
+  "name": "Bloomburrow"
+ },
+ {
+  "code": "c21",
+  "name": "Commander 2021"
+ },
+ {
+  "code": "clb",
+  "name": "Commander Legends: Battle for Baldur's Gate"
+ },
+ {
+  "code": "dmu",
+  "name": "Dominaria United"
+ },
+ {
+  "code": "dsk",
+  "name": "Duskmourn: House of Horror"
+ },
+ {
+  "code": "eoe",
+  "name": "Edge of Eternities"
+ },
+ {
+  "code": "pip",
+  "name": "Fallout"
+ },
+ {
+  "code": "fin",
+  "name": "Final Fantasy"
+ },
+ {
+  "code": "fdn",
+  "name": "Foundations"
+ },
+ {
+  "code": "inr",
+  "name": "Innistrad Remastered"
+ },
+ {
+  "code": "vow",
+  "name": "Innistrad: Crimson Vow"
+ },
+ {
+  "code": "mid",
+  "name": "Innistrad: Midnight Hunt"
+ },
+ {
+  "code": "neo",
+  "name": "Kamigawa: Neon Dynasty"
+ },
+ {
+  "code": "ecl",
+  "name": "Lorwyn Eclipsed"
+ },
+ {
+  "code": "mom",
+  "name": "March of the Machine"
+ },
+ {
+  "code": "mat",
+  "name": "March of the Machine: The Aftermath"
+ },
+ {
+  "code": "msh",
+  "name": "Marvel Super Heroes"
+ },
+ {
+  "code": "spm",
+  "name": "Marvel's Spider-Man"
+ },
+ {
+  "code": "mh3",
+  "name": "Modern Horizons 3"
+ },
+ {
+  "code": "mkm",
+  "name": "Murders at Karlov Manor"
+ },
+ {
+  "code": "otj",
+  "name": "Outlaws of Thunder Junction"
+ },
+ {
+  "code": "one",
+  "name": "Phyrexia: All Will Be One"
+ },
+ {
+  "code": "sos",
+  "name": "Secrets of Strixhaven"
+ },
+ {
+  "code": "spg",
+  "name": "Special Guests"
+ },
+ {
+  "code": "snc",
+  "name": "Streets of New Capenna"
+ },
+ {
+  "code": "stx",
+  "name": "Strixhaven: School of Mages"
+ },
+ {
+  "code": "tdm",
+  "name": "Tarkir: Dragonstorm"
+ },
+ {
+  "code": "tmt",
+  "name": "Teenage Mutant Ninja Turtles"
+ },
+ {
+  "code": "bro",
+  "name": "The Brothers' War"
+ },
+ {
+  "code": "hob",
+  "name": "The Hobbit"
+ },
+ {
+  "code": "ltr",
+  "name": "The Lord of the Rings: Tales of Middle-earth"
+ },
+ {
+  "code": "lci",
+  "name": "The Lost Caverns of Ixalan"
+ },
+ {
+  "code": "40k",
+  "name": "Warhammer 40,000 Commander"
+ },
+ {
+  "code": "woe",
+  "name": "Wilds of Eldraine"
+ }
+]

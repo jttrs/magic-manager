@@ -216,6 +216,35 @@ def set_sync_all(
     typer.echo(f"  → {n} cards upserted")
 
 
+@app.command("serve")
+def serve_cmd(
+    host: str = typer.Option("127.0.0.1", help="Bind address (local-only by default)."),
+    port: int = typer.Option(8765, help="Port."),
+    reload: bool = typer.Option(False, help="Auto-reload on Python source changes (dev)."),
+):
+    """Run the web app: JSON API + job runner (SSE) + the built frontend (web/dist).
+
+    Frontend dev uses Vite's server (`npm run dev` in web/), which proxies /api here."""
+    import uvicorn
+    from .web.app import DIST_DIR
+
+    if not DIST_DIR.is_dir():
+        typer.echo(f"note: {DIST_DIR} not built — API only. Run `npm --prefix web run build` "
+                   "for the UI, or `npm --prefix web run dev` for live development.", err=True)
+    uvicorn.run("magic_manager.web.app:create_app", factory=True,
+                host=host, port=port, reload=reload)
+
+
+@set_app.command("backfill-dates")
+def set_backfill_dates():
+    """Fill missing per-printing release dates from Scryfall set dates (one cached call).
+
+    Needed once after the V27 upgrade so "chronologically-first standard printing"
+    works offline before every set is re-synced. Never overwrites a real date."""
+    n = sets_mod.backfill_released_at()
+    typer.echo(f"filled released_at on {n} card rows")
+
+
 @set_app.command("is-synced")
 def set_is_synced(
     name_or_code: str = typer.Argument(...),
@@ -4985,14 +5014,10 @@ def edhrec_sync_cmd(
     # (mirrors _materialize_or_die), not dump a raw traceback.
     try:
         if family:
-            anchors = [a.strip() for a in family.split(",") if a.strip()]
-            name_set: set[str] = set()
-            for anchor in anchors:
-                name_set.update(edhrec_mod.names_from_selector(f"set:{anchor}+related", card_type=card_type))
-            names = sorted(name_set)
+            names = edhrec_mod.names_for_bulk(families=family.split(","), card_type=card_type)
             src = f"--family {family}"
         else:
-            names = edhrec_mod.names_from_selector(selector, card_type=card_type)
+            names = edhrec_mod.names_for_bulk(selector=selector, card_type=card_type)
             src = f"selector {selector!r}"
     except sel_mod.SelectorParseError as e:
         typer.echo(f"error: invalid selector: {e}", err=True)

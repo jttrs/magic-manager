@@ -1,0 +1,20 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "e2e/**/*.spec.ts"
+  ],
+  "project": [
+    "src/**/*.{ts,tsx}",
+    "e2e/**/*.ts"
+  ],
+  "ignore": [
+    "src/core/api/**"
+  ],
+  "ignoreDependencies": [
+    "@fontsource-variable/archivo",
+    "tailwindcss"
+  ],
+  "ignoreBinaries": [
+    "uv"
+  ]
+}

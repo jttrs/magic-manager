@@ -827,11 +827,32 @@ def names_from_selector(selector: str, *, card_type: str | None = None) -> list[
     return sorted(names)
 
 
+def names_for_bulk(
+    *, selector: str | None = None, families: Iterable[str] | None = None,
+    card_type: str | None = None,
+) -> list[str]:
+    """Resolve a bulk-warm universe: exactly one of a selector string OR set-family
+    anchors (each unioned as ``set:<anchor>+related``). The single home for the
+    ``--selector``/``--family`` input shared by the CLI and the web job. Raises
+    ``ValueError`` unless exactly one is given; selector errors propagate
+    (``SelectorParseError`` / ``LookupError``)."""
+    anchors = [a.strip() for a in (families or []) if a and a.strip()]
+    if bool(selector) == bool(anchors):
+        raise ValueError("provide exactly one of a selector or family anchors")
+    if selector:
+        return names_from_selector(selector, card_type=card_type)
+    out: set[str] = set()
+    for anchor in anchors:
+        out.update(names_from_selector(f"set:{anchor}+related", card_type=card_type))
+    return sorted(out)
+
+
 def sync_bulk(
     names: Iterable[str],
     *,
     resume: bool = True,
     progress=None,
+    on_resolve=None,
 ) -> BulkSyncResult:
     """Warm the EDHREC cache for every name via :func:`sync_both`.
 
@@ -858,6 +879,10 @@ def sync_bulk(
     than fetch noise. The loop still continues (one bad card shouldn't abort a
     1000-item batch).
 
+    ``on_resolve(i, total, name)`` — optional callback per name during the
+    resolve/resume pre-pass (which can take minutes on a cold cache and is
+    otherwise silent).
+
     ``progress(i, total, name, tag)`` — optional callback per attempted name;
     ``tag`` is ``"cmd+card"`` / ``"card-only"`` / ``"none"`` / ``"ERROR: …"`` /
     ``"BUG: …"`` / ``"skip (cached)"``.
@@ -871,7 +896,9 @@ def sync_bulk(
     # resolve into sync_both so it isn't repeated. Skipped names are counted but
     # not progress-logged (a large resume shouldn't spam a line per cache hit).
     todo: list[tuple[str, tuple[str, dict | None]]] = []
-    for name in names:
+    for n_resolved, name in enumerate(names, 1):
+        if on_resolve is not None:
+            on_resolve(n_resolved, len(names), name)
         try:
             oracle_name, card = resolve_oracle_card(name)
         except scryfall.ScryfallError:
@@ -1134,8 +1161,12 @@ def compare_commanders(ref_a: str, ref_b: str) -> CompareResult:
         ))
 
     # Enrich all cards in ONE batched call (incl. representative printing image).
+    # The displayed printing (image/link) is the chronologically-first STANDARD
+    # printing — not the cheapest one, which is often a random showcase/borderless
+    # reprint. The floor price stays the cheapest across all printings.
     oids = [c.oracle_id for c in cards if c.oracle_id]
     meta = sets.lowest_price_by_oracle(oids)
+    display = sets.standard_printing_by_oracle(oids)
     for c in cards:
         m = meta.get(c.oracle_id or "")
         if not m:
@@ -1148,9 +1179,10 @@ def compare_commanders(ref_a: str, ref_b: str) -> CompareResult:
         c.rarity = m.get("rarity")
         c.lowest_usd = m.get("lowest_usd")
         c.lowest_usd_foil = m.get("lowest_usd_foil")
-        c.scryfall_id = m.get("scryfall_id")
-        c.image_uri = m.get("image_uri")
-        c.set_code = m.get("set_code")
-        c.collector_number = m.get("collector_number")
+        p = display.get(c.oracle_id or "") or m
+        c.scryfall_id = p.get("scryfall_id")
+        c.image_uri = p.get("image_uri")
+        c.set_code = p.get("set_code")
+        c.collector_number = p.get("collector_number")
 
     return CompareResult(name_a=name_a, name_b=name_b, slug_a=slug_a, slug_b=slug_b, cards=cards)

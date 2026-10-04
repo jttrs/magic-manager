@@ -1,0 +1,448 @@
+{
+ "families": [
+  {
+   "code": "fin",
+   "name": "Final Fantasy",
+   "owned_prints": 550,
+   "owned_qty": 1758,
+   "owned_usd": 3175.89,
+   "pools": {
+    "printing": {
+     "count": 161,
+     "usd": 3396.87
+    },
+    "functional": {
+     "count": 54,
+     "usd": 771.64
+    },
+    "variant-chase": {
+     "count": 81,
+     "usd": 2385.38
+    }
+   }
+  }
+ ],
+ "cards": [
+  {
+   "key": "sid|514ad860-dff2-45f2-ad5c-77c776c1cf74",
+   "family": "fin",
+   "pools": [
+    "printing",
+    "variant-chase"
+   ],
+   "name": "Y'shtola, Night's Blessed",
+   "set_code": "FIC",
+   "collector_number": "207",
+   "rarity": "mythic",
+   "finish": "nonfoil",
+   "usd": 193.08,
+   "image_uri": "https://cards.scryfall.io/normal/front/5/1/514ad860-dff2-45f2-ad5c-77c776c1cf74.jpg?1783906302",
+   "scryfall_url": "https://scryfall.com/card/fic/207",
+   "manapool_line": "1 Y'shtola, Night's Blessed (FIC) 207",
+   "tcgplayer_line": "1 Y'shtola, Night's Blessed (Borderless) [FIC] 207"
+  },
+  {
+   "key": "sid|545c98b3-dc78-4070-8dcb-f6a246abce09",
+   "family": "fin",
+   "pools": [
+    "printing",
+    "variant-chase"
+   ],
+   "name": "Tataru Taru",
+   "set_code": "FIC",
+   "collector_number": "466",
+   "rarity": "rare",
+   "finish": "foil",
+   "usd": 170.06,
+   "image_uri": "https://cards.scryfall.io/normal/front/5/4/545c98b3-dc78-4070-8dcb-f6a246abce09.jpg?1783904647",
+   "scryfall_url": "https://scryfall.com/card/fic/466",
+   "manapool_line": "1 Tataru Taru (FIC) 466 *F*",
+   "tcgplayer_line": "1 Tataru Taru (Borderless) (Chocobo Track Foil) [FIC] 466"
+  },
+  {
+   "key": "sid|39a038ed-9ed9-4a32-9613-989e4809ec94",
+   "family": "fin",
+   "pools": [
+    "printing",
+    "variant-chase"
+   ],
+   "name": "Tifa Lockhart",
+   "set_code": "FIN",
+   "collector_number": "567",
+   "rarity": "rare",
+   "finish": "foil",
+   "usd": 161.97,
+   "image_uri": "https://cards.scryfall.io/normal/front/3/9/39a038ed-9ed9-4a32-9613-989e4809ec94.jpg?1783904641",
+   "scryfall_url": "https://scryfall.com/card/fin/567",
+   "manapool_line": "1 Tifa Lockhart (FIN) 567 *F*",
+   "tcgplayer_line": "1 Tifa Lockhart (Borderless) (Chocobo Track Foil) [FIN] 567"
+  },
+  {
+   "key": "sid|4790a887-26dd-4a5f-9b85-10346cb6328b",
+   "family": "fin",
+   "pools": [
+    "functional",
+    "printing"
+   ],
+   "name": "Snapcaster Mage",
+   "set_code": "FIC",
+   "collector_number": "469",
+   "rarity": "mythic",
+   "finish": "foil",
+   "usd": 144.79,
+   "image_uri": "https://cards.scryfall.io/normal/front/4/7/4790a887-26dd-4a5f-9b85-10346cb6328b.jpg?1783904647",
+   "scryfall_url": "https://scryfall.com/card/fic/469",
+   "manapool_line": "1 Snapcaster Mage (FIC) 469 *F*",
+   "tcgplayer_line": "1 Snapcaster Mage (Borderless) (Chocobo Track Foil) [FIC] 469"
+  },
+  {
+   "key": "sid|aa1bd238-a9f5-4145-9668-eb49a3b4c2bf",
+   "family": "fin",
+   "pools": [
+    "printing",
+    "variant-chase"
+   ],
+   "name": "Aerith, Last Ancient",
+   "set_code": "FIC",
+   "collector_number": "471",
+   "rarity": "rare",
+   "finish": "foil",
+   "usd": 125.49,
+   "image_uri": "https://cards.scryfall.io/normal/front/a/a/aa1bd238-a9f5-4145-9668-eb49a3b4c2bf.jpg?1783904647",
+   "scryfall_url": "https://scryfall.com/card/fic/471",
+   "manapool_line": "1 Aerith, Last Ancient (FIC) 471 *F*",
+   "tcgplayer_line": "1 Aerith, Last Ancient (Borderless) (Chocobo Track Foil) [FIC] 471"
+  },
+  {
+   "key": "sid|f6cbc754-8aed-4c32-857c-ea639943b5d2",
+   "family": "fin",
+   "pools": [
+    "functional",
+    "printing"
+   ],
+   "name": "Ancient Copper Dragon",
+   "set_code": "FCA",
+   "collector_number": "12",
+   "rarity": "mythic",
+   "finish": "nonfoil",
+   "usd": 119.88,
+   "image_uri": "https://cards.scryfall.io/normal/front/f/6/f6cbc754-8aed-4c32-857c-ea639943b5d2.jpg?1783906392",
+   "scryfall_url": "https://scryfall.com/card/fca/12",
+   "manapool_line": "1 Ancient Copper Dragon (FCA) 12",
+   "tcgplayer_line": "1 Dragon of Mount Gulg - Ancient Copper Dragon (Showcase) [FCA] 12"
+  },
+  {
+   "key": "sid|f58e882a-c59f-4f72-91b5-0291f8360a2c",
+   "family": "fin",
+   "pools": [
+    "printing",
+    "variant-chase"
+   ],
+   "name": "Traveling Chocobo",
+   "set_code": "FIN",
+   "collector_number": "568",
+   "rarity": "mythic",
+   "finish": "foil",
+   "usd": 115.64,
+   "image_uri": "https://cards.scryfall.io/normal/front/f/5/f58e882a-c59f-4f72-91b5-0291f8360a2c.jpg?1783904641",
+   "scryfall_url": "https://scryfall.com/card/fin/568",
+   "manapool_line": "1 Traveling Chocobo (FIN) 568 *F*",
+   "tcgplayer_line": "1 Traveling Chocobo (Borderless) (Chocobo Track Foil) [FIN] 568"
+  },
+  {
+   "key": "sid|f57d0446-1eae-4b88-b65c-92a14a3f9cef",
+   "family": "fin",
+   "pools": [
+    "printing",
+    "variant-chase"
+   ],
+   "name": "Buster Sword",
+   "set_code": "FIN",
+   "collector_number": "351",
+   "rarity": "mythic",
+   "finish": "nonfoil",
+   "usd": 114.06,
+   "image_uri": "https://cards.scryfall.io/normal/front/f/5/f57d0446-1eae-4b88-b65c-92a14a3f9cef.jpg?1783906523",
+   "scryfall_url": "https://scryfall.com/card/fin/351",
+   "manapool_line": "1 Buster Sword (FIN) 351",
+   "tcgplayer_line": "1 Buster Sword (Borderless) [FIN] 351"
+  },
+  {
+   "key": "sid|cd212de7-25f6-4b3b-a35b-df7d87fe205b",
+   "family": "fin",
+   "pools": [
+    "functional",
+    "printing"
+   ],
+   "name": "Rhystic Study",
+   "set_code": "FCA",
+   "collector_number": "31",
+   "rarity": "mythic",
+   "finish": "nonfoil",
+   "usd": 109.71,
+   "image_uri": "https://cards.scryfall.io/normal/front/c/d/cd212de7-25f6-4b3b-a35b-df7d87fe205b.jpg?1783906385",
+   "scryfall_url": "https://scryfall.com/card/fca/31",
+   "manapool_line": "1 Rhystic Study (FCA) 31",
+   "tcgplayer_line": "1 Stay with Me - Rhystic Study (Showcase) [FCA] 31"
+  },
+  {
+   "key": "sid|fd5cb1fc-71b2-4b05-abd3-c90e95c53ad1",
+   "family": "fin",
+   "pools": [
+    "printing"
+   ],
+   "name": "Summon: Bahamut",
+   "set_code": "FIN",
+   "collector_number": "356",
+   "rarity": "mythic",
+   "finish": "nonfoil",
+   "usd": 51.92,
+   "image_uri": "https://cards.scryfall.io/normal/front/f/d/fd5cb1fc-71b2-4b05-abd3-c90e95c53ad1.jpg?1783906521",
+   "scryfall_url": "https://scryfall.com/card/fin/356",
+   "manapool_line": "1 Summon: Bahamut (FIN) 356",
+   "tcgplayer_line": "1 Summon: Bahamut (Borderless) [FIN] 356"
+  },
+  {
+   "key": "sid|9af0b8d6-f41b-4aa3-ae32-1ef2d1d4bade",
+   "family": "fin",
+   "pools": [
+    "functional",
+    "printing"
+   ],
+   "name": "Ranger-Captain of Eos",
+   "set_code": "FCA",
+   "collector_number": "2",
+   "rarity": "mythic",
+   "finish": "nonfoil",
+   "usd": 40.88,
+   "image_uri": "https://cards.scryfall.io/normal/front/9/a/9af0b8d6-f41b-4aa3-ae32-1ef2d1d4bade.jpg?1783906394",
+   "scryfall_url": "https://scryfall.com/card/fca/2",
+   "manapool_line": "1 Ranger-Captain of Eos (FCA) 2",
+   "tcgplayer_line": "1 Knights of San d'Oria - Ranger-Captain of Eos (Showcase) [FCA] 2"
+  },
+  {
+   "key": "sid|a71d1ec3-2d7a-4749-8936-8bf7a8b83d84",
+   "family": "fin",
+   "pools": [
+    "functional",
+    "printing"
+   ],
+   "name": "Ragavan, Nimble Pilferer",
+   "set_code": "FCA",
+   "collector_number": "43",
+   "rarity": "mythic",
+   "finish": "nonfoil",
+   "usd": 40.25,
+   "image_uri": "https://cards.scryfall.io/normal/front/a/7/a71d1ec3-2d7a-4749-8936-8bf7a8b83d84.jpg?1783906379",
+   "scryfall_url": "https://scryfall.com/card/fca/43",
+   "manapool_line": "1 Ragavan, Nimble Pilferer (FCA) 43",
+   "tcgplayer_line": "1 Zidane Tribal - Ragavan, Nimble Pilferer (Showcase) [FCA] 43"
+  },
+  {
+   "key": "sid|fc9c542d-ff46-4193-9972-68287879a8a0",
+   "family": "fin",
+   "pools": [
+    "functional",
+    "printing"
+   ],
+   "name": "Akroma's Will",
+   "set_code": "FCA",
+   "collector_number": "21",
+   "rarity": "mythic",
+   "finish": "nonfoil",
+   "usd": 36.34,
+   "image_uri": "https://cards.scryfall.io/normal/front/f/c/fc9c542d-ff46-4193-9972-68287879a8a0.jpg?1783906388",
+   "scryfall_url": "https://scryfall.com/card/fca/21",
+   "manapool_line": "1 Akroma's Will (FCA) 21",
+   "tcgplayer_line": "1 Blessing of the Oracle - Akroma's Will (Showcase) [FCA] 21"
+  },
+  {
+   "key": "sid|425d5bea-9c9a-4e8a-b4bc-02284fb9b5b4",
+   "family": "fin",
+   "pools": [
+    "printing"
+   ],
+   "name": "Clive, Ifrit's Dominant // Ifrit, Warden of Inferno",
+   "set_code": "FIN",
+   "collector_number": "318",
+   "rarity": "mythic",
+   "finish": "nonfoil",
+   "usd": 33.07,
+   "image_uri": "https://cards.scryfall.io/normal/front/4/2/425d5bea-9c9a-4e8a-b4bc-02284fb9b5b4.jpg?1783906539",
+   "scryfall_url": "https://scryfall.com/card/fin/318",
+   "manapool_line": "1 Clive, Ifrit's Dominant // Ifrit, Warden of Inferno (FIN) 318",
+   "tcgplayer_line": "1 Clive, Ifrit's Dominant (0318) (Borderless) [FIN] 318"
+  },
+  {
+   "key": "sid|6d24956c-b123-4682-9f89-6821ae45fc00",
+   "family": "fin",
+   "pools": [
+    "printing"
+   ],
+   "name": "Y'shtola Rhul",
+   "set_code": "FIN",
+   "collector_number": "577",
+   "rarity": "mythic",
+   "finish": "nonfoil",
+   "usd": 26.01,
+   "image_uri": "https://cards.scryfall.io/normal/front/6/d/6d24956c-b123-4682-9f89-6821ae45fc00.jpg?1783906430",
+   "scryfall_url": "https://scryfall.com/card/fin/577",
+   "manapool_line": "1 Y'shtola Rhul (FIN) 577",
+   "tcgplayer_line": "1 Y'shtola Rhul (Borderless) [FIN] 577"
+  },
+  {
+   "key": "sid|9240303a-73a3-4daf-b5fc-090ce7cbd92a",
+   "family": "fin",
+   "pools": [
+    "printing"
+   ],
+   "name": "The Earth Crystal",
+   "set_code": "FIN",
+   "collector_number": "342",
+   "rarity": "rare",
+   "finish": "nonfoil",
+   "usd": 21.59,
+   "image_uri": "https://cards.scryfall.io/normal/front/9/2/9240303a-73a3-4daf-b5fc-090ce7cbd92a.jpg?1783906525",
+   "scryfall_url": "https://scryfall.com/card/fin/342",
+   "manapool_line": "1 The Earth Crystal (FIN) 342",
+   "tcgplayer_line": "1 The Earth Crystal (Borderless) [FIN] 342"
+  },
+  {
+   "key": "sid|2ceea116-6197-45ec-a5a9-73588744b8a0",
+   "family": "fin",
+   "pools": [
+    "printing"
+   ],
+   "name": "Aettir and Priwen",
+   "set_code": "FIN",
+   "collector_number": "350",
+   "rarity": "mythic",
+   "finish": "nonfoil",
+   "usd": 19.36,
+   "image_uri": "https://cards.scryfall.io/normal/front/2/c/2ceea116-6197-45ec-a5a9-73588744b8a0.jpg?1783906523",
+   "scryfall_url": "https://scryfall.com/card/fin/350",
+   "manapool_line": "1 Aettir and Priwen (FIN) 350",
+   "tcgplayer_line": "1 Aettir and Priwen (Borderless) [FIN] 350"
+  },
+  {
+   "key": "sid|faf87bad-253a-4c7a-9dd5-c575cb27db9f",
+   "family": "fin",
+   "pools": [
+    "printing"
+   ],
+   "name": "Clive, Ifrit's Dominant // Ifrit, Warden of Inferno",
+   "set_code": "FIN",
+   "collector_number": "385",
+   "rarity": "mythic",
+   "finish": "nonfoil",
+   "usd": 11.73,
+   "image_uri": "https://cards.scryfall.io/normal/front/f/a/faf87bad-253a-4c7a-9dd5-c575cb27db9f.jpg?1783906514",
+   "scryfall_url": "https://scryfall.com/card/fin/385",
+   "manapool_line": "1 Clive, Ifrit's Dominant // Ifrit, Warden of Inferno (FIN) 385",
+   "tcgplayer_line": "1 Clive, Ifrit's Dominant (0385) (Borderless) [FIN] 385"
+  },
+  {
+   "key": "sid|0f5725aa-42bb-4dfd-9c15-135b38b33da3",
+   "family": "fin",
+   "pools": [
+    "functional"
+   ],
+   "name": "Torgal, A Fine Hound",
+   "set_code": "FIN",
+   "collector_number": "208",
+   "rarity": null,
+   "finish": "nonfoil",
+   "usd": 0.33,
+   "image_uri": "https://cards.scryfall.io/normal/front/0/f/0f5725aa-42bb-4dfd-9c15-135b38b33da3.jpg?1783906578",
+   "scryfall_url": "https://scryfall.com/card/fin/208",
+   "manapool_line": "1 Torgal, A Fine Hound (FIN) 208",
+   "tcgplayer_line": "1 Torgal, A Fine Hound [FIN] 208"
+  },
+  {
+   "key": "sid|e42c7d9d-8685-415b-8c5d-6ab2165863b9",
+   "family": "fin",
+   "pools": [
+    "functional"
+   ],
+   "name": "Zidane, Tantalus Thief",
+   "set_code": "FIN",
+   "collector_number": "251",
+   "rarity": null,
+   "finish": "nonfoil",
+   "usd": 0.25,
+   "image_uri": "https://cards.scryfall.io/normal/front/e/4/e42c7d9d-8685-415b-8c5d-6ab2165863b9.jpg?1783906559",
+   "scryfall_url": "https://scryfall.com/card/fin/251",
+   "manapool_line": "1 Zidane, Tantalus Thief (FIN) 251",
+   "tcgplayer_line": "1 Zidane, Tantalus Thief [FIN] 251"
+  },
+  {
+   "key": "sid|75c18134-f517-4a68-8640-0426b3cd4f6c",
+   "family": "fin",
+   "pools": [
+    "functional"
+   ],
+   "name": "Clash of the Eikons",
+   "set_code": "FIN",
+   "collector_number": "180",
+   "rarity": null,
+   "finish": "nonfoil",
+   "usd": 0.22,
+   "image_uri": "https://cards.scryfall.io/normal/front/7/5/75c18134-f517-4a68-8640-0426b3cd4f6c.jpg?1783906590",
+   "scryfall_url": "https://scryfall.com/card/fin/180",
+   "manapool_line": "1 Clash of the Eikons (FIN) 180",
+   "tcgplayer_line": "1 Clash of the Eikons [FIN] 180"
+  },
+  {
+   "key": "sid|aa4f6703-21f8-4c29-ad5a-5afb54188ade",
+   "family": "fin",
+   "pools": [
+    "functional"
+   ],
+   "name": "Summon: Anima",
+   "set_code": "FIN",
+   "collector_number": "120",
+   "rarity": null,
+   "finish": "nonfoil",
+   "usd": 0.21,
+   "image_uri": "https://cards.scryfall.io/normal/front/a/a/aa4f6703-21f8-4c29-ad5a-5afb54188ade.jpg?1783906610",
+   "scryfall_url": "https://scryfall.com/card/fin/120",
+   "manapool_line": "1 Summon: Anima (FIN) 120",
+   "tcgplayer_line": "1 Summon: Anima [FIN] 120"
+  },
+  {
+   "key": "sid|4c617bcd-05f8-40c2-bb38-489bc863ce6b",
+   "family": "fin",
+   "pools": [
+    "functional"
+   ],
+   "name": "Prompto Argentum",
+   "set_code": "FIN",
+   "collector_number": "148",
+   "rarity": null,
+   "finish": "nonfoil",
+   "usd": 0.2,
+   "image_uri": "https://cards.scryfall.io/normal/front/4/c/4c617bcd-05f8-40c2-bb38-489bc863ce6b.jpg?1783906601",
+   "scryfall_url": "https://scryfall.com/card/fin/148",
+   "manapool_line": "1 Prompto Argentum (FIN) 148",
+   "tcgplayer_line": "1 Prompto Argentum [FIN] 148"
+  },
+  {
+   "key": "sid|32eb192b-de6b-4814-8077-628d343d014e",
+   "family": "fin",
+   "pools": [
+    "functional"
+   ],
+   "name": "Summon: Fat Chocobo",
+   "set_code": "FIN",
+   "collector_number": "202",
+   "rarity": null,
+   "finish": "nonfoil",
+   "usd": 0.2,
+   "image_uri": "https://cards.scryfall.io/normal/front/3/2/32eb192b-de6b-4814-8077-628d343d014e.jpg?1784182967",
+   "scryfall_url": "https://scryfall.com/card/fin/202",
+   "manapool_line": "1 Summon: Fat Chocobo (FIN) 202",
+   "tcgplayer_line": "1 Summon: Fat Chocobo [FIN] 202"
+  }
+ ],
+ "skipped": []
+}

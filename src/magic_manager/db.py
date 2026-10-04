@@ -930,6 +930,17 @@ CREATE INDEX IF NOT EXISTS ingest_events_at_idx     ON ingest_events (at);
 CREATE INDEX IF NOT EXISTS ingest_events_sha_idx    ON ingest_events (source_sha256);
 """
 
+# V27 — per-printing release date. Scryfall's card payload carries
+# ``released_at`` (a printing's own date — promos can differ from their set), and
+# chronology is needed offline to pick a card's "chronologically-first standard
+# printing" (sets.standard_printing_by_oracle). Populated by the projection on
+# every sync; pre-V27 rows are NULL until re-synced or filled from set-level dates
+# via sets.backfill_released_at (one cached /sets call). Re-derivable column.
+SCHEMA_V27 = """
+ALTER TABLE cards ADD COLUMN released_at TEXT;
+CREATE INDEX IF NOT EXISTS cards_oracle_released_idx ON cards (oracle_id, released_at);
+"""
+
 
 # ---------- migration-authoring convention ----------
 #
@@ -1010,6 +1021,7 @@ MIGRATIONS: list[str] = [
     SCHEMA_V24,
     SCHEMA_V25,
     SCHEMA_V26,
+    SCHEMA_V27,
 ]
 CURRENT_VERSION = len(MIGRATIONS)
 
@@ -1591,7 +1603,7 @@ def upsert_card(conn: sqlite3.Connection, card: dict,
             frame_effects, finishes, oracle_text,
             flavor_name, promo_types, border_color, full_art,
             security_stamp, is_reskin,
-            legalities, keywords, game_changer
+            legalities, keywords, game_changer, released_at
         ) VALUES (
             :scryfall_id, :oracle_id, :name, :set_code, :collector_number,
             :rarity, :mana_cost, :cmc, :type_line, :colors, :color_identity,
@@ -1600,7 +1612,7 @@ def upsert_card(conn: sqlite3.Connection, card: dict,
             :frame_effects, :finishes, :oracle_text,
             :flavor_name, :promo_types, :border_color, :full_art,
             :security_stamp, :is_reskin,
-            :legalities, :keywords, :game_changer
+            :legalities, :keywords, :game_changer, :released_at
         )
         ON CONFLICT(scryfall_id) DO UPDATE SET
             oracle_id          = excluded.oracle_id,
@@ -1631,7 +1643,8 @@ def upsert_card(conn: sqlite3.Connection, card: dict,
             is_reskin          = excluded.is_reskin,
             legalities         = excluded.legalities,
             keywords           = excluded.keywords,
-            game_changer       = excluded.game_changer
+            game_changer       = excluded.game_changer,
+            released_at        = COALESCE(excluded.released_at, cards.released_at)
         """,
         _card_row(card, priced_at=priced_at),
     )
@@ -1727,6 +1740,7 @@ def _card_row(c: dict, *, priced_at: str | None = None) -> dict:
         "legalities":       json.dumps(f("legalities") or {}),
         "keywords":         json.dumps(f("keywords") or []),
         "game_changer":     1 if f("game_changer") else 0,
+        "released_at":      f("released_at"),
     }
 
 

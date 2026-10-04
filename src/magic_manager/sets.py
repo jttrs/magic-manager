@@ -1472,6 +1472,117 @@ def lowest_price_by_oracle(oracle_ids: Iterable[str], *, conn=None) -> dict[str,
         return _q(c)
 
 
+_STANDARD_BORDERS = {"black", "white"}
+
+
+def _standard_printing_rank(row) -> tuple:
+    """Sort key for "the chronologically-first STANDARD printing" of a card.
+
+    Earlier tiers dominate: physical before digital-only; plain frame before any
+    treatment (``treatments.compute_treatment(..., "nonfoil") == ""`` is the
+    canonical "is standard" predicate, plus a non-black/white border — borderless,
+    gold, silver — which that predicate doesn't read); a nonfoil-available
+    printing before foil-only; non-reskin before reskin (UB renames); non-promo
+    before promo; then oldest ``released_at`` (unknown dates last), then CN."""
+    from . import selectors, treatments  # local: avoid import cycles
+
+    finishes = util.decode_json_list(row["finishes"])
+    border = (row["border_color"] or "black").lower()
+    return (
+        1 if selectors._is_digital_only(dict(row)) else 0,
+        1 if (treatments.compute_treatment(row, finish="nonfoil")
+              or border not in _STANDARD_BORDERS) else 0,
+        0 if "nonfoil" in finishes else 1,
+        1 if row["is_reskin"] else 0,
+        1 if row["is_promo"] else 0,
+        row["released_at"] is None,
+        row["released_at"] or "",
+        util.cn_sort_key(row["collector_number"]),
+    )
+
+
+def standard_printing_by_oracle(oracle_ids: Iterable[str], *, conn=None) -> dict[str, dict]:
+    """The chronologically-first STANDARD local printing of each oracle card.
+
+    The display-printing sibling of :func:`lowest_price_by_oracle`: oracle-grain
+    views that show card art (the EDHREC commander compare) should not surface a
+    random showcase/borderless/foil-only printing just because it is cheapest.
+    Ranking is :func:`_standard_printing_rank` — falls back to a treated printing
+    only when no standard one exists locally. Returns ``{oracle_id: {scryfall_id,
+    image_uri, set_code, collector_number, released_at, scryfall_uri}}`` for
+    every oracle present in ``cards`` (absent ids omitted). Prices are NOT
+    included — the displayed floor price stays :func:`lowest_price_by_oracle`'s
+    cheapest-across-printings, independent of which printing's art is shown.
+    """
+    ids = list(dict.fromkeys(o for o in oracle_ids if o))
+    if not ids:
+        return {}
+
+    def _q(c):
+        best: dict[str, tuple] = {}
+        for i in range(0, len(ids), 500):
+            chunk = ids[i:i + 500]
+            placeholders = ",".join("?" for _ in chunk)
+            for r in c.execute(
+                f"""
+                SELECT oracle_id, scryfall_id, image_uri, scryfall_uri, set_code,
+                       collector_number, released_at, finishes, border_color,
+                       frame_effects, promo_types, full_art, security_stamp,
+                       is_promo, is_reskin
+                FROM cards
+                WHERE oracle_id IN ({placeholders}) AND is_token = 0
+                """,
+                chunk,
+            ):
+                key = _standard_printing_rank(r)
+                cur = best.get(r["oracle_id"])
+                if cur is None or key < cur[0]:
+                    best[r["oracle_id"]] = (key, r)
+        return {
+            oid: {
+                "scryfall_id": r["scryfall_id"],
+                "image_uri": r["image_uri"],
+                "scryfall_uri": r["scryfall_uri"],
+                "set_code": r["set_code"],
+                "collector_number": r["collector_number"],
+                "released_at": r["released_at"],
+            }
+            for oid, (_, r) in best.items()
+        }
+
+    if conn is not None:
+        return _q(conn)
+    with db.connect() as c:
+        return _q(c)
+
+
+def backfill_released_at(*, conn=None) -> int:
+    """Fill NULL ``cards.released_at`` from SET-level release dates.
+
+    Rows synced since V27 carry their own per-printing date; older rows are NULL
+    until re-synced. One cached ``scryfall.all_sets()`` call supplies each set's
+    ``released_at`` as a close proxy (a promo may differ from its set by days),
+    so chronology works offline immediately. Returns rows updated. Never
+    overwrites a per-printing date."""
+    dates = {
+        (s.get("code") or "").lower(): s.get("released_at")
+        for s in scryfall.all_sets()
+        if s.get("code") and s.get("released_at")
+    }
+
+    def _do(c) -> int:
+        n = 0
+        for code, date in dates.items():
+            n += c.execute(
+                "UPDATE cards SET released_at = ? WHERE set_code = ? AND released_at IS NULL",
+                (date, code),
+            ).rowcount
+        return n
+
+    with db.transaction(conn) as c:
+        return _do(c)
+
+
 def _rollup_deck_prices(
     deck_data: dict,
 ) -> tuple[int, float | None, str | None, float | None, set[str]]:

@@ -1,0 +1,74 @@
+import { ToggleGroup } from 'radix-ui';
+import type { ReactNode } from 'react';
+
+export function SideSection({ title, children, id }: { title: string; children: ReactNode; id?: string }) {
+  return (
+    <section aria-labelledby={id} className="flex flex-col gap-2">
+      <h2 id={id} className="text-sm voice-condensed uppercase tracking-[0.06em] text-on-chrome-muted">{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+type Opt<T extends string> = { value: T; label: string };
+
+/** Single-choice segmented control (sort, density, chase mode). */
+export function Segmented<T extends string>({ value, options, onChange, label }: { value: T; options: Opt<T>[]; onChange: (v: T) => void; label: string }) {
+  return (
+    <ToggleGroup.Root
+      type="single"
+      value={value}
+      onValueChange={(v) => v && onChange(v as T)}
+      aria-label={label}
+      className="grid min-w-0 auto-cols-fr grid-flow-col rounded-sm border border-chrome-line p-0.5"
+    >
+      {options.map((o) => (
+        <ToggleGroup.Item
+          key={o.value}
+          value={o.value}
+          className="min-h-8 min-w-0 truncate px-1.5 text-sm voice-semi text-on-chrome-muted rounded-xs cursor-pointer transition-colors ease-guide hover:text-on-chrome data-[state=on]:bg-chrome-raised data-[state=on]:text-on-chrome"
+        >
+          {o.label}
+        </ToggleGroup.Item>
+      ))}
+    </ToggleGroup.Root>
+  );
+}
+
+/** Multi-select chips; "on" chips carry the highlighter. */
+export function ChipToggles<T extends string>({ value, options, onChange, label }: { value: T[]; options: (Opt<T> & { count?: number })[]; onChange: (v: T[]) => void; label: string }) {
+  return (
+    <ToggleGroup.Root type="multiple" value={value} onValueChange={(v) => onChange(v as T[])} aria-label={label} className="flex flex-wrap gap-1.5">
+      {options.map((o) => (
+        <ToggleGroup.Item
+          key={o.value}
+          value={o.value}
+          className="inline-flex items-center gap-1.5 min-h-7 px-2.5 rounded-pill border border-chrome-line text-xs voice-semi text-on-chrome-muted cursor-pointer
+                     transition-[color,background-color,border-color] ease-guide hover:text-on-chrome hover:border-on-chrome-muted
+                     data-[state=on]:bg-accent data-[state=on]:border-accent data-[state=on]:text-on-accent"
+        >
+          {o.label}
+          {o.count != null && <span className="tabular opacity-75">{o.count}</span>}
+        </ToggleGroup.Item>
+      ))}
+    </ToggleGroup.Root>
+  );
+}
+
+export function TextField({ label, value, onChange, placeholder, name }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; name: string }) {
+  return (
+    <label className="flex flex-col gap-1.5 text-sm voice-semi text-on-chrome-muted">
+      {label}
+      <input
+        name={name}
+        type="search"
+        autoComplete="off"
+        spellCheck={false}
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+        className="min-h-9 rounded-sm border border-chrome-line bg-chrome-raised px-2.5 text-md text-on-chrome placeholder:text-on-chrome-muted focus-visible:border-accent"
+      />
+    </label>
+  );
+}
