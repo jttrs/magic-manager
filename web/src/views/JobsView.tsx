@@ -1,19 +1,15 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useState, type FormEvent } from 'react';
 import { jobsQuery } from '../app/queries';
+import { useJob } from '../app/useJob';
 import { ViewLayout } from '../components/AppShell';
 import { Button } from '../components/Button';
 import { SideSection, TextField } from '../components/Sidebar';
 import { EmptyNote, GuideSheet } from '../components/States';
-import { submitJob } from '../core/api';
 import { fmtInt } from '../core/format';
-import { watchJob, type JobEvent } from '../core/jobs';
-
-type Live = { status: string; done: number; total: number | null; log: { seq: number; msg: string; level: string }[]; summary?: string; error?: string };
 
 /** The job-runner chassis: configure → enqueue → stream progress (SSE) → result. */
 export function JobsView() {
-  const qc = useQueryClient();
   const jobs = useQuery(jobsQuery());
   const [families, setFamilies] = useState('');
   const [cardType, setCardType] = useState('legendary creature');
@@ -21,31 +17,7 @@ export function JobsView() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
   const [tagError, setTagError] = useState('');
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [live, setLive] = useState<Live | null>(null);
-  const stop = useRef<() => void>(() => {});
-
-  useEffect(() => {
-    if (!activeId) return;
-    setLive({ status: 'queued', done: 0, total: null, log: [] });
-    stop.current = watchJob(activeId, (e: JobEvent) => {
-      setLive((l) => {
-        const cur = l ?? { status: 'queued', done: 0, total: null, log: [] };
-        switch (e.type) {
-          case 'status':
-            if (e.data.status === 'succeeded' || e.data.status === 'failed') qc.invalidateQueries({ queryKey: ['jobs'] });
-            return { ...cur, status: e.data.status };
-          case 'progress':
-            return { ...cur, done: e.data.done, total: e.data.total, log: [...cur.log.slice(-199), { seq: (cur.log.at(-1)?.seq ?? 0) + 1, msg: e.data.message, level: e.data.level }] };
-          case 'result':
-            return { ...cur, summary: e.data.summary };
-          case 'error':
-            return { ...cur, error: e.data.error };
-        }
-      });
-    });
-    return () => stop.current();
-  }, [activeId, qc]);
+  const { live, start, follow } = useJob();
 
   async function onSubmit(ev: FormEvent) {
     ev.preventDefault();
@@ -56,37 +28,17 @@ export function JobsView() {
       return;
     }
     setSubmitting(true);
-    try {
-      const r = await submitJob({ path: { name: 'edhrec.sync_bulk' }, body: { families: fam, card_type: cardType || null, resume } });
-      if (r.error || !r.data) {
-        setFormError('The server rejected the job. Check the family codes and try again.');
-        return;
-      }
-      setActiveId(r.data.id);
-      qc.invalidateQueries({ queryKey: ['jobs'] });
-    } catch {
-      setFormError('Couldn’t reach the server. Is `uv run mm serve` running?');
-    } finally {
-      setSubmitting(false);
-    }
+    const err = await start('edhrec.sync_bulk', { families: fam, card_type: cardType || null, resume });
+    setSubmitting(false);
+    if (err) setFormError(err === 'The server rejected the job.' ? 'The server rejected the job. Check the family codes and try again.' : err);
   }
 
   async function onSyncTags() {
     setTagError('');
     setSubmitting(true);
-    try {
-      const r = await submitJob({ path: { name: 'scryfall.sync_tags' }, body: { refresh: false } });
-      if (r.error || !r.data) {
-        setTagError('The server rejected the job.');
-        return;
-      }
-      setActiveId(r.data.id);
-      qc.invalidateQueries({ queryKey: ['jobs'] });
-    } catch {
-      setTagError('Couldn’t reach the server. Is `uv run mm serve` running?');
-    } finally {
-      setSubmitting(false);
-    }
+    const err = await start('scryfall.sync_tags', { refresh: false });
+    setSubmitting(false);
+    if (err) setTagError(err);
   }
 
   const pct = live?.total ? Math.round((live.done / live.total) * 100) : null;
@@ -149,7 +101,7 @@ export function JobsView() {
               <ul className="mt-2">
                 {jobs.data.map((j) => (
                   <li key={j.id} className="ruled">
-                    <button type="button" onClick={() => setActiveId(j.id)} className="flex w-full cursor-pointer flex-col gap-0.5 py-2 text-left hover:bg-paper-sunk">
+                    <button type="button" onClick={() => follow(j.id)} className="flex w-full cursor-pointer flex-col gap-0.5 py-2 text-left hover:bg-paper-sunk">
                       <span className="flex items-baseline gap-2 text-md">
                         <span className="voice-semi font-medium">{j.title}</span>
                         <span className="ml-auto text-xs capitalize text-ink-muted">{j.status}</span>

@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, ServerSentEventsResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { CollectionBuyListData, CollectionBuyListErrors, CollectionBuyListResponses, CollectionData, CollectionErrors, CollectionFamiliesData, CollectionFamiliesResponses, CollectionResponses, CommandersData, CommandersErrors, CommandersResponses, CompareData, CompareErrors, CompareResponses, GetJobData, GetJobErrors, GetJobResponses, JobEventsData, JobEventsErrors, JobEventsResponses, JobSpecsData, JobSpecsResponses, ListJobsData, ListJobsResponses, SubmitJobData, SubmitJobErrors, SubmitJobResponses } from './types.gen';
+import type { CollectionBuyListData, CollectionBuyListErrors, CollectionBuyListResponses, CollectionData, CollectionErrors, CollectionFamiliesData, CollectionFamiliesResponses, CollectionResponses, CommandersData, CommandersErrors, CommandersResponses, CompareData, CompareErrors, CompareResponses, GetJobData, GetJobErrors, GetJobResponses, IngestCommitData, IngestCommitErrors, IngestCommitResponses, IngestPreconsData, IngestPreconsErrors, IngestPreconsResponses, IngestResolveData, IngestResolveErrors, IngestResolveResponses, IngestSearchData, IngestSearchErrors, IngestSearchResponses, JobEventsData, JobEventsErrors, JobEventsResponses, JobSpecsData, JobSpecsResponses, ListJobsData, ListJobsResponses, SubmitJobData, SubmitJobErrors, SubmitJobResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -81,3 +81,37 @@ export const collectionBuyList = <ThrowOnError extends boolean = false>(options:
         ...options.headers
     }
 });
+
+/**
+ * Ingest Search
+ */
+export const ingestSearch = <ThrowOnError extends boolean = false>(options: Options<IngestSearchData, ThrowOnError>): RequestResult<IngestSearchResponses, IngestSearchErrors, ThrowOnError> => (options.client ?? client).get<IngestSearchResponses, IngestSearchErrors, ThrowOnError>({ url: '/api/ingest/search', ...options });
+
+/**
+ * Ingest Resolve
+ */
+export const ingestResolve = <ThrowOnError extends boolean = false>(options: Options<IngestResolveData, ThrowOnError>): RequestResult<IngestResolveResponses, IngestResolveErrors, ThrowOnError> => (options.client ?? client).post<IngestResolveResponses, IngestResolveErrors, ThrowOnError>({
+    url: '/api/ingest/resolve',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Ingest Commit
+ */
+export const ingestCommit = <ThrowOnError extends boolean = false>(options: Options<IngestCommitData, ThrowOnError>): RequestResult<IngestCommitResponses, IngestCommitErrors, ThrowOnError> => (options.client ?? client).post<IngestCommitResponses, IngestCommitErrors, ThrowOnError>({
+    url: '/api/ingest/commit',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Ingest Precons
+ */
+export const ingestPrecons = <ThrowOnError extends boolean = false>(options?: Options<IngestPreconsData, ThrowOnError>): RequestResult<IngestPreconsResponses, IngestPreconsErrors, ThrowOnError> => (options?.client ?? client).get<IngestPreconsResponses, IngestPreconsErrors, ThrowOnError>({ url: '/api/ingest/precons', ...options });

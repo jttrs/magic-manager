@@ -22,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
 from .. import api, edhrec as edhrec_engine, scryfall
-from ..api import collection as collection_api, edhrec as edhrec_api, jobs as jobs_api
+from ..api import collection as collection_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api
 from .runtime import TERMINAL, JobManager
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -147,6 +147,27 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     @app.post("/api/collection/buy-list", response_model=collection_api.BuyListOut, tags=["collection"])
     def collection_buy_list(body: collection_api.BuyListIn):
         return collection_api.buy_list(body)
+
+    # ---------- add cards (ingest) ----------
+
+    @app.get("/api/ingest/search", response_model=ingest_api.SearchOut, tags=["ingest"])
+    def ingest_search(q: Annotated[str, Query(min_length=2, max_length=120)], limit: Annotated[int, Query(ge=1, le=200)] = 60):
+        return ingest_api.search(q, limit)
+
+    @app.post("/api/ingest/resolve", response_model=ingest_api.ResolveOut, tags=["ingest"])
+    def ingest_resolve(body: ingest_api.ResolveIn):
+        return ingest_api.resolve(body)
+
+    @app.post("/api/ingest/commit", response_model=ingest_api.CommitOut, tags=["ingest"])
+    def ingest_commit(body: ingest_api.CommitIn):
+        try:
+            return ingest_api.commit(body)
+        except LookupError as e:
+            raise HTTPException(status_code=422, detail=str(e)) from e
+
+    @app.get("/api/ingest/precons", response_model=list[ingest_api.PreconOptionOut], tags=["ingest"])
+    def ingest_precons(q: str = "", limit: Annotated[int, Query(ge=1, le=200)] = 50):
+        return ingest_api.precons(q, limit)
 
     # ---------- SPA ----------
 

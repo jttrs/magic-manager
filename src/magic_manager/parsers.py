@@ -43,8 +43,11 @@ CARD_RE = re.compile(
     (?P<qty>\d+)x?
     \s+
     (?P<name>.+?)
-    (?:\s+\((?P<set>[A-Za-z0-9]{2,6})\)\s+(?P<cn>[^\s★*]+))?
-    (?:\s*(?P<foil>★|\*F\*))?
+    (?:\s+(?:
+        \((?P<set>[A-Za-z0-9]{2,6})\)\s+(?P<cn>[^\s★*]+)
+      | \[(?P<tset>[A-Za-z0-9]{2,6})\](?:\s+(?P<tcn>[^\s★*]+))?   # TCGplayer Mass Entry
+    ))?
+    (?:\s*(?P<foil>★|\*F\*|\*E\*))?
     \s*$
     """,
     re.VERBOSE,
@@ -72,6 +75,7 @@ class Entry:
     foil: bool
     section: str = "mainboard"
     card: dict | None = None  # populated by resolve()
+    line_no: int = 0  # 1-based line in the parsed text (0 = unknown)
 
 
 @dataclass
@@ -97,7 +101,7 @@ def parse_text(text: str) -> ParseResult:
     in Scryfall data."""
     res = ParseResult()
     current = "mainboard"
-    for raw_line in text.splitlines():
+    for line_no, raw_line in enumerate(text.splitlines(), start=1):
         line = raw_line.rstrip()
         if not line.strip():
             continue
@@ -115,12 +119,30 @@ def parse_text(text: str) -> ParseResult:
             qty=int(m.group("qty")),
             raw=line,
             name=m.group("name").strip(),
-            set=m.group("set").lower() if m.group("set") else None,
-            collector_number=m.group("cn") if m.group("cn") else None,
+            set=(m.group("set") or m.group("tset") or "").lower() or None,
+            collector_number=m.group("cn") or m.group("tcn") or None,
             foil=bool(m.group("foil")),
             section=current,
+            line_no=line_no,
         ))
     return res
+
+
+def detect_paste_format(text: str) -> str:
+    """``'moxfield'`` (``(SET)``), ``'tcgplayer'`` (``[SET]``) or ``'names'``,
+    decided by the first parsable card line."""
+    for line in text.splitlines():
+        if not line.strip() or IGNORE_RE.match(line) or SECTION_RE.match(line):
+            continue
+        m = CARD_RE.match(line.rstrip())
+        if not m:
+            continue
+        if m.group("set"):
+            return "moxfield"
+        if m.group("tset"):
+            return "tcgplayer"
+        return "names"
+    return "names"
 
 
 # ---------- XLSX parsing (master-list round-trip) ----------
@@ -632,21 +654,7 @@ def resolve(result: ParseResult) -> ParseResult:
             })
             continue
         if entry.set and entry.collector_number:
-            typed = entry.name.lower()
-            resolved_name = (entry.card.get("name") or "").lower()
-            flavor_name = (entry.card.get("flavor_name") or "").lower()
-            # Accepted forms (any of these is a non-mismatch):
-            # - oracle name ("Counterspell")
-            # - front face of a DFC ("Pegasus Guardian")
-            # - flavor name alone ("Wild Rose Rebellion")
-            # - the merged "<flavor> / <oracle>" form our XLSX renders
-            front = resolved_name.split(" // ")[0]
-            accepted = {resolved_name, front}
-            if flavor_name:
-                accepted.add(flavor_name)
-                accepted.add(f"{flavor_name} / {resolved_name}")
-                accepted.add(f"{flavor_name} / {front}")
-            if typed and typed not in accepted:
+            if not name_matches_card(entry.name, entry.card):
                 result.warnings.append(
                     f"name/printing mismatch [{entry.section}]: {entry.raw!r} "
                     f"resolved to {entry.card.get('name')!r} via "
@@ -657,6 +665,22 @@ def resolve(result: ParseResult) -> ParseResult:
     # Attach raw not_found for completeness.
     result.not_found.extend(not_found)
     return result
+
+
+def name_matches_card(typed_name: str, card: dict) -> bool:
+    """True when ``typed_name`` is an accepted name for ``card`` (empty counts as
+    a match). Accepted forms: oracle name, DFC front face, flavor name alone, or
+    the merged ``"<flavor> / <oracle>"`` form the XLSX renders."""
+    typed = (typed_name or "").lower()
+    resolved_name = (card.get("name") or "").lower()
+    flavor_name = (card.get("flavor_name") or "").lower()
+    front = resolved_name.split(" // ")[0]
+    accepted = {resolved_name, front}
+    if flavor_name:
+        accepted.add(flavor_name)
+        accepted.add(f"{flavor_name} / {resolved_name}")
+        accepted.add(f"{flavor_name} / {front}")
+    return not typed or typed in accepted
 
 
 def _identifier_for(entry: Entry) -> dict:
