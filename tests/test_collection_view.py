@@ -9,8 +9,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 SETS = [
-    {"code": "tst", "parent_set_code": None, "name": "Test Set", "set_type": "expansion"},
-    {"code": "atst", "parent_set_code": "tst", "name": "Test Art Series", "set_type": "memorabilia"},
+    {"code": "tst", "parent_set_code": None, "name": "Test Set", "set_type": "expansion", "released_at": "2025-02-01"},
+    {"code": "atst", "parent_set_code": "tst", "name": "Test Art Series", "set_type": "memorabilia", "released_at": "2025-01-01"},
     {"code": "ttst", "parent_set_code": "tst", "name": "Test Tokens", "set_type": "token"},
 ]
 
@@ -74,6 +74,13 @@ def test_owned_counts_flags_and_summary(tmp_db, family):
     assert (s.printings, s.owned_printings, s.owned_copies, s.missing_printings) == (4, 1, 4, 3)
     assert s.owned_usd == pytest.approx(3 * 0.10 + 0.50)
     assert s.missing_usd == pytest.approx(1.00 + 9.00 + 2.00)  # cheapest finish of each missing printing
+    assert s.sets == [{"code": "tst", "name": "Test Set"}]  # only sets with printings in the universe
+
+
+def test_member_sets_list_oldest_first(tmp_db, family):
+    from magic_manager import collection_view as cv
+    _own("art")  # owned art card pulls its memorabilia set into the universe
+    assert [x["code"] for x in cv.family_cards("tst").summary.sets] == ["atst", "tst"]
 
 
 def test_etched_is_a_foil_finish(tmp_db, family):

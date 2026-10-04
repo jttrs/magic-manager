@@ -1176,6 +1176,14 @@
           "missing_usd": {
             "type": "number",
             "title": "Missing Usd"
+          },
+          "sets": {
+            "items": {
+              "$ref": "#/components/schemas/SetRefOut"
+            },
+            "type": "array",
+            "title": "Sets",
+            "description": "Member sets with printings, oldest first."
           }
         },
         "type": "object",
@@ -1346,6 +1354,24 @@
           "input_schema"
         ],
         "title": "JobSpecOut"
+      },
+      "SetRefOut": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name"
+        ],
+        "title": "SetRefOut"
       },
       "ValidationError": {
         "properties": {

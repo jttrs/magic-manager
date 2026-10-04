@@ -21,6 +21,11 @@ class FamilyOption(BaseModel):
     name: str
 
 
+class SetRefOut(BaseModel):
+    code: str
+    name: str
+
+
 class FamilySummaryOut(BaseModel):
     code: str
     name: str
@@ -30,6 +35,7 @@ class FamilySummaryOut(BaseModel):
     owned_usd: float
     missing_printings: int
     missing_usd: float
+    sets: list[SetRefOut] = Field(default_factory=list, description="Member sets with printings, oldest first.")
 
 
 class CollectionCardOut(BaseModel):

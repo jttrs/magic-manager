@@ -38,7 +38,7 @@ export function CompareView() {
     const shown = sortBy(data.cards.filter((c) => matches(c, search.q, search.tags)), rules, COMPARE_SORT);
     const buckets = bucketCards(shown);
     const sections = (b: Bucket) =>
-      groupCards(buckets[b].map(fromCompare), TYPE_GROUPS).map((g) => ({ ...g, level: 2 as const }));
+      groupCards(buckets[b].map(fromCompare), TYPE_GROUPS).map((g) => ({ ...g, level: 2 as const, noun: 'card type' }));
     return {
       buckets,
       sections: { a_only: sections('a_only'), both: sections('both'), b_only: sections('b_only') },

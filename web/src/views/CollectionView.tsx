@@ -137,13 +137,17 @@ export function CollectionView() {
     body = <VirtualGuide sections={view.sections} density={search.density} selected={selected} onToggle={toggle} label="Collection cards" minCardWidth={128} />;
   }
 
-  const title = q.data?.families.length ? q.data.families.map((f) => f.name).join(' · ') : 'Collection';
   const s = view?.stats;
+  const famN = q.data?.families.length ?? 0;
   return (
     <ViewLayout label="Collection controls" summary={controlsSummary(search, rules, fams.data)} sidebar={sidebar} startOpen={!search.families.length}>
       <GuideSheet
-        title={title}
-        summary={s ? `${fmtInt(s.owned)} of ${fmtInt(s.printings)} printings owned · ${fmtInt(s.copies)} copies · ${fmtInt(s.missing)} missing (${fmtUsd(s.missingUsd)})${q.data?.skipped?.length ? ` · skipped ${q.data.skipped.join(', ')}` : ''}` : undefined}
+        title="Collection"
+        summary={
+          s
+            ? `${famN} set ${famN === 1 ? 'family' : 'families'} · showing ${fmtInt(s.printings)} printings: ${fmtInt(s.owned)} owned (${fmtInt(s.copies)} copies), ${fmtInt(s.missing)} missing · ${fmtUsd(s.missingUsd)} to complete${q.data?.skipped?.length ? ` · skipped ${q.data.skipped.join(', ')}` : ''}`
+            : undefined
+        }
       >
         {body}
       </GuideSheet>
@@ -160,25 +164,38 @@ function typesSummary(exclude: readonly string[]): string {
 
 type Built = { cards: GuideCard[]; shown: CollectionCardOut[]; sections: GuideSection[]; byId: Map<string, CollectionCardOut>; stats: ReturnType<typeof collectionStats> };
 
-/** Filter → map → sort → section (family running head, then the lead sort key's groups). */
+/** Filter → map → sort → section (set-family head, then the lead sort key's groups). */
 function buildView(data: CollectionOut, search: CollectionSearch, rules: SortRule<CardSortKey>[]): Built {
   const shown = filterCollection(data.cards, search);
   const cards = sortBy(shown.map((c) => fromCollection(c, isMissing(c, search.exclude))), rules, CARD_SORT);
   const section = leadSection(rules, CARD_SORT);
+  const bySet = rules[0]?.key === 'set';
   const sections: GuideSection[] = [];
   for (const fam of data.families) {
     const famCards = cards.filter((c) => c.group === fam.code);
     if (!famCards.length) continue;
-    const st = collectionStats(shown.filter((c) => c.family === fam.code), search.exclude);
+    const setNames = new Map((fam.sets ?? []).map((x) => [x.code.toUpperCase(), x.name]));
     sections.push({
       key: `fam:${fam.code}`,
       label: fam.name,
       level: 1,
       items: [],
-      head: <FamilyHead name={fam.name} owned={fam.owned_printings} printings={fam.printings} copies={fam.owned_copies} value={fam.owned_usd} shownMissing={st.missing} shownMissingUsd={st.missingUsd} />,
+      noun: 'set family',
+      eyebrow: <FamilyEyebrow codes={(fam.sets ?? []).map((x) => x.code)} />,
+      detail: <OwnedMeter owned={fam.owned_printings} printings={fam.printings} />,
+      meta: `${fmtInt(fam.owned_printings)}/${fmtInt(fam.printings)} printings · ${fmtInt(fam.owned_copies)} copies · ${fmtUsd(fam.owned_usd)}`,
     });
     if (section) {
-      for (const g of groupCards(famCards.map((c) => ({ ...c, group: section(c) })))) sections.push({ ...g, key: `${fam.code}:${g.key}`, level: 2 });
+      for (const g of groupCards(famCards.map((c) => ({ ...c, group: section(c) })))) {
+        const setName = bySet ? setNames.get(g.label) : undefined;
+        sections.push({
+          ...g,
+          key: `${fam.code}:${g.key}`,
+          level: 2,
+          noun: bySet ? 'set' : 'group',
+          detail: setName ? <span className="truncate text-sm normal-case text-ink-muted">{setName}</span> : undefined,
+        });
+      }
     } else {
       sections.push({ key: `${fam.code}:all`, label: 'All printings', level: 2, items: famCards });
     }
@@ -186,21 +203,30 @@ function buildView(data: CollectionOut, search: CollectionSearch, rules: SortRul
   return { cards, shown, sections, byId: new Map(shown.map((c) => [c.scryfall_id, c])), stats: collectionStats(shown, search.exclude) };
 }
 
-function FamilyHead(p: { name: string; owned: number; printings: number; copies: number; value: number; shownMissing: number; shownMissingUsd: number }) {
-  const pct = p.printings ? Math.round((p.owned / p.printings) * 100) : 0;
+function FamilyEyebrow({ codes }: { codes: string[] }) {
+  const head = codes.slice(0, 8).map((c) => c.toUpperCase());
   return (
-    <h2 className="flex flex-wrap items-end gap-x-4 gap-y-1 border-b-2 border-rule-strong pb-1 pt-5 text-ink">
-      <span className="text-2xl voice-condensed font-bold uppercase leading-none">{p.name}</span>
-      <span className="flex items-center gap-2" aria-label={`${pct}% of printings owned`}>
-        <span className="relative h-1.5 w-24 overflow-hidden rounded-pill bg-rule">
-          <span className="absolute inset-y-0 left-0 bg-highlight-solid" style={{ width: `${pct}%` }} />
+    <span>
+      Set family
+      {head.length > 0 && (
+        <span className="ml-2 font-regular normal-case tracking-normal tabular">
+          {head.join(' · ')}
+          {codes.length > head.length && ` +${codes.length - head.length}`}
         </span>
-        <span className="text-sm tabular text-ink">{pct}%</span>
+      )}
+    </span>
+  );
+}
+
+function OwnedMeter({ owned, printings }: { owned: number; printings: number }) {
+  const pct = printings ? Math.round((owned / printings) * 100) : 0;
+  return (
+    <span className="flex items-center gap-2 pb-0.5" role="img" aria-label={`${pct}% of printings owned`}>
+      <span className="relative h-1.5 w-24 overflow-hidden rounded-pill bg-rule">
+        <span className="absolute inset-y-0 left-0 bg-highlight-solid" style={{ width: `${pct}%` }} />
       </span>
-      <span className="ml-auto text-sm tabular text-ink-muted">
-        {fmtInt(p.owned)}/{fmtInt(p.printings)} printings · {fmtInt(p.copies)} copies · {fmtUsd(p.value)} — {fmtInt(p.shownMissing)} missing shown · {fmtUsd(p.shownMissingUsd)}
-      </span>
-    </h2>
+      <span className="text-sm tabular text-ink">{pct}%</span>
+    </span>
   );
 }
 

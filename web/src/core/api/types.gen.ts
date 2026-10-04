@@ -392,6 +392,12 @@ export type FamilySummaryOut = {
      * Missing Usd
      */
     missing_usd: number;
+    /**
+     * Sets
+     *
+     * Member sets with printings, oldest first.
+     */
+    sets?: Array<SetRefOut>;
 };
 
 /**
@@ -490,6 +496,20 @@ export type JobSpecOut = {
     input_schema: {
         [key: string]: unknown;
     };
+};
+
+/**
+ * SetRefOut
+ */
+export type SetRefOut = {
+    /**
+     * Code
+     */
+    code: string;
+    /**
+     * Name
+     */
+    name: string;
 };
 
 /**

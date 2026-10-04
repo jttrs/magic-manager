@@ -37,7 +37,7 @@ test('families are a searchable checkbox list, never a chip wall', async ({ page
 test('every printing shows; owned counts and missing marks sit under the art', async ({ page }) => {
   await page.goto(COLLECTION_URL);
   await expect(page.getByRole('article')).toHaveCount(cards.length);
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('Bloomburrow');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Collection');
   const foil = cards.find((c) => c.owned.foil)!;
   const tile = page.getByRole('article').filter({ hasText: foil.name }).first();
   await expect(tile.getByLabel(/^Owned: /)).toContainText(`✦×${foil.owned.foil}`);
@@ -133,4 +133,24 @@ test('outline: h1 sheet, h2 family, h3 groups (no skipped levels)', async ({ pag
   await expect(page.getByRole('heading', { level: 2, name: /Bloomburrow/ })).toBeVisible();
   await expect(page.getByRole('heading', { level: 3 }).first()).toBeAttached();
   await expect(page.locator('h4')).toHaveCount(0);
+});
+
+test('family head names itself; sections collapse and jump', async ({ page }) => {
+  await page.goto(COLLECTION_URL + '&sort=rarity');
+  await expect(page.getByText('Set family', { exact: false }).first()).toBeVisible();
+  const fam = page.getByRole('heading', { level: 2 }).getByRole('button', { name: 'Bloomburrow' });
+  await fam.click();
+  await expect(fam).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByRole('article')).toHaveCount(0);
+  await expect(page.getByRole('heading', { level: 3 })).toHaveCount(0);
+  await fam.click();
+  const first = page.getByRole('heading', { level: 3 }).first().getByRole('button');
+  await expect(first).toHaveAttribute('aria-expanded', 'true');
+  const firstName = (await first.textContent())!;
+  await expect(page.getByRole('button', { name: 'Previous group' }).first()).toBeDisabled();
+  await page.getByRole('button', { name: 'Next group' }).first().click();
+  await expect(page.locator(':focus')).not.toHaveText(firstName);
+  await expect(page.locator(':focus')).toHaveAttribute('aria-expanded', 'true');
+  await page.locator(':focus').click();
+  await expect(page.locator(':focus')).toHaveAttribute('aria-expanded', 'false');
 });

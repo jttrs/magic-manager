@@ -76,6 +76,8 @@ class FamilySummary:
     owned_usd: float
     missing_printings: int
     missing_usd: float
+    # Member sets that contribute printings, oldest release first: [{code, name}].
+    sets: list[dict[str, str]] = field(default_factory=list)
 
 
 @dataclass
@@ -137,7 +139,8 @@ def family_cards(code: str) -> FamilyCollection:
     for (sid, fin), q in pledged.items():
         pledged_by.setdefault(sid, {})[fin] = q
     owned_ids = set(owned_by)
-    set_types = {s["code"].lower(): s.get("set_type") for s in scryfall.all_sets()}
+    all_sets = {s["code"].lower(): s for s in scryfall.all_sets()}
+    set_types = {code: s.get("set_type") for code, s in all_sets.items()}
     candidates: list[sel_mod.MaterializedRow] = []
     extra: dict[str, tuple[str | None, str | None]] = {}
     for r in rows:
@@ -194,6 +197,13 @@ def family_cards(code: str) -> FamilyCollection:
         owned_usd=round(sum((_unit_price(c, f) or 0.0) * q for c in owned_cards for f, q in c.owned.items()), 2),
         missing_printings=len(missing_cards),
         missing_usd=round(sum(_cheapest_finish_price(c) or 0.0 for c in missing_cards), 2),
+        sets=[
+            {"code": code, "name": (all_sets.get(code) or {}).get("name") or code.upper()}
+            for code in sorted(
+                {c.set_code for c in cards},
+                key=lambda code: ((all_sets.get(code) or {}).get("released_at") or "9999", code),
+            )
+        ],
     )
     return FamilyCollection(summary=summary, cards=cards)
 
