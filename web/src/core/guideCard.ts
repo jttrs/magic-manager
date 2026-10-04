@@ -1,8 +1,11 @@
 // The ONE card view-model every guide component renders. Each domain view maps
 // into it with a pure function, so card-diff and commander-compare share every
 // component (tile, row, grid, preview) and differ only in their mapper.
-import type { CardDiffTile, CompareCardOut } from './api';
+import type { CollectionCardOut, CompareCardOut } from './api';
 import { bucketInclusion } from './compare';
+import { typeGroup } from './cardFacts';
+
+export { TYPE_GROUPS } from './cardFacts';
 
 export type GuideCard = {
   key: string;
@@ -18,9 +21,18 @@ export type GuideCard = {
   pct: number | null;
   /** Two-sided inclusion (compare 'both' bucket). */
   bars: { a: number | null; b: number | null } | null;
-  /** Checklist stamps (card-diff pools: P / F / V). */
-  stamps: string[];
   group: string;
+  /** Sort/section facts shared by every view. */
+  cmc: number | null;
+  colors: string[];
+  typeGroup: string;
+  released: string | null;
+  /** Owned copies per finish (collection); null when ownership isn't shown. */
+  owned: Partial<Record<'nonfoil' | 'foil', number>> | null;
+  /** True when the printing is a gap under the active missing basis. */
+  missing: boolean;
+  /** Short facts printed in the guide line, never over the art (e.g. Chase, Borderless). */
+  tags: string[];
   lines: { plain: string; manapool: string; tcgplayer: string };
 };
 
@@ -28,24 +40,6 @@ const RARITY_LETTER: Record<string, string> = {
   common: 'C', uncommon: 'U', rare: 'R', mythic: 'M', special: 'S', bonus: 'B',
 };
 export const rarityLetter = (r: string | null): string => (r ? RARITY_LETTER[r] ?? r[0].toUpperCase() : '');
-
-/** Price-guide subhead for a card, from its type line (front face). */
-export const TYPE_GROUPS = [
-  'Creatures', 'Planeswalkers', 'Battles', 'Instants', 'Sorceries', 'Artifacts', 'Enchantments', 'Lands', 'Other',
-] as const;
-export function typeGroup(typeLine: string | null | undefined): string {
-  const t = (typeLine ?? '').split('//')[0];
-  const has = (w: string) => new RegExp(`\\b${w}\\b`).test(t);
-  if (has('Creature')) return 'Creatures';
-  if (has('Planeswalker')) return 'Planeswalkers';
-  if (has('Battle')) return 'Battles';
-  if (has('Instant')) return 'Instants';
-  if (has('Sorcery')) return 'Sorceries';
-  if (has('Artifact')) return 'Artifacts';
-  if (has('Enchantment')) return 'Enchantments';
-  if (has('Land')) return 'Lands';
-  return 'Other';
-}
 
 export function fromCompare(c: CompareCardOut): GuideCard {
   return {
@@ -60,34 +54,47 @@ export function fromCompare(c: CompareCardOut): GuideCard {
     price: c.lowest_usd,
     pct: bucketInclusion(c) >= 0 ? bucketInclusion(c) : null,
     bars: c.bucket === 'both' ? { a: c.a_pct, b: c.b_pct } : null,
-    stamps: [],
     group: typeGroup(c.type_line),
+    cmc: c.cmc,
+    colors: c.color_identity ?? [],
+    typeGroup: typeGroup(c.type_line),
+    released: null,
+    owned: null,
+    missing: false,
+    tags: [],
     lines: { plain: `1 ${c.name}`, manapool: `1 ${c.name}`, tcgplayer: `1 ${c.name}` },
   };
 }
 
-const POOL_STAMP: Record<string, string> = { printing: 'P', functional: 'F', 'variant-chase': 'V' };
+const TREATMENT_LABEL: Record<string, string> = {
+  b: 'Borderless', fa: 'Full art', shw: 'Showcase', ext: 'Ext. art', sm: 'Reskin', ff: 'Fancy foil',
+};
+export const treatmentLabels = (codes: string): string[] =>
+  codes ? codes.split('|').map((c) => TREATMENT_LABEL[c] ?? c) : [];
 
-export function fromCardDiff(t: CardDiffTile): GuideCard {
+/** Collection mapper. `missing` is decided by the caller's missing basis. */
+export function fromCollection(c: CollectionCardOut, missing: boolean): GuideCard {
   return {
-    key: `${t.family}|${t.key}`,
-    name: t.name,
-    image: t.image_uri,
-    href: t.scryfall_url,
-    setCode: t.set_code,
-    cn: t.collector_number,
-    rarity: t.rarity,
-    finish: t.finish,
-    price: t.usd,
+    key: c.scryfall_id,
+    name: c.name,
+    image: c.image_uri,
+    href: c.scryfall_url,
+    setCode: c.set_code.toUpperCase(),
+    cn: c.collector_number,
+    rarity: c.rarity,
+    finish: null,
+    price: c.price_usd ?? c.price_usd_foil,
     pct: null,
     bars: null,
-    stamps: t.pools.map((p) => POOL_STAMP[p] ?? p[0].toUpperCase()),
-    group: t.family,
-    lines: {
-      plain: `1 ${t.name}`,
-      manapool: t.manapool_line || `1 ${t.name}`,
-      tcgplayer: t.tcgplayer_line || `1 ${t.name}`,
-    },
+    group: c.family,
+    cmc: c.cmc,
+    colors: c.color_identity,
+    typeGroup: typeGroup(c.type_line),
+    released: c.released_at,
+    owned: c.owned as GuideCard['owned'],
+    missing,
+    tags: [...(c.is_chase ? ['Chase'] : []), ...treatmentLabels(c.treatment)],
+    lines: { plain: `1 ${c.name}`, manapool: '', tcgplayer: '' },
   };
 }
 

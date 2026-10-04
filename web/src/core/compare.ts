@@ -1,6 +1,8 @@
 // Pure view-model derivations for the commander compare view.
 import type { CompareCardOut } from './api';
-import type { Bucket, CompareSort } from './search';
+import { colorRank, TYPE_GROUPS, typeGroup } from './cardFacts';
+import type { Bucket } from './search';
+import type { SortPreset, SortRegistry } from './sort';
 
 export type CompareCard = CompareCardOut;
 
@@ -26,20 +28,29 @@ export function bucketInclusion(c: CompareCard): number {
   return Math.max(c.a_pct ?? -1, c.b_pct ?? -1);
 }
 
-const num = (v: number | null | undefined, missing = -Infinity) => (v == null ? missing : v);
+const maxOf = (a: number | null | undefined, b: number | null | undefined) =>
+  a == null && b == null ? null : Math.max(a ?? -Infinity, b ?? -Infinity);
 
-export function sortCards(cards: CompareCard[], sort: CompareSort): CompareCard[] {
-  const by: Record<CompareSort, (x: CompareCard, y: CompareCard) => number> = {
-    inclusion: (x, y) => bucketInclusion(y) - bucketInclusion(x),
-    delta: (x, y) => num(y.delta) - num(x.delta),
-    synergy: (x, y) =>
-      Math.max(num(y.synergy_a), num(y.synergy_b)) - Math.max(num(x.synergy_a), num(x.synergy_b)),
-    price: (x, y) => num(y.lowest_usd) - num(x.lowest_usd),
-    name: (x, y) => x.name.localeCompare(y.name),
-    mv: (x, y) => num(x.cmc, Infinity) - num(y.cmc, Infinity),
-  };
-  return [...cards].sort((x, y) => by[sort](x, y) || x.name.localeCompare(y.name));
-}
+export const COMPARE_SORT = {
+  inclusion: { label: 'Inclusion %', get: (c) => (bucketInclusion(c) >= 0 ? bucketInclusion(c) : null), defaultDir: 'desc' },
+  synergy: { label: 'Synergy', get: (c) => maxOf(c.synergy_a, c.synergy_b), defaultDir: 'desc' },
+  delta: { label: 'Inclusion gap', get: (c) => c.delta, defaultDir: 'desc' },
+  price: { label: 'Price', get: (c) => c.lowest_usd, defaultDir: 'desc' },
+  name: { label: 'Name', get: (c) => c.name, defaultDir: 'asc' },
+  mv: { label: 'Mana value', get: (c) => c.cmc, defaultDir: 'asc' },
+  color: { label: 'Color', get: (c) => colorRank(c.color_identity ?? []), defaultDir: 'asc' },
+  type: { label: 'Type', get: (c) => TYPE_GROUPS.indexOf(typeGroup(c.type_line) as (typeof TYPE_GROUPS)[number]), defaultDir: 'asc' },
+} satisfies SortRegistry<CompareCard>;
+
+export type CompareSortKey = keyof typeof COMPARE_SORT;
+
+export const COMPARE_SORT_PRESETS: SortPreset<CompareSortKey>[] = [
+  { label: 'Inclusion, high first', rules: [{ key: 'inclusion', dir: 'desc' }, { key: 'name', dir: 'asc' }] },
+  { label: 'Synergy, high first', rules: [{ key: 'synergy', dir: 'desc' }, { key: 'inclusion', dir: 'desc' }] },
+  { label: 'Biggest inclusion gap', rules: [{ key: 'delta', dir: 'desc' }, { key: 'inclusion', dir: 'desc' }] },
+  { label: 'Mana value › Inclusion', rules: [{ key: 'mv', dir: 'asc' }, { key: 'inclusion', dir: 'desc' }] },
+  { label: 'Price, low first', rules: [{ key: 'price', dir: 'asc' }, { key: 'inclusion', dir: 'desc' }] },
+];
 
 /** Tag → count across the given cards, most common first. */
 export function tagCounts(cards: CompareCard[]): Array<[string, number]> {

@@ -1,6 +1,6 @@
 import { createRootRoute, createRoute, createRouter, lazyRouteComponent, Outlet, redirect, stripSearchParams } from '@tanstack/react-router';
 import { AppShell } from '../components/AppShell';
-import { cardDiffSearch, compareSearch } from '../core/search';
+import { collectionSearch, compareSearch } from '../core/search';
 
 const rootRoute = createRootRoute({
   component: () => (
@@ -14,7 +14,7 @@ const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
   beforeLoad: () => {
-    throw redirect({ to: '/commanders' });
+    throw redirect({ to: '/collection' });
   },
 });
 
@@ -29,12 +29,22 @@ const compareRoute = createRoute({
   component: lazyRouteComponent(() => import('../views/CompareView'), 'CompareView'),
 });
 
-const cardDiffRoute = createRoute({
+const collectionRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/collection',
+  validateSearch: collectionSearch,
+  search: { middlewares: [stripSearchParams(collectionSearch.parse({}))] },
+  component: lazyRouteComponent(() => import('../views/CollectionView'), 'CollectionView'),
+});
+
+// The old missing-set view lived at /sets; it is now a filter of Collection.
+const legacySetsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/sets',
-  validateSearch: cardDiffSearch,
-  search: { middlewares: [stripSearchParams(cardDiffSearch.parse({}))] },
-  component: lazyRouteComponent(() => import('../views/CardDiffView'), 'CardDiffView'),
+  beforeLoad: ({ search }) => {
+    const families = (search as { families?: unknown }).families;
+    throw redirect({ to: '/collection', search: { families: Array.isArray(families) ? families.map(String) : [], show: ['missing'] } as never });
+  },
 });
 
 const jobsRoute = createRoute({
@@ -44,7 +54,7 @@ const jobsRoute = createRoute({
 });
 
 export const router = createRouter({
-  routeTree: rootRoute.addChildren([indexRoute, compareRoute, cardDiffRoute, jobsRoute]),
+  routeTree: rootRoute.addChildren([indexRoute, collectionRoute, legacySetsRoute, compareRoute, jobsRoute]),
   defaultPreload: 'intent',
 });
 

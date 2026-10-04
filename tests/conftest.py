@@ -216,3 +216,13 @@ def _make_precon_deck(name: str, deck_type: str, entries: list[dict]) -> dict:
 def make_precon_deck():
     """Factory fixture: build an MTGJSON-shaped deck dict for fake_mtgjson."""
     return _make_precon_deck
+
+
+@pytest.fixture(autouse=True)
+def _reset_all_sets_memo():
+    """`scryfall.all_sets()` memoizes in-process; never let one test's set list
+    leak into another."""
+    from magic_manager import scryfall
+    scryfall._all_sets_memo = None
+    yield
+    scryfall._all_sets_memo = None

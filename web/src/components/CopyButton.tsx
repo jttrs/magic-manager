@@ -2,10 +2,20 @@ import { useState } from 'react';
 import { Button } from './Button';
 
 /** Copies text to the clipboard and announces the result politely. */
-export function CopyButton({ label, getText, emphasis = 'quiet' }: { label: string; getText: () => string; emphasis?: 'primary' | 'quiet' }) {
+export function CopyButton({ label, getText, emphasis = 'quiet' }: { label: string; getText: () => string | Promise<string>; emphasis?: 'primary' | 'quiet' }) {
   const [status, setStatus] = useState('');
+  const [busy, setBusy] = useState(false);
   async function copy() {
-    const text = getText();
+    setBusy(true);
+    let text = '';
+    try {
+      text = await getText();
+    } catch {
+      setStatus('Couldn’t build the list. Check that `uv run mm serve` is running, then try again.');
+      return;
+    } finally {
+      setBusy(false);
+    }
     if (!text) {
       setStatus('Nothing to copy');
       return;
@@ -21,7 +31,7 @@ export function CopyButton({ label, getText, emphasis = 'quiet' }: { label: stri
   }
   return (
     <div className="flex flex-col gap-1">
-      <Button emphasis={emphasis} onClick={copy} className="w-full">{label}</Button>
+      <Button emphasis={emphasis} onClick={copy} disabled={busy} className="w-full">{busy ? 'Building list…' : label}</Button>
       <span aria-live="polite" className="min-h-4 text-xs text-on-chrome-muted">{status}</span>
     </div>
   );

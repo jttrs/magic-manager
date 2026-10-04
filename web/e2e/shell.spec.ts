@@ -8,15 +8,15 @@ test('top nav spans the full width and the sidebar starts below it (F7)', async 
   expect(header!.x).toBe(0);
   expect(header!.width).toBe(vw);
   expect(aside!.y).toBeGreaterThanOrEqual(header!.y + header!.height);
-  await expect(page.getByRole('navigation', { name: 'Primary' }).getByRole('link')).toHaveText(['Commanders', 'Sets']);
+  await expect(page.getByRole('navigation', { name: 'Primary' }).getByRole('link')).toHaveText(['Collection', 'Commanders']);
   await expect(page.getByRole('link', { name: 'Jobs' })).toBeVisible();
 });
 
 test('nav switches views and marks the active one', async ({ page }) => {
   await page.goto(COMPARE_URL);
-  await page.getByRole('link', { name: 'Sets' }).click();
-  await expect(page).toHaveURL(/\/sets/);
-  await expect(page.getByRole('link', { name: 'Sets' })).toHaveAttribute('data-status', 'active');
+  await page.getByRole('link', { name: 'Collection' }).click();
+  await expect(page).toHaveURL(/\/collection/);
+  await expect(page.getByRole('link', { name: 'Collection' })).toHaveAttribute('data-status', 'active');
 });
 
 test('theme override: dark sets data-theme, Auto clears it and follows the OS', async ({ page }) => {

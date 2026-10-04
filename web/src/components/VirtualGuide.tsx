@@ -94,14 +94,14 @@ export function VirtualGuide({ sections, density, selected, onToggle, barLabels,
 
 function SubHead({ label, count, level }: { label: string; count: number; level: 1 | 2 }) {
   return level === 1 ? (
-    <h3 className="flex items-baseline gap-3 border-b-2 border-rule-strong pb-1 pt-4 text-2xl voice-condensed font-bold uppercase text-ink">
+    <h2 className="flex items-baseline gap-3 border-b-2 border-rule-strong pb-1 pt-4 text-2xl voice-condensed font-bold uppercase text-ink">
       {label}
       <span className="ml-auto text-sm voice-semi font-regular normal-case tabular text-ink-muted">{count}</span>
-    </h3>
+    </h2>
   ) : (
-    <h4 className="flex items-baseline gap-2 border-b border-rule pb-1 pt-3 text-sm voice-condensed font-medium uppercase tracking-[0.06em] text-ink-muted">
+    <h3 className="flex items-baseline gap-2 border-b border-rule pb-1 pt-3 text-sm voice-condensed font-medium uppercase tracking-[0.06em] text-ink-muted">
       {label}
       <span className="ml-auto tabular">{count}</span>
-    </h4>
+    </h3>
   );
 }

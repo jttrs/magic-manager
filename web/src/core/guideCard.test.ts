@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { fromCardDiff, fromCompare, groupCards, rarityLetter, typeGroup, exportLines } from './guideCard';
-import { sortCards, matches, bucketCards, tagLabel } from './compare';
-import { filterTiles, sortTiles } from './cardDiff';
-import { compareSearch, cardDiffSearch } from './search';
-import type { CardDiffTile, CompareCardOut } from './api';
+import type { CollectionCardOut, CompareCardOut } from './api';
+import { CARD_SORT } from './cardSort';
+import { colorRank, typeGroup } from './cardFacts';
+import { buyFinish, collectionStats, filterCollection, isMissing, type CollectionFilters } from './collection';
+import { bucketCards, COMPARE_SORT, matches, tagLabel } from './compare';
+import { exportLines, fromCollection, fromCompare, groupCards, rarityLetter, treatmentLabels } from './guideCard';
+import { collectionSearch, compareSearch } from './search';
+import { composeSort, decodeSort, encodeSort, leadSection, sortBy } from './sort';
 
 const cmp = (o: Partial<CompareCardOut>): CompareCardOut => ({
   name: 'X', oracle_id: 'o', slug: 'x', bucket: 'a_only', tags: [], a_pct: null, b_pct: null,
@@ -12,107 +15,131 @@ const cmp = (o: Partial<CompareCardOut>): CompareCardOut => ({
   lowest_usd: null, lowest_usd_foil: null, scryfall_id: null, image_uri: null, set_code: null,
   collector_number: null, scryfall_url: null, ...o,
 });
-const tile = (o: Partial<CardDiffTile>): CardDiffTile => ({
-  key: 'sid|1', family: 'fin', pools: ['printing'], name: 'Y', set_code: 'FIN', collector_number: '1',
-  rarity: 'rare', finish: 'nonfoil', usd: 1, image_uri: null, scryfall_url: null,
-  manapool_line: '', tcgplayer_line: '', ...o,
+const card = (o: Partial<CollectionCardOut>): CollectionCardOut => ({
+  scryfall_id: 'id', oracle_id: 'o', name: 'Y', family: 'fin', set_code: 'fin', collector_number: '1',
+  rarity: 'rare', type_line: 'Creature — Moogle', cmc: 2, color_identity: ['W'], released_at: '2025-06-13',
+  finishes: ['nonfoil', 'foil'], owned: {}, pledged: {}, price_usd: 1, price_usd_foil: 3, image_uri: null,
+  scryfall_url: null, treatment: '', standard_frame: true, is_bulk: false, is_chase: false, ...o,
 });
+const ALL: CollectionFilters = { show: ['owned', 'missing'], basis: 'either', bulk: 'show', treatments: 'show', chase: 'show', q: '' };
 
-describe('typeGroup', () => {
-  it('classifies by front face, creature first', () => {
+describe('card facts', () => {
+  it('type groups by front face, creature first', () => {
     expect(typeGroup('Artifact Creature — Golem')).toBe('Creatures');
-    expect(typeGroup('Legendary Planeswalker — Tifa')).toBe('Planeswalkers');
     expect(typeGroup('Instant // Sorcery')).toBe('Instants');
-    expect(typeGroup('Land — Forest')).toBe('Lands');
     expect(typeGroup(null)).toBe('Other');
   });
-});
-
-describe('mappers', () => {
-  it('compare: inclusion is the bucket metric; both carries bars', () => {
-    const a = fromCompare(cmp({ bucket: 'a_only', a_pct: 61, set_code: 'fin' }));
-    expect(a.pct).toBe(61);
-    expect(a.bars).toBeNull();
-    expect(a.setCode).toBe('FIN');
-    const b = fromCompare(cmp({ bucket: 'both', a_pct: 40, b_pct: 70 }));
-    expect(b.pct).toBe(70);
-    expect(b.bars).toEqual({ a: 40, b: 70 });
+  it('color order: WUBRG mono, then multicolor, then colorless', () => {
+    expect(['G', 'W'].map((c) => colorRank([c]))).toEqual([4, 0]);
+    expect(colorRank(['W', 'U'])).toBeGreaterThan(colorRank(['G']));
+    expect(colorRank([])).toBeGreaterThan(colorRank(['W', 'U', 'B']));
   });
-  it('card-diff: pools become stamps; exact-printing lines preserved', () => {
-    const g = fromCardDiff(tile({ pools: ['printing', 'variant-chase'], manapool_line: '1 Y [FIN] 1' }));
-    expect(g.stamps).toEqual(['P', 'V']);
-    expect(g.lines.manapool).toBe('1 Y [FIN] 1');
-    expect(g.key).toBe('fin|sid|1');
-  });
-  it('rarity letters', () => {
+  it('labels', () => {
     expect(rarityLetter('mythic')).toBe('M');
-    expect(rarityLetter(null)).toBe('');
+    expect(treatmentLabels('b|ext')).toEqual(['Borderless', 'Ext. art']);
+    expect(tagLabel('manaartifacts')).toBe('Mana artifacts');
   });
 });
 
-describe('groupCards', () => {
-  it('orders groups by the given order, keeps item order', () => {
-    const cards = ['Lands', 'Creatures', 'Lands'].map((group, i) => ({ ...fromCompare(cmp({})), key: String(i), group }));
-    const g = groupCards(cards, ['Creatures', 'Lands']);
-    expect(g.map((x) => x.key)).toEqual(['Creatures', 'Lands']);
-    expect(g[1].items.map((c) => c.key)).toEqual(['0', '2']);
+describe('sort rules', () => {
+  const reg = { n: { label: 'N', get: (x: { n: number | null; s: string }) => x.n, defaultDir: 'desc' as const }, s: { label: 'S', get: (x: { n: number | null; s: string }) => x.s, defaultDir: 'asc' as const } };
+  const items = [{ n: 1, s: 'b' }, { n: null, s: 'a' }, { n: 2, s: 'c' }, { n: 1, s: 'a' }];
+  it('composes levels; nulls last in both directions', () => {
+    expect(sortBy(items, [{ key: 'n', dir: 'desc' }, { key: 's', dir: 'asc' }], reg).map((x) => `${x.n}${x.s}`)).toEqual(['2c', '1a', '1b', 'nulla']);
+    expect(sortBy(items, [{ key: 'n', dir: 'asc' }], reg).at(-1)!.n).toBeNull();
   });
-  it('export lines skip blanks', () => {
+  it('URL codec round-trips, omits default directions, drops junk and dupes', () => {
+    const rules = [{ key: 'n' as const, dir: 'asc' as const }, { key: 's' as const, dir: 'asc' as const }];
+    expect(encodeSort(rules, reg)).toBe('n:asc,s');
+    expect(decodeSort('n:asc,s', reg)).toEqual(rules);
+    expect(decodeSort('bogus,s,s,n:sideways', reg)).toEqual([{ key: 's', dir: 'asc' }, { key: 'n', dir: 'desc' }]);
+  });
+  it('collector numbers sort numerically with suffixes', () => {
+    const cards = ['10', '2a', '2'].map((cn) => fromCollection(card({ scryfall_id: cn, collector_number: cn }), false));
+    expect(sortBy(cards, [{ key: 'cn', dir: 'asc' }], CARD_SORT).map((c) => c.cn)).toEqual(['2', '2a', '10']);
+  });
+  it('rarity sorts mythic first by default and leads sections', () => {
+    const cards = ['common', 'mythic', 'rare'].map((r) => fromCollection(card({ scryfall_id: r, rarity: r }), false));
+    const rules = decodeSort('rarity', CARD_SORT);
+    expect(sortBy(cards, rules, CARD_SORT).map((c) => c.rarity)).toEqual(['mythic', 'rare', 'common']);
+    expect(leadSection(rules, CARD_SORT)!(cards[0])).toBe('Common');
+    expect(leadSection(decodeSort('price', CARD_SORT), CARD_SORT)).toBeNull();
+  });
+  it('compare registry ranks by bucket inclusion', () => {
+    const cs = [cmp({ name: 'B', a_pct: 10 }), cmp({ name: 'A', a_pct: 90 }), cmp({ name: 'C', bucket: 'both', a_pct: 20, b_pct: 50 })];
+    expect([...cs].sort(composeSort(decodeSort('inclusion,name', COMPARE_SORT), COMPARE_SORT)).map((c) => c.name)).toEqual(['A', 'C', 'B']);
+  });
+});
+
+describe('collection filters', () => {
+  const owned = card({ scryfall_id: 'own', owned: { nonfoil: 2 } });
+  const missing = card({ scryfall_id: 'miss' });
+  const bulk = card({ scryfall_id: 'bulk', is_bulk: true, rarity: 'common' });
+  const treated = card({ scryfall_id: 'tr', standard_frame: false, treatment: 'b' });
+  const chase = card({ scryfall_id: 'ch', is_chase: true });
+  const all = [owned, missing, bulk, treated, chase];
+  const ids = (f: Partial<CollectionFilters>) => filterCollection(all, { ...ALL, ...f }).map((c) => c.scryfall_id);
+
+  it('missing basis', () => {
+    expect(isMissing(owned, 'either')).toBe(false);
+    expect(isMissing(owned, 'foil')).toBe(true);
+    expect(isMissing(card({ finishes: ['nonfoil'] }), 'foil')).toBe(false);
+  });
+  it('show owned / missing', () => {
+    expect(ids({ show: ['owned'] })).toEqual(['own']);
+    expect(ids({ show: ['missing'] })).toEqual(['miss', 'bulk', 'tr', 'ch']);
+    expect(ids({ show: [] })).toEqual([]);
+  });
+  it('layers', () => {
+    expect(ids({ bulk: 'hide' })).not.toContain('bulk');
+    expect(ids({ treatments: 'hide' })).not.toContain('tr');
+    expect(ids({ chase: 'only' })).toEqual(['ch']);
+    expect(ids({ chase: 'hide' })).not.toContain('ch');
+    expect(ids({ q: 'nope' })).toEqual([]);
+  });
+  it('buy finish + stats', () => {
+    expect(buyFinish(card({ finishes: ['foil'] }), 'either')).toBe('foil');
+    expect(buyFinish(missing, 'either')).toBe('nonfoil');
+    expect(collectionStats([owned, missing], 'either')).toEqual({ printings: 2, owned: 1, copies: 2, missing: 1, missingUsd: 1 });
+  });
+  it('collection mapper carries counts, missing mark and tags', () => {
+    const g = fromCollection(card({ owned: { foil: 1 }, is_chase: true, treatment: 'shw' }), true);
+    expect(g.owned).toEqual({ foil: 1 });
+    expect(g.missing).toBe(true);
+    expect(g.tags).toEqual(['Chase', 'Showcase']);
+    expect(g.setCode).toBe('FIN');
+  });
+});
+
+describe('compare + grouping', () => {
+  it('mapper + buckets + filters', () => {
+    const both = fromCompare(cmp({ bucket: 'both', a_pct: 40, b_pct: 70, set_code: 'fin' }));
+    expect(both.pct).toBe(70);
+    expect(both.bars).toEqual({ a: 40, b: 70 });
+    const cards = [cmp({ name: 'B', tags: ['creatures'] }), cmp({ name: 'C', bucket: 'both' })];
+    expect(bucketCards(cards).both).toHaveLength(1);
+    expect(cards.filter((c) => matches(c, '', ['creatures'])).map((c) => c.name)).toEqual(['B']);
     expect(exportLines([fromCompare(cmp({ name: 'Sol Ring' }))], 'plain')).toBe('1 Sol Ring');
   });
-});
-
-describe('compare derivations', () => {
-  const cards = [
-    cmp({ name: 'B', bucket: 'a_only', a_pct: 10, tags: ['creatures'] }),
-    cmp({ name: 'A', bucket: 'a_only', a_pct: 90, lowest_usd: 1 }),
-    cmp({ name: 'C', bucket: 'both', a_pct: 20, b_pct: 50, delta: 30 }),
-  ];
-  it('sorts by inclusion desc, ties by name', () => {
-    expect(sortCards(cards, 'inclusion').map((c) => c.name)).toEqual(['A', 'C', 'B']);
-    expect(sortCards(cards, 'name').map((c) => c.name)).toEqual(['A', 'B', 'C']);
-  });
-  it('filters by query and tag', () => {
-    expect(cards.filter((c) => matches(c, 'b', [])).map((c) => c.name)).toEqual(['B']);
-    expect(cards.filter((c) => matches(c, '', ['creatures'])).map((c) => c.name)).toEqual(['B']);
-  });
-  it('buckets', () => {
-    const b = bucketCards(cards);
-    expect([b.a_only.length, b.both.length, b.b_only.length]).toEqual([2, 1, 0]);
-  });
-  it('tag labels', () => {
-    expect(tagLabel('manaartifacts')).toBe('Mana artifacts');
-    expect(tagLabel('some-new_tag')).toBe('Some new tag');
-  });
-});
-
-describe('card-diff derivations', () => {
-  const tiles = [
-    tile({ name: 'Zed', collector_number: '10', usd: 5, pools: ['functional'] }),
-    tile({ name: 'Amy', collector_number: '2', usd: null }),
-    tile({ name: 'Bo', collector_number: '2a', usd: 9 }),
-  ];
-  it('collector-number sort is numeric then suffix', () => {
-    expect(sortTiles(tiles, 'cn').map((t) => t.collector_number)).toEqual(['2', '2a', '10']);
-  });
-  it('value sort puts unpriced last', () => {
-    expect(sortTiles(tiles, 'value').map((t) => t.name)).toEqual(['Bo', 'Zed', 'Amy']);
-  });
-  it('pool filter keeps tiles in any shown pool', () => {
-    expect(filterTiles(tiles, '', ['functional']).map((t) => t.name)).toEqual(['Zed']);
+  it('groupCards keeps order', () => {
+    const cs = ['Lands', 'Creatures', 'Lands'].map((group, i) => ({ ...fromCompare(cmp({})), key: String(i), group }));
+    const g = groupCards(cs, ['Creatures', 'Lands']);
+    expect(g.map((x) => x.key)).toEqual(['Creatures', 'Lands']);
+    expect(g[1].items.map((c) => c.key)).toEqual(['0', '2']);
   });
 });
 
 describe('URL schemas', () => {
-  it('compare: defaults + coercion of single values', () => {
-    const s = compareSearch.parse({ a: 'Tifa', show: 'both', tags: 'creatures', sort: 'bogus' });
+  it('compare defaults', () => {
+    const s = compareSearch.parse({ a: 'Tifa', show: 'both', tags: 'creatures' });
     expect(s.show).toEqual(['both']);
-    expect(s.tags).toEqual(['creatures']);
-    expect(s.sort).toBe('inclusion');
+    expect(s.sort).toBe('inclusion,name');
   });
-  it('card-diff: defaults', () => {
-    const s = cardDiffSearch.parse({});
-    expect(s.show).toEqual(['printing', 'functional', 'variant-chase']);
-    expect(s.chase).toBe('exclude');
+  it('collection defaults + coercion', () => {
+    const s = collectionSearch.parse({ families: 'fin', chase: 'bogus' });
+    expect(s.families).toEqual(['fin']);
+    expect(s.show).toEqual(['owned', 'missing']);
+    expect(s.chase).toBe('show');
+    expect(s.sort).toBe('set,cn');
   });
 });

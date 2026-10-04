@@ -227,38 +227,5 @@ def test_commander_search_filters_eligibility(client, seed_cards, make_card):
 def test_openapi_schema_exposes_contracts(client):
     schema = client.get("/openapi.json").json()
     comps = schema["components"]["schemas"]
-    for name in ("CompareOut", "CardDiffOut", "CommanderOption", "JobOut"):
+    for name in ("CompareOut", "CollectionOut", "CommanderOption", "JobOut"):
         assert name in comps
-
-
-def test_card_diff_endpoint_maps_tiles(client, monkeypatch):
-    from magic_manager import card_diff, card_diff_tiles
-    pool = lambda n, c, u: card_diff.CardDiffPool(name=n, count=c, usd=u)  # noqa: E731
-    fd = card_diff.FamilyDiff(code="fin", name="Final Fantasy", owned_prints=3, owned_qty=4,
-                              owned_usd=10.0, printing=pool("printing", 2, 5.0),
-                              functional=pool("functional", 1, 1.0),
-                              variant_chase=pool("variant-chase", 1, 4.0))
-    seen = {}
-
-    def fake_multi(codes, *, chase, on_skip):
-        seen.update(codes=codes, chase=chase)
-        on_skip("zzz")
-        return [fd]
-
-    monkeypatch.setattr(card_diff, "multi_family_diff", fake_multi)
-    monkeypatch.setattr(card_diff_tiles, "build_tiles", lambda diffs, pools: [{
-        "sid_key": ("sid", "abc"), "family": "fin", "pools": {"variant-chase", "printing"},
-        "name": "Cloud", "set": "FIN", "cn": "1", "rarity": "rare", "finish": "foil",
-        "usd": 4.0, "image_uri": "https://img", "scryfall_url": "https://sf",
-        "data_attrs": {"mp": "1 Cloud [FIN] 1 foil", "tcg": "1 Cloud [FIN]"},
-    }])
-    r = client.get("/api/card-diff", params=[("families", "fin"), ("families", "zzz"), ("chase", "include")])
-    assert r.status_code == 200, r.text
-    body = r.json()
-    assert seen == {"codes": ["fin", "zzz"], "chase": "include"}
-    assert body["skipped"] == ["zzz"]
-    assert body["families"][0]["pools"]["variant-chase"] == {"count": 1, "usd": 4.0}
-    tile = body["cards"][0]
-    assert tile["key"] == "sid|abc" and tile["pools"] == ["printing", "variant-chase"]
-    assert tile["manapool_line"].startswith("1 Cloud")
-    assert client.get("/api/card-diff").status_code == 422  # families required

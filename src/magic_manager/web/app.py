@@ -10,7 +10,6 @@ index.html fallback so client-side routes deep-link.
 """
 from __future__ import annotations
 
-import asyncio
 from collections.abc import AsyncIterable
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -23,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
 from .. import api, edhrec as edhrec_engine, scryfall
-from ..api import card_diff as card_diff_api, edhrec as edhrec_api, jobs as jobs_api
+from ..api import collection as collection_api, edhrec as edhrec_api, jobs as jobs_api
 from .runtime import TERMINAL, JobManager
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -59,10 +58,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         await manager.startup()
-        # Warm the slow family list off the request path (best-effort).
-        warm = asyncio.create_task(asyncio.to_thread(card_diff_api.families))
         yield
-        warm.cancel()
         await manager.shutdown()
 
     app = FastAPI(title="magic-manager", version="0.1.0", lifespan=lifespan,
@@ -138,19 +134,19 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         except scryfall.ScryfallError as e:
             raise HTTPException(502, f"Scryfall lookup failed: {e}") from e
 
-    # ---------- card diff ----------
+    # ---------- collection ----------
 
-    @app.get("/api/card-diff/families", response_model=list[card_diff_api.FamilyOption], tags=["card-diff"])
-    def card_diff_families():
-        return card_diff_api.families()
+    @app.get("/api/collection/families", response_model=list[collection_api.FamilyOption], tags=["collection"])
+    def collection_families():
+        return collection_api.families()
 
-    @app.get("/api/card-diff", response_model=card_diff_api.CardDiffOut, tags=["card-diff"])
-    def card_diff(
-        families: Annotated[list[str], Query(min_length=1)],
-        pools: Annotated[list[card_diff_api.PoolKey] | None, Query()] = None,
-        chase: card_diff_api.ChaseMode = "exclude",
-    ):
-        return card_diff_api.diff(families, pools=pools, chase=chase)
+    @app.get("/api/collection", response_model=collection_api.CollectionOut, tags=["collection"])
+    def collection(families: Annotated[list[str], Query(min_length=1)]):
+        return collection_api.family_view(families)
+
+    @app.post("/api/collection/buy-list", response_model=collection_api.BuyListOut, tags=["collection"])
+    def collection_buy_list(body: collection_api.BuyListIn):
+        return collection_api.buy_list(body)
 
     # ---------- SPA ----------
 

@@ -116,6 +116,10 @@ def test_no_new_unfiltered_buylist_producer():
         "src/magic_manager/card_diff_tiles.py": "re-formats the already-filtered, deduped "
         "card-diff pools currently DISPLAYED (sourced from missing_printings) to "
         "the clipboard — not a new unfiltered singles union.",
+        "src/magic_manager/collection_view.py": "buy_lines() formats exactly the "
+        "(printing, finish, qty) picks the user marked in the Collection view, whose "
+        "universe already excludes tokens, digital-only, hard-unobtainable and "
+        "excluded variants — not an unfiltered singles union.",
     }
 
     unaccounted = producers - filtered - set(exceptions)
