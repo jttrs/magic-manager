@@ -22,6 +22,12 @@ export type GuideCard = {
   stamps: string[];
   group: string;
   lines: { plain: string; manapool: string; tcgplayer: string };
+  /** Function roots the card serves (Scryfall Tagger roll-up), display labels. */
+  functions?: string[];
+  /** Top Scryfall Tagger oracle tags, display labels. */
+  tags?: string[];
+  /** Short guide-line annotation, e.g. "also: Removal, Lifegain". */
+  note?: string | null;
 };
 
 const RARITY_LETTER: Record<string, string> = {
@@ -47,7 +53,8 @@ export function typeGroup(typeLine: string | null | undefined): string {
   return 'Other';
 }
 
-export function fromCompare(c: CompareCardOut): GuideCard {
+/** `fnLabels` maps function root keys → display labels (from the compare payload). */
+export function fromCompare(c: CompareCardOut, fnLabels: Readonly<Record<string, string>> = {}): GuideCard {
   return {
     key: c.oracle_id ?? `slug:${c.slug}`,
     name: c.name,
@@ -63,6 +70,9 @@ export function fromCompare(c: CompareCardOut): GuideCard {
     stamps: [],
     group: typeGroup(c.type_line),
     lines: { plain: `1 ${c.name}`, manapool: `1 ${c.name}`, tcgplayer: `1 ${c.name}` },
+    functions: (c.functions ?? []).map((k) => fnLabels[k] ?? k),
+    tags: (c.oracle_tags ?? []).map((t) => t.label),
+    note: null,
   };
 }
 

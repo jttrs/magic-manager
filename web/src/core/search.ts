@@ -18,6 +18,9 @@ const density = z.enum(densities).catch('grid').default('grid');
 const compareSortKeys = ['inclusion', 'delta', 'synergy', 'price', 'name', 'mv'] as const;
 export type CompareSort = (typeof compareSortKeys)[number];
 
+const GROUP_BYS = ['lists', 'function'] as const;
+export type GroupBy = (typeof GROUP_BYS)[number];
+
 export const compareSearch = z.object({
   a: z.string().optional().catch(undefined),
   b: z.string().optional().catch(undefined),
@@ -25,6 +28,7 @@ export const compareSearch = z.object({
   q: z.string().catch('').default(''),
   tags: list(z.string()).catch([]).default([]),
   sort: z.enum(compareSortKeys).catch('inclusion').default('inclusion'),
+  groupBy: z.enum(GROUP_BYS).catch('lists').default('lists'),
   density,
 });
 export type CompareSearch = z.infer<typeof compareSearch>;

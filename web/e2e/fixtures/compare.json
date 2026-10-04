@@ -34,7 +34,25 @@
    "image_uri": "https://cards.scryfall.io/normal/front/4/6/46184f97-d5c9-4a98-9fd9-e19057ce9b7e.jpg?1783943006",
    "set_code": "10e",
    "collector_number": "249",
-   "scryfall_url": "https://scryfall.com/card/10e/249"
+   "scryfall_url": "https://scryfall.com/card/10e/249",
+   "functions": [],
+   "oracle_tags": [
+    {
+     "id": "5bf7154a-2814-4329-a310-4a1343ee3850",
+     "slug": "bottom-deck-manipulation",
+     "label": "bottom deck manipulation"
+    },
+    {
+     "id": "3fab057d-0c64-41d5-adc0-bf25ea85e7f2",
+     "slug": "consult",
+     "label": "consult"
+    },
+    {
+     "id": "8cb1bab7-38db-4f6b-bee4-15d5c26a879d",
+     "slug": "repeatable-card-advantage",
+     "label": "repeatable card advantage"
+    }
+   ]
   },
   {
    "name": "Adventuring Gear",
@@ -53,7 +71,7 @@
    "synergy_b": null,
    "trend_a": -0.009602510609750804,
    "trend_b": null,
-   "type_line": "Artifact \u2014 Equipment",
+   "type_line": "Artifact — Equipment",
    "cmc": 1.0,
    "mana_cost": "{1}",
    "color_identity": [],
@@ -64,7 +82,15 @@
    "image_uri": "https://cards.scryfall.io/normal/front/3/a/3aa395f2-656e-4bf3-bd9b-6240bd3e2774.jpg?1783942129",
    "set_code": "zen",
    "collector_number": "195",
-   "scryfall_url": "https://scryfall.com/card/zen/195"
+   "scryfall_url": "https://scryfall.com/card/zen/195",
+   "functions": [],
+   "oracle_tags": [
+    {
+     "id": "cf47a50c-6dae-439d-9ad8-d2f60adcb4ce",
+     "slug": "landfall",
+     "label": "landfall"
+    }
+   ]
   },
   {
    "name": "Aftermath Analyst",
@@ -83,7 +109,7 @@
    "synergy_b": null,
    "trend_a": -0.013113865010352608,
    "trend_b": null,
-   "type_line": "Creature \u2014 Elf Detective",
+   "type_line": "Creature — Elf Detective",
    "cmc": 2.0,
    "mana_cost": "{1}{G}",
    "color_identity": [
@@ -96,7 +122,38 @@
    "image_uri": "https://cards.scryfall.io/normal/front/1/c/1c1aa6f8-2d34-4f4b-9184-0eab2e4745f7.jpg?1783912870",
    "set_code": "mkm",
    "collector_number": "148",
-   "scryfall_url": "https://scryfall.com/card/mkm/148"
+   "scryfall_url": "https://scryfall.com/card/mkm/148",
+   "functions": [
+    "ramp",
+    "recursion"
+   ],
+   "oracle_tags": [
+    {
+     "id": "2633b4e0-9361-4bc4-8dfe-cdd16b32dcb9",
+     "slug": "mass-reanimation",
+     "label": "mass reanimation"
+    },
+    {
+     "id": "d5903e3a-53df-4357-8143-faaefc45f95e",
+     "slug": "multi-land-ramp",
+     "label": "multi land ramp"
+    },
+    {
+     "id": "96bf3655-ba91-47b6-a6d7-ad96f41be43c",
+     "slug": "reanimate-land",
+     "label": "reanimate-land"
+    },
+    {
+     "id": "aa20ca6b-5548-48ac-92f3-8abb069273de",
+     "slug": "martyr",
+     "label": "martyr"
+    },
+    {
+     "id": "bcae5f6a-f68b-4217-8f6c-0b4d31abd045",
+     "slug": "mill-self",
+     "label": "mill-self"
+    }
+   ]
   },
   {
    "name": "Alpha Authority",
@@ -115,7 +172,7 @@
    "synergy_b": null,
    "trend_a": -0.174561387048116,
    "trend_b": null,
-   "type_line": "Enchantment \u2014 Aura",
+   "type_line": "Enchantment — Aura",
    "cmc": 2.0,
    "mana_cost": "{1}{G}",
    "color_identity": [
@@ -128,7 +185,28 @@
    "image_uri": "https://cards.scryfall.io/normal/front/f/b/fbc42ca6-db90-41d0-8a4b-3217fb2c114c.jpg?1783940119",
    "set_code": "gtc",
    "collector_number": "114",
-   "scryfall_url": "https://scryfall.com/card/gtc/114"
+   "scryfall_url": "https://scryfall.com/card/gtc/114",
+   "functions": [
+    "protection",
+    "evasion"
+   ],
+   "oracle_tags": [
+    {
+     "id": "fbbfa76e-f105-4c52-89cd-8a084016f343",
+     "slug": "gives-hexproof",
+     "label": "gives hexproof"
+    },
+    {
+     "id": "6a08380f-71ba-4b6e-9178-d3a761189800",
+     "slug": "gives-stalking",
+     "label": "gives stalking"
+    },
+    {
+     "id": "7d4c079e-5fb5-487c-bb38-769d06ce1e2b",
+     "slug": "protects-creature",
+     "label": "protects-creature"
+    }
+   ]
   },
   {
    "name": "Ancient Greenwarden",
@@ -147,7 +225,7 @@
    "synergy_b": null,
    "trend_a": -0.16486485616798982,
    "trend_b": null,
-   "type_line": "Creature \u2014 Elemental",
+   "type_line": "Creature — Elemental",
    "cmc": 6.0,
    "mana_cost": "{4}{G}{G}",
    "color_identity": [
@@ -160,7 +238,27 @@
    "image_uri": "https://cards.scryfall.io/normal/front/d/f/dfe08e59-fdc4-436f-b05c-6ad386c46310.jpg?1783929342",
    "set_code": "znr",
    "collector_number": "178",
-   "scryfall_url": "https://scryfall.com/card/znr/178"
+   "scryfall_url": "https://scryfall.com/card/znr/178",
+   "functions": [
+    "recursion"
+   ],
+   "oracle_tags": [
+    {
+     "id": "9ef8a6a5-ebdc-4f81-9363-d5169c9225ac",
+     "slug": "crucible-of-worlds",
+     "label": "crucible of worlds"
+    },
+    {
+     "id": "cf47a50c-6dae-439d-9ad8-d2f60adcb4ce",
+     "slug": "landfall",
+     "label": "landfall"
+    },
+    {
+     "id": "e03446e0-821d-41a2-9627-43f14a42ab91",
+     "slug": "trigger-doubler",
+     "label": "trigger doubler"
+    }
+   ]
   },
   {
    "name": "Ancient Tomb",
@@ -190,7 +288,42 @@
    "image_uri": "https://cards.scryfall.io/normal/front/b/d/bd3d4b4b-cf31-4f89-8140-9650edb03c7b.jpg?1783933762",
    "set_code": "uma",
    "collector_number": "236",
-   "scryfall_url": "https://scryfall.com/card/uma/236"
+   "scryfall_url": "https://scryfall.com/card/uma/236",
+   "functions": [
+    "ramp"
+   ],
+   "oracle_tags": [
+    {
+     "id": "f815d56f-f0ff-4703-b475-1339de1ff92e",
+     "slug": "sol-land",
+     "label": "sol land"
+    },
+    {
+     "id": "2f3e4ad7-5e60-41b4-bdbc-653f16869cf6",
+     "slug": "ramp",
+     "label": "ramp"
+    },
+    {
+     "id": "458887e7-bfa8-4933-8746-4c9efb578c54",
+     "slug": "adds-multiple-mana",
+     "label": "adds multiple mana"
+    },
+    {
+     "id": "c13ff08f-26bd-463e-a3e7-0f1eb2b3d3bf",
+     "slug": "burn-you",
+     "label": "burn-you"
+    },
+    {
+     "id": "34ea1e5f-3deb-4046-9823-5bcc62d8e169",
+     "slug": "mana-ability-with-extra-effect",
+     "label": "mana ability with extra effect"
+    },
+    {
+     "id": "69cdaa75-d349-4faf-9f7e-29f994b67ff3",
+     "slug": "painland",
+     "label": "painland"
+    }
+   ]
   },
   {
    "name": "Animist's Awakening",
@@ -222,7 +355,42 @@
    "image_uri": "https://cards.scryfall.io/normal/front/e/3/e3b62616-c1a3-45f7-a329-f1305c462eaf.jpg?1783938325",
    "set_code": "ori",
    "collector_number": "169",
-   "scryfall_url": "https://scryfall.com/card/ori/169"
+   "scryfall_url": "https://scryfall.com/card/ori/169",
+   "functions": [
+    "ramp"
+   ],
+   "oracle_tags": [
+    {
+     "id": "88e643b3-9fd4-4f46-9f36-cb1a72a7bc3c",
+     "slug": "extra-land",
+     "label": "extra land"
+    },
+    {
+     "id": "d5903e3a-53df-4357-8143-faaefc45f95e",
+     "slug": "multi-land-ramp",
+     "label": "multi land ramp"
+    },
+    {
+     "id": "7b69d9ad-db35-4299-9335-76e20e01e709",
+     "slug": "cards-in-graveyard-matter",
+     "label": "cards in graveyard matter"
+    },
+    {
+     "id": "7661e92b-76cb-47f8-b5e3-f321f43d0879",
+     "slug": "impulse-land",
+     "label": "impulse-land"
+    },
+    {
+     "id": "41c404e4-2724-4886-ba47-ffaea098e309",
+     "slug": "impulse-onto-battlefield",
+     "label": "impulse-onto-battlefield"
+    },
+    {
+     "id": "643c76a4-7481-4105-9a00-f523cf984056",
+     "slug": "synergy-instant",
+     "label": "synergy-instant"
+    }
+   ]
   },
   {
    "name": "Arcane Signet",
@@ -252,7 +420,32 @@
    "image_uri": "https://cards.scryfall.io/normal/front/8/4/84128e98-87d6-4c2f-909b-9435a7833e63.jpg?1783932545",
    "set_code": "eld",
    "collector_number": "331",
-   "scryfall_url": "https://scryfall.com/card/eld/331"
+   "scryfall_url": "https://scryfall.com/card/eld/331",
+   "functions": [
+    "ramp"
+   ],
+   "oracle_tags": [
+    {
+     "id": "8c2afeb7-e6c8-4cbc-9a5e-079f09b1cace",
+     "slug": "mana-rock-with-set-s-mechanic",
+     "label": "mana rock with set's mechanic"
+    },
+    {
+     "id": "1be51991-024b-44c1-a918-8b75087820ab",
+     "slug": "commander-identity-matters",
+     "label": "commander identity matters"
+    },
+    {
+     "id": "9826a011-f71f-42a1-bfe8-557ed6a24b80",
+     "slug": "mini-refund",
+     "label": "mini refund"
+    },
+    {
+     "id": "b0a937d3-b81b-47f3-9dbe-4a95ee3615e2",
+     "slug": "synergy-commander",
+     "label": "synergy-commander"
+    }
+   ]
   },
   {
    "name": "Archdruid's Charm",
@@ -284,7 +477,44 @@
    "image_uri": "https://cards.scryfall.io/normal/front/5/c/5caae5ae-845f-42c2-b1ae-956df2739433.jpg?1783912870",
    "set_code": "mkm",
    "collector_number": "151",
-   "scryfall_url": "https://scryfall.com/card/mkm/151"
+   "scryfall_url": "https://scryfall.com/card/mkm/151",
+   "functions": [
+    "ramp",
+    "removal",
+    "tutor"
+   ],
+   "oracle_tags": [
+    {
+     "id": "1ab2a220-a953-4f28-b57a-2c5cb82dde7b",
+     "slug": "abrade",
+     "label": "abrade"
+    },
+    {
+     "id": "5c75484f-369a-4021-808b-ebf854d1269a",
+     "slug": "disenchant-naturalize",
+     "label": "disenchant/naturalize"
+    },
+    {
+     "id": "8e3bf407-28b7-49ab-83d5-5a9c46b1cd79",
+     "slug": "land-ramp",
+     "label": "land ramp"
+    },
+    {
+     "id": "097bab20-06d1-4ac0-85e7-d5b9010ab7b8",
+     "slug": "one-sided-fight",
+     "label": "one-sided fight"
+    },
+    {
+     "id": "4dbace62-9708-4c6e-975a-c09fae7bb7e7",
+     "slug": "removal-exile",
+     "label": "removal-exile"
+    },
+    {
+     "id": "cc12d27d-1d0e-4849-9551-71caead74d24",
+     "slug": "spot-removal",
+     "label": "spot removal"
+    }
+   ]
   },
   {
    "name": "Arid Archway",
@@ -303,7 +533,7 @@
    "synergy_b": null,
    "trend_a": -0.12456904307021552,
    "trend_b": null,
-   "type_line": "Land \u2014 Desert",
+   "type_line": "Land — Desert",
    "cmc": 0.0,
    "mana_cost": "",
    "color_identity": [],
@@ -314,7 +544,40 @@
    "image_uri": "https://cards.scryfall.io/normal/front/3/f/3f8c8fa2-12ab-4f6a-9f7a-2bc69e9ba024.jpg?1783911778",
    "set_code": "otj",
    "collector_number": "252",
-   "scryfall_url": "https://scryfall.com/card/otj/252"
+   "scryfall_url": "https://scryfall.com/card/otj/252",
+   "functions": [],
+   "oracle_tags": [
+    {
+     "id": "458887e7-bfa8-4933-8746-4c9efb578c54",
+     "slug": "adds-multiple-mana",
+     "label": "adds multiple mana"
+    },
+    {
+     "id": "7a468894-584e-4ac4-9065-f5340efbea37",
+     "slug": "bounceland",
+     "label": "bounceland"
+    },
+    {
+     "id": "f815d56f-f0ff-4703-b475-1339de1ff92e",
+     "slug": "sol-land",
+     "label": "sol land"
+    },
+    {
+     "id": "fe5475a7-5410-478e-946c-8cd432495f9d",
+     "slug": "surveil",
+     "label": "surveil"
+    },
+    {
+     "id": "31b2e5a3-e32f-4a4d-ad9f-9c908bee1190",
+     "slug": "synergy-desert",
+     "label": "synergy-desert"
+    },
+    {
+     "id": "5e708c4d-9992-431e-afe1-fb5af05b2ea3",
+     "slug": "utility-land",
+     "label": "utility land"
+    }
+   ]
   },
   {
    "name": "Ashaya, Soul of the Wild",
@@ -333,7 +596,7 @@
    "synergy_b": null,
    "trend_a": -0.33873343320749255,
    "trend_b": null,
-   "type_line": "Legendary Creature \u2014 Elemental",
+   "type_line": "Legendary Creature — Elemental",
    "cmc": 5.0,
    "mana_cost": "{3}{G}{G}",
    "color_identity": [
@@ -346,7 +609,42 @@
    "image_uri": "https://cards.scryfall.io/normal/front/7/4/74943390-d25f-47cb-90bb-cbf70c87f4a2.jpg?1783929342",
    "set_code": "znr",
    "collector_number": "179",
-   "scryfall_url": "https://scryfall.com/card/znr/179"
+   "scryfall_url": "https://scryfall.com/card/znr/179",
+   "functions": [
+    "ramp"
+   ],
+   "oracle_tags": [
+    {
+     "id": "2f3e4ad7-5e60-41b4-bdbc-653f16869cf6",
+     "slug": "ramp",
+     "label": "ramp"
+    },
+    {
+     "id": "a7aedbff-fad6-41ce-a30b-b60d2f21fdbf",
+     "slug": "cda-power",
+     "label": "cda-power"
+    },
+    {
+     "id": "c69cb22a-d45f-49f1-be2f-553fb074cc1f",
+     "slug": "cda-toughness",
+     "label": "cda-toughness"
+    },
+    {
+     "id": "4b885271-f048-46ae-9d83-72f02e1d1e0b",
+     "slug": "gives-mana-ability",
+     "label": "gives mana ability"
+    },
+    {
+     "id": "98e144ca-bb2d-4952-9072-ebb4f5dd47c8",
+     "slug": "maro-sorcerer",
+     "label": "maro-sorcerer"
+    },
+    {
+     "id": "2c1b031c-4759-4529-92fd-9ab6e8a5be2c",
+     "slug": "tap-fuel-creature",
+     "label": "tap fuel-creature"
+    }
+   ]
   },
   {
    "name": "Augur of Autumn",
@@ -365,7 +663,7 @@
    "synergy_b": null,
    "trend_a": -0.3183292640833176,
    "trend_b": null,
-   "type_line": "Creature \u2014 Human Druid",
+   "type_line": "Creature — Human Druid",
    "cmc": 3.0,
    "mana_cost": "{1}{G}{G}",
    "color_identity": [
@@ -378,7 +676,20 @@
    "image_uri": "https://cards.scryfall.io/normal/front/d/0/d06a31b1-f0e7-4512-a810-4a9a7e682b79.jpg?1783908484",
    "set_code": "plst",
    "collector_number": "MID-168",
-   "scryfall_url": "https://scryfall.com/card/plst/MID-168"
+   "scryfall_url": "https://scryfall.com/card/plst/MID-168",
+   "functions": [],
+   "oracle_tags": [
+    {
+     "id": "c8d56e5f-ca69-4ab2-8e5b-34accb5d61d7",
+     "slug": "power-matters",
+     "label": "power matters"
+    },
+    {
+     "id": "401cb7eb-f849-458e-8fbe-47b9df4ee901",
+     "slug": "precognition-engine",
+     "label": "precognition engine"
+    }
+   ]
   },
   {
    "name": "Avenger of Zendikar",
@@ -397,7 +708,7 @@
    "synergy_b": null,
    "trend_a": -0.2673551301821791,
    "trend_b": null,
-   "type_line": "Creature \u2014 Elemental",
+   "type_line": "Creature — Elemental",
    "cmc": 7.0,
    "mana_cost": "{5}{G}{G}",
    "color_identity": [
@@ -410,7 +721,42 @@
    "image_uri": "https://cards.scryfall.io/normal/front/d/d/dde073e0-f329-4ab0-8e31-a48929e017ce.jpg?1783942047",
    "set_code": "wwk",
    "collector_number": "96",
-   "scryfall_url": "https://scryfall.com/card/wwk/96"
+   "scryfall_url": "https://scryfall.com/card/wwk/96",
+   "functions": [
+    "token-maker"
+   ],
+   "oracle_tags": [
+    {
+     "id": "a860da22-6dbb-4fb7-9962-808d9e03ecc7",
+     "slug": "enters-in-company",
+     "label": "enters in company"
+    },
+    {
+     "id": "c1100c9e-08bf-4845-9263-1a5f86b9005f",
+     "slug": "gives-pp-counters",
+     "label": "gives pp counters"
+    },
+    {
+     "id": "de8087f3-9b70-4f31-90b2-499ecf0ee066",
+     "slug": "land-count-matters",
+     "label": "land count matters"
+    },
+    {
+     "id": "cf47a50c-6dae-439d-9ad8-d2f60adcb4ce",
+     "slug": "landfall",
+     "label": "landfall"
+    },
+    {
+     "id": "9a3f1038-140e-447a-ba5d-020893c49977",
+     "slug": "repeatable-pp-counters",
+     "label": "repeatable pp counters"
+    },
+    {
+     "id": "7d289e1b-eb86-4635-8dc8-d8e585af225e",
+     "slug": "typal-plant",
+     "label": "typal-plant"
+    }
+   ]
   },
   {
    "name": "Awaken the Woods",
@@ -442,7 +788,28 @@
    "image_uri": "https://cards.scryfall.io/normal/front/1/c/1c95f8b8-faba-4412-8d8f-093e2ec903f0.jpg?1783920050",
    "set_code": "bro",
    "collector_number": "170",
-   "scryfall_url": "https://scryfall.com/card/bro/170"
+   "scryfall_url": "https://scryfall.com/card/bro/170",
+   "functions": [
+    "ramp",
+    "token-maker"
+   ],
+   "oracle_tags": [
+    {
+     "id": "bb6c0ff7-302d-48ff-aee9-5cfefd44e351",
+     "slug": "mana-dork",
+     "label": "mana dork"
+    },
+    {
+     "id": "d5903e3a-53df-4357-8143-faaefc45f95e",
+     "slug": "multi-land-ramp",
+     "label": "multi land ramp"
+    },
+    {
+     "id": "07808167-c4ef-4a2d-bfe9-fa38a5a9d17b",
+     "slug": "multiple-bodies",
+     "label": "multiple bodies"
+    }
+   ]
   },
   {
    "name": "Azusa, Lost but Seeking",
@@ -461,7 +828,7 @@
    "synergy_b": null,
    "trend_a": -0.10208349511553357,
    "trend_b": null,
-   "type_line": "Legendary Creature \u2014 Human Monk",
+   "type_line": "Legendary Creature — Human Monk",
    "cmc": 3.0,
    "mana_cost": "{2}{G}",
    "color_identity": [
@@ -474,7 +841,22 @@
    "image_uri": "https://cards.scryfall.io/normal/front/0/b/0b8aff2c-1f7b-4507-b914-53f8c4706b3d.jpg?1783930680",
    "set_code": "m21",
    "collector_number": "173",
-   "scryfall_url": "https://scryfall.com/card/m21/173"
+   "scryfall_url": "https://scryfall.com/card/m21/173",
+   "functions": [
+    "ramp"
+   ],
+   "oracle_tags": [
+    {
+     "id": "d5903e3a-53df-4357-8143-faaefc45f95e",
+     "slug": "multi-land-ramp",
+     "label": "multi land ramp"
+    },
+    {
+     "id": "81ea08d3-c112-4b29-9e09-83f0278e1e12",
+     "slug": "play-additional-land",
+     "label": "play additional land"
+    }
+   ]
   },
   {
    "name": "Ba Sing Se",
@@ -506,7 +888,30 @@
    "image_uri": "https://cards.scryfall.io/normal/front/b/d/bdf3b2be-d0cd-4a3c-a10e-82d32c12d3bd.jpg?1783904912",
    "set_code": "tla",
    "collector_number": "266",
-   "scryfall_url": "https://scryfall.com/card/tla/266"
+   "scryfall_url": "https://scryfall.com/card/tla/266",
+   "functions": [],
+   "oracle_tags": [
+    {
+     "id": "b519fddd-6819-486e-83c2-280c45a59263",
+     "slug": "creatureland",
+     "label": "creatureland"
+    },
+    {
+     "id": "ef02b1a3-a5ae-4d8a-86ca-302d6f477744",
+     "slug": "mana-sink",
+     "label": "mana sink"
+    },
+    {
+     "id": "9a3f1038-140e-447a-ba5d-020893c49977",
+     "slug": "repeatable-pp-counters",
+     "label": "repeatable pp counters"
+    },
+    {
+     "id": "7e76d8fa-81d2-4586-b5bb-7c16d5328cde",
+     "slug": "synergy-basic",
+     "label": "synergy-basic"
+    }
+   ]
   },
   {
    "name": "Basilisk Collar",
@@ -525,7 +930,7 @@
    "synergy_b": 0.10447475429484698,
    "trend_a": -0.2075348890623738,
    "trend_b": 0.01725967387263968,
-   "type_line": "Artifact \u2014 Equipment",
+   "type_line": "Artifact — Equipment",
    "cmc": 1.0,
    "mana_cost": "{1}",
    "color_identity": [],
@@ -536,7 +941,32 @@
    "image_uri": "https://cards.scryfall.io/normal/front/5/5/55cdba1b-7a80-435f-9cff-b9365f62e311.jpg?1783942040",
    "set_code": "wwk",
    "collector_number": "122",
-   "scryfall_url": "https://scryfall.com/card/wwk/122"
+   "scryfall_url": "https://scryfall.com/card/wwk/122",
+   "functions": [
+    "lifegain"
+   ],
+   "oracle_tags": [
+    {
+     "id": "d51792e0-fa67-4872-b3bb-12d91cbb2960",
+     "slug": "gives-lifelink",
+     "label": "gives lifelink"
+    },
+    {
+     "id": "2dabdf83-e041-48a4-b0e5-08e1842f008c",
+     "slug": "repeatable-lifegain",
+     "label": "repeatable lifegain"
+    },
+    {
+     "id": "ab654d3f-c8a7-4e52-b488-bba83be17951",
+     "slug": "french-vanilla-equipment",
+     "label": "french vanilla equipment"
+    },
+    {
+     "id": "f8506719-ec4b-4b73-a5a4-5b6e82143079",
+     "slug": "gives-deathtouch",
+     "label": "gives deathtouch"
+    }
+   ]
   },
   {
    "name": "Beast Within",
@@ -569,7 +999,42 @@
    "image_uri": "https://cards.scryfall.io/normal/front/c/e/ce5b6d19-22e3-4f57-8f4d-a17e982286c7.jpg?1783941304",
    "set_code": "nph",
    "collector_number": "103",
-   "scryfall_url": "https://scryfall.com/card/nph/103"
+   "scryfall_url": "https://scryfall.com/card/nph/103",
+   "functions": [
+    "removal"
+   ],
+   "oracle_tags": [
+    {
+     "id": "6bda5d89-d8fb-4d99-a217-9142fee8ae3f",
+     "slug": "removal-destroy",
+     "label": "removal-destroy"
+    },
+    {
+     "id": "f6cdebcf-d2e3-4b56-8443-e6eca8ac9873",
+     "slug": "removal-permanent",
+     "label": "removal-permanent"
+    },
+    {
+     "id": "cc12d27d-1d0e-4849-9551-71caead74d24",
+     "slug": "spot-removal",
+     "label": "spot removal"
+    },
+    {
+     "id": "44012cd5-95e4-42f1-b74d-453ca9130f8f",
+     "slug": "color-break",
+     "label": "color break"
+    },
+    {
+     "id": "568637db-e729-4474-b860-3bb28fca02a7",
+     "slug": "donate-token",
+     "label": "donate token"
+    },
+    {
+     "id": "6ba18e8c-ca24-4c2e-86e3-304e9096074d",
+     "slug": "swap-removal",
+     "label": "swap removal"
+    }
+   ]
   },
   {
    "name": "Birds of Paradise",
@@ -588,7 +1053,7 @@
    "synergy_b": 0.013991409350938178,
    "trend_a": 0.015615810133026356,
    "trend_b": 0.9344178022630921,
-   "type_line": "Creature \u2014 Bird",
+   "type_line": "Creature — Bird",
    "cmc": 1.0,
    "mana_cost": "{G}",
    "color_identity": [
@@ -601,7 +1066,22 @@
    "image_uri": "https://cards.scryfall.io/normal/front/f/7/f79357f4-ddd1-4b29-9e5f-813c799513ee.jpg?1783946901",
    "set_code": "5ed",
    "collector_number": "280",
-   "scryfall_url": "https://scryfall.com/card/5ed/280"
+   "scryfall_url": "https://scryfall.com/card/5ed/280",
+   "functions": [
+    "ramp"
+   ],
+   "oracle_tags": [
+    {
+     "id": "bb6c0ff7-302d-48ff-aee9-5cfefd44e351",
+     "slug": "mana-dork",
+     "label": "mana dork"
+    },
+    {
+     "id": "c7756471-d290-452f-bfc6-24866c841f28",
+     "slug": "evasion",
+     "label": "evasion"
+    }
+   ]
   },
   {
    "name": "Bitterthorn, Nissa's Animus",
@@ -620,7 +1100,7 @@
    "synergy_b": 0.09785173798967355,
    "trend_a": -0.058738229828381894,
    "trend_b": 0.35826769411620424,
-   "type_line": "Legendary Artifact \u2014 Equipment",
+   "type_line": "Legendary Artifact — Equipment",
    "cmc": 3.0,
    "mana_cost": "{3}",
    "color_identity": [],
@@ -631,7 +1111,43 @@
    "image_uri": "https://cards.scryfall.io/normal/front/f/a/fa7a883f-e180-48ce-b7d4-cded2f74c323.jpg?1783917271",
    "set_code": "moc",
    "collector_number": "45",
-   "scryfall_url": "https://scryfall.com/card/moc/45"
+   "scryfall_url": "https://scryfall.com/card/moc/45",
+   "functions": [
+    "ramp",
+    "tutor"
+   ],
+   "oracle_tags": [
+    {
+     "id": "51403157-c373-4f34-934a-fcc70a47fe57",
+     "slug": "combat-ramp",
+     "label": "combat ramp"
+    },
+    {
+     "id": "8e3bf407-28b7-49ab-83d5-5a9c46b1cd79",
+     "slug": "land-ramp",
+     "label": "land ramp"
+    },
+    {
+     "id": "ce97c571-5fd7-4e1d-a642-dfee09f4cde3",
+     "slug": "tutor-land-basic",
+     "label": "tutor-land-basic"
+    },
+    {
+     "id": "f092d281-91b4-4349-bd5a-9274f20f2c20",
+     "slug": "tutor-land-to-battlefield",
+     "label": "tutor-land-to-battlefield"
+    },
+    {
+     "id": "d540c4fb-c2dd-49be-aecc-73883ae9edd9",
+     "slug": "attacking-matters",
+     "label": "attacking matters"
+    },
+    {
+     "id": "346ca9a4-9877-447f-953c-63a8fee974a2",
+     "slug": "living-weapon",
+     "label": "living weapon"
+    }
+   ]
   },
   {
    "name": "Blackblade Reforged",
@@ -650,7 +1166,7 @@
    "synergy_b": 0.32154984238591594,
    "trend_a": 0.007472676976446752,
    "trend_b": 0.26638742108385444,
-   "type_line": "Legendary Artifact \u2014 Equipment",
+   "type_line": "Legendary Artifact — Equipment",
    "cmc": 2.0,
    "mana_cost": "{2}",
    "color_identity": [],
@@ -661,7 +1177,30 @@
    "image_uri": "https://cards.scryfall.io/normal/front/8/6/862d38d1-e3d0-47e1-a535-ff445b1c55c6.jpg?1783934961",
    "set_code": "dom",
    "collector_number": "211",
-   "scryfall_url": "https://scryfall.com/card/dom/211"
+   "scryfall_url": "https://scryfall.com/card/dom/211",
+   "functions": [],
+   "oracle_tags": [
+    {
+     "id": "88e2e64f-3631-4439-b462-178eade87b06",
+     "slug": "alternate-equip-cost",
+     "label": "alternate-equip-cost"
+    },
+    {
+     "id": "98e144ca-bb2d-4952-9072-ebb4f5dd47c8",
+     "slug": "maro-sorcerer",
+     "label": "maro-sorcerer"
+    },
+    {
+     "id": "42bb3fdc-00d5-4015-862c-ed4b03f517e7",
+     "slug": "repeated-keyword",
+     "label": "repeated keyword"
+    },
+    {
+     "id": "394a55d0-f936-4742-a71f-81eede568e63",
+     "slug": "synergy-legendary",
+     "label": "synergy-legendary"
+    }
+   ]
   },
   {
    "name": "Boseiju, Who Endures",
@@ -693,7 +1232,42 @@
    "image_uri": "https://cards.scryfall.io/normal/front/2/1/2135ac5a-187b-4dc9-8f82-34e8d1603416.jpg?1783923818",
    "set_code": "neo",
    "collector_number": "266",
-   "scryfall_url": "https://scryfall.com/card/neo/266"
+   "scryfall_url": "https://scryfall.com/card/neo/266",
+   "functions": [
+    "removal"
+   ],
+   "oracle_tags": [
+    {
+     "id": "5c75484f-369a-4021-808b-ebf854d1269a",
+     "slug": "disenchant-naturalize",
+     "label": "disenchant/naturalize"
+    },
+    {
+     "id": "6bda5d89-d8fb-4d99-a217-9142fee8ae3f",
+     "slug": "removal-destroy",
+     "label": "removal-destroy"
+    },
+    {
+     "id": "d2a563f5-66f7-442c-91cd-3e8b6c0fc0c5",
+     "slug": "removal-land",
+     "label": "removal-land"
+    },
+    {
+     "id": "cc12d27d-1d0e-4849-9551-71caead74d24",
+     "slug": "spot-removal",
+     "label": "spot removal"
+    },
+    {
+     "id": "baf0028c-c0d7-44e2-8840-da458377bdbe",
+     "slug": "donate-rampant-growth",
+     "label": "donate rampant growth"
+    },
+    {
+     "id": "dd559220-3431-4cfd-8217-a46db79aabe8",
+     "slug": "hate-nonbasic-land",
+     "label": "hate-nonbasic-land"
+    }
+   ]
   },
   {
    "name": "Brotherhood Regalia",
@@ -712,7 +1286,7 @@
    "synergy_b": 0.16419187228483398,
    "trend_a": -0.13006605893930792,
    "trend_b": 1.0292354041333542,
-   "type_line": "Artifact \u2014 Equipment",
+   "type_line": "Artifact — Equipment",
    "cmc": 2.0,
    "mana_cost": "{2}",
    "color_identity": [],
@@ -723,7 +1297,43 @@
    "image_uri": "https://cards.scryfall.io/normal/front/8/a/8a6439a6-288d-427e-b14b-a99e8ef8c5cd.jpg?1783910968",
    "set_code": "acr",
    "collector_number": "71",
-   "scryfall_url": "https://scryfall.com/card/acr/71"
+   "scryfall_url": "https://scryfall.com/card/acr/71",
+   "functions": [
+    "protection",
+    "evasion"
+   ],
+   "oracle_tags": [
+    {
+     "id": "a2799aac-0769-4411-a881-78e2d6ef28ae",
+     "slug": "gives-unblockable",
+     "label": "gives unblockable"
+    },
+    {
+     "id": "49fc31ee-3a91-4b4b-9ab8-a0bfe8802e76",
+     "slug": "gives-ward",
+     "label": "gives ward"
+    },
+    {
+     "id": "7d4c079e-5fb5-487c-bb38-769d06ce1e2b",
+     "slug": "protects-creature",
+     "label": "protects-creature"
+    },
+    {
+     "id": "88e2e64f-3631-4439-b462-178eade87b06",
+     "slug": "alternate-equip-cost",
+     "label": "alternate-equip-cost"
+    },
+    {
+     "id": "e5b6b06a-9d5b-404e-914b-c18c221c565c",
+     "slug": "rhystic",
+     "label": "rhystic"
+    },
+    {
+     "id": "394a55d0-f936-4742-a71f-81eede568e63",
+     "slug": "synergy-legendary",
+     "label": "synergy-legendary"
+    }
+   ]
   },
   {
    "name": "Buster Sword",
@@ -743,7 +1353,7 @@
    "synergy_b": 0.6025105154330667,
    "trend_a": -0.14855354604708657,
    "trend_b": -0.18582663024176485,
-   "type_line": "Artifact \u2014 Equipment",
+   "type_line": "Artifact — Equipment",
    "cmc": 3.0,
    "mana_cost": "{3}",
    "color_identity": [],
@@ -754,7 +1364,42 @@
    "image_uri": "https://cards.scryfall.io/normal/front/3/7/374d7383-a1a7-4eea-91f7-290180e14cc9.jpg?1783906560",
    "set_code": "fin",
    "collector_number": "255",
-   "scryfall_url": "https://scryfall.com/card/fin/255"
+   "scryfall_url": "https://scryfall.com/card/fin/255",
+   "functions": [
+    "draw"
+   ],
+   "oracle_tags": [
+    {
+     "id": "7dca0cec-0c2f-4079-b945-3059c05125bd",
+     "slug": "curiosity",
+     "label": "curiosity"
+    },
+    {
+     "id": "0e87cf9c-591e-4f2a-b4fd-675021f120ae",
+     "slug": "draw-engine",
+     "label": "draw engine"
+    },
+    {
+     "id": "524845ed-ea82-4a60-8b54-8a38ab06a503",
+     "slug": "repeatable-pure-draw",
+     "label": "repeatable pure draw"
+    },
+    {
+     "id": "2218ced0-3030-4925-940d-57d9a0e5be37",
+     "slug": "expertise",
+     "label": "expertise"
+    },
+    {
+     "id": "4c406bdb-5e52-4a8d-bf0c-774138bda127",
+     "slug": "free-cast-another",
+     "label": "free-cast-another"
+    },
+    {
+     "id": "2bcab7f4-d89b-4f8a-979f-f2f6c3c02346",
+     "slug": "mana-value-matters",
+     "label": "mana value matters"
+    }
+   ]
   },
   {
    "name": "Champion's Helm",
@@ -774,7 +1419,7 @@
    "synergy_b": 0.5922579090202433,
    "trend_a": -0.1999552173030667,
    "trend_b": -0.5519416914065459,
-   "type_line": "Artifact \u2014 Equipment",
+   "type_line": "Artifact — Equipment",
    "cmc": 3.0,
    "mana_cost": "{3}",
    "color_identity": [],
@@ -785,7 +1430,27 @@
    "image_uri": "https://cards.scryfall.io/normal/front/d/c/dcad6846-0b35-4193-b647-16e597357f9b.jpg?1783941160",
    "set_code": "cmd",
    "collector_number": "244",
-   "scryfall_url": "https://scryfall.com/card/cmd/244"
+   "scryfall_url": "https://scryfall.com/card/cmd/244",
+   "functions": [
+    "protection"
+   ],
+   "oracle_tags": [
+    {
+     "id": "fbbfa76e-f105-4c52-89cd-8a084016f343",
+     "slug": "gives-hexproof",
+     "label": "gives hexproof"
+    },
+    {
+     "id": "7d4c079e-5fb5-487c-bb38-769d06ce1e2b",
+     "slug": "protects-creature",
+     "label": "protects-creature"
+    },
+    {
+     "id": "394a55d0-f936-4742-a71f-81eede568e63",
+     "slug": "synergy-legendary",
+     "label": "synergy-legendary"
+    }
+   ]
   },
   {
    "name": "Command Beacon",
@@ -815,7 +1480,30 @@
    "image_uri": "https://cards.scryfall.io/normal/front/1/6/166fa02f-e456-48ca-8ac3-d217afceff4d.jpg?1783938103",
    "set_code": "c15",
    "collector_number": "56",
-   "scryfall_url": "https://scryfall.com/card/c15/56"
+   "scryfall_url": "https://scryfall.com/card/c15/56",
+   "functions": [],
+   "oracle_tags": [
+    {
+     "id": "137ad7eb-702f-4277-b3c3-affb570f0aea",
+     "slug": "commander-tax-evasion",
+     "label": "commander tax evasion"
+    },
+    {
+     "id": "817c47d7-159b-4426-8e42-9201669bc220",
+     "slug": "sacrifice-self",
+     "label": "sacrifice self"
+    },
+    {
+     "id": "b0a937d3-b81b-47f3-9dbe-4a95ee3615e2",
+     "slug": "synergy-commander",
+     "label": "synergy-commander"
+    },
+    {
+     "id": "5e708c4d-9992-431e-afe1-fb5af05b2ea3",
+     "slug": "utility-land",
+     "label": "utility land"
+    }
+   ]
   },
   {
    "name": "Command Tower",
@@ -845,7 +1533,35 @@
    "image_uri": "https://cards.scryfall.io/normal/front/4/6/46982091-cc78-4171-8b3d-d07592684728.jpg?1783941150",
    "set_code": "cmd",
    "collector_number": "269",
-   "scryfall_url": "https://scryfall.com/card/cmd/269"
+   "scryfall_url": "https://scryfall.com/card/cmd/269",
+   "functions": [],
+   "oracle_tags": [
+    {
+     "id": "1be51991-024b-44c1-a918-8b75087820ab",
+     "slug": "commander-identity-matters",
+     "label": "commander identity matters"
+    },
+    {
+     "id": "6671420c-fd48-417e-bd71-a1f3c5553866",
+     "slug": "rainbow-land",
+     "label": "rainbow land"
+    },
+    {
+     "id": "66bb00c9-7409-4571-ad92-d03f716a64db",
+     "slug": "synergy-color-share",
+     "label": "synergy-color-share"
+    },
+    {
+     "id": "b0a937d3-b81b-47f3-9dbe-4a95ee3615e2",
+     "slug": "synergy-commander",
+     "label": "synergy-commander"
+    },
+    {
+     "id": "f774ffae-26f8-4a6e-a338-dd430bbda1a5",
+     "slug": "tutored-by-name",
+     "label": "tutored by name"
+    }
+   ]
   },
   {
    "name": "Commander's Plate",
@@ -864,7 +1580,7 @@
    "synergy_b": 0.08703993248696264,
    "trend_a": 0.01597318630997938,
    "trend_b": 0.14034125455642868,
-   "type_line": "Artifact \u2014 Equipment",
+   "type_line": "Artifact — Equipment",
    "cmc": 1.0,
    "mana_cost": "{1}",
    "color_identity": [],
@@ -875,7 +1591,43 @@
    "image_uri": "https://cards.scryfall.io/normal/front/1/0/107ea1fe-167f-4a79-b0f1-f76dce2e6b0a.jpg?1783924606",
    "set_code": "plst",
    "collector_number": "CMR-305",
-   "scryfall_url": "https://scryfall.com/card/plst/CMR-305"
+   "scryfall_url": "https://scryfall.com/card/plst/CMR-305",
+   "functions": [
+    "protection",
+    "evasion"
+   ],
+   "oracle_tags": [
+    {
+     "id": "4d202360-ddd6-4a59-a0b5-29c506e8d14b",
+     "slug": "gives-protection",
+     "label": "gives protection"
+    },
+    {
+     "id": "7d4c079e-5fb5-487c-bb38-769d06ce1e2b",
+     "slug": "protects-creature",
+     "label": "protects-creature"
+    },
+    {
+     "id": "88e2e64f-3631-4439-b462-178eade87b06",
+     "slug": "alternate-equip-cost",
+     "label": "alternate-equip-cost"
+    },
+    {
+     "id": "1be51991-024b-44c1-a918-8b75087820ab",
+     "slug": "commander-identity-matters",
+     "label": "commander identity matters"
+    },
+    {
+     "id": "24d4542d-ea49-4d59-92fa-fc4bdb91fc17",
+     "slug": "enlarge",
+     "label": "enlarge"
+    },
+    {
+     "id": "ab654d3f-c8a7-4e52-b488-bba83be17951",
+     "slug": "french-vanilla-equipment",
+     "label": "french vanilla equipment"
+    }
+   ]
   },
   {
    "name": "Adaptive Omnitool",
@@ -894,7 +1646,7 @@
    "synergy_b": 0.15693359676594135,
    "trend_a": null,
    "trend_b": -0.17699367185861173,
-   "type_line": "Artifact \u2014 Equipment",
+   "type_line": "Artifact — Equipment",
    "cmc": 2.0,
    "mana_cost": "{2}",
    "color_identity": [],
@@ -905,7 +1657,30 @@
    "image_uri": "https://cards.scryfall.io/normal/front/9/e/9e84f840-d7c6-4a82-8891-3d12281020ee.jpg?1789753307",
    "set_code": "fdc",
    "collector_number": "243",
-   "scryfall_url": "https://scryfall.com/card/fdc/243"
+   "scryfall_url": "https://scryfall.com/card/fdc/243",
+   "functions": [],
+   "oracle_tags": [
+    {
+     "id": "d540c4fb-c2dd-49be-aecc-73883ae9edd9",
+     "slug": "attacking-matters",
+     "label": "attacking matters"
+    },
+    {
+     "id": "eda56123-7dcd-4d60-9ebd-9510695486b2",
+     "slug": "cranial-plating",
+     "label": "cranial plating"
+    },
+    {
+     "id": "66777b7b-50d8-40f1-b811-8d44e21aa9d3",
+     "slug": "impulse-artifact",
+     "label": "impulse-artifact"
+    },
+    {
+     "id": "12cc0718-e08e-485c-85ee-3331f688fd54",
+     "slug": "repeatable-impulse",
+     "label": "repeatable impulse"
+    }
+   ]
   },
   {
    "name": "Adelbert Steiner",
@@ -924,7 +1699,7 @@
    "synergy_b": 0.08426709747847302,
    "trend_a": null,
    "trend_b": -0.1881260248287238,
-   "type_line": "Legendary Creature \u2014 Human Knight",
+   "type_line": "Legendary Creature — Human Knight",
    "cmc": 2.0,
    "mana_cost": "{1}{W}",
    "color_identity": [
@@ -937,7 +1712,27 @@
    "image_uri": "https://cards.scryfall.io/normal/front/1/a/1a67a991-1e52-4676-a2e3-2bc7aa943ab3.jpg?1783906656",
    "set_code": "fin",
    "collector_number": "3",
-   "scryfall_url": "https://scryfall.com/card/fin/3"
+   "scryfall_url": "https://scryfall.com/card/fin/3",
+   "functions": [
+    "lifegain"
+   ],
+   "oracle_tags": [
+    {
+     "id": "2dabdf83-e041-48a4-b0e5-08e1842f008c",
+     "slug": "repeatable-lifegain",
+     "label": "repeatable lifegain"
+    },
+    {
+     "id": "eda56123-7dcd-4d60-9ebd-9510695486b2",
+     "slug": "cranial-plating",
+     "label": "cranial plating"
+    },
+    {
+     "id": "1e0533e5-a1c0-4f02-9332-f73dc05663ce",
+     "slug": "synergy-equipment",
+     "label": "synergy-equipment"
+    }
+   ]
   },
   {
    "name": "Aerith, Last Ancient",
@@ -956,7 +1751,7 @@
    "synergy_b": 0.298294158466165,
    "trend_a": null,
    "trend_b": -1.1162998656077694,
-   "type_line": "Legendary Creature \u2014 Human Cleric Druid",
+   "type_line": "Legendary Creature — Human Cleric Druid",
    "cmc": 4.0,
    "mana_cost": "{2}{G}{W}",
    "color_identity": [
@@ -970,7 +1765,43 @@
    "image_uri": "https://cards.scryfall.io/normal/front/d/0/d041a51c-9a28-4b32-9da3-0f06807959f1.jpg?1783906349",
    "set_code": "fic",
    "collector_number": "76",
-   "scryfall_url": "https://scryfall.com/card/fic/76"
+   "scryfall_url": "https://scryfall.com/card/fic/76",
+   "functions": [
+    "recursion",
+    "lifegain"
+   ],
+   "oracle_tags": [
+    {
+     "id": "c05a300c-2ec4-446a-a399-b3c314497de7",
+     "slug": "reanimate-creature",
+     "label": "reanimate-creature"
+    },
+    {
+     "id": "4e94f94c-98cb-4525-98a5-500c793c2365",
+     "slug": "regrowth-creature",
+     "label": "regrowth-creature"
+    },
+    {
+     "id": "2dabdf83-e041-48a4-b0e5-08e1842f008c",
+     "slug": "repeatable-lifegain",
+     "label": "repeatable lifegain"
+    },
+    {
+     "id": "c659b6ed-f835-445d-9a2e-f693f1ef852a",
+     "slug": "infusion",
+     "label": "infusion"
+    },
+    {
+     "id": "8cb1bab7-38db-4f6b-bee4-15d5c26a879d",
+     "slug": "repeatable-card-advantage",
+     "label": "repeatable card advantage"
+    },
+    {
+     "id": "f6c1d92f-0cef-4674-958e-1d0ef6e0a93f",
+     "slug": "self-replacement-effect",
+     "label": "self-replacement effect"
+    }
+   ]
   },
   {
    "name": "Aettir and Priwen",
@@ -989,7 +1820,7 @@
    "synergy_b": 0.21643931183912862,
    "trend_a": null,
    "trend_b": -0.21758248575274275,
-   "type_line": "Legendary Artifact \u2014 Equipment",
+   "type_line": "Legendary Artifact — Equipment",
    "cmc": 6.0,
    "mana_cost": "{6}",
    "color_identity": [],
@@ -1000,7 +1831,25 @@
    "image_uri": "https://cards.scryfall.io/normal/front/0/3/038710ca-c756-4e66-a9de-278e676c9f5b.jpg?1783906559",
    "set_code": "fin",
    "collector_number": "253",
-   "scryfall_url": "https://scryfall.com/card/fin/253"
+   "scryfall_url": "https://scryfall.com/card/fin/253",
+   "functions": [],
+   "oracle_tags": [
+    {
+     "id": "749b70a8-18e7-472a-871c-18f78a440c21",
+     "slug": "life-total-matters-self",
+     "label": "life-total-matters-self"
+    },
+    {
+     "id": "72cb9a08-aeff-4928-aed0-56523d308edb",
+     "slug": "lifegain-matters",
+     "label": "lifegain matters"
+    },
+    {
+     "id": "7f21c0f0-32e5-4bc2-a671-aeb12b006610",
+     "slug": "shapechange",
+     "label": "shapechange"
+    }
+   ]
   },
   {
    "name": "Aggravated Assault",
@@ -1032,7 +1881,30 @@
    "image_uri": "https://cards.scryfall.io/normal/front/c/9/c99c5707-d5f2-4675-bfca-e801e6b0f627.jpg?1783945060",
    "set_code": "ons",
    "collector_number": "185",
-   "scryfall_url": "https://scryfall.com/card/ons/185"
+   "scryfall_url": "https://scryfall.com/card/ons/185",
+   "functions": [],
+   "oracle_tags": [
+    {
+     "id": "cd7e37e6-8b6e-4001-b263-68acf062d11a",
+     "slug": "bottomless-mana-sink",
+     "label": "bottomless mana sink"
+    },
+    {
+     "id": "b0fb4bcb-d667-4799-9eee-7071c69bcd55",
+     "slug": "extra-combat-phase",
+     "label": "extra combat phase"
+    },
+    {
+     "id": "adab7de4-6227-43bf-9d6f-4543f684423e",
+     "slug": "extra-untap",
+     "label": "extra untap"
+    },
+    {
+     "id": "b4bb63c1-124c-4176-adff-dd0a16e60c31",
+     "slug": "untapper-creature",
+     "label": "untapper-creature"
+    }
+   ]
   },
   {
    "name": "Akiri, Fearless Voyager",
@@ -1051,7 +1923,7 @@
    "synergy_b": 0.32392087278570425,
    "trend_a": null,
    "trend_b": 0.22355896320915083,
-   "type_line": "Legendary Creature \u2014 Kor Warrior",
+   "type_line": "Legendary Creature — Kor Warrior",
    "cmc": 3.0,
    "mana_cost": "{1}{R}{W}",
    "color_identity": [
@@ -1065,7 +1937,43 @@
    "image_uri": "https://cards.scryfall.io/normal/front/6/9/69e42511-f653-4a6f-a5d4-50e21dfc8077.jpg?1783929324",
    "set_code": "znr",
    "collector_number": "220",
-   "scryfall_url": "https://scryfall.com/card/znr/220"
+   "scryfall_url": "https://scryfall.com/card/znr/220",
+   "functions": [
+    "draw",
+    "protection"
+   ],
+   "oracle_tags": [
+    {
+     "id": "0e87cf9c-591e-4f2a-b4fd-675021f120ae",
+     "slug": "draw-engine",
+     "label": "draw engine"
+    },
+    {
+     "id": "a8d1455c-431c-473d-ac75-507f048da34c",
+     "slug": "gives-indestructible",
+     "label": "gives indestructible"
+    },
+    {
+     "id": "7d4c079e-5fb5-487c-bb38-769d06ce1e2b",
+     "slug": "protects-creature",
+     "label": "protects-creature"
+    },
+    {
+     "id": "524845ed-ea82-4a60-8b54-8a38ab06a503",
+     "slug": "repeatable-pure-draw",
+     "label": "repeatable pure draw"
+    },
+    {
+     "id": "d540c4fb-c2dd-49be-aecc-73883ae9edd9",
+     "slug": "attacking-matters",
+     "label": "attacking matters"
+    },
+    {
+     "id": "7f0df34c-d16c-4396-8547-0f586a0b0a00",
+     "slug": "neo-regenerate",
+     "label": "neo-regenerate"
+    }
+   ]
   },
   {
    "name": "Akroma's Will",
@@ -1097,7 +2005,44 @@
    "image_uri": "https://cards.scryfall.io/normal/front/b/d/bda58c92-4356-44b4-bbb7-78d90900bb08.jpg?1787679388",
    "set_code": "plst",
    "collector_number": "CMR-3",
-   "scryfall_url": "https://scryfall.com/card/plst/CMR-3"
+   "scryfall_url": "https://scryfall.com/card/plst/CMR-3",
+   "functions": [
+    "protection",
+    "lifegain",
+    "evasion"
+   ],
+   "oracle_tags": [
+    {
+     "id": "0eb64cb1-4430-4b39-a2dd-d06221d21e14",
+     "slug": "gives-flying",
+     "label": "gives flying"
+    },
+    {
+     "id": "a8d1455c-431c-473d-ac75-507f048da34c",
+     "slug": "gives-indestructible",
+     "label": "gives indestructible"
+    },
+    {
+     "id": "d51792e0-fa67-4872-b3bb-12d91cbb2960",
+     "slug": "gives-lifelink",
+     "label": "gives lifelink"
+    },
+    {
+     "id": "4d202360-ddd6-4a59-a0b5-29c506e8d14b",
+     "slug": "gives-protection",
+     "label": "gives protection"
+    },
+    {
+     "id": "6d148a4b-b566-4533-a5ec-13ae6bbbaf87",
+     "slug": "protects-all",
+     "label": "protects-all"
+    },
+    {
+     "id": "7d4c079e-5fb5-487c-bb38-769d06ce1e2b",
+     "slug": "protects-creature",
+     "label": "protects-creature"
+    }
+   ]
   },
   {
    "name": "Amy Rose",
@@ -1116,7 +2061,7 @@
    "synergy_b": 0.08930236751930727,
    "trend_a": null,
    "trend_b": 0.01646840256539739,
-   "type_line": "Legendary Creature \u2014 Hedgehog Warrior",
+   "type_line": "Legendary Creature — Hedgehog Warrior",
    "cmc": 4.0,
    "mana_cost": "{2}{R}{W}",
    "color_identity": [
@@ -1130,7 +2075,40 @@
    "image_uri": "https://cards.scryfall.io/normal/front/6/a/6ac0c02f-6428-4ed0-bd1a-bf9f4af9c3c1.jpg?1783906091",
    "set_code": "sld",
    "collector_number": "2083",
-   "scryfall_url": "https://scryfall.com/card/sld/2083"
+   "scryfall_url": "https://scryfall.com/card/sld/2083",
+   "functions": [],
+   "oracle_tags": [
+    {
+     "id": "d540c4fb-c2dd-49be-aecc-73883ae9edd9",
+     "slug": "attacking-matters",
+     "label": "attacking matters"
+    },
+    {
+     "id": "eb78924e-cf3a-4d52-9b04-4f69ca876626",
+     "slug": "attacking-matters-self",
+     "label": "attacking matters-self"
+    },
+    {
+     "id": "e7b5e3ad-18b8-4b90-8392-bfb87a8854be",
+     "slug": "power-matters-self",
+     "label": "power matters-self"
+    },
+    {
+     "id": "a0af400c-1847-40fe-966b-655d213f5a2e",
+     "slug": "quick-equip",
+     "label": "quick equip"
+    },
+    {
+     "id": "5a314bf9-8038-4acd-8cab-6b683caeb35f",
+     "slug": "repeatable-crime",
+     "label": "repeatable crime"
+    },
+    {
+     "id": "81b21b7b-33a8-45d3-ab83-f680ed3fda27",
+     "slug": "scales-with-power",
+     "label": "scales with power"
+    }
+   ]
   },
   {
    "name": "Annie Joins Up",
@@ -1164,7 +2142,37 @@
    "image_uri": "https://cards.scryfall.io/normal/front/1/6/1624a5f4-f5bc-47c9-85de-c5520ee234ce.jpg?1783911799",
    "set_code": "otj",
    "collector_number": "191",
-   "scryfall_url": "https://scryfall.com/card/otj/191"
+   "scryfall_url": "https://scryfall.com/card/otj/191",
+   "functions": [
+    "removal"
+   ],
+   "oracle_tags": [
+    {
+     "id": "01c171be-e0db-443c-830d-578873c27792",
+     "slug": "burn-creature",
+     "label": "burn creature"
+    },
+    {
+     "id": "9b437740-9a6c-40cd-90db-a2b057df8e3f",
+     "slug": "burn-planeswalker",
+     "label": "burn planeswalker"
+    },
+    {
+     "id": "cc12d27d-1d0e-4849-9551-71caead74d24",
+     "slug": "spot-removal",
+     "label": "spot removal"
+    },
+    {
+     "id": "394a55d0-f936-4742-a71f-81eede568e63",
+     "slug": "synergy-legendary",
+     "label": "synergy-legendary"
+    },
+    {
+     "id": "e03446e0-821d-41a2-9627-43f14a42ab91",
+     "slug": "trigger-doubler",
+     "label": "trigger doubler"
+    }
+   ]
   },
   {
    "name": "Ardenn, Intrepid Archaeologist",
@@ -1183,7 +2191,7 @@
    "synergy_b": 0.19603657749342973,
    "trend_a": null,
    "trend_b": 0.5467032925201445,
-   "type_line": "Legendary Creature \u2014 Kor Scout",
+   "type_line": "Legendary Creature — Kor Scout",
    "cmc": 3.0,
    "mana_cost": "{2}{W}",
    "color_identity": [
@@ -1196,7 +2204,40 @@
    "image_uri": "https://cards.scryfall.io/normal/front/4/3/43980fad-266f-47af-af12-e452db8afe17.jpg?1787679075",
    "set_code": "plst",
    "collector_number": "CMR-10",
-   "scryfall_url": "https://scryfall.com/card/plst/CMR-10"
+   "scryfall_url": "https://scryfall.com/card/plst/CMR-10",
+   "functions": [],
+   "oracle_tags": [
+    {
+     "id": "49afe081-433c-4a7f-89af-dea9eb90cd96",
+     "slug": "pair-commander",
+     "label": "pair-commander"
+    },
+    {
+     "id": "43186715-4959-49c0-bb12-5e94a937fd59",
+     "slug": "quick-enchant",
+     "label": "quick enchant"
+    },
+    {
+     "id": "a0af400c-1847-40fe-966b-655d213f5a2e",
+     "slug": "quick-equip",
+     "label": "quick equip"
+    },
+    {
+     "id": "5a314bf9-8038-4acd-8cab-6b683caeb35f",
+     "slug": "repeatable-crime",
+     "label": "repeatable crime"
+    },
+    {
+     "id": "c42516cf-68c1-45f7-bf08-cbb3b69dc19e",
+     "slug": "synergy-aura",
+     "label": "synergy-aura"
+    },
+    {
+     "id": "1e0533e5-a1c0-4f02-9332-f73dc05663ce",
+     "slug": "synergy-equipment",
+     "label": "synergy-equipment"
+    }
+   ]
   },
   {
    "name": "Arid Mesa",
@@ -1226,7 +2267,32 @@
    "image_uri": "https://cards.scryfall.io/normal/front/1/6/16c8d2fa-54a7-46e8-980c-905258497c90.jpg?1783942125",
    "set_code": "zen",
    "collector_number": "211",
-   "scryfall_url": "https://scryfall.com/card/zen/211"
+   "scryfall_url": "https://scryfall.com/card/zen/211",
+   "functions": [
+    "tutor"
+   ],
+   "oracle_tags": [
+    {
+     "id": "e52dfcb3-8c7e-4462-9f96-58a0002e8686",
+     "slug": "cycle-zen-fetchland",
+     "label": "cycle-zen-fetchland"
+    },
+    {
+     "id": "92e2b83e-cae0-4cdc-ad0e-9170d53a1a04",
+     "slug": "tutor-land-mountain",
+     "label": "tutor-land-mountain"
+    },
+    {
+     "id": "cc15fe00-a614-45ce-8c9e-950e662a02bd",
+     "slug": "tutor-land-plains",
+     "label": "tutor-land-plains"
+    },
+    {
+     "id": "e07644cf-2b48-4e1f-bfb0-92bbdcffe129",
+     "slug": "life-payment",
+     "label": "life payment"
+    }
+   ]
   },
   {
    "name": "Armored Skyhunter",
@@ -1245,7 +2311,7 @@
    "synergy_b": 0.1075288142405189,
    "trend_a": null,
    "trend_b": 0.21514330424221303,
-   "type_line": "Creature \u2014 Cat Knight",
+   "type_line": "Creature — Cat Knight",
    "cmc": 4.0,
    "mana_cost": "{3}{W}",
    "color_identity": [
@@ -1258,7 +2324,40 @@
    "image_uri": "https://cards.scryfall.io/normal/front/2/b/2bf63241-9091-42f5-b997-9ce5aa3484f1.jpg?1783928889",
    "set_code": "cmr",
    "collector_number": "11",
-   "scryfall_url": "https://scryfall.com/card/cmr/11"
+   "scryfall_url": "https://scryfall.com/card/cmr/11",
+   "functions": [],
+   "oracle_tags": [
+    {
+     "id": "eb78924e-cf3a-4d52-9b04-4f69ca876626",
+     "slug": "attacking-matters-self",
+     "label": "attacking matters-self"
+    },
+    {
+     "id": "c7756471-d290-452f-bfc6-24866c841f28",
+     "slug": "evasion",
+     "label": "evasion"
+    },
+    {
+     "id": "203275e0-8cfc-49a9-9a0b-703abae43c4e",
+     "slug": "impulse-artifact-equipment",
+     "label": "impulse-artifact-equipment"
+    },
+    {
+     "id": "9bd0e7dd-ca29-4594-ac14-bf29ef2aac84",
+     "slug": "impulse-enchantment-aura",
+     "label": "impulse-enchantment-aura"
+    },
+    {
+     "id": "41c404e4-2724-4886-ba47-ffaea098e309",
+     "slug": "impulse-onto-battlefield",
+     "label": "impulse-onto-battlefield"
+    },
+    {
+     "id": "a0af400c-1847-40fe-966b-655d213f5a2e",
+     "slug": "quick-equip",
+     "label": "quick equip"
+    }
+   ]
   },
   {
    "name": "Armory Automaton",
@@ -1277,7 +2376,7 @@
    "synergy_b": 0.23484924307653995,
    "trend_a": null,
    "trend_b": -1.2043071817979096,
-   "type_line": "Artifact Creature \u2014 Construct",
+   "type_line": "Artifact Creature — Construct",
    "cmc": 3.0,
    "mana_cost": "{3}",
    "color_identity": [],
@@ -1288,7 +2387,40 @@
    "image_uri": "https://cards.scryfall.io/normal/front/c/c/cc0be4ff-c346-4c22-8357-9a2383a53469.jpg?1783937081",
    "set_code": "c16",
    "collector_number": "51",
-   "scryfall_url": "https://scryfall.com/card/c16/51"
+   "scryfall_url": "https://scryfall.com/card/c16/51",
+   "functions": [],
+   "oracle_tags": [
+    {
+     "id": "eb78924e-cf3a-4d52-9b04-4f69ca876626",
+     "slug": "attacking-matters-self",
+     "label": "attacking matters-self"
+    },
+    {
+     "id": "f364876b-e3af-42aa-a404-399498af1a62",
+     "slug": "hate-equipment",
+     "label": "hate-equipment"
+    },
+    {
+     "id": "a35cdad8-9a43-435f-87d0-79dccf1c4a17",
+     "slug": "multiple-targets",
+     "label": "multiple targets"
+    },
+    {
+     "id": "a0af400c-1847-40fe-966b-655d213f5a2e",
+     "slug": "quick-equip",
+     "label": "quick equip"
+    },
+    {
+     "id": "5a314bf9-8038-4acd-8cab-6b683caeb35f",
+     "slug": "repeatable-crime",
+     "label": "repeatable crime"
+    },
+    {
+     "id": "1e0533e5-a1c0-4f02-9332-f73dc05663ce",
+     "slug": "synergy-equipment",
+     "label": "synergy-equipment"
+    }
+   ]
   },
   {
    "name": "Ash Barrens",
@@ -1318,7 +2450,72 @@
    "image_uri": "https://cards.scryfall.io/normal/front/9/d/9d7ac112-bb20-4ea4-b797-5d21f6b7c121.jpg?1783937080",
    "set_code": "c16",
    "collector_number": "56",
-   "scryfall_url": "https://scryfall.com/card/c16/56"
+   "scryfall_url": "https://scryfall.com/card/c16/56",
+   "functions": [
+    "tutor"
+   ],
+   "oracle_tags": [
+    {
+     "id": "ce97c571-5fd7-4e1d-a642-dfee09f4cde3",
+     "slug": "tutor-land-basic",
+     "label": "tutor-land-basic"
+    },
+    {
+     "id": "ce4076e8-fcfe-4018-a863-c60755359cbe",
+     "slug": "tutor-to-hand",
+     "label": "tutor-to-hand"
+    }
+   ]
+  }
+ ],
+ "functions": [
+  {
+   "key": "ramp",
+   "label": "Ramp"
+  },
+  {
+   "key": "draw",
+   "label": "Card draw"
+  },
+  {
+   "key": "removal",
+   "label": "Removal"
+  },
+  {
+   "key": "board-wipe",
+   "label": "Board wipe"
+  },
+  {
+   "key": "counterspell",
+   "label": "Counterspell"
+  },
+  {
+   "key": "tutor",
+   "label": "Tutor"
+  },
+  {
+   "key": "recursion",
+   "label": "Recursion"
+  },
+  {
+   "key": "protection",
+   "label": "Protection"
+  },
+  {
+   "key": "token-maker",
+   "label": "Token maker"
+  },
+  {
+   "key": "sac-outlet",
+   "label": "Sac outlet"
+  },
+  {
+   "key": "lifegain",
+   "label": "Lifegain"
+  },
+  {
+   "key": "evasion",
+   "label": "Evasion"
   }
  ]
 }

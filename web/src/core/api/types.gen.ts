@@ -224,6 +224,18 @@ export type CompareCardOut = {
      * Scryfall Url
      */
     scryfall_url: string | null;
+    /**
+     * Functions
+     *
+     * Function root keys (Scryfall Tagger roll-up).
+     */
+    functions?: Array<string>;
+    /**
+     * Oracle Tags
+     *
+     * Top Tagger oracle tags by weight.
+     */
+    oracle_tags?: Array<OracleTagOut>;
 };
 
 /**
@@ -250,6 +262,12 @@ export type CompareOut = {
      * Cards
      */
     cards: Array<CompareCardOut>;
+    /**
+     * Functions
+     *
+     * Function roots, display order.
+     */
+    functions?: Array<FunctionRootOut>;
 };
 
 /**
@@ -296,6 +314,22 @@ export type FamilyOut = {
     pools: {
         [key: string]: PoolSummary;
     };
+};
+
+/**
+ * FunctionRootOut
+ *
+ * A curated function root (``config/function_tags.toml``), in display order.
+ */
+export type FunctionRootOut = {
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Label
+     */
+    label: string;
 };
 
 /**
@@ -394,6 +428,26 @@ export type JobSpecOut = {
     input_schema: {
         [key: string]: unknown;
     };
+};
+
+/**
+ * OracleTagOut
+ *
+ * A Scryfall Tagger oracle tag (``id`` is the stable UUID).
+ */
+export type OracleTagOut = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Slug
+     */
+    slug: string;
+    /**
+     * Label
+     */
+    label: string;
 };
 
 /**

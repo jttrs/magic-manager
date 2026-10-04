@@ -280,7 +280,9 @@ def card_summaries(oracle_ids: Iterable[str], *,
     ``functions`` = rolled-up root keys; ``tags`` = the top
     ``preview_limit`` tags for a card preview: strongest weight first, then tags
     inside a function subtree, then label — skipping structural/meta subtrees
-    (``preview_exclude``). Ids with neither are absent."""
+    (``preview_exclude``) unless the tag is ALSO inside a function subtree (e.g.
+    mana-rock-with-set-s-mechanic sits under both mana-rock and a meta root).
+    Ids with neither are absent."""
     cfg = config.function_tags()
     with db.transaction(conn) as c:
         h = _hierarchy(c)
@@ -297,7 +299,8 @@ def card_summaries(oracle_ids: Iterable[str], *,
     for oid, pairs in raw.items():
         tids = {t for t, _ in pairs}
         funcs = [r.key for r in roots if r.tag_ids & tids]
-        cands = [(tid, w) for tid, w in pairs if tid in h.by_id and tid not in excluded]
+        cands = [(tid, w) for tid, w in pairs
+                 if tid in h.by_id and (tid not in excluded or tid in functional)]
         cands.sort(key=lambda p: (-WEIGHT_RANK.get(p[1] or "", 1),
                                   p[0] not in functional, h.by_id[p[0]][1]))
         tags = [Tag(tid, h.by_id[tid][0], h.by_id[tid][1], w) for tid, w in cands[:limit]]

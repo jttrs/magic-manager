@@ -231,3 +231,21 @@ def test_sync_tags_job_spec(tmp_db, bulk):
     res = spec.run(spec.input_model(), events.append)
     assert "12 tags" in res.summary and events
     assert res.artifacts[0].data["taggings"] == 9
+
+
+def test_preview_keeps_functional_tag_even_under_meta_root(tmp_db, monkeypatch):
+    rows = [
+        {"id": "fn", "slug": "fn", "label": "fn", "child_ids": ["x"], "taggings": []},
+        {"id": "meta", "slug": "meta", "label": "meta", "child_ids": ["x", "y"], "taggings": []},
+        {"id": "x", "slug": "x", "label": "x", "parent_ids": ["fn", "meta"],
+         "taggings": [{"oracle_id": "o1", "weight": "median"}]},
+        {"id": "y", "slug": "y", "label": "y", "parent_ids": ["meta"],
+         "taggings": [{"oracle_id": "o1", "weight": "median"}]},
+    ]
+    scryfall_tags.ingest(rows, source="t", updated_at=None)
+    cfg = {"roots": [{"key": "f", "label": "F", "tags": [{"id": "fn", "slug": "fn"}]}],
+           "preview_limit": 5, "preview_exclude": ["meta"]}
+    monkeypatch.setattr(config, "function_tags", lambda **k: cfg)
+    summ = scryfall_tags.card_summaries(["o1"])["o1"]
+    assert summ.functions == ["f"]
+    assert [t.slug for t in summ.tags] == ["x"]

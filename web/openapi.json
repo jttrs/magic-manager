@@ -922,6 +922,22 @@
               }
             ],
             "title": "Scryfall Url"
+          },
+          "functions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Functions",
+            "description": "Function root keys (Scryfall Tagger roll-up)."
+          },
+          "oracle_tags": {
+            "items": {
+              "$ref": "#/components/schemas/OracleTagOut"
+            },
+            "type": "array",
+            "title": "Oracle Tags",
+            "description": "Top Tagger oracle tags by weight."
           }
         },
         "type": "object",
@@ -979,6 +995,14 @@
             },
             "type": "array",
             "title": "Cards"
+          },
+          "functions": {
+            "items": {
+              "$ref": "#/components/schemas/FunctionRootOut"
+            },
+            "type": "array",
+            "title": "Functions",
+            "description": "Function roots, display order."
           }
         },
         "type": "object",
@@ -1049,6 +1073,25 @@
           "pools"
         ],
         "title": "FamilyOut"
+      },
+      "FunctionRootOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label"
+        ],
+        "title": "FunctionRootOut",
+        "description": "A curated function root (``config/function_tags.toml``), in display order."
       },
       "HTTPValidationError": {
         "properties": {
@@ -1205,6 +1248,30 @@
           "input_schema"
         ],
         "title": "JobSpecOut"
+      },
+      "OracleTagOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "slug",
+          "label"
+        ],
+        "title": "OracleTagOut",
+        "description": "A Scryfall Tagger oracle tag (``id`` is the stable UUID)."
       },
       "PoolSummary": {
         "properties": {

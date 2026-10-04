@@ -20,6 +20,7 @@ export function JobsView() {
   const [resume, setResume] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
+  const [tagError, setTagError] = useState('');
   const [activeId, setActiveId] = useState<string | null>(null);
   const [live, setLive] = useState<Live | null>(null);
   const stop = useRef<() => void>(() => {});
@@ -70,9 +71,28 @@ export function JobsView() {
     }
   }
 
+  async function onSyncTags() {
+    setTagError('');
+    setSubmitting(true);
+    try {
+      const r = await submitJob({ path: { name: 'scryfall.sync_tags' }, body: { refresh: false } });
+      if (r.error || !r.data) {
+        setTagError('The server rejected the job.');
+        return;
+      }
+      setActiveId(r.data.id);
+      qc.invalidateQueries({ queryKey: ['jobs'] });
+    } catch {
+      setTagError('Couldn’t reach the server. Is `uv run mm serve` running?');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   const pct = live?.total ? Math.round((live.done / live.total) * 100) : null;
 
   const sidebar = (
+    <div className="flex flex-col gap-6">
     <form onSubmit={onSubmit} className="flex flex-col gap-6" aria-describedby="job-form-error">
       <SideSection title="Warm EDHREC cache">
         <p className="text-sm leading-relaxed text-on-chrome-muted">Fetch EDHREC pages for every card in the given set families so compares load instantly.</p>
@@ -86,6 +106,12 @@ export function JobsView() {
         <p id="job-form-error" role="alert" className="min-h-4 text-sm text-danger">{formError}</p>
       </SideSection>
     </form>
+    <SideSection title="Sync Scryfall tags">
+      <p className="text-sm leading-relaxed text-on-chrome-muted">Download Scryfall’s daily oracle-tag file so Commanders can group cards by function.</p>
+      <Button type="button" disabled={submitting} onClick={onSyncTags}>Sync tags</Button>
+      {tagError && <p role="alert" className="text-sm text-danger">{tagError}</p>}
+    </SideSection>
+    </div>
   );
 
   return (
@@ -95,7 +121,7 @@ export function JobsView() {
           <section aria-labelledby="live-h" className="min-w-0">
             <h2 id="live-h" className="border-b-2 border-rule-strong pb-1 text-2xl voice-condensed font-bold uppercase">Current run</h2>
             {!live ? (
-              <EmptyNote title="No run yet">Start a warm-up from the sidebar to watch it here.</EmptyNote>
+              <EmptyNote title="No run yet">Start a job from the sidebar to watch it here.</EmptyNote>
             ) : (
               <div className="mt-3 flex flex-col gap-3">
                 <p className="flex items-baseline gap-3 text-md">

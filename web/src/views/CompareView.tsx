@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { getRouteApi, useNavigate } from '@tanstack/react-router';
+import { getRouteApi, Link, useNavigate } from '@tanstack/react-router';
 import { useMemo } from 'react';
 import { compareQuery } from '../app/queries';
 import { useSelection } from '../app/selection';
@@ -11,8 +11,9 @@ import { ChipToggles, Segmented, SideSection, TextField } from '../components/Si
 import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../components/States';
 import { VirtualGuide } from '../components/VirtualGuide';
 import { bucketCards, matches, sortCards, tagCounts, tagLabel } from '../core/compare';
-import { exportLines, fromCompare, groupCards, TYPE_GROUPS } from '../core/guideCard';
-import { BUCKETS, type Bucket, type CompareSearch } from '../core/search';
+import { exportLines, fromCompare } from '../core/guideCard';
+import { compareSections, hasFunctionData } from '../core/groupBy';
+import { BUCKETS, type Bucket, type CompareSearch, type GroupBy } from '../core/search';
 
 const cleanName = (n: string) => n.replace(/\s*\((?:Commander|Partner)\)\s*$/i, '');
 const route = getRouteApi('/commanders');
@@ -33,15 +34,17 @@ export function CompareView() {
     if (!data) return null;
     const shown = sortCards(data.cards.filter((c) => matches(c, search.q, search.tags)), search.sort);
     const buckets = bucketCards(shown);
+    const roots = data.functions ?? [];
     const sections = (b: Bucket) =>
-      groupCards(buckets[b].map(fromCompare), TYPE_GROUPS).map((g) => ({ ...g, level: 2 as const }));
+      compareSections(buckets[b], search.groupBy, roots).map((g) => ({ ...g, level: 2 as const }));
     return {
       buckets,
       sections: { a_only: sections('a_only'), both: sections('both'), b_only: sections('b_only') },
       tags: tagCounts(data.cards).slice(0, 18),
       byKey: new Map(shown.map((c) => [fromCompare(c).key, fromCompare(c)])),
+      tagged: hasFunctionData(data.cards),
     };
-  }, [data, search.q, search.tags, search.sort]);
+  }, [data, search.q, search.tags, search.sort, search.groupBy]);
 
   const titles: Record<Bucket, string> = { a_only: `${names.a} only`, both: 'Shared', b_only: `${names.b} only` };
   const columns: Column[] = BUCKETS.map((b) => ({
@@ -80,6 +83,17 @@ export function CompareView() {
         />
       </SideSection>
       <SideSection title="Display">
+        <Segmented<GroupBy>
+          label="Group by"
+          value={search.groupBy}
+          onChange={(groupBy) => set({ groupBy })}
+          options={[{ value: 'lists', label: 'EDHREC lists' }, { value: 'function', label: 'Function' }]}
+        />
+        {search.groupBy === 'function' && view && !view.tagged && (
+          <p role="note" className="text-sm leading-relaxed text-on-chrome-muted">
+            No Scryfall function tags yet — run <Link to="/jobs" className="text-on-chrome underline">Sync Scryfall tags</Link>, then reload.
+          </p>
+        )}
         <Segmented label="Density" value={search.density} onChange={(density) => set({ density })} options={[{ value: 'grid', label: 'Grid' }, { value: 'rows', label: 'Rows' }]} />
         <Segmented
           label="Sort by"
