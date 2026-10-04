@@ -1,0 +1,1269 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "magic-manager",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/jobs/specs": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Job Specs",
+        "operationId": "job_specs",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/JobSpecOut"
+                  },
+                  "type": "array",
+                  "title": "Response Job Specs"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/jobs/{name}": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Submit Job",
+        "operationId": "submit_job",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/jobs": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "List Jobs",
+        "operationId": "list_jobs",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/JobOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Jobs"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/jobs/{job_id}": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Get Job",
+        "operationId": "get_job",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/jobs/{job_id}/events": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Job Events",
+        "operationId": "job_events",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/event-stream": {
+                "itemSchema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    },
+                    "event": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "retry": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/edhrec/commanders": {
+      "get": {
+        "tags": [
+          "edhrec"
+        ],
+        "summary": "Commanders",
+        "operationId": "commanders",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "title": "Q"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CommanderOption"
+                  },
+                  "title": "Response Commanders"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/edhrec/compare": {
+      "get": {
+        "tags": [
+          "edhrec"
+        ],
+        "summary": "Compare",
+        "operationId": "compare",
+        "parameters": [
+          {
+            "name": "a",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "title": "A"
+            }
+          },
+          {
+            "name": "b",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "title": "B"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompareOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/card-diff/families": {
+      "get": {
+        "tags": [
+          "card-diff"
+        ],
+        "summary": "Card Diff Families",
+        "operationId": "card_diff_families",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FamilyOption"
+                  },
+                  "type": "array",
+                  "title": "Response Card Diff Families"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/card-diff": {
+      "get": {
+        "tags": [
+          "card-diff"
+        ],
+        "summary": "Card Diff",
+        "operationId": "card_diff",
+        "parameters": [
+          {
+            "name": "families",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "title": "Families"
+            }
+          },
+          {
+            "name": "pools",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "printing",
+                      "functional",
+                      "variant-chase"
+                    ],
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Pools"
+            }
+          },
+          {
+            "name": "chase",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "exclude",
+                "include",
+                "only"
+              ],
+              "type": "string",
+              "default": "exclude",
+              "title": "Chase"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CardDiffOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CardDiffOut": {
+        "properties": {
+          "families": {
+            "items": {
+              "$ref": "#/components/schemas/FamilyOut"
+            },
+            "type": "array",
+            "title": "Families"
+          },
+          "cards": {
+            "items": {
+              "$ref": "#/components/schemas/CardDiffTile"
+            },
+            "type": "array",
+            "title": "Cards"
+          },
+          "skipped": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Skipped",
+            "description": "Codes that didn't resolve to a configured family."
+          }
+        },
+        "type": "object",
+        "required": [
+          "families",
+          "cards"
+        ],
+        "title": "CardDiffOut"
+      },
+      "CardDiffTile": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key",
+            "description": "Stable per-family tile id (exact printing)."
+          },
+          "family": {
+            "type": "string",
+            "title": "Family"
+          },
+          "pools": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "printing",
+                "functional",
+                "variant-chase"
+              ]
+            },
+            "type": "array",
+            "title": "Pools"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "set_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Set Code"
+          },
+          "collector_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collector Number"
+          },
+          "rarity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rarity"
+          },
+          "finish": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finish"
+          },
+          "usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usd"
+          },
+          "image_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Uri"
+          },
+          "scryfall_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scryfall Url"
+          },
+          "manapool_line": {
+            "type": "string",
+            "title": "Manapool Line",
+            "default": ""
+          },
+          "tcgplayer_line": {
+            "type": "string",
+            "title": "Tcgplayer Line",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "family",
+          "pools",
+          "name",
+          "set_code",
+          "collector_number",
+          "rarity",
+          "finish",
+          "usd",
+          "image_uri",
+          "scryfall_url"
+        ],
+        "title": "CardDiffTile"
+      },
+      "CommanderOption": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "oracle_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oracle Id"
+          },
+          "type_line": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type Line"
+          },
+          "color_identity": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Color Identity"
+          },
+          "image_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Uri"
+          },
+          "cached": {
+            "type": "boolean",
+            "title": "Cached",
+            "description": "EDHREC commander page already in the local cache."
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "oracle_id",
+          "type_line",
+          "color_identity",
+          "image_uri",
+          "cached"
+        ],
+        "title": "CommanderOption"
+      },
+      "CompareCardOut": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "oracle_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oracle Id"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "bucket": {
+            "type": "string",
+            "title": "Bucket"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "a_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "A Pct"
+          },
+          "b_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "B Pct"
+          },
+          "a_decks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "A Decks"
+          },
+          "b_decks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "B Decks"
+          },
+          "delta": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delta"
+          },
+          "synergy_a": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Synergy A"
+          },
+          "synergy_b": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Synergy B"
+          },
+          "trend_a": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trend A"
+          },
+          "trend_b": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trend B"
+          },
+          "type_line": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type Line"
+          },
+          "cmc": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cmc"
+          },
+          "mana_cost": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mana Cost"
+          },
+          "color_identity": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color Identity"
+          },
+          "rarity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rarity"
+          },
+          "lowest_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lowest Usd"
+          },
+          "lowest_usd_foil": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lowest Usd Foil"
+          },
+          "scryfall_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scryfall Id"
+          },
+          "image_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Uri"
+          },
+          "set_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Set Code"
+          },
+          "collector_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collector Number"
+          },
+          "scryfall_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scryfall Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "oracle_id",
+          "slug",
+          "bucket",
+          "tags",
+          "a_pct",
+          "b_pct",
+          "a_decks",
+          "b_decks",
+          "delta",
+          "synergy_a",
+          "synergy_b",
+          "trend_a",
+          "trend_b",
+          "type_line",
+          "cmc",
+          "mana_cost",
+          "color_identity",
+          "rarity",
+          "lowest_usd",
+          "lowest_usd_foil",
+          "scryfall_id",
+          "image_uri",
+          "set_code",
+          "collector_number",
+          "scryfall_url"
+        ],
+        "title": "CompareCardOut"
+      },
+      "CompareOut": {
+        "properties": {
+          "name_a": {
+            "type": "string",
+            "title": "Name A"
+          },
+          "name_b": {
+            "type": "string",
+            "title": "Name B"
+          },
+          "slug_a": {
+            "type": "string",
+            "title": "Slug A"
+          },
+          "slug_b": {
+            "type": "string",
+            "title": "Slug B"
+          },
+          "cards": {
+            "items": {
+              "$ref": "#/components/schemas/CompareCardOut"
+            },
+            "type": "array",
+            "title": "Cards"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name_a",
+          "name_b",
+          "slug_a",
+          "slug_b",
+          "cards"
+        ],
+        "title": "CompareOut"
+      },
+      "FamilyOption": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name"
+        ],
+        "title": "FamilyOption"
+      },
+      "FamilyOut": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "owned_prints": {
+            "type": "integer",
+            "title": "Owned Prints"
+          },
+          "owned_qty": {
+            "type": "integer",
+            "title": "Owned Qty"
+          },
+          "owned_usd": {
+            "type": "number",
+            "title": "Owned Usd"
+          },
+          "pools": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/PoolSummary"
+            },
+            "type": "object",
+            "title": "Pools"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "owned_prints",
+          "owned_qty",
+          "owned_usd",
+          "pools"
+        ],
+        "title": "FamilyOut"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "JobOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "inputs": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Inputs"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "artifacts": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Artifacts"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "title",
+          "inputs",
+          "status",
+          "created_at",
+          "started_at",
+          "finished_at",
+          "progress",
+          "summary",
+          "artifacts",
+          "error"
+        ],
+        "title": "JobOut"
+      },
+      "JobSpecOut": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "mutates": {
+            "type": "boolean",
+            "title": "Mutates"
+          },
+          "input_schema": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Input Schema"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "title",
+          "description",
+          "mutates",
+          "input_schema"
+        ],
+        "title": "JobSpecOut"
+      },
+      "PoolSummary": {
+        "properties": {
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "usd": {
+            "type": "number",
+            "title": "Usd"
+          }
+        },
+        "type": "object",
+        "required": [
+          "count",
+          "usd"
+        ],
+        "title": "PoolSummary"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

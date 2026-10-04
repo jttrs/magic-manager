@@ -47,3 +47,9 @@ output/
 .venv/
 uv.lock
 
+
+# impeccable direction sketches (ephemeral)
+.impeccable/sketches/
+.impeccable/mocks/
+.playwright-mcp/
+.impeccable/questions/

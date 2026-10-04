@@ -1,0 +1,153 @@
+@import '@fontsource-variable/archivo/wdth.css';
+@import './styles/tokens.css';
+@import 'tailwindcss';
+
+/* Utilities resolve ONLY to design tokens: the default palette, fonts and radii
+   are reset, then re-pointed at the generated theme variables. A raw color or an
+   arbitrary value is a lint failure (see stylelint config + tests/guards). */
+@theme {
+  --color-*: initial;
+  --font-*: initial;
+  --radius-*: initial;
+  --shadow-*: initial;
+  --text-*: initial;
+  --font-weight-*: initial;
+}
+
+@theme inline {
+  --color-chrome: var(--theme-chrome);
+  --color-chrome-raised: var(--theme-chrome-raised);
+  --color-chrome-line: var(--theme-chrome-line);
+  --color-on-chrome: var(--theme-on-chrome);
+  --color-on-chrome-muted: var(--theme-on-chrome-muted);
+  --color-paper: var(--theme-paper);
+  --color-paper-raised: var(--theme-paper-raised);
+  --color-paper-sunk: var(--theme-paper-sunk);
+  --color-ink: var(--theme-ink);
+  --color-ink-muted: var(--theme-ink-muted);
+  --color-rule: var(--theme-rule);
+  --color-rule-strong: var(--theme-rule-strong);
+  --color-highlight: var(--theme-highlight);
+  --color-highlight-solid: var(--theme-highlight-solid);
+  --color-accent: var(--theme-accent);
+  --color-accent-ink: var(--theme-accent-ink);
+  --color-on-accent: var(--theme-on-accent);
+  --color-danger: var(--theme-danger);
+  --color-focus: var(--theme-focus);
+  --color-scrim: var(--theme-scrim);
+  --color-transparent: transparent;
+
+  --font-guide: var(--font-family-guide);
+  --font-weight-regular: var(--font-wght-regular);
+  --font-weight-medium: var(--font-wght-medium);
+  --font-weight-bold: var(--font-wght-bold);
+
+  --text-2xs: var(--font-size-2xs);
+  --text-xs: var(--font-size-xs);
+  --text-sm: var(--font-size-sm);
+  --text-md: var(--font-size-md);
+  --text-lg: var(--font-size-lg);
+  --text-xl: var(--font-size-xl);
+  --text-2xl: var(--font-size-2xl);
+  --text-3xl: var(--font-size-3xl);
+
+  --radius-xs: var(--radius-xs);
+  --radius-sm: var(--radius-sm);
+  --radius-pill: var(--radius-pill);
+
+  --ease-out: var(--motion-ease-out);
+}
+
+@layer base {
+  html {
+    background: var(--theme-chrome);
+    color: var(--theme-on-chrome);
+    font-family: var(--font-family-guide);
+    font-variation-settings: 'wdth' var(--font-width-normal);
+    font-size: 100%;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizelegibility;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100dvh;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--theme-focus);
+    outline-offset: 2px;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  img {
+    display: block;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 1ms !important;
+      transition-duration: 1ms !important;
+    }
+  }
+}
+
+/* Typographic voices of the guide. Condensed = running heads & display;
+   semi = labels; normal = body. Numbers are always tabular. */
+@utility voice-condensed {
+  font-variation-settings: 'wdth' var(--font-width-condensed);
+}
+
+@utility voice-semi {
+  font-variation-settings: 'wdth' var(--font-width-semi);
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* The highlighter: a translucent stroke laid behind text/captions, slightly
+   ragged at the ends like a real marker pass. */
+@utility highlighter {
+  background-image: linear-gradient(
+    100deg,
+    transparent 0.2em,
+    var(--theme-highlight) 0.35em,
+    var(--theme-highlight) calc(100% - 0.35em),
+    transparent calc(100% - 0.2em)
+  );
+  box-decoration-break: clone;
+}
+
+@utility ruled {
+  border-bottom: 1px solid var(--theme-rule);
+}
+
+@utility ease-guide {
+  transition-timing-function: var(--motion-ease-out);
+  transition-duration: var(--motion-duration-base);
+}
+
+/* Printed-stock grain on guide sheets: a fixed, low-contrast fractal noise
+   multiplied over the paper token so it reads as stock, not as a pattern. */
+@utility paper-grain {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.72' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.16'/%3E%3C/svg%3E");
+  background-blend-mode: multiply;
+}
+
+[data-theme="dark"] .paper-grain {
+  background-blend-mode: soft-light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .paper-grain {
+    background-blend-mode: soft-light;
+  }
+}

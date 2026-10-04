@@ -1,0 +1,25 @@
+{
+  "theme": {
+    "$type": "color",
+    "chrome": { "$value": "{color.charcoal.950}" },
+    "chrome-raised": { "$value": "{color.charcoal.850}" },
+    "chrome-line": { "$value": "{color.charcoal.700}" },
+    "on-chrome": { "$value": "{color.bone.100}" },
+    "on-chrome-muted": { "$value": "{color.taupe.400}" },
+    "paper": { "$value": "{color.charcoal.800}", "$description": "Guide sheet printed on charcoal stock." },
+    "paper-raised": { "$value": "{color.charcoal.700}" },
+    "paper-sunk": { "$value": "{color.charcoal.850}" },
+    "ink": { "$value": "{color.bone.100}" },
+    "ink-muted": { "$value": "{color.taupe.400}" },
+    "rule": { "$value": "#efe7d624" },
+    "rule-strong": { "$value": "{color.bone.300}" },
+    "highlight": { "$value": "#f0a53147" },
+    "highlight-solid": { "$value": "{color.amber.500}" },
+    "accent": { "$value": "{color.amber.500}" },
+    "accent-ink": { "$value": "{color.amber.300}" },
+    "on-accent": { "$value": "{color.ink.900}" },
+    "danger": { "$value": "{color.rust.400}" },
+    "focus": { "$value": "{color.amber.400}" },
+    "scrim": { "$value": "#100d09cc" }
+  }
+}

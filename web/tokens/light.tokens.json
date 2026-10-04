@@ -1,0 +1,25 @@
+{
+  "theme": {
+    "$type": "color",
+    "chrome": { "$value": "{color.charcoal.900}", "$description": "App frame: top bar + sidebar (stays dark in light mode)." },
+    "chrome-raised": { "$value": "{color.charcoal.800}" },
+    "chrome-line": { "$value": "{color.charcoal.600}" },
+    "on-chrome": { "$value": "{color.bone.100}" },
+    "on-chrome-muted": { "$value": "{color.taupe.400}" },
+    "paper": { "$value": "{color.bone.100}", "$description": "Guide sheet the content is printed on." },
+    "paper-raised": { "$value": "{color.bone.50}" },
+    "paper-sunk": { "$value": "{color.bone.200}" },
+    "ink": { "$value": "{color.ink.900}" },
+    "ink-muted": { "$value": "{color.ink.600}" },
+    "rule": { "$value": "#1d191226" },
+    "rule-strong": { "$value": "{color.ink.900}" },
+    "highlight": { "$value": "#f0a53173", "$description": "Translucent highlighter stroke on paper." },
+    "highlight-solid": { "$value": "{color.amber.500}" },
+    "accent": { "$value": "{color.amber.500}", "$description": "Active nav, focus, primary action on chrome." },
+    "accent-ink": { "$value": "{color.amber.800}", "$description": "Amber-family text that must read on paper." },
+    "on-accent": { "$value": "{color.ink.900}" },
+    "danger": { "$value": "{color.rust.700}" },
+    "focus": { "$value": "{color.amber.500}" },
+    "scrim": { "$value": "#100d09b3" }
+  }
+}
