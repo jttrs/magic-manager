@@ -7,6 +7,7 @@
 #   scryfall.sh search 't:dragon c:r f:modern' [order=edhrec] [unique=cards]
 #   scryfall.sh raw    '/cards/search' 'q=t:dragon&order=edhrec'
 #   scryfall.sh named  'Lightning Bolt'
+#   scryfall.sh bulk   oracle_tags [--refresh]   # prints LOCAL PATH of the cached file
 #
 # All output is the raw JSON body from Scryfall.
 # Exits non-zero with a message on rate-limit or HTTP errors.
@@ -165,6 +166,66 @@ call_api() {
   cat "$tmp_body"
 }
 
+# Bulk-data download (data.scryfall.io). Resolves <type> via the cached
+# /bulk-data listing, downloads the file once into $CACHE_DIR/bulk/, and prints
+# the LOCAL PATH (bulk files are multi-MB gzip — never piped as a body). The
+# file name embeds Scryfall's daily timestamp, so a fresh listing (24h TTL)
+# naturally yields a new file; older files of the same type are pruned.
+# Host-locked to https://data.scryfall.io/.
+bulk_download() {
+  local type="$1" refresh="${2:-}"
+  local listing uri
+  if [ "$refresh" = "--refresh" ]; then CACHE_TTL_SECONDS=0; fi
+  listing=$(call_api GET /bulk-data "" "")
+  uri=$(printf '%s' "$listing" | python3 -c '
+import json, sys
+t = sys.argv[1]
+for b in json.load(sys.stdin).get("data", []):
+    if b.get("type") == t:
+        print(b.get("jsonl_download_uri") or b.get("download_uri") or "")
+        break
+' "$type")
+  if [ -z "$uri" ]; then
+    echo "scryfall.sh: no bulk-data entry of type '$type'" >&2
+    exit 7
+  fi
+  case "$uri" in
+    https://data.scryfall.io/*) ;;
+    *) echo "scryfall.sh: refusing bulk download from unexpected host: $uri" >&2; exit 7 ;;
+  esac
+  local dir="$CACHE_DIR/bulk" name dest
+  mkdir -p "$dir"
+  name="${type}--$(basename "$uri")"
+  dest="$dir/$name"
+  if [ -s "$dest" ]; then
+    echo "$dest"
+    return 0
+  fi
+  acquire_lock
+  check_backoff
+  pace $FAST_GAP_MS
+  local tmp http_code
+  tmp=$(mktemp "$dir/.dl.XXXXXX")
+  # shellcheck disable=SC2064
+  trap "rm -f '$tmp'; rmdir '$LOCK_FILE' 2>/dev/null || true" EXIT
+  http_code=$(curl -sS -L -H "User-Agent: $UA" -o "$tmp" -w '%{http_code}' "$uri") || {
+    echo "scryfall.sh: bulk download failed for $uri" >&2
+    exit 4
+  }
+  if [ "$http_code" = "429" ]; then
+    echo $(( $(now_ms) + 35000 )) > "$BACKOFF_FILE"
+    echo "scryfall.sh: HTTP 429 on bulk download. Backing off for 35s." >&2
+    exit 5
+  fi
+  if [ "$http_code" -ge 400 ]; then
+    echo "scryfall.sh: HTTP $http_code from $uri" >&2
+    exit 6
+  fi
+  find "$dir" -maxdepth 1 -name "${type}--*" ! -name "$name" -delete 2>/dev/null || true
+  mv "$tmp" "$dest"
+  echo "$dest"
+}
+
 urlencode() { python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$1"; }
 
 cmd="${1:-}"; shift || true
@@ -201,6 +262,11 @@ case "$cmd" in
     [ -z "$body" ] && { echo "usage: scryfall.sh collection [path-to-body.json]  (or pipe JSON on stdin)" >&2; exit 1; }
     call_api POST /cards/collection "" "$body"
     ;;
+  bulk)
+    btype="${1:-}"; shift || true
+    [ -z "$btype" ] && { echo "usage: scryfall.sh bulk <type> [--refresh]   (e.g. oracle_tags)" >&2; exit 1; }
+    bulk_download "$btype" "${1:-}"
+    ;;
   raw)
     path="${1:-}"; qs="${2:-}"
     [ -z "$path" ] && { echo "usage: scryfall.sh raw '/path' 'qs=already&encoded'" >&2; exit 1; }
@@ -214,6 +280,7 @@ Subcommands:
   named      '<exact card name>'
   collection [path-to-body.json]   (or pipe JSON body on stdin; up to 75 identifiers per call)
   raw        '/api/path' 'already=encoded&query=string'
+  bulk       <bulk-data type> [--refresh]   (downloads once/day; prints local path)
 EOF
     exit 1
     ;;

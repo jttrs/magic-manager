@@ -12,6 +12,9 @@ const list = <T extends z.ZodTypeAny>(item: T) =>
 const densities = ['grid', 'rows'] as const;
 const density = z.enum(densities).catch('grid').default('grid');
 
+const GROUP_BYS = ['lists', 'function'] as const;
+export type GroupBy = (typeof GROUP_BYS)[number];
+
 export const compareSearch = z.object({
   a: z.string().optional().catch(undefined),
   b: z.string().optional().catch(undefined),
@@ -20,6 +23,7 @@ export const compareSearch = z.object({
   tags: list(z.string()).catch([]).default([]),
   /** Encoded sort rules (core/sort.ts), e.g. `inclusion,name`. */
   sort: z.string().catch('inclusion,name').default('inclusion,name'),
+  groupBy: z.enum(GROUP_BYS).catch('lists').default('lists'),
   density,
 });
 export type CompareSearch = z.infer<typeof compareSearch>;
@@ -32,6 +36,8 @@ export const collectionSearch = z.object({
   /** Unchecked card-type traits (core/collection.ts TRAITS keys). */
   exclude: list(z.string()).catch([]).default([]),
   q: z.string().catch('').default(''),
+  /** Scryfall Tagger function roots to keep (OR); empty = all. */
+  fn: list(z.string()).catch([]).default([]),
   sort: z.string().catch('set,cn').default('set,cn'),
   density,
 });

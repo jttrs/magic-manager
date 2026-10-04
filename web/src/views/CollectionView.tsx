@@ -13,7 +13,7 @@ import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../components/St
 import { VirtualGuide, type GuideSection } from '../components/VirtualGuide';
 import { collectionBuyList, type CollectionCardOut, type CollectionOut } from '../core/api';
 import { CARD_SORT, CARD_SORT_PRESETS, type CardSortKey } from '../core/cardSort';
-import { buyFinish, collectionStats, filterCollection, isMissing, TRAITS, traitCounts } from '../core/collection';
+import { buyFinish, collectionStats, filterCollection, functionCounts, isMissing, NO_FUNCTION, TRAITS, traitCounts } from '../core/collection';
 import { fmtInt, fmtUsd } from '../core/format';
 import { fromCollection, groupCards, type GuideCard } from '../core/guideCard';
 import { SHOW, type CollectionSearch } from '../core/search';
@@ -22,7 +22,7 @@ import { decodeSort, encodeSort, leadSection, sortBy, type SortRule } from '../c
 const route = getRouteApi('/collection');
 
 const LAST_FAMILIES = 'mm.collection.families';
-const RESET: Partial<CollectionSearch> = { show: [...SHOW], exclude: [], q: '' };
+const RESET: Partial<CollectionSearch> = { show: [...SHOW], exclude: [], q: '', fn: [] };
 
 export function CollectionView() {
   const search = route.useSearch();
@@ -44,6 +44,13 @@ export function CollectionView() {
 
   const view = useMemo(() => (q.data ? buildView(q.data, search, rules) : null), [q.data, search, rules]);
   const counts = useMemo(() => (q.data ? traitCounts(q.data.cards) : null), [q.data]);
+  const fnCounts = useMemo(() => (q.data ? functionCounts(q.data.cards) : null), [q.data]);
+  const fnOptions = q.data && fnCounts && fnCounts.size > (fnCounts.has(NO_FUNCTION) ? 1 : 0)
+    ? [
+        ...(q.data.functions ?? []).filter((r) => fnCounts.has(r.key) || search.fn.includes(r.key)).map((r) => ({ value: r.key, label: r.label, count: fnCounts.get(r.key) ?? 0 })),
+        { value: NO_FUNCTION, label: 'No tagged function', count: fnCounts.get(NO_FUNCTION) ?? 0 },
+      ]
+    : null;
 
   const marked = view ? [...selected].map((k) => view.byId.get(k)).filter((c) => c != null) : [];
   const buyPool = marked.length ? marked : (view?.shown.filter((c) => isMissing(c, search.exclude)) ?? []);
@@ -91,7 +98,18 @@ export function CollectionView() {
           onChange={(included) => set({ exclude: TRAITS.map((t) => t.key).filter((k) => !included.includes(k)) })}
           options={TRAITS.filter((t) => !counts || counts.has(t.key) || search.exclude.includes(t.key)).map((t) => ({ value: t.key, label: t.label, group: t.group, count: counts?.get(t.key) ?? 0 }))}
         />
-        {(search.exclude.length > 0 || search.show.length < 2 || search.q) && (
+        {fnOptions && (
+          <MultiSelect
+            label="Function"
+            noun="functions"
+            searchable={false}
+            summary={search.fn.length ? undefined : 'Any function'}
+            value={search.fn}
+            onChange={(fn) => set({ fn })}
+            options={fnOptions}
+          />
+        )}
+        {(search.exclude.length > 0 || search.show.length < 2 || search.q || search.fn.length > 0) && (
           <button type="button" onClick={() => set(RESET)} className="self-start cursor-pointer text-sm text-on-chrome-muted underline hover:text-on-chrome">Reset filters</button>
         )}
       </SideSection>
@@ -169,7 +187,8 @@ type Built = { cards: GuideCard[]; shown: CollectionCardOut[]; sections: GuideSe
 /** Filter → map → sort → section (set-family head, then the lead sort key's groups). */
 function buildView(data: CollectionOut, search: CollectionSearch, rules: SortRule<CardSortKey>[]): Built {
   const shown = filterCollection(data.cards, search);
-  const cards = sortBy(shown.map((c) => fromCollection(c, isMissing(c, search.exclude))), rules, CARD_SORT);
+  const fnLabels = Object.fromEntries((data.functions ?? []).map((r) => [r.key, r.label]));
+  const cards = sortBy(shown.map((c) => fromCollection(c, isMissing(c, search.exclude), fnLabels)), rules, CARD_SORT);
   const section = leadSection(rules, CARD_SORT);
   const bySet = rules[0]?.key === 'set';
   const sections: GuideSection[] = [];
@@ -245,6 +264,7 @@ function controlsSummary(search: CollectionSearch, rules: SortRule<CardSortKey>[
     names.length > 2 ? `${names[0]} +${names.length - 1}` : names.join(', '),
     show,
     search.exclude.length ? typesSummary(search.exclude) : '',
+    search.fn.length ? `${search.fn.length} function${search.fn.length > 1 ? 's' : ''}` : '',
     rules.map((r) => CARD_SORT[r.key].label).join(' › '),
   ];
   return parts.filter(Boolean).join(' · ');

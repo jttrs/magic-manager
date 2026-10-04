@@ -9,7 +9,21 @@ export type CollectionFilters = {
    *  are judged on the checked finishes); any other excluded trait hides it. */
   exclude: readonly string[];
   q: string;
+  /** Scryfall Tagger function roots to keep (OR); empty = no function filter. */
+  fn?: readonly string[];
 };
+
+/** `fn` key for printings no function root covers. */
+export const NO_FUNCTION = '_none';
+
+const fnKeys = (c: CollectionCardOut): string[] => (c.functions?.length ? c.functions : [NO_FUNCTION]);
+
+/** Cards per function root (incl. NO_FUNCTION); a multi-role card counts in each. */
+export function functionCounts(cards: readonly CollectionCardOut[]): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const c of cards) for (const k of fnKeys(c)) m.set(k, (m.get(k) ?? 0) + 1);
+  return m;
+}
 
 type TraitGroup = 'Finish' | 'Rarity' | 'Treatment' | 'Chase';
 type TraitDef = { key: string; label: string; group: TraitGroup };
@@ -90,8 +104,10 @@ export function filterCollection(cards: readonly CollectionCardOut[], f: Collect
   const wantOwned = f.show.includes('owned');
   const wantMissing = f.show.includes('missing');
   const excluded = new Set(f.exclude);
+  const fn = new Set(f.fn ?? []);
   return cards.filter((c) => {
     if (q && !c.name.toLowerCase().includes(q)) return false;
+    if (fn.size && !fnKeys(c).some((k) => fn.has(k))) return false;
     if (excluded.size && traitsOf(c).some((t) => excluded.has(t))) return false;
     const fins = allowedFinishes(c, excluded);
     if (!fins.length) return false;

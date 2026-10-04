@@ -34,6 +34,12 @@ export type GuideCard = {
   /** Short facts printed in the guide line, never over the art (e.g. Chase, Borderless). */
   tags: string[];
   lines: { plain: string; manapool: string; tcgplayer: string };
+  /** Function roots the card serves (Scryfall Tagger roll-up), display labels. */
+  functions?: string[];
+  /** Top Scryfall Tagger oracle tags, display labels (hover preview only). */
+  oracleTags?: string[];
+  /** Short guide-line annotation, e.g. "also: Removal, Lifegain". */
+  note?: string | null;
 };
 
 const RARITY_LETTER: Record<string, string> = {
@@ -41,7 +47,8 @@ const RARITY_LETTER: Record<string, string> = {
 };
 export const rarityLetter = (r: string | null): string => (r ? RARITY_LETTER[r] ?? r[0].toUpperCase() : '');
 
-export function fromCompare(c: CompareCardOut): GuideCard {
+/** `fnLabels` maps function root keys → display labels (from the compare payload). */
+export function fromCompare(c: CompareCardOut, fnLabels: Readonly<Record<string, string>> = {}): GuideCard {
   return {
     key: c.oracle_id ?? `slug:${c.slug}`,
     name: c.name,
@@ -63,6 +70,9 @@ export function fromCompare(c: CompareCardOut): GuideCard {
     missing: false,
     tags: [],
     lines: { plain: `1 ${c.name}`, manapool: `1 ${c.name}`, tcgplayer: `1 ${c.name}` },
+    functions: (c.functions ?? []).map((k) => fnLabels[k] ?? k),
+    oracleTags: (c.oracle_tags ?? []).map((t) => t.label),
+    note: null,
   };
 }
 
@@ -73,7 +83,7 @@ export const treatmentLabels = (codes: string): string[] =>
   codes ? codes.split('|').map((c) => TREATMENT_LABEL[c] ?? c) : [];
 
 /** Collection mapper. `missing` is decided by the caller's missing basis. */
-export function fromCollection(c: CollectionCardOut, missing: boolean): GuideCard {
+export function fromCollection(c: CollectionCardOut, missing: boolean, fnLabels: Readonly<Record<string, string>> = {}): GuideCard {
   return {
     key: c.scryfall_id,
     name: c.name,
@@ -95,6 +105,7 @@ export function fromCollection(c: CollectionCardOut, missing: boolean): GuideCar
     missing,
     tags: [...(c.is_chase ? ['Chase'] : []), ...treatmentLabels(c.treatment)],
     lines: { plain: `1 ${c.name}`, manapool: '', tcgplayer: '' },
+    functions: (c.functions ?? []).map((k) => fnLabels[k] ?? k),
   };
 }
 

@@ -4,6 +4,7 @@ import type { GuideCard } from '../core/guideCard';
 import { rarityLetter } from '../core/guideCard';
 import { fmtPct, fmtUsd } from '../core/format';
 import { CardArt, Holdings, InclusionBars, Tags } from './CardFace';
+import { CardPreview } from './CardMeta';
 
 type Props = { card: GuideCard; selected: boolean; onToggle: (key: string) => void; barLabels?: [string, string] };
 
@@ -35,11 +36,12 @@ export const CardRow = memo(function CardRow({ card, selected, onToggle, barLabe
               {card.finish === 'foil' ? ' ✦' : ''}
             </span>
             {card.tags.length > 0 && <span className="hidden min-w-0 @[36rem]:block"><Tags tags={card.tags} /></span>}
+            {card.note && <span className="hidden min-w-0 truncate text-2xs text-ink-muted @[24rem]:inline">{card.note}</span>}
           </a>
         </HoverCard.Trigger>
         <HoverCard.Portal>
           <HoverCard.Content side="right" align="center" sideOffset={12} collisionPadding={16} className="z-40 w-56 drop-shadow-[0_10px_24px_var(--theme-scrim)]">
-            <CardArt card={card} eager />
+            <CardPreview card={card} />
           </HoverCard.Content>
         </HoverCard.Portal>
       </HoverCard.Root>

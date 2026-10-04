@@ -1,0 +1,94 @@
+# Curated FUNCTION roots over Scryfall Tagger's oracle-tag hierarchy
+# (consumed by magic_manager.scryfall_tags via config.load_function_tags).
+#
+# A card's "functions" = every root whose subtree (the root tag(s) + all
+# descendants via child_ids) tags the card. Roots are keyed on the Tagger tag
+# UUID (`id`) — slugs/labels can be renamed upstream; `slug` is a readable
+# fallback used only when the UUID disappears from the bulk file.
+#
+# This file is OPTIONAL — config.py ships the same defaults baked in.
+# Choices (inspected against the oracle_tags bulk file, 2026-10-04):
+#   - Card draw = `draw` (textual draw, 35 descendants), NOT `card-advantage`
+#     (which also pulls regrowth/impulse/tome — broader than "draw").
+#   - Removal = `removal`; it CONTAINS `sweeper`, so a wrath is in both Removal and
+#     Board wipe — expected (a card may serve several functions).
+#   - Token maker: Tagger has no single "creates tokens" tag; union of
+#     `repeatable-token-generator` (engines) + `multiple-bodies` (one-shot spells
+#     that make 2+ creatures).
+#   - Evasion = `gives-evasion` (grants evasion to others). The `evasion` tag tags
+#     every flyer (~5.6k cards) — a keyword, not a deck function.
+#   - Counterspell's upstream parent is `blue-effect`; we root at `counterspell`.
+
+# Max oracle tags shown per card in previews (highest weight first).
+preview_limit = 6
+
+# Structural / meta subtrees never shown as a card's preview tags.
+preview_exclude = [
+  "card-names", "cycle", "flavors-of-vanilla", "type-errata", "unique-type-line",
+  "triggered-ability", "activated-ability", "cheaper-than-mv",
+  "more-expensive-than-mv", "staple-with-set-s-mechanic", "token-errata",
+  "single-target-instant-sorcery", "drawback", "meme",
+]
+
+[[roots]]
+key = "ramp"
+label = "Ramp"
+tags = [{ id = "2f3e4ad7-5e60-41b4-bdbc-653f16869cf6", slug = "ramp" }]
+
+[[roots]]
+key = "draw"
+label = "Card draw"
+tags = [{ id = "b6448c45-ce65-4848-aa98-2151e4e07437", slug = "draw" }]
+
+[[roots]]
+key = "removal"
+label = "Removal"
+tags = [{ id = "444f824c-f910-4530-9dbe-ede7a84cd7f9", slug = "removal" }]
+
+[[roots]]
+key = "board-wipe"
+label = "Board wipe"
+tags = [{ id = "3fb7e4fd-5304-4120-b7c4-8a89f70ad3f0", slug = "sweeper" }]
+
+[[roots]]
+key = "counterspell"
+label = "Counterspell"
+tags = [{ id = "690fc968-48ba-4854-a948-3db6bf19d3a9", slug = "counterspell" }]
+
+[[roots]]
+key = "tutor"
+label = "Tutor"
+tags = [{ id = "c768d2ec-3264-4a90-a98f-bea8467857d3", slug = "tutor" }]
+
+[[roots]]
+key = "recursion"
+label = "Recursion"
+tags = [{ id = "82b824ad-648f-467f-a190-2e0fa9a795d2", slug = "recursion" }]
+
+[[roots]]
+key = "protection"
+label = "Protection"
+tags = [{ id = "6e2cdc7c-b02c-4b59-a171-f93723721b79", slug = "protection" }]
+
+[[roots]]
+key = "token-maker"
+label = "Token maker"
+tags = [
+  { id = "a9657a5d-e7f8-4000-a795-7a78b5fb8923", slug = "repeatable-token-generator" },
+  { id = "07808167-c4ef-4a2d-bfe9-fa38a5a9d17b", slug = "multiple-bodies" },
+]
+
+[[roots]]
+key = "sac-outlet"
+label = "Sac outlet"
+tags = [{ id = "c7bd55a7-1ea0-49da-b25e-0be470fbe8ec", slug = "sacrifice-outlet" }]
+
+[[roots]]
+key = "lifegain"
+label = "Lifegain"
+tags = [{ id = "4caab3cc-1d60-44fb-a26a-cc833bc67c97", slug = "lifegain" }]
+
+[[roots]]
+key = "evasion"
+label = "Evasion"
+tags = [{ id = "6cdeab4c-72a6-4f40-ab19-14284d6cf775", slug = "gives-evasion" }]

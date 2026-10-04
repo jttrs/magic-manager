@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# PreToolUse Bash hook: blocks any direct call to api.scryfall.com that
-# doesn't go through the project's scryfall.sh wrapper.
+# PreToolUse Bash hook: blocks any direct call to api.scryfall.com (or the
+# bulk-data download host data.scryfall.io) that doesn't go through the
+# project's scryfall.sh wrapper (`scryfall.sh bulk <type>` for bulk files).
 #
 # Exits 0 always (so the tool runs normally for non-matching commands).
 # When blocking, emits hookSpecificOutput with permissionDecision=deny and
@@ -16,7 +17,7 @@ cmd=$(printf '%s' "$input" | python3 -c 'import sys,json; print(json.load(sys.st
 # the bare hostname so commit messages, log lines, etc. that mention the
 # domain as text don't get blocked.
 case "$cmd" in
-  *://api.scryfall.com*) ;;
+  *://api.scryfall.com*|*://data.scryfall.io*) ;;
   *) exit 0 ;;
 esac
 
@@ -31,7 +32,7 @@ cat <<'JSON'
   "hookSpecificOutput": {
     "hookEventName": "PreToolUse",
     "permissionDecision": "deny",
-    "permissionDecisionReason": "Direct curl to api.scryfall.com is blocked. Use the project wrapper at .claude/skills/scryfall-search/scryfall.sh — it enforces the 500ms-per-request rate limit, caches responses for 24h, and backs off on HTTP 429. Example: .claude/skills/scryfall-search/scryfall.sh search 't:dragon c:r f:modern' order=edhrec"
+    "permissionDecisionReason": "Direct curl to api.scryfall.com / data.scryfall.io is blocked. Bulk files: scryfall.sh bulk oracle_tags. Use the project wrapper at .claude/skills/scryfall-search/scryfall.sh — it enforces the 500ms-per-request rate limit, caches responses for 24h, and backs off on HTTP 429. Example: .claude/skills/scryfall-search/scryfall.sh search 't:dragon c:r f:modern' order=edhrec"
   }
 }
 JSON

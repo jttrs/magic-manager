@@ -50,6 +50,29 @@ def _run(args: list[str], stdin: str | None = None) -> dict:
     return body
 
 
+
+def bulk_file(bulk_type: str, *, refresh: bool = False) -> Path:
+    """Local path of a Scryfall bulk-data file (e.g. ``oracle_tags``).
+
+    Delegates to ``scryfall.sh bulk`` — it resolves the type via the cached
+    ``/bulk-data`` listing (24h TTL), downloads the daily file from
+    ``data.scryfall.io`` once, and prints the cached path. ``refresh`` bypasses
+    the listing cache (a new daily file is fetched only if Scryfall published one).
+    """
+    if not WRAPPER.exists():
+        raise ScryfallError(f"wrapper missing: {WRAPPER}")
+    args = [str(WRAPPER), "bulk", bulk_type] + (["--refresh"] if refresh else [])
+    res = subprocess.run(args, text=True, capture_output=True, check=False)
+    if res.returncode != 0:
+        raise ScryfallError(
+            f"scryfall.sh bulk {bulk_type} exited {res.returncode}: "
+            f"{res.stderr.strip() or res.stdout.strip()}"
+        )
+    path = Path(res.stdout.strip().splitlines()[-1]) if res.stdout.strip() else None
+    if path is None or not path.exists():
+        raise ScryfallError(f"scryfall.sh bulk {bulk_type} returned no file")
+    return path
+
 # ---------- search (paginated) ----------
 
 def search(query: str, **params: str) -> Iterator[dict]:

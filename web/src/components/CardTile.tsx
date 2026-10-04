@@ -2,6 +2,7 @@ import { HoverCard } from 'radix-ui';
 import { memo } from 'react';
 import type { GuideCard } from '../core/guideCard';
 import { CardArt, GuideLine, Holdings, InclusionBars, Tags } from './CardFace';
+import { CardPreview, GuideNote } from './CardMeta';
 
 type Props = {
   card: GuideCard;
@@ -42,12 +43,13 @@ export const CardTile = memo(function CardTile({ card, selected, onToggle, barLa
             </HoverCard.Trigger>
             <HoverCard.Portal>
               <HoverCard.Content side="right" align="start" sideOffset={10} collisionPadding={16} className="z-40 w-64 drop-shadow-[0_10px_24px_var(--theme-scrim)]">
-                <CardArt card={card} eager />
+                <CardPreview card={card} />
               </HoverCard.Content>
             </HoverCard.Portal>
           </HoverCard.Root>
         </span>
         <GuideLine card={card} />
+        {card.note && <GuideNote note={card.note} />}
         {card.owned && <Holdings card={card} />}
         <Tags tags={card.tags} />
         {card.bars && <InclusionBars a={card.bars.a} b={card.bars.b} labelA={barLabels[0]} labelB={barLabels[1]} />}

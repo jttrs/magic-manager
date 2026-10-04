@@ -942,6 +942,36 @@ CREATE INDEX IF NOT EXISTS cards_oracle_released_idx ON cards (oracle_id, releas
 """
 
 
+# V28 — Scryfall Tagger oracle (function) tags, from Scryfall's OFFICIAL
+# ``oracle_tags`` bulk file (GET /bulk-data → data.scryfall.io; never the tagger
+# site / GraphQL). A REBUILDABLE cache — `mm scryfall tags sync` re-downloads and
+# fully re-derives both tables (scryfall_tags.sync). Keyed on the tag UUID, not
+# the slug: Tagger slugs/labels can be renamed.
+#   scryfall_tags      one row per tag; parent_ids/child_ids are JSON arrays of
+#                      tag UUIDs (the hierarchy, e.g. mana-rock ⊂ ramp).
+#   card_oracle_tags   one row per (oracle_id, tag) tagging + Tagger's weight
+#                      (very_strong | strong | median | weak).
+SCHEMA_V28 = """
+CREATE TABLE IF NOT EXISTS scryfall_tags (
+    id          TEXT PRIMARY KEY,
+    slug        TEXT NOT NULL,
+    label       TEXT,
+    type        TEXT NOT NULL DEFAULT 'oracle',
+    parent_ids  TEXT NOT NULL DEFAULT '[]',
+    child_ids   TEXT NOT NULL DEFAULT '[]',
+    updated_at  TEXT
+);
+CREATE INDEX IF NOT EXISTS scryfall_tags_slug_idx ON scryfall_tags (slug);
+
+CREATE TABLE IF NOT EXISTS card_oracle_tags (
+    oracle_id   TEXT NOT NULL,
+    tag_id      TEXT NOT NULL,
+    weight      TEXT,
+    PRIMARY KEY (oracle_id, tag_id)
+);
+CREATE INDEX IF NOT EXISTS card_oracle_tags_tag_idx ON card_oracle_tags (tag_id);
+"""
+
 # ---------- migration-authoring convention ----------
 #
 # Always-safe ops in a migration: CREATE TABLE, ALTER TABLE ADD COLUMN,
@@ -978,6 +1008,8 @@ CREATE INDEX IF NOT EXISTS cards_oracle_released_idx ON cards (oracle_id, releas
 #   - edhrec_pages / edhrec_commander_cards / edhrec_card_commanders /
 #                       edhrec_rankings   (V23) rebuilt by `mm edhrec sync` — a
 #                       cache over json.edhrec.com, re-fetchable any time
+#   - scryfall_tags / card_oracle_tags   (V28) rebuilt by `mm scryfall tags sync`
+#                       — a cache over Scryfall's official oracle_tags bulk file
 #
 # Copy-rebuild dance for destructive changes:
 #   BEGIN;
@@ -1022,6 +1054,7 @@ MIGRATIONS: list[str] = [
     SCHEMA_V25,
     SCHEMA_V26,
     SCHEMA_V27,
+    SCHEMA_V28,
 ]
 CURRENT_VERSION = len(MIGRATIONS)
 
