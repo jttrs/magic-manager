@@ -72,6 +72,17 @@ test('paste: resolve → review (pick printing, finish refits, unresolved left o
   await expect(page.getByRole('textbox', { name: 'Card list' })).toHaveValue('');
 });
 
+test('paste: a list with no card lines stays on the paste box and says why', async ({ page }) => {
+  await page.route('**/api/ingest/resolve', (r) => r.fulfill({ json: { format: 'names', deck_name: null, lines: [], warnings: ["unparseable line: 'hello'"] } }));
+  await page.goto(COLLECTION_URL);
+  await page.getByRole('button', { name: 'Add cards' }).click();
+  await page.getByRole('tab', { name: 'Paste a list' }).click();
+  await page.getByRole('textbox', { name: 'Card list' }).fill('hello');
+  await page.getByRole('button', { name: 'Read list' }).click();
+  await expect(page.getByRole('alert')).toContainText("No card lines found. unparseable line: 'hello'");
+  await expect(page.getByRole('textbox', { name: 'Card list' })).toBeVisible();
+});
+
 test('deck URL: fetch job streams, then the deck lands in review and commits with its name', async ({ page }) => {
   await page.route('**/api/jobs/ingest.fetch_deck', (r) => r.fulfill({ status: 202, json: job('jd', 'ingest.fetch_deck') }));
   await page.route('**/api/jobs/jd/events', (r) => r.fulfill({

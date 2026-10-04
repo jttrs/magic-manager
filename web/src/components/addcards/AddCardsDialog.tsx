@@ -6,6 +6,7 @@ import { ingestCommit, type PrintingOut, type ResolveOut } from '../../core/api'
 import { fmtInt } from '../../core/format';
 import { commitItems, fromResolved, reviewStats, stagePrinting, updateLine, type Finish, type ReviewLine } from '../../core/ingest';
 import { Button } from '../Button';
+import { Chevron } from '../Chevron';
 import { DeckPane } from './DeckPane';
 import { PastePane } from './PastePane';
 import { ReviewTable } from './ReviewTable';
@@ -168,9 +169,16 @@ function readTitle(lines: ReviewLine[]): string {
 function Review({ title, warnings, back, children }: { title: string; warnings: string[]; back: { label: string; onClick: () => void }; children: ReactNode }) {
   return (
     <section aria-label={title} className="flex min-h-0 flex-1 flex-col @container">
-      <div className="flex items-end gap-3 border-b-2 border-rule-strong pb-1">
+      <div className="flex items-baseline gap-4 border-b-2 border-rule-strong pb-1">
         <h3 className="text-lg voice-condensed font-bold uppercase">{title}</h3>
-        <button type="button" onClick={back.onClick} className="ml-auto cursor-pointer text-sm text-ink-muted underline hover:text-ink">{back.label}</button>
+        <button
+          type="button"
+          onClick={back.onClick}
+          className="inline-flex cursor-pointer items-center gap-0.5 self-center rounded-sm px-1 text-sm voice-semi font-medium text-accent-ink underline decoration-1 underline-offset-2 hover:decoration-2"
+        >
+          <Chevron dir="left" className="size-3.5" />
+          {back.label}
+        </button>
       </div>
       {warnings.length > 0 && (
         <details className="border-b border-rule py-1.5 text-sm text-ink-muted">

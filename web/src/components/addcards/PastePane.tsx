@@ -26,7 +26,12 @@ export function PastePane({ text, onText, onResolved }: { text: string; onText: 
     setBusy(true);
     setError('');
     try {
-      onResolved(unwrap(await ingestResolve({ body: { text, format } })));
+      const r = unwrap(await ingestResolve({ body: { text, format } }));
+      if (!r.lines.length) {
+        setError(r.warnings?.length ? `No card lines found. ${r.warnings[0]}` : 'No card lines found. Each line needs a count and a name, like “4 Lightning Bolt”.');
+        return;
+      }
+      onResolved(r);
     } catch (e) {
       setError(`Couldn’t read the list: ${(e as Error).message}`);
     } finally {
