@@ -4,6 +4,8 @@ import { useEffect, useMemo } from 'react';
 import { collectionQuery, familiesQuery } from '../app/queries';
 import { useSelection } from '../app/selection';
 import { ViewLayout } from '../components/AppShell';
+import { AddCardsDialog } from '../components/addcards/AddCardsDialog';
+import { Button } from '../components/Button';
 import { CopyTargets } from '../components/CopyButton';
 import { CardKingdomMark, ManaPoolMark, TcgplayerMark } from '../components/StoreMarks';
 import { MultiSelect } from '../components/MultiSelect';
@@ -163,6 +165,7 @@ export function CollectionView() {
     <ViewLayout label="Collection controls" summary={controlsSummary(search, rules, fams.data)} sidebar={sidebar} startOpen={!search.families.length}>
       <GuideSheet
         title="Collection"
+        actions={<AddCardsDialog trigger={<Button tone="paper" emphasis="primary">Add cards</Button>} />}
         summary={
           s
             ? `${famN} set ${famN === 1 ? 'family' : 'families'} · showing ${fmtInt(s.printings)} printings: ${fmtInt(s.owned)} owned (${fmtInt(s.copies)} copies), ${fmtInt(s.missing)} missing · ${fmtUsd(s.missingUsd)} to complete${q.data?.skipped?.length ? ` · skipped ${q.data.skipped.join(', ')}` : ''}`

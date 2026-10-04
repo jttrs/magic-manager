@@ -429,6 +429,203 @@
           }
         }
       }
+    },
+    "/api/ingest/search": {
+      "get": {
+        "tags": [
+          "ingest"
+        ],
+        "summary": "Ingest Search",
+        "operationId": "ingest_search",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 120,
+              "title": "Q"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 60,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ingest/resolve": {
+      "post": {
+        "tags": [
+          "ingest"
+        ],
+        "summary": "Ingest Resolve",
+        "operationId": "ingest_resolve",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolveOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ingest/commit": {
+      "post": {
+        "tags": [
+          "ingest"
+        ],
+        "summary": "Ingest Commit",
+        "operationId": "ingest_commit",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommitIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommitOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ingest/precons": {
+      "get": {
+        "tags": [
+          "ingest"
+        ],
+        "summary": "Ingest Precons",
+        "operationId": "ingest_precons",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Q"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PreconOptionOut"
+                  },
+                  "title": "Response Ingest Precons"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -806,6 +1003,103 @@
           "cached"
         ],
         "title": "CommanderOption"
+      },
+      "CommitIn": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CommitItem"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Items"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "search",
+              "paste",
+              "deck"
+            ],
+            "title": "Source"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label",
+            "description": "Free text recorded on the ingest event (e.g. a deck name)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "source"
+        ],
+        "title": "CommitIn"
+      },
+      "CommitItem": {
+        "properties": {
+          "scryfall_id": {
+            "type": "string",
+            "title": "Scryfall Id"
+          },
+          "finish": {
+            "type": "string",
+            "enum": [
+              "nonfoil",
+              "foil"
+            ],
+            "title": "Finish"
+          },
+          "qty": {
+            "type": "integer",
+            "maximum": 10000.0,
+            "minimum": 1.0,
+            "title": "Qty"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scryfall_id",
+          "finish",
+          "qty"
+        ],
+        "title": "CommitItem"
+      },
+      "CommitOut": {
+        "properties": {
+          "ingest_id": {
+            "type": "integer",
+            "title": "Ingest Id"
+          },
+          "copies": {
+            "type": "integer",
+            "title": "Copies"
+          },
+          "printings": {
+            "type": "integer",
+            "title": "Printings"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ingest_id",
+          "copies",
+          "printings",
+          "summary"
+        ],
+        "title": "CommitOut"
       },
       "CompareCardOut": {
         "properties": {
@@ -1437,6 +1731,385 @@
         ],
         "title": "OracleTagOut",
         "description": "A Scryfall Tagger oracle tag (``id`` is the stable UUID)."
+      },
+      "PreconOptionOut": {
+        "properties": {
+          "file_name": {
+            "type": "string",
+            "title": "File Name"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "set_code": {
+            "type": "string",
+            "title": "Set Code"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "release_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Date"
+          },
+          "default_state": {
+            "type": "string",
+            "enum": [
+              "built",
+              "deconstructed"
+            ],
+            "title": "Default State"
+          },
+          "owned_built": {
+            "type": "integer",
+            "title": "Owned Built"
+          },
+          "owned_deconstructed": {
+            "type": "integer",
+            "title": "Owned Deconstructed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file_name",
+          "name",
+          "set_code",
+          "type",
+          "release_date",
+          "default_state",
+          "owned_built",
+          "owned_deconstructed"
+        ],
+        "title": "PreconOptionOut"
+      },
+      "PrintingOut": {
+        "properties": {
+          "scryfall_id": {
+            "type": "string",
+            "title": "Scryfall Id"
+          },
+          "oracle_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oracle Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "set_code": {
+            "type": "string",
+            "title": "Set Code"
+          },
+          "set_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Set Name"
+          },
+          "collector_number": {
+            "type": "string",
+            "title": "Collector Number"
+          },
+          "rarity": {
+            "type": "string",
+            "title": "Rarity"
+          },
+          "finishes": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "nonfoil",
+                "foil"
+              ]
+            },
+            "type": "array",
+            "title": "Finishes",
+            "description": "Inventory finishes (etched counts as foil)."
+          },
+          "treatment": {
+            "type": "string",
+            "title": "Treatment",
+            "description": "treatments.compute_treatment code, '' for a standard frame."
+          },
+          "image_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Uri"
+          },
+          "price_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Usd"
+          },
+          "price_usd_foil": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Usd Foil"
+          },
+          "released_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Released At"
+          },
+          "owned": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Owned",
+            "description": "Copies you already own, per finish."
+          }
+        },
+        "type": "object",
+        "required": [
+          "scryfall_id",
+          "oracle_id",
+          "name",
+          "set_code",
+          "set_name",
+          "collector_number",
+          "rarity",
+          "finishes",
+          "treatment",
+          "image_uri",
+          "price_usd",
+          "price_usd_foil",
+          "released_at"
+        ],
+        "title": "PrintingOut",
+        "description": "One exact printing a line can resolve to (what the picker shows)."
+      },
+      "ResolveIn": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 200000,
+            "minLength": 1,
+            "title": "Text"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "moxfield",
+              "tcgplayer",
+              "names"
+            ],
+            "title": "Format",
+            "default": "auto"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "ResolveIn"
+      },
+      "ResolveOut": {
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": [
+              "moxfield",
+              "tcgplayer",
+              "names",
+              "deck"
+            ],
+            "title": "Format"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/ResolvedLineOut"
+            },
+            "type": "array",
+            "title": "Lines"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          },
+          "deck_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deck Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "format",
+          "lines"
+        ],
+        "title": "ResolveOut"
+      },
+      "ResolvedLineOut": {
+        "properties": {
+          "line": {
+            "type": "integer",
+            "title": "Line",
+            "description": "1-based line number in the pasted text (0 for fetched decks)."
+          },
+          "raw": {
+            "type": "string",
+            "title": "Raw"
+          },
+          "qty": {
+            "type": "integer",
+            "title": "Qty"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "finish": {
+            "type": "string",
+            "enum": [
+              "nonfoil",
+              "foil"
+            ],
+            "title": "Finish"
+          },
+          "section": {
+            "type": "string",
+            "title": "Section"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "exact",
+              "ambiguous",
+              "unresolved"
+            ],
+            "title": "Status"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/PrintingOut"
+            },
+            "type": "array",
+            "title": "Candidates",
+            "description": "Exact: one. Ambiguous: every printing of the name, best guess first. Unresolved: empty."
+          },
+          "chosen": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chosen",
+            "description": "scryfall_id of the default pick (None when unresolved)."
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "line",
+          "raw",
+          "qty",
+          "name",
+          "finish",
+          "section",
+          "status",
+          "candidates",
+          "chosen"
+        ],
+        "title": "ResolvedLineOut"
+      },
+      "SearchOut": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "title": "Query"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "local",
+              "scryfall"
+            ],
+            "title": "Source"
+          },
+          "printings": {
+            "items": {
+              "$ref": "#/components/schemas/PrintingOut"
+            },
+            "type": "array",
+            "title": "Printings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "query",
+          "source",
+          "printings"
+        ],
+        "title": "SearchOut"
       },
       "SetRefOut": {
         "properties": {

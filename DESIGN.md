@@ -253,6 +253,13 @@ Hairline borders are the main geometry. `ruled` is a 1px bottom border; column a
 - **Tags:** short printed facts (Chase, Borderless, Showcase, Ext. art, Reskin) as one truncated uppercase line; Chase in accent ink.
 - Missing printings dim their art (`opacity-55 grayscale`) — state is shown on the art's tone, never drawn over it.
 
+### Add cards dialog (Collection)
+- **Why a modal:** a protected multi-step flow (stage → review → commit) that must not leak half-edits into the sheet. Trigger: the sheet header's primary `Add cards`. Paper sheet inset 3dvh, title + text tabs (`Search · Paste a list · Deck or precon`, amber underline on the active tab, like the nav).
+- **One review model for every mode:** search stages printings, paste/deck lines resolve server-side, and all of them end in the same `ReviewTable` checklist (ruled rows: include checkbox, art crop, name + source line/note, printing picker, finish toggle, unit price, qty). Ambiguous lines carry an amber-ink `BEST GUESS` mark; unresolved lines a rust `NOT FOUND` and are left out. Narrow containers wrap the controls under the name (`@container`, `contents` at ≥44rem).
+- **Printing picker:** a ruled trigger naming the pick (`DSC · 114 · U`) + candidate count, opening a popover grid of every printing's art with price and owned copies; the current pick gets an amber outline.
+- **Footer:** what will happen in plain numbers (`8 copies · 2 best-guess printings to check · 1 not found`) and one primary `Add N copies`. Success shows a highlighter `Added …` status in the dialog; the collection refetches behind it.
+- **Precons add directly** (a job; `Keep it`: Suggested / Keep built / Break into loose cards); **deck URLs fetch first** (a job) and land in review before anything is written.
+
 ### Button and CopyButton
 - **Button:** one component with `tone="chrome|paper"` and `emphasis="primary|quiet"`; primary fills amber, quiet variants are ruled outlines.
 - **CopyButton:** wraps Button, copies generated list text, and announces result through `aria-live="polite"`.

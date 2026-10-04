@@ -97,6 +97,14 @@ def _cheapest_finish_price(card: CollectionCard) -> float | None:
     return min(prices) if prices else None
 
 
+def inventory_finishes(raw_json: str | None) -> list[str]:
+    """Scryfall ``finishes`` JSON → inventory finishes. Inventory records two
+    finishes, so etched counts as foil (Scryfall lists it separately, e.g.
+    etched-only commander printings); defaults to ``["nonfoil"]``."""
+    raw = ["foil" if f == "etched" else f for f in json.loads(raw_json or "[]")]
+    return list(dict.fromkeys(f for f in raw if f in sel_mod.VALID_FINISHES)) or ["nonfoil"]
+
+
 def family_cards(code: str) -> FamilyCollection:
     """The full printing universe of ``code``'s family with ownership attached.
     Raises ``LookupError`` for an unknown code."""
@@ -169,8 +177,7 @@ def family_cards(code: str) -> FamilyCollection:
             continue
         # Inventory records two finishes; etched is a foil finish there (Scryfall
         # lists it separately, e.g. etched-only commander printings).
-        raw = ["foil" if f == "etched" else f for f in json.loads(c.get("finishes") or "[]")]
-        finishes = list(dict.fromkeys(f for f in raw if f in sel_mod.VALID_FINISHES)) or ["nonfoil"]
+        finishes = inventory_finishes(c.get("finishes"))
         img, released = extra[sid]
         cards.append(CollectionCard(
             scryfall_id=sid, oracle_id=c.get("oracle_id"), name=c.get("name") or "",

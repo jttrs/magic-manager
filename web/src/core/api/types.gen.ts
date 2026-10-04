@@ -219,6 +219,66 @@ export type CommanderOption = {
 };
 
 /**
+ * CommitIn
+ */
+export type CommitIn = {
+    /**
+     * Items
+     */
+    items: Array<CommitItem>;
+    /**
+     * Source
+     */
+    source: 'search' | 'paste' | 'deck';
+    /**
+     * Label
+     *
+     * Free text recorded on the ingest event (e.g. a deck name).
+     */
+    label?: string | null;
+};
+
+/**
+ * CommitItem
+ */
+export type CommitItem = {
+    /**
+     * Scryfall Id
+     */
+    scryfall_id: string;
+    /**
+     * Finish
+     */
+    finish: 'nonfoil' | 'foil';
+    /**
+     * Qty
+     */
+    qty: number;
+};
+
+/**
+ * CommitOut
+ */
+export type CommitOut = {
+    /**
+     * Ingest Id
+     */
+    ingest_id: number;
+    /**
+     * Copies
+     */
+    copies: number;
+    /**
+     * Printings
+     */
+    printings: number;
+    /**
+     * Summary
+     */
+    summary: string;
+};
+
+/**
  * CompareCardOut
  */
 export type CompareCardOut = {
@@ -565,6 +625,222 @@ export type OracleTagOut = {
 };
 
 /**
+ * PreconOptionOut
+ */
+export type PreconOptionOut = {
+    /**
+     * File Name
+     */
+    file_name: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Set Code
+     */
+    set_code: string;
+    /**
+     * Type
+     */
+    type: string;
+    /**
+     * Release Date
+     */
+    release_date: string | null;
+    /**
+     * Default State
+     */
+    default_state: 'built' | 'deconstructed';
+    /**
+     * Owned Built
+     */
+    owned_built: number;
+    /**
+     * Owned Deconstructed
+     */
+    owned_deconstructed: number;
+};
+
+/**
+ * PrintingOut
+ *
+ * One exact printing a line can resolve to (what the picker shows).
+ */
+export type PrintingOut = {
+    /**
+     * Scryfall Id
+     */
+    scryfall_id: string;
+    /**
+     * Oracle Id
+     */
+    oracle_id: string | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Set Code
+     */
+    set_code: string;
+    /**
+     * Set Name
+     */
+    set_name: string | null;
+    /**
+     * Collector Number
+     */
+    collector_number: string;
+    /**
+     * Rarity
+     */
+    rarity: string;
+    /**
+     * Finishes
+     *
+     * Inventory finishes (etched counts as foil).
+     */
+    finishes: Array<'nonfoil' | 'foil'>;
+    /**
+     * Treatment
+     *
+     * treatments.compute_treatment code, '' for a standard frame.
+     */
+    treatment: string;
+    /**
+     * Image Uri
+     */
+    image_uri: string | null;
+    /**
+     * Price Usd
+     */
+    price_usd: number | null;
+    /**
+     * Price Usd Foil
+     */
+    price_usd_foil: number | null;
+    /**
+     * Released At
+     */
+    released_at: string | null;
+    /**
+     * Owned
+     *
+     * Copies you already own, per finish.
+     */
+    owned?: {
+        [key: string]: number;
+    };
+};
+
+/**
+ * ResolveIn
+ */
+export type ResolveIn = {
+    /**
+     * Text
+     */
+    text: string;
+    /**
+     * Format
+     */
+    format?: 'auto' | 'moxfield' | 'tcgplayer' | 'names';
+};
+
+/**
+ * ResolveOut
+ */
+export type ResolveOut = {
+    /**
+     * Format
+     */
+    format: 'moxfield' | 'tcgplayer' | 'names' | 'deck';
+    /**
+     * Lines
+     */
+    lines: Array<ResolvedLineOut>;
+    /**
+     * Warnings
+     */
+    warnings?: Array<string>;
+    /**
+     * Deck Name
+     */
+    deck_name?: string | null;
+};
+
+/**
+ * ResolvedLineOut
+ */
+export type ResolvedLineOut = {
+    /**
+     * Line
+     *
+     * 1-based line number in the pasted text (0 for fetched decks).
+     */
+    line: number;
+    /**
+     * Raw
+     */
+    raw: string;
+    /**
+     * Qty
+     */
+    qty: number;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Finish
+     */
+    finish: 'nonfoil' | 'foil';
+    /**
+     * Section
+     */
+    section: string;
+    /**
+     * Status
+     */
+    status: 'exact' | 'ambiguous' | 'unresolved';
+    /**
+     * Candidates
+     *
+     * Exact: one. Ambiguous: every printing of the name, best guess first. Unresolved: empty.
+     */
+    candidates: Array<PrintingOut>;
+    /**
+     * Chosen
+     *
+     * scryfall_id of the default pick (None when unresolved).
+     */
+    chosen: string | null;
+    /**
+     * Note
+     */
+    note?: string | null;
+};
+
+/**
+ * SearchOut
+ */
+export type SearchOut = {
+    /**
+     * Query
+     */
+    query: string;
+    /**
+     * Source
+     */
+    source: 'local' | 'scryfall';
+    /**
+     * Printings
+     */
+    printings: Array<PrintingOut>;
+};
+
+/**
  * SetRefOut
  */
 export type SetRefOut = {
@@ -877,3 +1153,123 @@ export type CollectionBuyListResponses = {
 };
 
 export type CollectionBuyListResponse = CollectionBuyListResponses[keyof CollectionBuyListResponses];
+
+export type IngestSearchData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Q
+         */
+        q: string;
+        /**
+         * Limit
+         */
+        limit?: number;
+    };
+    url: '/api/ingest/search';
+};
+
+export type IngestSearchErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type IngestSearchError = IngestSearchErrors[keyof IngestSearchErrors];
+
+export type IngestSearchResponses = {
+    /**
+     * Successful Response
+     */
+    200: SearchOut;
+};
+
+export type IngestSearchResponse = IngestSearchResponses[keyof IngestSearchResponses];
+
+export type IngestResolveData = {
+    body: ResolveIn;
+    path?: never;
+    query?: never;
+    url: '/api/ingest/resolve';
+};
+
+export type IngestResolveErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type IngestResolveError = IngestResolveErrors[keyof IngestResolveErrors];
+
+export type IngestResolveResponses = {
+    /**
+     * Successful Response
+     */
+    200: ResolveOut;
+};
+
+export type IngestResolveResponse = IngestResolveResponses[keyof IngestResolveResponses];
+
+export type IngestCommitData = {
+    body: CommitIn;
+    path?: never;
+    query?: never;
+    url: '/api/ingest/commit';
+};
+
+export type IngestCommitErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type IngestCommitError = IngestCommitErrors[keyof IngestCommitErrors];
+
+export type IngestCommitResponses = {
+    /**
+     * Successful Response
+     */
+    200: CommitOut;
+};
+
+export type IngestCommitResponse = IngestCommitResponses[keyof IngestCommitResponses];
+
+export type IngestPreconsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Q
+         */
+        q?: string;
+        /**
+         * Limit
+         */
+        limit?: number;
+    };
+    url: '/api/ingest/precons';
+};
+
+export type IngestPreconsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type IngestPreconsError = IngestPreconsErrors[keyof IngestPreconsErrors];
+
+export type IngestPreconsResponses = {
+    /**
+     * Response Ingest Precons
+     *
+     * Successful Response
+     */
+    200: Array<PreconOptionOut>;
+};
+
+export type IngestPreconsResponse = IngestPreconsResponses[keyof IngestPreconsResponses];
