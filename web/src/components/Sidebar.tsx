@@ -27,7 +27,7 @@ export function Segmented<T extends string>({ value, options, onChange, label, s
         <ToggleGroup.Item
           key={o.value}
           value={o.value}
-          className="min-h-8 min-w-0 truncate px-1.5 text-sm voice-semi text-on-chrome-muted rounded-xs cursor-pointer transition-colors ease-guide hover:text-on-chrome data-[state=on]:bg-chrome-raised data-[state=on]:text-on-chrome"
+          className="min-h-8 min-w-0 truncate px-1.5 text-sm voice-semi text-on-chrome-muted rounded-xs cursor-pointer transition-colors ease-guide hover:text-on-chrome data-[state=on]:bg-accent data-[state=on]:text-on-accent data-[state=on]:hover:text-on-accent"
         >
           {o.label}
         </ToggleGroup.Item>
@@ -48,26 +48,34 @@ export function Segmented<T extends string>({ value, options, onChange, label, s
 
 /** Segmented look, toggle behavior: each segment switches on/off independently
  *  (e.g. Show: Owned | Missing — both, either, or neither). Optional counts. */
-export function SegmentedToggles<T extends string>({ value, options, onChange, label }: { value: T[]; options: (Opt<T> & { count?: number })[]; onChange: (v: T[]) => void; label: string }) {
-  return (
+export function SegmentedToggles<T extends string>({ value, options, onChange, label, showLabel = false }: { value: T[]; options: (Opt<T> & { count?: number })[]; onChange: (v: T[]) => void; label: string; showLabel?: boolean }) {
+  const id = useId();
+  const group = (
     <ToggleGroup.Root
       type="multiple"
       value={value}
       onValueChange={(v) => onChange(v as T[])}
-      aria-label={label}
+      {...(showLabel ? { 'aria-labelledby': id } : { 'aria-label': label })}
       className="grid min-w-0 auto-cols-fr grid-flow-col gap-0.5 rounded-sm border border-chrome-line p-0.5"
     >
       {options.map((o) => (
         <ToggleGroup.Item
           key={o.value}
           value={o.value}
-          className="flex min-h-8 min-w-0 cursor-pointer items-center justify-center gap-1.5 rounded-xs px-1.5 text-sm voice-semi text-on-chrome-muted transition-colors ease-guide hover:text-on-chrome data-[state=on]:bg-chrome-raised data-[state=on]:text-on-chrome"
+          className="flex min-h-8 min-w-0 cursor-pointer items-center justify-center gap-1.5 rounded-xs px-1.5 text-sm voice-semi text-on-chrome-muted transition-colors ease-guide hover:text-on-chrome data-[state=on]:bg-accent data-[state=on]:text-on-accent data-[state=on]:hover:text-on-accent"
         >
           <span className="truncate">{o.label}</span>
           {o.count != null && <span className="tabular text-xs opacity-75">{o.count}</span>}
         </ToggleGroup.Item>
       ))}
     </ToggleGroup.Root>
+  );
+  if (!showLabel) return group;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span id={id} className="text-sm voice-semi text-on-chrome-muted">{label}</span>
+      {group}
+    </div>
   );
 }
 

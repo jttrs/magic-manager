@@ -93,7 +93,8 @@ export function CollectionView() {
       </SideSection>
       <SideSection title="Show">
         <SegmentedToggles
-          label="Show cards"
+          label="Cards"
+          showLabel
           value={search.show}
           onChange={(show) => set({ show: SHOW.filter((s) => show.includes(s)) })}
           options={[

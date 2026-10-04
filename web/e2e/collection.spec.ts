@@ -49,7 +49,7 @@ test('every printing shows; owned counts and missing marks sit under the art', a
 
 test('show owned / missing filters', async ({ page }) => {
   await page.goto(COLLECTION_URL);
-  const show = page.getByRole('toolbar', { name: 'Show cards' });
+  const show = page.getByRole('toolbar', { name: 'Cards' });
   await show.getByRole('button', { name: /Missing/ }).click();
   await expect(page.getByRole('article')).toHaveCount(ownedN);
   await show.getByRole('button', { name: /Missing/ }).click();
@@ -98,7 +98,7 @@ test('finish picker: unchecking Nonfoil judges owned/missing on foils', async ({
   await page.keyboard.press('Escape');
   const foilish = cards.filter((c) => c.finishes.includes('foil'));
   await expect(page.getByRole('article')).toHaveCount(foilish.length);
-  const show = page.getByRole('toolbar', { name: 'Show cards' });
+  const show = page.getByRole('toolbar', { name: 'Cards' });
   await show.getByRole('button', { name: /Owned/ }).click();
   await expect(page.getByRole('article')).toHaveCount(foilish.filter((c) => !(c.owned.foil ?? 0)).length);
 });
