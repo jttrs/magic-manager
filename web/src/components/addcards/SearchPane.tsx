@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useDeferredValue, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { printingSearchQuery } from '../../app/queries';
 import type { PrintingOut } from '../../core/api';
 import { fmtUsd } from '../../core/format';
@@ -9,7 +9,11 @@ import { ownedLabel, printingLabel } from './PrintingPicker';
 /** Live printing search: type a name, press a printing to stage one copy. */
 export function SearchPane({ onPick }: { onPick: (p: PrintingOut, finish: Finish) => void }) {
   const [q, setQ] = useState('');
-  const dq = useDeferredValue(q);
+  const [dq, setDq] = useState('');
+  useEffect(() => {
+    const t = window.setTimeout(() => setDq(q), 200);
+    return () => window.clearTimeout(t);
+  }, [q]);
   const res = useQuery(printingSearchQuery(dq));
   const hits = res.data?.printings ?? [];
   return (
@@ -57,8 +61,8 @@ export function SearchPane({ onPick }: { onPick: (p: PrintingOut, finish: Finish
               <span className="text-ink">{fmtUsd(p.price_usd ?? p.price_usd_foil)}</span>
               <span className="text-accent-ink">{ownedLabel(p)}</span>
               {p.finishes.includes('foil') && p.finishes.includes('nonfoil') && (
-                <button type="button" onClick={() => onPick(p, 'foil')} aria-label={`Add ${p.name} foil, ${printingLabel(p)}`} className="ml-auto cursor-pointer rounded-xs border border-rule px-1 leading-5 text-ink-muted hover:border-rule-strong hover:text-ink">
-                  +✦ Foil
+                <button type="button" onClick={() => onPick(p, 'foil')} aria-label={`Add ${p.name} foil, ${printingLabel(p)}`} className="ml-auto min-h-7 cursor-pointer rounded-xs border border-rule px-2 text-xs voice-semi text-ink hover:border-rule-strong hover:bg-paper-sunk">
+                  + Foil
                 </button>
               )}
             </span>

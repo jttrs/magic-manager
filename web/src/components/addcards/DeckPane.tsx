@@ -36,8 +36,8 @@ function DeckUrl({ onFetched }: { onFetched: (r: ResolveOut) => void }) {
   }, [live?.status, live?.artifacts, onFetched]);
 
   async function fetchDeck() {
-    if (!/^https?:\/\//.test(url.trim())) {
-      setError('Paste a full deck URL, starting with https://');
+    if (!/^https?:\/\/([\w-]+\.)*(archidekt\.com|moxfield\.com|mtggoldfish\.com|manabox\.app|scryfall\.com)\//i.test(url.trim())) {
+      setError('Paste a deck link from Archidekt, Moxfield, MTGGoldfish, ManaBox or Scryfall.');
       return;
     }
     setError('');

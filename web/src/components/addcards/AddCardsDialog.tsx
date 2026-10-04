@@ -65,12 +65,12 @@ export function AddCardsDialog({ trigger }: { trigger: ReactNode }) {
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim backdrop-blur-[1px]" />
         <Dialog.Content
-          aria-describedby={undefined}
           className="paper-grain fixed inset-x-2 top-[3dvh] bottom-[3dvh] z-50 mx-auto flex max-w-6xl flex-col rounded-sm bg-paper text-ink shadow-[0_24px_60px_-24px_var(--theme-scrim)] focus:outline-none sm:inset-x-6 @container"
         >
           <Tabs.Root value={mode} onValueChange={(m) => { setMode(m as Mode); setDone(null); setError(''); }} className="flex min-h-0 flex-1 flex-col">
             <header className="flex flex-wrap items-end gap-x-6 gap-y-2 border-b-2 border-rule-strong px-5 pt-4">
               <Dialog.Title className="pb-2 text-3xl voice-condensed font-bold leading-none">Add cards</Dialog.Title>
+              <Dialog.Description className="sr-only">Search for a printing, paste a card list, or bring a deck or precon. Review every line, then add the copies to your collection.</Dialog.Description>
               <Tabs.List aria-label="How to add" className="flex gap-5">
                 {(
                   [
@@ -116,7 +116,7 @@ export function AddCardsDialog({ trigger }: { trigger: ReactNode }) {
               <Tabs.Content value="paste" className="flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden">
                 {pasted ? (
                   <Review
-                    title={`${fmtInt(pasted.lines.length)} lines read`}
+                    title={readTitle(pasted.lines)}
                     warnings={pasted.warnings}
                     back={{ label: 'Edit list', onClick: () => setPasted(null) }}
                   >
@@ -157,6 +157,12 @@ export function AddCardsDialog({ trigger }: { trigger: ReactNode }) {
       </Dialog.Portal>
     </Dialog.Root>
   );
+}
+
+/** "4 of 5 lines matched" — the outcome, not the parse count. */
+function readTitle(lines: ReviewLine[]): string {
+  const ok = lines.filter((l) => l.status !== 'unresolved').length;
+  return ok === lines.length ? `${fmtInt(ok)} ${ok === 1 ? 'line' : 'lines'} matched` : `${fmtInt(ok)} of ${fmtInt(lines.length)} lines matched`;
 }
 
 function Review({ title, warnings, back, children }: { title: string; warnings: string[]; back: { label: string; onClick: () => void }; children: ReactNode }) {

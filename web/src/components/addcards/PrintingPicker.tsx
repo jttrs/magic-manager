@@ -49,15 +49,17 @@ export function PrintingPicker({ name, candidates, value, onChange }: { name: st
           aria-label={`Printings of ${name}`}
           className="z-[60] max-h-[min(30rem,70dvh)] w-[min(40rem,calc(100vw-1.5rem))] overflow-y-auto rounded-sm border border-rule-strong bg-paper-raised p-2 text-ink shadow-[0_14px_32px_-14px_var(--theme-scrim)]"
         >
-          <ul role="listbox" aria-label={`Printings of ${name}`} className="grid grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))] gap-2">
+          <ul aria-label={`Printings of ${name}`} className="grid grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))] gap-2">
             {candidates.map((c) => {
               const on = c.scryfall_id === value;
               return (
-                <li key={c.scryfall_id} role="option" aria-selected={on}>
+                <li key={c.scryfall_id}>
                   <Popover.Close asChild>
                     <button
                       type="button"
                       onClick={() => onChange(c.scryfall_id)}
+                      aria-pressed={on}
+                      aria-label={`${printingLabel(c)}, ${fmtUsd(c.price_usd ?? c.price_usd_foil)}${ownedLabel(c) ? `, own ${ownedLabel(c)}` : ''}`}
                       className={`flex w-full cursor-pointer flex-col gap-1 rounded-sm p-1 text-left transition-colors ease-guide hover:bg-paper-sunk ${on ? 'outline-2 outline-accent' : ''}`}
                     >
                       {c.image_uri ? (

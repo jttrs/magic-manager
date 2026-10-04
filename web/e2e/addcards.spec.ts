@@ -63,7 +63,7 @@ test('paste: resolve → review (pick printing, finish refits, unresolved left o
   await expect(page.getByText('1 not found')).toBeVisible();
   await expect(page.getByRole('checkbox', { name: 'Include Notacard' })).toBeDisabled();
   await page.getByRole('button', { name: /^Printing of Sol Ring/ }).click();
-  await page.getByRole('listbox', { name: 'Printings of Sol Ring' }).getByRole('button').nth(1).click();
+  await page.getByRole('list', { name: 'Printings of Sol Ring' }).getByRole('button').nth(1).click();
   await expect(page.getByText('Foil only')).toBeVisible();
   await page.getByRole('spinbutton', { name: 'Copies of Lightning Bolt' }).fill('3');
   await page.getByRole('button', { name: 'Add 4 copies' }).click();
@@ -83,7 +83,7 @@ test('deck URL: fetch job streams, then the deck lands in review and commits wit
   await page.getByRole('button', { name: 'Add cards' }).click();
   await page.getByRole('tab', { name: 'Deck or precon' }).click();
   await page.getByRole('button', { name: 'Fetch deck' }).click();
-  await expect(page.getByRole('alert')).toContainText('full deck URL');
+  await expect(page.getByRole('alert')).toContainText('Paste a deck link from Archidekt');
   await page.getByRole('textbox', { name: /Archidekt/ }).fill('https://archidekt.com/decks/123');
   await page.getByRole('button', { name: 'Fetch deck' }).click();
   await expect(page.getByRole('heading', { name: 'Goblins' })).toBeVisible();
