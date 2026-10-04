@@ -21,7 +21,7 @@ const card = (o: Partial<CollectionCardOut>): CollectionCardOut => ({
   finishes: ['nonfoil', 'foil'], owned: {}, pledged: {}, price_usd: 1, price_usd_foil: 3, image_uri: null,
   scryfall_url: null, treatment: '', standard_frame: true, is_bulk: false, is_chase: false, ...o,
 });
-const ALL: CollectionFilters = { show: ['owned', 'missing'], basis: 'either', exclude: [], q: '' };
+const ALL: CollectionFilters = { show: ['owned', 'missing'], exclude: [], q: '' };
 
 describe('card facts', () => {
   it('type groups by front face, creature first', () => {
@@ -80,10 +80,18 @@ describe('collection filters', () => {
   const all = [owned, missing, bulk, treated, chase];
   const ids = (f: Partial<CollectionFilters>) => filterCollection(all, { ...ALL, ...f }).map((c) => c.scryfall_id);
 
-  it('missing basis', () => {
-    expect(isMissing(owned, 'either')).toBe(false);
-    expect(isMissing(owned, 'foil')).toBe(true);
-    expect(isMissing(card({ finishes: ['nonfoil'] }), 'foil')).toBe(false);
+  it('finish traits OR together and set the owned/missing basis', () => {
+    expect(isMissing(owned, [])).toBe(false);
+    expect(isMissing(owned, ['finish:nonfoil'])).toBe(true);
+    expect(isMissing(card({ finishes: ['nonfoil'] }), ['finish:nonfoil'])).toBe(false);
+    const fancy = card({ scryfall_id: 'ff', treatment: 'ff', finishes: ['foil'] });
+    expect(traitCounts([fancy]).get('finish:fancy')).toBe(1);
+    expect(traitsOf(fancy)).toContain('treat:std');
+    const pool = [owned, fancy, card({ scryfall_id: 'nf', finishes: ['nonfoil'] })];
+    const shown = (exclude: string[]) => filterCollection(pool, { ...ALL, exclude }).map((c) => c.scryfall_id);
+    expect(shown(['finish:fancy'])).toEqual(['own', 'nf']);
+    expect(shown(['finish:nonfoil', 'finish:foil'])).toEqual(['ff']);
+    expect(shown(['finish:nonfoil', 'finish:foil', 'finish:fancy'])).toEqual([]);
   });
   it('show owned / missing', () => {
     expect(ids({ show: ['owned'] })).toEqual(['own']);
@@ -104,9 +112,10 @@ describe('collection filters', () => {
     expect(ids({ q: 'nope' })).toEqual([]);
   });
   it('buy finish + stats', () => {
-    expect(buyFinish(card({ finishes: ['foil'] }), 'either')).toBe('foil');
-    expect(buyFinish(missing, 'either')).toBe('nonfoil');
-    expect(collectionStats([owned, missing], 'either')).toEqual({ printings: 2, owned: 1, copies: 2, missing: 1, missingUsd: 1 });
+    expect(buyFinish(card({ finishes: ['foil'] }), [])).toBe('foil');
+    expect(buyFinish(missing, [])).toBe('nonfoil');
+    expect(buyFinish(missing, ['finish:nonfoil'])).toBe('foil');
+    expect(collectionStats([owned, missing], [])).toEqual({ printings: 2, owned: 1, copies: 2, missing: 1, missingUsd: 1 });
   });
   it('collection mapper carries counts, missing mark and tags', () => {
     const g = fromCollection(card({ owned: { foil: 1 }, is_chase: true, treatment: 'shw' }), true);

@@ -162,7 +162,10 @@ def family_cards(code: str) -> FamilyCollection:
         sid, c = r.scryfall_id, r.card
         if sid not in kept and sid not in owned_ids:
             continue
-        finishes = [f for f in json.loads(c.get("finishes") or "[]") if f in sel_mod.VALID_FINISHES] or ["nonfoil"]
+        # Inventory records two finishes; etched is a foil finish there (Scryfall
+        # lists it separately, e.g. etched-only commander printings).
+        raw = ["foil" if f == "etched" else f for f in json.loads(c.get("finishes") or "[]")]
+        finishes = list(dict.fromkeys(f for f in raw if f in sel_mod.VALID_FINISHES)) or ["nonfoil"]
         img, released = extra[sid]
         cards.append(CollectionCard(
             scryfall_id=sid, oracle_id=c.get("oracle_id"), name=c.get("name") or "",

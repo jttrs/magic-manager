@@ -32,6 +32,8 @@ def family(monkeypatch, seed_cards, make_card):
                   promo_types=["prerelease"]),
         make_card(id="dig", oracle_id="o7", set="tst", collector_number="A-5", rarity="rare", name="A-Digital",
                   security_stamp="arena"),
+        make_card(id="etch", oracle_id="o6", set="tst", collector_number="400", rarity="mythic", name="Etched One",
+                  finishes=["etched"], frame_effects=["etched"]),
     ])
 
 
@@ -46,7 +48,7 @@ def test_universe_keeps_catalogued_printings_only(tmp_db, family):
     from magic_manager import collection_view as cv
     ids = {c.scryfall_id for c in cv.family_cards("tst").cards}
     # memorabilia set, token set, prerelease variant and digital-only are dropped
-    assert ids == {"r1", "c2", "b3"}
+    assert ids == {"r1", "c2", "b3", "etch"}
 
 
 def test_ownership_overrides_every_exclusion(tmp_db, family):
@@ -69,9 +71,15 @@ def test_owned_counts_flags_and_summary(tmp_db, family):
     assert c2.is_bulk and c2.standard_frame
     assert not b3.is_bulk and not b3.standard_frame and b3.finishes == ["nonfoil"]
     s = fc.summary
-    assert (s.printings, s.owned_printings, s.owned_copies, s.missing_printings) == (3, 1, 4, 2)
+    assert (s.printings, s.owned_printings, s.owned_copies, s.missing_printings) == (4, 1, 4, 3)
     assert s.owned_usd == pytest.approx(3 * 0.10 + 0.50)
-    assert s.missing_usd == pytest.approx(1.00 + 9.00)  # cheapest finish of each missing printing
+    assert s.missing_usd == pytest.approx(1.00 + 9.00 + 2.00)  # cheapest finish of each missing printing
+
+
+def test_etched_is_a_foil_finish(tmp_db, family):
+    from magic_manager import collection_view as cv
+    etch = next(c for c in cv.family_cards("tst").cards if c.scryfall_id == "etch")
+    assert etch.finishes == ["foil"] and "ff" in etch.treatment
 
 
 def test_pledged_counts_come_from_deck_assignments(tmp_db, family):

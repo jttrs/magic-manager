@@ -4,7 +4,7 @@ import { useEffect, useMemo } from 'react';
 import { collectionQuery, familiesQuery } from '../app/queries';
 import { useSelection } from '../app/selection';
 import { ViewLayout } from '../components/AppShell';
-import { CopyButton } from '../components/CopyButton';
+import { CopyTargets } from '../components/CopyButton';
 import { MultiSelect } from '../components/MultiSelect';
 import { ChipToggles, Segmented, SideSection, TextField } from '../components/Sidebar';
 import { SortBuilder } from '../components/SortBuilder';
@@ -12,7 +12,7 @@ import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../components/St
 import { VirtualGuide, type GuideSection } from '../components/VirtualGuide';
 import { collectionBuyList, type CollectionCardOut, type CollectionOut } from '../core/api';
 import { CARD_SORT, CARD_SORT_PRESETS, type CardSortKey } from '../core/cardSort';
-import { buyFinish, collectionStats, filterCollection, isMissing, TRAITS, traitCounts, type MissingBasis } from '../core/collection';
+import { buyFinish, collectionStats, filterCollection, isMissing, TRAITS, traitCounts } from '../core/collection';
 import { fmtInt, fmtUsd } from '../core/format';
 import { fromCollection, groupCards, type GuideCard } from '../core/guideCard';
 import { SHOW, type CollectionSearch } from '../core/search';
@@ -21,7 +21,7 @@ import { decodeSort, encodeSort, leadSection, sortBy, type SortRule } from '../c
 const route = getRouteApi('/collection');
 
 const LAST_FAMILIES = 'mm.collection.families';
-const RESET: Partial<CollectionSearch> = { show: [...SHOW], basis: 'either', exclude: [], q: '' };
+const RESET: Partial<CollectionSearch> = { show: [...SHOW], exclude: [], q: '' };
 
 export function CollectionView() {
   const search = route.useSearch();
@@ -45,10 +45,10 @@ export function CollectionView() {
   const counts = useMemo(() => (q.data ? traitCounts(q.data.cards) : null), [q.data]);
 
   const marked = view ? [...selected].map((k) => view.byId.get(k)).filter((c) => c != null) : [];
-  const buyPool = marked.length ? marked : (view?.shown.filter((c) => isMissing(c, search.basis)) ?? []);
-  const buyText = (target: 'manapool' | 'tcgplayer') => async () => {
+  const buyPool = marked.length ? marked : (view?.shown.filter((c) => isMissing(c, search.exclude)) ?? []);
+  const buyText = (target: 'manapool' | 'tcgplayer' | 'cardkingdom') => async () => {
     const r = await collectionBuyList({
-      body: { target, items: buyPool.map((c) => ({ scryfall_id: c.scryfall_id, finish: buyFinish(c, search.basis), qty: 1 })) },
+      body: { target, items: buyPool.map((c) => ({ scryfall_id: c.scryfall_id, finish: buyFinish(c, search.exclude), qty: 1 })) },
     });
     if (r.error || !r.data) throw new Error('buy-list failed');
     return r.data.text;
@@ -81,12 +81,6 @@ export function CollectionView() {
             { value: 'missing', label: 'Missing', count: view?.stats.missing },
           ]}
         />
-        <Segmented<MissingBasis>
-          label="Finish"
-          value={search.basis}
-          onChange={(basis) => set({ basis })}
-          options={[{ value: 'either', label: 'Any finish' }, { value: 'nonfoil', label: 'Nonfoil' }, { value: 'foil', label: 'Foil' }]}
-        />
         <MultiSelect
           label="Card types"
           noun="card types"
@@ -96,7 +90,7 @@ export function CollectionView() {
           onChange={(included) => set({ exclude: TRAITS.map((t) => t.key).filter((k) => !included.includes(k)) })}
           options={TRAITS.filter((t) => !counts || counts.has(t.key) || search.exclude.includes(t.key)).map((t) => ({ value: t.key, label: t.label, group: t.group, count: counts?.get(t.key) ?? 0 }))}
         />
-        {(search.exclude.length > 0 || search.show.length < 2 || search.basis !== 'either' || search.q) && (
+        {(search.exclude.length > 0 || search.show.length < 2 || search.q) && (
           <button type="button" onClick={() => set(RESET)} className="self-start cursor-pointer text-sm text-on-chrome-muted underline hover:text-on-chrome">Reset filters</button>
         )}
       </SideSection>
@@ -106,8 +100,19 @@ export function CollectionView() {
         <TextField name="q" label="Card name" value={search.q} placeholder="e.g. Cloud…" onChange={(qv) => set({ q: qv })} />
       </SideSection>
       <SideSection title={marked.length ? `Buy list · ${marked.length} marked` : `Buy list · ${buyPool.length} missing shown`}>
-        <CopyButton label="Copy ManaPool list" emphasis="primary" getText={buyText('manapool')} />
-        <CopyButton label="Copy TCGplayer list" getText={buyText('tcgplayer')} />
+        <CopyTargets
+          targets={[
+            { id: 'manapool', name: 'ManaPool', icon: '/brands/manapool.svg', getText: buyText('manapool') },
+            { id: 'tcgplayer', name: 'TCGplayer', icon: '/brands/tcgplayer.png', getText: buyText('tcgplayer') },
+            {
+              id: 'cardkingdom',
+              name: 'Card Kingdom',
+              icon: '/brands/cardkingdom.png',
+              getText: buyText('cardkingdom'),
+              note: 'Card Kingdom takes names only; pick each printing and foil after Find Cards',
+            },
+          ]}
+        />
         {selected.size > 0 && (
           <button type="button" onClick={clear} className="self-start cursor-pointer text-sm text-on-chrome-muted underline hover:text-on-chrome">Clear marks</button>
         )}
@@ -127,7 +132,7 @@ export function CollectionView() {
   } else if (q.isError) {
     body = <ErrorNote error={q.error} onRetry={() => q.refetch()} />;
   } else if (!view || view.cards.length === 0) {
-    body = <EmptyNote title="Nothing matches">No printings match these filters. Turn a layer back on or show both owned and missing cards.</EmptyNote>;
+    body = <EmptyNote title="Nothing matches">No printings match these filters. Check a card type back on, or show both owned and missing cards.</EmptyNote>;
   } else {
     body = <VirtualGuide sections={view.sections} density={search.density} selected={selected} onToggle={toggle} label="Collection cards" minCardWidth={128} />;
   }
@@ -158,13 +163,13 @@ type Built = { cards: GuideCard[]; shown: CollectionCardOut[]; sections: GuideSe
 /** Filter → map → sort → section (family running head, then the lead sort key's groups). */
 function buildView(data: CollectionOut, search: CollectionSearch, rules: SortRule<CardSortKey>[]): Built {
   const shown = filterCollection(data.cards, search);
-  const cards = sortBy(shown.map((c) => fromCollection(c, isMissing(c, search.basis))), rules, CARD_SORT);
+  const cards = sortBy(shown.map((c) => fromCollection(c, isMissing(c, search.exclude))), rules, CARD_SORT);
   const section = leadSection(rules, CARD_SORT);
   const sections: GuideSection[] = [];
   for (const fam of data.families) {
     const famCards = cards.filter((c) => c.group === fam.code);
     if (!famCards.length) continue;
-    const st = collectionStats(shown.filter((c) => c.family === fam.code), search.basis);
+    const st = collectionStats(shown.filter((c) => c.family === fam.code), search.exclude);
     sections.push({
       key: `fam:${fam.code}`,
       label: fam.name,
@@ -178,7 +183,7 @@ function buildView(data: CollectionOut, search: CollectionSearch, rules: SortRul
       sections.push({ key: `${fam.code}:all`, label: 'All printings', level: 2, items: famCards });
     }
   }
-  return { cards, shown, sections, byId: new Map(shown.map((c) => [c.scryfall_id, c])), stats: collectionStats(shown, search.basis) };
+  return { cards, shown, sections, byId: new Map(shown.map((c) => [c.scryfall_id, c])), stats: collectionStats(shown, search.exclude) };
 }
 
 function FamilyHead(p: { name: string; owned: number; printings: number; copies: number; value: number; shownMissing: number; shownMissingUsd: number }) {

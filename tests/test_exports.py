@@ -74,6 +74,19 @@ def test_tcgplayer_build_format(tmp_db):
     assert out == "1 Lightning Bolt [LEA] 161\n2 Sol Ring [CMM] 410\n"
 
 
+def test_cardkingdom_build_sums_by_name(tmp_db):
+    rows = _rows() + [
+        MaterializedRow(scryfall_id="id3", quantity=3, finish="nonfoil",
+                        card={**_rows()[0].card, "set": "m10", "collector_number": "146"}),
+        MaterializedRow(scryfall_id="id4", quantity=1, finish="nonfoil",
+                        card={**_rows()[0].card, "name": "Delver of Secrets // Insectile Aberration"}),
+    ]
+    # Card Kingdom's builder accepts only "qty name": printings and finishes of
+    # one name collapse into a single line; DFCs keep the front face.
+    out = exports.build("cardkingdom", rows)
+    assert out == "4 Lightning Bolt\n2 Sol Ring\n1 Delver of Secrets\n"
+
+
 def test_plain_build_format(tmp_db):
     out = exports.build("plain", _rows())
     expected = (

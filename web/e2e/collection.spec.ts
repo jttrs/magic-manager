@@ -62,7 +62,7 @@ test('card types: one grouped picker; unchecking a trait hides every card carryi
   const trigger = page.getByRole('button', { name: /Card types/ });
   await expect(trigger).toContainText('All card types');
   await trigger.click();
-  for (const g of ['Rarity', 'Treatment', 'Chase']) await expect(page.getByRole('group', { name: new RegExp(g) })).toBeVisible();
+  for (const g of ['Finish', 'Rarity', 'Treatment', 'Chase']) await expect(page.getByRole('group', { name: new RegExp(g) })).toBeVisible();
   await page.getByRole('checkbox', { name: /^Common/ }).uncheck();
   await page.getByRole('checkbox', { name: /^Uncommon/ }).uncheck();
   await expect(page.getByRole('article')).toHaveCount(cards.filter((c) => !['common', 'uncommon'].includes(c.rarity)).length);
@@ -70,7 +70,8 @@ test('card types: one grouped picker; unchecking a trait hides every card carryi
   await page.getByRole('button', { name: 'Check all' }).click();
   await page.getByRole('button', { name: 'Clear all Treatment' }).click();
   await page.getByRole('checkbox', { name: /^Standard frame/ }).check();
-  await expect(page.getByRole('article')).toHaveCount(cards.filter((c) => c.standard_frame && !c.treatment).length);
+  const codes = (c: (typeof cards)[number]) => (c.treatment ? c.treatment.split('|') : []);
+  await expect(page.getByRole('article')).toHaveCount(cards.filter((c) => !codes(c).some((t) => t !== 'ff') && (c.standard_frame || codes(c).length > 0)).length);
   await page.getByRole('button', { name: 'Check all' }).click();
   await page.getByRole('checkbox', { name: /^Not chase/ }).uncheck();
   await expect(page.getByRole('article')).toHaveCount(cards.filter((c) => c.is_chase).length);
@@ -81,6 +82,18 @@ test('card types: one grouped picker; unchecking a trait hides every card carryi
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Reset filters' }).click();
   await expect(page.getByRole('article')).toHaveCount(cards.length);
+});
+
+test('finish lives in card types: unchecking Nonfoil judges owned/missing on foils', async ({ page }) => {
+  await page.goto(COLLECTION_URL);
+  await page.getByRole('button', { name: /Card types/ }).click();
+  await page.getByRole('checkbox', { name: /^Nonfoil/ }).uncheck();
+  await page.keyboard.press('Escape');
+  const foilish = cards.filter((c) => c.finishes.includes('foil'));
+  await expect(page.getByRole('article')).toHaveCount(foilish.length);
+  const show = page.getByRole('toolbar', { name: 'Show cards' });
+  await show.getByRole('button', { name: /Owned/ }).click();
+  await expect(page.getByRole('article')).toHaveCount(foilish.filter((c) => !(c.owned.foil ?? 0)).length);
 });
 
 test('sort builder: presets, keyboard reorder, direction, URL', async ({ page }) => {
@@ -110,6 +123,9 @@ test('buy list copies the missing printings shown (or the marked ones)', async (
   await page.getByRole('button', { name: 'Copy TCGplayer list' }).click();
   await expect(page.getByText('Copied 1 line', { exact: true })).toBeVisible();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`1 ${first.scryfall_id} [tcgplayer]`);
+  await page.getByRole('button', { name: 'Copy Card Kingdom list' }).click();
+  await expect(page.getByText(/Card Kingdom takes names only/)).toBeVisible();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`1 ${first.scryfall_id} [cardkingdom]`);
 });
 
 test('outline: h1 sheet, h2 family, h3 groups (no skipped levels)', async ({ page }) => {

@@ -29,7 +29,7 @@ export type BuyListIn = {
     /**
      * Target
      */
-    target: 'manapool' | 'tcgplayer' | 'moxfield' | 'plain';
+    target: 'manapool' | 'tcgplayer' | 'cardkingdom' | 'moxfield' | 'plain';
     /**
      * Items
      */

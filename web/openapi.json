@@ -468,6 +468,7 @@
             "enum": [
               "manapool",
               "tcgplayer",
+              "cardkingdom",
               "moxfield",
               "plain"
             ],

@@ -205,7 +205,7 @@ Hairline borders are the main geometry. `ruled` is a 1px bottom border; column a
 - **ChipToggles:** multi-select `ToggleGroup`, pill chips; selected chips fill amber and show optional tabular counts. **Only for ≤5 options.**
 - **MultiSelect:** any choice set larger than 5 (set families, EDHREC lists). A compact trigger summarizing the selection (`Final Fantasy +2 ▾`) opens a searchable checkbox popover; selected options are pinned first; bulk-select is scoped to the current search, never "select everything".
 - **SortBuilder:** the one sort control for every card view. Trigger shows the hierarchy (`Set › Rarity › #`); the popover edits ordered levels (direction toggle, ▲▼ buttons and drag handles via Pragmatic drag-and-drop, add/remove) and offers presets. The first level groups the sheet into sections. Rules live in the URL (`core/sort.ts` codec).
-- **Grouped MultiSelect (Card types):** trait filters (Rarity · Treatment · Chase) are ONE grouped checkbox picker, everything checked by default; unchecking a trait hides every card carrying it. Group headings carry All/None; the trigger summarizes exclusions (`All card types` / `Hiding Common, Uncommon +1`). No explanatory copy under controls.
+- **Grouped MultiSelect (Card types):** trait filters (Finish · Rarity · Treatment · Chase) are ONE grouped checkbox picker, everything checked by default; unchecking a trait hides every card carrying it — except Finish (Nonfoil · Foil · Fancy foil), which ORs: a printing shows while any of its finishes is checked, and owned/missing are judged on the checked finishes only. Fancy foil = a foil printing whose treatment carries `ff` (surge, etched, galaxy…). Group headings carry All/None; the trigger summarizes exclusions (`All card types` / `Hiding Common, Uncommon +1`). No explanatory copy under controls.
 - **TextField:** labelled search input on `chrome-raised`, `chrome-line` border, amber focus border.
 - **A11y contract:** groups carry explicit `aria-label`; labels wrap inputs or target by `htmlFor`.
 
@@ -271,3 +271,4 @@ Hairline borders are the main geometry. `ruled` is a 1px bottom border; column a
 - **Don't** turn highlighter marks into persistent filled cards. The mark is a user annotation over the guide, not a new surface.
 - **Don't** overlay anything on card art — no stamps, badges, counts or ribbons. The card image is the artifact.
 - **Don't** render more than 5 options as chips; use `MultiSelect`.
+- **Store copy buttons** sit in one row, each the store's own mark (`web/public/brands/`, decorative `alt=""`) over its name, with `aria-label="Copy <Store> list"`; one shared polite status line. A store that can't take exact printings (Card Kingdom) says so in that status line after copying.

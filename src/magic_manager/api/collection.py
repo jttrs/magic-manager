@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 
 from .. import collection_view, family_status, gallery
 
-BuyTarget = Literal["manapool", "tcgplayer", "moxfield", "plain"]
+BuyTarget = Literal["manapool", "tcgplayer", "cardkingdom", "moxfield", "plain"]
 
 
 class FamilyOption(BaseModel):
