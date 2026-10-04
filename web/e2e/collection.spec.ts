@@ -41,8 +41,12 @@ test('every printing shows; owned counts and missing marks sit under the art', a
   const foil = cards.find((c) => c.owned.foil)!;
   const tile = page.getByRole('article').filter({ hasText: foil.name }).first();
   await expect(tile.getByLabel(/^Owned: /)).toContainText(`✦×${foil.owned.foil}`);
-  // facts never overlay the art: nothing is absolutely positioned over the image button
-  expect(await tile.locator('.absolute').count()).toBe(0);
+  // facts never overlay the art; the only overlay is the inspect affordance, invisible until hover/focus
+  const overlays = tile.locator('.absolute');
+  await expect(overlays).toHaveCount(1);
+  await expect(overlays).toHaveAttribute('aria-label', /^Inspect /);
+  await page.mouse.move(0, 0);
+  await expect(overlays).toHaveCSS('opacity', '0');
   const missing = cards.find((c) => total(c) === 0)!;
   await expect(page.getByRole('article').filter({ hasText: missing.name }).first()).toContainText('Missing');
 });
@@ -153,4 +157,21 @@ test('family head names itself; sections collapse and jump', async ({ page }) =>
   await expect(page.locator(':focus')).toHaveAttribute('aria-expanded', 'true');
   await page.locator(':focus').click();
   await expect(page.locator(':focus')).toHaveAttribute('aria-expanded', 'false');
+});
+
+test('magnifier inspects a card (large art, facts, Scryfall/TCGplayer links); the rest of the card still marks', async ({ page }) => {
+  await page.goto(COLLECTION_URL);
+  const tile = page.getByRole('article').first();
+  const name = (await tile.getByRole('button').first().getAttribute('aria-label'))!.replace(/^Mark /, '');
+  await tile.getByRole('button', { name: `Inspect ${name}` }).click();
+  const dialog = page.getByRole('dialog', { name });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('img', { name })).toHaveAttribute('src', /\/large\//);
+  await expect(dialog.getByRole('link', { name: /TCGplayer/ })).toHaveAttribute('href', /tcgplayer\.com\/search\/magic/);
+  await expect(dialog.getByText('Printing')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('button', { name: `Unmark ${name}` })).toHaveCount(0);
+  await tile.getByRole('button', { name: `Mark ${name}` }).click();
+  await expect(page.getByRole('button', { name: `Unmark ${name}` }).first()).toBeVisible();
 });

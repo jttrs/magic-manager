@@ -164,7 +164,7 @@ export function CollectionView() {
     <ViewLayout label="Collection controls" summary={controlsSummary(search, rules, fams.data)} sidebar={sidebar} startOpen={!search.families.length}>
       <GuideSheet
         title="Collection"
-        titleAction={<AddCardsDialog trigger={<AddCardsButton />} />}
+        actions={<AddCardsDialog trigger={<AddCardsButton />} />}
         summary={
           s
             ? `${famN} set ${famN === 1 ? 'family' : 'families'} · showing ${fmtInt(s.printings)} printings: ${fmtInt(s.owned)} owned (${fmtInt(s.copies)} copies), ${fmtInt(s.missing)} missing · ${fmtUsd(s.missingUsd)} to complete${q.data?.skipped?.length ? ` · skipped ${q.data.skipped.join(', ')}` : ''}`

@@ -5,13 +5,14 @@ import { rarityLetter } from '../core/guideCard';
 import { fmtPct, fmtUsd } from '../core/format';
 import { CardArt, Holdings, InclusionBars, Tags } from './CardFace';
 import { CardPreview } from './CardMeta';
+import { MagnifierMark } from './StoreMarks';
 
-type Props = { card: GuideCard; selected: boolean; onToggle: (key: string) => void; barLabels?: [string, string] };
+type Props = { card: GuideCard; selected: boolean; onToggle: (key: string) => void; onInspect?: (card: GuideCard) => void; barLabels?: [string, string] };
 
 /** List view: one ruled checklist line per card; hovering/focusing the name previews the art. */
-export const CardRow = memo(function CardRow({ card, selected, onToggle, barLabels = ['A', 'B'] }: Props) {
+export const CardRow = memo(function CardRow({ card, selected, onToggle, onInspect, barLabels = ['A', 'B'] }: Props) {
   return (
-    <div className={`grid min-h-[var(--size-row-h)] grid-cols-[1rem_minmax(4rem,1fr)_auto_auto] @[18rem]:grid-cols-[1rem_var(--size-thumb)_minmax(5.5rem,1fr)_auto_auto] items-center gap-2 ruled px-1 ${selected ? 'highlighter' : ''}`}>
+    <div className={`grid min-h-[var(--size-row-h)] grid-cols-[1rem_minmax(4rem,1fr)_auto_auto_auto] @[18rem]:grid-cols-[1rem_var(--size-thumb)_minmax(5.5rem,1fr)_auto_auto_auto] items-center gap-2 ruled px-1 ${selected ? 'highlighter' : ''}`}>
       <input
         type="checkbox"
         checked={selected}
@@ -66,6 +67,11 @@ export const CardRow = memo(function CardRow({ card, selected, onToggle, barLabe
         )}
       </span>
       <span className="w-12 text-right text-sm tabular voice-semi font-medium text-ink @[22rem]:w-14">{fmtUsd(card.price)}</span>
+      {onInspect ? (
+        <button type="button" onClick={() => onInspect(card)} aria-label={`Inspect ${card.name}`} title="Inspect card" className="grid size-7 cursor-pointer place-items-center rounded-sm text-accent-ink hover:bg-paper-sunk">
+          <MagnifierMark className="size-4" />
+        </button>
+      ) : <span />}
     </div>
   );
 });
