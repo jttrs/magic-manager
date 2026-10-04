@@ -59,8 +59,9 @@ export function CopyTargets({ targets, lead }: { targets: readonly CopyTarget[];
   return (
     <div className="flex flex-col gap-1.5">
       {lead && <span className="text-sm voice-semi tabular text-on-chrome-muted">{lead}</span>}
-      <div className="flex">
-        <div className="flex shrink-0 divide-x divide-chrome-line overflow-hidden rounded-sm border border-chrome-line">
+      {/* Names ride beside the marks only when the strip is wide enough for all of them. */}
+      <div className="@container">
+        <div className="flex w-full divide-x divide-chrome-line overflow-hidden rounded-sm border border-chrome-line">
           {targets.map(({ id, name, Mark, getText, note }) => {
             const state = busy === id ? 'busy' : done === id ? 'done' : 'idle';
             return (
@@ -72,15 +73,16 @@ export function CopyTargets({ targets, lead }: { targets: readonly CopyTarget[];
                 aria-label={`Copy ${name} list`}
                 title={`Copy ${name} list`}
                 data-state={state}
-                className="group relative grid size-8 cursor-pointer place-items-center text-accent transition-colors duration-200 ease-guide hover:bg-chrome focus-visible:z-10 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus disabled:cursor-wait"
+                className="group relative flex h-8 min-w-0 flex-auto cursor-pointer items-center justify-center gap-1.5 px-2 text-accent transition-colors duration-200 ease-guide hover:bg-chrome focus-visible:z-10 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus disabled:cursor-wait"
               >
                 {state === 'done' ? (
                   <svg viewBox="0 0 16 16" aria-hidden="true" className="size-4">
                     <path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 ) : (
-                  <Mark className="size-[1.125rem] transition-transform duration-300 ease-guide group-hover:-translate-y-px group-data-[state=busy]:animate-pulse group-disabled:group-data-[state=idle]:opacity-45" />
+                  <Mark className="size-[1.125rem] shrink-0 transition-transform duration-300 ease-guide group-hover:-translate-y-px group-data-[state=busy]:animate-pulse group-disabled:group-data-[state=idle]:opacity-45" />
                 )}
+                <span className="hidden truncate text-xs voice-condensed font-medium uppercase tracking-[0.06em] text-on-chrome @[21.5rem]:inline">{name}</span>
               </button>
             );
           })}
