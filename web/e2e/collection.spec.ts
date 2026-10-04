@@ -41,12 +41,8 @@ test('every printing shows; owned counts and missing marks sit under the art', a
   const foil = cards.find((c) => c.owned.foil)!;
   const tile = page.getByRole('article').filter({ hasText: foil.name }).first();
   await expect(tile.getByLabel(/^Owned: /)).toContainText(`✦×${foil.owned.foil}`);
-  // facts never overlay the art; the only overlay is the inspect affordance, invisible until hover/focus
-  const overlays = tile.locator('.absolute');
-  await expect(overlays).toHaveCount(1);
-  await expect(overlays).toHaveAttribute('aria-label', /^Inspect /);
-  await page.mouse.move(0, 0);
-  await expect(overlays).toHaveCSS('opacity', '0');
+  // nothing ever overlays the art: the mark toggle lives in the caption
+  expect(await tile.locator('.absolute').count()).toBe(0);
   const missing = cards.find((c) => total(c) === 0)!;
   await expect(page.getByRole('article').filter({ hasText: missing.name }).first()).toContainText('Missing');
 });
@@ -61,36 +57,43 @@ test('show owned / missing filters', async ({ page }) => {
   await expect(page.getByRole('article')).toHaveCount(missingN);
 });
 
-test('card types: one grouped picker; unchecking a trait hides every card carrying it', async ({ page }) => {
+test('card-type filters: rarity, finish and treatment pickers (with counts), chase include/exclude with an explainer', async ({ page }) => {
   await page.goto(COLLECTION_URL);
-  const trigger = page.getByRole('button', { name: /Card types/ });
-  await expect(trigger).toContainText('All card types');
-  await trigger.click();
-  for (const g of ['Finish', 'Rarity', 'Treatment', 'Chase']) await expect(page.getByRole('group', { name: new RegExp(g) })).toBeVisible();
+  const rarity = page.getByRole('button', { name: /^Rarity/ });
+  await expect(rarity).toContainText('All rarities');
+  await rarity.click();
+  await expect(page.getByRole('checkbox', { name: /^Mythic/ })).toBeVisible();
   await page.getByRole('checkbox', { name: /^Common/ }).uncheck();
   await page.getByRole('checkbox', { name: /^Uncommon/ }).uncheck();
+  await page.keyboard.press('Escape');
   await expect(page.getByRole('article')).toHaveCount(cards.filter((c) => !['common', 'uncommon'].includes(c.rarity)).length);
+  await expect(rarity).toContainText('Hiding Uncommon, Common');
   await expect(page).toHaveURL(/exclude=/);
-  await page.getByRole('button', { name: 'Check all' }).click();
-  await page.getByRole('button', { name: 'Clear all Treatment' }).click();
+  await page.getByRole('button', { name: 'Reset filters' }).click();
+
+  const treat = page.getByRole('button', { name: /^Treatment/ });
+  await expect(treat).toContainText('All treatments');
+  await treat.click();
+  await page.getByRole('button', { name: 'Clear all' }).click();
   await page.getByRole('checkbox', { name: /^Standard frame/ }).check();
+  await page.keyboard.press('Escape');
   const codes = (c: (typeof cards)[number]) => (c.treatment ? c.treatment.split('|') : []);
   await expect(page.getByRole('article')).toHaveCount(cards.filter((c) => !codes(c).some((t) => t !== 'ff') && (c.standard_frame || codes(c).length > 0)).length);
-  await page.getByRole('button', { name: 'Check all' }).click();
-  await page.getByRole('checkbox', { name: /^Not chase/ }).uncheck();
-  await expect(page.getByRole('article')).toHaveCount(cards.filter((c) => c.is_chase).length);
-  await page.keyboard.press('Escape');
-  await expect(trigger).toContainText('Hiding Not chase');
-  await trigger.click();
-  await expect(page.getByText('1 unchecked')).toBeVisible();
-  await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Reset filters' }).click();
+
+  await page.getByRole('radio', { name: 'Exclude' }).click();
+  await expect(page.getByRole('article')).toHaveCount(cards.filter((c) => !c.is_chase).length);
+  await page.getByRole('radio', { name: 'Include' }).click();
   await expect(page.getByRole('article')).toHaveCount(cards.length);
+  await page.getByRole('button', { name: 'What counts as chase?' }).focus();
+  await expect(page.getByRole('tooltip')).toContainText('ultra-premium variants');
+  await expect(page.getByRole('tooltip')).not.toContainText('.toml');
+  await expect(page.getByRole('button', { name: 'Reset filters' })).toHaveCount(0);
 });
 
-test('finish lives in card types: unchecking Nonfoil judges owned/missing on foils', async ({ page }) => {
+test('finish picker: unchecking Nonfoil judges owned/missing on foils', async ({ page }) => {
   await page.goto(COLLECTION_URL);
-  await page.getByRole('button', { name: /Card types/ }).click();
+  await page.getByRole('button', { name: /^Finish/ }).click();
   await page.getByRole('checkbox', { name: /^Nonfoil/ }).uncheck();
   await page.keyboard.press('Escape');
   const foilish = cards.filter((c) => c.finishes.includes('foil'));
@@ -159,10 +162,10 @@ test('family head names itself; sections collapse and jump', async ({ page }) =>
   await expect(page.locator(':focus')).toHaveAttribute('aria-expanded', 'false');
 });
 
-test('magnifier inspects a card (large art, facts, Scryfall/TCGplayer links); the rest of the card still marks', async ({ page }) => {
+test('pressing the art inspects a card (large art, facts, Scryfall/TCGplayer links); the caption list toggle marks it', async ({ page }) => {
   await page.goto(COLLECTION_URL);
   const tile = page.getByRole('article').first();
-  const name = (await tile.getByRole('button').first().getAttribute('aria-label'))!.replace(/^Mark /, '');
+  const name = (await tile.getByRole('button', { name: /^Mark / }).getAttribute('aria-label'))!.replace(/^Mark /, '');
   await tile.getByRole('button', { name: `Inspect ${name}` }).click();
   const dialog = page.getByRole('dialog', { name });
   await expect(dialog).toBeVisible();

@@ -48,7 +48,7 @@ test('shared cards carry two labelled inclusion bars', async ({ page }) => {
 test('display printing is the standard one returned by the API (F3)', async ({ page }) => {
   await page.goto(COMPARE_URL);
   const tile = page.locator('section[aria-labelledby="col-a_only"]').getByRole('article').first();
-  const name = (await tile.getByRole('button').first().getAttribute('aria-label'))!.replace(/^Mark /, '');
+  const name = (await tile.getByRole('button', { name: /^Mark / }).getAttribute('aria-label'))!.replace(/^Mark /, '');
   const c = fixtures.compare.cards.find((x) => x.name === name)!;
   await expect(tile).toContainText(`${c.collector_number} · ${c.set_code!.toUpperCase()}`);
   await expect(tile.getByRole('img', { name: c.name })).toHaveAttribute('src', c.image_uri!);
@@ -58,7 +58,8 @@ test('list view shows a dense checklist and persists in the URL', async ({ page 
   await page.goto(COMPARE_URL);
   await page.getByRole('radio', { name: 'List' }).click();
   await expect(page).toHaveURL(/view=list/);
-  await expect(page.getByRole('checkbox', { name: /^Mark / }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Mark / }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Inspect / }).first()).toBeVisible();
   await expect(page.getByRole('article')).toHaveCount(0);
 });
 

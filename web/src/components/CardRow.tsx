@@ -5,31 +5,25 @@ import { rarityLetter } from '../core/guideCard';
 import { fmtPct, fmtUsd } from '../core/format';
 import { CardArt, Holdings, InclusionBars, Tags } from './CardFace';
 import { CardPreview } from './CardMeta';
-import { MagnifierMark } from './StoreMarks';
+import { MarkToggle } from './MarkToggle';
 
 type Props = { card: GuideCard; selected: boolean; onToggle: (key: string) => void; onInspect?: (card: GuideCard) => void; barLabels?: [string, string] };
 
-/** List view: one ruled checklist line per card; hovering/focusing the name previews the art. */
+/** List view: one ruled line per card — list toggle marks it, the name opens the inspector (hover previews the art). */
 export const CardRow = memo(function CardRow({ card, selected, onToggle, onInspect, barLabels = ['A', 'B'] }: Props) {
   return (
-    <div className={`grid min-h-[var(--size-row-h)] grid-cols-[1rem_minmax(4rem,1fr)_auto_auto_auto] @[18rem]:grid-cols-[1rem_var(--size-thumb)_minmax(5.5rem,1fr)_auto_auto_auto] items-center gap-2 ruled px-1 ${selected ? 'highlighter' : ''}`}>
-      <input
-        type="checkbox"
-        checked={selected}
-        onChange={() => onToggle(card.key)}
-        aria-label={`Mark ${card.name}`}
-        className="h-3.5 w-3.5 cursor-pointer accent-[var(--theme-accent)]"
-      />
+    <div className={`grid min-h-[var(--size-row-h)] grid-cols-[1.75rem_minmax(4rem,1fr)_auto_auto] @[18rem]:grid-cols-[1.75rem_var(--size-thumb)_minmax(5.5rem,1fr)_auto_auto] items-center gap-2 ruled px-1 ${selected ? 'highlighter' : ''}`}>
+      <MarkToggle name={card.name} marked={selected} onToggle={() => onToggle(card.key)} size="sm" />
       <span className="hidden h-[var(--size-thumb)] w-[var(--size-thumb)] overflow-hidden rounded-xs @[18rem]:block">
         <CardArt card={card} crop className={card.missing ? 'opacity-55 grayscale-[0.7]' : ''} />
       </span>
       <HoverCard.Root openDelay={250} closeDelay={80}>
         <HoverCard.Trigger asChild>
-          <a
-            href={card.href ?? undefined}
-            target="_blank"
-            rel="noreferrer"
-            className="flex min-w-0 items-baseline gap-2 text-sm text-ink no-underline hover:underline"
+          <button
+            type="button"
+            onClick={() => onInspect?.(card)}
+            aria-label={`Inspect ${card.name}`}
+            className="flex min-w-0 cursor-pointer items-baseline gap-2 text-left text-sm text-ink hover:underline"
           >
             <span className="truncate voice-semi">{card.name}</span>
             <span className="hidden shrink-0 text-2xs tabular text-ink-muted @[30rem]:inline" translate="no">
@@ -38,7 +32,7 @@ export const CardRow = memo(function CardRow({ card, selected, onToggle, onInspe
             </span>
             {card.tags.length > 0 && <span className="hidden min-w-0 @[36rem]:block"><Tags tags={card.tags} /></span>}
             {card.note && <span className="hidden min-w-0 truncate text-2xs text-ink-muted @[24rem]:inline">{card.note}</span>}
-          </a>
+          </button>
         </HoverCard.Trigger>
         <HoverCard.Portal>
           <HoverCard.Content side="right" align="center" sideOffset={12} collisionPadding={16} className="z-40 w-56 drop-shadow-[0_10px_24px_var(--theme-scrim)]">
@@ -67,11 +61,6 @@ export const CardRow = memo(function CardRow({ card, selected, onToggle, onInspe
         )}
       </span>
       <span className="w-12 text-right text-sm tabular voice-semi font-medium text-ink @[22rem]:w-14">{fmtUsd(card.price)}</span>
-      {onInspect ? (
-        <button type="button" onClick={() => onInspect(card)} aria-label={`Inspect ${card.name}`} title="Inspect card" className="grid size-7 cursor-pointer place-items-center rounded-sm text-accent-ink hover:bg-paper-sunk">
-          <MagnifierMark className="size-4" />
-        </button>
-      ) : <span />}
     </div>
   );
 });

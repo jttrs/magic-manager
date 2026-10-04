@@ -64,16 +64,6 @@ export function AddCardMark(p: MarkProps) {
   );
 }
 
-/** Magnifying glass (inspect a card). */
-export function MagnifierMark(p: MarkProps) {
-  return (
-    <svg {...base} {...p}>
-      <circle cx="10.5" cy="10.5" r="6.2" />
-      <path d="M15 15l5.4 5.4M10.5 7.9v5.2M7.9 10.5h5.2" />
-    </svg>
-  );
-}
-
 /** Scryfall: a scrying orb on its stand. */
 export function ScryfallMark(p: MarkProps) {
   return (

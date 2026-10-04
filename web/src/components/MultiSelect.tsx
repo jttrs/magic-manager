@@ -15,6 +15,8 @@ type Props = {
   summary?: string;
   /** Hide the search box (short, grouped lists). */
   searchable?: boolean;
+  /** Keep the authored option order (e.g. rarity) instead of pinning the selection first. */
+  keepOrder?: boolean;
 };
 
 /**
@@ -22,7 +24,7 @@ type Props = {
  * searchable checkbox list. DESIGN.md: chip groups stop at 5 options; anything
  * larger uses this, so long lists never take over the sidebar.
  */
-export function MultiSelect({ label, options, value, onChange, noun, placeholder = 'Filter…', summary: summaryText, searchable = true }: Props) {
+export function MultiSelect({ label, options, value, onChange, noun, placeholder = 'Filter…', summary: summaryText, searchable = true, keepOrder = false }: Props) {
   const [q, setQ] = useState('');
   const id = useId();
   const selected = useMemo(() => new Set(value), [value]);
@@ -30,9 +32,9 @@ export function MultiSelect({ label, options, value, onChange, noun, placeholder
     const ql = q.trim().toLowerCase();
     const hits = ql ? options.filter((o) => o.label.toLowerCase().includes(ql) || o.value.toLowerCase().includes(ql)) : options;
     // Grouped lists keep their authored order; flat lists pin the selection first.
-    if (options.some((o) => o.group)) return hits;
+    if (keepOrder || options.some((o) => o.group)) return hits;
     return [...hits.filter((o) => selected.has(o.value)), ...hits.filter((o) => !selected.has(o.value))];
-  }, [options, q, selected]);
+  }, [options, q, selected, keepOrder]);
   const grouped = options.some((o) => o.group);
   const groups = useMemo(() => {
     const m = new Map<string, MultiOption[]>();
@@ -95,6 +97,11 @@ export function MultiSelect({ label, options, value, onChange, noun, placeholder
                 {q && shown.length > 0 && (
                   <button type="button" className="cursor-pointer text-on-chrome-muted underline hover:text-on-chrome" onClick={() => onChange([...new Set([...value, ...shown.map((o) => o.value)])])}>
                     Select shown
+                  </button>
+                )}
+                {!q && value.length < options.length && (
+                  <button type="button" className="cursor-pointer text-on-chrome-muted underline hover:text-on-chrome" onClick={() => onChange(options.map((o) => o.value))}>
+                    Select all
                   </button>
                 )}
                 <button type="button" className="cursor-pointer text-on-chrome-muted underline hover:text-on-chrome" onClick={() => onChange(q ? value.filter((v) => !shown.some((o) => o.value === v)) : [])}>
