@@ -1,5 +1,5 @@
 import { ToggleGroup } from 'radix-ui';
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 
 export function SideSection({ title, children, id }: { title: string; children: ReactNode; id?: string }) {
   return (
@@ -12,14 +12,15 @@ export function SideSection({ title, children, id }: { title: string; children: 
 
 type Opt<T extends string> = { value: T; label: string };
 
-/** Single-choice segmented control (sort, density, chase mode). */
-export function Segmented<T extends string>({ value, options, onChange, label }: { value: T; options: Opt<T>[]; onChange: (v: T) => void; label: string }) {
-  return (
+/** Single-choice segmented control (view type, chase mode). `showLabel` prints the label above it. */
+export function Segmented<T extends string>({ value, options, onChange, label, showLabel = false }: { value: T; options: Opt<T>[]; onChange: (v: T) => void; label: string; showLabel?: boolean }) {
+  const id = useId();
+  const group = (
     <ToggleGroup.Root
       type="single"
       value={value}
       onValueChange={(v) => v && onChange(v as T)}
-      aria-label={label}
+      {...(showLabel ? { 'aria-labelledby': id } : { 'aria-label': label })}
       className="grid min-w-0 auto-cols-fr grid-flow-col rounded-sm border border-chrome-line p-0.5"
     >
       {options.map((o) => (
@@ -32,6 +33,13 @@ export function Segmented<T extends string>({ value, options, onChange, label }:
         </ToggleGroup.Item>
       ))}
     </ToggleGroup.Root>
+  );
+  if (!showLabel) return group;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span id={id} className="text-sm voice-semi text-on-chrome-muted">{label}</span>
+      {group}
+    </div>
   );
 }
 

@@ -5,7 +5,7 @@ import type { GuideCard, GuideGroup } from '../core/guideCard';
 import { CardRow } from './CardRow';
 import { CardTile } from './CardTile';
 
-type Density = 'grid' | 'rows';
+type Density = 'grid' | 'list';
 
 export type GuideSection = GuideGroup & {
   level?: 1 | 2;
@@ -33,7 +33,7 @@ type Props = {
 
 const GAP = 12;
 
-/** One virtualized scroll region for any grouped card list, in grid or rows density. */
+/** One virtualized scroll region for any grouped card list, in grid or list view. */
 export function VirtualGuide({ sections, density, selected, onToggle, barLabels, label, minCardWidth = 120 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
@@ -46,7 +46,7 @@ export function VirtualGuide({ sections, density, selected, onToggle, barLabels,
     return () => ro.disconnect();
   }, []);
 
-  const columns = density === 'rows' ? 1 : Math.max(1, Math.floor((width + GAP) / (minCardWidth + GAP)));
+  const columns = density === 'list' ? 1 : Math.max(1, Math.floor((width + GAP) / (minCardWidth + GAP)));
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
   const toggleSection = (key: string) =>
     setCollapsed((prev) => {
@@ -80,10 +80,11 @@ export function VirtualGuide({ sections, density, selected, onToggle, barLabels,
     getScrollElement: () => scrollRef.current,
     estimateSize: (i) => {
       const r = rows[i];
-      return r.kind === 'head' ? (r.level === 1 ? 72 : 38) : density === 'rows' ? 33 : cardH + GAP;
+      return r.kind === 'head' ? (r.level === 1 ? 72 : 38) : density === 'list' ? 33 : cardH + GAP;
     },
     getItemKey: (i) => rows[i].key,
-    overscan: density === 'rows' ? 12 : 3,
+    // Keep ~a screen of rows mounted either side so short scroll-backs never remount.
+    overscan: density === 'list' ? 24 : 6,
   });
 
   /** Scroll to the previous/next head of the same level, then focus its toggle. */
@@ -127,7 +128,7 @@ export function VirtualGuide({ sections, density, selected, onToggle, barLabels,
                   onPrev={neighbor(vi.index, -1) ? () => jump(vi.index, -1) : undefined}
                   onNext={neighbor(vi.index, 1) ? () => jump(vi.index, 1) : undefined}
                 />
-              ) : density === 'rows' ? (
+              ) : density === 'list' ? (
                 row.items.map((c) => <CardRow key={c.key} card={c} selected={selected.has(c.key)} onToggle={onToggle} barLabels={barLabels} />)
               ) : (
                 <div className="grid pb-3" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, columnGap: GAP }}>

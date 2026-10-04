@@ -54,10 +54,10 @@ test('display printing is the standard one returned by the API (F3)', async ({ p
   await expect(tile.getByRole('img', { name: c.name })).toHaveAttribute('src', c.image_uri!);
 });
 
-test('rows density shows a dense checklist and persists in the URL', async ({ page }) => {
+test('list view shows a dense checklist and persists in the URL', async ({ page }) => {
   await page.goto(COMPARE_URL);
-  await page.getByRole('radio', { name: 'Rows' }).click();
-  await expect(page).toHaveURL(/density=rows/);
+  await page.getByRole('radio', { name: 'List' }).click();
+  await expect(page).toHaveURL(/view=list/);
   await expect(page.getByRole('checkbox', { name: /^Mark / }).first()).toBeVisible();
   await expect(page.getByRole('article')).toHaveCount(0);
 });

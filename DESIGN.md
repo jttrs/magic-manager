@@ -165,7 +165,7 @@ Desktop view bodies use `lg:grid-cols-[var(--size-sidebar)_minmax(0,1fr)]` with 
 
 Guide sheets (`GuideSheet`) are full-height paper panels with a compact title block and a flexible body. Compare views split the sheet into horizontal resizable columns using `react-resizable-panels`; each visible column has a ruled heading, optional legend, virtualized body, and hide control. Width layout persists per visible-set key in localStorage.
 
-Cards have two densities. Grid density calculates columns from the scroll-region width with a 12px gap and minimum card widths (`120px`, or `128px` for Collection). Rows density is a 2rem ruled checklist line. `CardRow` uses container-query breakpoints at `18rem` (show crop thumbnail), `22rem` (show bars and wider price), and `30rem` (show set/CN metadata and wider bars).
+Cards have two view types (sidebar `View type`: Grid · List, URL `view`). Grid calculates columns from the scroll-region width with a 12px gap and minimum card widths (`120px`, or `128px` for Collection). List is a 2rem ruled checklist line. `CardRow` uses container-query breakpoints at `18rem` (show crop thumbnail), `22rem` (show bars and wider price), and `30rem` (show set/CN metadata and wider bars).
 
 Responsive behavior is task-specific, not generic stacking. At `max-width: 47.99rem`, `GuideColumns` becomes a tabbed single-column view. At `min-width: 64rem`, sidebar controls are always visible; below that, `ViewLayout` uses a disclosure button with `aria-expanded` and `aria-controls`.
 
@@ -212,7 +212,7 @@ Hairline borders are the main geometry. `ruled` is a 1px bottom border; column a
 ### Group by (Commanders)
 - **Purpose:** re-section every compare column without changing ranking: `Card type` (EDHREC's type-based lists, the default) or `Function` (Scryfall Tagger function roots in config order — Ramp, Card draw, Removal, …; untagged cards last under "No tagged function").
 - **Style:** a two-option `Segmented` in the Display section (two options → segmented, never chips). Group heads reuse VirtualGuide's level-2 ruled subheads; no per-function colors (one-accent rule).
-- **Multi-membership:** a card serving several functions is listed under each, with a muted `GuideNote` ("also: Removal, Tutor") under its caption (inline after the set metadata in Rows); a one-line helper under the control says so and that column totals count each card once. Marking is per card, so every appearance highlights together.
+- **Multi-membership:** a card serving several functions is listed under each, with a muted `GuideNote` ("also: Removal, Tutor") under its caption (inline after the set metadata in List); a one-line helper under the control says so and that column totals count each card once. Marking is per card, so every appearance highlights together.
 - **Empty state:** when the tag cache was never synced, a chrome-muted note links to Jobs → Sync Scryfall tags.
 
 ### Function filter (Collection)

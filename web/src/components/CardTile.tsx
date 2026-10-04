@@ -11,7 +11,7 @@ type Props = {
   barLabels?: [string, string];
 };
 
-/** Grid density: card art + guide caption. Pressing the card marks it with the highlighter. */
+/** Grid view: card art + guide caption. Pressing the card marks it with the highlighter. */
 export const CardTile = memo(function CardTile({ card, selected, onToggle, barLabels = ['A', 'B'] }: Props) {
   return (
     <article className="group flex min-w-0 flex-col gap-1">
