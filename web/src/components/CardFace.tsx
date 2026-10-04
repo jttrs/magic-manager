@@ -9,6 +9,11 @@ const IMG_H = 680;
 /** Scryfall serves the same card at /normal/ and as an art-only crop at /art_crop/. */
 const artCrop = (url: string) => url.replace('/normal/', '/art_crop/');
 
+// Card images already decoded this session. The guide is virtualized, so a tile
+// scrolled back into view is a fresh <img>; for a seen URL we skip lazy/async so
+// the browser paints it from its memory cache in the same frame (no blank flash).
+const seen = new Set<string>();
+
 export function CardArt({ card, className = '', eager = false, crop = false }: { card: GuideCard; className?: string; eager?: boolean; crop?: boolean }) {
   if (!card.image) {
     return (
@@ -29,8 +34,9 @@ export function CardArt({ card, className = '', eager = false, crop = false }: {
       alt={card.name}
       width={IMG_W}
       height={IMG_H}
-      loading={eager ? 'eager' : 'lazy'}
-      decoding="async"
+      loading={eager || seen.has(card.image) ? 'eager' : 'lazy'}
+      decoding={seen.has(card.image) ? 'sync' : 'async'}
+      onLoad={() => seen.add(card.image!)}
       draggable={false}
       className={`aspect-[488/680] h-auto w-full rounded-[4.5%/3.2%] bg-paper-sunk ${className}`}
     />

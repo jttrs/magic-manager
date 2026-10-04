@@ -83,7 +83,8 @@ export function VirtualGuide({ sections, density, selected, onToggle, barLabels,
       return r.kind === 'head' ? (r.level === 1 ? 72 : 38) : density === 'list' ? 33 : cardH + GAP;
     },
     getItemKey: (i) => rows[i].key,
-    overscan: density === 'list' ? 12 : 3,
+    // Keep ~a screen of rows mounted either side so short scroll-backs never remount.
+    overscan: density === 'list' ? 24 : 6,
   });
 
   /** Scroll to the previous/next head of the same level, then focus its toggle. */
