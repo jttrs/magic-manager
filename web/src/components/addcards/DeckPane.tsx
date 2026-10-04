@@ -9,7 +9,7 @@ import { Button } from '../Button';
 /** Bring a whole deck: a deck-builder URL (reviewed before adding) or a precon (added directly). */
 export function DeckPane({ onFetched }: { onFetched: (r: ResolveOut) => void }) {
   return (
-    <div className="grid min-h-0 flex-1 gap-6 overflow-y-auto pr-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
+    <div className="grid min-h-0 flex-1 gap-6 overflow-y-auto pr-3 [scrollbar-gutter:stable] lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
       <DeckUrl onFetched={onFetched} />
       <PreconCatalog />
     </div>

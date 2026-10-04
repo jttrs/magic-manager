@@ -104,7 +104,7 @@ export function AddCardsDialog({ trigger }: { trigger: ReactNode }) {
                 <section aria-labelledby="staged-h" className="flex min-h-0 flex-col @container">
                   <h3 id="staged-h" className="border-b-2 border-rule-strong pb-1 text-lg voice-condensed font-bold uppercase">To add</h3>
                   {staged.length ? (
-                    <div className="min-h-0 flex-1 overflow-y-auto">
+                    <div className="min-h-0 flex-1 overflow-y-auto pr-3 [scrollbar-gutter:stable]">
                       <ReviewTable label="Cards to add" lines={staged} onChange={(k, p) => setStaged((s) => updateLine(s, k, p))} onRemove={(k) => setStaged((s) => s.filter((l) => l.key !== k))} />
                     </div>
                   ) : (
@@ -178,7 +178,7 @@ function Review({ title, warnings, back, children }: { title: string; warnings: 
           <ul className="mt-1 flex flex-col gap-0.5 text-xs">{warnings.map((w) => <li key={w}>{w}</li>)}</ul>
         </details>
       )}
-      <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+      <div className="min-h-0 flex-1 overflow-y-auto pr-3 [scrollbar-gutter:stable]">{children}</div>
     </section>
   );
 }

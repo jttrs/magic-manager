@@ -40,7 +40,7 @@ export function SearchPane({ onPick }: { onPick: (p: PrintingOut, finish: Finish
               ? 'Searching…'
               : `${hits.length}${hits.length === 60 ? '+' : ''} printings${res.data?.source === 'scryfall' ? ' from Scryfall' : ''}. Press a card to add one copy.`}
       </p>
-      <ul aria-label="Printings" className="grid min-h-0 grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-3 overflow-y-auto pb-2 pr-1">
+      <ul aria-label="Printings" className="grid min-h-0 grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-3 overflow-y-auto pb-2 pr-3 [scrollbar-gutter:stable]">
         {hits.map((p) => (
           <li key={p.scryfall_id} className="flex flex-col gap-1">
             <button

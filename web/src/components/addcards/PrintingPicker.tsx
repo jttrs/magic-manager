@@ -47,7 +47,7 @@ export function PrintingPicker({ name, candidates, value, onChange }: { name: st
           sideOffset={4}
           collisionPadding={12}
           aria-label={`Printings of ${name}`}
-          className="z-[60] max-h-[min(30rem,70dvh)] w-[min(40rem,calc(100vw-1.5rem))] overflow-y-auto rounded-sm border border-rule-strong bg-paper-raised p-2 text-ink shadow-[0_14px_32px_-14px_var(--theme-scrim)]"
+          className="z-[60] max-h-[min(30rem,70dvh)] w-[min(40rem,calc(100vw-1.5rem))] overflow-y-auto rounded-sm border border-rule-strong bg-paper-raised p-2 pr-3 [scrollbar-gutter:stable] text-ink shadow-[0_14px_32px_-14px_var(--theme-scrim)]"
         >
           <ul aria-label={`Printings of ${name}`} className="grid grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))] gap-2">
             {candidates.map((c) => {
