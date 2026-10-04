@@ -206,6 +206,16 @@ Hairline borders are the main geometry. `ruled` is a 1px bottom border; column a
 - **TextField:** labelled search input on `chrome-raised`, `chrome-line` border, amber focus border.
 - **A11y contract:** groups carry explicit `aria-label`; labels wrap inputs or target by `htmlFor`.
 
+### Group by (Commanders)
+- **Purpose:** re-section every compare column without changing ranking: `EDHREC lists` (type groups, the default) or `Function` (Scryfall Tagger function roots in config order — Ramp, Card draw, Removal, …; untagged cards last under "No tagged function").
+- **Style:** a two-option `Segmented` in the Display section (two options → segmented, never chips). Group heads reuse VirtualGuide's level-2 ruled subheads; no per-function colors (one-accent rule).
+- **Multi-membership:** a card serving several functions is listed under each, with a muted `GuideNote` ("also: Removal, Tutor") under its caption; marking is per card, so every appearance highlights together.
+- **Empty state:** when the tag cache was never synced, a chrome-muted note links to Jobs → Sync Scryfall tags.
+
+### CardMeta (hover preview + guide note)
+- **CardPreview:** art first, then — below the art, never over it — a ruled `paper-raised` panel with a `Functions` label line and up to six tag chips (hairline `rule` border, `ink-muted`, no fill, no amber).
+- **GuideNote:** one truncated `2xs` `ink-muted` line under the guide line; `title` carries the full text.
+
 ### CommanderPicker
 - **Purpose:** commander search field with local suggestions and free-text commit.
 - **Style:** condensed large input on chrome; suggestions are a raised chrome popover.
@@ -226,7 +236,7 @@ Hairline borders are the main geometry. `ruled` is a 1px bottom border; column a
 - **Purpose:** two densities for the same `GuideCard` view-model from `web/src/core/guideCard.ts`.
 - **Tile state:** button is `aria-pressed`; selected cards get an amber ring and highlighter caption.
 - **Row state:** checkbox marks a card; selected rows receive the highlighter utility.
-- **Preview:** names trigger hover-card art previews; card links open Scryfall when present.
+- **Preview:** names trigger hover-card previews (`CardPreview`: art, then functions + Scryfall tags below it); card links open Scryfall when present.
 
 ### CardFace parts
 - **CardArt:** fixed 488×680 card aspect or art crop; missing image becomes a ruled paper placeholder.
