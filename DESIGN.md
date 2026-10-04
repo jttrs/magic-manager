@@ -207,9 +207,9 @@ Hairline borders are the main geometry. `ruled` is a 1px bottom border; column a
 - **A11y contract:** groups carry explicit `aria-label`; labels wrap inputs or target by `htmlFor`.
 
 ### Group by (Commanders)
-- **Purpose:** re-section every compare column without changing ranking: `EDHREC lists` (type groups, the default) or `Function` (Scryfall Tagger function roots in config order — Ramp, Card draw, Removal, …; untagged cards last under "No tagged function").
+- **Purpose:** re-section every compare column without changing ranking: `Card type` (EDHREC's type-based lists, the default) or `Function` (Scryfall Tagger function roots in config order — Ramp, Card draw, Removal, …; untagged cards last under "No tagged function").
 - **Style:** a two-option `Segmented` in the Display section (two options → segmented, never chips). Group heads reuse VirtualGuide's level-2 ruled subheads; no per-function colors (one-accent rule).
-- **Multi-membership:** a card serving several functions is listed under each, with a muted `GuideNote` ("also: Removal, Tutor") under its caption; marking is per card, so every appearance highlights together.
+- **Multi-membership:** a card serving several functions is listed under each, with a muted `GuideNote` ("also: Removal, Tutor") under its caption (inline after the set metadata in Rows); a one-line helper under the control says so and that column totals count each card once. Marking is per card, so every appearance highlights together.
 - **Empty state:** when the tag cache was never synced, a chrome-muted note links to Jobs → Sync Scryfall tags.
 
 ### CardMeta (hover preview + guide note)

@@ -35,6 +35,7 @@ export const CardRow = memo(function CardRow({ card, selected, onToggle, barLabe
               {[card.setCode, card.cn, rarityLetter(card.rarity)].filter(Boolean).join(' · ')}
               {card.finish === 'foil' ? ' ✦' : ''}
             </span>
+            {card.note && <span className="hidden min-w-0 truncate text-2xs text-ink-muted @[24rem]:inline">{card.note}</span>}
           </a>
         </HoverCard.Trigger>
         <HoverCard.Portal>

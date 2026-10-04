@@ -87,12 +87,18 @@ export function CompareView() {
           label="Group by"
           value={search.groupBy}
           onChange={(groupBy) => set({ groupBy })}
-          options={[{ value: 'lists', label: 'EDHREC lists' }, { value: 'function', label: 'Function' }]}
+          options={[{ value: 'lists', label: 'Card type' }, { value: 'function', label: 'Function' }]}
         />
-        {search.groupBy === 'function' && view && !view.tagged && (
-          <p role="note" className="text-sm leading-relaxed text-on-chrome-muted">
-            No Scryfall function tags yet — run <Link to="/jobs" className="text-on-chrome underline">Sync Scryfall tags</Link>, then reload.
-          </p>
+        {search.groupBy === 'function' && view && (
+          view.tagged ? (
+            <p className="text-xs leading-relaxed text-on-chrome-muted">
+              Deck roles from Scryfall Tagger. A card with several roles is listed under each; column totals count it once.
+            </p>
+          ) : (
+            <p role="note" className="text-sm leading-relaxed text-on-chrome-muted">
+              No Scryfall function tags yet — run <Link to="/jobs" className="text-on-chrome underline">Sync Scryfall tags</Link>, then reload.
+            </p>
+          )
         )}
         <Segmented label="Density" value={search.density} onChange={(density) => set({ density })} options={[{ value: 'grid', label: 'Grid' }, { value: 'rows', label: 'Rows' }]} />
         <Segmented
