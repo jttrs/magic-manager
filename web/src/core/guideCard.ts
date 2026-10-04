@@ -83,7 +83,7 @@ export const treatmentLabels = (codes: string): string[] =>
   codes ? codes.split('|').map((c) => TREATMENT_LABEL[c] ?? c) : [];
 
 /** Collection mapper. `missing` is decided by the caller's missing basis. */
-export function fromCollection(c: CollectionCardOut, missing: boolean): GuideCard {
+export function fromCollection(c: CollectionCardOut, missing: boolean, fnLabels: Readonly<Record<string, string>> = {}): GuideCard {
   return {
     key: c.scryfall_id,
     name: c.name,
@@ -105,6 +105,7 @@ export function fromCollection(c: CollectionCardOut, missing: boolean): GuideCar
     missing,
     tags: [...(c.is_chase ? ['Chase'] : []), ...treatmentLabels(c.treatment)],
     lines: { plain: `1 ${c.name}`, manapool: '', tcgplayer: '' },
+    functions: (c.functions ?? []).map((k) => fnLabels[k] ?? k),
   };
 }
 

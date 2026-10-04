@@ -65,3 +65,22 @@ describe('compareSearch.groupBy', () => {
     expect(compareSearch.parse({ groupBy: 'nope' }).groupBy).toBe('lists');
   });
 });
+
+describe('collection function filter', () => {
+  it('keeps cards in any chosen function; _none matches untagged', async () => {
+    const { filterCollection, functionCounts, NO_FUNCTION: NONE } = await import('./collection');
+    const card = (id: string, functions: string[]) => ({
+      scryfall_id: id, oracle_id: id, name: id, family: 'f', set_code: 'f', collector_number: '1', rarity: 'rare',
+      type_line: null, cmc: null, color_identity: [], released_at: null, finishes: ['nonfoil'], owned: {}, pledged: {},
+      price_usd: null, price_usd_foil: null, image_uri: null, scryfall_url: null, treatment: '', standard_frame: true,
+      is_bulk: false, is_chase: false, functions,
+    });
+    const cards = [card('a', ['ramp', 'removal']), card('b', ['draw']), card('c', [])];
+    const base = { show: ['owned', 'missing'] as const, exclude: [], q: '' };
+    const ids = (fn: string[]) => filterCollection(cards, { ...base, show: [...base.show], fn }).map((c) => c.scryfall_id);
+    expect(ids([])).toEqual(['a', 'b', 'c']);
+    expect(ids(['removal'])).toEqual(['a']);
+    expect(ids(['draw', NONE])).toEqual(['b', 'c']);
+    expect(Object.fromEntries(functionCounts(cards))).toEqual({ ramp: 1, removal: 1, draw: 1, [NONE]: 1 });
+  });
+});

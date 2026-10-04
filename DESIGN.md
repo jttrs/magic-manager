@@ -215,6 +215,10 @@ Hairline borders are the main geometry. `ruled` is a 1px bottom border; column a
 - **Multi-membership:** a card serving several functions is listed under each, with a muted `GuideNote` ("also: Removal, Tutor") under its caption (inline after the set metadata in Rows); a one-line helper under the control says so and that column totals count each card once. Marking is per card, so every appearance highlights together.
 - **Empty state:** when the tag cache was never synced, a chrome-muted note links to Jobs → Sync Scryfall tags.
 
+### Function filter (Collection)
+- **Purpose:** keep printings serving any chosen Tagger function root (OR), plus a "No tagged function" option; sits under Card types in Show and is cleared by Reset filters.
+- **Style:** 13 options → `MultiSelect` (never chips); trigger reads "Any function" when empty. Hidden until the tag cache has data.
+
 ### CardMeta (hover preview + guide note)
 - **CardPreview:** art first, then — below the art, never over it — a ruled `paper-raised` panel with a `Functions` label line and up to six tag chips (hairline `rule` border, `ink-muted`, no fill, no amber).
 - **GuideNote:** one truncated `2xs` `ink-muted` line under the guide line; `title` carries the full text.

@@ -667,6 +667,14 @@
           "is_chase": {
             "type": "boolean",
             "title": "Is Chase"
+          },
+          "functions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Functions",
+            "description": "Function root keys (Scryfall Tagger roll-up)."
           }
         },
         "type": "object",
@@ -719,6 +727,14 @@
             "type": "array",
             "title": "Skipped",
             "description": "Codes that didn't resolve to a family."
+          },
+          "functions": {
+            "items": {
+              "$ref": "#/components/schemas/FunctionRootOut"
+            },
+            "type": "array",
+            "title": "Functions",
+            "description": "Function roots, display order."
           }
         },
         "type": "object",

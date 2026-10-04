@@ -152,6 +152,12 @@ export type CollectionCardOut = {
      * Is Chase
      */
     is_chase: boolean;
+    /**
+     * Functions
+     *
+     * Function root keys (Scryfall Tagger roll-up).
+     */
+    functions?: Array<string>;
 };
 
 /**
@@ -172,6 +178,12 @@ export type CollectionOut = {
      * Codes that didn't resolve to a family.
      */
     skipped?: Array<string>;
+    /**
+     * Functions
+     *
+     * Function roots, display order.
+     */
+    functions?: Array<FunctionRootOut>;
 };
 
 /**

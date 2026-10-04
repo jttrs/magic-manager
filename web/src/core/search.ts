@@ -36,6 +36,8 @@ export const collectionSearch = z.object({
   /** Unchecked card-type traits (core/collection.ts TRAITS keys). */
   exclude: list(z.string()).catch([]).default([]),
   q: z.string().catch('').default(''),
+  /** Scryfall Tagger function roots to keep (OR); empty = all. */
+  fn: list(z.string()).catch([]).default([]),
   sort: z.string().catch('set,cn').default('set,cn'),
   density,
 });

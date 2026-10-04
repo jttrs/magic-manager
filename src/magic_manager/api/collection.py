@@ -11,7 +11,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from .. import collection_view, family_status, gallery
+from .. import collection_view, family_status, gallery, scryfall_tags
+from .edhrec import FunctionRootOut, function_roots
 
 BuyTarget = Literal["manapool", "tcgplayer", "cardkingdom", "moxfield", "plain"]
 
@@ -61,12 +62,16 @@ class CollectionCardOut(BaseModel):
     standard_frame: bool
     is_bulk: bool
     is_chase: bool
+    functions: list[str] = Field(default_factory=list,
+                                 description="Function root keys (Scryfall Tagger roll-up).")
 
 
 class CollectionOut(BaseModel):
     families: list[FamilySummaryOut]
     cards: list[CollectionCardOut]
     skipped: list[str] = Field(default_factory=list, description="Codes that didn't resolve to a family.")
+    functions: list[FunctionRootOut] = Field(default_factory=list,
+                                             description="Function roots, display order.")
 
 
 class BuyItem(BaseModel):
@@ -117,7 +122,14 @@ def family_view(codes: list[str]) -> CollectionOut:
             )
             for c in fc.cards
         )
-    return CollectionOut(families=summaries, cards=cards, skipped=skipped)
+    # Tagger function roots for every card in ONE batched lookup (oracle grain).
+    summ = scryfall_tags.card_summaries({c.oracle_id for c in cards if c.oracle_id})
+    for c in cards:
+        s = summ.get(c.oracle_id or "")
+        if s:
+            c.functions = list(s.functions)
+    return CollectionOut(families=summaries, cards=cards, skipped=skipped,
+                         functions=function_roots())
 
 
 def buy_list(req: BuyListIn) -> BuyListOut:

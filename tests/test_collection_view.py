@@ -138,3 +138,17 @@ def test_family_member_codes_dedupe(client):
 def test_buy_list_endpoint(client):
     r = client.post("/api/collection/buy-list", json={"target": "tcgplayer", "items": [{"scryfall_id": "b3", "finish": "nonfoil"}]})
     assert r.status_code == 200 and r.json()["lines"] == 1
+
+
+def test_collection_endpoint_carries_tagger_functions(client):
+    from magic_manager import scryfall_tags
+    RAMP = "2f3e4ad7-5e60-41b4-bdbc-653f16869cf6"
+    scryfall_tags.ingest([
+        {"id": RAMP, "slug": "ramp", "label": "ramp", "child_ids": [],
+         "taggings": [{"oracle_id": "o1", "weight": "median"}]},
+    ], source="t", updated_at=None)
+    body = client.get("/api/collection", params=[("families", "tst")]).json()
+    by = {c["scryfall_id"]: c for c in body["cards"]}
+    assert by["r1"]["functions"] == ["ramp"] and by["b3"]["functions"] == ["ramp"]
+    assert by["c2"]["functions"] == []
+    assert body["functions"][0] == {"key": "ramp", "label": "Ramp"}
