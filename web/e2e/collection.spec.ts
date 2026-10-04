@@ -119,7 +119,7 @@ test('buy list copies the missing printings shown (or the marked ones)', async (
   await expect(page.getByText(`Copied ${missingN} lines`)).toBeVisible();
   const first = cards.find((c) => total(c) === 0)!;
   await page.getByRole('button', { name: `Mark ${first.name}` }).first().click();
-  await expect(page.getByRole('heading', { name: /Buy list · 1 marked/ })).toBeVisible();
+  await expect(page.getByText('Copy bulk lists · 1 marked', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Copy TCGplayer list' }).click();
   await expect(page.getByText('Copied 1 line', { exact: true })).toBeVisible();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`1 ${first.scryfall_id} [tcgplayer]`);

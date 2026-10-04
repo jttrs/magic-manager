@@ -62,7 +62,15 @@ export function MultiSelect({ label, options, value, onChange, noun, placeholder
             align="start"
             sideOffset={4}
             collisionPadding={12}
-            className="z-50 flex max-h-[min(28rem,70dvh)] w-[max(var(--radix-popover-trigger-width),18rem)] flex-col rounded-sm border border-chrome-line bg-chrome-raised text-on-chrome shadow-[0_12px_28px_-12px_var(--theme-scrim)]"
+            tabIndex={-1}
+            onOpenAutoFocus={(e) => {
+              // Searchable pickers land in the filter box; others on the panel itself,
+              // so no stray focus ring lands on the first link-button.
+              if (searchable) return;
+              e.preventDefault();
+              (e.currentTarget as HTMLElement).focus({ preventScroll: true });
+            }}
+            className="z-50 flex focus:outline-none max-h-[min(28rem,70dvh)] w-[max(var(--radix-popover-trigger-width),18rem)] flex-col rounded-sm border border-chrome-line bg-chrome-raised text-on-chrome shadow-[0_12px_28px_-12px_var(--theme-scrim)]"
           >
             <div className="flex flex-col gap-2 border-b border-chrome-line p-2">
               {searchable && <input

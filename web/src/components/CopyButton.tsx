@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ComponentType, type ReactNode, type SVGProps } from 'react';
 import { Button } from './Button';
 
 type GetText = () => string | Promise<string>;
@@ -7,6 +7,7 @@ type GetText = () => string | Promise<string>;
 function useCopy() {
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
   async function copy(id: string, getText: GetText, note?: string) {
     setBusy(id);
     let text = '';
@@ -26,12 +27,14 @@ function useCopy() {
       await navigator.clipboard.writeText(text);
       const n = text.trimEnd().split('\n').length;
       setStatus(`Copied ${n} line${n === 1 ? '' : 's'}${note ? ` — ${note}` : ''}`);
+      setDone(id);
+      window.setTimeout(() => setDone((d) => (d === id ? null : d)), 1600);
     } catch {
       setStatus('Clipboard blocked — allow clipboard access and try again');
     }
     window.setTimeout(() => setStatus(''), note ? 6000 : 2400);
   }
-  return { status, busy, copy };
+  return { status, busy, done, copy };
 }
 
 const Status = ({ text }: { text: string }) => <span aria-live="polite" className="min-h-4 text-xs text-on-chrome-muted">{text}</span>;
@@ -47,27 +50,41 @@ export function CopyButton({ label, getText, emphasis = 'quiet' }: { label: stri
   );
 }
 
-export type CopyTarget = { id: string; name: string; icon: string; getText: GetText; note?: string };
+export type CopyTarget = { id: string; name: string; Mark: ComponentType<SVGProps<SVGSVGElement>>; getText: GetText; note?: string };
 
-/** One row of store marks; each copies that store's paste-ready list. */
-export function CopyTargets({ targets }: { targets: readonly CopyTarget[] }) {
-  const { status, busy, copy } = useCopy();
+/** A label line (what will be copied) over a compact row of icon-only store
+ *  marks; each copies that store's list and shows a check when done. */
+export function CopyTargets({ targets, lead }: { targets: readonly CopyTarget[]; lead?: ReactNode }) {
+  const { status, busy, done, copy } = useCopy();
   return (
-    <div className="flex flex-col gap-1">
-      <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${targets.length}, minmax(0, 1fr))` }}>
-        {targets.map((t) => (
-          <Button
-            key={t.id}
-            onClick={() => copy(t.id, t.getText, t.note)}
-            disabled={busy != null}
-            aria-label={`Copy ${t.name} list`}
-            title={`Copy ${t.name} list`}
-            className="flex-col !gap-1 px-1 py-2"
-          >
-            <img src={t.icon} alt="" width={20} height={20} className="size-5 rounded-xs" />
-            <span className="text-xs leading-tight">{busy === t.id ? 'Building…' : t.name}</span>
-          </Button>
-        ))}
+    <div className="flex flex-col gap-1.5">
+      {lead && <span className="text-sm voice-semi tabular text-on-chrome-muted">{lead}</span>}
+      <div className="flex">
+        <div className="flex shrink-0 divide-x divide-chrome-line overflow-hidden rounded-sm border border-chrome-line">
+          {targets.map(({ id, name, Mark, getText, note }) => {
+            const state = busy === id ? 'busy' : done === id ? 'done' : 'idle';
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => copy(id, getText, note)}
+                disabled={busy != null}
+                aria-label={`Copy ${name} list`}
+                title={`Copy ${name} list`}
+                data-state={state}
+                className="group relative grid size-8 cursor-pointer place-items-center text-accent transition-colors duration-200 ease-guide hover:bg-chrome focus-visible:z-10 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus disabled:cursor-wait"
+              >
+                {state === 'done' ? (
+                  <svg viewBox="0 0 16 16" aria-hidden="true" className="size-4">
+                    <path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                ) : (
+                  <Mark className="size-[1.125rem] transition-transform duration-300 ease-guide group-hover:-translate-y-px group-data-[state=busy]:animate-pulse group-disabled:group-data-[state=idle]:opacity-45" />
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
       <Status text={status} />
     </div>

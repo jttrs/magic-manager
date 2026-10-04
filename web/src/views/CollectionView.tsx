@@ -5,6 +5,7 @@ import { collectionQuery, familiesQuery } from '../app/queries';
 import { useSelection } from '../app/selection';
 import { ViewLayout } from '../components/AppShell';
 import { CopyTargets } from '../components/CopyButton';
+import { CardKingdomMark, ManaPoolMark, TcgplayerMark } from '../components/StoreMarks';
 import { MultiSelect } from '../components/MultiSelect';
 import { ChipToggles, Segmented, SideSection, TextField } from '../components/Sidebar';
 import { SortBuilder } from '../components/SortBuilder';
@@ -99,15 +100,16 @@ export function CollectionView() {
         <Segmented label="Density" value={search.density} onChange={(density) => set({ density })} options={[{ value: 'grid', label: 'Grid' }, { value: 'rows', label: 'Rows' }]} />
         <TextField name="q" label="Card name" value={search.q} placeholder="e.g. Cloud…" onChange={(qv) => set({ q: qv })} />
       </SideSection>
-      <SideSection title={marked.length ? `Buy list · ${marked.length} marked` : `Buy list · ${buyPool.length} missing shown`}>
+      <SideSection title="Buy">
         <CopyTargets
+          lead={`Copy bulk lists · ${marked.length ? `${fmtInt(marked.length)} marked` : `${fmtInt(buyPool.length)} missing shown`}`}
           targets={[
-            { id: 'manapool', name: 'ManaPool', icon: '/brands/manapool.svg', getText: buyText('manapool') },
-            { id: 'tcgplayer', name: 'TCGplayer', icon: '/brands/tcgplayer.png', getText: buyText('tcgplayer') },
+            { id: 'manapool', name: 'ManaPool', Mark: ManaPoolMark, getText: buyText('manapool') },
+            { id: 'tcgplayer', name: 'TCGplayer', Mark: TcgplayerMark, getText: buyText('tcgplayer') },
             {
               id: 'cardkingdom',
               name: 'Card Kingdom',
-              icon: '/brands/cardkingdom.png',
+              Mark: CardKingdomMark,
               getText: buyText('cardkingdom'),
               note: 'Card Kingdom takes names only; pick each printing and foil after Find Cards',
             },
@@ -181,8 +183,12 @@ function buildView(data: CollectionOut, search: CollectionSearch, rules: SortRul
       level: 1,
       items: [],
       noun: 'set family',
-      eyebrow: <FamilyEyebrow codes={(fam.sets ?? []).map((x) => x.code)} />,
-      detail: <OwnedMeter owned={fam.owned_printings} printings={fam.printings} />,
+      detail: (
+        <>
+          <FamilyCodes codes={(fam.sets ?? []).map((x) => x.code)} />
+          <OwnedMeter owned={fam.owned_printings} printings={fam.printings} />
+        </>
+      ),
       meta: `${fmtInt(fam.owned_printings)}/${fmtInt(fam.printings)} printings · ${fmtInt(fam.owned_copies)} copies · ${fmtUsd(fam.owned_usd)}`,
     });
     if (section) {
@@ -203,14 +209,15 @@ function buildView(data: CollectionOut, search: CollectionSearch, rules: SortRul
   return { cards, shown, sections, byId: new Map(shown.map((c) => [c.scryfall_id, c])), stats: collectionStats(shown, search.exclude) };
 }
 
-function FamilyEyebrow({ codes }: { codes: string[] }) {
+/** "Set family · BLB · BLC" printed beside the family name. */
+function FamilyCodes({ codes }: { codes: string[] }) {
   const head = codes.slice(0, 8).map((c) => c.toUpperCase());
   return (
-    <span>
+    <span className="pb-0.5 text-xs voice-semi font-medium uppercase tracking-[0.08em] text-ink-muted">
       Set family
       {head.length > 0 && (
-        <span className="ml-2 font-regular normal-case tracking-normal tabular">
-          {head.join(' · ')}
+        <span className="ml-1.5 font-regular tracking-normal tabular">
+          · {head.join(' · ')}
           {codes.length > head.length && ` +${codes.length - head.length}`}
         </span>
       )}

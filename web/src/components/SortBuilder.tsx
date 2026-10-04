@@ -55,7 +55,12 @@ export function SortBuilder<K extends string>({ keys, rules, presets, onChange }
             sideOffset={4}
             collisionPadding={12}
             aria-label="Sort hierarchy"
-            className="z-50 flex w-[22rem] max-w-[calc(100vw-1.5rem)] flex-col gap-3 rounded-sm border border-chrome-line bg-chrome-raised p-3 text-on-chrome shadow-[0_12px_28px_-12px_var(--theme-scrim)]"
+            tabIndex={-1}
+            onOpenAutoFocus={(e) => {
+              e.preventDefault();
+              (e.currentTarget as HTMLElement).focus({ preventScroll: true });
+            }}
+            className="z-50 flex focus:outline-none w-[22rem] max-w-[calc(100vw-1.5rem)] flex-col gap-3 rounded-sm border border-chrome-line bg-chrome-raised p-3 text-on-chrome shadow-[0_12px_28px_-12px_var(--theme-scrim)]"
           >
             <div className="flex items-baseline justify-between">
               <h2 className="text-sm voice-condensed uppercase tracking-[0.06em] text-on-chrome-muted">Sort by, in order</h2>
@@ -63,7 +68,6 @@ export function SortBuilder<K extends string>({ keys, rules, presets, onChange }
                 <button type="button" onClick={() => onChange([])} className="cursor-pointer text-xs text-on-chrome-muted underline hover:text-on-chrome">Clear</button>
               )}
             </div>
-            <p className="text-xs leading-snug text-on-chrome-muted">The first level groups the sheet into sections; later levels order cards inside each section.</p>
             <ol className="flex flex-col gap-1" aria-label="Sort levels">
               {rules.map((r, i) => (
                 <RuleRow

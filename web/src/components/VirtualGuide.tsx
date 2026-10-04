@@ -9,8 +9,6 @@ type Density = 'grid' | 'rows';
 
 export type GuideSection = GuideGroup & {
   level?: 1 | 2;
-  /** Small kicker above a level-1 label naming what the section is (e.g. "Set family"). */
-  eyebrow?: ReactNode;
   /** Shown right after the label (e.g. a progress meter or a set name). */
   detail?: ReactNode;
   /** Right-aligned facts; defaults to the card count. */
@@ -161,7 +159,6 @@ function SectionHead({ row, onToggle, onPrev, onNext }: { row: Head; onToggle: (
       }
     >
       <div className="min-w-0">
-        {top && s.eyebrow && <div className="mb-1 text-xs voice-semi font-medium uppercase tracking-[0.08em] text-ink-muted">{s.eyebrow}</div>}
         <H className="m-0">
           <button
             type="button"
