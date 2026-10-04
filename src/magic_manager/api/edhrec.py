@@ -11,7 +11,7 @@ from dataclasses import asdict
 
 from pydantic import BaseModel, Field, model_validator
 
-from .. import db, edhrec, legality
+from .. import config, db, edhrec, legality
 from .. import gallery
 from .jobs import Artifact, JobResult, JobSpec, ProgressEvent, ProgressFn, register
 
@@ -64,6 +64,19 @@ SYNC_BULK = register(JobSpec(
 
 # ---------- read: commander compare ----------
 
+class OracleTagOut(BaseModel):
+    """A Scryfall Tagger oracle tag (``id`` is the stable UUID)."""
+    id: str
+    slug: str
+    label: str
+
+
+class FunctionRootOut(BaseModel):
+    """A curated function root (``config/function_tags.toml``), in display order."""
+    key: str
+    label: str
+
+
 class CompareCardOut(BaseModel):
     name: str
     oracle_id: str | None
@@ -91,6 +104,10 @@ class CompareCardOut(BaseModel):
     set_code: str | None
     collector_number: str | None
     scryfall_url: str | None
+    functions: list[str] = Field(default_factory=list,
+                                 description="Function root keys (Scryfall Tagger roll-up).")
+    oracle_tags: list[OracleTagOut] = Field(default_factory=list,
+                                            description="Top Tagger oracle tags by weight.")
 
 
 class CompareOut(BaseModel):
@@ -99,6 +116,8 @@ class CompareOut(BaseModel):
     slug_a: str
     slug_b: str
     cards: list[CompareCardOut]
+    functions: list[FunctionRootOut] = Field(default_factory=list,
+                                             description="Function roots, display order.")
 
 
 def compare(a: str, b: str) -> CompareOut:
@@ -114,7 +133,14 @@ def compare(a: str, b: str) -> CompareOut:
             )
             for c in res.cards
         ],
+        functions=function_roots(),
     )
+
+
+def function_roots() -> list[FunctionRootOut]:
+    """The configured function roots (key + label) in display order."""
+    return [FunctionRootOut(key=r["key"], label=r["label"])
+            for r in config.function_tags()["roots"]]
 
 
 # ---------- read: commander picker ----------

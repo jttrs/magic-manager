@@ -3969,9 +3969,51 @@ def query_missing_jumpstart_cmd(
 
 # ---------- ad-hoc scryfall query ----------
 
+def _scryfall_tags_cmd(action: str, rest: list[str], *, refresh: bool) -> None:
+    """`mm scryfall tags sync|show` — thin relay over magic_manager.scryfall_tags."""
+    from . import scryfall_tags
+    from .scryfall import ScryfallError
+
+    if action == "sync":
+        try:
+            res = scryfall_tags.sync(refresh=refresh, progress=lambda m: typer.echo(m, err=True))
+        except ScryfallError as e:
+            typer.echo(f"error: {e}", err=True)
+            raise typer.Exit(2)
+        state = "already current" if res.skipped else "synced"
+        typer.echo(f"Scryfall tags {state}: {res.tags} tags · {res.taggings} taggings "
+                   f"· {res.source} (published {res.updated_at or '?'})")
+        return
+
+    name = " ".join(rest).strip()
+    if not name:
+        typer.echo("usage: mm scryfall tags show <card name>", err=True)
+        raise typer.Exit(2)
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT oracle_id, name FROM cards WHERE name = ? COLLATE NOCASE "
+            "AND oracle_id IS NOT NULL LIMIT 1", (name,)).fetchone()
+    if not row:
+        typer.echo(f"error: {name!r} not in the local cards table", err=True)
+        raise typer.Exit(1)
+    summ = scryfall_tags.card_summaries([row[0]]).get(row[0])
+    tags = scryfall_tags.tags_for_oracles([row[0]]).get(row[0], [])
+    typer.echo(f"{row[1]}")
+    typer.echo(f"  functions: {', '.join(summ.functions) if summ and summ.functions else '—'}")
+    typer.echo(f"  preview:   {', '.join(t.label for t in summ.tags) if summ else '—'}")
+    typer.echo(f"  all tags ({len(tags)}): {', '.join(t.slug for t in tags) or '—'}")
+
+
+
 @app.command("scryfall")
 def scryfall_cmd(
-    query: str = typer.Argument(..., help="Scryfall search query (any syntax the API accepts)."),
+    query_parts: list[str] = typer.Argument(
+        ..., metavar="QUERY",
+        help="Scryfall search query (any syntax the API accepts). "
+             "`mm scryfall tags sync [--refresh]` refreshes the local Tagger cache; "
+             "`mm scryfall tags show <card>` lists a card's functions + tags."),
+    refresh: bool = typer.Option(False, "--refresh",
+                                 help="(tags sync only) re-check Scryfall's bulk listing and rewrite."),
     first: int = typer.Option(20, "--first", help="Show at most N results."),
     json_out: bool = typer.Option(False, "--json", help="Emit raw Scryfall JSON instead of the table."),
     fields: str = typer.Option(
@@ -3993,6 +4035,12 @@ def scryfall_cmd(
     is included by default, so distinct printings of the same card
     (e.g. Cloud, Ex-SOLDIER variants) are immediately visually distinguishable.
     """
+    if query_parts and query_parts[0] == "tags" and len(query_parts) >= 2 \
+            and query_parts[1] in ("sync", "show"):
+        _scryfall_tags_cmd(query_parts[1], query_parts[2:], refresh=refresh)
+        return
+    query = " ".join(query_parts)
+
     from .scryfall import search as sf_search
     from .treatments import compute_treatment
 

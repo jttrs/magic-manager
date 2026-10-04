@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
 
-from . import db, legality, scryfall, sets, util
+from . import db, legality, scryfall, scryfall_tags, sets, util
 
 WRAPPER = (
     Path(__file__).resolve().parents[2]
@@ -1002,6 +1002,9 @@ class CompareCard:
     image_uri: str | None = None
     set_code: str | None = None
     collector_number: str | None = None
+    # Scryfall Tagger (V28): function root keys + top preview tags ({id,slug,label})
+    functions: list[str] = field(default_factory=list)
+    oracle_tags: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -1126,7 +1129,9 @@ def compare_commanders(ref_a: str, ref_b: str) -> CompareResult:
     keyed on ``card_oracle_id`` (fallback slug); ``both`` cards carry each side's
     inclusion % + deck count and a ``delta`` = ``abs(a_pct - b_pct)``. Every card
     is enriched in ONE batched ``sets.lowest_price_by_oracle`` call (type / mana /
-    lowest USD + a representative printing's image + Scryfall link).
+    lowest USD + a representative printing's image + Scryfall link), and ONE
+    batched ``scryfall_tags.card_summaries`` call (Tagger function roots + top
+    preview tags; empty when the tag cache was never synced).
     """
     name_a, slug_a, a_cards = _commander_card_entries(ref_a)
     name_b, slug_b, b_cards = _commander_card_entries(ref_b)
@@ -1167,6 +1172,10 @@ def compare_commanders(ref_a: str, ref_b: str) -> CompareResult:
     oids = [c.oracle_id for c in cards if c.oracle_id]
     meta = sets.lowest_price_by_oracle(oids)
     display = sets.standard_printing_by_oracle(oids)
+    by_oid: dict[str, list[CompareCard]] = {}
+    for c in cards:
+        if c.oracle_id:
+            by_oid.setdefault(c.oracle_id, []).append(c)
     for c in cards:
         m = meta.get(c.oracle_id or "")
         if not m:
@@ -1184,5 +1193,12 @@ def compare_commanders(ref_a: str, ref_b: str) -> CompareResult:
         c.image_uri = p.get("image_uri")
         c.set_code = p.get("set_code")
         c.collector_number = p.get("collector_number")
+
+    # Scryfall Tagger functions + preview tags — also ONE batched lookup.
+    for oid, summ in scryfall_tags.card_summaries(oids).items():
+        for c in by_oid.get(oid, ()):
+            c.functions = list(summ.functions)
+            c.oracle_tags = [{"id": t.id, "slug": t.slug, "label": t.label}
+                             for t in summ.tags]
 
     return CompareResult(name_a=name_a, name_b=name_b, slug_a=slug_a, slug_b=slug_b, cards=cards)

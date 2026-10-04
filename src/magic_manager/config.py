@@ -215,3 +215,53 @@ def collection_formats(*, override: str | Path | None = None) -> dict[str, dict]
     verbatim (plain TOML — collection_sync owns the interpretation)."""
     raw = load_toml("collection_formats.toml", override=override, required=True)
     return {str(k).lower(): dict(v) for k, v in raw.items() if isinstance(v, dict)}
+
+
+# ---------- function_tags.toml (Scryfall Tagger function roots) ----------
+
+# Baked-in default == config/function_tags.toml (OPTIONAL file; a test keeps the
+# two in sync). Each root: (key, label, ((tag_uuid, tag_slug), …)).
+_DEFAULT_FUNCTION_ROOTS: tuple[tuple[str, str, tuple[tuple[str, str], ...]], ...] = (
+    ("ramp", "Ramp", (("2f3e4ad7-5e60-41b4-bdbc-653f16869cf6", "ramp"),)),
+    ("draw", "Card draw", (("b6448c45-ce65-4848-aa98-2151e4e07437", "draw"),)),
+    ("removal", "Removal", (("444f824c-f910-4530-9dbe-ede7a84cd7f9", "removal"),)),
+    ("board-wipe", "Board wipe", (("3fb7e4fd-5304-4120-b7c4-8a89f70ad3f0", "sweeper"),)),
+    ("counterspell", "Counterspell", (("690fc968-48ba-4854-a948-3db6bf19d3a9", "counterspell"),)),
+    ("tutor", "Tutor", (("c768d2ec-3264-4a90-a98f-bea8467857d3", "tutor"),)),
+    ("recursion", "Recursion", (("82b824ad-648f-467f-a190-2e0fa9a795d2", "recursion"),)),
+    ("protection", "Protection", (("6e2cdc7c-b02c-4b59-a171-f93723721b79", "protection"),)),
+    ("token-maker", "Token maker", (
+        ("a9657a5d-e7f8-4000-a795-7a78b5fb8923", "repeatable-token-generator"),
+        ("07808167-c4ef-4a2d-bfe9-fa38a5a9d17b", "multiple-bodies"),
+    )),
+    ("sac-outlet", "Sac outlet", (("c7bd55a7-1ea0-49da-b25e-0be470fbe8ec", "sacrifice-outlet"),)),
+    ("lifegain", "Lifegain", (("4caab3cc-1d60-44fb-a26a-cc833bc67c97", "lifegain"),)),
+    ("evasion", "Evasion", (("6cdeab4c-72a6-4f40-ab19-14284d6cf775", "gives-evasion"),)),
+)
+_DEFAULT_PREVIEW_LIMIT = 6
+_DEFAULT_PREVIEW_EXCLUDE: tuple[str, ...] = (
+    "card-names", "cycle", "flavors-of-vanilla", "type-errata", "unique-type-line",
+    "triggered-ability", "activated-ability", "cheaper-than-mv",
+    "more-expensive-than-mv", "staple-with-set-s-mechanic", "token-errata",
+    "single-target-instant-sorcery", "drawback", "meme",
+)
+
+
+def function_tags(*, override: str | Path | None = None) -> dict:
+    """``config/function_tags.toml`` → ``{"roots": [{key,label,tags:[{id,slug}]}],
+    "preview_limit": int, "preview_exclude": [slug…]}``. OPTIONAL: a missing or
+    unparseable file (or an absent key) falls back to the baked-in default."""
+    raw = load_toml("function_tags.toml", override=override)
+    roots = raw.get("roots")
+    if not isinstance(roots, list) or not roots:
+        roots = [{"key": k, "label": lbl, "tags": [{"id": i, "slug": s} for i, s in tags]}
+                 for k, lbl, tags in _DEFAULT_FUNCTION_ROOTS]
+    else:
+        roots = [{"key": str(r["key"]), "label": str(r.get("label") or r["key"]),
+                  "tags": [{"id": str(t.get("id") or ""), "slug": str(t.get("slug") or "")}
+                           for t in (r.get("tags") or [])]}
+                 for r in roots if isinstance(r, dict) and r.get("key")]
+    limit = raw.get("preview_limit", _DEFAULT_PREVIEW_LIMIT)
+    exclude = raw.get("preview_exclude", list(_DEFAULT_PREVIEW_EXCLUDE))
+    return {"roots": roots, "preview_limit": int(limit),
+            "preview_exclude": [str(s) for s in exclude]}
