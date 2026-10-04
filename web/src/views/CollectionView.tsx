@@ -177,16 +177,16 @@ export function CollectionView() {
   );
 }
 
-/** The sheet's main action, beside the title: amber-ink card-plus mark + condensed label. */
+/** The sheet's main action: a ghost button — amber-ink card-plus mark + label, no frame. */
 function AddCardsButton(props: ComponentProps<'button'>) {
   return (
     <button
       type="button"
       {...props}
-      className="group inline-flex min-h-9 cursor-pointer items-center gap-2 rounded-pill border border-rule-strong bg-paper-raised py-1 pl-2.5 pr-3.5 text-ink shadow-[0_1px_0_var(--theme-rule)] transition-[background-color,border-color,box-shadow] duration-200 ease-guide hover:border-accent hover:bg-paper-sunk hover:shadow-[0_6px_14px_-8px_var(--theme-scrim)] data-[state=open]:border-accent"
+      className="group inline-flex min-h-8 cursor-pointer items-center gap-1.5 rounded-sm px-2 text-md voice-semi font-medium text-accent-ink no-underline transition-colors duration-200 ease-guide hover:bg-paper-sunk focus-visible:bg-paper-sunk data-[state=open]:bg-paper-sunk"
     >
-      <AddCardMark className="size-5 text-accent-ink transition-transform duration-300 ease-guide group-hover:-translate-y-0.5 group-hover:rotate-[-4deg]" />
-      <span className="text-sm voice-condensed font-bold uppercase tracking-[0.06em]">Add cards</span>
+      <AddCardMark className="size-5 transition-transform duration-300 ease-guide group-hover:-translate-y-0.5 group-hover:rotate-[-4deg]" />
+      <span className="underline-offset-4 group-hover:underline">Add cards</span>
     </button>
   );
 }

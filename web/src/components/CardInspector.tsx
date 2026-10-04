@@ -83,7 +83,7 @@ export function CardInspector({ card, onClose }: { card: GuideCard | null; onClo
                 </ul>
               )}
 
-              <div className="mt-auto flex flex-wrap gap-2 pt-2">
+              <div className="mt-auto flex flex-wrap gap-x-4 gap-y-1 pt-2">
                 {card.href && <OutLink href={card.href} label="Scryfall" Mark={ScryfallMark} />}
                 <OutLink href={tcgplayerSearch(card.name)} label="TCGplayer" Mark={TcgplayerMark} />
               </div>
@@ -103,10 +103,10 @@ function OutLink({ href, label, Mark }: { href: string; label: string; Mark: Com
       target="_blank"
       rel="noreferrer"
       title={`Open on ${label}`}
-      className="group inline-flex min-h-9 items-center gap-2 rounded-pill border border-rule-strong bg-paper-raised pl-2.5 pr-3.5 text-sm voice-condensed font-bold uppercase tracking-[0.06em] text-ink no-underline transition-colors ease-guide hover:border-accent hover:bg-paper-sunk"
+      className="group inline-flex min-h-8 cursor-pointer items-center gap-1.5 rounded-sm px-2 text-md voice-semi font-medium text-accent-ink no-underline transition-colors duration-200 ease-guide hover:bg-paper-sunk focus-visible:bg-paper-sunk -ml-2"
     >
-      <Mark className="size-[1.15rem] text-accent-ink transition-transform duration-300 ease-guide group-hover:-translate-y-px" />
-      {label}
+      <Mark className="size-[1.15rem] transition-transform duration-300 ease-guide group-hover:-translate-y-px" />
+      <span className="underline-offset-4 group-hover:underline">{label}</span>
       <span className="sr-only">(opens in a new tab)</span>
     </a>
   );
