@@ -3,7 +3,7 @@ import { memo } from 'react';
 import type { GuideCard } from '../core/guideCard';
 import { rarityLetter } from '../core/guideCard';
 import { fmtPct, fmtUsd } from '../core/format';
-import { CardArt, InclusionBars, Stamps } from './CardFace';
+import { CardArt, Holdings, InclusionBars, Tags } from './CardFace';
 
 type Props = { card: GuideCard; selected: boolean; onToggle: (key: string) => void; barLabels?: [string, string] };
 
@@ -19,7 +19,7 @@ export const CardRow = memo(function CardRow({ card, selected, onToggle, barLabe
         className="h-3.5 w-3.5 cursor-pointer accent-[var(--theme-accent)]"
       />
       <span className="hidden h-[var(--size-thumb)] w-[var(--size-thumb)] overflow-hidden rounded-xs @[18rem]:block">
-        <CardArt card={card} crop />
+        <CardArt card={card} crop className={card.missing ? 'opacity-55 grayscale-[0.7]' : ''} />
       </span>
       <HoverCard.Root openDelay={250} closeDelay={80}>
         <HoverCard.Trigger asChild>
@@ -34,6 +34,7 @@ export const CardRow = memo(function CardRow({ card, selected, onToggle, barLabe
               {[card.setCode, card.cn, rarityLetter(card.rarity)].filter(Boolean).join(' · ')}
               {card.finish === 'foil' ? ' ✦' : ''}
             </span>
+            {card.tags.length > 0 && <span className="hidden min-w-0 @[36rem]:block"><Tags tags={card.tags} /></span>}
           </a>
         </HoverCard.Trigger>
         <HoverCard.Portal>
@@ -59,7 +60,7 @@ export const CardRow = memo(function CardRow({ card, selected, onToggle, barLabe
             <span className="w-8 text-right text-2xs tabular text-ink">{fmtPct(card.pct)}</span>
           </span>
         ) : (
-          <Stamps stamps={card.stamps} />
+          <Holdings card={card} />
         )}
       </span>
       <span className="w-12 text-right text-sm tabular voice-semi font-medium text-ink @[22rem]:w-14">{fmtUsd(card.price)}</span>

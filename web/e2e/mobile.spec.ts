@@ -1,4 +1,4 @@
-import { COMPARE_URL, expect, SETS_URL, test } from './support';
+import { COLLECTION_URL, COMPARE_URL, expect, test } from './support';
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -12,9 +12,11 @@ test('phones: no horizontal overflow; one column at a time via tabs', async ({ p
 });
 
 test('phones: controls collapse into a disclosure once inputs are set', async ({ page }) => {
-  await page.goto(SETS_URL);
-  const toggle = page.getByRole('button', { name: 'Missing-set controls' });
+  await page.goto(COLLECTION_URL);
+  const toggle = page.getByRole('button', { name: 'Collection controls' });
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(toggle).toContainText('Bloomburrow · Owned + missing');
   await toggle.click();
   await expect(page.getByRole('button', { name: 'Copy ManaPool list' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
 });

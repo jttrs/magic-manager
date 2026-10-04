@@ -1472,9 +1472,6 @@ def lowest_price_by_oracle(oracle_ids: Iterable[str], *, conn=None) -> dict[str,
         return _q(c)
 
 
-_STANDARD_BORDERS = {"black", "white"}
-
-
 def _standard_printing_rank(row) -> tuple:
     """Sort key for "the chronologically-first STANDARD printing" of a card.
 
@@ -1487,11 +1484,9 @@ def _standard_printing_rank(row) -> tuple:
     from . import selectors, treatments  # local: avoid import cycles
 
     finishes = util.decode_json_list(row["finishes"])
-    border = (row["border_color"] or "black").lower()
     return (
         1 if selectors._is_digital_only(dict(row)) else 0,
-        1 if (treatments.compute_treatment(row, finish="nonfoil")
-              or border not in _STANDARD_BORDERS) else 0,
+        0 if treatments.is_standard_frame(row) else 1,
         0 if "nonfoil" in finishes else 1,
         1 if row["is_reskin"] else 0,
         1 if row["is_promo"] else 0,

@@ -73,15 +73,29 @@ export function InclusionBars({ a, b, labelA, labelB, compact = false }: { a: nu
   );
 }
 
-export function Stamps({ stamps }: { stamps: string[] }) {
-  if (!stamps.length) return null;
-  const names: Record<string, string> = { P: 'printing', F: 'functional', V: 'variant-chase' };
+/** Owned copies per finish (×N plain, ✦×N foil) or the missing mark — printed
+ *  in the guide line, never over the art. */
+export function Holdings({ card }: { card: GuideCard }) {
+  if (!card.owned) return null;
+  const nf = card.owned.nonfoil ?? 0;
+  const fo = card.owned.foil ?? 0;
+  const label = [nf ? `${nf} nonfoil` : '', fo ? `${fo} foil` : ''].filter(Boolean).join(', ');
   return (
-    <span className="flex gap-0.5" aria-label={`pools: ${stamps.map((s) => names[s] ?? s).join(', ')}`}>
-      {stamps.map((s) => (
-        <span key={s} className="grid h-4 w-4 place-items-center rounded-xs border border-rule-strong bg-paper-raised text-2xs voice-condensed font-bold leading-none text-ink">
-          {s}
-        </span>
+    <span className="flex shrink-0 items-baseline gap-1.5 text-2xs tabular" aria-label={card.missing && !label ? 'Missing' : `Owned: ${label || 'none'}${card.missing ? ' (missing in this finish)' : ''}`}>
+      {nf > 0 && <span className="font-bold text-ink">×{nf}</span>}
+      {fo > 0 && <span className="font-bold text-accent-ink">✦×{fo}</span>}
+      {card.missing && <span className="voice-condensed font-bold uppercase tracking-[0.06em] text-danger">Missing</span>}
+    </span>
+  );
+}
+
+/** Small facts (Chase, Borderless…) as ruled text tags under the name. */
+export function Tags({ tags }: { tags: string[] }) {
+  if (!tags.length) return null;
+  return (
+    <span className="block min-w-0 truncate text-2xs voice-semi uppercase tracking-[0.04em] text-ink-muted" title={tags.join(' · ')}>
+      {tags.map((t, i) => (
+        <span key={t} className={t === 'Chase' ? 'font-bold text-accent-ink' : ''}>{i ? ' · ' : ''}{t}</span>
       ))}
     </span>
   );

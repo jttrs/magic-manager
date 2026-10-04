@@ -53,3 +53,4 @@ uv.lock
 .impeccable/mocks/
 .playwright-mcp/
 .impeccable/questions/
+.impeccable/hook.cache.json
