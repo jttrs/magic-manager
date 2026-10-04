@@ -255,7 +255,7 @@ Hairline borders are the main geometry. `ruled` is a 1px bottom border; column a
 
 ### Card inspector
 - **Trigger:** an amber `MagnifierMark` in a small charcoal pill over the art's top-right corner — shown only on hover / keyboard focus (always on `hover: none` touch screens), so the art is never covered at rest. The one sanctioned overlay on card art. List view puts the same mark at the row's end. Pressing anywhere else on the card still marks it.
-- **Dialog (`CardInspector`, rendered once per `VirtualGuide`):** large Scryfall image left (stacked on phones), then name (`Dialog.Title`), type line, a `dl` of Printing · Mana value · Price (nonfoil / ✦ foil) · Owned · Functions, the printed Tags, Tagger chips, and ghost links `Scryfall` / `TCGplayer` (same treatment as `Add cards`), each led by its site mark (TCGplayer = name search; no product id is stored).
+- **Dialog (`CardInspector`, rendered once per `VirtualGuide`):** large Scryfall image left (stacked on phones), then name (`Dialog.Title`), type line, a `dl` of Printing · Mana value · Price (nonfoil / ✦ foil) · Owned · Functions, the printed Tags, Tagger chips, and, under a small `View on` label, ghost links `Scryfall` / `TCGplayer` (same treatment as `Add cards`), each led by its site mark (TCGplayer = name search; no product id is stored).
 
 ### Ghost actions + external links
 - **Ghost action** = the app's modern secondary/inline action: mark + sentence-case label in `accent-ink`, no frame; hover/focus wash + underline. Use it for sheet-level actions and outbound links; reserve the filled amber `Button` for a flow's single commit (e.g. `Add 8 copies`).

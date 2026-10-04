@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 export function GuideSheet({ title, summary, actions, children }: { title: ReactNode; summary?: ReactNode; actions?: ReactNode; children: ReactNode }) {
   return (
     <div className="paper-grain flex h-full min-h-[70dvh] flex-col rounded-sm bg-paper text-ink shadow-[0_1px_0_var(--theme-chrome-line),0_18px_40px_-28px_var(--theme-scrim)]">
-      <div className="flex flex-wrap items-end gap-x-6 gap-y-2 px-5 pt-4 pb-3">
+      <div className="flex flex-wrap items-end gap-x-6 gap-y-2 px-5 pt-4 pb-2">
         <div className="min-w-0">
           <h1 className="text-3xl voice-condensed font-bold leading-none tracking-[-0.01em] text-ink">{title}</h1>
           {summary && <p className="mt-1.5 text-sm tabular text-ink-muted">{summary}</p>}

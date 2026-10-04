@@ -83,10 +83,13 @@ export function CardInspector({ card, onClose }: { card: GuideCard | null; onClo
                 </ul>
               )}
 
-              <div className="mt-auto flex flex-wrap gap-x-4 gap-y-1 pt-2">
-                {card.href && <OutLink href={card.href} label="Scryfall" Mark={ScryfallMark} />}
-                <OutLink href={tcgplayerSearch(card.name)} label="TCGplayer" Mark={TcgplayerMark} />
-              </div>
+              <nav aria-labelledby="inspect-view-on" className="mt-auto flex flex-col gap-1 pt-2">
+                <span id="inspect-view-on" className="text-xs voice-semi text-ink-muted">View on</span>
+                <div className="flex flex-wrap gap-x-4 gap-y-1">
+                  {card.href && <OutLink href={card.href} label="Scryfall" Mark={ScryfallMark} />}
+                  <OutLink href={tcgplayerSearch(card.name)} label="TCGplayer" Mark={TcgplayerMark} />
+                </div>
+              </nav>
             </div>
           </Dialog.Content>
         )}

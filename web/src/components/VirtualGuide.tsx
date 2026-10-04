@@ -135,6 +135,7 @@ export function VirtualGuide({ sections, density, selected, onToggle, barLabels,
               {row.kind === 'head' ? (
                 <SectionHead
                   row={row}
+                  first={vi.index === 0}
                   onToggle={() => toggleSection(row.section.key)}
                   onPrev={neighbor(vi.index, -1) ? () => jump(vi.index, -1) : undefined}
                   onNext={neighbor(vi.index, 1) ? () => jump(vi.index, 1) : undefined}
@@ -157,7 +158,7 @@ export function VirtualGuide({ sections, density, selected, onToggle, barLabels,
   );
 }
 
-function SectionHead({ row, onToggle, onPrev, onNext }: { row: Head; onToggle: () => void; onPrev?: () => void; onNext?: () => void }) {
+function SectionHead({ row, first = false, onToggle, onPrev, onNext }: { row: Head; first?: boolean; onToggle: () => void; onPrev?: () => void; onNext?: () => void }) {
   const { section: s, level, collapsed } = row;
   const top = level === 1;
   const H = top ? 'h2' : 'h3';
@@ -167,7 +168,7 @@ function SectionHead({ row, onToggle, onPrev, onNext }: { row: Head; onToggle: (
       data-head={row.key}
       className={
         top
-          ? 'flex flex-wrap items-end gap-x-4 gap-y-1 border-b-2 border-rule-strong pb-1.5 pt-6 text-ink'
+          ? `flex flex-wrap items-end gap-x-4 gap-y-1 border-b-2 border-rule-strong pb-1.5 text-ink ${first ? 'pt-1' : 'pt-6'}`
           : 'flex items-center gap-x-3 border-b border-rule pb-1 pt-3 text-ink-muted'
       }
     >
