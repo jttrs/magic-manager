@@ -57,17 +57,30 @@ test('show owned / missing filters', async ({ page }) => {
   await expect(page.getByRole('article')).toHaveCount(missingN);
 });
 
-test('layers: exclude bulk, exclude treatments, chase only', async ({ page }) => {
+test('card types: one grouped picker; unchecking a trait hides every card carrying it', async ({ page }) => {
   await page.goto(COLLECTION_URL);
-  await page.getByRole('switch', { name: /Exclude bulk/ }).check();
-  await expect(page.getByRole('article')).toHaveCount(cards.filter((c) => !c.is_bulk).length);
-  await expect(page).toHaveURL(/bulk=hide/);
-  await page.getByRole('switch', { name: /Exclude bulk/ }).uncheck();
-  await page.getByRole('switch', { name: /Exclude treatments/ }).check();
-  await expect(page.getByRole('article')).toHaveCount(cards.filter((c) => c.standard_frame).length);
-  await page.getByRole('switch', { name: /Exclude treatments/ }).uncheck();
-  await page.getByRole('radiogroup', { name: 'Chase cards' }).getByRole('radio', { name: 'Only' }).click();
+  const trigger = page.getByRole('button', { name: /Card types/ });
+  await expect(trigger).toContainText('All card types');
+  await trigger.click();
+  for (const g of ['Rarity', 'Treatment', 'Chase']) await expect(page.getByRole('group', { name: new RegExp(g) })).toBeVisible();
+  await page.getByRole('checkbox', { name: /^Common/ }).uncheck();
+  await page.getByRole('checkbox', { name: /^Uncommon/ }).uncheck();
+  await expect(page.getByRole('article')).toHaveCount(cards.filter((c) => !['common', 'uncommon'].includes(c.rarity)).length);
+  await expect(page).toHaveURL(/exclude=/);
+  await page.getByRole('button', { name: 'Check all' }).click();
+  await page.getByRole('button', { name: 'Clear all Treatment' }).click();
+  await page.getByRole('checkbox', { name: /^Standard frame/ }).check();
+  await expect(page.getByRole('article')).toHaveCount(cards.filter((c) => c.standard_frame && !c.treatment).length);
+  await page.getByRole('button', { name: 'Check all' }).click();
+  await page.getByRole('checkbox', { name: /^Not chase/ }).uncheck();
   await expect(page.getByRole('article')).toHaveCount(cards.filter((c) => c.is_chase).length);
+  await page.keyboard.press('Escape');
+  await expect(trigger).toContainText('Hiding Not chase');
+  await trigger.click();
+  await expect(page.getByText('1 unchecked')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Reset filters' }).click();
+  await expect(page.getByRole('article')).toHaveCount(cards.length);
 });
 
 test('sort builder: presets, keyboard reorder, direction, URL', async ({ page }) => {
@@ -97,15 +110,6 @@ test('buy list copies the missing printings shown (or the marked ones)', async (
   await page.getByRole('button', { name: 'Copy TCGplayer list' }).click();
   await expect(page.getByText('Copied 1 line', { exact: true })).toBeVisible();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`1 ${first.scryfall_id} [tcgplayer]`);
-});
-
-test('shopping view narrows to buyable gaps; reset restores everything', async ({ page }) => {
-  await page.goto(COLLECTION_URL);
-  await page.getByRole('button', { name: 'Shopping view' }).click();
-  const shopping = cards.filter((c) => total(c) === 0 && !c.is_bulk && c.standard_frame && !c.is_chase);
-  await expect(page.getByRole('article')).toHaveCount(shopping.length);
-  await page.getByRole('button', { name: 'Reset filters' }).click();
-  await expect(page.getByRole('article')).toHaveCount(cards.length);
 });
 
 test('outline: h1 sheet, h2 family, h3 groups (no skipped levels)', async ({ page }) => {

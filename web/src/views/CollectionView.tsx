@@ -12,7 +12,7 @@ import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../components/St
 import { VirtualGuide, type GuideSection } from '../components/VirtualGuide';
 import { collectionBuyList, type CollectionCardOut, type CollectionOut } from '../core/api';
 import { CARD_SORT, CARD_SORT_PRESETS, type CardSortKey } from '../core/cardSort';
-import { buyFinish, collectionStats, filterCollection, isMissing, type MissingBasis } from '../core/collection';
+import { buyFinish, collectionStats, filterCollection, isMissing, TRAITS, traitCounts, type MissingBasis } from '../core/collection';
 import { fmtInt, fmtUsd } from '../core/format';
 import { fromCollection, groupCards, type GuideCard } from '../core/guideCard';
 import { SHOW, type CollectionSearch } from '../core/search';
@@ -20,15 +20,8 @@ import { decodeSort, encodeSort, leadSection, sortBy, type SortRule } from '../c
 
 const route = getRouteApi('/collection');
 
-/** One click to what you'd actually buy: gaps only, no bulk, treatments or chase. */
-const SHOPPING: Partial<CollectionSearch> = { show: ['missing'], bulk: 'hide', treatments: 'hide', chase: 'hide' };
-const RESET: Partial<CollectionSearch> = { show: [...SHOW], basis: 'either', bulk: 'show', treatments: 'show', chase: 'show', q: '' };
-const BASIS_HINT: Record<MissingBasis, string> = {
-  either: 'Missing = you own no copy of the printing in any finish.',
-  nonfoil: 'Missing = no nonfoil copy (printings with no nonfoil version are skipped).',
-  foil: 'Missing = no foil copy (printings with no foil version are skipped).',
-};
 const LAST_FAMILIES = 'mm.collection.families';
+const RESET: Partial<CollectionSearch> = { show: [...SHOW], basis: 'either', exclude: [], q: '' };
 
 export function CollectionView() {
   const search = route.useSearch();
@@ -49,6 +42,7 @@ export function CollectionView() {
   }, [search.families, navigate]);
 
   const view = useMemo(() => (q.data ? buildView(q.data, search, rules) : null), [q.data, search, rules]);
+  const counts = useMemo(() => (q.data ? traitCounts(q.data.cards) : null), [q.data]);
 
   const marked = view ? [...selected].map((k) => view.byId.get(k)).filter((c) => c != null) : [];
   const buyPool = marked.length ? marked : (view?.shown.filter((c) => isMissing(c, search.basis)) ?? []);
@@ -78,10 +72,6 @@ export function CollectionView() {
         )}
       </SideSection>
       <SideSection title="Show">
-        <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm">
-          <button type="button" onClick={() => set(SHOPPING)} className="cursor-pointer text-on-chrome underline decoration-accent decoration-2 underline-offset-4 hover:text-accent">Shopping view</button>
-          <button type="button" onClick={() => set(RESET)} className="cursor-pointer text-on-chrome-muted underline hover:text-on-chrome">Reset filters</button>
-        </div>
         <ChipToggles
           label="Show cards"
           value={search.show}
@@ -92,20 +82,23 @@ export function CollectionView() {
           ]}
         />
         <Segmented<MissingBasis>
-          label="Missing means"
+          label="Finish"
           value={search.basis}
           onChange={(basis) => set({ basis })}
           options={[{ value: 'either', label: 'Any finish' }, { value: 'nonfoil', label: 'Nonfoil' }, { value: 'foil', label: 'Foil' }]}
         />
-        <p className="text-xs leading-snug text-on-chrome-muted">{BASIS_HINT[search.basis]}</p>
-      </SideSection>
-      <SideSection title="Layers">
-        <Toggle label="Exclude bulk" hint="commons & uncommons" checked={search.bulk === 'hide'} onChange={(on) => set({ bulk: on ? 'hide' : 'show' })} />
-        <Toggle label="Exclude treatments" hint="borderless, showcase, ext. art…" checked={search.treatments === 'hide'} onChange={(on) => set({ treatments: on ? 'hide' : 'show' })} />
-        <div className="flex flex-col gap-1">
-          <span className="text-sm text-on-chrome-muted">Chase cards</span>
-          <Segmented label="Chase cards" value={search.chase} onChange={(chase) => set({ chase })} options={[{ value: 'show', label: 'Show' }, { value: 'hide', label: 'Hide' }, { value: 'only', label: 'Only' }]} />
-        </div>
+        <MultiSelect
+          label="Card types"
+          noun="card types"
+          searchable={false}
+          summary={typesSummary(search.exclude)}
+          value={TRAITS.map((t) => t.key).filter((k) => !search.exclude.includes(k))}
+          onChange={(included) => set({ exclude: TRAITS.map((t) => t.key).filter((k) => !included.includes(k)) })}
+          options={TRAITS.filter((t) => !counts || counts.has(t.key) || search.exclude.includes(t.key)).map((t) => ({ value: t.key, label: t.label, group: t.group, count: counts?.get(t.key) ?? 0 }))}
+        />
+        {(search.exclude.length > 0 || search.show.length < 2 || search.basis !== 'either' || search.q) && (
+          <button type="button" onClick={() => set(RESET)} className="self-start cursor-pointer text-sm text-on-chrome-muted underline hover:text-on-chrome">Reset filters</button>
+        )}
       </SideSection>
       <SideSection title="Arrange">
         <SortBuilder keys={CARD_SORT} rules={rules} presets={CARD_SORT_PRESETS} onChange={(r) => set({ sort: encodeSort(r, CARD_SORT) })} />
@@ -153,16 +146,11 @@ export function CollectionView() {
   );
 }
 
-function Toggle({ label, hint, checked, onChange }: { label: string; hint: string; checked: boolean; onChange: (on: boolean) => void }) {
-  return (
-    <label className="flex cursor-pointer items-start gap-2.5 text-md text-on-chrome">
-      <input type="checkbox" role="switch" checked={checked} onChange={(e) => onChange(e.target.checked)} className="mt-1 h-4 w-4 shrink-0 cursor-pointer accent-[var(--theme-accent)]" />
-      <span className="flex flex-col leading-tight">
-        {label}
-        <span className="text-xs text-on-chrome-muted">{hint}</span>
-      </span>
-    </label>
-  );
+/** "All card types" or the unchecked traits, e.g. "Hiding Common, Uncommon +2". */
+function typesSummary(exclude: readonly string[]): string {
+  if (!exclude.length) return 'All card types';
+  const labels = TRAITS.filter((t) => exclude.includes(t.key)).map((t) => t.label);
+  return `Hiding ${labels.slice(0, 2).join(', ')}${labels.length > 2 ? ` +${labels.length - 2}` : ''}`;
 }
 
 type Built = { cards: GuideCard[]; shown: CollectionCardOut[]; sections: GuideSection[]; byId: Map<string, CollectionCardOut>; stats: ReturnType<typeof collectionStats> };
@@ -214,12 +202,11 @@ function FamilyHead(p: { name: string; owned: number; printings: number; copies:
 function controlsSummary(search: CollectionSearch, rules: SortRule<CardSortKey>[], fams: { code: string; name: string }[] | undefined): string {
   const names = search.families.map((c) => fams?.find((f) => f.code === c)?.name ?? c.toUpperCase());
   const show = search.show.length === 2 ? 'Owned + missing' : search.show[0] === 'owned' ? 'Owned only' : search.show[0] === 'missing' ? 'Missing only' : 'Nothing shown';
-  const hidden = [search.bulk === 'hide' && 'bulk', search.treatments === 'hide' && 'treatments', search.chase === 'hide' && 'chase'].filter(Boolean);
+
   const parts = [
     names.length > 2 ? `${names[0]} +${names.length - 1}` : names.join(', '),
     show,
-    hidden.length ? `no ${hidden.join('/')}` : '',
-    search.chase === 'only' ? 'chase only' : '',
+    search.exclude.length ? typesSummary(search.exclude) : '',
     rules.map((r) => CARD_SORT[r.key].label).join(' › '),
   ];
   return parts.filter(Boolean).join(' · ');

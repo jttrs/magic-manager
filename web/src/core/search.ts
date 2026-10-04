@@ -25,15 +25,13 @@ export const compareSearch = z.object({
 export type CompareSearch = z.infer<typeof compareSearch>;
 
 export const SHOW = ['owned', 'missing'] as const;
-const layer = z.enum(['show', 'hide']).catch('show').default('show');
 
 export const collectionSearch = z.object({
   families: list(z.string()).catch([]).default([]),
   show: list(z.enum(SHOW)).catch([...SHOW]).default([...SHOW]),
   basis: z.enum(['either', 'nonfoil', 'foil']).catch('either').default('either'),
-  bulk: layer,
-  treatments: layer,
-  chase: z.enum(['show', 'hide', 'only']).catch('show').default('show'),
+  /** Unchecked card-type traits (core/collection.ts TRAITS keys). */
+  exclude: list(z.string()).catch([]).default([]),
   q: z.string().catch('').default(''),
   sort: z.string().catch('set,cn').default('set,cn'),
   density,

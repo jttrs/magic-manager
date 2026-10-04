@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { CollectionCardOut, CompareCardOut } from './api';
 import { CARD_SORT } from './cardSort';
 import { colorRank, typeGroup } from './cardFacts';
-import { buyFinish, collectionStats, filterCollection, isMissing, type CollectionFilters } from './collection';
+import { buyFinish, collectionStats, filterCollection, isMissing, traitCounts, traitsOf, type CollectionFilters } from './collection';
 import { bucketCards, COMPARE_SORT, matches, tagLabel } from './compare';
 import { exportLines, fromCollection, fromCompare, groupCards, rarityLetter, treatmentLabels } from './guideCard';
 import { collectionSearch, compareSearch } from './search';
@@ -21,7 +21,7 @@ const card = (o: Partial<CollectionCardOut>): CollectionCardOut => ({
   finishes: ['nonfoil', 'foil'], owned: {}, pledged: {}, price_usd: 1, price_usd_foil: 3, image_uri: null,
   scryfall_url: null, treatment: '', standard_frame: true, is_bulk: false, is_chase: false, ...o,
 });
-const ALL: CollectionFilters = { show: ['owned', 'missing'], basis: 'either', bulk: 'show', treatments: 'show', chase: 'show', q: '' };
+const ALL: CollectionFilters = { show: ['owned', 'missing'], basis: 'either', exclude: [], q: '' };
 
 describe('card facts', () => {
   it('type groups by front face, creature first', () => {
@@ -90,11 +90,17 @@ describe('collection filters', () => {
     expect(ids({ show: ['missing'] })).toEqual(['miss', 'bulk', 'tr', 'ch']);
     expect(ids({ show: [] })).toEqual([]);
   });
-  it('layers', () => {
-    expect(ids({ bulk: 'hide' })).not.toContain('bulk');
-    expect(ids({ treatments: 'hide' })).not.toContain('tr');
-    expect(ids({ chase: 'only' })).toEqual(['ch']);
-    expect(ids({ chase: 'hide' })).not.toContain('ch');
+  it('card-type traits', () => {
+    expect(traitsOf(treated)).toEqual(['rarity:rare', 'treat:b', 'chase:no']);
+    expect(traitsOf(card({ standard_frame: false, treatment: '' }))).toContain('treat:other');
+    expect(traitsOf(card({ treatment: 'b|ext', standard_frame: false }))).toEqual(['rarity:rare', 'treat:b', 'treat:ext', 'chase:no']);
+    expect(traitCounts(all).get('rarity:rare')).toBe(4);
+  });
+  it('unchecked traits hide any card carrying them', () => {
+    expect(ids({ exclude: ['rarity:common'] })).not.toContain('bulk');
+    expect(ids({ exclude: ['treat:b'] })).not.toContain('tr');
+    expect(ids({ exclude: ['chase:no'] })).toEqual(['ch']);
+    expect(ids({ exclude: ['chase:yes'] })).not.toContain('ch');
     expect(ids({ q: 'nope' })).toEqual([]);
   });
   it('buy finish + stats', () => {
@@ -136,10 +142,12 @@ describe('URL schemas', () => {
     expect(s.sort).toBe('inclusion,name');
   });
   it('collection defaults + coercion', () => {
-    const s = collectionSearch.parse({ families: 'fin', chase: 'bogus' });
+    const s = collectionSearch.parse({ families: 'fin', exclude: 'rarity:common' });
+    expect(s.exclude).toEqual(['rarity:common']);
+    const d = collectionSearch.parse({});
     expect(s.families).toEqual(['fin']);
     expect(s.show).toEqual(['owned', 'missing']);
-    expect(s.chase).toBe('show');
+    expect(d.exclude).toEqual([]);
     expect(s.sort).toBe('set,cn');
   });
 });
