@@ -2,12 +2,13 @@
 verbose flag, and returns a string ready to copy/paste into the target service.
 """
 
-from . import moxfield, tcgplayer, archidekt, plain, scryfall_json, xlsx  # noqa: F401
+from . import moxfield, tcgplayer, cardkingdom, archidekt, plain, scryfall_json, xlsx  # noqa: F401
 
 TARGETS = {
     "moxfield":      moxfield.build,
     "manapool":      moxfield.build,  # ManaPool consumes Moxfield format natively
     "tcgplayer":     tcgplayer.build,
+    "cardkingdom":   cardkingdom.build,
     "archidekt":     archidekt.build,
     "plain-text":    plain.build,
     "plain":         plain.build,

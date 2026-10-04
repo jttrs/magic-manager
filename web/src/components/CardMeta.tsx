@@ -4,7 +4,7 @@ import { CardArt } from './CardFace';
 /** Hover preview: card art, then (never over the art) its Tagger functions + top tags. */
 export function CardPreview({ card }: { card: GuideCard }) {
   const fns = card.functions ?? [];
-  const tags = card.tags ?? [];
+  const tags = card.oracleTags ?? [];
   return (
     <div className="flex flex-col gap-1.5">
       <CardArt card={card} eager />

@@ -74,6 +74,20 @@ test('marking cards highlights them and copies a plain list', async ({ page }) =
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`1 ${name}`);
 });
 
+test('sheet is titled Commanders; EDHREC lists live in a multi-select, not a chip wall', async ({ page }) => {
+  await page.goto(COMPARE_URL);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Commanders');
+  await page.getByRole('button', { name: /EDHREC lists/ }).click();
+  await expect(page.getByRole('searchbox', { name: 'Filter lists' })).toBeVisible();
+});
+
+test('sort rules come from the shared builder and land in the URL', async ({ page }) => {
+  await page.goto(COMPARE_URL);
+  await page.getByRole('button', { name: /^Sort/ }).click();
+  await page.getByRole('button', { name: 'Biggest inclusion gap' }).click();
+  await expect(page).toHaveURL(/sort=delta%2Cinclusion/);
+});
+
 test('name filter and EDHREC list chips narrow every column', async ({ page }) => {
   await page.goto(COMPARE_URL);
   const target = fixtures.compare.cards[0].name;

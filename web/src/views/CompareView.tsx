@@ -10,7 +10,10 @@ import { GuideColumns, type Column } from '../components/GuideColumns';
 import { ChipToggles, Segmented, SideSection, TextField } from '../components/Sidebar';
 import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../components/States';
 import { VirtualGuide } from '../components/VirtualGuide';
-import { bucketCards, matches, sortCards, tagCounts, tagLabel } from '../core/compare';
+import { bucketCards, COMPARE_SORT, COMPARE_SORT_PRESETS, matches, tagCounts, tagLabel } from '../core/compare';
+import { decodeSort, encodeSort, sortBy } from '../core/sort';
+import { MultiSelect } from '../components/MultiSelect';
+import { SortBuilder } from '../components/SortBuilder';
 import { exportLines, fromCompare } from '../core/guideCard';
 import { compareSections, hasFunctionData } from '../core/groupBy';
 import { BUCKETS, type Bucket, type CompareSearch, type GroupBy } from '../core/search';
@@ -26,25 +29,27 @@ export function CompareView() {
   const set = (patch: Partial<CompareSearch>) => navigate({ search: (s) => ({ ...s, ...patch }), replace: true });
   const q = useQuery(compareQuery(search.a, search.b));
   const { selected, toggle, clear } = useSelection('compare');
+  const rules = useMemo(() => decodeSort(search.sort, COMPARE_SORT), [search.sort]);
 
   const data = q.data;
   const names = { a: data ? shortName(data.name_a) : 'A', b: data ? shortName(data.name_b) : 'B' };
 
   const view = useMemo(() => {
     if (!data) return null;
-    const shown = sortCards(data.cards.filter((c) => matches(c, search.q, search.tags)), search.sort);
+    const shown = sortBy(data.cards.filter((c) => matches(c, search.q, search.tags)), rules, COMPARE_SORT);
     const buckets = bucketCards(shown);
     const roots = data.functions ?? [];
+    const noun = search.groupBy === 'function' ? 'function' : 'card type';
     const sections = (b: Bucket) =>
-      compareSections(buckets[b], search.groupBy, roots).map((g) => ({ ...g, level: 2 as const }));
+      compareSections(buckets[b], search.groupBy, roots).map((g) => ({ ...g, level: 2 as const, noun }));
     return {
       buckets,
       sections: { a_only: sections('a_only'), both: sections('both'), b_only: sections('b_only') },
-      tags: tagCounts(data.cards).slice(0, 18),
+      tags: tagCounts(data.cards),
       byKey: new Map(shown.map((c) => [fromCompare(c).key, fromCompare(c)])),
       tagged: hasFunctionData(data.cards),
     };
-  }, [data, search.q, search.tags, search.sort, search.groupBy]);
+  }, [data, search.q, search.tags, rules, search.groupBy]);
 
   const titles: Record<Bucket, string> = { a_only: `${names.a} only`, both: 'Shared', b_only: `${names.b} only` };
   const columns: Column[] = BUCKETS.map((b) => ({
@@ -101,17 +106,12 @@ export function CompareView() {
           )
         )}
         <Segmented label="Density" value={search.density} onChange={(density) => set({ density })} options={[{ value: 'grid', label: 'Grid' }, { value: 'rows', label: 'Rows' }]} />
-        <Segmented
-          label="Sort by"
-          value={search.sort}
-          onChange={(sort) => set({ sort })}
-          options={[{ value: 'inclusion', label: 'Incl.' }, { value: 'synergy', label: 'Syn.' }, { value: 'price', label: 'Price' }, { value: 'name', label: 'A–Z' }]}
-        />
+        <SortBuilder keys={COMPARE_SORT} rules={rules} presets={COMPARE_SORT_PRESETS} onChange={(r) => set({ sort: encodeSort(r, COMPARE_SORT) })} />
       </SideSection>
       <SideSection title="Filter">
         <TextField name="q" label="Card name" value={search.q} placeholder="e.g. Sol Ring…" onChange={(q) => set({ q })} />
         {view && view.tags.length > 0 && (
-          <ChipToggles label="EDHREC lists" value={search.tags} onChange={(tags) => set({ tags })} options={view.tags.map(([t, n]) => ({ value: t, label: tagLabel(t), count: n }))} />
+          <MultiSelect label="EDHREC lists" noun="lists" value={search.tags} onChange={(tags) => set({ tags })} options={view.tags.map(([t, n]) => ({ value: t, label: tagLabel(t), count: n }))} />
         )}
       </SideSection>
       <SideSection title={`Marked · ${marked.length}`}>
@@ -141,9 +141,9 @@ export function CompareView() {
   }
 
   return (
-    <ViewLayout label="Compare controls" sidebar={sidebar} startOpen={!search.a || !search.b}>
+    <ViewLayout label="Commander controls" summary={search.a && search.b ? `${search.a} vs ${search.b} · ${search.density === 'rows' ? 'Rows' : 'Grid'}` : undefined} sidebar={sidebar} startOpen={!search.a || !search.b}>
       <GuideSheet
-        title="Commander compare"
+        title="Commanders"
         summary={data ? `${cleanName(data.name_a)} vs ${cleanName(data.name_b)} · ${data.cards.length} recommended cards · cheapest price across printings` : undefined}
       >
         {body}

@@ -89,6 +89,10 @@
     display: block;
   }
 
+  input[type="search"]::-webkit-search-cancel-button {
+    appearance: none;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,

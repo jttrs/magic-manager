@@ -145,3 +145,16 @@ LEGEND: tuple[tuple[str, str], ...] = (
     ("ff",  "fancy foil finish — surgefoil, rainbowfoil, fracturefoil, "
             "etched, etc. (collapsed under one keyword)"),
 )
+
+
+_STANDARD_BORDERS = frozenset({"black", "white"})
+
+
+def is_standard_frame(card_row) -> bool:
+    """True iff a printing is a plain, untreated frame: no treatment code on its
+    nonfoil finish (b/fa/shw/ext/sm/ff) AND a black/white border (borderless,
+    gold and silver borders read as treatments too). The single "is this the
+    ordinary printing?" predicate shared by display-printing selection
+    (``sets.standard_printing_by_oracle``) and the collection Treatments layer."""
+    border = (_row_get(card_row, "border_color") or "black").lower()
+    return not compute_treatment(card_row, finish="nonfoil") and border in _STANDARD_BORDERS

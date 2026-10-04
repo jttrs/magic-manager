@@ -1,6 +1,6 @@
 ---
 name: export-list
-description: Generate a copy/paste-ready block of cards for an external service (TCGplayer Mass Entry, ManaPool bulk, Moxfield, Archidekt, plain TSV, or Scryfall identifier JSON). Inputs are V2 selectors like `inventory`, `wishlist:edh-staples`, `deck:atraxa-superfriends`, `set:fin missing`, or `set:fca+related missing:foil`. Use whenever the user wants to buy, share, import elsewhere, or analyze a slice of their collection.
+description: Generate a copy/paste-ready block of cards for an external service (TCGplayer Mass Entry, ManaPool bulk, Card Kingdom Deck Builder, Moxfield, Archidekt, plain TSV, or Scryfall identifier JSON). Inputs are V2 selectors like `inventory`, `wishlist:edh-staples`, `deck:atraxa-superfriends`, `set:fin missing`, or `set:fca+related missing:foil`. Use whenever the user wants to buy, share, import elsewhere, or analyze a slice of their collection.
 ---
 
 # Export List
@@ -78,6 +78,7 @@ uv run mm export tcgplayer 'set:fin+related missing' --out /tmp/ff-buy.txt
 ## Where to paste each target
 
 - **TCGplayer**: <https://www.tcgplayer.com/massentry> — paste into the textarea, "Add to Cart".
+- **Card Kingdom** (`cardkingdom`): <https://www.cardkingdom.com/builder> — paste, "Find Cards". Names only: every printing/finish of a name collapses to one `qty name` line; pick edition + foil in each card's dropdown.
 - **ManaPool**: <https://manapool.com/mass-entry-info> → mass entry form. Their cart optimizer will minimize price across multiple sellers, which is the main reason to export here over TCGplayer.
 - **Moxfield**: New Deck → Bulk Edit → paste → Import.
 - **Archidekt**: New Deck → "Add Cards" → "Multi-line Add" → paste.

@@ -8,8 +8,8 @@ import { applyTheme, readTheme, type ThemePref } from '../app/theme';
 import { useMediaQuery } from '../app/useMediaQuery';
 
 const NAV = [
+  { to: '/collection', label: 'Collection' },
   { to: '/commanders', label: 'Commanders' },
-  { to: '/sets', label: 'Sets' },
 ] as const;
 
 /** Global frame: masthead + full-width top nav; views supply sidebar + main below it. */
@@ -51,7 +51,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 }
 
 /** Sidebar (starts below the nav) + main region. */
-export function ViewLayout({ sidebar, children, label, startOpen = false }: { sidebar: ReactNode; children: ReactNode; label: string; startOpen?: boolean }) {
+export function ViewLayout({ sidebar, children, label, summary, startOpen = false }: { sidebar: ReactNode; children: ReactNode; label: string; summary?: string; startOpen?: boolean }) {
   const wide = useMediaQuery('(min-width: 64rem)');
   const [open, setOpen] = useState(startOpen);
   const shown = wide || open;
@@ -64,10 +64,13 @@ export function ViewLayout({ sidebar, children, label, startOpen = false }: { si
             aria-expanded={open}
             aria-controls="view-controls"
             onClick={() => setOpen((o) => !o)}
-            className="flex w-full cursor-pointer items-center justify-between py-1 text-md voice-condensed uppercase tracking-[0.06em] text-on-chrome"
+            className="flex w-full cursor-pointer items-center gap-3 py-1 text-left"
           >
-            {label}
-            <span aria-hidden="true" className={`transition-transform ease-guide ${open ? 'rotate-180' : ''}`}>▾</span>
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="text-md voice-condensed uppercase tracking-[0.06em] text-on-chrome">{label}</span>
+              {summary && !open && <span className="truncate text-xs text-on-chrome-muted">{summary}</span>}
+            </span>
+            <span aria-hidden="true" className={`text-on-chrome transition-transform ease-guide ${open ? 'rotate-180' : ''}`}>▾</span>
           </button>
         )}
         <div id="view-controls" hidden={!shown} className={`flex-col gap-6 ${shown ? 'flex' : ''} ${wide ? '' : 'pt-3'}`}>{sidebar}</div>

@@ -1,7 +1,7 @@
 import { HoverCard } from 'radix-ui';
 import { memo } from 'react';
 import type { GuideCard } from '../core/guideCard';
-import { CardArt, GuideLine, InclusionBars, Stamps } from './CardFace';
+import { CardArt, GuideLine, Holdings, InclusionBars, Tags } from './CardFace';
 import { CardPreview, GuideNote } from './CardMeta';
 
 type Props = {
@@ -23,11 +23,11 @@ export const CardTile = memo(function CardTile({ card, selected, onToggle, barLa
           onClick={() => onToggle(card.key)}
           className="block w-full cursor-pointer rounded-[4.5%/3.2%] transition-transform ease-guide hover:-translate-y-0.5 focus-visible:-translate-y-0.5"
         >
-          <CardArt card={card} className={selected ? 'ring-2 ring-highlight-solid ring-offset-2 ring-offset-paper' : ''} />
+          <CardArt
+            card={card}
+            className={`${selected ? 'ring-2 ring-highlight-solid ring-offset-2 ring-offset-paper' : ''} ${card.missing ? 'opacity-55 grayscale-[0.7]' : ''}`}
+          />
         </button>
-        {card.stamps.length > 0 && (
-          <span className="pointer-events-none absolute right-1.5 top-1.5"><Stamps stamps={card.stamps} /></span>
-        )}
       </div>
       <div className={`flex flex-col gap-0.5 rounded-xs px-0.5 ${selected ? 'highlighter' : ''}`}>
         <span className="flex items-baseline gap-1">
@@ -50,6 +50,8 @@ export const CardTile = memo(function CardTile({ card, selected, onToggle, barLa
         </span>
         <GuideLine card={card} />
         {card.note && <GuideNote note={card.note} />}
+        {card.owned && <Holdings card={card} />}
+        <Tags tags={card.tags} />
         {card.bars && <InclusionBars a={card.bars.a} b={card.bars.b} labelA={barLabels[0]} labelB={barLabels[1]} />}
       </div>
     </article>

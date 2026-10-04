@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, ServerSentEventsResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { CardDiffData, CardDiffErrors, CardDiffFamiliesData, CardDiffFamiliesResponses, CardDiffResponses, CommandersData, CommandersErrors, CommandersResponses, CompareData, CompareErrors, CompareResponses, GetJobData, GetJobErrors, GetJobResponses, JobEventsData, JobEventsErrors, JobEventsResponses, JobSpecsData, JobSpecsResponses, ListJobsData, ListJobsResponses, SubmitJobData, SubmitJobErrors, SubmitJobResponses } from './types.gen';
+import type { CollectionBuyListData, CollectionBuyListErrors, CollectionBuyListResponses, CollectionData, CollectionErrors, CollectionFamiliesData, CollectionFamiliesResponses, CollectionResponses, CommandersData, CommandersErrors, CommandersResponses, CompareData, CompareErrors, CompareResponses, GetJobData, GetJobErrors, GetJobResponses, JobEventsData, JobEventsErrors, JobEventsResponses, JobSpecsData, JobSpecsResponses, ListJobsData, ListJobsResponses, SubmitJobData, SubmitJobErrors, SubmitJobResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -61,11 +61,23 @@ export const commanders = <ThrowOnError extends boolean = false>(options: Option
 export const compare = <ThrowOnError extends boolean = false>(options: Options<CompareData, ThrowOnError>): RequestResult<CompareResponses, CompareErrors, ThrowOnError> => (options.client ?? client).get<CompareResponses, CompareErrors, ThrowOnError>({ url: '/api/edhrec/compare', ...options });
 
 /**
- * Card Diff Families
+ * Collection Families
  */
-export const cardDiffFamilies = <ThrowOnError extends boolean = false>(options?: Options<CardDiffFamiliesData, ThrowOnError>): RequestResult<CardDiffFamiliesResponses, unknown, ThrowOnError> => (options?.client ?? client).get<CardDiffFamiliesResponses, unknown, ThrowOnError>({ url: '/api/card-diff/families', ...options });
+export const collectionFamilies = <ThrowOnError extends boolean = false>(options?: Options<CollectionFamiliesData, ThrowOnError>): RequestResult<CollectionFamiliesResponses, unknown, ThrowOnError> => (options?.client ?? client).get<CollectionFamiliesResponses, unknown, ThrowOnError>({ url: '/api/collection/families', ...options });
 
 /**
- * Card Diff
+ * Collection
  */
-export const cardDiff = <ThrowOnError extends boolean = false>(options: Options<CardDiffData, ThrowOnError>): RequestResult<CardDiffResponses, CardDiffErrors, ThrowOnError> => (options.client ?? client).get<CardDiffResponses, CardDiffErrors, ThrowOnError>({ url: '/api/card-diff', ...options });
+export const collection = <ThrowOnError extends boolean = false>(options: Options<CollectionData, ThrowOnError>): RequestResult<CollectionResponses, CollectionErrors, ThrowOnError> => (options.client ?? client).get<CollectionResponses, CollectionErrors, ThrowOnError>({ url: '/api/collection', ...options });
+
+/**
+ * Collection Buy List
+ */
+export const collectionBuyList = <ThrowOnError extends boolean = false>(options: Options<CollectionBuyListData, ThrowOnError>): RequestResult<CollectionBuyListResponses, CollectionBuyListErrors, ThrowOnError> => (options.client ?? client).post<CollectionBuyListResponses, CollectionBuyListErrors, ThrowOnError>({
+    url: '/api/collection/buy-list',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});

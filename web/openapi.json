@@ -318,13 +318,13 @@
         }
       }
     },
-    "/api/card-diff/families": {
+    "/api/collection/families": {
       "get": {
         "tags": [
-          "card-diff"
+          "collection"
         ],
-        "summary": "Card Diff Families",
-        "operationId": "card_diff_families",
+        "summary": "Collection Families",
+        "operationId": "collection_families",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -335,7 +335,7 @@
                     "$ref": "#/components/schemas/FamilyOption"
                   },
                   "type": "array",
-                  "title": "Response Card Diff Families"
+                  "title": "Response Collection Families"
                 }
               }
             }
@@ -343,13 +343,13 @@
         }
       }
     },
-    "/api/card-diff": {
+    "/api/collection": {
       "get": {
         "tags": [
-          "card-diff"
+          "collection"
         ],
-        "summary": "Card Diff",
-        "operationId": "card_diff",
+        "summary": "Collection",
+        "operationId": "collection",
         "parameters": [
           {
             "name": "families",
@@ -363,45 +363,6 @@
               "minItems": 1,
               "title": "Families"
             }
-          },
-          {
-            "name": "pools",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "array",
-                  "items": {
-                    "enum": [
-                      "printing",
-                      "functional",
-                      "variant-chase"
-                    ],
-                    "type": "string"
-                  }
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Pools"
-            }
-          },
-          {
-            "name": "chase",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "enum": [
-                "exclude",
-                "include",
-                "only"
-              ],
-              "type": "string",
-              "default": "exclude",
-              "title": "Chase"
-            }
           }
         ],
         "responses": {
@@ -410,7 +371,48 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CardDiffOut"
+                  "$ref": "#/components/schemas/CollectionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collection/buy-list": {
+      "post": {
+        "tags": [
+          "collection"
+        ],
+        "summary": "Collection Buy List",
+        "operationId": "collection_buy_list",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuyListIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuyListOut"
                 }
               }
             }
@@ -431,99 +433,118 @@
   },
   "components": {
     "schemas": {
-      "CardDiffOut": {
+      "BuyItem": {
         "properties": {
-          "families": {
-            "items": {
-              "$ref": "#/components/schemas/FamilyOut"
-            },
-            "type": "array",
-            "title": "Families"
+          "scryfall_id": {
+            "type": "string",
+            "title": "Scryfall Id"
           },
-          "cards": {
-            "items": {
-              "$ref": "#/components/schemas/CardDiffTile"
-            },
-            "type": "array",
-            "title": "Cards"
+          "finish": {
+            "type": "string",
+            "enum": [
+              "nonfoil",
+              "foil"
+            ],
+            "title": "Finish"
           },
-          "skipped": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Skipped",
-            "description": "Codes that didn't resolve to a configured family."
+          "qty": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Qty",
+            "default": 1
           }
         },
         "type": "object",
         "required": [
-          "families",
-          "cards"
+          "scryfall_id",
+          "finish"
         ],
-        "title": "CardDiffOut"
+        "title": "BuyItem"
       },
-      "CardDiffTile": {
+      "BuyListIn": {
         "properties": {
-          "key": {
+          "target": {
             "type": "string",
-            "title": "Key",
-            "description": "Stable per-family tile id (exact printing)."
+            "enum": [
+              "manapool",
+              "tcgplayer",
+              "cardkingdom",
+              "moxfield",
+              "plain"
+            ],
+            "title": "Target"
           },
-          "family": {
-            "type": "string",
-            "title": "Family"
-          },
-          "pools": {
+          "items": {
             "items": {
-              "type": "string",
-              "enum": [
-                "printing",
-                "functional",
-                "variant-chase"
-              ]
+              "$ref": "#/components/schemas/BuyItem"
             },
             "type": "array",
-            "title": "Pools"
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "target",
+          "items"
+        ],
+        "title": "BuyListIn"
+      },
+      "BuyListOut": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "lines": {
+            "type": "integer",
+            "title": "Lines"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text",
+          "lines"
+        ],
+        "title": "BuyListOut"
+      },
+      "CollectionCardOut": {
+        "properties": {
+          "scryfall_id": {
+            "type": "string",
+            "title": "Scryfall Id"
+          },
+          "oracle_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oracle Id"
           },
           "name": {
             "type": "string",
             "title": "Name"
           },
+          "family": {
+            "type": "string",
+            "title": "Family"
+          },
           "set_code": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "type": "string",
             "title": "Set Code"
           },
           "collector_number": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "type": "string",
             "title": "Collector Number"
           },
           "rarity": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "type": "string",
             "title": "Rarity"
           },
-          "finish": {
+          "type_line": {
             "anyOf": [
               {
                 "type": "string"
@@ -532,9 +553,9 @@
                 "type": "null"
               }
             ],
-            "title": "Finish"
+            "title": "Type Line"
           },
-          "usd": {
+          "cmc": {
             "anyOf": [
               {
                 "type": "number"
@@ -543,7 +564,70 @@
                 "type": "null"
               }
             ],
-            "title": "Usd"
+            "title": "Cmc"
+          },
+          "color_identity": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Color Identity"
+          },
+          "released_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Released At"
+          },
+          "finishes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Finishes"
+          },
+          "owned": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Owned",
+            "description": "finish -> owned copies"
+          },
+          "pledged": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Pledged",
+            "description": "finish -> copies pledged to built decks"
+          },
+          "price_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Usd"
+          },
+          "price_usd_foil": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Usd Foil"
           },
           "image_uri": {
             "anyOf": [
@@ -567,32 +651,82 @@
             ],
             "title": "Scryfall Url"
           },
-          "manapool_line": {
+          "treatment": {
             "type": "string",
-            "title": "Manapool Line",
-            "default": ""
+            "title": "Treatment",
+            "description": "Treatment codes (b, fa, shw, ext, sm, ff; '|'-joined); '' = plain"
           },
-          "tcgplayer_line": {
-            "type": "string",
-            "title": "Tcgplayer Line",
-            "default": ""
+          "standard_frame": {
+            "type": "boolean",
+            "title": "Standard Frame"
+          },
+          "is_bulk": {
+            "type": "boolean",
+            "title": "Is Bulk"
+          },
+          "is_chase": {
+            "type": "boolean",
+            "title": "Is Chase"
           }
         },
         "type": "object",
         "required": [
-          "key",
-          "family",
-          "pools",
+          "scryfall_id",
+          "oracle_id",
           "name",
+          "family",
           "set_code",
           "collector_number",
           "rarity",
-          "finish",
-          "usd",
+          "type_line",
+          "cmc",
+          "color_identity",
+          "released_at",
+          "finishes",
+          "owned",
+          "pledged",
+          "price_usd",
+          "price_usd_foil",
           "image_uri",
-          "scryfall_url"
+          "scryfall_url",
+          "treatment",
+          "standard_frame",
+          "is_bulk",
+          "is_chase"
         ],
-        "title": "CardDiffTile"
+        "title": "CollectionCardOut"
+      },
+      "CollectionOut": {
+        "properties": {
+          "families": {
+            "items": {
+              "$ref": "#/components/schemas/FamilySummaryOut"
+            },
+            "type": "array",
+            "title": "Families"
+          },
+          "cards": {
+            "items": {
+              "$ref": "#/components/schemas/CollectionCardOut"
+            },
+            "type": "array",
+            "title": "Cards"
+          },
+          "skipped": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Skipped",
+            "description": "Codes that didn't resolve to a family."
+          }
+        },
+        "type": "object",
+        "required": [
+          "families",
+          "cards"
+        ],
+        "title": "CollectionOut"
       },
       "CommanderOption": {
         "properties": {
@@ -1033,7 +1167,7 @@
         ],
         "title": "FamilyOption"
       },
-      "FamilyOut": {
+      "FamilySummaryOut": {
         "properties": {
           "code": {
             "type": "string",
@@ -1043,36 +1177,51 @@
             "type": "string",
             "title": "Name"
           },
-          "owned_prints": {
+          "printings": {
             "type": "integer",
-            "title": "Owned Prints"
+            "title": "Printings"
           },
-          "owned_qty": {
+          "owned_printings": {
             "type": "integer",
-            "title": "Owned Qty"
+            "title": "Owned Printings"
+          },
+          "owned_copies": {
+            "type": "integer",
+            "title": "Owned Copies"
           },
           "owned_usd": {
             "type": "number",
             "title": "Owned Usd"
           },
-          "pools": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/PoolSummary"
+          "missing_printings": {
+            "type": "integer",
+            "title": "Missing Printings"
+          },
+          "missing_usd": {
+            "type": "number",
+            "title": "Missing Usd"
+          },
+          "sets": {
+            "items": {
+              "$ref": "#/components/schemas/SetRefOut"
             },
-            "type": "object",
-            "title": "Pools"
+            "type": "array",
+            "title": "Sets",
+            "description": "Member sets with printings, oldest first."
           }
         },
         "type": "object",
         "required": [
           "code",
           "name",
-          "owned_prints",
-          "owned_qty",
+          "printings",
+          "owned_printings",
+          "owned_copies",
           "owned_usd",
-          "pools"
+          "missing_printings",
+          "missing_usd"
         ],
-        "title": "FamilyOut"
+        "title": "FamilySummaryOut"
       },
       "FunctionRootOut": {
         "properties": {
@@ -1273,23 +1422,23 @@
         "title": "OracleTagOut",
         "description": "A Scryfall Tagger oracle tag (``id`` is the stable UUID)."
       },
-      "PoolSummary": {
+      "SetRefOut": {
         "properties": {
-          "count": {
-            "type": "integer",
-            "title": "Count"
+          "code": {
+            "type": "string",
+            "title": "Code"
           },
-          "usd": {
-            "type": "number",
-            "title": "Usd"
+          "name": {
+            "type": "string",
+            "title": "Name"
           }
         },
         "type": "object",
         "required": [
-          "count",
-          "usd"
+          "code",
+          "name"
         ],
-        "title": "PoolSummary"
+        "title": "SetRefOut"
       },
       "ValidationError": {
         "properties": {

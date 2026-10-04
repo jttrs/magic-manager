@@ -4570,7 +4570,7 @@ def intake_cmd(
 
 @app.command("export")
 def export_cmd(
-    target: str = typer.Argument(..., help="moxfield | manapool | tcgplayer | archidekt | plain | scryfall-json"),
+    target: str = typer.Argument(..., help="moxfield | manapool | tcgplayer | cardkingdom | archidekt | plain | scryfall-json"),
     selector: str = typer.Argument(..., help="V2 selector, e.g. 'inventory', 'set:fca missing', 'wishlist:edh-staples'"),
     out: Path = typer.Option(None, "--out", help="Optional output path; otherwise prints to stdout."),
 ):
@@ -4588,6 +4588,9 @@ def export_cmd(
         typer.echo("# NOTE: TCGplayer Mass Entry format is '1 Card Name [SETCODE] CN'.", err=True)
         typer.echo("#       Foil is set per-batch via the cart UI toggle, not per-line —", err=True)
         typer.echo("#       run twice with finish=nonfoil and finish=foil for a mixed cart.", err=True)
+    elif target == "cardkingdom":
+        typer.echo("# NOTE: Card Kingdom's Deck Builder takes 'qty name' only — pick each", err=True)
+        typer.echo("#       edition/foil in its dropdowns after Find Cards.", err=True)
 
     if out:
         out.parent.mkdir(parents=True, exist_ok=True)

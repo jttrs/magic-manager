@@ -1,7 +1,6 @@
 // Server state via TanStack Query over the generated, typed API client.
 import { keepPreviousData, queryOptions } from '@tanstack/react-query';
-import { cardDiff, cardDiffFamilies, commanders, compare, listJobs } from '../core/api';
-import type { Pool } from '../core/search';
+import { collection, collectionFamilies, commanders, compare, listJobs } from '../core/api';
 
 class ApiError extends Error {}
 
@@ -33,18 +32,17 @@ export const compareQuery = (a?: string, b?: string) =>
 
 export const familiesQuery = () =>
   queryOptions({
-    queryKey: ['card-diff', 'families'],
-    queryFn: async ({ signal }) => unwrap(await cardDiffFamilies({ signal })),
+    queryKey: ['collection', 'families'],
+    queryFn: async ({ signal }) => unwrap(await collectionFamilies({ signal })),
     staleTime: 5 * 60_000,
   });
 
-export const cardDiffQuery = (families: string[], chase: 'exclude' | 'include' | 'only', pools?: Pool[]) =>
+export const collectionQuery = (families: string[]) =>
   queryOptions({
-    queryKey: ['card-diff', families, chase, pools],
-    queryFn: async ({ signal }) =>
-      unwrap(await cardDiff({ query: { families, chase, ...(pools ? { pools } : {}) }, signal })),
+    queryKey: ['collection', [...families].sort()],
+    queryFn: async ({ signal }) => unwrap(await collection({ query: { families }, signal })),
     enabled: families.length > 0,
-    staleTime: 5 * 60_000,
+    staleTime: 60_000,
     placeholderData: keepPreviousData,
   });
 

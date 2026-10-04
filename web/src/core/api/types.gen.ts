@@ -5,67 +5,127 @@ export type ClientOptions = {
 };
 
 /**
- * CardDiffOut
+ * BuyItem
  */
-export type CardDiffOut = {
+export type BuyItem = {
     /**
-     * Families
+     * Scryfall Id
      */
-    families: Array<FamilyOut>;
+    scryfall_id: string;
     /**
-     * Cards
+     * Finish
      */
-    cards: Array<CardDiffTile>;
+    finish: 'nonfoil' | 'foil';
     /**
-     * Skipped
-     *
-     * Codes that didn't resolve to a configured family.
+     * Qty
      */
-    skipped?: Array<string>;
+    qty?: number;
 };
 
 /**
- * CardDiffTile
+ * BuyListIn
  */
-export type CardDiffTile = {
+export type BuyListIn = {
     /**
-     * Key
-     *
-     * Stable per-family tile id (exact printing).
+     * Target
      */
-    key: string;
+    target: 'manapool' | 'tcgplayer' | 'cardkingdom' | 'moxfield' | 'plain';
     /**
-     * Family
+     * Items
      */
-    family: string;
+    items: Array<BuyItem>;
+};
+
+/**
+ * BuyListOut
+ */
+export type BuyListOut = {
     /**
-     * Pools
+     * Text
      */
-    pools: Array<'printing' | 'functional' | 'variant-chase'>;
+    text: string;
+    /**
+     * Lines
+     */
+    lines: number;
+};
+
+/**
+ * CollectionCardOut
+ */
+export type CollectionCardOut = {
+    /**
+     * Scryfall Id
+     */
+    scryfall_id: string;
+    /**
+     * Oracle Id
+     */
+    oracle_id: string | null;
     /**
      * Name
      */
     name: string;
     /**
+     * Family
+     */
+    family: string;
+    /**
      * Set Code
      */
-    set_code: string | null;
+    set_code: string;
     /**
      * Collector Number
      */
-    collector_number: string | null;
+    collector_number: string;
     /**
      * Rarity
      */
-    rarity: string | null;
+    rarity: string;
     /**
-     * Finish
+     * Type Line
      */
-    finish: string | null;
+    type_line: string | null;
     /**
-     * Usd
+     * Cmc
      */
-    usd: number | null;
+    cmc: number | null;
+    /**
+     * Color Identity
+     */
+    color_identity: Array<string>;
+    /**
+     * Released At
+     */
+    released_at: string | null;
+    /**
+     * Finishes
+     */
+    finishes: Array<string>;
+    /**
+     * Owned
+     *
+     * finish -> owned copies
+     */
+    owned: {
+        [key: string]: number;
+    };
+    /**
+     * Pledged
+     *
+     * finish -> copies pledged to built decks
+     */
+    pledged: {
+        [key: string]: number;
+    };
+    /**
+     * Price Usd
+     */
+    price_usd: number | null;
+    /**
+     * Price Usd Foil
+     */
+    price_usd_foil: number | null;
     /**
      * Image Uri
      */
@@ -75,13 +135,43 @@ export type CardDiffTile = {
      */
     scryfall_url: string | null;
     /**
-     * Manapool Line
+     * Treatment
+     *
+     * Treatment codes (b, fa, shw, ext, sm, ff; '|'-joined); '' = plain
      */
-    manapool_line?: string;
+    treatment: string;
     /**
-     * Tcgplayer Line
+     * Standard Frame
      */
-    tcgplayer_line?: string;
+    standard_frame: boolean;
+    /**
+     * Is Bulk
+     */
+    is_bulk: boolean;
+    /**
+     * Is Chase
+     */
+    is_chase: boolean;
+};
+
+/**
+ * CollectionOut
+ */
+export type CollectionOut = {
+    /**
+     * Families
+     */
+    families: Array<FamilySummaryOut>;
+    /**
+     * Cards
+     */
+    cards: Array<CollectionCardOut>;
+    /**
+     * Skipped
+     *
+     * Codes that didn't resolve to a family.
+     */
+    skipped?: Array<string>;
 };
 
 /**
@@ -285,9 +375,9 @@ export type FamilyOption = {
 };
 
 /**
- * FamilyOut
+ * FamilySummaryOut
  */
-export type FamilyOut = {
+export type FamilySummaryOut = {
     /**
      * Code
      */
@@ -297,23 +387,35 @@ export type FamilyOut = {
      */
     name: string;
     /**
-     * Owned Prints
+     * Printings
      */
-    owned_prints: number;
+    printings: number;
     /**
-     * Owned Qty
+     * Owned Printings
      */
-    owned_qty: number;
+    owned_printings: number;
+    /**
+     * Owned Copies
+     */
+    owned_copies: number;
     /**
      * Owned Usd
      */
     owned_usd: number;
     /**
-     * Pools
+     * Missing Printings
      */
-    pools: {
-        [key: string]: PoolSummary;
-    };
+    missing_printings: number;
+    /**
+     * Missing Usd
+     */
+    missing_usd: number;
+    /**
+     * Sets
+     *
+     * Member sets with printings, oldest first.
+     */
+    sets?: Array<SetRefOut>;
 };
 
 /**
@@ -451,17 +553,17 @@ export type OracleTagOut = {
 };
 
 /**
- * PoolSummary
+ * SetRefOut
  */
-export type PoolSummary = {
+export type SetRefOut = {
     /**
-     * Count
+     * Code
      */
-    count: number;
+    code: string;
     /**
-     * Usd
+     * Name
      */
-    usd: number;
+    name: string;
 };
 
 /**
@@ -691,25 +793,25 @@ export type CompareResponses = {
 
 export type CompareResponse = CompareResponses[keyof CompareResponses];
 
-export type CardDiffFamiliesData = {
+export type CollectionFamiliesData = {
     body?: never;
     path?: never;
     query?: never;
-    url: '/api/card-diff/families';
+    url: '/api/collection/families';
 };
 
-export type CardDiffFamiliesResponses = {
+export type CollectionFamiliesResponses = {
     /**
-     * Response Card Diff Families
+     * Response Collection Families
      *
      * Successful Response
      */
     200: Array<FamilyOption>;
 };
 
-export type CardDiffFamiliesResponse = CardDiffFamiliesResponses[keyof CardDiffFamiliesResponses];
+export type CollectionFamiliesResponse = CollectionFamiliesResponses[keyof CollectionFamiliesResponses];
 
-export type CardDiffData = {
+export type CollectionData = {
     body?: never;
     path?: never;
     query: {
@@ -717,32 +819,49 @@ export type CardDiffData = {
          * Families
          */
         families: Array<string>;
-        /**
-         * Pools
-         */
-        pools?: Array<'printing' | 'functional' | 'variant-chase'> | null;
-        /**
-         * Chase
-         */
-        chase?: 'exclude' | 'include' | 'only';
     };
-    url: '/api/card-diff';
+    url: '/api/collection';
 };
 
-export type CardDiffErrors = {
+export type CollectionErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type CardDiffError = CardDiffErrors[keyof CardDiffErrors];
+export type CollectionError = CollectionErrors[keyof CollectionErrors];
 
-export type CardDiffResponses = {
+export type CollectionResponses = {
     /**
      * Successful Response
      */
-    200: CardDiffOut;
+    200: CollectionOut;
 };
 
-export type CardDiffResponse = CardDiffResponses[keyof CardDiffResponses];
+export type CollectionResponse = CollectionResponses[keyof CollectionResponses];
+
+export type CollectionBuyListData = {
+    body: BuyListIn;
+    path?: never;
+    query?: never;
+    url: '/api/collection/buy-list';
+};
+
+export type CollectionBuyListErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CollectionBuyListError = CollectionBuyListErrors[keyof CollectionBuyListErrors];
+
+export type CollectionBuyListResponses = {
+    /**
+     * Successful Response
+     */
+    200: BuyListOut;
+};
+
+export type CollectionBuyListResponse = CollectionBuyListResponses[keyof CollectionBuyListResponses];

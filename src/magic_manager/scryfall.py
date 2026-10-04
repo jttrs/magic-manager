@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import time
 from pathlib import Path
 from typing import Iterable, Iterator
 from urllib.parse import urlparse
@@ -108,10 +109,25 @@ def get_set(set_code: str) -> dict:
     return _run(["raw", f"/sets/{set_code.lower()}", ""])
 
 
+_ALL_SETS_TTL_S = 300.0
+_all_sets_memo: tuple[float, list[dict]] | None = None
+
+
 def all_sets() -> list[dict]:
-    """GET /sets — full list of every Magic set Scryfall knows about."""
+    """GET /sets — full list of every Magic set Scryfall knows about.
+
+    The wrapper already caches the response on disk for 24h, but every call
+    still spawns it and re-parses ~1000 sets; `sets.resolve` runs once per set
+    code, so family listing paid that ~90×. Memoized in-process for a few
+    minutes (callers must not mutate the returned list)."""
+    global _all_sets_memo
+    now = time.monotonic()
+    if _all_sets_memo is not None and now - _all_sets_memo[0] < _ALL_SETS_TTL_S:
+        return _all_sets_memo[1]
     body = _run(["raw", "/sets", ""])
-    return body.get("data", [])
+    data = body.get("data", [])
+    _all_sets_memo = (now, data)
+    return data
 
 
 def deck_export(deck_id: str) -> dict:

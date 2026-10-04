@@ -49,7 +49,7 @@ describe('compareSections', () => {
   it('maps function keys and tags to display labels on the guide card', () => {
     const sol = compareSections(cards, 'function', roots)[0].items[0];
     expect(sol.functions).toEqual(['Ramp']);
-    expect(sol.tags).toEqual(['mana rock']);
+    expect(sol.oracleTags).toEqual(['mana rock']);
   });
 
   it('detects whether tags were synced', () => {

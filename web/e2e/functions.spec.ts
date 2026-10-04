@@ -7,12 +7,12 @@ test('Group by Function regroups each column under Tagger function roots (P4)', 
   await page.goto(COMPARE_URL);
   await expect(page).not.toHaveURL(/groupBy=/);
   const aOnly = page.locator('section[aria-labelledby="col-a_only"]');
-  await expect(aOnly.getByRole('heading', { name: /^Creatures/, level: 4 })).toBeVisible();
+  await expect(aOnly.getByRole('heading', { name: /^Creatures/, level: 3 })).toBeVisible();
 
   await page.getByRole('radio', { name: 'Function' }).click();
   await expect(page).toHaveURL(/groupBy=function/);
-  await expect(aOnly.getByRole('heading', { name: /^Ramp/, level: 4 })).toBeVisible();
-  await expect(aOnly.getByRole('heading', { name: /^Creatures/, level: 4 })).toHaveCount(0);
+  await expect(aOnly.getByRole('heading', { name: /^Ramp/, level: 3 })).toBeVisible();
+  await expect(aOnly.getByRole('heading', { name: /^Creatures/, level: 3 })).toHaveCount(0);
 
   // A card serving several functions is listed under each, noting the others.
   const charm = card("Archdruid's Charm");
@@ -46,7 +46,7 @@ test('without synced tags, Function grouping explains how to sync', async ({ pag
   await page.goto(`${COMPARE_URL}&groupBy=function`);
   await expect(page.getByRole('note')).toContainText('No Scryfall function tags yet');
   await expect(page.getByRole('link', { name: 'Sync Scryfall tags' })).toHaveAttribute('href', '/jobs');
-  await expect(page.locator('section[aria-labelledby="col-a_only"]').getByRole('heading', { name: /^No tagged function/, level: 4 })).toBeVisible();
+  await expect(page.locator('section[aria-labelledby="col-a_only"]').getByRole('heading', { name: /^No tagged function/, level: 3 })).toBeVisible();
 });
 
 test('Jobs can sync the Scryfall tag cache', async ({ page }) => {

@@ -165,7 +165,7 @@ Desktop view bodies use `lg:grid-cols-[var(--size-sidebar)_minmax(0,1fr)]` with 
 
 Guide sheets (`GuideSheet`) are full-height paper panels with a compact title block and a flexible body. Compare views split the sheet into horizontal resizable columns using `react-resizable-panels`; each visible column has a ruled heading, optional legend, virtualized body, and hide control. Width layout persists per visible-set key in localStorage.
 
-Cards have two densities. Grid density calculates columns from the scroll-region width with a 12px gap and minimum card widths (`120px`, or `128px` for missing-set). Rows density is a 2rem ruled checklist line. `CardRow` uses container-query breakpoints at `18rem` (show crop thumbnail), `22rem` (show bars and wider price), and `30rem` (show set/CN metadata and wider bars).
+Cards have two densities. Grid density calculates columns from the scroll-region width with a 12px gap and minimum card widths (`120px`, or `128px` for Collection). Rows density is a 2rem ruled checklist line. `CardRow` uses container-query breakpoints at `18rem` (show crop thumbnail), `22rem` (show bars and wider price), and `30rem` (show set/CN metadata and wider bars).
 
 Responsive behavior is task-specific, not generic stacking. At `max-width: 47.99rem`, `GuideColumns` becomes a tabbed single-column view. At `min-width: 64rem`, sidebar controls are always visible; below that, `ViewLayout` uses a disclosure button with `aria-expanded` and `aria-controls`.
 
@@ -202,7 +202,10 @@ Hairline borders are the main geometry. `ruled` is a 1px bottom border; column a
 ### Sidebar primitives
 - **SideSection:** uppercase condensed side heading plus vertical control stack.
 - **Segmented:** single-choice `ToggleGroup`, ruled chrome border, `chrome-raised` selected state.
-- **ChipToggles:** multi-select `ToggleGroup`, pill chips; selected chips fill amber and show optional tabular counts.
+- **ChipToggles:** multi-select `ToggleGroup`, pill chips; selected chips fill amber and show optional tabular counts. **Only for ≤5 options.**
+- **MultiSelect:** any choice set larger than 5 (set families, EDHREC lists). A compact trigger summarizing the selection (`Final Fantasy +2 ▾`) opens a searchable checkbox popover; selected options are pinned first; bulk-select is scoped to the current search, never "select everything".
+- **SortBuilder:** the one sort control for every card view. Trigger shows the hierarchy (`Set › Rarity › #`); the popover edits ordered levels (direction toggle, ▲▼ buttons and drag handles via Pragmatic drag-and-drop, add/remove) and offers presets. The first level groups the sheet into sections. Rules live in the URL (`core/sort.ts` codec).
+- **Grouped MultiSelect (Card types):** trait filters (Finish · Rarity · Treatment · Chase) are ONE grouped checkbox picker, everything checked by default; unchecking a trait hides every card carrying it — except Finish (Nonfoil · Foil · Fancy foil), which ORs: a printing shows while any of its finishes is checked, and owned/missing are judged on the checked finishes only. Fancy foil = a foil printing whose treatment carries `ff` (surge, etched, galaxy…). Group headings carry All/None; the trigger summarizes exclusions (`All card types` / `Hiding Common, Uncommon +1`). No explanatory copy under controls.
 - **TextField:** labelled search input on `chrome-raised`, `chrome-line` border, amber focus border.
 - **A11y contract:** groups carry explicit `aria-label`; labels wrap inputs or target by `htmlFor`.
 
@@ -242,7 +245,9 @@ Hairline borders are the main geometry. `ruled` is a 1px bottom border; column a
 - **CardArt:** fixed 488×680 card aspect or art crop; missing image becomes a ruled paper placeholder.
 - **GuideLine:** CN · SET · rarity · finish + inclusion/price in tabular figures.
 - **InclusionBars:** two stacked bars for shared commander cards, with ARIA label carrying both percentages.
-- **Stamps:** compact P/F/V stamps for printing, functional, and variant-chase pools.
+- **Holdings:** owned copies per finish (`×N`, foil `✦×N` in accent ink) or a rust **MISSING** mark, on its own caption line.
+- **Tags:** short printed facts (Chase, Borderless, Showcase, Ext. art, Reskin) as one truncated uppercase line; Chase in accent ink.
+- Missing printings dim their art (`opacity-55 grayscale`) — state is shown on the art's tone, never drawn over it.
 
 ### Button and CopyButton
 - **Button:** one component with `tone="chrome|paper"` and `emphasis="primary|quiet"`; primary fills amber, quiet variants are ruled outlines.
@@ -262,7 +267,9 @@ Hairline borders are the main geometry. `ruled` is a 1px bottom border; column a
 - **Do** prefer `GuideCard` mapping in `web/src/core/guideCard.ts` so tile, row, grid, and preview stay shared across domains.
 - **Do** preserve URL-backed controls from `web/src/core/search.ts`; filters, visibility, sort, density, and commander/set choices are shareable state.
 - **Do** use `voice-condensed`, `voice-semi`, `tabular`, `highlighter`, `ruled`, `ease-guide`, and `paper-grain` instead of inventing one-off visual classes.
-- **Do** keep mobile behavior as controls disclosure plus column tabs, not a squeezed desktop splitter.
+- **Do** keep mobile behavior as controls disclosure plus column tabs, not a squeezed desktop splitter; the collapsed disclosure shows a one-line summary of the active scope.
+- **Do** put every card fact (owned counts, missing, pools, treatments, chase) in the caption under the card.
+- **Do** keep the heading outline unbroken: sheet `h1`, family/column `h2`, groups `h3`.
 - **Do** keep visual regression evidence pinned through Playwright's offline fixture suite (`web/playwright.config.ts`, `.playwright-mcp/final-*.png`, `.playwright-mcp/verdict-*.png`).
 
 ### Don't:
@@ -272,3 +279,8 @@ Hairline borders are the main geometry. `ruled` is a 1px bottom border; column a
 - **Don't** let components import views/routes; presentational components take props and stay reusable.
 - **Don't** use dashboards cards, broad rounded corners, multi-accent category colors, or decorative gradients; the built system is printed stock, rules, and amber marks.
 - **Don't** turn highlighter marks into persistent filled cards. The mark is a user annotation over the guide, not a new surface.
+- **Don't** overlay anything on card art — no stamps, badges, counts or ribbons. The card image is the artifact.
+- **Don't** render more than 5 options as chips; use `MultiSelect`.
+- **Section heads (VirtualGuide):** every head is a disclosure (`aria-expanded` button inside the h2/h3, chevron left) with ▲▼ jump buttons on the right that scroll to and focus the previous/next head of the same level (`Next set family`, `Next set`, `Next card type`). Collapsing a level-1 head hides its level-2 sections. Level-1 heads say what they are inline beside the name (`BLOOMBURROW  SET FAMILY · BLB · BLC`, never a kicker above it); set sub-heads pair the code with the set name.
+- **Sheet header vs section heads:** the sheet title names the view (`Collection`) and its summary describes what the current filters SHOW; family heads carry family-wide facts (progress, owned/printings, copies, value). Never repeat the same numbers at both levels.
+- **Buy (bulk buy lists):** sidebar section `Buy` (single-word section titles); a label line `Copy bulk lists · 157 missing shown` (or `· 3 marked`) over a full-width ruled strip of equal 32px-tall cells, one per store (names beside the marks when the strip is ≥21.5rem wide, marks only when narrower): a monochrome store mark in amber (`StoreMarks.tsx`, drawn on a 24px stroke grid after each store's logo). Hover darkens the cell and lifts the mark 1px; a successful copy swaps the mark for a ✓ for 1.6s. Each cell has `aria-label`/`title` `Copy <Store> list`; one shared polite status line, where a store that can't take exact printings (Card Kingdom) says so. Kept small on purpose: an occasional action for most collectors. Owner-approved exception to the Amber-Only Rule: store marks are amber at rest.
