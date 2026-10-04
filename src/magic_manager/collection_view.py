@@ -10,8 +10,10 @@ family, my copies of each printing, and where the gaps are". So this module:
   code set (``family_status._family_code_set`` — the same scope card-diff and
   set-status use), in ONE cards query;
 * keeps the printings a collector catalogs, reusing the master-list policy:
-  set types in ``sets.DEFAULT_INVENTORY_SET_TYPES`` (no memorabilia/art-series,
-  alchemy or token sets) and not ``sets.is_excluded_variant`` (prerelease,
+  the family's anchor set whatever its type (core, draft_innovation like ACR/MH3,
+  masters…), plus member sets whose type is in ``sets.DEFAULT_INVENTORY_SET_TYPES``
+  (no memorabilia/art-series, alchemy or token sets) — as
+  ``FamilyResolution.filtered_codes`` does — and not ``sets.is_excluded_variant`` (prerelease,
   stamped, serialized, …); then drops tokens, digital-only
   (``selectors._is_digital_only``), the family's HARD-tier unobtainable rules,
   and meld-back faces (``missing._drop_meld_back_faces``). Every exclusion
@@ -147,7 +149,7 @@ def family_cards(code: str) -> FamilyCollection:
         card = sel_mod._card_dict(r)
         sid = card["scryfall_id"]
         if sid not in owned_ids and (
-            set_types.get(card["set"]) not in sets_mod.DEFAULT_INVENTORY_SET_TYPES
+            (card["set"] != parent_code and set_types.get(card["set"]) not in sets_mod.DEFAULT_INVENTORY_SET_TYPES)
             or sets_mod.is_excluded_variant(card)
             or card.get("is_token")
             or sel_mod._is_digital_only(card)

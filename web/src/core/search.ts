@@ -9,8 +9,8 @@ export type Bucket = (typeof BUCKETS)[number];
 const list = <T extends z.ZodTypeAny>(item: T) =>
   z.preprocess((v) => (v == null ? undefined : Array.isArray(v) ? v : [v]), z.array(item));
 
-const densities = ['grid', 'rows'] as const;
-const density = z.enum(densities).catch('grid').default('grid');
+const VIEW_TYPES = ['grid', 'list'] as const;
+const view = z.enum(VIEW_TYPES).catch('grid').default('grid');
 
 const GROUP_BYS = ['lists', 'function'] as const;
 export type GroupBy = (typeof GROUP_BYS)[number];
@@ -24,7 +24,7 @@ export const compareSearch = z.object({
   /** Encoded sort rules (core/sort.ts), e.g. `inclusion,name`. */
   sort: z.string().catch('inclusion,name').default('inclusion,name'),
   groupBy: z.enum(GROUP_BYS).catch('lists').default('lists'),
-  density,
+  view,
 });
 export type CompareSearch = z.infer<typeof compareSearch>;
 
@@ -39,6 +39,6 @@ export const collectionSearch = z.object({
   /** Scryfall Tagger function roots to keep (OR); empty = all. */
   fn: list(z.string()).catch([]).default([]),
   sort: z.string().catch('set,cn').default('set,cn'),
-  density,
+  view,
 });
 export type CollectionSearch = z.infer<typeof collectionSearch>;

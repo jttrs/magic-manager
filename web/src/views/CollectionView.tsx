@@ -115,7 +115,7 @@ export function CollectionView() {
       </SideSection>
       <SideSection title="Arrange">
         <SortBuilder keys={CARD_SORT} rules={rules} presets={CARD_SORT_PRESETS} onChange={(r) => set({ sort: encodeSort(r, CARD_SORT) })} />
-        <Segmented label="Density" value={search.density} onChange={(density) => set({ density })} options={[{ value: 'grid', label: 'Grid' }, { value: 'rows', label: 'Rows' }]} />
+        <Segmented label="View type" showLabel value={search.view} onChange={(view) => set({ view })} options={[{ value: 'grid', label: 'Grid' }, { value: 'list', label: 'List' }]} />
         <TextField name="q" label="Card name" value={search.q} placeholder="e.g. Cloud…" onChange={(qv) => set({ q: qv })} />
       </SideSection>
       <SideSection title="Buy">
@@ -154,7 +154,7 @@ export function CollectionView() {
   } else if (!view || view.cards.length === 0) {
     body = <EmptyNote title="Nothing matches">No printings match these filters. Check a card type back on, or show both owned and missing cards.</EmptyNote>;
   } else {
-    body = <VirtualGuide sections={view.sections} density={search.density} selected={selected} onToggle={toggle} label="Collection cards" minCardWidth={128} />;
+    body = <VirtualGuide sections={view.sections} density={search.view} selected={selected} onToggle={toggle} label="Collection cards" minCardWidth={128} />;
   }
 
   const s = view?.stats;

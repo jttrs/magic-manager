@@ -60,7 +60,7 @@ export function CompareView() {
     body: view ? (
       <VirtualGuide
         sections={view.sections[b]}
-        density={search.density}
+        density={search.view}
         selected={selected}
         onToggle={toggle}
         barLabels={[names.a, names.b]}
@@ -105,7 +105,7 @@ export function CompareView() {
             </p>
           )
         )}
-        <Segmented label="Density" value={search.density} onChange={(density) => set({ density })} options={[{ value: 'grid', label: 'Grid' }, { value: 'rows', label: 'Rows' }]} />
+        <Segmented label="View type" showLabel value={search.view} onChange={(view) => set({ view })} options={[{ value: 'grid', label: 'Grid' }, { value: 'list', label: 'List' }]} />
         <SortBuilder keys={COMPARE_SORT} rules={rules} presets={COMPARE_SORT_PRESETS} onChange={(r) => set({ sort: encodeSort(r, COMPARE_SORT) })} />
       </SideSection>
       <SideSection title="Filter">
@@ -141,7 +141,7 @@ export function CompareView() {
   }
 
   return (
-    <ViewLayout label="Commander controls" summary={search.a && search.b ? `${search.a} vs ${search.b} · ${search.density === 'rows' ? 'Rows' : 'Grid'}` : undefined} sidebar={sidebar} startOpen={!search.a || !search.b}>
+    <ViewLayout label="Commander controls" summary={search.a && search.b ? `${search.a} vs ${search.b} · ${search.view === 'list' ? 'List' : 'Grid'}` : undefined} sidebar={sidebar} startOpen={!search.a || !search.b}>
       <GuideSheet
         title="Commanders"
         summary={data ? `${cleanName(data.name_a)} vs ${cleanName(data.name_b)} · ${data.cards.length} recommended cards · cheapest price across printings` : undefined}

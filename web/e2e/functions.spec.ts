@@ -22,8 +22,8 @@ test('Group by Function regroups each column under Tagger function roots (P4)', 
 
   await expect(page.getByText('A card with several roles is listed under each')).toBeVisible();
 
-  // Rows density keeps the also-note inline.
-  await page.getByRole('radio', { name: 'Rows' }).click();
+  // List view keeps the also-note inline.
+  await page.getByRole('radio', { name: 'List' }).click();
   await expect(aOnly.getByText(`also: ${others}`).first()).toBeVisible();
 
   await page.reload();

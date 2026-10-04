@@ -8,7 +8,7 @@ import { CardPreview } from './CardMeta';
 
 type Props = { card: GuideCard; selected: boolean; onToggle: (key: string) => void; barLabels?: [string, string] };
 
-/** Rows density: one ruled checklist line per card; hovering/focusing the name previews the art. */
+/** List view: one ruled checklist line per card; hovering/focusing the name previews the art. */
 export const CardRow = memo(function CardRow({ card, selected, onToggle, barLabels = ['A', 'B'] }: Props) {
   return (
     <div className={`grid min-h-[var(--size-row-h)] grid-cols-[1rem_minmax(4rem,1fr)_auto_auto] @[18rem]:grid-cols-[1rem_var(--size-thumb)_minmax(5.5rem,1fr)_auto_auto] items-center gap-2 ruled px-1 ${selected ? 'highlighter' : ''}`}>

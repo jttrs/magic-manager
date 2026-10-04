@@ -152,3 +152,21 @@ def test_collection_endpoint_carries_tagger_functions(client):
     assert by["r1"]["functions"] == ["ramp"] and by["b3"]["functions"] == ["ramp"]
     assert by["c2"]["functions"] == []
     assert body["functions"][0] == {"key": "ramp", "label": "Ramp"}
+
+
+def test_anchor_set_counts_whatever_its_set_type(tmp_db, monkeypatch, seed_cards, make_card):
+    # ACR / MH3 are draft_innovation and core sets are core: the anchor is the
+    # family, so its unowned printings must still show as missing.
+    import magic_manager.scryfall as scry
+    from magic_manager import collection_view as cv
+    monkeypatch.setattr(scry, "all_sets", lambda: [
+        {"code": "dix", "parent_set_code": None, "name": "Draft Innovation", "set_type": "draft_innovation"},
+        {"code": "mdix", "parent_set_code": "dix", "name": "DI Masters", "set_type": "masters"},
+    ])
+    seed_cards([
+        make_card(id="d1", oracle_id="x1", set="dix", collector_number="1", rarity="rare", name="Anchor Card"),
+        make_card(id="m1", oracle_id="x2", set="mdix", collector_number="1", rarity="rare", name="Child Card"),
+    ])
+    fc = cv.family_cards("dix")
+    assert {c.scryfall_id for c in fc.cards} == {"d1"}
+    assert fc.summary.missing_printings == 1
