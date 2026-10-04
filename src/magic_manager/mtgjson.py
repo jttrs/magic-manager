@@ -381,7 +381,7 @@ def _scene_box_component(file_name: str, display: str, *, entry_code: str | None
     return False
 
 
-def default_precon_state(file_name: str, *, name: str | None = None) -> str:
+def default_precon_state(file_name: str, *, name: str | None = None, quick: bool = False) -> str:
     """Recommend the default ingest state for a precon: ``"deconstructed"`` or
     ``"built"``.
 
@@ -397,6 +397,9 @@ def default_precon_state(file_name: str, *, name: str | None = None) -> str:
     ``name`` (the deck display name) is used for test 1 if given; otherwise read
     from the deck file. Network-tolerant: MTGJSON failures degrade to whatever
     tests could run, then ``"built"``.
+
+    ``quick=True`` runs test 1 only (no deck/set file fetches) — a cheap hint
+    for listing many precons at once; the add path uses the full check.
     """
     display = (name or "").lower()
     if not display:
@@ -406,6 +409,8 @@ def default_precon_state(file_name: str, *, name: str | None = None) -> str:
             display = ""
     if display and any(pat in display for pat in POOL_NAME_PATTERNS):
         return "deconstructed"
+    if quick:
+        return "built"
     # Scene-Box-style: the deck is a component of a pool-named sealedProduct.
     if _scene_box_component(file_name, display):
         return "deconstructed"

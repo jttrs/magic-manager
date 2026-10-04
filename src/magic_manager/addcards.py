@@ -372,7 +372,7 @@ def precon_catalog(q: str = "", *, limit: int = 50) -> list[dict]:
             "file_name": d["fileName"], "name": d.get("name") or d["fileName"],
             "set_code": (d.get("code") or "").lower(), "type": d.get("type") or "",
             "release_date": d.get("releaseDate"),
-            "default_state": mtgjson.default_precon_state(d["fileName"], name=d.get("name")),
+            "default_state": mtgjson.default_precon_state(d["fileName"], name=d.get("name"), quick=True),
             "owned_built": built, "owned_deconstructed": decon,
         })
     return out

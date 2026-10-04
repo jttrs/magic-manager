@@ -1,6 +1,6 @@
-// Monochrome store marks drawn for this guide (currentColor, 24px grid), after
-// each store's own logo: ManaPool's lettered cube, TCGplayer's fanned cards
-// with a bolt, Card Kingdom's castle in a roundel.
+// Monochrome marks drawn for this guide (currentColor, 24px stroke grid): the
+// stores after their own logos — ManaPool's lettered cube, TCGplayer's fanned
+// cards with a bolt, Card Kingdom's castle in a roundel — and the add-card mark.
 import { useId, type SVGProps } from 'react';
 
 type MarkProps = SVGProps<SVGSVGElement>;
@@ -40,6 +40,25 @@ export function CardKingdomMark(p: MarkProps) {
       <circle cx="12" cy="12" r="9.4" />
       <path d="M7.4 16.6V9.2h2.1v1.7h1.45V9.2h2.1v1.7h1.45V9.2h2.1v7.4Z" />
       <path d="M11 16.6v-2.2a1 1 0 0 1 2 0v2.2" />
+    </svg>
+  );
+}
+
+/** A card with a plus badge overlapping its corner (the add-cards action). */
+export function AddCardMark(p: MarkProps) {
+  const id = useId();
+  return (
+    <svg {...base} {...p}>
+      <mask id={id}>
+        <rect width="24" height="24" fill="#fff" />
+        <circle cx="17.5" cy="17.5" r="6.4" fill="#000" />
+      </mask>
+      <g mask={`url(#${id})`}>
+        <rect x="3.2" y="2.6" width="12.4" height="17.2" rx="1.6" />
+        <path d="M6 6.4h6.8M6 9.2h4.6" />
+      </g>
+      <circle cx="17.5" cy="17.5" r="4.9" />
+      <path d="M17.5 15.3v4.4M15.3 17.5h4.4" />
     </svg>
   );
 }

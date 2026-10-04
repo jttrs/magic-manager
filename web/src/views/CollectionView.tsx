@@ -1,13 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { getRouteApi, useNavigate } from '@tanstack/react-router';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, type ComponentProps } from 'react';
 import { collectionQuery, familiesQuery } from '../app/queries';
 import { useSelection } from '../app/selection';
 import { ViewLayout } from '../components/AppShell';
 import { AddCardsDialog } from '../components/addcards/AddCardsDialog';
-import { Button } from '../components/Button';
 import { CopyTargets } from '../components/CopyButton';
-import { CardKingdomMark, ManaPoolMark, TcgplayerMark } from '../components/StoreMarks';
+import { AddCardMark, CardKingdomMark, ManaPoolMark, TcgplayerMark } from '../components/StoreMarks';
 import { MultiSelect } from '../components/MultiSelect';
 import { ChipToggles, Segmented, SideSection, TextField } from '../components/Sidebar';
 import { SortBuilder } from '../components/SortBuilder';
@@ -165,7 +164,7 @@ export function CollectionView() {
     <ViewLayout label="Collection controls" summary={controlsSummary(search, rules, fams.data)} sidebar={sidebar} startOpen={!search.families.length}>
       <GuideSheet
         title="Collection"
-        actions={<AddCardsDialog trigger={<Button tone="paper" emphasis="primary">Add cards</Button>} />}
+        titleAction={<AddCardsDialog trigger={<AddCardsButton />} />}
         summary={
           s
             ? `${famN} set ${famN === 1 ? 'family' : 'families'} · showing ${fmtInt(s.printings)} printings: ${fmtInt(s.owned)} owned (${fmtInt(s.copies)} copies), ${fmtInt(s.missing)} missing · ${fmtUsd(s.missingUsd)} to complete${q.data?.skipped?.length ? ` · skipped ${q.data.skipped.join(', ')}` : ''}`
@@ -175,6 +174,20 @@ export function CollectionView() {
         {body}
       </GuideSheet>
     </ViewLayout>
+  );
+}
+
+/** The sheet's main action, beside the title: amber-ink card-plus mark + condensed label. */
+function AddCardsButton(props: ComponentProps<'button'>) {
+  return (
+    <button
+      type="button"
+      {...props}
+      className="group inline-flex min-h-9 cursor-pointer items-center gap-2 rounded-pill border border-rule-strong bg-paper-raised py-1 pl-2.5 pr-3.5 text-ink shadow-[0_1px_0_var(--theme-rule)] transition-[background-color,border-color,box-shadow] duration-200 ease-guide hover:border-accent hover:bg-paper-sunk hover:shadow-[0_6px_14px_-8px_var(--theme-scrim)] data-[state=open]:border-accent"
+    >
+      <AddCardMark className="size-5 text-accent-ink transition-transform duration-300 ease-guide group-hover:-translate-y-0.5 group-hover:rotate-[-4deg]" />
+      <span className="text-sm voice-condensed font-bold uppercase tracking-[0.06em]">Add cards</span>
+    </button>
   );
 }
 

@@ -200,7 +200,7 @@ def test_precon_catalog_filter(tmp_db, monkeypatch):
         {"code": "SPC", "fileName": "D_SPC", "name": "Some Sealed", "releaseDate": "2025-01-01", "type": "Theme Deck?"},
     ]
     monkeypatch.setattr(mtgjson, "deck_list", lambda **k: list(rows))
-    monkeypatch.setattr(mtgjson, "default_precon_state", lambda fn, name=None: "built")
+    monkeypatch.setattr(mtgjson, "default_precon_state", lambda fn, name=None, quick=False: "built")
     monkeypatch.setattr(decks, "precon_unit_counts", lambda: {"A_BLC": (2, 1)})
     allp = addcards.precon_catalog()
     assert [p["file_name"] for p in allp] == ["A_BLC", "C_OLD"]

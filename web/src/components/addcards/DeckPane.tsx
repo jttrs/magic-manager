@@ -69,7 +69,13 @@ function DeckUrl({ onFetched }: { onFetched: (r: ResolveOut) => void }) {
 
 function PreconCatalog() {
   const [q, setQ] = useState('');
-  const res = useQuery(preconCatalogQuery(q));
+  const [dq, setDq] = useState('');
+  useEffect(() => {
+    const t = window.setTimeout(() => setDq(q), 250);
+    return () => window.clearTimeout(t);
+  }, [q]);
+  const res = useQuery(preconCatalogQuery(dq));
+  const settled = !res.isPlaceholderData && !res.isFetching && dq === q;
   const [open, setOpen] = useState<string | null>(null);
   return (
     <section aria-labelledby="precon-h" className="flex min-h-0 flex-col gap-3">
@@ -84,12 +90,14 @@ function PreconCatalog() {
           className="h-10 rounded-sm border border-rule-strong bg-paper-raised px-3 text-md text-ink placeholder:text-ink-muted focus-visible:border-accent"
         />
       </label>
+      <p aria-live="polite" className="sr-only">{settled ? `${res.data?.length ?? 0} precons` : 'Searching…'}</p>
+      {!settled && <p className="text-xs text-ink-muted">Searching…</p>}
       {res.isError && <p role="alert" className="text-sm text-danger">Couldn’t load the precon list: {(res.error as Error).message}</p>}
       <ul aria-label="Precons" className="flex flex-col">
         {(res.data ?? []).map((p) => (
           <PreconRow key={p.file_name} p={p} open={open === p.file_name} onOpen={(o) => setOpen(o ? p.file_name : null)} />
         ))}
-        {res.data?.length === 0 && <li className="py-3 text-sm text-ink-muted">No precons match “{q}”.</li>}
+        {settled && res.data?.length === 0 && <li className="py-3 text-sm text-ink-muted">No precons match “{q}”.</li>}
       </ul>
     </section>
   );
