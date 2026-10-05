@@ -1,10 +1,9 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Dialog } from 'radix-ui';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { cartSetupQuery, unwrap } from '../../app/queries';
 import { Button } from '../../components/Button';
 import { cartCheck, type CartAuditOut } from '../../core/api';
-import { cartBookmarkletHref } from '../../core/cartBookmarklet';
 import { fmtCount, fmtInt, fmtUsd } from '../../core/format';
 
 /** Internal (cart_check flag): audit a Mana Pool cart against your collection —
@@ -26,11 +25,11 @@ export function CartCheckDialog({ trigger, family }: { trigger: ReactNode; famil
 
 function CartCheck({ family }: { family?: string }) {
   const setup = useQuery(cartSetupQuery(true));
-  const [paste, setPaste] = useState('');
   const run = useMutation({
-    mutationFn: async (body: { cart?: string; use_account?: boolean }) => unwrap(await cartCheck({ body: { ...body, family: family ?? null } })),
+    mutationFn: async () => unwrap(await cartCheck({ body: { family: family ?? null } })),
   });
   const r = run.data;
+  const ready = setup.data?.account === true;
 
   return (
     <>
@@ -41,62 +40,25 @@ function CartCheck({ family }: { family?: string }) {
         </Dialog.Description>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-        {!r ? (
-          <div className="flex flex-col gap-4">
-            {setup.data?.account && (
-              <div className="flex flex-wrap items-center gap-3">
-                <Button emphasis="primary" onClick={() => run.mutate({ use_account: true })} disabled={run.isPending}>{run.isPending ? 'Reading your cart…' : 'Read my cart'}</Button>
-                <span className="text-sm text-ink-muted">Uses the Mana Pool account in this machine’s .env.</span>
-              </div>
-            )}
-            <BookmarkletSteps />
-            <label className="flex flex-col gap-1.5 text-sm voice-semi text-ink-muted">
-              Paste what the bookmarklet copied
-              <textarea
-                value={paste}
-                onChange={(e) => setPaste(e.target.value)}
-                rows={4}
-                spellCheck={false}
-                placeholder='{"source":"manapool-cart-page","items":[…]}'
-                className="rounded-sm border border-rule-strong bg-paper-raised px-3 py-2 font-mono text-sm text-ink placeholder:text-ink-muted focus-visible:border-accent"
-              />
-            </label>
-            {run.isError && <p role="alert" className="text-sm text-danger">{(run.error as Error).message}</p>}
-          </div>
-        ) : (
+        {r ? (
           <Results r={r} />
+        ) : setup.isPending ? (
+          <p role="status" className="text-md text-ink-muted">Checking this machine’s setup…</p>
+        ) : !ready ? (
+          <p className="text-md leading-relaxed">
+            Reading the cart needs your Mana Pool account in this machine’s <code className="text-sm">.env</code>: <code className="text-sm">MANAPOOL_EMAIL</code>, <code className="text-sm">MANAPOOL_PASSWORD</code> and <code className="text-sm">MANAPOOL_ACCESS_TOKEN</code>. Add them, restart <code className="text-sm">uv run mm serve</code>, and try again.
+          </p>
+        ) : (
+          <p className="text-md leading-relaxed text-ink-muted">Reads your cart with the Mana Pool account in this machine’s .env and checks every line against your collection.</p>
         )}
+        {run.isError && <p role="alert" className="mt-3 text-sm text-danger">{(run.error as Error).message}</p>}
       </div>
       <div className="flex justify-end gap-2 border-t border-rule px-5 py-3">
-        {r ? (
-          <Button tone="paper" onClick={() => { run.reset(); setPaste(''); }}>Check another cart</Button>
-        ) : (
-          <Button emphasis="primary" onClick={() => run.mutate({ cart: paste })} disabled={!paste.trim() || run.isPending}>{run.isPending ? 'Checking…' : 'Check cart'}</Button>
-        )}
+        <Button tone="paper" emphasis={r ? 'quiet' : 'primary'} onClick={() => run.mutate()} disabled={!ready || run.isPending}>
+          {run.isPending ? 'Reading your cart…' : r ? 'Check again' : 'Read my cart'}
+        </Button>
       </div>
     </>
-  );
-}
-
-/** Drag-to-install link: set through the DOM, since React refuses javascript: hrefs. */
-function BookmarkletSteps() {
-  const ref = useRef<HTMLAnchorElement>(null);
-  useEffect(() => {
-    ref.current?.setAttribute('href', cartBookmarkletHref());
-  }, []);
-  return (
-    <ol className="flex list-decimal flex-col gap-1.5 pl-5 text-md leading-relaxed">
-      <li>
-        Drag{' '}
-        <a ref={ref} onClick={(e) => e.preventDefault()} className="cursor-grab rounded-sm border border-rule-strong px-2 py-0.5 text-sm voice-semi text-accent-ink no-underline">mm · copy cart</a>{' '}
-        to your bookmarks bar (once).
-      </li>
-      <li>On manapool.com, open your cart and click the bookmark. It copies the cart lines shown on the page.</li>
-      <li>Paste them below.</li>
-      <li className="list-none -ml-5 text-sm text-ink-muted">
-        The bookmark only reads what’s on the cart page — card, quantity, price, foil. It never reads your login, and nothing leaves your computer.
-      </li>
-    </ol>
   );
 }
 

@@ -7,7 +7,7 @@ description: Audit a live Mana Pool cart against your collection and a set famil
 
 Deterministic, script-driven cart audit. Claude invokes `scripts/manapool_cart_check.py`, then **relays the script's stdout markdown tables verbatim into chat** and surfaces the `file://` link to the full report. No inline computation, no eyeballing prices or ownership — the script is the single source of truth.
 
-The checks live in `magic_manager.cart`; the script is a thin driver. Cart lines that carry `set` + `number` (the web app's safe cart-page bookmarklet, `--file`) map locally with **no Mana Pool credentials**; only uuid-only lines (headless / legacy bookmarklet) need `MANAPOOL_*`. In the web app the same audit is Collection → *Check my Mana Pool cart*, behind the internal `cart_check` feature flag.
+The checks live in `magic_manager.cart`; the script is a thin driver. Cart lines that carry `set` + `number` (`--file`) map locally with **no Mana Pool credentials**; only uuid-only lines (headless / legacy bookmarklet) need `MANAPOOL_*`. In the web app the same audit is Collection → *Check my Mana Pool cart*, behind the internal `cart_check` feature flag.
 
 This is the superset of the `price-check` skill's `manapool` mode: `price-check` answers *only* "am I overpaying"; `cart-check` also answers "what can I remove" and "what am I still missing."
 

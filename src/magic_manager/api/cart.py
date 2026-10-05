@@ -1,10 +1,10 @@
 """Cart surface of the typed API: audit a Mana Pool cart against your collection.
 
-Internal-only — every route checks the ``cart_check`` feature flag. The cart
-arrives either as the safe bookmarklet's paste (set + number lines, matched
-locally, no Mana Pool credentials) or, on a machine with ``MANAPOOL_*`` in
-``.env``, straight from the account via ``scripts/manapool_cart.py`` (the one
-sanctioned home of the login code; its session token stays in memory there).
+Internal-only — every route checks the ``cart_check`` feature flag, and the
+cart is read with the Mana Pool account configured in this machine's ``.env``
+(``MANAPOOL_*``) via ``scripts/manapool_cart.py`` — the one sanctioned home of
+the login code; its session token stays in memory there. Never ask users for
+these credentials (real money); a cart-page bookmarklet was considered and parked.
 """
 from __future__ import annotations
 
@@ -28,8 +28,6 @@ class CartSetupOut(BaseModel):
 
 
 class CartIn(BaseModel):
-    cart: str | None = Field(None, max_length=2_000_000, description="The bookmarklet's pasted JSON.")
-    use_account: bool = Field(False, description="Read the cart with the configured Mana Pool account instead.")
     family: str | None = Field(None, max_length=10, description="Set family to check gaps against; imputed when the cart sits in one.")
 
 
@@ -106,15 +104,10 @@ def setup() -> CartSetupOut:
 
 def check(req: CartIn) -> CartAuditOut:
     features.require("cart_check")
-    if req.use_account:
-        mod = _cart_script()
-        items = mod.fetch_headless(mod._load_env())
-        if items is None:
-            raise cart.CartFormatError("Couldn’t read the cart with your Mana Pool account — check MANAPOOL_* in .env, or paste from the bookmarklet.")
-    elif req.cart:
-        items = cart.parse(req.cart)
-    else:
-        raise cart.CartFormatError("Paste the cart the bookmarklet copied.")
+    mod = _cart_script()
+    items = mod.fetch_headless(mod._load_env())
+    if items is None:
+        raise cart.CartFormatError("Couldn’t read your cart with the Mana Pool account — check MANAPOOL_* in .env.")
     if not items:
         raise cart.CartFormatError("Your Mana Pool cart is empty.")
     return CartAuditOut(**cart.audit(items, anchor=req.family))

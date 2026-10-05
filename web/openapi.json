@@ -2362,25 +2362,6 @@
       },
       "CartIn": {
         "properties": {
-          "cart": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 2000000
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cart",
-            "description": "The bookmarklet's pasted JSON."
-          },
-          "use_account": {
-            "type": "boolean",
-            "title": "Use Account",
-            "description": "Read the cart with the configured Mana Pool account instead.",
-            "default": false
-          },
           "family": {
             "anyOf": [
               {
