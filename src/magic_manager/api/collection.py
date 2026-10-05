@@ -11,7 +11,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from .. import collection_view, family_status, gallery, scryfall_tags
+from .. import collection_view, family_status, gallery, provenance, scryfall_tags
 from .edhrec import FunctionRootOut, function_roots
 
 BuyTarget = Literal["manapool", "tcgplayer", "cardkingdom", "moxfield", "plain"]
@@ -39,6 +39,17 @@ class FamilySummaryOut(BaseModel):
     sets: list[SetRefOut] = Field(default_factory=list, description="Member sets with printings, oldest first.")
 
 
+SourceKind = Literal["singles", "unknown", "deck", "pool"]
+
+
+class SourceOut(BaseModel):
+    key: str = Field(description="'singles' | 'unknown' | 'product:<MTGJSON fileName>'")
+    kind: SourceKind = Field(description="deck = playable precon; pool = card pool (land pack, scene box, most Secret Lair drops); singles = bought/added individually; unknown = provenance not reconstructed.")
+    label: str
+    set_code: str | None = None
+    printings: int = Field(0, description="Owned printings in this view acquired from this source.")
+
+
 class CollectionCardOut(BaseModel):
     scryfall_id: str
     oracle_id: str | None
@@ -64,6 +75,8 @@ class CollectionCardOut(BaseModel):
     is_chase: bool
     functions: list[str] = Field(default_factory=list,
                                  description="Function root keys (Scryfall Tagger roll-up).")
+    sources: list[str] = Field(default_factory=list,
+                               description="Source keys this owned printing's copies were acquired from (see CollectionOut.sources).")
 
 
 class CollectionOut(BaseModel):
@@ -72,6 +85,8 @@ class CollectionOut(BaseModel):
     skipped: list[str] = Field(default_factory=list, description="Codes that didn't resolve to a family.")
     functions: list[FunctionRootOut] = Field(default_factory=list,
                                              description="Function roots, display order.")
+    sources: list[SourceOut] = Field(default_factory=list,
+                                     description="Every source behind an owned printing in this view, most printings first.")
 
 
 class BuyItem(BaseModel):
@@ -128,8 +143,21 @@ def family_view(codes: list[str]) -> CollectionOut:
         s = summ.get(c.oracle_id or "")
         if s:
             c.functions = list(s.functions)
+    # Where owned copies came from (V19 ledger), ONE batched lookup.
+    by_card = provenance.card_sources([c.scryfall_id for c in cards if any(c.owned.values())])
+    catalog: dict[str, SourceOut] = {}
+    for c in cards:
+        keys = list(dict.fromkeys(cs.source.key for cs in by_card.get(c.scryfall_id, [])))
+        c.sources = keys
+        for cs in by_card.get(c.scryfall_id, []):
+            if cs.source.key not in catalog:
+                s = cs.source
+                catalog[s.key] = SourceOut(key=s.key, kind=s.kind, label=s.label, set_code=s.set_code)
+        for k in keys:
+            catalog[k].printings += 1
     return CollectionOut(families=summaries, cards=cards, skipped=skipped,
-                         functions=function_roots())
+                         functions=function_roots(),
+                         sources=sorted(catalog.values(), key=lambda s: (-s.printings, s.label)))
 
 
 def buy_list(req: BuyListIn) -> BuyListOut:

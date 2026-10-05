@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { CollectionCardOut, CompareCardOut } from './api';
 import { CARD_SORT } from './cardSort';
 import { colorRank, typeGroup } from './cardFacts';
-import { buyFinish, collectionStats, filterCollection, isMissing, traitCounts, traitsOf, type CollectionFilters } from './collection';
+import { buyFinish, collectionStats, filterCollection, isMissing, sourceKinds, sourceOptions, traitCounts, traitsOf, type CollectionFilters } from './collection';
 import { bucketCards, COMPARE_SORT, matches, tagLabel } from './compare';
 import { exportLines, fromCollection, fromCompare, groupCards, rarityLetter, treatmentLabels } from './guideCard';
 import { collectionSearch, compareSearch } from './search';
@@ -117,6 +117,29 @@ describe('collection filters', () => {
     expect(buyFinish(missing, ['finish:nonfoil'])).toBe('foil');
     expect(collectionStats([owned, missing], [])).toEqual({ printings: 2, owned: 1, copies: 2, missing: 1, missingUsd: 1 });
   });
+  it('source filter keeps owned printings acquired from a picked kind or product', () => {
+    const sources = [
+      { key: 'product:Camp_FIN', kind: 'pool' as const, label: 'Camp', set_code: 'fin', printings: 1 },
+      { key: 'product:Gob_FDN', kind: 'deck' as const, label: 'Goblins', set_code: 'fdn', printings: 1 },
+      { key: 'singles', kind: 'singles' as const, label: 'Singles', set_code: null, printings: 2 },
+    ];
+    const pooled = card({ scryfall_id: 'p', owned: { nonfoil: 1 }, sources: ['product:Camp_FIN', 'singles'] });
+    const decked = card({ scryfall_id: 'd', owned: { nonfoil: 1 }, sources: ['product:Gob_FDN', 'singles'] });
+    const pool = [pooled, decked, missing];
+    const kinds = sourceKinds(sources);
+    const shown = (src: string[]) => filterCollection(pool, { ...ALL, src }, kinds).map((c) => c.scryfall_id);
+    expect(shown([])).toEqual(['p', 'd', 'miss']);
+    expect(shown(['kind:pool'])).toEqual(['p']);
+    expect(shown(['product:Gob_FDN'])).toEqual(['d']);
+    expect(shown(['kind:singles'])).toEqual(['p', 'd']);
+    const opts = sourceOptions(pool, sources);
+    expect(opts.map((o) => [o.value, o.count, o.group])).toEqual([
+      ['kind:pool', 1, 'By kind'], ['kind:deck', 1, 'By kind'], ['kind:singles', 2, 'By kind'],
+      ['product:Camp_FIN', 1, 'Card pools'], ['product:Gob_FDN', 1, 'Precon decks'],
+    ]);
+    expect(opts[3].label).toBe('Camp · FIN');
+  });
+
   it('collection mapper carries counts, missing mark and tags', () => {
     const g = fromCollection(card({ owned: { foil: 1 }, is_chase: true, treatment: 'shw' }), true);
     expect(g.owned).toEqual({ foil: 1 });

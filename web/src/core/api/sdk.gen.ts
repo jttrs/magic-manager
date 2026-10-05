@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, ServerSentEventsResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { CollectionBuyListData, CollectionBuyListErrors, CollectionBuyListResponses, CollectionData, CollectionErrors, CollectionFamiliesData, CollectionFamiliesResponses, CollectionResponses, CommandersData, CommandersErrors, CommandersResponses, CompareData, CompareErrors, CompareResponses, DeckDetailData, DeckDetailErrors, DeckDetailResponses, DeckListData, DeckListResponses, GetJobData, GetJobErrors, GetJobResponses, IngestCommitData, IngestCommitErrors, IngestCommitResponses, IngestPreconsData, IngestPreconsErrors, IngestPreconsResponses, IngestResolveData, IngestResolveErrors, IngestResolveResponses, IngestSearchData, IngestSearchErrors, IngestSearchResponses, JobEventsData, JobEventsErrors, JobEventsResponses, JobSpecsData, JobSpecsResponses, ListJobsData, ListJobsResponses, SubmitJobData, SubmitJobErrors, SubmitJobResponses } from './types.gen';
+import type { CardHoldingsData, CardHoldingsErrors, CardHoldingsResponses, CollectionBuyListData, CollectionBuyListErrors, CollectionBuyListResponses, CollectionData, CollectionErrors, CollectionFamiliesData, CollectionFamiliesResponses, CollectionResponses, CommandersData, CommandersErrors, CommandersResponses, CompareData, CompareErrors, CompareResponses, DeckDetailData, DeckDetailErrors, DeckDetailResponses, DeckListData, DeckListResponses, GetJobData, GetJobErrors, GetJobResponses, IngestCommitData, IngestCommitErrors, IngestCommitResponses, IngestPreconsData, IngestPreconsErrors, IngestPreconsResponses, IngestResolveData, IngestResolveErrors, IngestResolveResponses, IngestSearchData, IngestSearchErrors, IngestSearchResponses, JobEventsData, JobEventsErrors, JobEventsResponses, JobSpecsData, JobSpecsResponses, ListJobsData, ListJobsResponses, SubmitJobData, SubmitJobErrors, SubmitJobResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -91,6 +91,11 @@ export const deckList = <ThrowOnError extends boolean = false>(options?: Options
  * Deck Detail
  */
 export const deckDetail = <ThrowOnError extends boolean = false>(options: Options<DeckDetailData, ThrowOnError>): RequestResult<DeckDetailResponses, DeckDetailErrors, ThrowOnError> => (options.client ?? client).get<DeckDetailResponses, DeckDetailErrors, ThrowOnError>({ url: '/api/decks/{slug}', ...options });
+
+/**
+ * Card Holdings
+ */
+export const cardHoldings = <ThrowOnError extends boolean = false>(options: Options<CardHoldingsData, ThrowOnError>): RequestResult<CardHoldingsResponses, CardHoldingsErrors, ThrowOnError> => (options.client ?? client).get<CardHoldingsResponses, CardHoldingsErrors, ThrowOnError>({ url: '/api/cards/{scryfall_id}/holdings', ...options });
 
 /**
  * Ingest Search

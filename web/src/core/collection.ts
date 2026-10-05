@@ -1,6 +1,6 @@
 // Collection view derivations: which printings show under the active filters,
 // what counts as "missing", and which finish a buy-list line should name.
-import type { CollectionCardOut } from './api';
+import type { CollectionCardOut, SourceOut } from './api';
 
 export type CollectionFilters = {
   show: readonly ('owned' | 'missing')[];
@@ -11,7 +11,19 @@ export type CollectionFilters = {
   q: string;
   /** Scryfall Tagger function roots to keep (OR); empty = no function filter. */
   fn?: readonly string[];
+  /** Acquisition sources to keep (OR): `kind:<deck|pool|singles|unknown>` or a
+   *  SourceOut key. Only owned printings have sources, so any value hides missing. */
+  src?: readonly string[];
 };
+
+/** Kind of each source key, from the payload's source catalog. */
+export const sourceKinds = (sources: readonly SourceOut[] = []): ReadonlyMap<string, string> =>
+  new Map(sources.map((s) => [s.key, s.kind]));
+
+/** Does a printing match the active source selection (`kind:*` or exact key)? */
+function sourceMatch(c: CollectionCardOut, src: ReadonlySet<string>, kinds: ReadonlyMap<string, string>): boolean {
+  return (c.sources ?? []).some((k) => src.has(k) || src.has(`kind:${kinds.get(k)}`));
+}
 
 /** `fn` key for printings no function root covers. */
 export const NO_FUNCTION = '_none';
@@ -99,13 +111,15 @@ function ownedCopies(c: CollectionCardOut, exclude: readonly string[]): number {
   return ownedIn(c, allowedFinishes(c, new Set(exclude)));
 }
 
-export function filterCollection(cards: readonly CollectionCardOut[], f: CollectionFilters): CollectionCardOut[] {
+export function filterCollection(cards: readonly CollectionCardOut[], f: CollectionFilters, kinds: ReadonlyMap<string, string> = new Map()): CollectionCardOut[] {
   const q = f.q.trim().toLowerCase();
   const wantOwned = f.show.includes('owned');
   const wantMissing = f.show.includes('missing');
   const excluded = new Set(f.exclude);
   const fn = new Set(f.fn ?? []);
+  const src = new Set(f.src ?? []);
   return cards.filter((c) => {
+    if (src.size && !sourceMatch(c, src, kinds)) return false;
     if (q && !c.name.toLowerCase().includes(q)) return false;
     if (fn.size && !fnKeys(c).some((k) => fn.has(k))) return false;
     if (excluded.size && traitsOf(c).some((t) => excluded.has(t))) return false;
@@ -144,4 +158,24 @@ export const traitsIn = (group: TraitGroup) => TRAITS.filter((t) => t.group === 
 export function setGroupIncluded(exclude: readonly string[], group: TraitGroup, included: readonly string[]): string[] {
   const keys = traitsIn(group).map((t) => t.key);
   return [...exclude.filter((k) => !keys.includes(k)), ...keys.filter((k) => !included.includes(k))];
+}
+
+const KIND_LABEL: Record<string, string> = {
+  pool: 'Any card pool', deck: 'Any precon deck', singles: 'Singles', unknown: 'Unknown origin',
+};
+const KIND_ORDER = ['pool', 'deck', 'singles', 'unknown'];
+const PRODUCT_GROUP: Record<string, string> = { pool: 'Card pools', deck: 'Precon decks' };
+
+/** "Acquired from" picker options: one per kind present, then every pool and
+ *  precon deck product by name (· SET), with owned-printing counts. */
+export function sourceOptions(cards: readonly CollectionCardOut[], sources: readonly SourceOut[]) {
+  const kinds = sourceKinds(sources);
+  const byKind = new Map<string, number>();
+  for (const c of cards) for (const k of new Set((c.sources ?? []).map((s) => kinds.get(s) ?? ''))) if (k) byKind.set(k, (byKind.get(k) ?? 0) + 1);
+  const kindOpts = KIND_ORDER.filter((k) => byKind.has(k)).map((k) => ({ value: `kind:${k}`, label: KIND_LABEL[k], count: byKind.get(k), group: 'By kind' }));
+  const products = sources
+    .filter((s) => s.kind in PRODUCT_GROUP)
+    .sort((a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind) || a.label.localeCompare(b.label))
+    .map((s) => ({ value: s.key, label: s.set_code ? `${s.label} · ${s.set_code.toUpperCase()}` : s.label, count: s.printings, group: PRODUCT_GROUP[s.kind] }));
+  return [...kindOpts, ...products];
 }
