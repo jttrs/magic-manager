@@ -38,6 +38,8 @@ export const SHOW = ['owned', 'missing'] as const;
 export const collectionSearch = z.object({
   families: list(z.string()).catch([]).default([]),
   show: list(z.enum(SHOW)).catch([...SHOW]).default([...SHOW]),
+  /** Missing = only cards you own in no printing at all (functional gaps). */
+  gaps: z.boolean().catch(false).default(false),
   /** Unchecked card-type traits (core/collection.ts TRAITS keys). */
   exclude: list(z.string()).catch([]).default([]),
   q: z.string().catch('').default(''),

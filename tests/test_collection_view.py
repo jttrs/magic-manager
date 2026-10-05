@@ -170,3 +170,16 @@ def test_anchor_set_counts_whatever_its_set_type(tmp_db, monkeypatch, seed_cards
     fc = cv.family_cards("dix")
     assert {c.scryfall_id for c in fc.cards} == {"d1"}
     assert fc.summary.missing_printings == 1
+
+
+def test_card_owned_counts_any_printing_anywhere(tmp_db, family, seed_cards, make_card):
+    """Owning a card in another set (or another family printing) is functional
+    ownership: the family's missing printings of it carry card_owned > 0."""
+    from magic_manager import collection_view as cv
+    seed_cards([make_card(id="else", oracle_id="o2", set="zzz", collector_number="9", name="Common Two")])
+    _own("else", qty=2)
+    _own("b3")
+    by = {c.scryfall_id: c for c in cv.family_cards("tst").cards}
+    assert by["c2"].card_owned == 2          # owned only in another set
+    assert by["r1"].card_owned == 1          # owned via the borderless printing
+    assert by["etch"].card_owned == 0        # a true gap

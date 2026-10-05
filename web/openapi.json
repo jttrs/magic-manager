@@ -2445,6 +2445,12 @@
             "title": "Functions",
             "description": "Function root keys (Scryfall Tagger roll-up)."
           },
+          "card_owned": {
+            "type": "integer",
+            "title": "Card Owned",
+            "description": "Copies of this card owned in any printing, any set.",
+            "default": 0
+          },
           "sources": {
             "items": {
               "type": "string"

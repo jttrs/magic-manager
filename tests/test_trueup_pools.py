@@ -2,12 +2,11 @@
 re-attribute the ledger on apply.
 
 Offline: stubs mtgjson.deck_list + mtgjson.deck, seeds inventory + an
-unattributed-backfill ledger event, then drives scripts/trueup_pools.py's core.
+unattributed-backfill ledger event, then drives magic_manager.trueup.
 """
 
 from __future__ import annotations
 
-import importlib.util
 import sys
 from pathlib import Path
 
@@ -18,11 +17,8 @@ sys.path.insert(0, str(ROOT / "src"))
 
 
 def _load():
-    path = ROOT / "scripts" / "trueup_pools.py"
-    spec = importlib.util.spec_from_file_location("trueup_pools", path)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+    from magic_manager import trueup
+    return trueup
 
 
 def _seed_unattributed(conn, deltas):
@@ -607,3 +603,32 @@ def test_sld_drop_not_double_registered_across_editions(tmp_db, seed_cards, make
             "('TwinDrop_SLD','TwinDropFoilEdition_SLD')").fetchone()["c"]
         assert n == 1
         assert ingest.reconcile_inventory_ledger(conn) == []
+
+
+def test_plan_reports_value_and_only_restricts(tmp_db, seed_cards, make_card, stub_products, fake_scryfall):
+    """plan() returns each product's identity + card value; ``only`` limits the
+    candidates (the web re-check of a reviewed list) and ticks progress."""
+    from magic_manager import db
+    fake_scryfall()
+    a = "abab0000-0000-0000-0000-000000000001"
+    b = "abab0000-0000-0000-0000-000000000002"
+    seed_cards([
+        make_card(id=a, set="tla", collector_number="1", name="A", prices={"usd": "2.50", "usd_foil": None}),
+        make_card(id=b, set="tla", collector_number="2", name="B", prices={"usd": "1.00", "usd_foil": None}),
+    ])
+    with db.connect() as conn:
+        _seed_unattributed(conn, [(a, "nonfoil", 1), (b, "nonfoil", 2)])
+    stub_products(
+        decklist={"tla": [{"fileName": "One_TLA", "name": "One", "code": "TLA", "type": "Box Set"},
+                          {"fileName": "Two_TLA", "name": "Two", "code": "TLA", "type": "Box Set"}]},
+        decks={"One_TLA": _deck("One", "TLA", "Box Set", [(a, 1, False, "tla"), (b, 1, False, "tla")]),
+               "Two_TLA": _deck("Two", "TLA", "Box Set", [(b, 1, False, "tla")])},
+    )
+    tp = _load()
+    ticks = []
+    r = tp.plan(progress=lambda i, n, name: ticks.append(n))
+    by = {p["fileName"]: p for p in r["ready"]}
+    assert set(by) == {"One_TLA", "Two_TLA"}
+    assert by["One_TLA"]["usd"] == 3.5 and by["One_TLA"]["recipe_qty"] == 2 and by["One_TLA"]["type"] == "Box Set"
+    assert ticks and ticks[0] == 2
+    assert [p["fileName"] for p in tp.plan(only={"Two_TLA"})["ready"]] == ["Two_TLA"]

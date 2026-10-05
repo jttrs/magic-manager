@@ -6,8 +6,9 @@ import { useSelection } from '../app/selection';
 import { ViewLayout } from '../components/AppShell';
 import { AddCardsDialog } from '../components/addcards/AddCardsDialog';
 import { CopyTargets } from '../components/CopyButton';
-import { AddCardMark, CardKingdomMark, ManaPoolMark, TcgplayerMark } from '../components/StoreMarks';
-import { GhostAction } from '../components/GhostAction';
+import { AddCardMark, CardKingdomMark, FindProductsMark, ManaPoolMark, TcgplayerMark } from '../components/StoreMarks';
+import { IconAction } from '../components/IconAction';
+import { FindProductsDialog } from './collection/FindProductsDialog';
 import { MultiSelect } from '../components/MultiSelect';
 import { Segmented, SegmentedToggles, SideSection, TextField } from '../components/Sidebar';
 import { SortBuilder } from '../components/SortBuilder';
@@ -105,6 +106,20 @@ export function CollectionView() {
             { value: 'missing', label: 'Missing', count: view?.stats.missing },
           ]}
         />
+        {search.show.includes('missing') && (
+          <Segmented
+            label="Missing means"
+            showLabel
+            labelExtra={
+              <InfoTip label="What does missing mean?">
+                <b>This printing</b> (default): each exact printing you don’t have — what a collector is missing. <b>The card</b>: only cards you have in no printing from any set — the gaps for deck building.
+              </InfoTip>
+            }
+            value={search.gaps ? 'card' : 'printing'}
+            onChange={(v) => set({ gaps: v === 'card' })}
+            options={[{ value: 'printing', label: 'This printing' }, { value: 'card', label: 'The card' }]}
+          />
+        )}
         {srcOptions && (
           <MultiSelect
             label="Acquired from"
@@ -227,10 +242,15 @@ export function CollectionView() {
     <ViewLayout label="Collection controls" summary={controlsSummary(search, rules, fams.data)} sidebar={sidebar} startOpen={!search.families.length}>
       <GuideSheet
         title="Collection"
-        actions={<AddCardsDialog trigger={<GhostAction Icon={AddCardMark} label="Add cards" />} />}
+        actions={
+          <span role="toolbar" aria-label="Collection actions" className="flex items-center gap-0.5">
+            <AddCardsDialog trigger={<IconAction Icon={AddCardMark} label="Add cards" />} />
+            <FindProductsDialog trigger={<IconAction Icon={FindProductsMark} label="Find products in your cards" />} />
+          </span>
+        }
         summary={
           s
-            ? `${famN} set ${famN === 1 ? 'family' : 'families'} · showing ${fmtInt(s.printings)} printings: ${fmtInt(s.owned)} owned (${fmtInt(s.copies)} copies), ${fmtInt(s.missing)} missing · ${fmtUsd(s.missingUsd)} to complete${q.data?.skipped?.length ? ` · skipped ${q.data.skipped.join(', ')}` : ''}`
+            ? `${famN} set ${famN === 1 ? 'family' : 'families'} · showing ${fmtInt(s.printings)} printings: ${fmtInt(s.owned)} owned (${fmtInt(s.copies)} copies), ${search.gaps ? `${fmtInt(s.missingCards)} cards you own in no printing · ${fmtUsd(s.missingCardsUsd)} at the cheapest printing of each` : `${fmtInt(s.missing)} missing · ${fmtUsd(s.missingUsd)} to complete`}${q.data?.skipped?.length ? ` · skipped ${q.data.skipped.join(', ')}` : ''}`
             : undefined
         }
       >

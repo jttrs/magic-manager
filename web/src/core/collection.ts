@@ -9,6 +9,8 @@ export type CollectionFilters = {
    *  are judged on the checked finishes); any other excluded trait hides it. */
   exclude: readonly string[];
   q: string;
+  /** Missing printings only of cards you own in no printing anywhere. */
+  gaps?: boolean;
   /** Scryfall Tagger function roots to keep (OR); empty = no function filter. */
   fn?: readonly string[];
   /** Acquisition sources to keep (OR): `kind:<deck|pool|singles|unknown>` or a
@@ -126,7 +128,7 @@ export function filterCollection(cards: readonly CollectionCardOut[], f: Collect
     const fins = allowedFinishes(c, excluded);
     if (!fins.length) return false;
     const n = ownedIn(c, fins);
-    return (wantOwned && n > 0) || (wantMissing && n === 0);
+    return (wantOwned && n > 0) || (wantMissing && n === 0 && !(f.gaps && (c.card_owned ?? 0) > 0));
   });
 }
 
@@ -136,19 +138,28 @@ export function buyFinish(c: CollectionCardOut, exclude: readonly string[]): Inv
   return fins.includes('nonfoil') || !fins.length && c.finishes.includes('nonfoil') ? 'nonfoil' : 'foil';
 }
 
-export type CollectionStats = { printings: number; owned: number; copies: number; missing: number; missingUsd: number };
+export type CollectionStats = {
+  printings: number; owned: number; copies: number; missing: number; missingUsd: number;
+  /** Distinct missing cards (by oracle) and Σ each one's cheapest missing printing shown. */
+  missingCards: number; missingCardsUsd: number;
+};
 
 export function collectionStats(cards: readonly CollectionCardOut[], exclude: readonly string[]): CollectionStats {
   let owned = 0, copies = 0, missing = 0, missingUsd = 0;
+  const cheapest = new Map<string, number>();
   for (const c of cards) {
     const n = ownedCopies(c, exclude);
     if (n > 0) { owned++; copies += n; }
     if (isMissing(c, exclude)) {
       missing++;
-      missingUsd += (buyFinish(c, exclude) === 'foil' ? c.price_usd_foil : c.price_usd) ?? 0;
+      const p = (buyFinish(c, exclude) === 'foil' ? c.price_usd_foil : c.price_usd) ?? 0;
+      missingUsd += p;
+      const k = c.oracle_id ?? c.scryfall_id;
+      cheapest.set(k, Math.min(cheapest.get(k) ?? Infinity, p));
     }
   }
-  return { printings: cards.length, owned, copies, missing, missingUsd };
+  const missingCardsUsd = [...cheapest.values()].reduce((s, p) => s + p, 0);
+  return { printings: cards.length, owned, copies, missing, missingUsd, missingCards: cheapest.size, missingCardsUsd };
 }
 
 /** Trait keys of one group. */

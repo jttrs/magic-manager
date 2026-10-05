@@ -3016,22 +3016,6 @@ def deck_construct_from_loose_cmd(
         typer.echo("  Fully covered — every recipe card pledged from loose inventory.")
 
 
-def _load_trueup_module():
-    """Import scripts/trueup_pools.py as a module (it lives outside the package,
-    like the other deterministic scripts). Cached on the function object."""
-    import importlib.util
-    from pathlib import Path as _P
-    cached = getattr(_load_trueup_module, "_mod", None)
-    if cached is not None:
-        return cached
-    path = _P(__file__).resolve().parent.parent.parent / "scripts" / "trueup_pools.py"
-    spec = importlib.util.spec_from_file_location("trueup_pools", path)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    _load_trueup_module._mod = mod
-    return mod
-
-
 @deck_app.command("product-coverage")
 @deck_app.command("trueup")  # back-compat alias for muscle memory
 def deck_product_coverage_cmd(
@@ -3084,7 +3068,7 @@ def deck_product_coverage_cmd(
     ``precon`` ingest event linked (by ingest_id) to the exact card copies it
     moves out of the unattributed bucket — completing the star schema.
     """
-    tp = _load_trueup_module()
+    from . import trueup as tp
     mode = "all" if all_sets else ("target" if target else "from-unattributed")
     picks = {s.strip() for s in pick.split(",") if s.strip()}
     refute_set = {s.strip() for s in refute.split(",") if s.strip()}

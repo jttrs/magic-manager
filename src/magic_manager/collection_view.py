@@ -62,6 +62,7 @@ class CollectionCard:
     is_bulk: bool
     is_chase: bool
     is_token: bool
+    card_owned: int = 0                 # copies of this CARD (oracle) owned in any printing, any set
 
     @property
     def owned_total(self) -> int:
@@ -196,6 +197,25 @@ def family_cards(code: str) -> FamilyCollection:
             is_chase=sel_mod._is_family_unobtainable(c, parent_code, _CHASE_TIER),
             is_token=bool(c.get("is_token")),
         ))
+
+    # Functional ownership: copies of each card in ANY printing anywhere, so a
+    # missing printing of a card you already play is distinguishable from a gap.
+    oids = sorted({c.oracle_id for c in cards if c.oracle_id})
+    if oids:
+        with db.connect() as conn:
+            by_oid = {
+                r[0]: r[1] for r in conn.execute(
+                    f"""
+                    SELECT c.oracle_id, SUM(i.quantity) FROM inventory i
+                    JOIN cards c ON c.scryfall_id = i.scryfall_id
+                    WHERE i.quantity > 0 AND c.oracle_id IN ({",".join("?" * len(oids))})
+                    GROUP BY c.oracle_id
+                    """,
+                    oids,
+                )
+            }
+        for c in cards:
+            c.card_owned = by_oid.get(c.oracle_id or "", 0)
 
     owned_cards = [c for c in cards if c.owned_total]
     missing_cards = [c for c in cards if not c.owned_total]
