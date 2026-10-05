@@ -112,12 +112,12 @@ export function CollectionView() {
             showLabel
             labelExtra={
               <InfoTip label="What does missing mean?">
-                <b>Any printing</b>: every printing in the family you don’t have. <b>Card not owned</b>: only cards you have in no printing at all, from any set — the gaps in what you can play.
+                <b>This printing</b> (default): each exact printing you don’t have — what a collector is missing. <b>The card</b>: only cards you have in no printing from any set — the gaps for deck building.
               </InfoTip>
             }
             value={search.gaps ? 'card' : 'printing'}
             onChange={(v) => set({ gaps: v === 'card' })}
-            options={[{ value: 'printing', label: 'Any printing' }, { value: 'card', label: 'Card not owned' }]}
+            options={[{ value: 'printing', label: 'This printing' }, { value: 'card', label: 'The card' }]}
           />
         )}
         {srcOptions && (
