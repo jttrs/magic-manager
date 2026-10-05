@@ -191,6 +191,7 @@ Hairline borders are the main geometry. `ruled` is a 1px bottom border; column a
 
 ### AppShell + ViewLayout
 - **Purpose:** global masthead, primary nav, jobs link, theme switch, sidebar-below-nav layout.
+- **Nav:** Collection · Decks · Explore · Market. On phones the tabs tighten (smaller condensed type, no gaps) and *Jobs* shows its queue mark alone so all four tabs fit at 360px without scrolling.
 - **States:** active nav uses amber underline; jobs shows amber pulse when queued/running; theme can be system/light/dark and persists to `localStorage` as `mm.theme`.
 - **A11y contract:** skip link to `#main`, `nav aria-label="Primary"`, `main tabIndex={-1}`, sidebar labelled by the view, mobile disclosure uses `aria-expanded`/`aria-controls`.
 
@@ -271,6 +272,12 @@ Hairline borders are the main geometry. `ruled` is a 1px bottom border; column a
 - **As commander:** the commander's recommended cards (single) or today's three resizable columns `A only · Both · B only` (compare).
 - **As a card:** sections `Commanders that run it` (share of their decks), `Played alongside` (by type, lift order, `1.09× lift` notes), `Similar cards`; comparing splits each into the three columns, the Both column carrying both shares as stacked bars and both lifts in the note. Descriptive only — never a verdict.
 - Every card inspector has `Explore this card`.
+
+### Market (`/market`)
+- **The price guide, literally.** Sidebar: `Subject: Set family | Deck`, a searchable one-of picker (`SearchSelect`: filter box over a listbox; ↑/↓, Enter picks, picking closes).
+- **Set family → Sealed:** ruled guide table grouped by product category (`Booster boxes · 2` sticky-style heads): `Product · Sealed · Cards inside ⓘ · Difference`. Difference is signed; cards worth more than the box reads `+$` in accent-ink, otherwise muted `−$`. Pricing runs as the `market.value_family` job (a thin amber progress rule `Pricing 13 of 36 · <product>`; cells show `…` until priced; results kept 12 h per family in `localStorage`). A product row discloses its contents tree (`Contents · Market · Cards inside`, indented per level) plus fixed-card totals at these vs the cheapest printings and a TCGplayer ghost link.
+- **Set family → Cards:** `Card (SET CN · treated) · This printing · Cheapest (SET CN where it differs) · Premium · You own`; `Printings: All | Not cheapest`, sort by premium/price/set; 200 rows then `Show more`.
+- **Deck:** a three-row **ledger**, not hero metrics: `Buy it sealed` (precons; the product named beneath) · `Buy every card` · `Use your free cards first`, × `Deck’s printings | Cheapest printings`; the lowest cell is bold accent-ink with a `lowest` tag. Then `To buy` and `Covered by your free cards · worth $` line tables. Sidebar *Buy*: `Printing: Cheapest | Deck’s` + the store-mark copy strip. Decks' toolbar gains *Cost to build* (price tag mark) → here.
 
 ### Deck Manager (`/decks`)
 - **Two resizable panels** (list ~1/3 · inspector ~2/3, `react-resizable-panels`, persisted); phones show one at a time (list → deck, `‹ All decks` back).

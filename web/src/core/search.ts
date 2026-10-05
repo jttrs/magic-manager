@@ -65,3 +65,24 @@ export const decksSearch = z.object({
   view,
 });
 export type DecksSearch = z.infer<typeof decksSearch>;
+
+const MARKET_SUBJECTS = ['family', 'deck'] as const;
+const MARKET_TABS = ['products', 'cards'] as const;
+const CARD_PRICE_SORTS = ['savings', 'price', 'set'] as const;
+const PRICE_BASES = ['floor', 'exact'] as const;
+
+export const marketSearch = z.object({
+  subject: z.enum(MARKET_SUBJECTS).catch('family').default('family'),
+  /** Set family (any member code). */
+  code: z.string().optional().catch(undefined),
+  /** Deck slug. */
+  deck: z.string().optional().catch(undefined),
+  tab: z.enum(MARKET_TABS).catch('products').default('products'),
+  q: z.string().catch('').default(''),
+  /** Cards: only printings that cost more than the card's cheapest printing. */
+  cheaper: z.boolean().catch(false).default(false),
+  sort: z.enum(CARD_PRICE_SORTS).catch('savings').default('savings'),
+  /** Deck buy list: the cheapest printing of each card, or the deck's exact printing. */
+  buyAt: z.enum(PRICE_BASES).catch('floor').default('floor'),
+});
+export type MarketSearch = z.infer<typeof marketSearch>;

@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, ServerSentEventsResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { CardHoldingsData, CardHoldingsErrors, CardHoldingsResponses, CollectionBuyListData, CollectionBuyListErrors, CollectionBuyListResponses, CollectionData, CollectionErrors, CollectionFamiliesData, CollectionFamiliesResponses, CollectionResponses, CommandersData, CommandersErrors, CommandersResponses, CompareData, CompareErrors, CompareResponses, DeckBreakDownData, DeckBreakDownErrors, DeckBreakDownResponses, DeckBuildData, DeckBuildErrors, DeckBuildPlanData, DeckBuildPlanErrors, DeckBuildPlanResponses, DeckBuildResponses, DeckCheckData, DeckCheckErrors, DeckCheckResponses, DeckCopyData, DeckCopyErrors, DeckCopyResponses, DeckCreateData, DeckCreateErrors, DeckCreateResponses, DeckDetailData, DeckDetailErrors, DeckDetailResponses, DeckImportData, DeckImportErrors, DeckImportResponses, DeckListData, DeckListResponses, DeckPreviewData, DeckPreviewErrors, DeckPreviewResponses, DeckSaveData, DeckSaveErrors, DeckSaveResponses, DeckSuggestionsData, DeckSuggestionsErrors, DeckSuggestionsResponses, ExploreCardData, ExploreCardErrors, ExploreCardResponses, ExploreSearchData, ExploreSearchErrors, ExploreSearchResponses, GetJobData, GetJobErrors, GetJobResponses, IngestCommitData, IngestCommitErrors, IngestCommitResponses, IngestPreconsData, IngestPreconsErrors, IngestPreconsResponses, IngestResolveData, IngestResolveErrors, IngestResolveResponses, IngestSearchData, IngestSearchErrors, IngestSearchResponses, JobEventsData, JobEventsErrors, JobEventsResponses, JobSpecsData, JobSpecsResponses, ListJobsData, ListJobsResponses, SubmitJobData, SubmitJobErrors, SubmitJobResponses } from './types.gen';
+import type { CardHoldingsData, CardHoldingsErrors, CardHoldingsResponses, CollectionBuyListData, CollectionBuyListErrors, CollectionBuyListResponses, CollectionData, CollectionErrors, CollectionFamiliesData, CollectionFamiliesResponses, CollectionResponses, CommandersData, CommandersErrors, CommandersResponses, CompareData, CompareErrors, CompareResponses, DeckBreakDownData, DeckBreakDownErrors, DeckBreakDownResponses, DeckBuildData, DeckBuildErrors, DeckBuildPlanData, DeckBuildPlanErrors, DeckBuildPlanResponses, DeckBuildResponses, DeckCheckData, DeckCheckErrors, DeckCheckResponses, DeckCopyData, DeckCopyErrors, DeckCopyResponses, DeckCreateData, DeckCreateErrors, DeckCreateResponses, DeckDetailData, DeckDetailErrors, DeckDetailResponses, DeckImportData, DeckImportErrors, DeckImportResponses, DeckListData, DeckListResponses, DeckPreviewData, DeckPreviewErrors, DeckPreviewResponses, DeckSaveData, DeckSaveErrors, DeckSaveResponses, DeckSuggestionsData, DeckSuggestionsErrors, DeckSuggestionsResponses, ExploreCardData, ExploreCardErrors, ExploreCardResponses, ExploreSearchData, ExploreSearchErrors, ExploreSearchResponses, GetJobData, GetJobErrors, GetJobResponses, IngestCommitData, IngestCommitErrors, IngestCommitResponses, IngestPreconsData, IngestPreconsErrors, IngestPreconsResponses, IngestResolveData, IngestResolveErrors, IngestResolveResponses, IngestSearchData, IngestSearchErrors, IngestSearchResponses, JobEventsData, JobEventsErrors, JobEventsResponses, JobSpecsData, JobSpecsResponses, ListJobsData, ListJobsResponses, MarketCardsData, MarketCardsErrors, MarketCardsResponses, MarketDeckData, MarketDeckErrors, MarketDeckResponses, MarketProductsData, MarketProductsErrors, MarketProductsResponses, MarketProductTreeData, MarketProductTreeErrors, MarketProductTreeResponses, MarketValueData, MarketValueErrors, MarketValueResponses, SubmitJobData, SubmitJobErrors, SubmitJobResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -69,6 +69,31 @@ export const exploreSearch = <ThrowOnError extends boolean = false>(options: Opt
  * Explore Card
  */
 export const exploreCard = <ThrowOnError extends boolean = false>(options: Options<ExploreCardData, ThrowOnError>): RequestResult<ExploreCardResponses, ExploreCardErrors, ThrowOnError> => (options.client ?? client).get<ExploreCardResponses, ExploreCardErrors, ThrowOnError>({ url: '/api/explore/card', ...options });
+
+/**
+ * Market Products
+ */
+export const marketProducts = <ThrowOnError extends boolean = false>(options: Options<MarketProductsData, ThrowOnError>): RequestResult<MarketProductsResponses, MarketProductsErrors, ThrowOnError> => (options.client ?? client).get<MarketProductsResponses, MarketProductsErrors, ThrowOnError>({ url: '/api/market/products', ...options });
+
+/**
+ * Market Value
+ */
+export const marketValue = <ThrowOnError extends boolean = false>(options: Options<MarketValueData, ThrowOnError>): RequestResult<MarketValueResponses, MarketValueErrors, ThrowOnError> => (options.client ?? client).get<MarketValueResponses, MarketValueErrors, ThrowOnError>({ url: '/api/market/value', ...options });
+
+/**
+ * Market Product Tree
+ */
+export const marketProductTree = <ThrowOnError extends boolean = false>(options: Options<MarketProductTreeData, ThrowOnError>): RequestResult<MarketProductTreeResponses, MarketProductTreeErrors, ThrowOnError> => (options.client ?? client).get<MarketProductTreeResponses, MarketProductTreeErrors, ThrowOnError>({ url: '/api/market/product-tree', ...options });
+
+/**
+ * Market Cards
+ */
+export const marketCards = <ThrowOnError extends boolean = false>(options: Options<MarketCardsData, ThrowOnError>): RequestResult<MarketCardsResponses, MarketCardsErrors, ThrowOnError> => (options.client ?? client).get<MarketCardsResponses, MarketCardsErrors, ThrowOnError>({ url: '/api/market/cards', ...options });
+
+/**
+ * Market Deck
+ */
+export const marketDeck = <ThrowOnError extends boolean = false>(options: Options<MarketDeckData, ThrowOnError>): RequestResult<MarketDeckResponses, MarketDeckErrors, ThrowOnError> => (options.client ?? client).get<MarketDeckResponses, MarketDeckErrors, ThrowOnError>({ url: '/api/market/deck', ...options });
 
 /**
  * Collection Families

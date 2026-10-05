@@ -176,3 +176,13 @@ export function ExploreMark(p: MarkProps) {
     </svg>
   );
 }
+
+/** A price tag (what this costs). */
+export function PriceMark(p: MarkProps) {
+  return (
+    <svg {...base} {...p}>
+      <path d="M3.4 12.6V4.8a1.4 1.4 0 0 1 1.4-1.4h7.8l8 8a1.6 1.6 0 0 1 0 2.3l-6.9 6.9a1.6 1.6 0 0 1-2.3 0Z" />
+      <circle cx="8.2" cy="8.2" r="1.5" />
+    </svg>
+  );
+}

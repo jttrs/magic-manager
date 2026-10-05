@@ -444,6 +444,241 @@
         }
       }
     },
+    "/api/market/products": {
+      "get": {
+        "tags": [
+          "market"
+        ],
+        "summary": "Market Products",
+        "operationId": "market_products",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "title": "Code"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FamilyProductsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/market/value": {
+      "get": {
+        "tags": [
+          "market"
+        ],
+        "summary": "Market Value",
+        "operationId": "market_value",
+        "parameters": [
+          {
+            "name": "set",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "title": "Set"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductValueOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/market/product-tree": {
+      "get": {
+        "tags": [
+          "market"
+        ],
+        "summary": "Market Product Tree",
+        "operationId": "market_product_tree",
+        "parameters": [
+          {
+            "name": "set",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "title": "Set"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TreeNodeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/market/cards": {
+      "get": {
+        "tags": [
+          "market"
+        ],
+        "summary": "Market Cards",
+        "operationId": "market_cards",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "title": "Code"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FamilyCardsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/market/deck": {
+      "get": {
+        "tags": [
+          "market"
+        ],
+        "summary": "Market Deck",
+        "operationId": "market_deck",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "title": "Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeckCostOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/collection/families": {
       "get": {
         "tags": [
@@ -1664,6 +1899,156 @@
         ],
         "title": "CardOptionOut"
       },
+      "CardPriceOut": {
+        "properties": {
+          "scryfall_id": {
+            "type": "string",
+            "title": "Scryfall Id"
+          },
+          "oracle_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oracle Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "set_code": {
+            "type": "string",
+            "title": "Set Code"
+          },
+          "collector_number": {
+            "type": "string",
+            "title": "Collector Number"
+          },
+          "rarity": {
+            "type": "string",
+            "title": "Rarity"
+          },
+          "type_line": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type Line"
+          },
+          "finishes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Finishes"
+          },
+          "treatment": {
+            "type": "string",
+            "title": "Treatment"
+          },
+          "image_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Uri"
+          },
+          "is_chase": {
+            "type": "boolean",
+            "title": "Is Chase"
+          },
+          "price_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Usd"
+          },
+          "price_usd_foil": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Usd Foil"
+          },
+          "floor_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Floor Usd",
+            "description": "Cheapest nonfoil printing of this card anywhere."
+          },
+          "floor_set_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Floor Set Code"
+          },
+          "floor_collector_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Floor Collector Number"
+          },
+          "owned": {
+            "type": "integer",
+            "title": "Owned"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scryfall_id",
+          "oracle_id",
+          "name",
+          "set_code",
+          "collector_number",
+          "rarity",
+          "type_line",
+          "finishes",
+          "treatment",
+          "image_uri",
+          "is_chase",
+          "price_usd",
+          "price_usd_foil",
+          "owned"
+        ],
+        "title": "CardPriceOut"
+      },
       "CardProfileOut": {
         "properties": {
           "name": {
@@ -2789,6 +3174,100 @@
         ],
         "title": "DeckCardOut"
       },
+      "DeckCostOut": {
+        "properties": {
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "sealed_product": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sealed Product",
+            "description": "The sealed product this precon ships in."
+          },
+          "sealed": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sealed"
+          },
+          "scratch": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scratch",
+            "description": "Every card new, exact printings."
+          },
+          "with_collection": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "With Collection",
+            "description": "Your free cards first, buy the rest (exact)."
+          },
+          "scratch_floor": {
+            "type": "number",
+            "title": "Scratch Floor"
+          },
+          "with_collection_floor": {
+            "type": "number",
+            "title": "With Collection Floor"
+          },
+          "coverage": {
+            "type": "number",
+            "title": "Coverage"
+          },
+          "unpriced": {
+            "type": "integer",
+            "title": "Unpriced"
+          },
+          "total_need": {
+            "type": "integer",
+            "title": "Total Need"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/DeckLineOut"
+            },
+            "type": "array",
+            "title": "Lines"
+          }
+        },
+        "type": "object",
+        "required": [
+          "slug",
+          "sealed",
+          "scratch_floor",
+          "with_collection_floor",
+          "coverage",
+          "unpriced",
+          "total_need",
+          "lines"
+        ],
+        "title": "DeckCostOut"
+      },
       "DeckDetailOut": {
         "properties": {
           "deck": {
@@ -2820,6 +3299,106 @@
           "editable"
         ],
         "title": "DeckDetailOut"
+      },
+      "DeckLineOut": {
+        "properties": {
+          "scryfall_id": {
+            "type": "string",
+            "title": "Scryfall Id"
+          },
+          "finish": {
+            "type": "string",
+            "title": "Finish"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "set_code": {
+            "type": "string",
+            "title": "Set Code"
+          },
+          "collector_number": {
+            "type": "string",
+            "title": "Collector Number"
+          },
+          "need": {
+            "type": "integer",
+            "title": "Need"
+          },
+          "free": {
+            "type": "integer",
+            "title": "Free"
+          },
+          "buy": {
+            "type": "integer",
+            "title": "Buy"
+          },
+          "unit_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Usd"
+          },
+          "floor_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Floor Usd"
+          },
+          "floor_set_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Floor Set Code"
+          },
+          "floor_collector_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Floor Collector Number"
+          },
+          "floor_scryfall_id": {
+            "type": "string",
+            "title": "Floor Scryfall Id",
+            "description": "The cheapest printing (this one when unpriced elsewhere)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "scryfall_id",
+          "finish",
+          "name",
+          "set_code",
+          "collector_number",
+          "need",
+          "free",
+          "buy",
+          "unit_usd",
+          "floor_usd",
+          "floor_scryfall_id"
+        ],
+        "title": "DeckLineOut"
       },
       "DeckPledgeOut": {
         "properties": {
@@ -3338,6 +3917,32 @@
         "type": "object",
         "title": "FactsOut"
       },
+      "FamilyCardsOut": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "cards": {
+            "items": {
+              "$ref": "#/components/schemas/CardPriceOut"
+            },
+            "type": "array",
+            "title": "Cards"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "cards"
+        ],
+        "title": "FamilyCardsOut"
+      },
       "FamilyOption": {
         "properties": {
           "code": {
@@ -3355,6 +3960,32 @@
           "name"
         ],
         "title": "FamilyOption"
+      },
+      "FamilyProductsOut": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "products": {
+            "items": {
+              "$ref": "#/components/schemas/ProductOut"
+            },
+            "type": "array",
+            "title": "Products"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "products"
+        ],
+        "title": "FamilyProductsOut"
       },
       "FamilySummaryOut": {
         "properties": {
@@ -4097,6 +4728,179 @@
         "title": "PrintingOut",
         "description": "One exact printing a line can resolve to (what the picker shows)."
       },
+      "ProductOut": {
+        "properties": {
+          "set_code": {
+            "type": "string",
+            "title": "Set Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "subtype": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subtype"
+          },
+          "release_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Date"
+          },
+          "tcgplayer_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tcgplayer Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "set_code",
+          "name"
+        ],
+        "title": "ProductOut"
+      },
+      "ProductValueOut": {
+        "properties": {
+          "set_code": {
+            "type": "string",
+            "title": "Set Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "sealed_market": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sealed Market",
+            "description": "The sealed product's own market price."
+          },
+          "market_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Market Source"
+          },
+          "contents_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contents Value",
+            "description": "What's inside: fixed cards + booster EV."
+          },
+          "exact_singles": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exact Singles",
+            "description": "\u03a3 the product's exact card printings."
+          },
+          "floor_singles": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Floor Singles",
+            "description": "\u03a3 the cheapest printing of each card anywhere."
+          },
+          "booster_only": {
+            "type": "boolean",
+            "title": "Booster Only",
+            "default": false
+          },
+          "coverage": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notes"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "set_code",
+          "name"
+        ],
+        "title": "ProductValueOut"
+      },
       "ResolveIn": {
         "properties": {
           "text": {
@@ -4587,6 +5391,65 @@
           "short"
         ],
         "title": "SwapOut"
+      },
+      "TreeNodeOut": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "market": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Market"
+          },
+          "contents_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contents Value"
+          },
+          "contents_kind": {
+            "type": "string",
+            "title": "Contents Kind"
+          },
+          "children": {
+            "items": {
+              "$ref": "#/components/schemas/TreeNodeOut"
+            },
+            "type": "array",
+            "title": "Children"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "kind",
+          "count",
+          "market",
+          "contents_value",
+          "contents_kind"
+        ],
+        "title": "TreeNodeOut"
       },
       "ValidationError": {
         "properties": {

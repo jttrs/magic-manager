@@ -11,6 +11,7 @@ const NAV = [
   { to: '/collection', label: 'Collection' },
   { to: '/decks', label: 'Decks' },
   { to: '/explore', label: 'Explore' },
+  { to: '/market', label: 'Market' },
 ] as const;
 
 /** Global frame: masthead + full-width top nav; views supply sidebar + main below it. */
@@ -20,19 +21,19 @@ export function AppShell({ children }: { children: ReactNode }) {
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-3 focus:z-50 bg-accent text-on-accent px-3 py-1 rounded-sm">
         Skip to content
       </a>
-      <header className="flex min-w-0 items-stretch gap-3 border-b border-chrome-line px-3 sm:gap-8 sm:px-6">
+      <header className="flex min-w-0 items-stretch gap-2 border-b border-chrome-line px-2 sm:gap-8 sm:px-6">
         <Link to="/" className="flex shrink-0 items-center text-xl voice-condensed font-bold tracking-[-0.01em] text-on-chrome no-underline sm:text-2xl" translate="no">
           <span className="sm:hidden">mm</span>
           <span className="hidden sm:inline">magic-manager</span>
         </Link>
         <nav aria-label="Primary" className="flex min-w-0 items-stretch overflow-x-auto">
-          <ul className="flex items-stretch gap-1">
+          <ul className="flex items-stretch sm:gap-1">
             {NAV.map((n) => (
               <li key={n.to} className="flex">
                 <Link
                   to={n.to}
-                  className="relative flex items-center px-2 text-lg voice-condensed sm:px-3 sm:text-xl text-on-chrome-muted no-underline transition-colors ease-guide hover:text-on-chrome
-                             after:absolute after:inset-x-2 after:bottom-0 sm:after:inset-x-3 after:h-[3px] after:rounded-pill after:bg-transparent
+                  className="relative flex items-center px-1.5 text-md voice-condensed sm:px-3 sm:text-xl text-on-chrome-muted no-underline transition-colors ease-guide hover:text-on-chrome
+                             after:absolute after:inset-x-1.5 after:bottom-0 sm:after:inset-x-3 after:h-[3px] after:rounded-pill after:bg-transparent
                              data-[status=active]:text-on-chrome data-[status=active]:after:bg-accent"
                 >
                   {n.label}
@@ -41,7 +42,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             ))}
           </ul>
         </nav>
-        <div className="ml-auto flex items-center gap-3">
+        <div className="ml-auto flex items-center gap-2 sm:gap-3">
           <JobsLink />
           <ThemeSwitch />
         </div>
@@ -130,7 +131,11 @@ function JobsLink() {
       aria-label={running ? `Jobs, ${running} running` : 'Jobs'}
     >
       {running > 0 && <span aria-hidden="true" className="h-2 w-2 animate-pulse rounded-pill bg-accent" />}
-      Jobs
+      {/* Phones show the queue mark alone so every primary tab fits. */}
+      <svg viewBox="0 0 16 16" aria-hidden="true" className="size-4 sm:hidden">
+        <path d="M3 4.5h10M3 8h10M3 11.5h6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      </svg>
+      <span className="hidden sm:inline">Jobs</span>
     </Link>
   );
 }
