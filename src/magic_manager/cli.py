@@ -4355,6 +4355,47 @@ def db_snapshots_cmd():
         typer.echo(f"{when}  {size_mb:>6.2f} MB  {p}")
 
 
+@db_app.command("prune")
+def db_prune_cmd(
+    keep: int = typer.Option(3, "--keep", min=1, help="How many of the newest snapshots to keep."),
+    apply: bool = typer.Option(False, "--apply", help="Delete them (default: list only)."),
+):
+    """Delete old whole-DB snapshots in db/bak, keeping the newest --keep."""
+    doomed, freed = db.prune_snapshots(keep=keep, apply=apply)
+    for p in doomed:
+        typer.echo(f"{'deleted' if apply else 'would delete'}  {p.name}")
+    typer.echo(f"{'freed' if apply else 'would free'} {freed / (1024 ** 3):.2f} GB across {len(doomed)} snapshot(s)"
+               + ("" if apply else " — re-run with --apply"))
+
+
+@db_app.command("undo")
+def db_undo_cmd(
+    take: bool = typer.Option(False, "--take", help="Overwrite the restore point with your data now."),
+    restore: bool = typer.Option(False, "--restore", help="Swap your data with the restore point."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Don't ask before restoring."),
+):
+    """The one restore point of your data (what the web app's Undo uses)."""
+    from . import undo as undo_mod
+    if take:
+        undo_mod.take("manual (mm db undo --take)")
+    info = undo_mod.info()
+    if info is None:
+        typer.echo("(no restore point yet — one is taken before the first change of each web session, or with --take)")
+        raise typer.Exit(0)
+    ch = info["changes"]
+    typer.echo(f"restore point: {info['taken_at']} ({info['reason']})")
+    typer.echo("restoring would change: " + ", ".join(f"{k} {v:+d}" for k, v in ch.items() if v) or "nothing")
+    if restore:
+        if not yes:
+            typer.confirm("Swap your data with this restore point?", abort=True)
+        try:
+            undo_mod.restore()
+        except undo_mod.UndoError as e:
+            typer.echo(str(e), err=True)
+            raise typer.Exit(1)
+        typer.echo("restored — run `mm db undo --restore` again to swap back")
+
+
 @db_app.command("restore")
 def db_restore_cmd(
     backup_path: Path = typer.Argument(..., help="Path to a snapshot file."),

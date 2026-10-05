@@ -1648,6 +1648,20 @@ def list_snapshots() -> list[Path]:
     return candidates
 
 
+def prune_snapshots(*, keep: int = 3, apply: bool = False) -> tuple[list[Path], int]:
+    """Old whole-DB backups beyond the newest ``keep`` (they're 0.5 GB+ each and
+    older ones predate today's schema). Returns ``(paths, bytes)``; deletes them
+    only with ``apply``."""
+    if keep < 1:
+        raise ValueError("keep at least one snapshot")
+    doomed = list_snapshots()[keep:]
+    freed = sum(p.stat().st_size for p in doomed)
+    if apply:
+        for p in doomed:
+            p.unlink()
+    return doomed, freed
+
+
 # ---------- card upserts ----------
 
 def upsert_card(conn: sqlite3.Connection, card: dict,

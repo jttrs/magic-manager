@@ -2481,6 +2481,64 @@ export type TreeNodeOut = {
 };
 
 /**
+ * UndoOut
+ */
+export type UndoOut = {
+    /**
+     * Taken At
+     *
+     * UTC ISO time the restore point was taken.
+     */
+    taken_at: string;
+    /**
+     * Reason
+     */
+    reason: string;
+    /**
+     * Restorable
+     *
+     * False when the database changed shape since.
+     */
+    restorable: boolean;
+    current: UndoSummary;
+    snapshot: UndoSummary;
+    /**
+     * Snapshot minus current: what restoring would change.
+     */
+    changes: UndoSummary;
+};
+
+/**
+ * UndoSummary
+ */
+export type UndoSummary = {
+    /**
+     * Copies
+     */
+    copies: number;
+    /**
+     * Printings
+     */
+    printings: number;
+    /**
+     * Decks
+     */
+    decks: number;
+    /**
+     * Built
+     */
+    built: number;
+    /**
+     * Wishlist
+     */
+    wishlist: number;
+    /**
+     * Earmarks
+     */
+    earmarks: number;
+};
+
+/**
  * UnidentifiedOut
  */
 export type UnidentifiedOut = {
@@ -2816,6 +2874,40 @@ export type ExploreCardResponses = {
 };
 
 export type ExploreCardResponse = ExploreCardResponses[keyof ExploreCardResponses];
+
+export type UndoInfoData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/undo';
+};
+
+export type UndoInfoResponses = {
+    /**
+     * Response Undo Info
+     *
+     * Successful Response
+     */
+    200: UndoOut | null;
+};
+
+export type UndoInfoResponse = UndoInfoResponses[keyof UndoInfoResponses];
+
+export type UndoRestoreData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/undo/restore';
+};
+
+export type UndoRestoreResponses = {
+    /**
+     * Successful Response
+     */
+    200: UndoOut;
+};
+
+export type UndoRestoreResponse = UndoRestoreResponses[keyof UndoRestoreResponses];
 
 export type FeaturesRouteData = {
     body?: never;

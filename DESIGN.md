@@ -192,6 +192,7 @@ Hairline borders are the main geometry. `ruled` is a 1px bottom border; column a
 ### AppShell + ViewLayout
 - **Purpose:** global masthead, primary nav, jobs link, theme switch, sidebar-below-nav layout.
 - **Nav:** Collection · Decks · Explore · Market. On phones the tabs tighten (smaller condensed type, no gaps) so all four fit at 360px. **Jobs is not a destination:** background jobs are housekeeping, so they sit beside the theme switch as a quiet queue-mark icon (tooltip *Background jobs*, amber dot while one runs) — never a nav tab or a word.
+- **Restore point:** a quiet undo-arrow icon left of the jobs icon, shown only once a restore point exists (tooltip `Restore point · 3:31 PM`). Confirm dialog (`Restore your collection to 3:31 PM?`): why it was taken, a plain list of what changes (`3 fewer copies`, `1 more deck`), and that it swaps — restoring again comes back. One slot; taken automatically before the first change of each session.
 - **States:** active nav uses amber underline; the jobs icon shows an amber dot when queued/running; theme can be system/light/dark and persists to `localStorage` as `mm.theme`.
 - **A11y contract:** skip link to `#main`, `nav aria-label="Primary"`, `main tabIndex={-1}`, sidebar labelled by the view, mobile disclosure uses `aria-expanded`/`aria-controls`.
 
