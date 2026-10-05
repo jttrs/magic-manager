@@ -45,6 +45,11 @@ def bulk(tmp_path, monkeypatch):
         return p
 
     def fake_bulk_file(bulk_type, *, refresh=False):
+        if bulk_type == "art_tags":  # `tags sync` / the job sync both kinds
+            p = tmp_path / "art_tags--art-tags-20261004090119.jsonl.gz"
+            with gzip.open(p, "wt", encoding="utf-8") as f:
+                f.write("")
+            return p
         assert bulk_type == "oracle_tags"
         calls["n"] += 1
         calls["refresh"].append(refresh)
@@ -68,7 +73,7 @@ def test_v28_tables_exist(tmp_db):
         v = conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0]
     assert {"scryfall_tags", "card_oracle_tags"} <= tables
     assert "card_oracle_tags_tag_idx" in idx
-    assert v == db.CURRENT_VERSION == 29
+    assert v == db.CURRENT_VERSION == 30
 
 
 # ---------- sync ----------

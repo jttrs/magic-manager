@@ -245,6 +245,25 @@ def set_backfill_dates():
     typer.echo(f"filled released_at on {n} card rows")
 
 
+@set_app.command("backfill-illustrations")
+def set_backfill_illustrations(
+    refresh: bool = typer.Option(False, "--refresh", help="Re-check Scryfall's bulk listing first."),
+):
+    """Fill missing cards.illustration_id from Scryfall's default_cards bulk file.
+
+    Needed once after the V30 upgrade so art tags can be matched to printings
+    offline. Streams the cached bulk file; only fills NULLs."""
+    from . import scryfall_art
+    from .scryfall import ScryfallError
+    try:
+        n = scryfall_art.backfill_illustration_ids(
+            refresh=refresh, progress=lambda m: typer.echo(m, err=True))
+    except ScryfallError as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+    typer.echo(f"filled illustration_id on {n} card rows")
+
+
 @set_app.command("is-synced")
 def set_is_synced(
     name_or_code: str = typer.Argument(...),
@@ -3991,20 +4010,71 @@ def query_missing_jumpstart_cmd(
 
 # ---------- ad-hoc scryfall query ----------
 
-def _scryfall_tags_cmd(action: str, rest: list[str], *, refresh: bool) -> None:
+def _scryfall_art_cmd(rest: list[str], *, cards: str | None, deck: str | None,
+                      owned: bool, first: int) -> None:
+    """`mm scryfall art <tag> [--cards …|--deck <slug>] [--owned]` — thin relay
+    over magic_manager.scryfall_art.printings_with_art."""
+    from . import scryfall_art
+
+    ref = " ".join(rest).strip()
+    if not ref:
+        typer.echo("usage: mm scryfall art <tag> [--cards \"A,B\" | --deck <slug>] [--owned]", err=True)
+        raise typer.Exit(2)
+    if cards and deck:
+        typer.echo("error: --cards and --deck are mutually exclusive", err=True)
+        raise typer.Exit(2)
+    oracle_ids: set[str] | None = None
+    with db.connect() as conn:
+        if cards:
+            oracle_ids = set()
+            for name in (n.strip() for n in cards.split(",") if n.strip()):
+                r = conn.execute("SELECT oracle_id FROM cards WHERE name = ? COLLATE NOCASE "
+                                 "AND oracle_id IS NOT NULL LIMIT 1", (name,)).fetchone()
+                if not r:
+                    typer.echo(f"error: {name!r} not in the local cards table", err=True)
+                    raise typer.Exit(1)
+                oracle_ids.add(r[0])
+        elif deck:
+            sids = [r.scryfall_id for r in decks_mod.deck_show(deck)]
+            oracle_ids = {r[0] for i in range(0, len(sids), 900) for r in conn.execute(
+                "SELECT oracle_id FROM cards WHERE oracle_id IS NOT NULL AND scryfall_id IN "
+                f"({','.join('?' * len(sids[i:i + 900]))})", sids[i:i + 900])}
+        try:
+            rows = scryfall_art.printings_with_art(ref, oracle_ids=oracle_ids,
+                                                   owned_only=owned, conn=conn)
+        except LookupError as e:
+            hits = scryfall_art.art_tag_search(ref, 5, conn=conn)
+            typer.echo(f"error: {e}" + (f" — did you mean: {', '.join(h['slug'] for h in hits)}?" if hits else ""),
+                       err=True)
+            raise typer.Exit(1)
+    typer.echo(f"{len(rows)} printing(s) with {ref!r} art" + (" (owned)" if owned else ""))
+    for r in rows[:first]:
+        typer.echo(f"{r['set_code']:<6} {r['collector_number']:<6} {r['name'][:34]:<34} "
+                   f"{(r['weight'] or '-'):<11} own={r['owned']}  {', '.join(r['tags'])[:40]}")
+    if len(rows) > first:
+        typer.echo(f"… {len(rows) - first} more (raise --first)")
+
+
+def _scryfall_tags_cmd(action: str, rest: list[str], *, refresh: bool, kind: str = "all") -> None:
     """`mm scryfall tags sync|show` — thin relay over magic_manager.scryfall_tags."""
     from . import scryfall_tags
     from .scryfall import ScryfallError
 
     if action == "sync":
+        if kind not in ("all", *scryfall_tags.KINDS):
+            typer.echo(f"error: --kind must be one of all, {', '.join(scryfall_tags.KINDS)}", err=True)
+            raise typer.Exit(2)
+        kinds = tuple(scryfall_tags.KINDS) if kind == "all" else (kind,)
         try:
-            res = scryfall_tags.sync(refresh=refresh, progress=lambda m: typer.echo(m, err=True))
+            results = scryfall_tags.sync_kinds(
+                kinds, refresh=refresh, progress=lambda m: typer.echo(m, err=True))
         except ScryfallError as e:
             typer.echo(f"error: {e}", err=True)
             raise typer.Exit(2)
-        state = "already current" if res.skipped else "synced"
-        typer.echo(f"Scryfall tags {state}: {res.tags} tags · {res.taggings} taggings "
-                   f"· {res.source} (published {res.updated_at or '?'})")
+        for name, res in results.items():
+            state = "already current" if res.skipped else "synced"
+            typer.echo(f"Scryfall {name} tags {state}: {res.tags} tags · {res.taggings} taggings "
+                       f"· {res.source} (published {res.updated_at or '?'})")
         return
 
     name = " ".join(rest).strip()
@@ -4033,9 +4103,14 @@ def scryfall_cmd(
         ..., metavar="QUERY",
         help="Scryfall search query (any syntax the API accepts). "
              "`mm scryfall tags sync [--refresh]` refreshes the local Tagger cache; "
-             "`mm scryfall tags show <card>` lists a card's functions + tags."),
+             "`mm scryfall tags show <card>` lists a card's functions + tags; "
+             "`mm scryfall art <tag> [--cards …|--deck …] [--owned]` lists printings with that art."),
     refresh: bool = typer.Option(False, "--refresh",
                                  help="(tags sync only) re-check Scryfall's bulk listing and rewrite."),
+    kind: str = typer.Option("all", "--kind", help="(tags sync only) oracle | art | all."),
+    cards: str = typer.Option(None, "--cards", help="(art only) comma-separated card names to restrict to."),
+    deck: str = typer.Option(None, "--deck", help="(art only) restrict to this deck slug's cards."),
+    owned: bool = typer.Option(False, "--owned", help="(art only) only printings you own."),
     first: int = typer.Option(20, "--first", help="Show at most N results."),
     json_out: bool = typer.Option(False, "--json", help="Emit raw Scryfall JSON instead of the table."),
     fields: str = typer.Option(
@@ -4059,7 +4134,10 @@ def scryfall_cmd(
     """
     if query_parts and query_parts[0] == "tags" and len(query_parts) >= 2 \
             and query_parts[1] in ("sync", "show"):
-        _scryfall_tags_cmd(query_parts[1], query_parts[2:], refresh=refresh)
+        _scryfall_tags_cmd(query_parts[1], query_parts[2:], refresh=refresh, kind=kind)
+        return
+    if query_parts and query_parts[0] == "art" and len(query_parts) >= 2:
+        _scryfall_art_cmd(query_parts[1:], cards=cards, deck=deck, owned=owned, first=first)
         return
     query = " ".join(query_parts)
 

@@ -978,6 +978,28 @@ ALTER TABLE decks ADD COLUMN kind_source TEXT;
 CREATE INDEX IF NOT EXISTS decks_kind_idx ON decks (kind);
 """
 
+# V30 — art tags + printing → illustration link. Scryfall's OFFICIAL ``art_tags``
+# bulk file shares the oracle_tags format but its taggings key on
+# ``illustration_id`` (one piece of artwork, shared by every printing that reuses
+# it), so ``cards`` gains a nullable ``illustration_id`` (projected on sync,
+# filled for old rows by scryfall_art.backfill_illustration_ids — re-derivable).
+# Art tags share the ``scryfall_tags`` hierarchy table, discriminated by ``type``
+# ('oracle' | 'illustration'); existing rows are explicitly marked 'oracle'.
+#   illustration_art_tags   one row per (illustration_id, tag) + Tagger weight;
+#                           rebuilt by `mm scryfall tags sync --kind art`.
+SCHEMA_V30 = """
+ALTER TABLE cards ADD COLUMN illustration_id TEXT;
+CREATE INDEX IF NOT EXISTS cards_illustration_idx ON cards (illustration_id);
+UPDATE scryfall_tags SET type = 'oracle';
+CREATE TABLE IF NOT EXISTS illustration_art_tags (
+    illustration_id TEXT NOT NULL,
+    tag_id          TEXT NOT NULL,
+    weight          TEXT,
+    PRIMARY KEY (illustration_id, tag_id)
+);
+CREATE INDEX IF NOT EXISTS illustration_art_tags_tag_idx ON illustration_art_tags (tag_id);
+"""
+
 # ---------- migration-authoring convention ----------
 #
 # Always-safe ops in a migration: CREATE TABLE, ALTER TABLE ADD COLUMN,
@@ -1016,6 +1038,8 @@ CREATE INDEX IF NOT EXISTS decks_kind_idx ON decks (kind);
 #                       cache over json.edhrec.com, re-fetchable any time
 #   - scryfall_tags / card_oracle_tags   (V28) rebuilt by `mm scryfall tags sync`
 #                       — a cache over Scryfall's official oracle_tags bulk file
+#   - illustration_art_tags   (V30) rebuilt by `mm scryfall tags sync --kind art`;
+#                       cards.illustration_id by `mm set backfill-illustrations`
 #
 # Copy-rebuild dance for destructive changes:
 #   BEGIN;
@@ -1062,6 +1086,7 @@ MIGRATIONS: list[str] = [
     SCHEMA_V27,
     SCHEMA_V28,
     SCHEMA_V29,
+    SCHEMA_V30,
 ]
 CURRENT_VERSION = len(MIGRATIONS)
 
@@ -1643,7 +1668,7 @@ def upsert_card(conn: sqlite3.Connection, card: dict,
             frame_effects, finishes, oracle_text,
             flavor_name, promo_types, border_color, full_art,
             security_stamp, is_reskin,
-            legalities, keywords, game_changer, released_at
+            legalities, keywords, game_changer, released_at, illustration_id
         ) VALUES (
             :scryfall_id, :oracle_id, :name, :set_code, :collector_number,
             :rarity, :mana_cost, :cmc, :type_line, :colors, :color_identity,
@@ -1652,7 +1677,7 @@ def upsert_card(conn: sqlite3.Connection, card: dict,
             :frame_effects, :finishes, :oracle_text,
             :flavor_name, :promo_types, :border_color, :full_art,
             :security_stamp, :is_reskin,
-            :legalities, :keywords, :game_changer, :released_at
+            :legalities, :keywords, :game_changer, :released_at, :illustration_id
         )
         ON CONFLICT(scryfall_id) DO UPDATE SET
             oracle_id          = excluded.oracle_id,
@@ -1684,7 +1709,8 @@ def upsert_card(conn: sqlite3.Connection, card: dict,
             legalities         = excluded.legalities,
             keywords           = excluded.keywords,
             game_changer       = excluded.game_changer,
-            released_at        = COALESCE(excluded.released_at, cards.released_at)
+            released_at        = COALESCE(excluded.released_at, cards.released_at),
+            illustration_id    = COALESCE(excluded.illustration_id, cards.illustration_id)
         """,
         _card_row(card, priced_at=priced_at),
     )
@@ -1700,6 +1726,12 @@ def upsert_cards(conn: sqlite3.Connection, cards: Iterable[dict],
         upsert_card(conn, c, priced_at=stamp)
         n += 1
     return n
+
+
+def card_illustration_id(card: dict) -> str | None:
+    """A Scryfall card's ``illustration_id``: top level, else ``card_faces[0]``
+    (multi-face layouts). Shared by the upsert projection and the backfill."""
+    return card.get("illustration_id") or ((card.get("card_faces") or [{}])[0] or {}).get("illustration_id")
 
 
 def _card_row(c: dict, *, priced_at: str | None = None) -> dict:
@@ -1781,6 +1813,8 @@ def _card_row(c: dict, *, priced_at: str | None = None) -> dict:
         "keywords":         json.dumps(f("keywords") or []),
         "game_changer":     1 if f("game_changer") else 0,
         "released_at":      f("released_at"),
+        # V30 — the artwork id; multi-face cards carry it per face.
+        "illustration_id":  card_illustration_id(c),
     }
 
 

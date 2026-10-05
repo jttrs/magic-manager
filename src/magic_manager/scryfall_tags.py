@@ -1,4 +1,5 @@
-"""Scryfall Tagger oracle (function) tags — a rebuildable local cache (V28).
+"""Scryfall Tagger tags — a rebuildable local cache: oracle (function) tags (V28)
+and art tags (V30, same hierarchy table, ``type``-discriminated; see :data:`KINDS`).
 
 Source: Scryfall's OFFICIAL ``oracle_tags`` bulk file (``GET /bulk-data`` →
 ``data.scryfall.io``), fetched through the sanctioned ``scryfall.sh bulk``
@@ -28,9 +29,37 @@ from typing import Callable, Iterable, Sequence
 
 from . import config, db, scryfall
 
-BULK_TYPE = "oracle_tags"
-_SETTINGS_KEY = "scryfall_tags.source"
 _CHUNK = 900  # stay under SQLite's host-parameter limit
+
+
+@dataclass(frozen=True)
+class Kind:
+    """One flavour of Scryfall tag bulk file. Both share the tag hierarchy table
+    (``scryfall_tags``, discriminated by ``type``) and the file format; they differ
+    in the bulk type, the tagging grain/table, and the settings key."""
+    name: str
+    bulk_type: str
+    tag_type: str          # scryfall_tags.type
+    table: str             # tagging table
+    key_col: str           # grain column in ``table`` / key inside ``taggings[]``
+    settings_key: str
+
+
+KINDS: dict[str, Kind] = {
+    "oracle": Kind("oracle", "oracle_tags", "oracle", "card_oracle_tags",
+                   "oracle_id", "scryfall_tags.source"),
+    "art": Kind("art", "art_tags", "illustration", "illustration_art_tags",
+                "illustration_id", "scryfall_tags.art_source"),
+}
+BULK_TYPE = KINDS["oracle"].bulk_type  # back-compat
+
+
+def kind_of(kind: str) -> Kind:
+    try:
+        return KINDS[kind]
+    except KeyError:
+        raise ValueError(f"unknown tag kind {kind!r} (expected one of {', '.join(KINDS)})") from None
+
 
 # Higher = stronger. Tagger publishes very_strong / strong / median / weak.
 WEIGHT_RANK = {"very_strong": 3, "strong": 2, "median": 1, "weak": 0}
@@ -92,10 +121,12 @@ def load_bulk(path: Path) -> list[dict]:
 
 
 def ingest(rows: Iterable[dict], *, source: str, updated_at: str | None,
-           conn: sqlite3.Connection | None = None) -> tuple[int, int]:
-    """Fully replace both tag tables from parsed bulk ``rows`` in ONE transaction.
-    Returns ``(n_tags, n_taggings)``. Re-running with the same rows is a no-op
-    in effect (rebuildable cache)."""
+           conn: sqlite3.Connection | None = None, kind: str = "oracle") -> tuple[int, int]:
+    """Fully replace ONE kind's tags + taggings from parsed bulk ``rows`` in ONE
+    transaction (the other kind's rows are untouched). Returns
+    ``(n_tags, n_taggings)``. Re-running with the same rows is a no-op in effect
+    (rebuildable cache)."""
+    k = kind_of(kind)
     tag_rows: list[tuple] = []
     tagging_rows: dict[tuple[str, str], str | None] = {}
     for t in rows:
@@ -104,48 +135,51 @@ def ingest(rows: Iterable[dict], *, source: str, updated_at: str | None,
         tid = t["id"]
         tag_rows.append((
             tid, t.get("slug") or "", t.get("label") or t.get("slug") or "",
-            t.get("type") or "oracle",
+            k.tag_type,
             json.dumps(t.get("parent_ids") or []), json.dumps(t.get("child_ids") or []),
             updated_at,
         ))
         for tg in t.get("taggings") or []:
-            oid = tg.get("oracle_id")
-            if oid:
-                tagging_rows[(oid, tid)] = tg.get("weight")
+            key = tg.get(k.key_col)
+            if key:
+                tagging_rows[(key, tid)] = tg.get("weight")
     with db.transaction(conn) as c:
-        c.execute("DELETE FROM card_oracle_tags")
-        c.execute("DELETE FROM scryfall_tags")
+        c.execute(f"DELETE FROM {k.table}")
+        c.execute("DELETE FROM scryfall_tags WHERE type = ?", (k.tag_type,))
         c.executemany(
             "INSERT INTO scryfall_tags (id, slug, label, type, parent_ids, child_ids, updated_at) "
             "VALUES (?, ?, ?, ?, ?, ?, ?)", tag_rows)
         c.executemany(
-            "INSERT INTO card_oracle_tags (oracle_id, tag_id, weight) VALUES (?, ?, ?)",
+            f"INSERT INTO {k.table} ({k.key_col}, tag_id, weight) VALUES (?, ?, ?)",
             [(o, t, w) for (o, t), w in tagging_rows.items()])
         c.execute("INSERT INTO settings (key, value) VALUES (?, ?) "
                   "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-                  (_SETTINGS_KEY, source))
+                  (k.settings_key, source))
     return len(tag_rows), len(tagging_rows)
 
 
-def _counts(conn: sqlite3.Connection) -> tuple[int, int]:
-    return (conn.execute("SELECT COUNT(*) FROM scryfall_tags").fetchone()[0],
-            conn.execute("SELECT COUNT(*) FROM card_oracle_tags").fetchone()[0])
+def _counts(conn: sqlite3.Connection, kind: str = "oracle") -> tuple[int, int]:
+    k = kind_of(kind)
+    return (conn.execute("SELECT COUNT(*) FROM scryfall_tags WHERE type = ?",
+                         (k.tag_type,)).fetchone()[0],
+            conn.execute(f"SELECT COUNT(*) FROM {k.table}").fetchone()[0])
 
 
-def sync(*, refresh: bool = False,
+def sync(*, refresh: bool = False, kind: str = "oracle",
          progress: Callable[[str], None] | None = None) -> SyncResult:
-    """Download (≤ once a day, via the wrapper's cache) the ``oracle_tags`` bulk
-    file and re-derive the local tag tables. When the local tables already hold
-    this exact daily file, skip the rewrite unless ``refresh``."""
+    """Download (≤ once a day, via the wrapper's cache) the kind's bulk file and
+    re-derive its local tag tables. When the local tables already hold this exact
+    daily file, skip the rewrite unless ``refresh``."""
+    k = kind_of(kind)
     say = progress or (lambda _m: None)
-    say("Resolving Scryfall oracle_tags bulk file…")
-    path = scryfall.bulk_file(BULK_TYPE, refresh=refresh)
+    say(f"Resolving Scryfall {k.bulk_type} bulk file…")
+    path = scryfall.bulk_file(k.bulk_type, refresh=refresh)
     updated_at = _bulk_timestamp(path)
     with db.connect() as conn:
         row = conn.execute("SELECT value FROM settings WHERE key = ?",
-                           (_SETTINGS_KEY,)).fetchone()
+                           (k.settings_key,)).fetchone()
         if not refresh and row and row[0] == path.name:
-            n_tags, n_taggings = _counts(conn)
+            n_tags, n_taggings = _counts(conn, kind)
             if n_tags:
                 say("Already current.")
                 return SyncResult(path.name, n_tags, n_taggings, skipped=True,
@@ -154,8 +188,15 @@ def sync(*, refresh: bool = False,
     rows = load_bulk(path)
     say(f"Writing {len(rows)} tags…")
     with db.connect() as conn:
-        n_tags, n_taggings = ingest(rows, source=path.name, updated_at=updated_at, conn=conn)
+        n_tags, n_taggings = ingest(rows, source=path.name, updated_at=updated_at,
+                                    conn=conn, kind=kind)
     return SyncResult(path.name, n_tags, n_taggings, updated_at=updated_at)
+
+
+def sync_kinds(kinds: Iterable[str] = tuple(KINDS), *, refresh: bool = False,
+               progress: Callable[[str], None] | None = None) -> dict[str, SyncResult]:
+    """Sync several kinds (default: all) → ``{kind: SyncResult}``."""
+    return {name: sync(refresh=refresh, kind=name, progress=progress) for name in kinds}
 
 
 # ---------- hierarchy ----------
@@ -178,14 +219,15 @@ class _Hierarchy:
         return out
 
 
-def _hierarchy(conn: sqlite3.Connection) -> _Hierarchy:
-    """Load the whole tag graph (~4.5k rows — cheap). Edges come from BOTH
+def _hierarchy(conn: sqlite3.Connection, kind: str = "oracle") -> _Hierarchy:
+    """Load one kind's tag graph (~4.5k / ~11.6k rows — cheap); kinds never mix. Edges come from BOTH
     ``child_ids`` and the inverse of ``parent_ids`` so a one-sided edge upstream
     still rolls up."""
     by_id: dict[str, tuple[str, str, list[str]]] = {}
     by_slug: dict[str, str] = {}
     parents: list[tuple[str, list[str]]] = []
-    for r in conn.execute("SELECT id, slug, label, child_ids, parent_ids FROM scryfall_tags"):
+    for r in conn.execute("SELECT id, slug, label, child_ids, parent_ids FROM scryfall_tags WHERE type = ?",
+                          (kind_of(kind).tag_type,)):
         by_id[r[0]] = (r[1], r[2] or r[1], list(json.loads(r[3] or "[]")))
         by_slug[r[1]] = r[0]
         parents.append((r[0], json.loads(r[4] or "[]")))
@@ -196,10 +238,11 @@ def _hierarchy(conn: sqlite3.Connection) -> _Hierarchy:
     return _Hierarchy(by_id, by_slug)
 
 
-def descendants(tag_id: str, *, conn: sqlite3.Connection | None = None) -> set[str]:
-    """Every tag UUID strictly below ``tag_id`` in the hierarchy."""
+def descendants(tag_id: str, *, kind: str = "oracle",
+                conn: sqlite3.Connection | None = None) -> set[str]:
+    """Every tag UUID strictly below ``tag_id`` in the ``kind`` hierarchy."""
     with db.transaction(conn) as c:
-        return _hierarchy(c).subtree(tag_id) - {tag_id}
+        return _hierarchy(c, kind).subtree(tag_id) - {tag_id}
 
 
 def _resolve_ref(h: _Hierarchy, ref: dict) -> str | None:
@@ -309,9 +352,10 @@ def card_summaries(oracle_ids: Iterable[str], *,
     return out
 
 
-def status(*, conn: sqlite3.Connection | None = None) -> dict:
+def status(*, kind: str = "oracle", conn: sqlite3.Connection | None = None) -> dict:
     """``{source, tags, taggings}`` for the local cache (source None = never synced)."""
     with db.transaction(conn) as c:
-        row = c.execute("SELECT value FROM settings WHERE key = ?", (_SETTINGS_KEY,)).fetchone()
-        n_tags, n_taggings = _counts(c)
+        row = c.execute("SELECT value FROM settings WHERE key = ?",
+                        (kind_of(kind).settings_key,)).fetchone()
+        n_tags, n_taggings = _counts(c, kind)
     return {"source": row[0] if row else None, "tags": n_tags, "taggings": n_taggings}
