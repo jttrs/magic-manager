@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { getRouteApi, useNavigate } from '@tanstack/react-router';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panels';
 import { deckQuery, decksQuery } from '../app/queries';
 import { useMediaQuery } from '../app/useMediaQuery';
@@ -9,6 +9,7 @@ import { AddCardsDialog, type AddCardsSeed } from '../components/addcards/AddCar
 import { ViewLayout } from '../components/AppShell';
 import { Chevron } from '../components/Chevron';
 import { Segmented, SegmentedToggles, SelectField, SideSection, TextField } from '../components/Sidebar';
+import { InfoTip } from '../components/InfoTip';
 import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../components/States';
 import { AddCardMark } from '../components/StoreMarks';
 import { VirtualGuide } from '../components/VirtualGuide';
@@ -66,7 +67,7 @@ export function DecksView() {
   else if (!decks.data.length) body = <EmptyNote title="No decks yet">Add a precon or a deck URL from Collection → Add cards, or build one with <span translate="no">uv run mm deck</span>.</EmptyNote>;
   else {
     const list = <DeckList groups={groups} total={shown.length} active={search.deck} onPick={(deck) => set({ deck })} />;
-    const inspector = search.deck ? <DeckInspector slug={search.deck} view={search.view} onBack={narrow ? () => set({ deck: undefined }) : undefined} /> : <EmptyNote title="Pick a deck">Choose a deck on the left to see its cards.</EmptyNote>;
+    const inspector = search.deck ? <DeckInspector slug={search.deck} view={search.view} onView={narrow ? (view) => set({ view }) : undefined} onBack={narrow ? () => set({ deck: undefined }) : undefined} /> : <EmptyNote title="Pick a deck">Choose a deck on the left to see its cards.</EmptyNote>;
     body = narrow ? (search.deck ? inspector : list) : <Split list={list} inspector={inspector} />;
   }
 
@@ -93,19 +94,33 @@ function Split({ list, inspector }: { list: ReactNode; inspector: ReactNode }) {
   );
 }
 
+/** One tab stop for the whole list (roving focus): ↑/↓ move between decks, Home/End jump, Enter opens. */
 function DeckList({ groups, total, active, onPick }: { groups: ReturnType<typeof groupDecks>; total: number; active?: string; onPick: (slug: string) => void }) {
+  const navRef = useRef<HTMLElement>(null);
+  const flat = groups.flatMap((g) => g.decks.map((d) => d.slug));
+  const [focusSlug, setFocusSlug] = useState<string | undefined>(undefined);
+  const tabSlug = (focusSlug && flat.includes(focusSlug) ? focusSlug : undefined) ?? (active && flat.includes(active) ? active : flat[0]);
+  const move = (e: KeyboardEvent<HTMLElement>) => {
+    const i = flat.indexOf(tabSlug ?? '');
+    const next = e.key === 'ArrowDown' ? i + 1 : e.key === 'ArrowUp' ? i - 1 : e.key === 'Home' ? 0 : e.key === 'End' ? flat.length - 1 : null;
+    if (next == null) return;
+    e.preventDefault();
+    const slug = flat[Math.max(0, Math.min(flat.length - 1, next))];
+    setFocusSlug(slug);
+    navRef.current?.querySelector<HTMLButtonElement>(`[data-slug="${CSS.escape(slug)}"]`)?.focus();
+  };
   if (!total) return <EmptyNote title="No decks match">Clear the search or show both built and loose decks.</EmptyNote>;
   return (
-    <nav aria-label="Decks" className="h-full min-h-0 overflow-y-auto overscroll-contain px-4 pb-6 [scrollbar-gutter:stable]">
+    <nav ref={navRef} aria-label="Decks" onKeyDown={move} className="h-full min-h-0 overflow-y-auto overscroll-contain px-4 pb-6 [scrollbar-gutter:stable]">
       {groups.map((g) => (
-        <section key={g.key} aria-labelledby={`dg-${g.key}`}>
+        <section key={g.key} aria-labelledby={`dg-${g.key}`} className="[content-visibility:auto] [contain-intrinsic-size:auto_20rem]">
           <h2 id={`dg-${g.key}`} className="sticky top-0 z-10 flex items-baseline gap-2 border-b border-rule bg-paper pb-1 pt-3 text-sm voice-condensed font-medium uppercase tracking-[0.06em] text-ink-muted">
             <span className="min-w-0 truncate">{g.label}</span>
             <span className="ml-auto tabular">{g.decks.length}</span>
           </h2>
           <ul>
             {g.decks.map((d) => (
-              <li key={d.slug}><DeckRow d={d} active={d.slug === active} onPick={() => onPick(d.slug)} /></li>
+              <li key={d.slug}><DeckRow d={d} active={d.slug === active} tabbable={d.slug === tabSlug} onFocus={() => setFocusSlug(d.slug)} onPick={() => onPick(d.slug)} /></li>
             ))}
           </ul>
         </section>
@@ -114,10 +129,13 @@ function DeckList({ groups, total, active, onPick }: { groups: ReturnType<typeof
   );
 }
 
-function DeckRow({ d, active, onPick }: { d: DeckSummaryOut; active: boolean; onPick: () => void }) {
+function DeckRow({ d, active, tabbable, onFocus, onPick }: { d: DeckSummaryOut; active: boolean; tabbable: boolean; onFocus: () => void; onPick: () => void }) {
   return (
     <button
       type="button"
+      data-slug={d.slug}
+      tabIndex={tabbable ? 0 : -1}
+      onFocus={onFocus}
       onClick={onPick}
       aria-current={active ? 'true' : undefined}
       className={`ruled flex w-full cursor-pointer items-center gap-3 px-1 py-2 text-left transition-colors ease-guide hover:bg-paper-sunk ${active ? 'highlighter' : ''}`}
@@ -141,7 +159,7 @@ function DeckRow({ d, active, onPick }: { d: DeckSummaryOut; active: boolean; on
   );
 }
 
-function DeckInspector({ slug, view, onBack }: { slug: string; view: 'grid' | 'list'; onBack?: () => void }) {
+function DeckInspector({ slug, view, onView, onBack }: { slug: string; view: 'grid' | 'list'; onView?: (v: 'grid' | 'list') => void; onBack?: () => void }) {
   const q = useQuery(deckQuery(slug));
   const { selected, toggle, clear } = useSelection(`deck:${slug}`);
   const [seed, setSeed] = useState<AddCardsSeed | null>(null);
@@ -167,16 +185,26 @@ function DeckInspector({ slug, view, onBack }: { slug: string; view: 'grid' | 'l
             {[deck.set_name ?? deck.set_code?.toUpperCase(), deck.released?.slice(0, 4), deck.source, deck.author && `by ${deck.author}`].filter(Boolean).join(' · ')}
             {' · '}
             {fmtInt(deck.cards)} cards · {fmtUsd(deck.value_usd)} · {deck.state === 'built' ? `built, ${Math.round(deck.pledged_pct)}% pledged` : 'loose'}
+            <span className="ml-1 inline-flex align-middle">
+              <InfoTip label="What do built, pledged and free mean?" tone="paper">
+                <b>Built</b>: you keep this deck assembled; its cards are <b>pledged</b> to it, so they aren’t counted as free. <b>Loose</b>: you keep the recipe, but the cards sit in your collection. <b>Free to use</b>: copies you own that no built deck has pledged.
+              </InfoTip>
+            </span>
           </p>
         </div>
         <span className="ml-auto flex flex-wrap items-center gap-x-1">
           {marked > 0 && (
             <>
-              <GhostAction onClick={() => setSeed({ name: deck.name, lines: deckReviewLines(cards, selected) })} label={`Add ${fmtInt(marked)} marked`} />
+              <GhostAction onClick={() => setSeed({ name: deck.name, lines: deckReviewLines(cards, selected) })} label={`Review ${fmtInt(marked)} marked to add`} />
               <button type="button" onClick={clear} className="cursor-pointer px-1 text-sm text-ink-muted underline hover:text-ink">Clear</button>
             </>
           )}
-          <GhostAction onClick={() => setSeed({ name: deck.name, lines: deckReviewLines(cards) })} label="Add deck to collection" />
+          <GhostAction onClick={() => setSeed({ name: deck.name, lines: deckReviewLines(cards) })} label="Review deck to add" />
+          {onView && (
+            <button type="button" onClick={() => onView(view === 'grid' ? 'list' : 'grid')} className="cursor-pointer px-2 text-sm text-ink-muted underline hover:text-ink">
+              {view === 'grid' ? 'List view' : 'Card view'}
+            </button>
+          )}
         </span>
       </header>
       <div className="min-h-0 flex-1">

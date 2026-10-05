@@ -40,7 +40,7 @@ test('add the whole deck, or only marked cards, through the add-cards review', a
     return r.fulfill({ json: { ingest_id: 1, copies, printings: b.items.length, summary: `+${copies} copies · ${b.items.length} printings` } });
   });
   await page.goto(DECK_URL);
-  await page.getByRole('button', { name: 'Add deck to collection' }).click();
+  await page.getByRole('button', { name: 'Review deck to add' }).click();
   const dialog = page.getByRole('dialog', { name: 'Add cards' });
   await expect(dialog.getByRole('heading', { name: detail.deck.name })).toBeVisible();
   const total = detail.cards.filter((c) => c.board !== 'token').reduce((s, c) => s + c.count, 0);
@@ -55,7 +55,7 @@ test('add the whole deck, or only marked cards, through the add-cards review', a
     names.push((await mark.getAttribute('aria-label'))!.replace(/^Mark /, ''));
     await mark.click();
   }
-  await page.getByRole('button', { name: 'Add 2 marked' }).click();
+  await page.getByRole('button', { name: 'Review 2 marked to add' }).click();
   const two = names.map((nm) => detail.cards.find((c) => c.printing.name === nm)!);
   const n = two.reduce((s, c) => s + c.count, 0);
   await page.getByRole('dialog', { name: 'Add cards' }).getByRole('button', { name: new RegExp(`^Add ${n} cop`) }).click();
@@ -65,4 +65,16 @@ test('add the whole deck, or only marked cards, through the add-cards review', a
 test('unknown deck in the URL shows the error with a retry', async ({ page }) => {
   await page.goto('/decks?deck=nope');
   await expect(page.getByText(/not found/)).toBeVisible();
+});
+
+test('deck list is one tab stop with arrow-key navigation', async ({ page }) => {
+  await page.goto('/decks');
+  const rows = page.getByRole('navigation', { name: 'Decks' }).getByRole('button');
+  await expect(rows.first()).toHaveAttribute('tabindex', '0');
+  await expect(rows.nth(1)).toHaveAttribute('tabindex', '-1');
+  await rows.first().focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(rows.nth(1)).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/deck=/);
 });
