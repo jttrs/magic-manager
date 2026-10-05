@@ -35,7 +35,10 @@ class PrintingOut(BaseModel):
     price_usd: float | None
     price_usd_foil: float | None
     released_at: str | None
+    type_line: str | None = None
+    cmc: float | None = None
     owned: dict[str, int] = Field(default_factory=dict, description="Copies you already own, per finish.")
+    free: int = Field(0, description="Owned copies no built deck has pledged (all finishes).")
 
 
 class SearchOut(BaseModel):

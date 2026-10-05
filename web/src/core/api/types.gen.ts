@@ -5,6 +5,58 @@ export type ClientOptions = {
 };
 
 /**
+ * ActionOut
+ */
+export type ActionOut = {
+    /**
+     * Slug
+     */
+    slug: string;
+    /**
+     * Summary
+     */
+    summary: string;
+};
+
+/**
+ * BuildIn
+ */
+export type BuildIn = {
+    /**
+     * Allow Shortfall
+     *
+     * Pledge what's free even if some cards are missing.
+     */
+    allow_shortfall?: boolean;
+};
+
+/**
+ * BuildPlanOut
+ */
+export type BuildPlanOut = {
+    /**
+     * Target
+     *
+     * The copy a build would assemble; null when every copy is built.
+     */
+    target: string | null;
+    /**
+     * Need
+     */
+    need: number;
+    /**
+     * Covered
+     *
+     * Copies of `need` you have free.
+     */
+    covered: number;
+    /**
+     * Short
+     */
+    short: Array<SwapLineOut>;
+};
+
+/**
  * BuyItem
  */
 export type BuyItem = {
@@ -65,6 +117,29 @@ export type CardSourceOut = {
      * Copies acquired from this source (history: may exceed what is owned today).
      */
     copies: number;
+};
+
+/**
+ * ChangeOut
+ */
+export type ChangeOut = {
+    printing: PrintingOut;
+    /**
+     * Board
+     */
+    board: string;
+    /**
+     * Finish
+     */
+    finish: string;
+    /**
+     * Before
+     */
+    before: number;
+    /**
+     * After
+     */
+    after: number;
 };
 
 /**
@@ -462,6 +537,16 @@ export type CompareOut = {
 };
 
 /**
+ * CopyIn
+ */
+export type CopyIn = {
+    /**
+     * Name
+     */
+    name?: string | null;
+};
+
+/**
  * DeckCardOut
  */
 export type DeckCardOut = {
@@ -513,6 +598,18 @@ export type DeckDetailOut = {
      * Cards
      */
     cards: Array<DeckCardOut>;
+    /**
+     * Version Id
+     *
+     * Current version; pass back as expected_version_id when saving.
+     */
+    version_id: number;
+    /**
+     * Editable
+     *
+     * False for precons (read-only recipes): copy the deck to edit it.
+     */
+    editable: boolean;
 };
 
 /**
@@ -571,12 +668,6 @@ export type DeckSummaryOut = {
      * Copies of this recipe kept assembled (cards pledged).
      */
     built: number;
-    /**
-     * Loose
-     *
-     * Copies tracked as loose (recipe kept, cards in the collection).
-     */
-    loose: number;
     /**
      * Slugs
      *
@@ -637,6 +728,38 @@ export type DeckSummaryOut = {
      * Representative art: the commander, else the priciest card.
      */
     image_uri: string | null;
+};
+
+/**
+ * DraftCardIn
+ */
+export type DraftCardIn = {
+    /**
+     * Scryfall Id
+     */
+    scryfall_id: string;
+    /**
+     * Board
+     */
+    board: 'main' | 'side' | 'commander' | 'companion' | 'maybe' | 'token';
+    /**
+     * Finish
+     */
+    finish: 'nonfoil' | 'foil' | 'either';
+    /**
+     * Count
+     */
+    count: number;
+};
+
+/**
+ * DraftIn
+ */
+export type DraftIn = {
+    /**
+     * Cards
+     */
+    cards: Array<DraftCardIn>;
 };
 
 /**
@@ -860,6 +983,26 @@ export type JobSpecOut = {
 };
 
 /**
+ * NewDeckIn
+ */
+export type NewDeckIn = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Format
+     */
+    format?: string;
+    /**
+     * Commander
+     *
+     * scryfall_id of the commander to seed.
+     */
+    commander?: string | null;
+};
+
+/**
  * OracleTagOut
  *
  * A Scryfall Tagger oracle tag (``id`` is the stable UUID).
@@ -915,6 +1058,24 @@ export type PreconOptionOut = {
      * Owned Deconstructed
      */
     owned_deconstructed: number;
+};
+
+/**
+ * PreviewOut
+ */
+export type PreviewOut = {
+    /**
+     * Built
+     */
+    built: boolean;
+    /**
+     * Changes
+     */
+    changes: Array<ChangeOut>;
+    /**
+     * Physical swap list; only for a built deck.
+     */
+    swap: SwapOut | null;
 };
 
 /**
@@ -980,6 +1141,14 @@ export type PrintingOut = {
      */
     released_at: string | null;
     /**
+     * Type Line
+     */
+    type_line?: string | null;
+    /**
+     * Cmc
+     */
+    cmc?: number | null;
+    /**
      * Owned
      *
      * Copies you already own, per finish.
@@ -987,6 +1156,12 @@ export type PrintingOut = {
     owned?: {
         [key: string]: number;
     };
+    /**
+     * Free
+     *
+     * Owned copies no built deck has pledged (all finishes).
+     */
+    free?: number;
 };
 
 /**
@@ -1078,6 +1253,56 @@ export type ResolvedLineOut = {
 };
 
 /**
+ * SaveIn
+ */
+export type SaveIn = {
+    /**
+     * Cards
+     */
+    cards: Array<DraftCardIn>;
+    /**
+     * Expected Version Id
+     */
+    expected_version_id: number;
+    /**
+     * Name
+     */
+    name?: string | null;
+};
+
+/**
+ * SaveOut
+ */
+export type SaveOut = {
+    /**
+     * Built
+     */
+    built: boolean;
+    /**
+     * Changes
+     */
+    changes: Array<ChangeOut>;
+    /**
+     * Physical swap list; only for a built deck.
+     */
+    swap: SwapOut | null;
+    /**
+     * Version Number
+     *
+     * New version number; null when nothing changed.
+     */
+    version_number: number | null;
+    /**
+     * Pulled
+     */
+    pulled: number;
+    /**
+     * Sleeved
+     */
+    sleeved: number;
+};
+
+/**
  * SearchOut
  */
 export type SearchOut = {
@@ -1139,6 +1364,90 @@ export type SourceOut = {
      * Owned printings in this view acquired from this source.
      */
     printings?: number;
+};
+
+/**
+ * SuggestionOut
+ */
+export type SuggestionOut = {
+    printing: PrintingOut;
+    /**
+     * Inclusion Pct
+     */
+    inclusion_pct: number | null;
+    /**
+     * Synergy
+     */
+    synergy: number | null;
+    /**
+     * Tags
+     */
+    tags: Array<string>;
+    /**
+     * Owned
+     *
+     * Copies owned across every printing of the card.
+     */
+    owned: number;
+    /**
+     * Free
+     *
+     * Owned copies no built deck has pledged, across printings.
+     */
+    free: number;
+};
+
+/**
+ * SuggestionsOut
+ */
+export type SuggestionsOut = {
+    /**
+     * Commander
+     */
+    commander: string;
+    /**
+     * Cards
+     */
+    cards: Array<SuggestionOut>;
+};
+
+/**
+ * SwapLineOut
+ */
+export type SwapLineOut = {
+    printing: PrintingOut;
+    /**
+     * Finish
+     */
+    finish: 'nonfoil' | 'foil';
+    /**
+     * Qty
+     */
+    qty: number;
+};
+
+/**
+ * SwapOut
+ */
+export type SwapOut = {
+    /**
+     * Pull
+     *
+     * Copies to take out of the built deck (they return to the free pool).
+     */
+    pull: Array<SwapLineOut>;
+    /**
+     * Sleeve
+     *
+     * Free copies to put into the built deck (pledged).
+     */
+    sleeve: Array<SwapLineOut>;
+    /**
+     * Short
+     *
+     * Copies the deck needs that you don't have free.
+     */
+    short: Array<SwapLineOut>;
 };
 
 /**
@@ -1459,6 +1768,31 @@ export type DeckListResponses = {
 
 export type DeckListResponse = DeckListResponses[keyof DeckListResponses];
 
+export type DeckCreateData = {
+    body: NewDeckIn;
+    path?: never;
+    query?: never;
+    url: '/api/decks';
+};
+
+export type DeckCreateErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeckCreateError = DeckCreateErrors[keyof DeckCreateErrors];
+
+export type DeckCreateResponses = {
+    /**
+     * Successful Response
+     */
+    201: ActionOut;
+};
+
+export type DeckCreateResponse = DeckCreateResponses[keyof DeckCreateResponses];
+
 export type DeckDetailData = {
     body?: never;
     path: {
@@ -1488,6 +1822,216 @@ export type DeckDetailResponses = {
 };
 
 export type DeckDetailResponse = DeckDetailResponses[keyof DeckDetailResponses];
+
+export type DeckSaveData = {
+    body: SaveIn;
+    path: {
+        /**
+         * Slug
+         */
+        slug: string;
+    };
+    query?: never;
+    url: '/api/decks/{slug}';
+};
+
+export type DeckSaveErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeckSaveError = DeckSaveErrors[keyof DeckSaveErrors];
+
+export type DeckSaveResponses = {
+    /**
+     * Successful Response
+     */
+    200: SaveOut;
+};
+
+export type DeckSaveResponse = DeckSaveResponses[keyof DeckSaveResponses];
+
+export type DeckBuildPlanData = {
+    body?: never;
+    path: {
+        /**
+         * Slug
+         */
+        slug: string;
+    };
+    query?: never;
+    url: '/api/decks/{slug}/build-plan';
+};
+
+export type DeckBuildPlanErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeckBuildPlanError = DeckBuildPlanErrors[keyof DeckBuildPlanErrors];
+
+export type DeckBuildPlanResponses = {
+    /**
+     * Successful Response
+     */
+    200: BuildPlanOut;
+};
+
+export type DeckBuildPlanResponse = DeckBuildPlanResponses[keyof DeckBuildPlanResponses];
+
+export type DeckBuildData = {
+    body: BuildIn;
+    path: {
+        /**
+         * Slug
+         */
+        slug: string;
+    };
+    query?: never;
+    url: '/api/decks/{slug}/build';
+};
+
+export type DeckBuildErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeckBuildError = DeckBuildErrors[keyof DeckBuildErrors];
+
+export type DeckBuildResponses = {
+    /**
+     * Successful Response
+     */
+    200: ActionOut;
+};
+
+export type DeckBuildResponse = DeckBuildResponses[keyof DeckBuildResponses];
+
+export type DeckBreakDownData = {
+    body?: never;
+    path: {
+        /**
+         * Slug
+         */
+        slug: string;
+    };
+    query?: never;
+    url: '/api/decks/{slug}/break-down';
+};
+
+export type DeckBreakDownErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeckBreakDownError = DeckBreakDownErrors[keyof DeckBreakDownErrors];
+
+export type DeckBreakDownResponses = {
+    /**
+     * Successful Response
+     */
+    200: ActionOut;
+};
+
+export type DeckBreakDownResponse = DeckBreakDownResponses[keyof DeckBreakDownResponses];
+
+export type DeckCopyData = {
+    body: CopyIn;
+    path: {
+        /**
+         * Slug
+         */
+        slug: string;
+    };
+    query?: never;
+    url: '/api/decks/{slug}/copy';
+};
+
+export type DeckCopyErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeckCopyError = DeckCopyErrors[keyof DeckCopyErrors];
+
+export type DeckCopyResponses = {
+    /**
+     * Successful Response
+     */
+    201: ActionOut;
+};
+
+export type DeckCopyResponse = DeckCopyResponses[keyof DeckCopyResponses];
+
+export type DeckPreviewData = {
+    body: DraftIn;
+    path: {
+        /**
+         * Slug
+         */
+        slug: string;
+    };
+    query?: never;
+    url: '/api/decks/{slug}/preview';
+};
+
+export type DeckPreviewErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeckPreviewError = DeckPreviewErrors[keyof DeckPreviewErrors];
+
+export type DeckPreviewResponses = {
+    /**
+     * Successful Response
+     */
+    200: PreviewOut;
+};
+
+export type DeckPreviewResponse = DeckPreviewResponses[keyof DeckPreviewResponses];
+
+export type DeckSuggestionsData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Commander
+         */
+        commander: string;
+    };
+    url: '/api/decks-suggestions';
+};
+
+export type DeckSuggestionsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeckSuggestionsError = DeckSuggestionsErrors[keyof DeckSuggestionsErrors];
+
+export type DeckSuggestionsResponses = {
+    /**
+     * Successful Response
+     */
+    200: SuggestionsOut;
+};
+
+export type DeckSuggestionsResponse = DeckSuggestionsResponses[keyof DeckSuggestionsResponses];
 
 export type CardHoldingsData = {
     body?: never;

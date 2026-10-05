@@ -198,4 +198,6 @@ def deck_detail(slug: str) -> dict:
             "color_identity": json.loads(r["color_identity"]) if r["color_identity"] else [],
             "pledged_here": r["pledged_here"], "free": free.get(sid, 0),
         })
-    return {"deck": found[0], "cards": cards}
+    with db.connect() as conn:
+        vid = conn.execute("SELECT current_version_id FROM decks WHERE slug = ?", (slug,)).fetchone()[0]
+    return {"deck": found[0], "cards": cards, "version_id": vid, "editable": not fn}

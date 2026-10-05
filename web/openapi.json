@@ -453,6 +453,45 @@
             }
           }
         }
+      },
+      "post": {
+        "tags": [
+          "decks"
+        ],
+        "summary": "Deck Create",
+        "operationId": "deck_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewDeckIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/decks/{slug}": {
@@ -480,6 +519,339 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DeckDetailOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "decks"
+        ],
+        "summary": "Deck Save",
+        "operationId": "deck_save",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/decks/{slug}/build-plan": {
+      "get": {
+        "tags": [
+          "decks"
+        ],
+        "summary": "Deck Build Plan",
+        "operationId": "deck_build_plan",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildPlanOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/decks/{slug}/build": {
+      "post": {
+        "tags": [
+          "decks"
+        ],
+        "summary": "Deck Build",
+        "operationId": "deck_build",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuildIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/decks/{slug}/break-down": {
+      "post": {
+        "tags": [
+          "decks"
+        ],
+        "summary": "Deck Break Down",
+        "operationId": "deck_break_down",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/decks/{slug}/copy": {
+      "post": {
+        "tags": [
+          "decks"
+        ],
+        "summary": "Deck Copy",
+        "operationId": "deck_copy",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CopyIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/decks/{slug}/preview": {
+      "post": {
+        "tags": [
+          "decks"
+        ],
+        "summary": "Deck Preview",
+        "operationId": "deck_preview",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/decks-suggestions": {
+      "get": {
+        "tags": [
+          "decks"
+        ],
+        "summary": "Deck Suggestions",
+        "operationId": "deck_suggestions",
+        "parameters": [
+          {
+            "name": "commander",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "title": "Commander"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestionsOut"
                 }
               }
             }
@@ -739,6 +1111,76 @@
   },
   "components": {
     "schemas": {
+      "ActionOut": {
+        "properties": {
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          }
+        },
+        "type": "object",
+        "required": [
+          "slug",
+          "summary"
+        ],
+        "title": "ActionOut"
+      },
+      "BuildIn": {
+        "properties": {
+          "allow_shortfall": {
+            "type": "boolean",
+            "title": "Allow Shortfall",
+            "description": "Pledge what's free even if some cards are missing.",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "BuildIn"
+      },
+      "BuildPlanOut": {
+        "properties": {
+          "target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target",
+            "description": "The copy a build would assemble; null when every copy is built."
+          },
+          "need": {
+            "type": "integer",
+            "title": "Need"
+          },
+          "covered": {
+            "type": "integer",
+            "title": "Covered",
+            "description": "Copies of `need` you have free."
+          },
+          "short": {
+            "items": {
+              "$ref": "#/components/schemas/SwapLineOut"
+            },
+            "type": "array",
+            "title": "Short"
+          }
+        },
+        "type": "object",
+        "required": [
+          "target",
+          "need",
+          "covered",
+          "short"
+        ],
+        "title": "BuildPlanOut"
+      },
       "BuyItem": {
         "properties": {
           "scryfall_id": {
@@ -839,6 +1281,38 @@
           "copies"
         ],
         "title": "CardSourceOut"
+      },
+      "ChangeOut": {
+        "properties": {
+          "printing": {
+            "$ref": "#/components/schemas/PrintingOut"
+          },
+          "board": {
+            "type": "string",
+            "title": "Board"
+          },
+          "finish": {
+            "type": "string",
+            "title": "Finish"
+          },
+          "before": {
+            "type": "integer",
+            "title": "Before"
+          },
+          "after": {
+            "type": "integer",
+            "title": "After"
+          }
+        },
+        "type": "object",
+        "required": [
+          "printing",
+          "board",
+          "finish",
+          "before",
+          "after"
+        ],
+        "title": "ChangeOut"
       },
       "CollectionCardOut": {
         "properties": {
@@ -1611,6 +2085,24 @@
         ],
         "title": "CompareOut"
       },
+      "CopyIn": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "title": "CopyIn"
+      },
       "DeckCardOut": {
         "properties": {
           "printing": {
@@ -1706,12 +2198,24 @@
             },
             "type": "array",
             "title": "Cards"
+          },
+          "version_id": {
+            "type": "integer",
+            "title": "Version Id",
+            "description": "Current version; pass back as expected_version_id when saving."
+          },
+          "editable": {
+            "type": "boolean",
+            "title": "Editable",
+            "description": "False for precons (read-only recipes): copy the deck to edit it."
           }
         },
         "type": "object",
         "required": [
           "deck",
-          "cards"
+          "cards",
+          "version_id",
+          "editable"
         ],
         "title": "DeckDetailOut"
       },
@@ -1786,11 +2290,6 @@
             "type": "integer",
             "title": "Built",
             "description": "Copies of this recipe kept assembled (cards pledged)."
-          },
-          "loose": {
-            "type": "integer",
-            "title": "Loose",
-            "description": "Copies tracked as loose (recipe kept, cards in the collection)."
           },
           "slugs": {
             "items": {
@@ -1903,7 +2402,6 @@
           "deck_type",
           "state",
           "built",
-          "loose",
           "slugs",
           "origin",
           "source",
@@ -1917,6 +2415,65 @@
           "image_uri"
         ],
         "title": "DeckSummaryOut"
+      },
+      "DraftCardIn": {
+        "properties": {
+          "scryfall_id": {
+            "type": "string",
+            "title": "Scryfall Id"
+          },
+          "board": {
+            "type": "string",
+            "enum": [
+              "main",
+              "side",
+              "commander",
+              "companion",
+              "maybe",
+              "token"
+            ],
+            "title": "Board"
+          },
+          "finish": {
+            "type": "string",
+            "enum": [
+              "nonfoil",
+              "foil",
+              "either"
+            ],
+            "title": "Finish"
+          },
+          "count": {
+            "type": "integer",
+            "maximum": 999.0,
+            "minimum": 0.0,
+            "title": "Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scryfall_id",
+          "board",
+          "finish",
+          "count"
+        ],
+        "title": "DraftCardIn"
+      },
+      "DraftIn": {
+        "properties": {
+          "cards": {
+            "items": {
+              "$ref": "#/components/schemas/DraftCardIn"
+            },
+            "type": "array",
+            "title": "Cards"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cards"
+        ],
+        "title": "DraftIn"
       },
       "FamilyOption": {
         "properties": {
@@ -2229,6 +2786,38 @@
         ],
         "title": "JobSpecOut"
       },
+      "NewDeckIn": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "format": {
+            "type": "string",
+            "title": "Format",
+            "default": "commander"
+          },
+          "commander": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commander",
+            "description": "scryfall_id of the commander to seed."
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "NewDeckIn"
+      },
       "OracleTagOut": {
         "properties": {
           "id": {
@@ -2311,6 +2900,39 @@
           "owned_deconstructed"
         ],
         "title": "PreconOptionOut"
+      },
+      "PreviewOut": {
+        "properties": {
+          "built": {
+            "type": "boolean",
+            "title": "Built"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/ChangeOut"
+            },
+            "type": "array",
+            "title": "Changes"
+          },
+          "swap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SwapOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Physical swap list; only for a built deck."
+          }
+        },
+        "type": "object",
+        "required": [
+          "built",
+          "changes",
+          "swap"
+        ],
+        "title": "PreviewOut"
       },
       "PrintingOut": {
         "properties": {
@@ -2417,6 +3039,28 @@
             ],
             "title": "Released At"
           },
+          "type_line": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type Line"
+          },
+          "cmc": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cmc"
+          },
           "owned": {
             "additionalProperties": {
               "type": "integer"
@@ -2424,6 +3068,12 @@
             "type": "object",
             "title": "Owned",
             "description": "Copies you already own, per finish."
+          },
+          "free": {
+            "type": "integer",
+            "title": "Free",
+            "description": "Owned copies no built deck has pledged (all finishes).",
+            "default": 0
           }
         },
         "type": "object",
@@ -2602,6 +3252,95 @@
         ],
         "title": "ResolvedLineOut"
       },
+      "SaveIn": {
+        "properties": {
+          "cards": {
+            "items": {
+              "$ref": "#/components/schemas/DraftCardIn"
+            },
+            "type": "array",
+            "title": "Cards"
+          },
+          "expected_version_id": {
+            "type": "integer",
+            "title": "Expected Version Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cards",
+          "expected_version_id"
+        ],
+        "title": "SaveIn"
+      },
+      "SaveOut": {
+        "properties": {
+          "built": {
+            "type": "boolean",
+            "title": "Built"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/ChangeOut"
+            },
+            "type": "array",
+            "title": "Changes"
+          },
+          "swap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SwapOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Physical swap list; only for a built deck."
+          },
+          "version_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Number",
+            "description": "New version number; null when nothing changed."
+          },
+          "pulled": {
+            "type": "integer",
+            "title": "Pulled"
+          },
+          "sleeved": {
+            "type": "integer",
+            "title": "Sleeved"
+          }
+        },
+        "type": "object",
+        "required": [
+          "built",
+          "changes",
+          "swap",
+          "version_number",
+          "pulled",
+          "sleeved"
+        ],
+        "title": "SaveOut"
+      },
       "SearchOut": {
         "properties": {
           "query": {
@@ -2697,6 +3436,144 @@
           "label"
         ],
         "title": "SourceOut"
+      },
+      "SuggestionOut": {
+        "properties": {
+          "printing": {
+            "$ref": "#/components/schemas/PrintingOut"
+          },
+          "inclusion_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inclusion Pct"
+          },
+          "synergy": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Synergy"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "owned": {
+            "type": "integer",
+            "title": "Owned",
+            "description": "Copies owned across every printing of the card."
+          },
+          "free": {
+            "type": "integer",
+            "title": "Free",
+            "description": "Owned copies no built deck has pledged, across printings."
+          }
+        },
+        "type": "object",
+        "required": [
+          "printing",
+          "inclusion_pct",
+          "synergy",
+          "tags",
+          "owned",
+          "free"
+        ],
+        "title": "SuggestionOut"
+      },
+      "SuggestionsOut": {
+        "properties": {
+          "commander": {
+            "type": "string",
+            "title": "Commander"
+          },
+          "cards": {
+            "items": {
+              "$ref": "#/components/schemas/SuggestionOut"
+            },
+            "type": "array",
+            "title": "Cards"
+          }
+        },
+        "type": "object",
+        "required": [
+          "commander",
+          "cards"
+        ],
+        "title": "SuggestionsOut"
+      },
+      "SwapLineOut": {
+        "properties": {
+          "printing": {
+            "$ref": "#/components/schemas/PrintingOut"
+          },
+          "finish": {
+            "type": "string",
+            "enum": [
+              "nonfoil",
+              "foil"
+            ],
+            "title": "Finish"
+          },
+          "qty": {
+            "type": "integer",
+            "title": "Qty"
+          }
+        },
+        "type": "object",
+        "required": [
+          "printing",
+          "finish",
+          "qty"
+        ],
+        "title": "SwapLineOut"
+      },
+      "SwapOut": {
+        "properties": {
+          "pull": {
+            "items": {
+              "$ref": "#/components/schemas/SwapLineOut"
+            },
+            "type": "array",
+            "title": "Pull",
+            "description": "Copies to take out of the built deck (they return to the free pool)."
+          },
+          "sleeve": {
+            "items": {
+              "$ref": "#/components/schemas/SwapLineOut"
+            },
+            "type": "array",
+            "title": "Sleeve",
+            "description": "Free copies to put into the built deck (pledged)."
+          },
+          "short": {
+            "items": {
+              "$ref": "#/components/schemas/SwapLineOut"
+            },
+            "type": "array",
+            "title": "Short",
+            "description": "Copies the deck needs that you don't have free."
+          }
+        },
+        "type": "object",
+        "required": [
+          "pull",
+          "sleeve",
+          "short"
+        ],
+        "title": "SwapOut"
       },
       "ValidationError": {
         "properties": {

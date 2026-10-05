@@ -3,7 +3,7 @@ import type { DeckCardOut, DeckSummaryOut, PrintingOut } from './api';
 import { DECK_SECTIONS, deckGuideGroups, deckReviewLines, deckSection, deckTypeCounts, filterDecks, fromDeckCard, groupDecks } from './decks';
 
 const deck = (o: Partial<DeckSummaryOut>): DeckSummaryOut => ({
-  slug: 's', name: 'Deck', format: 'commander', deck_type: 'Commander', state: 'built', built: 1, loose: 0, slugs: ['s'], origin: 'precon', source: 'Commander Deck', author: null,
+  slug: 's', name: 'Deck', format: 'commander', deck_type: 'Commander', state: 'built', built: 1, slugs: ['s'], origin: 'precon', source: 'Commander Deck', author: null,
   set_code: 'fic', set_name: 'Final Fantasy Commander', released: '2025-06-13', cards: 100, value_usd: 50, pledged_pct: 100, image_uri: null, ...o,
 });
 const printing = (o: Partial<PrintingOut> = {}): PrintingOut => ({
@@ -18,20 +18,20 @@ const card = (o: Partial<DeckCardOut> & { p?: Partial<PrintingOut> } = {}): Deck
 describe('deck list', () => {
   const ds = [
     deck({ slug: 'a', name: 'Counter Blitz' }),
-    deck({ slug: 'b', name: 'Goblins', state: 'deconstructed', built: 0, loose: 2, set_code: 'blb', set_name: 'Bloomburrow', released: '2024-08-02', format: 'jumpstart', deck_type: 'Jumpstart', origin: 'precon' }),
+    deck({ slug: 'b', name: 'Goblins', state: 'deconstructed', built: 0, set_code: 'blb', set_name: 'Bloomburrow', released: '2024-08-02', format: 'jumpstart', deck_type: 'Jumpstart', origin: 'precon' }),
     deck({ slug: 'c', name: 'Mine', origin: 'custom', set_code: null, set_name: null, released: null, source: null, author: 'me' }),
   ];
-  it('filters by state and free text (name, set, author)', () => {
-    expect(filterDecks(ds, { q: '', states: ['built'] }).map((d) => d.slug)).toEqual(['a', 'c']);
-    expect(filterDecks(ds, { q: 'bloom', states: ['built', 'deconstructed'] }).map((d) => d.slug)).toEqual(['b']);
-    expect(filterDecks(ds, { q: 'me', states: ['built'] }).map((d) => d.slug)).toEqual(['c']);
-    expect(filterDecks(ds, { q: '', states: ['built', 'deconstructed'], types: ['Jumpstart'] }).map((d) => d.slug)).toEqual(['b']);
+  it('filters by built and free text (name, set, author)', () => {
+    expect(filterDecks(ds, { q: '', builtOnly: true }).map((d) => d.slug)).toEqual(['a', 'c']);
+    expect(filterDecks(ds, { q: 'bloom' }).map((d) => d.slug)).toEqual(['b']);
+    expect(filterDecks(ds, { q: 'me', builtOnly: true }).map((d) => d.slug)).toEqual(['c']);
+    expect(filterDecks(ds, { q: '', types: ['Jumpstart'] }).map((d) => d.slug)).toEqual(['b']);
     expect(deckTypeCounts(ds)).toEqual([{ value: 'Commander', label: 'Commander', count: 2 }, { value: 'Jumpstart', label: 'Jumpstart', count: 1 }]);
   });
   it('groups newest set/year first, unknowns last', () => {
     expect(groupDecks(ds, 'set').map((g) => g.label)).toEqual(['Final Fantasy Commander', 'Bloomburrow', 'No set']);
     expect(groupDecks(ds, 'year').map((g) => g.label)).toEqual(['2025', '2024', 'Undated']);
-    expect(groupDecks(ds, 'state').map((g) => g.label)).toEqual(['Built', 'Loose (deconstructed)']);
+    expect(groupDecks(ds, 'state').map((g) => g.label)).toEqual(['Built', 'Not built']);
     expect(groupDecks(ds, 'type').map((g) => g.label)).toEqual(['Commander', 'Jumpstart']);
     expect(groupDecks(ds, 'origin').map((g) => g.label)).toEqual(['Preconstructed', 'Built by hand']);
   });

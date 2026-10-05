@@ -80,7 +80,7 @@ export function CopyTargets({ targets, lead }: { targets: readonly CopyTarget[];
                     <path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 ) : (
-                  <Mark className="size-[1.125rem] shrink-0 transition-transform duration-300 ease-guide group-hover:-translate-y-px group-data-[state=busy]:animate-pulse group-disabled:group-data-[state=idle]:opacity-45" />
+                  <Mark className="size-[1.125rem] shrink-0 group-data-[state=busy]:animate-pulse group-disabled:group-data-[state=idle]:opacity-45" />
                 )}
                 <span className="hidden truncate text-xs voice-condensed font-medium uppercase tracking-[0.06em] text-on-chrome @[21.5rem]:inline">{name}</span>
               </button>

@@ -3,13 +3,14 @@ import { expect, fixtures, test } from './support';
 const detail = fixtures.deckDetail;
 const DECK_URL = `/decks?deck=${encodeURIComponent(detail.deck.slug)}`;
 
-test('deck list groups by set, filters by state and text; the nav has Decks', async ({ page }) => {
+test('deck list shows Commander decks by default, filters built and text; the nav has Decks', async ({ page }) => {
   await page.goto('/decks');
   await expect(page.getByRole('link', { name: 'Decks' })).toHaveAttribute('aria-current', 'page');
   const list = page.getByRole('navigation', { name: 'Decks' });
-  await expect(list.getByRole('button')).toHaveCount(fixtures.decks.length);
-  await page.getByRole('toolbar', { name: 'Decks' }).getByRole('button', { name: /^Loose/ }).click();
-  await expect(list.getByRole('button')).toHaveCount(fixtures.decks.filter((d) => d.built > 0).length);
+  const commander = fixtures.decks.filter((d) => d.deck_type === 'Commander');
+  await expect(list.getByRole('button')).toHaveCount(commander.length);
+  await page.getByRole('radio', { name: /^Built/ }).click();
+  await expect(list.getByRole('button')).toHaveCount(commander.filter((d) => d.built > 0).length);
   await page.getByRole('searchbox', { name: 'Deck, set or author' }).fill('avengers');
   await expect(list.getByRole('button')).toHaveCount(1);
   await page.getByRole('searchbox', { name: 'Deck, set or author' }).fill('');
@@ -18,9 +19,10 @@ test('deck list groups by set, filters by state and text; the nav has Decks', as
   await expect(page).toHaveURL(/group=type/);
   await expect(list.getByRole('heading', { name: /^Commander/ })).toBeVisible();
   await page.getByRole('button', { name: /^Deck type/ }).click();
-  await page.getByRole('checkbox', { name: /^Commander/ }).check();
+  await page.getByRole('checkbox', { name: /^Commander/ }).uncheck();
   await page.keyboard.press('Escape');
-  await expect(list.getByRole('button')).toHaveCount(fixtures.decks.filter((d) => d.built > 0 && d.deck_type === 'Commander').length);
+  await expect(page).toHaveURL(/types=/);
+  await expect(list.getByRole('button')).toHaveCount(fixtures.decks.filter((d) => d.built > 0).length);
 });
 
 test('inspector: sections by board then type, card facts, deep link', async ({ page }) => {
@@ -47,7 +49,7 @@ test('add the whole deck, or only marked cards, through the add-cards review', a
     return r.fulfill({ json: { ingest_id: 1, copies, printings: b.items.length, summary: `+${copies} copies · ${b.items.length} printings` } });
   });
   await page.goto(DECK_URL);
-  await page.getByRole('button', { name: 'Review deck to add' }).click();
+  await page.getByRole('button', { name: 'Add deck cards to collection' }).click();
   const dialog = page.getByRole('dialog', { name: 'Add cards' });
   await expect(dialog.getByRole('heading', { name: detail.deck.name })).toBeVisible();
   const total = detail.cards.filter((c) => c.board !== 'token').reduce((s, c) => s + c.count, 0);
@@ -62,7 +64,7 @@ test('add the whole deck, or only marked cards, through the add-cards review', a
     names.push((await mark.getAttribute('aria-label'))!.replace(/^Mark /, ''));
     await mark.click();
   }
-  await page.getByRole('button', { name: 'Review 2 marked to add' }).click();
+  await page.getByRole('button', { name: 'Add 2 marked cards to collection' }).click();
   const two = names.map((nm) => detail.cards.find((c) => c.printing.name === nm)!);
   const n = two.reduce((s, c) => s + c.count, 0);
   await page.getByRole('dialog', { name: 'Add cards' }).getByRole('button', { name: new RegExp(`^Add ${n} cop`) }).click();
@@ -86,9 +88,62 @@ test('deck list is one tab stop with arrow-key navigation', async ({ page }) => 
   await expect(page).toHaveURL(/deck=/);
 });
 
-test('one row per recipe with built / loose copy counters', async ({ page }) => {
-  await page.goto('/decks');
-  const d = fixtures.decks.find((x) => x.built && x.loose) ?? fixtures.decks[0];
+test('one row per recipe with a built-copy counter (no loose tracking)', async ({ page }) => {
+  await page.goto('/decks?types=%5B%5D');
+  const d = fixtures.decks.find((x) => x.built > 0)!;
   const row = page.getByRole('navigation', { name: 'Decks' }).getByRole('button', { name: new RegExp(d.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) }).first();
-  await expect(row.getByLabel(`${d.built} built, ${d.loose} loose`)).toBeVisible();
+  await expect(row.getByLabel(`${d.built} built`)).toBeVisible();
+  await expect(page.getByText(/loose/i)).toHaveCount(0);
+});
+
+const editable = { ...detail, version_id: 7, editable: true, deck: { ...detail.deck, built: 1, slugs: [detail.deck.slug], pledged_pct: 100 } };
+
+test('deck actions are icons with tooltips; precons offer Copy to edit; building confirms first', async ({ page }) => {
+  let built: unknown = null;
+  await page.route('**/api/decks/*/build-plan', (r) => r.fulfill({ json: { target: detail.deck.slug, need: 3, covered: 2, short: [{ printing: detail.cards[0].printing, finish: 'nonfoil', qty: 1 }] } }));
+  await page.route('**/api/decks/*/build', (r) => { built = r.request().postDataJSON(); return r.fulfill({ json: { slug: detail.deck.slug, summary: 'Built — 2 cards pledged, 1 still missing' } }); });
+  await page.route((u) => u.pathname === `/api/decks/${detail.deck.slug}`, (r) => r.fulfill({ json: { ...detail, version_id: 1, editable: false, deck: { ...detail.deck, built: 0, slugs: [detail.deck.slug], pledged_pct: 0 } } }));
+  await page.goto(DECK_URL);
+  const bar = page.getByRole('toolbar', { name: 'Deck actions' });
+  await expect(bar.getByRole('button', { name: 'Copy to edit' })).toBeVisible();
+  await expect(bar.getByRole('button', { name: 'Break down' })).toHaveAttribute('aria-disabled', 'true');
+  await bar.getByRole('button', { name: 'Add deck cards to collection' }).hover();
+  await expect(page.getByRole('tooltip')).toHaveText('Add deck cards to collection');
+  await bar.getByRole('button', { name: 'Build from your cards' }).click();
+  const dialog = page.getByRole('alertdialog', { name: /Build/ });
+  await expect(dialog).toContainText('2 of the 3 cards free');
+  await expect(dialog.getByRole('list', { name: 'Missing cards' })).toContainText(detail.cards[0].printing.name);
+  await dialog.getByRole('button', { name: 'Build with 1 missing' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Built —' })).toBeVisible();
+  expect(built).toEqual({ allow_shortfall: true });
+});
+
+test('editor: add a card from search, see the diff, save a new version (built decks review the swap)', async ({ page }) => {
+  let saved: { cards: { scryfall_id: string; count: number }[]; expected_version_id: number } | null = null;
+  const extra = { ...detail.cards[0].printing, scryfall_id: 'new-card', oracle_id: 'o-new', name: 'Sol Ring', type_line: 'Artifact', owned: { nonfoil: 2 }, free: 2 };
+  await page.route((u) => u.pathname === `/api/decks/${detail.deck.slug}`, (r) => {
+    if (r.request().method() === 'PUT') {
+      saved = r.request().postDataJSON();
+      return r.fulfill({ json: { built: true, changes: [], swap: null, version_number: 8, pulled: 0, sleeved: 1 } });
+    }
+    return r.fulfill({ json: editable });
+  });
+  await page.route('**/api/ingest/search**', (r) => r.fulfill({ json: { query: 'sol', source: 'local', printings: [{ ...extra, scryfall_id: 'unowned', name: 'Sol Talisman', owned: {}, free: 0 }, extra] } }));
+  await page.route('**/api/decks/*/preview', (r) => r.fulfill({ json: { built: true, changes: [], swap: { pull: [], sleeve: [{ printing: extra, finish: 'nonfoil', qty: 1 }], short: [] } } }));
+  await page.goto(`/decks/${encodeURIComponent(detail.deck.slug)}/edit`);
+  await expect(page.getByRole('button', { name: 'Save deck' })).toBeDisabled();
+  await page.getByRole('tab', { name: 'Search' }).click();
+  await page.getByRole('searchbox').fill('sol');
+  const results = page.getByRole('button', { name: /^Add Sol/ });
+  await expect(results.first()).toHaveAccessibleName('Add Sol Ring');      // free copies rank first
+  await results.first().click();
+  await expect(page.getByText('New', { exact: true })).toBeVisible();
+  await expect(page.getByText('+1')).toBeVisible();
+  await page.getByRole('button', { name: 'Save deck' }).click();
+  const review = page.getByRole('alertdialog', { name: 'Update your built deck' });
+  await expect(review).toContainText('Put in · 1');
+  await review.getByRole('button', { name: 'Save and update' }).click();
+  await expect(page).toHaveURL(/\/decks\?deck=/);
+  expect(saved!.expected_version_id).toBe(7);
+  expect(saved!.cards.find((c) => c.scryfall_id === 'new-card')?.count).toBe(1);
 });
