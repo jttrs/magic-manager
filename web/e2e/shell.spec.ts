@@ -9,7 +9,7 @@ test('top nav spans the full width and the sidebar starts below it (F7)', async 
   expect(header!.width).toBe(vw);
   expect(aside!.y).toBeGreaterThanOrEqual(header!.y + header!.height);
   await expect(page.getByRole('navigation', { name: 'Primary' }).getByRole('link')).toHaveText(['Collection', 'Decks', 'Explore', 'Market']);
-  await expect(page.getByRole('link', { name: 'Jobs' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Background jobs' })).toBeVisible();
 });
 
 test('nav switches views and marks the active one', async ({ page }) => {
