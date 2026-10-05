@@ -526,6 +526,12 @@ export type CollectionCardOut = {
      */
     functions?: Array<string>;
     /**
+     * Card Owned
+     *
+     * Copies of this card owned in any printing, any set.
+     */
+    card_owned?: number;
+    /**
      * Sources
      *
      * Source keys this owned printing's copies were acquired from (see CollectionOut.sources).

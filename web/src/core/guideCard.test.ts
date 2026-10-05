@@ -80,6 +80,16 @@ describe('collection filters', () => {
   const all = [owned, missing, bulk, treated, chase];
   const ids = (f: Partial<CollectionFilters>) => filterCollection(all, { ...ALL, ...f }).map((c) => c.scryfall_id);
 
+  it('gaps keeps only missing printings of cards owned in no printing', () => {
+    const playable = card({ scryfall_id: 'alt', oracle_id: 'o-play', card_owned: 2 });
+    const gap = card({ scryfall_id: 'gap', oracle_id: 'o-gap', card_owned: 0, price_usd: 3 });
+    const gap2 = card({ scryfall_id: 'gap2', oracle_id: 'o-gap', card_owned: 0, price_usd: 1 });
+    const pool = [owned, playable, gap, gap2];
+    expect(filterCollection(pool, { ...ALL, gaps: true }).map((c) => c.scryfall_id)).toEqual(['own', 'gap', 'gap2']);
+    const s = collectionStats([gap, gap2], []);
+    expect([s.missing, s.missingCards, s.missingCardsUsd]).toEqual([2, 1, 1]);
+  });
+
   it('finish traits OR together and set the owned/missing basis', () => {
     expect(isMissing(owned, [])).toBe(false);
     expect(isMissing(owned, ['finish:nonfoil'])).toBe(true);
@@ -115,7 +125,7 @@ describe('collection filters', () => {
     expect(buyFinish(card({ finishes: ['foil'] }), [])).toBe('foil');
     expect(buyFinish(missing, [])).toBe('nonfoil');
     expect(buyFinish(missing, ['finish:nonfoil'])).toBe('foil');
-    expect(collectionStats([owned, missing], [])).toEqual({ printings: 2, owned: 1, copies: 2, missing: 1, missingUsd: 1 });
+    expect(collectionStats([owned, missing], [])).toEqual({ printings: 2, owned: 1, copies: 2, missing: 1, missingUsd: 1, missingCards: 1, missingCardsUsd: 1 });
   });
   it('source filter keeps owned printings acquired from a picked kind or product', () => {
     const sources = [

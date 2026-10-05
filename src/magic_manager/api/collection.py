@@ -75,6 +75,7 @@ class CollectionCardOut(BaseModel):
     is_chase: bool
     functions: list[str] = Field(default_factory=list,
                                  description="Function root keys (Scryfall Tagger roll-up).")
+    card_owned: int = Field(0, description="Copies of this card owned in any printing, any set.")
     sources: list[str] = Field(default_factory=list,
                                description="Source keys this owned printing's copies were acquired from (see CollectionOut.sources).")
 

@@ -105,6 +105,20 @@ export function CollectionView() {
             { value: 'missing', label: 'Missing', count: view?.stats.missing },
           ]}
         />
+        {search.show.includes('missing') && (
+          <Segmented
+            label="Missing means"
+            showLabel
+            labelExtra={
+              <InfoTip label="What does missing mean?">
+                <b>Any printing</b>: every printing in the family you don’t have. <b>Card not owned</b>: only cards you have in no printing at all, from any set — the gaps in what you can play.
+              </InfoTip>
+            }
+            value={search.gaps ? 'card' : 'printing'}
+            onChange={(v) => set({ gaps: v === 'card' })}
+            options={[{ value: 'printing', label: 'Any printing' }, { value: 'card', label: 'Card not owned' }]}
+          />
+        )}
         {srcOptions && (
           <MultiSelect
             label="Acquired from"
@@ -230,7 +244,7 @@ export function CollectionView() {
         actions={<AddCardsDialog trigger={<GhostAction Icon={AddCardMark} label="Add cards" />} />}
         summary={
           s
-            ? `${famN} set ${famN === 1 ? 'family' : 'families'} · showing ${fmtInt(s.printings)} printings: ${fmtInt(s.owned)} owned (${fmtInt(s.copies)} copies), ${fmtInt(s.missing)} missing · ${fmtUsd(s.missingUsd)} to complete${q.data?.skipped?.length ? ` · skipped ${q.data.skipped.join(', ')}` : ''}`
+            ? `${famN} set ${famN === 1 ? 'family' : 'families'} · showing ${fmtInt(s.printings)} printings: ${fmtInt(s.owned)} owned (${fmtInt(s.copies)} copies), ${search.gaps ? `${fmtInt(s.missingCards)} cards you own in no printing · ${fmtUsd(s.missingCardsUsd)} at the cheapest printing of each` : `${fmtInt(s.missing)} missing · ${fmtUsd(s.missingUsd)} to complete`}${q.data?.skipped?.length ? ` · skipped ${q.data.skipped.join(', ')}` : ''}`
             : undefined
         }
       >
