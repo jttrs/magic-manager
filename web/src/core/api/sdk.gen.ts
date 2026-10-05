@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, ServerSentEventsResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { CardHoldingsData, CardHoldingsErrors, CardHoldingsResponses, CollectionBuyListData, CollectionBuyListErrors, CollectionBuyListResponses, CollectionData, CollectionErrors, CollectionFamiliesData, CollectionFamiliesResponses, CollectionResponses, CommandersData, CommandersErrors, CommandersResponses, CompareData, CompareErrors, CompareResponses, DeckBreakDownData, DeckBreakDownErrors, DeckBreakDownResponses, DeckBuildData, DeckBuildErrors, DeckBuildPlanData, DeckBuildPlanErrors, DeckBuildPlanResponses, DeckBuildResponses, DeckCheckData, DeckCheckErrors, DeckCheckResponses, DeckCopyData, DeckCopyErrors, DeckCopyResponses, DeckCreateData, DeckCreateErrors, DeckCreateResponses, DeckDetailData, DeckDetailErrors, DeckDetailResponses, DeckImportData, DeckImportErrors, DeckImportResponses, DeckListData, DeckListResponses, DeckPreviewData, DeckPreviewErrors, DeckPreviewResponses, DeckSaveData, DeckSaveErrors, DeckSaveResponses, DeckSuggestionsData, DeckSuggestionsErrors, DeckSuggestionsResponses, ExploreCardData, ExploreCardErrors, ExploreCardResponses, ExploreSearchData, ExploreSearchErrors, ExploreSearchResponses, GetJobData, GetJobErrors, GetJobResponses, IngestCommitData, IngestCommitErrors, IngestCommitResponses, IngestPreconsData, IngestPreconsErrors, IngestPreconsResponses, IngestResolveData, IngestResolveErrors, IngestResolveResponses, IngestSearchData, IngestSearchErrors, IngestSearchResponses, JobEventsData, JobEventsErrors, JobEventsResponses, JobSpecsData, JobSpecsResponses, ListJobsData, ListJobsResponses, MarketCardsData, MarketCardsErrors, MarketCardsResponses, MarketDeckData, MarketDeckErrors, MarketDeckResponses, MarketProductsData, MarketProductsErrors, MarketProductsResponses, MarketProductTreeData, MarketProductTreeErrors, MarketProductTreeResponses, MarketValueData, MarketValueErrors, MarketValueResponses, SubmitJobData, SubmitJobErrors, SubmitJobResponses } from './types.gen';
+import type { CardHoldingsData, CardHoldingsErrors, CardHoldingsResponses, CartCheckData, CartCheckErrors, CartCheckResponses, CartSetupData, CartSetupResponses, CollectionBuyListData, CollectionBuyListErrors, CollectionBuyListResponses, CollectionData, CollectionErrors, CollectionFamiliesData, CollectionFamiliesResponses, CollectionResponses, CommandersData, CommandersErrors, CommandersResponses, CompareData, CompareErrors, CompareResponses, DeckBreakDownData, DeckBreakDownErrors, DeckBreakDownResponses, DeckBuildData, DeckBuildErrors, DeckBuildPlanData, DeckBuildPlanErrors, DeckBuildPlanResponses, DeckBuildResponses, DeckCheckData, DeckCheckErrors, DeckCheckResponses, DeckCopyData, DeckCopyErrors, DeckCopyResponses, DeckCreateData, DeckCreateErrors, DeckCreateResponses, DeckDetailData, DeckDetailErrors, DeckDetailResponses, DeckImportData, DeckImportErrors, DeckImportResponses, DeckListData, DeckListResponses, DeckPreviewData, DeckPreviewErrors, DeckPreviewResponses, DeckSaveData, DeckSaveErrors, DeckSaveResponses, DeckSuggestionsData, DeckSuggestionsErrors, DeckSuggestionsResponses, ExploreCardData, ExploreCardErrors, ExploreCardResponses, ExploreSearchData, ExploreSearchErrors, ExploreSearchResponses, FeaturesRouteData, FeaturesRouteResponses, GetJobData, GetJobErrors, GetJobResponses, IngestCommitData, IngestCommitErrors, IngestCommitResponses, IngestPreconsData, IngestPreconsErrors, IngestPreconsResponses, IngestResolveData, IngestResolveErrors, IngestResolveResponses, IngestSearchData, IngestSearchErrors, IngestSearchResponses, JobEventsData, JobEventsErrors, JobEventsResponses, JobSpecsData, JobSpecsResponses, ListJobsData, ListJobsResponses, MarketCardsData, MarketCardsErrors, MarketCardsResponses, MarketDeckData, MarketDeckErrors, MarketDeckResponses, MarketProductsData, MarketProductsErrors, MarketProductsResponses, MarketProductTreeData, MarketProductTreeErrors, MarketProductTreeResponses, MarketValueData, MarketValueErrors, MarketValueResponses, SubmitJobData, SubmitJobErrors, SubmitJobResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -69,6 +69,28 @@ export const exploreSearch = <ThrowOnError extends boolean = false>(options: Opt
  * Explore Card
  */
 export const exploreCard = <ThrowOnError extends boolean = false>(options: Options<ExploreCardData, ThrowOnError>): RequestResult<ExploreCardResponses, ExploreCardErrors, ThrowOnError> => (options.client ?? client).get<ExploreCardResponses, ExploreCardErrors, ThrowOnError>({ url: '/api/explore/card', ...options });
+
+/**
+ * Features Route
+ */
+export const featuresRoute = <ThrowOnError extends boolean = false>(options?: Options<FeaturesRouteData, ThrowOnError>): RequestResult<FeaturesRouteResponses, unknown, ThrowOnError> => (options?.client ?? client).get<FeaturesRouteResponses, unknown, ThrowOnError>({ url: '/api/features', ...options });
+
+/**
+ * Cart Setup
+ */
+export const cartSetup = <ThrowOnError extends boolean = false>(options?: Options<CartSetupData, ThrowOnError>): RequestResult<CartSetupResponses, unknown, ThrowOnError> => (options?.client ?? client).get<CartSetupResponses, unknown, ThrowOnError>({ url: '/api/cart/setup', ...options });
+
+/**
+ * Cart Check
+ */
+export const cartCheck = <ThrowOnError extends boolean = false>(options: Options<CartCheckData, ThrowOnError>): RequestResult<CartCheckResponses, CartCheckErrors, ThrowOnError> => (options.client ?? client).post<CartCheckResponses, CartCheckErrors, ThrowOnError>({
+    url: '/api/cart/check',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
 
 /**
  * Market Products

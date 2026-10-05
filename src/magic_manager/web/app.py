@@ -21,8 +21,8 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
-from .. import api, deck_edit, edhrec as edhrec_engine, scryfall
-from ..api import cards as cards_api, collection as collection_api, explore as explore_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api, market as market_api, trueup as trueup_api
+from .. import api, cart as cart_engine, deck_edit, edhrec as edhrec_engine, features as features_engine, scryfall
+from ..api import cart as cart_api, cards as cards_api, collection as collection_api, explore as explore_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api, market as market_api, trueup as trueup_api
 from .runtime import TERMINAL, JobManager
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -148,6 +148,28 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             raise HTTPException(422, str(e)) from e
         except scryfall.ScryfallError as e:
             raise HTTPException(502, f"Scryfall lookup failed: {e}") from e
+
+    # ---------- features + cart (internal) ----------
+
+    @app.get("/api/features", response_model=cart_api.FeaturesOut, tags=["features"])
+    def features_route():
+        return cart_api.flags()
+
+    @app.get("/api/cart/setup", response_model=cart_api.CartSetupOut, tags=["cart"])
+    def cart_setup():
+        try:
+            return cart_api.setup()
+        except features_engine.FeatureDisabled as e:
+            raise HTTPException(403, str(e)) from e
+
+    @app.post("/api/cart/check", response_model=cart_api.CartAuditOut, tags=["cart"])
+    def cart_check(req: cart_api.CartIn):
+        try:
+            return cart_api.check(req)
+        except features_engine.FeatureDisabled as e:
+            raise HTTPException(403, str(e)) from e
+        except (cart_engine.CartFormatError, LookupError) as e:
+            raise HTTPException(422, str(e)) from e
 
     # ---------- market ----------
 

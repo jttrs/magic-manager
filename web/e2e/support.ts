@@ -42,6 +42,7 @@ export async function mockApi(page: Page, overrides: Record<string, (url: URL) =
       return slug === deckDetail.deck.slug ? route.fulfill({ json: deckDetail }) : route.fulfill({ status: 404, json: { detail: `deck with slug '${slug}' not found` } });
     }
     if (url.pathname === '/api/jobs') return route.fulfill({ json: [] });
+    if (url.pathname === '/api/features') return route.fulfill({ json: { flags: { cart_check: false } } });
     return route.fulfill({ status: 404, json: { detail: `unmocked ${url.pathname}` } });
   });
 }

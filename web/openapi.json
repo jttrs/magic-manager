@@ -444,6 +444,89 @@
         }
       }
     },
+    "/api/features": {
+      "get": {
+        "tags": [
+          "features"
+        ],
+        "summary": "Features Route",
+        "operationId": "features_route",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeaturesOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cart/setup": {
+      "get": {
+        "tags": [
+          "cart"
+        ],
+        "summary": "Cart Setup",
+        "operationId": "cart_setup",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CartSetupOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cart/check": {
+      "post": {
+        "tags": [
+          "cart"
+        ],
+        "summary": "Cart Check",
+        "operationId": "cart_check",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CartIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CartAuditOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/market/products": {
       "get": {
         "tags": [
@@ -2194,6 +2277,141 @@
         ],
         "title": "CardSourceOut"
       },
+      "CartAuditOut": {
+        "properties": {
+          "lines": {
+            "type": "integer",
+            "title": "Lines"
+          },
+          "copies": {
+            "type": "integer",
+            "title": "Copies"
+          },
+          "total": {
+            "type": "number",
+            "title": "Total"
+          },
+          "unidentified": {
+            "items": {
+              "$ref": "#/components/schemas/UnidentifiedOut"
+            },
+            "type": "array",
+            "title": "Unidentified"
+          },
+          "family": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Family"
+          },
+          "families": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Families"
+          },
+          "dupes": {
+            "items": {
+              "$ref": "#/components/schemas/DupeOut"
+            },
+            "type": "array",
+            "title": "Dupes"
+          },
+          "owned": {
+            "items": {
+              "$ref": "#/components/schemas/OwnedOut"
+            },
+            "type": "array",
+            "title": "Owned"
+          },
+          "missing": {
+            "items": {
+              "$ref": "#/components/schemas/MissingOut"
+            },
+            "type": "array",
+            "title": "Missing"
+          },
+          "overpay": {
+            "items": {
+              "$ref": "#/components/schemas/OverpayOut"
+            },
+            "type": "array",
+            "title": "Overpay"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lines",
+          "copies",
+          "total",
+          "unidentified",
+          "family",
+          "families",
+          "dupes",
+          "owned",
+          "missing",
+          "overpay"
+        ],
+        "title": "CartAuditOut"
+      },
+      "CartIn": {
+        "properties": {
+          "cart": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cart",
+            "description": "The bookmarklet's pasted JSON."
+          },
+          "use_account": {
+            "type": "boolean",
+            "title": "Use Account",
+            "description": "Read the cart with the configured Mana Pool account instead.",
+            "default": false
+          },
+          "family": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Family",
+            "description": "Set family to check gaps against; imputed when the cart sits in one."
+          }
+        },
+        "type": "object",
+        "title": "CartIn"
+      },
+      "CartSetupOut": {
+        "properties": {
+          "account": {
+            "type": "boolean",
+            "title": "Account",
+            "description": "MANAPOOL_EMAIL, _PASSWORD and _ACCESS_TOKEN are configured, so the cart can be read directly."
+          }
+        },
+        "type": "object",
+        "required": [
+          "account"
+        ],
+        "title": "CartSetupOut"
+      },
       "ChangeOut": {
         "properties": {
           "printing": {
@@ -3721,6 +3939,96 @@
         ],
         "title": "DraftIn"
       },
+      "DupeOut": {
+        "properties": {
+          "scryfall_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scryfall Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "set": {
+            "type": "string",
+            "title": "Set"
+          },
+          "num": {
+            "type": "string",
+            "title": "Num"
+          },
+          "fin": {
+            "type": "string",
+            "title": "Fin",
+            "default": ""
+          },
+          "nf_qty": {
+            "type": "integer",
+            "title": "Nf Qty"
+          },
+          "fo_qty": {
+            "type": "integer",
+            "title": "Fo Qty"
+          },
+          "nf_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nf Price"
+          },
+          "fo_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fo Price"
+          },
+          "cheaper": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cheaper"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "set",
+          "num",
+          "nf_qty",
+          "fo_qty",
+          "nf_price",
+          "fo_price",
+          "cheaper",
+          "note"
+        ],
+        "title": "DupeOut"
+      },
       "EntryOut": {
         "properties": {
           "name": {
@@ -4049,6 +4357,22 @@
         ],
         "title": "FamilySummaryOut"
       },
+      "FeaturesOut": {
+        "properties": {
+          "flags": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "type": "object",
+            "title": "Flags"
+          }
+        },
+        "type": "object",
+        "required": [
+          "flags"
+        ],
+        "title": "FeaturesOut"
+      },
       "FunctionRootOut": {
         "properties": {
           "key": {
@@ -4359,6 +4683,57 @@
         ],
         "title": "LegalityOut"
       },
+      "MissingOut": {
+        "properties": {
+          "scryfall_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scryfall Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "set": {
+            "type": "string",
+            "title": "Set"
+          },
+          "num": {
+            "type": "string",
+            "title": "Num"
+          },
+          "fin": {
+            "type": "string",
+            "title": "Fin"
+          },
+          "market": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Market"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "set",
+          "num",
+          "fin",
+          "market"
+        ],
+        "title": "MissingOut"
+      },
       "NewDeckIn": {
         "properties": {
           "name": {
@@ -4414,6 +4789,145 @@
         ],
         "title": "OracleTagOut",
         "description": "A Scryfall Tagger oracle tag (``id`` is the stable UUID)."
+      },
+      "OverpayOut": {
+        "properties": {
+          "scryfall_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scryfall Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "set": {
+            "type": "string",
+            "title": "Set"
+          },
+          "num": {
+            "type": "string",
+            "title": "Num"
+          },
+          "fin": {
+            "type": "string",
+            "title": "Fin"
+          },
+          "qty": {
+            "type": "integer",
+            "title": "Qty"
+          },
+          "your": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Your"
+          },
+          "market": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Market"
+          },
+          "over": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Over"
+          },
+          "pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "set",
+          "num",
+          "fin",
+          "qty",
+          "your",
+          "market"
+        ],
+        "title": "OverpayOut"
+      },
+      "OwnedOut": {
+        "properties": {
+          "scryfall_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scryfall Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "set": {
+            "type": "string",
+            "title": "Set"
+          },
+          "num": {
+            "type": "string",
+            "title": "Num"
+          },
+          "fin": {
+            "type": "string",
+            "title": "Fin"
+          },
+          "owned_qty": {
+            "type": "integer",
+            "title": "Owned Qty"
+          },
+          "your": {
+            "type": "number",
+            "title": "Your"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "set",
+          "num",
+          "fin",
+          "owned_qty",
+          "your"
+        ],
+        "title": "OwnedOut"
       },
       "PairedOut": {
         "properties": {
@@ -5456,6 +5970,50 @@
           "contents_kind"
         ],
         "title": "TreeNodeOut"
+      },
+      "UnidentifiedOut": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "set": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Set"
+          },
+          "num": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Num"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "set",
+          "num"
+        ],
+        "title": "UnidentifiedOut"
       },
       "ValidationError": {
         "properties": {
