@@ -9,6 +9,9 @@ that must run once against your live DB after you pull them:
   V30  cards.illustration_id + art tags → scryfall_art.backfill_illustration_ids()
                                     (mm set backfill-illustrations) and
                                     scryfall_tags.sync_kinds()      (mm scryfall tags sync — oracle + art)
+  —    'built' follows pledges     → decks.backfill_built_state()  (mm deck backfill-built)
+                                    data-only: imported / hand-built decks with nothing pledged → not built;
+                                    precons keep ONE built copy (extra unpledged built copies → not built)
 
 Every step is additive: migrations add columns/tables, backfills fill only the
 new ones. This script makes that verifiable instead of assumed:
@@ -57,6 +60,11 @@ OWNERSHIP: tuple[tuple[str, tuple[str, ...] | None], ...] = (
 )
 
 
+# Columns a registered backfill is ALLOWED to change (verified by their own check
+# below instead of byte-equality). decks.precon_state is derived from pledges.
+CORRECTED: dict[str, frozenset[str]] = {"decks": frozenset({"precon_state"})}
+
+
 def _columns(conn: sqlite3.Connection, table: str) -> list[str]:
     return [r[1] for r in conn.execute(f"PRAGMA table_info({table})")]
 
@@ -64,7 +72,7 @@ def _columns(conn: sqlite3.Connection, table: str) -> list[str]:
 def _fingerprint(conn: sqlite3.Connection, cols_by_table: dict[str, list[str]] | None = None) -> dict[str, tuple[int, str, list[str]]]:
     out: dict[str, tuple[int, str, list[str]]] = {}
     for table, _ in OWNERSHIP:
-        cols = (cols_by_table or {}).get(table) or _columns(conn, table)
+        cols = (cols_by_table or {}).get(table) or [c for c in _columns(conn, table) if c not in CORRECTED.get(table, ())]
         if not cols:
             continue
         rows = conn.execute(f"SELECT {', '.join(cols)} FROM {table}").fetchall()
@@ -100,12 +108,21 @@ def run(path: Path) -> int:
           lambda: decks.backfill_kinds() if decks.unclassified_precon_count() else "already classified — skipped")
     _step("V30 backfill printing illustration ids",
           lambda: f"{scryfall_art.backfill_illustration_ids()} card rows filled")
+    _step("built follows pledges (unpledged imports → not built)",
+          lambda: decks.backfill_built_state() if (decks.unpledged_built_count() or decks.extra_built_precon_count()) else "nothing to correct — skipped")
 
     raw = sqlite3.connect(path)
     after = _fingerprint(raw, {t: cols for t, (_, _, cols) in before.items()})
     from magic_manager import ingest
     drift = ingest.reconcile_inventory_ledger(raw)
     kinds = raw.execute("SELECT kind, COUNT(*) FROM decks GROUP BY kind").fetchall() if "kind" in _columns(raw, "decks") else []
+    # CORRECTED columns: precon_state may change, but only toward the rule
+    # "a non-precon deck is built iff something is pledged to it".
+    unpledged_built = raw.execute(
+        "SELECT COUNT(*) FROM decks d WHERE d.precon_state = 'built' AND d.source_precon_file_name IS NULL "
+        "AND NOT EXISTS (SELECT 1 FROM deck_assignments a WHERE a.deck_id = d.deck_id)").fetchone()[0]
+    from magic_manager import decks as _decks
+    unpledged_built += _decks.extra_built_precon_count(conn=raw)
     raw.close()
 
     bad = [t for t in before if before[t][:2] != after.get(t, (None, None))[:2]]
@@ -113,8 +130,9 @@ def run(path: Path) -> int:
     for t, (n, h, _) in before.items():
         print(f"  {'✓' if t not in bad else '✗'} {t}: {n} rows {'unchanged' if t not in bad else f'CHANGED → {after[t][0]} rows'}")
     print(f"  {'✓' if not drift else '✗'} ledger reconciles (inventory == SUM(delta)): {len(drift)} drifting pairs")
+    print(f"  {'✓' if not unpledged_built else '✗'} 'built' is consistent (no unpledged imports; one built copy per precon unless pledged): {unpledged_built} off")
     print(f"  decks by kind: {dict(kinds)}")
-    return 1 if bad or drift else 0
+    return 1 if bad or drift or unpledged_built else 0
 
 
 def main(argv: list[str] | None = None) -> int:

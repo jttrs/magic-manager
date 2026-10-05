@@ -147,3 +147,45 @@ test('editor: add a card from search, see the diff, save a new version (built de
   expect(saved!.expected_version_id).toBe(7);
   expect(saved!.cards.find((c) => c.scryfall_id === 'new-card')?.count).toBe(1);
 });
+
+const sse = (events: [string, unknown][]) => events.map(([e, d], i) => `event: ${e}\ndata: ${JSON.stringify(d)}\nid: ${i + 1}\n\n`).join('');
+const queued = (id: string, name: string) => ({ id, name, title: name, inputs: {}, status: 'queued', created_at: '2026-01-01T00:00:00+00:00', started_at: null, finished_at: null, progress: null, summary: null, artifacts: [], error: null });
+
+test('import a deck: saves the decklist (not built); "I have these cards" opens the add review', async ({ page }) => {
+  let imported: { deck: { source: string; id: string } } | null = null;
+  const fetched = { format: 'deck', lines: [], warnings: [], deck_name: detail.deck.name, deck: { source: 'archidekt', id: '42', name: detail.deck.name, author: null, cards: [{ qty: 1, name: 'x' }] } };
+  await page.route('**/api/jobs/ingest.fetch_deck', (r) => r.fulfill({ status: 202, json: queued('jf', 'ingest.fetch_deck') }));
+  await page.route('**/api/jobs/jf/events', (r) => r.fulfill({ status: 200, contentType: 'text/event-stream', body: sse([['result', { summary: 'ok', artifacts: [{ kind: 'json', label: 'lines', data: fetched }] }], ['status', { status: 'succeeded' }]]) }));
+  await page.route('**/api/decks/import', (r) => { imported = r.request().postDataJSON(); return r.fulfill({ json: { slug: detail.deck.slug, duplicate: false, summary: 'Decklist saved' } }); });
+  await page.goto('/decks');
+  await page.getByRole('toolbar', { name: 'Deck list actions' }).getByRole('button', { name: 'Import a deck from a link' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Import a deck' });
+  await expect(dialog).toContainText('isn’t marked built');
+  await dialog.getByRole('textbox').fill('https://archidekt.com/decks/42/x');
+  await dialog.getByRole('checkbox', { name: /Also add these cards/ }).check();
+  await dialog.getByRole('button', { name: 'Import deck' }).click();
+  await expect(page).toHaveURL(new RegExp(`deck=${encodeURIComponent(detail.deck.slug).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+  await expect(page.getByRole('dialog', { name: 'Add cards' })).toBeVisible();
+  expect(imported!.deck).toMatchObject({ source: 'archidekt', id: '42' });
+});
+
+test('editor: card names open the inspector; checks show legality and the bracket floor', async ({ page }) => {
+  await page.route((u) => u.pathname === `/api/decks/${detail.deck.slug}`, (r) => r.fulfill({ json: editable }));
+  await page.route('**/api/cards/*/holdings', (r) => r.fulfill({ json: { scryfall_id: 'x', owned: {}, pledged: {}, free: {}, decks: [], sources: [], other_printings_owned: 0 } }));
+  await page.route('**/api/decks/*/check', (r) => r.fulfill({ json: {
+    format: 'commander',
+    legality: { format: 'commander', legal: false, checked_count: 40, violations: [{ code: 'deck_size', severity: 'error', message: 'Deck has 40 cards; Commander needs exactly 100.', cards: [] }] },
+    bracket: { suggested_bracket: 3, game_changer_count: 1, game_changers: ['Farewell'], mass_land_denial: [], extra_turns: [], two_card_combos: 0, rationale: [], stale_data: false, spellbook_available: false },
+  } }));
+  await page.goto(`/decks/${encodeURIComponent(detail.deck.slug)}/edit`);
+  const checks = page.getByRole('button', { name: 'Deck checks' });
+  await expect(checks).toContainText('1 issue');
+  await expect(checks).toContainText('B3+');
+  await checks.click();
+  await expect(page.getByText('Commander needs exactly 100')).toBeVisible();
+  await expect(page.getByText('Game Changers: Farewell')).toBeVisible();
+  await page.keyboard.press('Escape');
+  const name = detail.cards.find((c) => c.board !== 'token')!.printing.name;
+  await page.getByRole('button', { name, exact: true }).first().click();
+  await expect(page.getByRole('dialog', { name })).toBeVisible();
+});

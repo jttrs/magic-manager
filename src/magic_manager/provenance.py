@@ -44,6 +44,7 @@ class CardSource:
     source: Source
     finish: str
     copies: int
+    acquisitions: int = 1   # distinct ingest events (e.g. two Jumpstart packs of the same theme bought separately)
 
 
 @dataclass
@@ -113,12 +114,13 @@ def card_sources(scryfall_ids, *, conn=None) -> dict[str, list[CardSource]]:
     def _q(c) -> dict[str, list[CardSource]]:
         products = _products(c)
         agg: dict[str, dict[tuple[Source, str], int]] = {}
+        events: dict[tuple[str, Source, str], set[int]] = {}
         for i in range(0, len(ids), 500):
             part = ids[i:i + 500]
             ph = ",".join("?" * len(part))
-            for sid, fin, method, label, path, q in c.execute(
+            for sid, fin, method, label, path, q, iid in c.execute(
                 f"""
-                SELECT v.scryfall_id, v.finish, e.method, e.label, e.source_path, SUM(v.delta) AS q
+                SELECT v.scryfall_id, v.finish, e.method, e.label, e.source_path, SUM(v.delta) AS q, v.ingest_id
                 FROM inventory_events v JOIN ingest_events e ON e.ingest_id = v.ingest_id
                 WHERE v.scryfall_id IN ({ph})
                 GROUP BY v.scryfall_id, v.finish, v.ingest_id
@@ -128,8 +130,9 @@ def card_sources(scryfall_ids, *, conn=None) -> dict[str, list[CardSource]]:
                 src = _classify(method, label, path, products)
                 d = agg.setdefault(sid, {})
                 d[(src, fin)] = d.get((src, fin), 0) + q
+                events.setdefault((sid, src, fin), set()).add(iid)
         return {
-            sid: sorted((CardSource(s, f, n) for (s, f), n in d.items()),
+            sid: sorted((CardSource(s, f, n, len(events[(sid, s, f)])) for (s, f), n in d.items()),
                         key=lambda cs: (-cs.copies, cs.source.label, cs.finish))
             for sid, d in agg.items()
         }

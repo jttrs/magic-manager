@@ -1,6 +1,7 @@
 // Server state via TanStack Query over the generated, typed API client.
 import { keepPreviousData, queryOptions } from '@tanstack/react-query';
-import { cardHoldings, collection, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs } from '../core/api';
+import type { DraftCardIn } from '../core/api';
+import { cardHoldings, collection, deckCheck, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs } from '../core/api';
 
 class ApiError extends Error {}
 
@@ -52,6 +53,14 @@ export const holdingsQuery = (scryfallId: string | null | undefined) =>
     queryFn: async ({ signal }) => unwrap(await cardHoldings({ path: { scryfall_id: scryfallId! }, signal })),
     enabled: Boolean(scryfallId),
     staleTime: 30_000,
+  });
+
+export const deckCheckQuery = (slug: string, cards: DraftCardIn[], combos: boolean) =>
+  queryOptions({
+    queryKey: ['decks', 'check', slug, cards, combos],
+    queryFn: async ({ signal }) => unwrap(await deckCheck({ path: { slug }, body: { cards, combos }, signal })),
+    staleTime: 5 * 60_000,
+    placeholderData: keepPreviousData,
   });
 
 export const suggestionsQuery = (commander: string | null) =>

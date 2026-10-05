@@ -65,11 +65,21 @@ class ResolvedLineOut(BaseModel):
     note: str | None = None
 
 
+class DeckSourceOut(BaseModel):
+    """A fetched deck as the builder returned it — pass back to save it as a decklist."""
+    source: str | None = None
+    id: str | None = None
+    name: str | None = None
+    author: str | None = None
+    cards: list[dict] = Field(default_factory=list)
+
+
 class ResolveOut(BaseModel):
     format: Literal["moxfield", "tcgplayer", "names", "deck"]
     lines: list[ResolvedLineOut]
     warnings: list[str] = Field(default_factory=list)
     deck_name: str | None = None
+    deck: DeckSourceOut | None = Field(None, description="Deck URL fetches only: the source deck, to save its decklist.")
 
 
 class CommitItem(BaseModel):

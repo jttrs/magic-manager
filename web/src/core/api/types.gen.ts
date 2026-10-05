@@ -19,6 +19,50 @@ export type ActionOut = {
 };
 
 /**
+ * BracketOut
+ */
+export type BracketOut = {
+    /**
+     * Suggested Bracket
+     *
+     * Floor (1–4) from Wizards' bracket criteria; None without a commander. Never authoritative.
+     */
+    suggested_bracket: number | null;
+    /**
+     * Game Changer Count
+     */
+    game_changer_count: number;
+    /**
+     * Game Changers
+     */
+    game_changers: Array<string>;
+    /**
+     * Mass Land Denial
+     */
+    mass_land_denial: Array<string>;
+    /**
+     * Extra Turns
+     */
+    extra_turns: Array<string>;
+    /**
+     * Two Card Combos
+     */
+    two_card_combos: number;
+    /**
+     * Rationale
+     */
+    rationale: Array<string>;
+    /**
+     * Stale Data
+     */
+    stale_data: boolean;
+    /**
+     * Spellbook Available
+     */
+    spellbook_available: boolean;
+};
+
+/**
  * BuildIn
  */
 export type BuildIn = {
@@ -117,6 +161,12 @@ export type CardSourceOut = {
      * Copies acquired from this source (history: may exceed what is owned today).
      */
     copies: number;
+    /**
+     * Acquisitions
+     *
+     * Separate ingests from this source (e.g. 2 = two purchases of the same product).
+     */
+    acquisitions?: number;
 };
 
 /**
@@ -140,6 +190,34 @@ export type ChangeOut = {
      * After
      */
     after: number;
+};
+
+/**
+ * CheckIn
+ */
+export type CheckIn = {
+    /**
+     * Cards
+     */
+    cards: Array<DraftCardIn>;
+    /**
+     * Combos
+     *
+     * Also ask Commander Spellbook for two-card combos (network).
+     */
+    combos?: boolean;
+};
+
+/**
+ * CheckOut
+ */
+export type CheckOut = {
+    /**
+     * Format
+     */
+    format: string;
+    legality: LegalityOut;
+    bracket: BracketOut | null;
 };
 
 /**
@@ -635,6 +713,36 @@ export type DeckPledgeOut = {
 };
 
 /**
+ * DeckSourceOut
+ *
+ * A fetched deck as the builder returned it — pass back to save it as a decklist.
+ */
+export type DeckSourceOut = {
+    /**
+     * Source
+     */
+    source?: string | null;
+    /**
+     * Id
+     */
+    id?: string | null;
+    /**
+     * Name
+     */
+    name?: string | null;
+    /**
+     * Author
+     */
+    author?: string | null;
+    /**
+     * Cards
+     */
+    cards?: Array<{
+        [key: string]: unknown;
+    }>;
+};
+
+/**
  * DeckSummaryOut
  */
 export type DeckSummaryOut = {
@@ -895,6 +1003,39 @@ export type HoldingsOut = {
 };
 
 /**
+ * ImportIn
+ */
+export type ImportIn = {
+    deck: DeckSourceOut;
+    /**
+     * Force
+     *
+     * Replace the cards of a deck already imported from this source.
+     */
+    force?: boolean;
+};
+
+/**
+ * ImportOut
+ */
+export type ImportOut = {
+    /**
+     * Slug
+     */
+    slug: string;
+    /**
+     * Duplicate
+     *
+     * Already imported from this source; `slug` is the existing deck.
+     */
+    duplicate: boolean;
+    /**
+     * Summary
+     */
+    summary: string;
+};
+
+/**
  * JobOut
  */
 export type JobOut = {
@@ -980,6 +1121,28 @@ export type JobSpecOut = {
     input_schema: {
         [key: string]: unknown;
     };
+};
+
+/**
+ * LegalityOut
+ */
+export type LegalityOut = {
+    /**
+     * Format
+     */
+    format: string;
+    /**
+     * Legal
+     */
+    legal: boolean;
+    /**
+     * Checked Count
+     */
+    checked_count: number;
+    /**
+     * Violations
+     */
+    violations: Array<ViolationOut>;
 };
 
 /**
@@ -1198,6 +1361,10 @@ export type ResolveOut = {
      * Deck Name
      */
     deck_name?: string | null;
+    /**
+     * Deck URL fetches only: the source deck, to save its decklist.
+     */
+    deck?: DeckSourceOut | null;
 };
 
 /**
@@ -1476,6 +1643,28 @@ export type ValidationError = {
     ctx?: {
         [key: string]: unknown;
     };
+};
+
+/**
+ * ViolationOut
+ */
+export type ViolationOut = {
+    /**
+     * Code
+     */
+    code: string;
+    /**
+     * Severity
+     */
+    severity: 'error' | 'warning' | 'info';
+    /**
+     * Message
+     */
+    message: string;
+    /**
+     * Cards
+     */
+    cards: Array<string>;
 };
 
 export type JobSpecsData = {
@@ -1853,6 +2042,31 @@ export type DeckSaveResponses = {
 
 export type DeckSaveResponse = DeckSaveResponses[keyof DeckSaveResponses];
 
+export type DeckImportData = {
+    body: ImportIn;
+    path?: never;
+    query?: never;
+    url: '/api/decks/import';
+};
+
+export type DeckImportErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeckImportError = DeckImportErrors[keyof DeckImportErrors];
+
+export type DeckImportResponses = {
+    /**
+     * Successful Response
+     */
+    200: ImportOut;
+};
+
+export type DeckImportResponse = DeckImportResponses[keyof DeckImportResponses];
+
 export type DeckBuildPlanData = {
     body?: never;
     path: {
@@ -2002,6 +2216,36 @@ export type DeckPreviewResponses = {
 };
 
 export type DeckPreviewResponse = DeckPreviewResponses[keyof DeckPreviewResponses];
+
+export type DeckCheckData = {
+    body: CheckIn;
+    path: {
+        /**
+         * Slug
+         */
+        slug: string;
+    };
+    query?: never;
+    url: '/api/decks/{slug}/check';
+};
+
+export type DeckCheckErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeckCheckError = DeckCheckErrors[keyof DeckCheckErrors];
+
+export type DeckCheckResponses = {
+    /**
+     * Successful Response
+     */
+    200: CheckOut;
+};
+
+export type DeckCheckResponse = DeckCheckResponses[keyof DeckCheckResponses];
 
 export type DeckSuggestionsData = {
     body?: never;

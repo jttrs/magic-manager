@@ -112,3 +112,59 @@ def test_api_routes(cards):
     r = client.post("/api/decks/api-deck/build", json={})
     assert r.status_code == 200 and "1 card pledged" in r.json()["summary"]
     assert client.post("/api/decks/nope/break-down").status_code == 404
+
+
+def test_imports_are_recipes_and_built_follows_pledges(cards, make_card, monkeypatch):
+    from magic_manager import decksource
+
+    payload = {"source": "archidekt", "id": "42", "name": "Imported Brew", "author": "me",
+               "cards": [{"qty": 1, "name": "Alpha", "scryfall_id": A, "board": "main", "finish": "nonfoil"}]}
+    raw = make_card(id=A, oracle_id="aaaaaaaa-0000-0000-0000-00000000000a", name="Alpha", collector_number="1")
+    monkeypatch.setattr(decksource, "_resolve_cards", lambda cs: ({A: raw}, {}, {}, []))
+    r = deck_edit.import_payload(payload)
+    assert r == {"slug": "imported-brew", "duplicate": False, "created": True, "not_found": 0}
+    assert _state("imported-brew") == "deconstructed"                       # a recipe, not built
+    again = deck_edit.import_payload(payload)
+    assert again["duplicate"] and again["slug"] == "imported-brew"         # no second copy
+
+    # Adding the recipe's cards to the collection does NOT build it.
+    out = deck_edit.add_recipe_to_collection("imported-brew")
+    assert out["copies"] == 1 and _state("imported-brew") == "deconstructed"
+    with db.connect() as conn:
+        assert conn.execute("SELECT quantity FROM inventory WHERE scryfall_id = ?", (A,)).fetchone()[0] == 1
+    # Pledging marks it built; unpledging everything marks it not built.
+    decks.deck_assign_batch("imported-brew", [(A, "nonfoil", 1)])
+    assert _state("imported-brew") == "built"
+    decks.deck_unassign_batch("imported-brew", "all")
+    assert _state("imported-brew") == "deconstructed"
+
+
+def test_backfill_built_state_only_fixes_unpledged_non_precons(cards):
+    inventory.inventory_add(A, "nonfoil", 1)
+    decks.deck_create("old-import", "Old import")                         # legacy default: built, nothing pledged
+    decks.deck_create("pledged", "Pledged")
+    decks.deck_add_card("pledged", A, "main", "nonfoil", 1)
+    decks.deck_assign_batch("pledged", [(A, "nonfoil", 1)])
+    decks.deck_create("precon", "Precon", source_precon_file_name="X_TST")   # precons untouched
+    assert decks.unpledged_built_count() == 1
+    decks.deck_create("precon-2", "Precon", source_precon_file_name="X_TST")    # a second built copy, nothing pledged
+    decks.deck_create("precon-3", "Precon", source_precon_file_name="X_TST", precon_state="deconstructed")
+    assert decks.extra_built_precon_count() == 1
+    assert decks.backfill_built_state() == {"corrected": 1, "precon_extras": 1}
+    assert (_state("old-import"), _state("pledged"), _state("precon"), _state("precon-2"), _state("precon-3")) == (
+        "deconstructed", "built", "built", "deconstructed", "deconstructed")   # one built copy per precon
+    assert decks.backfill_built_state() == {"corrected": 0, "precon_extras": 0}   # idempotent
+
+
+def test_check_reports_legality_and_bracket_floor(cards, monkeypatch):
+    slug = deck_edit.create_deck("Checked")
+    with db.connect() as conn:
+        conn.execute("UPDATE cards SET game_changer = 1, legalities = ? WHERE scryfall_id = ?",
+                     ('{"commander": "legal"}', B))
+        conn.execute("UPDATE cards SET legalities = ? WHERE scryfall_id IN (?, ?)", ('{"commander": "legal"}', A, C))
+        conn.execute("UPDATE cards SET type_line = 'Legendary Creature — Elf' WHERE scryfall_id = ?", (A,))
+        conn.commit()
+    r = deck_edit.check(slug, [DraftCard(A, "commander", "nonfoil", 1), DraftCard(B, "main", "nonfoil", 1)])
+    assert r["format"] == "commander"
+    assert r["legality"]["legal"] is False                                 # 2 of 100 cards
+    assert r["bracket"]["game_changers"] == ["Beta"] and r["bracket"]["suggested_bracket"] >= 3

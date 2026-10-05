@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Dialog, Tabs } from 'radix-ui';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { unwrap } from '../../app/queries';
-import { ingestCommit, type PrintingOut, type ResolvedLineOut, type ResolveOut } from '../../core/api';
+import { deckImport, ingestCommit, type DeckSourceOut, type PrintingOut, type ResolvedLineOut, type ResolveOut } from '../../core/api';
 import { fmtInt } from '../../core/format';
 import { commitItems, fromResolved, reviewStats, stagePrinting, updateLine, type Finish, type ReviewLine } from '../../core/ingest';
 import { Button } from '../Button';
@@ -27,7 +27,7 @@ export function AddCardsDialog({ trigger, seed, onSeedDone }: { trigger?: ReactN
   const [staged, setStaged] = useState<ReviewLine[]>([]);
   const [pasteText, setPasteText] = useState('');
   const [pasted, setPasted] = useState<{ lines: ReviewLine[]; warnings: string[] } | null>(null);
-  const [deck, setDeck] = useState<{ lines: ReviewLine[]; warnings: string[]; name: string | null } | null>(null);
+  const [deck, setDeck] = useState<{ lines: ReviewLine[]; warnings: string[]; name: string | null; source?: DeckSourceOut | null } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState<Done | null>(null);
@@ -51,7 +51,8 @@ export function AddCardsDialog({ trigger, seed, onSeedDone }: { trigger?: ReactN
     else if (mode === 'paste') setPasted((p) => (p ? { ...p, lines: fn(p.lines) } : p));
     else setDeck((d) => (d ? { ...d, lines: fn(d.lines) } : d));
   };
-  const onFetched = useCallback((r: ResolveOut) => setDeck({ lines: fromResolved(r.lines, 'd'), warnings: r.warnings ?? [], name: r.deck_name ?? null }), []);
+  const onFetched = useCallback((r: ResolveOut) => setDeck({ lines: fromResolved(r.lines, 'd'), warnings: r.warnings ?? [], name: r.deck_name ?? null, source: r.deck ?? null }), []);
+  const [saveList, setSaveList] = useState(true);
 
   async function commit() {
     if (!lines) return;
@@ -61,7 +62,17 @@ export function AddCardsDialog({ trigger, seed, onSeedDone }: { trigger?: ReactN
     setError('');
     try {
       const r = unwrap(await ingestCommit({ body: { items, source: mode, label: mode === 'deck' ? deck?.name ?? null : null } }));
-      setDone({ summary: r.summary, mode });
+      let summary = r.summary;
+      if (mode === 'deck' && saveList && deck?.source) {
+        try {
+          const saved = unwrap(await deckImport({ body: { deck: deck.source } }));
+          summary += saved.duplicate ? ' · decklist already in Decks' : ' · decklist saved to Decks';
+          await qc.invalidateQueries({ queryKey: ['decks'] });
+        } catch (e) {
+          summary += ` · decklist not saved: ${(e as Error).message}`;
+        }
+      }
+      setDone({ summary, mode });
       if (mode === 'search') setStaged([]);
       else if (mode === 'paste') { setPasted(null); setPasteText(''); }
       else setDeck(null);
@@ -164,6 +175,12 @@ export function AddCardsDialog({ trigger, seed, onSeedDone }: { trigger?: ReactN
                   {stats.skipped > 0 && ` · ${fmtInt(stats.skipped)} left out`}
                 </p>
                 {error && <p role="alert" className="text-sm text-danger">{error}</p>}
+                {mode === 'deck' && deck?.source && (
+                  <label className="ml-auto inline-flex cursor-pointer items-center gap-1.5 text-sm text-ink">
+                    <input type="checkbox" checked={saveList} onChange={(e) => setSaveList(e.target.checked)} className="accent-[var(--theme-accent)]" />
+                    Also save the decklist to Decks
+                  </label>
+                )}
                 <Button tone="paper" emphasis="primary" onClick={commit} disabled={busy || stats.copies === 0} className="ml-auto">
                   {busy ? 'Adding…' : `Add ${fmtInt(stats.copies)} ${stats.copies === 1 ? 'copy' : 'copies'}`}
                 </Button>

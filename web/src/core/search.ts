@@ -55,6 +55,8 @@ export const decksSearch = z.object({
   /** Deck types to keep (deck_view.deck_type labels); empty = all. Commander by default. */
   types: list(z.string()).catch(['Commander']).default(['Commander']),
   q: z.string().catch('').default(''),
+  /** Open the "add deck cards to collection" review once (after an import). */
+  add: z.boolean().optional().catch(undefined),
   view,
 });
 export type DecksSearch = z.infer<typeof decksSearch>;

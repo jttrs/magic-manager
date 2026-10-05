@@ -251,6 +251,53 @@ def copy_recipe(slug: str, *, name: str | None = None) -> str:
     return new_slug
 
 
+def add_recipe_to_collection(slug: str, *, label: str | None = None) -> dict:
+    """Add one copy of a deck's playable cards (commander, main, companion,
+    sideboard — not maybe or tokens) to the collection as a single ``deck``
+    ingest event. 'either' slots land as nonfoil when the printing has it.
+    Does NOT pledge them: building stays an explicit step."""
+    from . import addcards, collection_view
+
+    with db.connect() as conn:
+        d = _deck(conn, slug)
+        cards = _current_cards(conn, d["current_version_id"])
+        fins = {r[0]: collection_view.inventory_finishes(r[1]) for r in conn.execute(
+            f"SELECT scryfall_id, finishes FROM cards WHERE scryfall_id IN ({','.join('?' * len(cards)) or 'NULL'})",
+            [c.scryfall_id for c in cards])}
+    items = []
+    for c in cards:
+        if c.board not in PLAYABLE or c.count <= 0:
+            continue
+        fin = c.finish if c.finish != "either" else ("nonfoil" if "nonfoil" in fins.get(c.scryfall_id, ["nonfoil"]) else "foil")
+        items.append((c.scryfall_id, fin, c.count))
+    if not items:
+        return {"copies": 0, "printings": 0, "summary": "nothing to add"}
+    return addcards.commit(items, source="deck", label=label or d["name"])
+
+
+def import_payload(payload: dict, *, force: bool = False) -> dict:
+    """Save a fetched deck (``scripts/import_deck.py`` JSON: source / id / name /
+    author / cards) as a decklist — recipe only, never built. A deck already
+    imported from the same source is not duplicated: returns its slug with
+    ``duplicate=True`` (``force`` replaces its cards instead)."""
+    from . import decksource
+
+    cards = payload.get("cards") or []
+    if not cards:
+        raise ValueError("the fetched deck has no cards")
+    name = (payload.get("name") or "Imported deck").strip()
+    with db.connect() as conn:
+        slug = _unique_slug(conn, name)
+    res = decksource.import_deck(
+        cards, slug=slug, name=name, author=payload.get("author"),
+        source=payload.get("source"), source_deck_id=payload.get("id"), force=force,
+    )
+    if res.get("duplicate"):
+        return {"slug": res["existing_slug"], "duplicate": True, "created": False, "not_found": 0}
+    return {"slug": res["slug"], "duplicate": False, "created": bool(res.get("created")),
+            "not_found": len(res.get("not_found") or [])}
+
+
 # ---------- edit: preview + save ----------
 
 def is_editable(slug: str) -> bool:
@@ -322,6 +369,31 @@ def save(slug: str, cards: list[DraftCard], *, expected_version_id: int,
                                           allow_shortfall=True)
             sleeved = res["assigned_qty"]
     return {**pv, "version_number": v.version_number if v else None, "pulled": pulled, "sleeved": sleeved}
+
+
+# ---------- editor: legality + bracket floor ----------
+
+def check(slug: str, cards: list[DraftCard], *, combos: bool = False) -> dict:
+    """Check an (unsaved) decklist against its deck's format — the same engines
+    :func:`decks.finalize` stores on a version, nothing written. Legality reads
+    Scryfall's per-format legality; for Commander-like formats it also returns
+    the bracket FLOOR from Wizards' official criteria (Game Changers, mass land
+    denial, extra turns; two-card combos only when ``combos`` asks Commander
+    Spellbook — network). Advisory, never blocking."""
+    from . import brackets, legality
+
+    with db.connect() as conn:
+        fmt = (_deck(conn, slug)["format"] or "commander").lower()
+        rows = decks.materialize_rows_for_checks(
+            conn, [(c.scryfall_id, c.board, c.finish, c.count) for c in cards if c.count > 0])
+    report = legality.validate(rows, format=fmt).to_json()
+    bracket = None
+    if fmt in legality._COMMANDER_LIKE_FORMATS:
+        spellbook = None
+        if combos:
+            from . import commander_spellbook as spellbook
+        bracket = brackets.suggest(rows, spellbook=spellbook).to_json()
+    return {"format": fmt, "legality": report, "bracket": bracket}
 
 
 # ---------- editor: commander suggestions ----------

@@ -1,20 +1,22 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRouteApi, Link, useBlocker, useNavigate } from '@tanstack/react-router';
-import { DropdownMenu, Tabs } from 'radix-ui';
+import { DropdownMenu, Popover, Tabs } from 'radix-ui';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panels';
-import { deckQuery, printingSearchQuery, suggestionsQuery, unwrap } from '../app/queries';
+import { deckCheckQuery, deckQuery, printingSearchQuery, suggestionsQuery, unwrap } from '../app/queries';
 import { useMediaQuery } from '../app/useMediaQuery';
 import { Button } from '../components/Button';
+import { CardInspector } from '../components/CardInspector';
 import { Chevron } from '../components/Chevron';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { EmptyNote, ErrorNote, GridSkeleton } from '../components/States';
-import { deckPreview, deckSave, type DeckDetailOut, type PreviewOut, type PrintingOut, type SuggestionOut, type SwapLineOut } from '../core/api';
+import { deckPreview, deckSave, type CheckOut, type DeckDetailOut, type PreviewOut, type PrintingOut, type SuggestionOut, type SwapLineOut } from '../core/api';
 import {
   addCard, canCommand, collectionFirst, commanderName, draftCards, draftFromDeck, draftOracles, draftSections, draftStats,
   moveCard, setCount, setFinish, type Board, type Draft, type DraftFinish, type DraftRow,
 } from '../core/deckDraft';
 import { fmtInt, fmtUsd } from '../core/format';
+import { fromPrinting, type GuideCard } from '../core/guideCard';
 
 const route = getRouteApi('/decks/$slug/edit');
 const crop = (url: string) => url.replace('/normal/', '/art_crop/');
@@ -53,6 +55,8 @@ function Editor({ slug, detail }: { slug: string; detail: DeckDetailOut }) {
   const [review, setReview] = useState<PreviewOut | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [inspecting, setInspecting] = useState<GuideCard | null>(null);
+  const inspect = (p: PrintingOut) => setInspecting(fromPrinting(p));
   const stats = draftStats(draft, detail.deck.format);
   const renamed = name.trim() !== detail.deck.name && name.trim().length > 0;
   const dirty = stats.dirty || renamed;
@@ -88,8 +92,8 @@ function Editor({ slug, detail }: { slug: string; detail: DeckDetailOut }) {
   };
 
   const edit = (fn: (d: Draft) => Draft) => setDraft((d) => fn(d));
-  const deckPane = <DraftList draft={draft} onEdit={edit} />;
-  const findPane = <FindCards draft={draft} format={detail.deck.format} onAdd={(p, board) => edit((d) => addCard(d, p, board))} />;
+  const deckPane = <DraftList draft={draft} onEdit={edit} onInspect={inspect} />;
+  const findPane = <FindCards draft={draft} format={detail.deck.format} onAdd={(p, board) => edit((d) => addCard(d, p, board))} onInspect={inspect} />;
 
   return (
     <main id="main" tabIndex={-1} className="min-h-0 min-w-0 p-2 sm:p-3 lg:h-[calc(100dvh-var(--size-topbar))] lg:p-4">
@@ -115,6 +119,7 @@ function Editor({ slug, detail }: { slug: string; detail: DeckDetailOut }) {
                 {fmtInt(stats.size)}{stats.target && <span className="text-md font-regular text-ink-muted"> / {stats.target}</span>}
               </dd>
             </div>
+            <DeckChecks slug={slug} draft={draft} />
             <div className="flex flex-col items-end">
               <dt className="text-ink-muted">Changes</dt>
               <dd className="text-xl voice-condensed font-bold" aria-live="polite">
@@ -143,6 +148,7 @@ function Editor({ slug, detail }: { slug: string; detail: DeckDetailOut }) {
         )}
       </div>
 
+      <CardInspector card={inspecting} onClose={() => setInspecting(null)} />
       <ConfirmDialog
         open={review != null}
         onOpenChange={(o) => !o && setReview(null)}
@@ -191,7 +197,9 @@ function EditorSplit({ left, right }: { left: ReactNode; right: ReactNode }) {
 const BOARD_LABEL: Record<Board, string> = { commander: 'Commander', main: 'Main deck', companion: 'Companion', side: 'Sideboard', maybe: 'Maybe', token: 'Tokens' };
 const FINISH_LABEL: Record<DraftFinish, string> = { either: 'Any finish', nonfoil: 'Nonfoil', foil: 'Foil' };
 
-function DraftList({ draft, onEdit }: { draft: Draft; onEdit: (fn: (d: Draft) => Draft) => void }) {
+type Inspect = (p: PrintingOut) => void;
+
+function DraftList({ draft, onEdit, onInspect }: { draft: Draft; onEdit: (fn: (d: Draft) => Draft) => void; onInspect: Inspect }) {
   const sections = useMemo(() => draftSections(draft), [draft]);
   if (!sections.length) {
     return <EmptyNote title="An empty deck">Search for cards on the right{'\u00a0'}— add a commander first to get EDHREC suggestions.</EmptyNote>;
@@ -204,7 +212,7 @@ function DraftList({ draft, onEdit }: { draft: Draft; onEdit: (fn: (d: Draft) =>
             {s.label}<span className="ml-auto tabular">{s.count}</span>
           </h2>
           <ul>
-            {s.rows.map((r) => <DraftLine key={r.key} row={r} onEdit={onEdit} />)}
+            {s.rows.map((r) => <DraftLine key={r.key} row={r} onEdit={onEdit} onInspect={onInspect} />)}
           </ul>
         </section>
       ))}
@@ -212,7 +220,7 @@ function DraftList({ draft, onEdit }: { draft: Draft; onEdit: (fn: (d: Draft) =>
   );
 }
 
-function DraftLine({ row, onEdit }: { row: DraftRow; onEdit: (fn: (d: Draft) => Draft) => void }) {
+function DraftLine({ row, onEdit, onInspect }: { row: DraftRow; onEdit: (fn: (d: Draft) => Draft) => void; onInspect: Inspect }) {
   const p = row.printing;
   const removed = row.count === 0;
   const delta = row.count - row.saved;
@@ -225,7 +233,7 @@ function DraftLine({ row, onEdit }: { row: DraftRow; onEdit: (fn: (d: Draft) => 
         <StepButton label={`One more ${p.name}`} onClick={() => onEdit((d) => setCount(d, row.key, row.count + 1))}>+</StepButton>
       </span>
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className={`truncate text-md voice-semi font-medium ${removed ? 'line-through' : ''}`}>{p.name}</span>
+        <CardName p={p} onInspect={onInspect} struck={removed} />
         <span className="truncate text-xs tabular text-ink-muted">
           {[p.set_code.toUpperCase(), `#${p.collector_number}`, row.finish !== 'either' && FINISH_LABEL[row.finish], free > 0 ? `${free} free` : Object.values(p.owned ?? {}).some(Boolean) ? 'owned, all pledged' : 'not owned'].filter(Boolean).join(' · ')}
         </span>
@@ -287,7 +295,7 @@ function RowMenu({ row, onEdit }: { row: DraftRow; onEdit: (fn: (d: Draft) => Dr
 
 // ---------- right: find cards ----------
 
-function FindCards({ draft, format, onAdd }: { draft: Draft; format: string | null; onAdd: (p: PrintingOut, board: Board) => void }) {
+function FindCards({ draft, format, onAdd, onInspect }: { draft: Draft; format: string | null; onAdd: (p: PrintingOut, board: Board) => void; onInspect: Inspect }) {
   const commander = commanderName(draft);
   const [tab, setTab] = useState<'search' | 'suggest'>(commander ? 'suggest' : 'search');
   const inDeck = useMemo(() => draftOracles(draft), [draft]);
@@ -299,16 +307,16 @@ function FindCards({ draft, format, onAdd }: { draft: Draft; format: string | nu
         <PaneTab value="suggest">Suggestions</PaneTab>
       </Tabs.List>
       <Tabs.Content value="search" className="flex min-h-0 flex-1 flex-col">
-        <SearchTab inDeck={inDeck} wantsCommander={wantsCommander} onAdd={onAdd} />
+        <SearchTab inDeck={inDeck} wantsCommander={wantsCommander} onAdd={onAdd} onInspect={onInspect} />
       </Tabs.Content>
       <Tabs.Content value="suggest" className="flex min-h-0 flex-1 flex-col">
-        <SuggestTab commander={commander} inDeck={inDeck} onAdd={onAdd} />
+        <SuggestTab commander={commander} inDeck={inDeck} onAdd={onAdd} onInspect={onInspect} />
       </Tabs.Content>
     </Tabs.Root>
   );
 }
 
-function SearchTab({ inDeck, wantsCommander, onAdd }: { inDeck: Set<string>; wantsCommander: boolean; onAdd: (p: PrintingOut, board: Board) => void }) {
+function SearchTab({ inDeck, wantsCommander, onAdd, onInspect }: { inDeck: Set<string>; wantsCommander: boolean; onAdd: (p: PrintingOut, board: Board) => void; onInspect: Inspect }) {
   const [text, setText] = useState('');
   const [q, setQ] = useState('');
   useEffect(() => {
@@ -338,7 +346,7 @@ function SearchTab({ inDeck, wantsCommander, onAdd }: { inDeck: Set<string>; wan
         error={res.isError ? (res.error as Error).message : null}
       >
         {hits.map((p) => (
-          <ResultLine key={p.scryfall_id} p={p} inDeck={!!p.oracle_id && inDeck.has(p.oracle_id)} note={freeNote(p.free ?? 0, owned(p))} onAdd={onAdd} offerCommander={wantsCommander && canCommand(p)} />
+          <ResultLine key={p.scryfall_id} p={p} inDeck={!!p.oracle_id && inDeck.has(p.oracle_id)} note={freeNote(p.free ?? 0, owned(p))} onAdd={onAdd} onInspect={onInspect} offerCommander={wantsCommander && canCommand(p)} />
         ))}
       </ResultList>
     </>
@@ -348,7 +356,7 @@ function SearchTab({ inDeck, wantsCommander, onAdd }: { inDeck: Set<string>; wan
 const owned = (p: PrintingOut) => Object.values(p.owned ?? {}).reduce((s, n) => s + n, 0);
 const freeNote = (free: number, own: number) => (free > 0 ? `${free} free` : own > 0 ? 'owned, all pledged' : null);
 
-function SuggestTab({ commander, inDeck, onAdd }: { commander: string | null; inDeck: Set<string>; onAdd: (p: PrintingOut, board: Board) => void }) {
+function SuggestTab({ commander, inDeck, onAdd, onInspect }: { commander: string | null; inDeck: Set<string>; onAdd: (p: PrintingOut, board: Board) => void; onInspect: Inspect }) {
   const [freeOnly, setFreeOnly] = useState(false);
   const [hideInDeck, setHideInDeck] = useState(true);
   const res = useQuery(suggestionsQuery(commander));
@@ -373,6 +381,7 @@ function SuggestTab({ commander, inDeck, onAdd }: { commander: string | null; in
             lead={c.inclusion_pct != null ? `${Math.round(c.inclusion_pct)}%` : '—'}
             note={freeNote(c.free, c.owned)}
             onAdd={onAdd}
+            onInspect={onInspect}
           />
         ))}
       </ResultList>
@@ -387,13 +396,13 @@ function ResultList({ children, empty, loading, error }: { children: ReactNode[]
   return <ul className="mt-2 min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-8 [scrollbar-gutter:stable]">{children}</ul>;
 }
 
-function ResultLine({ p, inDeck, lead, note, onAdd, offerCommander = false }: { p: PrintingOut; inDeck: boolean; lead?: string; note: string | null; onAdd: (p: PrintingOut, board: Board) => void; offerCommander?: boolean }) {
+function ResultLine({ p, inDeck, lead, note, onAdd, onInspect, offerCommander = false }: { p: PrintingOut; inDeck: boolean; lead?: string; note: string | null; onAdd: (p: PrintingOut, board: Board) => void; onInspect: Inspect; offerCommander?: boolean }) {
   return (
     <li className="ruled flex items-center gap-3 py-1.5">
       {p.image_uri ? <img src={crop(p.image_uri)} alt="" loading="lazy" decoding="async" className="size-10 shrink-0 rounded-xs object-cover" /> : <span aria-hidden="true" className="size-10 shrink-0 rounded-xs border border-rule bg-paper-sunk" />}
       {lead && <span className="w-10 shrink-0 text-right text-sm voice-condensed font-bold tabular text-ink">{lead}</span>}
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-md voice-semi font-medium">{p.name}</span>
+        <CardName p={p} onInspect={onInspect} />
         <span className="truncate text-xs tabular text-ink-muted">
           {[p.type_line?.split(' — ')[0], `${p.set_code.toUpperCase()} #${p.collector_number}`].filter(Boolean).join(' · ')}
           {note && <> · <span className={note.endsWith('free') ? 'text-accent-ink' : ''}>{note}</span></>}
@@ -440,4 +449,95 @@ function SwapGroup({ title, lines, note, tone }: { title: string; lines: SwapLin
       </ul>
     </section>
   );
+}
+
+/** The card name opens the inspector (bigger art, facts, your copies). */
+function CardName({ p, onInspect, struck = false }: { p: PrintingOut; onInspect: Inspect; struck?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onInspect(p)}
+      className={`min-w-0 cursor-pointer self-start truncate text-left text-md voice-semi font-medium text-ink underline-offset-4 decoration-rule-strong hover:underline focus-visible:underline ${struck ? 'line-through' : ''}`}
+    >
+      {p.name}
+    </button>
+  );
+}
+
+// ---------- checks: format legality + bracket floor ----------
+
+const FORMAT_NAME: Record<string, string> = { commander: 'Commander', brawl: 'Brawl', paupercommander: 'Pauper Commander', oathbreaker: 'Oathbreaker' };
+const formatName = (f: string) => FORMAT_NAME[f] ?? f.charAt(0).toUpperCase() + f.slice(1);
+
+const BRACKET_NAME: Record<number, string> = { 1: 'Exhibition', 2: 'Core', 3: 'Upgraded', 4: 'Optimized' };
+
+/** Legality (Scryfall's per-format legality) and, for Commander, the bracket
+ *  FLOOR from Wizards' published criteria. Advisory — never blocks saving. */
+function DeckChecks({ slug, draft }: { slug: string; draft: Draft }) {
+  const [combos, setCombos] = useState(false);
+  const cards = useDebounced(draftCards(draft), 450);
+  const q = useQuery(deckCheckQuery(slug, cards, combos));
+  const r: CheckOut | undefined = q.data;
+  const errors = r?.legality.violations.filter((v) => v.severity === 'error') ?? [];
+  const b = r?.bracket;
+  return (
+    <div className="flex flex-col items-end">
+      <dt className="text-ink-muted">Checks</dt>
+      <dd>
+        <Popover.Root>
+          <Popover.Trigger className="cursor-pointer rounded-sm px-1 text-xl voice-condensed font-bold hover:bg-paper-sunk data-[state=open]:bg-paper-sunk" aria-label="Deck checks">
+            {!r ? <span className="text-ink-muted">…</span> : (
+              <>
+                <span className={errors.length ? 'text-danger' : 'text-ink'}>{errors.length ? `${errors.length} issue${errors.length > 1 ? 's' : ''}` : 'Legal'}</span>
+                {b?.suggested_bracket != null && <span className="text-ink"> · B{b.suggested_bracket}+</span>}
+              </>
+            )}
+          </Popover.Trigger>
+          <Popover.Portal>
+            <Popover.Content align="end" sideOffset={6} collisionPadding={12} className="z-50 flex max-h-[70dvh] w-[min(24rem,calc(100vw-1.5rem))] flex-col gap-3 overflow-y-auto rounded-sm border border-chrome-line bg-chrome-raised p-3 text-sm text-on-chrome shadow-[0_12px_28px_-12px_var(--theme-scrim)]">
+              {!r ? <p className="text-on-chrome-muted">Checking…</p> : (
+                <>
+                  <section className="flex flex-col gap-1">
+                    <h3 className="voice-semi font-medium">{errors.length ? 'Not legal' : 'Legal'} in {formatName(r.format)}</h3>
+                    {r.legality.violations.length === 0 && <p className="text-on-chrome-muted">No problems found.</p>}
+                    <ul className="flex flex-col gap-1">
+                      {r.legality.violations.map((v, i) => (
+                        <li key={`${v.code}-${i}`} className={v.severity === 'error' ? 'text-danger' : 'text-on-chrome-muted'}>{v.message}</li>
+                      ))}
+                    </ul>
+                  </section>
+                  {b && (
+                    <section className="flex flex-col gap-1 border-t border-chrome-line pt-2">
+                      <h3 className="voice-semi font-medium">
+                        {b.suggested_bracket != null ? `Bracket ${b.suggested_bracket} or higher · ${BRACKET_NAME[b.suggested_bracket]}` : 'Bracket needs a commander'}
+                      </h3>
+                      <p className="text-on-chrome-muted">
+                        Wizards’ Commander Brackets are guidelines for talking about power, not rules. This is the lowest bracket the list allows by their published criteria; how strong it plays is still your call.
+                      </p>
+                      {b.game_changers.length > 0 && <p>Game Changers: {b.game_changers.join(', ')}</p>}
+                      {b.mass_land_denial.length > 0 && <p>Mass land denial: {b.mass_land_denial.join(', ')}</p>}
+                      {b.extra_turns.length > 0 && <p>Extra turns: {b.extra_turns.join(', ')}</p>}
+                      {combos
+                        ? <p className="text-on-chrome-muted">{b.spellbook_available ? `Two-card combos: ${b.two_card_combos}` : 'Commander Spellbook didn’t answer; combos not counted.'}</p>
+                        : <button type="button" onClick={() => setCombos(true)} className="self-start cursor-pointer text-accent underline-offset-4 hover:underline">Also check two-card combos</button>}
+                    </section>
+                  )}
+                </>
+              )}
+            </Popover.Content>
+          </Popover.Portal>
+        </Popover.Root>
+      </dd>
+    </div>
+  );
+}
+
+function useDebounced<T>(value: T, ms: number): T {
+  const key = JSON.stringify(value);
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setV(JSON.parse(key) as T), ms);
+    return () => clearTimeout(t);
+  }, [key, ms]);
+  return v;
 }

@@ -18,8 +18,13 @@ fetches; the CLI resolves cards against Scryfall and writes them:
 
 ```
 uv run python scripts/import_deck.py <deck-url> \
-  | uv run mm deck import-deck --slug <deck-slug> [--name "Deck Name"] [--force] -
+  | uv run mm deck import-deck --slug <deck-slug> [--name "Deck Name"] [--force] [--add-to-collection] -
 ```
+
+**Defaults:** an import saves the **decklist (recipe) only** and is **never marked built**.
+Ask whether the user has the cards in hand: if yes, add `--add-to-collection` (one copy
+of the playable cards → inventory, one `deck` ingest event). Building (pledging those
+cards to the deck) stays a separate, explicit `mm deck compose <slug>`.
 
 - **Archidekt** (`archidekt.com/decks/<id>`) — open JSON API, plain fetch. Carries
   categories (Commander/Sideboard/Maybeboard → boards; others → main).

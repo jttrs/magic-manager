@@ -205,7 +205,9 @@ function CopiesBody({ h, onLeave }: { h: HoldingsOut; onLeave: () => void }) {
                       {cs.source.set_code && <span className="tabular text-ink-muted"> · {cs.source.set_code.toUpperCase()}</span>}
                     </span>
                     {KIND_NOTE[cs.source.kind] && <span className="shrink-0 text-xs text-ink-muted">{KIND_NOTE[cs.source.kind]}</span>}
-                    <span className="ml-auto shrink-0 text-xs tabular text-ink-muted">×{cs.copies}{cs.finish === 'foil' ? ' ✦' : ''}</span>
+                    <span className="ml-auto shrink-0 text-xs tabular text-ink-muted">
+                      ×{cs.copies}{cs.finish === 'foil' ? ' ✦' : ''}{(cs.acquisitions ?? 1) > 1 && ` · added ${cs.acquisitions} times`}
+                    </span>
                   </li>
                 ))}
               </ul>

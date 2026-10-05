@@ -586,6 +586,47 @@
         }
       }
     },
+    "/api/decks/import": {
+      "post": {
+        "tags": [
+          "decks"
+        ],
+        "summary": "Deck Import",
+        "operationId": "deck_import",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/decks/{slug}/build-plan": {
       "get": {
         "tags": [
@@ -809,6 +850,58 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PreviewOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/decks/{slug}/check": {
+      "post": {
+        "tags": [
+          "decks"
+        ],
+        "summary": "Deck Check",
+        "operationId": "deck_check",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckOut"
                 }
               }
             }
@@ -1129,6 +1222,79 @@
         ],
         "title": "ActionOut"
       },
+      "BracketOut": {
+        "properties": {
+          "suggested_bracket": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Bracket",
+            "description": "Floor (1\u20134) from Wizards' bracket criteria; None without a commander. Never authoritative."
+          },
+          "game_changer_count": {
+            "type": "integer",
+            "title": "Game Changer Count"
+          },
+          "game_changers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Game Changers"
+          },
+          "mass_land_denial": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Mass Land Denial"
+          },
+          "extra_turns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Extra Turns"
+          },
+          "two_card_combos": {
+            "type": "integer",
+            "title": "Two Card Combos"
+          },
+          "rationale": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Rationale"
+          },
+          "stale_data": {
+            "type": "boolean",
+            "title": "Stale Data"
+          },
+          "spellbook_available": {
+            "type": "boolean",
+            "title": "Spellbook Available"
+          }
+        },
+        "type": "object",
+        "required": [
+          "suggested_bracket",
+          "game_changer_count",
+          "game_changers",
+          "mass_land_denial",
+          "extra_turns",
+          "two_card_combos",
+          "rationale",
+          "stale_data",
+          "spellbook_available"
+        ],
+        "title": "BracketOut"
+      },
       "BuildIn": {
         "properties": {
           "allow_shortfall": {
@@ -1272,6 +1438,12 @@
             "type": "integer",
             "title": "Copies",
             "description": "Copies acquired from this source (history: may exceed what is owned today)."
+          },
+          "acquisitions": {
+            "type": "integer",
+            "title": "Acquisitions",
+            "description": "Separate ingests from this source (e.g. 2 = two purchases of the same product).",
+            "default": 1
           }
         },
         "type": "object",
@@ -1313,6 +1485,56 @@
           "after"
         ],
         "title": "ChangeOut"
+      },
+      "CheckIn": {
+        "properties": {
+          "cards": {
+            "items": {
+              "$ref": "#/components/schemas/DraftCardIn"
+            },
+            "type": "array",
+            "title": "Cards"
+          },
+          "combos": {
+            "type": "boolean",
+            "title": "Combos",
+            "description": "Also ask Commander Spellbook for two-card combos (network).",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "cards"
+        ],
+        "title": "CheckIn"
+      },
+      "CheckOut": {
+        "properties": {
+          "format": {
+            "type": "string",
+            "title": "Format"
+          },
+          "legality": {
+            "$ref": "#/components/schemas/LegalityOut"
+          },
+          "bracket": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BracketOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "format",
+          "legality",
+          "bracket"
+        ],
+        "title": "CheckOut"
       },
       "CollectionCardOut": {
         "properties": {
@@ -2251,6 +2473,65 @@
         ],
         "title": "DeckPledgeOut"
       },
+      "DeckSourceOut": {
+        "properties": {
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "author": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author"
+          },
+          "cards": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Cards"
+          }
+        },
+        "type": "object",
+        "title": "DeckSourceOut",
+        "description": "A fetched deck as the builder returned it \u2014 pass back to save it as a decklist."
+      },
       "DeckSummaryOut": {
         "properties": {
           "slug": {
@@ -2643,6 +2924,48 @@
         ],
         "title": "HoldingsOut"
       },
+      "ImportIn": {
+        "properties": {
+          "deck": {
+            "$ref": "#/components/schemas/DeckSourceOut"
+          },
+          "force": {
+            "type": "boolean",
+            "title": "Force",
+            "description": "Replace the cards of a deck already imported from this source.",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "deck"
+        ],
+        "title": "ImportIn"
+      },
+      "ImportOut": {
+        "properties": {
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "duplicate": {
+            "type": "boolean",
+            "title": "Duplicate",
+            "description": "Already imported from this source; `slug` is the existing deck."
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          }
+        },
+        "type": "object",
+        "required": [
+          "slug",
+          "duplicate",
+          "summary"
+        ],
+        "title": "ImportOut"
+      },
       "JobOut": {
         "properties": {
           "id": {
@@ -2785,6 +3108,37 @@
           "input_schema"
         ],
         "title": "JobSpecOut"
+      },
+      "LegalityOut": {
+        "properties": {
+          "format": {
+            "type": "string",
+            "title": "Format"
+          },
+          "legal": {
+            "type": "boolean",
+            "title": "Legal"
+          },
+          "checked_count": {
+            "type": "integer",
+            "title": "Checked Count"
+          },
+          "violations": {
+            "items": {
+              "$ref": "#/components/schemas/ViolationOut"
+            },
+            "type": "array",
+            "title": "Violations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "format",
+          "legal",
+          "checked_count",
+          "violations"
+        ],
+        "title": "LegalityOut"
       },
       "NewDeckIn": {
         "properties": {
@@ -3157,6 +3511,17 @@
               }
             ],
             "title": "Deck Name"
+          },
+          "deck": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DeckSourceOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Deck URL fetches only: the source deck, to save its decklist."
           }
         },
         "type": "object",
@@ -3614,6 +3979,42 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "ViolationOut": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warning",
+              "info"
+            ],
+            "title": "Severity"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "cards": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Cards"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "severity",
+          "message",
+          "cards"
+        ],
+        "title": "ViolationOut"
       }
     }
   }
