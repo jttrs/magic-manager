@@ -132,6 +132,11 @@ export function filterCollection(cards: readonly CollectionCardOut[], f: Collect
   });
 }
 
+/** Σ market price of a buy list (each printing at the finish its line names). */
+export function buyTotal(cards: readonly CollectionCardOut[], exclude: readonly string[]): number {
+  return cards.reduce((s, c) => s + ((buyFinish(c, exclude) === 'foil' ? c.price_usd_foil : c.price_usd) ?? 0), 0);
+}
+
 /** Finish a buy line names for a missing printing: nonfoil when it's checked, else foil. */
 export function buyFinish(c: CollectionCardOut, exclude: readonly string[]): InvFinish {
   const fins = allowedFinishes(c, new Set(exclude));

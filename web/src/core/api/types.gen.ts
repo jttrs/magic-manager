@@ -367,6 +367,88 @@ export type CardSourceOut = {
 };
 
 /**
+ * CartAuditOut
+ */
+export type CartAuditOut = {
+    /**
+     * Lines
+     */
+    lines: number;
+    /**
+     * Copies
+     */
+    copies: number;
+    /**
+     * Total
+     */
+    total: number;
+    /**
+     * Unidentified
+     */
+    unidentified: Array<UnidentifiedOut>;
+    /**
+     * Family
+     */
+    family: string | null;
+    /**
+     * Families
+     */
+    families: Array<string>;
+    /**
+     * Dupes
+     */
+    dupes: Array<DupeOut>;
+    /**
+     * Owned
+     */
+    owned: Array<OwnedOut>;
+    /**
+     * Missing
+     */
+    missing: Array<MissingOut>;
+    /**
+     * Overpay
+     */
+    overpay: Array<OverpayOut>;
+};
+
+/**
+ * CartIn
+ */
+export type CartIn = {
+    /**
+     * Cart
+     *
+     * The bookmarklet's pasted JSON.
+     */
+    cart?: string | null;
+    /**
+     * Use Account
+     *
+     * Read the cart with the configured Mana Pool account instead.
+     */
+    use_account?: boolean;
+    /**
+     * Family
+     *
+     * Set family to check gaps against; imputed when the cart sits in one.
+     */
+    family?: string | null;
+};
+
+/**
+ * CartSetupOut
+ */
+export type CartSetupOut = {
+    /**
+     * Account
+     *
+     * MANAPOOL_EMAIL, _PASSWORD and _ACCESS_TOKEN are configured, so the cart can be read directly.
+     */
+    account: boolean;
+};
+
+/**
  * ChangeOut
  */
 export type ChangeOut = {
@@ -1204,6 +1286,56 @@ export type DraftIn = {
 };
 
 /**
+ * DupeOut
+ */
+export type DupeOut = {
+    /**
+     * Scryfall Id
+     */
+    scryfall_id?: string | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Set
+     */
+    set: string;
+    /**
+     * Num
+     */
+    num: string;
+    /**
+     * Fin
+     */
+    fin?: string;
+    /**
+     * Nf Qty
+     */
+    nf_qty: number;
+    /**
+     * Fo Qty
+     */
+    fo_qty: number;
+    /**
+     * Nf Price
+     */
+    nf_price: number | null;
+    /**
+     * Fo Price
+     */
+    fo_price: number | null;
+    /**
+     * Cheaper
+     */
+    cheaper: number | null;
+    /**
+     * Note
+     */
+    note: string;
+};
+
+/**
  * EntryOut
  */
 export type EntryOut = {
@@ -1390,6 +1522,18 @@ export type FamilySummaryOut = {
      * Member sets with printings, oldest first.
      */
     sets?: Array<SetRefOut>;
+};
+
+/**
+ * FeaturesOut
+ */
+export type FeaturesOut = {
+    /**
+     * Flags
+     */
+    flags: {
+        [key: string]: boolean;
+    };
 };
 
 /**
@@ -1610,6 +1754,36 @@ export type LegalityOut = {
 };
 
 /**
+ * MissingOut
+ */
+export type MissingOut = {
+    /**
+     * Scryfall Id
+     */
+    scryfall_id?: string | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Set
+     */
+    set: string;
+    /**
+     * Num
+     */
+    num: string;
+    /**
+     * Fin
+     */
+    fin: string;
+    /**
+     * Market
+     */
+    market: number | null;
+};
+
+/**
  * NewDeckIn
  */
 export type NewDeckIn = {
@@ -1647,6 +1821,86 @@ export type OracleTagOut = {
      * Label
      */
     label: string;
+};
+
+/**
+ * OverpayOut
+ */
+export type OverpayOut = {
+    /**
+     * Scryfall Id
+     */
+    scryfall_id?: string | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Set
+     */
+    set: string;
+    /**
+     * Num
+     */
+    num: string;
+    /**
+     * Fin
+     */
+    fin: string;
+    /**
+     * Qty
+     */
+    qty: number;
+    /**
+     * Your
+     */
+    your: number | null;
+    /**
+     * Market
+     */
+    market: number | null;
+    /**
+     * Over
+     */
+    over?: number | null;
+    /**
+     * Pct
+     */
+    pct?: number | null;
+};
+
+/**
+ * OwnedOut
+ */
+export type OwnedOut = {
+    /**
+     * Scryfall Id
+     */
+    scryfall_id?: string | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Set
+     */
+    set: string;
+    /**
+     * Num
+     */
+    num: string;
+    /**
+     * Fin
+     */
+    fin: string;
+    /**
+     * Owned Qty
+     */
+    owned_qty: number;
+    /**
+     * Your
+     */
+    your: number;
 };
 
 /**
@@ -2229,6 +2483,24 @@ export type TreeNodeOut = {
 };
 
 /**
+ * UnidentifiedOut
+ */
+export type UnidentifiedOut = {
+    /**
+     * Name
+     */
+    name: string | null;
+    /**
+     * Set
+     */
+    set: string | null;
+    /**
+     * Num
+     */
+    num: string | null;
+};
+
+/**
  * ValidationError
  */
 export type ValidationError = {
@@ -2546,6 +2818,63 @@ export type ExploreCardResponses = {
 };
 
 export type ExploreCardResponse = ExploreCardResponses[keyof ExploreCardResponses];
+
+export type FeaturesRouteData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/features';
+};
+
+export type FeaturesRouteResponses = {
+    /**
+     * Successful Response
+     */
+    200: FeaturesOut;
+};
+
+export type FeaturesRouteResponse = FeaturesRouteResponses[keyof FeaturesRouteResponses];
+
+export type CartSetupData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/cart/setup';
+};
+
+export type CartSetupResponses = {
+    /**
+     * Successful Response
+     */
+    200: CartSetupOut;
+};
+
+export type CartSetupResponse = CartSetupResponses[keyof CartSetupResponses];
+
+export type CartCheckData = {
+    body: CartIn;
+    path?: never;
+    query?: never;
+    url: '/api/cart/check';
+};
+
+export type CartCheckErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CartCheckError = CartCheckErrors[keyof CartCheckErrors];
+
+export type CartCheckResponses = {
+    /**
+     * Successful Response
+     */
+    200: CartAuditOut;
+};
+
+export type CartCheckResponse = CartCheckResponses[keyof CartCheckResponses];
 
 export type MarketProductsData = {
     body?: never;

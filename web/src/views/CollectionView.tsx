@@ -9,6 +9,9 @@ import { CopyTargets } from '../components/CopyButton';
 import { AddCardMark, CardKingdomMark, FindProductsMark, ManaPoolMark, TcgplayerMark } from '../components/StoreMarks';
 import { IconAction } from '../components/IconAction';
 import { FindProductsDialog } from './collection/FindProductsDialog';
+import { CartCheckDialog } from './collection/CartCheckDialog';
+import { useFeature } from '../app/features';
+import { Button } from '../components/Button';
 import { MultiSelect } from '../components/MultiSelect';
 import { Segmented, SegmentedToggles, SideSection, TextField } from '../components/Sidebar';
 import { SortBuilder } from '../components/SortBuilder';
@@ -16,7 +19,7 @@ import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../components/St
 import { VirtualGuide, type GuideSection } from '../components/VirtualGuide';
 import { collectionBuyList, type CollectionCardOut, type CollectionOut } from '../core/api';
 import { CARD_SORT, CARD_SORT_PRESETS, type CardSortKey } from '../core/cardSort';
-import { buyFinish, collectionStats, filterCollection, functionCounts, isMissing, NO_FUNCTION, setGroupIncluded, sourceKinds, sourceOptions, TRAITS, traitCounts, traitsIn, type TraitGroup } from '../core/collection';
+import { buyFinish, buyTotal, collectionStats, filterCollection, functionCounts, isMissing, NO_FUNCTION, setGroupIncluded, sourceKinds, sourceOptions, TRAITS, traitCounts, traitsIn, type TraitGroup } from '../core/collection';
 import { InfoTip } from '../components/InfoTip';
 import { fmtInt, fmtUsd } from '../core/format';
 import { fromCollection, groupCards, type GuideCard } from '../core/guideCard';
@@ -68,6 +71,7 @@ export function CollectionView() {
 
   const srcOptions = useMemo(() => (q.data?.sources?.length ? sourceOptions(q.data.cards, q.data.sources) : null), [q.data]);
 
+  const cartCheck = useFeature('cart_check');
   const marked = view ? [...selected].map((k) => view.byId.get(k)).filter((c) => c != null) : [];
   const buyPool = marked.length ? marked : (view?.shown.filter((c) => isMissing(c, search.exclude)) ?? []);
   const buyText = (target: 'manapool' | 'tcgplayer' | 'cardkingdom') => async () => {
@@ -199,7 +203,7 @@ export function CollectionView() {
       </SideSection>
       <SideSection title="Buy">
         <CopyTargets
-          lead={`Copy bulk lists · ${marked.length ? `${fmtInt(marked.length)} marked` : `${fmtInt(buyPool.length)} missing shown`}`}
+          lead={`Copy bulk lists · ${marked.length ? `${fmtInt(marked.length)} marked` : `${fmtInt(buyPool.length)} missing shown`} · ≈ ${fmtUsd(buyTotal(buyPool, search.exclude))} at market`}
           targets={[
             { id: 'manapool', name: 'ManaPool', Mark: ManaPoolMark, getText: buyText('manapool') },
             { id: 'tcgplayer', name: 'TCGplayer', Mark: TcgplayerMark, getText: buyText('tcgplayer') },
@@ -212,6 +216,9 @@ export function CollectionView() {
             },
           ]}
         />
+        {cartCheck && (
+          <CartCheckDialog family={search.families.length === 1 ? search.families[0] : undefined} trigger={<Button>Check my Mana Pool cart</Button>} />
+        )}
         {selected.size > 0 && (
           <button type="button" onClick={clear} className="self-start cursor-pointer text-sm text-on-chrome-muted underline hover:text-on-chrome">Clear marks</button>
         )}

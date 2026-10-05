@@ -54,3 +54,6 @@ uv.lock
 .playwright-mcp/
 .impeccable/questions/
 .impeccable/hook.cache.json
+
+# Per-machine feature flags (see config/features.toml)
+config/features.local.toml

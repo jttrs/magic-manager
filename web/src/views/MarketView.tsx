@@ -39,6 +39,7 @@ export function MarketView() {
     return r.data.text;
   };
   const toBuy = cost.data?.lines.reduce((n, l) => n + l.buy, 0) ?? 0;
+  const toBuyUsd = cost.data?.lines.reduce((s, l) => s + l.buy * ((search.buyAt === 'floor' ? l.floor_usd : l.unit_usd) ?? 0), 0) ?? 0;
 
   const sidebar = (
     <>
@@ -95,7 +96,7 @@ export function MarketView() {
             options={[{ value: 'floor', label: 'Cheapest' }, { value: 'exact', label: 'Deck’s' }]}
           />
           <CopyTargets
-            lead={`Copy bulk lists · ${fmtCount(toBuy, 'card')} to buy`}
+            lead={`Copy bulk lists · ${fmtCount(toBuy, 'card')} to buy · ≈ ${fmtUsd(toBuyUsd)} at market`}
             targets={[
               { id: 'manapool', name: 'ManaPool', Mark: ManaPoolMark, getText: buyText('manapool') },
               { id: 'tcgplayer', name: 'TCGplayer', Mark: TcgplayerMark, getText: buyText('tcgplayer') },

@@ -1,7 +1,7 @@
 // Server state via TanStack Query over the generated, typed API client.
 import { keepPreviousData, queryOptions } from '@tanstack/react-query';
 import type { DraftCardIn } from '../core/api';
-import { marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs } from '../core/api';
+import { cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs } from '../core/api';
 
 class ApiError extends Error {}
 
@@ -111,6 +111,21 @@ export const preconCatalogQuery = (q: string) =>
     queryFn: async ({ signal }) => unwrap(await ingestPrecons({ query: { q: q.trim(), limit: 40 }, signal })),
     staleTime: 5 * 60_000,
     placeholderData: keepPreviousData,
+  });
+
+export const featuresQuery = () =>
+  queryOptions({
+    queryKey: ['features'],
+    queryFn: async ({ signal }) => unwrap(await featuresRoute({ signal })).flags,
+    staleTime: Infinity,
+  });
+
+export const cartSetupQuery = (enabled: boolean) =>
+  queryOptions({
+    queryKey: ['cart', 'setup'],
+    queryFn: async ({ signal }) => unwrap(await cartSetup({ signal })),
+    enabled,
+    staleTime: Infinity,
   });
 
 export const marketProductsQuery = (code?: string) =>

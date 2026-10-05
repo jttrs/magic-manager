@@ -1,0 +1,11 @@
+# Feature flags. Defaults ship OFF for anything internal-only.
+#
+# Turn a flag on for this machine without committing it:
+#   config/features.local.toml (git-ignored), e.g.  [features]\n cart_check = true
+#   or the environment:  MM_FEATURES=cart_check  (comma list; "-name" forces off)
+# Precedence: environment > features.local.toml > this file.
+
+[features]
+# Read your Mana Pool cart and audit it against your collection. Internal: it
+# needs your Mana Pool credentials or a bookmarklet, which we won't ask users for.
+cart_check = false

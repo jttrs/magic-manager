@@ -40,11 +40,12 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "src"))
 
-from manapool_common import (  # noqa: E402
-    CartLine, load_cart, map_cart, overpay_rows, _fmt,
+from manapool_common import load_cart, map_cart, _fmt  # noqa: E402
+from magic_manager import sets as sets_mod, util  # noqa: E402
+from magic_manager.cart import (  # noqa: E402 — the checks live in the engine
+    OVER_MARKET_USD_MIN as _OVER_MARKET_USD_MIN, check_dupes, check_missing, check_overpay,
+    check_owned, infer_set_anchors, is_flagged,
 )
-from magic_manager import db, missing as missing_mod, sets as sets_mod, util  # noqa: E402
-from magic_manager.selectors import _cn_sort_key  # noqa: E402
 
 
 # ---------- helpers ----------
@@ -59,198 +60,6 @@ def _card_link(name: str, setc: str, num: str) -> str:
     url = _scryfall_url(setc, num)
     label = f"{safe} ({setc}) {num}" if setc and num else safe
     return f"[{label}]({url})" if url else safe
-
-
-def _row_market(foil: bool, card: dict) -> float | None:
-    val = card.get("prices_usd_foil") if foil else card.get("prices_usd")
-    return float(val) if val not in (None, "") else None
-
-
-# ---------- the three atomic checks ----------
-
-def check_owned(mapped: list[CartLine], family_codes: set[str] | None) -> tuple[list[dict], int]:
-    """Cart lines whose (scryfall_id, finish) is already owned in inventory.
-
-    Returns (rows, skipped) where skipped counts out-of-family lines when
-    family_codes is given. A line is "owned" iff inventory qty>0 for the same
-    printing AND the same finish. Deterministic sort (set, cn, finish).
-    """
-    # Collect the scryfall_ids we need to test, honoring family scoping.
-    candidates: list[CartLine] = []
-    skipped = 0
-    for m in mapped:
-        if not m.scryfall_id:
-            continue  # unmapped — can't test ownership; overpay reports these
-        if family_codes is not None and (m.set_code or "").lower() not in family_codes:
-            skipped += 1
-            continue
-        candidates.append(m)
-
-    if not candidates:
-        return [], skipped
-
-    sids = list({m.scryfall_id for m in candidates})
-    placeholders = ",".join("?" for _ in sids)
-    owned: dict[tuple[str, str], int] = {}
-    with db.connect() as conn:
-        for r in conn.execute(
-            f"SELECT scryfall_id, finish, quantity FROM inventory "
-            f"WHERE scryfall_id IN ({placeholders})",
-            sids,
-        ).fetchall():
-            owned[(r["scryfall_id"], r["finish"])] = r["quantity"]
-
-    rows: list[dict] = []
-    for m in candidates:
-        fin = "foil" if m.foil else "nonfoil"
-        qty = owned.get((m.scryfall_id, fin), 0)
-        if qty > 0:
-            rows.append({
-                "name": m.name or "?", "set": m.set_code or "", "num": m.number or "",
-                "fin": fin, "owned_qty": qty, "your": (m.price_cents or 0) / 100.0,
-            })
-    rows.sort(key=lambda r: (r["set"], _cn_sort_key(r["num"]), r["fin"]))
-    return rows, skipped
-
-
-def check_missing(anchor: str, mapped: list[CartLine], treatment_class: str) -> list[dict]:
-    """Family gaps (missing.missing_printings) that are NOT already in the cart.
-
-    Cart membership is keyed on scryfall_id ALONE — printing-level, finish
-    ignored. This is the buying principle: when filling gaps, a copy is a copy;
-    the foil-vs-nonfoil distinction matters only at collection-entry, not at
-    buy-time. So a foil in the cart fills the gap for that printing and the
-    nonfoil is not re-listed (and vice-versa). It also matches the gap set we're
-    filtering: missing.missing_printings is itself printing-level (the bare
-    `missing` selector == `missing:either`), so keying on the same granularity
-    keeps the two steps consistent. Deterministic sort (set, cn, finish).
-    """
-    in_cart = {m.scryfall_id for m in mapped if m.scryfall_id}
-    gaps = missing_mod.missing_printings(anchor, treatment_class)
-    rows: list[dict] = []
-    for r in gaps:
-        if r.scryfall_id in in_cart:
-            continue
-        rows.append({
-            "name": r.card.get("name") or "?",
-            "set": r.card.get("set") or "",
-            "num": r.card.get("collector_number") or "",
-            "fin": r.finish,
-            "market": _row_market(r.finish == "foil", r.card),
-        })
-    rows.sort(key=lambda r: (r["set"], _cn_sort_key(r["num"]), r["fin"]))
-    return rows
-
-
-def check_overpay(mapped: list[CartLine], family_codes: set[str] | None) -> tuple[dict, int]:
-    """Overpay buckets over (optionally family-scoped) mapped lines.
-
-    Returns (buckets, skipped) where buckets is manapool_common.overpay_rows'
-    output and skipped counts out-of-family lines when family_codes is given.
-    """
-    skipped = 0
-    if family_codes is not None:
-        scoped: list[CartLine] = []
-        for m in mapped:
-            # keep unmapped lines (overpay_rows counts them as 'unmapped'); scope
-            # only lines we could place in/out of the family.
-            if m.set_code and m.set_code.lower() not in family_codes:
-                skipped += 1
-                continue
-            scoped.append(m)
-        mapped = scoped
-    return overpay_rows(mapped), skipped
-
-
-def check_dupes(mapped: list[CartLine]) -> list[dict]:
-    """Cart lines that duplicate a printing you're already buying.
-
-    Unscoped by design (a dupe is a dupe regardless of --set family): group by
-    scryfall_id — which on Scryfall uniquely identifies one ART, finish being
-    orthogonal — and flag any printing bought more than once. Two flavors:
-      hard  a single finish has qty >= 2 (two literally identical cards).
-      soft  both a nonfoil and a foil of the same printing are in the cart
-            (same art, two finishes — the collection tracks these as distinct
-            copies, but when BUYING you usually want only the cheaper).
-    A printing can be both. One collated row per dupe printing, carrying each
-    finish's qty + cheapest cart price so the user can pick or confirm intent.
-    """
-    # group[scryfall_id] = {"nf_qty","fo_qty","nf_price","fo_price","name","set","num"}
-    groups: dict[str, dict] = {}
-    for m in mapped:
-        if not m.scryfall_id:
-            continue
-        g = groups.setdefault(m.scryfall_id, {
-            "name": m.name or "?", "set": m.set_code or "", "num": m.number or "",
-            "nf_qty": 0, "fo_qty": 0, "nf_price": None, "fo_price": None,
-        })
-        qty = m.quantity or 1
-        price = m.price_cents / 100 if m.price_cents is not None else None
-        if m.foil:
-            g["fo_qty"] += qty
-            if price is not None and (g["fo_price"] is None or price < g["fo_price"]):
-                g["fo_price"] = price
-        else:
-            g["nf_qty"] += qty
-            if price is not None and (g["nf_price"] is None or price < g["nf_price"]):
-                g["nf_price"] = price
-
-    rows: list[dict] = []
-    for g in groups.values():
-        hard = g["nf_qty"] >= 2 or g["fo_qty"] >= 2
-        soft = g["nf_qty"] >= 1 and g["fo_qty"] >= 1
-        if not (hard or soft):
-            continue
-        notes: list[str] = []
-        if g["nf_qty"] >= 2:
-            notes.append(f"×{g['nf_qty']} nonfoil")
-        if g["fo_qty"] >= 2:
-            notes.append(f"×{g['fo_qty']} foil")
-        if soft:
-            notes.append("foil+nonfoil")
-        prices = [p for p in (g["nf_price"], g["fo_price"]) if p is not None]
-        rows.append({
-            "name": g["name"], "set": g["set"], "num": g["num"],
-            "nf_qty": g["nf_qty"], "nf_price": g["nf_price"],
-            "fo_qty": g["fo_qty"], "fo_price": g["fo_price"],
-            "cheaper": min(prices) if (soft and prices) else None,
-            "note": ", ".join(notes),
-        })
-    rows.sort(key=lambda r: (r["set"], _cn_sort_key(r["num"])))
-    return rows
-
-
-def _family_root(resolved) -> str:
-    """The root code of a resolved family — the member whose parent_set_code is
-    not itself in the family. sets_mod.resolve(x).code merely echoes the code you
-    asked for (`resolve('tle').code == 'tle'`), so two codes from ONE family
-    (`tla` + its child `tle`) would look like two anchors; keying on the shared
-    root collapses them. That root is also the code you'd pass to `--set`.
-    """
-    codes = {s["code"].lower() for s in resolved.related}
-    for s in resolved.related:
-        parent = (s.get("parent_set_code") or "").lower()
-        if not parent or parent not in codes:
-            return s["code"].lower()
-    return resolved.code.lower()
-
-
-def infer_set_anchors(mapped: list[CartLine]) -> list[str]:
-    """Distinct family ROOTS of the cart's mapped set codes.
-
-    Each mapped line carries the Scryfall set code of its printing; collapsing
-    those to family roots via sets_mod.resolve (24h-cached /sets) tells us which
-    family (or families) the cart belongs to — one root => deterministic
-    imputation, several => ambiguous (report all, let the user disambiguate).
-    """
-    codes = {m.set_code.lower() for m in mapped if m.set_code and m.scryfall_id}
-    roots: set[str] = set()
-    for c in codes:
-        try:
-            roots.add(_family_root(sets_mod.resolve(c)))
-        except LookupError:
-            pass
-    return sorted(roots)
 
 
 # ---------- rendering ----------
@@ -272,14 +81,10 @@ _CHAT_ROW_CAP = 40  # per-table row cap for the chat report; the file is uncappe
 # A line must clear BOTH gates to be flagged: the % gate (--over-market-pct)
 # AND an absolute-dollar floor. The dollar floor kills the low-threshold noise
 # where a big percentage is pennies (e.g. $0.21 → $0.25 is +19% but +$0.04).
-_OVER_MARKET_USD_MIN = 1.00  # min $ over market to flag, on top of the % gate
 
 
 def _is_flagged(row: dict, over_market_pct: float) -> bool:
-    """Overpay flag predicate: ≥ pct over market AND > $_OVER_MARKET_USD_MIN over
-    market. Single source of truth — every count/sum/display uses this."""
-    return row["pct"] >= over_market_pct and row["over"] > _OVER_MARKET_USD_MIN
-
+    return is_flagged(row, over_market_pct)
 
 def _summary_lines(set_code: str | None, n_lines: int, results: dict, over_market_pct: float) -> list[str]:
     out = ["## Summary", "", "| Metric | Value |", "|---|--:|",
