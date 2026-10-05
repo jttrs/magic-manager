@@ -155,10 +155,23 @@ def value_sealed_product(
     floor_total = None
     if floors:
         floor_total, _fp, _fu = _floor_sum(exp.needs, floors_cache=floors_cache)
-    if exp.packs_skipped:
+
+    # A MIXED container (fixed singles AND random boosters — e.g. a Bundle: N play
+    # boosters + a collector booster + fixed lands/cards) must ADD the boosters'
+    # EV back into cols 3/4, which the construct-from-singles expansion omits (a
+    # random pack can't be built). Without this the fixed-singles sum alone makes
+    # a bundle/scene-box/draft-night look card-poor even though most of its value
+    # is the packs. The EV is the same figure the tree's intrinsic already carries.
+    pack_ev = sealed.pack_ev_total(tree) if exp.packs_skipped else None
+    if pack_ev is not None:
+        exact = round((exact or 0.0) + pack_ev, 2)
+        if floor_total is not None:
+            floor_total = round(floor_total + pack_ev, 2)
+        else:
+            floor_total = pack_ev
         diagnostics.append(
-            f"{len(exp.packs_skipped)} random booster(s) excluded from the "
-            f"singles/floor sums (EV only): {', '.join(exp.packs_skipped)}")
+            f"includes +{util.fmt_usd(pack_ev)} random-booster EV (cols 3/4) from "
+            f"{len(exp.packs_skipped)} pack(s): {', '.join(exp.packs_skipped)}")
     return sealed.ProductValuation(
         label=tree.name, kind="sealed", listing=listing,
         sealed_market=totals.market_whole, sealed_market_source=source,

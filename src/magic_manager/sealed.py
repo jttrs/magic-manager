@@ -627,3 +627,28 @@ def referenced_set_codes(node: ProductNode) -> set[str]:
 
     _walk(node)
     return codes
+
+
+def pack_ev_total(node: ProductNode) -> float | None:
+    """Σ random-booster EV across the tree (per-unit, × each pack node's count).
+
+    Random ``pack`` nodes carry their booster EV in ``intrinsic_usd`` but are
+    EXCLUDED from the construct-from-singles expansion (you can't build a random
+    pack), so their value is otherwise invisible to the exact/floor singles
+    columns. This recovers it for a MIXED container (e.g. a Bundle = N play
+    boosters + a collector booster + fixed lands/cards), where the pack EV must
+    be ADDED to the fixed-singles sum to report true contents value. Returns None
+    when the tree has no priced pack nodes."""
+    total = 0.0
+    any_ev = False
+
+    def _walk(n: ProductNode, mult: int) -> None:
+        nonlocal total, any_ev
+        if n.kind == "pack" and n.intrinsic_usd is not None:
+            total += n.intrinsic_usd * mult
+            any_ev = True
+        for c in n.children:
+            _walk(c, mult * c.count)
+
+    _walk(node, node.count)
+    return round(total, 2) if any_ev else None

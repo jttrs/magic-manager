@@ -62,11 +62,11 @@ class _Provider:
 # ---------- value_sealed_product ----------
 
 def _patch_sealed(monkeypatch, *, market_whole, needs, packs=None, intrinsic=0.0,
-                  oracle_map=None, floors=None):
+                  oracle_map=None, floors=None, tree=None):
     from magic_manager import construct, sets
     monkeypatch.setattr(sealed, "identify_product", lambda c, s: {"name": "AFR Display", "uuid": "u"})
     monkeypatch.setattr(sealed, "build_product_tree",
-                        lambda *a, **k: type("N", (), {"name": "AFR Display"})())
+                        lambda *a, **k: tree or type("N", (), {"name": "AFR Display"})())
     monkeypatch.setattr(sealed, "referenced_set_codes", lambda node: {"afc"})
     monkeypatch.setattr(sealed, "aggregate", lambda node: _Totals(market_whole, intrinsic))
     monkeypatch.setattr(sealed, "make_market_provider", lambda mode: _Provider({}))
@@ -102,6 +102,29 @@ def test_value_sealed_product_booster_only(monkeypatch):
     assert pv.booster_only
     assert pv.exact_singles == pytest.approx(88.4) and pv.floor_singles == pytest.approx(88.4)
     assert "booster" in pv.note.lower()
+
+
+def test_value_sealed_product_mixed_container_adds_pack_ev(monkeypatch):
+    # A Bundle = fixed lands/cards (construct-expandable) PLUS random boosters
+    # (packs_skipped). Cols 3/4 must ADD the boosters' EV to the fixed-singles
+    # sum — otherwise a bundle looks card-poor. Regression for the dropped-EV bug.
+    needs = [_Need("s1", "nonfoil", 1, 8.0)]  # fixed cards exact = 8, floor = 2
+    # A real tree with two priced pack nodes: 9× play (EV 5.0) + 1× collector (EV 20.0)
+    # → pack_ev_total = 9*5 + 20 = 65.0
+    play = sealed.ProductNode(name="Play Booster", set_code="spm", kind="pack",
+                              count=9, intrinsic_usd=5.0)
+    coll = sealed.ProductNode(name="Collector Booster", set_code="spm", kind="pack",
+                              count=1, intrinsic_usd=20.0)
+    root = sealed.ProductNode(name="Gift Bundle", set_code="spm", kind="sealed",
+                              count=1, children=[play, coll])
+    _patch_sealed(monkeypatch, market_whole=95.0, needs=needs,
+                  packs=["SPM play booster", "SPM collector booster"], intrinsic=73.0,
+                  oracle_map={"s1": "o1"}, floors={"o1": (2.0, None)}, tree=root)
+    pv = valuation.value_sealed_product("spm", "Gift Bundle", listing=None, market="stub")
+    assert not pv.booster_only
+    assert pv.exact_singles == pytest.approx(8.0 + 65.0)   # fixed + pack EV
+    assert pv.floor_singles == pytest.approx(2.0 + 65.0)   # floor + pack EV
+    assert any("random-booster EV" in d for d in pv.diagnostics)
 
 
 def test_value_sealed_product_foil_floor(monkeypatch):
