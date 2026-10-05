@@ -124,3 +124,19 @@ export function TextField({ label, value, onChange, placeholder, name }: { label
     </label>
   );
 }
+
+/** Single choice from a short fixed list as a native select (keyboard + mobile pickers for free). */
+export function SelectField<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: Opt<T>[]; onChange: (v: T) => void }) {
+  return (
+    <label className="flex flex-col gap-1.5 text-sm voice-semi text-on-chrome-muted">
+      {label}
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value as T)}
+        className="min-h-9 w-full cursor-pointer rounded-sm border border-chrome-line bg-chrome-raised px-2 text-md text-on-chrome hover:border-on-chrome-muted focus-visible:border-accent"
+      >
+        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+    </label>
+  );
+}

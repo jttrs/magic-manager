@@ -113,6 +113,12 @@ def _printings(cards: Iterable[dict]) -> dict[str, dict]:
     return out
 
 
+def printings_for_ids(sids: Iterable[str]) -> dict[str, dict]:
+    """PrintingOut-shaped dicts keyed by scryfall_id for local ``cards`` rows
+    (ids absent from the local DB are omitted)."""
+    return _printings(_load_ids(sids).values())
+
+
 def _upsert(cards: list[dict]) -> None:
     if cards:
         with db.connect() as conn:

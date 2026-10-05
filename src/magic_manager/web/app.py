@@ -22,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
 from .. import api, edhrec as edhrec_engine, scryfall
-from ..api import collection as collection_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api
+from ..api import collection as collection_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api
 from .runtime import TERMINAL, JobManager
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -147,6 +147,19 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     @app.post("/api/collection/buy-list", response_model=collection_api.BuyListOut, tags=["collection"])
     def collection_buy_list(body: collection_api.BuyListIn):
         return collection_api.buy_list(body)
+
+    # ---------- decks ----------
+
+    @app.get("/api/decks", response_model=list[decks_api.DeckSummaryOut], tags=["decks"])
+    def deck_list():
+        return decks_api.summaries()
+
+    @app.get("/api/decks/{slug}", response_model=decks_api.DeckDetailOut, tags=["decks"])
+    def deck_detail(slug: str):
+        try:
+            return decks_api.detail(slug)
+        except LookupError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
 
     # ---------- add cards (ingest) ----------
 
