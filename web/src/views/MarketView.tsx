@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { decksQuery, deckCostQuery, familiesQuery, marketCardsQuery, marketProductsQuery, productTreeQuery } from '../app/queries';
 import { useJob } from '../app/useJob';
 import { ViewLayout } from '../components/AppShell';
+import { useFeature } from '../app/features';
+import { DealsPanel } from './market/DealsPanel';
 import { Chevron } from '../components/Chevron';
 import { CopyTargets } from '../components/CopyButton';
 import { InfoTip } from '../components/InfoTip';
@@ -38,6 +40,7 @@ export function MarketView() {
     if (r.error || !r.data) throw new Error('buy-list failed');
     return r.data.text;
   };
+  const dealsOn = useFeature('deals');
   const toBuy = cost.data?.lines.reduce((n, l) => n + l.buy, 0) ?? 0;
   const toBuyUsd = cost.data?.lines.reduce((s, l) => s + l.buy * ((search.buyAt === 'floor' ? l.floor_usd : l.unit_usd) ?? 0), 0) ?? 0;
 
@@ -48,9 +51,9 @@ export function MarketView() {
           label="Subject"
           value={search.subject}
           onChange={(subject) => set({ subject })}
-          options={[{ value: 'family', label: 'Set family' }, { value: 'deck', label: 'Deck' }]}
+          options={[{ value: 'family', label: 'Set family' }, { value: 'deck', label: 'Deck' }, ...(dealsOn ? [{ value: 'deals' as const, label: 'Deals' }] : [])]}
         />
-        {search.subject === 'family' ? (
+        {search.subject === 'deals' ? null : search.subject === 'family' ? (
           fams.isError ? (
             <p className="text-sm text-danger">Couldn’t load families: {(fams.error as Error).message}</p>
           ) : (
@@ -111,7 +114,11 @@ export function MarketView() {
   let title = 'Market';
   let summary: ReactNode;
   let body: ReactNode;
-  if (search.subject === 'family') {
+  if (search.subject === 'deals' && dealsOn) {
+    title = 'Deals';
+    summary = 'Product pages open in your browser, by store';
+    body = <DealsPanel />;
+  } else if (search.subject === 'family' || search.subject === 'deals') {
     if (!search.code) {
       body = (
         <EmptyNote title="What does it cost?">
@@ -137,7 +144,7 @@ export function MarketView() {
 
   const sideSummary = search.subject === 'family' ? famName : deckName;
   return (
-    <ViewLayout label="Market controls" summary={sideSummary} sidebar={sidebar} startOpen={!(search.code || search.deck)}>
+    <ViewLayout label="Market controls" summary={sideSummary} sidebar={sidebar} startOpen={!(search.code || search.deck || search.subject === 'deals')}>
       <GuideSheet title={title} summary={summary}>
         <div className="h-full overflow-y-auto pb-8">{body}</div>
       </GuideSheet>

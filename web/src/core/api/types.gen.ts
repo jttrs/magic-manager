@@ -1792,6 +1792,60 @@ export type NewDeckIn = {
 };
 
 /**
+ * OpenTabsOut
+ */
+export type OpenTabsOut = {
+    /**
+     * Browser
+     */
+    browser: string;
+    /**
+     * Windows
+     */
+    windows: number;
+    /**
+     * Windows Read
+     */
+    windows_read: number;
+    /**
+     * Warnings
+     */
+    warnings: Array<string>;
+    /**
+     * Stores
+     *
+     * Product pages of catalogued stores.
+     */
+    stores: Array<StoreTabsOut>;
+    /**
+     * Uncatalogued
+     *
+     * Shopify-shaped product pages from stores without a recipe yet.
+     */
+    uncatalogued: Array<UncataloguedOut>;
+    /**
+     * Store Pages
+     *
+     * Other pages of catalogued stores (carts, collections).
+     */
+    store_pages: number;
+    /**
+     * Other
+     *
+     * Tabs that aren't stores.
+     */
+    other: number;
+    /**
+     * Dropped Local
+     */
+    dropped_local: number;
+    /**
+     * Duplicates
+     */
+    duplicates: number;
+};
+
+/**
  * OracleTagOut
  *
  * A Scryfall Tagger oracle tag (``id`` is the stable UUID).
@@ -2363,6 +2417,34 @@ export type SourceOut = {
 };
 
 /**
+ * StoreTabsOut
+ */
+export type StoreTabsOut = {
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Mode
+     *
+     * How prices are read: shopify/meta server-side, rendered from your open tab.
+     */
+    mode: 'shopify' | 'meta' | 'rendered';
+    /**
+     * No Sales Tax
+     */
+    no_sales_tax: boolean;
+    /**
+     * Tabs
+     */
+    tabs: Array<TabOut>;
+};
+
+/**
  * SuggestionOut
  */
 export type SuggestionOut = {
@@ -2447,6 +2529,28 @@ export type SwapOut = {
 };
 
 /**
+ * TabOut
+ */
+export type TabOut = {
+    /**
+     * Url
+     */
+    url: string;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Window
+     */
+    window: number;
+    /**
+     * Tab
+     */
+    tab: number;
+};
+
+/**
  * TreeNodeOut
  */
 export type TreeNodeOut = {
@@ -2478,6 +2582,20 @@ export type TreeNodeOut = {
      * Children
      */
     children?: Array<TreeNodeOut>;
+};
+
+/**
+ * UncataloguedOut
+ */
+export type UncataloguedOut = {
+    /**
+     * Host
+     */
+    host: string;
+    /**
+     * Tabs
+     */
+    tabs: Array<TabOut>;
 };
 
 /**
@@ -2874,6 +2992,36 @@ export type ExploreCardResponses = {
 };
 
 export type ExploreCardResponse = ExploreCardResponses[keyof ExploreCardResponses];
+
+export type DealsTabsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Browser
+         */
+        browser?: 'chrome' | 'safari';
+    };
+    url: '/api/deals/tabs';
+};
+
+export type DealsTabsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DealsTabsError = DealsTabsErrors[keyof DealsTabsErrors];
+
+export type DealsTabsResponses = {
+    /**
+     * Successful Response
+     */
+    200: OpenTabsOut;
+};
+
+export type DealsTabsResponse = DealsTabsResponses[keyof DealsTabsResponses];
 
 export type UndoInfoData = {
     body?: never;

@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterable
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse
@@ -21,8 +21,8 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
-from .. import api, undo as undo_engine, cart as cart_engine, deck_edit, edhrec as edhrec_engine, features as features_engine, scryfall
-from ..api import undo as undo_api, cart as cart_api, cards as cards_api, collection as collection_api, explore as explore_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api, market as market_api, trueup as trueup_api
+from .. import api, tabs as tabs_engine, undo as undo_engine, cart as cart_engine, deck_edit, edhrec as edhrec_engine, features as features_engine, scryfall
+from ..api import deals as deals_api, undo as undo_api, cart as cart_api, cards as cards_api, collection as collection_api, explore as explore_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api, market as market_api, trueup as trueup_api
 from .runtime import TERMINAL, JobManager
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -156,6 +156,17 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             raise HTTPException(422, str(e)) from e
         except scryfall.ScryfallError as e:
             raise HTTPException(502, f"Scryfall lookup failed: {e}") from e
+
+    # ---------- deals (internal) ----------
+
+    @app.get("/api/deals/tabs", response_model=deals_api.OpenTabsOut, tags=["deals"])
+    def deals_tabs(browser: Annotated[Literal["chrome", "safari"], Query()] = "chrome"):
+        try:
+            return deals_api.open_tabs(browser)
+        except features_engine.FeatureDisabled as e:
+            raise HTTPException(403, str(e)) from e
+        except tabs_engine.TabsUnavailable as e:
+            raise HTTPException(503, str(e)) from e
 
     # ---------- undo (one restore point) ----------
 
