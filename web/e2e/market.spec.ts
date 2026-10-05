@@ -43,7 +43,7 @@ test('sealed products are priced by a job and drill into their contents', async 
 
   await page.getByRole('button', { name: 'Bloomburrow Bundle' }).click();
   await expect(page.getByRole('list', { name: 'Bloomburrow Bundle contents' })).toContainText('9× Bloomburrow Play Booster Pack');
-  await expect(page.getByText('Fixed cards: $3.00')).toBeVisible();
+  await expect(page.getByText('At the cheapest printing of each card: $2.00')).toBeVisible();
 });
 
 test('a deck costs out three ways and its buy list uses the cheapest printings', async ({ page }) => {
