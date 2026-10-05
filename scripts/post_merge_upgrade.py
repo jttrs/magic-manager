@@ -6,6 +6,9 @@ that must run once against your live DB after you pull them:
   V27  cards.released_at          → sets.backfill_released_at()   (mm set backfill-dates)
   V28  scryfall tag cache         → scryfall_tags.sync()          (mm scryfall tags sync)
   V29  decks.kind / kind_source   → decks.backfill_kinds()        (mm deck backfill-kinds)
+  V30  cards.illustration_id + art tags → scryfall_art.backfill_illustration_ids()
+                                    (mm set backfill-illustrations) and
+                                    scryfall_tags.sync_kinds()      (mm scryfall tags sync — oracle + art)
 
 Every step is additive: migrations add columns/tables, backfills fill only the
 new ones. This script makes that verifiable instead of assumed:
@@ -13,7 +16,7 @@ new ones. This script makes that verifiable instead of assumed:
 1. fingerprint the ownership data — inventory, the provenance ledger
    (ingest_events / inventory_events), wishlist, deck compositions, pledges and
    deck identity — hashing only the columns that existed BEFORE the upgrade;
-2. run the migrations (on connect) and the three backfills;
+2. run the migrations (on connect) and the backfills;
 3. re-fingerprint and require byte-equality, and require the ledger to still
    reconcile (``inventory == SUM(inventory_events.delta)``).
 
@@ -25,7 +28,7 @@ Usage
 
 Exit 0 = upgraded (or rehearsed) and every ownership table is identical.
 Exit 1 = something differed; with --apply the pre-upgrade snapshot path is printed for `mm db restore`.
-Network: steps 2b–2d read Scryfall / MTGJSON through the sanctioned cached wrappers.
+Network: steps 2b–2e read Scryfall / MTGJSON through the sanctioned cached wrappers.
 """
 from __future__ import annotations
 
@@ -86,13 +89,17 @@ def run(path: Path) -> int:
     print(f"before: {', '.join(f'{t}={n}' for t, (n, _, _) in before.items())}")
 
     print("upgrading:")
-    with db.connect() as conn:  # applies pending migrations (V27–V29), snapshotting first
+    with db.connect() as conn:  # applies pending migrations (V27–V30), snapshotting first
         version = conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] if _columns(conn, "schema_version") else "?"
     print(f"  · schema at V{version}")
-    from magic_manager import decks, scryfall_tags, sets
+    from magic_manager import decks, scryfall_art, scryfall_tags, sets
     _step("V27 backfill release dates", lambda: f"{sets.backfill_released_at()} card rows filled")
-    _step("V28 sync Scryfall oracle tags", lambda: scryfall_tags.sync())
-    _step("V29 classify decks vs card pools", lambda: decks.backfill_kinds())
+    _step("V28 + V30 sync Scryfall oracle + art tags", lambda: scryfall_tags.sync_kinds())
+    # Classification hits MTGJSON per precon (~3.5 min); skip when every precon row is already classified.
+    _step("V29 classify decks vs card pools",
+          lambda: decks.backfill_kinds() if decks.unclassified_precon_count() else "already classified — skipped")
+    _step("V30 backfill printing illustration ids",
+          lambda: f"{scryfall_art.backfill_illustration_ids()} card rows filled")
 
     raw = sqlite3.connect(path)
     after = _fingerprint(raw, {t: cols for t, (_, _, cols) in before.items()})
