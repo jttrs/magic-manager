@@ -417,18 +417,6 @@ export type CartAuditOut = {
  */
 export type CartIn = {
     /**
-     * Cart
-     *
-     * The bookmarklet's pasted JSON.
-     */
-    cart?: string | null;
-    /**
-     * Use Account
-     *
-     * Read the cart with the configured Mana Pool account instead.
-     */
-    use_account?: boolean;
-    /**
      * Family
      *
      * Set family to check gaps against; imputed when the cart sits in one.

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { CollectionCardOut, CompareCardOut } from './api';
 import { CARD_SORT } from './cardSort';
 import { colorRank, typeGroup } from './cardFacts';
-import { buyFinish, collectionStats, filterCollection, isMissing, sourceKinds, sourceOptions, traitCounts, traitsOf, type CollectionFilters } from './collection';
+import { buyFinish, buyTotal, collectionStats, filterCollection, isMissing, sourceKinds, sourceOptions, traitCounts, traitsOf, type CollectionFilters } from './collection';
 import { bucketCards, COMPARE_SORT, matches, tagLabel } from './compare';
 import { exportLines, fromCollection, fromCompare, groupCards, rarityLetter, treatmentLabels } from './guideCard';
 import { collectionSearch, compareSearch } from './search';
@@ -79,6 +79,10 @@ describe('collection filters', () => {
   const chase = card({ scryfall_id: 'ch', is_chase: true });
   const all = [owned, missing, bulk, treated, chase];
   const ids = (f: Partial<CollectionFilters>) => filterCollection(all, { ...ALL, ...f }).map((c) => c.scryfall_id);
+
+  it('prices a buy list at the finish each line names', () => {
+    expect(buyTotal([card({ price_usd: 1, price_usd_foil: 4 }), card({ finishes: ['foil'], price_usd: 1, price_usd_foil: 4 })], [])).toBe(5);
+  });
 
   it('gaps keeps only missing printings of cards owned in no printing', () => {
     const playable = card({ scryfall_id: 'alt', oracle_id: 'o-play', card_owned: 2 });

@@ -14,21 +14,28 @@ test('cart check is hidden unless its feature flag is on', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Check my Mana Pool cart' })).toHaveCount(0);
 });
 
-test('with the flag on: paste the bookmarklet cart and see what to fix', async ({ page }) => {
-  let sent: { cart: string; family: string | null } | null = null;
+test('with the flag on: explains setup when no Mana Pool account is configured', async ({ page }) => {
   await page.route('**/api/features', (r) => r.fulfill({ json: { flags: { cart_check: true } } }));
   await page.route('**/api/cart/setup', (r) => r.fulfill({ json: { account: false } }));
+  await page.goto(COLLECTION_URL);
+  await page.getByRole('button', { name: 'Check my Mana Pool cart' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Check my Mana Pool cart' });
+  await expect(dialog).toContainText('MANAPOOL_PASSWORD');
+  await expect(dialog.getByRole('button', { name: 'Read my cart' })).toBeDisabled();
+});
+
+test('with the flag on and an account: read the cart and see what to fix', async ({ page }) => {
+  let sent: { family: string | null } | null = null;
+  await page.route('**/api/features', (r) => r.fulfill({ json: { flags: { cart_check: true } } }));
+  await page.route('**/api/cart/setup', (r) => r.fulfill({ json: { account: true } }));
   await page.route('**/api/cart/check', (r) => { sent = r.request().postDataJSON(); return r.fulfill({ json: audit }); });
   await page.goto(COLLECTION_URL);
   await page.getByRole('button', { name: 'Check my Mana Pool cart' }).click();
   const dialog = page.getByRole('dialog', { name: 'Check my Mana Pool cart' });
-  await expect(dialog.getByRole('link', { name: 'mm · copy cart' })).toHaveAttribute('href', /^javascript:/);
-  await expect(dialog.getByRole('button', { name: 'Read my cart' })).toHaveCount(0);
-  await dialog.getByRole('textbox').fill('{"items":[{"set":"blb","number":"5"}]}');
-  await dialog.getByRole('button', { name: 'Check cart' }).click();
+  await dialog.getByRole('button', { name: 'Read my cart' }).click();
   await expect(dialog.getByRole('region', { name: 'Bought twice' })).toContainText('Twice Card');
   await expect(dialog.getByRole('region', { name: 'Already in your collection' })).toContainText('you own 1');
   await expect(dialog.getByRole('region', { name: 'Over market' })).toContainText('+50%');
   await expect(dialog.getByRole('region', { name: 'Still missing from BLB' })).toContainText('Gap Card');
-  expect(sent).toEqual({ cart: '{"items":[{"set":"blb","number":"5"}]}', family: 'blb' });
+  expect(sent).toEqual({ family: 'blb' });
 });

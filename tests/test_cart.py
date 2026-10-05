@@ -3,8 +3,6 @@ cart_check flag. Offline: seeded cards/inventory; the Mana Pool catalog is never
 hit (set+number lines map locally; a uuid-only line uses a stub)."""
 from __future__ import annotations
 
-import json
-
 import pytest
 from fastapi.testclient import TestClient
 
@@ -85,10 +83,17 @@ def client(cards, tmp_path, monkeypatch):
 
 
 def test_cart_route_is_gated_by_the_flag(client, monkeypatch):
-    body = {"cart": json.dumps({"items": [{"set": "tst", "number": "2", "price": 1}]})}
+    from magic_manager.api import cart as cart_api
+    fetched = {"items": [{"scryfall_id": B, "price_cents": 100}]}
+
+    class FakeScript:
+        _load_env = staticmethod(lambda: {})
+        fetch_headless = staticmethod(lambda env: fetched["items"])
+    monkeypatch.setattr(cart_api, "_cart_script", lambda: FakeScript)
     assert client.get("/api/features").json() == {"flags": {"cart_check": False}}
-    assert client.post("/api/cart/check", json=body).status_code == 403
+    assert client.post("/api/cart/check", json={}).status_code == 403
     monkeypatch.setenv("MM_FEATURES", "cart_check")
-    r = client.post("/api/cart/check", json=body)
+    r = client.post("/api/cart/check", json={})
     assert r.status_code == 200 and r.json()["owned"][0]["name"] == "Beta"
-    assert client.post("/api/cart/check", json={"cart": "nope"}).status_code == 422
+    fetched["items"] = None
+    assert client.post("/api/cart/check", json={}).status_code == 422
