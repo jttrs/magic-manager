@@ -8,7 +8,7 @@ test('top nav spans the full width and the sidebar starts below it (F7)', async 
   expect(header!.x).toBe(0);
   expect(header!.width).toBe(vw);
   expect(aside!.y).toBeGreaterThanOrEqual(header!.y + header!.height);
-  await expect(page.getByRole('navigation', { name: 'Primary' }).getByRole('link')).toHaveText(['Collection', 'Decks', 'Commanders']);
+  await expect(page.getByRole('navigation', { name: 'Primary' }).getByRole('link')).toHaveText(['Collection', 'Decks', 'Explore']);
   await expect(page.getByRole('link', { name: 'Jobs' })).toBeVisible();
 });
 

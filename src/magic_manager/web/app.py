@@ -22,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
 from .. import api, deck_edit, edhrec as edhrec_engine, scryfall
-from ..api import cards as cards_api, collection as collection_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api
+from ..api import cards as cards_api, collection as collection_api, explore as explore_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api
 from .runtime import TERMINAL, JobManager
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -126,9 +126,24 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         return edhrec_api.search_commanders(q, limit=limit)
 
     @app.get("/api/edhrec/compare", response_model=edhrec_api.CompareOut, tags=["edhrec"])
-    def compare(a: Annotated[str, Query(min_length=1)], b: Annotated[str, Query(min_length=1)]):
+    def compare(a: Annotated[str, Query(min_length=1)], b: Annotated[str | None, Query(min_length=1)] = None):
         try:
             return edhrec_api.compare(a, b)
+        except edhrec_engine.EdhrecError as e:
+            raise HTTPException(422, str(e)) from e
+        except scryfall.ScryfallError as e:
+            raise HTTPException(502, f"Scryfall lookup failed: {e}") from e
+
+    # ---------- explore ----------
+
+    @app.get("/api/explore/search", response_model=list[explore_api.CardOptionOut], tags=["explore"])
+    def explore_search(q: Annotated[str, Query(min_length=1)], limit: Annotated[int, Query(ge=1, le=50)] = 20):
+        return explore_api.search(q, limit=limit)
+
+    @app.get("/api/explore/card", response_model=explore_api.CardExploreOut, tags=["explore"])
+    def explore_card(a: Annotated[str, Query(min_length=1)], b: Annotated[str | None, Query(min_length=1)] = None):
+        try:
+            return explore_api.card(a, b)
         except edhrec_engine.EdhrecError as e:
             raise HTTPException(422, str(e)) from e
         except scryfall.ScryfallError as e:

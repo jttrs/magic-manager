@@ -108,28 +108,36 @@ class CompareCardOut(BaseModel):
                                  description="Function root keys (Scryfall Tagger roll-up).")
     oracle_tags: list[OracleTagOut] = Field(default_factory=list,
                                             description="Top Tagger oracle tags by weight.")
+    owned: int = Field(0, description="Copies you own across every printing.")
+    free: int = Field(0, description="Owned copies no built deck has pledged.")
 
 
 class CompareOut(BaseModel):
     name_a: str
-    name_b: str
+    name_b: str | None = Field(None, description="None when exploring one commander.")
     slug_a: str
-    slug_b: str
+    slug_b: str | None = None
     cards: list[CompareCardOut]
     functions: list[FunctionRootOut] = Field(default_factory=list,
                                              description="Function roots, display order.")
 
 
-def compare(a: str, b: str) -> CompareOut:
-    """Two commanders' recommended cards partitioned a_only / both / b_only.
-    Display printing = chronologically-first standard printing (engine-side)."""
+def compare(a: str, b: str | None = None) -> CompareOut:
+    """One commander's recommended cards (all a_only), or two partitioned
+    a_only / both / b_only. Display printing = first standard printing (engine-side);
+    owned / free from the collection (oracle grain)."""
+    from .. import explore
+
     res = edhrec.compare_commanders(a, b)
+    facts = explore.facts_for([c.oracle_id for c in res.cards if c.oracle_id])
     return CompareOut(
         name_a=res.name_a, name_b=res.name_b, slug_a=res.slug_a, slug_b=res.slug_b,
         cards=[
             CompareCardOut(
                 **asdict(c),
                 scryfall_url=gallery.scryfall_card_url(c.set_code, c.collector_number),
+                owned=(f := facts.get(c.oracle_id or "")) and f.owned or 0,
+                free=f and f.free or 0,
             )
             for c in res.cards
         ],

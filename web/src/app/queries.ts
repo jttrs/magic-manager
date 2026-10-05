@@ -1,7 +1,7 @@
 // Server state via TanStack Query over the generated, typed API client.
 import { keepPreviousData, queryOptions } from '@tanstack/react-query';
 import type { DraftCardIn } from '../core/api';
-import { cardHoldings, collection, deckCheck, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs } from '../core/api';
+import { cardHoldings, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs } from '../core/api';
 
 class ApiError extends Error {}
 
@@ -25,10 +25,27 @@ export const commanderSearchQuery = (q: string) =>
 
 export const compareQuery = (a?: string, b?: string) =>
   queryOptions({
-    queryKey: ['compare', a, b],
-    queryFn: async ({ signal }) => unwrap(await compare({ query: { a: a!, b: b! }, signal })),
-    enabled: Boolean(a && b),
+    queryKey: ['compare', a, b ?? null],
+    queryFn: async ({ signal }) => unwrap(await compare({ query: { a: a!, ...(b ? { b } : {}) }, signal })),
+    enabled: Boolean(a),
     staleTime: 5 * 60_000,
+  });
+
+export const exploreCardQuery = (a?: string, b?: string) =>
+  queryOptions({
+    queryKey: ['explore', 'card', a, b ?? null],
+    queryFn: async ({ signal }) => unwrap(await exploreCard({ query: { a: a!, ...(b ? { b } : {}) }, signal })),
+    enabled: Boolean(a),
+    staleTime: 5 * 60_000,
+  });
+
+export const cardSearchQuery = (q: string) =>
+  queryOptions({
+    queryKey: ['explore', 'search', q],
+    queryFn: async ({ signal }) => unwrap(await exploreSearch({ query: { q, limit: 12 }, signal })),
+    enabled: q.trim().length >= 2,
+    staleTime: 60_000,
+    placeholderData: keepPreviousData,
   });
 
 export const familiesQuery = () =>

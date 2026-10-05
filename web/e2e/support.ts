@@ -22,6 +22,12 @@ export async function mockApi(page: Page, overrides: Record<string, (url: URL) =
       }
     }
     if (url.pathname === '/api/edhrec/compare') return route.fulfill({ json: compare });
+    if (url.pathname === '/api/explore/card') {
+      const a = url.searchParams.get('a')!;
+      const b = url.searchParams.get('b');
+      return route.fulfill({ json: { a: profile(a), b: b ? profile(b) : null, commanders: [], coplayed: [], tags: {} } });
+    }
+    if (url.pathname === '/api/explore/search') return route.fulfill({ json: commanders.map((c) => ({ ...c, commander_eligible: true })) });
     if (url.pathname === '/api/edhrec/commanders') return route.fulfill({ json: commanders });
     if (url.pathname === '/api/collection/families') return route.fulfill({ json: families });
     if (url.pathname === '/api/collection') return route.fulfill({ json: collectionBlb });
@@ -40,6 +46,15 @@ export async function mockApi(page: Page, overrides: Record<string, (url: URL) =
   });
 }
 
+/** A minimal Explore card profile: a commander-eligible card with no EDHREC lists. */
+export function profile(name: string, o: Record<string, unknown> = {}) {
+  return {
+    name, slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-'), commander_eligible: true, num_decks: 1000, potential_decks: 5000, salt: 0.5,
+    facts: { oracle_id: `o-${name}`, type_line: 'Legendary Creature — Human', cmc: 3, color_identity: ['G'], lowest_usd: 1, scryfall_id: null, image_uri: null, set_code: 'fin', collector_number: '1', scryfall_url: null, owned: 0, free: 0 },
+    functions: [], tags: [], commanders: [], coplayed: [], similar: [], deck_mix: [], ...o,
+  };
+}
+
 export const test = base.extend<{ mocked: void }>({
   mocked: [async ({ page }, use) => {
     await mockApi(page);
@@ -48,5 +63,5 @@ export const test = base.extend<{ mocked: void }>({
 });
 export { expect };
 
-export const COMPARE_URL = '/commanders?a=Tifa%20Lockhart&b=Cloud%2C%20Ex-SOLDIER';
+export const COMPARE_URL = '/explore?a=Tifa%20Lockhart&b=Cloud%2C%20Ex-SOLDIER&role=commander';
 export const COLLECTION_URL = '/collection?families=%5B%22blb%22%5D';

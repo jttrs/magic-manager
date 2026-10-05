@@ -154,3 +154,25 @@ export function ImportDeckMark(p: MarkProps) {
     </svg>
   );
 }
+
+/** EDHREC: a commander's crown over a card (their deck-data pages). */
+export function EdhrecMark(p: MarkProps) {
+  return (
+    <svg {...base} {...p}>
+      <rect x="5.4" y="8.6" width="13.2" height="12.8" rx="1.6" />
+      <path d="M5.4 6.6 8 3.6l2.6 2.4L12 2.8l1.4 3.2L16 3.6l2.6 3H5.4Z" />
+      <path d="M8.6 13h6.8M8.6 16.4h4.4" />
+    </svg>
+  );
+}
+
+/** A magnifier over a card (explore this card). */
+export function ExploreMark(p: MarkProps) {
+  return (
+    <svg {...base} {...p}>
+      <rect x="3.2" y="2.6" width="11.4" height="16" rx="1.6" />
+      <circle cx="15.4" cy="15.2" r="4" />
+      <path d="m18.3 18.1 2.9 2.9" />
+    </svg>
+  );
+}

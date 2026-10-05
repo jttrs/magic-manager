@@ -10,7 +10,7 @@ export function SideSection({ title, children, id }: { title: string; children: 
   );
 }
 
-type Opt<T extends string> = { value: T; label: string };
+type Opt<T extends string> = { value: T; label: string; disabled?: boolean; title?: string };
 
 /** Single-choice segmented control (view type, chase mode). `showLabel` prints the label above it. */
 export function Segmented<T extends string>({ value, options, onChange, label, showLabel = false, labelExtra }: { value: T; options: Opt<T>[]; onChange: (v: T) => void; label: string; showLabel?: boolean; labelExtra?: ReactNode }) {
@@ -27,7 +27,9 @@ export function Segmented<T extends string>({ value, options, onChange, label, s
         <ToggleGroup.Item
           key={o.value}
           value={o.value}
-          className="min-h-8 min-w-0 truncate px-1.5 text-sm voice-semi text-on-chrome-muted rounded-xs cursor-pointer transition-colors ease-guide hover:text-on-chrome data-[state=on]:bg-accent data-[state=on]:text-on-accent data-[state=on]:hover:text-on-accent"
+          disabled={o.disabled}
+          title={o.title}
+          className="min-h-8 min-w-0 truncate px-1.5 text-sm voice-semi text-on-chrome-muted rounded-xs cursor-pointer transition-colors ease-guide hover:text-on-chrome disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:text-on-chrome-muted data-[state=on]:bg-accent data-[state=on]:text-on-accent data-[state=on]:hover:text-on-accent"
         >
           {o.label}
         </ToggleGroup.Item>

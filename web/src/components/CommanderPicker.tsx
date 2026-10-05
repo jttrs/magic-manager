@@ -1,16 +1,16 @@
 import { useQuery } from '@tanstack/react-query';
 import { Popover } from 'radix-ui';
 import { useId, useState, type KeyboardEvent } from 'react';
-import { commanderSearchQuery } from '../app/queries';
+import { cardSearchQuery, commanderSearchQuery } from '../app/queries';
 
-type Props = { label: string; value?: string; onCommit: (name: string) => void; name: string };
+type Props = { label: string; value?: string; onCommit: (name: string) => void; name: string; scope?: 'commander' | 'any'; placeholder?: string };
 
 /**
  * Commander input: an ARIA 1.2 combobox with local suggestions (commander-eligible
  * cards in your DB; EDHREC-cached first). Free text is accepted — the engine
  * resolves any card name via Scryfall.
  */
-export function CommanderPicker({ label, value = '', onCommit, name }: Props) {
+export function CommanderPicker({ label, value = '', onCommit, name, scope = 'commander', placeholder }: Props) {
   // `draft` holds in-progress typing; when null the field shows the committed value.
   const [draft, setDraft] = useState<string | null>(null);
   const text = draft ?? value;
@@ -20,8 +20,10 @@ export function CommanderPicker({ label, value = '', onCommit, name }: Props) {
   const id = useId();
   const listId = `${id}-list`;
 
-  const q = useQuery(commanderSearchQuery(text));
-  const options = open ? (q.data ?? []) : [];
+  const cmd = useQuery({ ...commanderSearchQuery(text), enabled: scope === 'commander' && text.trim().length >= 2 });
+  const any = useQuery({ ...cardSearchQuery(text), enabled: scope === 'any' && text.trim().length >= 2 });
+  const q = scope === 'any' ? any : cmd;
+  const options: { name: string; oracle_id: string | null; color_identity: string[]; cached: boolean }[] = open ? (q.data ?? []) : [];
 
   function commit(v: string) {
     const t = v.trim();
@@ -63,7 +65,7 @@ export function CommanderPicker({ label, value = '', onCommit, name }: Props) {
           aria-activedescendant={active >= 0 ? `${listId}-${active}` : undefined}
           autoComplete="off"
           spellCheck={false}
-          placeholder="Type a commander…"
+          placeholder={placeholder ?? (scope === 'any' ? 'Type a card name…' : 'Type a commander…')}
           value={text}
           onChange={(e) => {
             setText(e.target.value);

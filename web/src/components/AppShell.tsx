@@ -10,7 +10,7 @@ import { useMediaQuery } from '../app/useMediaQuery';
 const NAV = [
   { to: '/collection', label: 'Collection' },
   { to: '/decks', label: 'Decks' },
-  { to: '/commanders', label: 'Commanders' },
+  { to: '/explore', label: 'Explore' },
 ] as const;
 
 /** Global frame: masthead + full-width top nav; views supply sidebar + main below it. */

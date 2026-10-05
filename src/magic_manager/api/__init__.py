@@ -7,6 +7,6 @@ lives here — every module only adapts an existing engine function.
 
 Importing this package registers every job.
 """
-from . import cards, collection, decks, edhrec, ingest, jobs, scryfall_tags  # noqa: F401  (registers jobs)
+from . import cards, collection, decks, explore, edhrec, ingest, jobs, scryfall_tags  # noqa: F401  (registers jobs)
 
-__all__ = ["cards", "collection", "decks", "edhrec", "ingest", "jobs", "scryfall_tags"]
+__all__ = ["cards", "collection", "decks", "explore", "edhrec", "ingest", "jobs", "scryfall_tags"]
