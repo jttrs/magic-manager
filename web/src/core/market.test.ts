@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CardPriceOut, DeckCostOut, DeckLineOut, ProductValueOut } from './api';
-import { categoryLabel, contentsGap, deckBuyItems, deckLedger, filterCardPrices, premium, productGroups } from './market';
+import { categoryLabel, contentsGap, partialNote, deckBuyItems, deckLedger, filterCardPrices, premium, productGroups } from './market';
 
 const card = (p: Partial<CardPriceOut>): CardPriceOut => ({
   scryfall_id: 'x', oracle_id: 'o', name: 'Card', set_code: 'fin', collector_number: '1', rarity: 'rare', type_line: null,
@@ -32,6 +32,8 @@ describe('market view-model', () => {
     expect(productGroups([{ set_code: 'fin', name: 'Bundle', category: 'bundle' }], undefined, 'box')).toEqual([]);
     expect(contentsGap(v)).toBe(10);
     expect(contentsGap({ ...v, sealed_market: null })).toBeNull();
+    expect(partialNote(v)).toBeNull();
+    expect(partialNote({ ...v, unpriced_cards: 89, total_cards: 100 })).toMatch(/^11 of 100 cards have a price/);
   });
 
   it('filters printings that cost more than the cheapest and sorts by premium', () => {

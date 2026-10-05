@@ -13,7 +13,7 @@ import { EmptyNote, ErrorNote, GuideSheet } from '../components/States';
 import { CardKingdomMark, ManaPoolMark, TcgplayerMark } from '../components/StoreMarks';
 import { collectionBuyList, type CardPriceOut, type DeckCostOut, type DeckLineOut, type ProductValueOut, type TreeNodeOut } from '../core/api';
 import { fmtCount, fmtInt, fmtUsd } from '../core/format';
-import { contentsGap, deckBuyItems, deckLedger, filterCardPrices, premium, productGroups, type ProductRow } from '../core/market';
+import { contentsGap, deckBuyItems, deckLedger, filterCardPrices, partialNote, premium, productGroups, type ProductRow } from '../core/market';
 import type { MarketSearch } from '../core/search';
 
 const route = getRouteApi('/market');
@@ -156,7 +156,7 @@ type Artifact = { label: string; data: unknown };
 // Product valuations are slow to compute and prices move about daily: keep each
 // family's for 12 hours across reloads.
 const VALUES_TTL = 12 * 3600_000;
-const valuesStorageKey = (code: string) => `mm.market.values.${code}`;
+const valuesStorageKey = (code: string) => `mm.market.values.v2.${code}`;
 function readValues(code: string): ProductValueOut[] | null {
   try {
     const hit = JSON.parse(localStorage.getItem(valuesStorageKey(code)) ?? 'null') as { at: number; rows: ProductValueOut[] } | null;
@@ -283,9 +283,9 @@ function ProductLine({ p, open, onToggle, pricing }: { p: ProductRow; open: bool
           {v?.error && <span className="ml-4.5 block text-xs text-danger">Couldn’t price: {v.error}</span>}
         </th>
         <Money v={v?.sealed_market} pending={pending} />
-        <Money v={v?.contents_value} pending={pending} />
+        <Money v={v?.contents_value} pending={pending} partial={partialNote(v)} />
         <td className="hidden py-1.5 pl-3 text-right sm:table-cell">
-          {gap == null ? <span className="text-ink-muted">{pending ? '…' : '—'}</span> : <Gap gap={gap} />}
+          {gap == null || partialNote(v) ? <span className="text-ink-muted">{pending ? '…' : '—'}</span> : <Gap gap={gap} />}
         </td>
       </tr>
       {open && (
@@ -299,8 +299,21 @@ function ProductLine({ p, open, onToggle, pricing }: { p: ProductRow; open: bool
   );
 }
 
-function Money({ v, pending }: { v: number | null | undefined; pending?: boolean }) {
-  return <td className="py-1.5 pl-3 text-right text-ink">{v == null ? <span className="text-ink-muted">{pending ? '…' : '—'}</span> : fmtUsd(v)}</td>;
+function Money({ v, pending, partial }: { v: number | null | undefined; pending?: boolean; partial?: string | null }) {
+  if (v == null) return <td className="py-1.5 pl-3 text-right"><span className="text-ink-muted">{pending ? '…' : '—'}</span></td>;
+  return (
+    <td className="py-1.5 pl-3 text-right text-ink">
+      {partial ? (
+        <span title={partial}>
+          {fmtUsd(v)}
+          <span aria-hidden="true" className="text-ink-muted">+</span>
+          <span className="sr-only"> or more: {partial}</span>
+        </span>
+      ) : (
+        fmtUsd(v)
+      )}
+    </td>
+  );
 }
 
 /** Signed difference: cards worth more than the box read in the accent ink. */

@@ -61,6 +61,7 @@ def value_products(items: list[tuple[str, str]], *,
                 "market_source": v.sealed_market_source, "contents_value": v.intrinsic,
                 "exact_singles": v.exact_singles, "floor_singles": v.floor_singles,
                 "booster_only": v.booster_only, "coverage": round(v.coverage, 3),
+                "unpriced_cards": v.unpriced_cards, "total_cards": v.total_cards,
                 "notes": [*v.diagnostics, *([v.note] if v.note else [])], "error": None,
             })
         except Exception as e:  # noqa: BLE001 — one bad product never sinks the batch

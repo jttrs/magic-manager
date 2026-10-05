@@ -38,6 +38,8 @@ class ProductValueOut(BaseModel):
     floor_singles: float | None = Field(None, description="Σ the cheapest printing of each card anywhere.")
     booster_only: bool = False
     coverage: float | None = None
+    unpriced_cards: int = Field(0, description="Fixed cards with no price at their exact printing (contents value undercounts).")
+    total_cards: int = 0
     notes: list[str] = Field(default_factory=list)
     error: str | None = None
 

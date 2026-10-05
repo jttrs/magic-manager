@@ -103,6 +103,8 @@ class ProductValuation:
     diagnostics: list[str] = field(default_factory=list)
     note: str = ""
     intrinsic: float | None = None       # contents value incl. booster EV (the tree's aggregate)
+    unpriced_cards: int = 0              # fixed cards with no price at their exact printing (col 3 undercounts)
+    total_cards: int = 0                 # fixed cards in the product (the denominator for unpriced_cards)
 
 
 # ---------- market provider seam ----------

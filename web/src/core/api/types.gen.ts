@@ -2137,6 +2137,16 @@ export type ProductValueOut = {
      */
     coverage?: number | null;
     /**
+     * Unpriced Cards
+     *
+     * Fixed cards with no price at their exact printing (contents value undercounts).
+     */
+    unpriced_cards?: number;
+    /**
+     * Total Cards
+     */
+    total_cards?: number;
+    /**
      * Notes
      */
     notes?: Array<string>;

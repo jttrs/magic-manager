@@ -135,6 +135,33 @@ def test_value_sealed_product_foil_floor(monkeypatch):
     assert pv.floor_singles == pytest.approx(9.0)   # used foil floor for a foil need
 
 
+def test_floor_never_exceeds_the_exact_printing(monkeypatch):
+    # The live floor search and the local exact price are read at different
+    # times. A single-printing card whose price rose since the last sync came back
+    # with a floor ABOVE its exact price (FIN Camp Comrades: floor $110 > exact
+    # $107). The product's own printing is one of the card's printings, so cap.
+    needs = [_Need("s1", "foil", 1, 8.45), _Need("s2", "nonfoil", 2, 3.0), _Need("s3", "nonfoil", 1, 4.0)]
+    _patch_sealed(monkeypatch, market_whole=50.0, needs=needs,
+                  oracle_map={"s1": "o1", "s2": "o2", "s3": "o3"},
+                  floors={"o1": (1.0, 9.31), "o2": (1.5, None)})   # o3: no floor found
+    pv = valuation.value_sealed_product("fic", "Scene Box", listing=None, market="stub")
+    assert pv.exact_singles == pytest.approx(8.45 + 6.0 + 4.0)
+    assert pv.floor_singles == pytest.approx(8.45 + 3.0 + 4.0)   # capped · cheaper elsewhere · exact fallback
+    assert pv.floor_singles <= pv.exact_singles
+
+
+def test_unpriced_exact_printings_are_reported_not_hidden(monkeypatch):
+    # A Collector's Edition deck: foil versions Scryfall has no foil price for.
+    # Unknown is not $0 — count them and say so.
+    needs = [_Need("s1", "foil", 1, 5.0), _Need("s2", "foil", 3, None)]
+    _patch_sealed(monkeypatch, market_whole=300.0, needs=needs,
+                  oracle_map={"s1": "o1", "s2": "o2"}, floors={"o1": (1.0, 4.0), "o2": (1.0, 6.0)})
+    pv = valuation.value_sealed_product("fic", "CE deck", listing=None, market="stub")
+    assert pv.exact_singles == pytest.approx(5.0)
+    assert (pv.unpriced_cards, pv.total_cards) == (3, 4)
+    assert any("3 of 4 cards have no price" in d for d in pv.diagnostics)
+
+
 # ---------- sld_sealed_market ----------
 
 def _patch_sld_market(monkeypatch, products, provider):
