@@ -91,6 +91,21 @@ def _floor_sum(needs, *, floors_cache: dict) -> tuple[float | None, int, int]:
 
 # ---------- sealed-product producer ----------
 
+def priced_tree(set_code: str, product: dict, *, market: str = "chain",
+                refresh_stale: bool = False) -> tuple[sealed.ProductNode, sealed.MarketProvider]:
+    """Build ``product``'s value tree with local prices ensured: a null-provider
+    scout discovers the referenced sets, ``ensure_priced`` fills them, then the
+    tree is rebuilt with the real market provider (mirrors scripts/sealed_value.py)."""
+    provider = sealed.make_market_provider(market)
+    scout = sealed.build_product_tree(set_code, product)
+    try:
+        sets.ensure_priced(sealed.referenced_set_codes(scout),
+                           refresh_stale=refresh_stale, log=None)
+    except Exception:  # noqa: BLE001 — pricing degrades, never fatal
+        pass
+    return sealed.build_product_tree(set_code, product, market_provider=provider), provider
+
+
 def value_sealed_product(
     set_code: str, product_substr: str | None, *,
     listing: float | None = None, market: str = "chain",
@@ -111,16 +126,7 @@ def value_sealed_product(
         floors_cache = {}
     product = sealed.identify_product(set_code, product_substr)  # LookupError → caller
 
-    # col2: build with a null provider to discover referenced sets, ensure prices,
-    # then rebuild with the real provider (mirrors scripts/sealed_value.py).
-    provider = sealed.make_market_provider(market)
-    scout = sealed.build_product_tree(set_code, product)
-    try:
-        sets.ensure_priced(sealed.referenced_set_codes(scout),
-                           refresh_stale=refresh_stale, log=None)
-    except Exception:  # noqa: BLE001 — pricing degrades, never fatal
-        pass
-    tree = sealed.build_product_tree(set_code, product, market_provider=provider)
+    tree, provider = priced_tree(set_code, product, market=market, refresh_stale=refresh_stale)
     totals = sealed.aggregate(tree)
     source = getattr(provider, "last_source", None) or getattr(provider, "name", None)
 
@@ -141,7 +147,7 @@ def value_sealed_product(
             sealed_market=totals.market_whole, sealed_market_source=source,
             exact_singles=ev_val, floor_singles=ev_val,
             coverage=totals.coverage, booster_only=True,
-            diagnostics=diagnostics,
+            diagnostics=diagnostics, intrinsic=totals.intrinsic,
             note="random-booster product — cols 3/4 are the booster EV, not a fixed-singles sum",
         )
 
@@ -157,7 +163,7 @@ def value_sealed_product(
         label=tree.name, kind="sealed", listing=listing,
         sealed_market=totals.market_whole, sealed_market_source=source,
         exact_singles=exact, floor_singles=floor_total,
-        coverage=totals.coverage, diagnostics=diagnostics,
+        coverage=totals.coverage, diagnostics=diagnostics, intrinsic=totals.intrinsic,
     )
 
 

@@ -102,6 +102,7 @@ class ProductValuation:
     booster_only: bool = False           # True ⇒ exact/floor are EV-only (no fixed singles)
     diagnostics: list[str] = field(default_factory=list)
     note: str = ""
+    intrinsic: float | None = None       # contents value incl. booster EV (the tree's aggregate)
 
 
 # ---------- market provider seam ----------

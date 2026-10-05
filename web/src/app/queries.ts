@@ -1,7 +1,7 @@
 // Server state via TanStack Query over the generated, typed API client.
 import { keepPreviousData, queryOptions } from '@tanstack/react-query';
 import type { DraftCardIn } from '../core/api';
-import { cardHoldings, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs } from '../core/api';
+import { marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs } from '../core/api';
 
 class ApiError extends Error {}
 
@@ -111,6 +111,38 @@ export const preconCatalogQuery = (q: string) =>
     queryFn: async ({ signal }) => unwrap(await ingestPrecons({ query: { q: q.trim(), limit: 40 }, signal })),
     staleTime: 5 * 60_000,
     placeholderData: keepPreviousData,
+  });
+
+export const marketProductsQuery = (code?: string) =>
+  queryOptions({
+    queryKey: ['market', 'products', code],
+    queryFn: async ({ signal }) => unwrap(await marketProducts({ query: { code: code! }, signal })),
+    enabled: Boolean(code),
+    staleTime: 10 * 60_000,
+  });
+
+export const productTreeQuery = (set: string, name: string, enabled: boolean) =>
+  queryOptions({
+    queryKey: ['market', 'tree', set, name],
+    queryFn: async ({ signal }) => unwrap(await marketProductTree({ query: { set, name }, signal })),
+    enabled,
+    staleTime: 10 * 60_000,
+  });
+
+export const marketCardsQuery = (code?: string) =>
+  queryOptions({
+    queryKey: ['market', 'cards', code],
+    queryFn: async ({ signal }) => unwrap(await marketCards({ query: { code: code! }, signal })),
+    enabled: Boolean(code),
+    staleTime: 5 * 60_000,
+  });
+
+export const deckCostQuery = (slug?: string) =>
+  queryOptions({
+    queryKey: ['market', 'deck', slug],
+    queryFn: async ({ signal }) => unwrap(await marketDeck({ query: { slug: slug! }, signal })),
+    enabled: Boolean(slug),
+    staleTime: 60_000,
   });
 
 export const decksQuery = () =>

@@ -211,6 +211,82 @@ export type CardOptionOut = {
 };
 
 /**
+ * CardPriceOut
+ */
+export type CardPriceOut = {
+    /**
+     * Scryfall Id
+     */
+    scryfall_id: string;
+    /**
+     * Oracle Id
+     */
+    oracle_id: string | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Set Code
+     */
+    set_code: string;
+    /**
+     * Collector Number
+     */
+    collector_number: string;
+    /**
+     * Rarity
+     */
+    rarity: string;
+    /**
+     * Type Line
+     */
+    type_line: string | null;
+    /**
+     * Finishes
+     */
+    finishes: Array<string>;
+    /**
+     * Treatment
+     */
+    treatment: string;
+    /**
+     * Image Uri
+     */
+    image_uri: string | null;
+    /**
+     * Is Chase
+     */
+    is_chase: boolean;
+    /**
+     * Price Usd
+     */
+    price_usd: number | null;
+    /**
+     * Price Usd Foil
+     */
+    price_usd_foil: number | null;
+    /**
+     * Floor Usd
+     *
+     * Cheapest nonfoil printing of this card anywhere.
+     */
+    floor_usd?: number | null;
+    /**
+     * Floor Set Code
+     */
+    floor_set_code?: string | null;
+    /**
+     * Floor Collector Number
+     */
+    floor_collector_number?: string | null;
+    /**
+     * Owned
+     */
+    owned: number;
+};
+
+/**
  * CardProfileOut
  */
 export type CardProfileOut = {
@@ -803,6 +879,62 @@ export type DeckCardOut = {
 };
 
 /**
+ * DeckCostOut
+ */
+export type DeckCostOut = {
+    /**
+     * Slug
+     */
+    slug: string;
+    /**
+     * Sealed Product
+     *
+     * The sealed product this precon ships in.
+     */
+    sealed_product?: string | null;
+    /**
+     * Sealed
+     */
+    sealed: number | null;
+    /**
+     * Scratch
+     *
+     * Every card new, exact printings.
+     */
+    scratch?: number | null;
+    /**
+     * With Collection
+     *
+     * Your free cards first, buy the rest (exact).
+     */
+    with_collection?: number | null;
+    /**
+     * Scratch Floor
+     */
+    scratch_floor: number;
+    /**
+     * With Collection Floor
+     */
+    with_collection_floor: number;
+    /**
+     * Coverage
+     */
+    coverage: number;
+    /**
+     * Unpriced
+     */
+    unpriced: number;
+    /**
+     * Total Need
+     */
+    total_need: number;
+    /**
+     * Lines
+     */
+    lines: Array<DeckLineOut>;
+};
+
+/**
  * DeckDetailOut
  */
 export type DeckDetailOut = {
@@ -823,6 +955,66 @@ export type DeckDetailOut = {
      * False for precons (read-only recipes): copy the deck to edit it.
      */
     editable: boolean;
+};
+
+/**
+ * DeckLineOut
+ */
+export type DeckLineOut = {
+    /**
+     * Scryfall Id
+     */
+    scryfall_id: string;
+    /**
+     * Finish
+     */
+    finish: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Set Code
+     */
+    set_code: string;
+    /**
+     * Collector Number
+     */
+    collector_number: string;
+    /**
+     * Need
+     */
+    need: number;
+    /**
+     * Free
+     */
+    free: number;
+    /**
+     * Buy
+     */
+    buy: number;
+    /**
+     * Unit Usd
+     */
+    unit_usd: number | null;
+    /**
+     * Floor Usd
+     */
+    floor_usd: number | null;
+    /**
+     * Floor Set Code
+     */
+    floor_set_code?: string | null;
+    /**
+     * Floor Collector Number
+     */
+    floor_collector_number?: string | null;
+    /**
+     * Floor Scryfall Id
+     *
+     * The cheapest printing (this one when unpriced elsewhere).
+     */
+    floor_scryfall_id: string;
 };
 
 /**
@@ -1101,6 +1293,24 @@ export type FactsOut = {
 };
 
 /**
+ * FamilyCardsOut
+ */
+export type FamilyCardsOut = {
+    /**
+     * Code
+     */
+    code: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Cards
+     */
+    cards: Array<CardPriceOut>;
+};
+
+/**
  * FamilyOption
  */
 export type FamilyOption = {
@@ -1112,6 +1322,24 @@ export type FamilyOption = {
      * Name
      */
     name: string;
+};
+
+/**
+ * FamilyProductsOut
+ */
+export type FamilyProductsOut = {
+    /**
+     * Code
+     */
+    code: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Products
+     */
+    products: Array<ProductOut>;
 };
 
 /**
@@ -1583,6 +1811,94 @@ export type PrintingOut = {
 };
 
 /**
+ * ProductOut
+ */
+export type ProductOut = {
+    /**
+     * Set Code
+     */
+    set_code: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Category
+     */
+    category?: string | null;
+    /**
+     * Subtype
+     */
+    subtype?: string | null;
+    /**
+     * Release Date
+     */
+    release_date?: string | null;
+    /**
+     * Tcgplayer Url
+     */
+    tcgplayer_url?: string | null;
+};
+
+/**
+ * ProductValueOut
+ */
+export type ProductValueOut = {
+    /**
+     * Set Code
+     */
+    set_code: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Sealed Market
+     *
+     * The sealed product's own market price.
+     */
+    sealed_market?: number | null;
+    /**
+     * Market Source
+     */
+    market_source?: string | null;
+    /**
+     * Contents Value
+     *
+     * What's inside: fixed cards + booster EV.
+     */
+    contents_value?: number | null;
+    /**
+     * Exact Singles
+     *
+     * Σ the product's exact card printings.
+     */
+    exact_singles?: number | null;
+    /**
+     * Floor Singles
+     *
+     * Σ the cheapest printing of each card anywhere.
+     */
+    floor_singles?: number | null;
+    /**
+     * Booster Only
+     */
+    booster_only?: boolean;
+    /**
+     * Coverage
+     */
+    coverage?: number | null;
+    /**
+     * Notes
+     */
+    notes?: Array<string>;
+    /**
+     * Error
+     */
+    error?: string | null;
+};
+
+/**
  * ResolveIn
  */
 export type ResolveIn = {
@@ -1870,6 +2186,40 @@ export type SwapOut = {
      * Copies the deck needs that you don't have free.
      */
     short: Array<SwapLineOut>;
+};
+
+/**
+ * TreeNodeOut
+ */
+export type TreeNodeOut = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Count
+     */
+    count: number;
+    /**
+     * Market
+     */
+    market: number | null;
+    /**
+     * Contents Value
+     */
+    contents_value: number | null;
+    /**
+     * Contents Kind
+     */
+    contents_kind: string;
+    /**
+     * Children
+     */
+    children?: Array<TreeNodeOut>;
 };
 
 /**
@@ -2190,6 +2540,164 @@ export type ExploreCardResponses = {
 };
 
 export type ExploreCardResponse = ExploreCardResponses[keyof ExploreCardResponses];
+
+export type MarketProductsData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Code
+         */
+        code: string;
+    };
+    url: '/api/market/products';
+};
+
+export type MarketProductsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type MarketProductsError = MarketProductsErrors[keyof MarketProductsErrors];
+
+export type MarketProductsResponses = {
+    /**
+     * Successful Response
+     */
+    200: FamilyProductsOut;
+};
+
+export type MarketProductsResponse = MarketProductsResponses[keyof MarketProductsResponses];
+
+export type MarketValueData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Set
+         */
+        set: string;
+        /**
+         * Name
+         */
+        name: string;
+    };
+    url: '/api/market/value';
+};
+
+export type MarketValueErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type MarketValueError = MarketValueErrors[keyof MarketValueErrors];
+
+export type MarketValueResponses = {
+    /**
+     * Successful Response
+     */
+    200: ProductValueOut;
+};
+
+export type MarketValueResponse = MarketValueResponses[keyof MarketValueResponses];
+
+export type MarketProductTreeData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Set
+         */
+        set: string;
+        /**
+         * Name
+         */
+        name: string;
+    };
+    url: '/api/market/product-tree';
+};
+
+export type MarketProductTreeErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type MarketProductTreeError = MarketProductTreeErrors[keyof MarketProductTreeErrors];
+
+export type MarketProductTreeResponses = {
+    /**
+     * Successful Response
+     */
+    200: TreeNodeOut;
+};
+
+export type MarketProductTreeResponse = MarketProductTreeResponses[keyof MarketProductTreeResponses];
+
+export type MarketCardsData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Code
+         */
+        code: string;
+    };
+    url: '/api/market/cards';
+};
+
+export type MarketCardsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type MarketCardsError = MarketCardsErrors[keyof MarketCardsErrors];
+
+export type MarketCardsResponses = {
+    /**
+     * Successful Response
+     */
+    200: FamilyCardsOut;
+};
+
+export type MarketCardsResponse = MarketCardsResponses[keyof MarketCardsResponses];
+
+export type MarketDeckData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Slug
+         */
+        slug: string;
+    };
+    url: '/api/market/deck';
+};
+
+export type MarketDeckErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type MarketDeckError = MarketDeckErrors[keyof MarketDeckErrors];
+
+export type MarketDeckResponses = {
+    /**
+     * Successful Response
+     */
+    200: DeckCostOut;
+};
+
+export type MarketDeckResponse = MarketDeckResponses[keyof MarketDeckResponses];
 
 export type CollectionFamiliesData = {
     body?: never;

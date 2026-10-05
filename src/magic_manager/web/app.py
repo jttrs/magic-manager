@@ -22,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
 from .. import api, deck_edit, edhrec as edhrec_engine, scryfall
-from ..api import cards as cards_api, collection as collection_api, explore as explore_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api
+from ..api import cards as cards_api, collection as collection_api, explore as explore_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api, market as market_api
 from .runtime import TERMINAL, JobManager
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -148,6 +148,40 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             raise HTTPException(422, str(e)) from e
         except scryfall.ScryfallError as e:
             raise HTTPException(502, f"Scryfall lookup failed: {e}") from e
+
+    # ---------- market ----------
+
+    @app.get("/api/market/products", response_model=market_api.FamilyProductsOut, tags=["market"])
+    def market_products(code: Annotated[str, Query(min_length=2)]):
+        try:
+            return market_api.family_products(code)
+        except LookupError as e:
+            raise HTTPException(404, str(e)) from e
+
+    @app.get("/api/market/value", response_model=market_api.ProductValueOut, tags=["market"])
+    def market_value(set: Annotated[str, Query(min_length=2)], name: Annotated[str, Query(min_length=1)]):
+        return market_api.value_product(set, name)
+
+    @app.get("/api/market/product-tree", response_model=market_api.TreeNodeOut, tags=["market"])
+    def market_product_tree(set: Annotated[str, Query(min_length=2)], name: Annotated[str, Query(min_length=1)]):
+        try:
+            return market_api.product_tree(set, name)
+        except LookupError as e:
+            raise HTTPException(404, str(e)) from e
+
+    @app.get("/api/market/cards", response_model=market_api.FamilyCardsOut, tags=["market"])
+    def market_cards(code: Annotated[str, Query(min_length=2)]):
+        try:
+            return market_api.family_cards(code)
+        except LookupError as e:
+            raise HTTPException(404, str(e)) from e
+
+    @app.get("/api/market/deck", response_model=market_api.DeckCostOut, tags=["market"])
+    def market_deck(slug: Annotated[str, Query(min_length=1)]):
+        try:
+            return market_api.deck_cost(slug)
+        except LookupError as e:
+            raise HTTPException(404, str(e)) from e
 
     # ---------- collection ----------
 

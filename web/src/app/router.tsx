@@ -1,6 +1,6 @@
 import { createRootRoute, createRoute, createRouter, lazyRouteComponent, Outlet, redirect, stripSearchParams } from '@tanstack/react-router';
 import { AppShell } from '../components/AppShell';
-import { collectionSearch, compareSearch, decksSearch } from '../core/search';
+import { collectionSearch, compareSearch, decksSearch, marketSearch } from '../core/search';
 
 const rootRoute = createRootRoute({
   component: () => (
@@ -70,6 +70,14 @@ const deckEditRoute = createRoute({
   component: lazyRouteComponent(() => import('../views/DeckEditorView'), 'DeckEditorView'),
 });
 
+const marketRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/market',
+  validateSearch: marketSearch,
+  search: { middlewares: [stripSearchParams(marketSearch.parse({}))] },
+  component: lazyRouteComponent(() => import('../views/MarketView'), 'MarketView'),
+});
+
 const jobsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/jobs',
@@ -77,7 +85,7 @@ const jobsRoute = createRoute({
 });
 
 export const router = createRouter({
-  routeTree: rootRoute.addChildren([indexRoute, collectionRoute, legacySetsRoute, decksRoute, deckEditRoute, exploreRoute, legacyCommandersRoute, jobsRoute]),
+  routeTree: rootRoute.addChildren([indexRoute, collectionRoute, legacySetsRoute, decksRoute, deckEditRoute, exploreRoute, legacyCommandersRoute, marketRoute, jobsRoute]),
   defaultPreload: 'intent',
 });
 
