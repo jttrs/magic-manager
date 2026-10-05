@@ -143,3 +143,14 @@ export function NewDeckMark(p: MarkProps) {
     </svg>
   );
 }
+
+/** A card arriving from a link (import a deck from a deck-builder URL). */
+export function ImportDeckMark(p: MarkProps) {
+  return (
+    <svg {...base} {...p}>
+      <rect x="3.2" y="5.6" width="12.4" height="15.8" rx="1.6" />
+      <path d="M6 10h6.8M6 12.8h4.6" />
+      <path d="M21 2.8 15 8.8M15 4.8v4h4" />
+    </svg>
+  );
+}

@@ -11,10 +11,10 @@ import { Chevron } from '../components/Chevron';
 import { Segmented, SelectField, SideSection, TextField } from '../components/Sidebar';
 import { InfoTip } from '../components/InfoTip';
 import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../components/States';
-import { AddCardMark, NewDeckMark } from '../components/StoreMarks';
-import { GhostAction } from '../components/GhostAction';
+import { AddCardMark, ImportDeckMark, NewDeckMark } from '../components/StoreMarks';
 import { IconAction } from '../components/IconAction';
 import { DeckActions } from './decks/DeckActions';
+import { ImportDeckDialog } from './decks/ImportDeckDialog';
 import { NewDeckDialog } from './decks/NewDeckDialog';
 import { VirtualGuide } from '../components/VirtualGuide';
 import type { DeckSummaryOut } from '../core/api';
@@ -79,7 +79,7 @@ export function DecksView() {
   else if (!decks.data.length) body = <EmptyNote title="No decks yet">Add a precon or a deck URL from Collection → Add cards, or build one with <span translate="no">uv run mm deck</span>.</EmptyNote>;
   else {
     const list = <DeckList groups={groups} total={shown.length} active={search.deck} onPick={(deck) => set({ deck })} />;
-    const inspector = search.deck ? <DeckInspector slug={search.deck} view={search.view} onView={narrow ? (view) => set({ view }) : undefined} onBack={narrow ? () => set({ deck: undefined }) : undefined} /> : <EmptyNote title="Pick a deck">Choose a deck on the left to see its cards.</EmptyNote>;
+    const inspector = search.deck ? <DeckInspector slug={search.deck} view={search.view} autoAdd={search.add === true} onAutoAdded={() => set({ add: undefined })} onView={narrow ? (view) => set({ view }) : undefined} onBack={narrow ? () => set({ deck: undefined }) : undefined} /> : <EmptyNote title="Pick a deck">Choose a deck on the left to see its cards.</EmptyNote>;
     body = narrow ? (search.deck ? inspector : list) : <Split list={list} inspector={inspector} />;
   }
 
@@ -88,7 +88,12 @@ export function DecksView() {
       <GuideSheet
         title="Decks"
         summary={decks.data ? `${fmtInt(decks.data.length)} decks · ${fmtInt(builtCount)} built` : undefined}
-        actions={<NewDeckDialog trigger={<GhostAction Icon={NewDeckMark} label="New deck" />} />}
+        actions={
+          <span role="toolbar" aria-label="Deck list actions" className="flex items-center gap-0.5">
+            <NewDeckDialog trigger={<IconAction label="New deck" Icon={NewDeckMark} />} />
+            <ImportDeckDialog trigger={<IconAction label="Import a deck from a link" Icon={ImportDeckMark} />} />
+          </span>
+        }
       >
         {body}
       </GuideSheet>
@@ -180,12 +185,18 @@ function BuiltCount({ built }: { built: number }) {
   return <span className="voice-condensed uppercase tracking-[0.06em] text-accent-ink" aria-label={`${built} built`}>×{built} built</span>;
 }
 
-function DeckInspector({ slug, view, onView, onBack }: { slug: string; view: 'grid' | 'list'; onView?: (v: 'grid' | 'list') => void; onBack?: () => void }) {
+function DeckInspector({ slug, view, autoAdd = false, onAutoAdded, onView, onBack }: { slug: string; view: 'grid' | 'list'; autoAdd?: boolean; onAutoAdded?: () => void; onView?: (v: 'grid' | 'list') => void; onBack?: () => void }) {
   const q = useQuery(deckQuery(slug));
   const { selected, toggle, clear } = useSelection(`deck:${slug}`);
   const [seed, setSeed] = useState<AddCardsSeed | null>(null);
   const sections = useMemo(() => (q.data ? deckGuideGroups(q.data.cards).map((g) => ({ ...g, level: 2 as const, noun: 'section' })) : []), [q.data]);
   useEffect(() => setSeed(null), [slug]);
+  // Arrived from "Import a deck" with "I have these cards": open the add review once.
+  useEffect(() => {
+    if (!autoAdd || !q.data) return;
+    setSeed({ name: q.data.deck.name, lines: deckReviewLines(q.data.cards) });
+    onAutoAdded?.();
+  }, [autoAdd, q.data, onAutoAdded]);
 
   if (q.isPending) return <GridSkeleton label="Loading deck…" />;
   if (q.isError) return <ErrorNote error={q.error} onRetry={() => q.refetch()} />;

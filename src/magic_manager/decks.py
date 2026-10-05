@@ -694,6 +694,58 @@ def unclassified_precon_count(*, conn=None) -> int:
         ).fetchone()[0]
 
 
+_UNPLEDGED_BUILT_SQL = (
+    "FROM decks d WHERE d.precon_state = 'built' AND d.source_precon_file_name IS NULL "
+    "AND NOT EXISTS (SELECT 1 FROM deck_assignments a WHERE a.deck_id = d.deck_id)"
+)
+
+
+def unpledged_built_count(*, conn=None) -> int:
+    """Imported / hand-built decks marked built with nothing pledged — rows from
+    before 'built' followed pledges (imports used to default to built)."""
+    with db.transaction(conn) as conn:
+        return conn.execute(f"SELECT COUNT(*) {_UNPLEDGED_BUILT_SQL}").fetchone()[0]
+
+
+# Precon copies marked built BEYOND the first built copy of their recipe, with
+# nothing pledged. The ingest rule is "one copy built, the rest loose"; a second
+# built copy only stands when cards are actually pledged to it.
+_EXTRA_BUILT_PRECON_SQL = """
+    FROM decks d
+    WHERE d.precon_state = 'built' AND d.source_precon_file_name IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM deck_assignments a WHERE a.deck_id = d.deck_id)
+      AND d.deck_id <> (
+          SELECT d2.deck_id FROM decks d2
+          WHERE d2.source_precon_file_name = d.source_precon_file_name AND d2.precon_state = 'built'
+          ORDER BY EXISTS (SELECT 1 FROM deck_assignments a2 WHERE a2.deck_id = d2.deck_id) DESC, d2.deck_id
+          LIMIT 1)
+"""
+
+
+def extra_built_precon_count(*, conn=None) -> int:
+    with db.transaction(conn) as conn:
+        return conn.execute(f"SELECT COUNT(*) {_EXTRA_BUILT_PRECON_SQL}").fetchone()[0]
+
+
+def backfill_built_state(*, conn=None) -> dict:
+    """One-off, idempotent: 'built' means assembled.
+    * Imported / hand-built decks with no pledged cards → not built (imports
+      used to default to built).
+    * Precons keep ONE built copy per recipe (the ingest rule: one built, the
+      rest loose); extra built copies with nothing pledged → not built. Copies
+      with pledges are left alone (you really assembled them).
+    Returns ``{"corrected": n_custom, "precon_extras": n_precon}``."""
+    with db.transaction(conn) as conn:
+        n = conn.execute(
+            f"UPDATE decks SET precon_state = 'deconstructed' WHERE deck_id IN (SELECT d.deck_id {_UNPLEDGED_BUILT_SQL})"
+        ).rowcount
+        extras = [r[0] for r in conn.execute(f"SELECT d.deck_id {_EXTRA_BUILT_PRECON_SQL}")]
+        if extras:
+            conn.execute(
+                f"UPDATE decks SET precon_state = 'deconstructed' WHERE deck_id IN ({','.join('?' * len(extras))})", extras)
+    return {"corrected": n, "precon_extras": len(extras)}
+
+
 def deck_delete(slug: str) -> int:
     """Delete a deck. ON DELETE CASCADE drops its ``deck_cards``."""
     with db.connect() as conn:
@@ -884,25 +936,37 @@ def _materialize_for_checks(conn, version_id: int) -> list[dict]:
     decoded to native types). Includes every board — legality.py / brackets.py
     exclude tokens internally."""
     rows = conn.execute(
-        """
-        SELECT dc.scryfall_id, dc.board, dc.finish, dc.count,
-               c.oracle_id, c.name, c.type_line, c.oracle_text,
-               c.color_identity, c.keywords, c.legalities, c.game_changer
-        FROM deck_cards dc
-        JOIN cards c ON c.scryfall_id = dc.scryfall_id
-        WHERE dc.deck_version_id = ?
-        """,
+        "SELECT scryfall_id, board, finish, count FROM deck_cards WHERE deck_version_id = ?",
         (version_id,),
     ).fetchall()
+    return materialize_rows_for_checks(conn, [tuple(r) for r in rows])
+
+
+def materialize_rows_for_checks(conn, rows: list[tuple[str, str, str, int]]) -> list[dict]:
+    """``(scryfall_id, board, finish, count)`` rows (a saved version or an
+    unsaved draft) → legality/bracket-shaped card dicts. Unknown ids are skipped."""
+    ids = list(dict.fromkeys(r[0] for r in rows))
+    facts: dict = {}
+    for i in range(0, len(ids), 500):
+        part = ids[i:i + 500]
+        for r in conn.execute(
+            f"""SELECT scryfall_id, oracle_id, name, type_line, oracle_text,
+                       color_identity, keywords, legalities, game_changer
+                FROM cards WHERE scryfall_id IN ({','.join('?' * len(part))})""", part,
+        ):
+            facts[r["scryfall_id"]] = r
     out: list[dict] = []
-    for r in rows:
+    for sid, board, finish, count in rows:
+        r = facts.get(sid)
+        if r is None:
+            continue
         out.append({
-            "scryfall_id": r["scryfall_id"],
+            "scryfall_id": sid,
             "oracle_id": r["oracle_id"],
             "name": r["name"],
-            "board": r["board"],
-            "finish": r["finish"],
-            "count": r["count"],
+            "board": board,
+            "finish": finish,
+            "count": count,
             "type_line": r["type_line"],
             "oracle_text": r["oracle_text"],
             "color_identity": json.loads(r["color_identity"]) if r["color_identity"] else [],
@@ -1391,6 +1455,8 @@ def deck_assign_batch(
             assigned_qty += qty
         if assigned_rows:
             _touch_deck(conn, deck_id)
+            # Pledging cards IS building: a deck with pledged copies is built.
+            conn.execute("UPDATE decks SET precon_state = 'built' WHERE deck_id = ?", (deck_id,))
             # A deck-assign event moves deck_assignments, NOT inventory — the
             # owned quantity is unchanged — so it records NO inventory_events;
             # it exists in the dimension for the audit trail (and dedup via the
@@ -1445,6 +1511,8 @@ def deck_unassign_batch(
             unassigned_rows = summed["n"]
             unassigned_qty = summed["q"]
             conn.execute("DELETE FROM deck_assignments WHERE deck_id = ?", (deck_id,))
+            # Unpledging everything is breaking the deck down.
+            conn.execute("UPDATE decks SET precon_state = 'deconstructed' WHERE deck_id = ?", (deck_id,))
         else:
             assert isinstance(rows, list)
             for sid, finish, qty in rows:

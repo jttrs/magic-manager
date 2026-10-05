@@ -1,7 +1,7 @@
 // The ONE card view-model every guide component renders. Each domain view maps
 // into it with a pure function, so card-diff and commander-compare share every
 // component (tile, row, grid, preview) and differ only in their mapper.
-import type { CollectionCardOut, CompareCardOut } from './api';
+import type { CollectionCardOut, CompareCardOut, PrintingOut } from './api';
 import { bucketInclusion } from './compare';
 import { typeGroup } from './cardFacts';
 
@@ -117,6 +117,35 @@ export function fromCollection(c: CollectionCardOut, missing: boolean, fnLabels:
     functions: (c.functions ?? []).map((k) => fnLabels[k] ?? k),
     typeLine: c.type_line,
     prices: { nonfoil: c.finishes.includes('nonfoil') ? c.price_usd : null, foil: c.finishes.includes('foil') ? c.price_usd_foil : null },
+  };
+}
+
+/** One exact printing (search hits, editor rows) → the shared card view-model, for the inspector. */
+export function fromPrinting(p: PrintingOut): GuideCard {
+  return {
+    key: p.scryfall_id,
+    scryfallId: p.scryfall_id,
+    name: p.name,
+    image: p.image_uri,
+    href: `https://scryfall.com/card/${p.set_code}/${encodeURIComponent(p.collector_number)}`,
+    setCode: p.set_code.toUpperCase(),
+    cn: p.collector_number,
+    rarity: p.rarity,
+    finish: null,
+    price: p.price_usd ?? p.price_usd_foil,
+    pct: null,
+    bars: null,
+    group: typeGroup(p.type_line),
+    cmc: p.cmc ?? null,
+    colors: [],
+    typeGroup: typeGroup(p.type_line),
+    released: p.released_at,
+    owned: (p.owned ?? {}) as GuideCard['owned'],
+    missing: false,
+    tags: treatmentLabels(p.treatment),
+    lines: { plain: `1 ${p.name}`, manapool: '', tcgplayer: '' },
+    typeLine: p.type_line ?? null,
+    prices: { nonfoil: p.finishes.includes('nonfoil') ? p.price_usd : null, foil: p.finishes.includes('foil') ? p.price_usd_foil : null },
   };
 }
 

@@ -1860,6 +1860,13 @@ def deck_backfill_kinds_cmd():
                f"{r['deck']} deck, {r['pool']} pool")
 
 
+@deck_app.command("backfill-built")
+def deck_backfill_built_cmd():
+    """Mark imported / hand-built decks with nothing pledged as not built (one-off; idempotent)."""
+    r = decks_mod.backfill_built_state()
+    typer.echo(f"marked {r['corrected']} unpledged decks and {r['precon_extras']} extra precon copies as not built")
+
+
 @deck_app.command("show")
 def deck_show_cmd(slug: str = typer.Argument(...)):
     """Show every card in a deck (all boards)."""
@@ -1889,7 +1896,8 @@ def deck_create_cmd(
 ):
     """Create a new (empty) deck. Starts at version 1 with status ``brew``."""
     try:
-        d = decks_mod.deck_create(slug, name, format=format, archetype=archetype, notes=notes)
+        d = decks_mod.deck_create(slug, name, format=format, archetype=archetype, notes=notes,
+                                  precon_state="deconstructed")
     except ValueError as e:
         typer.echo(f"error: {e}", err=True); raise typer.Exit(2)
     typer.echo(f"Created deck #{d.deck_id}: {d.slug} ({d.name}) — v1 (brew)")
@@ -2741,6 +2749,10 @@ def deck_import_deck_cmd(
     name: str = typer.Option(None, "--name", help="Deck name (defaults to slug on create)."),
     force: bool = typer.Option(False, "--force", help="Re-import a deck already pulled from this source: "
                                "REPLACE its cards with the fresh pull (instead of refusing)."),
+    add_to_collection: bool = typer.Option(False, "--add-to-collection",
+                                           help="Also add one copy of the deck's playable cards to your collection "
+                                                "(you have them in hand). The deck is still NOT marked built — "
+                                                "run `mm deck compose <slug>` to pledge them."),
 ):
     """Ingest a normalized deck (JSON) fetched from Moxfield/Archidekt/MTGGoldfish/ManaBox/Scryfall.
 
@@ -2797,6 +2809,10 @@ def deck_import_deck_cmd(
     verb = "created" if res["created"] else ("replaced" if res.get("replaced") else "updated")
     by = f" by {author}" if (author and res["created"]) else ""
     typer.echo(f"Deck {res['slug']!r} ({verb}){by}: {res['added']} added, {res['updated']} updated")
+    if add_to_collection:
+        from . import deck_edit as _deck_edit
+        added = _deck_edit.add_recipe_to_collection(res["slug"])
+        typer.echo(f"Added to collection: {added['summary']}")
     for w in res["warnings"]:
         typer.echo(f"  warning: {w}", err=True)
     for nf in res["not_found"]:

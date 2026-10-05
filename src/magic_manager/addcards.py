@@ -454,4 +454,5 @@ def fetch_deck_lines(url: str, *, progress: Callable[[str], None] | None = None)
             "section": c.get("board") or "main",
         })
     lines, warnings = _resolve_wants(wants)
-    return {"format": "deck", "lines": lines, "warnings": warnings, "deck_name": payload.get("name")}
+    source = {k: payload.get(k) for k in ("source", "id", "name", "author")} | {"cards": payload.get("cards", [])}
+    return {"format": "deck", "lines": lines, "warnings": warnings, "deck_name": payload.get("name"), "deck": source}

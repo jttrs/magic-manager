@@ -500,6 +500,7 @@ def import_deck(cards: list[dict], *, slug: str, name: str | None = None,
             decks_mod.deck_create(
                 slug, name or slug, source_set_code=source_set_code,
                 author=author, source=source, source_deck_id=source_deck_id,
+                precon_state="deconstructed",  # an imported list is a recipe; built only once pledged
                 conn=conn,
             )
             created = True

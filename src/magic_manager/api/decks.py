@@ -13,7 +13,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from .. import addcards, deck_edit, deck_view
-from .ingest import PrintingOut
+from .ingest import DeckSourceOut, PrintingOut
 
 
 class DeckSummaryOut(BaseModel):
@@ -83,6 +83,17 @@ class ActionOut(BaseModel):
     summary: str
 
 
+class ImportIn(BaseModel):
+    deck: DeckSourceOut
+    force: bool = Field(False, description="Replace the cards of a deck already imported from this source.")
+
+
+class ImportOut(BaseModel):
+    slug: str
+    duplicate: bool = Field(description="Already imported from this source; `slug` is the existing deck.")
+    summary: str
+
+
 class NewDeckIn(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     format: str = "commander"
@@ -129,6 +140,42 @@ class SaveOut(PreviewOut):
     sleeved: int
 
 
+class ViolationOut(BaseModel):
+    code: str
+    severity: Literal["error", "warning", "info"]
+    message: str
+    cards: list[str]
+
+
+class LegalityOut(BaseModel):
+    format: str
+    legal: bool
+    checked_count: int
+    violations: list[ViolationOut]
+
+
+class BracketOut(BaseModel):
+    suggested_bracket: int | None = Field(description="Floor (1–4) from Wizards' bracket criteria; None without a commander. Never authoritative.")
+    game_changer_count: int
+    game_changers: list[str]
+    mass_land_denial: list[str]
+    extra_turns: list[str]
+    two_card_combos: int
+    rationale: list[str]
+    stale_data: bool
+    spellbook_available: bool
+
+
+class CheckIn(DraftIn):
+    combos: bool = Field(False, description="Also ask Commander Spellbook for two-card combos (network).")
+
+
+class CheckOut(BaseModel):
+    format: str
+    legality: LegalityOut
+    bracket: BracketOut | None
+
+
 class SuggestionOut(BaseModel):
     printing: PrintingOut
     inclusion_pct: float | None
@@ -169,6 +216,14 @@ def _swap(sw: dict | None) -> SwapOut | None:
 
 def _draft(cards: list[DraftCardIn]) -> list[deck_edit.DraftCard]:
     return [deck_edit.DraftCard(c.scryfall_id, c.board, c.finish, c.count) for c in cards]
+
+
+def import_deck(body: ImportIn) -> ImportOut:
+    r = deck_edit.import_payload(body.deck.model_dump(), force=body.force)
+    if r["duplicate"]:
+        return ImportOut(slug=r["slug"], duplicate=True, summary="Already in your decks")
+    miss = f" · {r['not_found']} cards not found" if r["not_found"] else ""
+    return ImportOut(slug=r["slug"], duplicate=False, summary=f"Decklist saved{miss}")
 
 
 def build_plan(slug: str) -> BuildPlanOut:
@@ -212,6 +267,12 @@ def save(slug: str, body: SaveIn) -> SaveOut:
     r = deck_edit.save(slug, _draft(body.cards), expected_version_id=body.expected_version_id, name=body.name)
     return SaveOut(built=r["built"], changes=_changes(r["changes"]), swap=_swap(r["swap"]),
                    version_number=r["version_number"], pulled=r["pulled"], sleeved=r["sleeved"])
+
+
+def check(slug: str, body: CheckIn) -> CheckOut:
+    r = deck_edit.check(slug, _draft(body.cards), combos=body.combos)
+    return CheckOut(format=r["format"], legality=LegalityOut(**r["legality"]),
+                    bracket=BracketOut(**r["bracket"]) if r["bracket"] else None)
 
 
 def suggestions(commander: str) -> SuggestionsOut:

@@ -105,8 +105,8 @@ function PreconCatalog() {
 
 const STATES = [
   { value: 'auto', label: 'Suggested' },
-  { value: 'built', label: 'Keep built' },
-  { value: 'deconstructed', label: 'Break into loose cards' },
+  { value: 'built', label: 'Keep it assembled' },
+  { value: 'deconstructed', label: 'Just add the cards' },
 ] as const;
 
 function PreconRow({ p, open, onOpen }: { p: PreconOptionOut; open: boolean; onOpen: (o: boolean) => void }) {
@@ -150,7 +150,7 @@ function PreconRow({ p, open, onOpen }: { p: PreconOptionOut; open: boolean; onO
             <label className="flex flex-col gap-1 text-xs voice-semi text-ink-muted">
               Keep it
               <select value={state} onChange={(e) => setState(e.target.value as typeof state)} className="h-8 cursor-pointer rounded-sm border border-rule bg-paper-raised px-2 text-sm text-ink focus-visible:border-accent">
-                {STATES.map((s) => <option key={s.value} value={s.value}>{s.value === 'auto' ? `Suggested (${p.default_state === 'built' ? 'built' : 'loose'})` : s.label}</option>)}
+                {STATES.map((s) => <option key={s.value} value={s.value}>{s.value === 'auto' ? `Suggested (${p.default_state === 'built' ? 'keep assembled' : 'just the cards'})` : s.label}</option>)}
               </select>
             </label>
             <Button tone="paper" emphasis="primary" onClick={add} disabled={running} className="ml-auto">{running ? 'Adding…' : `Add ${copies > 1 ? `${copies} copies` : 'to collection'}`}</Button>

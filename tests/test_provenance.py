@@ -36,6 +36,7 @@ def test_sources_classify_products_singles_and_unknown(seed_cards, make_card):
     inventory.inventory_add(A, "foil", 1, ingest_id=_event("checklist", "checklist:fin"))
     inventory.inventory_add(A, "nonfoil", 1, ingest_id=_event("precon", "backfill:precon", status="backfill"))
     inventory.inventory_add(B, "nonfoil", 1, ingest_id=_event("precon", "precon:Mystery_XYZ", "Mystery_XYZ"))
+    inventory.inventory_add(B, "nonfoil", 1, ingest_id=_event("precon", "precon:Mystery_XYZ", "Mystery_XYZ"))   # a 2nd purchase
 
     got = provenance.card_sources([A, B])
     a = {(cs.source.key, cs.finish): (cs.source.kind, cs.source.label, cs.copies) for cs in got[A]}
@@ -49,6 +50,7 @@ def test_sources_classify_products_singles_and_unknown(seed_cards, make_card):
     # A product with no deck row falls back to a prettified fileName.
     (b,) = got[B]
     assert (b.source.kind, b.source.label, b.source.set_code) == ("deck", "Mystery (XYZ)", "xyz")
+    assert (b.copies, b.acquisitions) == (2, 2)          # two separate ingests of the same product
 
 
 def test_reattribution_moves_copies_between_sources(seed_cards, make_card):

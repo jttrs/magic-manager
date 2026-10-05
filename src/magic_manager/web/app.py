@@ -179,6 +179,10 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     def deck_create(body: decks_api.NewDeckIn):
         return _deck_call(decks_api.create, body)
 
+    @app.post("/api/decks/import", response_model=decks_api.ImportOut, tags=["decks"])
+    def deck_import(body: decks_api.ImportIn):
+        return _deck_call(decks_api.import_deck, body)
+
     @app.get("/api/decks/{slug}/build-plan", response_model=decks_api.BuildPlanOut, tags=["decks"])
     def deck_build_plan(slug: str):
         return _deck_call(decks_api.build_plan, slug)
@@ -198,6 +202,10 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     @app.post("/api/decks/{slug}/preview", response_model=decks_api.PreviewOut, tags=["decks"])
     def deck_preview(slug: str, body: decks_api.DraftIn):
         return _deck_call(decks_api.preview, slug, body)
+
+    @app.post("/api/decks/{slug}/check", response_model=decks_api.CheckOut, tags=["decks"])
+    def deck_check(slug: str, body: decks_api.CheckIn):
+        return _deck_call(decks_api.check, slug, body)
 
     @app.put("/api/decks/{slug}", response_model=decks_api.SaveOut, tags=["decks"])
     def deck_save(slug: str, body: decks_api.SaveIn):

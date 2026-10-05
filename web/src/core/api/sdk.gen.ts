@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, ServerSentEventsResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { CardHoldingsData, CardHoldingsErrors, CardHoldingsResponses, CollectionBuyListData, CollectionBuyListErrors, CollectionBuyListResponses, CollectionData, CollectionErrors, CollectionFamiliesData, CollectionFamiliesResponses, CollectionResponses, CommandersData, CommandersErrors, CommandersResponses, CompareData, CompareErrors, CompareResponses, DeckBreakDownData, DeckBreakDownErrors, DeckBreakDownResponses, DeckBuildData, DeckBuildErrors, DeckBuildPlanData, DeckBuildPlanErrors, DeckBuildPlanResponses, DeckBuildResponses, DeckCopyData, DeckCopyErrors, DeckCopyResponses, DeckCreateData, DeckCreateErrors, DeckCreateResponses, DeckDetailData, DeckDetailErrors, DeckDetailResponses, DeckListData, DeckListResponses, DeckPreviewData, DeckPreviewErrors, DeckPreviewResponses, DeckSaveData, DeckSaveErrors, DeckSaveResponses, DeckSuggestionsData, DeckSuggestionsErrors, DeckSuggestionsResponses, GetJobData, GetJobErrors, GetJobResponses, IngestCommitData, IngestCommitErrors, IngestCommitResponses, IngestPreconsData, IngestPreconsErrors, IngestPreconsResponses, IngestResolveData, IngestResolveErrors, IngestResolveResponses, IngestSearchData, IngestSearchErrors, IngestSearchResponses, JobEventsData, JobEventsErrors, JobEventsResponses, JobSpecsData, JobSpecsResponses, ListJobsData, ListJobsResponses, SubmitJobData, SubmitJobErrors, SubmitJobResponses } from './types.gen';
+import type { CardHoldingsData, CardHoldingsErrors, CardHoldingsResponses, CollectionBuyListData, CollectionBuyListErrors, CollectionBuyListResponses, CollectionData, CollectionErrors, CollectionFamiliesData, CollectionFamiliesResponses, CollectionResponses, CommandersData, CommandersErrors, CommandersResponses, CompareData, CompareErrors, CompareResponses, DeckBreakDownData, DeckBreakDownErrors, DeckBreakDownResponses, DeckBuildData, DeckBuildErrors, DeckBuildPlanData, DeckBuildPlanErrors, DeckBuildPlanResponses, DeckBuildResponses, DeckCheckData, DeckCheckErrors, DeckCheckResponses, DeckCopyData, DeckCopyErrors, DeckCopyResponses, DeckCreateData, DeckCreateErrors, DeckCreateResponses, DeckDetailData, DeckDetailErrors, DeckDetailResponses, DeckImportData, DeckImportErrors, DeckImportResponses, DeckListData, DeckListResponses, DeckPreviewData, DeckPreviewErrors, DeckPreviewResponses, DeckSaveData, DeckSaveErrors, DeckSaveResponses, DeckSuggestionsData, DeckSuggestionsErrors, DeckSuggestionsResponses, GetJobData, GetJobErrors, GetJobResponses, IngestCommitData, IngestCommitErrors, IngestCommitResponses, IngestPreconsData, IngestPreconsErrors, IngestPreconsResponses, IngestResolveData, IngestResolveErrors, IngestResolveResponses, IngestSearchData, IngestSearchErrors, IngestSearchResponses, JobEventsData, JobEventsErrors, JobEventsResponses, JobSpecsData, JobSpecsResponses, ListJobsData, ListJobsResponses, SubmitJobData, SubmitJobErrors, SubmitJobResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -117,6 +117,18 @@ export const deckSave = <ThrowOnError extends boolean = false>(options: Options<
 });
 
 /**
+ * Deck Import
+ */
+export const deckImport = <ThrowOnError extends boolean = false>(options: Options<DeckImportData, ThrowOnError>): RequestResult<DeckImportResponses, DeckImportErrors, ThrowOnError> => (options.client ?? client).post<DeckImportResponses, DeckImportErrors, ThrowOnError>({
+    url: '/api/decks/import',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
  * Deck Build Plan
  */
 export const deckBuildPlan = <ThrowOnError extends boolean = false>(options: Options<DeckBuildPlanData, ThrowOnError>): RequestResult<DeckBuildPlanResponses, DeckBuildPlanErrors, ThrowOnError> => (options.client ?? client).get<DeckBuildPlanResponses, DeckBuildPlanErrors, ThrowOnError>({ url: '/api/decks/{slug}/build-plan', ...options });
@@ -155,6 +167,18 @@ export const deckCopy = <ThrowOnError extends boolean = false>(options: Options<
  */
 export const deckPreview = <ThrowOnError extends boolean = false>(options: Options<DeckPreviewData, ThrowOnError>): RequestResult<DeckPreviewResponses, DeckPreviewErrors, ThrowOnError> => (options.client ?? client).post<DeckPreviewResponses, DeckPreviewErrors, ThrowOnError>({
     url: '/api/decks/{slug}/preview',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Deck Check
+ */
+export const deckCheck = <ThrowOnError extends boolean = false>(options: Options<DeckCheckData, ThrowOnError>): RequestResult<DeckCheckResponses, DeckCheckErrors, ThrowOnError> => (options.client ?? client).post<DeckCheckResponses, DeckCheckErrors, ThrowOnError>({
+    url: '/api/decks/{slug}/check',
     ...options,
     headers: {
         'Content-Type': 'application/json',

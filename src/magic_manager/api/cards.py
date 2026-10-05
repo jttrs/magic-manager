@@ -27,6 +27,7 @@ class CardSourceOut(BaseModel):
     source: SourceOut
     finish: Finish
     copies: int = Field(description="Copies acquired from this source (history: may exceed what is owned today).")
+    acquisitions: int = Field(1, description="Separate ingests from this source (e.g. 2 = two purchases of the same product).")
 
 
 class HoldingsOut(BaseModel):
@@ -46,6 +47,6 @@ def holdings(scryfall_id: str) -> HoldingsOut:
         decks=[DeckPledgeOut(**vars(d)) for d in h.decks],
         sources=[CardSourceOut(source=SourceOut(key=cs.source.key, kind=cs.source.kind, label=cs.source.label,
                                                 set_code=cs.source.set_code),
-                               finish=cs.finish, copies=cs.copies) for cs in h.sources],
+                               finish=cs.finish, copies=cs.copies, acquisitions=cs.acquisitions) for cs in h.sources],
         other_printings_owned=h.other_printings_owned,
     )
