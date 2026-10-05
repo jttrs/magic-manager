@@ -444,6 +444,56 @@
         }
       }
     },
+    "/api/undo": {
+      "get": {
+        "tags": [
+          "undo"
+        ],
+        "summary": "Undo Info",
+        "operationId": "undo_info",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/UndoOut"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Undo Info"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/undo/restore": {
+      "post": {
+        "tags": [
+          "undo"
+        ],
+        "summary": "Undo Restore",
+        "operationId": "undo_restore",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UndoOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/features": {
       "get": {
         "tags": [
@@ -5962,6 +6012,82 @@
           "contents_kind"
         ],
         "title": "TreeNodeOut"
+      },
+      "UndoOut": {
+        "properties": {
+          "taken_at": {
+            "type": "string",
+            "title": "Taken At",
+            "description": "UTC ISO time the restore point was taken."
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "restorable": {
+            "type": "boolean",
+            "title": "Restorable",
+            "description": "False when the database changed shape since."
+          },
+          "current": {
+            "$ref": "#/components/schemas/UndoSummary"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/UndoSummary"
+          },
+          "changes": {
+            "$ref": "#/components/schemas/UndoSummary",
+            "description": "Snapshot minus current: what restoring would change."
+          }
+        },
+        "type": "object",
+        "required": [
+          "taken_at",
+          "reason",
+          "restorable",
+          "current",
+          "snapshot",
+          "changes"
+        ],
+        "title": "UndoOut"
+      },
+      "UndoSummary": {
+        "properties": {
+          "copies": {
+            "type": "integer",
+            "title": "Copies"
+          },
+          "printings": {
+            "type": "integer",
+            "title": "Printings"
+          },
+          "decks": {
+            "type": "integer",
+            "title": "Decks"
+          },
+          "built": {
+            "type": "integer",
+            "title": "Built"
+          },
+          "wishlist": {
+            "type": "integer",
+            "title": "Wishlist"
+          },
+          "earmarks": {
+            "type": "integer",
+            "title": "Earmarks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "copies",
+          "printings",
+          "decks",
+          "built",
+          "wishlist",
+          "earmarks"
+        ],
+        "title": "UndoSummary"
       },
       "UnidentifiedOut": {
         "properties": {

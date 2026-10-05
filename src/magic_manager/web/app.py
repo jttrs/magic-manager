@@ -15,14 +15,14 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
-from .. import api, cart as cart_engine, deck_edit, edhrec as edhrec_engine, features as features_engine, scryfall
-from ..api import cart as cart_api, cards as cards_api, collection as collection_api, explore as explore_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api, market as market_api, trueup as trueup_api
+from .. import api, undo as undo_engine, cart as cart_engine, deck_edit, edhrec as edhrec_engine, features as features_engine, scryfall
+from ..api import undo as undo_api, cart as cart_api, cards as cards_api, collection as collection_api, explore as explore_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api, market as market_api, trueup as trueup_api
 from .runtime import TERMINAL, JobManager
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -54,6 +54,11 @@ class JobOut(BaseModel):
 
 def create_app(*, serve_frontend: bool = True) -> FastAPI:
     manager = JobManager()
+    # One restore point, taken before the first write of each session.
+    guard = undo_engine.SessionGuard()
+
+    def write(label: str):
+        return Depends(lambda: guard.before_write(label))
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
@@ -79,6 +84,9 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     @app.post("/api/jobs/{name}", response_model=JobOut, status_code=202, tags=["jobs"])
     async def submit_job(name: str, body: dict):
         try:
+            spec = jobs_api.get(name)
+            if spec.mutates:
+                guard.before_write(f"before {spec.title.lower()}")
             rec = await manager.submit(name, body)
         except KeyError as e:
             raise HTTPException(404, str(e)) from e
@@ -148,6 +156,19 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             raise HTTPException(422, str(e)) from e
         except scryfall.ScryfallError as e:
             raise HTTPException(502, f"Scryfall lookup failed: {e}") from e
+
+    # ---------- undo (one restore point) ----------
+
+    @app.get("/api/undo", response_model=undo_api.UndoOut | None, tags=["undo"])
+    def undo_info():
+        return undo_api.info()
+
+    @app.post("/api/undo/restore", response_model=undo_api.UndoOut, tags=["undo"])
+    def undo_restore():
+        try:
+            return undo_api.restore()
+        except undo_engine.UndoError as e:
+            raise HTTPException(409, str(e)) from e
 
     # ---------- features + cart (internal) ----------
 
@@ -246,11 +267,11 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         except ValueError as e:
             raise HTTPException(status_code=422, detail=str(e)) from e
 
-    @app.post("/api/decks", response_model=decks_api.ActionOut, status_code=201, tags=["decks"])
+    @app.post("/api/decks", response_model=decks_api.ActionOut, status_code=201, tags=["decks"], dependencies=[write("before creating a deck")])
     def deck_create(body: decks_api.NewDeckIn):
         return _deck_call(decks_api.create, body)
 
-    @app.post("/api/decks/import", response_model=decks_api.ImportOut, tags=["decks"])
+    @app.post("/api/decks/import", response_model=decks_api.ImportOut, tags=["decks"], dependencies=[write("before importing a deck")])
     def deck_import(body: decks_api.ImportIn):
         return _deck_call(decks_api.import_deck, body)
 
@@ -258,15 +279,15 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     def deck_build_plan(slug: str):
         return _deck_call(decks_api.build_plan, slug)
 
-    @app.post("/api/decks/{slug}/build", response_model=decks_api.ActionOut, tags=["decks"])
+    @app.post("/api/decks/{slug}/build", response_model=decks_api.ActionOut, tags=["decks"], dependencies=[write("before building a deck")])
     def deck_build(slug: str, body: decks_api.BuildIn):
         return _deck_call(decks_api.build, slug, body)
 
-    @app.post("/api/decks/{slug}/break-down", response_model=decks_api.ActionOut, tags=["decks"])
+    @app.post("/api/decks/{slug}/break-down", response_model=decks_api.ActionOut, tags=["decks"], dependencies=[write("before breaking down a deck")])
     def deck_break_down(slug: str):
         return _deck_call(decks_api.break_down, slug)
 
-    @app.post("/api/decks/{slug}/copy", response_model=decks_api.ActionOut, status_code=201, tags=["decks"])
+    @app.post("/api/decks/{slug}/copy", response_model=decks_api.ActionOut, status_code=201, tags=["decks"], dependencies=[write("before copying a deck")])
     def deck_copy(slug: str, body: decks_api.CopyIn):
         return _deck_call(decks_api.copy, slug, body)
 
@@ -278,7 +299,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     def deck_check(slug: str, body: decks_api.CheckIn):
         return _deck_call(decks_api.check, slug, body)
 
-    @app.put("/api/decks/{slug}", response_model=decks_api.SaveOut, tags=["decks"])
+    @app.put("/api/decks/{slug}", response_model=decks_api.SaveOut, tags=["decks"], dependencies=[write("before saving a deck")])
     def deck_save(slug: str, body: decks_api.SaveIn):
         return _deck_call(decks_api.save, slug, body)
 
@@ -305,7 +326,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     def ingest_resolve(body: ingest_api.ResolveIn):
         return ingest_api.resolve(body)
 
-    @app.post("/api/ingest/commit", response_model=ingest_api.CommitOut, tags=["ingest"])
+    @app.post("/api/ingest/commit", response_model=ingest_api.CommitOut, tags=["ingest"], dependencies=[write("before adding cards")])
     def ingest_commit(body: ingest_api.CommitIn):
         try:
             return ingest_api.commit(body)

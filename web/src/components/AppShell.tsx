@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { ToggleGroup, Tooltip } from 'radix-ui';
 import { applyTheme, readTheme, type ThemePref } from '../app/theme';
 import { useMediaQuery } from '../app/useMediaQuery';
+import { UndoButton } from './UndoButton';
 
 const NAV = [
   { to: '/collection', label: 'Collection' },
@@ -43,6 +44,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </ul>
         </nav>
         <div className="ml-auto flex items-center gap-2 sm:gap-3">
+          <UndoButton />
           <JobsLink />
           <ThemeSwitch />
         </div>
