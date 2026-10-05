@@ -503,6 +503,12 @@ export type DeckSummaryOut = {
      */
     format: string | null;
     /**
+     * Deck Type
+     *
+     * What kind of deck: the game format (Commander, Standard, Pauper, Jumpstart…), else the precon product family (Starter / intro, Secret Lair, Land pack…).
+     */
+    deck_type: string;
+    /**
      * State
      */
     state: 'built' | 'deconstructed';

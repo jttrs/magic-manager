@@ -19,6 +19,7 @@ class DeckSummaryOut(BaseModel):
     slug: str
     name: str
     format: str | None
+    deck_type: str = Field(description="What kind of deck: the game format (Commander, Standard, Pauper, Jumpstart…), else the precon product family (Starter / intro, Secret Lair, Land pack…).")
     state: Literal["built", "deconstructed"]
     origin: Literal["precon", "import", "custom"] = Field(description="precon = MTGJSON product; import = deck-builder URL; custom = hand-built.")
     source: str | None = Field(description="Deck builder for imports (moxfield, archidekt…); precon product type for precons.")

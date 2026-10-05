@@ -1,4 +1,4 @@
-import { ToggleGroup } from 'radix-ui';
+import { DropdownMenu, ToggleGroup } from 'radix-ui';
 import { useId, type ReactNode } from 'react';
 
 export function SideSection({ title, children, id }: { title: string; children: ReactNode; id?: string }) {
@@ -125,18 +125,47 @@ export function TextField({ label, value, onChange, placeholder, name }: { label
   );
 }
 
-/** Single choice from a short fixed list as a native select (keyboard + mobile pickers for free). */
-export function SelectField<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: Opt<T>[]; onChange: (v: T) => void }) {
+/** Single choice from a short list: a trigger matching MultiSelect's, opening a
+ *  radio menu (Radix DropdownMenu — arrow keys, type-ahead, Escape). Optional counts. */
+export function SelectField<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: (Opt<T> & { count?: number })[]; onChange: (v: T) => void }) {
+  const id = useId();
+  const current = options.find((o) => o.value === value);
   return (
-    <label className="flex flex-col gap-1.5 text-sm voice-semi text-on-chrome-muted">
-      {label}
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value as T)}
-        className="min-h-9 w-full cursor-pointer rounded-sm border border-chrome-line bg-chrome-raised px-2 text-md text-on-chrome hover:border-on-chrome-muted focus-visible:border-accent"
-      >
-        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
-    </label>
+    <div className="flex flex-col gap-1.5">
+      <span id={`${id}-l`} className="text-sm voice-semi text-on-chrome-muted">{label}</span>
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger
+          aria-labelledby={`${id}-l ${id}-s`}
+          className="flex min-h-9 w-full cursor-pointer items-center gap-2 rounded-sm border border-chrome-line bg-chrome-raised px-2.5 text-left text-md text-on-chrome transition-colors ease-guide hover:border-on-chrome-muted data-[state=open]:border-accent"
+        >
+          <span id={`${id}-s`} className="min-w-0 flex-1 truncate">{current?.label ?? value}</span>
+          <span aria-hidden="true" className="text-on-chrome-muted">▾</span>
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content
+            align="start"
+            sideOffset={4}
+            collisionPadding={12}
+            className="z-50 w-[max(var(--radix-dropdown-menu-trigger-width),12rem)] rounded-sm border border-chrome-line bg-chrome-raised py-1 text-on-chrome shadow-[0_12px_28px_-12px_var(--theme-scrim)]"
+          >
+            <DropdownMenu.RadioGroup value={value} onValueChange={(v) => onChange(v as T)}>
+              {options.map((o) => (
+                <DropdownMenu.RadioItem
+                  key={o.value}
+                  value={o.value}
+                  className="flex cursor-pointer items-center gap-2.5 px-3 py-1.5 text-sm outline-none data-[highlighted]:bg-chrome-line data-[state=checked]:text-accent"
+                >
+                  <span aria-hidden="true" className="w-3 text-accent">
+                    <DropdownMenu.ItemIndicator>✓</DropdownMenu.ItemIndicator>
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">{o.label}</span>
+                  {o.count != null && <span className="tabular text-xs text-on-chrome-muted">{o.count}</span>}
+                </DropdownMenu.RadioItem>
+              ))}
+            </DropdownMenu.RadioGroup>
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
+    </div>
   );
 }

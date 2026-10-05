@@ -6,21 +6,22 @@ import type { DeckCardOut, DeckSummaryOut, ResolvedLineOut } from './api';
 import { TYPE_GROUPS, typeGroup } from './cardFacts';
 import { treatmentLabels, type GuideCard, type GuideGroup } from './guideCard';
 
-export const DECK_GROUPS = ['set', 'year', 'state', 'format', 'origin'] as const;
+export const DECK_GROUPS = ['set', 'year', 'type', 'state', 'origin'] as const;
 export type DeckGroupBy = (typeof DECK_GROUPS)[number];
-export const DECK_GROUP_LABEL: Record<DeckGroupBy, string> = { set: 'Set', year: 'Year', state: 'Built / loose', format: 'Format', origin: 'Source' };
+export const DECK_GROUP_LABEL: Record<DeckGroupBy, string> = { set: 'Set', year: 'Year', type: 'Deck type', state: 'Built / loose', origin: 'Source' };
 
 const ORIGIN_LABEL: Record<DeckSummaryOut['origin'], string> = { precon: 'Preconstructed', import: 'Imported', custom: 'Built by hand' };
-const titleCase = (s: string) => s.replace(/\b\w/g, (c) => c.toUpperCase());
 
-export type DeckFilters = { q: string; states: readonly DeckSummaryOut['state'][] };
+/** `types` = deck types to keep (empty keeps all). */
+export type DeckFilters = { q: string; states: readonly DeckSummaryOut['state'][]; types?: readonly string[] };
 
 export function filterDecks(decks: readonly DeckSummaryOut[], f: DeckFilters): DeckSummaryOut[] {
   const q = f.q.trim().toLowerCase();
   return decks.filter(
     (d) =>
       f.states.includes(d.state) &&
-      (!q || [d.name, d.set_name, d.set_code, d.source, d.author].some((v) => v?.toLowerCase().includes(q))),
+      (!f.types?.length || f.types.includes(d.deck_type)) &&
+      (!q || [d.name, d.set_name, d.set_code, d.source, d.author, d.deck_type].some((v) => v?.toLowerCase().includes(q))),
   );
 }
 
@@ -38,8 +39,8 @@ export function groupDecks(decks: readonly DeckSummaryOut[], by: DeckGroupBy): D
       }
       case 'state':
         return [d.state, d.state === 'built' ? 'Built' : 'Loose (deconstructed)', d.state === 'built' ? '1' : '0'];
-      case 'format':
-        return [d.format ?? '~', d.format ? titleCase(d.format) : 'No format', d.format ?? ''];
+      case 'type':
+        return [d.deck_type, d.deck_type, ''];
       case 'origin':
         return [d.origin, ORIGIN_LABEL[d.origin], { precon: '2', import: '1', custom: '0' }[d.origin]];
     }
@@ -53,7 +54,7 @@ export function groupDecks(decks: readonly DeckSummaryOut[], by: DeckGroupBy): D
     m.set(key, g);
   }
   const groups = [...m.values()];
-  if (by === 'format') groups.sort((a, b) => b.decks.length - a.decks.length);
+  if (by === 'type') groups.sort((a, b) => b.decks.length - a.decks.length || a.label.localeCompare(b.label));
   else groups.sort((a, b) => (a.key === '~' ? 1 : b.key === '~' ? -1 : b.rank.localeCompare(a.rank) || a.label.localeCompare(b.label)));
   return groups.map(({ key, label, decks: ds }) => ({ key, label, decks: ds }));
 }
@@ -132,4 +133,11 @@ export function deckReviewLines(cards: readonly DeckCardOut[], keys?: ReadonlySe
       chosen: c.printing.scryfall_id,
       note: null,
     }));
+}
+
+/** Deck types present, most common first, with counts (for the filter). */
+export function deckTypeCounts(decks: readonly DeckSummaryOut[]): { value: string; label: string; count: number }[] {
+  const m = new Map<string, number>();
+  for (const d of decks) m.set(d.deck_type, (m.get(d.deck_type) ?? 0) + 1);
+  return [...m].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([v, n]) => ({ value: v, label: v, count: n }));
 }

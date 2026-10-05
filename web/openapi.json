@@ -1651,6 +1651,11 @@
             ],
             "title": "Format"
           },
+          "deck_type": {
+            "type": "string",
+            "title": "Deck Type",
+            "description": "What kind of deck: the game format (Commander, Standard, Pauper, Jumpstart\u2026), else the precon product family (Starter / intro, Secret Lair, Land pack\u2026)."
+          },
           "state": {
             "type": "string",
             "enum": [
@@ -1759,6 +1764,7 @@
           "slug",
           "name",
           "format",
+          "deck_type",
           "state",
           "origin",
           "source",

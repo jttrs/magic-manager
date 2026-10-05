@@ -12,8 +12,15 @@ test('deck list groups by set, filters by state and text; the nav has Decks', as
   await expect(list.getByRole('button')).toHaveCount(fixtures.decks.filter((d) => d.state === 'built').length);
   await page.getByRole('searchbox', { name: 'Deck, set or author' }).fill('avengers');
   await expect(list.getByRole('button')).toHaveCount(1);
-  await page.getByRole('combobox', { name: 'Group decks by' }).selectOption('year');
-  await expect(page).toHaveURL(/group=year/);
+  await page.getByRole('searchbox', { name: 'Deck, set or author' }).fill('');
+  await page.getByRole('button', { name: /^Group decks by/ }).click();
+  await page.getByRole('menuitemradio', { name: 'Deck type' }).click();
+  await expect(page).toHaveURL(/group=type/);
+  await expect(list.getByRole('heading', { name: /^Jumpstart/ })).toBeVisible();
+  await page.getByRole('button', { name: /^Deck type/ }).click();
+  await page.getByRole('checkbox', { name: /^Commander/ }).check();
+  await page.keyboard.press('Escape');
+  await expect(list.getByRole('button')).toHaveCount(fixtures.decks.filter((d) => d.state === 'built' && d.deck_type === 'Commander').length);
 });
 
 test('inspector: sections by board then type, card facts, deep link', async ({ page }) => {

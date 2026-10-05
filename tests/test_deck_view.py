@@ -104,3 +104,16 @@ def test_api(world):
         r = client.get("/api/decks/a")
         assert r.status_code == 200 and r.json()["cards"][0]["printing"]["scryfall_id"] == "cmdr"
         assert client.get("/api/decks/zzz").status_code == 404
+
+
+def test_deck_type_prefers_format_then_product_type():
+    from magic_manager.deck_view import deck_type
+    assert deck_type("commander", "Commander Deck") == "Commander"
+    assert deck_type("Pauper", None) == "Pauper"
+    assert deck_type("standard_brawl", None) == "Brawl"
+    assert deck_type("paupercommander", None) == "Pauper Commander"
+    assert deck_type(None, "Jumpstart") == "Jumpstart"
+    assert deck_type(None, "Starter Kit") == "Starter / intro"
+    assert deck_type(None, "Enemy Deck") == "Archenemy"
+    assert deck_type(None, None) == "Other"
+    assert deck_type("canlander", None) == "Canlander"

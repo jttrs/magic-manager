@@ -58,6 +58,40 @@ def _sets_index() -> dict[str, dict]:
         return {}
 
 
+# Deck type = the game format the deck is built for. Scryfall's format keys
+# (legalities) plus deck-builder spellings; precons without a format fall back to
+# their MTGJSON product type. Labels are what the UI filters and groups on.
+_FORMAT_LABEL = {
+    "commander": "Commander", "edh": "Commander", "duel": "Commander",
+    "brawl": "Brawl", "standardbrawl": "Brawl", "historicbrawl": "Brawl",
+    "paupercommander": "Pauper Commander", "pdh": "Pauper Commander",
+    "oathbreaker": "Oathbreaker", "predh": "Commander",
+    "standard": "Standard", "future": "Standard", "pioneer": "Pioneer",
+    "modern": "Modern", "legacy": "Legacy", "vintage": "Vintage",
+    "pauper": "Pauper", "premodern": "Premodern", "oldschool": "Old School",
+    "historic": "Arena", "timeless": "Arena", "alchemy": "Arena", "explorer": "Arena", "gladiator": "Arena",
+    "penny": "Penny Dreadful", "jumpstart": "Jumpstart",
+    "limited": "Limited", "draft": "Limited", "sealed": "Limited", "cube": "Cube",
+}
+_PRODUCT_TYPE_LABEL = {
+    "Commander Deck": "Commander", "Brawl Deck": "Brawl", "Jumpstart": "Jumpstart",
+    "Enemy Deck": "Archenemy", "Archenemy Deck": "Archenemy", "Planechase Deck": "Planechase",
+    "Secret Lair Drop": "Secret Lair", "Bundle Land Pack": "Land pack",
+    "Challenger Deck": "Standard", "Game Night Deck": "Game Night", "Clash Pack": "Starter / intro",
+    "Box Set": "Starter / intro", "Starter Kit": "Starter / intro", "Starter Deck": "Starter / intro",
+    "Theme Deck": "Starter / intro", "Welcome Deck": "Starter / intro", "Intro Pack": "Starter / intro",
+    "Planeswalker Deck": "Starter / intro", "Duel Deck": "Starter / intro", "Guild Kit": "Starter / intro",
+}
+
+
+def deck_type(fmt: str | None, product_type: str | None) -> str:
+    """One label for what kind of deck this is (see ``_FORMAT_LABEL``)."""
+    key = (fmt or "").strip().lower().replace(" ", "").replace("_", "").replace("-", "")
+    if key:
+        return _FORMAT_LABEL.get(key, (fmt or "").strip().title())
+    return _PRODUCT_TYPE_LABEL.get(product_type or "", "Other")
+
+
 def _summaries(slug: str | None = None) -> list[dict]:
     where = "WHERE d.slug = ?" if slug is not None else ""
     sql = _SUMMARY_SQL.format(where=where, dwhere=where)
@@ -83,6 +117,7 @@ def _summaries(slug: str | None = None) -> list[dict]:
         cards = int(r["cards"])
         out.append({
             "slug": r["slug"], "name": r["name"], "format": r["format"],
+            "deck_type": deck_type(r["format"], source if origin == "precon" else None),
             "state": r["precon_state"], "origin": origin, "source": source,
             "author": r["author"], "set_code": code,
             "set_name": (sset or {}).get("name"), "released": released,

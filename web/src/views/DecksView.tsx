@@ -14,7 +14,8 @@ import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../components/St
 import { AddCardMark } from '../components/StoreMarks';
 import { VirtualGuide } from '../components/VirtualGuide';
 import type { DeckSummaryOut } from '../core/api';
-import { DECK_GROUP_LABEL, DECK_GROUPS, deckGuideGroups, deckReviewLines, filterDecks, groupDecks, type DeckGroupBy } from '../core/decks';
+import { DECK_GROUP_LABEL, DECK_GROUPS, deckGuideGroups, deckReviewLines, deckTypeCounts, filterDecks, groupDecks, type DeckGroupBy } from '../core/decks';
+import { MultiSelect } from '../components/MultiSelect';
 import { fmtInt, fmtUsd } from '../core/format';
 import type { DecksSearch } from '../core/search';
 
@@ -29,7 +30,8 @@ export function DecksView() {
   const decks = useQuery(decksQuery());
   const narrow = useMediaQuery('(max-width: 47.99rem)');
 
-  const shown = useMemo(() => (decks.data ? filterDecks(decks.data, { q: search.q, states: search.states }) : []), [decks.data, search.q, search.states]);
+  const shown = useMemo(() => (decks.data ? filterDecks(decks.data, { q: search.q, states: search.states, types: search.types }) : []), [decks.data, search.q, search.states, search.types]);
+  const typeOptions = useMemo(() => (decks.data ? deckTypeCounts(decks.data) : []), [decks.data]);
   const groups = useMemo(() => groupDecks(shown, search.group), [shown, search.group]);
   const counts = useMemo(() => {
     const c = { built: 0, deconstructed: 0 };
@@ -52,6 +54,16 @@ export function DecksView() {
             { value: 'built', label: 'Built', count: counts.built },
             { value: 'deconstructed', label: 'Loose', count: counts.deconstructed },
           ]}
+        />
+        <MultiSelect
+          label="Deck type"
+          noun="deck types"
+          searchable={false}
+          keepOrder
+          summary={search.types.length ? undefined : 'All deck types'}
+          value={search.types}
+          onChange={(types) => set({ types })}
+          options={typeOptions}
         />
       </SideSection>
       <SideSection title="Arrange">
@@ -148,7 +160,7 @@ function DeckRow({ d, active, tabbable, onFocus, onPick }: { d: DeckSummaryOut; 
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-md voice-semi font-medium text-ink">{d.name}</span>
         <span className="truncate text-xs tabular text-ink-muted">
-          {[d.set_code?.toUpperCase(), d.released?.slice(0, 4), d.source ?? d.format].filter(Boolean).join(' · ')}
+          {[d.deck_type, d.set_code?.toUpperCase(), d.released?.slice(0, 4)].filter(Boolean).join(' · ')}
         </span>
       </span>
       <span className="flex shrink-0 flex-col items-end gap-0.5 text-xs tabular">
@@ -182,7 +194,7 @@ function DeckInspector({ slug, view, onView, onBack }: { slug: string; view: 'gr
         <div className="min-w-0">
           <h2 id="deck-h" className="text-2xl voice-condensed font-bold uppercase leading-none text-ink">{deck.name}</h2>
           <p className="mt-1 text-sm tabular text-ink-muted">
-            {[deck.set_name ?? deck.set_code?.toUpperCase(), deck.released?.slice(0, 4), deck.source, deck.author && `by ${deck.author}`].filter(Boolean).join(' · ')}
+            {[deck.deck_type, deck.set_name ?? deck.set_code?.toUpperCase(), deck.released?.slice(0, 4), deck.source !== deck.deck_type && deck.source, deck.author && `by ${deck.author}`].filter(Boolean).join(' · ')}
             {' · '}
             {fmtInt(deck.cards)} cards · {fmtUsd(deck.value_usd)} · {deck.state === 'built' ? `built, ${Math.round(deck.pledged_pct)}% pledged` : 'loose'}
             <span className="ml-1 inline-flex align-middle">
