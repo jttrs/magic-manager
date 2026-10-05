@@ -433,6 +433,162 @@ export type CompareOut = {
 };
 
 /**
+ * DeckCardOut
+ */
+export type DeckCardOut = {
+    printing: PrintingOut;
+    /**
+     * Board
+     */
+    board: 'main' | 'side' | 'commander' | 'companion' | 'maybe' | 'token';
+    /**
+     * Finish
+     */
+    finish: 'nonfoil' | 'foil' | 'either';
+    /**
+     * Count
+     */
+    count: number;
+    /**
+     * Type Line
+     */
+    type_line: string | null;
+    /**
+     * Cmc
+     */
+    cmc: number | null;
+    /**
+     * Color Identity
+     */
+    color_identity: Array<string>;
+    /**
+     * Pledged Here
+     *
+     * Copies of this printing pledged to THIS deck (any finish).
+     */
+    pledged_here: number;
+    /**
+     * Free
+     *
+     * Copies you own that no deck has pledged (any finish).
+     */
+    free: number;
+};
+
+/**
+ * DeckDetailOut
+ */
+export type DeckDetailOut = {
+    deck: DeckSummaryOut;
+    /**
+     * Cards
+     */
+    cards: Array<DeckCardOut>;
+};
+
+/**
+ * DeckSummaryOut
+ */
+export type DeckSummaryOut = {
+    /**
+     * Slug
+     */
+    slug: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Format
+     */
+    format: string | null;
+    /**
+     * Deck Type
+     *
+     * What kind of deck: the game format (Commander, Standard, Pauper, Jumpstart…), else the precon product family (Starter / intro, Secret Lair, Land pack…).
+     */
+    deck_type: string;
+    /**
+     * State
+     *
+     * 'built' when at least one copy is built, else 'deconstructed'.
+     */
+    state: 'built' | 'deconstructed';
+    /**
+     * Built
+     *
+     * Copies of this recipe kept assembled (cards pledged).
+     */
+    built: number;
+    /**
+     * Loose
+     *
+     * Copies tracked as loose (recipe kept, cards in the collection).
+     */
+    loose: number;
+    /**
+     * Slugs
+     *
+     * Every deck row that is a copy of this recipe; `slug` is the representative (a built copy first).
+     */
+    slugs: Array<string>;
+    /**
+     * Origin
+     *
+     * precon = MTGJSON product; import = deck-builder URL; custom = hand-built.
+     */
+    origin: 'precon' | 'import' | 'custom';
+    /**
+     * Source
+     *
+     * Deck builder for imports (moxfield, archidekt…); precon product type for precons.
+     */
+    source: string | null;
+    /**
+     * Author
+     */
+    author: string | null;
+    /**
+     * Set Code
+     */
+    set_code: string | null;
+    /**
+     * Set Name
+     */
+    set_name: string | null;
+    /**
+     * Released
+     *
+     * Product release date (precons) or set release date; ISO.
+     */
+    released: string | null;
+    /**
+     * Cards
+     *
+     * Card count excluding tokens.
+     */
+    cards: number;
+    /**
+     * Value Usd
+     *
+     * Sum of non-token cards at their finish's price.
+     */
+    value_usd: number;
+    /**
+     * Pledged Pct
+     *
+     * Share of non-token card copies currently pledged to this deck (0–100).
+     */
+    pledged_pct: number;
+    /**
+     * Image Uri
+     *
+     * Representative art: the commander, else the priciest card.
+     */
+    image_uri: string | null;
+};
+
+/**
  * FamilyOption
  */
 export type FamilyOption = {
@@ -1153,6 +1309,54 @@ export type CollectionBuyListResponses = {
 };
 
 export type CollectionBuyListResponse = CollectionBuyListResponses[keyof CollectionBuyListResponses];
+
+export type DeckListData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/decks';
+};
+
+export type DeckListResponses = {
+    /**
+     * Response Deck List
+     *
+     * Successful Response
+     */
+    200: Array<DeckSummaryOut>;
+};
+
+export type DeckListResponse = DeckListResponses[keyof DeckListResponses];
+
+export type DeckDetailData = {
+    body?: never;
+    path: {
+        /**
+         * Slug
+         */
+        slug: string;
+    };
+    query?: never;
+    url: '/api/decks/{slug}';
+};
+
+export type DeckDetailErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeckDetailError = DeckDetailErrors[keyof DeckDetailErrors];
+
+export type DeckDetailResponses = {
+    /**
+     * Successful Response
+     */
+    200: DeckDetailOut;
+};
+
+export type DeckDetailResponse = DeckDetailResponses[keyof DeckDetailResponses];
 
 export type IngestSearchData = {
     body?: never;

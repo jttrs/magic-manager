@@ -24,6 +24,10 @@ _ALLOWED_FINISHES = ("nonfoil", "foil", "either")
 # V11 precon states (see the Deck dataclass). 'built' = assembled deck (pledged),
 # 'deconstructed' = torn-down deck (loose).
 _PRECON_STATES = ("built", "deconstructed")
+_KINDS = ("deck", "pool")
+# Boards that count toward a deck's "playable card count" (mirrors
+# mtgjson._deck_total_cards: commander + main + side, plus companion).
+_PLAYABLE_BOARDS = ("commander", "main", "side", "companion")
 
 # V17 composition-lifecycle statuses (per deck VERSION, not the deck). 'brew' =
 # in-progress list; 'tuned' = locked-in (finalized, legality/bracket recorded).
@@ -77,6 +81,11 @@ class Deck:
     # hand-built/precon decks and pre-V25 imports.
     source: str | None = None
     source_deck_id: str | None = None
+    # V29: 'deck' (playable recipe) or 'pool' (product contents, never playable).
+    # kind_source is 'auto' (classifier) or 'user' (``mm deck set-kind``); only
+    # non-'user' rows are re-classified by backfill_kinds.
+    kind: str = "deck"
+    kind_source: str | None = None
 
 
 @dataclass
@@ -181,6 +190,8 @@ def _deck_row_to_dataclass(row) -> Deck:
         author=(row["author"] if "author" in keys else None),
         source=(row["source"] if "source" in keys else None),
         source_deck_id=(row["source_deck_id"] if "source_deck_id" in keys else None),
+        kind=(row["kind"] if "kind" in keys else "deck"),
+        kind_source=(row["kind_source"] if "kind_source" in keys else None),
     )
 
 
@@ -188,7 +199,7 @@ def _fetch_deck(conn, slug: str):
     return conn.execute(
         "SELECT deck_id, slug, name, format, archetype, notes, "
         "created_at, updated_at, source_precon_file_name, precon_state, "
-        "current_version_id, author, source, source_deck_id "
+        "current_version_id, author, source, source_deck_id, kind, kind_source "
         "FROM decks WHERE slug = ?",
         (slug,),
     ).fetchone()
@@ -309,6 +320,7 @@ def deck_create(
     author: str | None = None,
     source: str | None = None,
     source_deck_id: str | None = None,
+    kind: str = "deck",
     conn=None,
 ) -> Deck:
     """Insert a new deck. Raises ``ValueError`` if ``slug`` is already in use.
@@ -338,6 +350,8 @@ def deck_create(
         raise ValueError(f"invalid precon_state {precon_state!r}; expected one of {_PRECON_STATES}")
     if status not in _VERSION_STATUSES:
         raise ValueError(f"invalid status {status!r}; expected one of {_VERSION_STATUSES}")
+    if kind not in _KINDS:
+        raise ValueError(f"invalid kind {kind!r}; expected one of {_KINDS}")
     now = db._utcnow_iso()
     with db.transaction(conn) as conn:
         existing = _fetch_deck(conn, slug)
@@ -348,13 +362,14 @@ def deck_create(
             INSERT INTO decks (slug, name, format, archetype, notes,
                                source_set_code, source_precon_file_name,
                                precon_state, created_at, updated_at, author,
-                               source, source_deck_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                               source, source_deck_id, kind, kind_source)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (slug, name, format, archetype, notes,
              (source_set_code or None), (source_precon_file_name or None),
              precon_state, now, now, (author or None),
-             (source or None), (source_deck_id or None)),
+             (source or None), (source_deck_id or None), kind,
+             "auto" if source_precon_file_name else None),
         )
         deck_id = cur.lastrowid
         # V17: every deck has a v1 version from birth; point the deck at it.
@@ -377,6 +392,8 @@ def deck_create(
         author=(author or None),
         source=(source or None),
         source_deck_id=(source_deck_id or None),
+        kind=kind,
+        kind_source=("auto" if source_precon_file_name else None),
     )
 
 
@@ -386,7 +403,7 @@ def deck_list() -> list[Deck]:
             """
             SELECT deck_id, slug, name, format, archetype, notes,
                    created_at, updated_at, source_precon_file_name, precon_state,
-                   current_version_id, author
+                   current_version_id, author, kind, kind_source
             FROM decks
             ORDER BY slug
             """
@@ -608,6 +625,73 @@ def backfill_token_board(*, conn=None) -> int:
             )
             moved += 1
     return moved
+
+
+def set_kind(slug: str, kind: str, *, conn=None) -> None:
+    """Manually set a deck's ``kind`` ('deck'|'pool'); recorded as a user
+    override (``kind_source='user'``) that :func:`backfill_kinds` never touches.
+    Raises ``ValueError`` on a bad kind, ``LookupError`` on an unknown slug."""
+    if kind not in _KINDS:
+        raise ValueError(f"invalid kind {kind!r}; expected one of {_KINDS}")
+    with db.transaction(conn) as conn:
+        n = conn.execute(
+            "UPDATE decks SET kind = ?, kind_source = 'user', updated_at = ? WHERE slug = ?",
+            (kind, db._utcnow_iso(), slug),
+        ).rowcount
+    if not n:
+        raise LookupError(f"deck with slug {slug!r} not found")
+
+
+def backfill_kinds(*, conn=None) -> dict:
+    """Classify every precon deck row via :func:`mtgjson_mod.precon_kind` (product
+    type from the cached MTGJSON DeckList, playable count from the row's own
+    current deck_cards). Touches only rows whose ``kind_source`` is NULL/'auto',
+    so user overrides survive; idempotent. Non-precon rows stay 'deck'.
+    Returns ``{"classified": n, "changed": n, "deck": n, "pool": n}``.
+    """
+    try:
+        index = mtgjson_mod._decklist_by_filename()
+    except Exception:
+        index = {}
+    marks = ",".join("?" for _ in _PLAYABLE_BOARDS)
+    with db.transaction(conn) as conn:
+        rows = conn.execute(
+            f"""
+            SELECT d.deck_id, d.name, d.kind, d.source_precon_file_name AS fn,
+                   COALESCE((SELECT SUM(dc.count) FROM deck_cards dc
+                              WHERE dc.deck_version_id = d.current_version_id
+                                AND dc.board IN ({marks})), 0) AS playable
+            FROM decks d
+            WHERE d.source_precon_file_name IS NOT NULL
+              AND (d.kind_source IS NULL OR d.kind_source = 'auto')
+            """,
+            _PLAYABLE_BOARDS,
+        ).fetchall()
+        counts = {"classified": 0, "changed": 0, "deck": 0, "pool": 0}
+        memo: dict[tuple, str] = {}  # copies of one precon classify identically
+        for r in rows:
+            key = (r["fn"], r["name"], int(r["playable"]))
+            if key not in memo:
+                memo[key] = mtgjson_mod.precon_kind(
+                    r["fn"], name=r["name"],
+                    product_type=(index.get(r["fn"]) or {}).get("type") or "",
+                    playable_cards=int(r["playable"]))
+            kind = memo[key]
+            conn.execute("UPDATE decks SET kind = ?, kind_source = 'auto' WHERE deck_id = ?",
+                         (kind, r["deck_id"]))
+            counts["classified"] += 1
+            counts["changed"] += kind != r["kind"]
+            counts[kind] += 1
+    return counts
+
+
+def unclassified_precon_count(*, conn=None) -> int:
+    """Precon rows never classified (``kind_source IS NULL``) — pre-V29 rows."""
+    with db.transaction(conn) as conn:
+        return conn.execute(
+            "SELECT COUNT(*) FROM decks "
+            "WHERE source_precon_file_name IS NOT NULL AND kind_source IS NULL"
+        ).fetchone()[0]
 
 
 def deck_delete(slug: str) -> int:
@@ -1965,10 +2049,15 @@ def import_precon(
                     f"{base_slug!r}; use plain `import-precon` to create one."
                 )
 
+        if effective_slugs:
+            playable = mtgjson_mod._deck_total_cards(deck_data)
+            row_kind = mtgjson_mod.precon_kind(
+                file_name, name=deck_name, product_type=deck_data.get("type"),
+                playable_cards=playable)
         for s in effective_slugs:
             deck_create(s, deck_name, format=fmt, source_set_code=src_set,
                         source_precon_file_name=file_name,
-                        precon_state=row_state, conn=conn)
+                        precon_state=row_state, kind=row_kind, conn=conn)
 
         for sid, count, finish, board_name in parsed_entries:
             for s in effective_slugs:

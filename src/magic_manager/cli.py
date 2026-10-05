@@ -1810,13 +1810,35 @@ def deck_ls_cmd():
     for d in ds:
         cur = next((v for v in decks_mod.version_list(d.slug) if v.is_current), None)
         status_by_slug[d.slug] = (cur.status, cur.version_number) if cur else ("—", 0)
-    typer.echo(f"{'slug':30} {'name':36} {'format':12} {'author':16} {'status':6} {'ver':>4} {'state':6} {'updated_at'}")
+    typer.echo(f"{'slug':30} {'name':36} {'format':12} {'author':16} {'status':6} {'ver':>4} {'state':6} {'kind':4} {'updated_at'}")
     for d in ds:
         flags = _state_flag.get(getattr(d, "precon_state", "built"), "")
         status, vnum = status_by_slug[d.slug]
         vlabel = f"v{vnum}" if vnum else "—"
         typer.echo(f"{d.slug:30} {d.name:36} {(d.format or '—'):12} {(d.author or '—'):16} {status:6} "
-                   f"{vlabel:>4} {flags:6} {d.updated_at}")
+                   f"{vlabel:>4} {flags:6} {d.kind:4} {d.updated_at}")
+
+
+@deck_app.command("set-kind")
+def deck_set_kind_cmd(
+    slug: str = typer.Argument(...),
+    kind: str = typer.Argument(..., help="deck | pool"),
+):
+    """Override a deck's KIND: ``deck`` (playable recipe) or ``pool`` (product
+    contents, never playable). Survives ``mm deck backfill-kinds``."""
+    try:
+        decks_mod.set_kind(slug, kind)
+    except (ValueError, LookupError) as e:
+        typer.echo(f"error: {e}", err=True); raise typer.Exit(2)
+    typer.echo(f"{slug}: kind set to {kind}")
+
+
+@deck_app.command("backfill-kinds")
+def deck_backfill_kinds_cmd():
+    """Classify every precon deck row as deck/pool (skips user overrides)."""
+    r = decks_mod.backfill_kinds()
+    typer.echo(f"classified {r['classified']} precon rows ({r['changed']} changed): "
+               f"{r['deck']} deck, {r['pool']} pool")
 
 
 @deck_app.command("show")

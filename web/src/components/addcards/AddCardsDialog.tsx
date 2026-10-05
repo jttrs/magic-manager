@@ -1,8 +1,8 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { Dialog, Tabs } from 'radix-ui';
-import { useCallback, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { unwrap } from '../../app/queries';
-import { ingestCommit, type PrintingOut, type ResolveOut } from '../../core/api';
+import { ingestCommit, type PrintingOut, type ResolvedLineOut, type ResolveOut } from '../../core/api';
 import { fmtInt } from '../../core/format';
 import { commitItems, fromResolved, reviewStats, stagePrinting, updateLine, type Finish, type ReviewLine } from '../../core/ingest';
 import { Button } from '../Button';
@@ -15,11 +15,14 @@ import { SearchPane } from './SearchPane';
 type Mode = 'search' | 'paste' | 'deck';
 type Done = { summary: string; mode: Mode };
 
+export type AddCardsSeed = { name: string; lines: ResolvedLineOut[] };
+
 /** "Add cards": search one printing, paste a list, or bring a deck/precon —
- *  every path ends in the same review checklist and one commit. */
-export function AddCardsDialog({ trigger }: { trigger: ReactNode }) {
+ *  every path ends in the same review checklist and one commit. A `seed`
+ *  (e.g. from the Deck Manager) opens straight into that review. */
+export function AddCardsDialog({ trigger, seed, onSeedDone }: { trigger?: ReactNode; seed?: AddCardsSeed | null; onSeedDone?: () => void }) {
   const qc = useQueryClient();
-  const [open, setOpen] = useState(false);
+  const [open, setOpenState] = useState(false);
   const [mode, setMode] = useState<Mode>('search');
   const [staged, setStaged] = useState<ReviewLine[]>([]);
   const [pasteText, setPasteText] = useState('');
@@ -28,6 +31,19 @@ export function AddCardsDialog({ trigger }: { trigger: ReactNode }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState<Done | null>(null);
+
+  useEffect(() => {
+    if (!seed) return;
+    setMode('deck');
+    setDone(null);
+    setError('');
+    setDeck({ lines: fromResolved(seed.lines, 'k'), warnings: [], name: seed.name });
+    setOpenState(true);
+  }, [seed]);
+  const setOpen = (o: boolean) => {
+    setOpenState(o);
+    if (!o) onSeedDone?.();
+  };
 
   const lines = mode === 'search' ? staged : mode === 'paste' ? pasted?.lines : deck?.lines;
   const setLines = (fn: (ls: ReviewLine[]) => ReviewLine[]) => {
@@ -62,7 +78,7 @@ export function AddCardsDialog({ trigger }: { trigger: ReactNode }) {
 
   return (
     <Dialog.Root open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setDone(null); setError(''); } }}>
-      <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>
+      {trigger && <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>}
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim backdrop-blur-[1px]" />
         <Dialog.Content

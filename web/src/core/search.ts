@@ -42,3 +42,17 @@ export const collectionSearch = z.object({
   view,
 });
 export type CollectionSearch = z.infer<typeof collectionSearch>;
+
+const DECK_GROUPS = ['set', 'year', 'type', 'state', 'origin'] as const;
+const DECK_STATES = ['built', 'deconstructed'] as const;
+
+export const decksSearch = z.object({
+  deck: z.string().optional().catch(undefined),
+  group: z.enum(DECK_GROUPS).catch('set').default('set'),
+  states: list(z.enum(DECK_STATES)).catch([...DECK_STATES]).default([...DECK_STATES]),
+  /** Deck types to keep (deck_view.deck_type labels); empty = all. */
+  types: list(z.string()).catch([]).default([]),
+  q: z.string().catch('').default(''),
+  view,
+});
+export type DecksSearch = z.infer<typeof decksSearch>;

@@ -430,6 +430,73 @@
         }
       }
     },
+    "/api/decks": {
+      "get": {
+        "tags": [
+          "decks"
+        ],
+        "summary": "Deck List",
+        "operationId": "deck_list",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DeckSummaryOut"
+                  },
+                  "type": "array",
+                  "title": "Response Deck List"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/decks/{slug}": {
+      "get": {
+        "tags": [
+          "decks"
+        ],
+        "summary": "Deck Detail",
+        "operationId": "deck_detail",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeckDetailOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/ingest/search": {
       "get": {
         "tags": [
@@ -1458,6 +1525,281 @@
           "cards"
         ],
         "title": "CompareOut"
+      },
+      "DeckCardOut": {
+        "properties": {
+          "printing": {
+            "$ref": "#/components/schemas/PrintingOut"
+          },
+          "board": {
+            "type": "string",
+            "enum": [
+              "main",
+              "side",
+              "commander",
+              "companion",
+              "maybe",
+              "token"
+            ],
+            "title": "Board"
+          },
+          "finish": {
+            "type": "string",
+            "enum": [
+              "nonfoil",
+              "foil",
+              "either"
+            ],
+            "title": "Finish"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "type_line": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type Line"
+          },
+          "cmc": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cmc"
+          },
+          "color_identity": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Color Identity"
+          },
+          "pledged_here": {
+            "type": "integer",
+            "title": "Pledged Here",
+            "description": "Copies of this printing pledged to THIS deck (any finish)."
+          },
+          "free": {
+            "type": "integer",
+            "title": "Free",
+            "description": "Copies you own that no deck has pledged (any finish)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "printing",
+          "board",
+          "finish",
+          "count",
+          "type_line",
+          "cmc",
+          "color_identity",
+          "pledged_here",
+          "free"
+        ],
+        "title": "DeckCardOut"
+      },
+      "DeckDetailOut": {
+        "properties": {
+          "deck": {
+            "$ref": "#/components/schemas/DeckSummaryOut"
+          },
+          "cards": {
+            "items": {
+              "$ref": "#/components/schemas/DeckCardOut"
+            },
+            "type": "array",
+            "title": "Cards"
+          }
+        },
+        "type": "object",
+        "required": [
+          "deck",
+          "cards"
+        ],
+        "title": "DeckDetailOut"
+      },
+      "DeckSummaryOut": {
+        "properties": {
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "format": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Format"
+          },
+          "deck_type": {
+            "type": "string",
+            "title": "Deck Type",
+            "description": "What kind of deck: the game format (Commander, Standard, Pauper, Jumpstart\u2026), else the precon product family (Starter / intro, Secret Lair, Land pack\u2026)."
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "built",
+              "deconstructed"
+            ],
+            "title": "State",
+            "description": "'built' when at least one copy is built, else 'deconstructed'."
+          },
+          "built": {
+            "type": "integer",
+            "title": "Built",
+            "description": "Copies of this recipe kept assembled (cards pledged)."
+          },
+          "loose": {
+            "type": "integer",
+            "title": "Loose",
+            "description": "Copies tracked as loose (recipe kept, cards in the collection)."
+          },
+          "slugs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Slugs",
+            "description": "Every deck row that is a copy of this recipe; `slug` is the representative (a built copy first)."
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "precon",
+              "import",
+              "custom"
+            ],
+            "title": "Origin",
+            "description": "precon = MTGJSON product; import = deck-builder URL; custom = hand-built."
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source",
+            "description": "Deck builder for imports (moxfield, archidekt\u2026); precon product type for precons."
+          },
+          "author": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author"
+          },
+          "set_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Set Code"
+          },
+          "set_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Set Name"
+          },
+          "released": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Released",
+            "description": "Product release date (precons) or set release date; ISO."
+          },
+          "cards": {
+            "type": "integer",
+            "title": "Cards",
+            "description": "Card count excluding tokens."
+          },
+          "value_usd": {
+            "type": "number",
+            "title": "Value Usd",
+            "description": "Sum of non-token cards at their finish's price."
+          },
+          "pledged_pct": {
+            "type": "number",
+            "title": "Pledged Pct",
+            "description": "Share of non-token card copies currently pledged to this deck (0\u2013100)."
+          },
+          "image_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Uri",
+            "description": "Representative art: the commander, else the priciest card."
+          }
+        },
+        "type": "object",
+        "required": [
+          "slug",
+          "name",
+          "format",
+          "deck_type",
+          "state",
+          "built",
+          "loose",
+          "slugs",
+          "origin",
+          "source",
+          "author",
+          "set_code",
+          "set_name",
+          "released",
+          "cards",
+          "value_usd",
+          "pledged_pct",
+          "image_uri"
+        ],
+        "title": "DeckSummaryOut"
       },
       "FamilyOption": {
         "properties": {

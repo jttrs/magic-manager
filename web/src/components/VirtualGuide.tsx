@@ -203,7 +203,7 @@ function JumpButton({ dir, label, onClick }: { dir: 'up' | 'down'; label: string
       title={label}
       disabled={!onClick}
       onClick={onClick}
-      className="grid size-7 cursor-pointer place-items-center rounded-sm text-ink-muted hover:bg-paper-sunk hover:text-ink disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
+      className="touch-hit grid size-7 cursor-pointer place-items-center rounded-sm text-ink-muted hover:bg-paper-sunk hover:text-ink disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
     >
       <Chevron dir={dir} className="size-4" />
     </button>

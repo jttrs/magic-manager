@@ -171,6 +171,32 @@ def free_quantity(
         return _q(c)
 
 
+def free_quantities(scryfall_ids, *, conn=None) -> dict[str, int]:
+    """Batched, finish-agnostic free copies: total owned (all finishes) minus
+    total pledged to every deck (all finishes), clamped at 0, per scryfall_id."""
+    ids = list(dict.fromkeys(scryfall_ids))
+
+    def _q(c):
+        out: dict[str, int] = {}
+        for i in range(0, len(ids), 300):
+            part = ids[i:i + 300]
+            ph = ",".join("?" * len(part))
+            owned = dict(c.execute(
+                f"SELECT scryfall_id, SUM(quantity) FROM inventory "
+                f"WHERE scryfall_id IN ({ph}) GROUP BY scryfall_id", part).fetchall())
+            pledged = dict(c.execute(
+                f"SELECT scryfall_id, SUM(count) FROM deck_assignments "
+                f"WHERE scryfall_id IN ({ph}) GROUP BY scryfall_id", part).fetchall())
+            for sid in part:
+                out[sid] = max(0, (owned.get(sid) or 0) - (pledged.get(sid) or 0))
+        return out
+
+    if conn is not None:
+        return _q(conn)
+    with db.connect() as c:
+        return _q(c)
+
+
 def inventory_add(
     scryfall_id: str,
     finish: str,

@@ -311,6 +311,14 @@ POOL_NAME_PATTERNS: frozenset[str] = _config.as_frozenset_setting(
 POOL_CARD_COUNT_THRESHOLD = _config.get_setting(
     "precon.toml", "pool_card_count_threshold", 150)
 
+# precon_kind knobs (config/precon.toml): product types that are always pools,
+# the Secret Lair minimum, the general minimum, and the scheme-deck exemption.
+POOL_PRODUCT_TYPES: frozenset[str] = frozenset(
+    _config.get_setting("precon.toml", "pool_product_types", ["Bundle Land Pack"]))
+SLD_MIN_PLAYABLE_CARDS = _config.get_setting("precon.toml", "sld_min_playable_cards", 40)
+MIN_PLAYABLE_CARDS = _config.get_setting("precon.toml", "min_playable_cards", 20)
+ARCHENEMY_PRODUCT_TYPES = frozenset({"Archenemy Deck", "Enemy Deck"})
+
 
 def _deck_total_cards(deck_data: dict) -> int:
     """Total card count across a deck's playable boards (for pool detection)."""
@@ -381,6 +389,40 @@ def _scene_box_component(file_name: str, display: str, *, entry_code: str | None
     return False
 
 
+def _pool_shaped(file_name: str, display: str, *, quick: bool = False,
+                 total_cards: int | None = None) -> bool:
+    """The shared pool tests behind ``default_precon_state`` and ``precon_kind``.
+
+    ``display`` is the lowercased deck name. Tests, in order: name matches
+    ``POOL_NAME_PATTERNS``; (unless ``quick``) Scene-Box component; card count
+    > ``POOL_CARD_COUNT_THRESHOLD`` (``total_cards`` if given, else read from the
+    deck file). Network-tolerant: lookup failures skip that test.
+    """
+    if display and any(pat in display for pat in POOL_NAME_PATTERNS):
+        return True
+    if quick:
+        return False
+    if _scene_box_component(file_name, display):
+        return True
+    try:
+        total = total_cards if total_cards is not None else _deck_total_cards(deck(file_name))
+        if total > POOL_CARD_COUNT_THRESHOLD:
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def _display_name(file_name: str, name: str | None) -> str:
+    display = (name or "").lower()
+    if not display:
+        try:
+            display = (deck(file_name).get("name") or "").lower()
+        except Exception:
+            display = ""
+    return display
+
+
 def default_precon_state(file_name: str, *, name: str | None = None, quick: bool = False) -> str:
     """Recommend the default ingest state for a precon: ``"deconstructed"`` or
     ``"built"``.
@@ -401,25 +443,46 @@ def default_precon_state(file_name: str, *, name: str | None = None, quick: bool
     ``quick=True`` runs test 1 only (no deck/set file fetches) — a cheap hint
     for listing many precons at once; the add path uses the full check.
     """
-    display = (name or "").lower()
-    if not display:
+    display = _display_name(file_name, name)
+    return "deconstructed" if _pool_shaped(file_name, display, quick=quick) else "built"
+
+
+def precon_kind(file_name: str, *, name: str | None = None,
+                product_type: str | None = None,
+                playable_cards: int | None = None) -> str:
+    """Classify a precon as a playable ``'deck'`` or a card ``'pool'``.
+
+    POOL when ANY of: product type in ``POOL_PRODUCT_TYPES`` (land packs); the
+    shared pool tests (:func:`_pool_shaped`); a Secret Lair Drop with fewer than
+    ``SLD_MIN_PLAYABLE_CARDS`` playable cards; fewer than ``MIN_PLAYABLE_CARDS``
+    playable cards — except Archenemy scheme decks (``ARCHENEMY_PRODUCT_TYPES``),
+    whose cards sit on the token/scheme board. Otherwise ``'deck'``.
+
+    ``playable_cards`` = commander + main + side count; read from MTGJSON when
+    omitted, as is ``product_type`` (DeckList entry). Network-tolerant: unknown
+    facts skip their rules, defaulting to ``'deck'``.
+    """
+    if product_type is None:
         try:
-            display = (deck(file_name).get("name") or "").lower()
+            product_type = _decklist_by_filename().get(file_name, {}).get("type")
         except Exception:
-            display = ""
-    if display and any(pat in display for pat in POOL_NAME_PATTERNS):
-        return "deconstructed"
-    if quick:
-        return "built"
-    # Scene-Box-style: the deck is a component of a pool-named sealedProduct.
-    if _scene_box_component(file_name, display):
-        return "deconstructed"
-    try:
-        if _deck_total_cards(deck(file_name)) > POOL_CARD_COUNT_THRESHOLD:
-            return "deconstructed"
-    except Exception:
-        pass
-    return "built"
+            product_type = None
+    if product_type in POOL_PRODUCT_TYPES:
+        return "pool"
+    display = _display_name(file_name, name)
+    if playable_cards is None:
+        try:
+            playable_cards = _deck_total_cards(deck(file_name))
+        except Exception:
+            playable_cards = None
+    if _pool_shaped(file_name, display, total_cards=playable_cards):
+        return "pool"
+    if playable_cards is not None and product_type not in ARCHENEMY_PRODUCT_TYPES:
+        if product_type == "Secret Lair Drop" and playable_cards < SLD_MIN_PLAYABLE_CARDS:
+            return "pool"
+        if playable_cards < MIN_PLAYABLE_CARDS:
+            return "pool"
+    return "deck"
 
 
 @lru_cache(maxsize=1)

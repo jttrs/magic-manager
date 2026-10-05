@@ -473,3 +473,7 @@ V28 rebuildable cache `scryfall_tags` + `card_oracle_tags` from Scryfall's OFFIC
 ## 23. Status — iteration 2, P2 (`feat/web-ingest`)
 
 Add-cards dialog on Collection: **Search** (live printing search, stage copies), **Paste a list** (Moxfield/ManaPool/Arena/TCGplayer/names → server resolve → review → commit), **Deck or precon** (deck URL → `ingest.fetch_deck` job → review; precon catalog → `ingest.precon` job). Engine `magic_manager.addcards`, API `api.ingest` (contract written first so UI and engine were built in parallel). Every commit is ONE ingest event (`adhoc` / `import-block`, label `web:*`) — no migration; the ledger reconciles. Shared `useJob` hook (lifted out of JobsView). Undo stays deferred (a reversing event).
+
+## 24. Status — iteration 2, P3 (`feat/web-decks`)
+
+Deck Manager at `/decks`: grouped deck-recipe list (set / year / state / format / source, search, built/loose) + resizable inspector (decklist sections, cards or list view, card inspector), with "Add deck to collection" / "Add N marked" feeding the P2 add-cards review (exact printings, one ingest event). Engine `magic_manager.deck_view` (set-based summaries, ~0.25 s for 580 decks), API `api.decks`. The card detail sheet planned for P3 shipped earlier as the card inspector (#83). Deck editing (versions, compose/decompose) stays CLI for now.

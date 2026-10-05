@@ -9,6 +9,7 @@ import { useMediaQuery } from '../app/useMediaQuery';
 
 const NAV = [
   { to: '/collection', label: 'Collection' },
+  { to: '/decks', label: 'Decks' },
   { to: '/commanders', label: 'Commanders' },
 ] as const;
 

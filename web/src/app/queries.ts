@@ -1,6 +1,6 @@
 // Server state via TanStack Query over the generated, typed API client.
 import { keepPreviousData, queryOptions } from '@tanstack/react-query';
-import { collection, collectionFamilies, commanders, compare, ingestPrecons, ingestSearch, listJobs } from '../core/api';
+import { collection, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs } from '../core/api';
 
 class ApiError extends Error {}
 
@@ -69,4 +69,19 @@ export const preconCatalogQuery = (q: string) =>
     queryFn: async ({ signal }) => unwrap(await ingestPrecons({ query: { q: q.trim(), limit: 40 }, signal })),
     staleTime: 5 * 60_000,
     placeholderData: keepPreviousData,
+  });
+
+export const decksQuery = () =>
+  queryOptions({
+    queryKey: ['decks'],
+    queryFn: async ({ signal }) => unwrap(await deckList({ signal })),
+    staleTime: 60_000,
+  });
+
+export const deckQuery = (slug?: string) =>
+  queryOptions({
+    queryKey: ['decks', slug],
+    queryFn: async ({ signal }) => unwrap(await deckDetail({ path: { slug: slug! }, signal })),
+    enabled: Boolean(slug),
+    staleTime: 60_000,
   });

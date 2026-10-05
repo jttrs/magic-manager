@@ -24,3 +24,15 @@ pool_name_patterns = ["scene box", "starter collection"]
 # dump, not an assembled deck) → defaults to deconstructed
 # (mtgjson.POOL_CARD_COUNT_THRESHOLD).
 pool_card_count_threshold = 150
+
+# Product `type` strings that are ALWAYS a card pool, never a playable deck
+# (mtgjson.POOL_PRODUCT_TYPES) — e.g. land packs.
+pool_product_types = ["Bundle Land Pack"]
+
+# A Secret Lair Drop with fewer playable cards than this is a pool
+# (mtgjson.SLD_MIN_PLAYABLE_CARDS).
+sld_min_playable_cards = 40
+
+# Any product with fewer playable cards than this is a pool, except Archenemy
+# scheme decks (mtgjson.MIN_PLAYABLE_CARDS).
+min_playable_cards = 20
