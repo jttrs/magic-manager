@@ -314,10 +314,10 @@ function ProductDetail({ p }: { p: ProductRow }) {
   const v = p.value;
   return (
     <div className="flex flex-col gap-3">
-      {v && !v.error && !v.booster_only && (v.exact_singles != null || v.floor_singles != null) && (
+      {v && !v.error && !v.booster_only && v.floor_singles != null && (
         <p className="text-sm text-ink-muted">
-          Fixed cards: <span className="tabular text-ink">{fmtUsd(v.exact_singles)}</span> at these printings ·{' '}
-          <span className="tabular text-ink">{fmtUsd(v.floor_singles)}</span> at the cheapest printing of each
+          At the cheapest printing of each card: <span className="tabular text-ink">{fmtUsd(v.floor_singles)}</span>
+          {' '}(boosters at their expected value)
         </p>
       )}
       {tree.isPending ? (
