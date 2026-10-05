@@ -1,5 +1,5 @@
 import { Popover } from 'radix-ui';
-import { useId, useMemo, useState } from 'react';
+import { useId, useMemo, useState, type ReactNode } from 'react';
 
 type MultiOption = { value: string; label: string; count?: number; group?: string };
 
@@ -17,6 +17,8 @@ type Props = {
   searchable?: boolean;
   /** Keep the authored option order (e.g. rarity) instead of pinning the selection first. */
   keepOrder?: boolean;
+  /** Rendered after the label (e.g. an InfoTip). */
+  labelExtra?: ReactNode;
 };
 
 /**
@@ -24,7 +26,7 @@ type Props = {
  * searchable checkbox list. DESIGN.md: chip groups stop at 5 options; anything
  * larger uses this, so long lists never take over the sidebar.
  */
-export function MultiSelect({ label, options, value, onChange, noun, placeholder = 'Filter…', summary: summaryText, searchable = true, keepOrder = false }: Props) {
+export function MultiSelect({ label, options, value, onChange, noun, placeholder = 'Filter…', summary: summaryText, searchable = true, keepOrder = false, labelExtra }: Props) {
   const [q, setQ] = useState('');
   const id = useId();
   const selected = useMemo(() => new Set(value), [value]);
@@ -49,7 +51,10 @@ export function MultiSelect({ label, options, value, onChange, noun, placeholder
 
   return (
     <div className="flex flex-col gap-1.5">
-      <span id={`${id}-l`} className="text-sm voice-semi text-on-chrome-muted">{label}</span>
+      <span className="flex items-center gap-1.5">
+        <span id={`${id}-l`} className="text-sm voice-semi text-on-chrome-muted">{label}</span>
+        {labelExtra}
+      </span>
       <Popover.Root onOpenChange={(o) => !o && setQ('')}>
         <Popover.Trigger
           aria-labelledby={`${id}-l ${id}-s`}

@@ -14,7 +14,7 @@ import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../components/St
 import { VirtualGuide, type GuideSection } from '../components/VirtualGuide';
 import { collectionBuyList, type CollectionCardOut, type CollectionOut } from '../core/api';
 import { CARD_SORT, CARD_SORT_PRESETS, type CardSortKey } from '../core/cardSort';
-import { buyFinish, collectionStats, filterCollection, functionCounts, isMissing, NO_FUNCTION, setGroupIncluded, TRAITS, traitCounts, traitsIn, type TraitGroup } from '../core/collection';
+import { buyFinish, collectionStats, filterCollection, functionCounts, isMissing, NO_FUNCTION, setGroupIncluded, sourceKinds, sourceOptions, TRAITS, traitCounts, traitsIn, type TraitGroup } from '../core/collection';
 import { InfoTip } from '../components/InfoTip';
 import { fmtInt, fmtUsd } from '../core/format';
 import { fromCollection, groupCards, type GuideCard } from '../core/guideCard';
@@ -24,7 +24,7 @@ import { decodeSort, encodeSort, leadSection, sortBy, type SortRule } from '../c
 const route = getRouteApi('/collection');
 
 const LAST_FAMILIES = 'mm.collection.families';
-const RESET: Partial<CollectionSearch> = { show: [...SHOW], exclude: [], q: '', fn: [] };
+const RESET: Partial<CollectionSearch> = { show: [...SHOW], exclude: [], q: '', fn: [], src: [] };
 
 export function CollectionView() {
   const search = route.useSearch();
@@ -64,6 +64,8 @@ export function CollectionView() {
       ]
     : null;
 
+  const srcOptions = useMemo(() => (q.data?.sources?.length ? sourceOptions(q.data.cards, q.data.sources) : null), [q.data]);
+
   const marked = view ? [...selected].map((k) => view.byId.get(k)).filter((c) => c != null) : [];
   const buyPool = marked.length ? marked : (view?.shown.filter((c) => isMissing(c, search.exclude)) ?? []);
   const buyText = (target: 'manapool' | 'tcgplayer' | 'cardkingdom') => async () => {
@@ -102,6 +104,21 @@ export function CollectionView() {
             { value: 'missing', label: 'Missing', count: view?.stats.missing },
           ]}
         />
+        {srcOptions && (
+          <MultiSelect
+            label="Acquired from"
+            labelExtra={
+              <InfoTip label="What does acquired from mean?">
+                Where your copies came from: a <b>card pool</b> (land pack, scene box, most Secret Lair drops), a <b>precon deck</b>, cards added as <b>singles</b>, or <b>unknown</b> for copies recorded before tracking began. Picking a source shows only owned cards.
+              </InfoTip>
+            }
+            noun="sources"
+            summary={search.src.length ? undefined : 'Any source'}
+            value={search.src}
+            onChange={(src) => set({ src })}
+            options={srcOptions}
+          />
+        )}
         <MultiSelect
           label="Rarity"
           noun="rarities"
@@ -155,7 +172,7 @@ export function CollectionView() {
             options={fnOptions}
           />
         )}
-        {(search.exclude.length > 0 || search.show.length < 2 || search.q || search.fn.length > 0) && (
+        {(search.exclude.length > 0 || search.show.length < 2 || search.q || search.fn.length > 0 || search.src.length > 0) && (
           <button type="button" onClick={() => set(RESET)} className="self-start cursor-pointer text-sm text-on-chrome-muted underline hover:text-on-chrome">Reset filters</button>
         )}
       </SideSection>
@@ -247,7 +264,7 @@ type Built = { cards: GuideCard[]; shown: CollectionCardOut[]; sections: GuideSe
 
 /** Filter → map → sort → section (set-family head, then the lead sort key's groups). */
 function buildView(data: CollectionOut, search: CollectionSearch, rules: SortRule<CardSortKey>[]): Built {
-  const shown = filterCollection(data.cards, search);
+  const shown = filterCollection(data.cards, search, sourceKinds(data.sources));
   const fnLabels = Object.fromEntries((data.functions ?? []).map((r) => [r.key, r.label]));
   const cards = sortBy(shown.map((c) => fromCollection(c, isMissing(c, search.exclude), fnLabels)), rules, CARD_SORT);
   const section = leadSection(rules, CARD_SORT);
@@ -326,6 +343,7 @@ function controlsSummary(search: CollectionSearch, rules: SortRule<CardSortKey>[
     show,
     search.exclude.length ? typesSummary(search.exclude) : '',
     search.fn.length ? `${search.fn.length} function${search.fn.length > 1 ? 's' : ''}` : '',
+    search.src.length ? `${search.src.length} source${search.src.length > 1 ? 's' : ''}` : '',
     rules.map((r) => CARD_SORT[r.key].label).join(' › '),
   ];
   return parts.filter(Boolean).join(' · ');

@@ -38,6 +38,8 @@ export const collectionSearch = z.object({
   q: z.string().catch('').default(''),
   /** Scryfall Tagger function roots to keep (OR); empty = all. */
   fn: list(z.string()).catch([]).default([]),
+  /** Acquisition sources to keep (OR): `kind:<k>` or a source key (core/collection.ts sourceMatch). */
+  src: list(z.string()).catch([]).default([]),
   sort: z.string().catch('set,cn').default('set,cn'),
   view,
 });

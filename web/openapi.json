@@ -497,6 +497,48 @@
         }
       }
     },
+    "/api/cards/{scryfall_id}/holdings": {
+      "get": {
+        "tags": [
+          "cards"
+        ],
+        "summary": "Card Holdings",
+        "operationId": "card_holdings",
+        "parameters": [
+          {
+            "name": "scryfall_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Scryfall Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HoldingsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/ingest/search": {
       "get": {
         "tags": [
@@ -771,6 +813,33 @@
         ],
         "title": "BuyListOut"
       },
+      "CardSourceOut": {
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/SourceOut"
+          },
+          "finish": {
+            "type": "string",
+            "enum": [
+              "nonfoil",
+              "foil"
+            ],
+            "title": "Finish"
+          },
+          "copies": {
+            "type": "integer",
+            "title": "Copies",
+            "description": "Copies acquired from this source (history: may exceed what is owned today)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "finish",
+          "copies"
+        ],
+        "title": "CardSourceOut"
+      },
       "CollectionCardOut": {
         "properties": {
           "scryfall_id": {
@@ -939,6 +1008,14 @@
             "type": "array",
             "title": "Functions",
             "description": "Function root keys (Scryfall Tagger roll-up)."
+          },
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sources",
+            "description": "Source keys this owned printing's copies were acquired from (see CollectionOut.sources)."
           }
         },
         "type": "object",
@@ -999,6 +1076,14 @@
             "type": "array",
             "title": "Functions",
             "description": "Function roots, display order."
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/SourceOut"
+            },
+            "type": "array",
+            "title": "Sources",
+            "description": "Every source behind an owned printing in this view, most printings first."
           }
         },
         "type": "object",
@@ -1630,6 +1715,38 @@
         ],
         "title": "DeckDetailOut"
       },
+      "DeckPledgeOut": {
+        "properties": {
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "finish": {
+            "type": "string",
+            "enum": [
+              "nonfoil",
+              "foil"
+            ],
+            "title": "Finish"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "slug",
+          "name",
+          "finish",
+          "count"
+        ],
+        "title": "DeckPledgeOut"
+      },
       "DeckSummaryOut": {
         "properties": {
           "slug": {
@@ -1906,6 +2023,68 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "HoldingsOut": {
+        "properties": {
+          "scryfall_id": {
+            "type": "string",
+            "title": "Scryfall Id"
+          },
+          "owned": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Owned",
+            "description": "finish -> owned copies"
+          },
+          "pledged": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Pledged",
+            "description": "finish -> copies pledged to built decks"
+          },
+          "free": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Free",
+            "description": "finish -> owned copies no deck has pledged"
+          },
+          "decks": {
+            "items": {
+              "$ref": "#/components/schemas/DeckPledgeOut"
+            },
+            "type": "array",
+            "title": "Decks"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/CardSourceOut"
+            },
+            "type": "array",
+            "title": "Sources"
+          },
+          "other_printings_owned": {
+            "type": "integer",
+            "title": "Other Printings Owned",
+            "description": "Copies of the same card owned in other printings (all finishes)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "scryfall_id",
+          "owned",
+          "pledged",
+          "free",
+          "decks",
+          "sources",
+          "other_printings_owned"
+        ],
+        "title": "HoldingsOut"
       },
       "JobOut": {
         "properties": {
@@ -2470,6 +2649,54 @@
           "name"
         ],
         "title": "SetRefOut"
+      },
+      "SourceOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key",
+            "description": "'singles' | 'unknown' | 'product:<MTGJSON fileName>'"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "singles",
+              "unknown",
+              "deck",
+              "pool"
+            ],
+            "title": "Kind",
+            "description": "deck = playable precon; pool = card pool (land pack, scene box, most Secret Lair drops); singles = bought/added individually; unknown = provenance not reconstructed."
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "set_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Set Code"
+          },
+          "printings": {
+            "type": "integer",
+            "title": "Printings",
+            "description": "Owned printings in this view acquired from this source.",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "kind",
+          "label"
+        ],
+        "title": "SourceOut"
       },
       "ValidationError": {
         "properties": {

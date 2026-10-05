@@ -51,6 +51,23 @@ export type BuyListOut = {
 };
 
 /**
+ * CardSourceOut
+ */
+export type CardSourceOut = {
+    source: SourceOut;
+    /**
+     * Finish
+     */
+    finish: 'nonfoil' | 'foil';
+    /**
+     * Copies
+     *
+     * Copies acquired from this source (history: may exceed what is owned today).
+     */
+    copies: number;
+};
+
+/**
  * CollectionCardOut
  */
 export type CollectionCardOut = {
@@ -158,6 +175,12 @@ export type CollectionCardOut = {
      * Function root keys (Scryfall Tagger roll-up).
      */
     functions?: Array<string>;
+    /**
+     * Sources
+     *
+     * Source keys this owned printing's copies were acquired from (see CollectionOut.sources).
+     */
+    sources?: Array<string>;
 };
 
 /**
@@ -184,6 +207,12 @@ export type CollectionOut = {
      * Function roots, display order.
      */
     functions?: Array<FunctionRootOut>;
+    /**
+     * Sources
+     *
+     * Every source behind an owned printing in this view, most printings first.
+     */
+    sources?: Array<SourceOut>;
 };
 
 /**
@@ -487,6 +516,28 @@ export type DeckDetailOut = {
 };
 
 /**
+ * DeckPledgeOut
+ */
+export type DeckPledgeOut = {
+    /**
+     * Slug
+     */
+    slug: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Finish
+     */
+    finish: 'nonfoil' | 'foil';
+    /**
+     * Count
+     */
+    count: number;
+};
+
+/**
  * DeckSummaryOut
  */
 export type DeckSummaryOut = {
@@ -670,6 +721,54 @@ export type HttpValidationError = {
      * Detail
      */
     detail?: Array<ValidationError>;
+};
+
+/**
+ * HoldingsOut
+ */
+export type HoldingsOut = {
+    /**
+     * Scryfall Id
+     */
+    scryfall_id: string;
+    /**
+     * Owned
+     *
+     * finish -> owned copies
+     */
+    owned: {
+        [key: string]: number;
+    };
+    /**
+     * Pledged
+     *
+     * finish -> copies pledged to built decks
+     */
+    pledged: {
+        [key: string]: number;
+    };
+    /**
+     * Free
+     *
+     * finish -> owned copies no deck has pledged
+     */
+    free: {
+        [key: string]: number;
+    };
+    /**
+     * Decks
+     */
+    decks: Array<DeckPledgeOut>;
+    /**
+     * Sources
+     */
+    sources: Array<CardSourceOut>;
+    /**
+     * Other Printings Owned
+     *
+     * Copies of the same card owned in other printings (all finishes).
+     */
+    other_printings_owned: number;
 };
 
 /**
@@ -1008,6 +1107,38 @@ export type SetRefOut = {
      * Name
      */
     name: string;
+};
+
+/**
+ * SourceOut
+ */
+export type SourceOut = {
+    /**
+     * Key
+     *
+     * 'singles' | 'unknown' | 'product:<MTGJSON fileName>'
+     */
+    key: string;
+    /**
+     * Kind
+     *
+     * deck = playable precon; pool = card pool (land pack, scene box, most Secret Lair drops); singles = bought/added individually; unknown = provenance not reconstructed.
+     */
+    kind: 'singles' | 'unknown' | 'deck' | 'pool';
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Set Code
+     */
+    set_code?: string | null;
+    /**
+     * Printings
+     *
+     * Owned printings in this view acquired from this source.
+     */
+    printings?: number;
 };
 
 /**
@@ -1357,6 +1488,36 @@ export type DeckDetailResponses = {
 };
 
 export type DeckDetailResponse = DeckDetailResponses[keyof DeckDetailResponses];
+
+export type CardHoldingsData = {
+    body?: never;
+    path: {
+        /**
+         * Scryfall Id
+         */
+        scryfall_id: string;
+    };
+    query?: never;
+    url: '/api/cards/{scryfall_id}/holdings';
+};
+
+export type CardHoldingsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CardHoldingsError = CardHoldingsErrors[keyof CardHoldingsErrors];
+
+export type CardHoldingsResponses = {
+    /**
+     * Successful Response
+     */
+    200: HoldingsOut;
+};
+
+export type CardHoldingsResponse = CardHoldingsResponses[keyof CardHoldingsResponses];
 
 export type IngestSearchData = {
     body?: never;

@@ -9,6 +9,8 @@ export { TYPE_GROUPS } from './cardFacts';
 
 export type GuideCard = {
   key: string;
+  /** The exact printing shown (inspector fetches its holdings); null when unknown. */
+  scryfallId?: string | null;
   name: string;
   image: string | null;
   href: string | null;
@@ -54,6 +56,7 @@ export const rarityLetter = (r: string | null): string => (r ? RARITY_LETTER[r] 
 export function fromCompare(c: CompareCardOut, fnLabels: Readonly<Record<string, string>> = {}): GuideCard {
   return {
     key: c.oracle_id ?? `slug:${c.slug}`,
+    scryfallId: c.scryfall_id,
     name: c.name,
     image: c.image_uri,
     href: c.scryfall_url,
@@ -91,6 +94,7 @@ export const treatmentLabels = (codes: string): string[] =>
 export function fromCollection(c: CollectionCardOut, missing: boolean, fnLabels: Readonly<Record<string, string>> = {}): GuideCard {
   return {
     key: c.scryfall_id,
+    scryfallId: c.scryfall_id,
     name: c.name,
     image: c.image_uri,
     href: c.scryfall_url,

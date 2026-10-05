@@ -1,5 +1,9 @@
+import { useQuery } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
 import { Dialog } from 'radix-ui';
-import { fmtUsd } from '../core/format';
+import { holdingsQuery } from '../app/queries';
+import type { HoldingsOut } from '../core/api';
+import { fmtInt, fmtUsd } from '../core/format';
 import { rarityLetter, type GuideCard } from '../core/guideCard';
 import type { ComponentType, SVGProps } from 'react';
 import { Holdings, Tags } from './CardFace';
@@ -60,7 +64,7 @@ export function CardInspector({ card, onClose }: { card: GuideCard | null; onClo
                     fmtUsd(card.price)
                   )}
                 </dd>
-                {card.owned && (
+                {card.owned && !card.scryfallId && (
                   <>
                     <dt className="text-ink-muted">Owned</dt>
                     <dd><Holdings card={card} /></dd>
@@ -82,6 +86,8 @@ export function CardInspector({ card, onClose }: { card: GuideCard | null; onClo
                   ))}
                 </ul>
               )}
+
+              {card.scryfallId && <YourCopies scryfallId={card.scryfallId} onLeave={onClose} />}
 
               <nav aria-labelledby="inspect-view-on" className="mt-auto flex flex-col gap-1 pt-2">
                 <span id="inspect-view-on" className="text-xs voice-semi text-ink-muted">View on</span>
@@ -112,5 +118,102 @@ function OutLink({ href, label, Mark }: { href: string; label: string; Mark: Com
       <span className="underline-offset-4 group-hover:underline">{label}</span>
       <span className="sr-only">(opens in a new tab)</span>
     </a>
+  );
+}
+
+const FINISHES = [
+  { key: 'nonfoil', label: 'Nonfoil' },
+  { key: 'foil', label: '✦ Foil' },
+] as const;
+const KIND_NOTE: Record<string, string> = { pool: 'card pool', deck: 'precon deck' };
+
+/** This printing in your collection: per-finish owned / pledged / free, the built
+ *  decks holding it, where the copies came from, and other printings you own. */
+function YourCopies({ scryfallId, onLeave }: { scryfallId: string; onLeave: () => void }) {
+  const q = useQuery(holdingsQuery(scryfallId));
+  return (
+    <section aria-labelledby="inspect-copies" className="flex flex-col gap-2">
+      <h3 id="inspect-copies" className="border-b border-rule pb-1 text-sm voice-semi font-medium text-ink">Your copies</h3>
+      {q.isPending ? (
+        <p role="status" className="text-sm text-ink-muted">Checking your collection…</p>
+      ) : q.isError ? (
+        <p className="text-sm text-danger">Couldn’t load your copies: {(q.error as Error).message}</p>
+      ) : (
+        <CopiesBody h={q.data} onLeave={onLeave} />
+      )}
+    </section>
+  );
+}
+
+function CopiesBody({ h, onLeave }: { h: HoldingsOut; onLeave: () => void }) {
+  const finishes = FINISHES.filter((f) => (h.owned[f.key] ?? 0) > 0);
+  const other = h.other_printings_owned;
+  const otherNote = other > 0 && (
+    <p className="text-sm text-ink-muted">You also own {fmtInt(other)} {other === 1 ? 'copy' : 'copies'} in other printings.</p>
+  );
+  if (!finishes.length) {
+    return (
+      <>
+        <p className="text-sm text-ink">You don’t own this printing.</p>
+        {otherNote}
+      </>
+    );
+  }
+  return (
+    <>
+      <dl className="grid grid-cols-[auto_1fr] gap-x-5 gap-y-1 text-sm">
+        {finishes.map((f) => {
+          const owned = h.owned[f.key] ?? 0;
+          const pledged = h.pledged[f.key] ?? 0;
+          return (
+            <div key={f.key} className="contents">
+              <dt className="text-ink-muted">{f.label}</dt>
+              <dd className="tabular">
+                <b className="font-bold">{fmtInt(owned)}</b> owned
+                {pledged > 0 && <> · {fmtInt(pledged)} pledged</>}
+                {' · '}<span className={h.free[f.key] ? 'text-accent-ink' : 'text-ink-muted'}>{fmtInt(h.free[f.key] ?? 0)} free</span>
+              </dd>
+            </div>
+          );
+        })}
+        {h.decks.length > 0 && (
+          <>
+            <dt className="text-ink-muted">Pledged to</dt>
+            <dd>
+              <ul className="flex flex-col gap-0.5">
+                {h.decks.map((d) => (
+                  <li key={`${d.slug}|${d.finish}`} className="flex items-baseline gap-2">
+                    <Link to="/decks" search={(s) => ({ ...s, deck: d.slug })} onClick={onLeave} className="min-w-0 truncate text-accent-ink underline-offset-4 hover:underline">
+                      {d.name}
+                    </Link>
+                    <span className="shrink-0 text-xs tabular text-ink-muted">×{d.count}{d.finish === 'foil' ? ' ✦' : ''}</span>
+                  </li>
+                ))}
+              </ul>
+            </dd>
+          </>
+        )}
+        {h.sources.length > 0 && (
+          <>
+            <dt className="text-ink-muted">Acquired from</dt>
+            <dd>
+              <ul className="flex flex-col gap-0.5">
+                {h.sources.map((cs) => (
+                  <li key={`${cs.source.key}|${cs.finish}`} className="flex items-baseline gap-2">
+                    <span className="min-w-0 truncate">
+                      {cs.source.label}
+                      {cs.source.set_code && <span className="tabular text-ink-muted"> · {cs.source.set_code.toUpperCase()}</span>}
+                    </span>
+                    {KIND_NOTE[cs.source.kind] && <span className="shrink-0 text-xs text-ink-muted">{KIND_NOTE[cs.source.kind]}</span>}
+                    <span className="ml-auto shrink-0 text-xs tabular text-ink-muted">×{cs.copies}{cs.finish === 'foil' ? ' ✦' : ''}</span>
+                  </li>
+                ))}
+              </ul>
+            </dd>
+          </>
+        )}
+      </dl>
+      {otherNote}
+    </>
   );
 }

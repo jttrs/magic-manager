@@ -178,3 +178,33 @@ test('pressing the art inspects a card (large art, facts, Scryfall/TCGplayer lin
   await tile.getByRole('button', { name: `Mark ${name}` }).click();
   await expect(page.getByRole('button', { name: `Unmark ${name}` }).first()).toBeVisible();
 });
+
+test('"Acquired from" narrows to owned printings from a card pool; the inspector lists your copies', async ({ page }) => {
+  const owned = cards.filter((c) => Object.values(c.owned).some((n) => n > 0));
+  const [pooled, single] = owned;
+  const pool = { key: 'product:CampComrades_FIN', kind: 'pool', label: 'Camp Comrades', set_code: 'fin', printings: 1 };
+  const data = {
+    ...fixtures.collectionBlb,
+    cards: cards.map((c) => ({ ...c, sources: c === pooled ? [pool.key] : c === single ? ['singles'] : [] })),
+    sources: [pool, { key: 'singles', kind: 'singles', label: 'Singles', set_code: null, printings: 1 }],
+  };
+  await page.route('**/api/collection?**', (r) => r.fulfill({ json: data }));
+  await page.route('**/api/cards/*/holdings', (r) => r.fulfill({ json: {
+    scryfall_id: pooled.scryfall_id, owned: { nonfoil: 2 }, pledged: { nonfoil: 1 }, free: { nonfoil: 1 },
+    decks: [{ slug: 'hop-to-it', name: 'Hop To It', finish: 'nonfoil', count: 1 }],
+    sources: [{ source: pool, finish: 'nonfoil', copies: 2 }], other_printings_owned: 3,
+  } }));
+  await page.goto(COLLECTION_URL);
+  await page.getByRole('button', { name: /Acquired from/ }).click();
+  await page.getByRole('checkbox', { name: /Any card pool/ }).check();
+  await page.keyboard.press('Escape');
+  await expect(page).toHaveURL(/src=/);
+  await expect(page.getByRole('article')).toHaveCount(1);
+
+  await page.getByRole('button', { name: `Inspect ${pooled.name}` }).click();
+  const copies = page.getByRole('dialog').getByRole('region', { name: 'Your copies' });
+  await expect(copies.getByText('owned')).toContainText('2');
+  await expect(copies.getByRole('link', { name: 'Hop To It' })).toHaveAttribute('href', /\/decks\?.*deck=hop-to-it/);
+  await expect(copies.getByText('Camp Comrades')).toBeVisible();
+  await expect(copies.getByText(/also own 3 copies in other printings/)).toBeVisible();
+});

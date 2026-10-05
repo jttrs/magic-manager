@@ -79,6 +79,7 @@ export function fromDeckCard(c: DeckCardOut): GuideCard {
   const finish = c.finish === 'either' ? null : c.finish;
   return {
     key: `${p.scryfall_id}|${c.board}|${c.finish}`,
+    scryfallId: p.scryfall_id,
     name: p.name,
     image: p.image_uri,
     href: `https://scryfall.com/card/${p.set_code}/${encodeURIComponent(p.collector_number)}`,
