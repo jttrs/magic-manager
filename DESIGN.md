@@ -191,8 +191,8 @@ Hairline borders are the main geometry. `ruled` is a 1px bottom border; column a
 
 ### AppShell + ViewLayout
 - **Purpose:** global masthead, primary nav, jobs link, theme switch, sidebar-below-nav layout.
-- **Nav:** Collection · Decks · Explore · Market. On phones the tabs tighten (smaller condensed type, no gaps) and *Jobs* shows its queue mark alone so all four tabs fit at 360px without scrolling.
-- **States:** active nav uses amber underline; jobs shows amber pulse when queued/running; theme can be system/light/dark and persists to `localStorage` as `mm.theme`.
+- **Nav:** Collection · Decks · Explore · Market. On phones the tabs tighten (smaller condensed type, no gaps) so all four fit at 360px. **Jobs is not a destination:** background jobs are housekeeping, so they sit beside the theme switch as a quiet queue-mark icon (tooltip *Background jobs*, amber dot while one runs) — never a nav tab or a word.
+- **States:** active nav uses amber underline; the jobs icon shows an amber dot when queued/running; theme can be system/light/dark and persists to `localStorage` as `mm.theme`.
 - **A11y contract:** skip link to `#main`, `nav aria-label="Primary"`, `main tabIndex={-1}`, sidebar labelled by the view, mobile disclosure uses `aria-expanded`/`aria-controls`.
 
 ### GuideSheet

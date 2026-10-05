@@ -3,7 +3,7 @@ import { Link } from '@tanstack/react-router';
 import { jobsQuery } from '../app/queries';
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
-import { ToggleGroup } from 'radix-ui';
+import { ToggleGroup, Tooltip } from 'radix-ui';
 import { applyTheme, readTheme, type ThemePref } from '../app/theme';
 import { useMediaQuery } from '../app/useMediaQuery';
 
@@ -121,21 +121,33 @@ function ThemeSwitch() {
 }
 
 /** Background work lives behind a utility link, not in the primary IA. */
+/** Background jobs: housekeeping, not a destination — a quiet icon that pulses
+ *  while something runs; the tooltip names it. */
 function JobsLink() {
   const jobs = useQuery(jobsQuery());
   const running = jobs.data?.filter((j) => j.status === 'queued' || j.status === 'running').length ?? 0;
+  const label = running ? `Background jobs · ${running} running` : 'Background jobs';
   return (
-    <Link
-      to="/jobs"
-      className="flex min-h-8 items-center gap-1.5 rounded-sm px-2 text-sm voice-semi text-on-chrome-muted no-underline transition-colors ease-guide hover:text-on-chrome data-[status=active]:text-on-chrome"
-      aria-label={running ? `Jobs, ${running} running` : 'Jobs'}
-    >
-      {running > 0 && <span aria-hidden="true" className="h-2 w-2 animate-pulse rounded-pill bg-accent" />}
-      {/* Phones show the queue mark alone so every primary tab fits. */}
-      <svg viewBox="0 0 16 16" aria-hidden="true" className="size-4 sm:hidden">
-        <path d="M3 4.5h10M3 8h10M3 11.5h6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      </svg>
-      <span className="hidden sm:inline">Jobs</span>
-    </Link>
+    <Tooltip.Provider delayDuration={200}>
+      <Tooltip.Root>
+        <Tooltip.Trigger asChild>
+          <Link
+            to="/jobs"
+            aria-label={label}
+            className="relative grid size-8 place-items-center rounded-sm text-on-chrome-muted no-underline transition-colors ease-guide hover:text-on-chrome data-[status=active]:text-on-chrome"
+          >
+            <svg viewBox="0 0 16 16" aria-hidden="true" className="size-4">
+              <path d="M3 4.5h10M3 8h10M3 11.5h6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            </svg>
+            {running > 0 && <span aria-hidden="true" className="absolute right-1 top-1 size-2 animate-pulse rounded-pill bg-accent" />}
+          </Link>
+        </Tooltip.Trigger>
+        <Tooltip.Portal>
+          <Tooltip.Content side="bottom" sideOffset={6} collisionPadding={12} className="z-50 rounded-sm border border-chrome-line bg-chrome-raised px-2.5 py-1.5 text-sm text-on-chrome shadow-[0_12px_28px_-12px_var(--theme-scrim)]">
+            {label}
+          </Tooltip.Content>
+        </Tooltip.Portal>
+      </Tooltip.Root>
+    </Tooltip.Provider>
   );
 }
