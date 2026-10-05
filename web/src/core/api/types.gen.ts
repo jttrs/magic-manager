@@ -147,6 +147,127 @@ export type BuyListOut = {
 };
 
 /**
+ * CardExploreOut
+ */
+export type CardExploreOut = {
+    a: CardProfileOut;
+    b?: CardProfileOut | null;
+    /**
+     * Commanders
+     *
+     * Comparison only: by share.
+     */
+    commanders?: Array<PairedOut>;
+    /**
+     * Coplayed
+     *
+     * Comparison only: by lift.
+     */
+    coplayed?: Array<PairedOut>;
+    /**
+     * Tags
+     *
+     * Comparison only: a_only / both / b_only.
+     */
+    tags?: {
+        [key: string]: Array<OracleTagOut>;
+    };
+};
+
+/**
+ * CardOptionOut
+ */
+export type CardOptionOut = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Oracle Id
+     */
+    oracle_id: string | null;
+    /**
+     * Type Line
+     */
+    type_line: string | null;
+    /**
+     * Color Identity
+     */
+    color_identity: Array<string>;
+    /**
+     * Image Uri
+     */
+    image_uri: string | null;
+    /**
+     * Cached
+     *
+     * EDHREC card page already cached locally.
+     */
+    cached: boolean;
+    /**
+     * Commander Eligible
+     */
+    commander_eligible: boolean;
+};
+
+/**
+ * CardProfileOut
+ */
+export type CardProfileOut = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Slug
+     */
+    slug: string;
+    facts: FactsOut;
+    /**
+     * Commander Eligible
+     */
+    commander_eligible: boolean;
+    /**
+     * Num Decks
+     */
+    num_decks: number | null;
+    /**
+     * Potential Decks
+     */
+    potential_decks: number | null;
+    /**
+     * Salt
+     */
+    salt: number | null;
+    /**
+     * Functions
+     */
+    functions: Array<string>;
+    /**
+     * Tags
+     */
+    tags: Array<OracleTagOut>;
+    /**
+     * Commanders
+     */
+    commanders: Array<EntryOut>;
+    /**
+     * Coplayed
+     */
+    coplayed: Array<EntryOut>;
+    /**
+     * Similar
+     */
+    similar: Array<EntryOut>;
+    /**
+     * Deck Mix
+     */
+    deck_mix: Array<{
+        [key: string]: unknown;
+    }>;
+};
+
+/**
  * CardSourceOut
  */
 export type CardSourceOut = {
@@ -580,6 +701,18 @@ export type CompareCardOut = {
      * Top Tagger oracle tags by weight.
      */
     oracle_tags?: Array<OracleTagOut>;
+    /**
+     * Owned
+     *
+     * Copies you own across every printing.
+     */
+    owned?: number;
+    /**
+     * Free
+     *
+     * Owned copies no built deck has pledged.
+     */
+    free?: number;
 };
 
 /**
@@ -592,8 +725,10 @@ export type CompareOut = {
     name_a: string;
     /**
      * Name B
+     *
+     * None when exploring one commander.
      */
-    name_b: string;
+    name_b?: string | null;
     /**
      * Slug A
      */
@@ -601,7 +736,7 @@ export type CompareOut = {
     /**
      * Slug B
      */
-    slug_b: string;
+    slug_b?: string | null;
     /**
      * Cards
      */
@@ -868,6 +1003,101 @@ export type DraftIn = {
      * Cards
      */
     cards: Array<DraftCardIn>;
+};
+
+/**
+ * EntryOut
+ */
+export type EntryOut = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Slug
+     */
+    slug: string;
+    facts: FactsOut;
+    /**
+     * Num Decks
+     */
+    num_decks?: number | null;
+    /**
+     * Potential Decks
+     */
+    potential_decks?: number | null;
+    /**
+     * Share
+     *
+     * % of the potential decks that run it.
+     */
+    share?: number | null;
+    /**
+     * Lift
+     *
+     * Co-play: how many times more often than chance.
+     */
+    lift?: number | null;
+    /**
+     * Group
+     *
+     * Co-play type group, or 'top'/'new' for commanders.
+     */
+    group?: string | null;
+};
+
+/**
+ * FactsOut
+ */
+export type FactsOut = {
+    /**
+     * Oracle Id
+     */
+    oracle_id?: string | null;
+    /**
+     * Type Line
+     */
+    type_line?: string | null;
+    /**
+     * Cmc
+     */
+    cmc?: number | null;
+    /**
+     * Color Identity
+     */
+    color_identity?: Array<string>;
+    /**
+     * Lowest Usd
+     */
+    lowest_usd?: number | null;
+    /**
+     * Scryfall Id
+     */
+    scryfall_id?: string | null;
+    /**
+     * Image Uri
+     */
+    image_uri?: string | null;
+    /**
+     * Set Code
+     */
+    set_code?: string | null;
+    /**
+     * Collector Number
+     */
+    collector_number?: string | null;
+    /**
+     * Scryfall Url
+     */
+    scryfall_url?: string | null;
+    /**
+     * Owned
+     */
+    owned?: number;
+    /**
+     * Free
+     */
+    free?: number;
 };
 
 /**
@@ -1183,6 +1413,31 @@ export type OracleTagOut = {
      * Label
      */
     label: string;
+};
+
+/**
+ * PairedOut
+ */
+export type PairedOut = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Slug
+     */
+    slug: string;
+    facts: FactsOut;
+    /**
+     * Bucket
+     */
+    bucket: 'a_only' | 'both' | 'b_only';
+    a: EntryOut | null;
+    b: EntryOut | null;
+    /**
+     * Gap
+     */
+    gap: number | null;
 };
 
 /**
@@ -1843,7 +2098,7 @@ export type CompareData = {
         /**
          * B
          */
-        b: string;
+        b?: string | null;
     };
     url: '/api/edhrec/compare';
 };
@@ -1865,6 +2120,76 @@ export type CompareResponses = {
 };
 
 export type CompareResponse = CompareResponses[keyof CompareResponses];
+
+export type ExploreSearchData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Q
+         */
+        q: string;
+        /**
+         * Limit
+         */
+        limit?: number;
+    };
+    url: '/api/explore/search';
+};
+
+export type ExploreSearchErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ExploreSearchError = ExploreSearchErrors[keyof ExploreSearchErrors];
+
+export type ExploreSearchResponses = {
+    /**
+     * Response Explore Search
+     *
+     * Successful Response
+     */
+    200: Array<CardOptionOut>;
+};
+
+export type ExploreSearchResponse = ExploreSearchResponses[keyof ExploreSearchResponses];
+
+export type ExploreCardData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * A
+         */
+        a: string;
+        /**
+         * B
+         */
+        b?: string | null;
+    };
+    url: '/api/explore/card';
+};
+
+export type ExploreCardErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ExploreCardError = ExploreCardErrors[keyof ExploreCardErrors];
+
+export type ExploreCardResponses = {
+    /**
+     * Successful Response
+     */
+    200: CardExploreOut;
+};
+
+export type ExploreCardResponse = ExploreCardResponses[keyof ExploreCardResponses];
 
 export type CollectionFamiliesData = {
     body?: never;

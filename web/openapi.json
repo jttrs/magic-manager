@@ -286,10 +286,17 @@
           {
             "name": "b",
             "in": "query",
-            "required": true,
+            "required": false,
             "schema": {
-              "type": "string",
-              "minLength": 1,
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
               "title": "B"
             }
           }
@@ -301,6 +308,125 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CompareOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/explore/search": {
+      "get": {
+        "tags": [
+          "explore"
+        ],
+        "summary": "Explore Search",
+        "operationId": "explore_search",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "title": "Q"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CardOptionOut"
+                  },
+                  "title": "Response Explore Search"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/explore/card": {
+      "get": {
+        "tags": [
+          "explore"
+        ],
+        "summary": "Explore Card",
+        "operationId": "explore_card",
+        "parameters": [
+          {
+            "name": "a",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "title": "A"
+            }
+          },
+          {
+            "name": "b",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "B"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CardExploreOut"
                 }
               }
             }
@@ -1421,6 +1547,235 @@
         ],
         "title": "BuyListOut"
       },
+      "CardExploreOut": {
+        "properties": {
+          "a": {
+            "$ref": "#/components/schemas/CardProfileOut"
+          },
+          "b": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CardProfileOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "commanders": {
+            "items": {
+              "$ref": "#/components/schemas/PairedOut"
+            },
+            "type": "array",
+            "title": "Commanders",
+            "description": "Comparison only: by share."
+          },
+          "coplayed": {
+            "items": {
+              "$ref": "#/components/schemas/PairedOut"
+            },
+            "type": "array",
+            "title": "Coplayed",
+            "description": "Comparison only: by lift."
+          },
+          "tags": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/components/schemas/OracleTagOut"
+              },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Tags",
+            "description": "Comparison only: a_only / both / b_only."
+          }
+        },
+        "type": "object",
+        "required": [
+          "a"
+        ],
+        "title": "CardExploreOut"
+      },
+      "CardOptionOut": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "oracle_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oracle Id"
+          },
+          "type_line": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type Line"
+          },
+          "color_identity": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Color Identity"
+          },
+          "image_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Uri"
+          },
+          "cached": {
+            "type": "boolean",
+            "title": "Cached",
+            "description": "EDHREC card page already cached locally."
+          },
+          "commander_eligible": {
+            "type": "boolean",
+            "title": "Commander Eligible"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "oracle_id",
+          "type_line",
+          "color_identity",
+          "image_uri",
+          "cached",
+          "commander_eligible"
+        ],
+        "title": "CardOptionOut"
+      },
+      "CardProfileOut": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "facts": {
+            "$ref": "#/components/schemas/FactsOut"
+          },
+          "commander_eligible": {
+            "type": "boolean",
+            "title": "Commander Eligible"
+          },
+          "num_decks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Num Decks"
+          },
+          "potential_decks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Potential Decks"
+          },
+          "salt": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Salt"
+          },
+          "functions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Functions"
+          },
+          "tags": {
+            "items": {
+              "$ref": "#/components/schemas/OracleTagOut"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "commanders": {
+            "items": {
+              "$ref": "#/components/schemas/EntryOut"
+            },
+            "type": "array",
+            "title": "Commanders"
+          },
+          "coplayed": {
+            "items": {
+              "$ref": "#/components/schemas/EntryOut"
+            },
+            "type": "array",
+            "title": "Coplayed"
+          },
+          "similar": {
+            "items": {
+              "$ref": "#/components/schemas/EntryOut"
+            },
+            "type": "array",
+            "title": "Similar"
+          },
+          "deck_mix": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Deck Mix"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "slug",
+          "facts",
+          "commander_eligible",
+          "num_decks",
+          "potential_decks",
+          "salt",
+          "functions",
+          "tags",
+          "commanders",
+          "coplayed",
+          "similar",
+          "deck_mix"
+        ],
+        "title": "CardProfileOut"
+      },
       "CardSourceOut": {
         "properties": {
           "source": {
@@ -2230,6 +2585,18 @@
             "type": "array",
             "title": "Oracle Tags",
             "description": "Top Tagger oracle tags by weight."
+          },
+          "owned": {
+            "type": "integer",
+            "title": "Owned",
+            "description": "Copies you own across every printing.",
+            "default": 0
+          },
+          "free": {
+            "type": "integer",
+            "title": "Free",
+            "description": "Owned copies no built deck has pledged.",
+            "default": 0
           }
         },
         "type": "object",
@@ -2270,15 +2637,30 @@
             "title": "Name A"
           },
           "name_b": {
-            "type": "string",
-            "title": "Name B"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name B",
+            "description": "None when exploring one commander."
           },
           "slug_a": {
             "type": "string",
             "title": "Slug A"
           },
           "slug_b": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Slug B"
           },
           "cards": {
@@ -2300,9 +2682,7 @@
         "type": "object",
         "required": [
           "name_a",
-          "name_b",
           "slug_a",
-          "slug_b",
           "cards"
         ],
         "title": "CompareOut"
@@ -2756,6 +3136,208 @@
         ],
         "title": "DraftIn"
       },
+      "EntryOut": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "facts": {
+            "$ref": "#/components/schemas/FactsOut"
+          },
+          "num_decks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Num Decks"
+          },
+          "potential_decks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Potential Decks"
+          },
+          "share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Share",
+            "description": "% of the potential decks that run it."
+          },
+          "lift": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lift",
+            "description": "Co-play: how many times more often than chance."
+          },
+          "group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group",
+            "description": "Co-play type group, or 'top'/'new' for commanders."
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "slug",
+          "facts"
+        ],
+        "title": "EntryOut"
+      },
+      "FactsOut": {
+        "properties": {
+          "oracle_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oracle Id"
+          },
+          "type_line": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type Line"
+          },
+          "cmc": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cmc"
+          },
+          "color_identity": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Color Identity"
+          },
+          "lowest_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lowest Usd"
+          },
+          "scryfall_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scryfall Id"
+          },
+          "image_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Uri"
+          },
+          "set_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Set Code"
+          },
+          "collector_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collector Number"
+          },
+          "scryfall_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scryfall Url"
+          },
+          "owned": {
+            "type": "integer",
+            "title": "Owned",
+            "default": 0
+          },
+          "free": {
+            "type": "integer",
+            "title": "Free",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "FactsOut"
+      },
       "FamilyOption": {
         "properties": {
           "code": {
@@ -3195,6 +3777,72 @@
         ],
         "title": "OracleTagOut",
         "description": "A Scryfall Tagger oracle tag (``id`` is the stable UUID)."
+      },
+      "PairedOut": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "facts": {
+            "$ref": "#/components/schemas/FactsOut"
+          },
+          "bucket": {
+            "type": "string",
+            "enum": [
+              "a_only",
+              "both",
+              "b_only"
+            ],
+            "title": "Bucket"
+          },
+          "a": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EntryOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "b": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EntryOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "gap": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gap"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "slug",
+          "facts",
+          "bucket",
+          "a",
+          "b",
+          "gap"
+        ],
+        "title": "PairedOut"
       },
       "PreconOptionOut": {
         "properties": {

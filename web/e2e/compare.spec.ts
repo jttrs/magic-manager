@@ -8,7 +8,7 @@ test('pools render as three horizontal columns with counts (F4)', async ({ page 
   const heads = page.locator('h2[id^="col-"]');
   await expect(heads).toHaveCount(3);
   await expect(heads.nth(0)).toContainText(`Tifa Lockhart only · ${counts.a_only}`);
-  await expect(heads.nth(1)).toContainText(`Shared · ${counts.both}`);
+  await expect(heads.nth(1)).toContainText(`Both · ${counts.both}`);
   await expect(heads.nth(2)).toContainText(`Cloud only · ${counts.b_only}`);
   const boxes = await Promise.all([0, 1, 2].map((i) => heads.nth(i).boundingBox()));
   expect(boxes[0]!.x).toBeLessThan(boxes[1]!.x);
@@ -77,7 +77,7 @@ test('marking cards highlights them and copies a plain list', async ({ page }) =
 
 test('sheet is titled Commanders; EDHREC lists live in a multi-select, not a chip wall', async ({ page }) => {
   await page.goto(COMPARE_URL);
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Commanders');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Explore');
   await page.getByRole('button', { name: /EDHREC lists/ }).click();
   await expect(page.getByRole('searchbox', { name: 'Filter lists' })).toBeVisible();
 });
@@ -96,10 +96,10 @@ test('name filter and EDHREC list chips narrow every column', async ({ page }) =
   await expect(page.getByRole('article')).toHaveCount(fixtures.compare.cards.filter((c) => c.name.toLowerCase().includes(target.toLowerCase())).length);
 });
 
-test('commander combobox: suggestions, keyboard choice, URL update', async ({ page }) => {
-  await page.goto('/commanders');
-  await expect(page.getByText('Pick two commanders')).toBeVisible();
-  const box = page.getByRole('combobox', { name: 'Commander A' });
+test('card combobox: suggestions, keyboard choice, URL update', async ({ page }) => {
+  await page.goto('/explore');
+  await expect(page.getByText('Explore a card')).toBeVisible();
+  const box = page.getByRole('combobox', { name: 'Card' });
   await box.fill('tifa');
   await expect(page.getByRole('listbox')).toBeVisible();
   await box.press('ArrowDown');
@@ -111,7 +111,33 @@ test('engine errors surface with a retry, not a blank sheet', async ({ page }) =
   await page.unrouteAll();
   const { mockApi } = await import('./support');
   await mockApi(page, { '/api/edhrec/compare': () => ({ status: 422, json: { detail: "'Sol Ring' is not commander-eligible" } }) });
-  await page.goto('/commanders?a=Sol%20Ring&b=Tifa%20Lockhart');
+  await page.goto('/explore?a=Sol%20Ring&b=Tifa%20Lockhart&role=commander');
   await expect(page.getByRole('alert')).toContainText('not commander-eligible');
   await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
+});
+
+test('explore a card as a card: commanders that run it, played alongside, similar; role follows eligibility', async ({ page }) => {
+  const { profile } = await import('./support');
+  const e = (name: string, o: Record<string, unknown> = {}) => ({ name, slug: name.toLowerCase(), facts: profile(name).facts, num_decks: 10, potential_decks: 20, share: 50, lift: 1.5, group: null, ...o });
+  await page.route('**/api/explore/card?**', (r) => r.fulfill({ json: {
+    a: profile('Sol Ring', { commander_eligible: false, commanders: [e('Tifa Lockhart', { group: 'top' })], coplayed: [e('Arcane Signet', { group: 'Mana rocks', lift: 2.25 })], similar: [e('Mana Vault')] }),
+    b: null, commanders: [], coplayed: [], tags: {},
+  } }));
+  await page.goto('/explore?a=Sol%20Ring');
+  await expect(page.getByRole('radio', { name: 'As commander' })).toBeDisabled();
+  await expect(page.getByRole('radio', { name: 'As a card' })).toHaveAttribute('aria-checked', 'true');
+  for (const h of ['Commanders that run it', 'Played alongside', 'Similar cards']) await expect(page.getByRole('heading', { name: new RegExp(`^${h}`) })).toBeVisible();
+  await expect(page.getByText('2.25× lift')).toBeVisible();
+  await expect(page.getByRole('link', { name: /EDHREC/ })).toHaveAttribute('href', /\/cards\/sol-ring$/);
+});
+
+test('old /commanders links land on Explore as commander; the inspector offers Explore this card', async ({ page }) => {
+  await page.goto('/commanders?a=Tifa%20Lockhart&b=Cloud%2C%20Ex-SOLDIER');
+  await expect(page).toHaveURL(/\/explore\?.*role=commander/);
+  const tile = page.getByRole('article').first();
+  const name = (await tile.getByRole('button', { name: /^Mark / }).getAttribute('aria-label'))!.replace(/^Mark /, '');
+  await tile.getByRole('button', { name: `Inspect ${name}` }).click();
+  await page.getByRole('dialog').getByRole('link', { name: 'Explore this card' }).click();
+  await expect(page).toHaveURL(/\/explore\?a=/);
+  await expect(page.getByRole('combobox', { name: 'Card' })).toHaveValue(name.split(' // ')[0]);
 });

@@ -15,9 +15,14 @@ const view = z.enum(VIEW_TYPES).catch('grid').default('grid');
 const GROUP_BYS = ['lists', 'function'] as const;
 export type GroupBy = (typeof GROUP_BYS)[number];
 
+const ROLES = ['commander', 'card'] as const;
+export type Role = (typeof ROLES)[number];
+
 export const compareSearch = z.object({
   a: z.string().optional().catch(undefined),
   b: z.string().optional().catch(undefined),
+  /** Explore role; unset = commander when A can lead, else card. */
+  role: z.enum(ROLES).optional().catch(undefined),
   show: list(z.enum(BUCKETS)).catch([...BUCKETS]).default([...BUCKETS]),
   q: z.string().catch('').default(''),
   tags: list(z.string()).catch([]).default([]),

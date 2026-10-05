@@ -18,15 +18,24 @@ const indexRoute = createRoute({
   },
 });
 
-const compareRoute = createRoute({
+const exploreRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/commanders',
+  path: '/explore',
   validateSearch: compareSearch,
   // Keep links short: defaults never appear in the URL.
   search: { middlewares: [stripSearchParams(compareSearch.parse({}))] },
   // Views load on demand (code-split); they reach route state via getRouteApi, so
   // there is no router↔view import cycle.
-  component: lazyRouteComponent(() => import('../views/CompareView'), 'CompareView'),
+  component: lazyRouteComponent(() => import('../views/ExploreView'), 'ExploreView'),
+});
+
+// Commanders grew into Explore (any card, as a commander or as one of the 99).
+const legacyCommandersRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/commanders',
+  beforeLoad: ({ search }) => {
+    throw redirect({ to: '/explore', search: { ...(search as object), role: 'commander' } as never });
+  },
 });
 
 const collectionRoute = createRoute({
@@ -68,7 +77,7 @@ const jobsRoute = createRoute({
 });
 
 export const router = createRouter({
-  routeTree: rootRoute.addChildren([indexRoute, collectionRoute, legacySetsRoute, decksRoute, deckEditRoute, compareRoute, jobsRoute]),
+  routeTree: rootRoute.addChildren([indexRoute, collectionRoute, legacySetsRoute, decksRoute, deckEditRoute, exploreRoute, legacyCommandersRoute, jobsRoute]),
   defaultPreload: 'intent',
 });
 

@@ -317,7 +317,8 @@ def roll_up(oracle_ids: Iterable[str], roots: Sequence[FunctionRoot] | None = No
 
 
 def card_summaries(oracle_ids: Iterable[str], *,
-                   conn: sqlite3.Connection | None = None) -> dict[str, CardTagSummary]:
+                   conn: sqlite3.Connection | None = None,
+                   limit: int | None = None) -> dict[str, CardTagSummary]:
     """ONE batched lookup → ``{oracle_id: CardTagSummary(functions, tags)}``.
 
     ``functions`` = rolled-up root keys; ``tags`` = the top
@@ -337,7 +338,7 @@ def card_summaries(oracle_ids: Iterable[str], *,
         if tid:
             excluded |= h.subtree(tid)
     functional = frozenset().union(*(r.tag_ids for r in roots)) if roots else frozenset()
-    limit = max(0, cfg["preview_limit"])
+    limit = max(0, cfg["preview_limit"] if limit is None else limit)
     out: dict[str, CardTagSummary] = {}
     for oid, pairs in raw.items():
         tids = {t for t, _ in pairs}

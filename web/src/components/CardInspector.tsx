@@ -7,7 +7,7 @@ import { fmtInt, fmtUsd } from '../core/format';
 import { rarityLetter, type GuideCard } from '../core/guideCard';
 import type { ComponentType, SVGProps } from 'react';
 import { Holdings, Tags } from './CardFace';
-import { ScryfallMark, TcgplayerMark } from './StoreMarks';
+import { ExploreMark, ScryfallMark, TcgplayerMark } from './StoreMarks';
 
 const RARITY_NAME: Record<string, string> = { common: 'Common', uncommon: 'Uncommon', rare: 'Rare', mythic: 'Mythic', special: 'Special', bonus: 'Bonus' };
 
@@ -95,6 +95,15 @@ export function CardInspector({ card, onClose }: { card: GuideCard | null; onClo
                   {card.href && <OutLink href={card.href} label="Scryfall" Mark={ScryfallMark} />}
                   <OutLink href={tcgplayerSearch(card.name)} label="TCGplayer" Mark={TcgplayerMark} />
                 </div>
+                <Link
+                  to="/explore"
+                  search={{ a: card.name.split(' // ')[0] } as never}
+                  onClick={onClose}
+                  className="-ml-2 inline-flex min-h-9 items-center gap-1.5 self-start rounded-sm px-2 text-md voice-semi font-medium text-accent-ink transition-colors duration-150 ease-guide hover:bg-paper-sunk focus-visible:bg-paper-sunk"
+                >
+                  <ExploreMark className="size-[1.15rem]" />
+                  Explore this card
+                </Link>
               </nav>
             </div>
           </Dialog.Content>

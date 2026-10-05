@@ -1012,9 +1012,9 @@ class CompareResult:
     """Outcome of :func:`compare_commanders`: both commanders' identities plus
     the merged, bucketed, enriched card list."""
     name_a: str
-    name_b: str
+    name_b: str | None
     slug_a: str
-    slug_b: str
+    slug_b: str | None
     cards: list[CompareCard] = field(default_factory=list)
 
 
@@ -1120,7 +1120,7 @@ def _commander_card_entries(ref: str) -> tuple[str, str, dict]:
     return res.name, res.slug, _dedupe_commander_cards(res.rows)
 
 
-def compare_commanders(ref_a: str, ref_b: str) -> CompareResult:
+def compare_commanders(ref_a: str, ref_b: str | None = None) -> CompareResult:
     """Compare the recommended-card rankings of two commanders (workflow D).
 
     Each commander's FULL recommendation set (every ``list_tag``) is read from the
@@ -1134,7 +1134,8 @@ def compare_commanders(ref_a: str, ref_b: str) -> CompareResult:
     preview tags; empty when the tag cache was never synced).
     """
     name_a, slug_a, a_cards = _commander_card_entries(ref_a)
-    name_b, slug_b, b_cards = _commander_card_entries(ref_b)
+    # One commander (Explore's single view): every card lands in a_only.
+    name_b, slug_b, b_cards = _commander_card_entries(ref_b) if ref_b else (None, None, {})
 
     keys = list(dict.fromkeys([*a_cards.keys(), *b_cards.keys()]))
     cards: list[CompareCard] = []
