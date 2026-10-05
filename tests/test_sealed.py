@@ -149,6 +149,26 @@ def test_box_recurses_into_36_packs(monkeypatch, tmp_path):
     assert t.intrinsic == pytest.approx(153.0)
 
 
+def test_pack_ev_total_sums_nested_packs(monkeypatch, tmp_path):
+    """pack_ev_total walks the tree summing pack-node EV × cumulative count.
+    A box of 36 draft packs ($4.25 each) → $153; a non-pack tree → None."""
+    _patch(monkeypatch, tmp_path=tmp_path)
+    box = sealed.build_product_tree("tst", sealed.identify_product("tst", "TST Booster Box"))
+    assert sealed.pack_ev_total(box) == pytest.approx(36 * 4.25)
+    # A hand-built mixed tree: 9×(EV 5) + 1×(EV 20) = 65; a deck child is ignored.
+    mixed = sealed.ProductNode(
+        name="Bundle", set_code="x", kind="sealed", count=1,
+        children=[
+            sealed.ProductNode(name="play", set_code="x", kind="pack", count=9, intrinsic_usd=5.0),
+            sealed.ProductNode(name="coll", set_code="x", kind="pack", count=1, intrinsic_usd=20.0),
+            sealed.ProductNode(name="deck", set_code="x", kind="deck", count=1, intrinsic_usd=99.0),
+        ])
+    assert sealed.pack_ev_total(mixed) == pytest.approx(65.0)
+    # No pack nodes → None (lets callers distinguish "no boosters" from "$0").
+    nopacks = sealed.ProductNode(name="d", set_code="x", kind="deck", count=1, intrinsic_usd=10.0)
+    assert sealed.pack_ev_total(nopacks) is None
+
+
 def test_pack_code_selects_booster_type(monkeypatch, tmp_path):
     """The Collector Pack references code='collector' → 2 rares = $8, NOT the
     draft EV of $4.25. Proves pack.code selects the right booster type."""
