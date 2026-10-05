@@ -444,6 +444,53 @@
         }
       }
     },
+    "/api/deals/tabs": {
+      "get": {
+        "tags": [
+          "deals"
+        ],
+        "summary": "Deals Tabs",
+        "operationId": "deals_tabs",
+        "parameters": [
+          {
+            "name": "browser",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "chrome",
+                "safari"
+              ],
+              "type": "string",
+              "default": "chrome",
+              "title": "Browser"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenTabsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/undo": {
       "get": {
         "tags": [
@@ -4797,6 +4844,77 @@
         ],
         "title": "NewDeckIn"
       },
+      "OpenTabsOut": {
+        "properties": {
+          "browser": {
+            "type": "string",
+            "title": "Browser"
+          },
+          "windows": {
+            "type": "integer",
+            "title": "Windows"
+          },
+          "windows_read": {
+            "type": "integer",
+            "title": "Windows Read"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          },
+          "stores": {
+            "items": {
+              "$ref": "#/components/schemas/StoreTabsOut"
+            },
+            "type": "array",
+            "title": "Stores",
+            "description": "Product pages of catalogued stores."
+          },
+          "uncatalogued": {
+            "items": {
+              "$ref": "#/components/schemas/UncataloguedOut"
+            },
+            "type": "array",
+            "title": "Uncatalogued",
+            "description": "Shopify-shaped product pages from stores without a recipe yet."
+          },
+          "store_pages": {
+            "type": "integer",
+            "title": "Store Pages",
+            "description": "Other pages of catalogued stores (carts, collections)."
+          },
+          "other": {
+            "type": "integer",
+            "title": "Other",
+            "description": "Tabs that aren't stores."
+          },
+          "dropped_local": {
+            "type": "integer",
+            "title": "Dropped Local"
+          },
+          "duplicates": {
+            "type": "integer",
+            "title": "Duplicates"
+          }
+        },
+        "type": "object",
+        "required": [
+          "browser",
+          "windows",
+          "windows_read",
+          "warnings",
+          "stores",
+          "uncatalogued",
+          "store_pages",
+          "other",
+          "dropped_local",
+          "duplicates"
+        ],
+        "title": "OpenTabsOut"
+      },
       "OracleTagOut": {
         "properties": {
           "id": {
@@ -5816,6 +5934,48 @@
         ],
         "title": "SourceOut"
       },
+      "StoreTabsOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "shopify",
+              "meta",
+              "rendered"
+            ],
+            "title": "Mode",
+            "description": "How prices are read: shopify/meta server-side, rendered from your open tab."
+          },
+          "no_sales_tax": {
+            "type": "boolean",
+            "title": "No Sales Tax"
+          },
+          "tabs": {
+            "items": {
+              "$ref": "#/components/schemas/TabOut"
+            },
+            "type": "array",
+            "title": "Tabs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "name",
+          "mode",
+          "no_sales_tax",
+          "tabs"
+        ],
+        "title": "StoreTabsOut"
+      },
       "SuggestionOut": {
         "properties": {
           "printing": {
@@ -5954,6 +6114,34 @@
         ],
         "title": "SwapOut"
       },
+      "TabOut": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "window": {
+            "type": "integer",
+            "title": "Window"
+          },
+          "tab": {
+            "type": "integer",
+            "title": "Tab"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url",
+          "title",
+          "window",
+          "tab"
+        ],
+        "title": "TabOut"
+      },
       "TreeNodeOut": {
         "properties": {
           "name": {
@@ -6012,6 +6200,27 @@
           "contents_kind"
         ],
         "title": "TreeNodeOut"
+      },
+      "UncataloguedOut": {
+        "properties": {
+          "host": {
+            "type": "string",
+            "title": "Host"
+          },
+          "tabs": {
+            "items": {
+              "$ref": "#/components/schemas/TabOut"
+            },
+            "type": "array",
+            "title": "Tabs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "host",
+          "tabs"
+        ],
+        "title": "UncataloguedOut"
       },
       "UndoOut": {
         "properties": {

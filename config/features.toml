@@ -9,3 +9,6 @@
 # Read your Mana Pool cart and audit it against your collection. Internal: it
 # needs your Mana Pool credentials or a bookmarklet, which we won't ask users for.
 cart_check = false
+# Read your open browser tabs (macOS) and price store product pages against
+# market. Internal: local-machine browser access.
+deals = false

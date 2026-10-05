@@ -68,7 +68,7 @@ export const decksSearch = z.object({
 });
 export type DecksSearch = z.infer<typeof decksSearch>;
 
-const MARKET_SUBJECTS = ['family', 'deck'] as const;
+const MARKET_SUBJECTS = ['family', 'deck', 'deals'] as const;
 const MARKET_TABS = ['products', 'cards'] as const;
 const CARD_PRICE_SORTS = ['savings', 'price', 'set'] as const;
 const PRICE_BASES = ['floor', 'exact'] as const;
