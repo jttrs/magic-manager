@@ -186,3 +186,15 @@ export function PriceMark(p: MarkProps) {
     </svg>
   );
 }
+
+/** A product box under a magnifier (find the products your cards came from). */
+export function FindProductsMark(p: MarkProps) {
+  return (
+    <svg {...base} {...p}>
+      <path d="M3 8.2 9.6 5l6.6 3.2v7.4L9.6 18.8 3 15.6Z" />
+      <path d="M3 8.2l6.6 3.2 6.6-3.2M9.6 11.4v7.4" />
+      <circle cx="17.2" cy="16.6" r="3.2" />
+      <path d="m19.6 19 2.2 2.2" />
+    </svg>
+  );
+}
