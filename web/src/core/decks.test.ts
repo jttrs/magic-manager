@@ -3,7 +3,7 @@ import type { DeckCardOut, DeckSummaryOut, PrintingOut } from './api';
 import { DECK_SECTIONS, deckGuideGroups, deckReviewLines, deckSection, deckTypeCounts, filterDecks, fromDeckCard, groupDecks } from './decks';
 
 const deck = (o: Partial<DeckSummaryOut>): DeckSummaryOut => ({
-  slug: 's', name: 'Deck', format: 'commander', deck_type: 'Commander', state: 'built', origin: 'precon', source: 'Commander Deck', author: null,
+  slug: 's', name: 'Deck', format: 'commander', deck_type: 'Commander', state: 'built', built: 1, loose: 0, slugs: ['s'], origin: 'precon', source: 'Commander Deck', author: null,
   set_code: 'fic', set_name: 'Final Fantasy Commander', released: '2025-06-13', cards: 100, value_usd: 50, pledged_pct: 100, image_uri: null, ...o,
 });
 const printing = (o: Partial<PrintingOut> = {}): PrintingOut => ({
@@ -18,7 +18,7 @@ const card = (o: Partial<DeckCardOut> & { p?: Partial<PrintingOut> } = {}): Deck
 describe('deck list', () => {
   const ds = [
     deck({ slug: 'a', name: 'Counter Blitz' }),
-    deck({ slug: 'b', name: 'Goblins', state: 'deconstructed', set_code: 'blb', set_name: 'Bloomburrow', released: '2024-08-02', format: 'jumpstart', deck_type: 'Jumpstart', origin: 'precon' }),
+    deck({ slug: 'b', name: 'Goblins', state: 'deconstructed', built: 0, loose: 2, set_code: 'blb', set_name: 'Bloomburrow', released: '2024-08-02', format: 'jumpstart', deck_type: 'Jumpstart', origin: 'precon' }),
     deck({ slug: 'c', name: 'Mine', origin: 'custom', set_code: null, set_name: null, released: null, source: null, author: 'me' }),
   ];
   it('filters by state and free text (name, set, author)', () => {

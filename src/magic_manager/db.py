@@ -972,6 +972,12 @@ CREATE TABLE IF NOT EXISTS card_oracle_tags (
 CREATE INDEX IF NOT EXISTS card_oracle_tags_tag_idx ON card_oracle_tags (tag_id);
 """
 
+SCHEMA_V29 = """
+ALTER TABLE decks ADD COLUMN kind TEXT NOT NULL DEFAULT 'deck' CHECK (kind IN ('deck','pool'));
+ALTER TABLE decks ADD COLUMN kind_source TEXT;
+CREATE INDEX IF NOT EXISTS decks_kind_idx ON decks (kind);
+"""
+
 # ---------- migration-authoring convention ----------
 #
 # Always-safe ops in a migration: CREATE TABLE, ALTER TABLE ADD COLUMN,
@@ -1055,6 +1061,7 @@ MIGRATIONS: list[str] = [
     SCHEMA_V26,
     SCHEMA_V27,
     SCHEMA_V28,
+    SCHEMA_V29,
 ]
 CURRENT_VERSION = len(MIGRATIONS)
 

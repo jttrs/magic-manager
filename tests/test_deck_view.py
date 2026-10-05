@@ -117,3 +117,29 @@ def test_deck_type_prefers_format_then_product_type():
     assert deck_type(None, "Enemy Deck") == "Archenemy"
     assert deck_type(None, None) == "Other"
     assert deck_type("canlander", None) == "Canlander"
+
+
+# ---------- kind (deck vs pool) + recipe grouping ----------
+
+def test_summaries_exclude_pools_and_group_copies(world):
+    _deck("pre", [("cmdr", "commander", "nonfoil", 1), ("bolt", "main", "nonfoil", 2)],
+          name="Pre", source_precon_file_name="pre.json", precon_state="deconstructed")
+    _deck("pre-2", [("cmdr", "commander", "nonfoil", 1), ("bolt", "main", "nonfoil", 2)],
+          name="Pre", source_precon_file_name="pre.json", precon_state="built")
+    _deck("lands", [("elf", "main", "nonfoil", 3)], source_precon_file_name="lands.json")
+    decks.set_kind("lands", "pool")
+    out = deck_view.deck_summaries()
+    assert [d["slug"] for d in out] == ["pre-2"]
+    d = out[0]
+    assert (d["built"], d["loose"], d["state"], d["slugs"]) == (1, 1, "built", ["pre-2", "pre"])
+    detail = deck_view.deck_detail("pre")
+    assert detail["deck"]["slug"] == "pre-2" and detail["deck"]["built"] == 1 and detail["deck"]["loose"] == 1
+    assert deck_view.deck_detail("lands")["deck"]["slugs"] == ["lands"]  # pools still viewable
+
+
+def test_non_precon_recipe_counts(world):
+    _deck("cus", [])
+    _deck("dec", [], precon_state="deconstructed")
+    by = {d["slug"]: d for d in deck_view.deck_summaries()}
+    assert (by["cus"]["built"], by["cus"]["loose"], by["cus"]["slugs"]) == (1, 0, ["cus"])
+    assert (by["dec"]["built"], by["dec"]["loose"], by["dec"]["state"]) == (0, 1, "deconstructed")

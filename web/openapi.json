@@ -1662,7 +1662,26 @@
               "built",
               "deconstructed"
             ],
-            "title": "State"
+            "title": "State",
+            "description": "'built' when at least one copy is built, else 'deconstructed'."
+          },
+          "built": {
+            "type": "integer",
+            "title": "Built",
+            "description": "Copies of this recipe kept assembled (cards pledged)."
+          },
+          "loose": {
+            "type": "integer",
+            "title": "Loose",
+            "description": "Copies tracked as loose (recipe kept, cards in the collection)."
+          },
+          "slugs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Slugs",
+            "description": "Every deck row that is a copy of this recipe; `slug` is the representative (a built copy first)."
           },
           "origin": {
             "type": "string",
@@ -1766,6 +1785,9 @@
           "format",
           "deck_type",
           "state",
+          "built",
+          "loose",
+          "slugs",
           "origin",
           "source",
           "author",

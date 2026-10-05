@@ -510,8 +510,28 @@ export type DeckSummaryOut = {
     deck_type: string;
     /**
      * State
+     *
+     * 'built' when at least one copy is built, else 'deconstructed'.
      */
     state: 'built' | 'deconstructed';
+    /**
+     * Built
+     *
+     * Copies of this recipe kept assembled (cards pledged).
+     */
+    built: number;
+    /**
+     * Loose
+     *
+     * Copies tracked as loose (recipe kept, cards in the collection).
+     */
+    loose: number;
+    /**
+     * Slugs
+     *
+     * Every deck row that is a copy of this recipe; `slug` is the representative (a built copy first).
+     */
+    slugs: Array<string>;
     /**
      * Origin
      *

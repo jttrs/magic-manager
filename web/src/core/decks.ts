@@ -19,7 +19,7 @@ export function filterDecks(decks: readonly DeckSummaryOut[], f: DeckFilters): D
   const q = f.q.trim().toLowerCase();
   return decks.filter(
     (d) =>
-      f.states.includes(d.state) &&
+      ((f.states.includes('built') && d.built > 0) || (f.states.includes('deconstructed') && d.loose > 0)) &&
       (!f.types?.length || f.types.includes(d.deck_type)) &&
       (!q || [d.name, d.set_name, d.set_code, d.source, d.author, d.deck_type].some((v) => v?.toLowerCase().includes(q))),
   );

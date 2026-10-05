@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 
-from . import addcards, db, inventory, mtgjson, scryfall
+from . import addcards, db, decks, inventory, mtgjson, scryfall
 from .decks import _BOARD_ORDER_SQL
 
 # Per-deck aggregates over the CURRENT version's non-token rows, set-based.
@@ -33,7 +33,7 @@ WITH rows_ AS (
     SELECT deck_id, SUM(count) AS pledged FROM deck_assignments GROUP BY deck_id
 )
 SELECT d.deck_id, d.slug, d.name, d.format, d.precon_state, d.source_precon_file_name,
-       d.source, d.author, d.source_set_code,
+       d.source, d.author, d.source_set_code, d.kind,
        COALESCE(agg.cards, 0) AS cards, COALESCE(agg.value, 0) AS value,
        COALESCE(pl.pledged, 0) AS pledged, img.image_uri
 FROM decks d
@@ -92,12 +92,12 @@ def deck_type(fmt: str | None, product_type: str | None) -> str:
     return _PRODUCT_TYPE_LABEL.get(product_type or "", "Other")
 
 
-def _summaries(slug: str | None = None) -> list[dict]:
-    where = "WHERE d.slug = ?" if slug is not None else ""
-    sql = _SUMMARY_SQL.format(where=where, dwhere=where)
-    params = (slug, slug) if slug is not None else ()
+def _summaries(where: str = "", params: tuple = ()) -> list[dict]:
+    """One summary per deck ROW matching ``where`` (a SQL predicate on ``d``)."""
+    clause = f"WHERE {where}" if where else ""
+    sql = _SUMMARY_SQL.format(where=clause, dwhere=clause)
     with db.connect() as conn:
-        rows = conn.execute(sql, params).fetchall()
+        rows = conn.execute(sql, params + params).fetchall()
     precons, sets = _precon_index(), _sets_index()
     out = []
     for r in rows:
@@ -124,12 +124,34 @@ def _summaries(slug: str | None = None) -> list[dict]:
             "cards": cards, "value_usd": round(float(r["value"]), 2),
             "pledged_pct": round(100.0 * min(1, r["pledged"] / cards), 1) if cards else 0.0,
             "image_uri": r["image_uri"],
+            "_kind": r["kind"], "_recipe": fn or r["slug"],
         })
     return out
 
 
+def _group(rows: list[dict]) -> list[dict]:
+    """Collapse deck rows into recipes: precon copies of one fileName become one
+    summary (built/loose counts, every copy's slug); the representative is the
+    first copy, built ones first then by slug. Recipe facts are identical across
+    copies, so every other field comes from the representative."""
+    groups: dict[str, list[dict]] = {}
+    for r in sorted(rows, key=lambda r: (r["state"] != "built", r["slug"])):
+        groups.setdefault(r["_recipe"], []).append(r)
+    out = []
+    for copies in groups.values():
+        built = sum(1 for c in copies if c["state"] == "built")
+        rep = {k: v for k, v in copies[0].items() if not k.startswith("_")}
+        rep.update(built=built, loose=len(copies) - built, slugs=[c["slug"] for c in copies],
+                   state="built" if built else "deconstructed")
+        out.append(rep)
+    return out
+
+
 def deck_summaries() -> list[dict]:
-    out = _summaries()
+    """Playable recipes only (kind='deck'), precon copies grouped."""
+    if decks.unclassified_precon_count():
+        decks.backfill_kinds()  # lazy one-off: rows predating V29 have no kind yet
+    out = _group([r for r in _summaries("d.kind = 'deck'")])
     out.sort(key=lambda d: d["name"])
     out.sort(key=lambda d: d["released"] or "", reverse=True)
     # released desc with nulls last (stable: name order kept within ties)
@@ -138,9 +160,14 @@ def deck_summaries() -> list[dict]:
 
 
 def deck_detail(slug: str) -> dict:
-    found = _summaries(slug)
-    if not found:
+    with db.connect() as conn:
+        row = conn.execute("SELECT source_precon_file_name FROM decks WHERE slug = ?", (slug,)).fetchone()
+    if row is None:
         raise LookupError(f"deck with slug {slug!r} not found")
+    fn = row["source_precon_file_name"]
+    # The whole recipe group (any copy, pool or deck), so the inspector shows ×built/×loose.
+    found = _group(_summaries("d.source_precon_file_name = ?", (fn,)) if fn
+                   else _summaries("d.slug = ?", (slug,)))
     with db.connect() as conn:
         deck_id = conn.execute("SELECT deck_id FROM decks WHERE slug = ?", (slug,)).fetchone()[0]
         rows = conn.execute(

@@ -33,9 +33,15 @@ export function DecksView() {
   const shown = useMemo(() => (decks.data ? filterDecks(decks.data, { q: search.q, states: search.states, types: search.types }) : []), [decks.data, search.q, search.states, search.types]);
   const typeOptions = useMemo(() => (decks.data ? deckTypeCounts(decks.data) : []), [decks.data]);
   const groups = useMemo(() => groupDecks(shown, search.group), [shown, search.group]);
+  // Recipes with at least one built / loose copy (a recipe can be both).
   const counts = useMemo(() => {
-    const c = { built: 0, deconstructed: 0 };
-    for (const d of decks.data ?? []) c[d.state]++;
+    const c = { built: 0, deconstructed: 0, builtCopies: 0, looseCopies: 0 };
+    for (const d of decks.data ?? []) {
+      if (d.built) c.built++;
+      if (d.loose) c.deconstructed++;
+      c.builtCopies += d.built;
+      c.looseCopies += d.loose;
+    }
     return c;
   }, [decks.data]);
 
@@ -85,7 +91,7 @@ export function DecksView() {
 
   return (
     <ViewLayout label="Deck controls" summary={`${fmtInt(shown.length)} decks · grouped by ${DECK_GROUP_LABEL[search.group].toLowerCase()}`} sidebar={sidebar}>
-      <GuideSheet title="Decks" summary={decks.data ? `${fmtInt(decks.data.length)} decks · ${fmtInt(counts.built)} built, ${fmtInt(counts.deconstructed)} loose` : undefined}>
+      <GuideSheet title="Decks" summary={decks.data ? `${fmtInt(decks.data.length)} deck recipes · ${fmtInt(counts.builtCopies)} built, ${fmtInt(counts.looseCopies)} loose copies` : undefined}>
         {body}
       </GuideSheet>
     </ViewLayout>
@@ -111,7 +117,7 @@ function DeckList({ groups, total, active, onPick }: { groups: ReturnType<typeof
   const navRef = useRef<HTMLElement>(null);
   const flat = groups.flatMap((g) => g.decks.map((d) => d.slug));
   const [focusSlug, setFocusSlug] = useState<string | undefined>(undefined);
-  const tabSlug = (focusSlug && flat.includes(focusSlug) ? focusSlug : undefined) ?? (active && flat.includes(active) ? active : flat[0]);
+  const tabSlug = (focusSlug && flat.includes(focusSlug) ? focusSlug : undefined) ?? (groups.flatMap((g) => g.decks).find((d) => active && d.slugs.includes(active))?.slug ?? flat[0]);
   const move = (e: KeyboardEvent<HTMLElement>) => {
     const i = flat.indexOf(tabSlug ?? '');
     const next = e.key === 'ArrowDown' ? i + 1 : e.key === 'ArrowUp' ? i - 1 : e.key === 'Home' ? 0 : e.key === 'End' ? flat.length - 1 : null;
@@ -132,7 +138,7 @@ function DeckList({ groups, total, active, onPick }: { groups: ReturnType<typeof
           </h2>
           <ul>
             {g.decks.map((d) => (
-              <li key={d.slug}><DeckRow d={d} active={d.slug === active} tabbable={d.slug === tabSlug} onFocus={() => setFocusSlug(d.slug)} onPick={() => onPick(d.slug)} /></li>
+              <li key={d.slug}><DeckRow d={d} active={!!active && d.slugs.includes(active)} tabbable={d.slug === tabSlug} onFocus={() => setFocusSlug(d.slug)} onPick={() => onPick(d.slug)} /></li>
             ))}
           </ul>
         </section>
@@ -165,9 +171,19 @@ function DeckRow({ d, active, tabbable, onFocus, onPick }: { d: DeckSummaryOut; 
       </span>
       <span className="flex shrink-0 flex-col items-end gap-0.5 text-xs tabular">
         <span className="text-ink">{fmtUsd(d.value_usd)}</span>
-        <span className={`voice-condensed uppercase tracking-[0.06em] ${d.state === 'built' ? 'text-accent-ink' : 'text-ink-muted'}`}>{d.state === 'built' ? 'Built' : 'Loose'}</span>
+        <CopyCounts built={d.built} loose={d.loose} />
       </span>
     </button>
+  );
+}
+
+/** "×1 built · ×2 loose" — copies of the recipe, collection-style counters. */
+function CopyCounts({ built, loose }: { built: number; loose: number }) {
+  return (
+    <span className="flex gap-1.5 voice-condensed uppercase tracking-[0.06em]" aria-label={`${built} built, ${loose} loose`}>
+      {built > 0 && <span className="text-accent-ink">×{built} built</span>}
+      {loose > 0 && <span className="text-ink-muted">×{loose} loose</span>}
+    </span>
   );
 }
 
@@ -196,7 +212,7 @@ function DeckInspector({ slug, view, onView, onBack }: { slug: string; view: 'gr
           <p className="mt-1 text-sm tabular text-ink-muted">
             {[deck.deck_type, deck.set_name ?? deck.set_code?.toUpperCase(), deck.released?.slice(0, 4), deck.source !== deck.deck_type && deck.source, deck.author && `by ${deck.author}`].filter(Boolean).join(' · ')}
             {' · '}
-            {fmtInt(deck.cards)} cards · {fmtUsd(deck.value_usd)} · {deck.state === 'built' ? `built, ${Math.round(deck.pledged_pct)}% pledged` : 'loose'}
+            {fmtInt(deck.cards)} cards · {fmtUsd(deck.value_usd)} · {[deck.built && `×${deck.built} built (${Math.round(deck.pledged_pct)}% pledged)`, deck.loose && `×${deck.loose} loose`].filter(Boolean).join(', ')}
             <span className="ml-1 inline-flex align-middle">
               <InfoTip label="What do built, pledged and free mean?" tone="paper">
                 <b>Built</b>: you keep this deck assembled; its cards are <b>pledged</b> to it, so they aren’t counted as free. <b>Loose</b>: you keep the recipe, but the cards sit in your collection. <b>Free to use</b>: copies you own that no built deck has pledged.

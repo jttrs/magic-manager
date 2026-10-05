@@ -1,4 +1,5 @@
-"""Decks surface of the typed API: every tracked deck (recipe) with its source and
+"""Decks surface of the typed API: every playable deck recipe (card pools such as
+land packs, scene boxes and most Secret Lair drops are excluded) with its source and
 ownership, and one deck's cards with exact printings + owned / pledged / free.
 
 Adapts :mod:`magic_manager.deck_view` (the engine). Card printings reuse the
@@ -20,7 +21,10 @@ class DeckSummaryOut(BaseModel):
     name: str
     format: str | None
     deck_type: str = Field(description="What kind of deck: the game format (Commander, Standard, Pauper, Jumpstart…), else the precon product family (Starter / intro, Secret Lair, Land pack…).")
-    state: Literal["built", "deconstructed"]
+    state: Literal["built", "deconstructed"] = Field(description="'built' when at least one copy is built, else 'deconstructed'.")
+    built: int = Field(description="Copies of this recipe kept assembled (cards pledged).")
+    loose: int = Field(description="Copies tracked as loose (recipe kept, cards in the collection).")
+    slugs: list[str] = Field(description="Every deck row that is a copy of this recipe; `slug` is the representative (a built copy first).")
     origin: Literal["precon", "import", "custom"] = Field(description="precon = MTGJSON product; import = deck-builder URL; custom = hand-built.")
     source: str | None = Field(description="Deck builder for imports (moxfield, archidekt…); precon product type for precons.")
     author: str | None

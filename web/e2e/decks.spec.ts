@@ -9,18 +9,18 @@ test('deck list groups by set, filters by state and text; the nav has Decks', as
   const list = page.getByRole('navigation', { name: 'Decks' });
   await expect(list.getByRole('button')).toHaveCount(fixtures.decks.length);
   await page.getByRole('toolbar', { name: 'Decks' }).getByRole('button', { name: /^Loose/ }).click();
-  await expect(list.getByRole('button')).toHaveCount(fixtures.decks.filter((d) => d.state === 'built').length);
+  await expect(list.getByRole('button')).toHaveCount(fixtures.decks.filter((d) => d.built > 0).length);
   await page.getByRole('searchbox', { name: 'Deck, set or author' }).fill('avengers');
   await expect(list.getByRole('button')).toHaveCount(1);
   await page.getByRole('searchbox', { name: 'Deck, set or author' }).fill('');
   await page.getByRole('button', { name: /^Group decks by/ }).click();
   await page.getByRole('menuitemradio', { name: 'Deck type' }).click();
   await expect(page).toHaveURL(/group=type/);
-  await expect(list.getByRole('heading', { name: /^Jumpstart/ })).toBeVisible();
+  await expect(list.getByRole('heading', { name: /^Commander/ })).toBeVisible();
   await page.getByRole('button', { name: /^Deck type/ }).click();
   await page.getByRole('checkbox', { name: /^Commander/ }).check();
   await page.keyboard.press('Escape');
-  await expect(list.getByRole('button')).toHaveCount(fixtures.decks.filter((d) => d.state === 'built' && d.deck_type === 'Commander').length);
+  await expect(list.getByRole('button')).toHaveCount(fixtures.decks.filter((d) => d.built > 0 && d.deck_type === 'Commander').length);
 });
 
 test('inspector: sections by board then type, card facts, deep link', async ({ page }) => {
@@ -84,4 +84,11 @@ test('deck list is one tab stop with arrow-key navigation', async ({ page }) => 
   await expect(rows.nth(1)).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/deck=/);
+});
+
+test('one row per recipe with built / loose copy counters', async ({ page }) => {
+  await page.goto('/decks');
+  const d = fixtures.decks.find((x) => x.built && x.loose) ?? fixtures.decks[0];
+  const row = page.getByRole('navigation', { name: 'Decks' }).getByRole('button', { name: new RegExp(d.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) }).first();
+  await expect(row.getByLabel(`${d.built} built, ${d.loose} loose`)).toBeVisible();
 });
