@@ -96,3 +96,9 @@ export function deckBuyItems(lines: DeckLineOut[], at: MarketSearch['buyAt']) {
     .filter((l) => l.buy > 0)
     .map((l) => (at === 'floor' ? { scryfall_id: l.floor_scryfall_id, finish: 'nonfoil' as const, qty: l.buy } : { scryfall_id: l.scryfall_id, finish: l.finish as 'nonfoil' | 'foil', qty: l.buy }));
 }
+
+/** "11 of 100 cards priced" when some fixed cards have no price at their exact printing. */
+export function partialNote(v: ProductValueOut | undefined): string | null {
+  if (!v || !v.unpriced_cards || !v.total_cards) return null;
+  return `${v.total_cards - v.unpriced_cards} of ${v.total_cards} cards have a price at this printing — the rest count as unknown, so the real value is higher`;
+}

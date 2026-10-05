@@ -5376,6 +5376,17 @@
             ],
             "title": "Coverage"
           },
+          "unpriced_cards": {
+            "type": "integer",
+            "title": "Unpriced Cards",
+            "description": "Fixed cards with no price at their exact printing (contents value undercounts).",
+            "default": 0
+          },
+          "total_cards": {
+            "type": "integer",
+            "title": "Total Cards",
+            "default": 0
+          },
           "notes": {
             "items": {
               "type": "string"

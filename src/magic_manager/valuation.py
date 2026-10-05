@@ -57,7 +57,8 @@ def _floor_sum(needs, *, floors_cache: dict) -> tuple[float | None, int, int]:
     """Σ cheapest-anywhere floor over a list of ``construct.CardNeed``.
 
     For each need, use the finish-appropriate floor (``min_usd`` / ``min_usd_foil``)
-    from the cheapest printing of that card anywhere, ×qty. Floors are fetched in
+    from the cheapest printing of that card anywhere, ×qty — capped at the need's
+    own (exact) price, since that printing is itself one of the card's printings. Floors are fetched in
     ONE batched pass (``sld.card_floors_many`` — chunked OR-search, not one call
     per card) and memoized in ``floors_cache`` across the run. Returns
     ``(total_or_None, n_priced, n_unpriced)``; total is None when nothing priced."""
@@ -81,6 +82,12 @@ def _floor_sum(needs, *, floors_cache: dict) -> tuple[float | None, int, int]:
             continue
         nf_floor, foil_floor = floors_cache.get(oid, (None, None))
         floor = foil_floor if n.finish == "foil" else nf_floor
+        # The product's own printing is one of the card's printings, so the floor
+        # can never exceed it. The live floor search and the local exact price are
+        # read at different times; without this clamp a single-printing card whose
+        # price rose since the last sync showed a floor ABOVE its exact price.
+        if n.unit_usd is not None and (floor is None or floor > n.unit_usd):
+            floor = n.unit_usd
         if floor is None:
             n_unpriced += n.qty
             continue
@@ -152,6 +159,14 @@ def value_sealed_product(
         )
 
     exact = round(sum(r.unit_usd * r.need_qty for r in priced), 2) if priced else None
+    total_cards = sum(r.need_qty for r in rows)
+    unpriced_cards = total_cards - sum(r.need_qty for r in priced)
+    if unpriced_cards:
+        # e.g. a Collector's Edition deck: foil versions Scryfall has no foil
+        # price for. Unknown is not $0 — say so instead of silently undercounting.
+        diagnostics.append(
+            f"{unpriced_cards} of {total_cards} cards have no price at their exact "
+            f"printing — col 3 (and the contents value) count only the rest")
     floor_total = None
     if floors:
         floor_total, _fp, _fu = _floor_sum(exp.needs, floors_cache=floors_cache)
@@ -177,6 +192,7 @@ def value_sealed_product(
         sealed_market=totals.market_whole, sealed_market_source=source,
         exact_singles=exact, floor_singles=floor_total,
         coverage=totals.coverage, diagnostics=diagnostics, intrinsic=totals.intrinsic,
+        unpriced_cards=unpriced_cards, total_cards=total_cards,
     )
 
 
