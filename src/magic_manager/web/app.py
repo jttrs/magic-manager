@@ -21,7 +21,7 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
-from .. import api, edhrec as edhrec_engine, scryfall
+from .. import api, deck_edit, edhrec as edhrec_engine, scryfall
 from ..api import cards as cards_api, collection as collection_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api
 from .runtime import TERMINAL, JobManager
 
@@ -159,6 +159,55 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         try:
             return decks_api.detail(slug)
         except LookupError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+
+    def _deck_call(fn, *args):
+        try:
+            return fn(*args)
+        except LookupError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+        except deck_edit.ReadOnlyDeck as e:
+            raise HTTPException(status_code=403, detail=str(e)) from e
+        except deck_edit.StaleDraft as e:
+            raise HTTPException(status_code=409, detail=str(e)) from e
+        except deck_edit.Shortfall as e:
+            raise HTTPException(status_code=409, detail=str(e)) from e
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e)) from e
+
+    @app.post("/api/decks", response_model=decks_api.ActionOut, status_code=201, tags=["decks"])
+    def deck_create(body: decks_api.NewDeckIn):
+        return _deck_call(decks_api.create, body)
+
+    @app.get("/api/decks/{slug}/build-plan", response_model=decks_api.BuildPlanOut, tags=["decks"])
+    def deck_build_plan(slug: str):
+        return _deck_call(decks_api.build_plan, slug)
+
+    @app.post("/api/decks/{slug}/build", response_model=decks_api.ActionOut, tags=["decks"])
+    def deck_build(slug: str, body: decks_api.BuildIn):
+        return _deck_call(decks_api.build, slug, body)
+
+    @app.post("/api/decks/{slug}/break-down", response_model=decks_api.ActionOut, tags=["decks"])
+    def deck_break_down(slug: str):
+        return _deck_call(decks_api.break_down, slug)
+
+    @app.post("/api/decks/{slug}/copy", response_model=decks_api.ActionOut, status_code=201, tags=["decks"])
+    def deck_copy(slug: str, body: decks_api.CopyIn):
+        return _deck_call(decks_api.copy, slug, body)
+
+    @app.post("/api/decks/{slug}/preview", response_model=decks_api.PreviewOut, tags=["decks"])
+    def deck_preview(slug: str, body: decks_api.DraftIn):
+        return _deck_call(decks_api.preview, slug, body)
+
+    @app.put("/api/decks/{slug}", response_model=decks_api.SaveOut, tags=["decks"])
+    def deck_save(slug: str, body: decks_api.SaveIn):
+        return _deck_call(decks_api.save, slug, body)
+
+    @app.get("/api/decks-suggestions", response_model=decks_api.SuggestionsOut, tags=["decks"])
+    def deck_suggestions(commander: Annotated[str, Query(min_length=1)]):
+        try:
+            return decks_api.suggestions(commander)
+        except edhrec_engine.EdhrecError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
     # ---------- cards ----------

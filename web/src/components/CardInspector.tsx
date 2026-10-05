@@ -112,10 +112,10 @@ function OutLink({ href, label, Mark }: { href: string; label: string; Mark: Com
       target="_blank"
       rel="noreferrer"
       title={`Open on ${label}`}
-      className="group inline-flex min-h-8 cursor-pointer items-center gap-1.5 rounded-sm px-2 text-md voice-semi font-medium text-accent-ink no-underline transition-colors duration-200 ease-guide hover:bg-paper-sunk focus-visible:bg-paper-sunk -ml-2"
+      className="-ml-2 inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-sm px-2 text-md voice-semi font-medium text-accent-ink no-underline transition-colors duration-150 ease-guide hover:bg-paper-sunk focus-visible:bg-paper-sunk"
     >
-      <Mark className="size-[1.15rem] transition-transform duration-300 ease-guide group-hover:-translate-y-px" />
-      <span className="underline-offset-4 group-hover:underline">{label}</span>
+      <Mark className="size-[1.15rem]" />
+      {label}
       <span className="sr-only">(opens in a new tab)</span>
     </a>
   );

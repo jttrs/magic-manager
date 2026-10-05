@@ -55,6 +55,12 @@ const decksRoute = createRoute({
   component: lazyRouteComponent(() => import('../views/DecksView'), 'DecksView'),
 });
 
+const deckEditRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/decks/$slug/edit',
+  component: lazyRouteComponent(() => import('../views/DeckEditorView'), 'DeckEditorView'),
+});
+
 const jobsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/jobs',
@@ -62,7 +68,7 @@ const jobsRoute = createRoute({
 });
 
 export const router = createRouter({
-  routeTree: rootRoute.addChildren([indexRoute, collectionRoute, legacySetsRoute, decksRoute, compareRoute, jobsRoute]),
+  routeTree: rootRoute.addChildren([indexRoute, collectionRoute, legacySetsRoute, decksRoute, deckEditRoute, compareRoute, jobsRoute]),
   defaultPreload: 'intent',
 });
 

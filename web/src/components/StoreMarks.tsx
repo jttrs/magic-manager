@@ -74,3 +74,72 @@ export function ScryfallMark(p: MarkProps) {
     </svg>
   );
 }
+
+/** Deck actions share one card silhouette so they read as a family. */
+function CardBody({ maskId, x = 3.2 }: { maskId?: string; x?: number }) {
+  return <rect x={x} y="2.6" width="12.4" height="17.2" rx="1.6" mask={maskId ? `url(#${maskId})` : undefined} />;
+}
+
+/** A card with a pencil across its corner (edit the deck). */
+export function EditDeckMark(p: MarkProps) {
+  const id = useId();
+  return (
+    <svg {...base} {...p}>
+      <mask id={id}>
+        <rect width="24" height="24" fill="#fff" />
+        <path d="M21.6 9.4 11.4 19.6l-3.6 1.2 1.2-3.6L19.2 7Z" fill="#000" stroke="#000" strokeWidth="3.4" />
+      </mask>
+      <CardBody maskId={id} />
+      <path d="M20.6 8.4 11 18l-2.6.9.9-2.6L18.9 6.7a1.2 1.2 0 0 1 1.7 1.7Z" />
+      <path d="M17.6 8l1.7 1.7" />
+    </svg>
+  );
+}
+
+/** Two offset cards (copy the recipe). */
+export function CopyDeckMark(p: MarkProps) {
+  const id = useId();
+  return (
+    <svg {...base} {...p}>
+      <mask id={id}>
+        <rect width="24" height="24" fill="#fff" />
+        <rect x="7.4" y="5.6" width="13.6" height="18.4" rx="2.4" fill="#000" />
+      </mask>
+      <rect x="3" y="2.4" width="11.6" height="15.8" rx="1.6" mask={`url(#${id})`} />
+      <rect x="8.4" y="6.6" width="11.6" height="15.8" rx="1.6" />
+    </svg>
+  );
+}
+
+/** A deck box with cards dropping in (build the deck from your cards). */
+export function BuildDeckMark(p: MarkProps) {
+  return (
+    <svg {...base} {...p}>
+      <path d="M4 10.4h16v9.4a1.6 1.6 0 0 1-1.6 1.6H5.6A1.6 1.6 0 0 1 4 19.8Z" />
+      <path d="M4 14.2h16" />
+      <path d="M12 2.6v6.2M9.4 6.4 12 9l2.6-2.6" />
+    </svg>
+  );
+}
+
+/** A deck box with cards lifting out (break the deck down). */
+export function BreakDownMark(p: MarkProps) {
+  return (
+    <svg {...base} {...p}>
+      <path d="M4 10.4h16v9.4a1.6 1.6 0 0 1-1.6 1.6H5.6A1.6 1.6 0 0 1 4 19.8Z" />
+      <path d="M4 14.2h16" />
+      <path d="M12 8.8V2.6M9.4 5.2 12 2.6l2.6 2.6" />
+    </svg>
+  );
+}
+
+/** A deck box with a plus (start a new deck). */
+export function NewDeckMark(p: MarkProps) {
+  return (
+    <svg {...base} {...p}>
+      <path d="M3.4 8.6h12v11.2a1.6 1.6 0 0 1-1.6 1.6H5a1.6 1.6 0 0 1-1.6-1.6Z" />
+      <path d="M3.4 12.4h12" />
+      <path d="M18.6 2.6v7M15.1 6.1h7" />
+    </svg>
+  );
+}

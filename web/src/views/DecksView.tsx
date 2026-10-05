@@ -8,15 +8,19 @@ import { useSelection } from '../app/selection';
 import { AddCardsDialog, type AddCardsSeed } from '../components/addcards/AddCardsDialog';
 import { ViewLayout } from '../components/AppShell';
 import { Chevron } from '../components/Chevron';
-import { Segmented, SegmentedToggles, SelectField, SideSection, TextField } from '../components/Sidebar';
+import { Segmented, SelectField, SideSection, TextField } from '../components/Sidebar';
 import { InfoTip } from '../components/InfoTip';
 import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../components/States';
-import { AddCardMark } from '../components/StoreMarks';
+import { AddCardMark, NewDeckMark } from '../components/StoreMarks';
+import { GhostAction } from '../components/GhostAction';
+import { IconAction } from '../components/IconAction';
+import { DeckActions } from './decks/DeckActions';
+import { NewDeckDialog } from './decks/NewDeckDialog';
 import { VirtualGuide } from '../components/VirtualGuide';
 import type { DeckSummaryOut } from '../core/api';
 import { DECK_GROUP_LABEL, DECK_GROUPS, deckGuideGroups, deckReviewLines, deckTypeCounts, filterDecks, groupDecks, type DeckGroupBy } from '../core/decks';
 import { MultiSelect } from '../components/MultiSelect';
-import { fmtInt, fmtUsd } from '../core/format';
+import { fmtCount, fmtInt, fmtUsd } from '../core/format';
 import type { DecksSearch } from '../core/search';
 
 const route = getRouteApi('/decks');
@@ -30,20 +34,10 @@ export function DecksView() {
   const decks = useQuery(decksQuery());
   const narrow = useMediaQuery('(max-width: 47.99rem)');
 
-  const shown = useMemo(() => (decks.data ? filterDecks(decks.data, { q: search.q, states: search.states, types: search.types }) : []), [decks.data, search.q, search.states, search.types]);
+  const shown = useMemo(() => (decks.data ? filterDecks(decks.data, { q: search.q, builtOnly: search.built, types: search.types }) : []), [decks.data, search.q, search.built, search.types]);
   const typeOptions = useMemo(() => (decks.data ? deckTypeCounts(decks.data) : []), [decks.data]);
   const groups = useMemo(() => groupDecks(shown, search.group), [shown, search.group]);
-  // Recipes with at least one built / loose copy (a recipe can be both).
-  const counts = useMemo(() => {
-    const c = { built: 0, deconstructed: 0, builtCopies: 0, looseCopies: 0 };
-    for (const d of decks.data ?? []) {
-      if (d.built) c.built++;
-      if (d.loose) c.deconstructed++;
-      c.builtCopies += d.built;
-      c.looseCopies += d.loose;
-    }
-    return c;
-  }, [decks.data]);
+  const builtCount = useMemo(() => (decks.data ?? []).filter((d) => d.built > 0).length, [decks.data]);
 
   const sidebar = (
     <>
@@ -51,14 +45,14 @@ export function DecksView() {
         <TextField name="q" label="Deck, set or author" value={search.q} placeholder="e.g. Counter Blitz, fic…" onChange={(q) => set({ q })} />
       </SideSection>
       <SideSection title="Show">
-        <SegmentedToggles
+        <Segmented
           label="Decks"
           showLabel
-          value={[...search.states]}
-          onChange={(states) => set({ states: (['built', 'deconstructed'] as const).filter((s) => states.includes(s)) })}
+          value={search.built ? 'built' : 'all'}
+          onChange={(v) => set({ built: v === 'built' })}
           options={[
-            { value: 'built', label: 'Built', count: counts.built },
-            { value: 'deconstructed', label: 'Loose', count: counts.deconstructed },
+            { value: 'all', label: 'All' },
+            { value: 'built', label: `Built · ${fmtInt(builtCount)}` },
           ]}
         />
         <MultiSelect
@@ -91,7 +85,11 @@ export function DecksView() {
 
   return (
     <ViewLayout label="Deck controls" summary={`${fmtInt(shown.length)} decks · grouped by ${DECK_GROUP_LABEL[search.group].toLowerCase()}`} sidebar={sidebar}>
-      <GuideSheet title="Decks" summary={decks.data ? `${fmtInt(decks.data.length)} deck recipes · ${fmtInt(counts.builtCopies)} built, ${fmtInt(counts.looseCopies)} loose copies` : undefined}>
+      <GuideSheet
+        title="Decks"
+        summary={decks.data ? `${fmtInt(decks.data.length)} decks · ${fmtInt(builtCount)} built` : undefined}
+        actions={<NewDeckDialog trigger={<GhostAction Icon={NewDeckMark} label="New deck" />} />}
+      >
         {body}
       </GuideSheet>
     </ViewLayout>
@@ -127,7 +125,7 @@ function DeckList({ groups, total, active, onPick }: { groups: ReturnType<typeof
     setFocusSlug(slug);
     navRef.current?.querySelector<HTMLButtonElement>(`[data-slug="${CSS.escape(slug)}"]`)?.focus();
   };
-  if (!total) return <EmptyNote title="No decks match">Clear the search or show both built and loose decks.</EmptyNote>;
+  if (!total) return <EmptyNote title="No decks match">Clear the search, show all decks, or pick more deck types.</EmptyNote>;
   return (
     <nav ref={navRef} aria-label="Decks" onKeyDown={move} className="h-full min-h-0 overflow-y-auto overscroll-contain px-4 pb-6 [scrollbar-gutter:stable]">
       {groups.map((g) => (
@@ -171,20 +169,15 @@ function DeckRow({ d, active, tabbable, onFocus, onPick }: { d: DeckSummaryOut; 
       </span>
       <span className="flex shrink-0 flex-col items-end gap-0.5 text-xs tabular">
         <span className="text-ink">{fmtUsd(d.value_usd)}</span>
-        <CopyCounts built={d.built} loose={d.loose} />
+        {d.built > 0 && <BuiltCount built={d.built} />}
       </span>
     </button>
   );
 }
 
-/** "×1 built · ×2 loose" — copies of the recipe, collection-style counters. */
-function CopyCounts({ built, loose }: { built: number; loose: number }) {
-  return (
-    <span className="flex gap-1.5 voice-condensed uppercase tracking-[0.06em]" aria-label={`${built} built, ${loose} loose`}>
-      {built > 0 && <span className="text-accent-ink">×{built} built</span>}
-      {loose > 0 && <span className="text-ink-muted">×{loose} loose</span>}
-    </span>
-  );
+/** "×1 built" — copies of the recipe you keep assembled. */
+function BuiltCount({ built }: { built: number }) {
+  return <span className="voice-condensed uppercase tracking-[0.06em] text-accent-ink" aria-label={`${built} built`}>×{built} built</span>;
 }
 
 function DeckInspector({ slug, view, onView, onBack }: { slug: string; view: 'grid' | 'list'; onView?: (v: 'grid' | 'list') => void; onBack?: () => void }) {
@@ -212,22 +205,25 @@ function DeckInspector({ slug, view, onView, onBack }: { slug: string; view: 'gr
           <p className="mt-1 text-sm tabular text-ink-muted">
             {[deck.deck_type, deck.set_name ?? deck.set_code?.toUpperCase(), deck.released?.slice(0, 4), deck.source !== deck.deck_type && deck.source, deck.author && `by ${deck.author}`].filter(Boolean).join(' · ')}
             {' · '}
-            {fmtInt(deck.cards)} cards · {fmtUsd(deck.value_usd)} · {[deck.built && `×${deck.built} built (${Math.round(deck.pledged_pct)}% pledged)`, deck.loose && `×${deck.loose} loose`].filter(Boolean).join(', ')}
+            {fmtCount(deck.cards, 'card')} · {fmtUsd(deck.value_usd)}
+            {deck.built > 0 && ` · ×${deck.built} built (${Math.round(deck.pledged_pct)}% pledged)`}
             <span className="ml-1 inline-flex align-middle">
               <InfoTip label="What do built, pledged and free mean?" tone="paper">
-                <b>Built</b>: you keep this deck assembled; its cards are <b>pledged</b> to it, so they aren’t counted as free. <b>Loose</b>: you keep the recipe, but the cards sit in your collection. <b>Free to use</b>: copies you own that no built deck has pledged.
+                <b>Built</b>: you keep this deck assembled; its cards are <b>pledged</b> to it, so they aren’t counted as free. <b>Free to use</b>: copies you own that no built deck has pledged. Breaking a deck down returns its cards to your collection.
               </InfoTip>
             </span>
           </p>
         </div>
-        <span className="ml-auto flex flex-wrap items-center gap-x-1">
+        <span className="ml-auto flex flex-wrap items-center justify-end gap-x-2">
           {marked > 0 && (
-            <>
-              <GhostAction onClick={() => setSeed({ name: deck.name, lines: deckReviewLines(cards, selected) })} label={`Review ${fmtInt(marked)} marked to add`} />
-              <button type="button" onClick={clear} className="cursor-pointer px-1 text-sm text-ink-muted underline hover:text-ink">Clear</button>
-            </>
+            <span className="flex items-center gap-1 text-sm text-ink-muted">
+              <IconAction label={`Add ${fmtCount(marked, 'marked card')} to collection`} Icon={AddCardMark} onClick={() => setSeed({ name: deck.name, lines: deckReviewLines(cards, selected) })} />
+              {fmtInt(marked)} marked
+              <button type="button" onClick={clear} className="cursor-pointer px-1 underline hover:text-ink">Clear</button>
+              <span aria-hidden="true" className="mx-1 h-5 w-px bg-rule" />
+            </span>
           )}
-          <GhostAction onClick={() => setSeed({ name: deck.name, lines: deckReviewLines(cards) })} label="Review deck to add" />
+          <DeckActions detail={q.data} slug={slug} onAddToCollection={() => setSeed({ name: deck.name, lines: deckReviewLines(cards) })} />
           {onView && (
             <button type="button" onClick={() => onView(view === 'grid' ? 'list' : 'grid')} className="cursor-pointer px-2 text-sm text-ink-muted underline hover:text-ink">
               {view === 'grid' ? 'List view' : 'Card view'}
@@ -240,18 +236,5 @@ function DeckInspector({ slug, view, onView, onBack }: { slug: string; view: 'gr
       </div>
       <AddCardsDialog seed={seed} onSeedDone={() => setSeed(null)} />
     </section>
-  );
-}
-
-function GhostAction({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="group inline-flex min-h-8 cursor-pointer items-center gap-1.5 rounded-sm px-2 text-md voice-semi font-medium text-accent-ink transition-colors duration-200 ease-guide hover:bg-paper-sunk focus-visible:bg-paper-sunk"
-    >
-      <AddCardMark className="size-5 transition-transform duration-300 ease-guide group-hover:-translate-y-0.5" />
-      <span className="underline-offset-4 group-hover:underline">{label}</span>
-    </button>
   );
 }

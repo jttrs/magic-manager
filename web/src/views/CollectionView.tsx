@@ -1,12 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { getRouteApi, useNavigate } from '@tanstack/react-router';
-import { useEffect, useMemo, type ComponentProps } from 'react';
+import { useEffect, useMemo } from 'react';
 import { collectionQuery, familiesQuery } from '../app/queries';
 import { useSelection } from '../app/selection';
 import { ViewLayout } from '../components/AppShell';
 import { AddCardsDialog } from '../components/addcards/AddCardsDialog';
 import { CopyTargets } from '../components/CopyButton';
 import { AddCardMark, CardKingdomMark, ManaPoolMark, TcgplayerMark } from '../components/StoreMarks';
+import { GhostAction } from '../components/GhostAction';
 import { MultiSelect } from '../components/MultiSelect';
 import { Segmented, SegmentedToggles, SideSection, TextField } from '../components/Sidebar';
 import { SortBuilder } from '../components/SortBuilder';
@@ -226,7 +227,7 @@ export function CollectionView() {
     <ViewLayout label="Collection controls" summary={controlsSummary(search, rules, fams.data)} sidebar={sidebar} startOpen={!search.families.length}>
       <GuideSheet
         title="Collection"
-        actions={<AddCardsDialog trigger={<AddCardsButton />} />}
+        actions={<AddCardsDialog trigger={<GhostAction Icon={AddCardMark} label="Add cards" />} />}
         summary={
           s
             ? `${famN} set ${famN === 1 ? 'family' : 'families'} · showing ${fmtInt(s.printings)} printings: ${fmtInt(s.owned)} owned (${fmtInt(s.copies)} copies), ${fmtInt(s.missing)} missing · ${fmtUsd(s.missingUsd)} to complete${q.data?.skipped?.length ? ` · skipped ${q.data.skipped.join(', ')}` : ''}`
@@ -236,20 +237,6 @@ export function CollectionView() {
         {body}
       </GuideSheet>
     </ViewLayout>
-  );
-}
-
-/** The sheet's main action: a ghost button — amber-ink card-plus mark + label, no frame. */
-function AddCardsButton(props: ComponentProps<'button'>) {
-  return (
-    <button
-      type="button"
-      {...props}
-      className="group inline-flex min-h-8 cursor-pointer items-center gap-1.5 rounded-sm px-2 text-md voice-semi font-medium text-accent-ink no-underline transition-colors duration-200 ease-guide hover:bg-paper-sunk focus-visible:bg-paper-sunk data-[state=open]:bg-paper-sunk"
-    >
-      <AddCardMark className="size-5 transition-transform duration-300 ease-guide group-hover:-translate-y-0.5 group-hover:rotate-[-4deg]" />
-      <span className="underline-offset-4 group-hover:underline">Add cards</span>
-    </button>
   );
 }
 

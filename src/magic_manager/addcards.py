@@ -93,6 +93,7 @@ def _printings(cards: Iterable[dict]) -> dict[str, dict]:
     """PrintingOut-shaped dicts keyed by scryfall_id (one batched owned query)."""
     cards = list(cards)
     owned = _owned_by([c["scryfall_id"] for c in cards])
+    free = inventory.free_quantities(list(owned)) if owned else {}
     names = _set_names()
     out = {}
     for c in cards:
@@ -108,7 +109,9 @@ def _printings(cards: Iterable[dict]) -> dict[str, dict]:
             "image_uri": c.get("image_uri"),
             "price_usd": c.get("prices_usd"), "price_usd_foil": c.get("prices_usd_foil"),
             "released_at": c.get("released_at"),
+            "type_line": c.get("type_line"), "cmc": c.get("cmc"),
             "owned": owned.get(sid, {}),
+            "free": free.get(sid, 0),
         }
     return out
 

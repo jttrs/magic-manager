@@ -8,18 +8,18 @@ import { treatmentLabels, type GuideCard, type GuideGroup } from './guideCard';
 
 export const DECK_GROUPS = ['set', 'year', 'type', 'state', 'origin'] as const;
 export type DeckGroupBy = (typeof DECK_GROUPS)[number];
-export const DECK_GROUP_LABEL: Record<DeckGroupBy, string> = { set: 'Set', year: 'Year', type: 'Deck type', state: 'Built / loose', origin: 'Source' };
+export const DECK_GROUP_LABEL: Record<DeckGroupBy, string> = { set: 'Set', year: 'Year', type: 'Deck type', state: 'Built / not built', origin: 'Source' };
 
 const ORIGIN_LABEL: Record<DeckSummaryOut['origin'], string> = { precon: 'Preconstructed', import: 'Imported', custom: 'Built by hand' };
 
-/** `types` = deck types to keep (empty keeps all). */
-export type DeckFilters = { q: string; states: readonly DeckSummaryOut['state'][]; types?: readonly string[] };
+/** `builtOnly` keeps decks with a built copy; `types` = deck types to keep (empty keeps all). */
+export type DeckFilters = { q: string; builtOnly?: boolean; types?: readonly string[] };
 
 export function filterDecks(decks: readonly DeckSummaryOut[], f: DeckFilters): DeckSummaryOut[] {
   const q = f.q.trim().toLowerCase();
   return decks.filter(
     (d) =>
-      ((f.states.includes('built') && d.built > 0) || (f.states.includes('deconstructed') && d.loose > 0)) &&
+      (!f.builtOnly || d.built > 0) &&
       (!f.types?.length || f.types.includes(d.deck_type)) &&
       (!q || [d.name, d.set_name, d.set_code, d.source, d.author, d.deck_type].some((v) => v?.toLowerCase().includes(q))),
   );
@@ -38,7 +38,7 @@ export function groupDecks(decks: readonly DeckSummaryOut[], by: DeckGroupBy): D
         return [y || '~', y || 'Undated', y];
       }
       case 'state':
-        return [d.state, d.state === 'built' ? 'Built' : 'Loose (deconstructed)', d.state === 'built' ? '1' : '0'];
+        return [d.state, d.state === 'built' ? 'Built' : 'Not built', d.state === 'built' ? '1' : '0'];
       case 'type':
         return [d.deck_type, d.deck_type, ''];
       case 'origin':
