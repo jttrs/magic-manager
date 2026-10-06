@@ -45,7 +45,6 @@ output/
 # persisted Moxfield browser session (a live login — must never be committed)
 .deck-sessions/
 .venv/
-uv.lock
 
 
 # impeccable direction sketches (ephemeral)
