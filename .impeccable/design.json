@@ -1,43 +1,495 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-03T17:12:07.995-07:00",
+  "generatedAt": "2026-10-06T15:50:23-07:00",
   "title": "Design System: magic-manager web",
   "extensions": {
     "colorMeta": {
-      "charcoal-950": { "role": "neutral", "displayName": "Deep Charcoal Chrome", "canonical": "#100d09", "tonalRamp": ["#100d09", "#16130e", "#1c1812", "#221e17", "#2e2920", "#433c30", "#8a8170", "#efe7d6"] },
-      "charcoal-900": { "role": "neutral", "displayName": "Charcoal Chrome", "canonical": "#16130e", "tonalRamp": ["#100d09", "#16130e", "#1c1812", "#221e17", "#2e2920", "#433c30", "#8a8170", "#efe7d6"] },
-      "bone-100": { "role": "neutral", "displayName": "Bone Paper", "canonical": "#efe7d6", "tonalRamp": ["#1d1912", "#3d3529", "#625846", "#a59b87", "#d3c6aa", "#e4dac4", "#efe7d6", "#f7f2e7"] },
-      "ink-900": { "role": "neutral", "displayName": "Guide Ink", "canonical": "#1d1912", "tonalRamp": ["#100d09", "#16130e", "#1d1912", "#3d3529", "#625846", "#8a8170", "#a59b87", "#efe7d6"] },
-      "amber-500": { "role": "primary", "displayName": "Amber Highlighter", "canonical": "#f0a531", "tonalRamp": ["#2b1900", "#4a2c00", "#7a4b00", "#a96e10", "#d89022", "#f0a531", "#f4b347", "#f7c66b"] },
-      "rust-700": { "role": "secondary", "displayName": "Rust Danger", "canonical": "#9c3a22", "tonalRamp": ["#2a0c05", "#4b160b", "#752813", "#9c3a22", "#c9553d", "#e2785e", "#efa895", "#f7d7cc"] },
-      "chrome": { "role": "neutral", "displayName": "Theme Chrome", "canonical": "var(--theme-chrome)", "tonalRamp": ["#100d09", "#16130e", "#1c1812", "#221e17", "#2e2920", "#433c30", "#8a8170", "#efe7d6"] },
-      "paper": { "role": "neutral", "displayName": "Theme Guide Sheet", "canonical": "var(--theme-paper)", "tonalRamp": ["#1d1912", "#3d3529", "#625846", "#a59b87", "#d3c6aa", "#e4dac4", "#efe7d6", "#f7f2e7"] },
-      "accent": { "role": "primary", "displayName": "Theme Accent", "canonical": "var(--theme-accent)", "tonalRamp": ["#2b1900", "#4a2c00", "#7a4b00", "#a96e10", "#d89022", "#f0a531", "#f4b347", "#f7c66b"] }
+      "charcoal-950": {
+        "role": "neutral",
+        "displayName": "Charcoal 950",
+        "canonical": "#100d09",
+        "tonalRamp": [
+          "#100d09",
+          "#16130e",
+          "#1c1812",
+          "#221e17",
+          "#2e2920",
+          "#433c30",
+          "#8a8170",
+          "#efe7d6"
+        ]
+      },
+      "charcoal-900": {
+        "role": "neutral",
+        "displayName": "Charcoal 900",
+        "canonical": "#16130e",
+        "tonalRamp": [
+          "#100d09",
+          "#16130e",
+          "#1c1812",
+          "#221e17",
+          "#2e2920",
+          "#433c30",
+          "#8a8170",
+          "#efe7d6"
+        ]
+      },
+      "charcoal-850": {
+        "role": "neutral",
+        "displayName": "Charcoal 850",
+        "canonical": "#1c1812",
+        "tonalRamp": [
+          "#15110b",
+          "#2f2b24",
+          "#4c4740",
+          "#6a655e",
+          "#8b857e",
+          "#aca79f",
+          "#cfcac1",
+          "#f3eee5"
+        ]
+      },
+      "charcoal-800": {
+        "role": "neutral",
+        "displayName": "Charcoal 800",
+        "canonical": "#221e17",
+        "tonalRamp": [
+          "#15110a",
+          "#2f2b23",
+          "#4c473f",
+          "#6a655d",
+          "#8a857d",
+          "#aca79e",
+          "#cfcac0",
+          "#f3eee4"
+        ]
+      },
+      "charcoal-700": {
+        "role": "neutral",
+        "displayName": "Charcoal 700",
+        "canonical": "#2e2920",
+        "tonalRamp": [
+          "#151109",
+          "#302b22",
+          "#4c473d",
+          "#6b655b",
+          "#8b857b",
+          "#ada79c",
+          "#d0cabe",
+          "#f4eee2"
+        ]
+      },
+      "charcoal-600": {
+        "role": "neutral",
+        "displayName": "Charcoal 600",
+        "canonical": "#433c30",
+        "tonalRamp": [
+          "#171106",
+          "#312a1f",
+          "#4e473a",
+          "#6d6558",
+          "#8d8578",
+          "#afa798",
+          "#d2c9bb",
+          "#f6edde"
+        ]
+      },
+      "bone-50": {
+        "role": "neutral",
+        "displayName": "Bone 50",
+        "canonical": "#f7f2e7",
+        "tonalRamp": [
+          "#15110a",
+          "#2f2b23",
+          "#4b473e",
+          "#6a665c",
+          "#8a867c",
+          "#aca79d",
+          "#cfcabf",
+          "#f3eee3"
+        ]
+      },
+      "bone-100": {
+        "role": "neutral",
+        "displayName": "Bone 100",
+        "canonical": "#efe7d6",
+        "tonalRamp": [
+          "#1d1912",
+          "#3d3529",
+          "#625846",
+          "#a59b87",
+          "#d3c6aa",
+          "#e4dac4",
+          "#efe7d6",
+          "#f7f2e7"
+        ]
+      },
+      "bone-200": {
+        "role": "neutral",
+        "displayName": "Bone 200",
+        "canonical": "#e4dac4",
+        "tonalRamp": [
+          "#181002",
+          "#322a19",
+          "#4f4734",
+          "#6e6552",
+          "#8e8571",
+          "#b0a792",
+          "#d3cab4",
+          "#f8eed7"
+        ]
+      },
+      "bone-300": {
+        "role": "neutral",
+        "displayName": "Bone 300",
+        "canonical": "#d3c6aa",
+        "tonalRamp": [
+          "#191000",
+          "#342a12",
+          "#51462e",
+          "#70654b",
+          "#91856b",
+          "#b3a68b",
+          "#d6c9ad",
+          "#fbedd0"
+        ]
+      },
+      "ink-900": {
+        "role": "neutral",
+        "displayName": "Ink 900",
+        "canonical": "#1d1912",
+        "tonalRamp": [
+          "#100d09",
+          "#16130e",
+          "#1d1912",
+          "#3d3529",
+          "#625846",
+          "#8a8170",
+          "#a59b87",
+          "#efe7d6"
+        ]
+      },
+      "ink-700": {
+        "role": "neutral",
+        "displayName": "Ink 700",
+        "canonical": "#3d3529",
+        "tonalRamp": [
+          "#171006",
+          "#322a1e",
+          "#4f463a",
+          "#6e6558",
+          "#8e8577",
+          "#b0a698",
+          "#d3c9ba",
+          "#f7edde"
+        ]
+      },
+      "ink-600": {
+        "role": "neutral",
+        "displayName": "Ink 600",
+        "canonical": "#625846",
+        "tonalRamp": [
+          "#181002",
+          "#332a19",
+          "#504635",
+          "#6f6552",
+          "#8f8572",
+          "#b1a692",
+          "#d5c9b5",
+          "#f9edd8"
+        ]
+      },
+      "taupe-400": {
+        "role": "neutral",
+        "displayName": "Taupe 400",
+        "canonical": "#a59b87",
+        "tonalRamp": [
+          "#181002",
+          "#322a19",
+          "#4f4735",
+          "#6e6552",
+          "#8f8572",
+          "#b1a792",
+          "#d4c9b4",
+          "#f8edd8"
+        ]
+      },
+      "taupe-500": {
+        "role": "neutral",
+        "displayName": "Taupe 500",
+        "canonical": "#8a8170",
+        "tonalRamp": [
+          "#171004",
+          "#322a1c",
+          "#4f4737",
+          "#6e6555",
+          "#8e8574",
+          "#b0a795",
+          "#d3c9b7",
+          "#f7edda"
+        ]
+      },
+      "amber-300": {
+        "role": "primary",
+        "displayName": "Amber 300",
+        "canonical": "#f7c66b",
+        "tonalRamp": [
+          "#1b0f00",
+          "#3a2801",
+          "#5d4206",
+          "#855e00",
+          "#ab7d14",
+          "#cf9f42",
+          "#f3c267",
+          "#ffeccb"
+        ]
+      },
+      "amber-400": {
+        "role": "primary",
+        "displayName": "Amber 400",
+        "canonical": "#f4b347",
+        "tonalRamp": [
+          "#1d0e00",
+          "#3d2600",
+          "#614000",
+          "#885c01",
+          "#af7b18",
+          "#da9a26",
+          "#ffbd52",
+          "#ffecd0"
+        ]
+      },
+      "amber-500": {
+        "role": "primary",
+        "displayName": "Amber Highlighter",
+        "canonical": "#f0a531",
+        "tonalRamp": [
+          "#2b1900",
+          "#4a2c00",
+          "#7a4b00",
+          "#a96e10",
+          "#d89022",
+          "#f0a531",
+          "#f4b347",
+          "#f7c66b"
+        ]
+      },
+      "amber-800": {
+        "role": "primary",
+        "displayName": "Amber 800",
+        "canonical": "#7a4b00",
+        "tonalRamp": [
+          "#1f0c00",
+          "#3f2400",
+          "#653e02",
+          "#8a5a1a",
+          "#ad7b3e",
+          "#d09c60",
+          "#f5bf82",
+          "#ffebd5"
+        ]
+      },
+      "rust-400": {
+        "role": "secondary",
+        "displayName": "Rust 400",
+        "canonical": "#e2785e",
+        "tonalRamp": [
+          "#2b0000",
+          "#530e00",
+          "#811f03",
+          "#a6422a",
+          "#cb634a",
+          "#f1856b",
+          "#ffb6a4",
+          "#fee9e4"
+        ]
+      },
+      "rust-700": {
+        "role": "secondary",
+        "displayName": "Rust Danger",
+        "canonical": "#9c3a22",
+        "tonalRamp": [
+          "#2a0c05",
+          "#4b160b",
+          "#752813",
+          "#9c3a22",
+          "#c9553d",
+          "#e2785e",
+          "#efa895",
+          "#f7d7cc"
+        ]
+      },
+      "on-chrome": {
+        "role": "neutral",
+        "displayName": "On Chrome",
+        "canonical": "var(--theme-on-chrome) (resolves to #efe7d6 in light)",
+        "tonalRamp": [
+          "#161105",
+          "#312b1d",
+          "#4e4739",
+          "#6c6557",
+          "#8d8576",
+          "#aea797",
+          "#d2cab9",
+          "#f6eedd"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Guide Paper",
+        "canonical": "var(--theme-paper) (resolves to #efe7d6 in light)",
+        "tonalRamp": [
+          "#161105",
+          "#312b1d",
+          "#4e4739",
+          "#6c6557",
+          "#8d8576",
+          "#aea797",
+          "#d2cab9",
+          "#f6eedd"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "var(--theme-ink) (resolves to #1d1912 in light)",
+        "tonalRamp": [
+          "#15110a",
+          "#2f2b23",
+          "#4c473f",
+          "#6a655d",
+          "#8b857d",
+          "#aca79e",
+          "#cfcac0",
+          "#f3eee4"
+        ]
+      },
+      "accent": {
+        "role": "primary",
+        "displayName": "Accent",
+        "canonical": "var(--theme-accent) (resolves to #f0a531 in light)",
+        "tonalRamp": [
+          "#1e0d00",
+          "#3e2500",
+          "#633f02",
+          "#8a5b0b",
+          "#b57708",
+          "#e09618",
+          "#febc63",
+          "#ffebd3"
+        ]
+      },
+      "on-accent": {
+        "role": "neutral",
+        "displayName": "On Accent",
+        "canonical": "var(--theme-on-accent) (resolves to #1d1912 in light)",
+        "tonalRamp": [
+          "#15110a",
+          "#2f2b23",
+          "#4c473f",
+          "#6a655d",
+          "#8b857d",
+          "#aca79e",
+          "#cfcac0",
+          "#f3eee4"
+        ]
+      }
     },
     "typographyMeta": {
-      "display": { "displayName": "Condensed guide display", "purpose": "Guide-sheet titles and masthead identity." },
-      "headline": { "displayName": "Condensed running head", "purpose": "Column, family, and section heads." },
-      "title": { "displayName": "Condensed title", "purpose": "Top navigation, tabs, status titles." },
-      "body": { "displayName": "Guide body", "purpose": "Explanatory copy and view text." },
-      "label": { "displayName": "Semi-condensed label", "purpose": "Controls, side labels, metadata." }
+      "display": {
+        "displayName": "Condensed guide display",
+        "purpose": "Guide-sheet titles and masthead identity."
+      },
+      "headline": {
+        "displayName": "Condensed running head",
+        "purpose": "Column, family, and section heads."
+      },
+      "body": {
+        "displayName": "Guide body",
+        "purpose": "Explanatory copy and view text."
+      },
+      "label": {
+        "displayName": "Semi-condensed label",
+        "purpose": "Controls, side labels, metadata."
+      }
     },
     "shadows": [
-      { "name": "sheet-settle", "value": "0 1px 0 var(--theme-chrome-line), 0 18px 40px -28px var(--theme-scrim)", "purpose": "Separates a guide sheet from charcoal chrome." },
-      { "name": "preview-float", "value": "0 10px 24px var(--theme-scrim)", "purpose": "Floats card-art previews above rows and tiles." },
-      { "name": "popover-float", "value": "0 12px 28px -12px var(--theme-scrim)", "purpose": "Floats commander suggestion popovers." }
+      {
+        "name": "sheet-settle",
+        "value": "0 1px 0 var(--theme-chrome-line), 0 18px 40px -28px var(--theme-scrim)",
+        "purpose": "Separates a guide sheet from charcoal chrome."
+      },
+      {
+        "name": "preview-float",
+        "value": "0 10px 24px var(--theme-scrim)",
+        "purpose": "Floats card-art previews above rows and tiles."
+      },
+      {
+        "name": "popover-float",
+        "value": "0 12px 28px -12px var(--theme-scrim)",
+        "purpose": "Floats commander suggestion popovers."
+      }
     ],
     "motion": [
-      { "name": "duration-fast", "value": "120ms", "purpose": "Fast state changes." },
-      { "name": "duration-base", "value": "180ms", "purpose": "Default guide transition duration." },
-      { "name": "duration-slow", "value": "260ms", "purpose": "Reserved slower UI movement." },
-      { "name": "ease-out", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Default easing for component state transitions." }
+      {
+        "name": "duration-fast",
+        "value": "120ms",
+        "purpose": "Fast state changes."
+      },
+      {
+        "name": "duration-base",
+        "value": "180ms",
+        "purpose": "Default guide transition duration."
+      },
+      {
+        "name": "duration-slow",
+        "value": "260ms",
+        "purpose": "Reserved slower UI movement."
+      },
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Default easing for component state transitions."
+      },
+      {
+        "name": "ease-guide",
+        "value": "var(--motion-ease-out) over var(--motion-duration-base)",
+        "purpose": "Tailwind utility pairing the guide easing and base duration; pair with an enumerated transition-property, never transition: all."
+      }
     ],
     "breakpoints": [
-      { "name": "column-tabs", "value": "max-width: 47.99rem" },
-      { "name": "sidebar-fixed", "value": "min-width: 64rem" },
-      { "name": "row-thumbnail", "value": "container min-width: 18rem" },
-      { "name": "row-bars", "value": "container min-width: 22rem" },
-      { "name": "row-metadata", "value": "container min-width: 30rem" }
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "768px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px"
+      },
+      {
+        "name": "column-tabs",
+        "value": "max-width: 47.99rem"
+      },
+      {
+        "name": "sidebar-fixed",
+        "value": "min-width: 64rem"
+      },
+      {
+        "name": "row-thumbnail",
+        "value": "container min-width: 18rem"
+      },
+      {
+        "name": "row-bars",
+        "value": "container min-width: 22rem"
+      },
+      {
+        "name": "row-metadata",
+        "value": "container min-width: 30rem"
+      }
     ]
   },
   "components": [
@@ -45,25 +497,41 @@
       "name": "Primary Button",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "Amber primary action used for starts and copy actions.",
-      "html": "<button class=\"ds-btn-primary\">Copy marked as list</button>",
-      "css": ".ds-btn-primary{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;min-height:2.25rem;padding:.5rem .75rem;border:1px solid var(--theme-accent);border-radius:3px;background:var(--theme-accent);color:var(--theme-on-accent);font-family:var(--font-family-guide);font-size:var(--font-size-sm);font-weight:520;font-variation-settings:'wdth' var(--font-width-semi);transition:background-color var(--motion-duration-base) var(--motion-ease-out),color var(--motion-duration-base) var(--motion-ease-out),border-color var(--motion-duration-base) var(--motion-ease-out);cursor:pointer}.ds-btn-primary:hover{background:var(--theme-highlight-solid)}.ds-btn-primary:focus-visible{outline:2px solid var(--theme-focus);outline-offset:2px}.ds-btn-primary:disabled{opacity:.45;cursor:not-allowed}"
+      "description": "Filled amber commit action; the only filled control.",
+      "html": "<button class=\"ds-btn-primary\">Copy list</button>",
+      "css": ".ds-btn-primary{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;min-height:2.25rem;padding:.5rem .75rem;border-radius:3px;border:1px solid;cursor:pointer;font-family:var(--font-family-guide);font-size:var(--font-size-sm);font-weight:520;font-variation-settings:'wdth' var(--font-width-semi);transition:background-color var(--motion-duration-base) var(--motion-ease-out),color var(--motion-duration-base) var(--motion-ease-out),border-color var(--motion-duration-base) var(--motion-ease-out);background:var(--theme-accent);color:var(--theme-on-accent);border-color:var(--theme-accent)}.ds-btn-primary:hover{background:var(--theme-highlight-solid)}.ds-btn-primary:focus-visible{outline:2px solid var(--theme-focus);outline-offset:2px}.ds-btn-primary:disabled{opacity:.45;cursor:not-allowed}"
     },
     {
       "name": "Quiet Chrome Button",
       "kind": "button",
       "refersTo": "button-quiet-chrome",
-      "description": "Ruled outline button for controls on charcoal chrome.",
-      "html": "<button class=\"ds-btn-quiet-chrome\">Jobs</button>",
-      "css": ".ds-btn-quiet-chrome{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;min-height:2.25rem;padding:.5rem .75rem;border:1px solid var(--theme-chrome-line);border-radius:3px;background:transparent;color:var(--theme-on-chrome);font-family:var(--font-family-guide);font-size:var(--font-size-sm);font-weight:520;font-variation-settings:'wdth' var(--font-width-semi);transition:background-color var(--motion-duration-base) var(--motion-ease-out),color var(--motion-duration-base) var(--motion-ease-out),border-color var(--motion-duration-base) var(--motion-ease-out);cursor:pointer}.ds-btn-quiet-chrome:hover{border-color:var(--theme-on-chrome-muted);background:var(--theme-chrome-raised)}.ds-btn-quiet-chrome:focus-visible{outline:2px solid var(--theme-focus);outline-offset:2px}"
+      "description": "Ruled outline button on charcoal chrome for secondary actions.",
+      "html": "<button class=\"ds-btn-quiet\">Clear filters</button>",
+      "css": ".ds-btn-quiet{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;min-height:2.25rem;padding:.5rem .75rem;border-radius:3px;border:1px solid;cursor:pointer;font-family:var(--font-family-guide);font-size:var(--font-size-sm);font-weight:520;font-variation-settings:'wdth' var(--font-width-semi);transition:background-color var(--motion-duration-base) var(--motion-ease-out),color var(--motion-duration-base) var(--motion-ease-out),border-color var(--motion-duration-base) var(--motion-ease-out);background:transparent;color:var(--theme-on-chrome);border-color:var(--theme-chrome-line)}.ds-btn-quiet:hover{border-color:var(--theme-on-chrome-muted);background:var(--theme-chrome-raised)}.ds-btn-quiet:focus-visible{outline:2px solid var(--theme-focus);outline-offset:2px}.ds-btn-quiet:disabled{opacity:.45;cursor:not-allowed}"
+    },
+    {
+      "name": "Icon Action",
+      "kind": "button",
+      "refersTo": "icon-action",
+      "description": "Icon-only secondary action on paper in amber ink; the tooltip carries the words.",
+      "html": "<span class=\"ds-ia-wrap\"><button class=\"ds-icon-action\" aria-label=\"Copy list\"><svg viewBox=\"0 0 24 24\" width=\"22\" height=\"22\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"9\" y=\"9\" width=\"11\" height=\"11\" rx=\"2\"/><path d=\"M5 15V6a2 2 0 0 1 2-2h9\"/></svg></button><span class=\"ds-ia-tip\" role=\"tooltip\">Copy list</span></span>",
+      "css": ".ds-ia-wrap{position:relative;display:inline-block}.ds-icon-action{display:grid;place-items:center;width:2.25rem;height:2.25rem;border:0;border-radius:3px;background:transparent;color:var(--theme-accent-ink);cursor:pointer;transition:background-color var(--motion-duration-base) var(--motion-ease-out)}.ds-icon-action:hover,.ds-icon-action:focus-visible{background:var(--theme-paper-sunk)}.ds-icon-action:focus-visible{outline:2px solid var(--theme-focus);outline-offset:2px}.ds-ia-tip{position:absolute;top:calc(100% + 6px);left:50%;transform:translateX(-50%);white-space:nowrap;visibility:hidden;border:1px solid var(--theme-chrome-line);border-radius:3px;background:var(--theme-chrome-raised);color:var(--theme-on-chrome);padding:.375rem .625rem;font-family:var(--font-family-guide);font-size:var(--font-size-sm);line-height:1.35;box-shadow:0 12px 28px -12px var(--theme-scrim)}.ds-ia-wrap:hover .ds-ia-tip,.ds-icon-action:focus-visible+.ds-ia-tip{visibility:visible}"
     },
     {
       "name": "Text Field",
       "kind": "input",
       "refersTo": "text-field",
-      "description": "Labelled search input on raised chrome.",
+      "description": "Labelled search input on raised chrome; amber border on focus.",
       "html": "<label class=\"ds-field\">Card name<input class=\"ds-input\" type=\"search\" placeholder=\"e.g. Sol Ring…\" /></label>",
       "css": ".ds-field{display:flex;flex-direction:column;gap:.375rem;color:var(--theme-on-chrome-muted);font-family:var(--font-family-guide);font-size:var(--font-size-sm);font-weight:520;font-variation-settings:'wdth' var(--font-width-semi)}.ds-input{min-height:2.25rem;border:1px solid var(--theme-chrome-line);border-radius:3px;background:var(--theme-chrome-raised);padding:0 .625rem;color:var(--theme-on-chrome);font:inherit;font-size:var(--font-size-md);font-variation-settings:'wdth' var(--font-width-normal)}.ds-input::placeholder{color:var(--theme-on-chrome-muted)}.ds-input:focus-visible{outline:2px solid var(--theme-focus);outline-offset:2px;border-color:var(--theme-accent)}"
+    },
+    {
+      "name": "Segmented Control",
+      "kind": "custom",
+      "refersTo": "segmented",
+      "description": "Sidebar single-select group: ruled capsule with the selected segment filled amber.",
+      "html": "<div class=\"ds-seg\" role=\"group\" aria-label=\"View type\"><button class=\"ds-seg-item\" aria-pressed=\"true\">Grid</button><button class=\"ds-seg-item\" aria-pressed=\"false\">List</button></div>",
+      "css": ".ds-seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;min-width:0;border:1px solid var(--theme-chrome-line);border-radius:3px;padding:2px;background:var(--theme-chrome)}.ds-seg-item{min-height:2rem;min-width:0;padding:0 .375rem;border:0;border-radius:2px;background:transparent;color:var(--theme-on-chrome-muted);cursor:pointer;font-family:var(--font-family-guide);font-size:var(--font-size-sm);font-weight:520;font-variation-settings:'wdth' var(--font-width-semi);transition:color var(--motion-duration-base) var(--motion-ease-out),background-color var(--motion-duration-base) var(--motion-ease-out)}.ds-seg-item:hover{color:var(--theme-on-chrome)}.ds-seg-item[aria-pressed=true]{background:var(--theme-accent);color:var(--theme-on-accent)}.ds-seg-item:focus-visible{outline:2px solid var(--theme-focus);outline-offset:2px}"
     },
     {
       "name": "Chip Toggle On",
@@ -74,28 +542,28 @@
       "css": ".ds-chip-on{display:inline-flex;align-items:center;gap:.375rem;min-height:1.75rem;padding:.375rem .625rem;border:1px solid var(--theme-accent);border-radius:999px;background:var(--theme-accent);color:var(--theme-on-accent);font-family:var(--font-family-guide);font-size:var(--font-size-xs);font-weight:520;font-variation-settings:'wdth' var(--font-width-semi);cursor:pointer;transition:background-color var(--motion-duration-base) var(--motion-ease-out),border-color var(--motion-duration-base) var(--motion-ease-out)}.ds-chip-on span{font-variant-numeric:tabular-nums lining-nums;opacity:.75}.ds-chip-on:focus-visible{outline:2px solid var(--theme-focus);outline-offset:2px}"
     },
     {
+      "name": "Ruled Table Row",
+      "kind": "custom",
+      "refersTo": "ruled-row",
+      "description": "Deals/card-lines ledger: strong 2px head rule, hairline rows, right-aligned tabular figures; accent-ink good delta, danger bad delta.",
+      "html": "<table class=\"ds-ledger\"><thead><tr><th scope=\"col\">Product</th><th scope=\"col\" class=\"ds-num\">Best</th><th scope=\"col\" class=\"ds-num\">Gap</th></tr></thead><tbody><tr><th scope=\"row\"><span class=\"ds-name\">Commander Masters Bundle</span><span class=\"ds-sub\">Bundle · 3 stores</span></th><td class=\"ds-num\">$54.20</td><td class=\"ds-num ds-good\">−12%</td></tr><tr><th scope=\"row\"><span class=\"ds-name\">Modern Horizons 3 Display</span><span class=\"ds-sub\">Sealed · 5 stores</span></th><td class=\"ds-num\">$318.00</td><td class=\"ds-num ds-bad\">+8%</td></tr></tbody></table>",
+      "css": ".ds-ledger{width:100%;border-collapse:collapse;color:var(--theme-ink);font-family:var(--font-family-guide);font-size:var(--font-size-sm);font-variant-numeric:tabular-nums lining-nums}.ds-ledger thead tr{border-bottom:2px solid var(--theme-rule-strong);text-align:left;color:var(--theme-ink-muted);font-size:var(--font-size-xs);font-weight:520;font-variation-settings:'wdth' var(--font-width-semi);}.ds-ledger th{padding:.375rem .75rem .375rem 0;font-weight:500}.ds-ledger .ds-num{text-align:right;padding-left:.75rem}.ds-ledger tbody tr{border-bottom:1px solid var(--theme-rule);vertical-align:top;cursor:pointer;transition:background-color var(--motion-duration-base) var(--motion-ease-out)}.ds-ledger tbody tr:hover{background:var(--theme-paper-sunk)}.ds-ledger tbody th{padding:.5rem .75rem .5rem 0;text-align:left;font-weight:400}.ds-ledger td{padding:.5rem 0}.ds-name{display:block;font-size:var(--font-size-md);font-weight:520;font-variation-settings:'wdth' var(--font-width-semi);color:var(--theme-ink)}.ds-sub{display:block;font-size:var(--font-size-xs);color:var(--theme-ink-muted)}.ds-good{color:var(--theme-accent-ink)}.ds-bad{color:var(--theme-danger)}"
+    },
+    {
+      "name": "Split Separator Handle",
+      "kind": "custom",
+      "refersTo": "split-separator",
+      "description": "Resizable-panel separator: 1px vertical rule with a pill grip that turns amber on hover/focus.",
+      "html": "<div class=\"ds-split\" role=\"separator\" aria-label=\"Resize deck list\" aria-orientation=\"vertical\" tabindex=\"0\"><span class=\"ds-split-rule\"></span><span class=\"ds-split-grip\" aria-hidden=\"true\">⋮</span></div>",
+      "css": ".ds-split{position:relative;width:1rem;height:10rem;cursor:col-resize;outline:none}.ds-split-rule{position:absolute;top:.5rem;bottom:.5rem;left:50%;width:1px;transform:translateX(-50%);background:var(--theme-rule-strong);opacity:.4;transition:background-color var(--motion-duration-base) var(--motion-ease-out),opacity var(--motion-duration-base) var(--motion-ease-out)}.ds-split-grip{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:grid;place-items:center;width:.75rem;height:3rem;border:1px solid var(--theme-rule-strong);border-radius:999px;background:var(--theme-paper);color:var(--theme-ink-muted);font-size:var(--font-size-2xs);line-height:1;transition:background-color var(--motion-duration-base) var(--motion-ease-out),color var(--motion-duration-base) var(--motion-ease-out),border-color var(--motion-duration-base) var(--motion-ease-out)}.ds-split:hover .ds-split-rule,.ds-split:focus-visible .ds-split-rule{opacity:1}.ds-split:focus-visible .ds-split-rule{background:var(--theme-focus)}.ds-split:hover .ds-split-grip{border-color:var(--theme-accent);background:var(--theme-highlight-solid);color:var(--theme-on-accent)}.ds-split:focus-visible .ds-split-grip{background:var(--theme-highlight-solid);color:var(--theme-on-accent)}"
+    },
+    {
       "name": "Guide Sheet",
       "kind": "card",
       "refersTo": "sheet",
       "description": "Paper or charcoal-stock content surface for each view.",
       "html": "<section class=\"ds-sheet\"><h1>Commander compare</h1><p>123 recommended cards · cheapest price across printings</p></section>",
       "css": ".ds-sheet{min-height:18rem;border-radius:3px;background-color:var(--theme-paper);color:var(--theme-ink);padding:1rem 1.25rem;box-shadow:0 1px 0 var(--theme-chrome-line),0 18px 40px -28px var(--theme-scrim);font-family:var(--font-family-guide);background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.72' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.16'/%3E%3C/svg%3E\");background-blend-mode:multiply}.ds-sheet h1{margin:0;color:var(--theme-ink);font-size:var(--font-size-3xl);line-height:1;font-weight:680;letter-spacing:-.01em;font-variation-settings:'wdth' var(--font-width-condensed);text-transform:none}.ds-sheet p{margin:.375rem 0 0;color:var(--theme-ink-muted);font-size:var(--font-size-sm);font-variant-numeric:tabular-nums lining-nums}"
-    },
-    {
-      "name": "Guide Row",
-      "kind": "custom",
-      "refersTo": "card-row",
-      "description": "Rows density checklist line with tabular metadata and highlighter-selected state.",
-      "html": "<div class=\"ds-guide-row ds-marked\"><input type=\"checkbox\" checked aria-label=\"Mark Sol Ring\" /><span>Sol Ring</span><strong>$1.25</strong></div>",
-      "css": ".ds-guide-row{display:grid;grid-template-columns:1rem minmax(4rem,1fr) auto;align-items:center;gap:.5rem;min-height:2rem;border-bottom:1px solid var(--theme-rule);padding:0 .25rem;color:var(--theme-ink);font-family:var(--font-family-guide);font-size:var(--font-size-sm)}.ds-guide-row input{accent-color:var(--theme-accent)}.ds-guide-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:520;font-variation-settings:'wdth' var(--font-width-semi)}.ds-guide-row strong{font-weight:520;font-variant-numeric:tabular-nums lining-nums}.ds-guide-row.ds-marked{background-image:linear-gradient(100deg,transparent .2em,var(--theme-highlight) .35em,var(--theme-highlight) calc(100% - .35em),transparent calc(100% - .2em));box-decoration-break:clone}"
-    },
-    {
-      "name": "Inclusion Bars",
-      "kind": "custom",
-      "refersTo": "inclusion-bars",
-      "description": "Two stacked commander inclusion bars for shared cards.",
-      "html": "<span class=\"ds-bars\" aria-label=\"A 44%, B 21%\"><span><i style=\"width:44%\"></i><b>44%</b></span><span><i style=\"width:21%\"></i><b>21%</b></span></span>",
-      "css": ".ds-bars{display:flex;flex-direction:column;gap:2px;font-family:var(--font-family-guide)}.ds-bars span{display:flex;align-items:center;gap:.375rem}.ds-bars span::before{content:'';height:3px;flex:1;border-radius:999px;background:var(--theme-rule)}.ds-bars i{position:absolute;height:3px;border-radius:999px;background:var(--theme-rule-strong)}.ds-bars span+span i{background:var(--theme-ink-muted)}.ds-bars b{width:2rem;text-align:right;color:var(--theme-ink);font-size:var(--font-size-2xs);font-weight:400;font-variant-numeric:tabular-nums lining-nums}"
     },
     {
       "name": "Top Navigation Item",
@@ -118,28 +586,48 @@
       "Dense desktop columns with resizable separators; phones collapse columns into tabs."
     ],
     "rules": [
-      { "name": "The Amber-Only Rule", "body": "Amber appears only as highlighter, active/focus, progress, or primary action. Do not use amber for decorative fills, secondary charts, badges, or background variety.", "section": "colors" },
-      { "name": "The One Typeface Rule", "body": "Do not introduce display, serif, mono, or card-flavor faces; use Archivo width and weight to change voice.", "section": "typography" },
-      { "name": "The Tabular Ledger Rule", "body": "Any collection fact that can be compared in a column uses `tabular` figures.", "section": "typography" },
-      { "name": "The Ruled-First Rule", "body": "Prefer borders, hairlines, and tonal stock changes before shadows. Shadows are for floating previews, popovers, and the sheet resting on chrome.", "section": "elevation" }
+      {
+        "name": "The Amber-Only Rule",
+        "body": "Amber appears only as highlighter, active/focus, progress, or primary action. Do not use amber for decorative fills, secondary charts, badges, or background variety.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Typeface Rule",
+        "body": "Do not introduce display, serif, mono, or card-flavor faces; use Archivo width and weight to change voice.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Ledger Rule",
+        "body": "Any collection fact that can be compared in a column uses `tabular` figures.",
+        "section": "typography"
+      },
+      {
+        "name": "The Ruled-First Rule",
+        "body": "Prefer borders, hairlines, and tonal stock changes before shadows. Shadows are for floating previews, popovers, and the sheet resting on chrome.",
+        "section": "elevation"
+      }
     ],
     "dos": [
-      "Do build all reusable colors through `web/tokens/*.tokens.json` → `web/src/styles/tokens.css` → `web/src/index.css` theme utilities.",
-      "Do keep light mode as bone-paper guide sheets on dark charcoal chrome and dark mode as all-charcoal stock with bone ink.",
-      "Do use amber only for highlighter/focus/active/primary/progress states.",
-      "Do prefer `GuideCard` mapping in `web/src/core/guideCard.ts` so tile, row, grid, and preview stay shared across domains.",
-      "Do preserve URL-backed controls from `web/src/core/search.ts`; filters, visibility, sort, density, and commander/set choices are shareable state.",
-      "Do use `voice-condensed`, `voice-semi`, `tabular`, `highlighter`, `ruled`, `ease-guide`, and `paper-grain` instead of inventing one-off visual classes.",
-      "Do keep mobile behavior as controls disclosure plus column tabs, not a squeezed desktop splitter.",
-      "Do keep visual regression evidence pinned through Playwright's offline fixture suite (`web/playwright.config.ts`, `.playwright-mcp/final-*.png`, `.playwright-mcp/verdict-*.png`)."
+      "**Do** build all reusable colors through `web/tokens/*.tokens.json` → `web/src/styles/tokens.css` → `web/src/index.css` theme utilities.",
+      "**Do** keep light mode as bone-paper guide sheets on dark charcoal chrome and dark mode as all-charcoal stock with bone ink.",
+      "**Do** use amber only for highlighter/focus/active/primary/progress states.",
+      "**Do** prefer `GuideCard` mapping in `web/src/core/guideCard.ts` so tile, row, grid, and preview stay shared across domains.",
+      "**Do** preserve URL-backed controls from `web/src/core/search.ts`; filters, visibility, sort, density, and commander/set choices are shareable state.",
+      "**Do** use `voice-condensed`, `voice-semi`, `tabular`, `highlighter`, `ruled`, `ease-guide`, and `paper-grain` instead of inventing one-off visual classes.",
+      "**Do** keep mobile behavior as controls disclosure plus column tabs, not a squeezed desktop splitter; the collapsed disclosure shows a one-line summary of the active scope.",
+      "**Do** put every card fact (owned counts, missing, pools, treatments, chase) in the caption under the card.",
+      "**Do** keep the heading outline unbroken: sheet `h1`, family/column `h2`, groups `h3`.",
+      "**Do** keep visual regression evidence pinned through Playwright's offline fixture suite (`web/playwright.config.ts`, `.playwright-mcp/final-*.png`, `.playwright-mcp/verdict-*.png`)."
     ],
     "donts": [
-      "Don't introduce raw colors in authored CSS; `web/.stylelintrc.json` forbids hex/named/rgb/hsl/oklch functions outside generated tokens.",
-      "Don't use `transition: all`; the stylelint guard disallows it and components enumerate transitioned properties.",
-      "Don't add React or UI imports to `web/src/core`; `web/.dependency-cruiser.cjs` keeps that layer portable and framework-free.",
-      "Don't let components import views/routes; presentational components take props and stay reusable.",
-      "Don't use dashboards cards, broad rounded corners, multi-accent category colors, or decorative gradients; the built system is printed stock, rules, and amber marks.",
-      "Don't turn highlighter marks into persistent filled cards. The mark is a user annotation over the guide, not a new surface."
+      "**Don't** introduce raw colors in authored CSS; `web/.stylelintrc.json` forbids hex/named/rgb/hsl/oklch functions outside generated tokens.",
+      "**Don't** use `transition: all`; the stylelint guard disallows it and components enumerate transitioned properties.",
+      "**Don't** add React or UI imports to `web/src/core`; `web/.dependency-cruiser.cjs` keeps that layer portable and framework-free.",
+      "**Don't** let components import views/routes; presentational components take props and stay reusable.",
+      "**Don't** use dashboards cards, broad rounded corners, multi-accent category colors, or decorative gradients; the built system is printed stock, rules, and amber marks.",
+      "**Don't** turn highlighter marks into persistent filled cards. The mark is a user annotation over the guide, not a new surface.",
+      "**Don't** overlay anything on card art — no stamps, badges, counts or ribbons. The card image is the artifact.",
+      "**Don't** render more than 5 options as chips; use `MultiSelect`."
     ]
   }
 }
