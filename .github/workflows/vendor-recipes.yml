@@ -1,0 +1,21 @@
+# Every PR / push to main: the vendor recipe book still parses its saved store
+# pages (tests/fixtures/vendors) and the tab reader's rules hold. Offline.
+name: Vendor recipes
+
+on:
+  pull_request:
+    paths: ["config/vendors.toml", "src/magic_manager/**", "tests/**", ".github/workflows/vendor-recipes.yml"]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  recipes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - run: uv run pytest -q -p no:warnings tests/test_vendor_recipes.py tests/test_deals_tabs.py

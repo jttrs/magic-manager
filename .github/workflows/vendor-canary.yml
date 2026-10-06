@@ -1,0 +1,37 @@
+# Nightly: read every server-read store's sample product with its recipe
+# (scripts/vendor_canary.py). On failure, open — or comment on — one issue so a
+# drifted recipe gets fixed (config/vendors.toml + its fixture).
+name: Vendor recipe canary
+
+on:
+  schedule:
+    - cron: "17 9 * * *"   # daily, 09:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - id: run
+        run: |
+          set +e
+          uv run python scripts/vendor_canary.py --markdown > report.md
+          echo "status=$?" >> "$GITHUB_OUTPUT"
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+      - if: steps.run.outputs.status != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          title="Vendor recipe canary failing"
+          num=$(gh issue list --state open --search "in:title \"$title\"" --json number --jq '.[0].number')
+          { echo "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"; echo; cat report.md; } > body.md
+          if [ -n "$num" ]; then gh issue comment "$num" --body-file body.md
+          else gh issue create --title "$title" --body-file body.md; fi
+          exit 1
