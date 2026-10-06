@@ -902,6 +902,36 @@ export type CompareOut = {
 };
 
 /**
+ * ConfirmIn
+ */
+export type ConfirmIn = {
+    /**
+     * Url
+     */
+    url: string;
+    /**
+     * Title
+     */
+    title?: string | null;
+    /**
+     * Price
+     */
+    price?: number | null;
+    /**
+     * Currency
+     */
+    currency?: string | null;
+    /**
+     * Available
+     */
+    available?: boolean | null;
+    /**
+     * What the listing is; null forgets a confirmation.
+     */
+    choice: MatchOut | null;
+};
+
+/**
  * CopyIn
  */
 export type CopyIn = {
@@ -1742,6 +1772,38 @@ export type LegalityOut = {
 };
 
 /**
+ * MatchOut
+ */
+export type MatchOut = {
+    /**
+     * Kind
+     */
+    kind: 'sealed' | 'sld' | 'single';
+    /**
+     * Set Code
+     */
+    set_code: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Scryfall Id
+     */
+    scryfall_id?: string | null;
+    /**
+     * Finish
+     */
+    finish?: string | null;
+    /**
+     * Price
+     *
+     * Singles: the printing's market at that finish.
+     */
+    price?: number | null;
+};
+
+/**
  * MissingOut
  */
 export type MissingOut = {
@@ -2024,6 +2086,93 @@ export type PreviewOut = {
      * Physical swap list; only for a built deck.
      */
     swap: SwapOut | null;
+};
+
+/**
+ * PriceOut
+ */
+export type PriceOut = {
+    /**
+     * Url
+     */
+    url: string;
+    /**
+     * Vendor
+     */
+    vendor?: string | null;
+    /**
+     * Price
+     */
+    price: number | null;
+    /**
+     * Currency
+     */
+    currency: string | null;
+    /**
+     * Available
+     *
+     * None when the page doesn't say.
+     */
+    available: boolean | null;
+    /**
+     * Title
+     */
+    title: string | null;
+    /**
+     * Signal
+     *
+     * Which signal gave the price: shopify, meta, json-ld, microdata, pattern.
+     */
+    signal: string;
+    /**
+     * Error
+     */
+    error: string | null;
+    /**
+     * Kind
+     */
+    kind?: 'sealed' | 'sld' | 'single' | 'other_game' | 'unknown' | null;
+    /**
+     * Status
+     */
+    status?: 'matched' | 'ambiguous' | 'unmatched' | 'skipped' | 'confirmed' | null;
+    match?: MatchOut | null;
+    /**
+     * Candidates
+     */
+    candidates?: Array<MatchOut>;
+    /**
+     * Note
+     */
+    note?: string;
+    /**
+     * Market
+     *
+     * Sealed market, Secret Lair market, or the single's price.
+     */
+    market?: number | null;
+    /**
+     * Contents
+     *
+     * What the cards inside are worth (sealed / Secret Lair).
+     */
+    contents?: number | null;
+    /**
+     * Partial
+     *
+     * Some cards inside have no price — contents undercounts.
+     */
+    partial?: boolean;
+    /**
+     * Delta
+     *
+     * Face price minus market (negative = below market).
+     */
+    delta?: number | null;
+    /**
+     * Pct
+     */
+    pct?: number | null;
 };
 
 /**
@@ -3022,6 +3171,31 @@ export type DealsTabsResponses = {
 };
 
 export type DealsTabsResponse = DealsTabsResponses[keyof DealsTabsResponses];
+
+export type DealsMatchData = {
+    body: ConfirmIn;
+    path?: never;
+    query?: never;
+    url: '/api/deals/match';
+};
+
+export type DealsMatchErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DealsMatchError = DealsMatchErrors[keyof DealsMatchErrors];
+
+export type DealsMatchResponses = {
+    /**
+     * Successful Response
+     */
+    200: PriceOut;
+};
+
+export type DealsMatchResponse = DealsMatchResponses[keyof DealsMatchResponses];
 
 export type UndoInfoData = {
     body?: never;

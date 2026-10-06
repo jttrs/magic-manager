@@ -491,6 +491,47 @@
         }
       }
     },
+    "/api/deals/match": {
+      "post": {
+        "tags": [
+          "deals"
+        ],
+        "summary": "Deals Match",
+        "operationId": "deals_match",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/undo": {
       "get": {
         "tags": [
@@ -3374,6 +3415,75 @@
         ],
         "title": "CompareOut"
       },
+      "ConfirmIn": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "available": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Available"
+          },
+          "choice": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MatchOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the listing is; null forgets a confirmation."
+          }
+        },
+        "type": "object",
+        "required": [
+          "url",
+          "choice"
+        ],
+        "title": "ConfirmIn"
+      },
       "CopyIn": {
         "properties": {
           "name": {
@@ -4761,6 +4871,68 @@
         ],
         "title": "LegalityOut"
       },
+      "MatchOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "sealed",
+              "sld",
+              "single"
+            ],
+            "title": "Kind"
+          },
+          "set_code": {
+            "type": "string",
+            "title": "Set Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "scryfall_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scryfall Id"
+          },
+          "finish": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finish"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price",
+            "description": "Singles: the printing's market at that finish."
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "set_code",
+          "name"
+        ],
+        "title": "MatchOut"
+      },
       "MissingOut": {
         "properties": {
           "scryfall_id": {
@@ -5235,6 +5407,208 @@
           "swap"
         ],
         "title": "PreviewOut"
+      },
+      "PriceOut": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "vendor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vendor"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "available": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Available",
+            "description": "None when the page doesn't say."
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "signal": {
+            "type": "string",
+            "title": "Signal",
+            "description": "Which signal gave the price: shopify, meta, json-ld, microdata, pattern."
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "sealed",
+                  "sld",
+                  "single",
+                  "other_game",
+                  "unknown"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "matched",
+                  "ambiguous",
+                  "unmatched",
+                  "skipped",
+                  "confirmed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "match": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MatchOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/MatchOut"
+            },
+            "type": "array",
+            "title": "Candidates"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note",
+            "default": ""
+          },
+          "market": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Market",
+            "description": "Sealed market, Secret Lair market, or the single's price."
+          },
+          "contents": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contents",
+            "description": "What the cards inside are worth (sealed / Secret Lair)."
+          },
+          "partial": {
+            "type": "boolean",
+            "title": "Partial",
+            "description": "Some cards inside have no price \u2014 contents undercounts.",
+            "default": false
+          },
+          "delta": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delta",
+            "description": "Face price minus market (negative = below market)."
+          },
+          "pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url",
+          "price",
+          "currency",
+          "available",
+          "title",
+          "signal",
+          "error"
+        ],
+        "title": "PriceOut"
       },
       "PrintingOut": {
         "properties": {

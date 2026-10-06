@@ -168,6 +168,13 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         except tabs_engine.TabsUnavailable as e:
             raise HTTPException(503, str(e)) from e
 
+    @app.post("/api/deals/match", response_model=deals_api.PriceOut, tags=["deals"], dependencies=[write("before confirming a listing")])
+    def deals_match(req: deals_api.ConfirmIn):
+        try:
+            return deals_api.confirm(req)
+        except features_engine.FeatureDisabled as e:
+            raise HTTPException(403, str(e)) from e
+
     # ---------- undo (one restore point) ----------
 
     @app.get("/api/undo", response_model=undo_api.UndoOut | None, tags=["undo"])
