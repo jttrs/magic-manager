@@ -8,7 +8,7 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
-    port: 5173,
+    port: Number(process.env.MM_WEB_PORT ?? 5173),
     proxy: { '/api': { target: `http://127.0.0.1:${process.env.MM_API_PORT ?? 8765}`, changeOrigin: false } },
   },
   test: { include: ['src/**/*.test.ts'] },
