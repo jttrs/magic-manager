@@ -154,7 +154,7 @@ def value_sealed_product(
             sealed_market=totals.market_whole, sealed_market_source=source,
             exact_singles=ev_val, floor_singles=ev_val,
             coverage=totals.coverage, booster_only=True,
-            diagnostics=diagnostics, intrinsic=totals.intrinsic,
+            diagnostics=diagnostics, intrinsic=totals.intrinsic, booster_ev=ev_val,
             note="random-booster product — cols 3/4 are the booster EV, not a fixed-singles sum",
         )
 
@@ -193,6 +193,7 @@ def value_sealed_product(
         exact_singles=exact, floor_singles=floor_total,
         coverage=totals.coverage, diagnostics=diagnostics, intrinsic=totals.intrinsic,
         unpriced_cards=unpriced_cards, total_cards=total_cards,
+        booster_ev=pack_ev, card_needs=exp.needs,
     )
 
 

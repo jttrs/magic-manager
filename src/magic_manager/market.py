@@ -13,6 +13,8 @@ Thin composition over the existing engines (no new valuation math):
 """
 from __future__ import annotations
 
+import re
+import time
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -135,6 +137,103 @@ def _precon_product(slug: str) -> tuple[str, str] | None:
     return None
 
 
+def card_lines(rows: list[construct.NetRow]) -> tuple[list[dict], float, float]:
+    """Each netted card at its exact printing and at its cheapest printing (the
+    functional floor, from local prices — capped at the exact price, since that
+    printing is one of the card's printings). Returns ``(lines, Σ floor·need,
+    Σ floor·buy)``. Shared by deck cost and product cost."""
+    with db.connect() as conn:
+        oids = {r[0]: r[1] for r in conn.execute(
+            f"SELECT scryfall_id, oracle_id FROM cards WHERE scryfall_id IN ({','.join('?' * len(rows)) or 'NULL'})",
+            [r.scryfall_id for r in rows])}
+    floors = sets.lowest_price_by_oracle(set(v for v in oids.values() if v))
+    lines = []
+    need_floor = buy_floor = 0.0
+    for r in rows:
+        f = floors.get(oids.get(r.scryfall_id) or "") or {}
+        floor = f.get("lowest_usd")
+        cheaper_elsewhere = floor is not None and (r.unit_usd is None or floor < r.unit_usd)
+        if not cheaper_elsewhere:
+            floor = r.unit_usd if r.unit_usd is not None else floor
+            f = {}
+        if floor is not None:
+            need_floor += floor * r.need_qty
+            buy_floor += floor * r.buy_qty
+        lines.append({
+            "scryfall_id": r.scryfall_id, "finish": r.finish, "name": r.name,
+            "set_code": r.set_code, "collector_number": r.collector_number,
+            "need": r.need_qty, "free": r.loose_qty, "buy": r.buy_qty,
+            "unit_usd": r.unit_usd, "floor_usd": floor,
+            "floor_set_code": f.get("set_code"), "floor_collector_number": f.get("collector_number"),
+            "floor_scryfall_id": f.get("scryfall_id") or r.scryfall_id,
+        })
+    return lines, round(need_floor, 2), round(buy_floor, 2)
+
+
+_COST_TTL = 30 * 60
+_cost_memo: dict[tuple, tuple[float, dict]] = {}
+
+
+def product_cost(kind: str, set_code: str, name: str, finish: str | None = None) -> dict:
+    """What a sealed product or Secret Lair drop is worth, every way: its own
+    market price; what's inside at exact printings and at each card's cheapest
+    printing, split into KNOWN cards and random-booster EV; and every known card
+    as a line (exact + floor + your free copies). Memoized 30 min per product —
+    market prices don't move faster, and valuing is slow."""
+    key = (kind, set_code.lower(), name, finish)
+    hit = _cost_memo.get(key)
+    if hit and time.monotonic() - hit[0] < _COST_TTL:
+        return hit[1]
+    out = _sld_cost(name, finish) if kind == "sld" else _sealed_cost(set_code, name)
+    _cost_memo[key] = (time.monotonic(), out)
+    return out
+
+
+def _cost_totals(rows: list[construct.NetRow], ev: float | None) -> dict:
+    lines, floor_cards, _ = card_lines(rows)
+    priced = [ln for ln in lines if ln["unit_usd"] is not None]
+    known_exact = round(sum(ln["unit_usd"] * ln["need"] for ln in priced), 2) if priced else None
+    known_floor = floor_cards if lines else None
+    plus = lambda v: None if v is None and ev is None else round((v or 0.0) + (ev or 0.0), 2)  # noqa: E731
+    total = sum(ln["need"] for ln in lines)
+    return {"known_exact": known_exact, "known_floor": known_floor, "booster_ev": ev,
+            "exact": plus(known_exact), "floor": plus(known_floor),
+            "total_cards": total, "unpriced": total - sum(ln["need"] for ln in priced), "lines": lines}
+
+
+# Valuation diagnostics the cost ledger already shows as numbers (booster EV, unpriced count).
+_LEDGER_NOTE = re.compile(r"random-booster EV \(cols 3/4\)|have no price at their exact printing")
+
+
+def _sealed_cost(set_code: str, name: str) -> dict:
+    product = sealed.identify_product(set_code, name)
+    v = valuation.value_sealed_product(set_code, product.get("name"), floors=False)
+    rows = construct.net_against_loose(v.card_needs)
+    return {"kind": "sealed", "set_code": set_code.lower(), "name": product.get("name") or name,
+            "finish": None, "category": product.get("category"), "subtype": product.get("subtype"),
+            "release_date": product.get("releaseDate"), "market": v.sealed_market,
+            "market_source": v.sealed_market_source, "contents": v.intrinsic, "booster_only": v.booster_only,
+            "notes": [d for d in v.diagnostics if not _LEDGER_NOTE.search(d)], **_cost_totals(rows, v.booster_ev)}
+
+
+def _sld_cost(name: str, finish: str | None) -> dict:
+    from . import sld
+    drop = sld.identify_drop(name)
+    ids = drop.get("ids") or sld.collect_drop_ids(drop["file_names"])
+    notes = []
+    fin = "foil" if finish == "foil" else "nonfoil"
+    exp = construct.expand_printings(ids, finish=fin, label=drop["name"], set_code="sld")
+    if fin == "foil" and not any(n.unit_usd is not None for n in exp.needs):
+        exp = construct.expand_printings(ids, finish="nonfoil", label=drop["name"], set_code="sld")
+        notes.append("foil edition, but these cards are only priced nonfoil — cards use nonfoil prices")
+    market, source = valuation.sld_sealed_market(drop["name"], "foil" if finish == "foil" else "auto")
+    totals = _cost_totals(construct.net_against_loose(exp.needs), None)
+    return {"kind": "sld", "set_code": "sld", "name": drop["name"], "finish": finish,
+            "category": "secret_lair", "subtype": None, "release_date": drop.get("release_date"),
+            "market": market, "market_source": source, "contents": totals["exact"], "booster_only": False,
+            "notes": notes, **totals}
+
+
 def deck_cost(slug: str, *, with_sealed: bool = True) -> dict:
     """Three ways to get a deck: sealed (precons), everything new, or your free
     cards first — each line at its exact printing and at the functional floor."""
@@ -149,34 +248,12 @@ def deck_cost(slug: str, *, with_sealed: bool = True) -> dict:
         except Exception:  # noqa: BLE001 — sealed price is optional
             pass
     summary = construct.summarize(rows, sealed_market)
-    with db.connect() as conn:
-        oids = {r[0]: r[1] for r in conn.execute(
-            f"SELECT scryfall_id, oracle_id FROM cards WHERE scryfall_id IN ({','.join('?' * len(rows)) or 'NULL'})",
-            [r.scryfall_id for r in rows])}
-    floors = sets.lowest_price_by_oracle(set(v for v in oids.values() if v))
-    lines = []
-    scratch_floor = with_collection_floor = 0.0
-    for r in rows:
-        f = floors.get(oids.get(r.scryfall_id) or "") or {}
-        floor = f.get("lowest_usd")
-        if floor is None:
-            floor = r.unit_usd
-        if floor is not None:
-            scratch_floor += floor * r.need_qty
-            with_collection_floor += floor * r.buy_qty
-        lines.append({
-            "scryfall_id": r.scryfall_id, "finish": r.finish, "name": r.name,
-            "set_code": r.set_code, "collector_number": r.collector_number,
-            "need": r.need_qty, "free": r.loose_qty, "buy": r.buy_qty,
-            "unit_usd": r.unit_usd, "floor_usd": floor,
-            "floor_set_code": f.get("set_code"), "floor_collector_number": f.get("collector_number"),
-            "floor_scryfall_id": f.get("scryfall_id") or r.scryfall_id,
-        })
+    lines, scratch_floor, with_collection_floor = card_lines(rows)
     lines.sort(key=lambda ln: -((ln["floor_usd"] or 0) * ln["buy"]))
     return {
         "slug": slug, "sealed_product": sealed_name, "sealed": sealed_market,
         "scratch": summary["scratch"], "with_collection": summary["with_collection"],
-        "scratch_floor": round(scratch_floor, 2), "with_collection_floor": round(with_collection_floor, 2),
+        "scratch_floor": scratch_floor, "with_collection_floor": with_collection_floor,
         "coverage": round(summary["coverage"], 3), "unpriced": summary["n_unpriced"],
         "total_need": summary["total_need"], "lines": lines,
     }

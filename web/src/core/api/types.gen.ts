@@ -2173,6 +2173,26 @@ export type PriceOut = {
      * Pct
      */
     pct?: number | null;
+    /**
+     * Watching
+     *
+     * This link is on your watchlist (its price history is kept).
+     */
+    watching?: boolean;
+};
+
+/**
+ * PricePointOut
+ */
+export type PricePointOut = {
+    /**
+     * Price
+     */
+    price: number | null;
+    /**
+     * At
+     */
+    at: string;
 };
 
 /**
@@ -2259,6 +2279,110 @@ export type PrintingOut = {
      * Owned copies no built deck has pledged (all finishes).
      */
     free?: number;
+};
+
+/**
+ * ProductCostOut
+ */
+export type ProductCostOut = {
+    /**
+     * Kind
+     */
+    kind: 'sealed' | 'sld';
+    /**
+     * Set Code
+     */
+    set_code: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Finish
+     */
+    finish?: string | null;
+    /**
+     * Category
+     */
+    category?: string | null;
+    /**
+     * Subtype
+     */
+    subtype?: string | null;
+    /**
+     * Release Date
+     */
+    release_date?: string | null;
+    /**
+     * Market
+     *
+     * The sealed product's own market price.
+     */
+    market?: number | null;
+    /**
+     * Market Source
+     */
+    market_source?: string | null;
+    /**
+     * Contents
+     *
+     * What's inside: known cards (exact printings) + booster EV.
+     */
+    contents?: number | null;
+    /**
+     * Exact
+     *
+     * Known cards at their exact printings + booster EV.
+     */
+    exact?: number | null;
+    /**
+     * Floor
+     *
+     * Known cards at each card's cheapest printing + booster EV.
+     */
+    floor?: number | null;
+    /**
+     * Known Exact
+     *
+     * Known cards only, exact printings.
+     */
+    known_exact?: number | null;
+    /**
+     * Known Floor
+     *
+     * Known cards only, cheapest printings.
+     */
+    known_floor?: number | null;
+    /**
+     * Booster Ev
+     *
+     * Expected value of the random boosters inside.
+     */
+    booster_ev?: number | null;
+    /**
+     * Booster Only
+     */
+    booster_only?: boolean;
+    /**
+     * Total Cards
+     */
+    total_cards?: number;
+    /**
+     * Unpriced
+     *
+     * Known cards with no price at their exact printing.
+     */
+    unpriced?: number;
+    /**
+     * Notes
+     */
+    notes?: Array<string>;
+    /**
+     * Lines
+     *
+     * Every known card (exact + cheapest printing, your free copies).
+     */
+    lines?: Array<DeckLineOut>;
 };
 
 /**
@@ -2873,6 +2997,169 @@ export type ViolationOut = {
     cards: Array<string>;
 };
 
+/**
+ * WatchIn
+ */
+export type WatchIn = {
+    /**
+     * Url
+     */
+    url: string;
+    choice: MatchOut;
+    /**
+     * Price
+     */
+    price?: number | null;
+    /**
+     * Currency
+     */
+    currency?: string | null;
+};
+
+/**
+ * WatchOut
+ */
+export type WatchOut = {
+    /**
+     * Watching
+     */
+    watching: boolean;
+    /**
+     * Message
+     */
+    message: string;
+};
+
+/**
+ * WatchStoreOut
+ */
+export type WatchStoreOut = {
+    /**
+     * Url
+     */
+    url: string;
+    /**
+     * Store
+     */
+    store: string | null;
+    /**
+     * Price
+     */
+    price: number | null;
+    /**
+     * Available
+     */
+    available: boolean | null;
+    /**
+     * Read At
+     */
+    read_at: string;
+    /**
+     * Read
+     *
+     * False when the latest price is still the earmark's saved asking price.
+     */
+    read: boolean;
+    /**
+     * First Price
+     */
+    first_price: number | null;
+    /**
+     * First At
+     */
+    first_at: string;
+    /**
+     * Change
+     *
+     * Latest minus first price seen here.
+     */
+    change: number | null;
+    /**
+     * History
+     */
+    history: Array<PricePointOut>;
+};
+
+/**
+ * WatchedOut
+ */
+export type WatchedOut = {
+    /**
+     * Set Code
+     */
+    set_code: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Kind
+     */
+    kind: 'sealed' | 'sld' | 'single';
+    /**
+     * Finish
+     */
+    finish?: string | null;
+    /**
+     * Scryfall Id
+     *
+     * Singles: the watched printing.
+     */
+    scryfall_id?: string | null;
+    /**
+     * Category
+     */
+    category: string | null;
+    /**
+     * Subtype
+     */
+    subtype?: string | null;
+    /**
+     * Release Date
+     */
+    release_date: string | null;
+    /**
+     * Market
+     */
+    market?: number | null;
+    /**
+     * Contents
+     */
+    contents?: number | null;
+    /**
+     * Partial
+     */
+    partial?: boolean;
+    /**
+     * Best Price
+     */
+    best_price: number | null;
+    /**
+     * Best Store
+     */
+    best_store: string | null;
+    /**
+     * Best Url
+     */
+    best_url: string | null;
+    /**
+     * Delta
+     */
+    delta?: number | null;
+    /**
+     * Pct
+     */
+    pct?: number | null;
+    /**
+     * Stores
+     */
+    stores: Array<WatchStoreOut>;
+    /**
+     * Error
+     */
+    error?: string | null;
+};
+
 export type JobSpecsData = {
     body?: never;
     path?: never;
@@ -3197,6 +3484,79 @@ export type DealsMatchResponses = {
 
 export type DealsMatchResponse = DealsMatchResponses[keyof DealsMatchResponses];
 
+export type DealsUnwatchData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Url
+         */
+        url: string;
+    };
+    url: '/api/deals/watch';
+};
+
+export type DealsUnwatchErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DealsUnwatchError = DealsUnwatchErrors[keyof DealsUnwatchErrors];
+
+export type DealsUnwatchResponses = {
+    /**
+     * Successful Response
+     */
+    200: WatchOut;
+};
+
+export type DealsUnwatchResponse = DealsUnwatchResponses[keyof DealsUnwatchResponses];
+
+export type DealsWatchData = {
+    body: WatchIn;
+    path?: never;
+    query?: never;
+    url: '/api/deals/watch';
+};
+
+export type DealsWatchErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DealsWatchError = DealsWatchErrors[keyof DealsWatchErrors];
+
+export type DealsWatchResponses = {
+    /**
+     * Successful Response
+     */
+    200: WatchOut;
+};
+
+export type DealsWatchResponse = DealsWatchResponses[keyof DealsWatchResponses];
+
+export type DealsWatchedData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/deals/watched';
+};
+
+export type DealsWatchedResponses = {
+    /**
+     * Response Deals Watched
+     *
+     * Successful Response
+     */
+    200: Array<WatchedOut>;
+};
+
+export type DealsWatchedResponse = DealsWatchedResponses[keyof DealsWatchedResponses];
+
 export type UndoInfoData = {
     body?: never;
     path?: never;
@@ -3385,6 +3745,48 @@ export type MarketProductTreeResponses = {
 };
 
 export type MarketProductTreeResponse = MarketProductTreeResponses[keyof MarketProductTreeResponses];
+
+export type MarketProductCostData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Kind
+         */
+        kind: 'sealed' | 'sld';
+        /**
+         * Set
+         */
+        set: string;
+        /**
+         * Name
+         */
+        name: string;
+        /**
+         * Finish
+         */
+        finish?: string | null;
+    };
+    url: '/api/market/product-cost';
+};
+
+export type MarketProductCostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type MarketProductCostError = MarketProductCostErrors[keyof MarketProductCostErrors];
+
+export type MarketProductCostResponses = {
+    /**
+     * Successful Response
+     */
+    200: ProductCostOut;
+};
+
+export type MarketProductCostResponse = MarketProductCostResponses[keyof MarketProductCostResponses];
 
 export type MarketCardsData = {
     body?: never;

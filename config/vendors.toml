@@ -57,6 +57,15 @@ mode = "shopify"
 product_path = "/products/[^/?#]+"
 sample_url = "https://www.gamersguildusa.com/products/magic-the-gathering-reality-fracture-play-booster-display-box"
 
+[[vendor]]
+key = "cashcards"
+name = "Cash Cards Unlimited"
+hosts = ["cashcardsunlimited.com"]
+mode = "shopify"
+product_path = "/products/[^/?#]+"
+# A multi-deck page: each link names one deck with ?variant=<id> (or a name).
+sample_url = "https://cashcardsunlimited.com/collections/mtg-sealed-product/products/2018-commander-deck?variant=46755709747427"
+
 # ---- Page-tag stores ----
 
 [[vendor]]

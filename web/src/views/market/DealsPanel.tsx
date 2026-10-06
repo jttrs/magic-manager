@@ -1,12 +1,15 @@
-import { useMutation } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
 import { useJob } from '../../app/useJob';
-import { bestDeals, deltaLabel, pricesFrom, sharedErrors, stockLabel, type PriceRow } from '../../core/deals';
-import { unwrap } from '../../app/queries';
+import { deltaLabel, pricesFrom, sharedErrors, stockLabel, type PriceRow } from '../../core/deals';
+import { dealsTabsQuery, unwrap } from '../../app/queries';
 import { Button } from '../../components/Button';
 import { EmptyNote } from '../../components/States';
-import { dealsMatch, dealsTabs, type MatchOut, type OpenTabsOut, type StoreTabsOut } from '../../core/api';
+import { dealsMatch, type MatchOut, type OpenTabsOut, type StoreTabsOut } from '../../core/api';
 import { fmtCount, fmtInt, fmtUsd } from '../../core/format';
+import type { MarketSearch } from '../../core/search';
+import { DealsWorkspace } from './DealsWorkspace';
+import { dealsPricesQuery, patchPrices, setPrices, useDealCosts, useDealsData } from './useDealsData';
 
 const MODE_NOTE: Record<StoreTabsOut['mode'], string> = {
   shopify: 'price read from the store',
@@ -14,27 +17,33 @@ const MODE_NOTE: Record<StoreTabsOut['mode'], string> = {
   rendered: 'price read from your open tab',
 };
 
-/** Internal (deals flag): the product pages open in your browser, by store.
- *  Read on demand only — the open-tab set changes under us, so nothing is cached. */
-export function DealsPanel() {
-  const read = useMutation({ mutationFn: async () => unwrap(await dealsTabs({ query: { browser: 'chrome' } })) });
+const NO_PRICES = new Map<string, PriceRow>();
+const H2 = 'flex items-baseline gap-2 border-b-2 border-rule-strong pb-1 text-lg voice-condensed font-bold text-ink';
+
+/** Internal (deals flag): the product pages open in your browser. Read on demand only —
+ *  the open-tab set changes under us. Before prices: the pages by store; after: the product table. */
+export function DealsPanel({ search, set }: { search: MarketSearch; set: (patch: Partial<MarketSearch>) => void }) {
+  const qc = useQueryClient();
+  const read = useQuery(dealsTabsQuery());
   const r = read.data;
   const job = useJob();
   const urls = r ? r.stores.flatMap((s) => s.tabs.map((t) => t.url)) : [];
   const live = job.live;
   const reading = live != null && live.status !== 'succeeded' && live.status !== 'failed';
-  const [confirmed, setConfirmed] = useState<Map<string, PriceRow>>(new Map());
-  const prices = useMemo(() => {
-    const m = live?.status === 'succeeded' ? pricesFrom(live.artifacts) : new Map<string, PriceRow>();
-    for (const [u, row] of confirmed) if (m.has(u)) m.set(u, row);
-    return m;
-  }, [live?.status, live?.artifacts, confirmed]);
-  const onConfirmed = (row: PriceRow) => setConfirmed((c) => new Map(c).set(row.url, row));
-  return (
-    <div className="flex flex-col gap-4 px-5 pt-2">
+  const prices = useQuery(dealsPricesQuery()).data ?? NO_PRICES;
+  useEffect(() => {
+    if (live?.status === 'succeeded') setPrices(qc, pricesFrom(live.artifacts));
+  }, [live?.status, live?.artifacts, qc]);
+  const data = useDealsData('tabs', true);
+  const costs = useDealCosts(data.products);
+  const onConfirmed = (row: PriceRow) => patchPrices(qc, [row.url], () => row);
+  const shared = sharedErrors(prices.values());
+
+  const controls = (
+    <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3">
-        <Button tone="paper" emphasis={r ? 'quiet' : 'primary'} onClick={() => read.mutate()} disabled={read.isPending}>
-          {read.isPending ? 'Reading your tabs…' : r ? 'Read again' : 'Read my open tabs'}
+        <Button tone="paper" emphasis={r ? 'quiet' : 'primary'} onClick={() => void read.refetch()} disabled={read.isFetching}>
+          {read.isFetching ? 'Reading your tabs…' : r ? 'Read again' : 'Read my open tabs'}
         </Button>
         {r && urls.length > 0 && (
           <Button tone="paper" emphasis={prices.size ? 'quiet' : 'primary'} disabled={reading} onClick={() => { job.reset(); void job.start('deals.read_prices', { urls }); }}>
@@ -45,7 +54,7 @@ export function DealsPanel() {
       </div>
       {read.isError && <p role="alert" className="text-md text-danger">{(read.error as Error).message}</p>}
       {r?.warnings.map((w) => <p key={w} role="status" className="text-md leading-relaxed text-ink">{w}</p>)}
-      {!r && !read.isPending && !read.isError && (
+      {!r && !read.isFetching && !read.isError && (
         <p className="max-w-[60ch] text-md leading-relaxed text-ink-muted">
           Reads the tabs open in Chrome on this computer and keeps the store product pages. Nothing is opened, closed or changed.
         </p>
@@ -57,16 +66,32 @@ export function DealsPanel() {
         </p>
       )}
       {live?.status === 'failed' && <p role="alert" className="text-md text-danger">{live.error ?? 'Couldn’t read prices.'}</p>}
-      {sharedErrors(prices.values()).map((e) => <p key={e} role="alert" className="max-w-[70ch] text-md leading-relaxed text-ink">{e}</p>)}
-      {r && <Results r={r} prices={prices} onConfirmed={onConfirmed} />}
+      {shared.map((e) => <p key={e} role="alert" className="max-w-[70ch] text-md leading-relaxed text-ink">{e}</p>)}
+    </div>
+  );
+
+  if (prices.size > 0) {
+    return (
+      <DealsWorkspace
+        products={data.products}
+        costs={costs}
+        search={search}
+        set={set}
+        header={controls}
+        footer={r && <TabsFooter r={r} needsLook={data.needsLook} shared={shared} onConfirmed={onConfirmed} />}
+        emptyNote={<EmptyNote title="Nothing matched yet">Choose a product for the listings below, or read again.</EmptyNote>}
+      />
+    );
+  }
+  return (
+    <div className="flex h-full flex-col gap-4 overflow-y-auto px-5 pb-8 pt-2">
+      {controls}
+      {r && <Results r={r} />}
     </div>
   );
 }
 
-function Results({ r, prices, onConfirmed }: { r: OpenTabsOut; prices: Map<string, PriceRow>; onConfirmed: (row: PriceRow) => void }) {
-  const shared = sharedErrors(prices.values());
-  const best = bestDeals([...prices.values()]);
-  const storeOf = new Map(r.stores.flatMap((s) => s.tabs.map((t) => [t.url, s.name] as const)));
+function Results({ r }: { r: OpenTabsOut }) {
   const products = r.stores.reduce((n, s) => n + s.tabs.length, 0);
   if (!products && !r.uncatalogued.length) {
     return r.warnings.length
@@ -75,50 +100,61 @@ function Results({ r, prices, onConfirmed }: { r: OpenTabsOut; prices: Map<strin
   }
   return (
     <div className="flex flex-col gap-5">
-      {best.length > 0 && (
-        <section aria-label="Below market" className="flex flex-col">
-          <h2 className="flex items-baseline gap-2 border-b-2 border-rule-strong pb-1 text-lg voice-condensed font-bold text-ink">
-            Below market <span className="text-sm font-normal tabular text-ink-muted">{fmtInt(best.length)}</span>
-            <span className="ml-auto text-xs font-normal text-ink-muted">in stock · face price vs market, before tax</span>
-          </h2>
-          <ul>
-            {best.map((p) => (
-              <li key={p.url} className="flex flex-wrap items-baseline gap-x-3 border-b border-rule py-1.5 text-sm">
-                <a href={p.url} target="_blank" rel="noreferrer" className="min-w-0 basis-full truncate text-ink no-underline hover:text-accent-ink sm:basis-auto sm:flex-1">
-                  {p.match?.name ?? p.title}<span className="ml-2 text-xs text-ink-muted">{storeOf.get(p.url)}</span><span className="sr-only"> (opens in a new tab)</span>
-                </a>
-                <span className="flex-1 text-xs font-medium text-accent-ink sm:flex-none">{deltaLabel(p)?.text}</span>
-                <span className="w-20 shrink-0 text-right tabular text-ink">{fmtUsd(p.price)}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
       {r.stores.map((s) => (
         <section key={s.key} aria-label={s.name} className="flex flex-col">
-          <h2 className="flex items-baseline gap-2 border-b-2 border-rule-strong pb-1 text-lg voice-condensed font-bold text-ink">
+          <h2 className={H2}>
             {s.name}
             <span className="text-sm font-normal tabular text-ink-muted">{fmtInt(s.tabs.length)}</span>
             <span className="ml-auto text-xs font-normal text-ink-muted">{MODE_NOTE[s.mode]}{s.no_sales_tax ? ' · no sales tax' : ''}</span>
           </h2>
           <ul>
-            {s.tabs.map((t) => <Listing key={t.url} url={t.url} title={t.title} p={prices.get(t.url)} shared={shared} onConfirmed={onConfirmed} />)}
+            {s.tabs.map((t) => <Listing key={t.url} url={t.url} title={t.title} p={undefined} shared={[]} onConfirmed={() => {}} />)}
           </ul>
         </section>
       ))}
-      {r.uncatalogued.length > 0 && (
-        <section aria-label="Stores without a recipe yet" className="flex flex-col gap-1">
-          <h2 className="text-sm voice-condensed font-medium uppercase tracking-[0.06em] text-ink-muted">Stores without a recipe yet</h2>
-          <ul className="text-sm text-ink">
-            {r.uncatalogued.map((u) => <li key={u.host} className="border-b border-rule py-1.5">{u.host} <span className="tabular text-ink-muted">· {fmtCount(u.tabs.length, 'product page')}</span></li>)}
+      <Uncatalogued r={r} />
+      <OtherTabs r={r} />
+    </div>
+  );
+}
+
+function Uncatalogued({ r }: { r: OpenTabsOut }) {
+  if (!r.uncatalogued.length) return null;
+  return (
+    <section aria-label="Stores without a recipe yet" className="flex flex-col gap-1">
+      <h2 className="text-sm voice-condensed font-medium uppercase tracking-[0.06em] text-ink-muted">Stores without a recipe yet</h2>
+      <ul className="text-sm text-ink">
+        {r.uncatalogued.map((u) => <li key={u.host} className="border-b border-rule py-1.5">{u.host} <span className="tabular text-ink-muted">· {fmtCount(u.tabs.length, 'product page')}</span></li>)}
+      </ul>
+    </section>
+  );
+}
+
+function OtherTabs({ r }: { r: OpenTabsOut }) {
+  return (
+    <p className="text-xs text-ink-muted">
+      Also open: {fmtCount(r.store_pages, 'other store page')} (carts, collections) · {fmtCount(r.other, 'other tab')}
+      {r.dropped_local ? ` · ${fmtCount(r.dropped_local, 'local tab')} skipped` : ''}
+      {r.duplicates ? ` · ${fmtCount(r.duplicates, 'duplicate')}` : ''}
+    </p>
+  );
+}
+
+/** Under the table: listings that aren't a known product yet (pick one, or see why), then the rest. */
+function TabsFooter({ r, needsLook, shared, onConfirmed }: { r: OpenTabsOut; needsLook: PriceRow[]; shared: string[]; onConfirmed: (row: PriceRow) => void }) {
+  const titleOf = useMemo(() => new Map(r.stores.flatMap((s) => s.tabs.map((t) => [t.url, t.title] as const))), [r]);
+  return (
+    <div className="flex flex-col gap-5">
+      {needsLook.length > 0 && (
+        <section aria-label="Needs a look" className="flex flex-col">
+          <h2 className={H2}>Needs a look <span className="text-sm font-normal tabular text-ink-muted">{fmtInt(needsLook.length)}</span></h2>
+          <ul>
+            {needsLook.map((p) => <Listing key={p.url} url={p.url} title={titleOf.get(p.url) ?? ''} p={p} shared={shared} onConfirmed={onConfirmed} />)}
           </ul>
         </section>
       )}
-      <p className="text-xs text-ink-muted">
-        Also open: {fmtCount(r.store_pages, 'other store page')} (carts, collections) · {fmtCount(r.other, 'other tab')}
-        {r.dropped_local ? ` · ${fmtCount(r.dropped_local, 'local tab')} skipped` : ''}
-        {r.duplicates ? ` · ${fmtCount(r.duplicates, 'duplicate')}` : ''}
-      </p>
+      <Uncatalogued r={r} />
+      <OtherTabs r={r} />
     </div>
   );
 }

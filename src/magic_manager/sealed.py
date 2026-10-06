@@ -105,6 +105,8 @@ class ProductValuation:
     intrinsic: float | None = None       # contents value incl. booster EV (the tree's aggregate)
     unpriced_cards: int = 0              # fixed cards with no price at their exact printing (col 3 undercounts)
     total_cards: int = 0                 # fixed cards in the product (the denominator for unpriced_cards)
+    booster_ev: float | None = None      # random-booster EV included in cols 3/4 (None = no packs)
+    card_needs: list = field(default_factory=list, repr=False)  # the fixed cards (construct.CardNeed)
 
 
 # ---------- market provider seam ----------

@@ -11,6 +11,8 @@ that must run once against your live DB after you pull them:
                                     scryfall_tags.sync_kinds()      (mm scryfall tags sync — oracle + art)
   V31  earmarked_products.kind / scryfall_id / collector_number / finish → no backfill
                                     (DEFAULT 'sealed' classifies existing rows; schema-only)
+  V32  earmark_prices (price history) — schema-only; the migration seeds one row per
+                                    earmark link from its asking-price snapshot (no backfill step)
   —    'built' follows pledges     → decks.backfill_built_state()  (mm deck backfill-built)
                                     data-only: imported / hand-built decks with nothing pledged → not built;
                                     precons keep ONE built copy (extra unpledged built copies → not built)
@@ -120,6 +122,7 @@ def run(path: Path) -> int:
     from magic_manager import ingest
     drift = ingest.reconcile_inventory_ledger(raw)
     kinds = raw.execute("SELECT kind, COUNT(*) FROM decks GROUP BY kind").fetchall() if "kind" in _columns(raw, "decks") else []
+    price_rows = raw.execute("SELECT COUNT(*) FROM earmark_prices").fetchone()[0] if _columns(raw, "earmark_prices") else None
     # CORRECTED columns: precon_state may change, but only toward the rule
     # "a non-precon deck is built iff something is pledged to it".
     unpledged_built = raw.execute(
@@ -136,6 +139,8 @@ def run(path: Path) -> int:
     print(f"  {'✓' if not drift else '✗'} ledger reconciles (inventory == SUM(delta)): {len(drift)} drifting pairs")
     print(f"  {'✓' if not unpledged_built else '✗'} 'built' is consistent (no unpledged imports; one built copy per precon unless pledged): {unpledged_built} off")
     print(f"  decks by kind: {dict(kinds)}")
+    if price_rows is not None:
+        print(f"  earmark price history: {price_rows} rows (V32 seeds one per priced earmark link)")
     return 1 if bad or drift or unpledged_built else 0
 
 

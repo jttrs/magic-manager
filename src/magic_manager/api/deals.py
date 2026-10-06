@@ -75,6 +75,7 @@ class PriceOut(BaseModel):
     partial: bool = Field(False, description="Some cards inside have no price — contents undercounts.")
     delta: float | None = Field(None, description="Face price minus market (negative = below market).")
     pct: float | None = None
+    watching: bool = Field(False, description="This link is on your watchlist (its price history is kept).")
 
 
 class ReadPricesInput(BaseModel):
@@ -117,5 +118,103 @@ def confirm(req: ConfirmIn) -> PriceOut:
     deals.confirm_match(req.url, req.choice.model_dump() if req.choice else None)
     row = {"url": req.url, "vendor": None, "price": req.price, "currency": req.currency, "available": req.available,
            "title": req.title, "signal": "", "error": None}
-    confirmed = deals.confirmed_matches([req.url]).get(req.url)
-    return PriceOut(**deals.compare(row, confirmed=confirmed))
+    watched = deals.watched_identities([req.url])
+    confirmed = deals.confirmed_matches([req.url]).get(req.url) or watched.get(req.url)
+    return PriceOut(**deals.compare(row, confirmed=confirmed), watching=req.url in watched)
+
+
+class WatchIn(BaseModel):
+    url: str
+    choice: MatchOut
+    price: float | None = None
+    currency: str | None = "USD"
+
+
+class WatchOut(BaseModel):
+    watching: bool
+    message: str
+
+
+def watch(req: WatchIn) -> WatchOut:
+    features.require("deals")
+    deals.watch(req.url, req.choice.model_dump(), price=req.price, currency=req.currency)
+    return WatchOut(watching=True, message="Watching — its price is saved each time you read it.")
+
+
+def unwatch(url: str) -> WatchOut:
+    features.require("deals")
+    deals.unwatch(url)
+    return WatchOut(watching=False, message="No longer watching this link.")
+
+
+class PricePointOut(BaseModel):
+    price: float | None
+    at: str
+
+
+class WatchStoreOut(BaseModel):
+    url: str
+    store: str | None
+    price: float | None
+    available: bool | None
+    read_at: str
+    read: bool = Field(description="False when the latest price is still the earmark's saved asking price.")
+    first_price: float | None
+    first_at: str
+    change: float | None = Field(description="Latest minus first price seen here.")
+    history: list[PricePointOut]
+
+
+class WatchedOut(BaseModel):
+    set_code: str
+    name: str
+    kind: Literal["sealed", "sld", "single"]
+    finish: str | None = None
+    scryfall_id: str | None = Field(None, description="Singles: the watched printing.")
+    category: str | None
+    subtype: str | None = None
+    release_date: str | None
+    market: float | None = None
+    contents: float | None = None
+    partial: bool = False
+    best_price: float | None
+    best_store: str | None
+    best_url: str | None
+    delta: float | None = None
+    pct: float | None = None
+    stores: list[WatchStoreOut]
+    error: str | None = None
+
+
+def watched() -> list[WatchedOut]:
+    """Every watched product with its stores' prices — instant (no valuation;
+    values come per product from /api/market/product-cost)."""
+    features.require("deals")
+    return [WatchedOut(**r) for r in deals.watchlist(values=False)]
+
+
+class WatchlistInput(BaseModel):
+    refresh: bool = Field(False, description="Read every watched link's price first.")
+
+
+def _run_watchlist(inp: WatchlistInput, progress: ProgressFn) -> JobResult:
+    features.require("deals")
+    read = []
+    if inp.refresh:
+        urls = deals.watched_urls()
+        read = deals.read_and_compare(urls, progress=lambda i, n, msg: progress(ProgressEvent(i - 1, n, f"reading {msg}")))
+    rows = deals.watchlist(values=False)
+    out = [WatchedOut(**r).model_dump() for r in rows]
+    errors = [PriceOut(**r).model_dump() for r in read if r.get("error")]
+    summary = f"{len(out)} watched products" + (f" · {len(read) - len(errors)} of {len(read)} prices read" if inp.refresh else "")
+    return JobResult(summary=summary, artifacts=[Artifact(kind="json", label="watchlist", data=out),
+                                                 Artifact(kind="json", label="errors", data=errors)])
+
+
+WATCHLIST = register(JobSpec(
+    name="deals.watchlist",
+    title="Read watched prices",
+    description="Read every watched link's current price (history grows) and list what you watch.",
+    input_model=WatchlistInput,
+    run=_run_watchlist,
+))

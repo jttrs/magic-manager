@@ -2,6 +2,7 @@
 // the URL so any view is a shareable deep link. Framework-free: the router only
 // binds these schemas.
 import { z } from 'zod';
+import { BASES, DEAL_SORTS, PRODUCT_TYPES } from './deals';
 
 export const BUCKETS = ['a_only', 'both', 'b_only'] as const;
 export type Bucket = (typeof BUCKETS)[number];
@@ -86,5 +87,21 @@ export const marketSearch = z.object({
   sort: z.enum(CARD_PRICE_SORTS).catch('savings').default('savings'),
   /** Deck buy list: the cheapest printing of each card, or the deck's exact printing. */
   buyAt: z.enum(PRICE_BASES).catch('floor').default('floor'),
+  /** Deals: the product pages open in your browser, or the products you watch. */
+  deals: z.enum(['tabs', 'watching']).catch('tabs').default('tabs'),
+  /** Deals: name or set code. */
+  dq: z.string().catch('').default(''),
+  /** Deals: only products offered by these stores; empty = all. */
+  stores: list(z.string()).catch([]).default([]),
+  /** Deals: product types to keep; empty = all. */
+  types: list(z.enum(PRODUCT_TYPES)).catch([]).default([]),
+  /** Deals: only products at least this % under the compared price. */
+  minOff: z.union([z.literal(0), z.literal(10), z.literal(20), z.literal(30)]).catch(0).default(0),
+  /** Deals: what the best price is compared to. */
+  basis: z.enum(BASES).catch('market').default('market'),
+  dsort: z.enum(DEAL_SORTS).catch('gap_pct').default('gap_pct'),
+  inStock: z.boolean().catch(false).default(false),
+  /** Deals: the product open in the inspector (its key). */
+  item: z.string().optional().catch(undefined),
 });
 export type MarketSearch = z.infer<typeof marketSearch>;

@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from dataclasses import asdict
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from .. import market
@@ -108,6 +110,33 @@ class DeckCostOut(BaseModel):
     unpriced: int
     total_need: int
     lines: list[DeckLineOut]
+
+
+class ProductCostOut(BaseModel):
+    kind: Literal["sealed", "sld"]
+    set_code: str
+    name: str
+    finish: str | None = None
+    category: str | None = None
+    subtype: str | None = None
+    release_date: str | None = None
+    market: float | None = Field(None, description="The sealed product's own market price.")
+    market_source: str | None = None
+    contents: float | None = Field(None, description="What's inside: known cards (exact printings) + booster EV.")
+    exact: float | None = Field(None, description="Known cards at their exact printings + booster EV.")
+    floor: float | None = Field(None, description="Known cards at each card's cheapest printing + booster EV.")
+    known_exact: float | None = Field(None, description="Known cards only, exact printings.")
+    known_floor: float | None = Field(None, description="Known cards only, cheapest printings.")
+    booster_ev: float | None = Field(None, description="Expected value of the random boosters inside.")
+    booster_only: bool = False
+    total_cards: int = 0
+    unpriced: int = Field(0, description="Known cards with no price at their exact printing.")
+    notes: list[str] = Field(default_factory=list)
+    lines: list[DeckLineOut] = Field(default_factory=list, description="Every known card (exact + cheapest printing, your free copies).")
+
+
+def product_cost(kind: str, set_code: str, name: str, finish: str | None = None) -> ProductCostOut:
+    return ProductCostOut(**market.product_cost(kind, set_code, name, finish))
 
 
 def family_products(code: str) -> FamilyProductsOut:

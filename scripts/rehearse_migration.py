@@ -60,6 +60,8 @@ V4_NEW_TABLES = ("inventory", "wishlist_entries", "decks", "deck_cards", "set_ta
 # bespoke subsume check (_verify_v19_subsume): its rows must survive as
 # ingest_events rows. The columns ingest_events copies verbatim from ingest_log:
 _LEDGER_TABLES = ("ingest_events", "inventory_events")
+# V12+ earmarks are user-entered (store URLs + asking prices) — protected like the ledger.
+_EARMARK_TABLES = ("earmarked_products", "earmark_links")
 _INGEST_LOG_CARRIED_COLS = (
     "at", "label", "source_path", "archived_path", "mode",
     "rows_added", "rows_updated", "rows_zeroed", "status", "error",
@@ -345,6 +347,8 @@ def main(argv: list[str] | None = None) -> int:
     precious = list(PRECIOUS_TABLES)
     if pre_version >= 19:
         precious += list(_LEDGER_TABLES)
+    if pre_version >= 12:
+        precious += list(_EARMARK_TABLES)
 
     pre: dict[str, tuple[int, str]] = {}
     for t in precious:

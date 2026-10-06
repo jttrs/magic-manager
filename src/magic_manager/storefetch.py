@@ -21,7 +21,7 @@ import threading
 import time
 from pathlib import Path
 from typing import Callable
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 import httpx
 
@@ -123,7 +123,7 @@ def read_tab(url: str, *, runner: Callable[[str], str] | None = None) -> tuple[s
     esc = lambda s: s.replace("\\", "\\\\").replace('"', '\\"')  # noqa: E731
     out = (runner or _osascript)(_TAB_SCRIPT.format(url=esc(url), js=esc(_TAB_JS)))
     if out == "__GONE__" or not out:
-        raise TabGone("That tab was closed or moved to another page.")
+        raise TabGone("This store is read from your open tab — open the page in Chrome, then read again.")
     data = json.loads(out)
     html = data.get("head", "") + "".join(
         f'<script type="application/ld+json">{ld}</script>' for ld in data.get("ld", []))
@@ -151,7 +151,8 @@ def read(url: str, *, fresh: bool = False, client: httpx.Client | None = None,
         if status == 404:
             raise LookupError("the store no longer has this product")
         storepage.check_blocked(body if status != 200 else "", status)
-        return v, vendors.read_listing(v, json.loads(body))
+        variant = (parse_qs(parts.query).get("variant") or [None])[0]
+        return v, vendors.read_listing(v, json.loads(body), variant=variant)
     status, body = _get(url, fresh=fresh, client=client)
     if status == 404:
         raise LookupError("the store no longer has this product")

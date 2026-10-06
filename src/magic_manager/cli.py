@@ -4860,50 +4860,8 @@ def input_list(
 def _resolve_identity(set_code: str, name: str | None, *,
                       collector_number: str | None = None,
                       finish: str = "nonfoil") -> dict:
-    """Validate a proposed sealed-product / SLD-drop / single-card identity → canonical dict.
-
-    With ``collector_number`` it is a SINGLE printing (checked first, so ``sld`` +
-    ``--cn`` is a Secret Lair single, not a drop): ``earmarks.resolve_single``
-    verifies the printing, finish and (if given) ``name``.
-
-    The single deterministic checkpoint shared by `mm resolve-product` and
-    `mm earmark add` (and the sealed-value URL/tab flow): the AGENT proposes a
-    ``set_code`` + product/drop ``name`` (the non-deterministic store-page→identity
-    step), and this confirms it resolves to a real MTGJSON product (or SLD drop),
-    returning the canonical identity. Raises ``LookupError`` on no/ambiguous match.
-
-    Returns a uniform dict: ``{kind, set_code, name, uuid?, category?, subtype?,
-    release_date?, card_count?}`` (``kind`` is ``"sld"`` or ``"sealed"``).
-
-    Secret Lair drops resolve through the SAME engine that PRICES them
-    (``sld.identify_drop`` — the ``sealed`` booster-tree engine would misprice a
-    drop by its shared booster EV). Store / sealedProduct names carry a
-    ``Secret Lair x`` scaffold + a finish marker that the bare DeckList drop name
-    lacks, so the input is normalized + stripped before matching (this is what lets
-    a store name like "… Beholder I Rainbow Foil" resolve where a raw
-    ``identify_drop`` fails). The finish is preserved separately — inferred from the
-    ORIGINAL name into ``subtype`` and appended to the canonical ``name`` (" (Foil
-    Edition)") — so the two editions of one drop stay distinct earmark rows AND the
-    review can price the right finish deterministically instead of re-sniffing a
-    store string."""
-    if collector_number:
-        return earmarks_mod.resolve_single(set_code, collector_number, finish, name=name)
-    if set_code.lower() == "sld":
-        raw = name or ""
-        drop = sld_mod.identify_drop(sld_mod.strip_finish_marker(sld_mod.normalize_name(raw)))
-        edition = sld_mod.edition_from_name(raw)
-        canonical = drop["name"] + (" (Foil Edition)" if edition == "foil" else "")
-        return {"kind": "sld", "set_code": "sld", "name": canonical,
-                "subtype": edition, "category": "secret_lair",
-                "release_date": drop.get("release_date")}
-    product = sealed_mod.identify_product(set_code, name)
-    return {
-        "kind": "sealed", "set_code": set_code.lower(), "name": product["name"],
-        "uuid": product.get("uuid"), "category": product.get("category"),
-        "subtype": product.get("subtype"),
-        "release_date": product.get("releaseDate"),
-        "card_count": product.get("cardCount"),
-    }
+    """See :func:`earmarks.resolve_identity` (the shared checkpoint)."""
+    return earmarks_mod.resolve_identity(set_code, name, collector_number=collector_number, finish=finish)
 
 
 def _resolve_identity_args(set_code: str, name: str | None, cn: str | None, finish: str) -> dict:
