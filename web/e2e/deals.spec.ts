@@ -207,7 +207,7 @@ test('Watching: a filterable table with an inspector; read prices again', async 
   await expect(inspector.getByRole('button', { name: 'Stop watching' })).toBeVisible();
 
   // Compare to the cards' cheapest printings.
-  await page.getByRole('radio', { name: 'Cards, cheapest' }).click();
+  await page.getByRole('radio', { name: 'Cheapest' }).click();
   await expect(row).toContainText('−14%');
   await expect(row).toContainText('$10.01');
 

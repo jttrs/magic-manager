@@ -57,9 +57,22 @@ def test_watch_records_history_and_reads_append(tmp_db, stub_identity):
         assert conn.execute("SELECT COUNT(*) FROM earmark_prices").fetchone()[0] == 0
 
 
-def test_watching_is_sealed_and_secret_lair_only(tmp_db):
+def test_watch_a_single_printing(tmp_db, seed_cards, make_card):
+    sid = "44444444-0000-0000-0000-000000000011"
+    seed_cards([make_card(id=sid, name="Exemplar of Light", set="pfdn", collector_number="11p",
+                          finishes=["nonfoil", "foil"], prices={"usd": "21.47", "usd_foil": "30.00"})])
+    url = "https://pokeboxusa.com/products/exemplar"
+    deals.watch(url, {"kind": "single", "set_code": "pfdn", "name": "Exemplar of Light (PFDN 11p)",
+                      "scryfall_id": sid, "finish": "foil"}, price=29.99)
+    [p] = earmarks.earmark_list()
+    assert (p.kind, p.collector_number, p.finish, p.scryfall_id) == ("single", "11p", "foil", sid)
+    [w] = deals.watchlist(values=False)
+    assert (w["kind"], w["scryfall_id"], w["finish"], w["market"], w["best_price"]) == ("single", sid, "foil", 30.0, 29.99)
+    assert deals.watched_identities([url])[url]["kind"] == "single"
     with pytest.raises(deals.NotWatchable):
-        deals.watch("https://x/p", {"kind": "single", "set_code": "fdn", "name": "Card"}, price=1.0)
+        deals.watch("https://x/p", {"kind": "single", "set_code": "fdn", "name": "Card", "scryfall_id": "nope"}, price=1.0)
+    with pytest.raises(deals.NotWatchable):
+        deals.watch("https://x/q", {"kind": "unknown", "set_code": "x", "name": "Thing"}, price=1.0)
 
 
 def test_watched_links_count_as_confirmed(tmp_db, stub_identity):

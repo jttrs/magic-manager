@@ -113,10 +113,10 @@ export function MarketView() {
           <Segmented<Basis>
             label="Compare to"
             showLabel
-            labelExtra={<InfoTip label="What is each price compared to?"><b>Sealed price</b> is the sealed product’s market price. <b>Cards, exact</b> is the cards inside at their exact printings plus the boosters’ expected value. <b>Cards, cheapest</b> is each card at its cheapest printing anywhere plus the boosters’ expected value.</InfoTip>}
+            labelExtra={<InfoTip label="What is each price compared to?"><b>Sealed</b> is the sealed product’s market price. <b>Exact</b> is the cards inside at their exact printings plus the boosters’ expected value. <b>Cheapest</b> is each card inside at its cheapest printing anywhere plus the boosters’ expected value.</InfoTip>}
             value={search.basis}
             onChange={(basis) => setFilter({ basis })}
-            options={[{ value: 'market', label: 'Sealed price' }, { value: 'exact', label: 'Cards, exact' }, { value: 'floor', label: 'Cards, cheapest' }]}
+            options={[{ value: 'market', label: 'Sealed' }, { value: 'exact', label: 'Exact' }, { value: 'floor', label: 'Cheapest' }]}
           />
           <SelectField<DealSort>
             label="Sort"
@@ -209,7 +209,7 @@ export function MarketView() {
 
   const sideSummary = search.subject === 'family' ? famName : deckName;
   return (
-    <ViewLayout label="Market controls" summary={sideSummary} sidebar={sidebar} startOpen={!(search.code || search.deck)}>
+    <ViewLayout label="Market controls" summary={sideSummary} sidebar={sidebar} startOpen={!(search.code || search.deck || search.subject === 'deals')}>
       <GuideSheet title={title} summary={summary}>
         {inDeals ? <div className="h-full min-h-0">{body}</div> : <div className="h-full overflow-y-auto pb-8">{body}</div>}
       </GuideSheet>

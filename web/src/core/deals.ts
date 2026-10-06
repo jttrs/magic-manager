@@ -127,8 +127,10 @@ export function productsFromWatched(rows: WatchedOut[], errors: PriceRow[] = [])
       readAge: readAge(s), trend: trendLabel(s), error: errorOf.get(s.url) ?? null,
     })));
     return {
-      key: productKey(w.kind, w.set_code, w.name, w.finish), kind: w.kind, set_code: w.set_code, name: w.name, finish: w.finish ?? null,
+      key: w.kind === 'single' ? `single|${w.scryfall_id}|${w.finish ?? ''}` : productKey(w.kind, w.set_code, w.name, w.finish),
+      kind: w.kind, set_code: w.set_code, name: w.name, finish: w.finish ?? null,
       category: w.category, type: productType(w.kind, w.category), offers, best: bestOf(offers), watching: true,
+      ...(w.kind === 'single' ? { singleMarket: w.market ?? null } : {}),
     };
   });
 }

@@ -168,8 +168,9 @@ class WatchStoreOut(BaseModel):
 class WatchedOut(BaseModel):
     set_code: str
     name: str
-    kind: Literal["sealed", "sld"]
+    kind: Literal["sealed", "sld", "single"]
     finish: str | None = None
+    scryfall_id: str | None = Field(None, description="Singles: the watched printing.")
     category: str | None
     subtype: str | None = None
     release_date: str | None

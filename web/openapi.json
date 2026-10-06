@@ -7379,7 +7379,8 @@
             "type": "string",
             "enum": [
               "sealed",
-              "sld"
+              "sld",
+              "single"
             ],
             "title": "Kind"
           },
@@ -7393,6 +7394,18 @@
               }
             ],
             "title": "Finish"
+          },
+          "scryfall_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scryfall Id",
+            "description": "Singles: the watched printing."
           },
           "category": {
             "anyOf": [

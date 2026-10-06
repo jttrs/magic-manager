@@ -110,9 +110,9 @@ function Worth({ p, cost, state }: { p: DealProduct; cost?: ProductCostOut; stat
     <>
       <dl className="flex flex-col">
         <Row label="Sealed price" value={cost.market} best={best} note={cost.market_source} />
-        {hasCards && <Row label="Cards inside, exact printings" value={cost.known_exact} best={best} />}
-        {hasCards && <Row label="Cards inside, cheapest printings" value={cost.known_floor} best={best} />}
-        {hasBoosters && <Row label="Boosters, expected value" value={cost.booster_ev} best={best} />}
+        {hasCards && <Row label="Cards inside, exact printings" value={cost.known_exact} best={hasBoosters ? null : best} />}
+        {hasCards && <Row label="Cards inside, cheapest printings" value={cost.known_floor} best={hasBoosters ? null : best} />}
+        {hasBoosters && <Row label="Boosters, expected value" value={cost.booster_ev} best={hasCards ? null : best} />}
         {hasCards && hasBoosters && <Row strong label="Total, exact" value={cost.exact} best={best} />}
         {hasCards && hasBoosters && <Row strong label="Total, cheapest" value={cost.floor} best={best} />}
       </dl>
@@ -141,7 +141,7 @@ function WatchControl({ p }: { p: DealProduct }): ReactNode {
     for (const url of urls) unwrap(await dealsUnwatch({ query: { url } }));
     await done(urls, false);
   };
-  if (p.kind === 'single') return <span className="text-sm text-ink-muted">Singles can’t be watched yet</span>;
+  if (!p.watching && !fromTab) return null;
   return (
     <span className="flex flex-col items-end gap-1">
       {p.watching ? (

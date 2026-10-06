@@ -174,6 +174,7 @@ function ProductRow({ p, cost, state, basis, selected, onPick }: { p: DealProduc
         {p.kind === 'single' ? <span className="text-ink-muted">—</span> : exact == null ? dash(failed) : (
           <>
             <span className="text-ink">{fmtUsd(exact)}{(cost?.unpriced ?? 0) > 0 && <span aria-hidden="true" className="text-ink-muted">+</span>}</span>
+            {(cost?.unpriced ?? 0) > 0 && <span className="block text-xs text-danger">{fmtInt(cost!.unpriced)} of {fmtInt(cost!.total_cards)} unpriced</span>}
             {cost?.floor != null && <span className="block text-xs text-ink-muted">cheapest {fmtUsd(cost.floor)}</span>}
             {(cost?.booster_ev ?? 0) > 0 && cost?.known_exact != null && (
               <span className="block text-xs text-ink-muted">{fmtUsd(cost.known_exact)} cards + {fmtUsd(cost.booster_ev)} boosters</span>

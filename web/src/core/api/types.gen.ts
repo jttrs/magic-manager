@@ -3095,11 +3095,17 @@ export type WatchedOut = {
     /**
      * Kind
      */
-    kind: 'sealed' | 'sld';
+    kind: 'sealed' | 'sld' | 'single';
     /**
      * Finish
      */
     finish?: string | null;
+    /**
+     * Scryfall Id
+     *
+     * Singles: the watched printing.
+     */
+    scryfall_id?: string | null;
     /**
      * Category
      */

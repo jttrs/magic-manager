@@ -13,6 +13,7 @@ Thin composition over the existing engines (no new valuation math):
 """
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Callable
@@ -200,6 +201,10 @@ def _cost_totals(rows: list[construct.NetRow], ev: float | None) -> dict:
             "total_cards": total, "unpriced": total - sum(ln["need"] for ln in priced), "lines": lines}
 
 
+# Valuation diagnostics the cost ledger already shows as numbers (booster EV, unpriced count).
+_LEDGER_NOTE = re.compile(r"random-booster EV \(cols 3/4\)|have no price at their exact printing")
+
+
 def _sealed_cost(set_code: str, name: str) -> dict:
     product = sealed.identify_product(set_code, name)
     v = valuation.value_sealed_product(set_code, product.get("name"), floors=False)
@@ -208,7 +213,7 @@ def _sealed_cost(set_code: str, name: str) -> dict:
             "finish": None, "category": product.get("category"), "subtype": product.get("subtype"),
             "release_date": product.get("releaseDate"), "market": v.sealed_market,
             "market_source": v.sealed_market_source, "contents": v.intrinsic, "booster_only": v.booster_only,
-            "notes": list(v.diagnostics), **_cost_totals(rows, v.booster_ev)}
+            "notes": [d for d in v.diagnostics if not _LEDGER_NOTE.search(d)], **_cost_totals(rows, v.booster_ev)}
 
 
 def _sld_cost(name: str, finish: str | None) -> dict:

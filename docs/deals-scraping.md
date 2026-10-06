@@ -88,7 +88,8 @@ the set+CN printing to confirm when no card carries the store's name (SLD 609 "H
 
 A matched sealed product or Secret Lair drop can be **watched**: it becomes an earmark (the same
 `earmarked_products`/`earmark_links` rows `mm earmark add` writes), and every read of its link appends a
-row to `earmark_prices` (V32). Singles aren't watched yet. Rules that carry over from above: key by URL
+row to `earmark_prices` (V32). Singles are watched as one exact printing + finish (V31 single earmarks,
+validated by `earmarks.resolve_single`). Rules that carry over from above: key by URL
 (a watched link is a URL), keep the face price (the history is the store's price, never tax-adjusted),
 and a `rendered` store can only be re-read while its tab is open — the watchlist keeps the last price
 and says *saved*/*read N days ago* rather than guessing. Multi-variant Shopify links keep their

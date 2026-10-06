@@ -157,12 +157,16 @@ def watched_identities(urls: list[str]) -> dict[str, dict]:
         return {}
     with db.connect() as conn:
         rows = conn.execute(
-            f"SELECT l.store_url, p.set_code, p.product_name, p.subtype FROM earmark_links l "
+            f"SELECT l.store_url, p.set_code, p.product_name, p.subtype, p.kind, p.scryfall_id, p.finish FROM earmark_links l "
             f"JOIN earmarked_products p USING (product_id) WHERE l.store_url IN ({','.join('?' * len(urls))})", urls).fetchall()
-    return {r[0]: _earmark_choice(r[1], r[2], r[3]) for r in rows}
+    return {r[0]: _earmark_choice(r[1], r[2], r[3], kind=r[4], scryfall_id=r[5], finish=r[6]) for r in rows}
 
 
-def _earmark_choice(set_code: str, name: str, subtype: str | None) -> dict:
+def _earmark_choice(set_code: str, name: str, subtype: str | None, *, kind: str = "sealed",
+                    scryfall_id: str | None = None, finish: str | None = None) -> dict:
+    if kind == "single":
+        return {"kind": "single", "set_code": set_code, "name": name, "scryfall_id": scryfall_id,
+                "finish": finish or "nonfoil", "price": None}
     if set_code == "sld":
         return {"kind": "sld", "set_code": "sld", "name": sld.strip_foil_edition(name.replace(" (Foil Edition)", "")),
                 "finish": subtype or "nonfoil"}
@@ -189,15 +193,17 @@ def read_and_compare(urls: list[str], *, progress=None, fresh: bool = False) -> 
 # ---------- watching (earmarks + price history) ----------
 
 class NotWatchable(ValueError):
-    """Only sealed products and Secret Lair drops can be watched (for now)."""
+    """Only sealed products, Secret Lair drops and single printings can be watched."""
 
 
 def watch(url: str, choice: dict, *, price: float | None, currency: str | None = "USD") -> dict:
     """Earmark the product a listing sells at that store (validated through
     :func:`earmarks.resolve_identity`); the asking price starts its history."""
     kind = choice.get("kind")
+    if kind == "single":
+        return _watch_single(url, choice, price=price, currency=currency)
     if kind not in ("sealed", "sld"):
-        raise NotWatchable("Only sealed products and Secret Lair drops can be watched for now.")
+        raise NotWatchable("Only sealed products, Secret Lair drops and single cards can be watched.")
     name = choice["name"]
     if kind == "sld" and choice.get("finish") == "foil":
         name += " Foil Edition"
@@ -206,6 +212,20 @@ def watch(url: str, choice: dict, *, price: float | None, currency: str | None =
         ident["set_code"], ident["name"], url, product_uuid=ident.get("uuid"), category=ident.get("category"),
         subtype=ident.get("subtype"), release_date=ident.get("release_date"), card_count=ident.get("card_count"),
         asking_price=price, currency=currency or "USD")
+
+
+def _watch_single(url: str, choice: dict, *, price: float | None, currency: str | None) -> dict:
+    """Earmark one printing (V31 single earmark), validated by ``earmarks.resolve_single``."""
+    with db.connect() as conn:
+        row = conn.execute("SELECT set_code, collector_number FROM cards WHERE scryfall_id = ?",
+                           (choice.get("scryfall_id"),)).fetchone()
+    if row is None:
+        raise NotWatchable("Pick the exact printing first, then watch it.")
+    ident = earmarks.resolve_identity(row[0], None, collector_number=row[1], finish=choice.get("finish") or "nonfoil")
+    return earmarks.earmark_add(
+        ident["set_code"], ident["name"], url, category=ident.get("category"), subtype=ident.get("subtype"),
+        release_date=ident.get("release_date"), asking_price=price, currency=currency or "USD", kind="single",
+        scryfall_id=ident["scryfall_id"], collector_number=ident["collector_number"], finish=ident["finish"])
 
 
 def unwatch(url: str) -> dict:
@@ -232,9 +252,10 @@ def watchlist(*, progress=None, values: bool = True) -> list[dict]:
     for i, p in enumerate(products, 1):
         if progress:
             progress(i, len(products), p.product_name)
-        choice = _earmark_choice(p.set_code, p.product_name, p.subtype)
+        choice = _earmark_choice(p.set_code, p.product_name, p.subtype, kind=p.kind,
+                                 scryfall_id=p.scryfall_id, finish=p.finish)
         try:
-            value = _value(choice, cache) if values else {}
+            value = _value(choice, cache) if values or choice["kind"] == "single" else {}
         except Exception as e:  # noqa: BLE001 — still show the prices
             value = {"market": None, "contents": None, "partial": False, "error": str(e)}
         stores = []
@@ -255,7 +276,7 @@ def watchlist(*, progress=None, values: bool = True) -> list[dict]:
         delta = None if best is None or market is None else round(best["price"] - market, 2)
         out.append({
             "set_code": choice["set_code"], "name": choice["name"], "kind": choice["kind"], "finish": choice.get("finish"),
-            "category": p.category, "subtype": p.subtype,
+            "scryfall_id": choice.get("scryfall_id"), "category": p.category, "subtype": p.subtype,
             "release_date": p.release_date, "market": market, "contents": value.get("contents"),
             "partial": value.get("partial", False), "best_price": best["price"] if best else None,
             "best_store": best["store"] if best else None, "best_url": best["url"] if best else None,
