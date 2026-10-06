@@ -2173,6 +2173,12 @@ export type PriceOut = {
      * Pct
      */
     pct?: number | null;
+    /**
+     * Watching
+     *
+     * This link is on your watchlist (its price history is kept).
+     */
+    watching?: boolean;
 };
 
 /**
@@ -2873,6 +2879,39 @@ export type ViolationOut = {
     cards: Array<string>;
 };
 
+/**
+ * WatchIn
+ */
+export type WatchIn = {
+    /**
+     * Url
+     */
+    url: string;
+    choice: MatchOut;
+    /**
+     * Price
+     */
+    price?: number | null;
+    /**
+     * Currency
+     */
+    currency?: string | null;
+};
+
+/**
+ * WatchOut
+ */
+export type WatchOut = {
+    /**
+     * Watching
+     */
+    watching: boolean;
+    /**
+     * Message
+     */
+    message: string;
+};
+
 export type JobSpecsData = {
     body?: never;
     path?: never;
@@ -3196,6 +3235,61 @@ export type DealsMatchResponses = {
 };
 
 export type DealsMatchResponse = DealsMatchResponses[keyof DealsMatchResponses];
+
+export type DealsUnwatchData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Url
+         */
+        url: string;
+    };
+    url: '/api/deals/watch';
+};
+
+export type DealsUnwatchErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DealsUnwatchError = DealsUnwatchErrors[keyof DealsUnwatchErrors];
+
+export type DealsUnwatchResponses = {
+    /**
+     * Successful Response
+     */
+    200: WatchOut;
+};
+
+export type DealsUnwatchResponse = DealsUnwatchResponses[keyof DealsUnwatchResponses];
+
+export type DealsWatchData = {
+    body: WatchIn;
+    path?: never;
+    query?: never;
+    url: '/api/deals/watch';
+};
+
+export type DealsWatchErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DealsWatchError = DealsWatchErrors[keyof DealsWatchErrors];
+
+export type DealsWatchResponses = {
+    /**
+     * Successful Response
+     */
+    200: WatchOut;
+};
+
+export type DealsWatchResponse = DealsWatchResponses[keyof DealsWatchResponses];
 
 export type UndoInfoData = {
     body?: never;

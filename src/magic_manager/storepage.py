@@ -136,16 +136,38 @@ def read_text(page: str, pattern: str, *, stock_pattern: str | None = None, sold
     return Listing(_num(m.group(1)) if m else None, "USD" if m else None, available, _meta(page, "og:title") or title_of(page), "text")
 
 
-def read_shopify(product: dict) -> Listing:
+def _variant_for(variants: list[dict], want: str) -> dict | None:
+    """The variant a ``?variant=`` link names: its numeric id, else a variant
+    whose title contains the value (stores also use names, e.g. ``lorehold``)."""
+    want = want.strip().lower()
+    for v in variants:
+        if str(v.get("id")) == want:
+            return v
+    key = re.sub(r"[^a-z0-9]+", " ", want).strip()
+    hits = [v for v in variants if key and key in re.sub(r"[^a-z0-9]+", " ", str(v.get("title") or "").lower())]
+    return hits[0] if len(hits) == 1 else None
+
+
+def read_shopify(product: dict, variant: str | None = None) -> Listing:
     """Shopify storefront ``<product-url>.js``: prices in cents, per-variant and
-    product-level ``available``. The cheapest available variant wins (else the
-    cheapest overall, marked unavailable)."""
+    product-level ``available``. A ``variant`` (from the link's ``?variant=``)
+    reads that variant — a multi-deck page's links each name one deck — and
+    its title joins the product's; otherwise the cheapest available variant
+    wins (else the cheapest overall, marked unavailable)."""
     variants = product.get("variants") or []
-    live = [v for v in variants if v.get("available")]
-    pick = min(live or variants, key=lambda v: v.get("price") or 0, default=None)
+    title = product.get("title")
+    chosen = _variant_for(variants, variant) if variant else None
+    if chosen is not None:
+        pick, available = chosen, bool(chosen.get("available"))
+        vt = str(chosen.get("title") or "")
+        if vt and vt.lower() != "default title":
+            title = f"{title} — {vt}"
+    else:
+        live = [v for v in variants if v.get("available")]
+        pick = min(live or variants, key=lambda v: v.get("price") or 0, default=None)
+        available = bool(live) if variants else product.get("available")
     if pick is None or pick.get("price") is None:
-        return Listing(None, title=product.get("title"))
+        return Listing(None, title=title)
     cents = pick["price"]
     price = cents / 100 if isinstance(cents, int) else _num(cents)
-    available = bool(live) if variants else product.get("available")
-    return Listing(round(price, 2), "USD", available, product.get("title"), "shopify")
+    return Listing(round(price, 2), "USD", available, title, "shopify")

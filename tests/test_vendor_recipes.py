@@ -25,6 +25,7 @@ EXPECT = {
     "stompinggrounds": (179.0, True, "Magic: The Gathering Foundations"),
     "doubleinfinity": (169.99, True, "Magic the Gathering: Edge of Eternities"),
     "gamersguild": (142.28, False, "Magic: The Gathering | Reality Fracture"),
+    "cashcards": (69.99, True, "2018 Commander Deck"),        # no ?variant= → cheapest in-stock variant
     "forgeandfire": (249.95, True, "Final Fantasy - Play Booster Box"),
     "coolstuff": (44.99, True, "MTG - Universes Beyond: Final Fantasy"),
     "starcity": (249.99, False, "Final Fantasy Play Booster Box"),
@@ -91,6 +92,15 @@ def test_bot_walls_are_recognized(title):
         storepage.check_blocked(f"<html><head><title>{title}</title></head></html>")
     with pytest.raises(storepage.Blocked):
         storepage.check_blocked("", 403)
+
+
+def test_shopify_variant_links_read_that_variant():
+    page = _page("cashcards")
+    v = vendors.by_key("cashcards")
+    by_id = vendors.read_listing(v, page, variant="46755709747427")
+    assert (by_id.price, by_id.available, by_id.title) == (69.99, True, "2018 Commander Deck — Adaptive Enchantment")
+    by_name = vendors.read_listing(v, page, variant="subjective")
+    assert (by_name.price, by_name.title) == (59.99, "2018 Commander Deck — Subjective Reality")
 
 
 def test_shopify_js_url_handles_collection_scoped_links():

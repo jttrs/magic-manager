@@ -1,11 +1,11 @@
 import { useMutation } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { useJob } from '../../app/useJob';
-import { bestDeals, deltaLabel, pricesFrom, sharedErrors, stockLabel, type PriceRow } from '../../core/deals';
+import { bestDeals, canWatch, deltaLabel, pricesFrom, sharedErrors, stockLabel, type PriceRow } from '../../core/deals';
 import { unwrap } from '../../app/queries';
 import { Button } from '../../components/Button';
 import { EmptyNote } from '../../components/States';
-import { dealsMatch, dealsTabs, type MatchOut, type OpenTabsOut, type StoreTabsOut } from '../../core/api';
+import { dealsMatch, dealsTabs, dealsUnwatch, dealsWatch, type MatchOut, type OpenTabsOut, type StoreTabsOut } from '../../core/api';
 import { fmtCount, fmtInt, fmtUsd } from '../../core/format';
 
 const MODE_NOTE: Record<StoreTabsOut['mode'], string> = {
@@ -152,6 +152,12 @@ function Identity({ p, delta, onConfirmed }: { p: PriceRow; delta: ReturnType<ty
       unwrap(await dealsMatch({ body: { url: p.url, title: p.title, price: p.price, currency: p.currency, available: p.available, choice } })),
     onSuccess: onConfirmed,
   });
+  const watch = useMutation({
+    mutationFn: async (on: boolean) => on
+      ? unwrap(await dealsWatch({ body: { url: p.url, choice: p.match!, price: p.price, currency: p.currency } }))
+      : unwrap(await dealsUnwatch({ query: { url: p.url } })),
+    onSuccess: (w) => onConfirmed({ ...p, watching: w.watching }),
+  });
   if (p.match && !changing) {
     return (
       <p className="flex flex-wrap items-baseline gap-x-2 text-xs text-ink-muted">
@@ -165,6 +171,12 @@ function Identity({ p, delta, onConfirmed }: { p: PriceRow; delta: ReturnType<ty
         ) : p.status === 'matched' && candidates.length > 1 ? (
           <button type="button" onClick={() => setChanging(true)} className="cursor-pointer underline hover:text-ink">not this?</button>
         ) : null}
+        {canWatch(p) && (p.watching ? (
+          <button type="button" onClick={() => watch.mutate(false)} disabled={watch.isPending} className="cursor-pointer text-accent-ink underline hover:text-ink">watching · stop</button>
+        ) : (
+          <button type="button" onClick={() => watch.mutate(true)} disabled={watch.isPending} className="cursor-pointer underline hover:text-ink">watch price</button>
+        ))}
+        {watch.isError && <span role="alert" className="text-danger">{(watch.error as Error).message}</span>}
       </p>
     );
   }

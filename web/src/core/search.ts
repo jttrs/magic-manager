@@ -86,5 +86,7 @@ export const marketSearch = z.object({
   sort: z.enum(CARD_PRICE_SORTS).catch('savings').default('savings'),
   /** Deck buy list: the cheapest printing of each card, or the deck's exact printing. */
   buyAt: z.enum(PRICE_BASES).catch('floor').default('floor'),
+  /** Deals: the product pages open in your browser, or the products you watch. */
+  deals: z.enum(['tabs', 'watching']).catch('tabs').default('tabs'),
 });
 export type MarketSearch = z.infer<typeof marketSearch>;

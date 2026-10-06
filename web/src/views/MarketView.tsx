@@ -6,6 +6,7 @@ import { useJob } from '../app/useJob';
 import { ViewLayout } from '../components/AppShell';
 import { useFeature } from '../app/features';
 import { DealsPanel } from './market/DealsPanel';
+import { WatchingPanel } from './market/WatchingPanel';
 import { Chevron } from '../components/Chevron';
 import { CopyTargets } from '../components/CopyButton';
 import { InfoTip } from '../components/InfoTip';
@@ -53,7 +54,9 @@ export function MarketView() {
           onChange={(subject) => set({ subject })}
           options={[{ value: 'family', label: 'Set family' }, { value: 'deck', label: 'Deck' }, ...(dealsOn ? [{ value: 'deals' as const, label: 'Deals' }] : [])]}
         />
-        {search.subject === 'deals' ? null : search.subject === 'family' ? (
+        {search.subject === 'deals' ? (
+          <Segmented<MarketSearch['deals']> label="Show" value={search.deals} onChange={(deals) => set({ deals })} options={[{ value: 'tabs', label: 'Open tabs' }, { value: 'watching', label: 'Watching' }]} />
+        ) : search.subject === 'family' ? (
           fams.isError ? (
             <p className="text-sm text-danger">Couldn’t load families: {(fams.error as Error).message}</p>
           ) : (
@@ -115,9 +118,9 @@ export function MarketView() {
   let summary: ReactNode;
   let body: ReactNode;
   if (search.subject === 'deals' && dealsOn) {
-    title = 'Deals';
-    summary = 'Product pages open in your browser, by store';
-    body = <DealsPanel />;
+    title = search.deals === 'watching' ? 'Watching' : 'Deals';
+    summary = search.deals === 'watching' ? 'Products you watch: best price now, how it moved, and what it’s worth' : 'Product pages open in your browser, by store';
+    body = search.deals === 'watching' ? <WatchingPanel /> : <DealsPanel />;
   } else if (search.subject === 'family' || search.subject === 'deals') {
     if (!search.code) {
       body = (
@@ -144,7 +147,7 @@ export function MarketView() {
 
   const sideSummary = search.subject === 'family' ? famName : deckName;
   return (
-    <ViewLayout label="Market controls" summary={sideSummary} sidebar={sidebar} startOpen={!(search.code || search.deck || search.subject === 'deals')}>
+    <ViewLayout label="Market controls" summary={sideSummary} sidebar={sidebar} startOpen={!(search.code || search.deck)}>
       <GuideSheet title={title} summary={summary}>
         <div className="h-full overflow-y-auto pb-8">{body}</div>
       </GuideSheet>

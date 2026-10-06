@@ -7,10 +7,11 @@ Composes :mod:`tabs` (read the browser), :mod:`vendors` + :mod:`storefetch`
 from __future__ import annotations
 
 import json
+import time
 from collections import defaultdict
 from urllib.parse import urlsplit
 
-from . import db, listing_match, storefetch, storepage, tabs as tabs_mod, valuation, vendors
+from . import db, earmarks, listing_match, sld, storefetch, storepage, tabs as tabs_mod, valuation, vendors
 
 
 def open_tabs(browser: str = "chrome", **read_kw) -> dict:
@@ -108,8 +109,23 @@ def _cand(c: listing_match.Candidate, kind: str) -> dict:
             "finish": c.finish, "price": c.price}
 
 
+_VALUE_TTL = 30 * 60
+_value_memo: dict[tuple, tuple[float, dict]] = {}
+
+
 def _value(choice: dict, cache: dict) -> dict:
-    """Market + contents for a matched listing (cached per product in a run)."""
+    """Market + contents for a matched listing (memoized per product for 30 min:
+    market prices don't move faster than that, and valuing is slow)."""
+    key = (choice["kind"], choice.get("set_code"), choice.get("name"), choice.get("finish"), choice.get("scryfall_id"))
+    hit = _value_memo.get(key)
+    if hit and time.monotonic() - hit[0] < _VALUE_TTL:
+        return hit[1]
+    v = _value_uncached(choice, cache)
+    _value_memo[key] = (time.monotonic(), v)
+    return v
+
+
+def _value_uncached(choice: dict, cache: dict) -> dict:
     kind = choice["kind"]
     if kind == "single":
         price = choice.get("price")
@@ -156,14 +172,117 @@ def compare(row: dict, *, confirmed: dict | None = None, cache: dict | None = No
     return out
 
 
+def watched_identities(urls: list[str]) -> dict[str, dict]:
+    """Watched (earmarked) links → the product you watch them as (a confirmation)."""
+    if not urls:
+        return {}
+    with db.connect() as conn:
+        rows = conn.execute(
+            f"SELECT l.store_url, p.set_code, p.product_name, p.subtype FROM earmark_links l "
+            f"JOIN earmarked_products p USING (product_id) WHERE l.store_url IN ({','.join('?' * len(urls))})", urls).fetchall()
+    return {r[0]: _earmark_choice(r[1], r[2], r[3]) for r in rows}
+
+
+def _earmark_choice(set_code: str, name: str, subtype: str | None) -> dict:
+    if set_code == "sld":
+        return {"kind": "sld", "set_code": "sld", "name": sld.strip_foil_edition(name.replace(" (Foil Edition)", "")),
+                "finish": subtype or "nonfoil"}
+    return {"kind": "sealed", "set_code": set_code, "name": name}
+
+
 def read_and_compare(urls: list[str], *, progress=None, fresh: bool = False) -> list[dict]:
-    """Read every product page's price, then what it is and what it's worth."""
+    """Read every product page's price, then what it is and what it's worth.
+    Prices of watched links are added to their history."""
     rows = read_prices(urls, progress=progress, fresh=fresh)
-    confirmed = confirmed_matches(urls)
+    earmarks.record_reads(rows)
+    watched = watched_identities(urls)
+    confirmed = {**watched, **confirmed_matches(urls)}
     cache: dict = {}
     out = []
     for i, r in enumerate(rows, 1):
         if progress:
             progress(i, len(rows), f"valuing {r.get('title') or r['url']}")
-        out.append(compare(r, confirmed=confirmed.get(r["url"]), cache=cache))
+        out.append({**compare(r, confirmed=confirmed.get(r["url"]), cache=cache), "watching": r["url"] in watched})
     return out
+
+
+
+# ---------- watching (earmarks + price history) ----------
+
+class NotWatchable(ValueError):
+    """Only sealed products and Secret Lair drops can be watched (for now)."""
+
+
+def watch(url: str, choice: dict, *, price: float | None, currency: str | None = "USD") -> dict:
+    """Earmark the product a listing sells at that store (validated through
+    :func:`earmarks.resolve_identity`); the asking price starts its history."""
+    kind = choice.get("kind")
+    if kind not in ("sealed", "sld"):
+        raise NotWatchable("Only sealed products and Secret Lair drops can be watched for now.")
+    name = choice["name"]
+    if kind == "sld" and choice.get("finish") == "foil":
+        name += " Foil Edition"
+    ident = earmarks.resolve_identity(choice["set_code"], name)
+    return earmarks.earmark_add(
+        ident["set_code"], ident["name"], url, product_uuid=ident.get("uuid"), category=ident.get("category"),
+        subtype=ident.get("subtype"), release_date=ident.get("release_date"), card_count=ident.get("card_count"),
+        asking_price=price, currency=currency or "USD")
+
+
+def unwatch(url: str) -> dict:
+    return earmarks.earmark_remove_link(url)
+
+
+def _store_name(url: str, saved: str | None) -> str | None:
+    """The catalogue's store name for a link (earmarks saved before the catalogue keep a host)."""
+    parts = urlsplit(url)
+    v = vendors.classify(parts.netloc, parts.path).vendor
+    return v.name if v else saved
+
+
+def watchlist(*, progress=None) -> list[dict]:
+    """Every watched product: each store's latest price + stock + when read, the
+    first price seen there, the best current in-stock price, market + cards
+    inside, and the face-price gap. Best deals first."""
+    products = earmarks.earmark_list()
+    history = earmarks.price_history([l.link_id for p in products for l in p.links])
+    cache: dict = {}
+    out = []
+    for i, p in enumerate(products, 1):
+        if progress:
+            progress(i, len(products), p.product_name)
+        choice = _earmark_choice(p.set_code, p.product_name, p.subtype)
+        try:
+            value = _value(choice, cache)
+        except Exception as e:  # noqa: BLE001 — still show the prices
+            value = {"market": None, "contents": None, "partial": False, "error": str(e)}
+        stores = []
+        for l in p.links:
+            h = history.get(l.link_id) or []
+            last = h[-1] if h else {"price": l.asking_price, "available": None, "read_at": l.captured_at, "source": "snapshot"}
+            first = h[0] if h else last
+            stores.append({
+                "url": l.store_url, "store": _store_name(l.store_url, l.store_name), "price": last["price"], "available": last["available"],
+                "read_at": last["read_at"], "read": last["source"] == "read",
+                "first_price": first["price"], "first_at": first["read_at"],
+                "change": None if last["price"] is None or first["price"] is None else round(last["price"] - first["price"], 2),
+                "history": [{"price": x["price"], "at": x["read_at"]} for x in h],
+            })
+        live = [s for s in stores if s["price"] is not None and s["available"] is not False]
+        best = min(live or [s for s in stores if s["price"] is not None], key=lambda s: s["price"], default=None)
+        market = value.get("market")
+        delta = None if best is None or market is None else round(best["price"] - market, 2)
+        out.append({
+            "set_code": p.set_code, "name": p.product_name, "kind": choice["kind"], "category": p.category,
+            "release_date": p.release_date, "market": market, "contents": value.get("contents"),
+            "partial": value.get("partial", False), "best_price": best["price"] if best else None,
+            "best_store": best["store"] if best else None, "best_url": best["url"] if best else None,
+            "delta": delta, "pct": None if delta is None or not market else round(delta / market * 100, 1),
+            "stores": sorted(stores, key=lambda s: (s["price"] is None, s["price"] or 0)),
+            "error": value.get("error"),
+        })
+    return sorted(out, key=lambda r: (r["pct"] is None, r["pct"] if r["pct"] is not None else 0))
+
+
+def watched_urls() -> list[str]:
+    return [l.store_url for p in earmarks.earmark_list() for l in p.links]

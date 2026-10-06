@@ -21,6 +21,9 @@ the ``sealed`` engine so there is one source of price truth (DRY).
 Identity validation is enforced by the CLI ``add`` command: sealed products via
 ``sealed.identify_product`` (does it resolve in MTGJSON?), singles via
 ``resolve_single`` below (does the printing exist, in that finish, under that name?).
+V32 adds ``earmark_prices`` — the price history of each link: one row per
+observation (the asking-price snapshot taken when you earmark, and every Deals
+read of that URL). The identity checkpoint is :func:`resolve_identity`, shared by the CLI and the web.
 """
 
 from __future__ import annotations
@@ -287,8 +290,97 @@ def earmark_add(
                 (product_id, store_name, asking_price, currency, now, link_notes, link_id),
             )
             link_action = "updated"
+        if asking_price is not None:
+            record_price(link_id, asking_price, currency=currency, source="snapshot", at=now, conn=conn)
     return {"product_action": product_action, "link_action": link_action,
             "product_id": product_id, "link_id": link_id}
+
+
+# ---------- price history (V32) ----------
+
+def record_price(link_id: int, price: float | None, *, currency: str = "USD", available: bool | None = None,
+                 source: str = "read", at: str | None = None, conn=None) -> None:
+    """Append one price observation for a link."""
+    with db.transaction(conn) as conn:
+        conn.execute(
+            "INSERT INTO earmark_prices (link_id, price, currency, available, read_at, source) VALUES (?, ?, ?, ?, ?, ?)",
+            (link_id, price, currency, None if available is None else int(bool(available)), at or db._utcnow_iso(), source))
+
+
+def record_reads(rows: list[dict], *, conn=None) -> int:
+    """Record every read row whose URL is an earmarked link; returns how many."""
+    urls = [r["url"] for r in rows if r.get("price") is not None]
+    if not urls:
+        return 0
+    now = db._utcnow_iso()
+    with db.transaction(conn) as conn:
+        ids = {r[0]: r[1] for r in conn.execute(
+            f"SELECT store_url, link_id FROM earmark_links WHERE store_url IN ({','.join('?' * len(urls))})", urls)}
+        n = 0
+        for r in rows:
+            if r["url"] in ids and r.get("price") is not None:
+                record_price(ids[r["url"]], r["price"], currency=r.get("currency") or "USD",
+                             available=r.get("available"), at=now, conn=conn)
+                n += 1
+    return n
+
+
+def price_history(link_ids: list[int]) -> dict[int, list[dict]]:
+    """``link_id → [{price, currency, available, read_at, source}]`` oldest first."""
+    if not link_ids:
+        return {}
+    out: dict[int, list[dict]] = {}
+    with db.connect() as conn:
+        for r in conn.execute(
+            f"SELECT link_id, price, currency, available, read_at, source FROM earmark_prices "
+            f"WHERE link_id IN ({','.join('?' * len(link_ids))}) ORDER BY read_at, price_id", link_ids):
+            out.setdefault(r["link_id"], []).append({
+                "price": r["price"], "currency": r["currency"],
+                "available": None if r["available"] is None else bool(r["available"]),
+                "read_at": r["read_at"], "source": r["source"]})
+    return out
+
+
+# ---------- identity ----------
+
+def resolve_identity(set_code: str, name: str | None, *,
+                     collector_number: str | None = None, finish: str = "nonfoil") -> dict:
+    """Validate a proposed sealed-product / Secret Lair drop / single-card identity → canonical dict.
+
+    With ``collector_number`` it is a SINGLE printing (checked first, so ``sld`` +
+    a collector number is a Secret Lair single, not a drop): :func:`resolve_single`
+    verifies the printing, finish and (if given) ``name``.
+
+    The single deterministic checkpoint shared by ``mm resolve-product``,
+    ``mm earmark add`` and the web's *Watch*. Raises ``LookupError`` on no or an
+    ambiguous match. Returns ``{kind, set_code, name, uuid?, category?, subtype?,
+    release_date?, card_count?}`` (``kind`` = ``"sld"`` | ``"sealed"`` | ``"single"``).
+
+    Secret Lair drops resolve through the engine that PRICES them
+    (``sld.identify_drop``); store names carry a ``Secret Lair x`` scaffold + a
+    finish marker the bare drop name lacks, so the input is normalized + stripped
+    before matching. The finish is kept separately — inferred from the ORIGINAL
+    name into ``subtype`` and appended to the canonical name (" (Foil Edition)")
+    — so the two editions of one drop stay distinct earmarks."""
+    from . import sealed, sld
+    if collector_number:
+        return resolve_single(set_code, collector_number, finish, name=name)
+    if set_code.lower() == "sld":
+        raw = name or ""
+        drop = sld.identify_drop(sld.strip_finish_marker(sld.normalize_name(raw)))
+        edition = sld.edition_from_name(raw)
+        canonical = drop["name"] + (" (Foil Edition)" if edition == "foil" else "")
+        return {"kind": "sld", "set_code": "sld", "name": canonical,
+                "subtype": edition, "category": "secret_lair",
+                "release_date": drop.get("release_date")}
+    product = sealed.identify_product(set_code, name)
+    return {
+        "kind": "sealed", "set_code": set_code.lower(), "name": product["name"],
+        "uuid": product.get("uuid"), "category": product.get("category"),
+        "subtype": product.get("subtype"),
+        "release_date": product.get("releaseDate"),
+        "card_count": product.get("cardCount"),
+    }
 
 
 def earmark_remove_link(store_url: str, *, conn=None) -> dict:

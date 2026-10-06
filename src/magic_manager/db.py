@@ -1016,6 +1016,31 @@ CREATE UNIQUE INDEX IF NOT EXISTS earmarked_products_single_uq
     ON earmarked_products (set_code, collector_number, finish) WHERE kind = 'single';
 """
 
+# V32: a price history for every earmarked storefront link — one row per price
+# observation (the earmark's asking-price snapshot, or a Deals read). Additive;
+# seeded from each link's existing asking_price/captured_at so the history starts
+# where the earmark did. Rows go away with their link (ON DELETE CASCADE).
+SCHEMA_V32 = """
+CREATE TABLE IF NOT EXISTS earmark_prices (
+    price_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    link_id    INTEGER NOT NULL,
+    price      REAL,
+    currency   TEXT NOT NULL DEFAULT 'USD',
+    available  INTEGER,
+    read_at    TEXT NOT NULL,
+    source     TEXT NOT NULL DEFAULT 'read' CHECK (source IN ('snapshot', 'read')),
+    FOREIGN KEY (link_id) REFERENCES earmark_links (link_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS earmark_prices_link_idx ON earmark_prices (link_id, read_at);
+-- Idempotent: concurrent first connections can each run this script before the
+-- version bump lands, so seed only links that have no history yet.
+INSERT INTO earmark_prices (link_id, price, currency, available, read_at, source)
+    SELECT l.link_id, l.asking_price, l.currency, NULL, l.captured_at, 'snapshot'
+    FROM earmark_links l
+    WHERE l.asking_price IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM earmark_prices p WHERE p.link_id = l.link_id);
+"""
+
 # ---------- migration-authoring convention ----------
 #
 # Always-safe ops in a migration: CREATE TABLE, ALTER TABLE ADD COLUMN,
@@ -1104,6 +1129,7 @@ MIGRATIONS: list[str] = [
     SCHEMA_V29,
     SCHEMA_V30,
     SCHEMA_V31,
+    SCHEMA_V32,
 ]
 CURRENT_VERSION = len(MIGRATIONS)
 

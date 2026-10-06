@@ -78,13 +78,14 @@ def classify(host: str, path: str) -> Match:
     return Match("other")
 
 
-def read_listing(vendor: Vendor, page: str | dict, *, text: str | None = None) -> storepage.Listing:
+def read_listing(vendor: Vendor, page: str | dict, *, text: str | None = None,
+                 variant: str | None = None) -> storepage.Listing:
     """Apply ``vendor``'s recipe to a fetched page (``shopify``: the product
     JSON; ``meta``: the HTML; ``rendered``: the tab's head/JSON-LD HTML plus its
     visible ``text``). Patterns fill what page tags leave unknown; a sold-out
     pattern always wins (a page can carry stale "in stock" tags)."""
     if vendor.mode == "shopify":
-        return storepage.read_shopify(page if isinstance(page, dict) else {})
+        return storepage.read_shopify(page if isinstance(page, dict) else {}, variant)
     html = page if isinstance(page, str) else ""
     listing = storepage.read_meta(html)
     hay = text if text is not None else html

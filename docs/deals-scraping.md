@@ -84,12 +84,23 @@ HTML entities in titles are unescaped (eBay `LEGEND&#039;S`); singles accept the
 the set+CN printing to confirm when no card carries the store's name (SLD 609 "Hawkins National Laboratory"
 = Havengul Laboratory). Never silently pick: ambiguous → you choose, and your choice is remembered per URL.
 
+## Watching + price history (B4)
+
+A matched sealed product or Secret Lair drop can be **watched**: it becomes an earmark (the same
+`earmarked_products`/`earmark_links` rows `mm earmark add` writes), and every read of its link appends a
+row to `earmark_prices` (V32). Singles aren't watched yet. Rules that carry over from above: key by URL
+(a watched link is a URL), keep the face price (the history is the store's price, never tax-adjusted),
+and a `rendered` store can only be re-read while its tab is open — the watchlist keeps the last price
+and says *saved*/*read N days ago* rather than guessing. Multi-variant Shopify links keep their
+`?variant=` so the history follows that variant.
+
 ## Approved stores (owner, 2026-10-05)
 
 `config/vendors.toml`: **Shopify** — Many Realms, PokeBox USA, Stomping Grounds TCG, Double Infinity Gaming,
 Gamers Guild USA · **page tags** — Forge and Fire Gaming, CoolStuffInc, Star City Games, Miniature Market,
 GameNerdz, Noble Knight Games, Dragon's Lair Hobbies, Costco, Card Kingdom · **open tab** — Best Buy,
-Target, eBay. Considered, not added: Amazon / Walmart / GameStop / DA Card World (bot-walled — open-tab
+Target, eBay · added 2026-10-06: Cash Cards Unlimited (Shopify; where the owner's earmarks live —
+multi-deck pages, so `?variant=<id|name>` links read that variant). Considered, not added: Amazon / Walmart / GameStop / DA Card World (bot-walled — open-tab
 candidates), Face to Face Games (CAD), Troll and Toad (mid-relaunch), ChannelFireball / Barnes & Noble
 (no current sealed found).
 

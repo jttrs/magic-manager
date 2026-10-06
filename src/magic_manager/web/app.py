@@ -175,6 +175,22 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         except features_engine.FeatureDisabled as e:
             raise HTTPException(403, str(e)) from e
 
+    @app.post("/api/deals/watch", response_model=deals_api.WatchOut, tags=["deals"], dependencies=[write("before watching a product")])
+    def deals_watch(req: deals_api.WatchIn):
+        try:
+            return deals_api.watch(req)
+        except features_engine.FeatureDisabled as e:
+            raise HTTPException(403, str(e)) from e
+        except (LookupError, ValueError) as e:
+            raise HTTPException(422, str(e)) from e
+
+    @app.delete("/api/deals/watch", response_model=deals_api.WatchOut, tags=["deals"], dependencies=[write("before unwatching a product")])
+    def deals_unwatch(url: Annotated[str, Query(min_length=8)]):
+        try:
+            return deals_api.unwatch(url)
+        except features_engine.FeatureDisabled as e:
+            raise HTTPException(403, str(e)) from e
+
     # ---------- undo (one restore point) ----------
 
     @app.get("/api/undo", response_model=undo_api.UndoOut | None, tags=["undo"])

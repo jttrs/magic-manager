@@ -104,3 +104,53 @@ test('deals: below-market first, match lines, and confirming an ambiguous listin
   expect(confirmed!.url).toBe('https://www.bestbuy.com/product/x/JJ8');
   expect(confirmed!.choice.scryfall_id).toBe('pfdn11p');
 });
+
+const jobStub = (id: string, name: string) => ({ id, name, title: name, inputs: {}, status: 'queued', created_at: '2026-01-01T00:00:00+00:00', started_at: null, finished_at: null, progress: null, summary: null, artifacts: [], error: null });
+const sseOf = (summary: string, artifacts: unknown[]) => [
+  ['status', { status: 'running' }],
+  ['result', { summary, artifacts }],
+  ['status', { status: 'succeeded' }],
+].map(([e, d], i) => `event: ${e}\ndata: ${JSON.stringify(d)}\nid: ${i + 1}\n\n`).join('');
+
+test('watch a matched sealed product from its row', async ({ page }) => {
+  const match = { kind: 'sealed', set_code: 'hob', name: 'The Hobbit Play Booster Box', scryfall_id: null, finish: null, price: null };
+  const prices = [{ url: 'https://manyrealms.com/products/fdn-set', vendor: 'manyrealms', price: 149.99, currency: 'USD', available: true, title: 'The Hobbit - Play Booster Display', signal: 'shopify', error: null,
+    kind: 'sealed', status: 'matched', match, candidates: [], note: '', market: 152.92, contents: 154.08, partial: false, delta: -2.93, pct: -1.9, watching: false }];
+  let body: unknown = null;
+  await page.route('**/api/features', (r) => r.fulfill({ json: { flags: { deals: true } } }));
+  await page.route('**/api/deals/tabs?*', (r) => r.fulfill({ json: tabs }));
+  await page.route('**/api/jobs/deals.read_prices', (r) => r.fulfill({ status: 202, json: jobStub('p2', 'deals.read_prices') }));
+  await page.route('**/api/jobs/p2/events', (r) => r.fulfill({ status: 200, contentType: 'text/event-stream', body: sseOf('1 of 1', [{ kind: 'json', label: 'prices', data: prices }]) }));
+  await page.route('**/api/deals/watch', (r) => { body = r.request().postDataJSON(); return r.fulfill({ json: { watching: true, message: 'Watching' } }); });
+  await page.goto('/market?subject=deals');
+  await page.getByRole('button', { name: 'Read my open tabs' }).click();
+  await page.getByRole('button', { name: 'Read 2 prices' }).click();
+  await page.getByRole('button', { name: 'watch price' }).click();
+  await expect(page.getByRole('button', { name: 'watching · stop' })).toBeVisible();
+  expect(body).toEqual({ url: 'https://manyrealms.com/products/fdn-set', choice: match, price: 149.99, currency: 'USD' });
+});
+
+test('Watching: best price, market, each store with its trend; read prices again', async ({ page }) => {
+  const watched = [{
+    set_code: 'c13', name: 'Commander 2013 Deck: Nature of the Beast', kind: 'sealed', category: 'deck', release_date: '2013-11-01',
+    market: 75.5, contents: 81.2, partial: true, best_price: 59.99, best_store: 'Cash Cards Unlimited', best_url: 'https://cashcards.example/c13',
+    delta: -15.51, pct: -20.5, stores: [{
+      url: 'https://cashcards.example/c13', store: 'Cash Cards Unlimited', price: 59.99, available: true, read_at: '2026-09-10T12:00:00', read: true,
+      first_price: 64.99, first_at: '2026-09-05T12:00:00', change: -5, history: [{ price: 64.99, at: '2026-09-05T12:00:00' }, { price: 59.99, at: '2026-09-10T12:00:00' }],
+    }],
+  }];
+  const sent: unknown[] = [];
+  let n = 0;
+  await page.route('**/api/features', (r) => r.fulfill({ json: { flags: { deals: true } } }));
+  await page.route('**/api/jobs/deals.watchlist', (r) => { sent.push(r.request().postDataJSON()); n += 1; return r.fulfill({ status: 202, json: jobStub(`w${n}`, 'deals.watchlist') }); });
+  await page.route('**/api/jobs/w*/events', (r) => r.fulfill({ status: 200, contentType: 'text/event-stream', body: sseOf('1 watched products', [{ kind: 'json', label: 'watchlist', data: watched }, { kind: 'json', label: 'errors', data: [] }]) }));
+  await page.goto('/market?subject=deals&deals=watching');
+  const list = page.getByRole('list', { name: 'Watched products' });
+  await expect(list).toContainText('Commander 2013 Deck: Nature of the Beast');
+  await expect(list).toContainText('market $75.50');
+  await expect(list).toContainText('cards inside $81.20+');
+  await expect(list).toContainText('$15.51 under market (−20%)');
+  await expect(list).toContainText('↓ $5.00 since Sep 5');
+  await page.getByRole('button', { name: 'Read watched prices' }).click();
+  await expect.poll(() => sent).toEqual([{ refresh: false }, { refresh: true }]);
+});

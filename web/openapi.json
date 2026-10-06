@@ -532,6 +532,88 @@
         }
       }
     },
+    "/api/deals/watch": {
+      "post": {
+        "tags": [
+          "deals"
+        ],
+        "summary": "Deals Watch",
+        "operationId": "deals_watch",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WatchIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WatchOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "deals"
+        ],
+        "summary": "Deals Unwatch",
+        "operationId": "deals_unwatch",
+        "parameters": [
+          {
+            "name": "url",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "title": "Url"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WatchOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/undo": {
       "get": {
         "tags": [
@@ -5596,6 +5678,12 @@
               }
             ],
             "title": "Pct"
+          },
+          "watching": {
+            "type": "boolean",
+            "title": "Watching",
+            "description": "This link is on your watchlist (its price history is kept).",
+            "default": false
           }
         },
         "type": "object",
@@ -6791,6 +6879,64 @@
           "cards"
         ],
         "title": "ViolationOut"
+      },
+      "WatchIn": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "choice": {
+            "$ref": "#/components/schemas/MatchOut"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency",
+            "default": "USD"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url",
+          "choice"
+        ],
+        "title": "WatchIn"
+      },
+      "WatchOut": {
+        "properties": {
+          "watching": {
+            "type": "boolean",
+            "title": "Watching"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "watching",
+          "message"
+        ],
+        "title": "WatchOut"
       }
     }
   }
