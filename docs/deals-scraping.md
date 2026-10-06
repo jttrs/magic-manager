@@ -71,6 +71,19 @@ closed sockets) and their prices are JS-rendered, absent from raw HTML anyway.
     "No sales tax" is a per-vendor attribute used only as a cross-store tiebreaker for the SAME
     item (gross up taxed competitors ≈ × 1.10).
 
+## Matching listings to products (B3 — `listing_match.py`)
+
+Measured on 237 real store titles (2026-10-05/06): 204 matched (86%), 17 ambiguous (nearly all genuinely —
+"Commander Deck" with no deck name, a "Prerelease Kit" of several colleges, Japanese products), 10 skipped
+(other games, custom/graded/uncut/supplies), 6 unmatched (not in MTGJSON yet / not Magic). Rules learned:
+the **longest** set name wins (*Secrets of Strixhaven* ≠ *Strixhaven*); also try set names without their first
+word (stores drop *Marvel's*); score only words some family product uses (drops "presale", "expected
+release date", "Brand New"); Display=Box, Decks=Deck, Pre-Release=Prerelease; foil/non-foil twins decided by
+the title's finish (and `sld.strip_finish_marker` now strips *Non-Foil Edition* / *Nonfoil* before *Foil*);
+HTML entities in titles are unescaped (eBay `LEGEND&#039;S`); singles accept the card's flavor name and offer
+the set+CN printing to confirm when no card carries the store's name (SLD 609 "Hawkins National Laboratory"
+= Havengul Laboratory). Never silently pick: ambiguous → you choose, and your choice is remembered per URL.
+
 ## Approved stores (owner, 2026-10-05)
 
 `config/vendors.toml`: **Shopify** — Many Realms, PokeBox USA, Stomping Grounds TCG, Double Infinity Gaming,

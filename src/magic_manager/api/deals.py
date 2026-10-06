@@ -47,6 +47,15 @@ def open_tabs(browser: str = "chrome") -> OpenTabsOut:
     return OpenTabsOut(**deals.open_tabs(browser))
 
 
+class MatchOut(BaseModel):
+    kind: Literal["sealed", "sld", "single"]
+    set_code: str
+    name: str
+    scryfall_id: str | None = None
+    finish: str | None = None
+    price: float | None = Field(None, description="Singles: the printing's market at that finish.")
+
+
 class PriceOut(BaseModel):
     url: str
     vendor: str | None = None
@@ -56,6 +65,16 @@ class PriceOut(BaseModel):
     title: str | None
     signal: str = Field(description="Which signal gave the price: shopify, meta, json-ld, microdata, pattern.")
     error: str | None
+    kind: Literal["sealed", "sld", "single", "other_game", "unknown"] | None = None
+    status: Literal["matched", "ambiguous", "unmatched", "skipped", "confirmed"] | None = None
+    match: MatchOut | None = None
+    candidates: list[MatchOut] = Field(default_factory=list)
+    note: str = ""
+    market: float | None = Field(None, description="Sealed market, Secret Lair market, or the single's price.")
+    contents: float | None = Field(None, description="What the cards inside are worth (sealed / Secret Lair).")
+    partial: bool = Field(False, description="Some cards inside have no price — contents undercounts.")
+    delta: float | None = Field(None, description="Face price minus market (negative = below market).")
+    pct: float | None = None
 
 
 class ReadPricesInput(BaseModel):
@@ -65,18 +84,38 @@ class ReadPricesInput(BaseModel):
 
 def _run_read_prices(inp: ReadPricesInput, progress: ProgressFn) -> JobResult:
     features.require("deals")
-    rows = deals.read_prices(inp.urls, fresh=inp.fresh,
-                             progress=lambda i, n, url: progress(ProgressEvent(i - 1, n, url)))
+    rows = deals.read_and_compare(inp.urls, fresh=inp.fresh,
+                                  progress=lambda i, n, msg: progress(ProgressEvent(i - 1, n, msg)))
     out = [PriceOut(**r).model_dump() for r in rows]
     priced = sum(1 for r in out if r["price"] is not None)
-    return JobResult(summary=f"{priced} of {len(out)} prices read",
+    valued = sum(1 for r in out if r["delta"] is not None)
+    return JobResult(summary=f"{priced} of {len(out)} prices read · {valued} compared to market",
                      artifacts=[Artifact(kind="json", label="prices", data=out)])
 
 
 READ_PRICES = register(JobSpec(
     name="deals.read_prices",
     title="Read store prices",
-    description="Read price and stock for store product pages (server-side, or from your open tab).",
+    description="Read price and stock for store product pages, identify each product, and compare it to market.",
     input_model=ReadPricesInput,
     run=_run_read_prices,
 ))
+
+
+class ConfirmIn(BaseModel):
+    url: str
+    title: str | None = None
+    price: float | None = None
+    currency: str | None = None
+    available: bool | None = None
+    choice: MatchOut | None = Field(description="What the listing is; null forgets a confirmation.")
+
+
+def confirm(req: ConfirmIn) -> PriceOut:
+    """Remember what a listing is, then value it with that choice."""
+    features.require("deals")
+    deals.confirm_match(req.url, req.choice.model_dump() if req.choice else None)
+    row = {"url": req.url, "vendor": None, "price": req.price, "currency": req.currency, "available": req.available,
+           "title": req.title, "signal": "", "error": None}
+    confirmed = deals.confirmed_matches([req.url]).get(req.url)
+    return PriceOut(**deals.compare(row, confirmed=confirmed))

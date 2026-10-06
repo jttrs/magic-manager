@@ -58,8 +58,10 @@ def normalize_name(s: str) -> str:
 # Edition", but sealedProduct names use "Rainbow Foil", bare "Foil", etc.).
 # Stripped ONLY when matching a sealedProduct to a drop (not in group_drops).
 _FINISH_MARKERS = (
+    # Non-foil first: "… non foil edition" must not be read as "… non" + "foil edition".
+    "non foil edition", "nonfoil edition", "non foil", "nonfoil",
     "rainbow foil edition", "rainbow foil", "traditional foil edition",
-    "traditional foil", "foil edition", "non foil edition", "non foil", "foil",
+    "traditional foil", "foil edition", "foil",
 )
 
 

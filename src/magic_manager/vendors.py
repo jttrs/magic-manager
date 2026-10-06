@@ -9,6 +9,7 @@ tax (a cross-store tiebreaker only — deal deltas are always at face price).
 """
 from __future__ import annotations
 
+import html as htmllib
 import re
 from dataclasses import dataclass
 from functools import lru_cache
@@ -99,4 +100,6 @@ def read_listing(vendor: Vendor, page: str | dict, *, text: str | None = None) -
         m = re.search(vendor.title_pattern, html, re.S | re.I)
         if m:
             listing.title = re.sub(r"<[^>]+>|\s+", " ", m.group(1)).strip()
+    if listing.title:  # JSON-LD names can carry raw entities (eBay: "LEGEND&#039;S")
+        listing.title = htmllib.unescape(listing.title)
     return listing
