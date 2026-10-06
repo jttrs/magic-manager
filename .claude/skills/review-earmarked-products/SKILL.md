@@ -1,6 +1,6 @@
 ---
 name: review-earmarked-products
-description: Print a deterministic, well-formatted deal table of all earmarked sealed products — each product's storefront links + snapshot asking price alongside a LIVE-recomputed market and intrinsic (card) value, with a "deal delta" (market − best asking) so good deals sort to the top. Product names are hyperlinked to their store pages; products earmarked on multiple storefronts collate to one row. Triggers: "/review-earmarked-products", "show my earmarked products", "review my watchlist", "which earmarked products are good deals", "what's on my sealed watchlist", "are any of my earmarks worth buying".
+description: Print a deterministic, well-formatted deal table of all earmarked sealed products and single cards — each product's storefront links + snapshot asking price alongside a LIVE-recomputed market and intrinsic (card) value, with a "deal delta" (market − best asking) so good deals sort to the top. Product names are hyperlinked to their store pages; products earmarked on multiple storefronts collate to one row. Triggers: "/review-earmarked-products", "show my earmarked products", "review my watchlist", "which earmarked products are good deals", "what's on my sealed watchlist", "are any of my earmarks worth buying".
 ---
 
 # review-earmarked-products
@@ -46,12 +46,17 @@ Per earmarked product (one row, links collated):
 - **ask age** — days since the asking price was captured (a staleness signal;
   re-run [[earmark-product]] on the URL to refresh it).
 
+**Single cards** (earmarked with `--cn`) are priced from the EXACT printing's
+finish (`usd` or `usd_foil` — never the oracle floor), local-first from the
+`cards` table; pass `--refresh` to re-sync stale sets. They have no intrinsic
+value; the Category column reads `single`.
+
 ## Output shape
 
 Two artifacts in `output/earmarks-review/reports/` (ephemeral; pruned by [[cleanup-queries]]):
 - `earmarks-review-<ts>.txt` — the markdown deal table, paste-ready.
 - `earmarks-review-<ts>.xlsx` — one row per product (name/set/category/release/
-  best_asking/market/intrinsic/deal_delta/ask_age/n_stores/store_urls).
+  best_asking/market/intrinsic/deal_delta/ask_age/n_stores/store_urls/kind).
 
 Stdout: `## Earmarked products — deal review` + the table + a `TOTALS` line.
 

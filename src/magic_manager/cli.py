@@ -4857,8 +4857,14 @@ def input_list(
 
 # ---------- earmark ----------
 
-def _resolve_identity(set_code: str, name: str | None) -> dict:
-    """Validate a proposed sealed-product / SLD-drop identity → canonical dict.
+def _resolve_identity(set_code: str, name: str | None, *,
+                      collector_number: str | None = None,
+                      finish: str = "nonfoil") -> dict:
+    """Validate a proposed sealed-product / SLD-drop / single-card identity → canonical dict.
+
+    With ``collector_number`` it is a SINGLE printing (checked first, so ``sld`` +
+    ``--cn`` is a Secret Lair single, not a drop): ``earmarks.resolve_single``
+    verifies the printing, finish and (if given) ``name``.
 
     The single deterministic checkpoint shared by `mm resolve-product` and
     `mm earmark add` (and the sealed-value URL/tab flow): the AGENT proposes a
@@ -4880,6 +4886,8 @@ def _resolve_identity(set_code: str, name: str | None) -> dict:
     Edition)") — so the two editions of one drop stay distinct earmark rows AND the
     review can price the right finish deterministically instead of re-sniffing a
     store string."""
+    if collector_number:
+        return earmarks_mod.resolve_single(set_code, collector_number, finish, name=name)
     if set_code.lower() == "sld":
         raw = name or ""
         drop = sld_mod.identify_drop(sld_mod.strip_finish_marker(sld_mod.normalize_name(raw)))
@@ -4898,12 +4906,22 @@ def _resolve_identity(set_code: str, name: str | None) -> dict:
     }
 
 
+def _resolve_identity_args(set_code: str, name: str | None, cn: str | None, finish: str) -> dict:
+    """CLI-arg guard over ``_resolve_identity``: needs ``--name`` (sealed) or ``--cn`` (single)."""
+    if not name and not cn:
+        raise ValueError("give --name for a sealed product or --cn for a single")
+    return _resolve_identity(set_code, name, collector_number=cn, finish=finish)
+
+
 @app.command("resolve-product")
 def resolve_product_cmd(
     set_code: str = typer.Argument(..., help="Set code (e.g. afc, m15) or 'sld' for a Secret Lair drop."),
-    name: str = typer.Option(..., "--name", "-n",
-                             help="MTGJSON product name / SLD drop name (or a unique substring)."),
+    name: str = typer.Option(None, "--name", "-n",
+                             help="MTGJSON product name / SLD drop name (or a unique substring); "
+                                  "for a single, the card name to cross-check."),
     url: str = typer.Option(None, "--url", "-u", help="Optional storefront URL to echo back (for provenance)."),
+    cn: str = typer.Option(None, "--cn", help="Collector number → a SINGLE card printing instead of a sealed product."),
+    finish: str = typer.Option("nonfoil", "--finish", help="nonfoil | foil (singles only)."),
 ):
     """Validate + canonicalize a sealed-product or SLD-drop identity, as JSON.
 
@@ -4913,8 +4931,8 @@ def resolve_product_cmd(
     resolves and echoes the canonical identity (plus the URL if given) as JSON for
     feeding into `sealed-value` / batch / `earmark add`. Exits 2 if unresolved."""
     try:
-        identity = _resolve_identity(set_code, name)
-    except LookupError as e:
+        identity = _resolve_identity_args(set_code, name, cn, finish)
+    except (LookupError, ValueError) as e:
         typer.echo(f"error: {e}", err=True)
         raise typer.Exit(2)
     if url:
@@ -4929,16 +4947,23 @@ def resolve_product_cmd(
 @earmark_app.command("add")
 def earmark_add_cmd(
     set_code: str = typer.Argument(..., help="Set code the product belongs to (e.g. c19, acr)."),
-    name: str = typer.Option(..., "--name", "-n",
-                             help="MTGJSON product name (or a unique substring)."),
+    name: str = typer.Option(None, "--name", "-n",
+                             help="MTGJSON product name (or a unique substring); for a single, "
+                                  "the card name to cross-check."),
     url: str = typer.Option(..., "--url", "-u", help="Storefront product URL."),
+    cn: str = typer.Option(None, "--cn", help="Collector number → earmark a SINGLE card printing instead of a sealed product."),
+    finish: str = typer.Option("nonfoil", "--finish", help="nonfoil | foil (singles only)."),
     price: float = typer.Option(None, "--price", "-p", help="Store's asking price (snapshot)."),
     currency: str = typer.Option("USD", "--currency", help="Asking-price currency."),
     store: str = typer.Option(None, "--store", help="Store label (default: derived from URL host)."),
     notes: str = typer.Option(None, "--notes", help="Free-text note on this link."),
     json_out: bool = typer.Option(False, "--json", help="Emit the result as JSON."),
 ):
-    """Earmark a sealed product (or Secret Lair drop) on a storefront.
+    """Earmark a sealed product, Secret Lair drop, or single card on a storefront.
+
+    With ``--cn`` (+ ``--finish``) it earmarks a SINGLE printing (set + collector
+    number + finish); ``--name`` then cross-checks the card name so a store's
+    mislabeled set/CN is refused (exit 2) rather than stored.
 
     Validates ``name`` through the SAME shared checkpoint as ``mm resolve-product``
     (``_resolve_identity``) — a sealed product for a normal set, a Secret Lair drop
@@ -4950,11 +4975,12 @@ def earmark_add_cmd(
     different --url to add another store for the same product.
     """
     try:
-        identity = _resolve_identity(set_code, name)
-    except LookupError as e:
+        identity = _resolve_identity_args(set_code, name, cn, finish)
+    except (LookupError, ValueError) as e:
         typer.echo(f"error: {e}", err=True)
         raise typer.Exit(2)
 
+    is_single = identity["kind"] == "single"
     canonical_name = identity["name"]
     result = earmarks_mod.earmark_add(
         identity["set_code"], canonical_name, url,
@@ -4967,9 +4993,14 @@ def earmark_add_cmd(
         asking_price=price,
         currency=currency,
         link_notes=notes,
+        kind="single" if is_single else "sealed",
+        scryfall_id=identity.get("scryfall_id"),
+        collector_number=identity.get("collector_number"),
+        finish=identity.get("finish"),
     )
     if json_out:
-        json.dump({**result, "product_name": canonical_name, "set_code": identity["set_code"]},
+        json.dump({**result, "product_name": canonical_name, "set_code": identity["set_code"],
+                   "kind": "single" if is_single else "sealed"},
                   sys.stdout, indent=2)
         sys.stdout.write("\n")
         return
@@ -4982,7 +5013,7 @@ def earmark_add_cmd(
 def earmark_list_cmd(
     json_out: bool = typer.Option(False, "--json", help="Emit as JSON."),
 ):
-    """List earmarked products and their storefront links (plain text).
+    """List earmarked products and single cards and their storefront links (plain text).
 
     High-level facts + asking-price snapshots only. For live market/intrinsic
     valuation and the deal table, run the ``review-earmarked-products`` skill
@@ -4992,6 +5023,8 @@ def earmark_list_cmd(
         json.dump([
             {
                 "set_code": p.set_code, "product_name": p.product_name,
+                "kind": p.kind, "collector_number": p.collector_number,
+                "finish": p.finish, "scryfall_id": p.scryfall_id,
                 "category": p.category, "release_date": p.release_date,
                 "best_asking": p.best_asking,
                 "links": [
@@ -5010,7 +5043,8 @@ def earmark_list_cmd(
         return
     for p in products:
         best = f"${p.best_asking:.2f}" if p.best_asking is not None else "—"
-        typer.echo(f"{p.product_name}  ({p.set_code})  [{p.category or '?'}]  best {best}")
+        label = f"single · {p.finish}" if p.kind == "single" else (p.category or "?")
+        typer.echo(f"{p.product_name}  ({p.set_code})  [{label}]  best {best}")
         for l in p.links:
             px = f"${l.asking_price:.2f} {l.currency}" if l.asking_price is not None else "—"
             typer.echo(f"    {(l.store_name or '?'):24} {px:>12}  {l.store_url}")

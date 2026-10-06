@@ -1,9 +1,13 @@
-"""Earmarked sealed products — a cross-storefront watchlist. CRUD only.
+"""Earmarked sealed products and single cards — a cross-storefront watchlist.
 
-Two tables (V12):
-  - ``earmarked_products`` — one row per MTGJSON sealed-product identity
-    (``set_code`` + ``product_name``, ``product_uuid`` when known). High-level
-    facts pulled from ``mtgjson.sealed_products`` at earmark time.
+CRUD plus the single-card identity checkpoint (``resolve_single``).
+
+Two tables (V12, V31):
+  - ``earmarked_products`` — one row per watched item. ``kind`` (V31) is
+    ``'sealed'`` (MTGJSON sealed-product identity: ``set_code`` + ``product_name``,
+    ``product_uuid`` when known; facts pulled from ``mtgjson.sealed_products``)
+    or ``'single'`` (one card printing keyed by ``set_code`` + ``collector_number``
+    + ``finish``, with its ``scryfall_id`` for exact-finish pricing).
   - ``earmark_links`` — one row per storefront URL, joined to a product. The
     same product on three stores → one product row + three link rows, so the
     review collates them.
@@ -14,16 +18,18 @@ whole point of an earmark, and not recomputable). Market / intrinsic value is
 deliberately NOT stored — ``scripts/review_earmarks.py`` recomputes it live via
 the ``sealed`` engine so there is one source of price truth (DRY).
 
-This module is pure CRUD; identity validation (does the product resolve in
-MTGJSON?) is enforced by the CLI ``add`` command via ``sealed.identify_product``.
+Identity validation is enforced by the CLI ``add`` command: sealed products via
+``sealed.identify_product`` (does it resolve in MTGJSON?), singles via
+``resolve_single`` below (does the printing exist, in that finish, under that name?).
 """
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from urllib.parse import urlparse
 
-from . import db
+from . import db, scryfall
 
 
 # ---------- row shapes ----------
@@ -52,6 +58,10 @@ class EarmarkProduct:
     card_count: int | None
     notes: str | None
     earmarked_at: str
+    kind: str = "sealed"
+    scryfall_id: str | None = None
+    collector_number: str | None = None
+    finish: str | None = None
     links: list[EarmarkLink] = field(default_factory=list)
 
     @property
@@ -74,6 +84,61 @@ def store_name_from_url(url: str) -> str | None:
     if not host:
         return None
     return host[4:] if host.startswith("www.") else host
+
+
+def resolve_single(set_code: str, collector_number: str, finish: str = "nonfoil",
+                   *, name: str | None = None) -> dict:
+    """Validate a proposed single-card printing → canonical identity dict.
+
+    The deterministic identity checkpoint for a single (sibling of
+    ``sealed.identify_product``): the AGENT proposes set + collector number +
+    finish (+ the card name from the store title); this confirms the printing
+    exists, offers that finish, and — when ``name`` is given — really is that
+    card (store titles often mislabel set/CN). Local ``cards`` first, Scryfall
+    ``/cards/collection`` fill (upserted) on a miss. Raises ``LookupError``."""
+    set_code = set_code.lower()
+    cn = str(collector_number).strip()
+    sql = ("SELECT scryfall_id, name, flavor_name, collector_number, finishes, rarity, "
+           "released_at FROM cards WHERE set_code = ? AND lower(collector_number) = lower(?)")
+    with db.connect() as conn:
+        row = conn.execute(sql, (set_code, cn)).fetchone()
+        if row is None:
+            found, _ = scryfall.collection([{"set": set_code, "collector_number": cn}])
+            if found:
+                db.upsert_card(conn, found[0])
+                conn.commit()
+            row = conn.execute(sql, (set_code, cn)).fetchone()
+    tag = f"{set_code.upper()} #{cn}"
+    if row is None:
+        raise LookupError(f"no printing {tag}")
+    try:
+        available = json.loads(row["finishes"] or "[]")
+    except (ValueError, TypeError):
+        available = []
+    # cards stores only prices_usd / prices_usd_foil (usd_etched is dropped at projection),
+    # so an etched-only printing could never be priced by the review.
+    if finish not in available:
+        if finish == "foil" and "etched" in available:
+            raise LookupError(f"{tag} ({row['name']}) is etched-only; etched prices aren't "
+                              f"tracked locally, so it can't be earmarked")
+        raise LookupError(f"{tag} ({row['name']}) has no {finish} finish; "
+                          f"available: {', '.join(available) or 'unknown'}")
+    card_name = row["name"]
+    if name is not None:
+        accepted = {card_name.lower(), card_name.split(" // ")[0].lower()}
+        if row["flavor_name"]:
+            accepted.add(row["flavor_name"].lower())
+        if name.strip().lower() not in accepted:
+            raise LookupError(f"{tag} is {card_name!r}, not {name!r} — the store's "
+                              f"set/CN may be wrong; verify by name + image")
+    cn = row["collector_number"]
+    return {
+        "kind": "single", "set_code": set_code,
+        "name": f"{card_name} (#{cn}, {finish})", "card_name": card_name,
+        "scryfall_id": row["scryfall_id"], "collector_number": cn, "finish": finish,
+        "category": "single", "subtype": row["rarity"] or None,
+        "release_date": row["released_at"] or None,
+    }
 
 
 # ---------- reads ----------
@@ -104,7 +169,10 @@ def earmark_list() -> list[EarmarkProduct]:
             product_uuid=p["product_uuid"], product_name=p["product_name"],
             category=p["category"], subtype=p["subtype"],
             release_date=p["release_date"], card_count=p["card_count"],
-            notes=p["notes"], earmarked_at=p["earmarked_at"], links=plinks,
+            notes=p["notes"], earmarked_at=p["earmarked_at"],
+            kind=p["kind"], scryfall_id=p["scryfall_id"],
+            collector_number=p["collector_number"], finish=p["finish"],
+            links=plinks,
         ))
     return out
 
@@ -126,9 +194,14 @@ def earmark_add(
     currency: str = "USD",
     product_notes: str | None = None,
     link_notes: str | None = None,
+    kind: str = "sealed",
+    scryfall_id: str | None = None,
+    collector_number: str | None = None,
+    finish: str | None = None,
     conn=None,
 ) -> dict:
-    """Upsert a product (by ``set_code`` + ``product_name``) and one storefront
+    """Upsert a product (sealed: by ``set_code`` + ``product_name``; single: by
+    ``set_code`` + ``collector_number`` + ``finish``) and one storefront
     link (by ``store_url``) in one atomic transaction.
 
     Product-level fields (category/subtype/…) are refreshed on re-add so a later
@@ -140,21 +213,37 @@ def earmark_add(
     "inserted"|"updated", "product_id": int, "link_id": int}``.
     """
     set_code = set_code.lower()
+    if kind not in ("sealed", "single"):
+        raise ValueError(f"kind must be 'sealed' or 'single', got {kind!r}")
+    if kind == "single":
+        if not collector_number:
+            raise ValueError("a single earmark requires a collector_number")
+        if finish not in ("nonfoil", "foil"):
+            raise ValueError(f"a single earmark requires finish nonfoil|foil, got {finish!r}")
     if store_name is None:
         store_name = store_name_from_url(store_url)
     now = db._utcnow_iso()
     with db.transaction(conn) as conn:
-        existing = conn.execute(
-            "SELECT product_id FROM earmarked_products WHERE set_code = ? AND product_name = ?",
-            (set_code, product_name),
-        ).fetchone()
+        if kind == "single":
+            existing = conn.execute(
+                "SELECT product_id FROM earmarked_products WHERE kind = 'single' "
+                "AND set_code = ? AND collector_number = ? AND finish = ?",
+                (set_code, collector_number, finish),
+            ).fetchone()
+        else:
+            existing = conn.execute(
+                "SELECT product_id FROM earmarked_products WHERE set_code = ? AND product_name = ?",
+                (set_code, product_name),
+            ).fetchone()
         if existing is None:
             cur = conn.execute(
                 "INSERT INTO earmarked_products (set_code, product_uuid, product_name, "
-                "category, subtype, release_date, card_count, notes, earmarked_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "category, subtype, release_date, card_count, notes, earmarked_at, "
+                "kind, scryfall_id, collector_number, finish) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (set_code, product_uuid, product_name, category, subtype,
-                 release_date, card_count, product_notes, now),
+                 release_date, card_count, product_notes, now,
+                 kind, scryfall_id, collector_number, finish),
             )
             product_id = cur.lastrowid
             product_action = "inserted"
@@ -168,10 +257,11 @@ def earmark_add(
                 "subtype = COALESCE(?, subtype), "
                 "release_date = COALESCE(?, release_date), "
                 "card_count = COALESCE(?, card_count), "
-                "notes = COALESCE(?, notes) "
+                "notes = COALESCE(?, notes), "
+                "scryfall_id = COALESCE(?, scryfall_id) "
                 "WHERE product_id = ?",
                 (product_uuid, category, subtype, release_date, card_count,
-                 product_notes, product_id),
+                 product_notes, scryfall_id, product_id),
             )
             product_action = "updated"
 

@@ -9,6 +9,8 @@ that must run once against your live DB after you pull them:
   V30  cards.illustration_id + art tags → scryfall_art.backfill_illustration_ids()
                                     (mm set backfill-illustrations) and
                                     scryfall_tags.sync_kinds()      (mm scryfall tags sync — oracle + art)
+  V31  earmarked_products.kind / scryfall_id / collector_number / finish → no backfill
+                                    (DEFAULT 'sealed' classifies existing rows; schema-only)
   —    'built' follows pledges     → decks.backfill_built_state()  (mm deck backfill-built)
                                     data-only: imported / hand-built decks with nothing pledged → not built;
                                     precons keep ONE built copy (extra unpledged built copies → not built)
@@ -57,6 +59,8 @@ OWNERSHIP: tuple[tuple[str, tuple[str, ...] | None], ...] = (
     ("deck_assignments", None),
     ("deck_versions", None),
     ("decks", None),
+    ("earmarked_products", None),
+    ("earmark_links", None),
 )
 
 
@@ -97,7 +101,7 @@ def run(path: Path) -> int:
     print(f"before: {', '.join(f'{t}={n}' for t, (n, _, _) in before.items())}")
 
     print("upgrading:")
-    with db.connect() as conn:  # applies pending migrations (V27–V30), snapshotting first
+    with db.connect() as conn:  # applies pending migrations (V27–V31), snapshotting first
         version = conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] if _columns(conn, "schema_version") else "?"
     print(f"  · schema at V{version}")
     from magic_manager import decks, scryfall_art, scryfall_tags, sets
