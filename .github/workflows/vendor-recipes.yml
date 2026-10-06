@@ -4,7 +4,7 @@ name: Vendor recipes
 
 on:
   pull_request:
-    paths: ["config/vendors.toml", "src/magic_manager/**", "tests/**", ".github/workflows/vendor-recipes.yml"]
+    paths: ["config/vendors.toml", "src/magic_manager/**", "tests/**", "pyproject.toml", "uv.lock", ".github/workflows/vendor-recipes.yml"]
   push:
     branches: [main]
 
