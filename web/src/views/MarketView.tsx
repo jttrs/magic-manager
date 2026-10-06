@@ -1,21 +1,26 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRouteApi, useNavigate } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { decksQuery, deckCostQuery, familiesQuery, marketCardsQuery, marketProductsQuery, productTreeQuery } from '../app/queries';
+import { decksQuery, deckCostQuery, familiesQuery, marketCardsQuery, marketProductsQuery } from '../app/queries';
 import { useJob } from '../app/useJob';
 import { ViewLayout } from '../components/AppShell';
 import { useFeature } from '../app/features';
 import { DealsPanel } from './market/DealsPanel';
 import { WatchingPanel } from './market/WatchingPanel';
+import { dealFilters, useDealCosts, useDealsData } from './market/useDealsData';
+import { CardLines } from './market/CardLines';
+import { ProductContents } from './market/ProductContents';
 import { Chevron } from '../components/Chevron';
 import { CopyTargets } from '../components/CopyButton';
 import { InfoTip } from '../components/InfoTip';
 import { SearchSelect } from '../components/SearchSelect';
-import { Segmented, SelectField, SideSection, TextField } from '../components/Sidebar';
+import { ChipToggles, Segmented, SelectField, SideSection, TextField } from '../components/Sidebar';
+import { MultiSelect } from '../components/MultiSelect';
 import { EmptyNote, ErrorNote, GuideSheet } from '../components/States';
 import { CardKingdomMark, ManaPoolMark, TcgplayerMark } from '../components/StoreMarks';
-import { collectionBuyList, type CardPriceOut, type DeckCostOut, type DeckLineOut, type ProductValueOut, type TreeNodeOut } from '../core/api';
+import { collectionBuyList, type CardPriceOut, type DeckCostOut, type ProductValueOut } from '../core/api';
 import { fmtCount, fmtInt, fmtUsd } from '../core/format';
+import { filterSortProducts, PRODUCT_TYPE_LABEL, PRODUCT_TYPES, typeCounts, type Basis, type DealSort } from '../core/deals';
 import { contentsGap, deckBuyItems, deckLedger, filterCardPrices, partialNote, premium, productGroups, type ProductRow } from '../core/market';
 import type { MarketSearch } from '../core/search';
 
@@ -42,6 +47,16 @@ export function MarketView() {
     return r.data.text;
   };
   const dealsOn = useFeature('deals');
+  const inDeals = dealsOn && search.subject === 'deals';
+  const dealsData = useDealsData(search.deals, inDeals);
+  const dealCosts = useDealCosts(dealsData.products);
+  // Changing a filter keeps the open product only while it's still in the list.
+  const setFilter = (patch: Partial<MarketSearch>) => {
+    const next = { ...search, ...patch };
+    const stillShown = filterSortProducts(dealsData.products, dealCosts.data, dealFilters(next)).some((p) => p.key === search.item);
+    set(search.item && dealsData.products.length && !stillShown ? { ...patch, item: undefined } : patch);
+  };
+  const counts = typeCounts(dealsData.products, dealCosts.data);
   const toBuy = cost.data?.lines.reduce((n, l) => n + l.buy, 0) ?? 0;
   const toBuyUsd = cost.data?.lines.reduce((s, l) => s + l.buy * ((search.buyAt === 'floor' ? l.floor_usd : l.unit_usd) ?? 0), 0) ?? 0;
 
@@ -55,7 +70,7 @@ export function MarketView() {
           options={[{ value: 'family', label: 'Set family' }, { value: 'deck', label: 'Deck' }, ...(dealsOn ? [{ value: 'deals' as const, label: 'Deals' }] : [])]}
         />
         {search.subject === 'deals' ? (
-          <Segmented<MarketSearch['deals']> label="Show" value={search.deals} onChange={(deals) => set({ deals })} options={[{ value: 'tabs', label: 'Open tabs' }, { value: 'watching', label: 'Watching' }]} />
+          <Segmented<MarketSearch['deals']> label="Show" value={search.deals} onChange={(deals) => set({ deals, item: undefined })} options={[{ value: 'tabs', label: 'Open tabs' }, { value: 'watching', label: 'Watching' }]} />
         ) : search.subject === 'family' ? (
           fams.isError ? (
             <p className="text-sm text-danger">Couldn’t load families: {(fams.error as Error).message}</p>
@@ -68,6 +83,53 @@ export function MarketView() {
           <SearchSelect label="Deck" noun="deck" value={search.deck} onChange={(deck) => set({ deck })} options={(decks.data ?? []).map((d) => ({ value: d.slug, label: d.name, hint: d.deck_type }))} />
         )}
       </SideSection>
+      {inDeals && (
+        <SideSection title="Find">
+          <TextField name="dq" label="Search" value={search.dq} placeholder="Name or set code" onChange={(dq) => setFilter({ dq })} />
+          <MultiSelect
+            label="Stores"
+            noun="stores"
+            searchable={false}
+            summary={search.stores.length ? undefined : 'All stores'}
+            value={search.stores}
+            onChange={(stores) => setFilter({ stores })}
+            options={dealsData.storeOptions.map((s) => ({ value: s, label: s }))}
+          />
+          <ChipToggles<(typeof PRODUCT_TYPES)[number]>
+            label="Type"
+            showLabel
+            value={search.types}
+            onChange={(types) => setFilter({ types })}
+            options={PRODUCT_TYPES.map((t) => ({ value: t, label: PRODUCT_TYPE_LABEL[t], count: counts[t] }))}
+          />
+          <Segmented<'0' | '10' | '20' | '30'>
+            label="Discount"
+            showLabel
+            labelExtra={<InfoTip label="Under what?">Under the price chosen in <b>Compare to</b>.</InfoTip>}
+            value={String(search.minOff) as '0'}
+            onChange={(v) => setFilter({ minOff: Number(v) as 0 })}
+            options={[{ value: '0', label: 'Any' }, { value: '10', label: '10%+' }, { value: '20', label: '20%+' }, { value: '30', label: '30%+' }]}
+          />
+          <Segmented<Basis>
+            label="Compare to"
+            showLabel
+            labelExtra={<InfoTip label="What is each price compared to?"><b>Sealed price</b> is the sealed product’s market price. <b>Cards, exact</b> is the cards inside at their exact printings plus the boosters’ expected value. <b>Cards, cheapest</b> is each card at its cheapest printing anywhere plus the boosters’ expected value.</InfoTip>}
+            value={search.basis}
+            onChange={(basis) => setFilter({ basis })}
+            options={[{ value: 'market', label: 'Sealed price' }, { value: 'exact', label: 'Cards, exact' }, { value: 'floor', label: 'Cards, cheapest' }]}
+          />
+          <SelectField<DealSort>
+            label="Sort"
+            value={search.dsort}
+            onChange={(dsort) => setFilter({ dsort })}
+            options={[
+              { value: 'gap_pct', label: 'Biggest discount %' }, { value: 'gap_usd', label: 'Biggest discount $' }, { value: 'price', label: 'Lowest price' },
+              { value: 'market', label: 'Sealed price' }, { value: 'exact', label: 'Cards, exact' }, { value: 'floor', label: 'Cards, cheapest' }, { value: 'name', label: 'Name' },
+            ]}
+          />
+          <ChipToggles<'in'> label="Availability" value={search.inStock ? ['in'] : []} onChange={(v) => setFilter({ inStock: v.length > 0 })} options={[{ value: 'in', label: 'In stock only' }]} />
+        </SideSection>
+      )}
       {search.subject === 'family' && (
         <SideSection title="Show">
           <Segmented<MarketSearch['tab']> label="Prices of" value={search.tab} onChange={(tab) => set({ tab })} options={[{ value: 'products', label: 'Sealed' }, { value: 'cards', label: 'Cards' }]} />
@@ -119,8 +181,8 @@ export function MarketView() {
   let body: ReactNode;
   if (search.subject === 'deals' && dealsOn) {
     title = search.deals === 'watching' ? 'Watching' : 'Deals';
-    summary = search.deals === 'watching' ? 'Products you watch: best price now, how it moved, and what it’s worth' : 'Product pages open in your browser, by store';
-    body = search.deals === 'watching' ? <WatchingPanel /> : <DealsPanel />;
+    summary = search.deals === 'watching' ? 'Products you watch: best price now, what it’s worth, and what’s inside' : 'Product pages open in your browser, compared to what they’re worth';
+    body = search.deals === 'watching' ? <WatchingPanel search={search} set={set} /> : <DealsPanel search={search} set={set} />;
   } else if (search.subject === 'family' || search.subject === 'deals') {
     if (!search.code) {
       body = (
@@ -149,7 +211,7 @@ export function MarketView() {
   return (
     <ViewLayout label="Market controls" summary={sideSummary} sidebar={sidebar} startOpen={!(search.code || search.deck)}>
       <GuideSheet title={title} summary={summary}>
-        <div className="h-full overflow-y-auto pb-8">{body}</div>
+        {inDeals ? <div className="h-full min-h-0">{body}</div> : <div className="h-full overflow-y-auto pb-8">{body}</div>}
       </GuideSheet>
     </ViewLayout>
   );
@@ -333,7 +395,6 @@ function Gap({ gap }: { gap: number }) {
 }
 
 function ProductDetail({ p }: { p: ProductRow }) {
-  const tree = useQuery(productTreeQuery(p.set_code, p.name, true));
   const v = p.value;
   return (
     <div className="flex flex-col gap-3">
@@ -343,43 +404,13 @@ function ProductDetail({ p }: { p: ProductRow }) {
           {' '}(boosters at their expected value)
         </p>
       )}
-      {tree.isPending ? (
-        <p role="status" className="text-sm text-ink-muted">Opening the box…</p>
-      ) : tree.isError ? (
-        <p className="text-sm text-danger">Couldn’t read its contents: {(tree.error as Error).message}</p>
-      ) : (
-        <ul aria-label={`${p.name} contents`} className="flex flex-col">
-          <li aria-hidden="true" className="flex gap-3 border-b border-rule pb-1 text-xs voice-semi text-ink-muted">
-            <span className="flex-1">Contents</span>
-            <span className="w-20 text-right">Market</span>
-            <span className="w-20 text-right">Cards inside</span>
-          </li>
-          {tree.data.children?.length ? tree.data.children.map((n, i) => <TreeLine key={i} n={n} depth={0} />) : <li className="text-sm text-ink-muted">No listed contents.</li>}
-        </ul>
-      )}
+      <ProductContents set={p.set_code} name={p.name} />
       {p.tcgplayer_url && (
         <a href={p.tcgplayer_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 self-start text-sm voice-semi text-accent-ink no-underline hover:text-ink">
           <TcgplayerMark className="size-4" />Sealed on TCGplayer<span className="sr-only">(opens in a new tab)</span>
         </a>
       )}
     </div>
-  );
-}
-
-function TreeLine({ n, depth }: { n: TreeNodeOut; depth: number }) {
-  return (
-    <li>
-      <div className="flex items-baseline gap-3 border-b border-rule/50 py-1 text-sm" style={{ paddingLeft: `${depth * 1.25}rem` }}>
-        <span className="min-w-0 flex-1 text-ink">
-          {n.count > 1 && <span className="tabular text-ink-muted">{n.count}× </span>}
-          {n.name}
-          <span className="ml-1.5 text-xs text-ink-muted">{n.kind}</span>
-        </span>
-        <span className="w-20 shrink-0 text-right tabular text-ink-muted" title="Market price">{fmtUsd(n.market)}</span>
-        <span className="w-20 shrink-0 text-right tabular text-ink" title="Cards inside">{fmtUsd(n.contents_value)}</span>
-      </div>
-      {n.children?.length ? <ul>{n.children.map((c, i) => <TreeLine key={i} n={c} depth={depth + 1} />)}</ul> : null}
-    </li>
   );
 }
 
@@ -482,8 +513,8 @@ function DeckPanel({ d, buyAt }: { d: DeckCostOut; buyAt: MarketSearch['buyAt'] 
       </table>
       {d.unpriced > 0 && <p className="-mt-3 text-sm text-ink-muted">{fmtCount(d.unpriced, 'printing')} without a price — totals undercount.</p>}
 
-      <DeckLines title="To buy" lines={toBuy} buyAt={buyAt} />
-      <DeckLines title="Covered by your free cards" worth lines={covered} buyAt={buyAt} />
+      <CardLines title="To buy" lines={toBuy} unitBasis={buyAt} />
+      <CardLines title="Covered by your free cards" worth lines={covered} unitBasis={buyAt} />
     </div>
   );
 }
@@ -500,46 +531,5 @@ function LedgerCell({ cell, colSpan }: { cell: { value: number | null; best: boo
         </span>
       )}
     </td>
-  );
-}
-
-function DeckLines({ title, lines, buyAt, worth = false }: { title: string; lines: DeckLineOut[]; buyAt: MarketSearch['buyAt']; worth?: boolean }) {
-  if (!lines.length) return null;
-  const unit = (l: DeckLineOut) => (buyAt === 'floor' ? l.floor_usd : l.unit_usd);
-  const total = lines.reduce((s, l) => s + (unit(l) ?? 0) * (l.buy || l.need), 0);
-  return (
-    <table className="w-full border-collapse text-sm tabular">
-      <caption className="pb-1 text-left text-sm voice-condensed font-medium uppercase tracking-[0.06em] text-ink-muted">
-        {title} · {fmtInt(lines.reduce((n, l) => n + (l.buy || l.need), 0))} <span className="normal-case tracking-normal">· {worth ? `worth ${fmtUsd(total)}` : fmtUsd(total)}</span>
-      </caption>
-      <thead>
-        <tr className="border-b-2 border-rule-strong text-left text-xs voice-semi text-ink-muted">
-          <th scope="col" className="py-1.5 pr-3 font-medium">Card</th>
-          <th scope="col" className="py-1.5 pl-3 text-right font-medium">Need</th>
-          <th scope="col" className="hidden py-1.5 pl-3 text-right font-medium sm:table-cell">Free</th>
-          <th scope="col" className="hidden py-1.5 pl-3 text-right font-medium sm:table-cell">Deck’s printing</th>
-          <th scope="col" className="py-1.5 pl-3 text-right font-medium">Cheapest</th>
-        </tr>
-      </thead>
-      <tbody>
-        {lines.map((l) => (
-          <tr key={`${l.scryfall_id}|${l.finish}`} className="border-b border-rule/60">
-            <th scope="row" className="py-1.5 pr-3 text-left font-normal">
-              <span className="text-ink">{l.name}</span>
-              <span className="ml-2 text-xs text-ink-muted">{l.set_code.toUpperCase()} {l.collector_number}{l.finish !== 'nonfoil' ? ` · ${l.finish}` : ''}</span>
-            </th>
-            <td className="py-1.5 pl-3 text-right text-ink">{l.need}</td>
-            <td className="hidden py-1.5 pl-3 text-right text-ink-muted sm:table-cell">{l.free || '—'}</td>
-            <td className="hidden py-1.5 pl-3 text-right text-ink sm:table-cell">{fmtUsd(l.unit_usd)}</td>
-            <td className="py-1.5 pl-3 text-right">
-              <span className="text-ink">{fmtUsd(l.floor_usd)}</span>
-              {l.floor_set_code && (l.floor_set_code !== l.set_code || l.floor_collector_number !== l.collector_number) && (
-                <span className="ml-1.5 hidden text-xs text-ink-muted md:inline">{l.floor_set_code.toUpperCase()} {l.floor_collector_number}</span>
-              )}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
   );
 }

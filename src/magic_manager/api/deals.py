@@ -169,18 +169,27 @@ class WatchedOut(BaseModel):
     set_code: str
     name: str
     kind: Literal["sealed", "sld"]
+    finish: str | None = None
     category: str | None
+    subtype: str | None = None
     release_date: str | None
-    market: float | None
-    contents: float | None
-    partial: bool
+    market: float | None = None
+    contents: float | None = None
+    partial: bool = False
     best_price: float | None
     best_store: str | None
     best_url: str | None
-    delta: float | None
-    pct: float | None
+    delta: float | None = None
+    pct: float | None = None
     stores: list[WatchStoreOut]
     error: str | None = None
+
+
+def watched() -> list[WatchedOut]:
+    """Every watched product with its stores' prices — instant (no valuation;
+    values come per product from /api/market/product-cost)."""
+    features.require("deals")
+    return [WatchedOut(**r) for r in deals.watchlist(values=False)]
 
 
 class WatchlistInput(BaseModel):
@@ -193,7 +202,7 @@ def _run_watchlist(inp: WatchlistInput, progress: ProgressFn) -> JobResult:
     if inp.refresh:
         urls = deals.watched_urls()
         read = deals.read_and_compare(urls, progress=lambda i, n, msg: progress(ProgressEvent(i - 1, n, f"reading {msg}")))
-    rows = deals.watchlist(progress=lambda i, n, name: progress(ProgressEvent(i - 1, n, f"valuing {name}")))
+    rows = deals.watchlist(values=False)
     out = [WatchedOut(**r).model_dump() for r in rows]
     errors = [PriceOut(**r).model_dump() for r in read if r.get("error")]
     summary = f"{len(out)} watched products" + (f" · {len(read) - len(errors)} of {len(read)} prices read" if inp.refresh else "")
@@ -203,8 +212,8 @@ def _run_watchlist(inp: WatchlistInput, progress: ProgressFn) -> JobResult:
 
 WATCHLIST = register(JobSpec(
     name="deals.watchlist",
-    title="Watched products",
-    description="Value every watched product (optionally reading each store's current price first).",
+    title="Read watched prices",
+    description="Read every watched link's current price (history grows) and list what you watch.",
     input_model=WatchlistInput,
     run=_run_watchlist,
 ))

@@ -105,3 +105,35 @@ def test_family_products_spans_member_sets(monkeypatch):
     assert out["code"] == "fin"
     assert [p["name"] for p in out["products"]] == ["Play Booster Box", "Bundle"]
     assert {p["set_code"] for p in out["products"]} == {"fin"}
+
+
+def test_product_cost_splits_known_cards_from_booster_ev(deck, monkeypatch):
+    """A mixed container: known cards at exact + cheapest printing, plus pack EV."""
+    from magic_manager import construct
+    needs = [construct.CardNeed(A, "nonfoil", 1, "x", "Skullclamp", "fic", "1", 5.0),
+             construct.CardNeed(B, "nonfoil", 2, "x", "Sol Ring", "fic", "2", 1.0)]
+    monkeypatch.setattr(sealed, "identify_product", lambda set_code, name: {"name": "FIC Bundle", "category": "bundle"})
+    monkeypatch.setattr(valuation, "value_sealed_product", lambda set_code, name, **kw: sealed.ProductValuation(
+        label=name, kind="sealed", sealed_market=60.0, intrinsic=37.0, booster_ev=30.0, card_needs=needs))
+    market._cost_memo.clear()
+    c = market.product_cost("sealed", "fic", "bundle")
+    assert (c["market"], c["contents"], c["booster_ev"]) == (60.0, 37.0, 30.0)
+    assert (c["known_exact"], c["known_floor"]) == (7.0, 4.0)      # Skullclamp floors to $2 elsewhere
+    assert (c["exact"], c["floor"]) == (37.0, 34.0)
+    assert (c["total_cards"], c["unpriced"], c["category"]) == (3, 0, "bundle")
+    clamp = {ln["name"]: ln for ln in c["lines"]}
+    assert clamp["Skullclamp"]["floor_usd"] == 2.0 and clamp["Skullclamp"]["floor_set_code"] == "msc"
+    assert clamp["Sol Ring"]["floor_usd"] == 1.0 and clamp["Sol Ring"]["free"] == 2
+    monkeypatch.setattr(valuation, "value_sealed_product", lambda *a, **k: pytest.fail("memoized"))
+    assert market.product_cost("sealed", "fic", "bundle") is c
+    market._cost_memo.clear()
+
+
+def test_product_cost_booster_only_has_no_known_cards(tmp_db, monkeypatch):
+    monkeypatch.setattr(sealed, "identify_product", lambda set_code, name: {"name": "Play Booster Box", "category": "booster_box"})
+    monkeypatch.setattr(valuation, "value_sealed_product", lambda set_code, name, **kw: sealed.ProductValuation(
+        label=name, kind="sealed", sealed_market=140.0, intrinsic=120.0, booster_ev=120.0, booster_only=True))
+    market._cost_memo.clear()
+    c = market.product_cost("sealed", "fin", "play booster box")
+    assert (c["known_exact"], c["known_floor"], c["exact"], c["floor"], c["lines"]) == (None, None, 120.0, 120.0, [])
+    market._cost_memo.clear()

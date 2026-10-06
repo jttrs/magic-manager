@@ -614,6 +614,31 @@
         }
       }
     },
+    "/api/deals/watched": {
+      "get": {
+        "tags": [
+          "deals"
+        ],
+        "summary": "Deals Watched",
+        "operationId": "deals_watched",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WatchedOut"
+                  },
+                  "type": "array",
+                  "title": "Response Deals Watched"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/undo": {
       "get": {
         "tags": [
@@ -879,6 +904,88 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/TreeNodeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/market/product-cost": {
+      "get": {
+        "tags": [
+          "market"
+        ],
+        "summary": "Market Product Cost",
+        "operationId": "market_product_cost",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "enum": [
+                "sealed",
+                "sld"
+              ],
+              "type": "string",
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "set",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "title": "Set"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "title": "Name"
+            }
+          },
+          {
+            "name": "finish",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Finish"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductCostOut"
                 }
               }
             }
@@ -5698,6 +5805,31 @@
         ],
         "title": "PriceOut"
       },
+      "PricePointOut": {
+        "properties": {
+          "price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
+          },
+          "at": {
+            "type": "string",
+            "title": "At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "price",
+          "at"
+        ],
+        "title": "PricePointOut"
+      },
       "PrintingOut": {
         "properties": {
           "scryfall_id": {
@@ -5858,6 +5990,203 @@
         ],
         "title": "PrintingOut",
         "description": "One exact printing a line can resolve to (what the picker shows)."
+      },
+      "ProductCostOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "sealed",
+              "sld"
+            ],
+            "title": "Kind"
+          },
+          "set_code": {
+            "type": "string",
+            "title": "Set Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "finish": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finish"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "subtype": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subtype"
+          },
+          "release_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Date"
+          },
+          "market": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Market",
+            "description": "The sealed product's own market price."
+          },
+          "market_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Market Source"
+          },
+          "contents": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contents",
+            "description": "What's inside: known cards (exact printings) + booster EV."
+          },
+          "exact": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exact",
+            "description": "Known cards at their exact printings + booster EV."
+          },
+          "floor": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Floor",
+            "description": "Known cards at each card's cheapest printing + booster EV."
+          },
+          "known_exact": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Known Exact",
+            "description": "Known cards only, exact printings."
+          },
+          "known_floor": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Known Floor",
+            "description": "Known cards only, cheapest printings."
+          },
+          "booster_ev": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Booster Ev",
+            "description": "Expected value of the random boosters inside."
+          },
+          "booster_only": {
+            "type": "boolean",
+            "title": "Booster Only",
+            "default": false
+          },
+          "total_cards": {
+            "type": "integer",
+            "title": "Total Cards",
+            "default": 0
+          },
+          "unpriced": {
+            "type": "integer",
+            "title": "Unpriced",
+            "description": "Known cards with no price at their exact printing.",
+            "default": 0
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notes"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/DeckLineOut"
+            },
+            "type": "array",
+            "title": "Lines",
+            "description": "Every known card (exact + cheapest printing, your free copies)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "set_code",
+          "name"
+        ],
+        "title": "ProductCostOut"
       },
       "ProductOut": {
         "properties": {
@@ -6937,6 +7266,281 @@
           "message"
         ],
         "title": "WatchOut"
+      },
+      "WatchStoreOut": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "store": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Store"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
+          },
+          "available": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Available"
+          },
+          "read_at": {
+            "type": "string",
+            "title": "Read At"
+          },
+          "read": {
+            "type": "boolean",
+            "title": "Read",
+            "description": "False when the latest price is still the earmark's saved asking price."
+          },
+          "first_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Price"
+          },
+          "first_at": {
+            "type": "string",
+            "title": "First At"
+          },
+          "change": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change",
+            "description": "Latest minus first price seen here."
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/PricePointOut"
+            },
+            "type": "array",
+            "title": "History"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url",
+          "store",
+          "price",
+          "available",
+          "read_at",
+          "read",
+          "first_price",
+          "first_at",
+          "change",
+          "history"
+        ],
+        "title": "WatchStoreOut"
+      },
+      "WatchedOut": {
+        "properties": {
+          "set_code": {
+            "type": "string",
+            "title": "Set Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "sealed",
+              "sld"
+            ],
+            "title": "Kind"
+          },
+          "finish": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finish"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "subtype": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subtype"
+          },
+          "release_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Date"
+          },
+          "market": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Market"
+          },
+          "contents": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contents"
+          },
+          "partial": {
+            "type": "boolean",
+            "title": "Partial",
+            "default": false
+          },
+          "best_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Best Price"
+          },
+          "best_store": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Best Store"
+          },
+          "best_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Best Url"
+          },
+          "delta": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delta"
+          },
+          "pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct"
+          },
+          "stores": {
+            "items": {
+              "$ref": "#/components/schemas/WatchStoreOut"
+            },
+            "type": "array",
+            "title": "Stores"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "set_code",
+          "name",
+          "kind",
+          "category",
+          "release_date",
+          "best_price",
+          "best_store",
+          "best_url",
+          "stores"
+        ],
+        "title": "WatchedOut"
       }
     }
   }

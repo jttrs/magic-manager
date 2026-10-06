@@ -5,7 +5,7 @@ import sqlite3
 
 import pytest
 
-from magic_manager import db, deals, earmarks, sealed, valuation
+from magic_manager import db, deals, earmarks, market, sealed, valuation
 
 
 @pytest.fixture
@@ -14,9 +14,10 @@ def stub_identity(monkeypatch):
         "kind": "sealed", "set_code": set_code, "name": name, "uuid": "u-1", "category": "deck"})
     monkeypatch.setattr(valuation, "value_sealed_product", lambda set_code, name, **kw: sealed.ProductValuation(
         label=name, kind="sealed", sealed_market=80.0, intrinsic=95.0))
-    deals._value_memo.clear()
+    monkeypatch.setattr(sealed, "identify_product", lambda set_code, name: {"name": name, "category": "deck"})
+    market._cost_memo.clear()
     yield
-    deals._value_memo.clear()
+    market._cost_memo.clear()
 
 
 def test_v32_seeds_history_from_existing_asking_prices(tmp_path, monkeypatch):

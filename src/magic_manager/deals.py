@@ -11,7 +11,7 @@ import time
 from collections import defaultdict
 from urllib.parse import urlsplit
 
-from . import db, earmarks, listing_match, sld, storefetch, storepage, tabs as tabs_mod, valuation, vendors
+from . import db, earmarks, listing_match, market, sld, storefetch, storepage, tabs as tabs_mod, vendors
 
 
 def open_tabs(browser: str = "chrome", **read_kw) -> dict:
@@ -109,25 +109,11 @@ def _cand(c: listing_match.Candidate, kind: str) -> dict:
             "finish": c.finish, "price": c.price}
 
 
-_VALUE_TTL = 30 * 60
-_value_memo: dict[tuple, tuple[float, dict]] = {}
-
-
-def _value(choice: dict, cache: dict) -> dict:
-    """Market + contents for a matched listing (memoized per product for 30 min:
-    market prices don't move faster than that, and valuing is slow)."""
-    key = (choice["kind"], choice.get("set_code"), choice.get("name"), choice.get("finish"), choice.get("scryfall_id"))
-    hit = _value_memo.get(key)
-    if hit and time.monotonic() - hit[0] < _VALUE_TTL:
-        return hit[1]
-    v = _value_uncached(choice, cache)
-    _value_memo[key] = (time.monotonic(), v)
-    return v
-
-
-def _value_uncached(choice: dict, cache: dict) -> dict:
-    kind = choice["kind"]
-    if kind == "single":
+def _value(choice: dict, cache: dict | None = None) -> dict:
+    """Market + contents for a matched listing. Sealed products and Secret Lair
+    drops go through ``market.product_cost`` (memoized 30 min — the same figures
+    the product inspector shows); a single is its printing's price."""
+    if choice["kind"] == "single":
         price = choice.get("price")
         if price is None and choice.get("scryfall_id"):
             with db.connect() as conn:
@@ -135,15 +121,8 @@ def _value_uncached(choice: dict, cache: dict) -> dict:
             if r:
                 price = r[1] if choice.get("finish") == "foil" else r[0]
         return {"market": price, "contents": None, "partial": False}
-    key = (kind, choice["set_code"], choice["name"], choice.get("finish"))
-    if key not in cache:
-        if kind == "sld":
-            v = valuation.value_sld_drop(choice["name"], edition=choice.get("finish") or "auto", floors=False)
-            cache[key] = {"market": v.sealed_market, "contents": v.exact_singles, "partial": False}
-        else:
-            v = valuation.value_sealed_product(choice["set_code"], choice["name"], floors=False)
-            cache[key] = {"market": v.sealed_market, "contents": v.intrinsic, "partial": bool(v.unpriced_cards)}
-    return cache[key]
+    c = market.product_cost(choice["kind"], choice["set_code"], choice["name"], choice.get("finish"))
+    return {"market": c["market"], "contents": c["contents"], "partial": bool(c["unpriced"])}
 
 
 def compare(row: dict, *, confirmed: dict | None = None, cache: dict | None = None) -> dict:
@@ -240,10 +219,12 @@ def _store_name(url: str, saved: str | None) -> str | None:
     return v.name if v else saved
 
 
-def watchlist(*, progress=None) -> list[dict]:
+def watchlist(*, progress=None, values: bool = True) -> list[dict]:
     """Every watched product: each store's latest price + stock + when read, the
-    first price seen there, the best current in-stock price, market + cards
-    inside, and the face-price gap. Best deals first."""
+    first price seen there, the best current in-stock price, and — with
+    ``values`` — market + cards inside and the face-price gap. Best deals first.
+    ``values=False`` is instant (no valuation): the web app fills values per
+    product from ``market.product_cost``."""
     products = earmarks.earmark_list()
     history = earmarks.price_history([l.link_id for p in products for l in p.links])
     cache: dict = {}
@@ -253,7 +234,7 @@ def watchlist(*, progress=None) -> list[dict]:
             progress(i, len(products), p.product_name)
         choice = _earmark_choice(p.set_code, p.product_name, p.subtype)
         try:
-            value = _value(choice, cache)
+            value = _value(choice, cache) if values else {}
         except Exception as e:  # noqa: BLE001 — still show the prices
             value = {"market": None, "contents": None, "partial": False, "error": str(e)}
         stores = []
@@ -273,7 +254,8 @@ def watchlist(*, progress=None) -> list[dict]:
         market = value.get("market")
         delta = None if best is None or market is None else round(best["price"] - market, 2)
         out.append({
-            "set_code": p.set_code, "name": p.product_name, "kind": choice["kind"], "category": p.category,
+            "set_code": choice["set_code"], "name": choice["name"], "kind": choice["kind"], "finish": choice.get("finish"),
+            "category": p.category, "subtype": p.subtype,
             "release_date": p.release_date, "market": market, "contents": value.get("contents"),
             "partial": value.get("partial", False), "best_price": best["price"] if best else None,
             "best_store": best["store"] if best else None, "best_url": best["url"] if best else None,

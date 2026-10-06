@@ -287,6 +287,15 @@ def expand_sealed(set_code: str, product_substr: str | None,
     return exp
 
 
+def expand_printings(scryfall_ids: list[str], *, finish: str = "nonfoil", label: str = "",
+                     set_code: str | None = None, refresh_stale: bool = False) -> Expansion:
+    """Priced needs for an explicit list of printings (one copy each, one finish) —
+    e.g. a Secret Lair drop's cards. ``set_code`` is synced first when given."""
+    raw = [{"scryfall_id": sid, "finish": finish, "count": 1, "source": label,
+            "fb_set": (set_code or "").lower()} for sid in dict.fromkeys(scryfall_ids) if sid]
+    return Expansion(label=label, needs=_price_raw_needs(raw, refresh_stale=refresh_stale))
+
+
 def expand_deck_file(file_name: str, *, refresh_stale: bool = False) -> Expansion:
     """Expand an MTGJSON precon deck fileName (e.g. ``AncientArsenal_ACR``)."""
     deck_data = mtgjson.deck(file_name)

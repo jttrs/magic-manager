@@ -1,7 +1,7 @@
 // Server state via TanStack Query over the generated, typed API client.
 import { keepPreviousData, queryOptions } from '@tanstack/react-query';
 import type { DraftCardIn } from '../core/api';
-import { undoInfo, cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs } from '../core/api';
+import { dealsTabs, dealsWatched, marketProductCost, undoInfo, cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs } from '../core/api';
 
 class ApiError extends Error {}
 
@@ -182,4 +182,31 @@ export const deckQuery = (slug?: string) =>
     queryFn: async ({ signal }) => unwrap(await deckDetail({ path: { slug: slug! }, signal })),
     enabled: Boolean(slug),
     staleTime: 60_000,
+  });
+
+export const watchedQuery = () =>
+  queryOptions({
+    queryKey: ['deals', 'watched'],
+    queryFn: async ({ signal }) => unwrap(await dealsWatched({ signal })),
+    staleTime: 60_000,
+  });
+
+/** The open-tabs read. Disabled: only the explicit "Read my open tabs" refetches it. */
+export const dealsTabsQuery = () =>
+  queryOptions({
+    queryKey: ['deals', 'tabs'],
+    queryFn: async () => unwrap(await dealsTabs({ query: { browser: 'chrome' } })),
+    enabled: false,
+    retry: false,
+    staleTime: Infinity,
+    gcTime: 30 * 60_000,
+  });
+
+/** What a sealed product / Secret Lair drop is worth (server-memoized 30 min). */
+export const productCostQuery = (kind: 'sealed' | 'sld', set: string, name: string, finish: string | null) =>
+  queryOptions({
+    queryKey: ['market', 'product-cost', kind, set, name, finish],
+    queryFn: async ({ signal }) => unwrap(await marketProductCost({ query: { kind, set, name, finish }, signal })),
+    staleTime: 30 * 60_000,
+    retry: 1,
   });
