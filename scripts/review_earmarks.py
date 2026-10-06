@@ -1,10 +1,12 @@
-"""Deterministic review of earmarked sealed products (a watchlist deal table).
+"""Deterministic review of earmarked sealed products and single cards (a watchlist deal table).
 
 Reads the earmark watchlist (`earmarks.earmark_list`) and, for each product,
 **recomputes** its live market + intrinsic value by REUSING the sealed engine
 (`sealed.build_product_tree` / `aggregate`, the same path `sealed_value.py`
 drives) — the DB stores only the non-derivable asking-price snapshot, never
-derived values. Emits a markdown deal table (product names hyperlinked to their
+derived values. Single cards are priced from the local `cards` table
+(`sets.priced_map`, local-first) at the EXACT printing's finish — never the oracle
+floor. Emits a markdown deal table (product names hyperlinked to their
 storefronts, collated across stores) + a txt/xlsx to `output/earmarks-review/reports/`.
 
 Columns: product (+ per-store links & asking prices), set, category, release,
@@ -104,6 +106,29 @@ def _value_product(set_code: str, product_name: str, market_provider,
     return {"market": totals.market_whole, "intrinsic": totals.intrinsic, "error": None}
 
 
+def _value_singles(products, *, refresh_stale: bool = False) -> dict[int, dict]:
+    """Price every earmarked single, keyed by ``product_id``, with ONE local-first
+    ``sets.priced_map`` call. Market is the EXACT printing's finish price
+    (``usd_foil`` for foil, else ``usd``) — never the oracle floor; no intrinsic."""
+    singles = [p for p in products if p.kind == "single"]
+    if not singles:
+        return {}
+    pm = sets.priced_map([p.scryfall_id for p in singles if p.scryfall_id],
+                         refresh=refresh_stale,
+                         warn=lambda codes: print(
+                             f"warning: stale prices for {', '.join(codes)} (--refresh to re-sync)",
+                             file=sys.stderr),
+                         log=lambda m: print(m, file=sys.stderr))
+    out: dict[int, dict] = {}
+    for p in singles:
+        prices = pm.get(p.scryfall_id) or {}
+        market = prices.get("usd_foil" if p.finish == "foil" else "usd")
+        err = None if market is not None else \
+            f"no local price for {p.set_code.upper()} #{p.collector_number} ({p.finish})"
+        out[p.product_id] = {"market": market, "intrinsic": None, "error": err}
+    return out
+
+
 # ---------- rendering ----------
 
 def _product_cell(p) -> str:
@@ -125,10 +150,14 @@ def _build_rows(products, market_provider, today: str,
                 *, market_name: str = "tcgcsv", refresh_stale: bool = False) -> list[dict]:
     """Value every product and assemble sortable row dicts."""
     rows = []
+    single_vals = _value_singles(products, refresh_stale=refresh_stale)
     for p in products:
-        val = _value_product(p.set_code, p.product_name, market_provider,
-                             edition=p.subtype,
-                             market_name=market_name, refresh_stale=refresh_stale)
+        if p.kind == "single":
+            val = single_vals[p.product_id]
+        else:
+            val = _value_product(p.set_code, p.product_name, market_provider,
+                                 edition=p.subtype,
+                                 market_name=market_name, refresh_stale=refresh_stale)
         best = p.best_asking
         market = val["market"]
         delta = (market - best) if (market is not None and best is not None) else None
@@ -162,7 +191,7 @@ def _render_lines(rows, today: str) -> list[str]:
             delta_cell = f"**+{delta_cell.lstrip('$')}**" if delta_cell.startswith("$") else delta_cell
         age = f"{r['age']}d" if r["age"] is not None else "—"
         lines.append(
-            f"| {_product_cell(p)} | {p.set_code.upper()} | {p.category or '—'} | "
+            f"| {_product_cell(p)} | {p.set_code.upper()} | {p.category or ('single' if p.kind == 'single' else '—')} | "
             f"{p.release_date or '—'} | {_fmt(r['best_asking'])} | {_fmt(r['market'])} | "
             f"{_fmt(r['intrinsic'])} | {delta_cell} | {age} |"
         )
@@ -182,14 +211,14 @@ def _render_lines(rows, today: str) -> list[str]:
 def _write_xlsx(rows, today: str, out_path: Path) -> None:
     headers = ["product_name", "set_code", "category", "release_date", "best_asking",
                "market", "intrinsic", "deal_delta", "ask_age_days", "n_stores",
-               "store_urls"]
+               "store_urls", "kind"]
     cell_rows = []
     for r in rows:
         p = r["product"]
         cell_rows.append([
             p.product_name, p.set_code.upper(), p.category, p.release_date,
             r["best_asking"], r["market"], r["intrinsic"], r["delta"], r["age"],
-            len(p.links), " | ".join(l.store_url for l in p.links),
+            len(p.links), " | ".join(l.store_url for l in p.links), p.kind,
         ])
     earmarks_sheet = exports.xlsx.SheetSpec(
         title="earmarks", headers=headers, rows=cell_rows,
@@ -202,7 +231,7 @@ def _write_xlsx(rows, today: str, out_path: Path) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(
-        description="Review earmarked sealed products: live market/intrinsic vs asking price.")
+        description="Review earmarked sealed products and single cards: live market/intrinsic vs asking price.")
     ap.add_argument("--market", choices=["null", "tcgcsv", "tcgapi", "chain", "compare"],
                     default="tcgcsv", help="Live market price source (default: tcgcsv).")
     ap.add_argument("--format", choices=["txt", "xlsx", "all"], default="all",

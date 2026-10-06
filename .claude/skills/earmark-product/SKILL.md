@@ -1,6 +1,6 @@
 ---
 name: earmark-product
-description: Save a sealed MTG product from a storefront URL onto a cross-store watchlist ("earmarks"). Claude fetches the store page, extracts the product name + asking price, resolves it to an MTGJSON identity, and records it via `mm earmark add`. The same product on multiple storefronts collates to one product with several links. Triggers: "/earmark-product <url>", "earmark this product", "add this to my watchlist", "save this sealed product link", "track this product's price", "watch this on <store>".
+description: Save a sealed MTG product (or a single card printing) from a storefront URL onto a cross-store watchlist ("earmarks"). Claude fetches the store page, extracts the product name + asking price, resolves it to an MTGJSON identity, and records it via `mm earmark add`. The same product on multiple storefronts collates to one product with several links. Triggers: "/earmark-product <url>", "earmark this product", "add this to my watchlist", "save this sealed product link", "track this product's price", "watch this on <store>", "earmark this card", "watch this single".
 ---
 
 # earmark-product
@@ -20,7 +20,7 @@ review's job); this skill just captures the link + the asking-price snapshot.
 
 **Don't** use for:
 - Valuing a product right now — that's [[sealed-value]] / [[construct-value]].
-- A decklist or single card URL — earmarks are for *sealed products* only.
+- A decklist URL — earmarks are for sealed products and single cards only.
 - Reviewing what's saved — that's [[review-earmarked-products]].
 
 ## Recipe (what Claude does)
@@ -48,6 +48,26 @@ review's job); this skill just captures the link + the asking-price snapshot.
    under the same product.
 3. **Relay** the CLI's one-line result (inserted/updated product + link).
 
+## Single cards
+
+A single-card listing (a store page for one printing) is earmarked with `--cn` and
+the listing's exact finish:
+
+```bash
+uv run mm earmark add <set_code> --cn <collector number> [--finish foil] \
+  --name "<card name from the store title>" --url "<the store URL>" --price <asking price>
+```
+
+- **Tripwire: store titles mislabel set/CN.** Always pass `--name` so the CLI can
+  cross-check the card (it also accepts the front face or flavor name). On a
+  refusal (exit 2, "the store's set/CN may be wrong"), do NOT force it — find the
+  real printing by name + price + image, then retry with the right set/CN.
+- `--finish` must be the listing's exact finish (`nonfoil` default, or `foil`);
+  the review prices that finish of that exact printing.
+- `sld` + `--cn` is a Secret Lair *single*, not a drop.
+- Validate first with `uv run mm resolve-product <set_code> --cn <CN> --name "<name>"`
+  if unsure; `--name` is optional for singles but strongly recommended.
+
 ## Not to be confused with
 
 - [[review-earmarked-products]] — prints the deal table (live market vs asking)
@@ -60,7 +80,7 @@ review's job); this skill just captures the link + the asking-price snapshot.
   — the shared URL→identity recipe (also used by [[sealed-value]]).
 - `mm resolve-product` / `mm earmark add|list|rm-link|rm-product` — the CLI (`cli.py`).
 - `src/magic_manager/earmarks.py` — the CRUD module (V12 `earmarked_products` +
-  `earmark_links` tables). Stores only the non-derivable asking-price snapshot.
+  `earmark_links` tables; V31 adds `kind` sealed|single and `earmarks.resolve_single`). Stores only the non-derivable asking-price snapshot.
 - `cli._resolve_identity` — the shared MTGJSON-identity validator both `add` and
   `resolve-product` enforce (dispatches `sld` → `sld.identify_drop`, else
   `sealed.identify_product`). `mtgjson.sealed_products(code)` — the sealed-product

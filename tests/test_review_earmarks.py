@@ -93,3 +93,36 @@ def test_edition_falls_back_to_name_sniff_when_no_subtype(monkeypatch):
                                    market_provider=None, edition=None,
                                    market_name="tcgcsv")
     assert captured["edition"] == "foil"
+
+
+# ---------- singles ----------
+
+def _single(pid, finish, sid="sid-1", cn="7"):
+    from magic_manager import earmarks
+    return earmarks.EarmarkProduct(
+        product_id=pid, set_code="tst", product_uuid=None, product_name=f"Card (#{cn}, {finish})",
+        category="single", subtype=None, release_date=None, card_count=None, notes=None,
+        earmarked_at="2026-01-01", kind="single", scryfall_id=sid, collector_number=cn,
+        finish=finish,
+        links=[earmarks.EarmarkLink(1, pid, "https://x.example/a", "x.example", 1.0, "USD",
+                                    "2026-01-01", None)])
+
+
+def test_single_priced_from_exact_finish(monkeypatch):
+    from magic_manager import sets
+    monkeypatch.setattr(sealed, "identify_product", _boom)
+    monkeypatch.setattr(sealed, "build_product_tree", _boom)
+    monkeypatch.setattr(sets, "priced_map", lambda ids, **k: {
+        "sid-1": {"usd": 1.5, "usd_foil": 4.0, "prices_updated_at": "x"},
+        "sid-2": {"usd": None, "usd_foil": None, "prices_updated_at": "x"}})
+    products = [_single(1, "nonfoil"), _single(2, "foil"), _single(3, "foil", sid="sid-2", cn="8")]
+    vals = review_earmarks._value_singles(products)
+    assert vals[1]["market"] == 1.5 and vals[2]["market"] == 4.0
+    assert vals[1]["intrinsic"] is None and vals[1]["error"] is None
+    assert vals[3]["market"] is None and "no local price for TST #8 (foil)" in vals[3]["error"]
+
+    rows = review_earmarks._build_rows(products, None, "2026-02-01")
+    assert len(rows) == 3
+    by_id = {r["product"].product_id: r for r in rows}
+    assert by_id[2]["delta"] == 3.0 and by_id[3]["error"]
+    assert "| single |" in "\n".join(review_earmarks._render_lines(rows, "2026-02-01"))

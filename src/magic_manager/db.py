@@ -1000,6 +1000,22 @@ CREATE TABLE IF NOT EXISTS illustration_art_tags (
 CREATE INDEX IF NOT EXISTS illustration_art_tags_tag_idx ON illustration_art_tags (tag_id);
 """
 
+# V31 — single-card earmarks. ``earmarked_products`` gains a ``kind``
+# discriminator ('sealed' | 'single') so one printing can be watched next to
+# sealed product. Sealed rows keep UNIQUE(set_code, product_name); a single is
+# keyed by (set_code, collector_number, finish) via a PARTIAL unique index, and
+# carries its ``scryfall_id`` for exact-finish pricing. Existing rows become
+# 'sealed' through the column DEFAULT, so there is no backfill. As before,
+# market value is never stored — only the non-derivable asking-price snapshot.
+SCHEMA_V31 = """
+ALTER TABLE earmarked_products ADD COLUMN kind TEXT NOT NULL DEFAULT 'sealed' CHECK (kind IN ('sealed','single'));
+ALTER TABLE earmarked_products ADD COLUMN scryfall_id TEXT;
+ALTER TABLE earmarked_products ADD COLUMN collector_number TEXT;
+ALTER TABLE earmarked_products ADD COLUMN finish TEXT CHECK (finish IS NULL OR finish IN ('nonfoil','foil'));
+CREATE UNIQUE INDEX IF NOT EXISTS earmarked_products_single_uq
+    ON earmarked_products (set_code, collector_number, finish) WHERE kind = 'single';
+"""
+
 # ---------- migration-authoring convention ----------
 #
 # Always-safe ops in a migration: CREATE TABLE, ALTER TABLE ADD COLUMN,
@@ -1087,6 +1103,7 @@ MIGRATIONS: list[str] = [
     SCHEMA_V28,
     SCHEMA_V29,
     SCHEMA_V30,
+    SCHEMA_V31,
 ]
 CURRENT_VERSION = len(MIGRATIONS)
 
