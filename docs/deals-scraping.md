@@ -21,7 +21,7 @@ session that hit every one of these; the deterministic tools MUST handle them, n
 
 | Mode | How | When | CI-checkable |
 |---|---|---|---|
-| `shopify` | server GET `<product-url>.json` (or `.js`) → variant price, `available` | Shopify stores (Many Realms, PokeBox, most card shops) | yes — live canary + fixtures |
+| `shopify` | server GET `<product-url>.js` → variant price (cents) + `available` (`.json` has no stock) | Shopify stores (Many Realms, PokeBox, most card shops) | yes — live canary + fixtures |
 | `meta` | server GET page → `meta[property="og:price:amount"]` / `product:price:amount`, JSON-LD `Product.offers.price` | stores that serve structured data to plain GETs | yes |
 | `rendered` | read the **already-rendered tab** in the user's browser via AppleScript `execute javascript` | bot-blocked and JS-priced retailers (Best Buy, eBay, Amazon) | fixtures only (needs a real browser session) |
 
@@ -70,6 +70,15 @@ closed sockets) and their prices are JS-rendered, absent from raw HTML anyway.
 10. **Tax.** Deltas are **face price vs pre-tax market** — never pre-discount a no-tax store's price.
     "No sales tax" is a per-vendor attribute used only as a cross-store tiebreaker for the SAME
     item (gross up taxed competitors ≈ × 1.10).
+
+## Approved stores (owner, 2026-10-05)
+
+`config/vendors.toml`: **Shopify** — Many Realms, PokeBox USA, Stomping Grounds TCG, Double Infinity Gaming,
+Gamers Guild USA · **page tags** — Forge and Fire Gaming, CoolStuffInc, Star City Games, Miniature Market,
+GameNerdz, Noble Knight Games, Dragon's Lair Hobbies, Costco, Card Kingdom · **open tab** — Best Buy,
+Target, eBay. Considered, not added: Amazon / Walmart / GameStop / DA Card World (bot-walled — open-tab
+candidates), Face to Face Games (CAD), Troll and Toad (mid-relaunch), ChannelFireball / Barnes & Noble
+(no current sealed found).
 
 ## Recipe book + CI
 

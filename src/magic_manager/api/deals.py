@@ -6,6 +6,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from .. import deals, features
+from .jobs import Artifact, JobResult, JobSpec, ProgressEvent, ProgressFn, register
 
 
 class TabOut(BaseModel):
@@ -44,3 +45,38 @@ class OpenTabsOut(BaseModel):
 def open_tabs(browser: str = "chrome") -> OpenTabsOut:
     features.require("deals")
     return OpenTabsOut(**deals.open_tabs(browser))
+
+
+class PriceOut(BaseModel):
+    url: str
+    vendor: str | None = None
+    price: float | None
+    currency: str | None
+    available: bool | None = Field(description="None when the page doesn't say.")
+    title: str | None
+    signal: str = Field(description="Which signal gave the price: shopify, meta, json-ld, microdata, pattern.")
+    error: str | None
+
+
+class ReadPricesInput(BaseModel):
+    urls: list[str] = Field(min_length=1, max_length=300)
+    fresh: bool = Field(False, description="Skip the 30-minute page cache.")
+
+
+def _run_read_prices(inp: ReadPricesInput, progress: ProgressFn) -> JobResult:
+    features.require("deals")
+    rows = deals.read_prices(inp.urls, fresh=inp.fresh,
+                             progress=lambda i, n, url: progress(ProgressEvent(i - 1, n, url)))
+    out = [PriceOut(**r).model_dump() for r in rows]
+    priced = sum(1 for r in out if r["price"] is not None)
+    return JobResult(summary=f"{priced} of {len(out)} prices read",
+                     artifacts=[Artifact(kind="json", label="prices", data=out)])
+
+
+READ_PRICES = register(JobSpec(
+    name="deals.read_prices",
+    title="Read store prices",
+    description="Read price and stock for store product pages (server-side, or from your open tab).",
+    input_model=ReadPricesInput,
+    run=_run_read_prices,
+))

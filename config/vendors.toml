@@ -1,0 +1,169 @@
+# The vendor recipe book — which stores the deals tools read, and how.
+# Design + failure modes: docs/deals-scraping.md. Loaded by magic_manager.vendors.
+#
+#   mode           shopify  — server GET <product-url>.js (Shopify storefront: cents + availability)
+#                  meta     — server GET, price/stock from page tags (product/og meta,
+#                             schema.org JSON-LD, microdata), then the patterns below
+#                  rendered — read the page already open in your browser tab (bot-blocked
+#                             or JS-priced stores); never fetched server-side
+#   product_path   regex on the URL path that marks a product page
+#   sample_url     one known product page — the nightly canary reads it (server modes)
+#   no_sales_tax   cross-store tiebreaker only; deal deltas are always at face price
+#   price_pattern / stock_pattern / sold_out_pattern / title_pattern
+#                  optional regexes (first group = value) when page tags aren't enough;
+#                  for `rendered` they run over the tab's visible text.
+
+# ---- Shopify stores ----
+
+[[vendor]]
+key = "manyrealms"
+name = "Many Realms"
+hosts = ["manyrealms.com"]
+mode = "shopify"
+product_path = "/products/[^/?#]+"
+sample_url = "https://manyrealms.com/products/magic-the-gathering-foundations-play-booster-box"
+no_sales_tax = true
+
+[[vendor]]
+key = "pokebox"
+name = "PokeBox"
+hosts = ["pokeboxusa.com"]
+mode = "shopify"
+product_path = "/products/[^/?#]+"
+sample_url = "https://www.pokeboxusa.com/products/marvel-super-heroes-play-booster-display"
+no_sales_tax = true
+
+[[vendor]]
+key = "stompinggrounds"
+name = "Stomping Grounds"
+hosts = ["stompinggroundstcg.com"]
+mode = "shopify"
+product_path = "/products/[^/?#]+"
+sample_url = "https://www.stompinggroundstcg.com/products/magic-the-gathering-foundations-play-booster-box"
+
+[[vendor]]
+key = "doubleinfinity"
+name = "Double Infinity Gaming"
+hosts = ["doubleinfinitygaming.com"]
+mode = "shopify"
+product_path = "/products/[^/?#]+"
+sample_url = "https://doubleinfinitygaming.com/products/magic-the-gathering-edge-of-eternities-play-booster-box-presale"
+
+[[vendor]]
+key = "gamersguild"
+name = "Gamers Guild"
+hosts = ["gamersguildusa.com", "gamersguildaz.com"]
+mode = "shopify"
+product_path = "/products/[^/?#]+"
+sample_url = "https://www.gamersguildusa.com/products/magic-the-gathering-reality-fracture-play-booster-display-box"
+
+# ---- Page-tag stores ----
+
+[[vendor]]
+key = "forgeandfire"
+name = "Forge and Fire Gaming"
+hosts = ["forgeandfiregaming.com"]
+mode = "meta"
+product_path = "^/(?!cart|checkout|account|login|search)[^/]+/[^/]+/?$"
+sample_url = "https://forgeandfiregaming.com/magic-the-gathering/final-fantasy-play-booster-display/"
+
+[[vendor]]
+key = "coolstuff"
+name = "CoolStuffInc"
+hosts = ["coolstuffinc.com"]
+mode = "meta"
+product_path = "^/p/\\d+"
+sample_url = "https://www.coolstuffinc.com/p/408893"
+
+[[vendor]]
+key = "starcity"
+name = "Star City Games"
+hosts = ["starcitygames.com"]
+mode = "meta"
+product_path = "^/[a-z0-9-]+-(?:en|jp|ja)/?$"
+sample_url = "https://starcitygames.com/final-fantasy-play-booster-box-sld-mtg-bbx-finplay-en/"
+stock_pattern = '"instock":\s*true'
+sold_out_pattern = '"instock":\s*false'
+
+[[vendor]]
+key = "miniaturemarket"
+name = "Miniature Market"
+hosts = ["miniaturemarket.com"]
+mode = "meta"
+product_path = "\\.html$"
+sample_url = "https://www.miniaturemarket.com/mtg-universes-beyond-final-fantasy-play-booster-box-30-wocd3842-box.html"
+
+[[vendor]]
+key = "gamenerdz"
+name = "GameNerdz"
+hosts = ["gamenerdz.com"]
+mode = "meta"
+product_path = "^/(?!cart|checkout|account|login|search|categories|brands)[a-z0-9-]+/?$"
+sample_url = "https://www.gamenerdz.com/riftbound-league-of-legends-tcg-radiance-booster-box-preorder"
+
+[[vendor]]
+key = "nobleknight"
+name = "Noble Knight Games"
+hosts = ["nobleknight.com"]
+mode = "meta"
+product_path = "^/P/\\d+"
+sample_url = "https://www.nobleknight.com/P/2148327420/Edge-of-Eternities---Play-Booster-Display"
+
+[[vendor]]
+key = "dragonslair"
+name = "Dragon's Lair Hobbies"
+hosts = ["dragonslairhobbies.com"]
+mode = "meta"
+product_path = "^/product/[^/]+"
+sample_url = "https://dragonslairhobbies.com/product/magic-the-gathering-teenage-mutant-ninja-turtles-play-booster-display/"
+
+[[vendor]]
+key = "costco"
+name = "Costco"
+hosts = ["costco.com"]
+mode = "meta"
+product_path = "(\\.product\\.\\d+\\.html$|^/p/-/[^/]+/\\d+)"
+sample_url = "https://www.costco.com/p/-/magic-the-gathering-bloomburrow-commander-kit-peace-offering/4000399539"
+
+[[vendor]]
+key = "cardkingdom"
+name = "Card Kingdom"
+hosts = ["cardkingdom.com"]
+mode = "meta"
+product_path = "^/mtg-sealed/[^/]+"
+sample_url = "https://www.cardkingdom.com/mtg-sealed/edge-of-eternities-play-booster-box"
+# The og:title is an unfilled template ("title | edition | …"): take the heading.
+title_pattern = '<h1[^>]*>\s*(.*?)\s*</h1>'
+stock_pattern = 'Add To Cart\s*</a>'
+sold_out_pattern = '>\s*(?:Out of Stock|Sold Out)\s*<'
+
+# ---- Read from your open tab ----
+
+[[vendor]]
+key = "bestbuy"
+name = "Best Buy"
+hosts = ["bestbuy.com"]
+mode = "rendered"
+product_path = "^/(site|product)/.+"
+# The first $ amount is the price; the second is the ÷4 installment.
+price_pattern = '\$\s?(\d[\d,]*\.\d{2})'
+sold_out_pattern = 'sold out|out of stock|coming soon'
+
+[[vendor]]
+key = "target"
+name = "Target"
+hosts = ["target.com"]
+mode = "rendered"
+product_path = "^/p/.+/-/A-\\d+"
+price_pattern = '\$\s?(\d[\d,]*\.\d{2})'
+sold_out_pattern = 'out of stock|sold out|not available'
+
+[[vendor]]
+key = "ebay"
+name = "eBay"
+hosts = ["ebay.com"]
+mode = "rendered"
+product_path = "^/itm/\\d+"
+# The first "US $" amount is the item price; later ones are installments/shipping.
+price_pattern = 'US \$\s?(\d[\d,]*\.\d{2})'
+sold_out_pattern = 'this listing (?:was ended|has ended)|out of stock|sold out'
