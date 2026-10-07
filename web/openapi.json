@@ -2183,6 +2183,144 @@
         }
       }
     },
+    "/api/art/tags": {
+      "get": {
+        "tags": [
+          "art"
+        ],
+        "summary": "Art Tags",
+        "operationId": "art_tags",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100,
+              "default": "",
+              "title": "Q"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtTagsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/art/swaps": {
+      "post": {
+        "tags": [
+          "art"
+        ],
+        "summary": "Art Swaps",
+        "operationId": "art_swaps",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArtSwapsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtSwapsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/art/lookup": {
+      "post": {
+        "tags": [
+          "art"
+        ],
+        "summary": "Art Lookup",
+        "operationId": "art_lookup",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArtSwapsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtLookupOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/cards/{scryfall_id}/holdings": {
       "get": {
         "tags": [
@@ -2546,6 +2684,204 @@
           "summary"
         ],
         "title": "ActionOut"
+      },
+      "ArtLookupOut": {
+        "properties": {
+          "searched": {
+            "type": "integer",
+            "title": "Searched",
+            "description": "Cards asked about."
+          },
+          "added": {
+            "type": "integer",
+            "title": "Added",
+            "description": "On-theme printings new to the local catalog."
+          }
+        },
+        "type": "object",
+        "required": [
+          "searched",
+          "added"
+        ],
+        "title": "ArtLookupOut"
+      },
+      "ArtSwapRowOut": {
+        "properties": {
+          "scryfall_id": {
+            "type": "string",
+            "title": "Scryfall Id",
+            "description": "The printing the draft uses now."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "on_theme",
+              "swap",
+              "none"
+            ],
+            "title": "Status"
+          },
+          "pick": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pick",
+            "description": "Best on-theme printing: yours with the most free copies, else the cheapest."
+          },
+          "candidates": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Candidates",
+            "description": "Every on-theme printing of the card, best first."
+          }
+        },
+        "type": "object",
+        "required": [
+          "scryfall_id",
+          "status",
+          "pick",
+          "candidates"
+        ],
+        "title": "ArtSwapRowOut"
+      },
+      "ArtSwapsIn": {
+        "properties": {
+          "tag": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Tag",
+            "description": "Art tag id, slug or label."
+          },
+          "cards": {
+            "items": {
+              "$ref": "#/components/schemas/DraftCardIn"
+            },
+            "type": "array",
+            "title": "Cards"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tag",
+          "cards"
+        ],
+        "title": "ArtSwapsIn"
+      },
+      "ArtSwapsOut": {
+        "properties": {
+          "tag": {
+            "$ref": "#/components/schemas/ArtTagRefOut"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/ArtSwapRowOut"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "printings": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/PrintingOut"
+            },
+            "type": "object",
+            "title": "Printings"
+          },
+          "matched": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Matched",
+            "description": "Per on-theme printing, the tags (incl. child tags) that matched."
+          }
+        },
+        "type": "object",
+        "required": [
+          "tag",
+          "rows",
+          "printings",
+          "matched"
+        ],
+        "title": "ArtSwapsOut"
+      },
+      "ArtTagOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "illustrations": {
+            "type": "integer",
+            "title": "Illustrations",
+            "description": "Artworks tagged with it directly (child tags add more)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "slug",
+          "illustrations"
+        ],
+        "title": "ArtTagOut"
+      },
+      "ArtTagRefOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "ArtTagRefOut"
+      },
+      "ArtTagsOut": {
+        "properties": {
+          "synced": {
+            "type": "boolean",
+            "title": "Synced",
+            "description": "False until the Scryfall tag cache is loaded (job `scryfall.sync_tags`)."
+          },
+          "tags": {
+            "items": {
+              "$ref": "#/components/schemas/ArtTagOut"
+            },
+            "type": "array",
+            "title": "Tags"
+          }
+        },
+        "type": "object",
+        "required": [
+          "synced",
+          "tags"
+        ],
+        "title": "ArtTagsOut"
       },
       "BracketOut": {
         "properties": {

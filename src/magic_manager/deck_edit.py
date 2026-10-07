@@ -398,6 +398,12 @@ def check(slug: str, cards: list[DraftCard], *, combos: bool = False) -> dict:
 
 # ---------- editor: commander suggestions ----------
 
+def most_free(options: list[tuple[str, int]], free: dict[str, int]) -> str:
+    """Of your printings ``[(scryfall_id, owned qty)]``, the one with the most
+    FREE copies (ties → most owned) — the printing a deck should use."""
+    return max(options, key=lambda t: (free.get(t[0], 0), t[1]))[0]
+
+
 def usable_printings(oracle_ids) -> tuple[dict[str, str], dict[str, list[tuple[str, int]]], dict[str, int]]:
     """The printing to add for each oracle card: your printing with the most FREE
     copies when you own the card, else its first standard printing. Returns
@@ -424,7 +430,7 @@ def usable_printings(oracle_ids) -> tuple[dict[str, str], dict[str, list[tuple[s
     for oid in oids:
         mine = owned_by_oracle.get(oid)
         if mine:
-            pick[oid] = max(mine, key=lambda t: (free.get(t[0], 0), t[1]))[0]
+            pick[oid] = most_free(mine, free)
         elif oid in std:
             pick[oid] = std[oid]["scryfall_id"]
     return pick, owned_by_oracle, free

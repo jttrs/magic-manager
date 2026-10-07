@@ -2,7 +2,7 @@
 import { keepPreviousData, queryOptions } from '@tanstack/react-query';
 import type { DraftCardIn } from '../core/api';
 import type { RankingRequest } from '../core/rankings';
-import { dealsTabs, dealsWatched, marketProductCost, marketSecretLair, undoInfo, cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, cardFloors, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs, historyList, historyEvent, exploreRanking, exploreRankingOptions, cardCombos, deckCombos, draftCombos } from '../core/api';
+import { dealsTabs, dealsWatched, marketProductCost, marketSecretLair, undoInfo, cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, cardFloors, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs, historyList, historyEvent, exploreRanking, exploreRankingOptions, cardCombos, deckCombos, draftCombos, artTags, artSwaps } from '../core/api';
 
 class ApiError extends Error {}
 
@@ -285,4 +285,22 @@ export const cardCombosQuery = (name: string | undefined, enabled = true) =>
     queryFn: async ({ signal }) => unwrap(await cardCombos({ query: { name: name! }, signal })),
     enabled: Boolean(name) && enabled,
     staleTime: 10 * 60_000,
+  });
+
+export const artTagsQuery = (q: string) =>
+  queryOptions({
+    queryKey: ['art', 'tags', q],
+    queryFn: async ({ signal }) => unwrap(await artTags({ query: { q, limit: 8 }, signal })),
+    staleTime: 10 * 60_000,
+    placeholderData: keepPreviousData,
+  });
+
+export const artSwapsQuery = (tag: string | null, sids: string[]) =>
+  queryOptions({
+    queryKey: ['art', 'swaps', tag, sids],
+    queryFn: async ({ signal }) =>
+      unwrap(await artSwaps({ body: { tag: tag!, cards: sids.map((scryfall_id) => ({ scryfall_id, board: 'main', finish: 'either', count: 1 })) }, signal })),
+    enabled: !!tag && sids.length > 0,
+    staleTime: 10 * 60_000,
+    placeholderData: keepPreviousData,
   });
