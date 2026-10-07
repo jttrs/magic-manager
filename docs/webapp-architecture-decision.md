@@ -477,3 +477,78 @@ Add-cards dialog on Collection: **Search** (live printing search, stage copies),
 ## 24. Status — iteration 2, P3 (`feat/web-decks`)
 
 Deck Manager at `/decks`: grouped deck-recipe list (set / year / state / format / source, search, built/loose) + resizable inspector (decklist sections, cards or list view, card inspector), with "Add deck to collection" / "Add N marked" feeding the P2 add-cards review (exact printings, one ingest event). Engine `magic_manager.deck_view` (set-based summaries, ~0.25 s for 580 decks), API `api.decks`. The card detail sheet planned for P3 shipped earlier as the card inspector (#83). Deck editing (versions, compose/decompose) stays CLI for now.
+
+## 25. Phase 3 — hosting, login and per-user profiles (shaped 2026-10-06, `torre/hosting-auth-profiles`)
+
+**Status:** decisions signed off by the owner 2026-10-07. Supersedes Part I §5's "Postgres,
+user-scoped" row and §9 phase 3 ("SQLite → Postgres; add `user_id`"). Nothing is built yet.
+
+**Facts that drove it.** Of the 677 MB DB, ~650 MB is shared cache (EDHREC pages, `cards`,
+Tagger tags); one user's data (the 14 `undo.USER_TABLES`) is ~6 MB. The engine has ~346 raw
+SQLite queries. SQLite resolves unqualified table names across `ATTACH`ed databases, so the same
+queries run against one file or against a catalog file + a user file. Research (shared schema +
+Postgres RLS is the SaaS default; database-per-tenant is increasingly preferred for many small
+tenants because isolation is physical and export/delete is a file operation; hybrids with a
+shared catalog are emerging):
+[Redis](https://redis.io/blog/data-isolation-multi-tenant-saas/),
+[asadali.dev](https://asadali.dev/blog/multi-tenant-saas-practical-comparison-database-per-tenant-vs-shared-schema/),
+[Augmented Dev](https://theaugmenteddev.com/blog/multi-tenant-data-isolation-patterns-saas).
+
+### 25.1 Decisions
+
+| # | Concern | Decision |
+|---|---|---|
+| H1 | Data model | **Shared catalog DB + one small SQLite DB per user**, `ATTACH`ed per connection. Catalog = cards, prices, sets, Tagger/art tags, EDHREC, MTGJSON caches. User DB = `undo.USER_TABLES` (inventory + ledger, decks/cards/versions/assignments, wishlist, earmarks + prices, set targets, settings, imports). `inventory == SUM(inventory_events.delta)` holds per user file. No `user_id` columns. |
+| H2 | Database | **Plain SQLite files on the server's persistent disk** (`/data/catalog.db`, `/data/users/<id>.db`, `/data/auth.db`), continuously replicated offsite with **Litestream** (object storage, e.g. Cloudflare R2). Not Postgres, not Turso. |
+| H3 | Owner's data | **Hosted becomes the owner's source of truth.** First account = the owner's user tables split out of today's DB (rehearsed per `db-upgrade`). Local mode keeps working for dev/CLI/skills against a copy. No two-way sync. |
+| H4 | Auth | **Self-hosted OAuth only — Discord + Google** (Authlib, state + PKCE). No passwords, no email sender, no magic links (cheapest, smallest attack surface; providers own MFA/recovery). Server-side sessions in `auth.db` (users, linked identities, sessions); HttpOnly + Secure + SameSite=Lax cookie; CSRF protection on writes. |
+| H5 | Access | **Invite-only** (allowlist / invite codes). The owner is **admin**. |
+| H6 | Feature flags | Layered: `config/features.toml` defaults < local overrides < **per-user overrides set by the admin**. Flags that need the owner's machine are **pinned off** for everyone else. |
+| H7 | Hosting (beta) | **A server in the owner's house during beta**, as **one Docker image** (SPA + API + worker) with data under a mounted `/data`. Move the same image to a vendor (e.g. SPA on Cloudflare Pages/Vercel + API on Fly.io/Railway) when needed. Litestream makes the move a restore. |
+| H8 | Worker | Single host ⇒ keep Taskiq's **in-process broker**; Redis only when a second host appears. Writes serialize **per user DB**; catalog writes (syncs) serialize globally. |
+| H9 | Local-only features | Tab reading + AppleScript store reads (Deals), the Mana Pool cart (machine `.env` account), Moxfield browser import: **admin-only flags that run only where the server is the owner's machine**; hidden for everyone else. Hosted alternatives (paste-your-export, manual URL entry) later. Users are never asked for marketplace credentials. |
+| H10 | Privacy | Store only OAuth subject id + display name + email. **Self-serve export** (download my user DB + CSV) and **delete my account** (removes the user file + auth rows; offsite backups age out of retention, e.g. 30 days). |
+| H11 | Local mode | **Same engine, two layouts, one `MM_MODE` switch.** `local` = no login, today's single file untouched (or the split layout); `hosted` = login, catalog + the signed-in user's file. CLI/skills keep `MAGIC_MANAGER_DB`. |
+
+### 25.2 Pinned / open
+
+- **External access (partly decided, rest pinned):** the owner reaches the server over
+  **Tailscale** (admin access, no open ports). Friends' access is pinned until the first outside
+  user needs it — leaning **Cloudflare Tunnel + own domain** (~$10/yr, most polished) or
+  **Tailscale Funnel** (free public HTTPS on a `ts.net` name). Either way invite-only OAuth (H4/H5)
+  is the gate. Rejected: Tailscale node sharing for friends (every friend installs Tailscale),
+  ngrok + basic auth (free-tier browser interstitial, bandwidth caps; demos only), router port
+  forwarding (exposes the home IP). Until then the beta is LAN + owner's tailnet.
+- **Home server hardware:** not decided. Old PC/laptop (e.g. Proxmox + one container) is fine for
+  the Docker image. An always-on Mac keeps the H9 admin features working **only if the app runs
+  natively** — Docker on macOS is a Linux VM (no `osascript`/headed Chrome).
+- **Budget:** not set; expected beta cost ≈ a domain (~$10/yr) + free-tier object storage.
+
+### 25.3 Consequences for the build
+
+- **Migrations split in two:** catalog migrations (run once) and user migrations (run on every
+  user file, at startup and on first login). `db.MIGRATIONS` needs a target per entry; the
+  `db-upgrade` rehearsals cover both layouts.
+- **`db.connect()` becomes layout-aware:** opens the user file as `main`, attaches the catalog
+  (hosted) — or opens the single file (local). Table names must stay unique across the two
+  files (a test guards it).
+- **Undo** (`undo.py`) becomes per user (`users/<id>.undo.db`); `SessionGuard` keys on the user.
+- **Request scoping:** the web layer resolves session → user → that user's connection; the
+  engine stays unaware of users (no `user_id` parameters threaded through it).
+- **Jobs** carry the user id; a user's job gets that user's connection.
+
+### 25.4 Build order (small PRs, after sign-off)
+
+1. Layout-aware `db.connect` + catalog/user table split + uniqueness test (no behavior change in
+   local mode).
+2. Migration targets (catalog vs user) + `db-upgrade` rehearsal support for the split layout.
+3. Splitter: today's DB → `catalog.db` + `users/<owner>.db` (rehearsed; owner OK before apply).
+4. `auth.db` + Discord/Google OAuth + sessions + CSRF + invite codes + admin role.
+5. Per-request user connection, per-user undo, jobs carry the user.
+6. Per-user feature flags + admin page; pin H9 features to the owner's machine.
+7. Export / delete-my-account.
+8. Docker image + Litestream + home deploy runbook.
+9. Owner admin access over Tailscale; friends' external access when the pinned item resolves.
+
+Phase 5 (shared server-side Scryfall/MTGJSON/EDHREC cache + rate limiter, retiring the browser
+Moxfield import) is re-evaluated **after** this lands.
