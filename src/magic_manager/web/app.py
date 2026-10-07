@@ -22,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
 from .. import api, sets as sets_mod, tabs as tabs_engine, undo as undo_engine, cart as cart_engine, deck_edit, edhrec as edhrec_engine, features as features_engine, scryfall
-from ..api import deals as deals_api, undo as undo_api, cart as cart_api, cards as cards_api, collection as collection_api, explore as explore_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api, market as market_api, trueup as trueup_api, history as history_api, combos as combos_api, art as art_api, jumpstart as jumpstart_api
+from ..api import deals as deals_api, undo as undo_api, cart as cart_api, cards as cards_api, collection as collection_api, explore as explore_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api, market as market_api, trueup as trueup_api, history as history_api, combos as combos_api, art as art_api, jumpstart as jumpstart_api, surf as surf_api
 from .runtime import TERMINAL, JobManager
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -450,6 +450,22 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             return art_api.lookup(body)
         except LookupError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
+
+    # ---------- card surfer ----------
+
+    @app.post("/api/surf/draw", response_model=surf_api.SurfDrawOut, tags=["surf"])
+    def surf_draw(body: surf_api.SurfDrawIn):
+        """The next random cards for the card surfer (read-only)."""
+        try:
+            return surf_api.draw(body)
+        except LookupError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+        except scryfall.ScryfallError as e:
+            raise HTTPException(status_code=502, detail=f"Scryfall didn't answer: {e}") from e
+
+    @app.get("/api/surf/options", response_model=surf_api.SurfOptionsOut, tags=["surf"])
+    def surf_options():
+        return surf_api.options()
 
     # ---------- cards ----------
 

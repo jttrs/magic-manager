@@ -196,3 +196,21 @@ def art_tags_for_printings(scryfall_ids: Iterable[str], *,
             for sid, label in c.execute(q, chunk):
                 out.setdefault(sid, []).append(label)
     return {sid: sorted(set(labels)) for sid, labels in out.items()}
+
+
+def art_tags_for_illustrations(illustration_ids: Iterable[str], *, limit: int = 8,
+                               conn: sqlite3.Connection | None = None) -> dict[str, list[dict]]:
+    """``{illustration_id: [{slug, label}…]}`` — each artwork's DIRECT art tags,
+    strongest weight first then label, at most ``limit``. Keyed on the artwork, so
+    it works for printings not in the local catalog (e.g. a random Scryfall card)."""
+    ids = list(dict.fromkeys(i for i in illustration_ids if i))
+    found: dict[str, list[tuple[int, str, str]]] = {}
+    with db.transaction(conn) as c:
+        for chunk in _chunks(ids):
+            q = ("SELECT t.illustration_id, s.slug, COALESCE(NULLIF(s.label, ''), s.slug), t.weight "
+                 "FROM illustration_art_tags t JOIN scryfall_tags s ON s.id = t.tag_id "
+                 f"WHERE t.illustration_id IN ({','.join('?' * len(chunk))})")
+            for ill, slug, label, weight in c.execute(q, chunk):
+                found.setdefault(ill, []).append((-WEIGHT_RANK.get(weight or "", 1), label, slug))
+    return {ill: [{"slug": s, "label": lab} for _w, lab, s in sorted(set(rows))[:limit]]
+            for ill, rows in found.items()}

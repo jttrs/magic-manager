@@ -116,7 +116,7 @@ export function CardInspector({ card, onClose }: { card: GuideCard | null; onClo
 }
 
 /** A link to another site: that site's monochrome mark + its name (the mark replaces a generic ↗). */
-function OutLink({ href, label, Mark }: { href: string; label: string; Mark: ComponentType<SVGProps<SVGSVGElement>> }) {
+export function OutLink({ href, label, Mark }: { href: string; label: string; Mark: ComponentType<SVGProps<SVGSVGElement>> }) {
   return (
     <a
       href={href}

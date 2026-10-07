@@ -91,6 +91,17 @@ def search(query: str, **params: str) -> Iterator[dict]:
         yield from page.get("data", [])
 
 
+def search_total(query: str, **params: str) -> int:
+    """How many cards match ``query`` (first page's ``total_cards``; 0 when none)."""
+    args = ["search", query, *(f"{k}={v}" for k, v in params.items())]
+    try:
+        return int(_run(args).get("total_cards") or 0)
+    except ScryfallError as e:
+        if "HTTP 404" in str(e):
+            return 0
+        raise
+
+
 def _follow(next_page_url: str) -> dict:
     parsed = urlparse(next_page_url)
     if parsed.netloc != "api.scryfall.com":
@@ -102,6 +113,17 @@ def _follow(next_page_url: str) -> dict:
 
 def named(exact_name: str) -> dict:
     return _run(["named", exact_name])
+
+
+def random_card(query: str = "") -> dict | None:
+    """GET /cards/random?q= — one random printing matching ``query`` (never
+    cached by the wrapper). ``None`` when nothing matches (Scryfall's 404)."""
+    try:
+        return _run(["random", query])
+    except ScryfallError as e:
+        if "HTTP 404" in str(e) or "0 cards matched" in str(e):
+            return None
+        raise
 
 
 def get_set(set_code: str) -> dict:

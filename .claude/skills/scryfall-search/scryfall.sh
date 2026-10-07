@@ -7,6 +7,7 @@
 #   scryfall.sh search 't:dragon c:r f:modern' [order=edhrec] [unique=cards]
 #   scryfall.sh raw    '/cards/search' 'q=t:dragon&order=edhrec'
 #   scryfall.sh named  'Lightning Bolt'
+#   scryfall.sh random 't:dragon has:flavor'   # one random card; NEVER cached
 #   scryfall.sh bulk   oracle_tags [--refresh]   # prints LOCAL PATH of the cached file
 #
 # All output is the raw JSON body from Scryfall.
@@ -18,6 +19,7 @@ UA='ClaudeCode-magic-manager-ScryfallSkill/1.0 (https://scryfall.com/docs/api; r
 CACHE_DIR="${SCRYFALL_CACHE_DIR:-${TMPDIR:-/tmp}/scryfall-cache}"
 STATE_DIR="${SCRYFALL_STATE_DIR:-${TMPDIR:-/tmp}/scryfall-state}"
 CACHE_TTL_SECONDS=${SCRYFALL_CACHE_TTL:-86400}      # 24h per Scryfall guidance
+NO_CACHE=0        # set by `random`: a cached random card would repeat for 24h
 SLOW_GAP_MS=500   # /cards/search, /cards/named, /cards/random, /cards/collection
 FAST_GAP_MS=100   # all other endpoints
 BACKOFF_FILE="$STATE_DIR/backoff_until"
@@ -86,7 +88,7 @@ call_api() {
   cache_key=$(printf '%s\n%s\n%s' "$method" "$url" "$body" | sha)
   cache_file="$CACHE_DIR/$cache_key.json"
 
-  if [ -f "$cache_file" ]; then
+  if [ "$NO_CACHE" != 1 ] && [ -f "$cache_file" ]; then
     local age
     age=$(( $(date +%s) - $(stat -f %m "$cache_file" 2>/dev/null || stat -c %Y "$cache_file") ))
     if [ "$age" -lt "$CACHE_TTL_SECONDS" ]; then
@@ -162,7 +164,7 @@ call_api() {
     exit 6
   fi
 
-  cp "$tmp_body" "$cache_file"
+  [ "$NO_CACHE" = 1 ] || cp "$tmp_body" "$cache_file"
   cat "$tmp_body"
 }
 
@@ -245,6 +247,11 @@ case "$cmd" in
     [ -z "$name" ] && { echo "usage: scryfall.sh named '<exact name>'" >&2; exit 1; }
     call_api GET /cards/named "exact=$(urlencode "$name")" ""
     ;;
+  random)
+    q="${1:-}"
+    NO_CACHE=1
+    if [ -n "$q" ]; then call_api GET /cards/random "q=$(urlencode "$q")" ""; else call_api GET /cards/random "" ""; fi
+    ;;
   collection)
     # Reads a JSON body from stdin or a file. Body must match Scryfall's
     # /cards/collection schema: {"identifiers":[ ... up to 75 ... ]}
@@ -278,6 +285,7 @@ scryfall.sh: unknown subcommand '$cmd'
 Subcommands:
   search     '<scryfall syntax>' [order=edhrec] [unique=cards] [dir=asc] [page=N]
   named      '<exact card name>'
+  random     ['<scryfall syntax>']   (one random card matching; never cached)
   collection [path-to-body.json]   (or pipe JSON body on stdin; up to 75 identifiers per call)
   raw        '/api/path' 'already=encoded&query=string'
   bulk       <bulk-data type> [--refresh]   (downloads once/day; prints local path)

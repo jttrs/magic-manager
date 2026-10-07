@@ -4000,6 +4000,336 @@ export type SuggestionsOut = {
 };
 
 /**
+ * SurfCardOut
+ */
+export type SurfCardOut = {
+    /**
+     * Scryfall Id
+     */
+    scryfall_id: string;
+    /**
+     * Oracle Id
+     */
+    oracle_id?: string | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Type Line
+     */
+    type_line?: string | null;
+    /**
+     * Oracle Text
+     */
+    oracle_text?: string | null;
+    /**
+     * Flavor Text
+     */
+    flavor_text?: string | null;
+    /**
+     * Artist
+     */
+    artist?: string | null;
+    /**
+     * Set Code
+     */
+    set_code: string;
+    /**
+     * Set Name
+     */
+    set_name?: string | null;
+    /**
+     * Collector Number
+     */
+    collector_number?: string | null;
+    /**
+     * Rarity
+     */
+    rarity?: string | null;
+    /**
+     * Released At
+     */
+    released_at?: string | null;
+    /**
+     * Image
+     */
+    image?: string | null;
+    /**
+     * Faces
+     *
+     * A double-faced card's faces (empty for one face).
+     */
+    faces: Array<SurfFaceOut>;
+    /**
+     * Scryfall Uri
+     */
+    scryfall_uri?: string | null;
+    /**
+     * Color Identity
+     */
+    color_identity: Array<string>;
+    prices: SurfPricesOut;
+    /**
+     * Owned
+     *
+     * Copies of this printing you own.
+     */
+    owned: number;
+    /**
+     * Owned Any
+     *
+     * Copies you own across every printing.
+     */
+    owned_any: number;
+    /**
+     * Art Tags
+     *
+     * The artwork's art tags (local tag cache).
+     */
+    art_tags: Array<SurfTagOut>;
+};
+
+/**
+ * SurfDrawIn
+ */
+export type SurfDrawIn = {
+    filters?: SurfFiltersIn;
+    /**
+     * Source
+     */
+    source?: 'scryfall' | 'owned';
+    /**
+     * N
+     */
+    n?: number;
+    /**
+     * Seed
+     *
+     * Your cards: shuffle seed (one per feed).
+     */
+    seed?: number;
+    /**
+     * Offset
+     *
+     * Your cards: position in the shuffled list.
+     */
+    offset?: number;
+    /**
+     * With Total
+     *
+     * All of Magic: also count the matching printings (first page).
+     */
+    with_total?: boolean;
+};
+
+/**
+ * SurfDrawOut
+ */
+export type SurfDrawOut = {
+    /**
+     * Source
+     */
+    source: 'scryfall' | 'owned';
+    /**
+     * Query
+     *
+     * The Scryfall search the filters compile to.
+     */
+    query: string;
+    /**
+     * Cards
+     */
+    cards: Array<SurfCardOut>;
+    /**
+     * Total
+     *
+     * Printings that match (when asked / your cards).
+     */
+    total?: number | null;
+    /**
+     * Next Offset
+     */
+    next_offset?: number | null;
+    /**
+     * Exhausted
+     *
+     * No more cards to draw (nothing matches, or every one of yours was shown).
+     */
+    exhausted: boolean;
+};
+
+/**
+ * SurfFaceOut
+ */
+export type SurfFaceOut = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Type Line
+     */
+    type_line?: string | null;
+    /**
+     * Oracle Text
+     */
+    oracle_text?: string | null;
+    /**
+     * Flavor Text
+     */
+    flavor_text?: string | null;
+    /**
+     * Artist
+     */
+    artist?: string | null;
+    /**
+     * Image
+     */
+    image?: string | null;
+};
+
+/**
+ * SurfFamilyOut
+ */
+export type SurfFamilyOut = {
+    /**
+     * Value
+     */
+    value: string;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Year
+     */
+    year?: string | null;
+};
+
+/**
+ * SurfFiltersIn
+ */
+export type SurfFiltersIn = {
+    /**
+     * Art
+     *
+     * Art tag slugs (any of).
+     */
+    art?: Array<string>;
+    /**
+     * Families
+     *
+     * Set family anchors (any of).
+     */
+    families?: Array<string>;
+    /**
+     * Colors
+     *
+     * Colour identity letters WUBRG, or C for colourless.
+     */
+    colors?: string;
+    /**
+     * Color Match
+     */
+    color_match?: 'exact' | 'within';
+    /**
+     * Flavor
+     */
+    flavor?: 'any' | 'has' | 'none';
+    /**
+     * Types
+     *
+     * Card types (any of).
+     */
+    types?: Array<string>;
+    /**
+     * Legendary
+     */
+    legendary?: 'any' | 'only' | 'not';
+    /**
+     * Rarity
+     */
+    rarity?: Array<string>;
+    /**
+     * Artist
+     */
+    artist?: string;
+    /**
+     * Treatments
+     *
+     * Treatment keys (any of), see /api/surf/options.
+     */
+    treatments?: Array<string>;
+};
+
+/**
+ * SurfOptionOut
+ */
+export type SurfOptionOut = {
+    /**
+     * Value
+     */
+    value: string;
+    /**
+     * Label
+     */
+    label: string;
+};
+
+/**
+ * SurfOptionsOut
+ */
+export type SurfOptionsOut = {
+    /**
+     * Families
+     *
+     * Top-level paper sets, newest first.
+     */
+    families: Array<SurfFamilyOut>;
+    /**
+     * Treatments
+     */
+    treatments: Array<SurfOptionOut>;
+    /**
+     * Types
+     */
+    types: Array<SurfOptionOut>;
+    /**
+     * Rarities
+     */
+    rarities: Array<SurfOptionOut>;
+};
+
+/**
+ * SurfPricesOut
+ */
+export type SurfPricesOut = {
+    /**
+     * Nonfoil
+     */
+    nonfoil?: number | null;
+    /**
+     * Foil
+     */
+    foil?: number | null;
+};
+
+/**
+ * SurfTagOut
+ */
+export type SurfTagOut = {
+    /**
+     * Slug
+     */
+    slug: string;
+    /**
+     * Label
+     */
+    label: string;
+};
+
+/**
  * SwapLineOut
  */
 export type SwapLineOut = {
@@ -5919,6 +6249,47 @@ export type ArtLookupResponses = {
 };
 
 export type ArtLookupResponse = ArtLookupResponses[keyof ArtLookupResponses];
+
+export type SurfDrawData = {
+    body: SurfDrawIn;
+    path?: never;
+    query?: never;
+    url: '/api/surf/draw';
+};
+
+export type SurfDrawErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type SurfDrawError = SurfDrawErrors[keyof SurfDrawErrors];
+
+export type SurfDrawResponses = {
+    /**
+     * Successful Response
+     */
+    200: SurfDrawOut;
+};
+
+export type SurfDrawResponse = SurfDrawResponses[keyof SurfDrawResponses];
+
+export type SurfOptionsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/surf/options';
+};
+
+export type SurfOptionsResponses = {
+    /**
+     * Successful Response
+     */
+    200: SurfOptionsOut;
+};
+
+export type SurfOptionsResponse = SurfOptionsResponses[keyof SurfOptionsResponses];
 
 export type CardHoldingsData = {
     body?: never;

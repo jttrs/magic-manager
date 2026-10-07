@@ -2321,6 +2321,69 @@
         }
       }
     },
+    "/api/surf/draw": {
+      "post": {
+        "tags": [
+          "surf"
+        ],
+        "summary": "Surf Draw",
+        "description": "The next random cards for the card surfer (read-only).",
+        "operationId": "surf_draw",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SurfDrawIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SurfDrawOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/surf/options": {
+      "get": {
+        "tags": [
+          "surf"
+        ],
+        "summary": "Surf Options",
+        "operationId": "surf_options",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SurfOptionsOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/cards/{scryfall_id}/holdings": {
       "get": {
         "tags": [
@@ -9649,6 +9712,583 @@
           "cards"
         ],
         "title": "SuggestionsOut"
+      },
+      "SurfCardOut": {
+        "properties": {
+          "scryfall_id": {
+            "type": "string",
+            "title": "Scryfall Id"
+          },
+          "oracle_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oracle Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "type_line": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type Line"
+          },
+          "oracle_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oracle Text"
+          },
+          "flavor_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Flavor Text"
+          },
+          "artist": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artist"
+          },
+          "set_code": {
+            "type": "string",
+            "title": "Set Code"
+          },
+          "set_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Set Name"
+          },
+          "collector_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collector Number"
+          },
+          "rarity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rarity"
+          },
+          "released_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Released At"
+          },
+          "image": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image"
+          },
+          "faces": {
+            "items": {
+              "$ref": "#/components/schemas/SurfFaceOut"
+            },
+            "type": "array",
+            "title": "Faces",
+            "description": "A double-faced card's faces (empty for one face)."
+          },
+          "scryfall_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scryfall Uri"
+          },
+          "color_identity": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Color Identity"
+          },
+          "prices": {
+            "$ref": "#/components/schemas/SurfPricesOut"
+          },
+          "owned": {
+            "type": "integer",
+            "title": "Owned",
+            "description": "Copies of this printing you own."
+          },
+          "owned_any": {
+            "type": "integer",
+            "title": "Owned Any",
+            "description": "Copies you own across every printing."
+          },
+          "art_tags": {
+            "items": {
+              "$ref": "#/components/schemas/SurfTagOut"
+            },
+            "type": "array",
+            "title": "Art Tags",
+            "description": "The artwork's art tags (local tag cache)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "scryfall_id",
+          "name",
+          "set_code",
+          "faces",
+          "color_identity",
+          "prices",
+          "owned",
+          "owned_any",
+          "art_tags"
+        ],
+        "title": "SurfCardOut"
+      },
+      "SurfDrawIn": {
+        "properties": {
+          "filters": {
+            "$ref": "#/components/schemas/SurfFiltersIn"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "scryfall",
+              "owned"
+            ],
+            "title": "Source",
+            "default": "scryfall"
+          },
+          "n": {
+            "type": "integer",
+            "maximum": 8.0,
+            "minimum": 1.0,
+            "title": "N",
+            "default": 4
+          },
+          "seed": {
+            "type": "integer",
+            "title": "Seed",
+            "description": "Your cards: shuffle seed (one per feed).",
+            "default": 0
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Offset",
+            "description": "Your cards: position in the shuffled list.",
+            "default": 0
+          },
+          "with_total": {
+            "type": "boolean",
+            "title": "With Total",
+            "description": "All of Magic: also count the matching printings (first page).",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "SurfDrawIn"
+      },
+      "SurfDrawOut": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "scryfall",
+              "owned"
+            ],
+            "title": "Source"
+          },
+          "query": {
+            "type": "string",
+            "title": "Query",
+            "description": "The Scryfall search the filters compile to."
+          },
+          "cards": {
+            "items": {
+              "$ref": "#/components/schemas/SurfCardOut"
+            },
+            "type": "array",
+            "title": "Cards"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total",
+            "description": "Printings that match (when asked / your cards)."
+          },
+          "next_offset": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Offset"
+          },
+          "exhausted": {
+            "type": "boolean",
+            "title": "Exhausted",
+            "description": "No more cards to draw (nothing matches, or every one of yours was shown)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "query",
+          "cards",
+          "exhausted"
+        ],
+        "title": "SurfDrawOut"
+      },
+      "SurfFaceOut": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "type_line": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type Line"
+          },
+          "oracle_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oracle Text"
+          },
+          "flavor_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Flavor Text"
+          },
+          "artist": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artist"
+          },
+          "image": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "SurfFaceOut"
+      },
+      "SurfFamilyOut": {
+        "properties": {
+          "value": {
+            "type": "string",
+            "title": "Value"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value",
+          "label"
+        ],
+        "title": "SurfFamilyOut"
+      },
+      "SurfFiltersIn": {
+        "properties": {
+          "art": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Art",
+            "description": "Art tag slugs (any of)."
+          },
+          "families": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Families",
+            "description": "Set family anchors (any of)."
+          },
+          "colors": {
+            "type": "string",
+            "title": "Colors",
+            "description": "Colour identity letters WUBRG, or C for colourless.",
+            "default": ""
+          },
+          "color_match": {
+            "type": "string",
+            "enum": [
+              "exact",
+              "within"
+            ],
+            "title": "Color Match",
+            "default": "exact"
+          },
+          "flavor": {
+            "type": "string",
+            "enum": [
+              "any",
+              "has",
+              "none"
+            ],
+            "title": "Flavor",
+            "default": "any"
+          },
+          "types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Types",
+            "description": "Card types (any of)."
+          },
+          "legendary": {
+            "type": "string",
+            "enum": [
+              "any",
+              "only",
+              "not"
+            ],
+            "title": "Legendary",
+            "default": "any"
+          },
+          "rarity": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Rarity"
+          },
+          "artist": {
+            "type": "string",
+            "title": "Artist",
+            "default": ""
+          },
+          "treatments": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Treatments",
+            "description": "Treatment keys (any of), see /api/surf/options."
+          }
+        },
+        "type": "object",
+        "title": "SurfFiltersIn"
+      },
+      "SurfOptionOut": {
+        "properties": {
+          "value": {
+            "type": "string",
+            "title": "Value"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value",
+          "label"
+        ],
+        "title": "SurfOptionOut"
+      },
+      "SurfOptionsOut": {
+        "properties": {
+          "families": {
+            "items": {
+              "$ref": "#/components/schemas/SurfFamilyOut"
+            },
+            "type": "array",
+            "title": "Families",
+            "description": "Top-level paper sets, newest first."
+          },
+          "treatments": {
+            "items": {
+              "$ref": "#/components/schemas/SurfOptionOut"
+            },
+            "type": "array",
+            "title": "Treatments"
+          },
+          "types": {
+            "items": {
+              "$ref": "#/components/schemas/SurfOptionOut"
+            },
+            "type": "array",
+            "title": "Types"
+          },
+          "rarities": {
+            "items": {
+              "$ref": "#/components/schemas/SurfOptionOut"
+            },
+            "type": "array",
+            "title": "Rarities"
+          }
+        },
+        "type": "object",
+        "required": [
+          "families",
+          "treatments",
+          "types",
+          "rarities"
+        ],
+        "title": "SurfOptionsOut"
+      },
+      "SurfPricesOut": {
+        "properties": {
+          "nonfoil": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nonfoil"
+          },
+          "foil": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Foil"
+          }
+        },
+        "type": "object",
+        "title": "SurfPricesOut"
+      },
+      "SurfTagOut": {
+        "properties": {
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "slug",
+          "label"
+        ],
+        "title": "SurfTagOut"
       },
       "SwapLineOut": {
         "properties": {
