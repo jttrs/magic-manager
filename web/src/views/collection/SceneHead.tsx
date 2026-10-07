@@ -1,6 +1,7 @@
 import { Popover, Tooltip } from 'radix-ui';
 import { CopyTargets } from '../../components/CopyButton';
-import { BuyListMark, CardKingdomMark, ManaPoolMark, TcgplayerMark } from '../../components/StoreMarks';
+import { buyListTargets, type BuyStore } from '../../components/buyTargets';
+import { BuyListMark } from '../../components/StoreMarks';
 import { collectionBuyList, type SceneFinishOut, type SceneOut } from '../../core/api';
 import { FINISH_LABEL, finishTally, isComplete, missingLine, sceneBuyItems, sceneByline, scenePct } from '../../core/scenes';
 
@@ -35,13 +36,7 @@ export function SceneMeta({ scene }: { scene: SceneOut }) {
   );
 }
 
-const STORES = [
-  { id: 'manapool', name: 'ManaPool', Mark: ManaPoolMark },
-  { id: 'tcgplayer', name: 'TCGplayer', Mark: TcgplayerMark },
-  { id: 'cardkingdom', name: 'Card Kingdom', Mark: CardKingdomMark, note: 'Card Kingdom takes names only; pick each printing and foil after Find Cards' },
-] as const;
-
-function buyText(f: SceneFinishOut, target: (typeof STORES)[number]['id']) {
+function buyText(f: SceneFinishOut, target: BuyStore) {
   return async () => {
     const r = await collectionBuyList({ body: { target, items: sceneBuyItems(f) } });
     if (r.error || !r.data) throw new Error('buy-list failed');
@@ -90,7 +85,7 @@ function SceneBuy({ scene }: { scene: SceneOut }) {
                 <span className="text-sm normal-case tracking-normal tabular text-on-chrome">{missingLine(f)}</span>
               </h4>
               {f.missing_ids.length > 0 && (
-                <CopyTargets targets={STORES.map((s) => ({ ...s, getText: buyText(f, s.id) }))} />
+                <CopyTargets targets={buyListTargets((s) => buyText(f, s))} />
               )}
             </section>
           ))}

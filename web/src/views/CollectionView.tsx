@@ -6,7 +6,8 @@ import { useSelection } from '../app/selection';
 import { ViewLayout } from '../components/AppShell';
 import { AddCardsDialog } from '../components/addcards/AddCardsDialog';
 import { CopyTargets } from '../components/CopyButton';
-import { AddCardMark, CardKingdomMark, CountCardsMark, FindProductsMark, ManaPoolMark, TcgplayerMark } from '../components/StoreMarks';
+import { buyListTargets } from '../components/buyTargets';
+import { AddCardMark, CountCardsMark, FindProductsMark } from '../components/StoreMarks';
 import { IconAction } from '../components/IconAction';
 import { FindProductsDialog } from './collection/FindProductsDialog';
 import { CollectionTabs } from './collection/CollectionTabs';
@@ -212,17 +213,7 @@ export function CollectionView() {
       <SideSection title="Buy">
         <CopyTargets
           lead={`Copy bulk lists · ${marked.length ? `${fmtInt(marked.length)} marked` : `${fmtInt(buyPool.length)} missing shown`} · ≈ ${fmtUsd(buyTotal(buyPool, search.exclude))} at market`}
-          targets={[
-            { id: 'manapool', name: 'ManaPool', Mark: ManaPoolMark, getText: buyText('manapool') },
-            { id: 'tcgplayer', name: 'TCGplayer', Mark: TcgplayerMark, getText: buyText('tcgplayer') },
-            {
-              id: 'cardkingdom',
-              name: 'Card Kingdom',
-              Mark: CardKingdomMark,
-              getText: buyText('cardkingdom'),
-              note: 'Card Kingdom takes names only; pick each printing and foil after Find Cards',
-            },
-          ]}
+          targets={buyListTargets(buyText)}
         />
         {cartCheck && (
           <CartCheckDialog family={search.families.length === 1 ? search.families[0] : undefined} trigger={<Button>Check my Mana Pool cart</Button>} />
