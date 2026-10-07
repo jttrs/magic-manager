@@ -60,6 +60,7 @@ function Review({ onClose }: { onClose: () => void }) {
     void qc.invalidateQueries({ queryKey: ['collection'] });
     void qc.invalidateQueries({ queryKey: ['decks'] });
     void qc.invalidateQueries({ queryKey: ['holdings'] });
+    void qc.invalidateQueries({ queryKey: ['history'] });
   }, [recorded, qc]);
 
   const record = async () => {

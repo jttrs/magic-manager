@@ -22,6 +22,7 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass, field
+from typing import Literal
 
 from . import db
 
@@ -189,9 +190,11 @@ def card_holdings(scryfall_id: str) -> Holdings:
 # at local prices. Honest about what the ledger can't know: pre-ledger ingests
 # (before V19) carry no deltas — their copies live in the reconstructed buckets —
 # and product-coverage (``trueup:``) entries are dated when they were IDENTIFIED,
-# not when bought.
+# not when bought. A removal is its own (negative) event, so "held" nets removals
+# against acquisitions newest-first (LIFO): per printing-finish, the held copies
+# across all entries always sum to what is owned today.
 
-HISTORY_KINDS = ("deck", "pool", "singles", "checklist", "unknown", "move")
+HistoryKind = Literal["deck", "pool", "singles", "checklist", "unknown", "move"]
 
 _SINGLES_TITLES = {
     "adhoc": "Added by hand", "intake": "Scan session", "import-block": "Imported list",
@@ -209,15 +212,15 @@ class HistoryEntry:
     ingest_id: int
     at: str
     method: str
-    kind: str                    # one of HISTORY_KINDS
+    kind: HistoryKind
     title: str
     detail: str | None = None    # file name, product fileName, raw label…
     dated: str = "acquired"      # acquired | identified (product coverage) | reconstructed (V19 backfill)
     ledgered: bool = True        # False: pre-ledger ingest, copies counted in a reconstructed bucket
     copies_in: int = 0
     copies_out: int = 0
-    held: int = 0                # copies this event still accounts for (sum of positive balances)
-    printings: int = 0           # printings with a positive balance
+    held: int = 0                # copies this event still accounts for (removals netted newest-first)
+    printings: int = 0           # printings with held copies
     value_usd: float = 0.0       # held copies at today's local prices
     lines: int = 0               # checklist rows / deck-move lines touched (from the ingest row)
     product: str | None = None   # MTGJSON fileName
@@ -324,6 +327,33 @@ def _balances(conn, ingest_id: int | None = None):
     ).fetchall()
 
 
+def _held(conn, sids=None) -> dict[tuple[int, str, str], int]:
+    """``(ingest_id, sid, finish) -> held``: each event's positive balance with later
+    removals (negative balances on other events) drawn from the NEWEST acquisition
+    first, so per printing-finish the held copies sum to the owned quantity."""
+    rows: list = []
+    q = "SELECT ingest_id, scryfall_id, finish, SUM(delta) FROM inventory_events {} GROUP BY ingest_id, scryfall_id, finish"
+    if sids is None:
+        rows = conn.execute(q.format("")).fetchall()
+    else:
+        ids = list(dict.fromkeys(sids))
+        for i in range(0, len(ids), 500):
+            part = ids[i:i + 500]
+            rows += conn.execute(q.format(f"WHERE scryfall_id IN ({','.join('?' * len(part))})"), part).fetchall()
+    by_key: dict[tuple[str, str], list[tuple[int, int]]] = {}
+    for iid, sid, fin, bal in rows:
+        by_key.setdefault((sid, fin), []).append((iid, bal))
+    out: dict[tuple[int, str, str], int] = {}
+    for (sid, fin), evs in by_key.items():
+        pos = sorted((iid, b) for iid, b in evs if b > 0)
+        excess = sum(b for _, b in pos) - max(sum(b for _, b in evs), 0)
+        for iid, b in reversed(pos):
+            take = min(b, excess)
+            excess -= take
+            out[(iid, sid, fin)] = b - take
+    return out
+
+
 def _priced(conn, sids) -> tuple[dict[str, dict], list[str]]:
     from . import sets as sets_mod
     stale: list[str] = []
@@ -339,7 +369,7 @@ def _event_rows(conn, ingest_id: int | None = None):
 
 
 def _context(conn):
-    from .addcards import _set_names
+    from .sets import set_names
     products = _products(conn)
     deck_names = {s: n for s, n in conn.execute("SELECT slug, name FROM decks")}
     product_slugs = {
@@ -347,18 +377,19 @@ def _context(conn):
             "SELECT source_precon_file_name, MIN(slug) FROM decks "
             "WHERE source_precon_file_name IS NOT NULL AND kind = 'deck' GROUP BY source_precon_file_name")
     }
-    return products, deck_names, product_slugs, _set_names()
+    return products, deck_names, product_slugs, set_names()
 
 
-def _fill(h: HistoryEntry, rows, prices: dict[str, dict]) -> None:
+def _fill(h: HistoryEntry, rows, held: dict[tuple[int, str, str], int], prices: dict[str, dict]) -> None:
     h.ledgered = bool(rows) or h.kind == "move"
-    for _iid, sid, fin, cin, cout, bal in rows:
+    for iid, sid, fin, cin, cout, _bal in rows:
         h.copies_in += cin
         h.copies_out += cout
-        if bal > 0:
-            h.held += bal
+        n = held.get((iid, sid, fin), 0)
+        if n > 0:
+            h.held += n
             h.printings += 1
-            h.value_usd += bal * (_unit_usd(prices.get(sid), fin) or 0.0)
+            h.value_usd += n * (_unit_usd(prices.get(sid), fin) or 0.0)
     h.value_usd = round(h.value_usd, 2)
 
 
@@ -376,11 +407,12 @@ def history(*, conn=None) -> History:
         by_event: dict[int, list] = {}
         for row in _balances(c):
             by_event.setdefault(row[0], []).append(row)
-        prices, stale = _priced(c, {r[1] for rows in by_event.values() for r in rows if r[5] > 0})
+        held = _held(c)
+        prices, stale = _priced(c, {sid for (_i, sid, _f), n in held.items() if n > 0})
         entries = []
         for e in _event_rows(c):
             h = _describe(e, *ctx)
-            _fill(h, by_event.get(h.ingest_id, []), prices)
+            _fill(h, by_event.get(h.ingest_id, []), held, prices)
             entries.append(h)
         return History(entries, _as_of(prices), sorted(set(stale)))
 
@@ -399,9 +431,11 @@ def history_event(ingest_id: int) -> tuple[HistoryEntry, list[HistoryLine]]:
         if not rows:
             raise LookupError(f"no ingest event {ingest_id}")
         bal = _balances(c, ingest_id)
+        held = _held(c, {r[1] for r in bal})
         prices, _ = _priced(c, {r[1] for r in bal})
         h = _describe(rows[0], *_context(c))
-        _fill(h, bal, prices)
-    lines = [HistoryLine(sid, fin, cin, cout, b, _unit_usd(prices.get(sid), fin)) for _i, sid, fin, cin, cout, b in bal]
+        _fill(h, bal, held, prices)
+    lines = [HistoryLine(sid, fin, cin, cout, held.get((i, sid, fin), 0), _unit_usd(prices.get(sid), fin))
+             for i, sid, fin, cin, cout, _b in bal]
     lines.sort(key=lambda ln: (-(max(ln.held, 0) * (ln.unit_usd or 0)), -ln.held, ln.scryfall_id))
     return h, lines

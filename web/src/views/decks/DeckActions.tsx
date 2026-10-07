@@ -25,6 +25,7 @@ export function DeckActions({ detail, slug, onAddToCollection }: { detail: DeckD
     await qc.invalidateQueries({ queryKey: ['decks'] });
     await qc.invalidateQueries({ queryKey: ['collection'] });
     await qc.invalidateQueries({ queryKey: ['holdings'] });
+    await qc.invalidateQueries({ queryKey: ['history'] });
   };
   const openBuild = async () => {
     setPlanError(null);

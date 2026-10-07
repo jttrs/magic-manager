@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { getRouteApi, Link, useNavigate } from '@tanstack/react-router';
-import { useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useMemo, useState } from 'react';
 import { historyEventQuery, historyQuery } from '../app/queries';
 import { useMediaQuery } from '../app/useMediaQuery';
 import { useSelection } from '../app/selection';
+import { useRovingFocus } from '../app/useRovingFocus';
 import { ViewLayout } from '../components/AppShell';
 import { Chevron } from '../components/Chevron';
 import { InfoTip } from '../components/InfoTip';
@@ -84,7 +85,7 @@ export function HistoryView() {
   else {
     const list = <Timeline groups={groups} total={shown.length} active={search.entry} onPick={(entry) => set({ entry })} />;
     const inspector = search.entry ? (
-      <EntryInspector ingestId={search.entry} view={search.view} onView={(view) => set({ view })} onOpen={(entry) => set({ entry })} onBack={narrow ? () => set({ entry: undefined }) : undefined} />
+      <EntryInspector key={search.entry} ingestId={search.entry} view={search.view} onView={(view) => set({ view })} onOpen={(entry) => set({ entry })} onBack={narrow ? () => set({ entry: undefined }) : undefined} />
     ) : (
       <EmptyNote title="Pick an entry">Choose an entry to see the exact cards it brought in and what they are worth today.</EmptyNote>
     );
@@ -115,21 +116,9 @@ export function HistoryView() {
 
 /** Month sections; one tab stop for the list (↑/↓, Home/End). */
 function Timeline({ groups, total, active, onPick }: { groups: MonthGroup[]; total: number; active?: number; onPick: (id: number) => void }) {
-  const navRef = useRef<HTMLElement>(null);
-  const [focusKey, setFocusKey] = useState<string | undefined>(undefined);
   const keys = groups.flatMap((g) => g.rows.map((r) => r.key));
   const activeKey = active == null ? undefined : groups.flatMap((g) => g.rows).find((r) => (r.type === 'entry' ? r.entry.ingest_id === active : r.entries.some((e) => e.ingest_id === active)))?.key;
-  const tabKey = (focusKey && keys.includes(focusKey) ? focusKey : undefined) ?? activeKey ?? keys[0];
-  const move = (e: KeyboardEvent<HTMLElement>) => {
-    if (!(e.target as HTMLElement).dataset.row) return;
-    const i = keys.indexOf(tabKey ?? '');
-    const next = e.key === 'ArrowDown' ? i + 1 : e.key === 'ArrowUp' ? i - 1 : e.key === 'Home' ? 0 : e.key === 'End' ? keys.length - 1 : null;
-    if (next == null) return;
-    e.preventDefault();
-    const k = keys[Math.max(0, Math.min(keys.length - 1, next))];
-    setFocusKey(k);
-    navRef.current?.querySelector<HTMLElement>(`[data-row="${CSS.escape(k)}"]`)?.focus();
-  };
+  const { navRef, tabKey, setFocusKey, onKeyDown: move } = useRovingFocus(keys, activeKey, 'data-row');
   if (!total) return <EmptyNote title="No entries match">Clear the search, widen the dates, or show more kinds.</EmptyNote>;
   return (
     <nav ref={navRef} aria-label="Purchase history" onKeyDown={move} className="h-full min-h-0 overflow-y-auto overscroll-contain px-4 pb-6 [scrollbar-gutter:stable]">

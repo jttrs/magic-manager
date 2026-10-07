@@ -1445,6 +1445,15 @@ def write_master_list_md(set_codes: Iterable[str], out_path: Path,
 # as `available` in `mm deck find`: one pack's worth is pledged to the recipe,
 # the rest are loose. That's expected, not a bug.)
 
+def set_names() -> dict[str, str]:
+    """``{set code (lowercase): set name}`` from Scryfall's (memoized) set list;
+    empty when Scryfall is unreachable."""
+    try:
+        return {s["code"].lower(): s.get("name") for s in scryfall.all_sets()}
+    except scryfall.ScryfallError:
+        return {}
+
+
 def card_price_map(scryfall_ids: Iterable[str], *, conn=None) -> dict[str, dict]:
     """Fetch identity + local Scryfall prices for a set of ``scryfall_id``s.
 

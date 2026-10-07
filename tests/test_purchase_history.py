@@ -86,9 +86,9 @@ def test_event_lines_and_unknown(seeded):
     inventory.inventory_add(A, "foil", 1, ingest_id=iid)
     inventory.inventory_remove(B, "nonfoil", 1)                     # a separate (adhoc) event
     entry, lines = provenance.history_event(iid)
-    assert entry.held == 4
+    assert entry.held == 3                                          # the later removal nets against it
     assert [(ln.scryfall_id, ln.finish, ln.copies_in, ln.held, ln.unit_usd) for ln in lines] == [
-        (A, "foil", 1, 1, 4.0), (B, "nonfoil", 3, 3, 0.25)]           # most valuable held first
+        (A, "foil", 1, 1, 4.0), (B, "nonfoil", 3, 2, 0.25)]           # most valuable held first
     with pytest.raises(LookupError):
         provenance.history_event(99999)
 
@@ -109,3 +109,29 @@ def test_history_api_and_routes(seeded):
     (line,) = r.json()["lines"]
     assert (line["printing"]["name"], line["finish"], line["held"]) == ("Alpha", "nonfoil", 2)
     assert c.get("/api/history/99999").status_code == 404
+
+
+def test_held_nets_later_removals_newest_first(seeded):
+    old = _event("precon", "precon:Goblins_FIN", "Goblins_FIN")
+    inventory.inventory_add(A, "nonfoil", 2, ingest_id=old)
+    new = _event("adhoc", "web:search")
+    inventory.inventory_add(A, "nonfoil", 1, ingest_id=new)
+    inventory.inventory_remove(A, "nonfoil", 2)                      # its own adhoc event
+    got = _by_id(provenance.history())
+    assert (got[new].held, got[new].value_usd) == (0, 0.0)           # newest acquisition drawn first
+    assert (got[old].held, got[old].value_usd) == (1, 1.5)
+    with db.connect() as conn:
+        owned = conn.execute("SELECT SUM(quantity) FROM inventory").fetchone()[0]
+    assert sum(e.held for e in got.values()) == owned == 1
+    _, lines = provenance.history_event(new)
+    assert [(ln.copies_in, ln.held) for ln in lines] == [(1, 0)]
+
+
+def test_card_sources_checklist_path_is_not_a_product(seeded):
+    jump = _event("precon", "jumpstart:fin", "checklists/fin-jumpstart-checklist.xlsx")
+    inventory.inventory_add(A, "nonfoil", 1, ingest_id=jump)
+    bare = _event("precon", None, "Goblins_FIN")
+    inventory.inventory_add(B, "nonfoil", 1, ingest_id=bare)
+    got = provenance.card_sources([A, B])
+    assert [cs.source.key for cs in got[A]] == ["singles"]
+    assert [cs.source.key for cs in got[B]] == ["product:Goblins_FIN"]

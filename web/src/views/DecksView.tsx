@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { getRouteApi, useNavigate } from '@tanstack/react-router';
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { deckQuery, decksQuery } from '../app/queries';
 import { useMediaQuery } from '../app/useMediaQuery';
 import { useSelection } from '../app/selection';
+import { useRovingFocus } from '../app/useRovingFocus';
 import { AddCardsDialog, type AddCardsSeed } from '../components/addcards/AddCardsDialog';
 import { ViewLayout } from '../components/AppShell';
 import { Chevron } from '../components/Chevron';
@@ -103,19 +104,9 @@ export function DecksView() {
 
 /** One tab stop for the whole list (roving focus): ↑/↓ move between decks, Home/End jump, Enter opens. */
 function DeckList({ groups, total, active, onPick }: { groups: ReturnType<typeof groupDecks>; total: number; active?: string; onPick: (slug: string) => void }) {
-  const navRef = useRef<HTMLElement>(null);
   const flat = groups.flatMap((g) => g.decks.map((d) => d.slug));
-  const [focusSlug, setFocusSlug] = useState<string | undefined>(undefined);
-  const tabSlug = (focusSlug && flat.includes(focusSlug) ? focusSlug : undefined) ?? (groups.flatMap((g) => g.decks).find((d) => active && d.slugs.includes(active))?.slug ?? flat[0]);
-  const move = (e: KeyboardEvent<HTMLElement>) => {
-    const i = flat.indexOf(tabSlug ?? '');
-    const next = e.key === 'ArrowDown' ? i + 1 : e.key === 'ArrowUp' ? i - 1 : e.key === 'Home' ? 0 : e.key === 'End' ? flat.length - 1 : null;
-    if (next == null) return;
-    e.preventDefault();
-    const slug = flat[Math.max(0, Math.min(flat.length - 1, next))];
-    setFocusSlug(slug);
-    navRef.current?.querySelector<HTMLButtonElement>(`[data-slug="${CSS.escape(slug)}"]`)?.focus();
-  };
+  const activeSlug = groups.flatMap((g) => g.decks).find((d) => active && d.slugs.includes(active))?.slug;
+  const { navRef, tabKey: tabSlug, setFocusKey: setFocusSlug, onKeyDown: move } = useRovingFocus(flat, activeSlug, 'data-slug');
   if (!total) return <EmptyNote title="No decks match">Clear the search, show all decks, or pick more deck types.</EmptyNote>;
   return (
     <nav ref={navRef} aria-label="Decks" onKeyDown={move} className="h-full min-h-0 overflow-y-auto overscroll-contain px-4 pb-6 [scrollbar-gutter:stable]">

@@ -16,7 +16,7 @@ from typing import Callable, Iterable
 
 from . import (
     collection_view, db, decks, ingest, inventory, mtgjson, parsers, scryfall,
-    selectors as sel_mod, treatments, util,
+    selectors as sel_mod, sets as sets_mod, treatments, util,
 )
 
 _CAND_CAP = 60
@@ -82,19 +82,12 @@ def _owned_by(sids: list[str]) -> dict[str, dict[str, int]]:
     return owned
 
 
-def _set_names() -> dict[str, str]:
-    try:
-        return {s["code"].lower(): s.get("name") for s in scryfall.all_sets()}
-    except scryfall.ScryfallError:
-        return {}
-
-
 def _printings(cards: Iterable[dict]) -> dict[str, dict]:
     """PrintingOut-shaped dicts keyed by scryfall_id (one batched owned query)."""
     cards = list(cards)
     owned = _owned_by([c["scryfall_id"] for c in cards])
     free = inventory.free_quantities(list(owned)) if owned else {}
-    names = _set_names()
+    names = sets_mod.set_names()
     out = {}
     for c in cards:
         sid = c["scryfall_id"]

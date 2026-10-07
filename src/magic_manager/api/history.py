@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from .. import addcards, provenance
 from .ingest import PrintingOut
 
-HistoryKind = Literal["deck", "pool", "singles", "checklist", "unknown", "move"]
+HistoryKind = provenance.HistoryKind
 
 
 class HistoryEntryOut(BaseModel):
