@@ -57,12 +57,32 @@ export function premium(c: CardPriceOut): number | null {
   return Math.max(0, c.price_usd - c.floor_usd);
 }
 
-export function filterCardPrices(cards: CardPriceOut[], s: Pick<MarketSearch, 'q' | 'cheaper' | 'sort'>): CardPriceOut[] {
+/** Keeps a printing under the foil-premium cap: its plain foil costs at most
+ *  that % over nonfoil ('cheaper' = foil no dearer than nonfoil). A printing
+ *  without both plain finishes priced never passes an active cap. */
+export function withinFoilMax(c: CardPriceOut, max: MarketSearch['foilMax']): boolean {
+  if (max === 'any') return true;
+  if (c.foil_gap_status !== 'ok' || c.foil_gap_pct == null) return false;
+  const pct = Math.round(c.foil_gap_pct * 10000) / 100;
+  return pct <= (max === 'cheaper' ? 0 : Number(max));
+}
+
+/** "+504%" / "−12%" — the foil premium as a whole percent. */
+export function fmtFoilGap(pct: number): string {
+  const v = Math.round(pct * 100);
+  return v > 0 ? `+${v}%` : v < 0 ? `−${Math.abs(v)}%` : '0%';
+}
+
+export function filterCardPrices(cards: CardPriceOut[], s: Pick<MarketSearch, 'q' | 'cheaper' | 'sort'> & { foilMax?: MarketSearch['foilMax'] }): CardPriceOut[] {
   const ql = s.q.trim().toLowerCase();
-  const shown = cards.filter((c) => (!ql || c.name.toLowerCase().includes(ql)) && (!s.cheaper || (premium(c) ?? 0) >= 0.01));
+  const shown = cards.filter(
+    (c) => (!ql || c.name.toLowerCase().includes(ql)) && (!s.cheaper || (premium(c) ?? 0) >= 0.01) && withinFoilMax(c, s.foilMax ?? 'any'),
+  );
+  const gap = (c: CardPriceOut) => (c.foil_gap_status === 'ok' && c.foil_gap_pct != null ? Math.round(c.foil_gap_pct * 10000) : Infinity);
   const cmp: Record<MarketSearch['sort'], (a: CardPriceOut, b: CardPriceOut) => number> = {
     savings: (a, b) => (premium(b) ?? -1) - (premium(a) ?? -1),
     price: (a, b) => (b.price_usd ?? -1) - (a.price_usd ?? -1),
+    foil: (a, b) => (gap(a) === gap(b) ? 0 : gap(a) - gap(b)),
     set: (a, b) => a.set_code.localeCompare(b.set_code) || a.collector_number.localeCompare(b.collector_number, undefined, { numeric: true }),
   };
   return [...shown].sort((a, b) => cmp[s.sort](a, b) || a.name.localeCompare(b.name));

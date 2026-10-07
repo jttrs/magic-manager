@@ -97,7 +97,8 @@ export type DecksSearch = z.infer<typeof decksSearch>;
 
 const MARKET_SUBJECTS = ['family', 'deck', 'sld', 'deals'] as const;
 const MARKET_TABS = ['products', 'cards'] as const;
-const CARD_PRICE_SORTS = ['savings', 'price', 'set'] as const;
+const CARD_PRICE_SORTS = ['savings', 'price', 'foil', 'set'] as const;
+const FOIL_MAX = ['any', 'cheaper', '25', '50', '100'] as const;
 const PRICE_BASES = ['floor', 'exact'] as const;
 
 export const marketSearch = z.object({
@@ -111,6 +112,10 @@ export const marketSearch = z.object({
   /** Cards: only printings that cost more than the card's cheapest printing. */
   cheaper: z.boolean().catch(false).default(false),
   sort: z.enum(CARD_PRICE_SORTS).catch('savings').default('savings'),
+  /** Cards: only printings whose plain foil costs at most this much over nonfoil. */
+  foilMax: z.preprocess((v) => (typeof v === 'number' ? String(v) : v), z.enum(FOIL_MAX)).catch('any').default('any'),
+  /** Deck: cheapest printings checked across every set on Scryfall (else local prices). */
+  live: z.boolean().catch(false).default(false),
   /** Deck buy list: the cheapest printing of each card, or the deck's exact printing. */
   buyAt: z.enum(PRICE_BASES).catch('floor').default('floor'),
   /** Deals: the product pages open in your browser, or the products you watch. */

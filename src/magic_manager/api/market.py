@@ -73,6 +73,10 @@ class CardPriceOut(BaseModel):
     floor_usd: float | None = Field(None, description="Cheapest nonfoil printing of this card anywhere.")
     floor_set_code: str | None = None
     floor_collector_number: str | None = None
+    foil_gap_status: Literal["ok", "fancy", "foil_only", "nonfoil_only", "unpriced"] = Field(
+        description="ok = both plain finishes priced; fancy = a premium foil treatment (no plain-foil choice).")
+    foil_gap_pct: float | None = Field(None, description="(foil − nonfoil) / nonfoil, a fraction; negative when the foil is cheaper.")
+    foil_gap_usd: float | None = Field(None, description="foil − nonfoil, USD.")
     owned: int
 
 
@@ -111,6 +115,7 @@ class DeckCostOut(BaseModel):
     unpriced: int
     total_need: int
     lines: list[DeckLineOut]
+    live: bool = Field(False, description="Floors checked across every set on Scryfall (else local prices).")
 
 
 class ProductCostOut(BaseModel):
@@ -157,8 +162,8 @@ def family_cards(code: str) -> FamilyCardsOut:
     return FamilyCardsOut(**market.family_card_prices(code))
 
 
-def deck_cost(slug: str) -> DeckCostOut:
-    return DeckCostOut(**market.deck_cost(slug))
+def deck_cost(slug: str, live: bool = False) -> DeckCostOut:
+    return DeckCostOut(**market.deck_cost(slug, live=live))
 
 
 class SldEditionOut(BaseModel):

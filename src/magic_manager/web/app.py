@@ -291,11 +291,13 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             raise HTTPException(404, str(e)) from e
 
     @app.get("/api/market/deck", response_model=market_api.DeckCostOut, tags=["market"])
-    def market_deck(slug: Annotated[str, Query(min_length=1)]):
+    def market_deck(slug: Annotated[str, Query(min_length=1)], live: bool = False):
         try:
-            return market_api.deck_cost(slug)
+            return market_api.deck_cost(slug, live)
         except LookupError as e:
             raise HTTPException(404, str(e)) from e
+        except scryfall.ScryfallError as e:
+            raise HTTPException(502, f"Scryfall lookup failed: {e}") from e
 
     # ---------- collection ----------
 
@@ -415,6 +417,13 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     @app.get("/api/cards/{scryfall_id}/holdings", response_model=cards_api.HoldingsOut, tags=["cards"])
     def card_holdings(scryfall_id: str):
         return cards_api.holdings(scryfall_id)
+
+    @app.post("/api/cards/floors", response_model=cards_api.FloorsOut, tags=["cards"])
+    def card_floors(body: cards_api.FloorsIn):
+        try:
+            return cards_api.floors(body)
+        except scryfall.ScryfallError as e:
+            raise HTTPException(502, f"Scryfall lookup failed: {e}") from e
 
     # ---------- purchase history ----------
 

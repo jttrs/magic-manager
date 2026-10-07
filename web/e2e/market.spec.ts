@@ -73,3 +73,58 @@ test('Decks links a deck to its cost in Market', async ({ page }) => {
   await expect(page).toHaveURL(new RegExp(`/market\\?subject=deck&deck=${detail.deck.slug}`));
   await expect(page.getByRole('table', { name: 'Three ways to get this deck' })).toBeVisible();
 });
+
+test('cards show the foil premium, filter under a cap and sort smallest first', async ({ page }) => {
+  const base = { oracle_id: 'o', rarity: 'rare', type_line: null, image_uri: null, is_chase: false, floor_usd: 1, floor_set_code: 'blb', floor_collector_number: '1', owned: 0, treatment: '' };
+  const cards = [
+    { ...base, scryfall_id: 'p1', name: 'Pricey Foil', set_code: 'blb', collector_number: '1', finishes: ['nonfoil', 'foil'], price_usd: 1, price_usd_foil: 5, foil_gap_status: 'ok', foil_gap_pct: 4, foil_gap_usd: 4 },
+    { ...base, scryfall_id: 'p2', name: 'Cheap Foil', set_code: 'blb', collector_number: '2', finishes: ['nonfoil', 'foil'], price_usd: 2, price_usd_foil: 2.2, foil_gap_status: 'ok', foil_gap_pct: 0.1, foil_gap_usd: 0.2 },
+    { ...base, scryfall_id: 'p3', name: 'Surge Card', set_code: 'blb', collector_number: '3', finishes: ['nonfoil', 'foil'], price_usd: 1, price_usd_foil: 9, foil_gap_status: 'fancy', foil_gap_pct: null, foil_gap_usd: null, treatment: 'ff' },
+  ];
+  await page.route('**/api/market/cards?*', (r) => r.fulfill({ json: { code: 'blb', name: 'Bloomburrow', cards } }));
+  await page.goto('/market?code=blb&tab=cards');
+  await expect(page.getByRole('row', { name: /Pricey Foil/ })).toContainText('+400%');
+  await expect(page.getByRole('row', { name: /Surge Card/ })).toContainText('fancy foil');
+
+  await page.goto('/market?code=blb&tab=cards&foilMax=25&sort=foil');
+  const rows = page.getByRole('table').getByRole('row');
+  await expect(rows).toHaveCount(2); // header + Cheap Foil
+  await expect(page.getByRole('row', { name: /Cheap Foil/ })).toContainText('+10%');
+  await expect(page.getByRole('radio', { name: 'Under 25%' })).toBeChecked();
+});
+
+test('the inspector shows the cheapest printing and can check every set live', async ({ page }) => {
+  const bodies: unknown[] = [];
+  await page.route('**/api/cards/floors', (r) => {
+    const body = r.request().postDataJSON() as { scryfall_ids: string[]; live: boolean };
+    bodies.push(body);
+    const nonfoil = body.live ? { usd: 0.1, set_code: 'sld', collector_number: '7', scryfall_id: 'any' } : { usd: 0.5, set_code: 'm21', collector_number: '3', scryfall_id: 'loc' };
+    return r.fulfill({ json: { live: body.live, floors: [{ scryfall_id: body.scryfall_ids[0], oracle_id: 'o', name: 'X', nonfoil, foil: null }] } });
+  });
+  await page.goto('/collection?families=%5B%22blb%22%5D');
+  await page.getByRole('button', { name: /^Inspect / }).first().click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toContainText('$0.50 nonfoil · M21 #3');
+  await dialog.getByRole('button', { name: 'Check every set on Scryfall' }).click();
+  await expect(dialog).toContainText('$0.10 nonfoil · SLD #7');
+  await expect(dialog).toContainText('checked every set');
+  expect(bodies.map((b) => (b as { live: boolean }).live)).toEqual([false, true]);
+});
+
+test('a deck’s cheapest printings can be checked across every set', async ({ page }) => {
+  const deck = fixtures.decks[0];
+  const seen: string[] = [];
+  await page.route('**/api/market/deck?*', (r) => {
+    const live = new URL(r.request().url()).searchParams.get('live') === 'true';
+    seen.push(String(live));
+    return r.fulfill({ json: { slug: deck.slug, sealed_product: null, sealed: null, scratch: 6, with_collection: 6, scratch_floor: live ? 1 : 4.5, with_collection_floor: live ? 1 : 4.5, coverage: 1, unpriced: 0, total_need: 1, live,
+      lines: [{ scryfall_id: 'd', finish: 'nonfoil', name: 'Pricey Card', set_code: 'abc', collector_number: '1', need: 1, free: 0, buy: 1, unit_usd: 6, floor_usd: live ? 1 : 4.5, floor_set_code: 'xyz', floor_collector_number: '9', floor_scryfall_id: 'c' }] } });
+  });
+  await page.goto(`/market?subject=deck&deck=${deck.slug}`);
+  await expect(page.getByText('Cheapest printings from the sets you’ve synced.')).toBeVisible();
+  await page.getByRole('button', { name: 'Check every set on Scryfall' }).click();
+  await expect(page.getByText('Cheapest printings checked across every set on Scryfall.')).toBeVisible();
+  await expect(page).toHaveURL(/live=true/);
+  await expect(page.getByRole('table', { name: 'Three ways to get this deck' })).toContainText('$1.00');
+  expect(seen).toEqual(['false', 'true']);
+});

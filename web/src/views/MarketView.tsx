@@ -11,6 +11,8 @@ import { SecretLairFind, SecretLairPanel } from './market/SecretLairPanel';
 import { dealFilters, useDealCosts, useDealsData } from './market/useDealsData';
 import { CardLines } from './market/CardLines';
 import { ProductContents } from './market/ProductContents';
+import { FoilGapCell, FoilPremiumFilter } from './market/FoilGap';
+import { FloorBasis } from './market/FloorBasis';
 import { Chevron } from '../components/Chevron';
 import { CopyTargets } from '../components/CopyButton';
 import { InfoTip } from '../components/InfoTip';
@@ -36,7 +38,7 @@ export function MarketView() {
   const set = (patch: Partial<MarketSearch>) => navigate({ search: (s) => ({ ...s, ...patch }), replace: true });
   const fams = useQuery(familiesQuery());
   const decks = useQuery({ ...decksQuery(), enabled: search.subject === 'deck' });
-  const cost = useQuery({ ...deckCostQuery(search.deck), enabled: search.subject === 'deck' && Boolean(search.deck) });
+  const cost = useQuery({ ...deckCostQuery(search.deck, search.live), enabled: search.subject === 'deck' && Boolean(search.deck) });
 
   const famName = fams.data?.find((f) => f.code === search.code)?.name ?? search.code;
   const deckName = decks.data?.find((d) => d.slug === search.deck)?.name ?? search.deck;
@@ -83,7 +85,7 @@ export function MarketView() {
         ) : decks.isError ? (
           <p className="text-sm text-danger">Couldn’t load decks: {(decks.error as Error).message}</p>
         ) : (
-          <SearchSelect label="Deck" noun="deck" value={search.deck} onChange={(deck) => set({ deck })} options={(decks.data ?? []).map((d) => ({ value: d.slug, label: d.name, hint: d.deck_type }))} />
+          <SearchSelect label="Deck" noun="deck" value={search.deck} onChange={(deck) => set({ deck, live: false })} options={(decks.data ?? []).map((d) => ({ value: d.slug, label: d.name, hint: d.deck_type }))} />
         )}
       </SideSection>
       {search.subject === 'sld' && <SecretLairFind search={search} set={set} />}
@@ -147,11 +149,12 @@ export function MarketView() {
                 onChange={(v) => set({ cheaper: v === 'cheaper' })}
                 options={[{ value: 'all', label: 'All' }, { value: 'cheaper', label: 'Not cheapest' }]}
               />
+              <FoilPremiumFilter value={search.foilMax} onChange={(foilMax) => set({ foilMax })} />
               <SelectField<MarketSearch['sort']>
                 label="Sort"
                 value={search.sort}
                 onChange={(sort) => set({ sort })}
-                options={[{ value: 'savings', label: 'Biggest premium' }, { value: 'price', label: 'Highest price' }, { value: 'set', label: 'Set and number' }]}
+                options={[{ value: 'savings', label: 'Biggest premium' }, { value: 'price', label: 'Highest price' }, { value: 'foil', label: 'Smallest foil premium' }, { value: 'set', label: 'Set and number' }]}
               />
             </>
           )}
@@ -207,10 +210,10 @@ export function MarketView() {
     body = <EmptyNote title="Cost out a deck">Choose a deck to see what it costs sealed, bought card by card, or built from your free cards first.</EmptyNote>;
   } else {
     title = deckName ?? 'Deck';
-    if (cost.isPending) body = <Loading label="Pricing the deck…" />;
+    if (cost.isPending) body = <Loading label={search.live ? 'Checking every set for the cheapest printings…' : 'Pricing the deck…'} />;
     else if (cost.isError) body = <ErrorNote error={cost.error} onRetry={() => cost.refetch()} />;
     else {
-      body = <DeckPanel d={cost.data} buyAt={search.buyAt} />;
+      body = <DeckPanel d={cost.data} buyAt={search.buyAt} onCheckLive={() => set({ live: true })} />;
       summary = `${fmtCount(cost.data.total_need, 'card')} · ${fmtInt(cost.data.total_need - toBuy)} from your free cards · ${fmtInt(toBuy)} to buy`;
     }
   }
@@ -416,13 +419,14 @@ function CardsPanel({ code, search }: { code: string; search: MarketSearch }) {
   const q = useQuery(marketCardsQuery(code));
   const shown = useMemo(() => (q.data ? filterCardPrices(q.data.cards, search) : []), [q.data, search]);
   // A new filter starts back at the first page.
-  const filterKey = `${code}|${search.q}|${search.cheaper}|${search.sort}`;
+  const filterKey = `${code}|${search.q}|${search.cheaper}|${search.sort}|${search.foilMax}`;
+  const foilFocus = search.sort === 'foil' || search.foilMax !== 'any';
   const [page, setPage] = useState({ key: filterKey, n: CARD_PAGE });
   const limit = page.key === filterKey ? page.n : CARD_PAGE;
 
   if (q.isPending) return <Loading label="Reading the family’s printings…" />;
   if (q.isError) return <ErrorNote error={q.error} onRetry={() => q.refetch()} />;
-  if (!shown.length) return <EmptyNote title="Nothing matches">Clear the name filter or show all printings.</EmptyNote>;
+  if (!shown.length) return <EmptyNote title="Nothing matches">Clear the name filter, show all printings, or allow any foil premium.</EmptyNote>;
   return (
     <div className="flex flex-col">
       <table className="mx-5 w-[calc(100%-2.5rem)] border-collapse text-sm tabular">
@@ -433,11 +437,12 @@ function CardsPanel({ code, search }: { code: string; search: MarketSearch }) {
             <th scope="col" className="py-1.5 pl-3 text-right font-medium">This printing</th>
             <th scope="col" className="py-1.5 pl-3 text-right font-medium">Cheapest</th>
             <th scope="col" className="hidden py-1.5 pl-3 text-right font-medium sm:table-cell">Premium</th>
+            <th scope="col" className={`py-1.5 pl-3 text-right font-medium ${foilFocus ? '' : 'hidden sm:table-cell'}`}>Foil premium</th>
             <th scope="col" className="hidden py-1.5 pl-3 text-right font-medium md:table-cell">You own</th>
           </tr>
         </thead>
         <tbody>
-          {shown.slice(0, limit).map((c) => <CardLine key={c.scryfall_id} c={c} />)}
+          {shown.slice(0, limit).map((c) => <CardLine key={c.scryfall_id} c={c} foilFocus={foilFocus} />)}
         </tbody>
       </table>
       {shown.length > limit && (
@@ -449,7 +454,7 @@ function CardsPanel({ code, search }: { code: string; search: MarketSearch }) {
   );
 }
 
-function CardLine({ c }: { c: CardPriceOut }) {
+function CardLine({ c, foilFocus }: { c: CardPriceOut; foilFocus: boolean }) {
   const extra = premium(c);
   const same = c.floor_set_code === c.set_code && c.floor_collector_number === c.collector_number;
   return (
@@ -464,6 +469,7 @@ function CardLine({ c }: { c: CardPriceOut }) {
         {c.floor_set_code && !same && <span className="ml-1.5 text-xs text-ink-muted">{c.floor_set_code.toUpperCase()} {c.floor_collector_number}</span>}
       </td>
       <td className="hidden py-1.5 pl-3 text-right sm:table-cell">{extra == null ? <span className="text-ink-muted">—</span> : extra < 0.01 ? <span className="text-ink-muted">cheapest</span> : <span className="text-ink">+{fmtUsd(extra)}</span>}</td>
+      <FoilGapCell c={c} className={foilFocus ? '' : 'hidden sm:table-cell'} />
       <td className="hidden py-1.5 pl-3 text-right md:table-cell">{c.owned ? fmtInt(c.owned) : <span className="text-ink-muted">—</span>}</td>
     </tr>
   );
@@ -471,7 +477,7 @@ function CardLine({ c }: { c: CardPriceOut }) {
 
 // ---------- deck ----------
 
-function DeckPanel({ d, buyAt }: { d: DeckCostOut; buyAt: MarketSearch['buyAt'] }) {
+function DeckPanel({ d, buyAt, onCheckLive }: { d: DeckCostOut; buyAt: MarketSearch['buyAt']; onCheckLive: () => void }) {
   const ledger = deckLedger(d);
   const toBuy = d.lines.filter((l) => l.buy > 0);
   const covered = d.lines.filter((l) => l.buy === 0);
@@ -505,6 +511,7 @@ function DeckPanel({ d, buyAt }: { d: DeckCostOut; buyAt: MarketSearch['buyAt'] 
           ))}
         </tbody>
       </table>
+      <FloorBasis live={d.live ?? false} onCheckLive={onCheckLive} />
       {d.unpriced > 0 && <p className="-mt-3 text-sm text-ink-muted">{fmtCount(d.unpriced, 'printing')} without a price — totals undercount.</p>}
 
       <CardLines title="To buy" lines={toBuy} unitBasis={buyAt} />

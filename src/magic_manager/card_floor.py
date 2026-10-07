@@ -82,6 +82,7 @@ class Floor:
     finish: str | None = None
     set_code: str | None = None
     collector_number: str | None = None
+    scryfall_id: str | None = None
 
 
 @dataclass
@@ -132,10 +133,10 @@ def _scan_anywhere(oracle_ids: list[str]) -> dict[str, FloorPair]:
             cn = p.get("collector_number")
             nf = price(p, "usd")
             if nf is not None and (pair.nonfoil is None or nf < pair.nonfoil.usd):
-                pair.nonfoil = Floor(nf, "nonfoil", set_code, cn)
+                pair.nonfoil = Floor(nf, "nonfoil", set_code, cn, p.get("id"))
             ff = price(p, "usd_foil")
             if ff is not None and (pair.foil is None or ff < pair.foil.usd):
-                pair.foil = Floor(ff, "foil", set_code, cn)
+                pair.foil = Floor(ff, "foil", set_code, cn, p.get("id"))
     return out
 
 
@@ -210,7 +211,7 @@ def local_floors(
             where += f" AND LOWER(set_code) IN ({fam_ph})"
             params += fam
         rows = c.execute(
-            f"SELECT oracle_id, set_code, collector_number, prices_usd, "
+            f"SELECT oracle_id, scryfall_id, set_code, collector_number, prices_usd, "
             f"prices_usd_foil FROM cards WHERE {where}",
             params,
         ).fetchall()
@@ -219,10 +220,10 @@ def local_floors(
             pair = pairs.setdefault(r["oracle_id"], FloorPair())
             nf = r["prices_usd"]
             if nf is not None and (pair.nonfoil is None or nf < pair.nonfoil.usd):
-                pair.nonfoil = Floor(nf, "nonfoil", r["set_code"], r["collector_number"])
+                pair.nonfoil = Floor(nf, "nonfoil", r["set_code"], r["collector_number"], r["scryfall_id"])
             ff = r["prices_usd_foil"]
             if ff is not None and (pair.foil is None or ff < pair.foil.usd):
-                pair.foil = Floor(ff, "foil", r["set_code"], r["collector_number"])
+                pair.foil = Floor(ff, "foil", r["set_code"], r["collector_number"], r["scryfall_id"])
         if finish_mode == "preserve":
             return dict(pairs)
         return {oid: pair.collapse() for oid, pair in pairs.items()}
@@ -231,3 +232,41 @@ def local_floors(
         return _q(conn)
     with db.connect() as c:
         return _q(c)
+
+
+# ---------- per-printing enrichment (web: inspector, any card list) ----------
+
+@dataclass
+class PrintingFloor:
+    """The cheapest printing of the card behind one printing, per finish."""
+    scryfall_id: str
+    oracle_id: str | None
+    name: str
+    nonfoil: Floor | None
+    foil: Floor | None
+
+
+def printing_floors(scryfall_ids: Iterable[str], *, live: bool = False) -> dict[str, PrintingFloor]:
+    """For each printing id, the cheapest nonfoil and cheapest foil printing of
+    the same card (by oracle_id) — the enrichment any card list can ask for.
+
+    Local-first: ``live=False`` reads every locally synced printing (no
+    network, :func:`local_floors`); ``live=True`` is the opt-in cross-every-set
+    Scryfall lookup (:func:`anywhere_floors`, ⌈N/20⌉ requests; raises
+    ``scryfall.ScryfallError``). Ids not in the local ``cards`` table are
+    omitted."""
+    ids = list(dict.fromkeys(i for i in scryfall_ids if i))
+    if not ids:
+        return {}
+    with db.connect() as c:
+        rows = c.execute(
+            f"SELECT scryfall_id, oracle_id, name FROM cards WHERE scryfall_id IN ({','.join('?' * len(ids))})",
+            ids).fetchall()
+        oids = [r["oracle_id"] for r in rows if r["oracle_id"]]
+        floors = (anywhere_floors(oids, finish_mode="preserve") if live
+                  else local_floors(oids, finish_mode="preserve", conn=c))
+    out = {}
+    for r in rows:
+        pair = floors.get(r["oracle_id"] or "") or FloorPair()
+        out[r["scryfall_id"]] = PrintingFloor(r["scryfall_id"], r["oracle_id"], r["name"], pair.nonfoil, pair.foil)
+    return out

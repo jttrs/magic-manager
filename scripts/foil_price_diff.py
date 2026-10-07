@@ -69,7 +69,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from magic_manager import parsers, scryfall, treatments  # noqa: E402
+from magic_manager import foil_gap, parsers, scryfall, treatments  # noqa: E402
 from magic_manager.card_floor import price as _price  # noqa: E402 — shared extractor
 
 
@@ -181,10 +181,6 @@ def _fmt_raw(v: float) -> str:
     return f"{sign}${abs(v):.2f}"
 
 
-def _is_fancy_foil(card: dict) -> bool:
-    return "ff" in treatments.compute_treatment(card).split("|")
-
-
 def _parse_drop_expensive(s: str) -> tuple[float, float]:
     """Parse ``PCT:RAW`` (both floats). Both must be present."""
     try:
@@ -275,70 +271,42 @@ def main() -> int:
         return 2
 
     unresolved = len(not_found)
-    fancy_foil = 0
-    foil_only = 0
-    nonfoil_only = 0
-    unpriced = 0
+    counts = {st: 0 for st in foil_gap.STATUSES}
     ranked: list[dict] = []
 
+    # Bucketing + gap math live in magic_manager.foil_gap (shared with the web).
     for card in found:
-        finishes = card.get("finishes") or []
-        # Bucket precedence: fancy-foil first, so etched-foil-only prints
-        # count as fancy-foil (their diff isn't computable AND they're the
-        # premium tier the user isn't asking about).
-        if _is_fancy_foil(card):
-            fancy_foil += 1
+        gap = foil_gap.foil_gap(
+            finishes=card.get("finishes") or [],
+            treatment=treatments.compute_treatment(card),
+            nonfoil=_price(card, "usd"), foil=_price(card, "usd_foil"))
+        counts[gap.status] += 1
+        if gap.status != "ok":
             continue
-        if finishes == ["foil"]:
-            foil_only += 1
-            continue
-        if "foil" not in finishes:
-            nonfoil_only += 1
-            continue
-        nonfoil = _price(card, "usd")
-        foil = _price(card, "usd_foil")
-        if nonfoil is None or foil is None or nonfoil == 0:
-            unpriced += 1
-            continue
-        pct = (foil - nonfoil) / nonfoil
-        raw = foil - nonfoil
         ranked.append({
             "name": card.get("name") or "",
             "set": (card.get("set") or "").lower(),
             "cn": card.get("collector_number") or "",
-            "nonfoil": nonfoil,
-            "foil": foil,
-            "pct": pct,
-            "pct_key": round(pct, 4),
-            "raw": raw,
+            "nonfoil": _price(card, "usd"),
+            "foil": _price(card, "usd_foil"),
+            "gap": gap,
+            "pct": gap.pct,
+            "raw": gap.usd,
         })
+    fancy_foil, foil_only = counts["fancy"], counts["foil_only"]
+    nonfoil_only, unpriced = counts["nonfoil_only"], counts["unpriced"]
 
-    ranked.sort(key=lambda r: (r["pct_key"], r["name"], r["set"], _cn_sort_key(r["cn"])))
+    ranked.sort(key=lambda r: (foil_gap.sort_key(r["gap"]), r["name"], r["set"], _cn_sort_key(r["cn"])))
 
     # Post-sort filters. Applied after ranking so the table always renders in
     # sort order regardless of which rows the filters trim. All bounds are
     # inclusive on the "keep" side. Bounds are in percent for pct, USD for raw.
     filtered = 0
-    if any(v is not None for v in (args.min_pct, args.max_pct,
-                                    args.min_raw, args.max_raw,
-                                    args.drop_expensive)):
-        kept: list[dict] = []
-        for r in ranked:
-            pct_pct = r["pct"] * 100  # store as fraction; flags are in percent
-            raw = r["raw"]
-            if args.min_pct is not None and pct_pct < args.min_pct:
-                filtered += 1; continue
-            if args.max_pct is not None and pct_pct > args.max_pct:
-                filtered += 1; continue
-            if args.min_raw is not None and raw < args.min_raw:
-                filtered += 1; continue
-            if args.max_raw is not None and raw > args.max_raw:
-                filtered += 1; continue
-            if args.drop_expensive is not None:
-                pct_thresh, raw_thresh = args.drop_expensive
-                if pct_pct > pct_thresh and raw >= raw_thresh:
-                    filtered += 1; continue
-            kept.append(r)
+    bounds = dict(min_pct=args.min_pct, max_pct=args.max_pct, min_raw=args.min_raw,
+                  max_raw=args.max_raw, drop_expensive=args.drop_expensive)
+    if any(v is not None for v in bounds.values()):
+        kept = [r for r in ranked if foil_gap.keep(r["gap"], **bounds)]
+        filtered = len(ranked) - len(kept)
         ranked = kept
 
     # Emit summary to stderr FIRST so it lands even if stdout is redirected.

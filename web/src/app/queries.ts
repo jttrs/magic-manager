@@ -2,7 +2,7 @@
 import { keepPreviousData, queryOptions } from '@tanstack/react-query';
 import type { DraftCardIn } from '../core/api';
 import type { RankingRequest } from '../core/rankings';
-import { dealsTabs, dealsWatched, marketProductCost, marketSecretLair, undoInfo, cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs, historyList, historyEvent, exploreRanking, exploreRankingOptions, cardCombos, deckCombos, draftCombos } from '../core/api';
+import { dealsTabs, dealsWatched, marketProductCost, marketSecretLair, undoInfo, cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, cardFloors, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs, historyList, historyEvent, exploreRanking, exploreRankingOptions, cardCombos, deckCombos, draftCombos } from '../core/api';
 
 class ApiError extends Error {}
 
@@ -90,6 +90,16 @@ export const holdingsQuery = (scryfallId: string | null | undefined) =>
     queryFn: async ({ signal }) => unwrap(await cardHoldings({ path: { scryfall_id: scryfallId! }, signal })),
     enabled: Boolean(scryfallId),
     staleTime: 30_000,
+  });
+
+/** The cheapest nonfoil + foil printing of the card behind each printing id —
+ *  local prices, or every set on Scryfall when `live`. */
+export const cardFloorsQuery = (scryfallIds: string[], live = false) =>
+  queryOptions({
+    queryKey: ['card-floors', scryfallIds, live],
+    queryFn: async ({ signal }) => unwrap(await cardFloors({ body: { scryfall_ids: scryfallIds, live }, signal })),
+    enabled: scryfallIds.length > 0,
+    staleTime: live ? 30 * 60_000 : 60_000,
   });
 
 export const deckCheckQuery = (slug: string, cards: DraftCardIn[], combos: boolean) =>
@@ -181,10 +191,10 @@ export const marketCardsQuery = (code?: string) =>
     staleTime: 5 * 60_000,
   });
 
-export const deckCostQuery = (slug?: string) =>
+export const deckCostQuery = (slug?: string, live = false) =>
   queryOptions({
-    queryKey: ['market', 'deck', slug],
-    queryFn: async ({ signal }) => unwrap(await marketDeck({ query: { slug: slug! }, signal })),
+    queryKey: ['market', 'deck', slug, live],
+    queryFn: async ({ signal }) => unwrap(await marketDeck({ query: { slug: slug!, live }, signal })),
     enabled: Boolean(slug),
     staleTime: 60_000,
   });

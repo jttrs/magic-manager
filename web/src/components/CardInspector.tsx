@@ -7,6 +7,7 @@ import { fmtInt, fmtUsd } from '../core/format';
 import { rarityLetter, type GuideCard } from '../core/guideCard';
 import type { ComponentType, SVGProps } from 'react';
 import { Holdings, Tags } from './CardFace';
+import { CheapestPrinting } from './CheapestPrinting';
 import { ExploreMark, ScryfallMark, TcgplayerMark } from './StoreMarks';
 
 const RARITY_NAME: Record<string, string> = { common: 'Common', uncommon: 'Uncommon', rare: 'Rare', mythic: 'Mythic', special: 'Special', bonus: 'Bonus' };
@@ -64,6 +65,7 @@ export function CardInspector({ card, onClose }: { card: GuideCard | null; onClo
                     fmtUsd(card.price)
                   )}
                 </dd>
+                {card.scryfallId && <CheapestPrinting key={card.scryfallId} scryfallId={card.scryfallId} setCode={card.setCode} cn={card.cn} />}
                 {card.owned && !card.scryfallId && (
                   <>
                     <dt className="text-ink-muted">Owned</dt>
