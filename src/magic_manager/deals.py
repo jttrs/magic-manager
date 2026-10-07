@@ -7,6 +7,7 @@ Composes :mod:`tabs` (read the browser), :mod:`vendors` + :mod:`storefetch`
 from __future__ import annotations
 
 import json
+import re
 import time
 from collections import defaultdict
 from urllib.parse import urlsplit
@@ -46,18 +47,46 @@ def open_tabs(browser: str = "chrome", **read_kw) -> dict:
     }
 
 
+# A TCGplayer product page (what Market → Secret Lair's Watch saves). TCGplayer
+# has no store recipe (rendered + bot-walled); a watched one is priced from its
+# TCGplayer MARKET price instead of reading the page.
+_TCGPLAYER_PRODUCT = re.compile(r"^https://(?:www\.)?tcgplayer\.com/product/\d+")
+TCGPLAYER_MARKET = "TCGplayer market"
+
+
+def is_market_link(url: str) -> bool:
+    return bool(_TCGPLAYER_PRODUCT.match(url or ""))
+
+
+def _market_read(row: dict, choice: dict | None) -> None:
+    """Fill a TCGplayer-product row from the market price of the product it is watched as."""
+    if choice is None or choice.get("kind") == "single":
+        row["error"] = "Not a product page of a catalogued store."
+        return
+    c = market.product_cost(choice["kind"], choice["set_code"], choice["name"], choice.get("finish"))
+    row.update(vendor="tcgplayer", price=c["market"], currency="USD", title=choice["name"], signal="market")
+    if c["market"] is None:
+        row["error"] = "TCGplayer has no market price for this yet."
+
+
 def read_prices(urls: list[str], *, progress=None, fresh: bool = False) -> list[dict]:
     """Price + stock for each product URL with its store's recipe. Never raises
     per URL: each row carries ``error`` (blocked, tab closed, JS events off, …)
     so one bad page doesn't sink the batch. A ``JsEventsOff`` is reported once
-    and the remaining open-tab reads are skipped with the same message."""
+    and the remaining open-tab reads are skipped with the same message. A
+    watched TCGplayer product link reads its product's TCGplayer market price."""
     rows: list[dict] = []
     js_off: str | None = None
+    market_ids = watched_identities([u for u in urls if is_market_link(u)])
     for i, url in enumerate(urls, 1):
         if progress:
             progress(i, len(urls), url)
         row: dict = {"url": url, "price": None, "currency": None, "available": None, "title": None, "signal": "", "error": None}
         try:
+            if is_market_link(url):
+                _market_read(row, market_ids.get(url))
+                rows.append(row)
+                continue
             parts = urlsplit(url)
             m = vendors.classify(parts.hostname or "", parts.path)
             if js_off and m.vendor and m.vendor.mode == "rendered":
@@ -234,6 +263,8 @@ def unwatch(url: str) -> dict:
 
 def _store_name(url: str, saved: str | None) -> str | None:
     """The catalogue's store name for a link (earmarks saved before the catalogue keep a host)."""
+    if is_market_link(url):
+        return TCGPLAYER_MARKET
     parts = urlsplit(url)
     v = vendors.classify(parts.netloc, parts.path).vendor
     return v.name if v else saved

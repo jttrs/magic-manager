@@ -97,7 +97,7 @@ function WatchControl({ r, price, watchedUrls }: { r: SldRow; price: number | nu
           tone="paper"
           emphasis="quiet"
           disabled={!url || watch.isPending}
-          title={url ? 'Track its TCGplayer price in Deals → Watching' : 'Not listed on TCGplayer yet'}
+          title={url ? 'Track its TCGplayer market price in Deals → Watching' : 'Not listed on TCGplayer yet'}
           onClick={() => watch.mutate()}
         >
           {watch.isPending ? 'Saving…' : 'Watch'}

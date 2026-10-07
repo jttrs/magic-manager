@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ProductCostOut, SldDropOut } from './api';
 import { marketSearch } from './search';
-import { filterSortDrops, sldGap, sldKey, sldRows, type SldFilters } from './secretLair';
+import { dropBase, filterSortDrops, sldGap, sldKey, sldRows, watchKey, type SldFilters } from './secretLair';
 
 const cost = (p: Partial<ProductCostOut>): ProductCostOut => ({ kind: 'sld', set_code: 'sld', name: 'x', ...p }) as ProductCostOut;
 
@@ -17,6 +17,13 @@ describe('secret lair view-model', () => {
     expect(rows.map((r) => [r.name, r.finish, r.otherEdition])).toEqual([['Both', 'nonfoil', false], ['Foil only', 'foil', true], ['Alpha', 'nonfoil', false]]);
     expect(rows[0].tcgplayer_url).toBe('https://t/1');
     expect(sldRows(drops, 'foil')[0].key).toBe(sldKey('Both', 'foil'));
+  });
+
+  it('a foil-only drop matches its watched entry, which comes back without the suffix', () => {
+    expect(dropBase('Alien Auroras Galaxy Foil Edition')).toBe('Alien Auroras Galaxy');
+    expect(dropBase('Foil Edition Fans')).toBe('Foil Edition Fans');
+    expect(watchKey('Alien Auroras Galaxy Foil Edition', 'foil')).toBe(watchKey('Alien Auroras Galaxy', 'foil'));
+    expect(watchKey('Both', 'foil')).not.toBe(watchKey('Both', 'nonfoil'));
   });
 
   it('gap is sealed minus cards, negative when sealed is cheaper', () => {

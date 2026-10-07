@@ -25,6 +25,13 @@ export type SldRow = {
 
 export const sldKey = (name: string, finish: string) => `sld|${name}|${finish}`;
 
+/** A drop's name without a trailing " Foil Edition" — a foil-only drop keeps that suffix in the
+ *  drop list, but comes back from the watchlist without it. */
+export const dropBase = (name: string) => name.replace(/ Foil Edition$/, '');
+
+/** Matches a drop row to a watched drop, whichever way each side spells a foil-only drop's name. */
+export const watchKey = (name: string, finish: string) => sldKey(dropBase(name), finish);
+
 /** Each drop at the chosen edition — or at its only edition when it doesn't ship in that one. */
 export function sldRows(drops: SldDropOut[], edition: SldEdition): SldRow[] {
   return drops.flatMap((d) => {

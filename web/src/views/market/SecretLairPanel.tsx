@@ -9,7 +9,7 @@ import { EmptyNote, ErrorNote } from '../../components/States';
 import type { ProductCostOut } from '../../core/api';
 import { fmtInt, fmtUsd } from '../../core/format';
 import type { MarketSearch } from '../../core/search';
-import { filterSortDrops, SLD_BASIS_LABEL, SLD_LIMITS, sldGap, sldKey, sldRows, type SldBasis, type SldEdition, type SldRow, type SldSort } from '../../core/secretLair';
+import { filterSortDrops, SLD_BASIS_LABEL, SLD_LIMITS, sldGap, sldRows, watchKey, type SldBasis, type SldEdition, type SldRow, type SldSort } from '../../core/secretLair';
 import { MasterDetail } from './DealsWorkspace';
 import type { CostState } from './useDealsData';
 import { SldInspector } from './SldInspector';
@@ -33,11 +33,11 @@ function useSecretLair(search: MarketSearch) {
   return { list, rows, costs };
 }
 
-/** Keys (`sld|name|finish`) of watched drops → their store links. */
+/** Watched drops (by `watchKey`) → their store links. */
 function useWatchedDrops(): Map<string, string[]> {
   const on = useFeature('deals');
   const watched = useQuery({ ...watchedQuery(), enabled: on });
-  return useMemo(() => new Map((watched.data ?? []).filter((w) => w.kind === 'sld').map((w) => [sldKey(w.name, w.finish ?? 'nonfoil'), w.stores.map((s) => s.url)])), [watched.data]);
+  return useMemo(() => new Map((watched.data ?? []).filter((w) => w.kind === 'sld').map((w) => [watchKey(w.name, w.finish ?? 'nonfoil'), w.stores.map((s) => s.url)])), [watched.data]);
 }
 
 /** Sidebar controls for the Secret Lair subject. */
@@ -129,7 +129,7 @@ export function SecretLairPanel({ search, set }: { search: MarketSearch; set: Se
     <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto overscroll-contain px-4 pb-8 pt-2 [scrollbar-gutter:stable]">{body}</div>
   );
   const inspector = selected
-    ? <SldInspector key={selected.key} row={selected} cost={costs.data.get(selected.key)} costState={costs.state.get(selected.key)} watchedUrls={watched.get(selected.key)} />
+    ? <SldInspector key={selected.key} row={selected} cost={costs.data.get(selected.key)} costState={costs.state.get(selected.key)} watchedUrls={watched.get(watchKey(selected.name, selected.finish))} />
     : <EmptyNote title="Pick a drop">Choose a row to see what it’s worth, its bonus card and every card inside.</EmptyNote>;
   return <MasterDetail list={listPane} inspector={inspector} open={selected != null} onBack={() => set({ item: undefined })} backLabel="All drops" splitId="mm.sld.split" />;
 }
@@ -160,7 +160,7 @@ function DropTable({ shown, costs, basis, watched, item, onPick }: { shown: SldR
         </thead>
         <tbody ref={ref} onKeyDown={move}>
           {shown.map((r) => (
-            <DropRow key={r.key} r={r} cost={costs.data.get(r.key)} state={costs.state.get(r.key)} basis={basis} watching={watched.has(r.key)} selected={r.key === item} onPick={() => onPick(r.key)} />
+            <DropRow key={r.key} r={r} cost={costs.data.get(r.key)} state={costs.state.get(r.key)} basis={basis} watching={watched.has(watchKey(r.name, r.finish))} selected={r.key === item} onPick={() => onPick(r.key)} />
           ))}
         </tbody>
       </table>

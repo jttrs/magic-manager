@@ -83,3 +83,15 @@ test('with the deals flag: Watch tracks the drop at its TCGplayer page', async (
   expect(body).toMatchObject({ url: 'https://www.tcgplayer.com/product/694967', choice: { kind: 'sld', name: 'Garfield: As Intended', finish: 'nonfoil' }, price: 30 });
   await expect(page.getByRole('row', { name: /Garfield/ })).toContainText('watching');
 });
+
+test('a watched foil-only drop shows as watched (the watchlist drops its " Foil Edition")', async ({ page }) => {
+  const foilOnly = { total: 1, drops: [{ name: 'Alien Auroras Galaxy Foil Edition', release_date: '2026-05-01', editions: [{ finish: 'foil', sealed_name: 'SLD Alien Auroras Galaxy Foil', tcgplayer_url: 'https://www.tcgplayer.com/product/5' }] }] };
+  const url = 'https://www.tcgplayer.com/product/5';
+  await page.route('**/api/features', (r) => r.fulfill({ json: { flags: { deals: true } } }));
+  await page.route('**/api/market/secret-lair?*', (r) => r.fulfill({ json: foilOnly }));
+  await page.route('**/api/deals/watched', (r) => r.fulfill({ json: [{ set_code: 'sld', name: 'Alien Auroras Galaxy', kind: 'sld', finish: 'foil', scryfall_id: null, category: 'secret_lair', subtype: 'foil', release_date: null, market: null, contents: null, partial: false, best_price: 30, best_store: 'TCGplayer market', best_url: url, delta: null, pct: null, stores: [{ url, store: 'TCGplayer market', price: 30, available: null, read_at: '2026-10-06', read: true, first_price: 30, first_at: '2026-10-06', change: 0, history: [] }], error: null }] }));
+  await page.goto('/market?subject=sld&edition=foil');
+  await expect(page.getByRole('row', { name: /Alien Auroras Galaxy/ })).toContainText('watching');
+  await page.getByRole('button', { name: 'Alien Auroras Galaxy Foil Edition' }).click();
+  await expect(page.getByRole('button', { name: 'Stop watching' })).toBeVisible();
+});
