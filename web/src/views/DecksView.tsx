@@ -1,13 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { getRouteApi, useNavigate } from '@tanstack/react-router';
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panels';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { deckQuery, decksQuery } from '../app/queries';
 import { useMediaQuery } from '../app/useMediaQuery';
 import { useSelection } from '../app/selection';
 import { AddCardsDialog, type AddCardsSeed } from '../components/addcards/AddCardsDialog';
 import { ViewLayout } from '../components/AppShell';
 import { Chevron } from '../components/Chevron';
+import { SplitPanes } from '../components/SplitPanes';
 import { Segmented, SelectField, SideSection, TextField } from '../components/Sidebar';
 import { InfoTip } from '../components/InfoTip';
 import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../components/States';
@@ -80,7 +80,7 @@ export function DecksView() {
   else {
     const list = <DeckList groups={groups} total={shown.length} active={search.deck} onPick={(deck) => set({ deck })} />;
     const inspector = search.deck ? <DeckInspector slug={search.deck} view={search.view} autoAdd={search.add === true} onAutoAdded={() => set({ add: undefined })} onView={narrow ? (view) => set({ view }) : undefined} onBack={narrow ? () => set({ deck: undefined }) : undefined} /> : <EmptyNote title="Pick a deck">Choose a deck on the left to see its cards.</EmptyNote>;
-    body = narrow ? (search.deck ? inspector : list) : <Split list={list} inspector={inspector} />;
+    body = narrow ? (search.deck ? inspector : list) : <SplitPanes id="mm.decks.split" detailId="deck" label="Resize deck list" list={list} inspector={inspector} />;
   }
 
   return (
@@ -98,20 +98,6 @@ export function DecksView() {
         {body}
       </GuideSheet>
     </ViewLayout>
-  );
-}
-
-function Split({ list, inspector }: { list: ReactNode; inspector: ReactNode }) {
-  const layout = useDefaultLayout({ id: 'mm.decks.split', panelIds: ['list', 'deck'], storage: localStorage });
-  return (
-    <Group orientation="horizontal" className="h-full min-h-0" defaultLayout={layout.defaultLayout ?? { list: 34, deck: 66 }} onLayoutChanged={layout.onLayoutChanged}>
-      <Panel id="list" minSize="22" className="flex min-w-0 flex-col">{list}</Panel>
-      <Separator aria-label="Resize deck list" className="group relative w-4 shrink-0 cursor-col-resize outline-none">
-        <span className="absolute inset-y-2 left-1/2 w-px -translate-x-1/2 bg-rule-strong/40 transition-colors ease-guide group-hover:bg-rule-strong group-focus-visible:bg-focus group-data-[separator=active]:bg-focus" />
-        <span aria-hidden="true" className="absolute left-1/2 top-1/2 grid h-12 w-3 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-pill border border-rule-strong bg-paper text-2xs leading-none text-ink-muted transition-colors ease-guide group-hover:border-accent group-hover:bg-highlight-solid group-hover:text-on-accent group-focus-visible:bg-highlight-solid group-focus-visible:text-on-accent">⋮</span>
-      </Separator>
-      <Panel id="deck" minSize="40" className="flex min-w-0 flex-col">{inspector}</Panel>
-    </Group>
   );
 }
 

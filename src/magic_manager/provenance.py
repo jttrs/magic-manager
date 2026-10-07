@@ -19,6 +19,7 @@ sources of a printing can sum past what is owned today. Callers show them as
 """
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass, field
 
@@ -82,7 +83,10 @@ def _product_file_name(method: str, label: str | None, source_path: str | None) 
     for p in _PRODUCT_PREFIXES:
         if label and label.startswith(p):
             return label[len(p):] or None
-    return source_path or None
+    # A bare MTGJSON fileName — not a checklist path (pre-V19 jumpstart/precon checklist ingests).
+    if source_path and "/" not in source_path and "." not in source_path:
+        return source_path
+    return None
 
 
 def _classify(method: str, label: str | None, source_path: str | None,
@@ -175,3 +179,229 @@ def card_holdings(scryfall_id: str) -> Holdings:
         ).fetchone()
         h.other_printings_owned = row[0] if row else 0
     return h
+
+
+# ---------- purchase history: one entry per ingest event ----------
+#
+# The acquisition timeline read straight off the ledger. Each ``ingest_events``
+# row is one entry; its ``inventory_events`` give copies in / out and the balance
+# it still holds per printing (what that acquisition accounts for today), valued
+# at local prices. Honest about what the ledger can't know: pre-ledger ingests
+# (before V19) carry no deltas — their copies live in the reconstructed buckets —
+# and product-coverage (``trueup:``) entries are dated when they were IDENTIFIED,
+# not when bought.
+
+HISTORY_KINDS = ("deck", "pool", "singles", "checklist", "unknown", "move")
+
+_SINGLES_TITLES = {
+    "adhoc": "Added by hand", "intake": "Scan session", "import-block": "Imported list",
+    "collection-import": "Collection import", "collection-export": "Collection export",
+}
+_WEB_TITLES = {"search": "Added from search", "paste": "Pasted list", "deck": "Added a deck's cards"}
+_UNKNOWN_DETAIL = {
+    "backfill:precon": "Reconstructed from precon decklists — which product is not known",
+    "backfill:unattributed": "Residual of the reconstruction — source not known",
+}
+
+
+@dataclass
+class HistoryEntry:
+    ingest_id: int
+    at: str
+    method: str
+    kind: str                    # one of HISTORY_KINDS
+    title: str
+    detail: str | None = None    # file name, product fileName, raw label…
+    dated: str = "acquired"      # acquired | identified (product coverage) | reconstructed (V19 backfill)
+    ledgered: bool = True        # False: pre-ledger ingest, copies counted in a reconstructed bucket
+    copies_in: int = 0
+    copies_out: int = 0
+    held: int = 0                # copies this event still accounts for (sum of positive balances)
+    printings: int = 0           # printings with a positive balance
+    value_usd: float = 0.0       # held copies at today's local prices
+    lines: int = 0               # checklist rows / deck-move lines touched (from the ingest row)
+    product: str | None = None   # MTGJSON fileName
+    set_code: str | None = None
+    deck_slug: str | None = None
+
+
+@dataclass
+class HistoryLine:
+    scryfall_id: str
+    finish: str
+    copies_in: int
+    copies_out: int
+    held: int
+    unit_usd: float | None
+
+
+@dataclass
+class History:
+    entries: list[HistoryEntry]
+    prices_as_of: str | None = None
+    stale_sets: list[str] = field(default_factory=list)
+
+
+def _unit_usd(p: dict | None, finish: str) -> float | None:
+    if not p:
+        return None
+    v = p.get("usd_foil") if finish == "foil" else p.get("usd")
+    try:
+        return float(v) if v not in (None, "") else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _set_label(code: str, names: dict[str, str]) -> str:
+    return names.get(code.lower()) or code.upper()
+
+
+def _describe(e, products: dict[str, tuple[str, str]], deck_names: dict[str, str],
+              product_slugs: dict[str, str], set_names: dict[str, str]) -> HistoryEntry:
+    iid, at, method, label, path, status, rows_added, rows_updated = e
+    label = label or ""
+    base = os.path.basename(path) if path and "/" in path else None
+    h = HistoryEntry(ingest_id=iid, at=at, method=method, kind="singles", title="", lines=(rows_added or 0) + (rows_updated or 0))
+    if status == "backfill":
+        h.dated = "reconstructed"
+    if method in ("deck-assign", "deck-unassign"):
+        slug = label.split(":", 1)[1] if ":" in label else (path or "").removeprefix("deck:")
+        h.kind, h.deck_slug = "move", slug or None
+        name = deck_names.get(slug, slug or "a deck")
+        h.title = f"Built {name}" if method == "deck-assign" else f"Broke down {name}"
+        return h
+    src = _classify(method, label, path, products)
+    if src.kind == "unknown":
+        h.kind, h.title = "unknown", "Provenance unknown"
+        h.detail = _UNKNOWN_DETAIL.get(label, label or None)
+        return h
+    if src.key.startswith("product:"):
+        fn = src.key.removeprefix("product:")
+        h.kind, h.title, h.product, h.set_code = src.kind, src.label, fn, src.set_code
+        h.detail = fn
+        h.deck_slug = product_slugs.get(fn) if src.kind == "deck" else None
+        if label.startswith("trueup:"):
+            h.dated = "identified"
+        return h
+    if label == "backfill:checklist":
+        h.kind, h.title = "checklist", "Checklists before the ledger"
+        h.detail = "Reconstructed from archived checklists"
+        return h
+    if method in ("checklist", "precon"):     # checklist ingests (incl. pre-ledger jumpstart/precon sheets)
+        h.kind = "checklist"
+        kind, _, code = label.partition(":")
+        if kind == "set" and code:
+            h.title, h.set_code = f"Checklist · {_set_label(code, set_names)}", code.lower()
+        elif kind == "jumpstart" and code:
+            h.title, h.set_code = f"Jumpstart packs · {_set_label(code, set_names)}", code.lower()
+        elif kind == "precon":
+            h.title = "Precon checklist"
+        else:
+            h.title = "Checklist"
+        h.detail = base or path or (label or None)
+        return h
+    if label.startswith("web:"):
+        source, _, rest = label.removeprefix("web:").partition(" · ")
+        h.title, h.detail = _WEB_TITLES.get(source, "Added cards"), rest or None
+        return h
+    h.title = _SINGLES_TITLES.get(method, "Added cards")
+    h.detail = label or None
+    return h
+
+
+def _balances(conn, ingest_id: int | None = None):
+    """``(ingest_id, sid, finish, in, out, balance)`` per event and printing-finish."""
+    where, args = ("WHERE ingest_id = ?", (ingest_id,)) if ingest_id is not None else ("", ())
+    return conn.execute(
+        f"""
+        SELECT ingest_id, scryfall_id, finish,
+               SUM(CASE WHEN delta > 0 THEN delta ELSE 0 END),
+               SUM(CASE WHEN delta < 0 THEN -delta ELSE 0 END),
+               SUM(delta)
+        FROM inventory_events {where}
+        GROUP BY ingest_id, scryfall_id, finish
+        """, args,
+    ).fetchall()
+
+
+def _priced(conn, sids) -> tuple[dict[str, dict], list[str]]:
+    from . import sets as sets_mod
+    stale: list[str] = []
+    return sets_mod.priced_map(sids, conn=conn, warn=stale.extend), stale
+
+
+def _event_rows(conn, ingest_id: int | None = None):
+    where, args = ("AND ingest_id = ?", (ingest_id,)) if ingest_id is not None else ("", ())
+    return conn.execute(
+        f"SELECT ingest_id, at, method, label, source_path, status, rows_added, rows_updated "
+        f"FROM ingest_events WHERE status <> 'failed' {where} ORDER BY at DESC, ingest_id DESC", args,
+    ).fetchall()
+
+
+def _context(conn):
+    from .addcards import _set_names
+    products = _products(conn)
+    deck_names = {s: n for s, n in conn.execute("SELECT slug, name FROM decks")}
+    product_slugs = {
+        fn: slug for fn, slug in conn.execute(
+            "SELECT source_precon_file_name, MIN(slug) FROM decks "
+            "WHERE source_precon_file_name IS NOT NULL AND kind = 'deck' GROUP BY source_precon_file_name")
+    }
+    return products, deck_names, product_slugs, _set_names()
+
+
+def _fill(h: HistoryEntry, rows, prices: dict[str, dict]) -> None:
+    h.ledgered = bool(rows) or h.kind == "move"
+    for _iid, sid, fin, cin, cout, bal in rows:
+        h.copies_in += cin
+        h.copies_out += cout
+        if bal > 0:
+            h.held += bal
+            h.printings += 1
+            h.value_usd += bal * (_unit_usd(prices.get(sid), fin) or 0.0)
+    h.value_usd = round(h.value_usd, 2)
+
+
+def _as_of(prices: dict[str, dict]) -> str | None:
+    dates = [p.get("prices_updated_at") for p in prices.values() if p.get("prices_updated_at")]
+    return max(dates)[:10] if dates else None
+
+
+def history(*, conn=None) -> History:
+    """Every (non-failed) ingest event, newest first, with copies in/out, the copies
+    it still accounts for and their value at local prices (never a network fetch
+    for prices — stale sets are reported, not refreshed)."""
+    def _q(c) -> History:
+        ctx = _context(c)
+        by_event: dict[int, list] = {}
+        for row in _balances(c):
+            by_event.setdefault(row[0], []).append(row)
+        prices, stale = _priced(c, {r[1] for rows in by_event.values() for r in rows if r[5] > 0})
+        entries = []
+        for e in _event_rows(c):
+            h = _describe(e, *ctx)
+            _fill(h, by_event.get(h.ingest_id, []), prices)
+            entries.append(h)
+        return History(entries, _as_of(prices), sorted(set(stale)))
+
+    if conn is not None:
+        return _q(conn)
+    with db.connect() as c:
+        return _q(c)
+
+
+def history_event(ingest_id: int) -> tuple[HistoryEntry, list[HistoryLine]]:
+    """One entry plus its cards: every printing-finish the event moved, with copies
+    in / out / still held and today's unit price; most valuable held first.
+    Raises ``LookupError`` for an unknown (or failed) ingest."""
+    with db.connect() as c:
+        rows = _event_rows(c, ingest_id)
+        if not rows:
+            raise LookupError(f"no ingest event {ingest_id}")
+        bal = _balances(c, ingest_id)
+        prices, _ = _priced(c, {r[1] for r in bal})
+        h = _describe(rows[0], *_context(c))
+        _fill(h, bal, prices)
+    lines = [HistoryLine(sid, fin, cin, cout, b, _unit_usd(prices.get(sid), fin)) for _i, sid, fin, cin, cout, b in bal]
+    lines.sort(key=lambda ln: (-(max(ln.held, 0) * (ln.unit_usd or 0)), -ln.held, ln.scryfall_id))
+    return h, lines

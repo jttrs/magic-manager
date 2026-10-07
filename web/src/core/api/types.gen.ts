@@ -1685,6 +1685,160 @@ export type HttpValidationError = {
 };
 
 /**
+ * HistoryEntryOut
+ */
+export type HistoryEntryOut = {
+    /**
+     * Ingest Id
+     */
+    ingest_id: number;
+    /**
+     * At
+     *
+     * ISO timestamp of the ingest.
+     */
+    at: string;
+    /**
+     * Method
+     */
+    method: string;
+    /**
+     * Kind
+     *
+     * deck = playable product; pool = card pool (land pack, scene box, Secret Lair…); singles = cards added individually; checklist = a bulk checklist ingest (source product not recorded); unknown = reconstructed bucket with no known source; move = cards pledged to / released from a deck.
+     */
+    kind: 'deck' | 'pool' | 'singles' | 'checklist' | 'unknown' | 'move';
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Detail
+     */
+    detail?: string | null;
+    /**
+     * Dated
+     *
+     * acquired = when you added it; identified = when Find products attributed loose cards to it; reconstructed = the V19 backfill.
+     */
+    dated: 'acquired' | 'identified' | 'reconstructed';
+    /**
+     * Ledgered
+     *
+     * False for ingests before the ledger existed: their copies are counted in 'Checklists before the ledger' / the unknown buckets.
+     */
+    ledgered: boolean;
+    /**
+     * Copies In
+     */
+    copies_in: number;
+    /**
+     * Copies Out
+     *
+     * Copies later removed or re-attributed to an identified product.
+     */
+    copies_out: number;
+    /**
+     * Held
+     *
+     * Copies this entry still accounts for.
+     */
+    held: number;
+    /**
+     * Printings
+     */
+    printings: number;
+    /**
+     * Value Usd
+     *
+     * Held copies at today's prices.
+     */
+    value_usd: number;
+    /**
+     * Lines
+     *
+     * Rows the ingest touched (checklist rows, deck-move lines).
+     */
+    lines: number;
+    /**
+     * Product
+     *
+     * MTGJSON fileName for product entries.
+     */
+    product?: string | null;
+    /**
+     * Set Code
+     */
+    set_code?: string | null;
+    /**
+     * Deck Slug
+     *
+     * Deck to open: the moved deck, or the playable product's deck row.
+     */
+    deck_slug?: string | null;
+};
+
+/**
+ * HistoryEventOut
+ */
+export type HistoryEventOut = {
+    entry: HistoryEntryOut;
+    /**
+     * Lines
+     */
+    lines: Array<HistoryLineOut>;
+};
+
+/**
+ * HistoryLineOut
+ */
+export type HistoryLineOut = {
+    printing: PrintingOut;
+    /**
+     * Finish
+     */
+    finish: 'nonfoil' | 'foil';
+    /**
+     * Copies In
+     */
+    copies_in: number;
+    /**
+     * Copies Out
+     */
+    copies_out: number;
+    /**
+     * Held
+     */
+    held: number;
+    /**
+     * Unit Usd
+     */
+    unit_usd: number | null;
+};
+
+/**
+ * HistoryOut
+ */
+export type HistoryOut = {
+    /**
+     * Entries
+     */
+    entries: Array<HistoryEntryOut>;
+    /**
+     * Prices As Of
+     *
+     * Newest local price fetch date (YYYY-MM-DD).
+     */
+    prices_as_of: string | null;
+    /**
+     * Stale Sets
+     *
+     * Set codes whose local prices are older than a week (not refreshed).
+     */
+    stale_sets: Array<string>;
+};
+
+/**
  * HoldingsOut
  */
 export type HoldingsOut = {
@@ -4511,6 +4665,52 @@ export type CardHoldingsResponses = {
 };
 
 export type CardHoldingsResponse = CardHoldingsResponses[keyof CardHoldingsResponses];
+
+export type HistoryListData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/history';
+};
+
+export type HistoryListResponses = {
+    /**
+     * Successful Response
+     */
+    200: HistoryOut;
+};
+
+export type HistoryListResponse = HistoryListResponses[keyof HistoryListResponses];
+
+export type HistoryEventData = {
+    body?: never;
+    path: {
+        /**
+         * Ingest Id
+         */
+        ingest_id: number;
+    };
+    query?: never;
+    url: '/api/history/{ingest_id}';
+};
+
+export type HistoryEventErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type HistoryEventError = HistoryEventErrors[keyof HistoryEventErrors];
+
+export type HistoryEventResponses = {
+    /**
+     * Successful Response
+     */
+    200: HistoryEventOut;
+};
+
+export type HistoryEventResponse = HistoryEventResponses[keyof HistoryEventResponses];
 
 export type IngestSearchData = {
     body?: never;

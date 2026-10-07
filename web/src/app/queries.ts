@@ -1,7 +1,7 @@
 // Server state via TanStack Query over the generated, typed API client.
 import { keepPreviousData, queryOptions } from '@tanstack/react-query';
 import type { DraftCardIn } from '../core/api';
-import { dealsTabs, dealsWatched, marketProductCost, marketSecretLair, undoInfo, cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs } from '../core/api';
+import { dealsTabs, dealsWatched, marketProductCost, marketSecretLair, undoInfo, cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs , historyList, historyEvent } from '../core/api';
 
 class ApiError extends Error {}
 
@@ -216,4 +216,19 @@ export const productCostQuery = (kind: 'sealed' | 'sld', set: string, name: stri
     queryFn: async ({ signal }) => unwrap(await marketProductCost({ query: { kind, set, name, finish }, signal })),
     staleTime: 30 * 60_000,
     retry: 1,
+  });
+
+export const historyQuery = () =>
+  queryOptions({
+    queryKey: ['history'],
+    queryFn: async ({ signal }) => unwrap(await historyList({ signal })),
+    staleTime: 30_000,
+  });
+
+export const historyEventQuery = (ingestId?: number) =>
+  queryOptions({
+    queryKey: ['history', ingestId],
+    queryFn: async ({ signal }) => unwrap(await historyEvent({ path: { ingest_id: ingestId! }, signal })),
+    enabled: ingestId != null,
+    staleTime: 30_000,
   });
