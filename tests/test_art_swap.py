@@ -99,6 +99,27 @@ def test_lookup_scryfall_adds_missing_printings(art, make_card, monkeypatch):
     assert art_swap.lookup_scryfall("cat", [A1]) == {"searched": 1, "added": 0}
 
 
+def test_lookup_scryfall_reraises_real_failures(art, monkeypatch):
+    def boom(q, **_):
+        raise scryfall.ScryfallError("scryfall.sh search exited 7: network down")
+        yield  # pragma: no cover
+
+    monkeypatch.setattr(scryfall, "search", boom)
+    with pytest.raises(scryfall.ScryfallError):
+        art_swap.lookup_scryfall("cat", [A1])
+
+
+def test_free_by_finish_ignores_other_finish_pledges(art):
+    inventory.inventory_add(A2, "nonfoil", 1)
+    inventory.inventory_add(A2, "foil", 1)
+    decks.deck_create("other", "Other")
+    decks.deck_add_card("other", A2, "main", "foil", 1)
+    decks.deck_assign_batch("other", [(A2, "foil", 1)])
+    res = art_swap.swaps("cat", [A1])
+    assert res["free_by_finish"][A2] == {"nonfoil": 1, "foil": 0}
+    assert A1 not in res["free_by_finish"]
+
+
 def test_api_routes(art):
     from fastapi.testclient import TestClient
 

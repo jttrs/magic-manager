@@ -15,8 +15,9 @@ from __future__ import annotations
 import itertools
 import math
 
-from . import addcards, db, deck_edit, scryfall, scryfall_art
+from . import addcards, db, deck_edit, inventory, scryfall, scryfall_art
 
+_FINISHES = ("nonfoil", "foil")
 _ORACLE_CHUNK = 20   # oracleid terms per Scryfall query (keeps the URL short)
 
 
@@ -60,7 +61,9 @@ def swaps(tag_ref: str, scryfall_ids) -> dict:
     """For each printing in a decklist: is it already on theme, can it swap to
     an on-theme printing of the same card, or is there none locally? Returns
     ``{tag: {id, label}, rows: [{scryfall_id, oracle_id, status, pick,
-    candidates}], printings: {sid: PrintingOut-dict}, matched: {sid: [labels]}}``
+    candidates}], printings: {sid: PrintingOut-dict}, matched: {sid: [labels]},
+    free_by_finish: {sid: {nonfoil, foil}}}`` (free copies per finish for printings
+    you own; the printing's ``free`` is the finish-agnostic total)
     where ``status`` ∈ on_theme | swap | none and ``candidates`` are ranked
     (:func:`rank`). Raises ``LookupError`` for an unknown tag."""
     sids = list(dict.fromkeys(s for s in scryfall_ids if s))
@@ -90,14 +93,18 @@ def swaps(tag_ref: str, scryfall_ids) -> dict:
             status, pick = "none", None
         rows.append({"scryfall_id": sid, "oracle_id": p.get("oracle_id"), "status": status,
                      "pick": pick, "candidates": [c["scryfall_id"] for c in ranked]})
+    with db.connect() as conn:
+        free_by_finish = {
+            sid: {fin: inventory.free_quantity(sid, fin, conn=conn) for fin in _FINISHES}
+            for sid, p in printings.items() if p.get("owned")}
     return {"tag": {"id": tag[0], "label": tag[1]}, "rows": rows,
-            "printings": printings, "matched": matched}
+            "printings": printings, "matched": matched, "free_by_finish": free_by_finish}
 
 
 def lookup_scryfall(tag_ref: str, scryfall_ids) -> dict:
     """Ask Scryfall for on-theme printings of the cards behind these printings
     (``art:<tag>``) and add any missing from the local catalog. Network; returns
-    ``{searched, added}`` (searched = cards, added = printings new to the catalog)."""
+    ``{searched, added}``; raises ``scryfall.ScryfallError`` on a real lookup failure (searched = cards, added = printings new to the catalog)."""
     tag = scryfall_art.resolve_tag(tag_ref)
     if tag is None:
         raise LookupError(f"no art tag matches {tag_ref!r}")
@@ -109,8 +116,10 @@ def lookup_scryfall(tag_ref: str, scryfall_ids) -> dict:
         part = " or ".join(f"oracleid:{o}" for o in oids[i:i + _ORACLE_CHUNK])
         try:
             found += itertools.islice(scryfall.search(f"art:{slug} game:paper unique:prints ({part})"), 500)
-        except scryfall.ScryfallError:
-            continue   # Scryfall answers "no cards" with an error object
+        except scryfall.ScryfallError as e:
+            if "HTTP 404" in str(e) or "didn't match any cards" in str(e):
+                continue   # Scryfall answers "no cards" with an error object
+            raise
     known = set(addcards.printings_for_ids(f["id"] for f in found if f.get("id")))
     new = [f for f in found if f.get("id") and f["id"] not in known]
     addcards._upsert(new)

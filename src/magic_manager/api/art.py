@@ -49,6 +49,9 @@ class ArtSwapsOut(BaseModel):
     rows: list[ArtSwapRowOut]
     printings: dict[str, PrintingOut]
     matched: dict[str, list[str]] = Field(description="Per on-theme printing, the tags (incl. child tags) that matched.")
+    free_by_finish: dict[str, dict[str, int]] = Field(
+        default_factory=dict,
+        description="Per printing you own, free copies per finish (`nonfoil`/`foil`); `printings[sid].free` is the finish-agnostic total.")
 
 
 class ArtLookupOut(BaseModel):

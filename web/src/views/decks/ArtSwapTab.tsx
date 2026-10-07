@@ -8,7 +8,7 @@ import { Chevron } from '../../components/Chevron';
 import { ProgressRule } from '../../components/ProgressRule';
 import { EmptyNote } from '../../components/States';
 import { artLookup, type ArtTagRefOut, type PrintingOut } from '../../core/api';
-import { artView, choiceNote, draftPrintingIds, isFree, swapAllFree, type ArtRow } from '../../core/artSwap';
+import { artView, choiceFor, choiceNote, draftPrintingIds, swapAllFree, wasPrinting, type ArtRow } from '../../core/artSwap';
 import { restorePrinting, swapPrinting, type Draft } from '../../core/deckDraft';
 import { fmtCount, fmtInt } from '../../core/format';
 
@@ -28,6 +28,11 @@ export function ArtSwapTab({ draft, onEdit, onInspect, tag, onTag }: { draft: Dr
   // A quick pick names the tag by slug; the answer carries its id.
   const fresh = q.data && tag && (q.data.tag.id === tag.id || q.data.tag.label === tag.label) ? q.data : undefined;
   const view = useMemo(() => artView(draft, fresh), [draft, fresh]);
+  // Swap the quick pick's slug for the server's tag so the answer keeps matching.
+  const answered = q.data?.tag;
+  useEffect(() => {
+    if (answered && fresh && tag && (answered.id !== tag.id || answered.label !== tag.label)) onTag({ id: answered.id, label: answered.label });
+  }, [answered, fresh, tag, onTag]);
 
   if (tagsQ.data && !tagsQ.data.synced) return <SyncTags />;
 
@@ -166,7 +171,12 @@ function ArtLine({ r, onEdit, onInspect }: { r: ArtRow; onEdit: Edit; onInspect:
   const others = r.candidates.filter((c) => c.scryfall_id !== target?.scryfall_id);
   const listId = useId();
   if (!target) return null;
-  const swapTo = (p: PrintingOut) => onEdit((d) => swapPrinting(d, r.row.key, p));
+  const swapTo = (p: PrintingOut) => onEdit((d) => swapPrinting(d, r.row.key, p, choiceFor(r, p).finish));
+  const note = (p: PrintingOut) => {
+    const c = choiceFor(r, p);
+    return { text: choiceNote(p, c.covered ? c.free : 0), free: c.covered };
+  };
+  const was = wasPrinting(r.row);
   return (
     <li className="ruled py-1.5">
       <div className="flex items-center gap-2">
@@ -182,8 +192,8 @@ function ArtLine({ r, onEdit, onInspect }: { r: ArtRow; onEdit: Edit; onInspect:
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="truncate text-md voice-semi font-medium text-ink">{cur.name}{r.row.count > 1 && <span className="tabular text-ink-muted"> ×{r.row.count}</span>}</span>
           <span className="truncate text-xs tabular text-ink-muted">
-            {where(target)} · <span className={isFree(target) ? 'text-accent-ink' : ''}>{choiceNote(target)}</span>
-            {r.status === 'swapped' && <> · <span className="voice-semi text-accent-ink">was {where(r.row.origin!.printing)}</span></>}
+            {where(target)} · <span className={note(target).free ? 'text-accent-ink' : ''}>{note(target).text}</span>
+            {r.status === 'swapped' && was && <> · <span className="voice-semi text-accent-ink">was {where(was)}</span></>}
           </span>
           {others.length > 0 && (
             <button type="button" aria-expanded={open} aria-controls={listId} onClick={() => setOpen((o) => !o)} className="-ml-1 inline-flex cursor-pointer items-center gap-0.5 self-start rounded-xs px-1 text-xs voice-semi text-ink-muted hover:bg-paper-sunk hover:text-ink">
@@ -202,10 +212,10 @@ function ArtLine({ r, onEdit, onInspect }: { r: ArtRow; onEdit: Edit; onInspect:
         <ul id={listId} aria-label={`Other ${cur.name} printings with this art`} className="mt-1.5 flex gap-2 overflow-x-auto pb-1 pl-[calc(2.75rem+1.375rem)]">
           {others.map((p) => (
             <li key={p.scryfall_id} className="shrink-0">
-              <button type="button" onClick={() => { swapTo(p); setOpen(false); }} aria-label={`Use ${where(p)}, ${choiceNote(p)}`} className="flex w-24 cursor-pointer flex-col gap-0.5 rounded-sm p-1 text-left hover:bg-paper-sunk focus-visible:bg-paper-sunk">
+              <button type="button" onClick={() => { swapTo(p); setOpen(false); }} aria-label={`Use ${where(p)}, ${note(p).text}`} className="flex w-24 cursor-pointer flex-col gap-0.5 rounded-sm p-1 text-left hover:bg-paper-sunk focus-visible:bg-paper-sunk">
                 {p.image_uri ? <img src={crop(p.image_uri)} alt="" loading="lazy" decoding="async" className="h-16 w-full rounded-xs object-cover" /> : <span aria-hidden="true" className="h-16 w-full rounded-xs border border-rule bg-paper-sunk" />}
                 <span className="truncate text-xs tabular text-ink">{where(p)}</span>
-                <span className={`truncate text-xs tabular ${isFree(p) ? 'text-accent-ink' : 'text-ink-muted'}`}>{choiceNote(p)}</span>
+                <span className={`truncate text-xs tabular ${note(p).free ? 'text-accent-ink' : 'text-ink-muted'}`}>{note(p).text}</span>
               </button>
             </li>
           ))}
