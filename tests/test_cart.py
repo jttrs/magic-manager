@@ -23,6 +23,16 @@ def cards(tmp_db, seed_cards, make_card):
         conn.execute("INSERT INTO inventory (scryfall_id,finish,quantity,acquired_at) VALUES (?, 'nonfoil', 1, '2025-01-01')", (B,))
 
 
+def _copy_real_config(tmp_path):
+    """Point-at-tmp tests replace only features.toml; copy the rest so a route that
+    reads another config file works whether or not an earlier test cached it."""
+    import shutil
+    from pathlib import Path
+    for f in (Path(__file__).resolve().parents[1] / "config").glob("*.toml"):
+        if f.name != "features.toml" and not (tmp_path / f.name).exists():
+            shutil.copy(f, tmp_path / f.name)
+
+
 def test_map_cart_local_first_then_catalog(cards, monkeypatch):
     called = []
     lines = cart.map_cart([
@@ -74,6 +84,7 @@ def test_parse_rejects_non_carts():
 def client(cards, tmp_path, monkeypatch):
     monkeypatch.setenv("MAGIC_MANAGER_CONFIG_DIR", str(tmp_path))
     (tmp_path / "features.toml").write_text("[features]\ncart_check = false\n")
+    _copy_real_config(tmp_path)  # every other config file the routes read
     monkeypatch.delenv("MM_FEATURES", raising=False)
     monkeypatch.setattr(cart, "infer_set_anchors", lambda mapped: [])
     config._cached_toml.cache_clear()

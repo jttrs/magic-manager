@@ -28,6 +28,16 @@ EXT = ROOT / "extension"
 CODE = re.compile(r"""['"]((?:companion|request|permission|cart|tabs|moxfield|deck)\.(?!com\b|net\b|app\b)[a-z_]+)['"]""")
 
 
+def _copy_real_config(tmp_path):
+    """Point-at-tmp tests replace only features.toml; copy the rest so a route that
+    reads another config file works whether or not an earlier test cached it."""
+    import shutil
+    from pathlib import Path
+    for f in (Path(__file__).resolve().parents[1] / "config").glob("*.toml"):
+        if f.name != "features.toml" and not (tmp_path / f.name).exists():
+            shutil.copy(f, tmp_path / f.name)
+
+
 def _golden(name: str) -> dict:
     return json.loads((FIX / name).read_text())
 
@@ -228,6 +238,7 @@ def test_read_prices_uses_the_companion_page_instead_of_this_mac(monkeypatch):
 def client(tmp_db, tmp_path, monkeypatch):
     monkeypatch.setenv("MAGIC_MANAGER_CONFIG_DIR", str(tmp_path))
     (tmp_path / "features.toml").write_text("[features]\ncompanion = false\ncart_check = false\ndeals = false\n")
+    _copy_real_config(tmp_path)  # every other config file the routes read
     monkeypatch.delenv("MM_FEATURES", raising=False)
     monkeypatch.setattr(cart, "infer_set_anchors", lambda mapped: [])
     config._cached_toml.cache_clear()
