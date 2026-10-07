@@ -714,7 +714,6 @@ def ingest_inventory_from_xlsx(path: Path, *, mode: str = "replace",
     zeroed = 0
     extras: list[dict] = []
     seen_keys: set[tuple[str, str]] = set()
-    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
     with db.connect() as conn:
         # One checklist event spans every per-cell delta below, in this same
@@ -763,36 +762,13 @@ def ingest_inventory_from_xlsx(path: Path, *, mode: str = "replace",
                     continue
                 new_qty = current_qty + entry.qty
 
-            if new_qty == current_qty:
-                continue
-            if new_qty == 0:
-                if current_qty > 0:
-                    conn.execute(
-                        "DELETE FROM inventory WHERE scryfall_id = ? AND finish = ?",
-                        (scry_id, finish),
-                    )
-                    ingest_mod.record_delta(conn, ingest_id, scry_id, finish,
-                                            -current_qty, at=now)
-                    zeroed += 1
-            elif row:
-                conn.execute(
-                    "UPDATE inventory SET quantity = ? WHERE scryfall_id = ? AND finish = ?",
-                    (new_qty, scry_id, finish),
-                )
-                ingest_mod.record_delta(conn, ingest_id, scry_id, finish,
-                                        new_qty - current_qty, at=now)
-                updated += 1
-            else:
-                conn.execute(
-                    """
-                    INSERT INTO inventory (scryfall_id, finish, quantity, acquired_at)
-                    VALUES (?, ?, ?, ?)
-                    """,
-                    (scry_id, finish, new_qty, now),
-                )
-                ingest_mod.record_delta(conn, ingest_id, scry_id, finish,
-                                        new_qty, at=now)
+            outcome = _write_count(conn, ingest_id, scry_id, finish, new_qty)
+            if outcome == "added":
                 added += 1
+            elif outcome == "updated":
+                updated += 1
+            elif outcome == "zeroed":
+                zeroed += 1
 
         # Replace mode, opt-in only: zero out in-partition inventory rows not
         # seen in the file (full-audit "file is authoritative"). Off by default
@@ -815,13 +791,8 @@ def ingest_inventory_from_xlsx(path: Path, *, mode: str = "replace",
                 key = (r["scryfall_id"], r["finish"])
                 if key in seen_keys:
                     continue
-                conn.execute(
-                    "DELETE FROM inventory WHERE scryfall_id = ? AND finish = ?",
-                    (r["scryfall_id"], r["finish"]),
-                )
-                ingest_mod.record_delta(conn, ingest_id, r["scryfall_id"],
-                                        r["finish"], -r["quantity"], at=now)
-                zeroed += 1
+                if _write_count(conn, ingest_id, r["scryfall_id"], r["finish"], 0) == "zeroed":
+                    zeroed += 1
 
         if added + updated + zeroed == 0:
             # No-op ingest (empty/unresolved file, or a modify file whose cells
@@ -850,6 +821,126 @@ def ingest_inventory_from_xlsx(path: Path, *, mode: str = "replace",
         "not_found": result.not_found,
         "extras": extras,
     }
+
+
+def _write_count(conn, ingest_id: int, scryfall_id: str, finish: str, qty: int) -> str | None:
+    """SET one ``(scryfall_id, finish)`` to ``qty`` under ``ingest_id`` — the
+    shared per-row write of every checklist path (XLSX ingest + web checklist).
+    Delegates to :func:`inventory.inventory_set` (inventory row + signed ledger
+    delta in the caller's transaction). Returns ``'added'`` / ``'updated'`` /
+    ``'zeroed'``, or ``None`` when nothing changed."""
+    from . import inventory
+    r = inventory.inventory_set(scryfall_id, finish, qty, conn=conn, ingest_id=ingest_id)
+    if r["action"] == "inserted":
+        return "added"
+    if r["action"] == "deleted":
+        return "zeroed"
+    if r["action"] == "updated" and r["old_qty"] != r["new_qty"]:
+        return "updated"
+    return None
+
+
+@dataclass(frozen=True)
+class CountChange:
+    """One edited checklist cell: set ``(scryfall_id, finish)`` to ``qty``.
+    ``expected`` is the count the editor started from; when given, the write is
+    refused if the collection moved underneath (another write since loading)."""
+    scryfall_id: str
+    finish: str
+    qty: int
+    expected: int | None = None
+
+
+class StaleCounts(ValueError):
+    """The collection changed since the checklist was loaded (``expected`` ≠ current)."""
+
+
+class BelowPledged(ValueError):
+    """A count would drop below the copies pledged to built decks."""
+
+
+def apply_counts(changes: Iterable[CountChange], *, label: str, conn=None) -> dict:
+    """Apply checklist counts as ONE ``checklist`` ingest event (modify-mode
+    semantics): each change SETS its row to ``qty``; rows not listed are never
+    touched. All-or-nothing — every change is validated (known card, valid
+    finish, non-negative qty, no duplicates, ``expected`` still current, not
+    below pledged copies) before anything is written.
+
+    Returns ``{"ingest_id", "added", "updated", "zeroed", "copies_added",
+    "copies_removed", "rows": [{scryfall_id, finish, old_qty, new_qty}]}``;
+    ``ingest_id`` is None when nothing changed (no event is left behind).
+    """
+    from . import ingest as ingest_mod
+
+    items = list(changes)
+    seen: set[tuple[str, str]] = set()
+    for ch in items:
+        if ch.finish not in ("nonfoil", "foil"):
+            raise ValueError(f"finish must be nonfoil or foil, got {ch.finish!r}")
+        if not isinstance(ch.qty, int) or ch.qty < 0:
+            raise ValueError(f"count must be a whole number ≥ 0, got {ch.qty!r}")
+        key = (ch.scryfall_id, ch.finish)
+        if key in seen:
+            raise ValueError(f"{ch.scryfall_id} ({ch.finish}) is listed twice")
+        seen.add(key)
+
+    with db.transaction(conn) as c:
+        ids = list({ch.scryfall_id for ch in items})
+        names: dict[str, str] = {}
+        owned: dict[tuple[str, str], int] = {}
+        pledged: dict[tuple[str, str], int] = {}
+        for i in range(0, len(ids), 300):
+            part = ids[i:i + 300]
+            ph = ",".join("?" * len(part))
+            names.update(c.execute(
+                f"SELECT scryfall_id, name FROM cards WHERE scryfall_id IN ({ph})", part).fetchall())
+            for sid, fin, q in c.execute(
+                    f"SELECT scryfall_id, finish, quantity FROM inventory WHERE scryfall_id IN ({ph})",
+                    part).fetchall():
+                owned[(sid, fin)] = q
+            for sid, fin, q in c.execute(
+                    f"SELECT scryfall_id, finish, SUM(count) FROM deck_assignments "
+                    f"WHERE scryfall_id IN ({ph}) GROUP BY scryfall_id, finish", part).fetchall():
+                pledged[(sid, fin)] = q or 0
+
+        unknown = [ch.scryfall_id for ch in items if ch.scryfall_id not in names]
+        if unknown:
+            raise LookupError(f"unknown printing(s): {', '.join(unknown[:5])}")
+        stale = [ch for ch in items
+                 if ch.expected is not None and owned.get((ch.scryfall_id, ch.finish), 0) != ch.expected]
+        if stale:
+            raise StaleCounts(
+                f"{len(stale)} count(s) changed since this checklist was loaded "
+                f"(e.g. {names[stale[0].scryfall_id]}) — reload and re-enter them")
+        low = [ch for ch in items if ch.qty < pledged.get((ch.scryfall_id, ch.finish), 0)]
+        if low:
+            ch = low[0]
+            raise BelowPledged(
+                f"{names[ch.scryfall_id]} ({ch.finish}) has "
+                f"{pledged[(ch.scryfall_id, ch.finish)]} copies in built decks — "
+                f"break those decks down before counting fewer")
+
+        tally = {"added": 0, "updated": 0, "zeroed": 0}
+        rows: list[dict] = []
+        plus = minus = 0
+        with ingest_mod.open_ingest_event("checklist", label=label, mode="replace", conn=c) as rec:
+            for ch in items:
+                old = owned.get((ch.scryfall_id, ch.finish), 0)
+                outcome = _write_count(c, rec.ingest_id, ch.scryfall_id, ch.finish, ch.qty)
+                if outcome is None:
+                    continue
+                tally[outcome] += 1
+                plus += max(0, ch.qty - old)
+                minus += max(0, old - ch.qty)
+                rows.append({"scryfall_id": ch.scryfall_id, "finish": ch.finish,
+                             "old_qty": old, "new_qty": ch.qty})
+            rec.rows_added, rec.rows_updated, rec.rows_zeroed = (
+                tally["added"], tally["updated"], tally["zeroed"])
+            ingest_id = rec.ingest_id
+        if not rows:
+            ingest_id = None
+    return {"ingest_id": ingest_id, **tally, "copies_added": plus,
+            "copies_removed": minus, "rows": rows}
 
 
 @dataclass

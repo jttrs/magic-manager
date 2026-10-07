@@ -51,6 +51,8 @@ export const collectionSearch = z.object({
   src: list(z.string()).catch([]).default([]),
   sort: z.string().catch('set,cn').default('set,cn'),
   view,
+  /** Checklist mode: count owned copies inline (views/collection/Checklist*). */
+  count: z.boolean().catch(false).default(false),
 });
 export type CollectionSearch = z.infer<typeof collectionSearch>;
 

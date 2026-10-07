@@ -11,7 +11,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from .. import collection_view, family_status, gallery, provenance, scryfall_tags
+from .. import collection_view, family_status, gallery, provenance, scryfall_tags, sets
 from .edhrec import FunctionRootOut, function_roots
 
 BuyTarget = Literal["manapool", "tcgplayer", "cardkingdom", "moxfield", "plain"]
@@ -106,6 +106,35 @@ class BuyListOut(BaseModel):
     lines: int
 
 
+class CountIn(BaseModel):
+    scryfall_id: str
+    finish: Literal["nonfoil", "foil"]
+    qty: int = Field(ge=0, le=9999)
+    expected: int | None = Field(None, ge=0, description="Count the editor started from; refused (409) if the collection moved since.")
+
+
+class ChecklistIn(BaseModel):
+    family: str = Field(min_length=1, description="Family label for the ingest event, e.g. 'Final Fantasy'.")
+    changes: list[CountIn] = Field(min_length=1, max_length=5000)
+
+
+class CountRowOut(BaseModel):
+    scryfall_id: str
+    finish: str
+    old_qty: int
+    new_qty: int
+
+
+class ChecklistOut(BaseModel):
+    ingest_id: int | None = Field(description="The checklist ingest event; null when nothing changed.")
+    added: int
+    updated: int
+    zeroed: int
+    copies_added: int
+    copies_removed: int
+    rows: list[CountRowOut]
+
+
 def families() -> list[FamilyOption]:
     """Families the collection touches (owned or registered), for the picker."""
     parents = family_status._owned_family_parents()
@@ -164,3 +193,12 @@ def family_view(codes: list[str]) -> CollectionOut:
 def buy_list(req: BuyListIn) -> BuyListOut:
     text = collection_view.buy_lines([(i.scryfall_id, i.finish, i.qty) for i in req.items], req.target)
     return BuyListOut(text=text, lines=len([ln for ln in text.splitlines() if ln.strip()]))
+
+
+def save_checklist(req: ChecklistIn) -> ChecklistOut:
+    """Edited checklist counts → ONE ``checklist`` ingest event (modify semantics)."""
+    res = sets.apply_counts(
+        [sets.CountChange(c.scryfall_id, c.finish, c.qty, c.expected) for c in req.changes],
+        label=f"web:checklist · {req.family}",
+    )
+    return ChecklistOut(**res)

@@ -1246,6 +1246,47 @@
         }
       }
     },
+    "/api/collection/checklist": {
+      "post": {
+        "tags": [
+          "collection"
+        ],
+        "summary": "Collection Checklist",
+        "operationId": "collection_checklist",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChecklistIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChecklistOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/decks": {
       "get": {
         "tags": [
@@ -2847,6 +2888,85 @@
         ],
         "title": "CheckOut"
       },
+      "ChecklistIn": {
+        "properties": {
+          "family": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Family",
+            "description": "Family label for the ingest event, e.g. 'Final Fantasy'."
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/CountIn"
+            },
+            "type": "array",
+            "maxItems": 5000,
+            "minItems": 1,
+            "title": "Changes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "family",
+          "changes"
+        ],
+        "title": "ChecklistIn"
+      },
+      "ChecklistOut": {
+        "properties": {
+          "ingest_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingest Id",
+            "description": "The checklist ingest event; null when nothing changed."
+          },
+          "added": {
+            "type": "integer",
+            "title": "Added"
+          },
+          "updated": {
+            "type": "integer",
+            "title": "Updated"
+          },
+          "zeroed": {
+            "type": "integer",
+            "title": "Zeroed"
+          },
+          "copies_added": {
+            "type": "integer",
+            "title": "Copies Added"
+          },
+          "copies_removed": {
+            "type": "integer",
+            "title": "Copies Removed"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/CountRowOut"
+            },
+            "type": "array",
+            "title": "Rows"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ingest_id",
+          "added",
+          "updated",
+          "zeroed",
+          "copies_added",
+          "copies_removed",
+          "rows"
+        ],
+        "title": "ChecklistOut"
+      },
       "CollectionCardOut": {
         "properties": {
           "scryfall_id": {
@@ -3735,6 +3855,76 @@
         },
         "type": "object",
         "title": "CopyIn"
+      },
+      "CountIn": {
+        "properties": {
+          "scryfall_id": {
+            "type": "string",
+            "title": "Scryfall Id"
+          },
+          "finish": {
+            "type": "string",
+            "enum": [
+              "nonfoil",
+              "foil"
+            ],
+            "title": "Finish"
+          },
+          "qty": {
+            "type": "integer",
+            "maximum": 9999.0,
+            "minimum": 0.0,
+            "title": "Qty"
+          },
+          "expected": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected",
+            "description": "Count the editor started from; refused (409) if the collection moved since."
+          }
+        },
+        "type": "object",
+        "required": [
+          "scryfall_id",
+          "finish",
+          "qty"
+        ],
+        "title": "CountIn"
+      },
+      "CountRowOut": {
+        "properties": {
+          "scryfall_id": {
+            "type": "string",
+            "title": "Scryfall Id"
+          },
+          "finish": {
+            "type": "string",
+            "title": "Finish"
+          },
+          "old_qty": {
+            "type": "integer",
+            "title": "Old Qty"
+          },
+          "new_qty": {
+            "type": "integer",
+            "title": "New Qty"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scryfall_id",
+          "finish",
+          "old_qty",
+          "new_qty"
+        ],
+        "title": "CountRowOut"
       },
       "DeckCardOut": {
         "properties": {
