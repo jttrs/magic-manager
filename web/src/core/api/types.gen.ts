@@ -510,6 +510,58 @@ export type CheckOut = {
 };
 
 /**
+ * ChecklistIn
+ */
+export type ChecklistIn = {
+    /**
+     * Family
+     *
+     * Family label for the ingest event, e.g. 'Final Fantasy'.
+     */
+    family: string;
+    /**
+     * Changes
+     */
+    changes: Array<CountIn>;
+};
+
+/**
+ * ChecklistOut
+ */
+export type ChecklistOut = {
+    /**
+     * Ingest Id
+     *
+     * The checklist ingest event; null when nothing changed.
+     */
+    ingest_id: number | null;
+    /**
+     * Added
+     */
+    added: number;
+    /**
+     * Updated
+     */
+    updated: number;
+    /**
+     * Zeroed
+     */
+    zeroed: number;
+    /**
+     * Copies Added
+     */
+    copies_added: number;
+    /**
+     * Copies Removed
+     */
+    copies_removed: number;
+    /**
+     * Rows
+     */
+    rows: Array<CountRowOut>;
+};
+
+/**
  * CollectionCardOut
  */
 export type CollectionCardOut = {
@@ -661,6 +713,26 @@ export type CollectionOut = {
      * Every source behind an owned printing in this view, most printings first.
      */
     sources?: Array<SourceOut>;
+};
+
+/**
+ * ColorOptionOut
+ */
+export type ColorOptionOut = {
+    /**
+     * Slug
+     */
+    slug: string;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Colors
+     *
+     * WUBRG identity letters ('' = colorless).
+     */
+    colors: string;
 };
 
 /**
@@ -1024,6 +1096,52 @@ export type CopyIn = {
 };
 
 /**
+ * CountIn
+ */
+export type CountIn = {
+    /**
+     * Scryfall Id
+     */
+    scryfall_id: string;
+    /**
+     * Finish
+     */
+    finish: 'nonfoil' | 'foil';
+    /**
+     * Qty
+     */
+    qty: number;
+    /**
+     * Expected
+     *
+     * Count the editor started from; refused (409) if the collection moved since.
+     */
+    expected?: number | null;
+};
+
+/**
+ * CountRowOut
+ */
+export type CountRowOut = {
+    /**
+     * Scryfall Id
+     */
+    scryfall_id: string;
+    /**
+     * Finish
+     */
+    finish: string;
+    /**
+     * Old Qty
+     */
+    old_qty: number;
+    /**
+     * New Qty
+     */
+    new_qty: number;
+};
+
+/**
  * DeckCardOut
  */
 export type DeckCardOut = {
@@ -1245,6 +1363,12 @@ export type DeckLineOut = {
      * The cheapest printing (this one when unpriced elsewhere).
      */
     floor_scryfall_id: string;
+    /**
+     * Bonus
+     *
+     * A Secret Lair drop's bonus card (shipped with the drop, not in its decklist).
+     */
+    bonus?: boolean;
 };
 
 /**
@@ -1712,6 +1836,160 @@ export type HttpValidationError = {
      * Detail
      */
     detail?: Array<ValidationError>;
+};
+
+/**
+ * HistoryEntryOut
+ */
+export type HistoryEntryOut = {
+    /**
+     * Ingest Id
+     */
+    ingest_id: number;
+    /**
+     * At
+     *
+     * ISO timestamp of the ingest.
+     */
+    at: string;
+    /**
+     * Method
+     */
+    method: string;
+    /**
+     * Kind
+     *
+     * deck = playable product; pool = card pool (land pack, scene box, Secret Lair…); singles = cards added individually; checklist = a bulk checklist ingest (source product not recorded); unknown = reconstructed bucket with no known source; move = cards pledged to / released from a deck.
+     */
+    kind: 'deck' | 'pool' | 'singles' | 'checklist' | 'unknown' | 'move';
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Detail
+     */
+    detail?: string | null;
+    /**
+     * Dated
+     *
+     * acquired = when you added it; identified = when Find products attributed loose cards to it; reconstructed = the V19 backfill.
+     */
+    dated: 'acquired' | 'identified' | 'reconstructed';
+    /**
+     * Ledgered
+     *
+     * False for ingests before the ledger existed: their copies are counted in 'Checklists before the ledger' / the unknown buckets.
+     */
+    ledgered: boolean;
+    /**
+     * Copies In
+     */
+    copies_in: number;
+    /**
+     * Copies Out
+     *
+     * Copies later removed or re-attributed to an identified product.
+     */
+    copies_out: number;
+    /**
+     * Held
+     *
+     * Copies this entry still accounts for.
+     */
+    held: number;
+    /**
+     * Printings
+     */
+    printings: number;
+    /**
+     * Value Usd
+     *
+     * Held copies at today's prices.
+     */
+    value_usd: number;
+    /**
+     * Lines
+     *
+     * Rows the ingest touched (checklist rows, deck-move lines).
+     */
+    lines: number;
+    /**
+     * Product
+     *
+     * MTGJSON fileName for product entries.
+     */
+    product?: string | null;
+    /**
+     * Set Code
+     */
+    set_code?: string | null;
+    /**
+     * Deck Slug
+     *
+     * Deck to open: the moved deck, or the playable product's deck row.
+     */
+    deck_slug?: string | null;
+};
+
+/**
+ * HistoryEventOut
+ */
+export type HistoryEventOut = {
+    entry: HistoryEntryOut;
+    /**
+     * Lines
+     */
+    lines: Array<HistoryLineOut>;
+};
+
+/**
+ * HistoryLineOut
+ */
+export type HistoryLineOut = {
+    printing: PrintingOut;
+    /**
+     * Finish
+     */
+    finish: 'nonfoil' | 'foil';
+    /**
+     * Copies In
+     */
+    copies_in: number;
+    /**
+     * Copies Out
+     */
+    copies_out: number;
+    /**
+     * Held
+     */
+    held: number;
+    /**
+     * Unit Usd
+     */
+    unit_usd: number | null;
+};
+
+/**
+ * HistoryOut
+ */
+export type HistoryOut = {
+    /**
+     * Entries
+     */
+    entries: Array<HistoryEntryOut>;
+    /**
+     * Prices As Of
+     *
+     * Newest local price fetch date (YYYY-MM-DD).
+     */
+    prices_as_of: string | null;
+    /**
+     * Stale Sets
+     *
+     * Set codes whose local prices are older than a week (not refreshed).
+     */
+    stale_sets: Array<string>;
 };
 
 /**
@@ -2563,6 +2841,12 @@ export type ProductCostOut = {
      */
     notes?: Array<string>;
     /**
+     * Sealed Name
+     *
+     * Secret Lair: the MTGJSON sealed product valued (None for older drops without one).
+     */
+    sealed_name?: string | null;
+    /**
      * Lines
      *
      * Every known card (exact + cheapest printing, your free copies).
@@ -2666,6 +2950,101 @@ export type ProductValueOut = {
      * Error
      */
     error?: string | null;
+};
+
+/**
+ * RankedOut
+ */
+export type RankedOut = {
+    /**
+     * Rank
+     */
+    rank: number | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Slug
+     */
+    slug: string;
+    facts: FactsOut;
+    /**
+     * Num Decks
+     */
+    num_decks?: number | null;
+    /**
+     * Salt
+     *
+     * Average 0–4 'unfun to play against' rating (salt rankings).
+     */
+    salt?: number | null;
+    /**
+     * Trend
+     *
+     * EDHREC trend z-score.
+     */
+    trend?: number | null;
+};
+
+/**
+ * RankingOptionsOut
+ */
+export type RankingOptionsOut = {
+    /**
+     * Timeframes
+     */
+    timeframes: Array<string>;
+    /**
+     * Colors
+     */
+    colors: Array<ColorOptionOut>;
+    /**
+     * Tags
+     *
+     * Tags already fetched (suggestions).
+     */
+    tags: Array<string>;
+};
+
+/**
+ * RankingOut
+ */
+export type RankingOut = {
+    /**
+     * Scope
+     */
+    scope: 'commanders' | 'cards' | 'salt';
+    /**
+     * Timeframe
+     *
+     * Stored timeframe: week|month|year, 'all' (salt, tag) or '' (set).
+     */
+    timeframe: string;
+    /**
+     * Filter
+     *
+     * '' | color:<slug> | tag:<slug> | set:<anchor>.
+     */
+    filter: string;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Cached
+     *
+     * False = never fetched; run the edhrec.rankings job.
+     */
+    cached: boolean;
+    /**
+     * Fetched At
+     */
+    fetched_at: string | null;
+    /**
+     * Rows
+     */
+    rows: Array<RankedOut>;
 };
 
 /**
@@ -2840,6 +3219,64 @@ export type SetRefOut = {
      * Name
      */
     name: string;
+};
+
+/**
+ * SldDropOut
+ */
+export type SldDropOut = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Release Date
+     */
+    release_date?: string | null;
+    /**
+     * Editions
+     */
+    editions: Array<SldEditionOut>;
+};
+
+/**
+ * SldDropsOut
+ */
+export type SldDropsOut = {
+    /**
+     * Total
+     *
+     * Every Secret Lair drop known.
+     */
+    total: number;
+    /**
+     * Drops
+     *
+     * The most recent drops, newest first. Values: GET /api/market/product-cost?kind=sld.
+     */
+    drops: Array<SldDropOut>;
+};
+
+/**
+ * SldEditionOut
+ */
+export type SldEditionOut = {
+    /**
+     * Finish
+     */
+    finish: 'nonfoil' | 'foil';
+    /**
+     * Sealed Name
+     *
+     * The MTGJSON sealed product for this edition, if listed.
+     */
+    sealed_name?: string | null;
+    /**
+     * Tcgplayer Url
+     *
+     * Its TCGplayer product page — the link a watched drop tracks.
+     */
+    tcgplayer_url?: string | null;
 };
 
 /**
@@ -3614,6 +4051,76 @@ export type ExploreCardResponses = {
 
 export type ExploreCardResponse = ExploreCardResponses[keyof ExploreCardResponses];
 
+export type ExploreRankingData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Scope
+         */
+        scope?: 'commanders' | 'cards' | 'salt';
+        /**
+         * Timeframe
+         *
+         * Ignored by salt, tag and set rankings.
+         */
+        timeframe?: 'week' | 'month' | 'year';
+        /**
+         * Color
+         *
+         * Color identity: WUBRG letters or an EDHREC name (azorius, mono-red…).
+         */
+        color?: string | null;
+        /**
+         * Tag
+         *
+         * Creature type or theme, e.g. goblins, treasure.
+         */
+        tag?: string | null;
+        /**
+         * Set Family
+         *
+         * Set family anchor or name, e.g. fin.
+         */
+        set_family?: string | null;
+    };
+    url: '/api/explore/ranking';
+};
+
+export type ExploreRankingErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ExploreRankingError = ExploreRankingErrors[keyof ExploreRankingErrors];
+
+export type ExploreRankingResponses = {
+    /**
+     * Successful Response
+     */
+    200: RankingOut;
+};
+
+export type ExploreRankingResponse = ExploreRankingResponses[keyof ExploreRankingResponses];
+
+export type ExploreRankingOptionsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/explore/ranking/options';
+};
+
+export type ExploreRankingOptionsResponses = {
+    /**
+     * Successful Response
+     */
+    200: RankingOptionsOut;
+};
+
+export type ExploreRankingOptionsResponse = ExploreRankingOptionsResponses[keyof ExploreRankingOptionsResponses];
+
 export type DealsTabsData = {
     body?: never;
     path?: never;
@@ -3973,6 +4480,36 @@ export type MarketProductCostResponses = {
 
 export type MarketProductCostResponse = MarketProductCostResponses[keyof MarketProductCostResponses];
 
+export type MarketSecretLairData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Limit
+         */
+        limit?: number;
+    };
+    url: '/api/market/secret-lair';
+};
+
+export type MarketSecretLairErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type MarketSecretLairError = MarketSecretLairErrors[keyof MarketSecretLairErrors];
+
+export type MarketSecretLairResponses = {
+    /**
+     * Successful Response
+     */
+    200: SldDropsOut;
+};
+
+export type MarketSecretLairResponse = MarketSecretLairResponses[keyof MarketSecretLairResponses];
+
 export type MarketCardsData = {
     body?: never;
     path?: never;
@@ -4105,6 +4642,31 @@ export type CollectionBuyListResponses = {
 };
 
 export type CollectionBuyListResponse = CollectionBuyListResponses[keyof CollectionBuyListResponses];
+
+export type CollectionChecklistData = {
+    body: ChecklistIn;
+    path?: never;
+    query?: never;
+    url: '/api/collection/checklist';
+};
+
+export type CollectionChecklistErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CollectionChecklistError = CollectionChecklistErrors[keyof CollectionChecklistErrors];
+
+export type CollectionChecklistResponses = {
+    /**
+     * Successful Response
+     */
+    200: ChecklistOut;
+};
+
+export type CollectionChecklistResponse = CollectionChecklistResponses[keyof CollectionChecklistResponses];
 
 export type DeckListData = {
     body?: never;
@@ -4562,6 +5124,52 @@ export type CardHoldingsResponses = {
 };
 
 export type CardHoldingsResponse = CardHoldingsResponses[keyof CardHoldingsResponses];
+
+export type HistoryListData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/history';
+};
+
+export type HistoryListResponses = {
+    /**
+     * Successful Response
+     */
+    200: HistoryOut;
+};
+
+export type HistoryListResponse = HistoryListResponses[keyof HistoryListResponses];
+
+export type HistoryEventData = {
+    body?: never;
+    path: {
+        /**
+         * Ingest Id
+         */
+        ingest_id: number;
+    };
+    query?: never;
+    url: '/api/history/{ingest_id}';
+};
+
+export type HistoryEventErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type HistoryEventError = HistoryEventErrors[keyof HistoryEventErrors];
+
+export type HistoryEventResponses = {
+    /**
+     * Successful Response
+     */
+    200: HistoryEventOut;
+};
+
+export type HistoryEventResponse = HistoryEventResponses[keyof HistoryEventResponses];
 
 export type IngestSearchData = {
     body?: never;
