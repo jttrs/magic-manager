@@ -2,7 +2,7 @@
 import { keepPreviousData, queryOptions } from '@tanstack/react-query';
 import type { DraftCardIn } from '../core/api';
 import type { RankingRequest } from '../core/rankings';
-import { dealsTabs, dealsWatched, marketProductCost, marketSecretLair, undoInfo, cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs, historyList, historyEvent, exploreRanking, exploreRankingOptions } from '../core/api';
+import { dealsTabs, dealsWatched, marketProductCost, marketSecretLair, undoInfo, cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs, historyList, historyEvent, exploreRanking, exploreRankingOptions, cardCombos, deckCombos, draftCombos } from '../core/api';
 
 class ApiError extends Error {}
 
@@ -251,4 +251,28 @@ export const historyEventQuery = (ingestId?: number) =>
     queryFn: async ({ signal }) => unwrap(await historyEvent({ path: { ingest_id: ingestId! }, signal })),
     enabled: ingestId != null,
     staleTime: 30_000,
+  });
+
+export const deckCombosQuery = (slug: string | undefined, enabled = true) =>
+  queryOptions({
+    queryKey: ['decks', slug, 'combos'],
+    queryFn: async ({ signal }) => unwrap(await deckCombos({ path: { slug: slug! }, signal })),
+    enabled: Boolean(slug) && enabled,
+    staleTime: 10 * 60_000,
+  });
+
+export const draftCombosQuery = (cards: DraftCardIn[]) =>
+  queryOptions({
+    queryKey: ['combos', 'draft', cards],
+    queryFn: async ({ signal }) => unwrap(await draftCombos({ body: { cards }, signal })),
+    staleTime: 10 * 60_000,
+    placeholderData: keepPreviousData,
+  });
+
+export const cardCombosQuery = (name: string | undefined, enabled = true) =>
+  queryOptions({
+    queryKey: ['combos', 'card', name],
+    queryFn: async ({ signal }) => unwrap(await cardCombos({ query: { name: name! }, signal })),
+    enabled: Boolean(name) && enabled,
+    staleTime: 10 * 60_000,
   });

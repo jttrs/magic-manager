@@ -13,7 +13,8 @@ import { MultiSelect } from '../components/MultiSelect';
 import { ChipToggles, Segmented, SideSection, TextField } from '../components/Sidebar';
 import { SortBuilder } from '../components/SortBuilder';
 import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../components/States';
-import { EdhrecMark, ScryfallMark } from '../components/StoreMarks';
+import { CardCombos } from '../components/Combos';
+import { ComboMark, EdhrecMark, ScryfallMark } from '../components/StoreMarks';
 import { VirtualGuide, type GuideSection } from '../components/VirtualGuide';
 import type { CardExploreOut, CardProfileOut, CompareOut, OracleTagOut } from '../core/api';
 import { bucketCards, COMPARE_SORT, COMPARE_SORT_PRESETS, matches, tagCounts, tagLabel } from '../core/compare';
@@ -247,19 +248,31 @@ function buildCommander(data: CompareOut, search: CompareSearch, rules: ReturnTy
 // ---------- the card plate(s) ----------
 
 function Plates({ r, role, onInspect }: { r: CardExploreOut; role: Role; onInspect: (p: CardProfileOut) => void }) {
+  // Commander Spellbook combos for one plate's card, fetched when asked for.
+  const [combosFor, setCombosFor] = useState<string | null>(null);
+  const shown = combosFor && [r.a.name, r.b?.name].includes(combosFor) ? cleanName(combosFor) : null;
+  const toggle = (name: string) => setCombosFor((c) => (c === name ? null : name));
   return (
     <div className="mx-4 flex flex-col gap-3 border-b-2 border-rule-strong pb-3">
       <div className={`grid gap-4 ${r.b ? 'md:grid-cols-[1fr_auto_1fr]' : ''}`}>
-        <Plate p={r.a} role={role} side={r.b ? 'A' : null} compact={Boolean(r.b)} onInspect={onInspect} />
+        <Plate p={r.a} role={role} side={r.b ? 'A' : null} compact={Boolean(r.b)} onInspect={onInspect} combosOpen={combosFor === r.a.name} onCombos={() => toggle(r.a.name)} />
         {r.b && <span aria-hidden="true" className="hidden self-center text-2xl voice-condensed font-bold text-ink-muted md:block">vs</span>}
-        {r.b && <Plate p={r.b} role={role} side="B" compact onInspect={onInspect} />}
+        {r.b && <Plate p={r.b} role={role} side="B" compact onInspect={onInspect} combosOpen={combosFor === r.b.name} onCombos={() => toggle(r.b!.name)} />}
       </div>
       {r.b && role === 'card' && <TagSplit tags={r.tags ?? {}} a={shortName(r.a.name)} b={shortName(r.b.name)} />}
+      {shown && (
+        <section id="card-combos" aria-labelledby="card-combos-h" className="flex max-h-[40dvh] flex-col">
+          <h3 id="card-combos-h" className="flex items-baseline gap-2 border-b border-rule pb-0.5 text-sm voice-semi font-medium text-ink">
+            <span className="min-w-0 truncate">Combos with {shown}</span><span className="ml-auto hidden shrink-0 text-xs font-regular text-ink-muted sm:inline">most played first · Commander Spellbook</span>
+          </h3>
+          <div className="min-h-0 overflow-y-auto overscroll-contain pr-1 [scrollbar-gutter:stable]"><CardCombos name={shown} /></div>
+        </section>
+      )}
     </div>
   );
 }
 
-function Plate({ p, role, side, compact = false, onInspect }: { p: CardProfileOut; role: Role; side: 'A' | 'B' | null; compact?: boolean; onInspect: (p: CardProfileOut) => void }) {
+function Plate({ p, role, side, compact = false, onInspect, combosOpen, onCombos }: { p: CardProfileOut; role: Role; side: 'A' | 'B' | null; compact?: boolean; onInspect: (p: CardProfileOut) => void; combosOpen: boolean; onCombos: () => void }) {
   const f = p.facts;
   const share = deckShare(p);
   const mix = [...p.deck_mix].sort((x, y) => (y.value as number) - (x.value as number)).slice(0, 5);
@@ -298,6 +311,10 @@ function Plate({ p, role, side, compact = false, onInspect }: { p: CardProfileOu
         <nav aria-label={`${cleanName(p.name)} elsewhere`} className="-ml-2 mt-auto flex flex-wrap gap-x-1">
           <OutLink href={edhrec} label="EDHREC" Mark={EdhrecMark} />
           {f.scryfall_url && <OutLink href={f.scryfall_url} label="Scryfall" Mark={ScryfallMark} />}
+          <button type="button" aria-expanded={combosOpen} aria-controls="card-combos" onClick={onCombos} className="inline-flex min-h-8 cursor-pointer items-center gap-1.5 rounded-sm px-2 text-sm voice-semi font-medium text-accent-ink transition-colors duration-150 ease-guide hover:bg-paper-sunk focus-visible:bg-paper-sunk aria-expanded:bg-paper-sunk">
+            <ComboMark className="size-4" />
+            {combosOpen ? 'Hide combos' : 'Combos'}
+          </button>
         </nav>
       </div>
     </section>

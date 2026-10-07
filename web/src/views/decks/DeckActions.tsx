@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { unwrap } from '../../app/queries';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { IconAction } from '../../components/IconAction';
-import { AddCardMark, BreakDownMark, BuildDeckMark, CopyDeckMark, EditDeckMark, PriceMark } from '../../components/StoreMarks';
+import { DeckCombosDialog } from '../../components/Combos';
+import { AddCardMark, BreakDownMark, BuildDeckMark, ComboMark, CopyDeckMark, EditDeckMark, PriceMark } from '../../components/StoreMarks';
 import { deckBreakDown, deckBuild, deckBuildPlan, deckCopy, type BuildPlanOut, type DeckDetailOut } from '../../core/api';
 import { fmtInt } from '../../core/format';
 
@@ -67,6 +68,7 @@ export function DeckActions({ detail, slug, onAddToCollection }: { detail: DeckD
         <IconAction label="Build from your cards" Icon={BuildDeckMark} onClick={openBuild} disabled={allBuilt} disabledReason="Every copy of this deck is built" />
         <IconAction label="Break down" Icon={BreakDownMark} onClick={() => setDialog({ kind: 'break' })} disabled={deck.built === 0} disabledReason="This deck isn’t built" />
         <IconAction label="Cost to build" Icon={PriceMark} onClick={() => navigate({ to: '/market', search: { subject: 'deck', deck: slug } })} />
+        <DeckCombosDialog slug={slug} deckName={deck.name} trigger={<IconAction label="Combos" Icon={ComboMark} />} />
       </span>
       {(toast || planError) && (
         <p role="status" className={`w-full text-right text-sm ${planError ? 'text-danger' : 'text-ink-muted'}`}>{planError ?? toast}</p>

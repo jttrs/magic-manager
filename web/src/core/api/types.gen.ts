@@ -147,6 +147,28 @@ export type BuyListOut = {
 };
 
 /**
+ * CardCombosOut
+ */
+export type CardCombosOut = {
+    /**
+     * Available
+     */
+    available: boolean;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Error
+     */
+    error?: string | null;
+    /**
+     * Combos
+     */
+    combos: Array<ComboOut>;
+};
+
+/**
  * CardExploreOut
  */
 export type CardExploreOut = {
@@ -714,6 +736,66 @@ export type ColorOptionOut = {
 };
 
 /**
+ * ComboOut
+ */
+export type ComboOut = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Url
+     *
+     * The combo's page on Commander Spellbook.
+     */
+    url: string;
+    /**
+     * Pieces
+     */
+    pieces: Array<PieceOut>;
+    /**
+     * Produces
+     *
+     * What it does (e.g. 'Infinite colorless mana').
+     */
+    produces: Array<string>;
+    /**
+     * Requires
+     *
+     * Extra pieces described, not named (any card that fits).
+     */
+    requires: Array<string>;
+    /**
+     * Description
+     *
+     * Steps, one per line.
+     */
+    description: string;
+    /**
+     * Prerequisites
+     */
+    prerequisites: string;
+    /**
+     * Mana Needed
+     */
+    mana_needed: string;
+    /**
+     * Popularity
+     *
+     * Decks on EDHREC running every piece.
+     */
+    popularity: number | null;
+    /**
+     * Identity
+     */
+    identity: string;
+    /**
+     * One-card-away combos: the card to add.
+     */
+    missing?: PieceOut | null;
+};
+
+/**
  * CommanderOption
  */
 export type CommanderOption = {
@@ -1103,6 +1185,48 @@ export type DeckCardOut = {
 };
 
 /**
+ * DeckCombosOut
+ */
+export type DeckCombosOut = {
+    /**
+     * Available
+     *
+     * False when Commander Spellbook couldn't be reached; see `error`.
+     */
+    available: boolean;
+    /**
+     * Error
+     */
+    error?: string | null;
+    /**
+     * Identity
+     */
+    identity?: string | null;
+    /**
+     * Included
+     */
+    included: Array<ComboOut>;
+    /**
+     * Almost
+     *
+     * Combos one card away, in the deck's colours.
+     */
+    almost: Array<ComboOut>;
+    /**
+     * Missing Cards
+     *
+     * The near-misses rolled up per missing card, most combos first.
+     */
+    missing_cards: Array<MissingCardOut>;
+    /**
+     * Off Color
+     *
+     * Near-misses that would need another colour (not listed).
+     */
+    off_color: number;
+};
+
+/**
  * DeckCostOut
  */
 export type DeckCostOut = {
@@ -1415,6 +1539,16 @@ export type DraftCardIn = {
      * Count
      */
     count: number;
+};
+
+/**
+ * DraftCombosIn
+ */
+export type DraftCombosIn = {
+    /**
+     * Cards
+     */
+    cards: Array<DraftCardIn>;
 };
 
 /**
@@ -2082,6 +2216,23 @@ export type MatchOut = {
 };
 
 /**
+ * MissingCardOut
+ */
+export type MissingCardOut = {
+    piece: PieceOut;
+    /**
+     * Combos
+     *
+     * Ids of the near-miss combos this card completes, most popular first.
+     */
+    combos: Array<string>;
+    /**
+     * Popularity
+     */
+    popularity: number;
+};
+
+/**
  * MissingOut
  */
 export type MissingOut = {
@@ -2308,6 +2459,40 @@ export type PairedOut = {
      * Gap
      */
     gap: number | null;
+};
+
+/**
+ * PieceOut
+ */
+export type PieceOut = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Oracle Id
+     */
+    oracle_id: string | null;
+    /**
+     * In Deck
+     *
+     * The deck already runs this card (deck combos only).
+     */
+    in_deck: boolean;
+    /**
+     * Owned / free copies across printings, cheapest price, display printing.
+     */
+    facts: FactsOut;
+    /**
+     * Image Uri
+     *
+     * Spellbook's art crop, for cards not in the local catalog.
+     */
+    image_uri: string | null;
+    /**
+     * The printing to add: your copy with the most free, else the first standard printing.
+     */
+    printing?: PrintingOut | null;
 };
 
 /**
@@ -4820,6 +5005,95 @@ export type DeckSuggestionsResponses = {
 };
 
 export type DeckSuggestionsResponse = DeckSuggestionsResponses[keyof DeckSuggestionsResponses];
+
+export type DeckCombosData = {
+    body?: never;
+    path: {
+        /**
+         * Slug
+         */
+        slug: string;
+    };
+    query?: never;
+    url: '/api/decks/{slug}/combos';
+};
+
+export type DeckCombosErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeckCombosError = DeckCombosErrors[keyof DeckCombosErrors];
+
+export type DeckCombosResponses = {
+    /**
+     * Successful Response
+     */
+    200: DeckCombosOut;
+};
+
+export type DeckCombosResponse = DeckCombosResponses[keyof DeckCombosResponses];
+
+export type DraftCombosData = {
+    body: DraftCombosIn;
+    path?: never;
+    query?: never;
+    url: '/api/combos/draft';
+};
+
+export type DraftCombosErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DraftCombosError = DraftCombosErrors[keyof DraftCombosErrors];
+
+export type DraftCombosResponses = {
+    /**
+     * Successful Response
+     */
+    200: DeckCombosOut;
+};
+
+export type DraftCombosResponse = DraftCombosResponses[keyof DraftCombosResponses];
+
+export type CardCombosData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Name
+         */
+        name: string;
+        /**
+         * Limit
+         */
+        limit?: number;
+    };
+    url: '/api/combos/card';
+};
+
+export type CardCombosErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CardCombosError = CardCombosErrors[keyof CardCombosErrors];
+
+export type CardCombosResponses = {
+    /**
+     * Successful Response
+     */
+    200: CardCombosOut;
+};
+
+export type CardCombosResponse = CardCombosResponses[keyof CardCombosResponses];
 
 export type CardHoldingsData = {
     body?: never;

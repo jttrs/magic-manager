@@ -1867,6 +1867,37 @@ def deck_backfill_built_cmd():
     typer.echo(f"marked {r['corrected']} unpledged decks and {r['precon_extras']} extra precon copies as not built")
 
 
+@deck_app.command("combos")
+def deck_combos_cmd(
+    slug: str = typer.Argument(...),
+    as_json: bool = typer.Option(False, "--json", help="Print the full result as JSON."),
+):
+    """Commander Spellbook combos the deck contains and the ones it is ONE card away from
+    (with what you own of the missing card and its cheapest price). Network, cached 24h."""
+    from . import combos as combos_mod
+
+    try:
+        r = combos_mod.deck_combos(slug)
+    except LookupError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(2)
+    if as_json:
+        typer.echo(json.dumps(combos_mod.to_json(r), indent=2))
+        return
+    if not r.available:
+        typer.echo(r.error, err=True)
+        raise typer.Exit(1)
+    typer.echo(f"In the deck: {len(r.included)}")
+    for c in r.included:
+        typer.echo(f"  {' + '.join(p.name for p in c.pieces)} → {', '.join(c.produces[:2])}")
+    typer.echo(f"One card away: {len(r.almost)} combos via {len(r.missing_cards)} cards"
+               + (f" ({r.off_color} more need another colour)" if r.off_color else ""))
+    for m in r.missing_cards:
+        f = m.piece.facts
+        price = f"${f.lowest_usd:.2f}" if f.lowest_usd is not None else "—"
+        typer.echo(f"  {m.piece.name}: {len(m.combos)} combo(s) · own {f.owned} ({f.free} free) · from {price}")
+
+
 @deck_app.command("show")
 def deck_show_cmd(slug: str = typer.Argument(...)):
     """Show every card in a deck (all boards)."""

@@ -3,11 +3,12 @@ import { getRouteApi, Link, useBlocker, useNavigate } from '@tanstack/react-rout
 import { DropdownMenu, Popover, Tabs } from 'radix-ui';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panels';
-import { deckCheckQuery, deckQuery, printingSearchQuery, suggestionsQuery, unwrap } from '../app/queries';
+import { deckCheckQuery, deckQuery, draftCombosQuery, printingSearchQuery, suggestionsQuery, unwrap } from '../app/queries';
 import { useMediaQuery } from '../app/useMediaQuery';
 import { Button } from '../components/Button';
 import { CardInspector } from '../components/CardInspector';
 import { Chevron } from '../components/Chevron';
+import { DeckCombosBody } from '../components/Combos';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { EmptyNote, ErrorNote, GridSkeleton } from '../components/States';
 import { deckPreview, deckSave, type CheckOut, type DeckDetailOut, type PreviewOut, type PrintingOut, type SuggestionOut, type SwapLineOut } from '../core/api';
@@ -297,14 +298,15 @@ function RowMenu({ row, onEdit }: { row: DraftRow; onEdit: (fn: (d: Draft) => Dr
 
 function FindCards({ draft, format, onAdd, onInspect }: { draft: Draft; format: string | null; onAdd: (p: PrintingOut, board: Board) => void; onInspect: Inspect }) {
   const commander = commanderName(draft);
-  const [tab, setTab] = useState<'search' | 'suggest'>(commander ? 'suggest' : 'search');
+  const [tab, setTab] = useState<FindTab>(commander ? 'suggest' : 'search');
   const inDeck = useMemo(() => draftOracles(draft), [draft]);
   const wantsCommander = !commander && ['commander', 'brawl', 'paupercommander', 'oathbreaker', 'edh'].includes((format ?? '').toLowerCase());
   return (
-    <Tabs.Root value={tab} onValueChange={(v) => setTab(v as 'search' | 'suggest')} className="flex h-full min-h-0 flex-col">
+    <Tabs.Root value={tab} onValueChange={(v) => setTab(v as FindTab)} className="flex h-full min-h-0 flex-col">
       <Tabs.List aria-label="Find cards" className="mx-4 mt-3 flex gap-px self-start overflow-hidden rounded-sm border border-rule-strong bg-rule">
         <PaneTab value="search">Search</PaneTab>
         <PaneTab value="suggest">Suggestions</PaneTab>
+        <PaneTab value="combos">Combos</PaneTab>
       </Tabs.List>
       <Tabs.Content value="search" className="flex min-h-0 flex-1 flex-col">
         <SearchTab inDeck={inDeck} wantsCommander={wantsCommander} onAdd={onAdd} onInspect={onInspect} />
@@ -312,7 +314,23 @@ function FindCards({ draft, format, onAdd, onInspect }: { draft: Draft; format: 
       <Tabs.Content value="suggest" className="flex min-h-0 flex-1 flex-col">
         <SuggestTab commander={commander} inDeck={inDeck} onAdd={onAdd} onInspect={onInspect} />
       </Tabs.Content>
+      <Tabs.Content value="combos" className="flex min-h-0 flex-1 flex-col">
+        <CombosTab draft={draft} onAdd={onAdd} onInspect={onInspect} />
+      </Tabs.Content>
     </Tabs.Root>
+  );
+}
+
+type FindTab = 'search' | 'suggest' | 'combos';
+
+/** Commander Spellbook over the unsaved draft: what one more card would complete, then what's in. */
+function CombosTab({ draft, onAdd, onInspect }: { draft: Draft; onAdd: (p: PrintingOut, board: Board) => void; onInspect: Inspect }) {
+  const cards = useDebounced(draftCards(draft), 600);
+  const q = useQuery(draftCombosQuery(cards));
+  return (
+    <div className="mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-8 [scrollbar-gutter:stable]">
+      <DeckCombosBody data={q.data} pending={q.isFetching} error={q.error} onAdd={(p) => onAdd(p, 'main')} onInspect={onInspect} />
+    </div>
   );
 }
 
