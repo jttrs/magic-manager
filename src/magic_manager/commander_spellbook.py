@@ -23,6 +23,11 @@ WRAPPER = (
 )
 
 
+# Boards Spellbook sees as "the 99" (besides the commander zone). Sideboard,
+# maybe-board and tokens are not part of the deck — shared by brackets + combos.
+MAIN_BOARDS = frozenset({"main", "companion"})
+
+
 class CommanderSpellbookError(RuntimeError):
     """Raised when the wrapper exits non-zero or the API returns an error object."""
 

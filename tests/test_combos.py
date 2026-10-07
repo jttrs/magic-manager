@@ -83,6 +83,20 @@ def test_unsaved_draft_rows_and_empty_deck(deck, fake_spellbook):
     assert len(state["calls"]) == 1
 
 
+def test_reversible_printing_counts_as_the_card(deck, seed_cards, make_card, fake_spellbook):
+    """A reversible Secret Lair printing ("X // X", no oracle id) is sent as "X"
+    and borrows the card's oracle id, so combos see it as in the deck."""
+    rev = "00000000-0000-0000-0000-0000000000ff"
+    seed_cards([make_card(id=rev, oracle_id=None, name="Isochron Scepter // Isochron Scepter", collector_number="99")])
+    state = fake_spellbook(find_my_combos=RESPONSE)
+    r = combos.combos_for_rows([(CMD, "commander", 1), (rev, "main", 1), (REVERSAL, "main", 1)])
+    assert sorted(state["calls"][-1][2]) == ["Dramatic Reversal", "Isochron Scepter"]
+    (inc,) = r.included
+    assert all(p.in_deck for p in inc.pieces)
+    assert "2-5" in [c.id for c in r.almost]                                     # Lattice is the ONE missing piece
+    assert combos._single_face("Delver of Secrets // Insectile Aberration") == "Delver of Secrets // Insectile Aberration"
+
+
 def test_spellbook_outage_degrades_to_unavailable(deck, fake_spellbook):
     fake_spellbook(find_my_combos=commander_spellbook.CommanderSpellbookError("HTTP 503"))
     r = combos.deck_combos(deck)

@@ -124,3 +124,42 @@ def test_to_json_from_json_round_trip():
     # Genuinely JSON-serializable.
     d2 = json.loads(json.dumps(d))
     assert brackets.BracketDetail.from_json(d2).suggested_bracket == detail.suggested_bracket
+
+
+def _live(*variants):
+    """A live-shaped /find-my-combos reply: combos the deck contains under results.included."""
+    return {"results": {"included": list(variants), "almostIncluded": []}}
+
+
+def _variant(*names, requires=()):
+    return {"uses": [{"card": {"name": n}} for n in names],
+            "requires": [{"template": {"name": r}} for r in requires]}
+
+
+def test_spellbook_sees_only_the_commander_and_the_99(fake_spellbook):
+    """Sideboard / maybe cards aren't in the deck: they never reach Spellbook,
+    so a combo they'd complete can't raise the floor."""
+    from magic_manager import commander_spellbook
+    seen = {}
+
+    def reply(*, commander, main):
+        seen.update(commander=commander, main=main)
+        return _live(*([_variant("Scepter", "Reversal")] if {"Scepter", "Reversal"} <= set(main) else []))
+
+    fake_spellbook(find_my_combos=reply)
+    cards = _commander_deck([_card("Reversal", "main"), _card("Scepter", "maybe"), _card("Spare", "side"),
+                             _card("Partner", "companion")])
+    detail = brackets.suggest(cards, spellbook=commander_spellbook)
+    assert seen == {"commander": ["My Commander"], "main": ["Reversal", "Partner"]}
+    assert detail.two_card_combos == 0 and detail.suggested_bracket < 4
+
+
+def test_unnamed_required_pieces_count_toward_combo_size(fake_spellbook):
+    from magic_manager import commander_spellbook
+    fake_spellbook(find_my_combos=_live(_variant("A", "B", requires=["A sac outlet"])))
+    detail = brackets.suggest(_commander_deck([_card("A", "main"), _card("B", "main")]), spellbook=commander_spellbook)
+    assert detail.spellbook_available and detail.two_card_combos == 0 and detail.suggested_bracket < 4
+
+    fake_spellbook(find_my_combos=_live(_variant("A", "B")))
+    detail = brackets.suggest(_commander_deck([_card("A", "main"), _card("B", "main")]), spellbook=commander_spellbook)
+    assert detail.two_card_combos == 1 and detail.suggested_bracket == 4

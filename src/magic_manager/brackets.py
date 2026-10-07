@@ -164,11 +164,13 @@ def _extract_combos(response: dict) -> list[dict]:
 
 def _combo_card_count(combo: dict) -> int | None:
     """Best-effort card count for one combo dict, or ``None`` if the shape
-    doesn't expose a countable card list."""
+    doesn't expose a countable card list. Spellbook's ``requires`` templates
+    ("a sac outlet") are unnamed pieces the combo still needs, so they count."""
     for key in ("uses", "cards"):
         val = combo.get(key)
         if isinstance(val, list):
-            return len(val)
+            requires = combo.get("requires")
+            return len(val) + (len(requires) if isinstance(requires, list) else 0)
     return None
 
 
@@ -224,8 +226,10 @@ def suggest(cards: list[dict], *, spellbook=None) -> BracketDetail:
     spellbook_available = False
     spellbook_error: str | None = None
     if spellbook is not None:
+        from .commander_spellbook import MAIN_BOARDS
+
         commander_names = [_name(c) for c in commanders]
-        main_names = [_name(c) for c in rest]
+        main_names = [_name(c) for c in rest if c.get("board", "main") in MAIN_BOARDS]
         combos, spellbook_available, spellbook_error = _call_spellbook(
             spellbook, commander_names, main_names
         )

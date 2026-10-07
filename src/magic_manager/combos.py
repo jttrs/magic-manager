@@ -25,8 +25,6 @@ from typing import Iterable
 from . import commander_spellbook, db, explore
 
 COMBO_URL = "https://commanderspellbook.com/combo/{id}/"
-# Boards Spellbook should see: the commander zone, then the 99.
-_MAIN_BOARDS = {"main", "companion"}
 
 
 @dataclass
@@ -150,10 +148,17 @@ def _roll_up(almost: list[Combo]) -> list[MissingCard]:
 
 # ---------- deck ----------
 
+def _single_face(name: str) -> str:
+    """``"X // X"`` (a reversible printing: the same card on both faces) → ``"X"``;
+    real double-faced names are left alone."""
+    front, sep, back = name.partition(" // ")
+    return front if sep and front == back else name
+
+
 def _deck_names(rows: Iterable[tuple[str, str, int]]) -> tuple[list[str], list[str], set[str]]:
     """``(scryfall_id, board, count)`` rows → (commander names, main names, oracle ids)."""
     rows = [(sid, board) for sid, board, count in rows
-            if count > 0 and (board == "commander" or board in _MAIN_BOARDS)]
+            if count > 0 and (board == "commander" or board in commander_spellbook.MAIN_BOARDS)]
     ids = list(dict.fromkeys(sid for sid, _ in rows))
     meta: dict[str, tuple[str, str | None]] = {}
     with db.connect() as conn:
@@ -162,7 +167,18 @@ def _deck_names(rows: Iterable[tuple[str, str, int]]) -> tuple[list[str], list[s
             for r in conn.execute(
                 f"SELECT scryfall_id, name, oracle_id FROM cards WHERE scryfall_id IN ({','.join('?' * len(part))})", part,
             ):
-                meta[r[0]] = (r[1], r[2])
+                meta[r[0]] = (_single_face(r[1]), r[2])
+        # Reversible printings (e.g. Secret Lair "X // X") carry no oracle id:
+        # borrow it from another printing of the same card.
+        orphans = list({name for name, oid in meta.values() if not oid})
+        found: dict[str, str] = {}
+        for i in range(0, len(orphans), 500):
+            part = orphans[i:i + 500]
+            for name, oid in conn.execute(
+                f"SELECT name, oracle_id FROM cards WHERE oracle_id IS NOT NULL AND name IN ({','.join('?' * len(part))})", part,
+            ):
+                found.setdefault(name, oid)
+        meta = {sid: (name, oid or found.get(name)) for sid, (name, oid) in meta.items()}
     commanders, main, oids = [], [], set()
     for sid, board in rows:
         if sid not in meta:
