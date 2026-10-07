@@ -2,7 +2,7 @@
 import { keepPreviousData, queryOptions } from '@tanstack/react-query';
 import type { DraftCardIn } from '../core/api';
 import type { RankingRequest } from '../core/rankings';
-import { dealsTabs, dealsWatched, marketProductCost, marketSecretLair, undoInfo, cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, cardFloors, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs, historyList, historyEvent, exploreRanking, exploreRankingOptions, cardCombos, deckCombos, draftCombos, artTags, artSwaps } from '../core/api';
+import { dealsTabs, dealsWatched, marketProductCost, marketSecretLair, undoInfo, cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, cardFloors, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs, historyList, historyEvent, exploreRanking, exploreRankingOptions, cardCombos, deckCombos, draftCombos, artTags, artSwaps, jumpstartSets, jumpstartView, jumpstartPack } from '../core/api';
 
 class ApiError extends Error {}
 
@@ -303,4 +303,27 @@ export const artSwapsQuery = (tag: string | null, sids: string[]) =>
     enabled: !!tag && sids.length > 0,
     staleTime: 10 * 60_000,
     placeholderData: keepPreviousData,
+  });
+
+export const jumpstartSetsQuery = () =>
+  queryOptions({
+    queryKey: ['jumpstart', 'sets'],
+    queryFn: async ({ signal }) => unwrap(await jumpstartSets({ signal })),
+    staleTime: 5 * 60_000,
+  });
+
+export const jumpstartQuery = (code?: string) =>
+  queryOptions({
+    queryKey: ['jumpstart', code],
+    queryFn: async ({ signal }) => unwrap(await jumpstartView({ path: { code: code! }, signal })),
+    enabled: Boolean(code),
+    staleTime: 30_000,
+  });
+
+export const jumpstartPackQuery = (code?: string, fileName?: string) =>
+  queryOptions({
+    queryKey: ['jumpstart', code, 'pack', fileName],
+    queryFn: async ({ signal }) => unwrap(await jumpstartPack({ path: { code: code!, file_name: fileName! }, signal })),
+    enabled: Boolean(code && fileName),
+    staleTime: 30_000,
   });

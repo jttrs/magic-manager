@@ -1,5 +1,8 @@
 """Deterministic "buildable set" missing-cards report for a Jumpstart set.
 
+Thin driver over :mod:`magic_manager.jumpstart` (``buildable_missing``), which
+the web Collection → Jumpstart sheet shares.
+
 Goal: hold the MINIMUM cards to have one built copy of every theme coexisting,
 while still being able to assemble any *version* of a theme on demand — one
 version of each theme constructed, plus the unique/extra cards from that theme's
@@ -34,98 +37,17 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
-import re
 import sys
-from collections import defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from magic_manager import (  # noqa: E402
-    db, exports, missing as missing_mod, mtgjson, ownership, selectors, sets, util,
-)
+from magic_manager import exports, jumpstart, mtgjson, sets, util  # noqa: E402
 
-# A version suffix is a trailing integer, with or without parentheses:
-#   'Angels (1)'    → 'Angels'   (parenthesized — e.g. J25/MSH naming)
-#   'Corruption 1'  → 'Corruption' (bare space-number — e.g. ONE naming)
-# The `$` anchor guarantees only a TRAILING version token is stripped, so a
-# digit inside a theme name (none observed, but e.g. 'Squad 5' would keep '5')
-# is only removed when it's the final token — which is exactly the version
-# marker in every Jumpstart set's DeckList naming to date.
-_VERSION_SUFFIX = re.compile(r"\s*\(?\d+\)?\s*$")
-
-
-def theme_of(variant_name: str) -> str:
-    """Strip a trailing version suffix, parenthesized or bare:
-    'Angels (1)' → 'Angels', 'Corruption 1' → 'Corruption'."""
-    return _VERSION_SUFFIX.sub("", variant_name or "").strip()
-
-
-def build_target(variants_boards: dict[str, list[dict[str, int]]]) -> dict[str, int]:
-    """Pure target computation — no DB, no network (unit-testable).
-
-    ``variants_boards`` maps a variant NAME to a list of per-version card-count
-    dicts ``{scryfall_id: count}`` (one dict per version of any theme; the key
-    is the full variant name so we can group by theme here). Returns
-    ``{scryfall_id: target_count}`` = Σ_themes max_versions(count).
-    """
-    # theme -> list of {scryfall_id: count} (one per version)
-    by_theme: dict[str, list[dict[str, int]]] = defaultdict(list)
-    for name, version_count in variants_boards.items():
-        by_theme[theme_of(name)].append(version_count)
-
-    target: dict[str, int] = defaultdict(int)
-    for versions in by_theme.values():
-        # max count per scryfall_id across this theme's versions
-        theme_max: dict[str, int] = defaultdict(int)
-        for vc in versions:
-            for sid, n in vc.items():
-                theme_max[sid] = max(theme_max[sid], n)
-        # sum the theme's target into the grand total (all themes coexist)
-        for sid, n in theme_max.items():
-            target[sid] += n
-    return dict(target)
-
-
-def _variant_boards(set_code: str) -> tuple[dict[str, dict[str, int]], dict[str, str], int]:
-    """For each Jumpstart variant of ``set_code``, sum card copies per
-    scryfall_id across all boards. Returns ``(boards, names_by_sid, n_variants)``
-    where ``boards[variant_name] = {scryfall_id: count}`` and ``names_by_sid``
-    maps scryfall_id → card name (fallback display for cards absent from the
-    local cards table)."""
-    variants = mtgjson.jumpstart_variants(set_code)
-    boards: dict[str, dict[str, int]] = {}
-    names_by_sid: dict[str, str] = {}
-    for v in variants:
-        deck_data = mtgjson.deck(v["fileName"])
-        counts: dict[str, int] = defaultdict(int)
-        for board_key in ("commander", "mainBoard", "sideBoard"):
-            for entry in deck_data.get(board_key) or []:
-                sid = (entry.get("identifiers") or {}).get("scryfallId")
-                if not sid:
-                    continue
-                counts[sid] += int(entry.get("count", 1) or 1)
-                if entry.get("name"):
-                    names_by_sid.setdefault(sid, entry["name"])
-        boards[v["name"]] = dict(counts)
-    return boards, names_by_sid, len(variants)
-
-
-def _card_dicts(scryfall_ids: list[str]) -> dict[str, dict]:
-    """Local cards-table rows normalized via selectors._card_dict, by scryfall_id."""
-    if not scryfall_ids:
-        return {}
-    with db.connect() as conn:
-        placeholders = ",".join("?" for _ in scryfall_ids)
-        return {
-            r["scryfall_id"]: selectors._card_dict(r)
-            for r in conn.execute(
-                f"SELECT {selectors._CARD_COLS} FROM cards c "
-                f"WHERE c.scryfall_id IN ({placeholders})",
-                scryfall_ids,
-            ).fetchall()
-        }
+# Engine re-exports (tests and muscle memory import them from here).
+theme_of = jumpstart.theme_of
+build_target = jumpstart.build_target
 
 
 def _write_xlsx(rows: list, out_path: Path) -> None:
@@ -178,35 +100,9 @@ def main() -> int:
     except Exception as e:  # noqa: BLE001 — best-effort, mirrors sets.py contract
         print(f"  ! sync failed: {e} (prices/names may under-report)", file=sys.stderr)
 
-    boards, names_by_sid, n_variants = _variant_boards(code)
-    n_themes = len({theme_of(n) for n in boards})
-    target = build_target(boards)
-
-    owned = ownership.owned_counts(grain="scryfall_id", scryfall_ids=list(target))
-    missing = {sid: target[sid] - owned.get(sid, 0)
-               for sid in target if target[sid] - owned.get(sid, 0) > 0}
-
-    cards = _card_dicts(list(missing))
-    rows: list = []
-    skipped: list[str] = []
-    for sid, qty in missing.items():
-        card = cards.get(sid)
-        if card is None:
-            skipped.append(names_by_sid.get(sid, sid))
-            continue
-        rows.append(selectors.MaterializedRow(
-            scryfall_id=sid, quantity=qty, finish="nonfoil", card=card))
-    # Physical-buyable gate: drop tokens / digital-only / family-unobtainable /
-    # meld-back prints — the same filter every other buy-list runs, so a theme's
-    # token or an Alchemy-rebalanced reprint can't leak into the shopping list.
-    # --no-filter opts out (raw target output).
-    n_before = len(rows)
-    if not args.no_filter:
-        rows = missing_mod.physical_buyable(rows, code)
-    n_filtered = n_before - len(rows)
-    # Deterministic order: (set, collector-number).
-    rows.sort(key=lambda r: ((r.card.get("set") or ""),
-                             util.cn_sort_key(r.card.get("collector_number"))))
+    res = jumpstart.buildable_missing(code, filter_buyable=not args.no_filter)
+    rows, target, owned = res.rows, res.target, res.owned
+    n_themes, n_variants, n_filtered, skipped = res.themes, res.variants, res.filtered, res.skipped
 
     from datetime import UTC, datetime
     ts = datetime.now(UTC).strftime("%Y-%m-%d-%H%M%S")
