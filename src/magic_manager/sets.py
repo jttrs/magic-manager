@@ -852,7 +852,12 @@ class CountChange:
 
 
 class StaleCounts(ValueError):
-    """The collection changed since the checklist was loaded (``expected`` ≠ current)."""
+    """The collection changed since the checklist was loaded (``expected`` ≠ current).
+    ``rows`` lists every stale cell: ``{scryfall_id, finish, expected, current}``."""
+
+    def __init__(self, message: str, rows: list[dict]):
+        super().__init__(message)
+        self.rows = rows
 
 
 class BelowPledged(ValueError):
@@ -909,9 +914,13 @@ def apply_counts(changes: Iterable[CountChange], *, label: str, conn=None) -> di
         stale = [ch for ch in items
                  if ch.expected is not None and owned.get((ch.scryfall_id, ch.finish), 0) != ch.expected]
         if stale:
+            n = len(stale)
             raise StaleCounts(
-                f"{len(stale)} count(s) changed since this checklist was loaded "
-                f"(e.g. {names[stale[0].scryfall_id]}) — reload and re-enter them")
+                f"{n} {'count' if n == 1 else 'counts'} changed since you started counting "
+                f"(e.g. {names[stale[0].scryfall_id]}) — check the flagged "
+                f"{'cell' if n == 1 else 'cells'} and save again",
+                [{"scryfall_id": ch.scryfall_id, "finish": ch.finish, "expected": ch.expected,
+                  "current": owned.get((ch.scryfall_id, ch.finish), 0)} for ch in stale])
         low = [ch for ch in items if ch.qty < pledged.get((ch.scryfall_id, ch.finish), 0)]
         if low:
             ch = low[0]

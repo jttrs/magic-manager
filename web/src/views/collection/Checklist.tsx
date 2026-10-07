@@ -1,5 +1,5 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { Button } from '../../components/Button';
 import { CardArt } from '../../components/CardFace';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
@@ -12,7 +12,8 @@ import type { Checklist } from './useChecklist';
 
 type Line = { kind: 'line'; key: string; card: GuideCard; data: CollectionCardOut; family: string; finishes: Finish[]; n: number };
 type Row = { kind: 'head'; key: string; label: string; level: 1 | 2; meta?: string } | Line;
-type Target = { row: number; finish: Finish };
+/** The cell keyboard navigation goes to — keyed by card, so filtering never moves it onto another card. */
+type Target = { id: string; finish: Finish };
 
 const LINE_H = 40;
 
@@ -27,6 +28,14 @@ export function ChecklistTable({ sections, byId, familyNames, checklist }: {
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [target, setTarget] = useState<Target | null>(null);
+  // Set by keyboard navigation and consumed by the cell that takes focus, so a
+  // row remounting (scroll, refetch, filter) never steals focus on its own.
+  const pendingFocus = useRef(false);
+  const grabFocus = useCallback(() => {
+    const take = pendingFocus.current;
+    pendingFocus.current = false;
+    return take;
+  }, []);
 
   const { rows, lines } = useMemo(() => {
     const rows: Row[] = [];
@@ -58,9 +67,11 @@ export function ChecklistTable({ sections, byId, familyNames, checklist }: {
     overscan: 20,
   });
 
-  const go = (to: Target | null) => {
-    if (!to) return false;
-    setTarget(to);
+  const go = (to: { row: number; finish: Finish } | null) => {
+    const line = to ? lines[to.row] : undefined;
+    if (!to || !line) return false;
+    pendingFocus.current = true;
+    setTarget({ id: line.data.scryfall_id, finish: to.finish });
     const r = rowOf.get(to.row);
     if (r != null) virt.scrollToIndex(r, { align: 'auto' });
     return true;
@@ -80,13 +91,15 @@ export function ChecklistTable({ sections, byId, familyNames, checklist }: {
       return;
     }
     if (!move) return;
+    // Enter/Tab on a flagged cell keeps your count.
+    if (e.key === 'Enter' || e.key === 'Tab') checklist.confirm(line.data, finish);
     if (go(nextCell(lines, line.n, finish, move))) e.preventDefault();
     else if (e.key === 'Enter') e.preventDefault();
   };
 
   return (
     <div className="@container flex h-full min-h-0 flex-col">
-      <div aria-hidden className="mx-4 grid grid-cols-[minmax(0,1fr)_repeat(2,4.75rem)] items-end gap-2 border-b-2 border-rule-strong pb-1 text-xs voice-semi font-medium uppercase tracking-[0.08em] text-ink-muted @[26rem]:grid-cols-[var(--size-thumb)_minmax(0,1fr)_repeat(2,5.5rem)]">
+      <div aria-hidden className="mx-4 grid grid-cols-[minmax(0,1fr)_repeat(2,5.25rem)] items-end gap-2 border-b-2 border-rule-strong pb-1 text-xs voice-semi font-medium uppercase tracking-[0.08em] text-ink-muted @[26rem]:grid-cols-[var(--size-thumb)_minmax(0,1fr)_repeat(2,6rem)]">
         <span className="@[26rem]:col-span-2">Printing</span>
         <span className="text-right">Nonfoil</span>
         <span className="text-right">Foil ✦</span>
@@ -106,8 +119,9 @@ export function ChecklistTable({ sections, byId, familyNames, checklist }: {
                   <CountLine
                     line={row}
                     draft={checklist.draft}
-                    focus={target?.row === row.n ? target.finish : null}
-                    onFocusCell={(finish) => setTarget({ row: row.n, finish })}
+                    focus={target?.id === row.data.scryfall_id ? target.finish : null}
+                    grabFocus={grabFocus}
+                    onFocusCell={(finish) => setTarget({ id: row.data.scryfall_id, finish })}
                     onSet={(finish, qty) => checklist.set(row.data, finish, qty, row.family)}
                     onKey={(finish) => onKey(row, finish)}
                   />
@@ -125,16 +139,17 @@ type LineProps = {
   line: Line;
   draft: Draft;
   focus: Finish | null;
+  grabFocus: () => boolean;
   onFocusCell: (f: Finish) => void;
   onSet: (f: Finish, qty: number | null) => void;
   onKey: (f: Finish) => (e: KeyboardEvent<HTMLInputElement>) => void;
 };
 
-const CountLine = memo(function CountLine({ line, draft, focus, onFocusCell, onSet, onKey }: LineProps) {
+const CountLine = memo(function CountLine({ line, draft, focus, grabFocus, onFocusCell, onSet, onKey }: LineProps) {
   const { card, data } = line;
   const edited = line.finishes.some((f) => draft[cellKey(data.scryfall_id, f)]);
   return (
-    <div className={`grid min-h-10 grid-cols-[minmax(0,1fr)_repeat(2,4.75rem)] items-center gap-2 ruled @[26rem]:grid-cols-[var(--size-thumb)_minmax(0,1fr)_repeat(2,5.5rem)] ${edited ? 'highlighter' : ''}`}>
+    <div className={`grid min-h-10 grid-cols-[minmax(0,1fr)_repeat(2,5.25rem)] items-center gap-2 ruled @[26rem]:grid-cols-[var(--size-thumb)_minmax(0,1fr)_repeat(2,6rem)] ${edited ? 'highlighter' : ''}`}>
       <span className="hidden h-[var(--size-thumb)] w-[var(--size-thumb)] overflow-hidden rounded-xs @[26rem]:block">
         <CardArt card={card} crop />
       </span>
@@ -153,7 +168,9 @@ const CountLine = memo(function CountLine({ line, draft, focus, onFocusCell, onS
             was={draft[cellKey(data.scryfall_id, f)]?.was ?? ownedOf(data, f)}
             value={cellValue(draft, data, f)}
             pledged={pledgedOf(data, f)}
+            moved={!!draft[cellKey(data.scryfall_id, f)]?.moved}
             focused={focus === f}
+            grabFocus={grabFocus}
             onFocus={() => onFocusCell(f)}
             onSet={(q) => onSet(f, q)}
             onKeyDown={onKey(f)}
@@ -166,12 +183,15 @@ const CountLine = memo(function CountLine({ line, draft, focus, onFocusCell, onS
   );
 });
 
-function CountCell({ label, was, value, pledged, focused, onFocus, onSet, onKeyDown }: {
+function CountCell({ label, was, value, pledged, moved, focused, grabFocus, onFocus, onSet, onKeyDown }: {
   label: string;
   was: number;
   value: number;
   pledged: number;
+  /** The collection changed under this cell: recheck it (Enter keeps your count). */
+  moved: boolean;
   focused: boolean;
+  grabFocus: () => boolean;
   onFocus: () => void;
   onSet: (qty: number | null) => void;
   onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
@@ -186,18 +206,19 @@ function CountCell({ label, was, value, pledged, focused, onFocus, onSet, onKeyD
     if (!active.current) setText(String(value));
   }, [value]);
   useEffect(() => {
-    if (focused && document.activeElement !== ref.current) {
+    // Only keyboard navigation moves focus here; a remount never steals it.
+    if (focused && document.activeElement !== ref.current && grabFocus()) {
       ref.current?.focus({ preventScroll: true });
       ref.current?.select();
     }
-  }, [focused]);
+  }, [focused, grabFocus]);
 
   const delta = value - was;
   const low = value < pledged;
   return (
     <span className="flex items-center justify-end gap-1.5">
-      <span className={`w-6 text-right text-2xs tabular voice-semi ${delta > 0 ? 'text-accent-ink' : 'text-danger'}`} aria-hidden={delta === 0}>
-        {delta > 0 ? `+${delta}` : delta < 0 ? `−${-delta}` : ''}
+      <span className={`min-w-6 whitespace-nowrap text-right text-2xs tabular voice-semi ${moved || delta > 0 ? 'text-accent-ink' : 'text-danger'}`} aria-hidden={delta === 0 && !moved}>
+        {moved ? `now ${was}` : delta > 0 ? `+${delta}` : delta < 0 ? `−${-delta}` : ''}
       </span>
       <input
         ref={ref}
@@ -206,7 +227,8 @@ function CountCell({ label, was, value, pledged, focused, onFocus, onSet, onKeyD
         autoComplete="off"
         aria-label={label}
         aria-invalid={bad || low || undefined}
-        title={pledged ? `${pledged} in built decks — break those down to count fewer` : undefined}
+        aria-description={moved ? `Changed to ${was} since you started counting` : undefined}
+        title={moved ? `Your collection now has ${was} — retype the count, or press Enter to keep ${value}` : pledged ? `${pledged} in built decks — break those down to count fewer` : undefined}
         value={text}
         onFocus={(e) => {
           active.current = true;
@@ -229,7 +251,7 @@ function CountCell({ label, was, value, pledged, focused, onFocus, onSet, onKeyD
           if (e.key === 'Escape') setText(String(was));
           onKeyDown(e);
         }}
-        className={`h-7 w-11 rounded-xs border bg-paper-raised px-1.5 text-right text-sm tabular text-ink outline-none transition-[border-color,background-color] duration-150 ease-guide focus:border-accent focus:bg-paper ${bad || low ? 'border-danger' : 'border-rule'} ${delta !== 0 ? 'font-semibold' : ''}`}
+        className={`h-7 w-11 rounded-xs border bg-paper-raised px-1.5 text-right text-sm tabular text-ink outline-none transition-[border-color,background-color] duration-150 ease-guide focus:border-accent focus:bg-paper ${bad || low ? 'border-danger' : moved ? 'border-accent ring-2 ring-accent' : 'border-rule'} ${delta !== 0 ? 'font-semibold' : ''}`}
       />
     </span>
   );
@@ -245,8 +267,8 @@ export function ChecklistActions({ checklist: c }: { checklist: Checklist }) {
       <Button tone="paper" disabled={!c.dirty || c.saving} onClick={() => setConfirm(true)}>Discard</Button>
       <Button
         emphasis="primary"
-        disabled={!c.dirty || c.saving || low.length > 0}
-        title={low.length ? `${low[0].name} can’t go below the ${low[0].min} in built decks` : undefined}
+        disabled={!c.dirty || c.saving || low.length > 0 || c.summary.moved > 0}
+        title={c.summary.moved ? 'Recheck the flagged counts first' : low.length ? `${low[0].name} can’t go below the ${low[0].min} in built decks` : undefined}
         onClick={() => void c.save()}
       >
         {c.saving ? 'Saving…' : n ? `Save ${fmtInt(n)} ${n === 1 ? 'change' : 'changes'}` : 'Save'}
@@ -261,10 +283,19 @@ export function ChecklistActions({ checklist: c }: { checklist: Checklist }) {
 /** Save errors (stale counts, pledged copies) and the below-pledged hint, above the table. */
 export function ChecklistNotes({ checklist: c }: { checklist: Checklist }) {
   const low = c.summary.belowPledged;
-  if (!c.error && !low.length) return null;
+  const moved = c.summary.moved;
+  if (!c.error && !low.length && !moved) return null;
   return (
     <div className="mx-4 mb-2 flex flex-col gap-1 text-sm">
       {c.error && <p role="alert" className="text-danger">Couldn’t save: {c.error}</p>}
+      {moved > 0 && (
+        <p role="status" className="flex flex-wrap items-center gap-x-3 gap-y-1 text-ink">
+          <span>
+            {fmtInt(moved)} {moved === 1 ? 'count changed' : 'counts changed'} in your collection since you started counting. Each flagged cell shows the new number — retype it, or press Enter to keep yours.
+          </span>
+          <button type="button" onClick={() => c.confirm()} className="cursor-pointer text-accent-ink underline hover:text-ink">Keep all my counts</button>
+        </p>
+      )}
       {low.length > 0 && (
         <p className="text-danger">
           {low[0].name} has {low[0].min} {low[0].min === 1 ? 'copy' : 'copies'} in built decks — break {low[0].min === 1 ? 'it' : 'them'} down before counting fewer{low.length > 1 ? ` (and ${low.length - 1} more)` : ''}.

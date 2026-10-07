@@ -14,8 +14,8 @@ type Props = Omit<ComponentProps<'button'>, 'onClick' | 'disabled'> & {
 
 /**
  * An icon-only action on paper: the mark in amber ink, a quiet sunk fill on
- * hover/focus — no lift, no underline. The tooltip carries the words, so a row
- * of actions stays calm. DESIGN.md: secondary actions only; a flow's commit stays
+ * hover/focus — no lift, no underline (a pressed toggle adds an amber
+ * underline). The tooltip carries the words, so a row of actions stays calm. DESIGN.md: secondary actions only; a flow's commit stays
  * a filled amber button.
  */
 export function IconAction({ label, Icon, onClick, disabled = false, disabledReason, ...rest }: Props) {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CollectionCardOut } from './api';
-import { summaryLine, cellValue, countFinishes, familyLabel, nextCell, parseCount, readDraft, setCell, summarize, toChanges, type Draft } from './checklist';
+import { confirmMoved, dropSaved, rebaseStale, summaryLine, cellValue, countFinishes, familyLabel, nextCell, parseCount, readDraft, setCell, summarize, toChanges, type Draft } from './checklist';
 
 const card = (over: Partial<CollectionCardOut> = {}): CollectionCardOut => ({
   scryfall_id: 'a', oracle_id: null, name: 'Alpha', family: 'tst', set_code: 'tst', collector_number: '1', rarity: 'rare',
@@ -56,6 +56,8 @@ describe('checklist draft', () => {
   it('restores a stored draft and drops malformed entries', () => {
     const good = setCell({}, card(), 'foil', 2, 'Test');
     expect(readDraft(JSON.stringify(good))).toEqual(good);
+    const flagged = rebaseStale(good, [{ scryfall_id: 'a', finish: 'foil', expected: 0, current: 1 }]);
+    expect(readDraft(JSON.stringify(flagged))).toEqual(flagged);
     expect(readDraft(JSON.stringify({ x: { id: 'a', finish: 'etched', qty: 1, was: 0 } }))).toEqual({});
     expect(readDraft('{nope')).toEqual({});
     expect(readDraft(null)).toEqual({});
@@ -68,6 +70,36 @@ describe('checklist draft', () => {
     expect(nextCell(rows, 2, 'nonfoil', 'down')).toBeNull();
     expect(nextCell(rows, 0, 'nonfoil', 'right')).toEqual({ row: 0, finish: 'foil' });
     expect(nextCell(rows, 1, 'foil', 'left')).toBeNull();
+  });
+
+  it('rebases stale cells on the current count and flags them', () => {
+    let d = setCell({}, card(), 'nonfoil', 5, 'T');                       // was 3
+    d = setCell(d, card({ scryfall_id: 'b', owned: { foil: 1 } }), 'foil', 4, 'T');
+    d = rebaseStale(d, [
+      { scryfall_id: 'a', finish: 'nonfoil', expected: 3, current: 4 },    // moved under the cell
+      { scryfall_id: 'b', finish: 'foil', expected: 1, current: 4 },       // now already matches
+    ]);
+    expect(Object.keys(d)).toEqual(['a|nonfoil']);
+    expect(d['a|nonfoil']).toMatchObject({ qty: 5, was: 4, moved: true });
+    expect(summarize(d)).toMatchObject({ moved: 1, added: 1 });
+    expect(toChanges(d)).toEqual([{ scryfall_id: 'a', finish: 'nonfoil', qty: 5, expected: 4 }]);
+    d = confirmMoved(d, 'a|nonfoil');
+    expect(summarize(d).moved).toBe(0);
+    expect(confirmMoved(d)).toBe(d); // nothing flagged → same object
+    // Retyping a flagged cell also clears the flag and keeps the new baseline.
+    const again = setCell(rebaseStale(setCell({}, card(), 'nonfoil', 5, 'T'), [{ scryfall_id: 'a', finish: 'nonfoil', expected: 3, current: 4 }]), card(), 'nonfoil', 6, 'T');
+    expect(again['a|nonfoil']).toMatchObject({ qty: 6, was: 4 });
+    expect(again['a|nonfoil'].moved).toBeUndefined();
+  });
+
+  it('after a save keeps only cells changed while it was in flight, rebased on the saved count', () => {
+    const sent = setCell(setCell({}, card(), 'nonfoil', 5, 'T'), card(), 'foil', 2, 'T');
+    let live = setCell(sent, card(), 'foil', 3, 'T');                       // typed during the save
+    live = setCell(live, card({ scryfall_id: 'b' }), 'nonfoil', 1, 'T');   // a new cell during the save
+    const after = dropSaved(live, sent);
+    expect(Object.keys(after).sort()).toEqual(['a|foil', 'b|nonfoil']);
+    expect(after['a|foil']).toMatchObject({ qty: 3, was: 2 });
+    expect(dropSaved(sent, sent)).toEqual({});
   });
 
   it('writes the running diff line', () => {

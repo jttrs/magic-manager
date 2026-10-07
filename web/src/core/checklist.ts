@@ -22,6 +22,9 @@ type DraftEntry = {
   unit: number | null;
   name: string;
   family: string;
+  /** The collection moved under this cell (a save came back stale): `was` was
+   *  rebased to the current count and the cell waits for you to recheck it. */
+  moved?: boolean;
 };
 
 export type Draft = Readonly<Record<string, DraftEntry>>;
@@ -78,11 +81,13 @@ export type DraftSummary = {
   unpriced: number;
   /** Cells below their pledged floor (Save stays off until fixed). */
   belowPledged: DraftEntry[];
+  /** Cells to recheck because the collection moved under them (Save stays off). */
+  moved: number;
   families: string[];
 };
 
 export function summarize(draft: Draft): DraftSummary {
-  const s: DraftSummary = { cells: 0, added: 0, removed: 0, value: 0, unpriced: 0, belowPledged: [], families: [] };
+  const s: DraftSummary = { cells: 0, added: 0, removed: 0, value: 0, unpriced: 0, belowPledged: [], moved: 0, families: [] };
   const fams = new Set<string>();
   for (const e of Object.values(draft)) {
     const d = e.qty - e.was;
@@ -93,11 +98,51 @@ export function summarize(draft: Draft): DraftSummary {
     if (e.unit == null) s.unpriced += Math.abs(d);
     else s.value += d * e.unit;
     if (e.qty < e.min) s.belowPledged.push(e);
+    if (e.moved) s.moved += 1;
     fams.add(e.family);
   }
   s.families = [...fams].sort();
   s.value = Math.round(s.value * 100) / 100;
   return s;
+}
+
+export type StaleRow = { scryfall_id: string; finish: string; expected: number; current: number };
+
+/** A save came back stale: rebase each listed cell on the collection's current
+ *  count and flag it for a recheck (a cell that now already matches is dropped). */
+export function rebaseStale(draft: Draft, rows: readonly StaleRow[]): Draft {
+  const next = { ...draft };
+  for (const r of rows) {
+    if (r.finish !== 'nonfoil' && r.finish !== 'foil') continue;
+    const key = cellKey(r.scryfall_id, r.finish);
+    const e = next[key];
+    if (!e) continue;
+    if (e.qty === r.current) delete next[key];
+    else next[key] = { ...e, was: r.current, moved: true };
+  }
+  return next;
+}
+
+/** Keep your count in a flagged cell (or every flagged cell with no key). */
+export function confirmMoved(draft: Draft, key?: string): Draft {
+  const keys = key ? [key] : Object.keys(draft);
+  if (!keys.some((k) => draft[k]?.moved)) return draft;
+  const next = { ...draft };
+  for (const k of keys) if (next[k]?.moved) next[k] = { ...next[k], moved: false };
+  return next;
+}
+
+/** After a save: drop the cells that were sent, but keep any you changed while it
+ *  was in flight — rebased on the count just saved, so the next save isn't stale. */
+export function dropSaved(draft: Draft, sent: Draft): Draft {
+  const next = { ...draft };
+  for (const [k, s] of Object.entries(sent)) {
+    const e = next[k];
+    if (!e) continue;
+    if (e.qty === s.qty) delete next[k];
+    else next[k] = { ...e, was: s.qty, moved: false };
+  }
+  return next;
 }
 
 /** The save body for POST /api/collection/checklist. */
@@ -131,6 +176,7 @@ export function readDraft(raw: string | null): Draft {
           unit: typeof v.unit === 'number' ? v.unit : null,
           name: typeof v.name === 'string' ? v.name : v.id,
           family: typeof v.family === 'string' ? v.family : '',
+          ...(v.moved === true ? { moved: true } : {}),
         };
       }
     }

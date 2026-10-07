@@ -301,7 +301,8 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         try:
             return collection_api.save_checklist(body)
         except sets_mod.StaleCounts as e:
-            raise HTTPException(status_code=409, detail=str(e)) from e
+            # The editor rebases and flags exactly these cells (structured detail).
+            raise HTTPException(status_code=409, detail={"message": str(e), "stale": e.rows}) from e
         except sets_mod.BelowPledged as e:
             raise HTTPException(status_code=409, detail=str(e)) from e
         except LookupError as e:
