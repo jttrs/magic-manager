@@ -17,7 +17,10 @@ family, my copies of each printing, and where the gaps are". So this module:
   stamped, serialized, …); then drops tokens, digital-only
   (``selectors._is_digital_only``), the family's HARD-tier unobtainable rules,
   and meld-back faces (``missing._drop_meld_back_faces``). Every exclusion
-  yields to ownership: a printing you own always shows (ground truth first);
+  yields to ownership: a printing you own always shows (ground truth first).
+  The set-type / variant / unobtainable exclusions also yield to a configured
+  scene (``scenes.scene_of`` — e.g. LTR's prerelease-stamped Shire scene run),
+  since a curated scene is incomplete without every panel;
 * attaches owned and pledged quantities per finish (one inventory query, one
   deck_assignments query) and the classification flags the UI layers on:
   ``is_bulk`` (common/uncommon), ``is_chase`` (family chase-tier rules),
@@ -30,7 +33,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 
-from . import db, exports, family_status, missing as missing_mod, scryfall, selectors as sel_mod, sets as sets_mod, treatments
+from . import db, exports, family_status, missing as missing_mod, scenes as scenes_mod, scryfall, selectors as sel_mod, sets as sets_mod, treatments
 
 BULK_RARITIES = frozenset({"common", "uncommon"})
 _HARD_TIER = frozenset({"hard"})
@@ -154,15 +157,21 @@ def family_cards(code: str) -> FamilyCollection:
     set_types = {code: s.get("set_type") for code, s in all_sets.items()}
     candidates: list[sel_mod.MaterializedRow] = []
     extra: dict[str, tuple[str | None, str | None]] = {}
+    scene_cfg = scenes_mod.configured(parent_code)
     for r in rows:
         card = sel_mod._card_dict(r)
         sid = card["scryfall_id"]
         if sid not in owned_ids and (
-            (card["set"] != parent_code and set_types.get(card["set"]) not in sets_mod.DEFAULT_INVENTORY_SET_TYPES)
-            or sets_mod.is_excluded_variant(card)
-            or card.get("is_token")
+            card.get("is_token")
             or sel_mod._is_digital_only(card)
-            or sel_mod._is_family_unobtainable(card, parent_code, _HARD_TIER)
+            or (
+                not scenes_mod.scene_of(scene_cfg, card["set"] or "", card.get("collector_number") or "")
+                and (
+                    (card["set"] != parent_code and set_types.get(card["set"]) not in sets_mod.DEFAULT_INVENTORY_SET_TYPES)
+                    or sets_mod.is_excluded_variant(card)
+                    or sel_mod._is_family_unobtainable(card, parent_code, _HARD_TIER)
+                )
+            )
         ):
             continue
         card["color_identity"] = r["color_identity"]
