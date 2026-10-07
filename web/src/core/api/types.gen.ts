@@ -103,6 +103,16 @@ export type ArtSwapsOut = {
     matched: {
         [key: string]: Array<string>;
     };
+    /**
+     * Free By Finish
+     *
+     * Per printing you own, free copies per finish (`nonfoil`/`foil`); `printings[sid].free` is the finish-agnostic total.
+     */
+    free_by_finish?: {
+        [key: string]: {
+            [key: string]: number;
+        };
+    };
 };
 
 /**
@@ -1701,6 +1711,12 @@ export type DeckCostOut = {
      * Floors checked across every set on Scryfall (else local prices).
      */
     live?: boolean;
+    /**
+     * Live Error
+     *
+     * Why the live Scryfall check failed (prices fell back to local).
+     */
+    live_error?: string | null;
 };
 
 /**

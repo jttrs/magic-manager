@@ -31,9 +31,12 @@ Pure engine: no rendering. ``api.collection`` adapts it for the web.
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass, field
 
 from . import db, exports, family_status, missing as missing_mod, scenes as scenes_mod, scryfall, selectors as sel_mod, sets as sets_mod, treatments
+
+log = logging.getLogger(__name__)
 
 BULK_RARITIES = frozenset({"common", "uncommon"})
 _HARD_TIER = frozenset({"hard"})
@@ -259,6 +262,9 @@ def buy_lines(items: list[tuple[str, str, int]], target: str) -> str:
             r["scryfall_id"]: sel_mod._card_dict(r)
             for r in conn.execute(f"SELECT {sel_mod._CARD_COLS} FROM cards c WHERE c.scryfall_id IN ({ph})", ids)
         }
+    missing = [sid for sid in ids if sid not in by_id]
+    if missing:
+        log.warning("buy_lines: skipping %d id(s) not in the local catalog: %s", len(missing), ", ".join(missing))
     rows = [
         sel_mod.MaterializedRow(scryfall_id=sid, quantity=max(1, qty), finish=finish, card=by_id[sid])
         for sid, finish, qty in items if sid in by_id

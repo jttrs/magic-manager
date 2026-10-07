@@ -21,7 +21,8 @@ import { SearchSelect } from '../components/SearchSelect';
 import { ChipToggles, Segmented, SelectField, SideSection, TextField } from '../components/Sidebar';
 import { MultiSelect } from '../components/MultiSelect';
 import { EmptyNote, ErrorNote, GuideSheet } from '../components/States';
-import { CardKingdomMark, ManaPoolMark, TcgplayerMark } from '../components/StoreMarks';
+import { buyListTargets } from '../components/buyTargets';
+import { TcgplayerMark } from '../components/StoreMarks';
 import { collectionBuyList, type CardPriceOut, type DeckCostOut, type ProductValueOut } from '../core/api';
 import { fmtCount, fmtInt, fmtUsd } from '../core/format';
 import { filterSortProducts, PRODUCT_TYPE_LABEL, PRODUCT_TYPES, typeCounts, type Basis, type DealSort } from '../core/deals';
@@ -175,11 +176,7 @@ export function MarketView() {
           />
           <CopyTargets
             lead={`Copy bulk lists · ${fmtCount(toBuy, 'card')} to buy · ≈ ${fmtUsd(toBuyUsd)} at market`}
-            targets={[
-              { id: 'manapool', name: 'ManaPool', Mark: ManaPoolMark, getText: buyText('manapool') },
-              { id: 'tcgplayer', name: 'TCGplayer', Mark: TcgplayerMark, getText: buyText('tcgplayer') },
-              { id: 'cardkingdom', name: 'Card Kingdom', Mark: CardKingdomMark, getText: buyText('cardkingdom'), note: 'Card Kingdom takes names only; pick each printing after Find Cards' },
-            ]}
+            targets={buyListTargets(buyText, { cardKingdomNote: 'Card Kingdom takes names only; pick each printing after Find Cards' })}
           />
         </SideSection>
       )}
@@ -514,7 +511,7 @@ function DeckPanel({ d, buyAt, onCheckLive }: { d: DeckCostOut; buyAt: MarketSea
           ))}
         </tbody>
       </table>
-      <FloorBasis live={d.live ?? false} onCheckLive={onCheckLive} />
+      <FloorBasis live={d.live ?? false} liveError={d.live_error} onCheckLive={onCheckLive} />
       {d.unpriced > 0 && <p className="-mt-3 text-sm text-ink-muted">{fmtCount(d.unpriced, 'printing')} without a price — totals undercount.</p>}
 
       <CardLines title="To buy" lines={toBuy} unitBasis={buyAt} />

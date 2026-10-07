@@ -110,12 +110,15 @@ class FloorPair:
 _FLOOR_CHUNK = 20
 
 
-def _scan_anywhere(oracle_ids: list[str]) -> dict[str, FloorPair]:
+def _scan_anywhere(oracle_ids: list[str], *, cards: dict[str, dict] | None = None) -> dict[str, FloorPair]:
     """Core batched scan: one ``(oracleid:a or …) unique=prints`` search per chunk
     of ≤ ``_FLOOR_CHUNK`` ids, tracking the CHEAPEST printing (price + set + cn)
     per finish for each oracle_id. The single source of truth both the price-only
     tuple API (:func:`card_floors_many`) and the enriched API
     (:func:`anywhere_floors`) project from, so there's one search pass either way.
+
+    ``cards``, when given, collects the Scryfall card dict of every printing that
+    became a floor, keyed by id (so callers can persist the winners).
 
     Raises ``scryfall.ScryfallError`` on a lookup failure (callers that must not
     abort a batch catch it and degrade the affected ids to unpriced)."""
@@ -134,14 +137,19 @@ def _scan_anywhere(oracle_ids: list[str]) -> dict[str, FloorPair]:
             nf = price(p, "usd")
             if nf is not None and (pair.nonfoil is None or nf < pair.nonfoil.usd):
                 pair.nonfoil = Floor(nf, "nonfoil", set_code, cn, p.get("id"))
+                if cards is not None and p.get("id"):
+                    cards[p["id"]] = p
             ff = price(p, "usd_foil")
             if ff is not None and (pair.foil is None or ff < pair.foil.usd):
                 pair.foil = Floor(ff, "foil", set_code, cn, p.get("id"))
+                if cards is not None and p.get("id"):
+                    cards[p["id"]] = p
     return out
 
 
 def anywhere_floors(
     oracle_ids: Iterable[str], *, finish_mode: FinishMode = "either",
+    cards: dict[str, dict] | None = None,
 ) -> dict[str, Floor | FloorPair]:
     """Cheapest printing of each card ANYWHERE (live, batched), keyed by oracle_id.
 
@@ -151,7 +159,7 @@ def anywhere_floors(
     Every requested id is present in the result (unpriced → an empty Floor /
     FloorPair with ``usd=None``). Raises ``scryfall.ScryfallError`` on lookup
     failure."""
-    pairs = _scan_anywhere(list(oracle_ids))
+    pairs = _scan_anywhere(list(oracle_ids), cards=cards)
     if finish_mode == "preserve":
         return dict(pairs)
     return {oid: pair.collapse() for oid, pair in pairs.items()}
@@ -246,6 +254,21 @@ class PrintingFloor:
     foil: Floor | None
 
 
+def _persist_floor_printings(conn, pairs: Iterable[Floor | FloorPair], found: dict[str, dict]) -> None:
+    """Upsert the winning live floor printings missing from the local ``cards``
+    table, so a floor id handed to a buy list always resolves locally."""
+    wanted = {f.scryfall_id for pair in pairs for f in (pair.nonfoil, pair.foil) if f and f.scryfall_id}
+    wanted &= found.keys()
+    if not wanted:
+        return
+    ids = list(wanted)
+    known = {r[0] for r in conn.execute(
+        f"SELECT scryfall_id FROM cards WHERE scryfall_id IN ({','.join('?' * len(ids))})", ids)}
+    new = [found[i] for i in ids if i not in known]
+    if new:
+        db.upsert_cards(conn, new)
+
+
 def printing_floors(scryfall_ids: Iterable[str], *, live: bool = False) -> dict[str, PrintingFloor]:
     """For each printing id, the cheapest nonfoil and cheapest foil printing of
     the same card (by oracle_id) — the enrichment any card list can ask for.
@@ -263,8 +286,11 @@ def printing_floors(scryfall_ids: Iterable[str], *, live: bool = False) -> dict[
             f"SELECT scryfall_id, oracle_id, name FROM cards WHERE scryfall_id IN ({','.join('?' * len(ids))})",
             ids).fetchall()
         oids = [r["oracle_id"] for r in rows if r["oracle_id"]]
-        floors = (anywhere_floors(oids, finish_mode="preserve") if live
+        found: dict[str, dict] = {}
+        floors = (anywhere_floors(oids, finish_mode="preserve", cards=found) if live
                   else local_floors(oids, finish_mode="preserve", conn=c))
+        if live:
+            _persist_floor_printings(c, floors.values(), found)
     out = {}
     for r in rows:
         pair = floors.get(r["oracle_id"] or "") or FloorPair()

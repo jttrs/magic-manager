@@ -137,3 +137,33 @@ def test_product_cost_booster_only_has_no_known_cards(tmp_db, monkeypatch):
     c = market.product_cost("sealed", "fin", "play booster box")
     assert (c["known_exact"], c["known_floor"], c["exact"], c["floor"], c["lines"]) == (None, None, 120.0, 120.0, [])
     market._cost_memo.clear()
+
+
+NEW_PRINT = "33333333-0000-0000-0000-0000000000ff"   # cheapest printing, set not synced locally
+
+
+def test_live_floor_printing_resolves_in_buy_lines(deck, make_card, monkeypatch):
+    """The live floor may pick a printing absent from `cards`; it must be
+    persisted so the buy list (keyed by that id) doesn't silently drop it."""
+    from magic_manager import collection_view, scryfall
+    far = make_card(id=NEW_PRINT, oracle_id=OA, name="Skullclamp", set="zzz", collector_number="7",
+                    prices={"usd": "0.50", "usd_foil": None})
+    monkeypatch.setattr(scryfall, "search", lambda q, **k: [far])
+    monkeypatch.setattr(valuation, "value_sealed_product", lambda *a, **k: pytest.fail("no sealed"))
+
+    out = market.deck_cost(deck, with_sealed=False, live=True)
+    clamp = next(line for line in out["lines"] if line["name"] == "Skullclamp")
+    assert clamp["floor_scryfall_id"] == NEW_PRINT and out["live"] is True and out["live_error"] is None
+    text = collection_view.buy_lines([(clamp["floor_scryfall_id"], "nonfoil", 1)], "tcgplayer")
+    assert "Skullclamp" in text
+
+
+def test_deck_cost_live_failure_falls_back_to_local(deck, monkeypatch):
+    from magic_manager import scryfall
+
+    def boom(q, **k):
+        raise scryfall.ScryfallError("HTTP 503")
+    monkeypatch.setattr(scryfall, "search", boom)
+    out = market.deck_cost(deck, with_sealed=False, live=True)
+    assert out["live"] is False and "503" in out["live_error"]
+    assert out["scratch_floor"] == 4.0   # local floor (msc 2.00 + 2·1)

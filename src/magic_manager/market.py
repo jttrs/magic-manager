@@ -18,7 +18,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable
 
-from . import card_floor, collection_view, construct, db, family_status, foil_gap, mtgjson, sealed, sets, valuation
+from . import card_floor, collection_view, construct, db, family_status, foil_gap, mtgjson, scryfall, sealed, sets, valuation
 
 
 # ---------- sealed products ----------
@@ -268,12 +268,18 @@ def deck_cost(slug: str, *, with_sealed: bool = True, live: bool = False) -> dic
         except Exception:  # noqa: BLE001 — sealed price is optional
             pass
     summary = construct.summarize(rows, sealed_market)
-    lines, scratch_floor, with_collection_floor = card_lines(rows, live=live)
+    live_error = None
+    try:
+        lines, scratch_floor, with_collection_floor = card_lines(rows, live=live)
+    except scryfall.ScryfallError as e:
+        live_error = str(e) or "Scryfall lookup failed"
+        live = False
+        lines, scratch_floor, with_collection_floor = card_lines(rows, live=False)
     lines.sort(key=lambda ln: -((ln["floor_usd"] or 0) * ln["buy"]))
     return {
         "slug": slug, "sealed_product": sealed_name, "sealed": sealed_market,
         "scratch": summary["scratch"], "with_collection": summary["with_collection"],
         "scratch_floor": scratch_floor, "with_collection_floor": with_collection_floor,
         "coverage": round(summary["coverage"], 3), "unpriced": summary["n_unpriced"],
-        "total_need": summary["total_need"], "lines": lines, "live": live,
+        "total_need": summary["total_need"], "lines": lines, "live": live, "live_error": live_error,
     }
