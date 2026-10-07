@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { ApiError } from '../core/apiError';
 
 /** Paper sheet that hosts a view's content: title, summary line, then the body. */
 export function GuideSheet({ title, summary, actions, nav, children }: { title: ReactNode; summary?: ReactNode; actions?: ReactNode; nav?: ReactNode; children: ReactNode }) {
@@ -32,6 +33,11 @@ export function ErrorNote({ error, onRetry }: { error: unknown; onRetry?: () => 
     <div role="alert" className="mx-auto mt-[12vh] max-w-[52ch] px-6 text-center">
       <p className="text-2xl voice-condensed font-bold text-danger">Couldn’t load this sheet</p>
       <p className="mt-2 text-md text-ink">{msg}</p>
+      {error instanceof ApiError && error.ref && !msg.includes(error.ref) && (
+        <p className="mt-1 text-sm tabular text-ink-muted">
+          Ref <span className="select-all text-ink">{error.ref}</span>{error.code ? ` · ${error.code}` : ''}
+        </p>
+      )}
       {onRetry && (
         <button type="button" onClick={onRetry} className="mt-4 cursor-pointer rounded-sm border border-rule px-3 py-1.5 text-sm voice-semi text-ink hover:border-rule-strong">
           Try again

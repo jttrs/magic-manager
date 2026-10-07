@@ -193,6 +193,8 @@ Hairline borders are the main geometry. `ruled` is a 1px bottom border; column a
 - **Purpose:** global masthead, primary nav, jobs link, theme switch, sidebar-below-nav layout.
 - **Nav:** Collection · Decks · Explore · Market. On phones the tabs tighten (smaller condensed type, no gaps) so all four fit at 360px. **Jobs is not a destination:** background jobs are housekeeping, so they sit beside the theme switch as a quiet queue-mark icon (tooltip *Background jobs*, amber dot while one runs) — never a nav tab or a word.
 - **Restore point:** a quiet undo-arrow icon left of the jobs icon, shown only once a restore point exists (tooltip `Restore point · 3:31 PM`). Confirm dialog (`Restore your collection to 3:31 PM?`): why it was taken, a plain list of what changes (`3 fewer copies`, `1 more deck`), and that it swaps — restoring again comes back. One slot; taken automatically before the first change of each session.
+- **Privacy:** a quiet shield icon right of the jobs icon (tooltip `Privacy · what this app records`; a check inside while anything is recorded). Dialog: one ruled section per purpose — *Error reports* · *Usage analytics* — each a heading, an amber Radix switch (on = amber, the one active language), one plain sentence, and a *What's recorded (n)* disclosure listing catalog events with their purpose; then retention in one sentence and a quiet *Delete my analytics data* button with a polite live result. Hosted users who haven't chosen see it once on first visit with *Save my choice*. Never a banner.
+- **Analytics link (internal, flag `analytics`):** a bar-chart icon beside the jobs icon, desktop only (`max-sm:hidden` keeps all four nav tabs on a 360px phone).
 - **States:** active nav uses amber underline; the jobs icon shows an amber dot when queued/running; theme can be system/light/dark and persists to `localStorage` as `mm.theme`.
 - **A11y contract:** skip link to `#main`, `nav aria-label="Primary"`, `main tabIndex={-1}`, sidebar labelled by the view, mobile disclosure uses `aria-expanded`/`aria-controls`.
 
@@ -348,13 +350,18 @@ Hairline borders are the main geometry. `ruled` is a 1px bottom border; column a
 - **Footer:** what will happen in plain numbers (`8 copies · 2 best-guess printings to check · 1 not found`) and one primary `Add N copies`. Success shows a highlighter `Added …` status in the dialog; the collection refetches behind it.
 - **Precons add directly** (a job; `Keep it`: Suggested / Keep built / Break into loose cards); **deck URLs fetch first** (a job) and land in review before anything is written.
 
+### Analytics (`/analytics`, internal flag `analytics`)
+- **A ledger, errors first.** Sidebar: `Period` Segmented (7 · 30 · 90 days), *Trace an error* (ref field + Find; validates 6–32 hex), *Store* facts (raw counts, retention, last pruned, recording state, file, the `mm analytics sql …` hint). Sheet: one ruled **totals line** (condensed tabular figures with a label beside each, rust when it counts failures — not metric cards), then two columns (xl): left = *Errors per day* (a ruled day-tally, rust bars, busiest day full height, axis dates, per-day sr-only text), *Top errors* (count · what failed · status/code · age), *Recent errors* (each linked by its short **ref** to the trace); right = *Views* (ink bar per view, the dark part = phone use), *Features*, *Collection → buy-list* funnel with session medians, *Jobs* table (runs · failed in rust · typical duration).
+- **Trace:** `?ref=` opens a sunk-paper panel above the ledger listing every event linked to that request (props as `k=v`), each with a copy-request-id button.
+- **Rust, not amber, for failure counts** (the Amber-Only Rule holds: amber stays on the active period and focus).
+
 ### Button and CopyButton
 - **Button:** one component with `tone="chrome|paper"` and `emphasis="primary|quiet"`; primary fills amber, quiet variants are ruled outlines.
 - **CopyButton:** wraps Button, copies generated list text, and announces result through `aria-live="polite"`.
 
 ### States
 - **EmptyNote:** centered guide copy, no illustration.
-- **ErrorNote:** `role="alert"`, rust heading, optional ruled retry button.
+- **ErrorNote:** `role="alert"`, rust heading, optional ruled retry button. An `ApiError` adds a muted line `Ref 3f9a12c0 · stale_draft` (select-all ref) so a user can quote it; 5xx messages already end in `(ref …)`.
 - **GridSkeleton:** pulsing card-aspect blocks with `role="status"` and `aria-live="polite"`.
 
 ## Do's and Don'ts

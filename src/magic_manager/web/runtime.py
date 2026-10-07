@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import threading
+import time
 import traceback
 import uuid
 from dataclasses import asdict, dataclass, field
@@ -24,6 +25,8 @@ from typing import Any, Literal
 
 from taskiq import InMemoryBroker
 
+from .. import analytics
+from ..analytics import catalog as analytics_catalog
 from ..api import jobs as jobs_api
 
 Status = Literal["queued", "running", "succeeded", "failed"]
@@ -55,11 +58,15 @@ class JobRecord:
     summary: str | None = None
     artifacts: list[dict] = field(default_factory=list)
     error: str | None = None
+    error_code: str | None = None
     events: list[JobEvent] = field(default_factory=list, repr=False)
+    # The submitting request's analytics context (request/session ids); never public.
+    ctx: analytics.Context = field(default_factory=analytics.Context, repr=False)
 
     def public(self) -> dict:
         d = asdict(self)
         d.pop("events")
+        d.pop("ctx")
         return d
 
 
@@ -93,11 +100,12 @@ class JobManager:
         spec = jobs_api.get(name)                       # KeyError → 404
         inputs = spec.input_model.model_validate(raw_inputs)  # ValidationError → 422
         rec = JobRecord(id=uuid.uuid4().hex, name=spec.name, title=spec.title,
-                        inputs=inputs.model_dump())
+                        inputs=inputs.model_dump(), ctx=analytics.current())
         self._jobs[rec.id] = rec
         self._trim()
         self._emit(rec, "status", {"status": rec.status})
         await self._task.kiq(rec.id)
+        await asyncio.to_thread(analytics.record, "job.started", {"job": rec.name, "job_id": rec.id}, ctx=rec.ctx)
         return rec
 
     def get(self, job_id: str) -> JobRecord:
@@ -133,14 +141,21 @@ class JobManager:
                 self._emit(rec, "status", {"status": rec.status})
                 return spec.run(inputs, progress)
 
+        t0 = time.monotonic()
         try:
             result = await asyncio.to_thread(body)
         except Exception as e:  # noqa: BLE001 — surface any job failure to the client
             rec.status, rec.finished_at = "failed", _now()
             rec.error = f"{type(e).__name__}: {e}"
-            self._emit(rec, "error", {"error": rec.error, "trace": traceback.format_exc(limit=5)})
+            rec.error_code = analytics_catalog.to_code(type(e).__name__)
+            self._emit(rec, "error", {"error": rec.error, "code": rec.error_code, "trace": traceback.format_exc(limit=5)})
             self._emit(rec, "status", {"status": rec.status})
+            await asyncio.to_thread(analytics.record, "job.failed", {
+                "job": rec.name, "code": rec.error_code, "job_id": rec.id,
+                "duration_ms": int((time.monotonic() - t0) * 1000)}, ctx=rec.ctx)
             return
+        await asyncio.to_thread(analytics.record, "job.succeeded", {
+            "job": rec.name, "job_id": rec.id, "duration_ms": int((time.monotonic() - t0) * 1000)}, ctx=rec.ctx)
         rec.status, rec.finished_at = "succeeded", _now()
         rec.summary = result.summary
         rec.artifacts = [asdict(a) for a in result.artifacts]

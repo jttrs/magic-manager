@@ -1,3 +1,4 @@
+import { apiErrorFrom } from '../../core/apiError';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBlocker } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -53,7 +54,7 @@ export function useChecklist() {
           // ChecklistNotes explains the flagged cells (summary.moved).
           setDraft((d) => rebaseStale(d, detail.stale));
         } else {
-          setError(typeof detail === 'string' ? detail : `Request failed (${r.response?.status ?? 'network'})`);
+          setError(apiErrorFrom(r.error, r.response).message);
         }
         return;
       }

@@ -1,17 +1,12 @@
 // Server state via TanStack Query over the generated, typed API client.
 import { keepPreviousData, queryOptions } from '@tanstack/react-query';
 import type { DraftCardIn } from '../core/api';
+import { apiErrorFrom } from '../core/apiError';
 import type { RankingRequest } from '../core/rankings';
-import { dealsTabs, dealsWatched, marketProductCost, marketSecretLair, undoInfo, cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, cardFloors, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs, historyList, historyEvent, exploreRanking, exploreRankingOptions, cardCombos, deckCombos, draftCombos, artTags, artSwaps, jumpstartSets, jumpstartView, jumpstartPack, surfOptions } from '../core/api';
-
-class ApiError extends Error {}
+import { analyticsConsent, analyticsSummary, analyticsCatalog, dealsTabs, dealsWatched, marketProductCost, marketSecretLair, undoInfo, cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, cardFloors, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs, historyList, historyEvent, exploreRanking, exploreRankingOptions, cardCombos, deckCombos, draftCombos, artTags, artSwaps, jumpstartSets, jumpstartView, jumpstartPack, surfOptions } from '../core/api';
 
 export function unwrap<T>(r: { data?: T; error?: unknown; response?: Response }): T {
-  if (r.error !== undefined || r.data === undefined) {
-    const detail = (r.error as { detail?: unknown } | undefined)?.detail;
-    const msg = typeof detail === 'string' ? detail : `Request failed (${r.response?.status ?? 'network'})`;
-    throw new ApiError(msg);
-  }
+  if (r.error !== undefined || r.data === undefined) throw apiErrorFrom(r.error, r.response);
   return r.data;
 }
 
@@ -333,4 +328,27 @@ export const surfOptionsQuery = () =>
     queryKey: ['surf', 'options'],
     queryFn: async ({ signal }) => unwrap(await surfOptions({ signal })),
     staleTime: 60 * 60_000,
+  });
+
+export const consentQuery = () =>
+  queryOptions({
+    queryKey: ['analytics', 'consent'],
+    queryFn: async ({ signal }) => unwrap(await analyticsConsent({ signal })),
+    staleTime: 5 * 60_000,
+    retry: 0,
+  });
+
+export const analyticsCatalogQuery = () =>
+  queryOptions({
+    queryKey: ['analytics', 'catalog'],
+    queryFn: async ({ signal }) => unwrap(await analyticsCatalog({ signal })),
+    staleTime: 60 * 60_000,
+  });
+
+export const analyticsSummaryQuery = (days: number) =>
+  queryOptions({
+    queryKey: ['analytics', 'summary', days],
+    queryFn: async ({ signal }) => unwrap(await analyticsSummary({ query: { days }, signal })),
+    staleTime: 30_000,
+    placeholderData: keepPreviousData,
   });

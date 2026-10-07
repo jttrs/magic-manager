@@ -3,6 +3,7 @@ import { AppShell } from '../components/AppShell';
 import { collectionSearch, compareSearch, decksSearch, marketSearch } from '../core/search';
 import { historySearch } from '../core/history';
 import { jumpstartSearch } from '../core/jumpstart';
+import { analyticsSearch } from '../core/analyticsDashboard';
 
 const rootRoute = createRootRoute({
   component: () => (
@@ -102,8 +103,16 @@ const jobsRoute = createRoute({
   component: lazyRouteComponent(() => import('../views/JobsView'), 'JobsView'),
 });
 
+const analyticsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/analytics',
+  validateSearch: analyticsSearch,
+  search: { middlewares: [stripSearchParams(analyticsSearch.parse({}))] },
+  component: lazyRouteComponent(() => import('../views/AnalyticsView'), 'AnalyticsView'),
+});
+
 export const router = createRouter({
-  routeTree: rootRoute.addChildren([indexRoute, collectionRoute, historyRoute, jumpstartRoute, legacySetsRoute, decksRoute, deckEditRoute, exploreRoute, legacyCommandersRoute, marketRoute, jobsRoute]),
+  routeTree: rootRoute.addChildren([indexRoute, collectionRoute, historyRoute, jumpstartRoute, legacySetsRoute, decksRoute, deckEditRoute, exploreRoute, legacyCommandersRoute, marketRoute, jobsRoute, analyticsRoute]),
   defaultPreload: 'intent',
 });
 

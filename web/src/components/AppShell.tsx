@@ -7,6 +7,9 @@ import { ToggleGroup, Tooltip } from 'radix-ui';
 import { applyTheme, readTheme, type ThemePref } from '../app/theme';
 import { useMediaQuery } from '../app/useMediaQuery';
 import { UndoButton } from './UndoButton';
+import { AnalyticsLink, PrivacyButton } from './Telemetry';
+import { useAnalytics } from '../app/analytics';
+import { useFeature } from '../app/features';
 
 const NAV = [
   { to: '/collection', label: 'Collection' },
@@ -17,6 +20,8 @@ const NAV = [
 
 /** Global frame: masthead + full-width top nav; views supply sidebar + main below it. */
 export function AppShell({ children }: { children: ReactNode }) {
+  useAnalytics();
+  const analytics = useFeature('analytics');
   return (
     <div className="grid min-h-dvh grid-rows-[var(--size-topbar)_1fr] overflow-x-clip bg-chrome text-on-chrome">
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-3 focus:z-50 bg-accent text-on-accent px-3 py-1 rounded-sm">
@@ -46,6 +51,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="ml-auto flex items-center gap-2 sm:gap-3">
           <UndoButton />
           <JobsLink />
+          {analytics && <AnalyticsLink />}
+          <PrivacyButton />
           <ThemeSwitch />
         </div>
       </header>

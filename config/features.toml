@@ -12,3 +12,7 @@ cart_check = false
 # Read your open browser tabs (macOS) and price store product pages against
 # market. Internal: local-machine browser access.
 deals = false
+# The Analytics dashboard (error trends, usage, sessions). Internal: it shows
+# every user's pseudonymous activity, so only the owner/admin turns it on.
+# (Recording itself is governed by each user's consent, not by this flag.)
+analytics = false
