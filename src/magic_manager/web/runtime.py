@@ -15,6 +15,7 @@ delivery order can never reorder events.
 from __future__ import annotations
 
 import asyncio
+import logging
 import threading
 import time
 import traceback
@@ -27,7 +28,10 @@ from taskiq import InMemoryBroker
 
 from .. import analytics
 from ..analytics import catalog as analytics_catalog
+from ..analytics import consent as analytics_consent
 from ..api import jobs as jobs_api
+
+log = logging.getLogger("magic_manager.web")
 
 Status = Literal["queued", "running", "succeeded", "failed"]
 TERMINAL: frozenset[str] = frozenset({"succeeded", "failed"})
@@ -146,21 +150,28 @@ class JobManager:
             result = await asyncio.to_thread(body)
         except Exception as e:  # noqa: BLE001 — surface any job failure to the client
             rec.status, rec.finished_at = "failed", _now()
-            rec.error = f"{type(e).__name__}: {e}"
+            log.exception("job %s (%s) failed", rec.id, rec.name)
+            if analytics_consent.mode() == "hosted":
+                # str(e)/traceback can carry SQL or paths: type only, detail stays in the log.
+                rec.error = f"{type(e).__name__}: job failed (see server log)"
+                trace = None
+            else:
+                rec.error = f"{type(e).__name__}: {e}"
+                trace = traceback.format_exc(limit=5)
             rec.error_code = analytics_catalog.to_code(type(e).__name__)
-            self._emit(rec, "error", {"error": rec.error, "code": rec.error_code, "trace": traceback.format_exc(limit=5)})
+            self._emit(rec, "error", {"error": rec.error, "code": rec.error_code, "trace": trace})
             self._emit(rec, "status", {"status": rec.status})
             await asyncio.to_thread(analytics.record, "job.failed", {
                 "job": rec.name, "code": rec.error_code, "job_id": rec.id,
                 "duration_ms": int((time.monotonic() - t0) * 1000)}, ctx=rec.ctx)
             return
-        await asyncio.to_thread(analytics.record, "job.succeeded", {
-            "job": rec.name, "job_id": rec.id, "duration_ms": int((time.monotonic() - t0) * 1000)}, ctx=rec.ctx)
         rec.status, rec.finished_at = "succeeded", _now()
         rec.summary = result.summary
         rec.artifacts = [asdict(a) for a in result.artifacts]
         self._emit(rec, "result", {"summary": rec.summary, "artifacts": rec.artifacts})
         self._emit(rec, "status", {"status": rec.status})
+        await asyncio.to_thread(analytics.record, "job.succeeded", {
+            "job": rec.name, "job_id": rec.id, "duration_ms": int((time.monotonic() - t0) * 1000)}, ctx=rec.ctx)
 
     # ---------- fan-out ----------
 

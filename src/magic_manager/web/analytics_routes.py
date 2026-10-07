@@ -16,6 +16,8 @@ def analytics_consent():
     return analytics_api.get_consent()
 
 
+# Deliberately not behind the write guard: consent is not undoable user data
+# (undo.restore keeps the latest consent), so it needs no restore point.
 @router.put("/consent", response_model=analytics_api.ConsentOut)
 def analytics_set_consent(body: analytics_api.ConsentIn):
     return analytics_api.set_consent(body)

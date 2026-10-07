@@ -26,7 +26,7 @@ from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .. import analytics
-from ..analytics import catalog
+from ..analytics import catalog, consent
 
 log = logging.getLogger("magic_manager.web")
 
@@ -78,8 +78,11 @@ class TelemetryMiddleware:
             if sent["started"]:
                 raise
             sent["status"] = 500
-            body = json.dumps({"detail": f"Unexpected server error — {type(e).__name__}: {e}",
-                               "code": code, "request_id": rid}).encode()
+            # Hosted: the message can carry SQL/paths — keep it in the server log only.
+            msg = f"Unexpected server error — {type(e).__name__}"
+            if consent.mode() != "hosted":
+                msg += f": {e}"
+            body = json.dumps({"detail": msg, "code": code, "request_id": rid}).encode()
             await send({"type": "http.response.start", "status": 500,
                         "headers": [(b"content-type", b"application/json"), (b"x-request-id", rid.encode())]})
             await send({"type": "http.response.body", "body": body})
@@ -90,8 +93,11 @@ class TelemetryMiddleware:
         code = state.get("error_code")
         if 400 <= status < 500:
             log.warning("%s %s → %s %s ref=%s", scope.get("method"), scope.get("path"), status, code, rid)
-        if route and (status >= 400 or catalog.load().triggers_for(route)):
-            await asyncio.to_thread(analytics.record_response, route, scope.get("method", "GET"), status, code, ctx=ctx)
+        try:
+            if route and (status >= 400 or catalog.load().triggers_for(route)):
+                await asyncio.to_thread(analytics.record_response, route, scope.get("method", "GET"), status, code, ctx=ctx)
+        except Exception as e:  # noqa: BLE001 — analytics never fails a request
+            log.warning("analytics skipped for %s: %s: %s", route, type(e).__name__, e)
 
 
 def install(app: FastAPI) -> None:

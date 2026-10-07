@@ -42,6 +42,21 @@ def test_take_then_restore_swaps_and_is_undoable(owned):
     assert _copies() == 5
 
 
+def test_restore_does_not_roll_back_consent(owned):
+    from magic_manager.analytics import consent
+    consent.update(usage=True)
+    with db.connect() as conn:
+        conn.execute("INSERT INTO settings (key, value) VALUES ('other', 'old')")
+    undo.take("before opt-out")
+    consent.update(usage=False)
+    with db.connect() as conn:
+        conn.execute("UPDATE settings SET value = 'new' WHERE key = 'other'")
+    undo.restore()
+    assert consent.get(fresh=True).usage is False
+    with db.connect() as conn:
+        assert conn.execute("SELECT value FROM settings WHERE key = 'other'").fetchone()[0] == "old"
+
+
 def test_restore_refuses_without_a_snapshot_or_across_schema_change(owned):
     with pytest.raises(undo.UndoError):
         undo.restore()

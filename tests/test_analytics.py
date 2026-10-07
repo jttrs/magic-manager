@@ -256,6 +256,56 @@ def test_unhandled_exception_is_a_coded_500(client, monkeypatch):
     assert _events("api.error")[-1]["props"]["code"] == "key_error"
 
 
+def test_hosted_500_body_does_not_leak_the_message(client, monkeypatch):
+    from magic_manager.api import history as history_api
+
+    def boom():
+        raise KeyError("secret sql detail")
+    monkeypatch.setattr(history_api, "history", boom)
+    monkeypatch.setenv("MM_MODE", "hosted")
+    r = client.get("/api/history")
+    assert r.status_code == 500
+    assert "secret sql detail" not in r.text and "KeyError" in r.json()["detail"]
+    assert r.json()["code"] == "key_error" and r.json()["request_id"]
+
+
+def test_failed_job_detail_is_hidden_when_hosted(on, monkeypatch):
+    import asyncio
+    from magic_manager.web import runtime
+
+    class Spec:
+        name, title = "boom", "Boom"
+
+        class input_model:
+            @staticmethod
+            def model_validate(d):
+                class I:
+                    def model_dump(self):
+                        return {}
+                return I()
+
+        @staticmethod
+        def run(inputs, progress):
+            raise KeyError("secret sql detail")
+    monkeypatch.setattr(runtime.jobs_api, "get", lambda name: Spec)
+
+    async def go():
+        m = runtime.JobManager()
+        await m.startup()
+        try:
+            rec = await m.submit("boom", {})
+            await m._execute(rec.id)
+            return rec
+        finally:
+            await m.shutdown()
+    for mode, leaks in (("hosted", False), ("local", True)):
+        monkeypatch.setenv("MM_MODE", mode)
+        rec = asyncio.run(go())
+        text = repr(rec.error) + repr([e.data for e in rec.events])
+        assert rec.status == "failed" and "KeyError" in rec.error
+        assert ("secret sql detail" in text) is leaks
+
+
 def test_client_ingest_endpoint_validates_and_reports_rejections(client):
     r = client.post("/api/analytics/events", headers={"X-MM-Session": SID}, json={"events": [
         {"name": "page.viewed", "props": {"view": "decks", "viewport": "wide", "path": "/decks/secret-deck"}},
