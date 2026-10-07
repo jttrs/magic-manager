@@ -117,6 +117,130 @@ def secret_delete(name: str = typer.Argument(...)):
     typer.echo("removed" if secrets_mod.delete(name) else "not found")
 
 
+analytics_app = typer.Typer(no_args_is_help=True,
+                            help="Self-hosted product analytics: dashboards, saved SQL, consent, retention (docs/analytics.md).")
+app.add_typer(analytics_app, name="analytics")
+
+
+def _echo_rows(rows: list[dict]) -> None:
+    if not rows:
+        typer.echo("(no rows)")
+        return
+    cols = list(rows[0])
+    typer.echo("\t".join(cols))
+    for r in rows:
+        typer.echo("\t".join("" if r[c] is None else str(r[c]) for c in cols))
+
+
+@analytics_app.command("summary")
+def analytics_summary(days: int = typer.Option(30, "--days", "-d", min=1, max=400),
+                      as_json: bool = typer.Option(False, "--json")):
+    """Errors, usage and sessions for the last N days."""
+    import json as _json
+    from .analytics import dashboard
+    s = dashboard.summary(days)
+    if as_json:
+        typer.echo(_json.dumps(s, indent=2, default=str))
+        return
+    t = s["totals"]
+    typer.echo(f"{s['since']} → {s['until']}: {t['errors']} errors · {t['usage']} usage events · "
+               f"{t['sessions']} sessions ({t['sessions_with_errors']} with errors)")
+    typer.echo("\nTop errors:")
+    for e in s["top_errors"][:15]:
+        dims = " ".join(f"{k}={v}" for k, v in e["dims"].items())
+        typer.echo(f"  {e['n']:>5}  {e['name']}  {dims}  (last {e['last_seen']})")
+    typer.echo("\nViews:")
+    for v in s["views"]:
+        typer.echo(f"  {v['n']:>5}  {v['view']}  (wide {v['wide']} · narrow {v['narrow']})")
+    typer.echo("\nJobs:")
+    for j in s["jobs"]:
+        typer.echo(f"  {j['job']}: {j['runs']} runs · {j['failures']} failed · mean {j['mean_ms'] or '—'} ms")
+
+
+@analytics_app.command("query")
+def analytics_query(name: str = typer.Argument(None, help="A saved query; omit to list them."),
+                    days: int = typer.Option(30, "--days", "-d", min=1),
+                    limit: int = typer.Option(50, "--limit", "-n", min=1),
+                    as_json: bool = typer.Option(False, "--json")):
+    """Run one saved, portable SQL query (src/magic_manager/analytics/queries)."""
+    import json as _json
+    from .analytics import dashboard
+    if not name:
+        typer.echo("\n".join(dashboard.query_names()))
+        return
+    try:
+        rows = dashboard.run(name, days=days, limit=limit)
+    except LookupError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(2) from e
+    typer.echo(_json.dumps(rows, indent=2)) if as_json else _echo_rows(rows)
+
+
+@analytics_app.command("sql")
+def analytics_sql(name: str = typer.Argument(..., help="A saved query name.")):
+    """Print a saved query (named params :since, :limit, :request_id) for DuckDB / a notebook."""
+    from .analytics import dashboard, store
+    try:
+        typer.echo(f"-- analytics DB: {store.path()}\n{dashboard.sql(name)}")
+    except LookupError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(2) from e
+
+
+@analytics_app.command("trace")
+def analytics_trace(ref: str = typer.Argument(..., help="The request ref shown with an error (≥ 6 hex chars).")):
+    """Every recorded event linked to one request."""
+    from .analytics import dashboard
+    try:
+        events = dashboard.trace(ref)
+    except ValueError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(2) from e
+    for e in events:
+        props = " ".join(f"{k}={v}" for k, v in e["props"].items())
+        typer.echo(f"{e['ts']}  {e['name']}  {props}  request={e['request_id']} session={e['session_id']}")
+    if not events:
+        typer.echo("No events for that ref (errors are kept 30 days; nothing is recorded if you opted out).")
+
+
+@analytics_app.command("prune")
+def analytics_prune():
+    """Apply retention now (the server also prunes at start and daily)."""
+    from .analytics import store
+    r = store.prune()
+    typer.echo(f"pruned {r['errors']} error events, {r['usage']} usage events, {r['aggregates']} daily counts")
+
+
+@analytics_app.command("consent")
+def analytics_consent(errors: bool = typer.Option(None, "--errors/--no-errors", help="Error telemetry."),
+                      usage: bool = typer.Option(None, "--usage/--no-usage", help="Usage analytics.")):
+    """Show or change what this install records."""
+    from .analytics import consent
+    c = consent.update(errors=errors, usage=usage) if errors is not None or usage is not None else consent.get(fresh=True)
+    note = " (MM_ANALYTICS=off: nothing is recorded)" if c.disabled else ""
+    typer.echo(f"mode={c.mode} errors={'on' if c.errors else 'off'} usage={'on' if c.usage else 'off'}{note}")
+
+
+@analytics_app.command("forget")
+def analytics_forget(yes: bool = typer.Option(False, "--yes", "-y")):
+    """Delete every raw event recorded for you (daily counts carry no user key and stay)."""
+    from . import analytics
+    if not yes and not typer.confirm("Delete all your recorded analytics events?"):
+        raise typer.Exit(1)
+    typer.echo(f"deleted {analytics.forget_user()} events")
+
+
+@analytics_app.command("catalog")
+def analytics_catalog():
+    """The event catalog as a markdown table (config/analytics_events.toml)."""
+    from .analytics import catalog
+    cat = catalog.load()
+    typer.echo("| Event | v | Category | Source | Properties | Purpose |\n|---|---|---|---|---|---|")
+    for e in cat.events.values():
+        props = ", ".join(f"`{p.name}`" for p in e.props.values()) or "—"
+        typer.echo(f"| `{e.name}` | {e.version} | {e.category} | {e.source} | {props} | {e.purpose} |")
+
+
 def _slug(s: str) -> str:
     raw = "".join(c if c.isalnum() else "-" for c in s.lower())
     # Collapse runs of hyphens so "Final Fantasy: Through the Ages" → "final-fantasy-through-the-ages"

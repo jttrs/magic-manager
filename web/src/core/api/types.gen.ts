@@ -618,6 +618,62 @@ export type CartSetupOut = {
 };
 
 /**
+ * CatalogEventOut
+ */
+export type CatalogEventOut = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Version
+     */
+    version: number;
+    /**
+     * Category
+     */
+    category: string;
+    /**
+     * Source
+     */
+    source: string;
+    /**
+     * Owner
+     */
+    owner: string;
+    /**
+     * Purpose
+     */
+    purpose: string;
+    /**
+     * Props
+     */
+    props: Array<CatalogPropOut>;
+};
+
+/**
+ * CatalogPropOut
+ */
+export type CatalogPropOut = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Type
+     */
+    type: string;
+    /**
+     * Required
+     */
+    required: boolean;
+    /**
+     * Values
+     */
+    values: Array<string>;
+};
+
+/**
  * ChangeOut
  */
 export type ChangeOut = {
@@ -718,6 +774,28 @@ export type ChecklistOut = {
      * Rows
      */
     rows: Array<CountRowOut>;
+};
+
+/**
+ * ClientEventIn
+ */
+export type ClientEventIn = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Props
+     */
+    props?: {
+        [key: string]: string | number | number | boolean;
+    };
+    /**
+     * Ts
+     *
+     * Epoch milliseconds when it happened (≤ 24 h ago).
+     */
+    ts?: number | null;
 };
 
 /**
@@ -1257,6 +1335,56 @@ export type ConfirmIn = {
 };
 
 /**
+ * ConsentIn
+ */
+export type ConsentIn = {
+    /**
+     * Errors
+     */
+    errors?: boolean | null;
+    /**
+     * Usage
+     */
+    usage?: boolean | null;
+};
+
+/**
+ * ConsentOut
+ */
+export type ConsentOut = {
+    /**
+     * Errors
+     *
+     * Error/reliability telemetry (legitimate interest; opt-out).
+     */
+    errors: boolean;
+    /**
+     * Usage
+     *
+     * Usage analytics (opt-in when hosted).
+     */
+    usage: boolean;
+    /**
+     * Asked
+     *
+     * Whether the user has made a choice (hosted asks once).
+     */
+    asked: boolean;
+    /**
+     * Mode
+     *
+     * local | hosted
+     */
+    mode: string;
+    /**
+     * Disabled
+     *
+     * MM_ANALYTICS=off: nothing is recorded on this server.
+     */
+    disabled: boolean;
+};
+
+/**
  * CopyIn
  */
 export type CopyIn = {
@@ -1310,6 +1438,20 @@ export type CountRowOut = {
      * New Qty
      */
     new_qty: number;
+};
+
+/**
+ * DayCount
+ */
+export type DayCount = {
+    /**
+     * Day
+     */
+    day: string;
+    /**
+     * N
+     */
+    n: number;
 };
 
 /**
@@ -1830,6 +1972,102 @@ export type EntryOut = {
 };
 
 /**
+ * ErrorGroup
+ */
+export type ErrorGroup = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Dims
+     */
+    dims: {
+        [key: string]: string;
+    };
+    /**
+     * N
+     */
+    n: number;
+    /**
+     * First Seen
+     */
+    first_seen: string;
+    /**
+     * Last Seen
+     */
+    last_seen: string;
+};
+
+/**
+ * EventOut
+ */
+export type EventOut = {
+    /**
+     * Event Id
+     */
+    event_id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Ts
+     */
+    ts: string;
+    /**
+     * Request Id
+     */
+    request_id: string | null;
+    /**
+     * Session Id
+     */
+    session_id: string | null;
+    /**
+     * Category
+     */
+    category?: string | null;
+    /**
+     * Props
+     */
+    props: {
+        [key: string]: string;
+    };
+};
+
+/**
+ * EventsIn
+ */
+export type EventsIn = {
+    /**
+     * Events
+     */
+    events: Array<ClientEventIn>;
+};
+
+/**
+ * EventsOut
+ */
+export type EventsOut = {
+    /**
+     * Accepted
+     */
+    accepted: number;
+    /**
+     * Rejected
+     */
+    rejected: Array<Rejection>;
+    /**
+     * Dropped Props
+     */
+    dropped_props: number;
+    /**
+     * Skipped By Consent
+     */
+    skipped_by_consent: number;
+};
+
+/**
  * FactsOut
  */
 export type FactsOut = {
@@ -1978,6 +2216,30 @@ export type FamilySummaryOut = {
 };
 
 /**
+ * FeatureUsage
+ */
+export type FeatureUsage = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Dims
+     */
+    dims: {
+        [key: string]: string;
+    };
+    /**
+     * N
+     */
+    n: number;
+    /**
+     * Last Seen
+     */
+    last_seen: string;
+};
+
+/**
  * FeaturesOut
  */
 export type FeaturesOut = {
@@ -2044,6 +2306,18 @@ export type FloorsOut = {
 };
 
 /**
+ * ForgetOut
+ */
+export type ForgetOut = {
+    /**
+     * Deleted
+     *
+     * Raw events removed. Daily counts carry no user key and stay.
+     */
+    deleted: number;
+};
+
+/**
  * FunctionRootOut
  *
  * A curated function root (``config/function_tags.toml``), in display order.
@@ -2057,6 +2331,20 @@ export type FunctionRootOut = {
      * Label
      */
     label: string;
+};
+
+/**
+ * FunnelStep
+ */
+export type FunnelStep = {
+    /**
+     * Step
+     */
+    step: string;
+    /**
+     * Sessions
+     */
+    sessions: number;
 };
 
 /**
@@ -2362,6 +2650,32 @@ export type JobOut = {
      * Error
      */
     error: string | null;
+    /**
+     * Error Code
+     */
+    error_code?: string | null;
+};
+
+/**
+ * JobOutcome
+ */
+export type JobOutcome = {
+    /**
+     * Job
+     */
+    job: string;
+    /**
+     * Runs
+     */
+    runs: number;
+    /**
+     * Failures
+     */
+    failures: number;
+    /**
+     * Mean Ms
+     */
+    mean_ms: number | null;
 };
 
 /**
@@ -3565,6 +3879,20 @@ export type RankingOut = {
 };
 
 /**
+ * Rejection
+ */
+export type Rejection = {
+    /**
+     * Index
+     */
+    index: number;
+    /**
+     * Reason
+     */
+    reason: string;
+};
+
+/**
  * ResolveIn
  */
 export type ResolveIn = {
@@ -3654,6 +3982,24 @@ export type ResolvedLineOut = {
      * Note
      */
     note?: string | null;
+};
+
+/**
+ * RetentionCell
+ */
+export type RetentionCell = {
+    /**
+     * Cohort
+     */
+    cohort: string;
+    /**
+     * Week
+     */
+    week: string;
+    /**
+     * Users
+     */
+    users: number;
 };
 
 /**
@@ -3823,6 +4169,24 @@ export type SearchOut = {
 };
 
 /**
+ * SessionsOut
+ */
+export type SessionsOut = {
+    /**
+     * By Day
+     */
+    by_day: Array<DayCount>;
+    /**
+     * Median Minutes
+     */
+    median_minutes: number | null;
+    /**
+     * Median Events
+     */
+    median_events: number | null;
+};
+
+/**
  * SetRefOut
  */
 export type SetRefOut = {
@@ -3927,6 +4291,34 @@ export type SourceOut = {
 };
 
 /**
+ * StoreOut
+ */
+export type StoreOut = {
+    /**
+     * Path
+     */
+    path: string;
+    /**
+     * Schema Version
+     */
+    schema_version: number;
+    /**
+     * Last Pruned
+     */
+    last_pruned: string | null;
+    /**
+     * Events
+     */
+    events: {
+        [key: string]: number;
+    };
+    /**
+     * First Day
+     */
+    first_day: string | null;
+};
+
+/**
  * StoreTabsOut
  */
 export type StoreTabsOut = {
@@ -3997,6 +4389,66 @@ export type SuggestionsOut = {
      * Cards
      */
     cards: Array<SuggestionOut>;
+};
+
+/**
+ * SummaryOut
+ */
+export type SummaryOut = {
+    /**
+     * Days
+     */
+    days: number;
+    /**
+     * Since
+     */
+    since: string;
+    /**
+     * Until
+     */
+    until: string;
+    totals: Totals;
+    /**
+     * Error Trend
+     */
+    error_trend: Array<DayCount>;
+    /**
+     * Top Errors
+     */
+    top_errors: Array<ErrorGroup>;
+    /**
+     * Recent Errors
+     */
+    recent_errors: Array<EventOut>;
+    /**
+     * Views
+     */
+    views: Array<ViewUsage>;
+    /**
+     * Features
+     */
+    features: Array<FeatureUsage>;
+    sessions: SessionsOut;
+    /**
+     * Funnel
+     */
+    funnel: Array<FunnelStep>;
+    /**
+     * Jobs
+     */
+    jobs: Array<JobOutcome>;
+    /**
+     * Retention
+     */
+    retention: Array<RetentionCell>;
+    store: StoreOut;
+    consent: ConsentOut;
+    /**
+     * Retention Policy
+     */
+    retention_policy: {
+        [key: string]: number;
+    };
 };
 
 /**
@@ -4429,6 +4881,28 @@ export type TargetOut = {
 };
 
 /**
+ * Totals
+ */
+export type Totals = {
+    /**
+     * Errors
+     */
+    errors: number;
+    /**
+     * Usage
+     */
+    usage: number;
+    /**
+     * Sessions
+     */
+    sessions: number;
+    /**
+     * Sessions With Errors
+     */
+    sessions_with_errors: number;
+};
+
+/**
  * TreeNodeOut
  */
 export type TreeNodeOut = {
@@ -4578,6 +5052,28 @@ export type ValidationError = {
     ctx?: {
         [key: string]: unknown;
     };
+};
+
+/**
+ * ViewUsage
+ */
+export type ViewUsage = {
+    /**
+     * View
+     */
+    view: string;
+    /**
+     * Narrow
+     */
+    narrow: number;
+    /**
+     * Wide
+     */
+    wide: number;
+    /**
+     * N
+     */
+    n: number;
 };
 
 /**
@@ -4793,6 +5289,174 @@ export type WatchedOut = {
      */
     target_met?: boolean | null;
 };
+
+export type AnalyticsConsentData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/analytics/consent';
+};
+
+export type AnalyticsConsentResponses = {
+    /**
+     * Successful Response
+     */
+    200: ConsentOut;
+};
+
+export type AnalyticsConsentResponse = AnalyticsConsentResponses[keyof AnalyticsConsentResponses];
+
+export type AnalyticsSetConsentData = {
+    body: ConsentIn;
+    path?: never;
+    query?: never;
+    url: '/api/analytics/consent';
+};
+
+export type AnalyticsSetConsentErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AnalyticsSetConsentError = AnalyticsSetConsentErrors[keyof AnalyticsSetConsentErrors];
+
+export type AnalyticsSetConsentResponses = {
+    /**
+     * Successful Response
+     */
+    200: ConsentOut;
+};
+
+export type AnalyticsSetConsentResponse = AnalyticsSetConsentResponses[keyof AnalyticsSetConsentResponses];
+
+export type AnalyticsEventsData = {
+    body: EventsIn;
+    headers?: {
+        /**
+         * X-Mm-Session
+         */
+        'x-mm-session'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/analytics/events';
+};
+
+export type AnalyticsEventsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AnalyticsEventsError = AnalyticsEventsErrors[keyof AnalyticsEventsErrors];
+
+export type AnalyticsEventsResponses = {
+    /**
+     * Successful Response
+     */
+    200: EventsOut;
+};
+
+export type AnalyticsEventsResponse = AnalyticsEventsResponses[keyof AnalyticsEventsResponses];
+
+export type AnalyticsForgetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/analytics/my-data';
+};
+
+export type AnalyticsForgetResponses = {
+    /**
+     * Successful Response
+     */
+    200: ForgetOut;
+};
+
+export type AnalyticsForgetResponse = AnalyticsForgetResponses[keyof AnalyticsForgetResponses];
+
+export type AnalyticsCatalogData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/analytics/catalog';
+};
+
+export type AnalyticsCatalogResponses = {
+    /**
+     * Response Analytics Catalog
+     *
+     * Successful Response
+     */
+    200: Array<CatalogEventOut>;
+};
+
+export type AnalyticsCatalogResponse = AnalyticsCatalogResponses[keyof AnalyticsCatalogResponses];
+
+export type AnalyticsSummaryData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Days
+         */
+        days?: number;
+    };
+    url: '/api/analytics/summary';
+};
+
+export type AnalyticsSummaryErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AnalyticsSummaryError = AnalyticsSummaryErrors[keyof AnalyticsSummaryErrors];
+
+export type AnalyticsSummaryResponses = {
+    /**
+     * Successful Response
+     */
+    200: SummaryOut;
+};
+
+export type AnalyticsSummaryResponse = AnalyticsSummaryResponses[keyof AnalyticsSummaryResponses];
+
+export type AnalyticsTraceData = {
+    body?: never;
+    path: {
+        /**
+         * Ref
+         */
+        ref: string;
+    };
+    query?: never;
+    url: '/api/analytics/trace/{ref}';
+};
+
+export type AnalyticsTraceErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AnalyticsTraceError = AnalyticsTraceErrors[keyof AnalyticsTraceErrors];
+
+export type AnalyticsTraceResponses = {
+    /**
+     * Response Analytics Trace
+     *
+     * Successful Response
+     */
+    200: Array<EventOut>;
+};
+
+export type AnalyticsTraceResponse = AnalyticsTraceResponses[keyof AnalyticsTraceResponses];
 
 export type JobSpecsData = {
     body?: never;

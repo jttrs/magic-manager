@@ -10,6 +10,8 @@ index.html fallback so client-side routes deep-link.
 """
 from __future__ import annotations
 
+import asyncio
+import logging
 from collections.abc import AsyncIterable
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -24,6 +26,8 @@ from pydantic import BaseModel, ValidationError
 from .. import api, sets as sets_mod, tabs as tabs_engine, undo as undo_engine, cart as cart_engine, deck_edit, edhrec as edhrec_engine, features as features_engine, scryfall
 from ..api import deals as deals_api, undo as undo_api, cart as cart_api, cards as cards_api, collection as collection_api, explore as explore_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api, market as market_api, trueup as trueup_api, history as history_api, combos as combos_api, art as art_api, jumpstart as jumpstart_api, surf as surf_api
 from .runtime import TERMINAL, JobManager
+from . import analytics_routes, telemetry
+from ..analytics import store as analytics_store
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DIST_DIR = REPO_ROOT / "web" / "dist"
@@ -50,6 +54,17 @@ class JobOut(BaseModel):
     summary: str | None
     artifacts: list[dict]
     error: str | None
+    error_code: str | None = None
+
+
+async def _prune_analytics_daily() -> None:
+    """Analytics retention: prune at startup, then once a day (docs/analytics.md)."""
+    while True:
+        try:
+            await asyncio.to_thread(analytics_store.prune)
+        except Exception as e:  # noqa: BLE001 — retention must never take the app down
+            logging.getLogger("magic_manager.web").warning("analytics prune failed: %s: %s", type(e).__name__, e)
+        await asyncio.sleep(24 * 60 * 60)
 
 
 def create_app(*, serve_frontend: bool = True) -> FastAPI:
@@ -63,13 +78,17 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         await manager.startup()
+        pruning = asyncio.create_task(_prune_analytics_daily())
         yield
+        pruning.cancel()
         await manager.shutdown()
 
     app = FastAPI(title="magic-manager", version="0.1.0", lifespan=lifespan,
                   generate_unique_id_function=lambda route: route.name)
     app.state.jobs = manager
     assert api  # registers jobs
+    telemetry.install(app)
+    app.include_router(analytics_routes.router)
 
     # ---------- jobs chassis ----------
 

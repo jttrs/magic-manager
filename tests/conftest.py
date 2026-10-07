@@ -238,3 +238,18 @@ def _reset_all_sets_memo():
     scryfall._all_sets_memo = None
     yield
     scryfall._all_sets_memo = None
+
+
+@pytest.fixture(autouse=True)
+def _isolated_analytics(tmp_path, monkeypatch):
+    """Analytics never touches a real store or secret: each test gets its own
+    analytics file and a fixed HMAC secret, the consent cache starts empty, and
+    recording is OFF unless a test opts in (tests/test_analytics.py)."""
+    monkeypatch.setenv("MM_ANALYTICS_DB", str(tmp_path / "analytics-test.db"))
+    monkeypatch.setenv("MM_ANALYTICS_SECRET", "test-secret")
+    monkeypatch.setenv("MM_ANALYTICS", "off")
+    monkeypatch.delenv("MM_MODE", raising=False)
+    from magic_manager.analytics import consent
+    consent.clear_cache()
+    yield
+    consent.clear_cache()

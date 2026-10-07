@@ -1,0 +1,188 @@
+# Analytics event catalog — the ONLY events the app may record (docs/analytics.md).
+#
+# Every event: a version, a category, who may send it, an owner and the product
+# question it answers. Properties are typed and closed: no free text, ever.
+#
+#   category  error  — reliability telemetry (legitimate interest; opt-out; 30-day raw retention)
+#             usage  — product analytics (opt-in when hosted; 90-day raw retention)
+#   source    server | client   (client events arrive through POST /api/analytics/events)
+#   dims      properties rolled into the daily aggregate (kept 13 months, no user key)
+#   triggers  server events recorded when a named API route answers 2xx — the event
+#             carries only the listed constant props, never anything from the request
+#
+# Property types (magic_manager.analytics.catalog):
+#   enum   one of `values`            int    whole number in [min, max]
+#   code   a dotted snake_case code (e.g. cart.no_tab, stale_counts), ≤ 64 chars
+#   route  an API route NAME (e.g. deck_save), never a concrete path
+#   job_id a job id (32 hex)          ingest_id  a provenance-ledger event id (int)
+#
+# Adding an event = an entry here + a row in docs/analytics.md § Catalog (a test
+# keeps them in sync). Bump `version` when a property's meaning changes.
+
+[retention]
+# Raw events are pruned automatically (server start + daily, and `mm analytics prune`).
+error_days = 30
+usage_days = 90
+# Daily aggregates carry no user key or session id.
+aggregate_days = 396  # ~13 months
+
+[views]
+# Page names the client may report; route templates map onto these (never paths).
+values = ["collection", "history", "jumpstart", "decks", "deck_editor", "explore", "market", "jobs", "analytics", "other"]
+
+# ---------------------------------------------------------------- errors
+
+[events."api.error"]
+version = 1
+category = "error"
+source = "server"
+owner = "web"
+purpose = "Which API routes fail, with which status and error code, and how often."
+dims = ["route", "method", "status", "code"]
+[events."api.error".props]
+route = { type = "route", required = true }
+method = { type = "enum", values = ["GET", "POST", "PUT", "PATCH", "DELETE"], required = true }
+status = { type = "int", min = 400, max = 599, required = true }
+code = { type = "code", required = true }
+
+[events."job.failed"]
+version = 1
+category = "error"
+source = "server"
+owner = "jobs"
+purpose = "Which background jobs fail and why (error code), so failures are fixed before anyone reports them."
+dims = ["job", "code"]
+[events."job.failed".props]
+job = { type = "code", required = true }
+code = { type = "code", required = true }
+duration_ms = { type = "int", min = 0, max = 86400000 }
+job_id = { type = "job_id" }
+
+[events."client.error"]
+version = 1
+category = "error"
+source = "client"
+owner = "web"
+purpose = "Uncaught browser errors by view and error type (never the message)."
+dims = ["view", "kind", "code"]
+[events."client.error".props]
+view = { type = "view", required = true }
+kind = { type = "enum", values = ["uncaught", "rejection", "render"], required = true }
+code = { type = "code", required = true }
+
+[events."client.network_error"]
+version = 1
+category = "error"
+source = "client"
+owner = "web"
+purpose = "API calls that never got an answer (offline, network failure, timeout), by view."
+dims = ["view", "code"]
+[events."client.network_error".props]
+view = { type = "view", required = true }
+code = { type = "enum", values = ["offline", "network", "timeout"], required = true }
+
+[events."companion.error"]
+version = 1
+category = "error"
+source = "client"
+owner = "companion"
+purpose = "Coded failures from the browser companion (e.g. cart.no_tab, cart.page_changed, moxfield.private_not_logged_in, approval.denied)."
+dims = ["code"]
+[events."companion.error".props]
+code = { type = "code", required = true }
+
+# ---------------------------------------------------------------- usage
+
+[events."page.viewed"]
+version = 1
+category = "usage"
+source = "client"
+owner = "web"
+purpose = "Which views are used, on a narrow (phone) or wide (desktop) screen."
+dims = ["view", "viewport"]
+[events."page.viewed".props]
+view = { type = "view", required = true }
+viewport = { type = "enum", values = ["narrow", "wide"], required = true }
+
+[events."job.started"]
+version = 1
+category = "usage"
+source = "server"
+owner = "jobs"
+purpose = "Which background jobs people run."
+dims = ["job"]
+[events."job.started".props]
+job = { type = "code", required = true }
+job_id = { type = "job_id" }
+
+[events."job.succeeded"]
+version = 1
+category = "usage"
+source = "server"
+owner = "jobs"
+purpose = "How long successful jobs take (duration trends)."
+dims = ["job"]
+[events."job.succeeded".props]
+job = { type = "code", required = true }
+duration_ms = { type = "int", min = 0, max = 86400000 }
+job_id = { type = "job_id" }
+
+[events."deck.changed"]
+version = 1
+category = "usage"
+source = "server"
+owner = "decks"
+purpose = "Which deck actions people use (create, import, build, break down, copy, save)."
+dims = ["action"]
+[events."deck.changed".props]
+action = { type = "enum", values = ["create", "import", "build", "break_down", "copy", "save"], required = true }
+[events."deck.changed".triggers]
+deck_create = { action = "create" }
+deck_import = { action = "import" }
+deck_build = { action = "build" }
+deck_break_down = { action = "break_down" }
+deck_copy = { action = "copy" }
+deck_save = { action = "save" }
+
+[events."buylist.exported"]
+version = 1
+category = "usage"
+source = "server"
+owner = "collection"
+purpose = "Whether buy-lists get used, and from which view."
+dims = ["surface"]
+[events."buylist.exported".props]
+surface = { type = "enum", values = ["collection", "jumpstart"], required = true }
+[events."buylist.exported".triggers]
+collection_buy_list = { surface = "collection" }
+jumpstart_buy_list = { surface = "jumpstart" }
+
+[events."cards.added"]
+version = 1
+category = "usage"
+source = "server"
+owner = "ingest"
+purpose = "How often cards are added through the web (replacing agent-run ingest)."
+dims = []
+[events."cards.added".triggers]
+ingest_commit = {}
+
+[events."checklist.saved"]
+version = 1
+category = "usage"
+source = "server"
+owner = "collection"
+purpose = "How often the web checklist replaces spreadsheet ingest."
+dims = []
+[events."checklist.saved".triggers]
+collection_checklist = {}
+
+[events."undo.restored"]
+version = 1
+category = "usage"
+source = "server"
+owner = "web"
+purpose = "How often people need undo (a proxy for confusing or regretted writes)."
+dims = []
+[events."undo.restored".triggers]
+undo_restore = {}
