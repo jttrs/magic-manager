@@ -1,0 +1,38 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "scryfall_id": "8d8432a7-1c8a-4cfb-947c-ecf9791063eb",
+      "name": "Sire of Seven Deaths",
+      "set_name": "Foundations",
+      "finish": "nonfoil",
+      "condition": "LP",
+      "treatments": [],
+      "quantity": 1,
+      "price": 17
+    },
+    {
+      "scryfall_id": "e91ba1d4-3bca-45a2-ad9f-7abbcfe50dbd",
+      "name": "Ajani, Nacatl Pariah // Ajani, Nacatl Avenger",
+      "set_name": "Modern Horizons 3",
+      "finish": "nonfoil",
+      "condition": "NM",
+      "treatments": [
+        "Borderless"
+      ],
+      "quantity": 1,
+      "price": 13
+    },
+    {
+      "scryfall_id": "8d8432a7-1c8a-4cfb-947c-ecf9791063eb",
+      "name": "Sire of Seven Deaths",
+      "set_name": "Foundations",
+      "finish": "foil",
+      "condition": "NM",
+      "treatments": [],
+      "quantity": 2,
+      "price": 20.5
+    }
+  ],
+  "warnings": []
+}

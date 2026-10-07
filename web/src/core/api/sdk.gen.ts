@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, ServerSentEventsResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AnalyticsCatalogData, AnalyticsCatalogResponses, AnalyticsConsentData, AnalyticsConsentResponses, AnalyticsEventsData, AnalyticsEventsErrors, AnalyticsEventsResponses, AnalyticsForgetData, AnalyticsForgetResponses, AnalyticsSetConsentData, AnalyticsSetConsentErrors, AnalyticsSetConsentResponses, AnalyticsSummaryData, AnalyticsSummaryErrors, AnalyticsSummaryResponses, AnalyticsTraceData, AnalyticsTraceErrors, AnalyticsTraceResponses, ArtLookupData, ArtLookupErrors, ArtLookupResponses, ArtSwapsData, ArtSwapsErrors, ArtSwapsResponses, ArtTagsData, ArtTagsErrors, ArtTagsResponses, CardCombosData, CardCombosErrors, CardCombosResponses, CardFloorsData, CardFloorsErrors, CardFloorsResponses, CardHoldingsData, CardHoldingsErrors, CardHoldingsResponses, CartCheckData, CartCheckErrors, CartCheckResponses, CartSetupData, CartSetupResponses, CollectionBuyListData, CollectionBuyListErrors, CollectionBuyListResponses, CollectionChecklistData, CollectionChecklistErrors, CollectionChecklistResponses, CollectionData, CollectionErrors, CollectionFamiliesData, CollectionFamiliesResponses, CollectionResponses, CommandersData, CommandersErrors, CommandersResponses, CompareData, CompareErrors, CompareResponses, DealsClearTargetData, DealsClearTargetErrors, DealsClearTargetResponses, DealsMatchData, DealsMatchErrors, DealsMatchResponses, DealsSetTargetData, DealsSetTargetErrors, DealsSetTargetResponses, DealsTabsData, DealsTabsErrors, DealsTabsResponses, DealsUnwatchData, DealsUnwatchErrors, DealsUnwatchResponses, DealsWatchData, DealsWatchedData, DealsWatchedResponses, DealsWatchErrors, DealsWatchResponses, DeckBreakDownData, DeckBreakDownErrors, DeckBreakDownResponses, DeckBuildData, DeckBuildErrors, DeckBuildPlanData, DeckBuildPlanErrors, DeckBuildPlanResponses, DeckBuildResponses, DeckCheckData, DeckCheckErrors, DeckCheckResponses, DeckCombosData, DeckCombosErrors, DeckCombosResponses, DeckCopyData, DeckCopyErrors, DeckCopyResponses, DeckCreateData, DeckCreateErrors, DeckCreateResponses, DeckDetailData, DeckDetailErrors, DeckDetailResponses, DeckImportData, DeckImportErrors, DeckImportResponses, DeckListData, DeckListResponses, DeckPreviewData, DeckPreviewErrors, DeckPreviewResponses, DeckSaveData, DeckSaveErrors, DeckSaveResponses, DeckSuggestionsData, DeckSuggestionsErrors, DeckSuggestionsResponses, DraftCombosData, DraftCombosErrors, DraftCombosResponses, ExploreCardData, ExploreCardErrors, ExploreCardResponses, ExploreRankingData, ExploreRankingErrors, ExploreRankingOptionsData, ExploreRankingOptionsResponses, ExploreRankingResponses, ExploreSearchData, ExploreSearchErrors, ExploreSearchResponses, FeaturesRouteData, FeaturesRouteResponses, GetJobData, GetJobErrors, GetJobResponses, HistoryEventData, HistoryEventErrors, HistoryEventResponses, HistoryListData, HistoryListResponses, IngestCommitData, IngestCommitErrors, IngestCommitResponses, IngestPreconsData, IngestPreconsErrors, IngestPreconsResponses, IngestResolveData, IngestResolveErrors, IngestResolveResponses, IngestSearchData, IngestSearchErrors, IngestSearchResponses, JobEventsData, JobEventsErrors, JobEventsResponses, JobSpecsData, JobSpecsResponses, JumpstartBuyListData, JumpstartBuyListErrors, JumpstartBuyListResponses, JumpstartPackData, JumpstartPackErrors, JumpstartPackResponses, JumpstartSetsData, JumpstartSetsResponses, JumpstartViewData, JumpstartViewErrors, JumpstartViewResponses, ListJobsData, ListJobsResponses, MarketCardsData, MarketCardsErrors, MarketCardsResponses, MarketDeckData, MarketDeckErrors, MarketDeckResponses, MarketProductCostData, MarketProductCostErrors, MarketProductCostResponses, MarketProductsData, MarketProductsErrors, MarketProductsResponses, MarketProductTreeData, MarketProductTreeErrors, MarketProductTreeResponses, MarketSecretLairData, MarketSecretLairErrors, MarketSecretLairResponses, MarketValueData, MarketValueErrors, MarketValueResponses, SubmitJobData, SubmitJobErrors, SubmitJobResponses, SurfDrawData, SurfDrawErrors, SurfDrawResponses, SurfOptionsData, SurfOptionsResponses, UndoInfoData, UndoInfoResponses, UndoRestoreData, UndoRestoreResponses } from './types.gen';
+import type { AnalyticsCatalogData, AnalyticsCatalogResponses, AnalyticsConsentData, AnalyticsConsentResponses, AnalyticsEventsData, AnalyticsEventsErrors, AnalyticsEventsResponses, AnalyticsForgetData, AnalyticsForgetResponses, AnalyticsSetConsentData, AnalyticsSetConsentErrors, AnalyticsSetConsentResponses, AnalyticsSummaryData, AnalyticsSummaryErrors, AnalyticsSummaryResponses, AnalyticsTraceData, AnalyticsTraceErrors, AnalyticsTraceResponses, ArtLookupData, ArtLookupErrors, ArtLookupResponses, ArtSwapsData, ArtSwapsErrors, ArtSwapsResponses, ArtTagsData, ArtTagsErrors, ArtTagsResponses, CardCombosData, CardCombosErrors, CardCombosResponses, CardFloorsData, CardFloorsErrors, CardFloorsResponses, CardHoldingsData, CardHoldingsErrors, CardHoldingsResponses, CartCheckData, CartCheckErrors, CartCheckResponses, CartLinesData, CartLinesErrors, CartLinesResponses, CartSetupData, CartSetupResponses, CollectionBuyListData, CollectionBuyListErrors, CollectionBuyListResponses, CollectionChecklistData, CollectionChecklistErrors, CollectionChecklistResponses, CollectionData, CollectionErrors, CollectionFamiliesData, CollectionFamiliesResponses, CollectionResponses, CommandersData, CommandersErrors, CommandersResponses, CompanionBookmarkletData, CompanionBookmarkletResponses, CompanionInfoData, CompanionInfoResponses, CompanionZipData, CompanionZipResponses, CompareData, CompareErrors, CompareResponses, DealsClearTargetData, DealsClearTargetErrors, DealsClearTargetResponses, DealsMatchData, DealsMatchErrors, DealsMatchResponses, DealsSetTargetData, DealsSetTargetErrors, DealsSetTargetResponses, DealsSuppliedTabsData, DealsSuppliedTabsErrors, DealsSuppliedTabsResponses, DealsTabsData, DealsTabsErrors, DealsTabsResponses, DealsUnwatchData, DealsUnwatchErrors, DealsUnwatchResponses, DealsWatchData, DealsWatchedData, DealsWatchedResponses, DealsWatchErrors, DealsWatchResponses, DeckBreakDownData, DeckBreakDownErrors, DeckBreakDownResponses, DeckBuildData, DeckBuildErrors, DeckBuildPlanData, DeckBuildPlanErrors, DeckBuildPlanResponses, DeckBuildResponses, DeckCheckData, DeckCheckErrors, DeckCheckResponses, DeckCombosData, DeckCombosErrors, DeckCombosResponses, DeckCopyData, DeckCopyErrors, DeckCopyResponses, DeckCreateData, DeckCreateErrors, DeckCreateResponses, DeckDetailData, DeckDetailErrors, DeckDetailResponses, DeckImportData, DeckImportErrors, DeckImportResponses, DeckListData, DeckListResponses, DeckPreviewData, DeckPreviewErrors, DeckPreviewResponses, DeckSaveData, DeckSaveErrors, DeckSaveResponses, DeckSuggestionsData, DeckSuggestionsErrors, DeckSuggestionsResponses, DraftCombosData, DraftCombosErrors, DraftCombosResponses, ExploreCardData, ExploreCardErrors, ExploreCardResponses, ExploreRankingData, ExploreRankingErrors, ExploreRankingOptionsData, ExploreRankingOptionsResponses, ExploreRankingResponses, ExploreSearchData, ExploreSearchErrors, ExploreSearchResponses, FeaturesRouteData, FeaturesRouteResponses, GetJobData, GetJobErrors, GetJobResponses, HistoryEventData, HistoryEventErrors, HistoryEventResponses, HistoryListData, HistoryListResponses, IngestCommitData, IngestCommitErrors, IngestCommitResponses, IngestDeckFromBrowserData, IngestDeckFromBrowserErrors, IngestDeckFromBrowserResponses, IngestPreconsData, IngestPreconsErrors, IngestPreconsResponses, IngestResolveData, IngestResolveErrors, IngestResolveResponses, IngestSearchData, IngestSearchErrors, IngestSearchResponses, JobEventsData, JobEventsErrors, JobEventsResponses, JobSpecsData, JobSpecsResponses, JumpstartBuyListData, JumpstartBuyListErrors, JumpstartBuyListResponses, JumpstartPackData, JumpstartPackErrors, JumpstartPackResponses, JumpstartSetsData, JumpstartSetsResponses, JumpstartViewData, JumpstartViewErrors, JumpstartViewResponses, ListJobsData, ListJobsResponses, MarketCardsData, MarketCardsErrors, MarketCardsResponses, MarketDeckData, MarketDeckErrors, MarketDeckResponses, MarketProductCostData, MarketProductCostErrors, MarketProductCostResponses, MarketProductsData, MarketProductsErrors, MarketProductsResponses, MarketProductTreeData, MarketProductTreeErrors, MarketProductTreeResponses, MarketSecretLairData, MarketSecretLairErrors, MarketSecretLairResponses, MarketValueData, MarketValueErrors, MarketValueResponses, SubmitJobData, SubmitJobErrors, SubmitJobResponses, SurfDrawData, SurfDrawErrors, SurfDrawResponses, SurfOptionsData, SurfOptionsResponses, UndoInfoData, UndoInfoResponses, UndoRestoreData, UndoRestoreResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -138,6 +138,18 @@ export const exploreRankingOptions = <ThrowOnError extends boolean = false>(opti
 export const dealsTabs = <ThrowOnError extends boolean = false>(options?: Options<DealsTabsData, ThrowOnError>): RequestResult<DealsTabsResponses, DealsTabsErrors, ThrowOnError> => (options?.client ?? client).get<DealsTabsResponses, DealsTabsErrors, ThrowOnError>({ url: '/api/deals/tabs', ...options });
 
 /**
+ * Deals Supplied Tabs
+ */
+export const dealsSuppliedTabs = <ThrowOnError extends boolean = false>(options: Options<DealsSuppliedTabsData, ThrowOnError>): RequestResult<DealsSuppliedTabsResponses, DealsSuppliedTabsErrors, ThrowOnError> => (options.client ?? client).post<DealsSuppliedTabsResponses, DealsSuppliedTabsErrors, ThrowOnError>({
+    url: '/api/deals/tabs',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
  * Deals Match
  */
 export const dealsMatch = <ThrowOnError extends boolean = false>(options: Options<DealsMatchData, ThrowOnError>): RequestResult<DealsMatchResponses, DealsMatchErrors, ThrowOnError> => (options.client ?? client).post<DealsMatchResponses, DealsMatchErrors, ThrowOnError>({
@@ -213,6 +225,45 @@ export const cartSetup = <ThrowOnError extends boolean = false>(options?: Option
  */
 export const cartCheck = <ThrowOnError extends boolean = false>(options: Options<CartCheckData, ThrowOnError>): RequestResult<CartCheckResponses, CartCheckErrors, ThrowOnError> => (options.client ?? client).post<CartCheckResponses, CartCheckErrors, ThrowOnError>({
     url: '/api/cart/check',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Companion Info
+ */
+export const companionInfo = <ThrowOnError extends boolean = false>(options?: Options<CompanionInfoData, ThrowOnError>): RequestResult<CompanionInfoResponses, unknown, ThrowOnError> => (options?.client ?? client).get<CompanionInfoResponses, unknown, ThrowOnError>({ url: '/api/companion', ...options });
+
+/**
+ * Companion Zip
+ */
+export const companionZip = <ThrowOnError extends boolean = false>(options?: Options<CompanionZipData, ThrowOnError>): RequestResult<CompanionZipResponses, unknown, ThrowOnError> => (options?.client ?? client).get<CompanionZipResponses, unknown, ThrowOnError>({ url: '/api/companion/extension.zip', ...options });
+
+/**
+ * Companion Bookmarklet
+ */
+export const companionBookmarklet = <ThrowOnError extends boolean = false>(options?: Options<CompanionBookmarkletData, ThrowOnError>): RequestResult<CompanionBookmarkletResponses, unknown, ThrowOnError> => (options?.client ?? client).get<CompanionBookmarkletResponses, unknown, ThrowOnError>({ url: '/api/companion/bookmarklet', ...options });
+
+/**
+ * Cart Lines
+ */
+export const cartLines = <ThrowOnError extends boolean = false>(options: Options<CartLinesData, ThrowOnError>): RequestResult<CartLinesResponses, CartLinesErrors, ThrowOnError> => (options.client ?? client).post<CartLinesResponses, CartLinesErrors, ThrowOnError>({
+    url: '/api/cart/lines',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Ingest Deck From Browser
+ */
+export const ingestDeckFromBrowser = <ThrowOnError extends boolean = false>(options: Options<IngestDeckFromBrowserData, ThrowOnError>): RequestResult<IngestDeckFromBrowserResponses, IngestDeckFromBrowserErrors, ThrowOnError> => (options.client ?? client).post<IngestDeckFromBrowserResponses, IngestDeckFromBrowserErrors, ThrowOnError>({
+    url: '/api/ingest/deck-from-browser',
     ...options,
     headers: {
         'Content-Type': 'application/json',

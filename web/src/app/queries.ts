@@ -3,7 +3,7 @@ import { keepPreviousData, queryOptions } from '@tanstack/react-query';
 import type { DraftCardIn } from '../core/api';
 import { apiErrorFrom } from '../core/apiError';
 import type { RankingRequest } from '../core/rankings';
-import { analyticsConsent, analyticsSummary, analyticsCatalog, dealsTabs, dealsWatched, marketProductCost, marketSecretLair, undoInfo, cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, cardFloors, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs, historyList, historyEvent, exploreRanking, exploreRankingOptions, cardCombos, deckCombos, draftCombos, artTags, artSwaps, jumpstartSets, jumpstartView, jumpstartPack, surfOptions } from '../core/api';
+import { analyticsConsent, analyticsSummary, analyticsCatalog, dealsTabs, dealsWatched, marketProductCost, marketSecretLair, undoInfo, cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, cardFloors, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs, historyList, historyEvent, exploreRanking, exploreRankingOptions, cardCombos, deckCombos, draftCombos, artTags, artSwaps, jumpstartSets, jumpstartView, jumpstartPack, surfOptions, companionInfo } from '../core/api';
 
 export function unwrap<T>(r: { data?: T; error?: unknown; response?: Response }): T {
   if (r.error !== undefined || r.data === undefined) throw apiErrorFrom(r.error, r.response);
@@ -151,6 +151,14 @@ export const featuresQuery = () =>
   queryOptions({
     queryKey: ['features'],
     queryFn: async ({ signal }) => unwrap(await featuresRoute({ signal })).flags,
+    staleTime: Infinity,
+  });
+
+/** The companion version in this repo + the error catalog (unflagged). */
+export const companionInfoQuery = () =>
+  queryOptions({
+    queryKey: ['companion', 'info'],
+    queryFn: async ({ signal }) => unwrap(await companionInfo({ signal })),
     staleTime: Infinity,
   });
 

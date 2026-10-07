@@ -16,9 +16,22 @@ from . import db, earmarks, listing_match, market, sld, storefetch, storepage, t
 
 
 def open_tabs(browser: str = "chrome", **read_kw) -> dict:
-    """Your open tabs sorted into: product pages per catalogued store, Shopify-
-    shaped stores without a recipe yet, and a count of everything else."""
-    read = tabs_mod.read_tabs(browser, **read_kw)
+    """Your open tabs (read on this Mac) sorted by :func:`sort_tabs`."""
+    return sort_tabs(tabs_mod.read_tabs(browser, **read_kw))
+
+
+def supplied_tabs(rows: list[dict]) -> dict:
+    """Tabs the browser companion read in the user's own browser (``url`` +
+    ``title`` each, only the store sites it was allowed to see), sorted by
+    :func:`sort_tabs` exactly like a local read."""
+    return sort_tabs(tabs_mod.collect(
+        [(r["url"], r.get("title") or "", int(r.get("window") or 1), i) for i, r in enumerate(rows, 1)],
+        browser="extension"))
+
+
+def sort_tabs(read: tabs_mod.TabRead) -> dict:
+    """Tabs sorted into: product pages per catalogued store, Shopify-shaped
+    stores without a recipe yet, and a count of everything else."""
     stores: dict[str, dict] = {}
     candidates: dict[str, list[dict]] = defaultdict(list)
     store_pages = other = 0
@@ -69,12 +82,15 @@ def _market_read(row: dict, choice: dict | None) -> None:
         row["error"] = "TCGplayer has no market price for this yet."
 
 
-def read_prices(urls: list[str], *, progress=None, fresh: bool = False) -> list[dict]:
+def read_prices(urls: list[str], *, progress=None, fresh: bool = False,
+                pages: dict[str, dict] | None = None) -> list[dict]:
     """Price + stock for each product URL with its store's recipe. Never raises
     per URL: each row carries ``error`` (blocked, tab closed, JS events off, …)
     so one bad page doesn't sink the batch. A ``JsEventsOff`` is reported once
     and the remaining open-tab reads are skipped with the same message. A
-    watched TCGplayer product link reads its product's TCGplayer market price."""
+    watched TCGplayer product link reads its product's TCGplayer market price.
+    ``pages`` = rendered tabs the browser companion already read (url →
+    ``{title, head, ld, text}``), used instead of reading the tab on this Mac."""
     rows: list[dict] = []
     js_off: str | None = None
     market_ids = watched_identities([u for u in urls if is_market_link(u)])
@@ -89,9 +105,9 @@ def read_prices(urls: list[str], *, progress=None, fresh: bool = False) -> list[
                 continue
             parts = urlsplit(url)
             m = vendors.classify(parts.hostname or "", parts.path)
-            if js_off and m.vendor and m.vendor.mode == "rendered":
+            if js_off and m.vendor and m.vendor.mode == "rendered" and url not in (pages or {}):
                 raise storefetch.JsEventsOff(js_off)
-            v, listing = storefetch.read(url, fresh=fresh)
+            v, listing = storefetch.read(url, fresh=fresh, rendered=(pages or {}).get(url))
             row.update(vendor=v.key, price=listing.price, currency=listing.currency,
                        available=listing.available, title=listing.title, signal=listing.signal)
             if listing.price is None:
@@ -202,10 +218,11 @@ def _earmark_choice(set_code: str, name: str, subtype: str | None, *, kind: str 
     return {"kind": "sealed", "set_code": set_code, "name": name}
 
 
-def read_and_compare(urls: list[str], *, progress=None, fresh: bool = False) -> list[dict]:
+def read_and_compare(urls: list[str], *, progress=None, fresh: bool = False,
+                     pages: dict[str, dict] | None = None) -> list[dict]:
     """Read every product page's price, then what it is and what it's worth.
     Prices of watched links are added to their history."""
-    rows = read_prices(urls, progress=progress, fresh=fresh)
+    rows = read_prices(urls, progress=progress, fresh=fresh, pages=pages)
     earmarks.record_reads(rows)
     watched = watched_identities(urls)
     confirmed = {**watched, **confirmed_matches(urls)}

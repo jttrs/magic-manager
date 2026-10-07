@@ -139,7 +139,7 @@ timestamps only within the last 24 hours.
 | `job.failed` | error | server | `job`, `code`, `duration_ms`, `job_id` | Which background jobs fail and why. |
 | `client.error` | error | client | `view`, `kind`, `code` | Uncaught browser errors by view and error type (never the message). |
 | `client.network_error` | error | client | `view`, `code` | API calls that never got an answer (offline, network, timeout). |
-| `companion.error` | error | client | `code` | Coded browser-companion failures (`cart.no_tab`, `cart.page_changed`, `moxfield.private_not_logged_in`, `approval.denied`, …). |
+| `companion.error` | error | client | `code` | Coded browser-companion / bookmarklet failures — exactly the codes in `extension/errors.json` (`cart.page_changed`, `cart.empty`, `moxfield.private`, `request.denied`, …). |
 | `page.viewed` | usage | client | `view`, `viewport` | Which views are used, on a narrow (phone) or wide screen. |
 | `job.started` | usage | server | `job`, `job_id` | Which background jobs people run. |
 | `job.succeeded` | usage | server | `job`, `duration_ms`, `job_id` | How long successful jobs take. |

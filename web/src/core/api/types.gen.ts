@@ -160,6 +160,20 @@ export type ArtTagsOut = {
 };
 
 /**
+ * BookmarkletOut
+ */
+export type BookmarkletOut = {
+    /**
+     * Href
+     */
+    href: string;
+    /**
+     * Version
+     */
+    version: string;
+};
+
+/**
  * BracketOut
  */
 export type BracketOut = {
@@ -597,6 +611,64 @@ export type CartAuditOut = {
  * CartIn
  */
 export type CartIn = {
+    /**
+     * Family
+     *
+     * Set family to check gaps against; imputed when the cart sits in one.
+     */
+    family?: string | null;
+};
+
+/**
+ * CartLineIn
+ */
+export type CartLineIn = {
+    /**
+     * Scryfall Id
+     */
+    scryfall_id?: string | null;
+    /**
+     * Name
+     */
+    name?: string | null;
+    /**
+     * Set Name
+     */
+    set_name?: string | null;
+    /**
+     * Finish
+     */
+    finish?: 'nonfoil' | 'foil' | 'etched';
+    /**
+     * Condition
+     */
+    condition?: string | null;
+    /**
+     * Treatments
+     */
+    treatments?: Array<string>;
+    /**
+     * Quantity
+     */
+    quantity: number;
+    /**
+     * Price
+     */
+    price?: number | null;
+};
+
+/**
+ * CartLinesIn
+ */
+export type CartLinesIn = {
+    /**
+     * Items
+     */
+    items: Array<CartLineIn>;
+    /**
+     * Source
+     */
+    source: 'extension' | 'bookmarklet';
     /**
      * Family
      *
@@ -1137,6 +1209,36 @@ export type CommitOut = {
 };
 
 /**
+ * CompanionOut
+ */
+export type CompanionOut = {
+    /**
+     * Version
+     *
+     * The extension version in this app's repo — older installs should update.
+     */
+    version: string;
+    /**
+     * Zip Url
+     */
+    zip_url: string;
+    /**
+     * Bookmarklet Url
+     */
+    bookmarklet_url: string;
+    /**
+     * Errors
+     *
+     * Every companion error code → {message, fix}.
+     */
+    errors: {
+        [key: string]: {
+            [key: string]: unknown;
+        };
+    };
+};
+
+/**
  * CompareCardOut
  */
 export type CompareCardOut = {
@@ -1622,6 +1724,17 @@ export type DeckDetailOut = {
      * False for precons (read-only recipes): copy the deck to edit it.
      */
     editable: boolean;
+};
+
+/**
+ * DeckFromBrowserIn
+ */
+export type DeckFromBrowserIn = {
+    /**
+     * Source
+     */
+    source: 'moxfield';
+    deck: MoxDeckIn;
 };
 
 /**
@@ -3065,6 +3178,94 @@ export type MissingOut = {
      * Market
      */
     market: number | null;
+};
+
+/**
+ * MoxBoardIn
+ */
+export type MoxBoardIn = {
+    /**
+     * Cards
+     */
+    cards: {
+        [key: string]: MoxEntryIn;
+    };
+};
+
+/**
+ * MoxCardIn
+ */
+export type MoxCardIn = {
+    /**
+     * Scryfall Id
+     */
+    scryfall_id?: string | null;
+    /**
+     * Set
+     */
+    set?: string | null;
+    /**
+     * Cn
+     */
+    cn?: string | null;
+    /**
+     * Name
+     */
+    name?: string | null;
+    /**
+     * Finish
+     */
+    finish?: string | null;
+};
+
+/**
+ * MoxDeckIn
+ */
+export type MoxDeckIn = {
+    /**
+     * Publicid
+     */
+    publicId: string;
+    /**
+     * Name
+     */
+    name?: string | null;
+    createdByUser?: MoxUserIn;
+    /**
+     * Boards
+     */
+    boards: {
+        [key: string]: MoxBoardIn;
+    };
+};
+
+/**
+ * MoxEntryIn
+ */
+export type MoxEntryIn = {
+    /**
+     * Quantity
+     */
+    quantity: number;
+    /**
+     * Isfoil
+     */
+    isFoil?: boolean;
+    /**
+     * Finish
+     */
+    finish?: string | null;
+    card: MoxCardIn;
+};
+
+/**
+ * MoxUserIn
+ */
+export type MoxUserIn = {
+    /**
+     * Username
+     */
+    userName?: string | null;
 };
 
 /**
@@ -4821,6 +5022,24 @@ export type SwapOut = {
 };
 
 /**
+ * TabIn
+ */
+export type TabIn = {
+    /**
+     * Url
+     */
+    url: string;
+    /**
+     * Title
+     */
+    title?: string;
+    /**
+     * Window
+     */
+    window?: number;
+};
+
+/**
  * TabOut
  */
 export type TabOut = {
@@ -4840,6 +5059,16 @@ export type TabOut = {
      * Tab
      */
     tab: number;
+};
+
+/**
+ * TabsIn
+ */
+export type TabsIn = {
+    /**
+     * Tabs
+     */
+    tabs: Array<TabIn>;
 };
 
 /**
@@ -5827,6 +6056,31 @@ export type DealsTabsResponses = {
 
 export type DealsTabsResponse = DealsTabsResponses[keyof DealsTabsResponses];
 
+export type DealsSuppliedTabsData = {
+    body: TabsIn;
+    path?: never;
+    query?: never;
+    url: '/api/deals/tabs';
+};
+
+export type DealsSuppliedTabsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DealsSuppliedTabsError = DealsSuppliedTabsErrors[keyof DealsSuppliedTabsErrors];
+
+export type DealsSuppliedTabsResponses = {
+    /**
+     * Successful Response
+     */
+    200: OpenTabsOut;
+};
+
+export type DealsSuppliedTabsResponse = DealsSuppliedTabsResponses[keyof DealsSuppliedTabsResponses];
+
 export type DealsMatchData = {
     body: ConfirmIn;
     path?: never;
@@ -6070,6 +6324,102 @@ export type CartCheckResponses = {
 };
 
 export type CartCheckResponse = CartCheckResponses[keyof CartCheckResponses];
+
+export type CompanionInfoData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/companion';
+};
+
+export type CompanionInfoResponses = {
+    /**
+     * Successful Response
+     */
+    200: CompanionOut;
+};
+
+export type CompanionInfoResponse = CompanionInfoResponses[keyof CompanionInfoResponses];
+
+export type CompanionZipData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/companion/extension.zip';
+};
+
+export type CompanionZipResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
+export type CompanionBookmarkletData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/companion/bookmarklet';
+};
+
+export type CompanionBookmarkletResponses = {
+    /**
+     * Successful Response
+     */
+    200: BookmarkletOut;
+};
+
+export type CompanionBookmarkletResponse = CompanionBookmarkletResponses[keyof CompanionBookmarkletResponses];
+
+export type CartLinesData = {
+    body: CartLinesIn;
+    path?: never;
+    query?: never;
+    url: '/api/cart/lines';
+};
+
+export type CartLinesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CartLinesError = CartLinesErrors[keyof CartLinesErrors];
+
+export type CartLinesResponses = {
+    /**
+     * Successful Response
+     */
+    200: CartAuditOut;
+};
+
+export type CartLinesResponse = CartLinesResponses[keyof CartLinesResponses];
+
+export type IngestDeckFromBrowserData = {
+    body: DeckFromBrowserIn;
+    path?: never;
+    query?: never;
+    url: '/api/ingest/deck-from-browser';
+};
+
+export type IngestDeckFromBrowserErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type IngestDeckFromBrowserError = IngestDeckFromBrowserErrors[keyof IngestDeckFromBrowserErrors];
+
+export type IngestDeckFromBrowserResponses = {
+    /**
+     * Successful Response
+     */
+    200: ResolveOut;
+};
+
+export type IngestDeckFromBrowserResponse = IngestDeckFromBrowserResponses[keyof IngestDeckFromBrowserResponses];
 
 export type MarketProductsData = {
     body?: never;

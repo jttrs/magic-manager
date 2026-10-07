@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Send to magic-manager?</title>
+  <link rel="stylesheet" href="page.css">
+</head>
+<body>
+  <main>
+    <h1 id="title">Send to magic-manager?</h1>
+    <p>Asked by <span class="origin" id="origin"></span> — the app you paired. <span class="muted" id="ttl"></span></p>
+    <p id="summary" class="ok"></p>
+    <div id="warnings"></div>
+    <h2>Exactly what will be sent</h2>
+    <div class="scroll"><table id="table"></table></div>
+    <details><summary>Show the raw data</summary><pre id="raw"></pre></details>
+    <p class="muted">Nothing else is sent: no cookies, passwords, sign-in tokens, email or addresses. Nothing has been sent yet.</p>
+    <div class="actions">
+      <button type="button" id="deny" disabled>Don’t send</button>
+      <button type="button" id="approve" class="primary" disabled>Send to magic-manager</button>
+    </div>
+    <p id="status" role="status" class="muted"></p>
+  </main>
+  <script type="module" src="approve.js"></script>
+</body>
+</html>

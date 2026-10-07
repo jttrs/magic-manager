@@ -1,0 +1,42 @@
+/* The companion's own pages. Mirrors the app's guide-sheet look: ruled rows, one
+   amber accent, light + dark. No remote fonts or images. */
+:root {
+  color-scheme: light dark;
+  /* The app's theme tokens (web/tokens), copied: extension pages can't load the app's CSS. */
+  --paper: #efe7d6; --raised: #f7f2e7; --sunk: #e4dac4; --ink: #1d1912; --muted: #625846;
+  --rule: rgba(29, 25, 18, 0.15); --rule-strong: #1d1912; --accent: #f0a531; --accent-ink: #7a4b00; --on-accent: #1d1912; --danger: #9c3a22;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #221e17; --raised: #2e2920; --sunk: #1c1812; --ink: #efe7d6; --muted: #a59b87;
+    --rule: rgba(239, 231, 214, 0.14); --rule-strong: #d3c6aa; --accent: #f0a531; --accent-ink: #f7c66b; --on-accent: #1d1912; --danger: #e2785e;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 14px/1.5 "Archivo", "Helvetica Neue", system-ui, sans-serif; }
+main { max-width: 720px; margin: 0 auto; padding: 20px 24px 28px; }
+h1 { font-size: 24px; margin: 0 0 6px; font-weight: 700; letter-spacing: -0.01em; font-stretch: 80%; padding-bottom: 8px; border-bottom: 2px solid var(--rule-strong); }
+h2 { font-size: 13px; margin: 24px 0 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; padding-bottom: 3px; border-bottom: 1px solid var(--rule-strong); }
+p { margin: 6px 0; }
+.muted { color: var(--muted); }
+.origin { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
+.row { display: flex; gap: 12px; align-items: baseline; border-bottom: 1px solid var(--rule); padding: 8px 0; }
+.row > :first-child { flex: 1; min-width: 0; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 5px 8px 5px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-weight: 600; color: var(--muted); font-size: 12px; }
+td.num, th.num { text-align: right; }
+.scroll { max-height: 340px; overflow: auto; border-top: 1px solid var(--rule); }
+pre { white-space: pre-wrap; word-break: break-word; font-size: 12px; background: var(--sunk); padding: 10px; max-height: 260px; overflow: auto; }
+button { font: inherit; border-radius: 3px; padding: 7px 14px; cursor: pointer; border: 1px solid var(--rule); background: transparent; color: var(--ink); }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:disabled { opacity: 0.5; cursor: default; }
+.actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; position: sticky; bottom: 0; background: var(--paper); padding: 10px 0; border-top: 1px solid var(--rule); }
+input[type="url"] { font: inherit; padding: 6px 8px; border: 1px solid var(--rule-strong); border-radius: 3px; background: var(--raised); color: var(--ink); width: 100%; }
+.error { color: var(--danger); }
+.ok { color: var(--accent-ink); font-weight: 600; }
+ul.plain { margin: 6px 0; padding-left: 18px; }
+details summary { cursor: pointer; color: var(--muted); }
+.warn { border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); padding: 6px 0; margin: 8px 0; color: var(--ink); }
+.warn::before { content: "Note · "; font-weight: 600; color: var(--accent-ink); }

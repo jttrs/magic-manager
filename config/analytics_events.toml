@@ -86,10 +86,43 @@ version = 1
 category = "error"
 source = "client"
 owner = "companion"
-purpose = "Coded failures from the browser companion (e.g. cart.no_tab, cart.page_changed, moxfield.private_not_logged_in, approval.denied)."
+purpose = "Which browser-companion / cart-bookmarklet failures users hit (extension/errors.json), so broken readers and confusing setups are fixed before anyone reports them."
 dims = ["code"]
 [events."companion.error".props]
-code = { type = "code", required = true }
+# Exactly the codes in extension/errors.json (tests/test_companion.py keeps them in sync).
+code = { type = "enum", required = true, values = [
+  "companion.not_installed",
+  "companion.timeout",
+  "companion.outdated",
+  "request.invalid",
+  "request.busy",
+  "request.denied",
+  "request.expired",
+  "request.tab_moved",
+  "request.cross_site",
+  "permission.deals_off",
+  "permission.moxfield_off",
+  "permission.manapool_missing",
+  "cart.load_timeout",
+  "cart.empty",
+  "cart.page_changed",
+  "cart.row_unreadable",
+  "cart.signed_out",
+  "cart.sign_in",
+  "cart.not_scriptable",
+  "cart.paste_invalid",
+  "cart.no_lines",
+  "tabs.none",
+  "tabs.page_unreadable",
+  "moxfield.bad_url",
+  "moxfield.private",
+  "moxfield.not_found",
+  "moxfield.blocked",
+  "moxfield.load_timeout",
+  "moxfield.changed",
+  "moxfield.http",
+  "deck.empty",
+] }
 
 # ---------------------------------------------------------------- usage
 

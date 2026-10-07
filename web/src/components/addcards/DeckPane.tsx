@@ -5,6 +5,8 @@ import { useJob, type JobLive } from '../../app/useJob';
 import type { PreconOptionOut, ResolveOut } from '../../core/api';
 import { fmtInt } from '../../core/format';
 import { Button } from '../Button';
+import { useBrowserDeck } from '../../app/useBrowserDeck';
+import { AwaitingNote, FailureNote } from '../companion/CompanionNotes';
 
 /** Bring a whole deck: a deck-builder URL (reviewed before adding) or a precon (added directly). */
 export function DeckPane({ onFetched }: { onFetched: (r: ResolveOut) => void }) {
@@ -27,7 +29,8 @@ function DeckUrl({ onFetched }: { onFetched: (r: ResolveOut) => void }) {
   const [url, setUrl] = useState('');
   const [error, setError] = useState('');
   const { live, start } = useJob();
-  const running = live != null && live.status !== 'succeeded' && live.status !== 'failed';
+  const browser = useBrowserDeck();
+  const running = browser.pending || (live != null && live.status !== 'succeeded' && live.status !== 'failed');
 
   useEffect(() => {
     if (live?.status !== 'succeeded') return;
@@ -41,6 +44,15 @@ function DeckUrl({ onFetched }: { onFetched: (r: ResolveOut) => void }) {
       return;
     }
     setError('');
+    browser.reset();
+    if (browser.handles(url)) {
+      try {
+        onFetched(await browser.read(url.trim()));
+      } catch {
+        // shown by FailureNote below
+      }
+      return;
+    }
     const err = await start('ingest.fetch_deck', { url: url.trim() });
     if (err) setError(err);
   }
@@ -60,7 +72,11 @@ function DeckUrl({ onFetched }: { onFetched: (r: ResolveOut) => void }) {
         />
       </label>
       <Button tone="paper" onClick={fetchDeck} disabled={running} className="self-start">{running ? 'Fetching…' : 'Fetch deck'}</Button>
-      {url.includes('moxfield') && <p className="text-xs text-ink-muted">Moxfield opens a Chrome window to read the deck.</p>}
+      {url.includes('moxfield') && (
+        <p className="text-xs text-ink-muted">{browser.handles(url) ? 'Read in this browser by the companion — you approve what it sends.' : 'Moxfield opens a Chrome window to read the deck.'}</p>
+      )}
+      {browser.awaiting != null && <AwaitingNote summary={browser.awaiting} />}
+      {browser.error && <FailureNote error={browser.error} />}
       {error && <p role="alert" className="text-sm text-danger">{error}</p>}
       <JobLine live={live} />
     </section>

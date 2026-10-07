@@ -14,14 +14,15 @@ test('cart check is hidden unless its feature flag is on', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Check my Mana Pool cart' })).toHaveCount(0);
 });
 
-test('with the flag on: explains setup when no Mana Pool account is configured', async ({ page }) => {
+test('with the flag on and no login on this computer: only the bookmarklet way is offered', async ({ page }) => {
   await page.route('**/api/features', (r) => r.fulfill({ json: { flags: { cart_check: true } } }));
   await page.route('**/api/cart/setup', (r) => r.fulfill({ json: { account: false } }));
   await page.goto(COLLECTION_URL);
   await page.getByRole('button', { name: 'Check my Mana Pool cart' }).click();
   const dialog = page.getByRole('dialog', { name: 'Check my Mana Pool cart' });
-  await expect(dialog).toContainText('MANAPOOL_PASSWORD');
-  await expect(dialog.getByRole('button', { name: 'Read my cart' })).toBeDisabled();
+  await expect(dialog.getByRole('heading', { name: 'With the bookmarklet' })).toBeVisible();
+  await expect(dialog.getByRole('heading', { name: 'With your login on this computer' })).toHaveCount(0);
+  await expect(dialog.getByRole('heading', { name: 'In this browser' })).toHaveCount(0);
 });
 
 test('with the flag on and an account: read the cart and see what to fix', async ({ page }) => {
@@ -32,7 +33,7 @@ test('with the flag on and an account: read the cart and see what to fix', async
   await page.goto(COLLECTION_URL);
   await page.getByRole('button', { name: 'Check my Mana Pool cart' }).click();
   const dialog = page.getByRole('dialog', { name: 'Check my Mana Pool cart' });
-  await dialog.getByRole('button', { name: 'Read my cart' }).click();
+  await dialog.getByRole('button', { name: 'Read with my login' }).click();
   await expect(dialog.getByRole('region', { name: 'Bought twice' })).toContainText('Twice Card');
   await expect(dialog.getByRole('region', { name: 'Already in your collection' })).toContainText('you own 1');
   await expect(dialog.getByRole('region', { name: 'Over market' })).toContainText('+50%');

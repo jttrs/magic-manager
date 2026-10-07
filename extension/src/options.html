@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>magic-manager companion</title>
+  <link rel="stylesheet" href="page.css">
+</head>
+<body>
+  <main>
+    <h1>magic-manager companion</h1>
+    <p class="muted">Reads things only your own browser can see and, after you approve each time, hands the card lines to your magic-manager app. Version <span id="version"></span>.</p>
+
+    <h2>1 · Pair with your app</h2>
+    <p>The address you open magic-manager at. The companion answers only that address — no other website can talk to it.</p>
+    <div class="row">
+      <div><input type="url" id="origin" placeholder="http://localhost:8765" autocomplete="off" spellcheck="false" aria-label="App address"></div>
+      <button type="button" id="pair" class="primary">Pair</button>
+      <button type="button" id="unpair">Unpair</button>
+    </div>
+    <p id="pair-status" role="status"></p>
+
+    <h2>2 · Choose what it may read</h2>
+    <div class="row">
+      <div><strong>Mana Pool cart</strong> — always on<br><span class="muted">Reads your cart page on manapool.com (cards, finishes, quantities, prices). Never its API, your sign-in or your address.</span></div>
+      <span id="cart-state" class="ok"></span>
+    </div>
+    <div class="row">
+      <div><strong>Deals — your open store tabs</strong><br><span class="muted">Lets the companion see which tabs are open on the <span id="store-count"></span> Deals stores and read the price on product pages you have open. Chrome will ask to allow those sites.</span></div>
+      <button type="button" id="deals"></button>
+    </div>
+    <div class="row">
+      <div><strong>Moxfield decks</strong><br><span class="muted">Reads a deck you choose from moxfield.com, as your browser sees it (including your own private decks when you're signed in). Chrome will ask to allow moxfield.com.</span></div>
+      <button type="button" id="moxfield"></button>
+    </div>
+
+    <h2>What it never does</h2>
+    <ul class="plain">
+      <li>Read cookies, passwords, sign-in tokens, email or addresses.</li>
+      <li>Change anything on Mana Pool, Moxfield or a store — no cart edits, no purchases.</li>
+      <li>Read anything unless the app asks <em>and</em> you press Send in its own window.</li>
+      <li>Collect in the background, run analytics, or load code from the internet.</li>
+    </ul>
+    <p class="muted">The source is plain JavaScript in the magic-manager repo (<span class="origin">extension/</span>) — read it before you install.</p>
+  </main>
+  <script type="module" src="options.js"></script>
+</body>
+</html>

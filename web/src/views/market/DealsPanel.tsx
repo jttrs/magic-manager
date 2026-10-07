@@ -5,11 +5,15 @@ import { deltaLabel, pricesFrom, sharedErrors, stockLabel, type PriceRow } from 
 import { dealsTabsQuery, unwrap } from '../../app/queries';
 import { Button } from '../../components/Button';
 import { EmptyNote } from '../../components/States';
-import { dealsMatch, type MatchOut, type OpenTabsOut, type StoreTabsOut } from '../../core/api';
+import { dealsMatch, dealsSuppliedTabs, type MatchOut, type OpenTabsOut, type StoreTabsOut } from '../../core/api';
+import { useFeature } from '../../app/features';
+import { useCompanion } from '../../app/useCompanion';
+import { AwaitingNote, FailureNote } from '../../components/companion/CompanionNotes';
+import { warningLines } from '../../core/companion';
 import { fmtCount, fmtInt, fmtUsd } from '../../core/format';
 import type { MarketSearch } from '../../core/search';
 import { DealsWorkspace } from './DealsWorkspace';
-import { dealsPricesQuery, patchPrices, setPrices, useDealCosts, useDealsData } from './useDealsData';
+import { dealsPagesQuery, dealsPricesQuery, patchPrices, setDealsPages, setPrices, useDealCosts, useDealsData } from './useDealsData';
 
 const MODE_NOTE: Record<StoreTabsOut['mode'], string> = {
   shopify: 'price read from the store',
@@ -27,6 +31,34 @@ export function DealsPanel({ search, set }: { search: MarketSearch; set: (patch:
   const read = useQuery(dealsTabsQuery());
   const r = read.data;
   const job = useJob();
+  // In this browser via the companion when it's connected; else Chrome on this Mac (AppleScript).
+  const c = useCompanion();
+  const inBrowser = useFeature('companion') && c.status === 'ready';
+  const [awaiting, setAwaiting] = useState<string | null>(null);
+  const [readNotes, setReadNotes] = useState<string[]>([]);
+  const pages = useQuery(dealsPagesQuery()).data;
+  const viaCompanion = useMutation({
+    mutationFn: async () => {
+      const d = await c.read('tabs', {}, (summary) => setAwaiting(summary));
+      setAwaiting(null);
+      const out = unwrap(await dealsSuppliedTabs({ body: { tabs: d.tabs } }));
+      setDealsPages(qc, d.pages);
+      qc.setQueryData(dealsTabsQuery().queryKey, out);
+      setReadNotes(warningLines(d.warnings, c.catalog));
+      return out;
+    },
+    onSettled: () => setAwaiting(null),
+  });
+  const readTabs = () => {
+    if (inBrowser) viaCompanion.mutate();
+    else {
+      setDealsPages(qc, {});
+      setReadNotes([]);
+      void read.refetch();
+    }
+  };
+  const readingTabs = read.isFetching || viaCompanion.isPending;
+  const pagesFor = (list: string[]) => Object.fromEntries(list.filter((u) => pages?.[u]).map((u) => [u, pages![u]]));
   const urls = r ? r.stores.flatMap((s) => s.tabs.map((t) => t.url)) : [];
   const live = job.live;
   const reading = live != null && live.status !== 'succeeded' && live.status !== 'failed';
@@ -42,21 +74,28 @@ export function DealsPanel({ search, set }: { search: MarketSearch; set: (patch:
   const controls = (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3">
-        <Button tone="paper" emphasis={r ? 'quiet' : 'primary'} onClick={() => void read.refetch()} disabled={read.isFetching}>
-          {read.isFetching ? 'Reading your tabs…' : r ? 'Read again' : 'Read my open tabs'}
+        <Button tone="paper" emphasis={r ? 'quiet' : 'primary'} onClick={readTabs} disabled={readingTabs}>
+          {awaiting != null ? 'Waiting for approval…' : readingTabs ? 'Reading your tabs…' : r ? 'Read again' : 'Read my open tabs'}
         </Button>
         {r && urls.length > 0 && (
-          <Button tone="paper" emphasis={prices.size ? 'quiet' : 'primary'} disabled={reading} onClick={() => { job.reset(); void job.start('deals.read_prices', { urls }); }}>
+          <Button tone="paper" emphasis={prices.size ? 'quiet' : 'primary'} disabled={reading} onClick={() => { job.reset(); void job.start('deals.read_prices', { urls, pages: pagesFor(urls) }); }}>
             {reading ? 'Reading prices…' : prices.size ? 'Read prices again' : `Read ${fmtCount(urls.length, 'price')}`}
           </Button>
         )}
-        {r && <span className="text-sm tabular text-ink-muted">{fmtInt(r.windows_read)} of {fmtCount(r.windows, 'window')} read</span>}
+        {r && (r.browser === 'extension'
+          ? <span className="text-sm text-ink-muted">Read in this browser by the companion</span>
+          : <span className="text-sm tabular text-ink-muted">{fmtInt(r.windows_read)} of {fmtCount(r.windows, 'window')} read</span>)}
       </div>
+      {awaiting != null && <AwaitingNote summary={awaiting} />}
+      {viaCompanion.isError && <FailureNote error={viaCompanion.error} />}
+      {readNotes.map((w) => <p key={w} role="status" className="text-md leading-relaxed text-ink">{w}</p>)}
       {read.isError && <p role="alert" className="text-md text-danger">{(read.error as Error).message}</p>}
       {r?.warnings.map((w) => <p key={w} role="status" className="text-md leading-relaxed text-ink">{w}</p>)}
-      {!r && !read.isFetching && !read.isError && (
+      {!r && !readingTabs && !read.isError && (
         <p className="max-w-[60ch] text-md leading-relaxed text-ink-muted">
-          Reads the tabs open in Chrome on this computer and keeps the store product pages. Nothing is opened, closed or changed.
+          {inBrowser
+            ? 'Asks the browser companion for the store product pages you have open in this browser. You see and approve what it sends; nothing is opened, closed or changed.'
+            : 'Reads the tabs open in Chrome on this computer and keeps the store product pages. Nothing is opened, closed or changed.'}
         </p>
       )}
       {reading && (

@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import hashlib
+import html as htmllib
 import json
 import os
 import re
@@ -124,26 +125,36 @@ def read_tab(url: str, *, runner: Callable[[str], str] | None = None) -> tuple[s
     out = (runner or _osascript)(_TAB_SCRIPT.format(url=esc(url), js=esc(_TAB_JS)))
     if out == "__GONE__" or not out:
         raise TabGone("This store is read from your open tab — open the page in Chrome, then read again.")
-    data = json.loads(out)
-    html = data.get("head", "") + "".join(
-        f'<script type="application/ld+json">{ld}</script>' for ld in data.get("ld", []))
-    html = f"<html><head><title>{data.get('title', '')}</title>{html}</head></html>"
-    return html, data.get("text", "")
+    return page_from_extract(json.loads(out))
+
+
+def page_from_extract(data: dict) -> tuple[str, str]:
+    """``(html, text)`` for the recipe parsers from a rendered tab's extract
+    ``{title, head, ld[], text}`` — read here by AppleScript, or in the user's
+    own browser by the browser companion (same shape, so one parser path)."""
+    title = htmllib.escape(str(data.get("title") or ""))
+    html = str(data.get("head") or "") + "".join(
+        f'<script type="application/ld+json">{ld}</script>' for ld in (data.get("ld") or []) if isinstance(ld, str))
+    html = f"<html><head><title>{title}</title>{html}</head></html>"
+    return html, str(data.get("text") or "")
 
 
 # ---------- one listing ----------
 
 def read(url: str, *, fresh: bool = False, client: httpx.Client | None = None,
-         tab_runner: Callable[[str], str] | None = None) -> tuple[vendors.Vendor, storepage.Listing]:
-    """Read ``url`` with its store's recipe. Raises :class:`LookupError` for an
-    uncatalogued store, :class:`storepage.Blocked`, :class:`JsEventsOff`, :class:`TabGone`."""
+         tab_runner: Callable[[str], str] | None = None,
+         rendered: dict | None = None) -> tuple[vendors.Vendor, storepage.Listing]:
+    """Read ``url`` with its store's recipe. ``rendered`` = the extract the
+    browser companion read from the user's open tab (open-tab stores only).
+    Raises :class:`LookupError` for an uncatalogued store,
+    :class:`storepage.Blocked`, :class:`JsEventsOff`, :class:`TabGone`."""
     parts = urlsplit(url)
     m = vendors.classify(parts.hostname or "", parts.path)
     if m.vendor is None or m.kind != "product":
         raise LookupError("not a product page of a catalogued store")
     v = m.vendor
     if v.mode == "rendered":
-        html, text = read_tab(url, runner=tab_runner)
+        html, text = page_from_extract(rendered) if rendered is not None else read_tab(url, runner=tab_runner)
         storepage.check_blocked(html)
         return v, vendors.read_listing(v, html, text=text)
     if v.mode == "shopify":

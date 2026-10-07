@@ -63,3 +63,8 @@ export function useAnalytics() {
     tracker.track('page.viewed', { view: viewOf(pathname), viewport: wide ? 'wide' : 'narrow' });
   }, [pathname]);
 }
+
+/** A coded browser-companion failure (extension/errors.json) → `companion.error`. */
+export function trackCompanionError(code: string) {
+  tracker.track('companion.error', { code });
+}
