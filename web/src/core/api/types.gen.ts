@@ -303,6 +303,24 @@ export type CardPriceOut = {
      */
     floor_collector_number?: string | null;
     /**
+     * Foil Gap Status
+     *
+     * ok = both plain finishes priced; fancy = a premium foil treatment (no plain-foil choice).
+     */
+    foil_gap_status: 'ok' | 'fancy' | 'foil_only' | 'nonfoil_only' | 'unpriced';
+    /**
+     * Foil Gap Pct
+     *
+     * (foil − nonfoil) / nonfoil, a fraction; negative when the foil is cheaper.
+     */
+    foil_gap_pct?: number | null;
+    /**
+     * Foil Gap Usd
+     *
+     * foil − nonfoil, USD.
+     */
+    foil_gap_usd?: number | null;
+    /**
      * Owned
      */
     owned: number;
@@ -1280,6 +1298,12 @@ export type DeckCostOut = {
      * Lines
      */
     lines: Array<DeckLineOut>;
+    /**
+     * Live
+     *
+     * Floors checked across every set on Scryfall (else local prices).
+     */
+    live?: boolean;
 };
 
 /**
@@ -1810,6 +1834,60 @@ export type FeaturesOut = {
     flags: {
         [key: string]: boolean;
     };
+};
+
+/**
+ * FloorOut
+ */
+export type FloorOut = {
+    /**
+     * Usd
+     */
+    usd: number;
+    /**
+     * Set Code
+     */
+    set_code?: string | null;
+    /**
+     * Collector Number
+     */
+    collector_number?: string | null;
+    /**
+     * Scryfall Id
+     */
+    scryfall_id?: string | null;
+};
+
+/**
+ * FloorsIn
+ */
+export type FloorsIn = {
+    /**
+     * Scryfall Ids
+     */
+    scryfall_ids: Array<string>;
+    /**
+     * Live
+     *
+     * Check every set on Scryfall (else locally synced prices).
+     */
+    live?: boolean;
+};
+
+/**
+ * FloorsOut
+ */
+export type FloorsOut = {
+    /**
+     * Live
+     */
+    live: boolean;
+    /**
+     * Floors
+     *
+     * One per known printing id (unknown ids are omitted).
+     */
+    floors: Array<PrintingFloorOut>;
 };
 
 /**
@@ -2656,6 +2734,32 @@ export type PricePointOut = {
      * At
      */
     at: string;
+};
+
+/**
+ * PrintingFloorOut
+ */
+export type PrintingFloorOut = {
+    /**
+     * Scryfall Id
+     */
+    scryfall_id: string;
+    /**
+     * Oracle Id
+     */
+    oracle_id?: string | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * The card's cheapest nonfoil printing.
+     */
+    nonfoil?: FloorOut | null;
+    /**
+     * The card's cheapest foil printing.
+     */
+    foil?: FloorOut | null;
 };
 
 /**
@@ -4548,6 +4652,10 @@ export type MarketDeckData = {
          * Slug
          */
         slug: string;
+        /**
+         * Live
+         */
+        live?: boolean;
     };
     url: '/api/market/deck';
 };
@@ -5124,6 +5232,31 @@ export type CardHoldingsResponses = {
 };
 
 export type CardHoldingsResponse = CardHoldingsResponses[keyof CardHoldingsResponses];
+
+export type CardFloorsData = {
+    body: FloorsIn;
+    path?: never;
+    query?: never;
+    url: '/api/cards/floors';
+};
+
+export type CardFloorsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CardFloorsError = CardFloorsErrors[keyof CardFloorsErrors];
+
+export type CardFloorsResponses = {
+    /**
+     * Successful Response
+     */
+    200: FloorsOut;
+};
+
+export type CardFloorsResponse = CardFloorsResponses[keyof CardFloorsResponses];
 
 export type HistoryListData = {
     body?: never;

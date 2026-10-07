@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { CardPriceOut, DeckCostOut, DeckLineOut, ProductValueOut } from './api';
-import { categoryLabel, contentsGap, partialNote, deckBuyItems, deckLedger, filterCardPrices, premium, productGroups } from './market';
+import { categoryLabel, contentsGap, partialNote, deckBuyItems, deckLedger, filterCardPrices, fmtFoilGap, premium, productGroups, withinFoilMax } from './market';
 
 const card = (p: Partial<CardPriceOut>): CardPriceOut => ({
   scryfall_id: 'x', oracle_id: 'o', name: 'Card', set_code: 'fin', collector_number: '1', rarity: 'rare', type_line: null,
-  finishes: ['nonfoil'], treatment: '', image_uri: null, is_chase: false, price_usd: 1, price_usd_foil: null, floor_usd: 1, owned: 0, ...p,
+  finishes: ['nonfoil'], treatment: '', image_uri: null, is_chase: false, price_usd: 1, price_usd_foil: null, floor_usd: 1, foil_gap_status: 'nonfoil_only', owned: 0, ...p,
 });
 const line = (p: Partial<DeckLineOut>): DeckLineOut => ({
   scryfall_id: 's', finish: 'nonfoil', name: 'L', set_code: 'fic', collector_number: '1', need: 1, free: 0, buy: 1,
@@ -41,6 +41,18 @@ describe('market view-model', () => {
     expect(premium(cards[1])).toBe(8);
     expect(filterCardPrices(cards, { q: '', cheaper: true, sort: 'savings' }).map((c) => c.name)).toEqual(['B', 'C']);
     expect(filterCardPrices(cards, { q: '', cheaper: false, sort: 'price' }).map((c) => c.name)).toEqual(['B', 'C', 'A']);
+  });
+
+  it('caps the foil premium and sorts by the smallest premium', () => {
+    const ok = (id: string, pct: number) => card({ scryfall_id: id, name: id, finishes: ['nonfoil', 'foil'], foil_gap_status: 'ok', foil_gap_pct: pct, foil_gap_usd: pct });
+    const cards = [ok('big', 1.5), ok('cheaper', -0.1), ok('quarter', 0.25), card({ scryfall_id: 'fancy', name: 'fancy', foil_gap_status: 'fancy' })];
+    expect(withinFoilMax(cards[3], 'any')).toBe(true);
+    expect(withinFoilMax(cards[3], '100')).toBe(false);
+    expect(withinFoilMax(cards[2], '25')).toBe(true);
+    expect(filterCardPrices(cards, { q: '', cheaper: false, sort: 'foil', foilMax: '50' }).map((c) => c.name)).toEqual(['cheaper', 'quarter']);
+    expect(filterCardPrices(cards, { q: '', cheaper: false, sort: 'foil', foilMax: 'cheaper' }).map((c) => c.name)).toEqual(['cheaper']);
+    expect(filterCardPrices(cards, { q: '', cheaper: false, sort: 'foil' }).map((c) => c.name)).toEqual(['cheaper', 'quarter', 'big', 'fancy']);
+    expect([fmtFoilGap(1.5), fmtFoilGap(-0.1), fmtFoilGap(0.001)]).toEqual(['+150%', '−10%', '0%']);
   });
 
   it('builds the three-way ledger and marks the lowest cell', () => {

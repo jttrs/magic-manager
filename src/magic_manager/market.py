@@ -18,7 +18,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable
 
-from . import collection_view, construct, db, family_status, mtgjson, sealed, sets, valuation
+from . import card_floor, collection_view, construct, db, family_status, foil_gap, mtgjson, sealed, sets, valuation
 
 
 # ---------- sealed products ----------
@@ -98,12 +98,15 @@ def product_tree(set_code: str, name: str) -> TreeNode:
 
 def family_card_prices(code: str) -> dict:
     """Every printing in the family at its exact price, beside the card's
-    functional floor (cheapest printing anywhere) and your copies."""
+    functional floor (cheapest printing anywhere), its foil-vs-nonfoil gap
+    (:mod:`foil_gap`; local prices) and your copies."""
     fc = collection_view.family_cards(code)
     floors = sets.lowest_price_by_oracle({c.oracle_id for c in fc.cards if c.oracle_id})
     cards = []
     for c in fc.cards:
         f = floors.get(c.oracle_id or "") or {}
+        gap = foil_gap.foil_gap(finishes=c.finishes, treatment=c.treatment,
+                                nonfoil=c.price_usd, foil=c.price_usd_foil)
         cards.append({
             "scryfall_id": c.scryfall_id, "oracle_id": c.oracle_id, "name": c.name,
             "set_code": c.set_code, "collector_number": c.collector_number, "rarity": c.rarity,
@@ -112,6 +115,7 @@ def family_card_prices(code: str) -> dict:
             "price_usd": c.price_usd, "price_usd_foil": c.price_usd_foil,
             "floor_usd": f.get("lowest_usd"), "floor_set_code": f.get("set_code"),
             "floor_collector_number": f.get("collector_number"),
+            "foil_gap_status": gap.status, "foil_gap_pct": gap.pct, "foil_gap_usd": gap.usd,
             "owned": c.owned_total,
         })
     return {"code": fc.summary.code, "name": fc.summary.name, "cards": cards}
@@ -137,21 +141,21 @@ def _precon_product(slug: str) -> tuple[str, str] | None:
     return None
 
 
-def card_lines(rows: list[construct.NetRow]) -> tuple[list[dict], float, float]:
-    """Each netted card at its exact printing and at its cheapest printing (the
-    functional floor, from local prices — capped at the exact price, since that
-    printing is one of the card's printings). Returns ``(lines, Σ floor·need,
-    Σ floor·buy)``. Shared by deck cost and product cost."""
-    with db.connect() as conn:
-        oids = {r[0]: r[1] for r in conn.execute(
-            f"SELECT scryfall_id, oracle_id FROM cards WHERE scryfall_id IN ({','.join('?' * len(rows)) or 'NULL'})",
-            [r.scryfall_id for r in rows])}
-    floors = sets.lowest_price_by_oracle(set(v for v in oids.values() if v))
+def card_lines(rows: list[construct.NetRow], *, live: bool = False) -> tuple[list[dict], float, float]:
+    """Each netted card at its exact printing and at its cheapest nonfoil
+    printing (the functional floor via :func:`card_floor.printing_floors` —
+    local prices, or every set live when ``live`` — capped at the exact price,
+    since that printing is one of the card's printings). Returns ``(lines,
+    Σ floor·need, Σ floor·buy)``. Shared by deck cost and product cost."""
+    floors = card_floor.printing_floors([r.scryfall_id for r in rows], live=live)
     lines = []
     need_floor = buy_floor = 0.0
     for r in rows:
-        f = floors.get(oids.get(r.scryfall_id) or "") or {}
-        floor = f.get("lowest_usd")
+        pf = floors.get(r.scryfall_id)
+        nf = pf.nonfoil if pf else None
+        f = {"set_code": nf.set_code, "collector_number": nf.collector_number,
+             "scryfall_id": nf.scryfall_id} if nf else {}
+        floor = nf.usd if nf else None
         cheaper_elsewhere = floor is not None and (r.unit_usd is None or floor < r.unit_usd)
         if not cheaper_elsewhere:
             floor = r.unit_usd if r.unit_usd is not None else floor
@@ -249,9 +253,10 @@ def _sld_cost(name: str, finish: str | None) -> dict:
             "sealed_name": product.get("name") if product else None, "notes": notes, **totals}
 
 
-def deck_cost(slug: str, *, with_sealed: bool = True) -> dict:
+def deck_cost(slug: str, *, with_sealed: bool = True, live: bool = False) -> dict:
     """Three ways to get a deck: sealed (precons), everything new, or your free
-    cards first — each line at its exact printing and at the functional floor."""
+    cards first — each line at its exact printing and at the functional floor
+    (local prices; ``live`` checks every set on Scryfall instead)."""
     exp = construct.expand_slug(slug)
     rows = construct.net_against_loose(exp.needs)
     sealed_market = sealed_name = None
@@ -263,12 +268,12 @@ def deck_cost(slug: str, *, with_sealed: bool = True) -> dict:
         except Exception:  # noqa: BLE001 — sealed price is optional
             pass
     summary = construct.summarize(rows, sealed_market)
-    lines, scratch_floor, with_collection_floor = card_lines(rows)
+    lines, scratch_floor, with_collection_floor = card_lines(rows, live=live)
     lines.sort(key=lambda ln: -((ln["floor_usd"] or 0) * ln["buy"]))
     return {
         "slug": slug, "sealed_product": sealed_name, "sealed": sealed_market,
         "scratch": summary["scratch"], "with_collection": summary["with_collection"],
         "scratch_floor": scratch_floor, "with_collection_floor": with_collection_floor,
         "coverage": round(summary["coverage"], 3), "unpriced": summary["n_unpriced"],
-        "total_need": summary["total_need"], "lines": lines,
+        "total_need": summary["total_need"], "lines": lines, "live": live,
     }

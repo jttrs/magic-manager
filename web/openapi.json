@@ -1249,6 +1249,16 @@
               "minLength": 1,
               "title": "Slug"
             }
+          },
+          {
+            "name": "live",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Live"
+            }
           }
         ],
         "responses": {
@@ -2141,6 +2151,47 @@
         }
       }
     },
+    "/api/cards/floors": {
+      "post": {
+        "tags": [
+          "cards"
+        ],
+        "summary": "Card Floors",
+        "operationId": "card_floors",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FloorsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FloorsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/history": {
       "get": {
         "tags": [
@@ -2901,6 +2952,42 @@
             ],
             "title": "Floor Collector Number"
           },
+          "foil_gap_status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "fancy",
+              "foil_only",
+              "nonfoil_only",
+              "unpriced"
+            ],
+            "title": "Foil Gap Status",
+            "description": "ok = both plain finishes priced; fancy = a premium foil treatment (no plain-foil choice)."
+          },
+          "foil_gap_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Foil Gap Pct",
+            "description": "(foil \u2212 nonfoil) / nonfoil, a fraction; negative when the foil is cheaper."
+          },
+          "foil_gap_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Foil Gap Usd",
+            "description": "foil \u2212 nonfoil, USD."
+          },
           "owned": {
             "type": "integer",
             "title": "Owned"
@@ -2921,6 +3008,7 @@
           "is_chase",
           "price_usd",
           "price_usd_foil",
+          "foil_gap_status",
           "owned"
         ],
         "title": "CardPriceOut"
@@ -4651,6 +4739,12 @@
             },
             "type": "array",
             "title": "Lines"
+          },
+          "live": {
+            "type": "boolean",
+            "title": "Live",
+            "description": "Floors checked across every set on Scryfall (else local prices).",
+            "default": false
           }
         },
         "type": "object",
@@ -5568,6 +5662,98 @@
           "flags"
         ],
         "title": "FeaturesOut"
+      },
+      "FloorOut": {
+        "properties": {
+          "usd": {
+            "type": "number",
+            "title": "Usd"
+          },
+          "set_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Set Code"
+          },
+          "collector_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collector Number"
+          },
+          "scryfall_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scryfall Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "usd"
+        ],
+        "title": "FloorOut"
+      },
+      "FloorsIn": {
+        "properties": {
+          "scryfall_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Scryfall Ids"
+          },
+          "live": {
+            "type": "boolean",
+            "title": "Live",
+            "description": "Check every set on Scryfall (else locally synced prices).",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "scryfall_ids"
+        ],
+        "title": "FloorsIn"
+      },
+      "FloorsOut": {
+        "properties": {
+          "live": {
+            "type": "boolean",
+            "title": "Live"
+          },
+          "floors": {
+            "items": {
+              "$ref": "#/components/schemas/PrintingFloorOut"
+            },
+            "type": "array",
+            "title": "Floors",
+            "description": "One per known printing id (unknown ids are omitted)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "live",
+          "floors"
+        ],
+        "title": "FloorsOut"
       },
       "FunctionRootOut": {
         "properties": {
@@ -6980,6 +7166,57 @@
           "at"
         ],
         "title": "PricePointOut"
+      },
+      "PrintingFloorOut": {
+        "properties": {
+          "scryfall_id": {
+            "type": "string",
+            "title": "Scryfall Id"
+          },
+          "oracle_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oracle Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "nonfoil": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FloorOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The card's cheapest nonfoil printing."
+          },
+          "foil": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FloorOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The card's cheapest foil printing."
+          }
+        },
+        "type": "object",
+        "required": [
+          "scryfall_id",
+          "name"
+        ],
+        "title": "PrintingFloorOut"
       },
       "PrintingOut": {
         "properties": {
