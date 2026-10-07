@@ -6,8 +6,9 @@
 # Precedence: environment > features.local.toml > this file.
 
 [features]
-# Read your Mana Pool cart and audit it against your collection. Internal: it
-# needs your Mana Pool credentials or a bookmarklet, which we won't ask users for.
+# Read your Mana Pool cart and audit it against your collection. Internal: read
+# with your own login from the Keychain, or in your browser by the browser
+# companion / cart bookmarklet (only cart lines reach the app).
 cart_check = false
 # Read your open browser tabs (macOS) and price store product pages against
 # market. Internal: local-machine browser access.
@@ -16,3 +17,7 @@ deals = false
 # every user's pseudonymous activity, so only the owner/admin turns it on.
 # (Recording itself is governed by each user's consent, not by this flag.)
 analytics = false
+# The browser companion (extension/): setup panel, extension download, and
+# reading the cart, store tabs and Moxfield decks in your own browser.
+# Internal while it's in beta.
+companion = false

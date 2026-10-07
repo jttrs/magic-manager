@@ -120,7 +120,7 @@ def test_read_tab_parses_the_tab_payload_and_detects_closed_tabs():
 def test_read_prices_reports_per_url_errors_and_stops_tab_reads_once_js_is_off(monkeypatch):
     calls = []
 
-    def fake_read(url, fresh=False):
+    def fake_read(url, fresh=False, rendered=None):
         calls.append(url)
         if "bestbuy" in url:
             raise storefetch.JsEventsOff("Turn on Allow JavaScript from Apple Events")

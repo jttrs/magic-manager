@@ -1,0 +1,56 @@
+{
+  "ok": true,
+  "deck": {
+    "publicId": "AbCd1234",
+    "name": "Goblin Party",
+    "createdByUser": {
+      "userName": "goblinfan"
+    },
+    "boards": {
+      "commanders": {
+        "cards": {
+          "0": {
+            "quantity": 1,
+            "isFoil": true,
+            "finish": "foil",
+            "card": {
+              "scryfall_id": "11111111-1111-4111-8111-111111111111",
+              "set": "fdn",
+              "cn": "1",
+              "name": "Krenko, Mob Boss",
+              "finish": "foil"
+            }
+          }
+        }
+      },
+      "mainboard": {
+        "cards": {
+          "0": {
+            "quantity": 1,
+            "isFoil": false,
+            "finish": "nonFoil",
+            "card": {
+              "scryfall_id": "22222222-2222-4222-8222-222222222222",
+              "set": "cmm",
+              "cn": "400",
+              "name": "Sol Ring",
+              "finish": null
+            }
+          },
+          "1": {
+            "quantity": 30,
+            "isFoil": false,
+            "finish": "nonFoil",
+            "card": {
+              "scryfall_id": "33333333-3333-4333-8333-333333333333",
+              "set": "fdn",
+              "cn": "280",
+              "name": "Mountain",
+              "finish": null
+            }
+          }
+        }
+      }
+    }
+  }
+}

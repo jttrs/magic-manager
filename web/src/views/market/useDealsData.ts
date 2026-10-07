@@ -2,6 +2,7 @@ import { queryOptions, useQueries, useQuery, type QueryClient } from '@tanstack/
 import { useMemo } from 'react';
 import { dealsTabsQuery, productCostQuery, watchedQuery } from '../../app/queries';
 import type { ProductCostOut } from '../../core/api';
+import type { RenderedPage } from '../../core/companion';
 import { productsFromTabs, productsFromWatched, storeNames, type DealFilters, type DealProduct, type PriceRow } from '../../core/deals';
 import type { MarketSearch } from '../../core/search';
 
@@ -15,6 +16,13 @@ export const dealsPricesQuery = () =>
     staleTime: Infinity,
     gcTime: 30 * 60_000,
   });
+
+/** Open-tab store pages the browser companion read with the tabs (url → reading),
+ *  handed to the read-prices job so those stores aren't read on this Mac. */
+const dealsPagesKey = ['deals', 'pages'] as const;
+export const dealsPagesQuery = () =>
+  queryOptions({ queryKey: dealsPagesKey, queryFn: async () => ({}) as Record<string, RenderedPage>, enabled: false, staleTime: Infinity, gcTime: 30 * 60_000 });
+export const setDealsPages = (qc: QueryClient, pages: Record<string, RenderedPage>) => qc.setQueryData(dealsPagesKey, pages);
 
 export const setPrices = (qc: QueryClient, prices: Map<string, PriceRow>) => qc.setQueryData(dealsPricesKey, prices);
 

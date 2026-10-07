@@ -9,6 +9,7 @@ import { useMediaQuery } from '../app/useMediaQuery';
 import { UndoButton } from './UndoButton';
 import { AnalyticsLink, PrivacyButton } from './Telemetry';
 import { useAnalytics } from '../app/analytics';
+import { CompanionButton } from './companion/CompanionSetup';
 import { useFeature } from '../app/features';
 
 const NAV = [
@@ -50,6 +51,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </nav>
         <div className="ml-auto flex items-center gap-2 sm:gap-3">
           <UndoButton />
+          <CompanionSlot />
           <JobsLink />
           {analytics && <AnalyticsLink />}
           <PrivacyButton />
@@ -59,6 +61,10 @@ export function AppShell({ children }: { children: ReactNode }) {
       {children}
     </div>
   );
+}
+
+function CompanionSlot() {
+  return useFeature('companion') ? <CompanionButton /> : null;
 }
 
 /** Sidebar (starts below the nav) + main region. */

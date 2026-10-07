@@ -276,7 +276,7 @@ def test_consent_and_forget_endpoints(client):
     assert client.put("/api/analytics/consent", json={"usage": False}).json()["usage"] is False
     client.post("/api/analytics/events", json={"events": [{"name": "page.viewed", "props": {"view": "decks", "viewport": "wide"}}]})
     assert _events("page.viewed") == []
-    client.post("/api/analytics/events", json={"events": [{"name": "companion.error", "props": {"code": "cart.no_tab"}}]})
+    client.post("/api/analytics/events", json={"events": [{"name": "companion.error", "props": {"code": "cart.page_changed"}}]})
     assert client.delete("/api/analytics/my-data").json() == {"deleted": 1}
 
 

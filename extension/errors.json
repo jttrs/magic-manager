@@ -1,0 +1,160 @@
+{
+  "_doc": "Every error the browser-companion path can produce, as <area>.<reason>. The extension, the app and the server all name errors from this list (tests/test_companion.py fails on an uncatalogued code). 'where' = which part raises it. Messages are shown to the user verbatim; 'fix' is the next step.",
+  "codes": {
+    "companion.not_installed": {
+      "where": "app",
+      "message": "The browser companion didn’t answer.",
+      "fix": "Install it and pair it with this app (Browser companion → Set up), or reload this page if you just installed it."
+    },
+    "companion.timeout": {
+      "where": "app",
+      "message": "The browser companion stopped answering before it finished.",
+      "fix": "Check for its approval window (it may be behind this one), then try again."
+    },
+    "companion.outdated": {
+      "where": "app",
+      "message": "Your browser companion is older than this app.",
+      "fix": "Download it again from Browser companion → Set up, replace the folder, and press Reload on chrome://extensions."
+    },
+    "request.invalid": {
+      "where": "extension",
+      "message": "The app sent the companion a request it doesn’t understand.",
+      "fix": "Update the companion and reload this page."
+    },
+    "request.busy": {
+      "where": "extension",
+      "message": "Another companion request is waiting for your approval.",
+      "fix": "Finish or close the open approval window first."
+    },
+    "request.denied": {
+      "where": "extension",
+      "message": "You chose not to send it. Nothing was sent.",
+      "fix": null
+    },
+    "request.expired": {
+      "where": "extension",
+      "message": "The approval window was closed or left open too long. Nothing was sent.",
+      "fix": "Try again and approve within 5 minutes."
+    },
+    "request.tab_moved": {
+      "where": "extension",
+      "message": "The app tab that asked was closed or left the app, so nothing was sent.",
+      "fix": "Keep the app open in that tab while you approve."
+    },
+    "request.cross_site": {
+      "where": "server",
+      "message": "This request came from another website, so the app refused it.",
+      "fix": "Use the app’s own page. If you see this in the app itself, report it."
+    },
+    "permission.deals_off": {
+      "where": "extension",
+      "message": "The companion isn’t allowed to see your store tabs yet.",
+      "fix": "Open the companion’s settings and switch on Deals (Chrome will ask to allow the store sites)."
+    },
+    "permission.moxfield_off": {
+      "where": "extension",
+      "message": "The companion isn’t allowed to read Moxfield yet.",
+      "fix": "Open the companion’s settings and switch on Moxfield (Chrome will ask to allow moxfield.com)."
+    },
+    "permission.manapool_missing": {
+      "where": "extension",
+      "message": "The companion can’t open Mana Pool pages — its Mana Pool permission was removed.",
+      "fix": "Allow manapool.com in the extension’s Chrome site access settings, or remove and re-add the extension."
+    },
+    "cart.load_timeout": {
+      "where": "extension",
+      "message": "Your Mana Pool cart page didn’t finish loading.",
+      "fix": "Open manapool.com/cart yourself, wait until the cards show, then try again."
+    },
+    "cart.empty": {
+      "where": "extension",
+      "message": "Your Mana Pool cart is empty in this browser.",
+      "fix": "Add cards on Mana Pool (signed in to the account you shop with), then try again."
+    },
+    "cart.page_changed": {
+      "where": "extension",
+      "message": "The companion couldn’t find any cards on your Mana Pool cart page — Mana Pool may have changed its page.",
+      "fix": "Report this so the reader can be updated (the scrape-doctor skill has the steps)."
+    },
+    "cart.row_unreadable": {
+      "where": "extension",
+      "message": "Some cart rows couldn’t be read completely.",
+      "fix": "Those rows are listed; check them against your cart."
+    },
+    "cart.signed_out": {
+      "where": "extension",
+      "message": "You’re not signed in to Mana Pool in this browser, so this is the browser’s guest cart.",
+      "fix": "Sign in to Mana Pool if your cart lives on your account, then try again."
+    },
+    "cart.sign_in": {
+      "where": "extension",
+      "message": "Mana Pool sent the companion to its sign-in page instead of your cart.",
+      "fix": "Sign in to Mana Pool in this browser, open your cart once, then try again."
+    },
+    "cart.not_scriptable": {
+      "where": "extension",
+      "message": "Chrome didn’t let the companion read the Mana Pool page.",
+      "fix": "Make sure manapool.com loads normally in this browser, then try again."
+    },
+    "cart.paste_invalid": {
+      "where": "app",
+      "message": "That isn’t what the cart bookmarklet copies.",
+      "fix": "Open your Mana Pool cart, click the bookmarklet, then paste here again."
+    },
+    "cart.no_lines": {
+      "where": "server",
+      "message": "No cart lines arrived.",
+      "fix": "Read the cart again."
+    },
+    "tabs.none": {
+      "where": "extension",
+      "message": "No tabs from the Deals stores are open in this browser.",
+      "fix": "Open the store product pages you want priced, then read again."
+    },
+    "tabs.page_unreadable": {
+      "where": "extension",
+      "message": "Some open-tab store pages couldn’t be read.",
+      "fix": "Reload those tabs, wait for the price to show, then read again."
+    },
+    "moxfield.bad_url": {
+      "where": "extension",
+      "message": "That isn’t a Moxfield deck link.",
+      "fix": "Paste a link like https://moxfield.com/decks/AbC123."
+    },
+    "moxfield.private": {
+      "where": "extension",
+      "message": "Moxfield says this deck is private to its owner.",
+      "fix": "Sign in to Moxfield in this browser as the owner, or set the deck to Unlisted, then try again."
+    },
+    "moxfield.not_found": {
+      "where": "extension",
+      "message": "Moxfield has no deck at that link.",
+      "fix": "Check the link — the deck may have been deleted."
+    },
+    "moxfield.blocked": {
+      "where": "extension",
+      "message": "Moxfield didn’t answer the companion (often its bot check).",
+      "fix": "Open the deck on moxfield.com in this browser, wait for it to load, then try again."
+    },
+    "moxfield.load_timeout": {
+      "where": "extension",
+      "message": "The Moxfield page didn’t finish loading.",
+      "fix": "Open the deck on moxfield.com yourself, then try again."
+    },
+    "moxfield.changed": {
+      "where": "extension",
+      "message": "Moxfield answered with a deck format the companion doesn’t recognise.",
+      "fix": "Export the deck as text on Moxfield and paste it instead, and report this (the scrape-doctor skill has the steps)."
+    },
+    "moxfield.http": {
+      "where": "extension",
+      "message": "Moxfield returned an error.",
+      "fix": "Try again in a minute."
+    },
+    "deck.empty": {
+      "where": "server",
+      "message": "The deck arrived but had no cards in it.",
+      "fix": "Check the deck has cards on Moxfield, then try again."
+    }
+  }
+}

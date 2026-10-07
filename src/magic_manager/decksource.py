@@ -394,6 +394,15 @@ def author_moxfield(data: dict) -> str | None:
     return u if isinstance(u, str) else None
 
 
+def payload_from_moxfield(data: dict, deck_id: str | None = None) -> dict:
+    """A Moxfield v3 deck JSON → the normalized deck payload every importer
+    emits (``source``/``id``/``name``/``author``/``cards``) — shared by
+    ``scripts/import_deck.py`` and the browser companion (which reads the deck
+    in the user's own browser and sends only these fields)."""
+    return {"source": "moxfield", "id": deck_id or data.get("publicId"), "name": data.get("name"),
+            "author": author_moxfield(data), "cards": parse_moxfield(data)}
+
+
 def author_archidekt(data: dict) -> str | None:
     """Archidekt deck owner: ``owner.username``."""
     o = data.get("owner") or {}

@@ -886,6 +886,45 @@
             }
           }
         }
+      },
+      "post": {
+        "tags": [
+          "deals"
+        ],
+        "summary": "Deals Supplied Tabs",
+        "operationId": "deals_supplied_tabs",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TabsIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenTabsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/deals/match": {
@@ -1226,6 +1265,144 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CartAuditOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/companion": {
+      "get": {
+        "tags": [
+          "companion"
+        ],
+        "summary": "Companion Info",
+        "operationId": "companion_info",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanionOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/companion/extension.zip": {
+      "get": {
+        "tags": [
+          "companion"
+        ],
+        "summary": "Companion Zip",
+        "operationId": "companion_zip",
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          }
+        }
+      }
+    },
+    "/api/companion/bookmarklet": {
+      "get": {
+        "tags": [
+          "companion"
+        ],
+        "summary": "Companion Bookmarklet",
+        "operationId": "companion_bookmarklet",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookmarkletOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cart/lines": {
+      "post": {
+        "tags": [
+          "cart"
+        ],
+        "summary": "Cart Lines",
+        "operationId": "cart_lines",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CartLinesIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CartAuditOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ingest/deck-from-browser": {
+      "post": {
+        "tags": [
+          "ingest"
+        ],
+        "summary": "Ingest Deck From Browser",
+        "operationId": "ingest_deck_from_browser",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeckFromBrowserIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolveOut"
                 }
               }
             }
@@ -3368,6 +3545,24 @@
         ],
         "title": "ArtTagsOut"
       },
+      "BookmarkletOut": {
+        "properties": {
+          "href": {
+            "type": "string",
+            "title": "Href"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "href",
+          "version"
+        ],
+        "title": "BookmarkletOut"
+      },
       "BracketOut": {
         "properties": {
           "suggested_bracket": {
@@ -4154,6 +4349,141 @@
         },
         "type": "object",
         "title": "CartIn"
+      },
+      "CartLineIn": {
+        "properties": {
+          "scryfall_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scryfall Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "set_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Set Name"
+          },
+          "finish": {
+            "type": "string",
+            "enum": [
+              "nonfoil",
+              "foil",
+              "etched"
+            ],
+            "title": "Finish",
+            "default": "nonfoil"
+          },
+          "condition": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 8
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Condition"
+          },
+          "treatments": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Treatments"
+          },
+          "quantity": {
+            "type": "integer",
+            "maximum": 999.0,
+            "minimum": 1.0,
+            "title": "Quantity"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1000000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "quantity"
+        ],
+        "title": "CartLineIn"
+      },
+      "CartLinesIn": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CartLineIn"
+            },
+            "type": "array",
+            "maxItems": 2000,
+            "title": "Items"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "extension",
+              "bookmarklet"
+            ],
+            "title": "Source"
+          },
+          "family": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Family",
+            "description": "Set family to check gaps against; imputed when the cart sits in one."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "source"
+        ],
+        "title": "CartLinesIn"
       },
       "CartSetupOut": {
         "properties": {
@@ -5007,6 +5337,40 @@
           "summary"
         ],
         "title": "CommitOut"
+      },
+      "CompanionOut": {
+        "properties": {
+          "version": {
+            "type": "string",
+            "title": "Version",
+            "description": "The extension version in this app's repo \u2014 older installs should update."
+          },
+          "zip_url": {
+            "type": "string",
+            "title": "Zip Url"
+          },
+          "bookmarklet_url": {
+            "type": "string",
+            "title": "Bookmarklet Url"
+          },
+          "errors": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Errors",
+            "description": "Every companion error code \u2192 {message, fix}."
+          }
+        },
+        "type": "object",
+        "required": [
+          "version",
+          "zip_url",
+          "bookmarklet_url",
+          "errors"
+        ],
+        "title": "CompanionOut"
       },
       "CompareCardOut": {
         "properties": {
@@ -5915,6 +6279,25 @@
           "editable"
         ],
         "title": "DeckDetailOut"
+      },
+      "DeckFromBrowserIn": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "const": "moxfield",
+            "title": "Source"
+          },
+          "deck": {
+            "$ref": "#/components/schemas/MoxDeckIn"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "source",
+          "deck"
+        ],
+        "title": "DeckFromBrowserIn"
       },
       "DeckLineOut": {
         "properties": {
@@ -8249,6 +8632,187 @@
           "market"
         ],
         "title": "MissingOut"
+      },
+      "MoxBoardIn": {
+        "properties": {
+          "cards": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/MoxEntryIn"
+            },
+            "type": "object",
+            "maxProperties": 1000,
+            "title": "Cards"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "cards"
+        ],
+        "title": "MoxBoardIn"
+      },
+      "MoxCardIn": {
+        "properties": {
+          "scryfall_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scryfall Id"
+          },
+          "set": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Set"
+          },
+          "cn": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 12
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cn"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "finish": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finish"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "MoxCardIn"
+      },
+      "MoxDeckIn": {
+        "properties": {
+          "publicId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{4,64}$",
+            "title": "Publicid"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "createdByUser": {
+            "$ref": "#/components/schemas/MoxUserIn",
+            "default": {}
+          },
+          "boards": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/MoxBoardIn"
+            },
+            "type": "object",
+            "maxProperties": 20,
+            "title": "Boards"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "publicId",
+          "boards"
+        ],
+        "title": "MoxDeckIn"
+      },
+      "MoxEntryIn": {
+        "properties": {
+          "quantity": {
+            "type": "integer",
+            "maximum": 999.0,
+            "minimum": 1.0,
+            "title": "Quantity"
+          },
+          "isFoil": {
+            "type": "boolean",
+            "title": "Isfoil",
+            "default": false
+          },
+          "finish": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finish"
+          },
+          "card": {
+            "$ref": "#/components/schemas/MoxCardIn"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "quantity",
+          "card"
+        ],
+        "title": "MoxEntryIn"
+      },
+      "MoxUserIn": {
+        "properties": {
+          "userName": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "MoxUserIn"
       },
       "NewDeckIn": {
         "properties": {
@@ -11317,6 +11881,35 @@
         ],
         "title": "SwapOut"
       },
+      "TabIn": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "maxLength": 2000,
+            "pattern": "^https?://",
+            "title": "Url"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Title",
+            "default": ""
+          },
+          "window": {
+            "type": "integer",
+            "maximum": 1000.0,
+            "minimum": 1.0,
+            "title": "Window",
+            "default": 1
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "title": "TabIn"
+      },
       "TabOut": {
         "properties": {
           "url": {
@@ -11344,6 +11937,24 @@
           "tab"
         ],
         "title": "TabOut"
+      },
+      "TabsIn": {
+        "properties": {
+          "tabs": {
+            "items": {
+              "$ref": "#/components/schemas/TabIn"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "title": "Tabs"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "tabs"
+        ],
+        "title": "TabsIn"
       },
       "TargetIn": {
         "properties": {

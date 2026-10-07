@@ -1,13 +1,20 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Dialog } from 'radix-ui';
 import { useState, type ReactNode } from 'react';
+import { useFeature } from '../../app/features';
 import { cartSetupQuery, unwrap } from '../../app/queries';
+import { useCompanion } from '../../app/useCompanion';
 import { Button } from '../../components/Button';
-import { cartCheck, type CartAuditOut } from '../../core/api';
+import { AwaitingNote, BookmarkletLink, FailureNote } from '../../components/companion/CompanionNotes';
+import { cartCheck, cartLines, companionBookmarklet, type CartAuditOut } from '../../core/api';
+import { CompanionError, parseBookmarkletPaste, warningLines, type CartLine } from '../../core/companion';
+import { trackCompanionError } from '../../app/analytics';
 import { fmtCount, fmtInt, fmtUsd } from '../../core/format';
 
 /** Internal (cart_check flag): audit a Mana Pool cart against your collection —
- *  bought twice, already owned, priced over market, and family gaps still missing. */
+ *  bought twice, already owned, priced over market, and family gaps still missing.
+ *  The cart is read in YOUR browser (companion or bookmarklet) — only its lines reach
+ *  the app — or, on the owner's own Mac, with the Keychain login. */
 export function CartCheckDialog({ trigger, family }: { trigger: ReactNode; family?: string }) {
   const [open, setOpen] = useState(false);
   return (
@@ -23,13 +30,47 @@ export function CartCheckDialog({ trigger, family }: { trigger: ReactNode; famil
   );
 }
 
+type Source = 'extension' | 'bookmarklet' | 'account';
+const SOURCE_LABEL: Record<Source, string> = {
+  extension: 'Read in this browser by the companion',
+  bookmarklet: 'Pasted from the bookmarklet',
+  account: 'Read with your Mana Pool login on this computer',
+};
+const H3 = 'border-b border-rule-strong pb-1 text-md voice-condensed font-bold uppercase tracking-[0.04em] text-ink';
+
 function CartCheck({ family }: { family?: string }) {
+  const companionOn = useFeature('companion');
+  const c = useCompanion();
   const setup = useQuery(cartSetupQuery(true));
-  const run = useMutation({
-    mutationFn: async () => unwrap(await cartCheck({ body: { family: family ?? null } })),
+  const bookmarklet = useQuery({ queryKey: ['companion', 'bookmarklet'], queryFn: async () => unwrap(await companionBookmarklet()), staleTime: Infinity });
+  const [awaiting, setAwaiting] = useState<string | null>(null);
+  const [paste, setPaste] = useState('');
+  const [result, setResult] = useState<{ r: CartAuditOut; source: Source; warnings: string[] } | null>(null);
+
+  const audit = async (items: CartLine[], source: 'extension' | 'bookmarklet') =>
+    unwrap(await cartLines({ body: { items, source, family: family ?? null } }));
+  const viaCompanion = useMutation({
+    mutationFn: async () => {
+      const d = await c.read('cart', {}, (summary) => setAwaiting(summary));
+      setAwaiting(null);
+      return { r: await audit(d.items, 'extension'), source: 'extension' as const, warnings: warningLines(d.warnings, c.catalog) };
+    },
+    onSuccess: setResult,
+    onSettled: () => setAwaiting(null),
   });
-  const r = run.data;
-  const ready = setup.data?.account === true;
+  const viaPaste = useMutation({
+    mutationFn: async () => {
+      const d = parseBookmarkletPaste(paste, c.catalog);
+      return { r: await audit(d.items, 'bookmarklet'), source: 'bookmarklet' as const, warnings: warningLines(d.warnings, c.catalog) };
+    },
+    onSuccess: setResult,
+    onError: (e) => { if (e instanceof CompanionError) trackCompanionError(e.code); },
+  });
+  const viaAccount = useMutation({
+    mutationFn: async () => ({ r: unwrap(await cartCheck({ body: { family: family ?? null } })), source: 'account' as const, warnings: [] }),
+    onSuccess: setResult,
+  });
+  const busy = viaCompanion.isPending || viaPaste.isPending || viaAccount.isPending;
 
   return (
     <>
@@ -40,24 +81,73 @@ function CartCheck({ family }: { family?: string }) {
         </Dialog.Description>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-        {r ? (
-          <Results r={r} />
-        ) : setup.isPending ? (
-          <p role="status" className="text-md text-ink-muted">Checking this machine’s setup…</p>
-        ) : !ready ? (
-          <p className="text-md leading-relaxed">
-            Reading the cart needs your Mana Pool account in this machine’s <code className="text-sm">.env</code>: <code className="text-sm">MANAPOOL_EMAIL</code>, <code className="text-sm">MANAPOOL_PASSWORD</code> and <code className="text-sm">MANAPOOL_ACCESS_TOKEN</code>. Add them, restart <code className="text-sm">uv run mm serve</code>, and try again.
-          </p>
+        {result ? (
+          <div className="flex flex-col gap-3">
+            <p className="text-sm text-ink-muted">{SOURCE_LABEL[result.source]}.</p>
+            {result.warnings.map((w) => <p key={w} role="status" className="text-md leading-relaxed text-ink">{w}</p>)}
+            <Results r={result.r} />
+          </div>
         ) : (
-          <p className="text-md leading-relaxed text-ink-muted">Reads your cart with the Mana Pool account in this machine’s .env and checks every line against your collection.</p>
+          <div className="flex flex-col gap-6">
+            {companionOn && (
+              <section aria-labelledby="cart-companion" className="flex flex-col gap-2">
+                <h3 id="cart-companion" className={H3}>In this browser</h3>
+                {c.status === 'ready' ? (
+                  <p className="max-w-[62ch] text-md leading-relaxed text-ink-muted">
+                    The companion reads your cart page on manapool.com — signed in as you, in this browser — and shows you the lines before anything is sent.
+                  </p>
+                ) : (
+                  <p className="max-w-[62ch] text-md leading-relaxed text-ink-muted">
+                    {c.status === 'checking' ? 'Looking for the browser companion…' : 'Set up the browser companion first — the plug icon at the top of the app.'}
+                  </p>
+                )}
+                <Button tone="paper" emphasis="primary" className="self-start" onClick={() => viaCompanion.mutate()} disabled={c.status !== 'ready' || busy}>
+                  {viaCompanion.isPending ? (awaiting != null ? 'Waiting for approval…' : 'Reading your cart…') : 'Read my cart'}
+                </Button>
+                {awaiting != null && <AwaitingNote summary={awaiting} />}
+                {viaCompanion.isError && <FailureNote error={viaCompanion.error} />}
+              </section>
+            )}
+            <section aria-labelledby="cart-bookmarklet" className="flex flex-col gap-2">
+              <h3 id="cart-bookmarklet" className={H3}>With the bookmarklet</h3>
+              <p className="max-w-[62ch] text-md leading-relaxed text-ink-muted">
+                No install: drag this to your bookmarks bar, click it on your Mana Pool cart page, then paste here. It copies only the cart’s cards, quantities, finishes and prices.
+              </p>
+              {bookmarklet.data && <BookmarkletLink href={bookmarklet.data.href} label="mm · Mana Pool cart" />}
+              <label className="flex flex-col gap-1.5 text-sm voice-semi text-ink-muted">
+                Paste what it copied
+                <textarea
+                  value={paste}
+                  onChange={(e) => setPaste(e.target.value)}
+                  rows={3}
+                  spellCheck={false}
+                  className="rounded-sm border border-rule-strong bg-paper-raised px-3 py-2 font-mono text-sm text-ink placeholder:text-ink-muted focus-visible:border-accent"
+                  placeholder='{"source":"manapool-cart-page", …}'
+                />
+              </label>
+              <Button tone="paper" className="self-start" onClick={() => viaPaste.mutate()} disabled={!paste.trim() || busy}>
+                {viaPaste.isPending ? 'Checking…' : 'Check pasted cart'}
+              </Button>
+              {viaPaste.isError && <FailureNote error={viaPaste.error} />}
+            </section>
+            {setup.data?.account && (
+              <section aria-labelledby="cart-account" className="flex flex-col gap-2">
+                <h3 id="cart-account" className={H3}>With your login on this computer</h3>
+                <p className="max-w-[62ch] text-md leading-relaxed text-ink-muted">Uses the Mana Pool login saved in this Mac’s Keychain. Only works where the app runs on your own computer.</p>
+                <Button tone="paper" className="self-start" onClick={() => viaAccount.mutate()} disabled={busy}>
+                  {viaAccount.isPending ? 'Reading your cart…' : 'Read with my login'}
+                </Button>
+                {viaAccount.isError && <FailureNote error={viaAccount.error} />}
+              </section>
+            )}
+          </div>
         )}
-        {run.isError && <p role="alert" className="mt-3 text-sm text-danger">{(run.error as Error).message}</p>}
       </div>
-      <div className="flex justify-end gap-2 border-t border-rule px-5 py-3">
-        <Button tone="paper" emphasis={r ? 'quiet' : 'primary'} onClick={() => run.mutate()} disabled={!ready || run.isPending}>
-          {run.isPending ? 'Reading your cart…' : r ? 'Check again' : 'Read my cart'}
-        </Button>
-      </div>
+      {result && (
+        <div className="flex justify-end gap-2 border-t border-rule px-5 py-3">
+          <Button tone="paper" onClick={() => { setResult(null); viaCompanion.reset(); viaPaste.reset(); viaAccount.reset(); }}>Check again</Button>
+        </div>
+      )}
     </>
   );
 }

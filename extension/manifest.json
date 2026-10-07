@@ -1,0 +1,73 @@
+{
+  "manifest_version": 3,
+  "name": "magic-manager companion",
+  "version": "0.1.0",
+  "description": "Reads your Mana Pool cart, open store tabs and Moxfield decks in your own browser and, only after you approve, hands the card lines to your magic-manager app.",
+  "minimum_chrome_version": "116",
+  "permissions": [
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://manapool.com/*"
+  ],
+  "optional_host_permissions": [
+    "http://localhost/*",
+    "http://127.0.0.1/*",
+    "https://*.ts.net/*",
+    "https://moxfield.com/*",
+    "https://*.moxfield.com/*",
+    "https://manyrealms.com/*",
+    "https://*.manyrealms.com/*",
+    "https://pokeboxusa.com/*",
+    "https://*.pokeboxusa.com/*",
+    "https://stompinggroundstcg.com/*",
+    "https://*.stompinggroundstcg.com/*",
+    "https://doubleinfinitygaming.com/*",
+    "https://*.doubleinfinitygaming.com/*",
+    "https://gamersguildusa.com/*",
+    "https://*.gamersguildusa.com/*",
+    "https://gamersguildaz.com/*",
+    "https://*.gamersguildaz.com/*",
+    "https://cashcardsunlimited.com/*",
+    "https://*.cashcardsunlimited.com/*",
+    "https://forgeandfiregaming.com/*",
+    "https://*.forgeandfiregaming.com/*",
+    "https://coolstuffinc.com/*",
+    "https://*.coolstuffinc.com/*",
+    "https://starcitygames.com/*",
+    "https://*.starcitygames.com/*",
+    "https://miniaturemarket.com/*",
+    "https://*.miniaturemarket.com/*",
+    "https://gamenerdz.com/*",
+    "https://*.gamenerdz.com/*",
+    "https://nobleknight.com/*",
+    "https://*.nobleknight.com/*",
+    "https://dragonslairhobbies.com/*",
+    "https://*.dragonslairhobbies.com/*",
+    "https://costco.com/*",
+    "https://*.costco.com/*",
+    "https://cardkingdom.com/*",
+    "https://*.cardkingdom.com/*",
+    "https://bestbuy.com/*",
+    "https://*.bestbuy.com/*",
+    "https://target.com/*",
+    "https://*.target.com/*",
+    "https://ebay.com/*",
+    "https://*.ebay.com/*"
+  ],
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "magic-manager companion settings"
+  },
+  "options_ui": {
+    "page": "src/options.html",
+    "open_in_tab": true
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+  }
+}

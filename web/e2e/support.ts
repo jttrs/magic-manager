@@ -7,6 +7,7 @@ import decks from './fixtures/decks.json' with { type: 'json' };
 import deckDetail from './fixtures/deck-detail.json' with { type: 'json' };
 import ranking from './fixtures/ranking-mono-red.json' with { type: 'json' };
 import rankingOptions from './fixtures/ranking-options.json' with { type: 'json' };
+import companionErrors from '../../extension/errors.json' with { type: 'json' };
 
 // 1×1 transparent PNG stands in for every Scryfall image.
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
@@ -51,9 +52,16 @@ export async function mockApi(page: Page, overrides: Record<string, (url: URL) =
     if (url.pathname === '/api/analytics/consent') return route.fulfill({ json: { errors: true, usage: true, asked: true, mode: 'local', disabled: false } });
     if (url.pathname === '/api/analytics/events') return route.fulfill({ json: { accepted: 0, rejected: [], dropped_props: 0, skipped_by_consent: 0 } });
     if (url.pathname === '/api/features') return route.fulfill({ json: { flags: { cart_check: false } } });
+    if (url.pathname === '/api/companion') return route.fulfill({ json: COMPANION_INFO });
+    if (url.pathname === '/api/companion/bookmarklet') return route.fulfill({ json: { href: 'javascript:void(0)', version: '0.1.0' } });
     return route.fulfill({ status: 404, json: { detail: `unmocked ${url.pathname}` } });
   });
 }
+
+const COMPANION_INFO = {
+  version: '0.1.0', zip_url: '/api/companion/extension.zip', bookmarklet_url: '/api/companion/bookmarklet',
+  errors: Object.fromEntries(Object.entries(companionErrors.codes).map(([k, v]) => [k, { message: v.message, fix: v.fix }])),
+};
 
 /** A minimal Explore card profile: a commander-eligible card with no EDHREC lists. */
 export function profile(name: string, o: Record<string, unknown> = {}) {

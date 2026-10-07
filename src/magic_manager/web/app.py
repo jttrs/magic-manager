@@ -18,13 +18,13 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
-from .. import api, sets as sets_mod, tabs as tabs_engine, undo as undo_engine, cart as cart_engine, deck_edit, edhrec as edhrec_engine, features as features_engine, scryfall
-from ..api import deals as deals_api, undo as undo_api, cart as cart_api, cards as cards_api, collection as collection_api, explore as explore_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api, market as market_api, trueup as trueup_api, history as history_api, combos as combos_api, art as art_api, jumpstart as jumpstart_api, surf as surf_api
+from .. import api, companion as companion_engine, sets as sets_mod, tabs as tabs_engine, undo as undo_engine, cart as cart_engine, deck_edit, edhrec as edhrec_engine, features as features_engine, scryfall
+from ..api import companion as companion_api, deals as deals_api, undo as undo_api, cart as cart_api, cards as cards_api, collection as collection_api, explore as explore_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api, market as market_api, trueup as trueup_api, history as history_api, combos as combos_api, art as art_api, jumpstart as jumpstart_api, surf as surf_api
 from .runtime import TERMINAL, JobManager
 from . import analytics_routes, telemetry
 from ..analytics import store as analytics_store
@@ -87,6 +87,22 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
                   generate_unique_id_function=lambda route: route.name)
     app.state.jobs = manager
     assert api  # registers jobs
+    # Writes only from this app's own pages: a browser marks every request with
+    # Sec-Fetch-Site, so a POST from another website (or another localhost
+    # port) is refused before it reaches a route. Non-browser clients (CLI,
+    # tests) send no header and pass. See docs/browser-companion-security.md.
+    # Added before telemetry so telemetry wraps it: the refusal carries a request id.
+    @app.middleware("http")
+    async def same_origin_writes(request: Request, call_next):
+        if request.method not in ("GET", "HEAD", "OPTIONS") and request.url.path.startswith("/api/"):
+            site = request.headers.get("sec-fetch-site")
+            if site is not None and site not in ("same-origin", "none"):
+                request.state.error_code = "request.cross_site"
+                return JSONResponse(status_code=403, content={
+                    "detail": companion_engine.error("request.cross_site", site=site), "code": "request.cross_site",
+                    "request_id": getattr(request.state, "request_id", None)})
+        return await call_next(request)
+
     telemetry.install(app)
     app.include_router(analytics_routes.router)
 
@@ -284,6 +300,59 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             raise HTTPException(403, str(e)) from e
         except (cart_engine.CartFormatError, LookupError) as e:
             raise HTTPException(422, str(e)) from e
+
+    # ---------- browser companion (internal) ----------
+
+    def _companion_failure(e: companion_api.CompanionFailure) -> HTTPException:
+        return HTTPException(422, e.body)
+
+    @app.get("/api/companion", response_model=companion_api.CompanionOut, tags=["companion"])
+    def companion_info():
+        try:
+            return companion_api.info()
+        except features_engine.FeatureDisabled as e:
+            raise HTTPException(403, str(e)) from e
+
+    @app.get("/api/companion/extension.zip", tags=["companion"], response_class=Response)
+    def companion_zip():
+        try:
+            data = companion_api.extension_zip()
+        except features_engine.FeatureDisabled as e:
+            raise HTTPException(403, str(e)) from e
+        return Response(data, media_type="application/zip",
+                        headers={"Content-Disposition": 'attachment; filename="magic-manager-companion.zip"'})
+
+    @app.get("/api/companion/bookmarklet", response_model=companion_api.BookmarkletOut, tags=["companion"])
+    def companion_bookmarklet():
+        try:
+            return companion_api.bookmarklet()
+        except features_engine.FeatureDisabled as e:
+            raise HTTPException(403, str(e)) from e
+
+    @app.post("/api/cart/lines", response_model=cart_api.CartAuditOut, tags=["cart"])
+    def cart_lines(req: companion_api.CartLinesIn):
+        try:
+            return companion_api.check_lines(req)
+        except features_engine.FeatureDisabled as e:
+            raise HTTPException(403, str(e)) from e
+        except companion_api.CompanionFailure as e:
+            raise _companion_failure(e) from e
+
+    @app.post("/api/deals/tabs", response_model=deals_api.OpenTabsOut, tags=["deals"])
+    def deals_supplied_tabs(req: companion_api.TabsIn):
+        try:
+            return companion_api.tabs(req)
+        except features_engine.FeatureDisabled as e:
+            raise HTTPException(403, str(e)) from e
+
+    @app.post("/api/ingest/deck-from-browser", response_model=ingest_api.ResolveOut, tags=["ingest"])
+    def ingest_deck_from_browser(req: companion_api.DeckFromBrowserIn):
+        try:
+            return companion_api.deck_lines(req)
+        except features_engine.FeatureDisabled as e:
+            raise HTTPException(403, str(e)) from e
+        except companion_api.CompanionFailure as e:
+            raise _companion_failure(e) from e
 
     # ---------- market ----------
 

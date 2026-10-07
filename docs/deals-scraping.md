@@ -17,6 +17,14 @@ session that hit every one of these; the deterministic tools MUST handle them, n
 5. **Deal** = face price vs market (sealed market / cards inside / single's price), in Market's
    engine.
 
+**In the user's own browser (browser companion).** When the companion is connected, steps 1 and the
+`rendered` read run in the user's browser instead of AppleScript: it lists tabs only on the Deals
+store sites (an opt-in permission), reads each open-tab store page's title, price/stock tags, Product
+JSON-LD and price/stock lines, and the server applies the same recipes (`deals.supplied_tabs`,
+`storefetch.page_from_extract`). No macOS, no "Allow JavaScript from Apple Events", no one-window
+latch. See `docs/browser-companion.md`. Open-tab recipes can't use `title_pattern` (the page body
+isn't sent); a test enforces it.
+
 ## Read modes (per recipe)
 
 | Mode | How | When | CI-checkable |

@@ -40,11 +40,11 @@ function useCopy() {
 const Status = ({ text }: { text: string }) => <span aria-live="polite" className="min-h-4 text-xs text-on-chrome-muted">{text}</span>;
 
 /** Copies text to the clipboard and announces the result politely. */
-export function CopyButton({ label, getText, emphasis = 'quiet' }: { label: string; getText: GetText; emphasis?: 'primary' | 'quiet' }) {
+export function CopyButton({ label, getText, emphasis = 'quiet', tone = 'chrome' }: { label: string; getText: GetText; emphasis?: 'primary' | 'quiet'; tone?: 'chrome' | 'paper' }) {
   const { status, busy, copy } = useCopy();
   return (
     <div className="flex flex-col gap-1">
-      <Button emphasis={emphasis} onClick={() => copy(label, getText)} disabled={busy != null} className="w-full">{busy ? 'Building list…' : label}</Button>
+      <Button tone={tone} emphasis={emphasis} onClick={() => copy(label, getText)} disabled={busy != null} className="w-full">{busy ? 'Building list…' : label}</Button>
       <Status text={status} />
     </div>
   );

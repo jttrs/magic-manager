@@ -117,6 +117,21 @@ def _local_cards(*, ids: set[str], set_numbers: set[tuple[str, str]]) -> tuple[d
     return by_id, by_sn
 
 
+def _fill_ids(ids: set[str]) -> dict[str, dict]:
+    """Printings the cart names by scryfall_id that aren't in the local catalog
+    yet (an unsynced set) — fetched once from Scryfall and upserted, so a cart
+    read in the browser identifies every exact printing."""
+    from . import scryfall
+    try:
+        found, _ = scryfall.collection([{"id": s} for s in sorted(ids)])
+    except Exception:  # noqa: BLE001 — offline: those lines stay unidentified, named
+        return {}
+    with db.connect() as conn:
+        db.upsert_cards(conn, found)
+    return {c["id"]: {"scryfall_id": c["id"], "name": c.get("name"), "set_code": c.get("set"),
+                      "collector_number": c.get("collector_number")} for c in found}
+
+
 def map_cart(cart: list[dict], *, remote: bool = True,
              product_fn: Callable[[str], dict | None] | None = None) -> list[CartLine]:
     """Identify every cart line once (see module doc for the order). The Mana
@@ -126,6 +141,8 @@ def map_cart(cart: list[dict], *, remote: bool = True,
     ids = {c["scryfall_id"] for c in cart if c.get("scryfall_id")}
     sns = {(str(c["set"]).lower(), str(c["number"])) for c in cart if c.get("set") and c.get("number")}
     by_id, by_sn = _local_cards(ids=ids, set_numbers=sns)
+    if remote and ids - by_id.keys():
+        by_id.update(_fill_ids(ids - by_id.keys()))
 
     prod_by_uuid: dict[str, dict | None] = {}
     configured = remote

@@ -60,7 +60,7 @@ test('read prices: fills price + stock per page, shows setup errors once', async
   await expect(look).toContainText('$199.99');
   await expect(look).toContainText('In stock');
   await expect(page.getByRole('alert').filter({ hasText: 'Allow JavaScript from Apple Events' })).toHaveCount(1);
-  expect(sent).toEqual({ urls: ['https://manyrealms.com/products/fdn-set', 'https://www.bestbuy.com/product/x/JJ8'] });
+  expect(sent).toEqual({ urls: ['https://manyrealms.com/products/fdn-set', 'https://www.bestbuy.com/product/x/JJ8'], pages: {} });
 });
 
 const sealedCost = (over: Record<string, unknown> = {}) => ({

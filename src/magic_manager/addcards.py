@@ -434,7 +434,13 @@ def fetch_deck_lines(url: str, *, progress: Callable[[str], None] | None = None)
     t.join()
     if proc.returncode != 0:
         raise RuntimeError(err_lines[-1] if err_lines else f"import_deck exited {proc.returncode}")
-    payload = json.loads(out)
+    return deck_lines_from_payload(json.loads(out))
+
+
+def deck_lines_from_payload(payload: dict) -> dict:
+    """A normalized deck payload (``source``/``id``/``name``/``author``/
+    ``cards``) → review lines, like a pasted list. Shared by the server-side
+    fetch and the browser companion's in-browser deck read."""
     wants = []
     for c in payload.get("cards", []):
         if (c.get("board") or "") in _SKIP_BOARDS:

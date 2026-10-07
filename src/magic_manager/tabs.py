@@ -123,17 +123,11 @@ def parse(raw: str) -> tuple[int, list[tuple[str, str, int, int]]]:
     return windows, out
 
 
-def read_tabs(browser: str = "chrome", *, runner: Callable[[str], str] | None = None,
-              ps: Callable[[], str] | None = None, system: str | None = None) -> TabRead:
-    """Every open web tab of ``browser`` (chrome | safari), local tabs dropped,
-    one entry per URL, plus warnings for the known ways this read goes wrong."""
-    if browser not in _ENGINES:
-        raise TabsUnavailable(f"Unsupported browser {browser!r} — use chrome or safari.")
-    if (system or platform.system()) != "Darwin":
-        raise TabsUnavailable("Reading open tabs works on macOS only.")
-    app, prop = _ENGINES[browser]
-    windows, rows = parse((runner or _osascript)(_SCRIPT.format(app=app, prop=prop, F=_FIELD, R=_ROW)))
-
+def collect(rows, *, browser: str, windows: int | None = None) -> TabRead:
+    """The shared filter over raw ``(url, title, window, tab)`` rows — from
+    AppleScript or from the browser companion: non-web and local/dev tabs
+    dropped, one entry per URL."""
+    rows = list(rows)
     seen: set[str] = set()
     tabs: list[Tab] = []
     dropped = dupes = 0
@@ -150,9 +144,23 @@ def read_tabs(browser: str = "chrome", *, runner: Callable[[str], str] | None = 
             continue
         seen.add(url)
         tabs.append(Tab(url=url, title=title, host=host.removeprefix("www."), window=w, tab=t))
+    read_windows = len({w for _, _, w, _ in rows})
+    return TabRead(browser=browser, tabs=tabs, windows=read_windows if windows is None else windows,
+                   windows_read=read_windows, dropped_local=dropped, duplicates=dupes)
 
-    read = TabRead(browser=browser, tabs=tabs, windows=windows,
-                   windows_read=len({w for _, _, w, _ in rows}), dropped_local=dropped, duplicates=dupes)
+
+def read_tabs(browser: str = "chrome", *, runner: Callable[[str], str] | None = None,
+              ps: Callable[[], str] | None = None, system: str | None = None) -> TabRead:
+    """Every open web tab of ``browser`` (chrome | safari), local tabs dropped,
+    one entry per URL, plus warnings for the known ways this read goes wrong."""
+    if browser not in _ENGINES:
+        raise TabsUnavailable(f"Unsupported browser {browser!r} — use chrome or safari.")
+    if (system or platform.system()) != "Darwin":
+        raise TabsUnavailable("Reading open tabs works on macOS only.")
+    app, prop = _ENGINES[browser]
+    windows, rows = parse((runner or _osascript)(_SCRIPT.format(app=app, prop=prop, F=_FIELD, R=_ROW)))
+
+    read = collect(rows, browser=browser, windows=windows)
     if browser == "chrome" and _second_chrome((ps or _ps)()):
         read.warnings.append(
             "Another Chrome (an automation/test instance) is running, so macOS may show only one window’s tabs. "

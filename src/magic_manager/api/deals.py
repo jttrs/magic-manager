@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .. import deals, earmarks, features
 from .jobs import Artifact, JobResult, JobSpec, ProgressEvent, ProgressFn, register
@@ -78,14 +78,36 @@ class PriceOut(BaseModel):
     watching: bool = Field(False, description="This link is on your watchlist (its price history is kept).")
 
 
+class RenderedPageIn(BaseModel):
+    """What the companion read from an open-tab store page — only the parts the
+    store recipes use (see ``extension/src/readers/store-page.js``)."""
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field("", max_length=500)
+    head: str = Field("", max_length=20_000)
+    ld: list[str] = Field(default_factory=list, max_length=8)
+    text: str = Field("", max_length=8_000)
+
+    @field_validator("ld")
+    @classmethod
+    def _ld_size(cls, v: list[str]) -> list[str]:
+        if any(len(x) > 100_000 for x in v):
+            raise ValueError("a JSON-LD block is too large")
+        return v
+
+
 class ReadPricesInput(BaseModel):
     urls: list[str] = Field(min_length=1, max_length=300)
     fresh: bool = Field(False, description="Skip the 30-minute page cache.")
+    pages: dict[str, RenderedPageIn] = Field(
+        default_factory=dict, max_length=300,
+        description="Open-tab store pages the browser companion already read (url → page reading); used instead of reading tabs on this Mac.")
 
 
 def _run_read_prices(inp: ReadPricesInput, progress: ProgressFn) -> JobResult:
     features.require("deals")
     rows = deals.read_and_compare(inp.urls, fresh=inp.fresh,
+                                  pages={u: p.model_dump() for u, p in inp.pages.items()},
                                   progress=lambda i, n, msg: progress(ProgressEvent(i - 1, n, msg)))
     out = [PriceOut(**r).model_dump() for r in rows]
     priced = sum(1 for r in out if r["price"] is not None)
