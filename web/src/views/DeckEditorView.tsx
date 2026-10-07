@@ -68,7 +68,7 @@ function Editor({ slug, detail }: { slug: string; detail: DeckDetailOut }) {
     setSaveError(null);
     try {
       unwrap(await deckSave({ path: { slug }, body: { cards: draftCards(draft), expected_version_id: detail.version_id, name: renamed ? name.trim() : null } }));
-      await Promise.all(['decks', 'collection', 'holdings'].map((k) => qc.invalidateQueries({ queryKey: [k] })));
+      await Promise.all(['decks', 'collection', 'holdings', 'history'].map((k) => qc.invalidateQueries({ queryKey: [k] })));
       navigate({ to: '/decks', search: (s) => ({ ...s, deck: slug }) });
     } catch (e) {
       setSaving(false);

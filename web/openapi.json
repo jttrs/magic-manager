@@ -1861,6 +1861,69 @@
         }
       }
     },
+    "/api/history": {
+      "get": {
+        "tags": [
+          "history"
+        ],
+        "summary": "History List",
+        "operationId": "history_list",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistoryOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/history/{ingest_id}": {
+      "get": {
+        "tags": [
+          "history"
+        ],
+        "summary": "History Event",
+        "operationId": "history_event",
+        "parameters": [
+          {
+            "name": "ingest_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Ingest Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistoryEventOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/ingest/search": {
       "get": {
         "tags": [
@@ -5022,6 +5085,252 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "HistoryEntryOut": {
+        "properties": {
+          "ingest_id": {
+            "type": "integer",
+            "title": "Ingest Id"
+          },
+          "at": {
+            "type": "string",
+            "title": "At",
+            "description": "ISO timestamp of the ingest."
+          },
+          "method": {
+            "type": "string",
+            "title": "Method"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "deck",
+              "pool",
+              "singles",
+              "checklist",
+              "unknown",
+              "move"
+            ],
+            "title": "Kind",
+            "description": "deck = playable product; pool = card pool (land pack, scene box, Secret Lair\u2026); singles = cards added individually; checklist = a bulk checklist ingest (source product not recorded); unknown = reconstructed bucket with no known source; move = cards pledged to / released from a deck."
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "dated": {
+            "type": "string",
+            "enum": [
+              "acquired",
+              "identified",
+              "reconstructed"
+            ],
+            "title": "Dated",
+            "description": "acquired = when you added it; identified = when Find products attributed loose cards to it; reconstructed = the V19 backfill."
+          },
+          "ledgered": {
+            "type": "boolean",
+            "title": "Ledgered",
+            "description": "False for ingests before the ledger existed: their copies are counted in 'Checklists before the ledger' / the unknown buckets."
+          },
+          "copies_in": {
+            "type": "integer",
+            "title": "Copies In"
+          },
+          "copies_out": {
+            "type": "integer",
+            "title": "Copies Out",
+            "description": "Copies later removed or re-attributed to an identified product."
+          },
+          "held": {
+            "type": "integer",
+            "title": "Held",
+            "description": "Copies this entry still accounts for."
+          },
+          "printings": {
+            "type": "integer",
+            "title": "Printings"
+          },
+          "value_usd": {
+            "type": "number",
+            "title": "Value Usd",
+            "description": "Held copies at today's prices."
+          },
+          "lines": {
+            "type": "integer",
+            "title": "Lines",
+            "description": "Rows the ingest touched (checklist rows, deck-move lines)."
+          },
+          "product": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product",
+            "description": "MTGJSON fileName for product entries."
+          },
+          "set_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Set Code"
+          },
+          "deck_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deck Slug",
+            "description": "Deck to open: the moved deck, or the playable product's deck row."
+          }
+        },
+        "type": "object",
+        "required": [
+          "ingest_id",
+          "at",
+          "method",
+          "kind",
+          "title",
+          "dated",
+          "ledgered",
+          "copies_in",
+          "copies_out",
+          "held",
+          "printings",
+          "value_usd",
+          "lines"
+        ],
+        "title": "HistoryEntryOut"
+      },
+      "HistoryEventOut": {
+        "properties": {
+          "entry": {
+            "$ref": "#/components/schemas/HistoryEntryOut"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/HistoryLineOut"
+            },
+            "type": "array",
+            "title": "Lines"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entry",
+          "lines"
+        ],
+        "title": "HistoryEventOut"
+      },
+      "HistoryLineOut": {
+        "properties": {
+          "printing": {
+            "$ref": "#/components/schemas/PrintingOut"
+          },
+          "finish": {
+            "type": "string",
+            "enum": [
+              "nonfoil",
+              "foil"
+            ],
+            "title": "Finish"
+          },
+          "copies_in": {
+            "type": "integer",
+            "title": "Copies In"
+          },
+          "copies_out": {
+            "type": "integer",
+            "title": "Copies Out"
+          },
+          "held": {
+            "type": "integer",
+            "title": "Held"
+          },
+          "unit_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Usd"
+          }
+        },
+        "type": "object",
+        "required": [
+          "printing",
+          "finish",
+          "copies_in",
+          "copies_out",
+          "held",
+          "unit_usd"
+        ],
+        "title": "HistoryLineOut"
+      },
+      "HistoryOut": {
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/HistoryEntryOut"
+            },
+            "type": "array",
+            "title": "Entries"
+          },
+          "prices_as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prices As Of",
+            "description": "Newest local price fetch date (YYYY-MM-DD)."
+          },
+          "stale_sets": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Stale Sets",
+            "description": "Set codes whose local prices are older than a week (not refreshed)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "entries",
+          "prices_as_of",
+          "stale_sets"
+        ],
+        "title": "HistoryOut"
       },
       "HoldingsOut": {
         "properties": {

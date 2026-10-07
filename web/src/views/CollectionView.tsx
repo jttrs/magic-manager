@@ -9,6 +9,7 @@ import { CopyTargets } from '../components/CopyButton';
 import { AddCardMark, CardKingdomMark, CountCardsMark, FindProductsMark, ManaPoolMark, TcgplayerMark } from '../components/StoreMarks';
 import { IconAction } from '../components/IconAction';
 import { FindProductsDialog } from './collection/FindProductsDialog';
+import { CollectionTabs } from './collection/CollectionTabs';
 import { CartCheckDialog } from './collection/CartCheckDialog';
 import { ChecklistActions, ChecklistLeaveGuard, ChecklistNotes, ChecklistTable } from './collection/Checklist';
 import { useChecklist } from './collection/useChecklist';
@@ -261,6 +262,7 @@ export function CollectionView() {
   return (
     <ViewLayout label="Collection controls" summary={controlsSummary(search, rules, fams.data)} sidebar={sidebar} startOpen={!search.families.length}>
       <GuideSheet
+        nav={<CollectionTabs />}
         title="Collection"
         actions={
           <span role="toolbar" aria-label="Collection actions" className="flex items-center gap-0.5">

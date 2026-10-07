@@ -1,6 +1,7 @@
 import { createRootRoute, createRoute, createRouter, lazyRouteComponent, Outlet, redirect, stripSearchParams } from '@tanstack/react-router';
 import { AppShell } from '../components/AppShell';
 import { collectionSearch, compareSearch, decksSearch, marketSearch } from '../core/search';
+import { historySearch } from '../core/history';
 
 const rootRoute = createRootRoute({
   component: () => (
@@ -46,6 +47,14 @@ const collectionRoute = createRoute({
   component: lazyRouteComponent(() => import('../views/CollectionView'), 'CollectionView'),
 });
 
+const historyRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/collection/history',
+  validateSearch: historySearch,
+  search: { middlewares: [stripSearchParams(historySearch.parse({}))] },
+  component: lazyRouteComponent(() => import('../views/HistoryView'), 'HistoryView'),
+});
+
 // The old missing-set view lived at /sets; it is now a filter of Collection.
 const legacySetsRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -85,7 +94,7 @@ const jobsRoute = createRoute({
 });
 
 export const router = createRouter({
-  routeTree: rootRoute.addChildren([indexRoute, collectionRoute, legacySetsRoute, decksRoute, deckEditRoute, exploreRoute, legacyCommandersRoute, marketRoute, jobsRoute]),
+  routeTree: rootRoute.addChildren([indexRoute, collectionRoute, historyRoute, legacySetsRoute, decksRoute, deckEditRoute, exploreRoute, legacyCommandersRoute, marketRoute, jobsRoute]),
   defaultPreload: 'intent',
 });
 

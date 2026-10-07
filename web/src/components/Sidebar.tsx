@@ -172,3 +172,21 @@ export function SelectField<T extends string>({ label, value, options, onChange 
     </div>
   );
 }
+
+/** A calendar day (YYYY-MM-DD), cleared with the field's own clear control. */
+export function DateField({ label, value, onChange, name, min, max }: { label: string; value: string | undefined; onChange: (v: string | undefined) => void; name: string; min?: string; max?: string }) {
+  return (
+    <label className="flex min-w-0 flex-col gap-1.5 text-sm voice-semi text-on-chrome-muted">
+      {label}
+      <input
+        name={name}
+        type="date"
+        value={value ?? ''}
+        min={min}
+        max={max}
+        onChange={(e) => onChange(e.target.value || undefined)}
+        className="min-h-9 min-w-0 rounded-sm border border-chrome-line bg-chrome-raised px-2.5 text-md tabular text-on-chrome [color-scheme:dark] focus-visible:border-accent"
+      />
+    </label>
+  );
+}

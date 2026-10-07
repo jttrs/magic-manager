@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react';
 
 /** Paper sheet that hosts a view's content: title, summary line, then the body. */
-export function GuideSheet({ title, summary, actions, children }: { title: ReactNode; summary?: ReactNode; actions?: ReactNode; children: ReactNode }) {
+export function GuideSheet({ title, summary, actions, nav, children }: { title: ReactNode; summary?: ReactNode; actions?: ReactNode; nav?: ReactNode; children: ReactNode }) {
   return (
     <div className="paper-grain flex h-full min-h-[70dvh] flex-col rounded-sm bg-paper text-ink shadow-[0_1px_0_var(--theme-chrome-line),0_18px_40px_-28px_var(--theme-scrim)]">
+      {nav}
       <div className="flex flex-wrap items-end gap-x-6 gap-y-2 px-5 pt-4 pb-2">
         <div className="min-w-0">
           <h1 className="text-3xl voice-condensed font-bold leading-none tracking-[-0.01em] text-ink">{title}</h1>

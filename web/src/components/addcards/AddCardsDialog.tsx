@@ -77,6 +77,7 @@ export function AddCardsDialog({ trigger, seed, onSeedDone }: { trigger?: ReactN
       else if (mode === 'paste') { setPasted(null); setPasteText(''); }
       else setDeck(null);
       await qc.invalidateQueries({ queryKey: ['collection'] });
+      await qc.invalidateQueries({ queryKey: ['history'] });
     } catch (e) {
       setError(`Nothing was added: ${(e as Error).message}`);
     } finally {
