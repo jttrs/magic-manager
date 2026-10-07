@@ -106,7 +106,7 @@ def secret_status():
     from . import secrets as secrets_mod
     import os
     for name in secrets_mod.PERSONAL:
-        where = "environment" if os.environ.get(name) else "Keychain" if secrets_mod.keychain_get(name) else "not set"
+        where = "Keychain" if secrets_mod.keychain_get(name) else "environment" if os.environ.get(name) else "not set"
         typer.echo(f"{name}: {where}")
 
 
@@ -3329,8 +3329,8 @@ def _row_unit_price(r: sel_mod.MaterializedRow) -> float | None:
 
 
 def _row_line_value(r: sel_mod.MaterializedRow) -> float | None:
-    p = _row_unit_price(r)
-    return p * r.quantity if p is not None else None
+    from . import jumpstart as jumpstart_mod
+    return jumpstart_mod.row_value(r)
 
 
 def _row_display_name(r: sel_mod.MaterializedRow) -> str:

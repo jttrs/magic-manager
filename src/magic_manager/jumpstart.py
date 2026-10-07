@@ -153,9 +153,16 @@ def is_ready(code: str) -> bool:
     return not sets.unsynced_set_codes(codes)
 
 
-def ensure_ready(code: str, *, progress: Callable[[int, int, str], None] | None = None) -> int:
+def ensure_ready(code: str, *, progress: Callable[[int, int, str], None] | None = None,
+                 refresh_stale: bool = False, log: Callable[[str], None] | None = None) -> int:
     """Fetch every pack's deck file, sync card sets with no local rows, and pull
-    the set's front cards (best-effort). Returns the number of packs."""
+    the set's front cards (best-effort). Returns the number of packs.
+
+    Price freshness is local-first (CLAUDE.md § Price freshness): stale sets are
+    warned about through ``log`` and re-synced only with ``refresh_stale``.
+    Raises ``RuntimeError`` naming any card set still unsynced afterwards —
+    ``sets.ensure_priced`` swallows sync errors, and a read that leaves the set
+    not ready must fail rather than look successful."""
     code = code.lower()
     vs = variants(code)
     tick = progress or (lambda *_: None)
@@ -164,7 +171,10 @@ def ensure_ready(code: str, *, progress: Callable[[int, int, str], None] | None 
         tick(i, len(vs) + 1, v.get("name") or v["fileName"])
         set_codes.update(e.set_code for e in entries(v["fileName"]) if e.set_code)
     tick(len(vs), len(vs) + 1, "Matching cards to your collection")
-    sets.ensure_priced(set_codes)
+    sets.ensure_priced(set_codes, refresh_stale=refresh_stale, log=log)
+    missing = sets.unsynced_set_codes(set_codes)
+    if missing:
+        raise RuntimeError(f"Couldn't sync prices for card set(s): {', '.join(c.upper() for c in missing)}. Check the connection and read again.")
     try:
         front_cards.sync_front_cards(code)
     except Exception:  # noqa: BLE001 — front cards only add value; never block
@@ -254,6 +264,18 @@ def _deck_slugs(file_names: list[str]) -> dict[str, str]:
 def _owned_slugs(code: str) -> set[str]:
     with db.connect() as conn:
         return {r["slug"] for r in conn.execute("SELECT slug FROM decks WHERE slug LIKE ?", (f"pack:%-{code}",))}
+
+
+def owned_file_names(code: str) -> set[str]:
+    """fileNames of the set's pack versions you own at least one copy of (built
+    or broken down) — deck rows keyed by ``source_precon_file_name`` plus
+    pre-fileName ``pack:<theme>-<code>`` slug rows. The one ownership rule the
+    set picker, the pack list and the whole-pack list share."""
+    code = code.lower()
+    units = decks.precon_unit_counts()
+    slugs = _owned_slugs(code)
+    return {v["fileName"] for v in variants(code)
+            if sum(units.get(v["fileName"], (0, 0))) or sets._slug_theme(v.get("name") or v["fileName"], code) in slugs}
 
 
 def set_packs(code: str) -> list[Pack]:
@@ -430,13 +452,11 @@ def missing_packs(code: str) -> MissingPacks:
     cards you already own (the whole-pack shopping list)."""
     code = code.lower()
     vs = variants(code)
-    units = decks.precon_unit_counts()
-    slugs = _owned_slugs(code)
+    owned = owned_file_names(code)
     out: list[tuple[dict, list[selectors.MaterializedRow]]] = []
     skipped = 0
     for v in vs:
-        name = v.get("name") or v["fileName"]
-        if sum(units.get(v["fileName"], (0, 0))) or sets._slug_theme(name, code) in slugs:
+        if v["fileName"] in owned:
             continue
         rows, n = pack_rows(code, v)
         skipped += n
