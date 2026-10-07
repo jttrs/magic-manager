@@ -1,0 +1,15 @@
+.git
+.worktrees
+.venv
+**/node_modules
+**/__pycache__
+web/dist
+web/test-results
+web/playwright-report
+db
+checklists
+output
+.env
+.env.*
+.deck-sessions
+.impeccable

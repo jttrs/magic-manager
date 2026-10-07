@@ -504,11 +504,12 @@ shared catalog are emerging):
 | H4 | Auth | **Self-hosted OAuth only — Discord + Google** (Authlib, state + PKCE). No passwords, no email sender, no magic links (cheapest, smallest attack surface; providers own MFA/recovery). Server-side sessions in `auth.db` (users, linked identities, sessions); HttpOnly + Secure + SameSite=Lax cookie; CSRF protection on writes. |
 | H5 | Access | **Invite-only** (allowlist / invite codes). The owner is **admin**. |
 | H6 | Feature flags | Layered: `config/features.toml` defaults < local overrides < **per-user overrides set by the admin**. Flags that need the owner's machine are **pinned off** for everyone else. |
-| H7 | Hosting (beta) | **A server in the owner's house during beta**, as **one Docker image** (SPA + API + worker) with data under a mounted `/data`. Move the same image to a vendor (e.g. SPA on Cloudflare Pages/Vercel + API on Fly.io/Railway) when needed. Litestream makes the move a restore. |
+| H7 | Hosting (beta) | **A server in the owner's house during beta**, running the app **natively** (`uv run mm serve` as an always-on service — launchd on a Mac, systemd on Linux — deployed by `git pull`, like today's `.worktrees/live`), data under one data dir. Native keeps the H9 macOS features working on a Mac mini (Docker on macOS is a Linux VM: no `osascript`, no visible Chrome). **Docker is for the vendor move** (e.g. Fly.io/Railway take images; SPA optionally on Cloudflare Pages/Vercel): a `Dockerfile` (SPA + API + worker, data under `/data`) is **built in CI on every PR** so Linux portability stays honest; H9 features stay off there. Litestream makes the move a restore. |
 | H8 | Worker | Single host ⇒ keep Taskiq's **in-process broker**; Redis only when a second host appears. Writes serialize **per user DB**; catalog writes (syncs) serialize globally. |
-| H9 | Local-only features | Tab reading + AppleScript store reads (Deals), the Mana Pool cart (machine `.env` account), Moxfield browser import: **admin-only flags that run only where the server is the owner's machine**; hidden for everyone else. Hosted alternatives (paste-your-export, manual URL entry) later. Users are never asked for marketplace credentials. |
+| H9 | Local-only features | Tab reading + AppleScript store reads (Deals), the Mana Pool cart (machine `.env` account), Moxfield browser import. **Interim:** admin-only flags that run only where the server is the owner's Mac running natively; hidden for everyone else. **Target: a Chrome extension (H12) replaces all of them**, so they work against any server — Docker/Linux included. Users are never asked for marketplace credentials. |
 | H10 | Privacy | Store only OAuth subject id + display name + email. **Self-serve export** (download my user DB + CSV) and **delete my account** (removes the user file + auth rows; offsite backups age out of retention, e.g. 30 days). |
 | H11 | Local mode | **Same engine, two layouts, one `MM_MODE` switch.** `local` = no login, today's single file untouched (or the split layout); `hosted` = login, catalog + the signed-in user's file. CLI/skills keep `MAGIC_MANAGER_DB`. |
+| H12 | Chrome extension | A **Manifest V3 Chrome extension** is the browser-side companion that does, in the *user's own* browser, what the server can't: (a) **tabs** — `chrome.tabs` lists the user's open store/product tabs and posts them to the API (replaces `tabs.py`/`osascript`; a server reading its own browser is wrong once users are remote); (b) **rendered store pages** — `chrome.scripting` reads price/stock from a page the user already has open (replaces AppleScript `execute javascript`); (c) **Mana Pool cart** — reads the cart from the user's logged-in Mana Pool tab, so no machine `.env` account and no credentials ever reach us; (d) **Moxfield import** — fetches the deck JSON from the user's own browser session (Cloudflare already cleared), replacing the headed-Playwright path. It authenticates to our API with a token minted from the signed-in session (no cookies shared cross-site), requests narrow `host_permissions` per store, and only posts normalized page data to existing engine seams (`deals`, `cart`, `decksource`) — no logic in the extension. Chosen over bookmarklets (more legitimate, persistent permissions, works across tabs, store-distributable). |
 
 ### 25.2 Pinned / open
 
@@ -519,9 +520,9 @@ shared catalog are emerging):
   is the gate. Rejected: Tailscale node sharing for friends (every friend installs Tailscale),
   ngrok + basic auth (free-tier browser interstitial, bandwidth caps; demos only), router port
   forwarding (exposes the home IP). Until then the beta is LAN + owner's tailnet.
-- **Home server hardware:** not decided. Old PC/laptop (e.g. Proxmox + one container) is fine for
-  the Docker image. An always-on Mac keeps the H9 admin features working **only if the app runs
-  natively** — Docker on macOS is a Linux VM (no `osascript`/headed Chrome).
+- **Home server hardware:** not decided. A Mac mini (native) keeps every H9 admin feature; an
+  old PC/laptop (Linux, native or the Docker image, e.g. Proxmox + one container) works for
+  everything except the macOS-only H9 features.
 - **Budget:** not set; expected beta cost ≈ a domain (~$10/yr) + free-tier object storage.
 
 ### 25.3 Consequences for the build
@@ -547,8 +548,11 @@ shared catalog are emerging):
 5. Per-request user connection, per-user undo, jobs carry the user.
 6. Per-user feature flags + admin page; pin H9 features to the owner's machine.
 7. Export / delete-my-account.
-8. Docker image + Litestream + home deploy runbook.
-9. Owner admin access over Tailscale; friends' external access when the pinned item resolves.
+8. Litestream + native home deploy runbook (launchd/systemd). The Dockerfile + CI build land
+   first, alongside this doc.
+9. Chrome extension (H12): API token endpoint → tabs → rendered store reads → Mana Pool cart →
+   Moxfield import; then drop the macOS-only paths' admin pinning (H9 interim).
+10. Owner admin access over Tailscale; friends' external access when the pinned item resolves.
 
-Phase 5 (shared server-side Scryfall/MTGJSON/EDHREC cache + rate limiter, retiring the browser
-Moxfield import) is re-evaluated **after** this lands.
+Phase 5 (shared server-side Scryfall/MTGJSON/EDHREC cache + rate limiter; the browser-driven
+Moxfield import is retired by H12) is re-evaluated **after** this lands.
