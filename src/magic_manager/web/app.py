@@ -157,6 +157,21 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         except scryfall.ScryfallError as e:
             raise HTTPException(502, f"Scryfall lookup failed: {e}") from e
 
+    @app.get("/api/explore/ranking", response_model=explore_api.RankingOut, tags=["explore"])
+    def explore_ranking(q: Annotated[explore_api.RankingQuery, Query()]):
+        """A cached EDHREC ranking joined to your collection (never fetches —
+        ``cached: false`` means run the ``edhrec.rankings`` job)."""
+        try:
+            return explore_api.ranking(q)
+        except edhrec_engine.EdhrecError as e:
+            raise HTTPException(422, str(e)) from e
+        except LookupError as e:
+            raise HTTPException(404, str(e)) from e
+
+    @app.get("/api/explore/ranking/options", response_model=explore_api.RankingOptionsOut, tags=["explore"])
+    def explore_ranking_options():
+        return explore_api.ranking_options()
+
     # ---------- deals (internal) ----------
 
     @app.get("/api/deals/tabs", response_model=deals_api.OpenTabsOut, tags=["deals"])

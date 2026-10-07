@@ -273,3 +273,55 @@ def search_cards(q: str, *, limit: int = 20) -> list[dict]:
         })
     out.sort(key=lambda c: (not c["name"].lower().startswith(ql), not c["cached"], c["name"]))
     return out[:limit]
+
+
+# ---------- rankings (EDHREC workflow C, joined to the collection) ----------
+
+@dataclass
+class Ranked:
+    rank: int | None
+    name: str
+    slug: str
+    facts: Facts
+    num_decks: int | None = None
+    salt: float | None = None
+    trend: float | None = None
+
+
+@dataclass
+class Ranking:
+    key: edhrec.RankingKey
+    title: str
+    cached: bool                  # False = never fetched (run the sync job)
+    fetched_at: str | None
+    rows: list[Ranked]
+
+
+def ranking(scope: str = "commanders", timeframe: str = "week", *,
+            color: str | None = None, tag: str | None = None,
+            set_family: str | None = None) -> Ranking:
+    """A CACHED EDHREC ranking (never fetches) with each entry joined to local
+    facts: display printing, cheapest price, copies owned / free. ``cached`` is
+    False when the ranking was never synced — the caller runs
+    :func:`edhrec.rankings` (as a job) and reads again."""
+    key = edhrec.ranking_key(scope, timeframe, color=color, tag=tag, set_family=set_family)
+    res = edhrec.cached_rankings(key)
+    if res is None:
+        return Ranking(key=key, title=edhrec.ranking_title(key), cached=False, fetched_at=None, rows=[])
+    facts = facts_for([r.oracle_id for r in res.rows if r.oracle_id])
+    return Ranking(
+        key=key, title=res.name, cached=True, fetched_at=res.fetched_at,
+        rows=[Ranked(rank=r.rank, name=r.name, slug=r.slug,
+                     facts=facts.get(r.oracle_id or "") or Facts(oracle_id=r.oracle_id),
+                     num_decks=r.num_decks, salt=r.salt, trend=r.trend_zscore)
+              for r in res.rows],
+    )
+
+
+def ranking_options() -> dict:
+    """Filter choices for the rankings controls: timeframes, every color
+    identity, and the tags / set families already fetched (for suggestions)."""
+    with db.connect() as conn:
+        tags = [r[0].removeprefix("tag:") for r in conn.execute(
+            "SELECT DISTINCT filter FROM edhrec_rankings WHERE filter LIKE 'tag:%' ORDER BY filter")]
+    return {"timeframes": list(edhrec.RANKING_TIMEFRAMES), "colors": edhrec.color_options(), "tags": tags}

@@ -105,9 +105,7 @@ def _md_rankings(res, top: int, prices_note: str) -> str:
     is_salt = res.scope == "salt"
     metric_hdr = "Salt" if is_salt else "Decks"
     entity_hdr = "Commander" if res.scope == "commanders" else "Card"
-    # res.name carries the EDHREC page header for a filtered ranking (e.g.
-    # "Top Mono-Red Commanders"); fall back to scope for the unfiltered case.
-    title = res.name if res.name and res.name[:1].isupper() else f"{res.scope} ({res.timeframe})"
+    title = res.name
     out = [
         f"## EDHREC rankings — {title}",
         "",
@@ -519,18 +517,10 @@ def main() -> int:
                     return 2
                 renderer, base = _md_card, f"{res.slug}-card-{ts}"
         else:  # rankings
-            filters = [f for f in (args.color, args.tag, args.set_family) if f]
-            if len(filters) > 1:
-                print("error: --color / --tag / --set are mutually exclusive.",
-                      file=sys.stderr)
-                return 2
-            if filters and args.scope != "commanders":
-                print(f"error: filters apply only to the 'commanders' scope, not {args.scope!r}.",
-                      file=sys.stderr)
-                return 2
-            res = edhrec.sync_rankings(args.scope, args.timeframe,
-                                       color=args.color, tag=args.tag,
-                                       set_family=args.set_family)
+            # validation (mutually-exclusive, commander-only filters) lives in
+            # the engine; a bad request raises EdhrecError → exit 2 below.
+            res = edhrec.sync_rankings(args.scope, args.timeframe, color=args.color,
+                                       tag=args.tag, set_family=args.set_family)
             renderer = _md_rankings
             base = f"rankings-{res.scope}-{res.slug}-{res.timeframe or 'all'}-{ts}"
     except edhrec.EdhrecError as e:

@@ -694,6 +694,26 @@ export type CollectionOut = {
 };
 
 /**
+ * ColorOptionOut
+ */
+export type ColorOptionOut = {
+    /**
+     * Slug
+     */
+    slug: string;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Colors
+     *
+     * WUBRG identity letters ('' = colorless).
+     */
+    colors: string;
+};
+
+/**
  * CommanderOption
  */
 export type CommanderOption = {
@@ -2748,6 +2768,101 @@ export type ProductValueOut = {
 };
 
 /**
+ * RankedOut
+ */
+export type RankedOut = {
+    /**
+     * Rank
+     */
+    rank: number | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Slug
+     */
+    slug: string;
+    facts: FactsOut;
+    /**
+     * Num Decks
+     */
+    num_decks?: number | null;
+    /**
+     * Salt
+     *
+     * Average 0–4 'unfun to play against' rating (salt rankings).
+     */
+    salt?: number | null;
+    /**
+     * Trend
+     *
+     * EDHREC trend z-score.
+     */
+    trend?: number | null;
+};
+
+/**
+ * RankingOptionsOut
+ */
+export type RankingOptionsOut = {
+    /**
+     * Timeframes
+     */
+    timeframes: Array<string>;
+    /**
+     * Colors
+     */
+    colors: Array<ColorOptionOut>;
+    /**
+     * Tags
+     *
+     * Tags already fetched (suggestions).
+     */
+    tags: Array<string>;
+};
+
+/**
+ * RankingOut
+ */
+export type RankingOut = {
+    /**
+     * Scope
+     */
+    scope: 'commanders' | 'cards' | 'salt';
+    /**
+     * Timeframe
+     *
+     * Stored timeframe: week|month|year, 'all' (salt, tag) or '' (set).
+     */
+    timeframe: string;
+    /**
+     * Filter
+     *
+     * '' | color:<slug> | tag:<slug> | set:<anchor>.
+     */
+    filter: string;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Cached
+     *
+     * False = never fetched; run the edhrec.rankings job.
+     */
+    cached: boolean;
+    /**
+     * Fetched At
+     */
+    fetched_at: string | null;
+    /**
+     * Rows
+     */
+    rows: Array<RankedOut>;
+};
+
+/**
  * ResolveIn
  */
 export type ResolveIn = {
@@ -3750,6 +3865,76 @@ export type ExploreCardResponses = {
 };
 
 export type ExploreCardResponse = ExploreCardResponses[keyof ExploreCardResponses];
+
+export type ExploreRankingData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Scope
+         */
+        scope?: 'commanders' | 'cards' | 'salt';
+        /**
+         * Timeframe
+         *
+         * Ignored by salt, tag and set rankings.
+         */
+        timeframe?: 'week' | 'month' | 'year';
+        /**
+         * Color
+         *
+         * Color identity: WUBRG letters or an EDHREC name (azorius, mono-red…).
+         */
+        color?: string | null;
+        /**
+         * Tag
+         *
+         * Creature type or theme, e.g. goblins, treasure.
+         */
+        tag?: string | null;
+        /**
+         * Set Family
+         *
+         * Set family anchor or name, e.g. fin.
+         */
+        set_family?: string | null;
+    };
+    url: '/api/explore/ranking';
+};
+
+export type ExploreRankingErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ExploreRankingError = ExploreRankingErrors[keyof ExploreRankingErrors];
+
+export type ExploreRankingResponses = {
+    /**
+     * Successful Response
+     */
+    200: RankingOut;
+};
+
+export type ExploreRankingResponse = ExploreRankingResponses[keyof ExploreRankingResponses];
+
+export type ExploreRankingOptionsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/explore/ranking/options';
+};
+
+export type ExploreRankingOptionsResponses = {
+    /**
+     * Successful Response
+     */
+    200: RankingOptionsOut;
+};
+
+export type ExploreRankingOptionsResponse = ExploreRankingOptionsResponses[keyof ExploreRankingOptionsResponses];
 
 export type DealsTabsData = {
     body?: never;

@@ -14,6 +14,7 @@ import { ProductContents } from './market/ProductContents';
 import { Chevron } from '../components/Chevron';
 import { CopyTargets } from '../components/CopyButton';
 import { InfoTip } from '../components/InfoTip';
+import { ProgressRule } from '../components/ProgressRule';
 import { SearchSelect } from '../components/SearchSelect';
 import { ChipToggles, Segmented, SelectField, SideSection, TextField } from '../components/Sidebar';
 import { MultiSelect } from '../components/MultiSelect';
@@ -293,7 +294,7 @@ function ProductsPanel({ code, q }: { code: string; q: string }) {
   const failed = !values.data && live?.status === 'failed';
   return (
     <div className="flex flex-col gap-2">
-      {running && <JobProgress done={live.done} total={live.total} message={live.log.at(-1)?.msg} />}
+      {running && <div className="mx-5"><ProgressRule label="Pricing products" verb="Pricing" done={live.done} total={live.total} message={live.log.at(-1)?.msg} /></div>}
       {failed && (
         <p role="alert" className="mx-5 text-sm text-danger">
           Couldn’t price these products: {live.error ?? 'the job failed'}.{' '}
@@ -329,20 +330,6 @@ function ProductsPanel({ code, q }: { code: string; q: string }) {
           ))}
         </table>
       )}
-    </div>
-  );
-}
-
-function JobProgress({ done, total, message }: { done: number; total: number | null; message?: string }) {
-  return (
-    <div className="mx-5 flex flex-col gap-1 pt-1" role="status" aria-live="polite">
-      <div className="flex items-baseline gap-2 text-sm text-ink-muted">
-        <span className="tabular">{total ? `Pricing ${fmtInt(Math.min(done + 1, total))} of ${fmtInt(total)}` : 'Starting…'}</span>
-        {message && <span className="min-w-0 truncate">· {message}</span>}
-      </div>
-      <div className="h-[3px] overflow-hidden rounded-pill bg-paper-sunk" role="progressbar" aria-label="Pricing products" aria-valuemin={0} aria-valuemax={total ?? 0} aria-valuenow={done}>
-        <div className="h-full rounded-pill bg-accent transition-[width] duration-300 ease-guide" style={{ width: total ? `${(done / total) * 100}%` : '4%' }} />
-      </div>
     </div>
   );
 }

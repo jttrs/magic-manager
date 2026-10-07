@@ -444,6 +444,147 @@
         }
       }
     },
+    "/api/explore/ranking": {
+      "get": {
+        "tags": [
+          "explore"
+        ],
+        "summary": "Explore Ranking",
+        "description": "A cached EDHREC ranking joined to your collection (never fetches \u2014\n``cached: false`` means run the ``edhrec.rankings`` job).",
+        "operationId": "explore_ranking",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "commanders",
+                "cards",
+                "salt"
+              ],
+              "type": "string",
+              "default": "commanders",
+              "title": "Scope"
+            }
+          },
+          {
+            "name": "timeframe",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "week",
+                "month",
+                "year"
+              ],
+              "type": "string",
+              "description": "Ignored by salt, tag and set rankings.",
+              "default": "week",
+              "title": "Timeframe"
+            },
+            "description": "Ignored by salt, tag and set rankings."
+          },
+          {
+            "name": "color",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Color identity: WUBRG letters or an EDHREC name (azorius, mono-red\u2026).",
+              "title": "Color"
+            },
+            "description": "Color identity: WUBRG letters or an EDHREC name (azorius, mono-red\u2026)."
+          },
+          {
+            "name": "tag",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Creature type or theme, e.g. goblins, treasure.",
+              "title": "Tag"
+            },
+            "description": "Creature type or theme, e.g. goblins, treasure."
+          },
+          {
+            "name": "set_family",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Set family anchor or name, e.g. fin.",
+              "title": "Set Family"
+            },
+            "description": "Set family anchor or name, e.g. fin."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RankingOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/explore/ranking/options": {
+      "get": {
+        "tags": [
+          "explore"
+        ],
+        "summary": "Explore Ranking Options",
+        "operationId": "explore_ranking_options",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RankingOptionsOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/deals/tabs": {
       "get": {
         "tags": [
@@ -3288,6 +3429,30 @@
           "cards"
         ],
         "title": "CollectionOut"
+      },
+      "ColorOptionOut": {
+        "properties": {
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "colors": {
+            "type": "string",
+            "title": "Colors",
+            "description": "WUBRG identity letters ('' = colorless)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "slug",
+          "label",
+          "colors"
+        ],
+        "title": "ColorOptionOut"
       },
       "CommanderOption": {
         "properties": {
@@ -6933,6 +7098,169 @@
           "name"
         ],
         "title": "ProductValueOut"
+      },
+      "RankedOut": {
+        "properties": {
+          "rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rank"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "facts": {
+            "$ref": "#/components/schemas/FactsOut"
+          },
+          "num_decks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Num Decks"
+          },
+          "salt": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Salt",
+            "description": "Average 0\u20134 'unfun to play against' rating (salt rankings)."
+          },
+          "trend": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trend",
+            "description": "EDHREC trend z-score."
+          }
+        },
+        "type": "object",
+        "required": [
+          "rank",
+          "name",
+          "slug",
+          "facts"
+        ],
+        "title": "RankedOut"
+      },
+      "RankingOptionsOut": {
+        "properties": {
+          "timeframes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Timeframes"
+          },
+          "colors": {
+            "items": {
+              "$ref": "#/components/schemas/ColorOptionOut"
+            },
+            "type": "array",
+            "title": "Colors"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "description": "Tags already fetched (suggestions)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "timeframes",
+          "colors",
+          "tags"
+        ],
+        "title": "RankingOptionsOut"
+      },
+      "RankingOut": {
+        "properties": {
+          "scope": {
+            "type": "string",
+            "enum": [
+              "commanders",
+              "cards",
+              "salt"
+            ],
+            "title": "Scope"
+          },
+          "timeframe": {
+            "type": "string",
+            "title": "Timeframe",
+            "description": "Stored timeframe: week|month|year, 'all' (salt, tag) or '' (set)."
+          },
+          "filter": {
+            "type": "string",
+            "title": "Filter",
+            "description": "'' | color:<slug> | tag:<slug> | set:<anchor>."
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "cached": {
+            "type": "boolean",
+            "title": "Cached",
+            "description": "False = never fetched; run the edhrec.rankings job."
+          },
+          "fetched_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fetched At"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/RankedOut"
+            },
+            "type": "array",
+            "title": "Rows"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scope",
+          "timeframe",
+          "filter",
+          "title",
+          "cached",
+          "fetched_at",
+          "rows"
+        ],
+        "title": "RankingOut"
       },
       "ResolveIn": {
         "properties": {

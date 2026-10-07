@@ -12,7 +12,8 @@ export const defaultRole = (eligible: boolean | undefined): Role => (eligible ? 
 
 const fmtLift = (l: number | null | undefined) => (l == null ? null : `${l.toFixed(l >= 10 ? 0 : 2)}× lift`);
 
-function base(name: string, slug: string, f: FactsOut): GuideCard {
+/** Local card facts (display printing, cheapest price, owned/free) → the guide view-model. */
+export function fromFacts(name: string, slug: string, f: FactsOut): GuideCard {
   return {
     key: f.oracle_id ?? `slug:${slug}`,
     scryfallId: f.scryfall_id ?? null,
@@ -41,11 +42,11 @@ function base(name: string, slug: string, f: FactsOut): GuideCard {
 }
 
 /** The explored card itself (plate → inspector). */
-export const profileCard = (p: CardProfileOut): GuideCard => base(p.name, p.slug, p.facts);
+export const profileCard = (p: CardProfileOut): GuideCard => fromFacts(p.name, p.slug, p.facts);
 
 /** One commander / co-played / similar card from a single profile. */
 export function fromEntry(e: EntryOut): GuideCard {
-  return { ...base(e.name, e.slug, e.facts), pct: e.share ?? null, note: fmtLift(e.lift) };
+  return { ...fromFacts(e.name, e.slug, e.facts), pct: e.share ?? null, note: fmtLift(e.lift) };
 }
 
 /** A paired entry (comparison): both shares as the two bars, both lifts in the note. */
@@ -54,7 +55,7 @@ export function fromPaired(p: PairedOut): GuideCard {
     ? `lift ${p.a?.lift?.toFixed(2) ?? '—'}× / ${p.b?.lift?.toFixed(2) ?? '—'}×`
     : fmtLift((p.a ?? p.b)?.lift);
   return {
-    ...base(p.name, p.slug, p.facts),
+    ...fromFacts(p.name, p.slug, p.facts),
     pct: (p.a ?? p.b)?.share ?? null,
     bars: p.bucket === 'both' ? { a: p.a?.share ?? null, b: p.b?.share ?? null } : null,
     note: lifts,

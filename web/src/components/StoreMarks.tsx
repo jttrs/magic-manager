@@ -210,3 +210,14 @@ export function CountCardsMark(p: MarkProps) {
     </svg>
   );
 }
+
+/** A ranked list under a circling arrow (read it again from the source). */
+export function RereadMark(p: MarkProps) {
+  return (
+    <svg {...base} {...p}>
+      <path d="M4 5.4h8M4 9.4h6M4 13.4h4" />
+      <path d="M20.2 14.2a5.6 5.6 0 1 1-1.9-4.3" />
+      <path d="M18.6 6.6v3.4H15.2" />
+    </svg>
+  );
+}

@@ -388,6 +388,7 @@ class SyncResult:
     timeframe: str | None = None   # rankings only
     rows: list[EnrichedCardRow] = field(default_factory=list)
     raw: dict = field(default_factory=dict)
+    fetched_at: str | None = None  # rankings: when this batch was fetched
 
 
 @dataclass
@@ -563,6 +564,121 @@ def sync_card(card_name: str) -> SyncResult:
 # the set of valid ranking scopes accepted by sync_rankings
 _RANKING_SCOPES = frozenset({"commanders", "cards", "salt"})
 
+# Timeframes EDHREC serves for commander/card rankings (``year`` is EDHREC's
+# "past 2 years" page). Salt and tag rankings are all-time; set rankings have none.
+RANKING_TIMEFRAMES = ("week", "month", "year")
+
+
+def color_options() -> list[dict]:
+    """Every EDHREC color-identity filter in display order (0 → 5 colors):
+    ``{slug, label, colors}`` where ``colors`` is the WUBRG identity."""
+    order = "WUBRG"
+    out = []
+    for letters, slug in _COLOR_SLUGS.items():
+        colors = "".join(c for c in order if c in letters)
+        out.append({"slug": slug, "colors": colors,
+                    "label": "-".join(p.capitalize() for p in slug.split("-"))})
+    return out
+
+
+@dataclass(frozen=True)
+class RankingKey:
+    """The stored identity of one ranking in ``edhrec_rankings`` — computed
+    OFFLINE from a request, so a cached ranking can be read without fetching."""
+    scope: str        # commanders | cards | salt
+    timeframe: str    # week|month|year, 'all' (salt/tag) or '' (set)
+    filter: str       # '' | 'color:<slug>' | 'tag:<slug>' | 'set:<anchor>'
+
+
+def _check_ranking_args(scope: str, color, tag, set_family) -> int:
+    """Validate a rankings request; returns the number of filters (0 or 1)."""
+    n_filters = sum(x is not None for x in (color, tag, set_family))
+    if n_filters > 1:
+        raise EdhrecError("color/tag/set filters are mutually exclusive — pass at most one")
+    if n_filters == 1 and scope != "commanders":
+        raise EdhrecError(f"filters apply only to the 'commanders' scope, not {scope!r}")
+    if n_filters == 0 and scope not in _RANKING_SCOPES:
+        raise EdhrecError(f"unknown ranking scope {scope!r} (expected commanders|cards|salt)")
+    return n_filters
+
+
+def ranking_key(scope: str = "commanders", timeframe: str = "week", *,
+                color: str | None = None, tag: str | None = None,
+                set_family: str | None = None) -> RankingKey:
+    """Where :func:`sync_rankings` stores this request (no network beyond a
+    cached set-family resolve). Raises :class:`EdhrecError` on a bad request."""
+    _check_ranking_args(scope, color, tag, set_family)
+    if color is not None:
+        return RankingKey("commanders", timeframe, f"color:{color_filter_slug(color)}")
+    if tag is not None:
+        return RankingKey("commanders", "all", f"tag:{slugify(tag)}")
+    if set_family is not None:
+        return RankingKey("commanders", "", f"set:{sets.resolve(set_family).code}")
+    if scope == "salt":
+        return RankingKey("salt", "all", "")
+    return RankingKey(scope, timeframe, "")
+
+
+def cached_rankings(key: RankingKey) -> SyncResult | None:
+    """The latest stored sync of ``key`` (rows of its newest batch, rank order),
+    or ``None`` when it was never fetched. Pure local read."""
+    with db.connect() as conn:
+        latest = conn.execute(
+            "SELECT MAX(fetched_at) FROM edhrec_rankings WHERE scope=? AND timeframe=? AND filter=?",
+            (key.scope, key.timeframe, key.filter),
+        ).fetchone()[0]
+        if latest is None:
+            return None
+        rows = conn.execute(
+            """SELECT entity_oracle_id, entity_slug, entity_name, rank, num_decks, salt, trend_zscore
+               FROM edhrec_rankings WHERE scope=? AND timeframe=? AND filter=? AND fetched_at=?
+               ORDER BY rank, entity_name""",
+            (key.scope, key.timeframe, key.filter, latest),
+        ).fetchall()
+    return SyncResult(
+        kind="rankings", slug=key.filter or key.scope, name=ranking_title(key),
+        scope=key.scope, timeframe=key.timeframe, fetched_at=latest,
+        rows=[EnrichedCardRow(
+            name=r["entity_name"], slug=r["entity_slug"], oracle_id=r["entity_oracle_id"],
+            list_tag=key.scope, num_decks=r["num_decks"], salt=r["salt"],
+            rank=r["rank"], trend_zscore=r["trend_zscore"],
+        ) for r in rows],
+    )
+
+
+def rankings(scope: str = "commanders", timeframe: str = "week", *,
+             color: str | None = None, tag: str | None = None,
+             set_family: str | None = None, refresh: bool = False,
+             progress=None) -> SyncResult:
+    """Read-or-sync: the cached ranking when present (instant), else fetch it
+    via :func:`sync_rankings`. ``refresh`` always re-fetches."""
+    key = ranking_key(scope, timeframe, color=color, tag=tag, set_family=set_family)
+    if not refresh:
+        hit = cached_rankings(key)
+        if hit is not None:
+            return hit
+    res = sync_rankings(scope, timeframe, color=color, tag=tag,
+                        set_family=set_family, progress=progress)
+    return cached_rankings(key) or res
+
+
+_TIMEFRAME_LABELS = {"week": "past week", "month": "past month", "year": "past 2 years"}
+
+
+def ranking_title(key: RankingKey) -> str:
+    """Human title for a ranking — the ONE naming rule shared by the CLI report
+    and the web (``Top commanders · Mono-Red · past week``)."""
+    when = _TIMEFRAME_LABELS.get(key.timeframe)
+    kind, _, val = key.filter.partition(":")
+    noun = {"commanders": "Top commanders", "cards": "Top cards", "salt": "Saltiest cards"}[key.scope]
+    if kind == "color":
+        noun += " · " + "-".join(p.capitalize() for p in val.split("-"))
+    elif kind == "tag":
+        noun += f" · {val.replace('-', ' ').capitalize()} tag"
+    elif kind == "set":
+        noun += f" · {val.upper()} family"
+    return f"{noun} · {when}" if when else noun
+
 
 @dataclass
 class _RankingPlan:
@@ -570,7 +686,6 @@ class _RankingPlan:
     cardviews: list[dict]                  # the ranking list (deck-count-ordered)
     filter_key: str                        # '' | 'color:…' | 'tag:…' | 'set:…'
     result_slug: str                       # SyncResult.slug (used in artifact names)
-    display_name: str                      # human title for the report header
     timeframe: str                         # effective timeframe stored on rows
     snapshots: list[tuple[str, str, dict]] # (page_type, slug, page) to _store_page
     primary_page: dict                     # SyncResult.raw
@@ -589,7 +704,7 @@ def _dedupe_cardviews(cardviews: list[dict]) -> list[dict]:
 
 def _plan_rankings(scope: str, timeframe: str, *,
                    color: str | None, tag: str | None,
-                   set_family: str | None) -> _RankingPlan:
+                   set_family: str | None, progress=None) -> _RankingPlan:
     """Fetch the right EDHREC page(s) for a (scope, filter) request and select
     the correct ranking cardlist. Filters are commander-only and mutually
     exclusive (enforced by the caller). List selection is EXPLICIT per filter —
@@ -603,7 +718,6 @@ def _plan_rankings(scope: str, timeframe: str, *,
         cardviews = lists.get(f"{slug}commanders") or next((cv for cv in lists.values() if cv), [])
         return _RankingPlan(
             cardviews=cardviews, filter_key=f"color:{slug}", result_slug=slug,
-            display_name=page.get("header") or f"{slug} commanders",
             timeframe=timeframe, snapshots=[("commanders", slug, page)],
             primary_page=page,
         )
@@ -618,7 +732,6 @@ def _plan_rankings(scope: str, timeframe: str, *,
                                       + list(lists.get("newcommanders") or []))
         return _RankingPlan(
             cardviews=cardviews, filter_key=f"tag:{tslug}", result_slug=f"tag-{tslug}",
-            display_name=f"{page.get('header') or tslug} commanders (tag)",
             timeframe="all", snapshots=[("commanders", f"tags/{tslug}", page)],
             primary_page=page,
         )
@@ -630,7 +743,9 @@ def _plan_rankings(scope: str, timeframe: str, *,
         snapshots: list[tuple[str, str, dict]] = []
         merged: list[dict] = []
         primary: dict = {}
-        for code in codes:
+        for i, code in enumerate(codes):
+            if progress:
+                progress(i, len(codes), f"Reading {code.upper()}")
             page = set_page(code)
             if not primary:
                 primary = page
@@ -643,7 +758,6 @@ def _plan_rankings(scope: str, timeframe: str, *,
         return _RankingPlan(
             cardviews=_dedupe_cardviews(merged), filter_key=f"set:{anchor}",
             result_slug=f"set-{anchor}",
-            display_name=f"{(primary.get('header') if primary else None) or anchor} commanders (set)",
             timeframe="", snapshots=snapshots, primary_page=primary,
         )
 
@@ -661,7 +775,7 @@ def _plan_rankings(scope: str, timeframe: str, *,
     cardviews = next((cv for cv in lists.values() if cv), [])
     return _RankingPlan(
         cardviews=cardviews, filter_key="", result_slug=scope,
-        display_name=f"{scope} ({tf})", timeframe=tf,
+        timeframe=tf,
         snapshots=[(("commanders" if scope == "commanders" else "top"), scope, page)],
         primary_page=page,
     )
@@ -669,7 +783,7 @@ def _plan_rankings(scope: str, timeframe: str, *,
 
 def sync_rankings(scope: str = "commanders", timeframe: str = "week", *,
                   color: str | None = None, tag: str | None = None,
-                  set_family: str | None = None) -> SyncResult:
+                  set_family: str | None = None, progress=None) -> SyncResult:
     """Workflow C: commander/card/salt rankings, optionally FILTERED.
 
     Unfiltered scopes: 'commanders' | 'cards' | 'salt' (salt ignores timeframe).
@@ -678,21 +792,25 @@ def sync_rankings(scope: str = "commanders", timeframe: str = "week", *,
     theme OR creature type — EDHREC serves both from /tags/<slug>), ``set_family``
     (a set name/code, expanded via :func:`sets.resolve` and unioned across the
     family's codes). Rank derives from array position within the deck-count-ordered
-    list. Each filtered ranking is persisted under its own ``filter`` key."""
-    n_filters = sum(x is not None for x in (color, tag, set_family))
-    if n_filters > 1:
-        raise EdhrecError("color/tag/set filters are mutually exclusive — pass at most one")
-    if n_filters == 1 and scope != "commanders":
-        raise EdhrecError(f"filters apply only to the 'commanders' scope, not {scope!r}")
-    if n_filters == 0 and scope not in _RANKING_SCOPES:
-        raise EdhrecError(f"unknown ranking scope {scope!r} (expected commanders|cards|salt)")
+    list. Each filtered ranking is persisted under its own ``filter`` key.
 
-    plan = _plan_rankings(scope, timeframe, color=color, tag=tag, set_family=set_family)
+    ``progress(done, total, message)`` (optional) ticks per page fetched — a set
+    family fetches one page per code."""
+    n_filters = _check_ranking_args(scope, color, tag, set_family)
+    key = ranking_key(scope, timeframe, color=color, tag=tag, set_family=set_family)
+    plan = _plan_rankings(scope, timeframe, color=color, tag=tag,
+                          set_family=set_family, progress=progress)
     # Filtered rankings are always commander rankings; unfiltered keeps its scope.
     row_scope = "commanders" if n_filters == 1 else scope
     at = db._utcnow_iso()
 
     names = [cv["name"] for cv in plan.cardviews if cv.get("name")]
+    if not names:
+        # An empty page (no lists, or a redirect for a mistyped tag) would store
+        # nothing and leave the ranking looking never-read; fail loudly instead.
+        raise EdhrecError(f"EDHREC lists nothing for {ranking_title(key)} — check the spelling or try another filter")
+    if progress:
+        progress(1, 1, f"Matching {len(names)} cards to your collection")
     resolved = resolve_names_to_oracle(names)
 
     rows: list[EnrichedCardRow] = []
@@ -730,9 +848,9 @@ def sync_rankings(scope: str = "commanders", timeframe: str = "week", *,
                 list_tag=row_scope, num_decks=cv.get("num_decks"),
                 salt=cv.get("salt"), rank=rank, trend_zscore=cv.get("trend_zscore"),
             ))
-    return SyncResult(kind="rankings", slug=plan.result_slug, name=plan.display_name,
+    return SyncResult(kind="rankings", slug=plan.result_slug, name=ranking_title(key),
                       scope=row_scope, timeframe=plan.timeframe, rows=rows,
-                      raw=plan.primary_page)
+                      raw=plan.primary_page, fetched_at=at)
 
 
 def sync_both(ref: str, *, resolved: tuple[str, dict | None] | None = None) -> DualSyncResult:
