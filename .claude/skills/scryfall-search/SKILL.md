@@ -42,6 +42,7 @@ When you need the wrapper directly (e.g. inside another script), call it via the
 Subcommands:
 - `search '<query>' [order=edhrec] [unique=cards|prints|art] [dir=asc|desc] [page=N]`
 - `named '<exact card name>'`
+- `random ['<query>']` — one random card matching the query (`/cards/random?q=`). **Never cached** (a cached random card would repeat for 24h); still paced. Exit 6 + Scryfall's 404 body when nothing matches. Used by the card surfer (`magic_manager.surf`).
 - `collection [body.json]` — POST to `/cards/collection` for bulk identifier lookup (up to 75 cards per call). Reads JSON body from stdin or a file path. Body shape: `{"identifiers": [{"name":"Sol Ring"}, {"set":"leb","collector_number":"162"}, ...]}`. Used by `magic_manager.parsers.resolve()`.
 - `raw '/some/path' 'already=encoded&query=string'` — for endpoints not covered above (sets, rulings, etc.)
 

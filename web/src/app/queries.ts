@@ -2,7 +2,7 @@
 import { keepPreviousData, queryOptions } from '@tanstack/react-query';
 import type { DraftCardIn } from '../core/api';
 import type { RankingRequest } from '../core/rankings';
-import { dealsTabs, dealsWatched, marketProductCost, marketSecretLair, undoInfo, cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, cardFloors, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs, historyList, historyEvent, exploreRanking, exploreRankingOptions, cardCombos, deckCombos, draftCombos, artTags, artSwaps, jumpstartSets, jumpstartView, jumpstartPack } from '../core/api';
+import { dealsTabs, dealsWatched, marketProductCost, marketSecretLair, undoInfo, cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, cardFloors, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs, historyList, historyEvent, exploreRanking, exploreRankingOptions, cardCombos, deckCombos, draftCombos, artTags, artSwaps, jumpstartSets, jumpstartView, jumpstartPack, surfOptions } from '../core/api';
 
 class ApiError extends Error {}
 
@@ -326,4 +326,11 @@ export const jumpstartPackQuery = (code?: string, fileName?: string) =>
     queryFn: async ({ signal }) => unwrap(await jumpstartPack({ path: { code: code!, file_name: fileName! }, signal })),
     enabled: Boolean(code && fileName),
     staleTime: 30_000,
+  });
+
+export const surfOptionsQuery = () =>
+  queryOptions({
+    queryKey: ['surf', 'options'],
+    queryFn: async ({ signal }) => unwrap(await surfOptions({ signal })),
+    staleTime: 60 * 60_000,
   });
