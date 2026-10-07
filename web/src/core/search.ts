@@ -20,7 +20,30 @@ export type GroupBy = (typeof GROUP_BYS)[number];
 const ROLES = ['commander', 'card'] as const;
 export type Role = (typeof ROLES)[number];
 
+const EXPLORE_MODES = ['card', 'rankings'] as const;
+export type ExploreMode = (typeof EXPLORE_MODES)[number];
+export const RANK_SCOPES = ['commanders', 'cards', 'salt'] as const;
+export type RankScope = (typeof RANK_SCOPES)[number];
+export const RANK_BYS = ['any', 'color', 'tag', 'set'] as const;
+export type RankBy = (typeof RANK_BYS)[number];
+export const RANK_TIMEFRAMES = ['week', 'month', 'year'] as const;
+export type RankTimeframe = (typeof RANK_TIMEFRAMES)[number];
+export const RANK_OWN = ['all', 'owned', 'free'] as const;
+export type RankOwn = (typeof RANK_OWN)[number];
+
 export const compareSearch = z.object({
+  /** Explore mode; unset = a card when one is picked, else rankings. */
+  mode: z.enum(EXPLORE_MODES).optional().catch(undefined),
+  /** Rankings: which list, one narrowing axis (filters don't stack), its value, timeframe. */
+  rank: z.enum(RANK_SCOPES).catch('commanders').default('commanders'),
+  by: z.enum(RANK_BYS).catch('any').default('any'),
+  color: z.string().optional().catch(undefined),
+  tag: z.string().optional().catch(undefined),
+  fam: z.string().optional().catch(undefined),
+  tf: z.enum(RANK_TIMEFRAMES).catch('week').default('week'),
+  own: z.enum(RANK_OWN).catch('all').default('all'),
+  rq: z.string().catch('').default(''),
+  rview: z.enum(['list', 'grid']).catch('list').default('list'),
   a: z.string().optional().catch(undefined),
   b: z.string().optional().catch(undefined),
   /** Explore role; unset = commander when A can lead, else card. */

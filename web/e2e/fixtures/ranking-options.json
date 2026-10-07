@@ -1,0 +1,172 @@
+{
+ "timeframes": [
+  "week",
+  "month",
+  "year"
+ ],
+ "colors": [
+  {
+   "slug": "colorless",
+   "label": "Colorless",
+   "colors": ""
+  },
+  {
+   "slug": "mono-white",
+   "label": "Mono-White",
+   "colors": "W"
+  },
+  {
+   "slug": "mono-blue",
+   "label": "Mono-Blue",
+   "colors": "U"
+  },
+  {
+   "slug": "mono-black",
+   "label": "Mono-Black",
+   "colors": "B"
+  },
+  {
+   "slug": "mono-red",
+   "label": "Mono-Red",
+   "colors": "R"
+  },
+  {
+   "slug": "mono-green",
+   "label": "Mono-Green",
+   "colors": "G"
+  },
+  {
+   "slug": "azorius",
+   "label": "Azorius",
+   "colors": "WU"
+  },
+  {
+   "slug": "dimir",
+   "label": "Dimir",
+   "colors": "UB"
+  },
+  {
+   "slug": "rakdos",
+   "label": "Rakdos",
+   "colors": "BR"
+  },
+  {
+   "slug": "gruul",
+   "label": "Gruul",
+   "colors": "RG"
+  },
+  {
+   "slug": "selesnya",
+   "label": "Selesnya",
+   "colors": "WG"
+  },
+  {
+   "slug": "orzhov",
+   "label": "Orzhov",
+   "colors": "WB"
+  },
+  {
+   "slug": "izzet",
+   "label": "Izzet",
+   "colors": "UR"
+  },
+  {
+   "slug": "golgari",
+   "label": "Golgari",
+   "colors": "BG"
+  },
+  {
+   "slug": "boros",
+   "label": "Boros",
+   "colors": "WR"
+  },
+  {
+   "slug": "simic",
+   "label": "Simic",
+   "colors": "UG"
+  },
+  {
+   "slug": "bant",
+   "label": "Bant",
+   "colors": "WUG"
+  },
+  {
+   "slug": "esper",
+   "label": "Esper",
+   "colors": "WUB"
+  },
+  {
+   "slug": "grixis",
+   "label": "Grixis",
+   "colors": "UBR"
+  },
+  {
+   "slug": "jund",
+   "label": "Jund",
+   "colors": "BRG"
+  },
+  {
+   "slug": "naya",
+   "label": "Naya",
+   "colors": "WRG"
+  },
+  {
+   "slug": "abzan",
+   "label": "Abzan",
+   "colors": "WBG"
+  },
+  {
+   "slug": "jeskai",
+   "label": "Jeskai",
+   "colors": "WUR"
+  },
+  {
+   "slug": "mardu",
+   "label": "Mardu",
+   "colors": "WBR"
+  },
+  {
+   "slug": "sultai",
+   "label": "Sultai",
+   "colors": "UBG"
+  },
+  {
+   "slug": "temur",
+   "label": "Temur",
+   "colors": "URG"
+  },
+  {
+   "slug": "yore-tiller",
+   "label": "Yore-Tiller",
+   "colors": "WUBR"
+  },
+  {
+   "slug": "glint-eye",
+   "label": "Glint-Eye",
+   "colors": "UBRG"
+  },
+  {
+   "slug": "dune-brood",
+   "label": "Dune-Brood",
+   "colors": "WBRG"
+  },
+  {
+   "slug": "ink-treader",
+   "label": "Ink-Treader",
+   "colors": "WURG"
+  },
+  {
+   "slug": "witch-maw",
+   "label": "Witch-Maw",
+   "colors": "WUBG"
+  },
+  {
+   "slug": "five-color",
+   "label": "Five-Color",
+   "colors": "WUBRG"
+  }
+ ],
+ "tags": [
+  "goblins"
+ ]
+}

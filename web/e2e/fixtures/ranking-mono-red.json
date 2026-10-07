@@ -1,0 +1,298 @@
+{
+ "scope": "commanders",
+ "timeframe": "week",
+ "filter": "color:mono-red",
+ "title": "Top commanders \u00b7 Mono-Red \u00b7 past week",
+ "cached": true,
+ "fetched_at": "2026-10-01T16:52:36+00:00",
+ "rows": [
+  {
+   "rank": 1,
+   "name": "Krenko, Mob Boss",
+   "slug": "krenko-mob-boss",
+   "facts": {
+    "oracle_id": "68418069-f615-40ef-ae0d-764192acae00",
+    "type_line": "Legendary Creature \u2014 Goblin Warrior",
+    "cmc": 4.0,
+    "color_identity": [
+     "R"
+    ],
+    "lowest_usd": 2.13,
+    "scryfall_id": "aa078518-0ce2-4c6f-9061-aa7e22ed7493",
+    "image_uri": "https://cards.scryfall.io/normal/front/a/a/aa078518-0ce2-4c6f-9061-aa7e22ed7493.jpg?1783940482",
+    "set_code": "m13",
+    "collector_number": "138",
+    "scryfall_url": "https://scryfall.com/card/m13/138",
+    "owned": 2,
+    "free": 1
+   },
+   "num_decks": 885,
+   "salt": null,
+   "trend": -0.22484111065390508
+  },
+  {
+   "rank": 2,
+   "name": "Magda, Brazen Outlaw",
+   "slug": "magda-brazen-outlaw",
+   "facts": {
+    "oracle_id": "3d268e48-3004-4384-bf52-e63243fb5e02",
+    "type_line": "Legendary Creature \u2014 Dwarf Berserker",
+    "cmc": 2.0,
+    "color_identity": [
+     "R"
+    ],
+    "lowest_usd": 9.77,
+    "scryfall_id": "338380ba-8415-40a2-8b81-2b30218ea16a",
+    "image_uri": "https://cards.scryfall.io/normal/front/3/3/338380ba-8415-40a2-8b81-2b30218ea16a.jpg?1783906708",
+    "set_code": "plst",
+    "collector_number": "KHM-142",
+    "scryfall_url": "https://scryfall.com/card/plst/KHM-142",
+    "owned": 0,
+    "free": 0
+   },
+   "num_decks": 434,
+   "salt": null,
+   "trend": -0.011490630718660612
+  },
+  {
+   "rank": 3,
+   "name": "Zada, Hedron Grinder",
+   "slug": "zada-hedron-grinder",
+   "facts": {
+    "oracle_id": "9f7d5e1c-bf5b-4ab9-bd6e-2627b4d22b36",
+    "type_line": "Legendary Creature \u2014 Goblin Ally",
+    "cmc": 4.0,
+    "color_identity": [
+     "R"
+    ],
+    "lowest_usd": 0.13,
+    "scryfall_id": "fc0969f1-92a0-47c3-8eff-d106fbef2f7e",
+    "image_uri": "https://cards.scryfall.io/normal/front/f/c/fc0969f1-92a0-47c3-8eff-d106fbef2f7e.jpg?1783938190",
+    "set_code": "bfz",
+    "collector_number": "162",
+    "scryfall_url": "https://scryfall.com/card/bfz/162",
+    "owned": 1,
+    "free": 0
+   },
+   "num_decks": 363,
+   "salt": null,
+   "trend": -0.04469949463204067
+  },
+  {
+   "rank": 4,
+   "name": "Smaug the Magnificent",
+   "slug": "smaug-the-magnificent",
+   "facts": {
+    "oracle_id": "c53b7602-5e36-4900-896c-844bf6eac22e",
+    "type_line": "Legendary Creature \u2014 Dragon",
+    "cmc": 4.0,
+    "color_identity": [
+     "R"
+    ],
+    "lowest_usd": 20.6,
+    "scryfall_id": "6a5d8fad-2ffd-4645-8c49-907999b6cecf",
+    "image_uri": "https://cards.scryfall.io/normal/front/6/a/6a5d8fad-2ffd-4645-8c49-907999b6cecf.jpg?1783902784",
+    "set_code": "hob",
+    "collector_number": "110",
+    "scryfall_url": "https://scryfall.com/card/hob/110",
+    "owned": 0,
+    "free": 0
+   },
+   "num_decks": 349,
+   "salt": null,
+   "trend": 0.11275953638026844
+  },
+  {
+   "rank": 5,
+   "name": "Lathliss, Dragon Queen",
+   "slug": "lathliss-dragon-queen",
+   "facts": {
+    "oracle_id": "15fef45d-f1a9-49b2-abaa-fe77bb9d1afd",
+    "type_line": "Legendary Creature \u2014 Dragon",
+    "cmc": 6.0,
+    "color_identity": [
+     "R"
+    ],
+    "lowest_usd": 0.38,
+    "scryfall_id": "54a4c37d-5eeb-42c9-9688-c2ed0d5044cd",
+    "image_uri": "https://cards.scryfall.io/normal/front/5/4/54a4c37d-5eeb-42c9-9688-c2ed0d5044cd.jpg?1783934548",
+    "set_code": "m19",
+    "collector_number": "149",
+    "scryfall_url": "https://scryfall.com/card/m19/149",
+    "owned": 6,
+    "free": 3
+   },
+   "num_decks": 323,
+   "salt": null,
+   "trend": -0.036629530206637166
+  },
+  {
+   "rank": 6,
+   "name": "Tannuk, Steadfast Second",
+   "slug": "tannuk-steadfast-second",
+   "facts": {
+    "oracle_id": "b5ae8016-92ed-4ae8-83a8-65068defc616",
+    "type_line": "Legendary Creature \u2014 Kavu Pilot",
+    "cmc": 4.0,
+    "color_identity": [
+     "R"
+    ],
+    "lowest_usd": 1.81,
+    "scryfall_id": "44607ed3-9523-40ac-9f61-0edd011cf762",
+    "image_uri": "https://cards.scryfall.io/normal/front/4/4/44607ed3-9523-40ac-9f61-0edd011cf762.jpg?1783905946",
+    "set_code": "eoe",
+    "collector_number": "162",
+    "scryfall_url": "https://scryfall.com/card/eoe/162",
+    "owned": 3,
+    "free": 3
+   },
+   "num_decks": 281,
+   "salt": null,
+   "trend": -0.051717618078190065
+  },
+  {
+   "rank": 7,
+   "name": "Jaws, Relentless Predator",
+   "slug": "jaws-relentless-predator",
+   "facts": {
+    "oracle_id": "1202725c-170b-42d7-9f82-a431a987f30e",
+    "type_line": "Legendary Creature \u2014 Shark",
+    "cmc": 5.0,
+    "color_identity": [
+     "R"
+    ],
+    "lowest_usd": 175.86,
+    "scryfall_id": "c6d16a9e-98c0-46e0-987c-f0de0915a204",
+    "image_uri": "https://cards.scryfall.io/normal/front/c/6/c6d16a9e-98c0-46e0-987c-f0de0915a204.jpg?1785419997",
+    "set_code": "sld",
+    "collector_number": "2175",
+    "scryfall_url": "https://scryfall.com/card/sld/2175",
+    "owned": 0,
+    "free": 0
+   },
+   "num_decks": 240,
+   "salt": null,
+   "trend": -0.052183541299511645
+  },
+  {
+   "rank": 8,
+   "name": "Ojer Axonil, Deepest Might",
+   "slug": "ojer-axonil-deepest-might",
+   "facts": {
+    "oracle_id": "d3b7b541-6f05-46c1-8031-c848c4bd4635",
+    "type_line": "Legendary Creature \u2014 God // Land",
+    "cmc": 4.0,
+    "color_identity": [
+     "R"
+    ],
+    "lowest_usd": 21.76,
+    "scryfall_id": "50f8e2b6-98c7-4f28-bb39-e1fbe841f1ee",
+    "image_uri": "https://cards.scryfall.io/normal/front/5/0/50f8e2b6-98c7-4f28-bb39-e1fbe841f1ee.jpg?1783913761",
+    "set_code": "lci",
+    "collector_number": "158",
+    "scryfall_url": "https://scryfall.com/card/lci/158",
+    "owned": 0,
+    "free": 0
+   },
+   "num_decks": 229,
+   "salt": null,
+   "trend": -0.060262453520879763
+  },
+  {
+   "rank": 9,
+   "name": "Kratos, God of War",
+   "slug": "kratos-god-of-war",
+   "facts": {
+    "oracle_id": "42e55b84-8250-441d-a09e-7c61bf7661cc",
+    "type_line": "Legendary Creature \u2014 God Warrior",
+    "cmc": 3.0,
+    "color_identity": [
+     "R"
+    ],
+    "lowest_usd": 50.65,
+    "scryfall_id": "fb97e2a1-0e86-4c12-8d31-6ff7b825ca10",
+    "image_uri": "https://cards.scryfall.io/normal/front/f/b/fb97e2a1-0e86-4c12-8d31-6ff7b825ca10.jpg?1783905133",
+    "set_code": "sld",
+    "collector_number": "2207",
+    "scryfall_url": "https://scryfall.com/card/sld/2207",
+    "owned": 0,
+    "free": 0
+   },
+   "num_decks": 226,
+   "salt": null,
+   "trend": -0.10725744627416092
+  },
+  {
+   "rank": 10,
+   "name": "Clive, Ifrit's Dominant",
+   "slug": "clive-ifrits-dominant",
+   "facts": {
+    "oracle_id": "ceba3d03-be5a-4dd7-b829-7db216a0f44e",
+    "type_line": "Legendary Creature \u2014 Human Noble Warrior // Legendary Enchantment Creature \u2014 Saga Demon",
+    "cmc": 6.0,
+    "color_identity": [
+     "R"
+    ],
+    "lowest_usd": 3.45,
+    "scryfall_id": "9a069e96-2786-493d-aca8-f70611435dbe",
+    "image_uri": "https://cards.scryfall.io/normal/front/9/a/9a069e96-2786-493d-aca8-f70611435dbe.jpg?1783906611",
+    "set_code": "fin",
+    "collector_number": "133",
+    "scryfall_url": "https://scryfall.com/card/fin/133",
+    "owned": 0,
+    "free": 0
+   },
+   "num_decks": 225,
+   "salt": null,
+   "trend": -0.04937120012544628
+  },
+  {
+   "rank": 11,
+   "name": "Norin the Wary",
+   "slug": "norin-the-wary",
+   "facts": {
+    "oracle_id": "b8b51a29-a2be-4b97-a73c-ea512d3d5622",
+    "type_line": "Legendary Creature \u2014 Human Warrior",
+    "cmc": 1.0,
+    "color_identity": [
+     "R"
+    ],
+    "lowest_usd": null,
+    "scryfall_id": "45524a5f-253e-4fd7-a359-be6df50c0f53",
+    "image_uri": "https://cards.scryfall.io/normal/front/4/5/45524a5f-253e-4fd7-a359-be6df50c0f53.jpg?1783931256",
+    "set_code": "plst",
+    "collector_number": "TSP-171",
+    "scryfall_url": "https://scryfall.com/card/plst/TSP-171",
+    "owned": 0,
+    "free": 0
+   },
+   "num_decks": 181,
+   "salt": null,
+   "trend": -0.07829980229432877
+  },
+  {
+   "rank": 12,
+   "name": "Alexios, Deimos of Kosmos",
+   "slug": "alexios-deimos-of-kosmos",
+   "facts": {
+    "oracle_id": "81c6c4f0-81ad-463c-a42b-60a73e6d70f3",
+    "type_line": "Legendary Creature \u2014 Human Berserker",
+    "cmc": 4.0,
+    "color_identity": [
+     "R"
+    ],
+    "lowest_usd": 0.36,
+    "scryfall_id": "e81b94b2-4052-4686-a788-9baf0fa0f81a",
+    "image_uri": "https://cards.scryfall.io/normal/front/e/8/e81b94b2-4052-4686-a788-9baf0fa0f81a.jpg?1783910980",
+    "set_code": "acr",
+    "collector_number": "33",
+    "scryfall_url": "https://scryfall.com/card/acr/33",
+    "owned": 8,
+    "free": 8
+   },
+   "num_decks": 160,
+   "salt": null,
+   "trend": -0.07636375571165507
+  }
+ ]
+}

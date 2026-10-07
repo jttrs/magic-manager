@@ -1,7 +1,8 @@
 // Server state via TanStack Query over the generated, typed API client.
 import { keepPreviousData, queryOptions } from '@tanstack/react-query';
 import type { DraftCardIn } from '../core/api';
-import { dealsTabs, dealsWatched, marketProductCost, marketSecretLair, undoInfo, cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs , historyList, historyEvent } from '../core/api';
+import type { RankingRequest } from '../core/rankings';
+import { dealsTabs, dealsWatched, marketProductCost, marketSecretLair, undoInfo, cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs, historyList, historyEvent, exploreRanking, exploreRankingOptions } from '../core/api';
 
 class ApiError extends Error {}
 
@@ -37,6 +38,23 @@ export const exploreCardQuery = (a?: string, b?: string) =>
     queryFn: async ({ signal }) => unwrap(await exploreCard({ query: { a: a!, ...(b ? { b } : {}) }, signal })),
     enabled: Boolean(a),
     staleTime: 5 * 60_000,
+  });
+
+/** A cached EDHREC ranking (never fetches; `cached: false` → run the `edhrec.rankings` job). */
+export const rankingQuery = (req: RankingRequest | null) =>
+  queryOptions({
+    queryKey: ['explore', 'ranking', req],
+    queryFn: async ({ signal }) => unwrap(await exploreRanking({ query: req!, signal })),
+    enabled: req != null,
+    staleTime: 5 * 60_000,
+    placeholderData: keepPreviousData,
+  });
+
+export const rankingOptionsQuery = () =>
+  queryOptions({
+    queryKey: ['explore', 'ranking-options'],
+    queryFn: async ({ signal }) => unwrap(await exploreRankingOptions({ signal })),
+    staleTime: 60 * 60_000,
   });
 
 export const cardSearchQuery = (q: string) =>

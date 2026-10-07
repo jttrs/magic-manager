@@ -5,11 +5,13 @@ import families from './fixtures/families.json' with { type: 'json' };
 import collectionBlb from './fixtures/collection-blb.json' with { type: 'json' };
 import decks from './fixtures/decks.json' with { type: 'json' };
 import deckDetail from './fixtures/deck-detail.json' with { type: 'json' };
+import ranking from './fixtures/ranking-mono-red.json' with { type: 'json' };
+import rankingOptions from './fixtures/ranking-options.json' with { type: 'json' };
 
 // 1×1 transparent PNG stands in for every Scryfall image.
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
 
-export const fixtures = { compare, commanders, families, collectionBlb, decks, deckDetail };
+export const fixtures = { compare, commanders, families, collectionBlb, decks, deckDetail, ranking, rankingOptions };
 
 export async function mockApi(page: Page, overrides: Record<string, (url: URL) => { status?: number; json: unknown }> = {}) {
   await page.route('https://cards.scryfall.io/**', (r) => r.fulfill({ status: 200, contentType: 'image/png', body: PNG }));
@@ -27,6 +29,8 @@ export async function mockApi(page: Page, overrides: Record<string, (url: URL) =
       const b = url.searchParams.get('b');
       return route.fulfill({ json: { a: profile(a), b: b ? profile(b) : null, commanders: [], coplayed: [], tags: {} } });
     }
+    if (url.pathname === '/api/explore/ranking') return route.fulfill({ json: ranking });
+    if (url.pathname === '/api/explore/ranking/options') return route.fulfill({ json: rankingOptions });
     if (url.pathname === '/api/explore/search') return route.fulfill({ json: commanders.map((c) => ({ ...c, commander_eligible: true })) });
     if (url.pathname === '/api/edhrec/commanders') return route.fulfill({ json: commanders });
     if (url.pathname === '/api/collection/families') return route.fulfill({ json: families });

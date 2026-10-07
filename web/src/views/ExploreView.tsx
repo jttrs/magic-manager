@@ -23,6 +23,9 @@ import { exportLines, fromCompare, type GuideCard } from '../core/guideCard';
 import { compareSections, hasFunctionData } from '../core/groupBy';
 import { BUCKETS, type Bucket, type CompareSearch, type GroupBy, type Role } from '../core/search';
 import { decodeSort, encodeSort, sortBy } from '../core/sort';
+import { exploreMode } from '../core/rankings';
+import { ExploreModeSwitch } from './explore/ExploreModeSwitch';
+import { RankingsExplore } from './explore/RankingsExplore';
 
 const route = getRouteApi('/explore');
 const cleanName = (n: string) => n.replace(/\s*\((?:Commander|Partner|Card)\)\s*$/i, '');
@@ -38,11 +41,13 @@ export function ExploreView() {
   const { selected, toggle, clear } = useSelection('explore');
   const [inspecting, setInspecting] = useState<GuideCard | null>(null);
 
-  const cards = useQuery(exploreCardQuery(search.a, search.b));
+  const mode = exploreMode(search.mode, search.a);
+  const modeSwitch = <ExploreModeSwitch value={mode} onChange={(m) => set({ mode: m })} />;
+  const cards = useQuery({ ...exploreCardQuery(search.a, search.b), enabled: Boolean(search.a) && mode === 'card' });
   const prof = cards.data;
   const canLead = prof ? prof.a.commander_eligible && (!prof.b || prof.b.commander_eligible) : undefined;
   const role: Role = search.role === 'commander' && canLead === false ? 'card' : search.role ?? defaultRole(canLead);
-  const cmd = useQuery({ ...compareQuery(search.a, search.b), enabled: Boolean(search.a) && role === 'commander' && canLead !== false });
+  const cmd = useQuery({ ...compareQuery(search.a, search.b), enabled: Boolean(search.a) && mode === 'card' && role === 'commander' && canLead !== false });
 
   const names = {
     a: prof ? shortName(prof.a.name) : search.a ? shortName(search.a) : 'A',
@@ -87,6 +92,7 @@ export function ExploreView() {
 
   const sidebar = (
     <>
+      {modeSwitch}
       <SideSection title="Cards">
         <div className="flex flex-col gap-3">
           <CommanderPicker scope="any" name="card-a" label="Card" value={search.a} onCommit={(a) => set({ a })} />
@@ -190,6 +196,8 @@ export function ExploreView() {
     const cols = cardView.cols;
     body = <GuideColumns columns={columns((b) => cols[b], (b) => cols[b].reduce((n, s) => n + s.items.length, 0), 'share of decks')} visible={search.show} onHide={(id) => set({ show: search.show.filter((s) => s !== id) })} storageKey="explore-card" />;
   }
+
+  if (mode === 'rankings') return <RankingsExplore search={search} set={set} modeSwitch={modeSwitch} />;
 
   return (
     <ViewLayout label="Explore controls" summary={search.a ? `${search.a}${search.b ? ` vs ${search.b}` : ''} · ${role === 'commander' ? 'as commander' : 'as a card'}` : undefined} sidebar={sidebar} startOpen={!search.a}>

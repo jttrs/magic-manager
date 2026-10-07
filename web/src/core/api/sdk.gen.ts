@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, ServerSentEventsResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { CardHoldingsData, CardHoldingsErrors, CardHoldingsResponses, CartCheckData, CartCheckErrors, CartCheckResponses, CartSetupData, CartSetupResponses, CollectionBuyListData, CollectionBuyListErrors, CollectionBuyListResponses, CollectionChecklistData, CollectionChecklistErrors, CollectionChecklistResponses, CollectionData, CollectionErrors, CollectionFamiliesData, CollectionFamiliesResponses, CollectionResponses, CommandersData, CommandersErrors, CommandersResponses, CompareData, CompareErrors, CompareResponses, DealsMatchData, DealsMatchErrors, DealsMatchResponses, DealsTabsData, DealsTabsErrors, DealsTabsResponses, DealsUnwatchData, DealsUnwatchErrors, DealsUnwatchResponses, DealsWatchData, DealsWatchedData, DealsWatchedResponses, DealsWatchErrors, DealsWatchResponses, DeckBreakDownData, DeckBreakDownErrors, DeckBreakDownResponses, DeckBuildData, DeckBuildErrors, DeckBuildPlanData, DeckBuildPlanErrors, DeckBuildPlanResponses, DeckBuildResponses, DeckCheckData, DeckCheckErrors, DeckCheckResponses, DeckCopyData, DeckCopyErrors, DeckCopyResponses, DeckCreateData, DeckCreateErrors, DeckCreateResponses, DeckDetailData, DeckDetailErrors, DeckDetailResponses, DeckImportData, DeckImportErrors, DeckImportResponses, DeckListData, DeckListResponses, DeckPreviewData, DeckPreviewErrors, DeckPreviewResponses, DeckSaveData, DeckSaveErrors, DeckSaveResponses, DeckSuggestionsData, DeckSuggestionsErrors, DeckSuggestionsResponses, ExploreCardData, ExploreCardErrors, ExploreCardResponses, ExploreSearchData, ExploreSearchErrors, ExploreSearchResponses, FeaturesRouteData, FeaturesRouteResponses, GetJobData, GetJobErrors, GetJobResponses, HistoryEventData, HistoryEventErrors, HistoryEventResponses, HistoryListData, HistoryListResponses, IngestCommitData, IngestCommitErrors, IngestCommitResponses, IngestPreconsData, IngestPreconsErrors, IngestPreconsResponses, IngestResolveData, IngestResolveErrors, IngestResolveResponses, IngestSearchData, IngestSearchErrors, IngestSearchResponses, JobEventsData, JobEventsErrors, JobEventsResponses, JobSpecsData, JobSpecsResponses, ListJobsData, ListJobsResponses, MarketCardsData, MarketCardsErrors, MarketCardsResponses, MarketDeckData, MarketDeckErrors, MarketDeckResponses, MarketProductCostData, MarketProductCostErrors, MarketProductCostResponses, MarketProductsData, MarketProductsErrors, MarketProductsResponses, MarketProductTreeData, MarketProductTreeErrors, MarketProductTreeResponses, MarketSecretLairData, MarketSecretLairErrors, MarketSecretLairResponses, MarketValueData, MarketValueErrors, MarketValueResponses, SubmitJobData, SubmitJobErrors, SubmitJobResponses, UndoInfoData, UndoInfoResponses, UndoRestoreData, UndoRestoreResponses } from './types.gen';
+import type { CardHoldingsData, CardHoldingsErrors, CardHoldingsResponses, CartCheckData, CartCheckErrors, CartCheckResponses, CartSetupData, CartSetupResponses, CollectionBuyListData, CollectionBuyListErrors, CollectionBuyListResponses, CollectionData, CollectionErrors, CollectionFamiliesData, CollectionFamiliesResponses, CollectionResponses, CommandersData, CommandersErrors, CommandersResponses, CompareData, CompareErrors, CompareResponses, DealsMatchData, DealsMatchErrors, DealsMatchResponses, DealsTabsData, DealsTabsErrors, DealsTabsResponses, DealsUnwatchData, DealsUnwatchErrors, DealsUnwatchResponses, DealsWatchData, DealsWatchedData, DealsWatchedResponses, DealsWatchErrors, DealsWatchResponses, DeckBreakDownData, DeckBreakDownErrors, DeckBreakDownResponses, DeckBuildData, DeckBuildErrors, DeckBuildPlanData, DeckBuildPlanErrors, DeckBuildPlanResponses, DeckBuildResponses, DeckCheckData, DeckCheckErrors, DeckCheckResponses, DeckCopyData, DeckCopyErrors, DeckCopyResponses, DeckCreateData, DeckCreateErrors, DeckCreateResponses, DeckDetailData, DeckDetailErrors, DeckDetailResponses, DeckImportData, DeckImportErrors, DeckImportResponses, DeckListData, DeckListResponses, DeckPreviewData, DeckPreviewErrors, DeckPreviewResponses, DeckSaveData, DeckSaveErrors, DeckSaveResponses, DeckSuggestionsData, DeckSuggestionsErrors, DeckSuggestionsResponses, ExploreCardData, ExploreCardErrors, ExploreCardResponses, ExploreRankingData, ExploreRankingErrors, ExploreRankingOptionsData, ExploreRankingOptionsResponses, ExploreRankingResponses, ExploreSearchData, ExploreSearchErrors, ExploreSearchResponses, FeaturesRouteData, FeaturesRouteResponses, GetJobData, GetJobErrors, GetJobResponses, IngestCommitData, IngestCommitErrors, IngestCommitResponses, IngestPreconsData, IngestPreconsErrors, IngestPreconsResponses, IngestResolveData, IngestResolveErrors, IngestResolveResponses, IngestSearchData, IngestSearchErrors, IngestSearchResponses, JobEventsData, JobEventsErrors, JobEventsResponses, JobSpecsData, JobSpecsResponses, ListJobsData, ListJobsResponses, MarketCardsData, MarketCardsErrors, MarketCardsResponses, MarketDeckData, MarketDeckErrors, MarketDeckResponses, MarketProductCostData, MarketProductCostErrors, MarketProductCostResponses, MarketProductsData, MarketProductsErrors, MarketProductsResponses, MarketProductTreeData, MarketProductTreeErrors, MarketProductTreeResponses, MarketValueData, MarketValueErrors, MarketValueResponses, SubmitJobData, SubmitJobErrors, SubmitJobResponses, UndoInfoData, UndoInfoResponses, UndoRestoreData, UndoRestoreResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -69,6 +69,19 @@ export const exploreSearch = <ThrowOnError extends boolean = false>(options: Opt
  * Explore Card
  */
 export const exploreCard = <ThrowOnError extends boolean = false>(options: Options<ExploreCardData, ThrowOnError>): RequestResult<ExploreCardResponses, ExploreCardErrors, ThrowOnError> => (options.client ?? client).get<ExploreCardResponses, ExploreCardErrors, ThrowOnError>({ url: '/api/explore/card', ...options });
+
+/**
+ * Explore Ranking
+ *
+ * A cached EDHREC ranking joined to your collection (never fetches —
+ * ``cached: false`` means run the ``edhrec.rankings`` job).
+ */
+export const exploreRanking = <ThrowOnError extends boolean = false>(options?: Options<ExploreRankingData, ThrowOnError>): RequestResult<ExploreRankingResponses, ExploreRankingErrors, ThrowOnError> => (options?.client ?? client).get<ExploreRankingResponses, ExploreRankingErrors, ThrowOnError>({ url: '/api/explore/ranking', ...options });
+
+/**
+ * Explore Ranking Options
+ */
+export const exploreRankingOptions = <ThrowOnError extends boolean = false>(options?: Options<ExploreRankingOptionsData, ThrowOnError>): RequestResult<ExploreRankingOptionsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<ExploreRankingOptionsResponses, unknown, ThrowOnError>({ url: '/api/explore/ranking/options', ...options });
 
 /**
  * Deals Tabs
@@ -162,11 +175,6 @@ export const marketProductTree = <ThrowOnError extends boolean = false>(options:
 export const marketProductCost = <ThrowOnError extends boolean = false>(options: Options<MarketProductCostData, ThrowOnError>): RequestResult<MarketProductCostResponses, MarketProductCostErrors, ThrowOnError> => (options.client ?? client).get<MarketProductCostResponses, MarketProductCostErrors, ThrowOnError>({ url: '/api/market/product-cost', ...options });
 
 /**
- * Market Secret Lair
- */
-export const marketSecretLair = <ThrowOnError extends boolean = false>(options?: Options<MarketSecretLairData, ThrowOnError>): RequestResult<MarketSecretLairResponses, MarketSecretLairErrors, ThrowOnError> => (options?.client ?? client).get<MarketSecretLairResponses, MarketSecretLairErrors, ThrowOnError>({ url: '/api/market/secret-lair', ...options });
-
-/**
  * Market Cards
  */
 export const marketCards = <ThrowOnError extends boolean = false>(options: Options<MarketCardsData, ThrowOnError>): RequestResult<MarketCardsResponses, MarketCardsErrors, ThrowOnError> => (options.client ?? client).get<MarketCardsResponses, MarketCardsErrors, ThrowOnError>({ url: '/api/market/cards', ...options });
@@ -191,18 +199,6 @@ export const collection = <ThrowOnError extends boolean = false>(options: Option
  */
 export const collectionBuyList = <ThrowOnError extends boolean = false>(options: Options<CollectionBuyListData, ThrowOnError>): RequestResult<CollectionBuyListResponses, CollectionBuyListErrors, ThrowOnError> => (options.client ?? client).post<CollectionBuyListResponses, CollectionBuyListErrors, ThrowOnError>({
     url: '/api/collection/buy-list',
-    ...options,
-    headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-    }
-});
-
-/**
- * Collection Checklist
- */
-export const collectionChecklist = <ThrowOnError extends boolean = false>(options: Options<CollectionChecklistData, ThrowOnError>): RequestResult<CollectionChecklistResponses, CollectionChecklistErrors, ThrowOnError> => (options.client ?? client).post<CollectionChecklistResponses, CollectionChecklistErrors, ThrowOnError>({
-    url: '/api/collection/checklist',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -323,16 +319,6 @@ export const deckSuggestions = <ThrowOnError extends boolean = false>(options: O
  * Card Holdings
  */
 export const cardHoldings = <ThrowOnError extends boolean = false>(options: Options<CardHoldingsData, ThrowOnError>): RequestResult<CardHoldingsResponses, CardHoldingsErrors, ThrowOnError> => (options.client ?? client).get<CardHoldingsResponses, CardHoldingsErrors, ThrowOnError>({ url: '/api/cards/{scryfall_id}/holdings', ...options });
-
-/**
- * History List
- */
-export const historyList = <ThrowOnError extends boolean = false>(options?: Options<HistoryListData, ThrowOnError>): RequestResult<HistoryListResponses, unknown, ThrowOnError> => (options?.client ?? client).get<HistoryListResponses, unknown, ThrowOnError>({ url: '/api/history', ...options });
-
-/**
- * History Event
- */
-export const historyEvent = <ThrowOnError extends boolean = false>(options: Options<HistoryEventData, ThrowOnError>): RequestResult<HistoryEventResponses, HistoryEventErrors, ThrowOnError> => (options.client ?? client).get<HistoryEventResponses, HistoryEventErrors, ThrowOnError>({ url: '/api/history/{ingest_id}', ...options });
 
 /**
  * Ingest Search

@@ -97,7 +97,7 @@ test('name filter and EDHREC list chips narrow every column', async ({ page }) =
 });
 
 test('card combobox: suggestions, keyboard choice, URL update', async ({ page }) => {
-  await page.goto('/explore');
+  await page.goto('/explore?mode=card');
   await expect(page.getByText('Explore a card')).toBeVisible();
   const box = page.getByRole('combobox', { name: 'Card' });
   await box.fill('tifa');
