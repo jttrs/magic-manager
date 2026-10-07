@@ -72,4 +72,5 @@ export function useDealCosts(products: DealProduct[]): DealCosts {
 
 export const dealFilters = (s: MarketSearch): DealFilters => ({
   q: s.dq, stores: s.stores, types: s.types, minOff: s.minOff, basis: s.basis, sort: s.dsort, inStock: s.inStock,
+  atTarget: s.deals === 'watching' && s.atTarget,
 });

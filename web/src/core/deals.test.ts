@@ -76,7 +76,7 @@ describe('deal products', () => {
   });
   it('builds watched products with age, trend and errors', () => {
     const st = { url: 'u', store: 'S', price: 55, available: true, read_at: '2026-09-10T12:00:00', read: true, first_price: 60, first_at: '2026-09-05T12:00:00', change: -5, history: [{ price: 60, at: 'a' }, { price: 55, at: 'b' }] };
-    const [p] = productsFromWatched([{ set_code: 'c13', name: 'N', kind: 'sealed', category: 'deck', release_date: null, best_price: 55, best_store: 'S', best_url: 'u', stores: [st, { ...st, url: 'v', price: null }] }], [row({ url: 'v', error: 'bad' })]);
+    const [p] = productsFromWatched([{ product_id: 1, set_code: 'c13', name: 'N', kind: 'sealed', category: 'deck', release_date: null, best_price: 55, best_store: 'S', best_url: 'u', stores: [st, { ...st, url: 'v', price: null }] }], [row({ url: 'v', error: 'bad' })]);
     expect(p.type).toBe('deck');
     expect(p.watching).toBe(true);
     expect(p.best?.price).toBe(55);

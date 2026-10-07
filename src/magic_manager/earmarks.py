@@ -23,7 +23,9 @@ Identity validation is enforced by the CLI ``add`` command: sealed products via
 ``resolve_single`` below (does the printing exist, in that finish, under that name?).
 V32 adds ``earmark_prices`` — the price history of each link: one row per
 observation (the asking-price snapshot taken when you earmark, and every Deals
-read of that URL). The identity checkpoint is :func:`resolve_identity`, shared by the CLI and the web.
+read of that URL). V33 adds ``earmark_targets`` — an optional price target per product
+(a price, or a percentage under its market price; see :func:`set_target`, :func:`target_threshold`).
+The identity checkpoint is :func:`resolve_identity`, shared by the CLI and the web.
 """
 
 from __future__ import annotations
@@ -339,6 +341,57 @@ def price_history(link_ids: list[int]) -> dict[int, list[dict]]:
                 "available": None if r["available"] is None else bool(r["available"]),
                 "read_at": r["read_at"], "source": r["source"]})
     return out
+
+
+# ---------- price targets (V33) ----------
+
+TARGET_MODES = ("price", "pct_under")
+
+
+def set_target(product_id: int, mode: str, value: float, *, conn=None) -> dict:
+    """Set (replace) a watched product's price target: ``price`` (USD) or
+    ``pct_under`` (percent under its market price, 0–100). Raises ``ValueError``
+    on a bad mode/value, ``LookupError`` when the product isn't watched."""
+    if mode not in TARGET_MODES:
+        raise ValueError(f"target mode must be one of {', '.join(TARGET_MODES)}")
+    if not value or value <= 0 or (mode == "pct_under" and value >= 100):
+        raise ValueError("a price target must be above $0" if mode == "price" else "a percentage must be between 0 and 100")
+    with db.transaction(conn) as conn:
+        if conn.execute("SELECT 1 FROM earmarked_products WHERE product_id = ?", (product_id,)).fetchone() is None:
+            raise LookupError(f"no watched product {product_id}")
+        conn.execute(
+            "INSERT INTO earmark_targets (product_id, mode, value, set_at) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(product_id) DO UPDATE SET mode = excluded.mode, value = excluded.value, set_at = excluded.set_at",
+            (product_id, mode, round(float(value), 2), db._utcnow_iso()))
+    return targets([product_id])[product_id]
+
+
+def clear_target(product_id: int, *, conn=None) -> bool:
+    with db.transaction(conn) as conn:
+        return conn.execute("DELETE FROM earmark_targets WHERE product_id = ?", (product_id,)).rowcount > 0
+
+
+def targets(product_ids: list[int] | None = None) -> dict[int, dict]:
+    """``product_id → {mode, value, set_at}`` (all targets, or just these products)."""
+    sql = "SELECT product_id, mode, value, set_at FROM earmark_targets"
+    args: list = []
+    if product_ids is not None:
+        if not product_ids:
+            return {}
+        sql += f" WHERE product_id IN ({','.join('?' * len(product_ids))})"
+        args = list(product_ids)
+    with db.connect() as conn:
+        return {r[0]: {"mode": r[1], "value": r[2], "set_at": r[3]} for r in conn.execute(sql, args)}
+
+
+def target_threshold(target: dict | None, market: float | None) -> float | None:
+    """The price at or under which a target is met (``None`` when it can't be
+    known yet: no target, or a percentage target without a market price)."""
+    if not target:
+        return None
+    if target["mode"] == "price":
+        return target["value"]
+    return None if market is None else round(market * (1 - target["value"] / 100), 2)
 
 
 # ---------- identity ----------

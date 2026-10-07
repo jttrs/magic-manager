@@ -5,7 +5,7 @@ import { Button } from '../../components/Button';
 import { Chevron } from '../../components/Chevron';
 import { EmptyNote } from '../../components/States';
 import type { ProductCostOut } from '../../core/api';
-import { BASIS_LABEL, deltaLabel, effectiveType, filterSortProducts, gapOf, PRODUCT_TYPE_LABEL, stockLabel, type DealProduct } from '../../core/deals';
+import { BASIS_LABEL, deltaLabel, effectiveType, filterSortProducts, gapOf, PRODUCT_TYPE_LABEL, stockLabel, targetMet, targetPriceOf, type DealProduct } from '../../core/deals';
 import { fmtInt, fmtUsd } from '../../core/format';
 import type { MarketSearch } from '../../core/search';
 import { DealInspector } from './DealInspector';
@@ -35,7 +35,7 @@ export function DealsWorkspace({ products, costs, search, set, header, footer, e
         emptyNote
       ) : shown.length === 0 ? (
         <EmptyNote title="Nothing matches these filters">
-          <Button tone="paper" onClick={() => set({ dq: '', stores: [], types: [], minOff: 0, inStock: false })}>Clear filters</Button>
+          <Button tone="paper" onClick={() => set({ dq: '', stores: [], types: [], minOff: 0, inStock: false, atTarget: false })}>Clear filters</Button>
         </EmptyNote>
       ) : (
         <>
@@ -132,6 +132,8 @@ function ProductRow({ p, cost, state, basis, selected, onPick }: { p: DealProduc
   const value = (v: number | null | undefined) => (v == null ? dash(failed) : fmtUsd(v));
   const sealedValue = p.kind === 'single' ? p.singleMarket : cost?.market;
   const exact = cost?.exact;
+  const target = targetPriceOf(p, cost);
+  const met = targetMet(p, cost) === true;
   return (
     <tr
       aria-busy={loading || undefined}
@@ -151,7 +153,7 @@ function ProductRow({ p, cost, state, basis, selected, onPick }: { p: DealProduc
         {best?.price != null ? (
           <>
             <span className="inline-flex items-baseline gap-1.5">
-              <span className="text-ink">{fmtUsd(best.price)}</span>
+              <span className={`text-ink ${met ? 'highlighter voice-semi font-medium' : ''}`}>{fmtUsd(best.price)}</span>
               {best.store && (
                 <a href={best.url} target="_blank" rel="noreferrer" className="touch-hit text-ink-muted no-underline hover:text-accent-ink">
                   <span aria-hidden="true">↗</span><span className="sr-only">Open {best.store} page (new tab)</span>
@@ -160,6 +162,9 @@ function ProductRow({ p, cost, state, basis, selected, onPick }: { p: DealProduc
             </span>
             <span className="block text-xs text-ink-muted">{best.store}</span>
             {soldOut && <span className="block text-xs text-danger">{stockLabel(best)}</span>}
+            {target != null && (
+              <span className={`block text-xs ${met ? 'voice-semi text-accent-ink' : 'text-ink-muted'}`}>{met ? `at target ${fmtUsd(target)}` : `target ${fmtUsd(target)}`}</span>
+            )}
             {best.trend && best.trend.tone !== 'even' && (
               <span className={`block text-xs ${best.trend.tone === 'good' ? 'text-accent-ink' : 'text-danger'}`} title={best.trend.text}>{best.trend.text.slice(0, 1)}</span>
             )}

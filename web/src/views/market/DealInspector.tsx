@@ -7,12 +7,15 @@ import { dealsUnwatch, dealsWatch, type ProductCostOut } from '../../core/api';
 import { effectiveType, PRODUCT_TYPE_LABEL, stockLabel, type DealProduct, type Offer } from '../../core/deals';
 import { fmtUsd } from '../../core/format';
 import { CardLines } from './CardLines';
+import { H3 } from './inspectorStyles';
+import { PriceHistory } from './PriceHistory';
+import { PriceTarget } from './PriceTarget';
 import { ProductContents } from './ProductContents';
 import { patchPrices, type CostState } from './useDealsData';
 
 const tone = (t: 'good' | 'bad' | 'even' | undefined) => (t === 'good' ? 'text-accent-ink' : t === 'bad' ? 'text-danger' : 'text-ink-muted');
 
-export const H3 = 'border-b-2 border-rule-strong pb-1 text-lg voice-condensed font-bold text-ink';
+export { H3 };
 
 /** The chosen product: where to buy it, what it's worth, what's in it. */
 export function DealInspector({ product: p, cost, costState }: { product: DealProduct; cost?: ProductCostOut; costState?: CostState }) {
@@ -35,6 +38,13 @@ export function DealInspector({ product: p, cost, costState }: { product: DealPr
         <h3 className={H3}>Stores</h3>
         <ul>{p.offers.map((o) => <OfferLine key={o.url} o={o} fromTab={p.match != null} />)}</ul>
       </section>
+
+      {p.productId != null && (
+        <>
+          <PriceTarget product={p} cost={cost} />
+          <PriceHistory product={p} cost={cost} />
+        </>
+      )}
 
       <section aria-label="What it’s worth" className="flex flex-col gap-1">
         <h3 className={H3}>What it’s worth</h3>

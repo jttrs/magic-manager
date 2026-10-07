@@ -73,7 +73,7 @@ def test_v28_tables_exist(tmp_db):
         v = conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0]
     assert {"scryfall_tags", "card_oracle_tags"} <= tables
     assert "card_oracle_tags_tag_idx" in idx
-    assert v == db.CURRENT_VERSION == 32
+    assert v == db.CURRENT_VERSION == 33
 
 
 # ---------- sync ----------

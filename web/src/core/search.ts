@@ -132,6 +132,8 @@ export const marketSearch = z.object({
   basis: z.enum(BASES).catch('market').default('market'),
   dsort: z.enum(DEAL_SORTS).catch('gap_pct').default('gap_pct'),
   inStock: z.boolean().catch(false).default(false),
+  /** Deals → Watching: only products whose best in-stock price meets their target. */
+  atTarget: z.boolean().catch(false).default(false),
   /** Secret Lair: the edition each drop is valued at. */
   edition: z.enum(SLD_EDITIONS).catch('nonfoil').default('nonfoil'),
   /** Secret Lair: how many of the newest drops to list. */

@@ -34,7 +34,7 @@ USER_TABLES = (
     "settings", "set_targets", "imports",
     "ingest_events", "inventory", "inventory_events",
     "decks", "deck_cards", "deck_versions", "deck_assignments",
-    "wishlist_entries", "earmarked_products", "earmark_links", "earmark_prices",
+    "wishlist_entries", "earmarked_products", "earmark_links", "earmark_prices", "earmark_targets",
 )
 
 SESSION_GAP_SECONDS = 30 * 60

@@ -1,5 +1,5 @@
 // Deals view-model: framework-free.
-import type { MatchOut, PriceOut, ProductCostOut, WatchedOut, WatchStoreOut } from './api';
+import type { MatchOut, PriceOut, PricePointOut, ProductCostOut, TargetOut, WatchedOut, WatchStoreOut } from './api';
 
 /** One product page's reading (the deals.read_prices job artifact, or a confirm result). */
 export type PriceRow = PriceOut;
@@ -88,6 +88,8 @@ export type DealSort = (typeof DEAL_SORTS)[number];
 export type Offer = {
   url: string; store: string | null; price: number | null; available: boolean | null;
   readAge?: string; trend?: ReturnType<typeof trendLabel>; error?: string | null; title?: string | null;
+  /** Watched links: every price seen there, oldest first, and its first / low / high. */
+  history?: PricePointOut[]; first?: number | null; low?: number | null; high?: number | null;
 };
 
 export type DealProduct = {
@@ -107,6 +109,10 @@ export type DealProduct = {
   singleMarket?: number | null;
   /** Open tabs: what the listing was matched to. */
   match?: MatchOut;
+  /** Watching: the earmark's id, its price target, and the target's price when the server knows it. */
+  productId?: number;
+  target?: TargetOut | null;
+  targetPrice?: number | null;
 };
 
 const productKey = (kind: string, set: string, name: string, finish: string | null | undefined) => `${kind}|${set}|${name}|${finish ?? ''}`;
@@ -125,11 +131,13 @@ export function productsFromWatched(rows: WatchedOut[], errors: PriceRow[] = [])
     const offers = sortOffers(w.stores.map((s) => ({
       url: s.url, store: s.store, price: s.price, available: s.available,
       readAge: readAge(s), trend: trendLabel(s), error: errorOf.get(s.url) ?? null,
+      history: s.history, first: s.first_price, low: s.low ?? null, high: s.high ?? null,
     })));
     return {
       key: w.kind === 'single' ? `single|${w.scryfall_id}|${w.finish ?? ''}` : productKey(w.kind, w.set_code, w.name, w.finish),
       kind: w.kind, set_code: w.set_code, name: w.name, finish: w.finish ?? null,
       category: w.category, type: productType(w.kind, w.category), offers, best: bestOf(offers), watching: true,
+      productId: w.product_id, target: w.target ?? null, targetPrice: w.target_price ?? null,
       ...(w.kind === 'single' ? { singleMarket: w.market ?? null } : {}),
     };
   });
@@ -183,7 +191,48 @@ export function effectiveType(p: DealProduct, cost: ProductCostOut | undefined):
   return p.type === 'other' && cost?.category ? productType(p.kind, cost.category) : p.type;
 }
 
-export type DealFilters = { q: string; stores: string[]; types: ProductType[]; minOff: number; basis: Basis; sort: DealSort; inStock: boolean };
+// ---------- price targets (watching) ----------
+
+/** The price at or under which a target is met. Mirrors `earmarks.target_threshold`: the instant
+ *  watchlist can't price a % target on a sealed product, so it's finished here from the product's
+ *  sealed market price (the same `product-cost` figure the server would use). */
+export function targetPriceOf(p: DealProduct, cost: ProductCostOut | undefined): number | null {
+  if (p.targetPrice != null) return p.targetPrice;
+  const t = p.target;
+  if (!t || t.mode !== 'pct_under' || p.kind === 'single' || cost?.market == null) return null;
+  return Math.round(cost.market * (1 - t.value / 100) * 100) / 100;
+}
+
+/** The cheapest in-stock (or stock-unknown) price — the only one that can meet a target. */
+export function inStockBest(p: DealProduct): Offer | null {
+  return p.offers.find((o) => o.price != null && o.available !== false) ?? null;
+}
+
+/** Met: the best in-stock price is at or under the target's price. Null when that price isn't known. */
+export function targetMet(p: DealProduct, cost: ProductCostOut | undefined): boolean | null {
+  const at = targetPriceOf(p, cost);
+  if (at == null) return null;
+  const best = inStockBest(p);
+  return best?.price != null && best.price <= at + 1e-9;
+}
+
+/** "$72.00" or "10% under sealed price" — how the owner set it. */
+export function targetText(t: TargetOut, kind: DealProduct['kind']): string {
+  return t.mode === 'price' ? usd(t.value) : `${fmtPct(t.value)} under ${kind === 'single' ? 'the printing’s price' : 'the sealed price'}`;
+}
+
+const usd = (v: number) => v.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+const fmtPct = (v: number) => `${Number.isInteger(v) ? v : v.toFixed(1)}%`;
+
+/** One product whose target the last read met (the `newly_met` artifact of deals.watchlist). */
+export type NewlyMet = { product_id: number; name: string; price: number; store: string | null; url: string; target_price: number };
+
+export function newlyMetFrom(artifacts: unknown): NewlyMet[] {
+  const arts = artifacts as { label: string; data: unknown[] }[] | undefined;
+  return (arts?.find((a) => a.label === 'newly_met')?.data ?? []) as NewlyMet[];
+}
+
+export type DealFilters = { q: string; stores: string[]; types: ProductType[]; minOff: number; basis: Basis; sort: DealSort; inStock: boolean; atTarget?: boolean };
 
 export function filterSortProducts(products: DealProduct[], costs: Map<string, ProductCostOut | undefined>, o: DealFilters): DealProduct[] {
   const q = o.q.trim().toLowerCase();
@@ -193,6 +242,7 @@ export function filterSortProducts(products: DealProduct[], costs: Map<string, P
     if (o.stores.length && !p.offers.some((x) => x.store != null && o.stores.includes(x.store))) return false;
     if (o.types.length && !o.types.includes(effectiveType(p, cost))) return false;
     if (o.inStock && (!p.best || p.best.available === false)) return false;
+    if (o.atTarget && targetMet(p, cost) !== true) return false;
     if (o.minOff > 0) {
       const g = gapOf(p, cost, o.basis);
       if (!g || g.pct > -o.minOff) return false;

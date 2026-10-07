@@ -134,6 +134,9 @@ export function MarketView() {
             ]}
           />
           <ChipToggles<'in'> label="Availability" value={search.inStock ? ['in'] : []} onChange={(v) => setFilter({ inStock: v.length > 0 })} options={[{ value: 'in', label: 'In stock only' }]} />
+          {search.deals === 'watching' && (
+            <ChipToggles<'met'> label="Target" value={search.atTarget ? ['met'] : []} onChange={(v) => setFilter({ atTarget: v.length > 0 })} options={[{ value: 'met', label: 'At or under target' }]} />
+          )}
         </SideSection>
       )}
       {search.subject === 'family' && (

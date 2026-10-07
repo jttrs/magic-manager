@@ -3550,6 +3550,44 @@ export type TabOut = {
 };
 
 /**
+ * TargetIn
+ */
+export type TargetIn = {
+    /**
+     * Product Id
+     */
+    product_id: number;
+    /**
+     * Mode
+     */
+    mode: 'price' | 'pct_under';
+    /**
+     * Value
+     */
+    value: number;
+};
+
+/**
+ * TargetOut
+ */
+export type TargetOut = {
+    /**
+     * Mode
+     *
+     * A price (USD), or a percentage under the market price.
+     */
+    mode: 'price' | 'pct_under';
+    /**
+     * Value
+     */
+    value: number;
+    /**
+     * Set At
+     */
+    set_at: string;
+};
+
+/**
  * TreeNodeOut
  */
 export type TreeNodeOut = {
@@ -3801,6 +3839,18 @@ export type WatchStoreOut = {
      */
     change: number | null;
     /**
+     * Low
+     *
+     * Lowest price seen here.
+     */
+    low?: number | null;
+    /**
+     * High
+     *
+     * Highest price seen here.
+     */
+    high?: number | null;
+    /**
      * History
      */
     history: Array<PricePointOut>;
@@ -3810,6 +3860,10 @@ export type WatchStoreOut = {
  * WatchedOut
  */
 export type WatchedOut = {
+    /**
+     * Product Id
+     */
+    product_id: number;
     /**
      * Set Code
      */
@@ -3884,6 +3938,19 @@ export type WatchedOut = {
      * Error
      */
     error?: string | null;
+    target?: TargetOut | null;
+    /**
+     * Target Price
+     *
+     * The price that meets the target. A percentage target on a sealed product needs its market price: null in the instant list, filled after a read.
+     */
+    target_price?: number | null;
+    /**
+     * Target Met
+     *
+     * The best in-stock price is at or under the target (null when the target price isn't known).
+     */
+    target_met?: boolean | null;
 };
 
 export type JobSpecsData = {
@@ -4334,6 +4401,61 @@ export type DealsWatchResponses = {
 };
 
 export type DealsWatchResponse = DealsWatchResponses[keyof DealsWatchResponses];
+
+export type DealsClearTargetData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Product Id
+         */
+        product_id: number;
+    };
+    url: '/api/deals/target';
+};
+
+export type DealsClearTargetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DealsClearTargetError = DealsClearTargetErrors[keyof DealsClearTargetErrors];
+
+export type DealsClearTargetResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DealsClearTargetResponse = DealsClearTargetResponses[keyof DealsClearTargetResponses];
+
+export type DealsSetTargetData = {
+    body: TargetIn;
+    path?: never;
+    query?: never;
+    url: '/api/deals/target';
+};
+
+export type DealsSetTargetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DealsSetTargetError = DealsSetTargetErrors[keyof DealsSetTargetErrors];
+
+export type DealsSetTargetResponses = {
+    /**
+     * Successful Response
+     */
+    200: TargetOut;
+};
+
+export type DealsSetTargetResponse = DealsSetTargetResponses[keyof DealsSetTargetResponses];
 
 export type DealsWatchedData = {
     body?: never;

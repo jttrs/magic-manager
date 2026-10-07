@@ -95,6 +95,13 @@ and a `rendered` store can only be re-read while its tab is open — the watchli
 and says *saved*/*read N days ago* rather than guessing. Multi-variant Shopify links keep their
 `?variant=` so the history follows that variant.
 
+**Price targets (V33).** Each watched product may carry ONE target in `earmark_targets`: a price (USD)
+or a percentage under its market price (sealed market; a single's printing price). It is **met** when the
+best IN-STOCK price (stock unknown counts; sold out never does) is at or under it. "Newly met" is never
+stored — `deals.read_watched` compares the watchlist just before and just after a read, so a target that
+was already met doesn't notify again, and one that drops back out and returns does. Local app: the notice
+is in-app only (no email/push).
+
 ## Approved stores (owner, 2026-10-05)
 
 `config/vendors.toml`: **Shopify** — Many Realms, PokeBox USA, Stomping Grounds TCG, Double Infinity Gaming,
