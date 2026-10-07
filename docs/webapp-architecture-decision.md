@@ -494,6 +494,30 @@ shared catalog are emerging):
 [asadali.dev](https://asadali.dev/blog/multi-tenant-saas-practical-comparison-database-per-tenant-vs-shared-schema/),
 [Augmented Dev](https://theaugmenteddev.com/blog/multi-tenant-data-isolation-patterns-saas).
 
+### 25.0 Binding principle — users' security (owner, 2026-10-07)
+
+> "we should also be very aware of security concerns users may have and develop in a way that we
+> cannot be used by a malicious actor to harm our users."
+
+Every Phase 3 decision is held to this. Concretely, for hosting:
+
+- **Per-user isolation enforced server-side.** The user is derived only from the server-side
+  session; client-sent user ids are never trusted. Each request opens only that user's DB file
+  (H1), and a test proves one user cannot read or write another's file.
+- **Auth/session hardening.** HttpOnly + Secure + SameSite cookies, CSRF protection on every write,
+  OAuth state + PKCE, session expiry/rotation, and rate limits on login and writes.
+- **No admin "act as user".** Admins manage invites and flags; they cannot impersonate users or
+  read their collections through the app.
+- **Secrets only in the host's secret store.** Never in the repo, images, logs or the client (H13).
+- **Export and delete-my-data** are self-serve (H10).
+- **Dependency and supply-chain hygiene.** Lockfiles committed (`uv.lock`, `package-lock.json`),
+  automated dependency/vulnerability updates, pinned CI actions and base images, minimal
+  extension permissions (H12).
+- **Security review before any hosted launch.** No outside user gets access until a security
+  review of the hosted build passes.
+
+The browser companion (H12) applies the same principle with its own threat model.
+
 ### 25.1 Decisions
 
 | # | Concern | Decision |
@@ -553,7 +577,8 @@ shared catalog are emerging):
    first, alongside this doc.
 9. Chrome extension (H12): API token endpoint → tabs → rendered store reads → Mana Pool cart →
    Moxfield import; then drop the macOS-only paths' admin pinning (H9 interim).
-10. Owner admin access over Tailscale; friends' external access when the pinned item resolves.
+10. Security review of the hosted build (§25.0) — gate before any outside user.
+11. Owner admin access over Tailscale; friends' external access when the pinned item resolves.
 
 Phase 5 (shared server-side Scryfall/MTGJSON/EDHREC cache + rate limiter; the browser-driven
 Moxfield import is retired by H12) is re-evaluated **after** this lands.
