@@ -22,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
 from .. import api, sets as sets_mod, tabs as tabs_engine, undo as undo_engine, cart as cart_engine, deck_edit, edhrec as edhrec_engine, features as features_engine, scryfall
-from ..api import deals as deals_api, undo as undo_api, cart as cart_api, cards as cards_api, collection as collection_api, explore as explore_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api, market as market_api, trueup as trueup_api, history as history_api, combos as combos_api
+from ..api import deals as deals_api, undo as undo_api, cart as cart_api, cards as cards_api, collection as collection_api, explore as explore_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api, market as market_api, trueup as trueup_api, history as history_api, combos as combos_api, art as art_api
 from .runtime import TERMINAL, JobManager
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -429,6 +429,27 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     def card_combos(name: Annotated[str, Query(min_length=1, max_length=200)],
                     limit: Annotated[int, Query(ge=1, le=100)] = 30):
         return combos_api.card(name, limit=limit)
+
+    # ---------- art (on-theme printing swaps) ----------
+
+    @app.get("/api/art/tags", response_model=art_api.ArtTagsOut, tags=["art"])
+    def art_tags(q: Annotated[str, Query(max_length=100)] = "",
+                 limit: Annotated[int, Query(ge=1, le=50)] = 20):
+        return art_api.tags(q, limit)
+
+    @app.post("/api/art/swaps", response_model=art_api.ArtSwapsOut, tags=["art"])
+    def art_swaps(body: art_api.ArtSwapsIn):
+        try:
+            return art_api.swaps(body)
+        except LookupError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+
+    @app.post("/api/art/lookup", response_model=art_api.ArtLookupOut, tags=["art"])
+    def art_lookup(body: art_api.ArtSwapsIn):
+        try:
+            return art_api.lookup(body)
+        except LookupError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
 
     # ---------- cards ----------
 

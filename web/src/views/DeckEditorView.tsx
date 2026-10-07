@@ -4,6 +4,7 @@ import { DropdownMenu, Popover, Tabs } from 'radix-ui';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panels';
 import { deckCheckQuery, deckQuery, draftCombosQuery, printingSearchQuery, suggestionsQuery, unwrap } from '../app/queries';
+import { useDebounced } from '../app/useDebounced';
 import { useMediaQuery } from '../app/useMediaQuery';
 import { Button } from '../components/Button';
 import { CardInspector } from '../components/CardInspector';
@@ -11,13 +12,14 @@ import { Chevron } from '../components/Chevron';
 import { DeckCombosBody } from '../components/Combos';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { EmptyNote, ErrorNote, GridSkeleton } from '../components/States';
-import { deckPreview, deckSave, type CheckOut, type DeckDetailOut, type PreviewOut, type PrintingOut, type SuggestionOut, type SwapLineOut } from '../core/api';
+import { deckPreview, deckSave, type ArtTagRefOut, type CheckOut, type DeckDetailOut, type PreviewOut, type PrintingOut, type SuggestionOut, type SwapLineOut } from '../core/api';
 import {
   addCard, canCommand, collectionFirst, commanderName, draftCards, draftFromDeck, draftOracles, draftSections, draftStats,
-  moveCard, setCount, setFinish, type Board, type Draft, type DraftFinish, type DraftRow,
+  moveCard, restorePrinting, setCount, setFinish, type Board, type Draft, type DraftFinish, type DraftRow,
 } from '../core/deckDraft';
 import { fmtInt, fmtUsd } from '../core/format';
 import { fromPrinting, type GuideCard } from '../core/guideCard';
+import { ArtSwapTab } from './decks/ArtSwapTab';
 
 const route = getRouteApi('/decks/$slug/edit');
 const crop = (url: string) => url.replace('/normal/', '/art_crop/');
@@ -94,7 +96,7 @@ function Editor({ slug, detail }: { slug: string; detail: DeckDetailOut }) {
 
   const edit = (fn: (d: Draft) => Draft) => setDraft((d) => fn(d));
   const deckPane = <DraftList draft={draft} onEdit={edit} onInspect={inspect} />;
-  const findPane = <FindCards draft={draft} format={detail.deck.format} onAdd={(p, board) => edit((d) => addCard(d, p, board))} onInspect={inspect} />;
+  const findPane = <FindCards draft={draft} format={detail.deck.format} onAdd={(p, board) => edit((d) => addCard(d, p, board))} onEdit={edit} onInspect={inspect} />;
 
   return (
     <main id="main" tabIndex={-1} className="min-h-0 min-w-0 p-2 sm:p-3 lg:h-[calc(100dvh-var(--size-topbar))] lg:p-4">
@@ -124,7 +126,7 @@ function Editor({ slug, detail }: { slug: string; detail: DeckDetailOut }) {
             <div className="flex flex-col items-end">
               <dt className="text-ink-muted">Changes</dt>
               <dd className="text-xl voice-condensed font-bold" aria-live="polite">
-                {stats.dirty ? <>{stats.added > 0 && <span className="text-accent-ink">+{stats.added}</span>} {stats.removed > 0 && <span className="text-danger">−{stats.removed}</span>}</> : <span className="text-ink-muted">none</span>}
+                {stats.dirty ? <>{stats.added > 0 && <span className="text-accent-ink">+{stats.added}</span>} {stats.removed > 0 && <span className="text-danger">−{stats.removed}</span>} {stats.swapped > 0 && <span className="text-accent-ink">{stats.swapped} swapped</span>}</> : <span className="text-ink-muted">none</span>}
               </dd>
             </div>
           </dl>
@@ -239,10 +241,12 @@ function DraftLine({ row, onEdit, onInspect }: { row: DraftRow; onEdit: (fn: (d:
           {[p.set_code.toUpperCase(), `#${p.collector_number}`, row.finish !== 'either' && FINISH_LABEL[row.finish], free > 0 ? `${free} free` : Object.values(p.owned ?? {}).some(Boolean) ? 'owned, all pledged' : 'not owned'].filter(Boolean).join(' · ')}
         </span>
       </span>
-      {delta !== 0 && (
+      {delta !== 0 ? (
         <span className={`shrink-0 text-xs voice-condensed font-bold uppercase tracking-[0.06em] ${delta > 0 ? 'text-accent-ink' : 'text-danger'}`}>
           {row.saved === 0 ? 'New' : removed ? 'Removed' : delta > 0 ? `+${delta}` : `−${-delta}`}
         </span>
+      ) : row.origin && !removed && (
+        <span className="shrink-0 text-xs voice-condensed font-bold uppercase tracking-[0.06em] text-accent-ink" title={`Was ${row.origin.printing.set_code.toUpperCase()} #${row.origin.printing.collector_number}`}>New art</span>
       )}
       <span className="w-14 shrink-0 text-right text-xs tabular text-ink-muted">{fmtUsd((row.finish === 'foil' ? p.price_usd_foil : p.price_usd) ?? p.price_usd_foil)}</span>
       <RowMenu row={row} onEdit={onEdit} />
@@ -283,6 +287,11 @@ function RowMenu({ row, onEdit }: { row: DraftRow; onEdit: (fn: (d: Draft) => Dr
             </DropdownMenu.Item>
           ))}
           <DropdownMenu.Separator className="my-1 h-px bg-chrome-line" />
+          {row.origin && row.count > 0 && (
+            <DropdownMenu.Item className={item} onSelect={() => onEdit((d) => restorePrinting(d, row.key))}>
+              Back to {row.origin.printing.set_code.toUpperCase()} #{row.origin.printing.collector_number}
+            </DropdownMenu.Item>
+          )}
           {row.count > 0 ? (
             <DropdownMenu.Item className={item} onSelect={() => onEdit((d) => setCount(d, row.key, 0))}>Remove from deck</DropdownMenu.Item>
           ) : (
@@ -296,9 +305,10 @@ function RowMenu({ row, onEdit }: { row: DraftRow; onEdit: (fn: (d: Draft) => Dr
 
 // ---------- right: find cards ----------
 
-function FindCards({ draft, format, onAdd, onInspect }: { draft: Draft; format: string | null; onAdd: (p: PrintingOut, board: Board) => void; onInspect: Inspect }) {
+function FindCards({ draft, format, onAdd, onEdit, onInspect }: { draft: Draft; format: string | null; onAdd: (p: PrintingOut, board: Board) => void; onEdit: (fn: (d: Draft) => Draft) => void; onInspect: Inspect }) {
   const commander = commanderName(draft);
   const [tab, setTab] = useState<FindTab>(commander ? 'suggest' : 'search');
+  const [artTag, setArtTag] = useState<ArtTagRefOut | null>(null);
   const inDeck = useMemo(() => draftOracles(draft), [draft]);
   const wantsCommander = !commander && ['commander', 'brawl', 'paupercommander', 'oathbreaker', 'edh'].includes((format ?? '').toLowerCase());
   return (
@@ -307,6 +317,7 @@ function FindCards({ draft, format, onAdd, onInspect }: { draft: Draft; format: 
         <PaneTab value="search">Search</PaneTab>
         <PaneTab value="suggest">Suggestions</PaneTab>
         <PaneTab value="combos">Combos</PaneTab>
+        <PaneTab value="art">Art</PaneTab>
       </Tabs.List>
       <Tabs.Content value="search" className="flex min-h-0 flex-1 flex-col">
         <SearchTab inDeck={inDeck} wantsCommander={wantsCommander} onAdd={onAdd} onInspect={onInspect} />
@@ -317,11 +328,14 @@ function FindCards({ draft, format, onAdd, onInspect }: { draft: Draft; format: 
       <Tabs.Content value="combos" className="flex min-h-0 flex-1 flex-col">
         <CombosTab draft={draft} onAdd={onAdd} onInspect={onInspect} />
       </Tabs.Content>
+      <Tabs.Content value="art" className="flex min-h-0 flex-1 flex-col">
+        <ArtSwapTab draft={draft} onEdit={onEdit} onInspect={onInspect} tag={artTag} onTag={setArtTag} />
+      </Tabs.Content>
     </Tabs.Root>
   );
 }
 
-type FindTab = 'search' | 'suggest' | 'combos';
+type FindTab = 'search' | 'suggest' | 'combos' | 'art';
 
 /** Commander Spellbook over the unsaved draft: what one more card would complete, then what's in. */
 function CombosTab({ draft, onAdd, onInspect }: { draft: Draft; onAdd: (p: PrintingOut, board: Board) => void; onInspect: Inspect }) {
@@ -548,14 +562,4 @@ function DeckChecks({ slug, draft }: { slug: string; draft: Draft }) {
       </dd>
     </div>
   );
-}
-
-function useDebounced<T>(value: T, ms: number): T {
-  const key = JSON.stringify(value);
-  const [v, setV] = useState(value);
-  useEffect(() => {
-    const t = setTimeout(() => setV(JSON.parse(key) as T), ms);
-    return () => clearTimeout(t);
-  }, [key, ms]);
-  return v;
 }

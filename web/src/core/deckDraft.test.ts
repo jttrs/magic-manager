@@ -21,7 +21,7 @@ describe('deck draft', () => {
 
   it('starts clean, drops tokens, sizes the deck against the format target', () => {
     expect(saved.rows.map((r) => r.key)).toEqual(['Cmd|commander|nonfoil', 'Elf|main|nonfoil', 'Bolt|main|nonfoil']);
-    expect(draftStats(saved, 'commander')).toEqual({ size: 4, target: 100, added: 0, removed: 0, dirty: false });
+    expect(draftStats(saved, 'commander')).toEqual({ size: 4, target: 100, added: 0, removed: 0, swapped: 0, dirty: false });
     expect(draftStats(saved, 'modern').target).toBe(60);
   });
 

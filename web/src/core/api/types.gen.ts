@@ -19,6 +19,147 @@ export type ActionOut = {
 };
 
 /**
+ * ArtLookupOut
+ */
+export type ArtLookupOut = {
+    /**
+     * Searched
+     *
+     * Cards asked about.
+     */
+    searched: number;
+    /**
+     * Added
+     *
+     * On-theme printings new to the local catalog.
+     */
+    added: number;
+};
+
+/**
+ * ArtSwapRowOut
+ */
+export type ArtSwapRowOut = {
+    /**
+     * Scryfall Id
+     *
+     * The printing the draft uses now.
+     */
+    scryfall_id: string;
+    /**
+     * Status
+     */
+    status: 'on_theme' | 'swap' | 'none';
+    /**
+     * Pick
+     *
+     * Best on-theme printing: yours with the most free copies, else the cheapest.
+     */
+    pick: string | null;
+    /**
+     * Candidates
+     *
+     * Every on-theme printing of the card, best first.
+     */
+    candidates: Array<string>;
+};
+
+/**
+ * ArtSwapsIn
+ */
+export type ArtSwapsIn = {
+    /**
+     * Tag
+     *
+     * Art tag id, slug or label.
+     */
+    tag: string;
+    /**
+     * Cards
+     */
+    cards: Array<DraftCardIn>;
+};
+
+/**
+ * ArtSwapsOut
+ */
+export type ArtSwapsOut = {
+    tag: ArtTagRefOut;
+    /**
+     * Rows
+     */
+    rows: Array<ArtSwapRowOut>;
+    /**
+     * Printings
+     */
+    printings: {
+        [key: string]: PrintingOut;
+    };
+    /**
+     * Matched
+     *
+     * Per on-theme printing, the tags (incl. child tags) that matched.
+     */
+    matched: {
+        [key: string]: Array<string>;
+    };
+};
+
+/**
+ * ArtTagOut
+ */
+export type ArtTagOut = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Slug
+     */
+    slug: string;
+    /**
+     * Illustrations
+     *
+     * Artworks tagged with it directly (child tags add more).
+     */
+    illustrations: number;
+};
+
+/**
+ * ArtTagRefOut
+ */
+export type ArtTagRefOut = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Label
+     */
+    label: string;
+};
+
+/**
+ * ArtTagsOut
+ */
+export type ArtTagsOut = {
+    /**
+     * Synced
+     *
+     * False until the Scryfall tag cache is loaded (job `scryfall.sync_tags`).
+     */
+    synced: boolean;
+    /**
+     * Tags
+     */
+    tags: Array<ArtTagOut>;
+};
+
+/**
  * BracketOut
  */
 export type BracketOut = {
@@ -5324,6 +5465,90 @@ export type CardCombosResponses = {
 };
 
 export type CardCombosResponse = CardCombosResponses[keyof CardCombosResponses];
+
+export type ArtTagsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Q
+         */
+        q?: string;
+        /**
+         * Limit
+         */
+        limit?: number;
+    };
+    url: '/api/art/tags';
+};
+
+export type ArtTagsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ArtTagsError = ArtTagsErrors[keyof ArtTagsErrors];
+
+export type ArtTagsResponses = {
+    /**
+     * Successful Response
+     */
+    200: ArtTagsOut;
+};
+
+export type ArtTagsResponse = ArtTagsResponses[keyof ArtTagsResponses];
+
+export type ArtSwapsData = {
+    body: ArtSwapsIn;
+    path?: never;
+    query?: never;
+    url: '/api/art/swaps';
+};
+
+export type ArtSwapsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ArtSwapsError = ArtSwapsErrors[keyof ArtSwapsErrors];
+
+export type ArtSwapsResponses = {
+    /**
+     * Successful Response
+     */
+    200: ArtSwapsOut;
+};
+
+export type ArtSwapsResponse = ArtSwapsResponses[keyof ArtSwapsResponses];
+
+export type ArtLookupData = {
+    body: ArtSwapsIn;
+    path?: never;
+    query?: never;
+    url: '/api/art/lookup';
+};
+
+export type ArtLookupErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ArtLookupError = ArtLookupErrors[keyof ArtLookupErrors];
+
+export type ArtLookupResponses = {
+    /**
+     * Successful Response
+     */
+    200: ArtLookupOut;
+};
+
+export type ArtLookupResponse = ArtLookupResponses[keyof ArtLookupResponses];
 
 export type CardHoldingsData = {
     body?: never;
