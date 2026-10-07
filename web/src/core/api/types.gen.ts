@@ -840,6 +840,12 @@ export type CollectionCardOut = {
      * Source keys this owned printing's copies were acquired from (see CollectionOut.sources).
      */
     sources?: Array<string>;
+    /**
+     * Scene
+     *
+     * Key of the scene/poster this printing belongs to (see CollectionOut.scenes).
+     */
+    scene?: string | null;
 };
 
 /**
@@ -872,6 +878,12 @@ export type CollectionOut = {
      * Every source behind an owned printing in this view, most printings first.
      */
     sources?: Array<SourceOut>;
+    /**
+     * Scenes
+     *
+     * Configured scenes/posters of these families, family then config order, with per-finish completion.
+     */
+    scenes?: Array<SceneOut>;
 };
 
 /**
@@ -3692,6 +3704,104 @@ export type SaveOut = {
      * Sleeved
      */
     sleeved: number;
+};
+
+/**
+ * SceneFinishOut
+ */
+export type SceneFinishOut = {
+    /**
+     * Finish
+     */
+    finish: 'nonfoil' | 'foil';
+    /**
+     * Printings
+     *
+     * Scene printings that exist in this finish.
+     */
+    printings: number;
+    /**
+     * Owned
+     *
+     * Of those, printings held in this finish.
+     */
+    owned: number;
+    /**
+     * Missing Usd
+     *
+     * Cost to finish the scene in this finish (local prices).
+     */
+    missing_usd: number;
+    /**
+     * Unpriced
+     *
+     * Missing printings with no price in this finish.
+     */
+    unpriced: number;
+    /**
+     * Missing Ids
+     *
+     * Missing printings in this finish, collector-number order.
+     */
+    missing_ids: Array<string>;
+};
+
+/**
+ * SceneOut
+ */
+export type SceneOut = {
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Family
+     */
+    family: string;
+    /**
+     * Rank
+     *
+     * Config order within the family.
+     */
+    rank: number;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Artist
+     */
+    artist: string | null;
+    /**
+     * Kind
+     */
+    kind: 'scene' | 'poster';
+    /**
+     * Set Code
+     */
+    set_code: string;
+    /**
+     * Cn Lo
+     */
+    cn_lo: number;
+    /**
+     * Cn Hi
+     */
+    cn_hi: number;
+    /**
+     * Printings
+     */
+    printings: number;
+    /**
+     * Owned Printings
+     *
+     * Printings held in any finish.
+     */
+    owned_printings: number;
+    /**
+     * Finishes
+     */
+    finishes: Array<SceneFinishOut>;
 };
 
 /**

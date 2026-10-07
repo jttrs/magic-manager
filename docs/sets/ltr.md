@@ -90,7 +90,7 @@ Scryfall's web UI groups these as "Scene Cards" via a hand-curated CN range (see
 | 6 | Kieran Yanner | 442–447 | 6 | Grey Havens |
 | 7 | Marta Nael | 448–451 | 4 | Mount Doom climax |
 
-**Machine-readable:** these 7 scenes are encoded in `selectors.FAMILY_SCENES["ltr"]` (§8). The standardized ownership + live-price scene-completion table is `uv run python scripts/scene_table.py ltr` (grouped by scene, per-finish owned qty + prices + %/$ diff, per-scene and grand-total cost-to-finish in each finish). Keep the config, this table, and §8 in sync.
+**Machine-readable:** these 7 scenes (plus the 4 posters of §4b, `kind = "poster"`) are encoded in `selectors.FAMILY_SCENES["ltr"]` (§8). The web Collection's **Scene** group (sort/group by Scene) shows each run with per-finish completion, cost to finish and buy lists (engine `magic_manager.scenes`). The standardized ownership + live-price scene-completion table is `uv run python scripts/scene_table.py ltr` (grouped by scene, per-finish owned qty + prices + %/$ diff, per-scene and grand-total cost-to-finish in each finish). Keep the config, this table, and §8 in sync.
 
 **Detection recipe** (how the boundaries were originally derived — the config above is the curated result):
 
@@ -116,6 +116,8 @@ Then group consecutive rows sharing an artist. Runs of ≥3 are scenes. Runs of 
 | D (Objects/Doom, incl. The One Ring 748) | 746–750 | $1,186.33 | $2,160.39 |
 
 Each panel has both nonfoil and foil finishes plus a serialized `z`-suffix version (731z, 732z, …) that's globally filtered.
+
+**Machine-readable:** the 4 blocks are `[[scenes.ltr]]` entries with `kind = "poster"` (names `Poster A · Fellowship era` … `Poster D · Objects / Mount Doom`, `artist = "Various artists"` — each block mixes artists). They're chase-tier, so they hide when the Collection's Chase filter is Exclude.
 
 **Scryfall doesn't tag** which specific poster (Fellowship / Two Towers / Return of the King / etc.) each panel belongs to — the CN grouping (contiguous 5-CN blocks) is the only signal.
 
@@ -170,5 +172,5 @@ For any PRM-stamped card the user presents, resolve by name+artist first (see `.
 - `selectors.py:78-90` — `FAMILY_DUPE_FOIL_PROMO_TYPES["ltr"] = frozenset({"surgefoil", "doublerainbow"})`
 - `selectors.py` — `FAMILY_UNOBTAINABLE_RULES["ltr"]` with three rules: `silverfoil+scroll` (scroll-frame showcase, §5), `any_of:{poster}` (the 20 poster panels 731–750, §4b/§5), and `any_of:{playpromo}` (LTR 299 Gandalf the White WPN promo, §5)
 - `selectors.py:_modifier_chase` — surfaces the Nazgûl chase via `mm query missing-set ltr`
-- `selectors.py:FAMILY_SCENES["ltr"]` — the 7 scene groupings (§4a) as `{name, artist, set, cn_lo, cn_hi}` dicts. Consumed by `scripts/scene_table.py ltr` for the standardized ownership + live-price scene table. **Keep in sync with §4a.**
+- `config/families.toml` `[[scenes.ltr]]` → `selectors.FAMILY_SCENES["ltr"]` — the 7 scene groupings (§4a) + 4 poster blocks (§4b, `kind = "poster"`) as `{name, artist, set, cn_lo, cn_hi[, kind]}` dicts. Consumed by `magic_manager.scenes` (web Collection Scene group) and `scripts/scene_table.py ltr` for the standardized ownership + live-price scene table. **Keep in sync with §4a.**
 - Related docs: [`ltr-borderless-scenes.md`](../ltr-borderless-scenes.md) — the original one-off scene analysis (superseded for live use by `scripts/scene_table.py`, kept as narrative reference).

@@ -11,7 +11,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from .. import collection_view, family_status, gallery, provenance, scryfall_tags, sets
+from .. import collection_view, family_status, gallery, provenance, scenes, scryfall_tags, sets
 from .edhrec import FunctionRootOut, function_roots
 
 BuyTarget = Literal["manapool", "tcgplayer", "cardkingdom", "moxfield", "plain"]
@@ -78,6 +78,31 @@ class CollectionCardOut(BaseModel):
     card_owned: int = Field(0, description="Copies of this card owned in any printing, any set.")
     sources: list[str] = Field(default_factory=list,
                                description="Source keys this owned printing's copies were acquired from (see CollectionOut.sources).")
+    scene: str | None = Field(None, description="Key of the scene/poster this printing belongs to (see CollectionOut.scenes).")
+
+
+class SceneFinishOut(BaseModel):
+    finish: Literal["nonfoil", "foil"]
+    printings: int = Field(description="Scene printings that exist in this finish.")
+    owned: int = Field(description="Of those, printings held in this finish.")
+    missing_usd: float = Field(description="Cost to finish the scene in this finish (local prices).")
+    unpriced: int = Field(description="Missing printings with no price in this finish.")
+    missing_ids: list[str] = Field(description="Missing printings in this finish, collector-number order.")
+
+
+class SceneOut(BaseModel):
+    key: str
+    family: str
+    rank: int = Field(description="Config order within the family.")
+    name: str
+    artist: str | None
+    kind: Literal["scene", "poster"]
+    set_code: str
+    cn_lo: int
+    cn_hi: int
+    printings: int
+    owned_printings: int = Field(description="Printings held in any finish.")
+    finishes: list[SceneFinishOut]
 
 
 class CollectionOut(BaseModel):
@@ -88,6 +113,8 @@ class CollectionOut(BaseModel):
                                              description="Function roots, display order.")
     sources: list[SourceOut] = Field(default_factory=list,
                                      description="Every source behind an owned printing in this view, most printings first.")
+    scenes: list[SceneOut] = Field(default_factory=list,
+                                   description="Configured scenes/posters of these families, family then config order, with per-finish completion.")
 
 
 class BuyItem(BaseModel):
@@ -149,10 +176,11 @@ def family_view(codes: list[str]) -> CollectionOut:
     summaries: list[FamilySummaryOut] = []
     cards: list[CollectionCardOut] = []
     skipped: list[str] = []
+    scene_out: list[SceneOut] = []
     seen: set[str] = set()
     for code in codes:
         try:
-            fc = collection_view.family_cards(code)
+            fc, progress = scenes.family_scenes(code)
         except LookupError:
             skipped.append(code)
             continue
@@ -160,12 +188,22 @@ def family_view(codes: list[str]) -> CollectionOut:
             continue
         seen.add(fc.summary.code)
         summaries.append(FamilySummaryOut(**vars(fc.summary)))
+        scene_of = scenes.scene_card_keys(fc)
         cards.extend(
             CollectionCardOut(
                 **{k: v for k, v in vars(c).items() if k not in ("scryfall_uri", "is_token")},
                 scryfall_url=gallery.scryfall_card_url(c.set_code, c.collector_number),
+                scene=scene_of.get(c.scryfall_id),
             )
             for c in fc.cards
+        )
+        scene_out.extend(
+            SceneOut(
+                **{k: v for k, v in vars(sp).items() if k not in ("card_ids", "finishes")},
+                printings=sp.printings,
+                finishes=[SceneFinishOut(**vars(sf)) for sf in sp.finishes.values() if sf.printings],
+            )
+            for sp in progress if sp.printings
         )
     # Tagger function roots for every card in ONE batched lookup (oracle grain).
     summ = scryfall_tags.card_summaries({c.oracle_id for c in cards if c.oracle_id})
@@ -186,7 +224,7 @@ def family_view(codes: list[str]) -> CollectionOut:
         for k in keys:
             catalog[k].printings += 1
     return CollectionOut(families=summaries, cards=cards, skipped=skipped,
-                         functions=function_roots(),
+                         functions=function_roots(), scenes=scene_out,
                          sources=sorted(catalog.values(), key=lambda s: (-s.printings, s.label)))
 
 

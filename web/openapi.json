@@ -4193,6 +4193,18 @@
             "type": "array",
             "title": "Sources",
             "description": "Source keys this owned printing's copies were acquired from (see CollectionOut.sources)."
+          },
+          "scene": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scene",
+            "description": "Key of the scene/poster this printing belongs to (see CollectionOut.scenes)."
           }
         },
         "type": "object",
@@ -4261,6 +4273,14 @@
             "type": "array",
             "title": "Sources",
             "description": "Every source behind an owned printing in this view, most printings first."
+          },
+          "scenes": {
+            "items": {
+              "$ref": "#/components/schemas/SceneOut"
+            },
+            "type": "array",
+            "title": "Scenes",
+            "description": "Configured scenes/posters of these families, family then config order, with per-finish completion."
           }
         },
         "type": "object",
@@ -9184,6 +9204,140 @@
           "sleeved"
         ],
         "title": "SaveOut"
+      },
+      "SceneFinishOut": {
+        "properties": {
+          "finish": {
+            "type": "string",
+            "enum": [
+              "nonfoil",
+              "foil"
+            ],
+            "title": "Finish"
+          },
+          "printings": {
+            "type": "integer",
+            "title": "Printings",
+            "description": "Scene printings that exist in this finish."
+          },
+          "owned": {
+            "type": "integer",
+            "title": "Owned",
+            "description": "Of those, printings held in this finish."
+          },
+          "missing_usd": {
+            "type": "number",
+            "title": "Missing Usd",
+            "description": "Cost to finish the scene in this finish (local prices)."
+          },
+          "unpriced": {
+            "type": "integer",
+            "title": "Unpriced",
+            "description": "Missing printings with no price in this finish."
+          },
+          "missing_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing Ids",
+            "description": "Missing printings in this finish, collector-number order."
+          }
+        },
+        "type": "object",
+        "required": [
+          "finish",
+          "printings",
+          "owned",
+          "missing_usd",
+          "unpriced",
+          "missing_ids"
+        ],
+        "title": "SceneFinishOut"
+      },
+      "SceneOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "family": {
+            "type": "string",
+            "title": "Family"
+          },
+          "rank": {
+            "type": "integer",
+            "title": "Rank",
+            "description": "Config order within the family."
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "artist": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artist"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "scene",
+              "poster"
+            ],
+            "title": "Kind"
+          },
+          "set_code": {
+            "type": "string",
+            "title": "Set Code"
+          },
+          "cn_lo": {
+            "type": "integer",
+            "title": "Cn Lo"
+          },
+          "cn_hi": {
+            "type": "integer",
+            "title": "Cn Hi"
+          },
+          "printings": {
+            "type": "integer",
+            "title": "Printings"
+          },
+          "owned_printings": {
+            "type": "integer",
+            "title": "Owned Printings",
+            "description": "Printings held in any finish."
+          },
+          "finishes": {
+            "items": {
+              "$ref": "#/components/schemas/SceneFinishOut"
+            },
+            "type": "array",
+            "title": "Finishes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "family",
+          "rank",
+          "name",
+          "artist",
+          "kind",
+          "set_code",
+          "cn_lo",
+          "cn_hi",
+          "printings",
+          "owned_printings",
+          "finishes"
+        ],
+        "title": "SceneOut"
       },
       "SearchOut": {
         "properties": {

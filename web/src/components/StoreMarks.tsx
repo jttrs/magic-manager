@@ -241,3 +241,14 @@ export function ComboMark(p: MarkProps) {
     </svg>
   );
 }
+
+/** A shopping basket with a list line (copy a buy list for what's missing). */
+export function BuyListMark(p: MarkProps) {
+  return (
+    <svg {...base} {...p}>
+      <path d="M3.4 9.2h17.2l-1.8 10a1.6 1.6 0 0 1-1.6 1.4H6.8a1.6 1.6 0 0 1-1.6-1.4Z" />
+      <path d="m8 9.2 3-5.8M16 9.2l-3-5.8" />
+      <path d="M8.6 13.4h6.8M9.4 16.6h5.2" />
+    </svg>
+  );
+}

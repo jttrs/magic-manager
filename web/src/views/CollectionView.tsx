@@ -13,6 +13,7 @@ import { CollectionTabs } from './collection/CollectionTabs';
 import { CartCheckDialog } from './collection/CartCheckDialog';
 import { ChecklistActions, ChecklistLeaveGuard, ChecklistNotes, ChecklistTable } from './collection/Checklist';
 import { useChecklist } from './collection/useChecklist';
+import { SceneDetail, SceneMeta } from './collection/SceneHead';
 import { useFeature } from '../app/features';
 import { Button } from '../components/Button';
 import { MultiSelect } from '../components/MultiSelect';
@@ -21,7 +22,7 @@ import { SortBuilder } from '../components/SortBuilder';
 import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../components/States';
 import { VirtualGuide, type GuideSection } from '../components/VirtualGuide';
 import { collectionBuyList, type CollectionCardOut, type CollectionOut } from '../core/api';
-import { CARD_SORT, CARD_SORT_PRESETS, type CardSortKey } from '../core/cardSort';
+import { activeRules, collectionPresets, collectionSortKeys, COLLECTION_SORT, NO_SCENE, sceneRanks, type CollectionSortKey } from '../core/scenes';
 import { buyFinish, buyTotal, collectionStats, filterCollection, functionCounts, isMissing, NO_FUNCTION, setGroupIncluded, sourceKinds, sourceOptions, TRAITS, traitCounts, traitsIn, type TraitGroup } from '../core/collection';
 import { InfoTip } from '../components/InfoTip';
 import { summaryLine } from '../core/checklist';
@@ -42,7 +43,8 @@ export function CollectionView() {
   const fams = useQuery(familiesQuery());
   const q = useQuery(collectionQuery(search.families));
   const { selected, toggle, clear } = useSelection('collection');
-  const rules = useMemo(() => decodeSort(search.sort, CARD_SORT), [search.sort]);
+  const hasScenes = (q.data?.scenes?.length ?? 0) > 0;
+  const rules = useMemo(() => activeRules(decodeSort(search.sort, COLLECTION_SORT), hasScenes), [search.sort, hasScenes]);
 
   // Default scope: the families you last looked at (first visit opens the picker).
   useEffect(() => {
@@ -203,7 +205,7 @@ export function CollectionView() {
         )}
       </SideSection>
       <SideSection title="Arrange">
-        <SortBuilder keys={CARD_SORT} rules={rules} presets={CARD_SORT_PRESETS} onChange={(r) => set({ sort: encodeSort(r, CARD_SORT) })} />
+        <SortBuilder keys={collectionSortKeys(hasScenes)} rules={rules} presets={collectionPresets(hasScenes)} onChange={(r) => set({ sort: encodeSort(r, COLLECTION_SORT) })} />
         <Segmented label="View type" showLabel value={search.view} onChange={(view) => set({ view })} options={[{ value: 'grid', label: 'Grid' }, { value: 'list', label: 'List' }]} />
         <TextField name="q" label="Card name" value={search.q} placeholder="e.g. Cloud…" onChange={(qv) => set({ q: qv })} />
       </SideSection>
@@ -304,12 +306,19 @@ function typesSummary(exclude: readonly string[]): string {
 type Built = { cards: GuideCard[]; shown: CollectionCardOut[]; sections: GuideSection[]; byId: Map<string, CollectionCardOut>; stats: ReturnType<typeof collectionStats> };
 
 /** Filter → map → sort → section (set-family head, then the lead sort key's groups). */
-function buildView(data: CollectionOut, search: CollectionSearch, rules: SortRule<CardSortKey>[]): Built {
+function buildView(data: CollectionOut, search: CollectionSearch, rules: SortRule<CollectionSortKey>[]): Built {
   const shown = filterCollection(data.cards, search, sourceKinds(data.sources));
   const fnLabels = Object.fromEntries((data.functions ?? []).map((r) => [r.key, r.label]));
-  const cards = sortBy(shown.map((c) => fromCollection(c, isMissing(c, search.exclude), fnLabels)), rules, CARD_SORT);
-  const section = leadSection(rules, CARD_SORT);
+  const ranks = sceneRanks(data.scenes ?? []);
+  const scenes = new Map((data.scenes ?? []).map((sc) => [sc.key, sc]));
+  const cards = sortBy(
+    shown.map((c) => ({ ...fromCollection(c, isMissing(c, search.exclude), fnLabels), sceneRank: c.scene ? ranks.get(c.scene) ?? null : null })),
+    rules,
+    COLLECTION_SORT,
+  );
+  const section = leadSection(rules, COLLECTION_SORT);
   const bySet = rules[0]?.key === 'set';
+  const byScene = rules[0]?.key === 'scene';
   const sections: GuideSection[] = [];
   for (const fam of data.families) {
     const famCards = cards.filter((c) => c.group === fam.code);
@@ -331,6 +340,19 @@ function buildView(data: CollectionOut, search: CollectionSearch, rules: SortRul
     });
     if (section) {
       for (const g of groupCards(famCards.map((c) => ({ ...c, group: section(c) })))) {
+        const scene = byScene ? scenes.get(g.key) : undefined;
+        if (byScene) {
+          sections.push({
+            ...g,
+            key: `${fam.code}:${g.key}`,
+            label: scene?.name ?? (g.key === NO_SCENE ? 'Not in a scene' : g.label),
+            level: 2,
+            noun: 'scene',
+            detail: scene ? <SceneDetail scene={scene} /> : undefined,
+            meta: scene ? <SceneMeta scene={scene} /> : undefined,
+          });
+          continue;
+        }
         const setName = bySet ? setNames.get(g.label) : undefined;
         sections.push({
           ...g,
@@ -375,7 +397,7 @@ function OwnedMeter({ owned, printings }: { owned: number; printings: number }) 
   );
 }
 
-function controlsSummary(search: CollectionSearch, rules: SortRule<CardSortKey>[], fams: { code: string; name: string }[] | undefined): string {
+function controlsSummary(search: CollectionSearch, rules: SortRule<CollectionSortKey>[], fams: { code: string; name: string }[] | undefined): string {
   const names = search.families.map((c) => fams?.find((f) => f.code === c)?.name ?? c.toUpperCase());
   const show = search.show.length === 2 ? 'Owned + missing' : search.show[0] === 'owned' ? 'Owned only' : search.show[0] === 'missing' ? 'Missing only' : 'Nothing shown';
 
@@ -385,7 +407,7 @@ function controlsSummary(search: CollectionSearch, rules: SortRule<CardSortKey>[
     search.exclude.length ? typesSummary(search.exclude) : '',
     search.fn.length ? `${search.fn.length} function${search.fn.length > 1 ? 's' : ''}` : '',
     search.src.length ? `${search.src.length} source${search.src.length > 1 ? 's' : ''}` : '',
-    rules.map((r) => CARD_SORT[r.key].label).join(' › '),
+    rules.map((r) => COLLECTION_SORT[r.key].label).join(' › '),
   ];
   return parts.filter(Boolean).join(' · ');
 }

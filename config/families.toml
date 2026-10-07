@@ -6,7 +6,9 @@
 #                     (collapsed by the preferred filter). Empty = no dupe signal.
 #   [[unobtainable.<fam>.rules]]  predicate rules for prints the user won't pursue;
 #                     each rule's `note` is the rationale (travels WITH the rule).
-#   [[scenes.<fam>]]  poster/scene groupings for scene-table reporting.
+#   [[scenes.<fam>]]  poster/scene groupings (scenes.py: Collection "Scene" group +
+#                     scene_table.py). Keys: name, artist, set, cn_lo, cn_hi,
+#                     optional kind = "scene" (default) | "poster".
 #
 # Predicate keys (AND within a rule, OR across a family's rules):
 #   promo_types_any_of / promo_types_all_of / frame_effects_all_of (lists),
@@ -96,6 +98,38 @@ artist = "Marta Nael"
 set = "ltr"
 cn_lo = 448
 cn_hi = 451
+
+[[scenes.ltr]]
+name = "Poster A · Fellowship era"
+artist = "Various artists"
+kind = "poster"
+set = "ltr"
+cn_lo = 731
+cn_hi = 735
+
+[[scenes.ltr]]
+name = "Poster B · Sauron / Ents"
+artist = "Various artists"
+kind = "poster"
+set = "ltr"
+cn_lo = 736
+cn_hi = 740
+
+[[scenes.ltr]]
+name = "Poster C · Aragorn era"
+artist = "Various artists"
+kind = "poster"
+set = "ltr"
+cn_lo = 741
+cn_hi = 745
+
+[[scenes.ltr]]
+name = "Poster D · Objects / Mount Doom"
+artist = "Various artists"
+kind = "poster"
+set = "ltr"
+cn_lo = 746
+cn_hi = 750
 
 [[unobtainable.acr.rules]]
 promo_types_any_of = ["doublerainbow", "serialized"]

@@ -14,10 +14,11 @@ cycles). Scryfall does not tag scene membership, so the groupings live in
     (summing only the CNs not yet owned in that finish)
   - a grand-total footer across all scenes
 
-Prices are fetched live via Scryfall's /cards/collection batch endpoint
-through the rate-limited wrapper (24h cache), so the numbers are current and
-re-runs the same day are instant. Ownership comes from the local ``inventory``
-table joined to ``cards`` by (set_code, collector_number).
+The engine is ``magic_manager.scenes`` (the same scene progress the web
+Collection's Scene group shows, over ``collection_view.family_cards``); this
+script only renders it. Prices are fetched live from Scryfall's
+/cards/collection batch endpoint through the rate-limited wrapper (24h cache);
+``--local`` uses the local ``cards`` prices instead (no network).
 
 Deterministic: scenes render in config order; cards sort by numeric CN within
 a scene; prices round to cents; %-diff computed as (foil-nonfoil)/nonfoil.
@@ -26,6 +27,7 @@ Usage:
     uv run python scripts/scene_table.py ltr
     uv run python scripts/scene_table.py ltr --owned-only     # hide fully-unowned rows
     uv run python scripts/scene_table.py ltr --missing-only   # only rows you don't own
+    uv run python scripts/scene_table.py ltr --local          # local prices, no network
 
 Exit codes:
     0 — rendered
@@ -40,7 +42,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from magic_manager import db, scryfall, selectors  # noqa: E402
+from magic_manager import scenes as scenes_mod, scryfall, selectors  # noqa: E402
 
 
 def _fmt_usd(v: float | None) -> str:
@@ -60,37 +62,10 @@ def _fmt_diff(nonfoil: float | None, foil: float | None) -> str:
     return f"{'+' if d >= 0 else '-'}${abs(d):.2f}"
 
 
-def _price(prices: dict, key: str) -> float | None:
-    v = (prices or {}).get(key)
-    if v is None or v == "":
-        return None
-    try:
-        return float(v)
-    except (ValueError, TypeError):
-        return None
-
-
 def _scryfall_url(set_code: str, cn: str) -> str:
     """Stable printing URL — no query string / utm suffix (matches
     foil_price_diff.py)."""
     return f"https://scryfall.com/card/{set_code.lower()}/{cn}"
-
-
-def _ownership(set_code: str) -> dict[tuple[str, str], int]:
-    """(collector_number, finish) -> owned quantity, for one set code."""
-    out: dict[tuple[str, str], int] = {}
-    with db.connect() as conn:
-        rows = conn.execute(
-            """
-            SELECT c.collector_number AS cn, inv.finish AS finish, inv.quantity AS qty
-            FROM inventory inv JOIN cards c ON c.scryfall_id = inv.scryfall_id
-            WHERE c.set_code = ?
-            """,
-            (set_code.lower(),),
-        ).fetchall()
-    for r in rows:
-        out[(str(r["cn"]), r["finish"])] = r["qty"]
-    return out
 
 
 def main() -> int:
@@ -101,95 +76,59 @@ def main() -> int:
                      help="Show only cards you own at least one finish of.")
     grp.add_argument("--missing-only", action="store_true",
                      help="Show only cards you own zero copies of.")
+    ap.add_argument("--local", action="store_true",
+                    help="Use local cards-table prices instead of a live Scryfall fetch.")
     args = ap.parse_args()
 
     anchor = args.anchor.lower()
-    scenes = selectors.FAMILY_SCENES.get(anchor)
-    if not scenes:
+    if not scenes_mod.configured(anchor):
         configured = ", ".join(sorted(selectors.FAMILY_SCENES)) or "(none)"
         print(f"error: no FAMILY_SCENES config for anchor {anchor!r}. "
-              f"Configured: {configured}. Add an entry in selectors.py "
-              f"(and docs/sets/{anchor}.md §4) first.", file=sys.stderr)
+              f"Configured: {configured}. Add a [[scenes.{anchor}]] entry in "
+              f"config/families.toml (and docs/sets/{anchor}.md §4) first.", file=sys.stderr)
         return 2
-
-    # Collect every (set, cn) identifier across all scenes for one batch fetch.
-    identifiers: list[dict] = []
-    for sc in scenes:
-        for cn in range(sc["cn_lo"], sc["cn_hi"] + 1):
-            identifiers.append({"set": sc["set"], "collector_number": str(cn)})
     try:
-        found, _not_found = scryfall.collection(identifiers)
+        fc, scenes = scenes_mod.family_scenes(anchor)
+        live = None if args.local else scenes_mod.live_prices([sid for s in scenes for sid in s.card_ids])
+    except LookupError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
     except scryfall.ScryfallError as e:
         print(f"error: scryfall lookup failed: {e}", file=sys.stderr)
         return 2
-
-    # Index cards by (set, cn).
-    card_by = {}
-    for c in found:
-        card_by[(c["set"].lower(), c["collector_number"])] = c
-
-    # Ownership per set code (fetch once per distinct set in the scenes).
-    own_by_set = {sc["set"].lower(): _ownership(sc["set"]) for sc in scenes}
+    if live is not None:
+        scenes = scenes_mod.progress(fc, live)
+    by_id = {c.scryfall_id: c for c in fc.cards}
 
     grand = {"cards": 0, "owned": 0, "finish_nf": 0.0, "finish_f": 0.0}
     out: list[str] = []
-
-    for sc in scenes:
-        setc = sc["set"].lower()
-        own = own_by_set[setc]
-        rows = []
-        owned_ct = 0
-        total_ct = 0
-        scene_nf_to_finish = 0.0
-        scene_f_to_finish = 0.0
-        for cn in range(sc["cn_lo"], sc["cn_hi"] + 1):
-            c = card_by.get((setc, str(cn)))
-            if c is None:
-                continue  # gap in the numeric range (non-scene CN); skip silently
-            total_ct += 1
-            onf = own.get((str(cn), "nonfoil"), 0)
-            off = own.get((str(cn), "foil"), 0)
-            if onf or off:
-                owned_ct += 1
-            nf = _price(c.get("prices"), "usd")
-            ff = _price(c.get("prices"), "usd_foil")
-            # cost-to-finish: add the price of finishes not yet owned
-            if onf == 0 and nf is not None:
-                scene_nf_to_finish += nf
-            if off == 0 and ff is not None:
-                scene_f_to_finish += ff
+    for s in scenes:
+        out.append(
+            f"### {s.name}{f' · {s.artist}' if s.artist else ''} "
+            f"({s.set_code.upper()} {s.cn_lo}–{s.cn_hi}) — {s.owned_printings}/{s.printings} owned"
+        )
+        out.append("| CN | Card | Own NF | Own Foil | NF $ | Foil $ | % diff | $ diff |")
+        out.append("|---:|---|---:|---:|---:|---:|---:|---:|")
+        for sid in s.card_ids:
+            c = by_id[sid]
+            onf, off = c.owned.get("nonfoil", 0), c.owned.get("foil", 0)
             if args.owned_only and not (onf or off):
                 continue
             if args.missing_only and (onf or off):
                 continue
-            rows.append((cn, c.get("name") or "", onf, off, nf, ff))
-
-        artist = f" · {sc['artist']}" if sc.get("artist") else ""
-        out.append(
-            f"### {sc['name']}{artist} "
-            f"({setc.upper()} {sc['cn_lo']}–{sc['cn_hi']}) — {owned_ct}/{total_ct} owned"
-        )
-        out.append("| CN | Card | Own NF | Own Foil | NF $ | Foil $ | % diff | $ diff |")
-        out.append("|---:|---|---:|---:|---:|---:|---:|---:|")
-        for cn, name, onf, off, nf, ff in rows:
-            onf_s = f"**{onf}**" if onf else "0"
-            off_s = f"**{off}**" if off else "0"
-            safe = (name or "").replace("|", "\\|")
-            link = f"[{safe}]({_scryfall_url(setc, str(cn))})"
+            nf, ff = (live or {}).get(sid, (c.price_usd, c.price_usd_foil))
+            safe = (c.name or "").replace("|", "\\|")
             out.append(
-                f"| {cn} | {link} | {onf_s} | {off_s} | "
-                f"{_fmt_usd(nf)} | {_fmt_usd(ff)} | "
-                f"{_fmt_pct(nf, ff)} | {_fmt_diff(nf, ff)} |"
+                f"| {c.collector_number} | [{safe}]({_scryfall_url(c.set_code, c.collector_number)}) | "
+                f"{f'**{onf}**' if onf else '0'} | {f'**{off}**' if off else '0'} | "
+                f"{_fmt_usd(nf)} | {_fmt_usd(ff)} | {_fmt_pct(nf, ff)} | {_fmt_diff(nf, ff)} |"
             )
-        out.append(
-            f"\n*Finish this scene: all-nonfoil {_fmt_usd(scene_nf_to_finish)} · "
-            f"all-foil {_fmt_usd(scene_f_to_finish)}*\n"
-        )
-
-        grand["cards"] += total_ct
-        grand["owned"] += owned_ct
-        grand["finish_nf"] += scene_nf_to_finish
-        grand["finish_f"] += scene_f_to_finish
+        nf_left, f_left = s.finishes["nonfoil"].missing_usd, s.finishes["foil"].missing_usd
+        out.append(f"\n*Finish this scene: all-nonfoil {_fmt_usd(nf_left)} · all-foil {_fmt_usd(f_left)}*\n")
+        grand["cards"] += s.printings
+        grand["owned"] += s.owned_printings
+        grand["finish_nf"] += nf_left
+        grand["finish_f"] += f_left
 
     print("\n".join(out))
     print(

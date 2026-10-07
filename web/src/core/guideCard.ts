@@ -42,6 +42,9 @@ export type GuideCard = {
   oracleTags?: string[];
   /** Short guide-line annotation, e.g. "also: Removal, Lifegain". */
   note?: string | null;
+  /** Scene/poster run this printing belongs to (collection) and its order; see core/scenes.ts. */
+  scene?: string | null;
+  sceneRank?: number | null;
   /** Inspector facts. */
   typeLine?: string | null;
   prices?: { nonfoil: number | null; foil: number | null };
@@ -115,6 +118,7 @@ export function fromCollection(c: CollectionCardOut, missing: boolean, fnLabels:
     tags: [...(c.is_chase ? ['Chase'] : []), ...treatmentLabels(c.treatment)],
     lines: { plain: `1 ${c.name}`, manapool: '', tcgplayer: '' },
     functions: (c.functions ?? []).map((k) => fnLabels[k] ?? k),
+    scene: c.scene ?? null,
     typeLine: c.type_line,
     prices: { nonfoil: c.finishes.includes('nonfoil') ? c.price_usd : null, foil: c.finishes.includes('foil') ? c.price_usd_foil : null },
   };
