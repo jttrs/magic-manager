@@ -477,3 +477,108 @@ Add-cards dialog on Collection: **Search** (live printing search, stage copies),
 ## 24. Status — iteration 2, P3 (`feat/web-decks`)
 
 Deck Manager at `/decks`: grouped deck-recipe list (set / year / state / format / source, search, built/loose) + resizable inspector (decklist sections, cards or list view, card inspector), with "Add deck to collection" / "Add N marked" feeding the P2 add-cards review (exact printings, one ingest event). Engine `magic_manager.deck_view` (set-based summaries, ~0.25 s for 580 decks), API `api.decks`. The card detail sheet planned for P3 shipped earlier as the card inspector (#83). Deck editing (versions, compose/decompose) stays CLI for now.
+
+## 25. Phase 3 — hosting, login and per-user profiles (shaped 2026-10-06, `torre/hosting-auth-profiles`)
+
+**Status:** decisions signed off by the owner 2026-10-07. Supersedes Part I §5's "Postgres,
+user-scoped" row and §9 phase 3 ("SQLite → Postgres; add `user_id`"). Nothing is built yet.
+
+**Facts that drove it.** Of the 677 MB DB, ~650 MB is shared cache (EDHREC pages, `cards`,
+Tagger tags); one user's data (the 14 `undo.USER_TABLES`) is ~6 MB. The engine has ~346 raw
+SQLite queries. SQLite resolves unqualified table names across `ATTACH`ed databases, so the same
+queries run against one file or against a catalog file + a user file. Research (shared schema +
+Postgres RLS is the SaaS default; database-per-tenant is increasingly preferred for many small
+tenants because isolation is physical and export/delete is a file operation; hybrids with a
+shared catalog are emerging):
+[Redis](https://redis.io/blog/data-isolation-multi-tenant-saas/),
+[asadali.dev](https://asadali.dev/blog/multi-tenant-saas-practical-comparison-database-per-tenant-vs-shared-schema/),
+[Augmented Dev](https://theaugmenteddev.com/blog/multi-tenant-data-isolation-patterns-saas).
+
+### 25.0 Binding principle — users' security (owner, 2026-10-07)
+
+> "we should also be very aware of security concerns users may have and develop in a way that we
+> cannot be used by a malicious actor to harm our users."
+
+Every Phase 3 decision is held to this. Concretely, for hosting:
+
+- **Per-user isolation enforced server-side.** The user is derived only from the server-side
+  session; client-sent user ids are never trusted. Each request opens only that user's DB file
+  (H1), and a test proves one user cannot read or write another's file.
+- **Auth/session hardening.** HttpOnly + Secure + SameSite cookies, CSRF protection on every write,
+  OAuth state + PKCE, session expiry/rotation, and rate limits on login and writes.
+- **No admin "act as user".** Admins manage invites and flags; they cannot impersonate users or
+  read their collections through the app.
+- **Secrets only in the host's secret store.** Never in the repo, images, logs or the client (H13).
+- **Export and delete-my-data** are self-serve (H10).
+- **Dependency and supply-chain hygiene.** Lockfiles committed (`uv.lock`, `package-lock.json`),
+  automated dependency/vulnerability updates, pinned CI actions and base images, minimal
+  extension permissions (H12).
+- **Security review before any hosted launch.** No outside user gets access until a security
+  review of the hosted build passes.
+
+The browser companion (H12) applies the same principle with its own threat model.
+
+### 25.1 Decisions
+
+| # | Concern | Decision |
+|---|---|---|
+| H1 | Data model | **Shared catalog DB + one small SQLite DB per user**, `ATTACH`ed per connection. Catalog = cards, prices, sets, Tagger/art tags, EDHREC, MTGJSON caches. User DB = `undo.USER_TABLES` (inventory + ledger, decks/cards/versions/assignments, wishlist, earmarks + prices, set targets, settings, imports). `inventory == SUM(inventory_events.delta)` holds per user file. No `user_id` columns. |
+| H2 | Database | **Plain SQLite files on the server's persistent disk** (`/data/catalog.db`, `/data/users/<id>.db`, `/data/auth.db`), continuously replicated offsite with **Litestream** (object storage, e.g. Cloudflare R2). Not Postgres, not Turso. |
+| H3 | Owner's data | **Hosted becomes the owner's source of truth.** First account = the owner's user tables split out of today's DB (rehearsed per `db-upgrade`). Local mode keeps working for dev/CLI/skills against a copy. No two-way sync. |
+| H4 | Auth | **Self-hosted OAuth only — Discord + Google** (Authlib, state + PKCE). No passwords, no email sender, no magic links (cheapest, smallest attack surface; providers own MFA/recovery). Server-side sessions in `auth.db` (users, linked identities, sessions); HttpOnly + Secure + SameSite=Lax cookie; CSRF protection on writes. |
+| H5 | Access | **Invite-only** (allowlist / invite codes). The owner is **admin**. |
+| H6 | Feature flags | Layered: `config/features.toml` defaults < local overrides < **per-user overrides set by the admin**. Flags that need the owner's machine are **pinned off** for everyone else. |
+| H7 | Hosting (beta) | **A server in the owner's house during beta**, running the app **natively** (`uv run mm serve` as an always-on service — launchd on a Mac, systemd on Linux — deployed by `git pull`, like today's `.worktrees/live`), data under one data dir. Native keeps the H9 macOS features working on a Mac mini (Docker on macOS is a Linux VM: no `osascript`, no visible Chrome). **Docker is for the vendor move** (e.g. Fly.io/Railway take images; SPA optionally on Cloudflare Pages/Vercel): a `Dockerfile` (SPA + API + worker, data under `/data`) is **built in CI on every PR** so Linux portability stays honest; H9 features stay off there. Litestream makes the move a restore. |
+| H8 | Worker | Single host ⇒ keep Taskiq's **in-process broker**; Redis only when a second host appears. Writes serialize **per user DB**; catalog writes (syncs) serialize globally. |
+| H9 | Local-only features | Tab reading + AppleScript store reads (Deals), the Mana Pool cart (machine `.env` account), Moxfield browser import. **Interim:** admin-only flags that run only where the server is the owner's Mac running natively; hidden for everyone else. **Target: a Chrome extension (H12) replaces all of them**, so they work against any server — Docker/Linux included. Users are never asked for marketplace credentials. |
+| H10 | Privacy | Store only OAuth subject id + display name + email. **Self-serve export** (download my user DB + CSV) and **delete my account** (removes the user file + auth rows; offsite backups age out of retention, e.g. 30 days). |
+| H11 | Local mode | **Same engine, two layouts, one `MM_MODE` switch.** `local` = no login, today's single file untouched (or the split layout); `hosted` = login, catalog + the signed-in user's file. CLI/skills keep `MAGIC_MANAGER_DB`. |
+| H12 | Chrome extension | A **Manifest V3 Chrome extension** is the browser-side companion that does, in the *user's own* browser, what the server can't: (a) **tabs** — `chrome.tabs` lists the user's open store/product tabs and posts them to the API (replaces `tabs.py`/`osascript`; a server reading its own browser is wrong once users are remote); (b) **rendered store pages** — `chrome.scripting` reads price/stock from a page the user already has open (replaces AppleScript `execute javascript`); (c) **Mana Pool cart** — reads the cart from the user's own logged-in Mana Pool tab and posts only cart lines (H13); (d) **Moxfield import** — fetches the deck JSON from the user's own browser session (Cloudflare already cleared), replacing the headed-Playwright path. It authenticates to our API with a token minted from the signed-in session (no cookies shared cross-site), requests narrow `host_permissions` per store, and only posts normalized page data to existing engine seams (`deals`, `cart`, `decksource`) — no logic in the extension. Chosen over bookmarklets (more legitimate, persistent permissions, works across tabs, store-distributable). |
+| H13 | Mana Pool credentials (owner decision 2026-10-07) | **Split by purpose.** (1) **Personal cart reads** use each user's OWN Mana Pool account and their password **never reaches the server**: the cart is read client-side in the user's browser (export/paste or a browser-side reader, H12c) and the app receives only cart lines. No admin or admin-only workflow ever uses another person's credentials. Locally the owner's login lives in the **macOS Keychain**, not `.env`. (2) **Catalog/price lookups** (`manapool.sh`, product mapping, overpay) use a **project-owned service account** (email + API access token, no password), stored only in the host's secret store, used only by server code, never visible to admins, and shared through the server-side cache (Phase 5). Until hosted, `cart_check` stays internal + local-only behind its flag. |
+
+### 25.2 Pinned / open
+
+- **External access (partly decided, rest pinned):** the owner reaches the server over
+  **Tailscale** (admin access, no open ports). Friends' access is pinned until the first outside
+  user needs it — leaning **Cloudflare Tunnel + own domain** (~$10/yr, most polished) or
+  **Tailscale Funnel** (free public HTTPS on a `ts.net` name). Either way invite-only OAuth (H4/H5)
+  is the gate. Rejected: Tailscale node sharing for friends (every friend installs Tailscale),
+  ngrok + basic auth (free-tier browser interstitial, bandwidth caps; demos only), router port
+  forwarding (exposes the home IP). Until then the beta is LAN + owner's tailnet.
+- **Home server hardware:** not decided. A Mac mini (native) keeps every H9 admin feature; an
+  old PC/laptop (Linux, native or the Docker image, e.g. Proxmox + one container) works for
+  everything except the macOS-only H9 features.
+- **Budget:** not set; expected beta cost ≈ a domain (~$10/yr) + free-tier object storage.
+
+### 25.3 Consequences for the build
+
+- **Migrations split in two:** catalog migrations (run once) and user migrations (run on every
+  user file, at startup and on first login). `db.MIGRATIONS` needs a target per entry; the
+  `db-upgrade` rehearsals cover both layouts.
+- **`db.connect()` becomes layout-aware:** opens the user file as `main`, attaches the catalog
+  (hosted) — or opens the single file (local). Table names must stay unique across the two
+  files (a test guards it).
+- **Undo** (`undo.py`) becomes per user (`users/<id>.undo.db`); `SessionGuard` keys on the user.
+- **Request scoping:** the web layer resolves session → user → that user's connection; the
+  engine stays unaware of users (no `user_id` parameters threaded through it).
+- **Jobs** carry the user id; a user's job gets that user's connection.
+
+### 25.4 Build order (small PRs, after sign-off)
+
+1. Layout-aware `db.connect` + catalog/user table split + uniqueness test (no behavior change in
+   local mode).
+2. Migration targets (catalog vs user) + `db-upgrade` rehearsal support for the split layout.
+3. Splitter: today's DB → `catalog.db` + `users/<owner>.db` (rehearsed; owner OK before apply).
+4. `auth.db` + Discord/Google OAuth + sessions + CSRF + invite codes + admin role.
+5. Per-request user connection, per-user undo, jobs carry the user.
+6. Per-user feature flags + admin page; pin H9 features to the owner's machine.
+7. Export / delete-my-account.
+8. Litestream + native home deploy runbook (launchd/systemd). The Dockerfile + CI build land
+   first, alongside this doc.
+9. Chrome extension (H12): API token endpoint → tabs → rendered store reads → Mana Pool cart →
+   Moxfield import; then drop the macOS-only paths' admin pinning (H9 interim).
+10. Security review of the hosted build (§25.0) — gate before any outside user.
+11. Owner admin access over Tailscale; friends' external access when the pinned item resolves.
+
+Phase 5 (shared server-side Scryfall/MTGJSON/EDHREC cache + rate limiter; the browser-driven
+Moxfield import is retired by H12) is re-evaluated **after** this lands.
