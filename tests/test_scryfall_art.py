@@ -84,7 +84,7 @@ def test_v30_columns_and_tables(tmp_db):
         idx = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='index'")}
     assert "illustration_id" in cols and "illustration_art_tags" in tables
     assert {"cards_illustration_idx", "illustration_art_tags_tag_idx"} <= idx
-    assert db.CURRENT_VERSION == 32
+    assert db.CURRENT_VERSION == 33
 
 
 def test_upsert_projects_illustration_and_never_nulls(tmp_db, make_card):

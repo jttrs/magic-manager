@@ -755,6 +755,80 @@
         }
       }
     },
+    "/api/deals/target": {
+      "put": {
+        "tags": [
+          "deals"
+        ],
+        "summary": "Deals Set Target",
+        "operationId": "deals_set_target",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TargetIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TargetOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "deals"
+        ],
+        "summary": "Deals Clear Target",
+        "operationId": "deals_clear_target",
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Product Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/deals/watched": {
       "get": {
         "tags": [
@@ -8592,6 +8666,62 @@
         ],
         "title": "TabOut"
       },
+      "TargetIn": {
+        "properties": {
+          "product_id": {
+            "type": "integer",
+            "title": "Product Id"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "price",
+              "pct_under"
+            ],
+            "title": "Mode"
+          },
+          "value": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_id",
+          "mode",
+          "value"
+        ],
+        "title": "TargetIn"
+      },
+      "TargetOut": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "price",
+              "pct_under"
+            ],
+            "title": "Mode",
+            "description": "A price (USD), or a percentage under the market price."
+          },
+          "value": {
+            "type": "number",
+            "title": "Value"
+          },
+          "set_at": {
+            "type": "string",
+            "title": "Set At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode",
+          "value",
+          "set_at"
+        ],
+        "title": "TargetOut"
+      },
       "TreeNodeOut": {
         "properties": {
           "name": {
@@ -9001,6 +9131,30 @@
             "title": "Change",
             "description": "Latest minus first price seen here."
           },
+          "low": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Low",
+            "description": "Lowest price seen here."
+          },
+          "high": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "High",
+            "description": "Highest price seen here."
+          },
           "history": {
             "items": {
               "$ref": "#/components/schemas/PricePointOut"
@@ -9026,6 +9180,10 @@
       },
       "WatchedOut": {
         "properties": {
+          "product_id": {
+            "type": "integer",
+            "title": "Product Id"
+          },
           "set_code": {
             "type": "string",
             "title": "Set Code"
@@ -9198,10 +9356,45 @@
               }
             ],
             "title": "Error"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TargetOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "target_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Price",
+            "description": "The price that meets the target. A percentage target on a sealed product needs its market price: null in the instant list, filled after a read."
+          },
+          "target_met": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Met",
+            "description": "The best in-stock price is at or under the target (null when the target price isn't known)."
           }
         },
         "type": "object",
         "required": [
+          "product_id",
           "set_code",
           "name",
           "kind",

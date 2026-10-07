@@ -1041,6 +1041,18 @@ INSERT INTO earmark_prices (link_id, price, currency, available, read_at, source
       AND NOT EXISTS (SELECT 1 FROM earmark_prices p WHERE p.link_id = l.link_id);
 """
 
+# V33: a price target per watched (earmarked) product — either a price ('price',
+# USD) or a percentage under its market price ('pct_under', 0–100). User data;
+# "newly met" is derived by comparing reads, so nothing else is stored.
+SCHEMA_V33 = """
+CREATE TABLE IF NOT EXISTS earmark_targets (
+    product_id INTEGER PRIMARY KEY REFERENCES earmarked_products (product_id) ON DELETE CASCADE,
+    mode       TEXT NOT NULL CHECK (mode IN ('price', 'pct_under')),
+    value      REAL NOT NULL CHECK (value > 0 AND (mode = 'price' OR value < 100)),
+    set_at     TEXT NOT NULL
+);
+"""
+
 # ---------- migration-authoring convention ----------
 #
 # Always-safe ops in a migration: CREATE TABLE, ALTER TABLE ADD COLUMN,
@@ -1067,6 +1079,8 @@ INSERT INTO earmark_prices (link_id, price, currency, available, read_at, source
 #                         `deck_versions` (V17) is the SCD-2 version history;
 #                         `deck_cards` (version-scoped as of V18) is one version's
 #                         composition. The user typed these in — not re-derivable.
+#   - earmarked_products / earmark_links / earmark_targets   watchlist + price
+#                         targets (V12, V33) — typed in by the user
 #   - precons / precon_cards    (when V2 ships them)
 #
 # Re-derivable tables (recovery = re-run a sync):
@@ -1130,6 +1144,7 @@ MIGRATIONS: list[str] = [
     SCHEMA_V30,
     SCHEMA_V31,
     SCHEMA_V32,
+    SCHEMA_V33,
 ]
 CURRENT_VERSION = len(MIGRATIONS)
 

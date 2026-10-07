@@ -278,6 +278,7 @@ def watchlist(*, progress=None, values: bool = True) -> list[dict]:
     product from ``market.product_cost``."""
     products = earmarks.earmark_list()
     history = earmarks.price_history([l.link_id for p in products for l in p.links])
+    targets = earmarks.targets()
     cache: dict = {}
     out = []
     for i, p in enumerate(products, 1):
@@ -294,18 +295,25 @@ def watchlist(*, progress=None, values: bool = True) -> list[dict]:
             h = history.get(l.link_id) or []
             last = h[-1] if h else {"price": l.asking_price, "available": None, "read_at": l.captured_at, "source": "snapshot"}
             first = h[0] if h else last
+            seen = [x["price"] for x in (h or [last]) if x["price"] is not None]
             stores.append({
                 "url": l.store_url, "store": _store_name(l.store_url, l.store_name), "price": last["price"], "available": last["available"],
                 "read_at": last["read_at"], "read": last["source"] == "read",
                 "first_price": first["price"], "first_at": first["read_at"],
                 "change": None if last["price"] is None or first["price"] is None else round(last["price"] - first["price"], 2),
+                "low": min(seen, default=None), "high": max(seen, default=None),
                 "history": [{"price": x["price"], "at": x["read_at"]} for x in h],
             })
         live = [s for s in stores if s["price"] is not None and s["available"] is not False]
         best = min(live or [s for s in stores if s["price"] is not None], key=lambda s: s["price"], default=None)
         market = value.get("market")
         delta = None if best is None or market is None else round(best["price"] - market, 2)
+        target = targets.get(p.product_id)
+        threshold = earmarks.target_threshold(target, market)
+        in_stock = min((s["price"] for s in live), default=None)
         out.append({
+            "product_id": p.product_id, "target": target, "target_price": threshold,
+            "target_met": None if threshold is None else in_stock is not None and in_stock <= threshold,
             "set_code": choice["set_code"], "name": choice["name"], "kind": choice["kind"], "finish": choice.get("finish"),
             "scryfall_id": choice.get("scryfall_id"), "category": p.category, "subtype": p.subtype,
             "release_date": p.release_date, "market": market, "contents": value.get("contents"),
@@ -316,6 +324,49 @@ def watchlist(*, progress=None, values: bool = True) -> list[dict]:
             "error": value.get("error"),
         })
     return sorted(out, key=lambda r: (r["pct"] is None, r["pct"] if r["pct"] is not None else 0))
+
+
+def _with_target_prices(rows: list[dict]) -> list[dict]:
+    """Fill each percentage target's price from the product's market price
+    (``market.product_cost``, memoized) — a sealed product's market isn't in
+    the instant watchlist."""
+    for r in rows:
+        if r["target"] and r["target_price"] is None and r["kind"] != "single":
+            try:
+                market_price = _value(_earmark_choice_of(r))["market"]
+            except Exception:  # noqa: BLE001 — no market, no threshold
+                continue
+            r["target_price"] = earmarks.target_threshold(r["target"], market_price)
+            in_stock = min((s["price"] for s in r["stores"] if s["price"] is not None and s["available"] is not False), default=None)
+            r["target_met"] = None if r["target_price"] is None else in_stock is not None and in_stock <= r["target_price"]
+    return rows
+
+
+def _earmark_choice_of(row: dict) -> dict:
+    return {"kind": row["kind"], "set_code": row["set_code"], "name": row["name"], "finish": row.get("finish"),
+            "scryfall_id": row.get("scryfall_id")}
+
+
+def read_watched(*, progress=None) -> dict:
+    """Read every watched link's price (its history grows), then report the
+    products whose target was met by THIS read: met now (best in-stock price at
+    or under the target) and not met just before. Returns ``{rows, read,
+    newly_met}`` — ``rows`` is the instant watchlist, ``read`` the price rows."""
+    before = {r["product_id"]: r for r in _with_target_prices(watchlist(values=False))}
+    read = read_and_compare(watched_urls(), progress=progress)
+    rows = _with_target_prices(watchlist(values=False))
+    newly = []
+    for r in rows:
+        if not r["target_met"]:
+            continue
+        prev = before.get(r["product_id"])
+        if prev is None or prev["target_met"] is not True:
+            live = [s for s in r["stores"] if s["price"] is not None and s["available"] is not False]
+            best = min(live, key=lambda s: s["price"])
+            newly.append({"product_id": r["product_id"], "name": r["name"], "kind": r["kind"], "set_code": r["set_code"],
+                          "finish": r.get("finish"), "scryfall_id": r.get("scryfall_id"),
+                          "price": best["price"], "store": best["store"], "url": best["url"], "target_price": r["target_price"]})
+    return {"rows": rows, "read": read, "newly_met": newly}
 
 
 def watched_urls() -> list[str]:

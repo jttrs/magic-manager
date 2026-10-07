@@ -206,6 +206,24 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         except features_engine.FeatureDisabled as e:
             raise HTTPException(403, str(e)) from e
 
+    @app.put("/api/deals/target", response_model=deals_api.TargetOut, tags=["deals"], dependencies=[write("before setting a price target")])
+    def deals_set_target(req: deals_api.TargetIn):
+        try:
+            return deals_api.set_target(req)
+        except features_engine.FeatureDisabled as e:
+            raise HTTPException(403, str(e)) from e
+        except LookupError as e:
+            raise HTTPException(404, str(e)) from e
+        except ValueError as e:
+            raise HTTPException(422, str(e)) from e
+
+    @app.delete("/api/deals/target", status_code=204, tags=["deals"], dependencies=[write("before clearing a price target")])
+    def deals_clear_target(product_id: Annotated[int, Query()]):
+        try:
+            deals_api.clear_target(product_id)
+        except features_engine.FeatureDisabled as e:
+            raise HTTPException(403, str(e)) from e
+
     @app.get("/api/deals/watched", response_model=list[deals_api.WatchedOut], tags=["deals"])
     def deals_watched():
         try:

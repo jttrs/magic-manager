@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from .. import deals, features
+from .. import deals, earmarks, features
 from .jobs import Artifact, JobResult, JobSpec, ProgressEvent, ProgressFn, register
 
 
@@ -162,10 +162,19 @@ class WatchStoreOut(BaseModel):
     first_price: float | None
     first_at: str
     change: float | None = Field(description="Latest minus first price seen here.")
+    low: float | None = Field(None, description="Lowest price seen here.")
+    high: float | None = Field(None, description="Highest price seen here.")
     history: list[PricePointOut]
 
 
+class TargetOut(BaseModel):
+    mode: Literal["price", "pct_under"] = Field(description="A price (USD), or a percentage under the market price.")
+    value: float
+    set_at: str
+
+
 class WatchedOut(BaseModel):
+    product_id: int
     set_code: str
     name: str
     kind: Literal["sealed", "sld", "single"]
@@ -184,6 +193,38 @@ class WatchedOut(BaseModel):
     pct: float | None = None
     stores: list[WatchStoreOut]
     error: str | None = None
+    target: TargetOut | None = None
+    target_price: float | None = Field(None, description="The price that meets the target. A percentage target on a sealed product needs its market price: null in the instant list, filled after a read.")
+    target_met: bool | None = Field(None, description="The best in-stock price is at or under the target (null when the target price isn't known).")
+
+
+class TargetIn(BaseModel):
+    product_id: int
+    mode: Literal["price", "pct_under"]
+    value: float = Field(gt=0)
+
+
+def set_target(req: TargetIn) -> TargetOut:
+    features.require("deals")
+    return TargetOut(**earmarks.set_target(req.product_id, req.mode, req.value))
+
+
+def clear_target(product_id: int) -> None:
+    features.require("deals")
+    earmarks.clear_target(product_id)
+
+
+class NewlyMetOut(BaseModel):
+    product_id: int
+    name: str
+    kind: Literal["sealed", "sld", "single"]
+    set_code: str
+    finish: str | None = None
+    scryfall_id: str | None = None
+    price: float
+    store: str | None
+    url: str
+    target_price: float
 
 
 def watched() -> list[WatchedOut]:
@@ -199,16 +240,21 @@ class WatchlistInput(BaseModel):
 
 def _run_watchlist(inp: WatchlistInput, progress: ProgressFn) -> JobResult:
     features.require("deals")
-    read = []
+    read, newly = [], []
     if inp.refresh:
-        urls = deals.watched_urls()
-        read = deals.read_and_compare(urls, progress=lambda i, n, msg: progress(ProgressEvent(i - 1, n, f"reading {msg}")))
-    rows = deals.watchlist(values=False)
+        res = deals.read_watched(progress=lambda i, n, msg: progress(ProgressEvent(i - 1, n, f"reading {msg}")))
+        rows, read, newly = res["rows"], res["read"], res["newly_met"]
+    else:
+        rows = deals.watchlist(values=False)
     out = [WatchedOut(**r).model_dump() for r in rows]
     errors = [PriceOut(**r).model_dump() for r in read if r.get("error")]
+    met = [NewlyMetOut(**r).model_dump() for r in newly]
     summary = f"{len(out)} watched products" + (f" · {len(read) - len(errors)} of {len(read)} prices read" if inp.refresh else "")
+    if met:
+        summary += f" · {len(met)} hit {'its' if len(met) == 1 else 'their'} target"
     return JobResult(summary=summary, artifacts=[Artifact(kind="json", label="watchlist", data=out),
-                                                 Artifact(kind="json", label="errors", data=errors)])
+                                                 Artifact(kind="json", label="errors", data=errors),
+                                                 Artifact(kind="json", label="newly_met", data=met)])
 
 
 WATCHLIST = register(JobSpec(

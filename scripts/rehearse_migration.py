@@ -61,7 +61,7 @@ V4_NEW_TABLES = ("inventory", "wishlist_entries", "decks", "deck_cards", "set_ta
 # ingest_events rows. The columns ingest_events copies verbatim from ingest_log:
 _LEDGER_TABLES = ("ingest_events", "inventory_events")
 # V12+ earmarks are user-entered (store URLs + asking prices) — protected like the ledger.
-_EARMARK_TABLES = ("earmarked_products", "earmark_links")
+_EARMARK_TABLES = ("earmarked_products", "earmark_links", "earmark_targets")
 _INGEST_LOG_CARRIED_COLS = (
     "at", "label", "source_path", "archived_path", "mode",
     "rows_added", "rows_updated", "rows_zeroed", "status", "error",
@@ -405,8 +405,11 @@ def main(argv: list[str] | None = None) -> int:
     for t in precious:
         n_pre, h_pre = pre[t]
         n_post, h_post = post[t]
-        status = "OK" if (n_pre == n_post and h_pre == h_post) else "DIVERGED"
-        if status != "OK":
+        if h_pre == "<absent>" and n_post == 0:
+            status = "NEW"  # created empty by this migration
+        else:
+            status = "OK" if (n_pre == n_post and h_pre == h_post) else "DIVERGED"
+        if status == "DIVERGED":
             fail = True
         print(f"  {t:16}  {n_pre:>6} rows → {n_post:>6} rows  {status}")
         if status == "DIVERGED":

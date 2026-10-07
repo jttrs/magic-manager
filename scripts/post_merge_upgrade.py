@@ -13,6 +13,7 @@ that must run once against your live DB after you pull them:
                                     (DEFAULT 'sealed' classifies existing rows; schema-only)
   V32  earmark_prices (price history) — schema-only; the migration seeds one row per
                                     earmark link from its asking-price snapshot (no backfill step)
+  V33  earmark_targets (price alerts) — schema-only
   —    'built' follows pledges     → decks.backfill_built_state()  (mm deck backfill-built)
                                     data-only: imported / hand-built decks with nothing pledged → not built;
                                     precons keep ONE built copy (extra unpledged built copies → not built)
@@ -63,6 +64,7 @@ OWNERSHIP: tuple[tuple[str, tuple[str, ...] | None], ...] = (
     ("decks", None),
     ("earmarked_products", None),
     ("earmark_links", None),
+    ("earmark_targets", None),
 )
 
 
