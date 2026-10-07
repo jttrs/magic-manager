@@ -4,6 +4,7 @@ import { Dialog } from 'radix-ui';
 import { holdingsQuery } from '../app/queries';
 import type { HoldingsOut } from '../core/api';
 import { fmtInt, fmtUsd } from '../core/format';
+import { tcgplayerSearch } from '../core/surf';
 import { rarityLetter, type GuideCard } from '../core/guideCard';
 import type { ComponentType, SVGProps } from 'react';
 import { Holdings, Tags } from './CardFace';
@@ -13,9 +14,6 @@ import { ExploreMark, ScryfallMark, TcgplayerMark } from './StoreMarks';
 const RARITY_NAME: Record<string, string> = { common: 'Common', uncommon: 'Uncommon', rare: 'Rare', mythic: 'Mythic', special: 'Special', bonus: 'Bonus' };
 
 const large = (url: string) => url.replace('/normal/', '/large/');
-const tcgplayerSearch = (name: string) =>
-  `https://www.tcgplayer.com/search/magic/product?productLineName=magic&q=${encodeURIComponent(name.split(' // ')[0])}`;
-
 /** Inspect one card: large art, then its facts and outbound links — never over the art. */
 export function CardInspector({ card, onClose }: { card: GuideCard | null; onClose: () => void }) {
   return (

@@ -4,10 +4,7 @@ import { OutLink } from '../../../components/CardInspector';
 import { ExploreMark, ScryfallMark, TcgplayerMark } from '../../../components/StoreMarks';
 import type { SurfCardOut } from '../../../core/api';
 import { fmtUsd } from '../../../core/format';
-import { artists, ownedLine, printingLine, textFaces } from '../../../core/surf';
-
-const tcgplayerSearch = (name: string) =>
-  `https://www.tcgplayer.com/search/magic/product?productLineName=magic&q=${encodeURIComponent(name.split(' // ')[0])}`;
+import { artists, ownedLine, tcgplayerSearch, printingLine, textFaces } from '../../../core/surf';
 
 /** One card in the feed: the card large, then its words — name, type, the
  *  flavor text set to be read, the artist, where it was printed. The art tags
@@ -127,7 +124,9 @@ export function SurfCardEntry({ card, onTag, onLeave, eager = false }: { card: S
           <Link
             to="/explore"
             search={{ a: card.name.split(' // ')[0], mode: 'card' } as never}
-            onClick={onLeave}
+            onClick={(e) => {
+              if (e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) onLeave();
+            }}
             className="-ml-2 inline-flex min-h-9 items-center gap-1.5 rounded-sm px-2 text-md voice-semi font-medium text-accent-ink transition-colors duration-150 ease-guide hover:bg-paper-sunk focus-visible:bg-paper-sunk"
           >
             <ExploreMark className="size-[1.15rem]" />

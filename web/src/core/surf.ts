@@ -144,3 +144,6 @@ export function feedSummary(source: SurfSource, total: number | null | undefined
 }
 
 export const scryfallSearchUrl = (query: string) => `https://scryfall.com/search?q=${encodeURIComponent(query)}&unique=prints`;
+
+export const tcgplayerSearch = (name: string) =>
+  `https://www.tcgplayer.com/search/magic/product?productLineName=magic&q=${encodeURIComponent(name.split(' // ')[0])}`;

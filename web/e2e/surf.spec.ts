@@ -63,3 +63,18 @@ test('surf: nothing matches offers a reset', async ({ page }) => {
   await dialog.getByRole('button', { name: 'Reset filters', exact: true }).click();
   await expect(page).toHaveURL(/surf=on/);
 });
+
+test('surf: your cards keeps searching through empty pages before giving up', async ({ page }) => {
+  const offsets: number[] = [];
+  await page.route('**/api/surf/options', (r) => r.fulfill({ json: { families: [], treatments: [], types: [], rarities: [] } }));
+  await page.route('**/api/surf/draw', (r) => {
+    const { offset } = r.request().postDataJSON();
+    offsets.push(offset);
+    const last = offset >= 240;
+    return r.fulfill({ json: { source: 'owned', query: 'q', cards: last ? [card('o1', 'Owned Dragon', { owned: 1, owned_any: 1 })] : [], total: 300, next_offset: offset + 120, exhausted: false } });
+  });
+  await page.goto('/explore?surf=' + encodeURIComponent('src=owned'));
+  const dialog = page.getByRole('dialog', { name: 'Card surfer' });
+  await expect(dialog.getByRole('article', { name: 'Owned Dragon' })).toBeAttached();
+  expect(offsets.slice(0, 3)).toEqual([0, 120, 240]);
+});

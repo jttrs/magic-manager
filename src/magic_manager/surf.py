@@ -17,12 +17,12 @@ Two sources, one filter model:
 """
 from __future__ import annotations
 
-import json
 import random
 from dataclasses import dataclass, field
 from typing import Literal
 
 from . import db, explore, scryfall, scryfall_art, sets
+from .util import decode_json_list, is_token_layout
 
 # key → (label, Scryfall syntax). Order is the picker's order.
 TREATMENTS: dict[str, tuple[str, str]] = {
@@ -96,28 +96,22 @@ def build_query(f: Filters, *, set_codes: list[str] | None = None) -> str:
         parts.append("has:flavor")
     elif f.flavor == "none":
         parts.append("-has:flavor")
-    if f.types:
-        parts.append(_any([f"t:{t}" for t in f.types]))
+    types = [t for t in f.types if t in TYPES]
+    if types:
+        parts.append(_any([f"t:{t}" for t in types]))
     if f.legendary == "only":
         parts.append("t:legendary")
     elif f.legendary == "not":
         parts.append("-t:legendary")
-    if f.rarity:
-        parts.append(_any([f"r:{r}" for r in f.rarity]))
+    rarity = [r for r in f.rarity if r in RARITIES]
+    if rarity:
+        parts.append(_any([f"r:{r}" for r in rarity]))
     if f.artist.strip():
         parts.append(f'a:"{f.artist.strip().replace(chr(34), "")}"')
-    if f.treatments:
-        parts.append(_any([TREATMENTS[t][1] for t in f.treatments if t in TREATMENTS]))
+    treatments = [t for t in f.treatments if t in TREATMENTS]
+    if treatments:
+        parts.append(_any([TREATMENTS[t][1] for t in treatments]))
     return " ".join(parts)
-
-
-def _list(v) -> list:
-    if isinstance(v, str):
-        try:
-            v = json.loads(v)
-        except json.JSONDecodeError:
-            return []
-    return list(v or [])
 
 
 def _flavors(card: dict) -> list[str]:
@@ -139,7 +133,7 @@ def matches(card: dict, f: Filters, *, set_codes: list[str] | None = None, local
         return False
     if f.families and set_codes is not None and (card.get("set") or "").lower() not in set_codes:
         return False
-    ci = {c.lower() for c in _list(card.get("color_identity"))}
+    ci = {c.lower() for c in decode_json_list(card.get("color_identity"))}
     letters, colorless = _colors(f)
     if letters:
         want = set(letters)
@@ -148,16 +142,19 @@ def matches(card: dict, f: Filters, *, set_codes: list[str] | None = None, local
     elif colorless and ci:
         return False
     words = set(tl.replace("—", " ").replace("//", " ").split())
-    if f.types and not any(t in words for t in f.types):
+    types = [t for t in f.types if t in TYPES]
+    if types and not any(t in words for t in types):
         return False
     if f.legendary == "only" and "legendary" not in words:
         return False
     if f.legendary == "not" and "legendary" in words:
         return False
-    if f.rarity and (card.get("rarity") or "") not in f.rarity:
+    rarity = [r for r in f.rarity if r in RARITIES]
+    if rarity and (card.get("rarity") or "") not in rarity:
         return False
-    if f.treatments:
-        effects = set(_list(card.get("frame_effects")))
+    treatments = [t for t in f.treatments if t in TREATMENTS]
+    if treatments:
+        effects = set(decode_json_list(card.get("frame_effects")))
         have = {
             "borderless": card.get("border_color") == "borderless",
             "fullart": bool(card.get("full_art")),
@@ -167,7 +164,7 @@ def matches(card: dict, f: Filters, *, set_codes: list[str] | None = None, local
             "textless": None if local else bool(card.get("textless")),
         }
         # Locally unknown treatments can't rule a card out.
-        if not any(have.get(t) is not False for t in f.treatments if t in have):
+        if not any(have.get(t) is not False for t in treatments if t in have):
             return False
     if local:
         return True
@@ -227,7 +224,7 @@ def normalize(card: dict) -> dict:
         "image": _image(card),
         "faces": faces,
         "scryfall_uri": card.get("scryfall_uri"),
-        "color_identity": [c.upper() for c in _list(card.get("color_identity"))],
+        "color_identity": [c.upper() for c in decode_json_list(card.get("color_identity"))],
         "prices": {"nonfoil": _price(prices.get("usd")), "foil": _price(prices.get("usd_foil") or prices.get("usd_etched"))},
     }
 
@@ -278,7 +275,7 @@ def _draw_scryfall(f: Filters, n: int, with_total: bool) -> Draw:
         if card is None:
             out.exhausted = True
             break
-        if card.get("layout") in ("art_series", "token", "double_faced_token", "emblem"):
+        if card.get("layout") == "art_series" or is_token_layout(card.get("layout")):
             continue
         out.cards.append(normalize(card))
     return out

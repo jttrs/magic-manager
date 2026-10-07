@@ -63,6 +63,12 @@ describe('feed', () => {
     expect(nextPage([...dry, page(['b'])])).toEqual({ offset: 0, first: false });
   });
 
+  it('keeps paging your cards through empty, unexhausted pages until the server says done', () => {
+    const empty = page([], { source: 'owned', next_offset: 120, total: 500 });
+    expect(nextPage([empty])).toEqual({ offset: 120, first: false });
+    expect(nextPage([empty, page([], { source: 'owned', next_offset: 500, exhausted: true })])).toBeUndefined();
+  });
+
   it('pages your cards by offset', () => {
     expect(nextPage([page(['a'], { source: 'owned', next_offset: 24, total: 40 })])).toEqual({ offset: 24, first: false });
     expect(nextPage([page(['a'], { source: 'owned', next_offset: 40, exhausted: true })])).toBeUndefined();
