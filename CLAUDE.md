@@ -201,7 +201,7 @@ Inside `src/magic_manager/`:
 
 The Python clients (`scryfall.py`, `mtgjson.py`, `edhrec.py`, and the `sealed-value` providers `tcgcsv.py`/`tcgapi.py`/`ebay.py`) ultimately call these wrappers, so the CLI is always safe.
 
-Secrets live only in the gitignored `.env` at repo root (`MANAPOOL_EMAIL`, `MANAPOOL_ACCESS_TOKEN`, optional `MANAPOOL_PASSWORD` for the tier-3 headless cart fetch; `TCGAPI_KEY`, `EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET` for sealed-value market prices). Never commit or log them.
+Secrets are split by whose they are (Phase 3 decision H13). **Personal** credentials — your own Mana Pool login (`MANAPOOL_EMAIL` + `MANAPOOL_PASSWORD`), used only to read YOUR cart — live in the macOS Keychain (`uv run mm secret set|status|delete <NAME>`; `magic_manager.secrets`: environment first, then Keychain) and are **never** read from `.env`. **Service** credentials for catalog/price APIs live in the gitignored `.env` at repo root (`MANAPOOL_EMAIL` + `MANAPOOL_ACCESS_TOKEN` for `manapool.sh` — hosted, a project-owned service account in the host's secret store; `TCGAPI_KEY`, `EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET` for sealed-value market prices). Never commit or log either.
 
 ## Conventions
 
