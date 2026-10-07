@@ -80,3 +80,28 @@ def test_watched_links_count_as_confirmed(tmp_db, stub_identity):
     deals.watch(url, {"kind": "sealed", "set_code": "hob", "name": "The Hobbit Bundle"}, price=50.0)
     assert deals.watched_identities([url, "https://other"]) == {url: {"kind": "sealed", "set_code": "hob", "name": "The Hobbit Bundle"}}
     assert deals._earmark_choice("sld", "Goblingram (Foil Edition)", "foil") == {"kind": "sld", "set_code": "sld", "name": "Goblingram", "finish": "foil"}
+
+
+def test_watched_tcgplayer_link_reads_its_market_price(tmp_db, stub_identity, monkeypatch):
+    """Market → Secret Lair watches a drop at its TCGplayer product page: no store recipe
+    reads that page, so a refresh records the product's TCGplayer market price instead."""
+    from magic_manager import storefetch
+    url = "https://www.tcgplayer.com/product/694967"
+    deals.watch(url, {"kind": "sealed", "set_code": "c18", "name": "Deck"}, price=75.0)
+    monkeypatch.setattr(storefetch, "read", lambda *a, **k: pytest.fail("TCGplayer pages are never fetched"))
+    rows = deals.read_and_compare([url, "https://www.tcgplayer.com/product/1"])
+    watched, unwatched = rows
+    assert (watched["price"], watched["signal"], watched["error"], watched["vendor"]) == (80.0, "market", None, "tcgplayer")
+    assert unwatched["price"] is None and unwatched["error"] == "Not a product page of a catalogued store."
+    store = deals.watchlist(values=False)[0]["stores"][0]
+    assert (store["store"], store["price"], store["first_price"], store["read"]) == ("TCGplayer market", 80.0, 75.0, True)
+
+
+def test_watched_tcgplayer_link_without_market_price(tmp_db, stub_identity, monkeypatch):
+    url = "https://www.tcgplayer.com/product/694967"
+    deals.watch(url, {"kind": "sealed", "set_code": "c18", "name": "Deck"}, price=75.0)
+    monkeypatch.setattr(valuation, "value_sealed_product", lambda set_code, name, **kw: sealed.ProductValuation(
+        label=name, kind="sealed", sealed_market=None))
+    market._cost_memo.clear()
+    row = deals.read_prices([url])[0]
+    assert row["price"] is None and row["error"] == "TCGplayer has no market price for this yet."

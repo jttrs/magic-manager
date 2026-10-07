@@ -26,7 +26,6 @@ type Props = {
 
 /** One product table + inspector, shared by Watching and Open tabs. */
 export function DealsWorkspace({ products, costs, search, set, header, footer, emptyNote }: Props) {
-  const narrow = useMediaQuery('(max-width: 47.99rem)');
   const shown = useMemo(() => filterSortProducts(products, costs.data, dealFilters(search)), [products, costs.data, search]);
   const selected = products.find((p) => p.key === search.item);
   const list = (
@@ -50,21 +49,27 @@ export function DealsWorkspace({ products, costs, search, set, header, footer, e
   const inspector = selected
     ? <DealInspector key={selected.key} product={selected} cost={costs.data.get(selected.key)} costState={costs.state.get(selected.key)} />
     : <EmptyNote title="Pick a product">Choose a row to see its stores, what it’s worth and what’s inside.</EmptyNote>;
+  return <MasterDetail list={list} inspector={inspector} open={selected != null} onBack={() => set({ item: undefined })} backLabel="All products" splitId="mm.deals.split" />;
+}
+
+/** A list beside its inspector (resizable split, list 60 / inspector 40); phones show one at a time with a back link. */
+export function MasterDetail({ list, inspector, open, onBack, backLabel, splitId }: { list: ReactNode; inspector: ReactNode; open: boolean; onBack: () => void; backLabel: string; splitId: string }) {
+  const narrow = useMediaQuery('(max-width: 47.99rem)');
   if (narrow) {
-    return selected ? (
+    return open ? (
       <div className="flex h-full min-h-0 flex-col">
-        <button type="button" onClick={() => set({ item: undefined })} className="touch-hit mx-4 inline-flex min-h-11 cursor-pointer items-center gap-0.5 self-start text-sm voice-semi text-accent-ink">
-          <Chevron dir="left" className="size-3.5" /> All products
+        <button type="button" onClick={onBack} className="touch-hit mx-4 inline-flex min-h-11 cursor-pointer items-center gap-0.5 self-start text-sm voice-semi text-accent-ink">
+          <Chevron dir="left" className="size-3.5" /> {backLabel}
         </button>
         <div className="min-h-0 flex-1">{inspector}</div>
       </div>
     ) : list;
   }
-  return <Split list={list} inspector={inspector} />;
+  return <Split id={splitId} list={list} inspector={inspector} />;
 }
 
-function Split({ list, inspector }: { list: ReactNode; inspector: ReactNode }) {
-  const layout = useDefaultLayout({ id: 'mm.deals.split', panelIds: ['list', 'item'], storage: localStorage });
+function Split({ id, list, inspector }: { id: string; list: ReactNode; inspector: ReactNode }) {
+  const layout = useDefaultLayout({ id, panelIds: ['list', 'item'], storage: localStorage });
   return (
     <Group orientation="horizontal" className="h-full min-h-0" defaultLayout={layout.defaultLayout ?? { list: 60, item: 40 }} onLayoutChanged={layout.onLayoutChanged}>
       <Panel id="list" minSize="35" className="flex min-w-0 flex-col">{list}</Panel>

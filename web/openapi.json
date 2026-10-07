@@ -1003,6 +1003,51 @@
         }
       }
     },
+    "/api/market/secret-lair": {
+      "get": {
+        "tags": [
+          "market"
+        ],
+        "summary": "Market Secret Lair",
+        "operationId": "market_secret_lair",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 30,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SldDropsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/market/cards": {
       "get": {
         "tags": [
@@ -3983,6 +4028,12 @@
             "type": "string",
             "title": "Floor Scryfall Id",
             "description": "The cheapest printing (this one when unpriced elsewhere)."
+          },
+          "bonus": {
+            "type": "boolean",
+            "title": "Bonus",
+            "description": "A Secret Lair drop's bonus card (shipped with the drop, not in its decklist).",
+            "default": false
           }
         },
         "type": "object",
@@ -6171,6 +6222,18 @@
             "type": "array",
             "title": "Notes"
           },
+          "sealed_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sealed Name",
+            "description": "Secret Lair: the MTGJSON sealed product valued (None for older drops without one)."
+          },
           "lines": {
             "items": {
               "$ref": "#/components/schemas/DeckLineOut"
@@ -6676,6 +6739,102 @@
           "name"
         ],
         "title": "SetRefOut"
+      },
+      "SldDropOut": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "release_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Date"
+          },
+          "editions": {
+            "items": {
+              "$ref": "#/components/schemas/SldEditionOut"
+            },
+            "type": "array",
+            "title": "Editions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "editions"
+        ],
+        "title": "SldDropOut"
+      },
+      "SldDropsOut": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "description": "Every Secret Lair drop known."
+          },
+          "drops": {
+            "items": {
+              "$ref": "#/components/schemas/SldDropOut"
+            },
+            "type": "array",
+            "title": "Drops",
+            "description": "The most recent drops, newest first. Values: GET /api/market/product-cost?kind=sld."
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "drops"
+        ],
+        "title": "SldDropsOut"
+      },
+      "SldEditionOut": {
+        "properties": {
+          "finish": {
+            "type": "string",
+            "enum": [
+              "nonfoil",
+              "foil"
+            ],
+            "title": "Finish"
+          },
+          "sealed_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sealed Name",
+            "description": "The MTGJSON sealed product for this edition, if listed."
+          },
+          "tcgplayer_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tcgplayer Url",
+            "description": "Its TCGplayer product page \u2014 the link a watched drop tracks."
+          }
+        },
+        "type": "object",
+        "required": [
+          "finish"
+        ],
+        "title": "SldEditionOut"
       },
       "SourceOut": {
         "properties": {

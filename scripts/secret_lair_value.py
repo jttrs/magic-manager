@@ -1,64 +1,29 @@
 """Deterministic markdown table of the most recent N Secret Lair drops.
 
-A "drop" is the MTGJSON DeckList notion of one Secret Lair Drop product,
-merged across its base printing and any ``... Foil Edition`` sibling (MTGJSON
-lists foil-edition-only Secret Lairs as separate deck entries; we treat them
-as the same logical drop). Drops are sorted newest-first by release date
-(name ascending as the tie-break) and rendered with live Scryfall singles
-prices, nonfoil and foil in separate columns plus a combined "buy everything"
-figure.
+Thin driver over :mod:`magic_manager.sld_market` (the same engine the web
+Market → Secret Lair view uses). A "drop" is the MTGJSON DeckList notion of one
+Secret Lair Drop, merged across its base printing and any ``... Foil Edition``
+sibling; drops sort newest-first by release date (name ascending tie-break).
 
-Every price is fetched live via Scryfall's ``/cards/collection`` batch
-endpoint through the project's rate-limited wrapper. Prices are cached
-inside the wrapper (24h TTL) so re-runs the same day are instant. Deck
-metadata comes from the MTGJSON wrapper (also cached).
+Each row is valued through ``market.product_cost(kind='sld')`` (DRY with the
+web app and Deals):
+  - Sealed mkt = the drop's sealed product (that edition) on the market
+    (TCGplayer via the provider chain).
+  - Exact cards = the drop's cards PLUS its bonus card (or bonus-pack EV) at
+    their exact printings.
+  - Cheapest cards = each of those cards at its cheapest printing (local prices).
+  - Gap = sealed − exact cards (negative ⇒ the sealed drop costs less than its
+    cards).
 
-Cross-universe exception: SLD singles valuation is inherently a LIVE
-cross-set lookup (floor singles span every set the SLD cards also print
-in), so this command is NOT subject to the repo's local-first convention —
-see CLAUDE.md § Price freshness: cross-universe exception. ``--refresh`` is
-accepted only for CLI surface consistency; it has no additional effect.
-
-Input:
-  - positional ``limit`` (default 10) or ``--limit N`` — how many of the most
-    recent drops to render. ``--limit`` wins if both are given.
-
-Output:
-  - stdout: a markdown title + legend, then the UNIFIED 4-column value table
-    (shared with sealed_value / sealed_value_batch): Drop (hyperlinked to a
-    Scryfall search for the drop's exact collector numbers), Release, Cards,
-    Listing, Sealed mkt, Exact singles, Floor singles. Listing is N/A for this
-    recent-drops survey (no per-drop asking price), so cols show bare values with
-    no delta. Sealed mkt = the drop's sealed product on the wider secondary
-    market (via the market providers). Exact singles = the drop's own Secret Lair
-    printings (nonfoil). Floor singles = the CHEAPEST printing of each card
-    anywhere (matched by oracle id) — the cheapest way to assemble the cards for
-    a deck regardless of the Secret Lair treatment.
-  - stderr: a one-line summary of how many drops were rendered out of the
-    total known SLD drops, how many distinct printings were fetched, and how
-    many distinct cards were priced for the floor lookup.
-
-Exit codes:
-  0 — ran to completion.
-  2 — bad invocation, or MTGJSON/Scryfall lookup failure.
-
-Determinism notes:
-  - Drops sort by release date descending, name ascending tie-break.
-  - Drop identity = base + Foil-Edition merged by stripping the
-    " Foil Edition" suffix from the entry name; a base entry's name/date win
-    as canonical regardless of encounter order.
-  - Scryfall IDs are the de-duplicated union across a drop's sibling decks,
-    preserving first-seen order.
-  - Floor prices are the min over every printing (``oracleid:<id>
-    unique=prints``) of that card's ``usd`` / ``usd_foil``; the per-oracle
-    lookup is de-duplicated across all drops and 24h-cached at the wrapper.
-  - Search URLs are built from ``set:sld (cn:... or ...)`` with collector
-    numbers sorted via ``util.cn_sort_key`` and any trailing "★" stripped.
+Prices are local-first (CLAUDE.md § Price freshness): a missing ``sld`` sync is
+filled; stale prices are used as-is. ``--refresh`` is accepted for CLI surface
+consistency and has no additional effect.
 
 Usage:
-    uv run python scripts/secret_lair_value.py
-    uv run python scripts/secret_lair_value.py 5
-    uv run python scripts/secret_lair_value.py --limit 20
+    uv run python scripts/secret_lair_value.py            # 10 newest, regular editions
+    uv run python scripts/secret_lair_value.py 20 --foil  # 20 newest, foil editions
+
+Exit codes: 0 ran to completion; 2 bad invocation or MTGJSON lookup failure.
 """
 from __future__ import annotations
 
@@ -69,108 +34,56 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from magic_manager import mtgjson, scryfall, sld, util, valuation  # noqa: E402
+from magic_manager import mtgjson, sld, sld_market, util  # noqa: E402
+
+
+def _gap_cell(g: dict | None) -> str:
+    if g is None:
+        return "—"
+    sign = "−" if g["usd"] < 0 else "+"
+    return f"{sign}{util.fmt_usd(abs(g['usd']))} ({sign}{abs(g['pct']):.0f}%)"
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(
-        description="Deterministic value table for the most recent N Secret Lair drops.",
-    )
-    ap.add_argument(
-        "limit", nargs="?", type=int, default=10,
-        help="Number of most recent drops to render (default 10).",
-    )
-    ap.add_argument(
-        "--limit", type=int, default=None, dest="limit_opt",
-        help="Same as the positional argument; wins if both are given.",
-    )
-    ap.add_argument(
-        "--market", choices=["null", "tcgcsv", "tcgapi", "manapool", "chain", "compare"],
-        default="chain", help="Sealed-market source for the Sealed mkt column (default: chain).",
-    )
-    # Cross-universe exception (CLAUDE.md § Price freshness): SLD valuation is
-    # inherently live/cross-set, so --refresh is a no-op — accepted only to
-    # keep the CLI surface uniform with local-first commands.
-    ap.add_argument(
-        "--refresh", action="store_true",
-        help="(Prices are always fetched live for this command — it needs "
-             "current cross-set market data; --refresh is accepted for CLI "
-             "consistency and has no additional effect.)",
-    )
+    ap = argparse.ArgumentParser(description="Value table for the most recent N Secret Lair drops.")
+    ap.add_argument("limit", nargs="?", type=int, default=10, help="Number of most recent drops (default 10).")
+    ap.add_argument("--limit", type=int, default=None, dest="limit_opt", help="Same as the positional; wins if both are given.")
+    ap.add_argument("--foil", action="store_true", help="Value the Foil Edition of each drop (drops without one are skipped).")
+    ap.add_argument("--refresh", action="store_true", help=argparse.SUPPRESS)
     args = ap.parse_args()
 
     n = args.limit_opt if args.limit_opt is not None else args.limit
     if n <= 0:
         print("error: limit must be a positive integer", file=sys.stderr)
         return 2
-
+    finish = "foil" if args.foil else "nonfoil"
     try:
-        chosen, total = sld.recent_drops(n)
-        # Resolve every drop's card ids, then fetch all printings in ONE batch so
-        # the whole table shares one Scryfall call + one per-oracle floor cache.
-        all_ids: list[str] = []
-        seen_ids: set[str] = set()
-        for g in chosen:
-            g["ids"] = sld.collect_drop_ids(g["file_names"])
-            for sid in g["ids"]:
-                if sid not in seen_ids:
-                    seen_ids.add(sid)
-                    all_ids.append(sid)
-        found, not_found = scryfall.collection([{"id": i} for i in all_ids])
+        rows = sld_market.survey(n, finish)
     except mtgjson.MtgJsonError as e:
         print(f"error: mtgjson lookup failed: {e}", file=sys.stderr)
         return 2
-    except scryfall.ScryfallError as e:
-        print(f"error: scryfall lookup failed: {e}", file=sys.stderr)
-        return 2
 
-    card_by_id = {c["id"]: c for c in found}
-    floors_cache: dict[str, tuple[float | None, float | None]] = {}
-
-    # Value each drop through the unified 4-column producer, sharing the batch
-    # fetch + floor cache. Keep the DropValue too (for the Cards + search-URL cols).
-    try:
-        rows = []
-        for g in chosen:
-            dv = sld.value_drop(g, floors=True, _card_by_id=card_by_id,
-                                _floors_cache=floors_cache)
-            pv = valuation.value_sld_drop(g, listing=None, market=args.market,
-                                          _card_by_id=card_by_id, _floors_cache=floors_cache)
-            rows.append((g, dv, pv))
-    except scryfall.ScryfallError as e:
-        print(f"error: scryfall lookup failed: {e}", file=sys.stderr)
-        return 2
-
-    print(
-        f"Rendered {len(chosen)} drops (of {total} SLD drops). "
-        f"Fetched {len(all_ids)} distinct printings; {len(not_found)} unresolved. "
-        f"Floor-priced {len(floors_cache)} distinct cards.",
-        file=sys.stderr,
-    )
-
-    print(f"## Secret Lair Drop value — top {n} by release (newest first)")
+    failed = sum(1 for r in rows if r["error"])
+    print(f"Valued {len(rows) - failed} of {len(rows)} drops ({finish}){f'; {failed} failed' if failed else ''}.", file=sys.stderr)
+    edition = "Foil Edition" if args.foil else "regular edition"
+    print(f"## Secret Lair Drop value — {n} newest, {edition}")
     print()
-    print(
-        "*Listing = N/A here (this is a recent-drops survey, no per-drop asking). "
-        "Sealed mkt = the drop's sealed product on the wider secondary market. "
-        "Exact singles = the drop's own Secret Lair printings (nonfoil). Floor "
-        "singles = cheapest printing of each card anywhere (nonfoil) — the "
-        "cheapest way to get the cards into a deck regardless of treatment.*"
-    )
+    print("*Sealed mkt = the drop's sealed product on the market. Exact cards = the drop's "
+          "cards plus its bonus card at their exact printings. Cheapest cards = each card at its "
+          "cheapest printing anywhere. Gap = sealed − exact cards (negative ⇒ sealed is cheaper).*")
     print()
-    print("| Drop | Release | Cards | Listing | Sealed mkt | Exact singles | Floor singles |")
+    print("| Drop | Release | Cards | Sealed mkt | Exact cards | Cheapest cards | Gap |")
     print("|---|---|---:|---:|---:|---:|---:|")
-    for g, dv, pv in rows:
-        safe = pv.label.replace("|", "\\|")
-        # Listing is None for the survey → fmt_delta_cell renders bare values.
-        print(
-            f"| [{safe}]({dv.search_url}) | {dv.release_date} | {dv.card_count} | "
-            f"{util.fmt_usd(pv.listing)} | "
-            f"{util.fmt_delta_cell(pv.sealed_market, pv.listing)} | "
-            f"{util.fmt_delta_cell(pv.exact_singles, pv.listing)} | "
-            f"{util.fmt_delta_cell(pv.floor_singles, pv.listing)} |"
-        )
-
+    for r in rows:
+        safe = r["name"].replace("|", "\\|")
+        c = r["cost"]
+        if c is None:
+            print(f"| {safe} | {r['release_date']} | — | — | — | — | error: {r['error']} |")
+            continue
+        url = sld.search_url([ln["collector_number"] for ln in c["lines"] if ln["set_code"].lower() == "sld" and ln["collector_number"] != "?"])
+        print(f"| [{safe}]({url}) | {r['release_date']} | {c['total_cards']} | {util.fmt_usd(c['market'])} | "
+              f"{util.fmt_usd(c['exact'])} | {util.fmt_usd(c['floor'])} | "
+              f"{_gap_cell(sld_market.gap(c))} |")
     return 0
 
 

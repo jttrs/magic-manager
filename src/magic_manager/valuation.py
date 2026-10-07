@@ -199,13 +199,12 @@ def value_sealed_product(
 
 # ---------- SLD col2: drop → sealedProduct market price ----------
 
-def sld_sealed_market(drop_name: str, edition: str = "auto",
-                      *, market: str = "chain") -> tuple[float | None, str | None]:
-    """Price a Secret Lair drop's SEALED product on the wider market.
+def sld_sealed_product(drop_name: str, edition: str = "auto", *, strict: bool = False) -> dict | None:
+    """The MTGJSON ``sealedProduct`` that sells a Secret Lair drop (base or foil edition).
 
     Secret Lair drops DO have MTGJSON ``sealedProduct`` entries (base + foil
-    editions, carrying tcgplayerProductId/uuid), so they price through the same
-    provider seam as any sealed product. Matching is robust to the naming
+    editions, carrying tcgplayerProductId/uuid, and the drop's BONUS card as
+    ``contents.card`` or a bonus ``pack``). Matching is robust to the naming
     differences between the DeckList drop name and the sealedProduct name — the
     shared ``sld.normalize_name`` (``&``→``and``, punctuation-insensitive) plus
     ``sld.strip_finish_marker`` (drops the ``Secret Lair x`` scaffold + a trailing
@@ -214,42 +213,49 @@ def sld_sealed_market(drop_name: str, edition: str = "auto",
     is considered, so a short drop name never bleeds into a longer sibling (the
     drop "City Styles" must not match the sealedProduct "City Styles 2 Dressed to
     Kill"; "Marvel's Storm" still matches "Secret Lair x Marvels Storm" via the
-    weaker tiers when no exact core exists). Picks base vs foil per ``edition``;
-    prices via ``sealed._market_meta`` + the provider chain. Returns
-    ``(price_or_None, source_or_None)`` — None when no sealedProduct matches (older
-    drops predate the entries) or nothing prices it."""
+    weaker tiers when no exact core exists). Prefers the requested ``edition``
+    ("foil" / else nonfoil); with ``strict`` returns None when that edition has no
+    product, else falls back to the base (then any) match. None when nothing
+    matches (older drops predate the entries)."""
     try:
         products = mtgjson.sealed_products("sld")
-        set_data = mtgjson.set_file("sld")
     except Exception:  # noqa: BLE001
-        return None, None
-
-    # Reduce the drop name and each sealedProduct name to a shared core.
+        return None
     want = sld.strip_finish_marker(sld.normalize_name(drop_name))
 
     def _core(p: dict) -> str:
         return sld.strip_finish_marker(sld.normalize_name(p.get("name") or ""))
 
     def _is_foil(p: dict) -> bool:
-        n = (p.get("name") or "").lower()
-        return "foil" in n and "non foil" not in n and "non-foil" not in n
+        return sld.edition_from_name(p.get("name") or "") == "foil"
 
-    # Tiered match (mirrors sld.identify_drop's exact→suffix→containment
-    # preference): take only the STRONGEST non-empty tier. Loose containment is a
-    # last resort so "City Styles" doesn't fuse with "City Styles 2 Dressed to
-    # Kill" (a distinct drop whose foil twin would otherwise mis-price this one).
     cored = [(p, c) for p in products if (c := _core(p))]
     exact = [p for p, c in cored if c == want]
     suffix = [p for p, c in cored if c != want and c.endswith(want)]
     contains = [p for p, c in cored if want != c and not c.endswith(want) and want in c]
     matches = exact or suffix or contains
     if not matches:
-        return None, None
+        return None
     want_foil = edition == "foil"
-    # Prefer the requested edition; else take any match (base if present).
-    picked = next((p for p in matches if _is_foil(p) == want_foil),
-                  next((p for p in matches if not _is_foil(p)), matches[0]))
+    hit = next((p for p in matches if _is_foil(p) == want_foil), None)
+    if hit is not None or strict:
+        return hit
+    return next((p for p in matches if not _is_foil(p)), matches[0])
 
+
+def sld_sealed_market(drop_name: str, edition: str = "auto",
+                      *, market: str = "chain") -> tuple[float | None, str | None]:
+    """Price a Secret Lair drop's SEALED product (:func:`sld_sealed_product`) on
+    the wider market via ``sealed._market_meta`` + the provider chain. Returns
+    ``(price_or_None, source_or_None)`` — None when no sealedProduct matches or
+    nothing prices it."""
+    picked = sld_sealed_product(drop_name, edition)
+    if picked is None:
+        return None, None
+    try:
+        set_data = mtgjson.set_file("sld")
+    except Exception:  # noqa: BLE001
+        return None, None
     provider = sealed.make_market_provider(market)
     meta = sealed._market_meta(picked, set_data)
     price = provider.price(meta)

@@ -101,6 +101,20 @@ def set_file(set_code: str) -> dict:
 
 
 @lru_cache(maxsize=None)
+def uuid_scryfall_ids(set_code: str) -> dict[str, str]:
+    """``{mtgjson uuid: scryfallId}`` for every card and token in a set file —
+    the bridge for ``sealedProduct.contents.card`` refs, which carry only a
+    ``uuid`` + ``set`` + ``number`` (e.g. a Secret Lair drop's bonus card)."""
+    data = set_file(set_code)
+    out: dict[str, str] = {}
+    for c in [*(data.get("cards") or []), *(data.get("tokens") or [])]:
+        sid = (c.get("identifiers") or {}).get("scryfallId")
+        if c.get("uuid") and sid:
+            out[c["uuid"]] = sid
+    return out
+
+
+@lru_cache(maxsize=None)
 def deck(file_name: str) -> dict:
     """Return ``decks/<file_name>.json``'s ``data`` block.
 
