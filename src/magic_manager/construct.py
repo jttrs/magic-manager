@@ -133,6 +133,12 @@ def _needs_from_card_refs(card_refs: list[dict], source: str) -> list[dict]:
     out: list[dict] = []
     for ref in card_refs:
         sid = (ref.get("identifiers") or {}).get("scryfallId")
+        if not sid and ref.get("uuid") and ref.get("set"):
+            # sealedProduct card refs carry only uuid + set + number.
+            try:
+                sid = mtgjson.uuid_scryfall_ids(ref["set"]).get(ref["uuid"])
+            except mtgjson.MtgJsonError:
+                sid = None
         if not sid:
             continue
         out.append({
@@ -145,6 +151,12 @@ def _needs_from_card_refs(card_refs: list[dict], source: str) -> list[dict]:
             "fb_cn": ref.get("number"),
         })
     return out
+
+
+def product_card_ids(product: dict) -> list[str]:
+    """Scryfall ids of a sealed product's explicit ``contents.card`` refs (its
+    inserts — e.g. a Secret Lair drop's bonus card)."""
+    return [r["scryfall_id"] for r in _needs_from_card_refs((product.get("contents") or {}).get("card") or [], "")]
 
 
 def _walk_product_contents(

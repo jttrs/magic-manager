@@ -11,7 +11,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from .. import market
+from .. import market, sld_market
 from .jobs import Artifact, JobResult, JobSpec, ProgressEvent, ProgressFn, register
 
 
@@ -96,6 +96,7 @@ class DeckLineOut(BaseModel):
     floor_set_code: str | None = None
     floor_collector_number: str | None = None
     floor_scryfall_id: str = Field(description="The cheapest printing (this one when unpriced elsewhere).")
+    bonus: bool = Field(False, description="A Secret Lair drop's bonus card (shipped with the drop, not in its decklist).")
 
 
 class DeckCostOut(BaseModel):
@@ -132,6 +133,7 @@ class ProductCostOut(BaseModel):
     total_cards: int = 0
     unpriced: int = Field(0, description="Known cards with no price at their exact printing.")
     notes: list[str] = Field(default_factory=list)
+    sealed_name: str | None = Field(None, description="Secret Lair: the MTGJSON sealed product valued (None for older drops without one).")
     lines: list[DeckLineOut] = Field(default_factory=list, description="Every known card (exact + cheapest printing, your free copies).")
 
 
@@ -157,6 +159,27 @@ def family_cards(code: str) -> FamilyCardsOut:
 
 def deck_cost(slug: str) -> DeckCostOut:
     return DeckCostOut(**market.deck_cost(slug))
+
+
+class SldEditionOut(BaseModel):
+    finish: Literal["nonfoil", "foil"]
+    sealed_name: str | None = Field(None, description="The MTGJSON sealed product for this edition, if listed.")
+    tcgplayer_url: str | None = Field(None, description="Its TCGplayer product page — the link a watched drop tracks.")
+
+
+class SldDropOut(BaseModel):
+    name: str
+    release_date: str | None = None
+    editions: list[SldEditionOut]
+
+
+class SldDropsOut(BaseModel):
+    total: int = Field(description="Every Secret Lair drop known.")
+    drops: list[SldDropOut] = Field(description="The most recent drops, newest first. Values: GET /api/market/product-cost?kind=sld.")
+
+
+def sld_drops(limit: int = 30) -> SldDropsOut:
+    return SldDropsOut(**sld_market.recent(limit))
 
 
 class ValueFamilyInput(BaseModel):

@@ -7,6 +7,7 @@ import { ViewLayout } from '../components/AppShell';
 import { useFeature } from '../app/features';
 import { DealsPanel } from './market/DealsPanel';
 import { WatchingPanel } from './market/WatchingPanel';
+import { SecretLairFind, SecretLairPanel } from './market/SecretLairPanel';
 import { dealFilters, useDealCosts, useDealsData } from './market/useDealsData';
 import { CardLines } from './market/CardLines';
 import { ProductContents } from './market/ProductContents';
@@ -65,11 +66,12 @@ export function MarketView() {
       <SideSection title="Price">
         <Segmented<MarketSearch['subject']>
           label="Subject"
+          wrap={dealsOn}
           value={search.subject}
           onChange={(subject) => set({ subject })}
-          options={[{ value: 'family', label: 'Set family' }, { value: 'deck', label: 'Deck' }, ...(dealsOn ? [{ value: 'deals' as const, label: 'Deals' }] : [])]}
+          options={[{ value: 'family', label: 'Set family' }, { value: 'deck', label: 'Deck' }, { value: 'sld', label: 'Secret Lair' }, ...(dealsOn ? [{ value: 'deals' as const, label: 'Deals' }] : [])]}
         />
-        {search.subject === 'deals' ? (
+        {search.subject === 'sld' ? null : search.subject === 'deals' ? (
           <Segmented<MarketSearch['deals']> label="Show" value={search.deals} onChange={(deals) => set({ deals, item: undefined })} options={[{ value: 'tabs', label: 'Open tabs' }, { value: 'watching', label: 'Watching' }]} />
         ) : search.subject === 'family' ? (
           fams.isError ? (
@@ -83,6 +85,7 @@ export function MarketView() {
           <SearchSelect label="Deck" noun="deck" value={search.deck} onChange={(deck) => set({ deck })} options={(decks.data ?? []).map((d) => ({ value: d.slug, label: d.name, hint: d.deck_type }))} />
         )}
       </SideSection>
+      {search.subject === 'sld' && <SecretLairFind search={search} set={set} />}
       {inDeals && (
         <SideSection title="Find">
           <TextField name="dq" label="Search" value={search.dq} placeholder="Name or set code" onChange={(dq) => setFilter({ dq })} />
@@ -179,7 +182,11 @@ export function MarketView() {
   let title = 'Market';
   let summary: ReactNode;
   let body: ReactNode;
-  if (search.subject === 'deals' && dealsOn) {
+  if (search.subject === 'sld') {
+    title = 'Secret Lair';
+    summary = 'The newest drops: sealed price beside the cards inside, bonus card included';
+    body = <SecretLairPanel search={search} set={set} />;
+  } else if (search.subject === 'deals' && dealsOn) {
     title = search.deals === 'watching' ? 'Watching' : 'Deals';
     summary = search.deals === 'watching' ? 'Products you watch: best price now, what it’s worth, and what’s inside' : 'Product pages open in your browser, compared to what they’re worth';
     body = search.deals === 'watching' ? <WatchingPanel search={search} set={set} /> : <DealsPanel search={search} set={set} />;
@@ -207,11 +214,11 @@ export function MarketView() {
     }
   }
 
-  const sideSummary = search.subject === 'family' ? famName : deckName;
+  const sideSummary = search.subject === 'family' ? famName : search.subject === 'sld' ? 'Secret Lair' : deckName;
   return (
-    <ViewLayout label="Market controls" summary={sideSummary} sidebar={sidebar} startOpen={!(search.code || search.deck || search.subject === 'deals')}>
+    <ViewLayout label="Market controls" summary={sideSummary} sidebar={sidebar} startOpen={!(search.code || search.deck || search.subject === 'deals' || search.subject === 'sld')}>
       <GuideSheet title={title} summary={summary}>
-        {inDeals ? <div className="h-full min-h-0">{body}</div> : <div className="h-full overflow-y-auto pb-8">{body}</div>}
+        {inDeals || search.subject === 'sld' ? <div className="h-full min-h-0">{body}</div> : <div className="h-full overflow-y-auto pb-8">{body}</div>}
       </GuideSheet>
     </ViewLayout>
   );

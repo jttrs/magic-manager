@@ -261,6 +261,13 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         except LookupError as e:
             raise HTTPException(404, str(e)) from e
 
+    @app.get("/api/market/secret-lair", response_model=market_api.SldDropsOut, tags=["market"])
+    def market_secret_lair(limit: Annotated[int, Query(ge=1, le=200)] = 30):
+        try:
+            return market_api.sld_drops(limit)
+        except RuntimeError as e:  # MtgJsonError: the catalogue couldn't be read
+            raise HTTPException(502, f"Couldn't list Secret Lair drops: {e}") from e
+
     @app.get("/api/market/cards", response_model=market_api.FamilyCardsOut, tags=["market"])
     def market_cards(code: Annotated[str, Query(min_length=2)]):
         try:

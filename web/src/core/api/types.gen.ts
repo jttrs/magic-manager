@@ -1121,6 +1121,12 @@ export type DeckLineOut = {
      * The cheapest printing (this one when unpriced elsewhere).
      */
     floor_scryfall_id: string;
+    /**
+     * Bonus
+     *
+     * A Secret Lair drop's bonus card (shipped with the drop, not in its decklist).
+     */
+    bonus?: boolean;
 };
 
 /**
@@ -2378,6 +2384,12 @@ export type ProductCostOut = {
      */
     notes?: Array<string>;
     /**
+     * Sealed Name
+     *
+     * Secret Lair: the MTGJSON sealed product valued (None for older drops without one).
+     */
+    sealed_name?: string | null;
+    /**
      * Lines
      *
      * Every known card (exact + cheapest printing, your free copies).
@@ -2655,6 +2667,64 @@ export type SetRefOut = {
      * Name
      */
     name: string;
+};
+
+/**
+ * SldDropOut
+ */
+export type SldDropOut = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Release Date
+     */
+    release_date?: string | null;
+    /**
+     * Editions
+     */
+    editions: Array<SldEditionOut>;
+};
+
+/**
+ * SldDropsOut
+ */
+export type SldDropsOut = {
+    /**
+     * Total
+     *
+     * Every Secret Lair drop known.
+     */
+    total: number;
+    /**
+     * Drops
+     *
+     * The most recent drops, newest first. Values: GET /api/market/product-cost?kind=sld.
+     */
+    drops: Array<SldDropOut>;
+};
+
+/**
+ * SldEditionOut
+ */
+export type SldEditionOut = {
+    /**
+     * Finish
+     */
+    finish: 'nonfoil' | 'foil';
+    /**
+     * Sealed Name
+     *
+     * The MTGJSON sealed product for this edition, if listed.
+     */
+    sealed_name?: string | null;
+    /**
+     * Tcgplayer Url
+     *
+     * Its TCGplayer product page — the link a watched drop tracks.
+     */
+    tcgplayer_url?: string | null;
 };
 
 /**
@@ -3787,6 +3857,36 @@ export type MarketProductCostResponses = {
 };
 
 export type MarketProductCostResponse = MarketProductCostResponses[keyof MarketProductCostResponses];
+
+export type MarketSecretLairData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Limit
+         */
+        limit?: number;
+    };
+    url: '/api/market/secret-lair';
+};
+
+export type MarketSecretLairErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type MarketSecretLairError = MarketSecretLairErrors[keyof MarketSecretLairErrors];
+
+export type MarketSecretLairResponses = {
+    /**
+     * Successful Response
+     */
+    200: SldDropsOut;
+};
+
+export type MarketSecretLairResponse = MarketSecretLairResponses[keyof MarketSecretLairResponses];
 
 export type MarketCardsData = {
     body?: never;

@@ -3,6 +3,7 @@
 // binds these schemas.
 import { z } from 'zod';
 import { BASES, DEAL_SORTS, PRODUCT_TYPES } from './deals';
+import { SLD_BASES, SLD_EDITIONS, SLD_SORTS } from './secretLair';
 
 export const BUCKETS = ['a_only', 'both', 'b_only'] as const;
 export type Bucket = (typeof BUCKETS)[number];
@@ -69,7 +70,7 @@ export const decksSearch = z.object({
 });
 export type DecksSearch = z.infer<typeof decksSearch>;
 
-const MARKET_SUBJECTS = ['family', 'deck', 'deals'] as const;
+const MARKET_SUBJECTS = ['family', 'deck', 'sld', 'deals'] as const;
 const MARKET_TABS = ['products', 'cards'] as const;
 const CARD_PRICE_SORTS = ['savings', 'price', 'set'] as const;
 const PRICE_BASES = ['floor', 'exact'] as const;
@@ -101,6 +102,13 @@ export const marketSearch = z.object({
   basis: z.enum(BASES).catch('market').default('market'),
   dsort: z.enum(DEAL_SORTS).catch('gap_pct').default('gap_pct'),
   inStock: z.boolean().catch(false).default(false),
+  /** Secret Lair: the edition each drop is valued at. */
+  edition: z.enum(SLD_EDITIONS).catch('nonfoil').default('nonfoil'),
+  /** Secret Lair: how many of the newest drops to list. */
+  sldN: z.number().int().min(1).max(200).catch(30).default(30),
+  /** Secret Lair: what the sealed price is compared to. */
+  sbasis: z.enum(SLD_BASES).catch('exact').default('exact'),
+  ssort: z.enum(SLD_SORTS).catch('gap_pct').default('gap_pct'),
   /** Deals: the product open in the inspector (its key). */
   item: z.string().optional().catch(undefined),
 });

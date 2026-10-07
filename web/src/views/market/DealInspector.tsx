@@ -12,7 +12,7 @@ import { patchPrices, type CostState } from './useDealsData';
 
 const tone = (t: 'good' | 'bad' | 'even' | undefined) => (t === 'good' ? 'text-accent-ink' : t === 'bad' ? 'text-danger' : 'text-ink-muted');
 
-const H3 = 'border-b-2 border-rule-strong pb-1 text-lg voice-condensed font-bold text-ink';
+export const H3 = 'border-b-2 border-rule-strong pb-1 text-lg voice-condensed font-bold text-ink';
 
 /** The chosen product: where to buy it, what it's worth, what's in it. */
 export function DealInspector({ product: p, cost, costState }: { product: DealProduct; cost?: ProductCostOut; costState?: CostState }) {
@@ -82,7 +82,7 @@ function OfferLine({ o, fromTab }: { o: Offer; fromTab: boolean }) {
   );
 }
 
-function Row({ label, value, best, note, strong = false }: { label: string; value: number | null | undefined; best: number | null; note?: string | null; strong?: boolean }) {
+export function Row({ label, value, best, note, strong = false }: { label: string; value: number | null | undefined; best: number | null; note?: string | null; strong?: boolean }) {
   const delta = value != null && value !== 0 && best != null ? ((best - value) / value) * 100 : null;
   return (
     <div className="flex flex-wrap items-baseline gap-x-3 border-b border-rule/60 py-1.5 text-sm">

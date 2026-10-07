@@ -1,7 +1,7 @@
 // Server state via TanStack Query over the generated, typed API client.
 import { keepPreviousData, queryOptions } from '@tanstack/react-query';
 import type { DraftCardIn } from '../core/api';
-import { dealsTabs, dealsWatched, marketProductCost, undoInfo, cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs } from '../core/api';
+import { dealsTabs, dealsWatched, marketProductCost, marketSecretLair, undoInfo, cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs } from '../core/api';
 
 class ApiError extends Error {}
 
@@ -203,6 +203,13 @@ export const dealsTabsQuery = () =>
   });
 
 /** What a sealed product / Secret Lair drop is worth (server-memoized 30 min). */
+export const secretLairQuery = (limit: number) =>
+  queryOptions({
+    queryKey: ['market', 'secret-lair', limit],
+    queryFn: async ({ signal }) => unwrap(await marketSecretLair({ query: { limit }, signal })),
+    staleTime: 30 * 60_000,
+  });
+
 export const productCostQuery = (kind: 'sealed' | 'sld', set: string, name: string, finish: string | null) =>
   queryOptions({
     queryKey: ['market', 'product-cost', kind, set, name, finish],

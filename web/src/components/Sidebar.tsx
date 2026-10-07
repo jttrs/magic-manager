@@ -13,7 +13,8 @@ export function SideSection({ title, children, id }: { title: string; children: 
 type Opt<T extends string> = { value: T; label: string; disabled?: boolean; title?: string };
 
 /** Single-choice segmented control (view type, chase mode). `showLabel` prints the label above it. */
-export function Segmented<T extends string>({ value, options, onChange, label, showLabel = false, labelExtra }: { value: T; options: Opt<T>[]; onChange: (v: T) => void; label: string; showLabel?: boolean; labelExtra?: ReactNode }) {
+/** `wrap` lays long labels out two to a row so they stay whole in the narrow sidebar. */
+export function Segmented<T extends string>({ value, options, onChange, label, showLabel = false, labelExtra, wrap = false }: { value: T; options: Opt<T>[]; onChange: (v: T) => void; label: string; showLabel?: boolean; labelExtra?: ReactNode; wrap?: boolean }) {
   const id = useId();
   const group = (
     <ToggleGroup.Root
@@ -21,7 +22,7 @@ export function Segmented<T extends string>({ value, options, onChange, label, s
       value={value}
       onValueChange={(v) => v && onChange(v as T)}
       {...(showLabel ? { 'aria-labelledby': id } : { 'aria-label': label })}
-      className="grid min-w-0 auto-cols-fr grid-flow-col rounded-sm border border-chrome-line p-0.5"
+      className={`grid min-w-0 rounded-sm border border-chrome-line p-0.5 ${wrap ? 'grid-cols-2' : 'auto-cols-fr grid-flow-col'}`}
     >
       {options.map((o) => (
         <ToggleGroup.Item

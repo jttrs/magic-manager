@@ -165,7 +165,7 @@ def card_lines(rows: list[construct.NetRow]) -> tuple[list[dict], float, float]:
             "need": r.need_qty, "free": r.loose_qty, "buy": r.buy_qty,
             "unit_usd": r.unit_usd, "floor_usd": floor,
             "floor_set_code": f.get("set_code"), "floor_collector_number": f.get("collector_number"),
-            "floor_scryfall_id": f.get("scryfall_id") or r.scryfall_id,
+            "floor_scryfall_id": f.get("scryfall_id") or r.scryfall_id, "bonus": False,
         })
     return lines, round(need_floor, 2), round(buy_floor, 2)
 
@@ -193,7 +193,7 @@ def _cost_totals(rows: list[construct.NetRow], ev: float | None) -> dict:
     lines, floor_cards, _ = card_lines(rows)
     priced = [ln for ln in lines if ln["unit_usd"] is not None]
     known_exact = round(sum(ln["unit_usd"] * ln["need"] for ln in priced), 2) if priced else None
-    known_floor = floor_cards if lines else None
+    known_floor = floor_cards if any(ln["floor_usd"] is not None for ln in lines) else None
     plus = lambda v: None if v is None and ev is None else round((v or 0.0) + (ev or 0.0), 2)  # noqa: E731
     total = sum(ln["need"] for ln in lines)
     return {"known_exact": known_exact, "known_floor": known_floor, "booster_ev": ev,
@@ -212,26 +212,41 @@ def _sealed_cost(set_code: str, name: str) -> dict:
     return {"kind": "sealed", "set_code": set_code.lower(), "name": product.get("name") or name,
             "finish": None, "category": product.get("category"), "subtype": product.get("subtype"),
             "release_date": product.get("releaseDate"), "market": v.sealed_market,
-            "market_source": v.sealed_market_source, "contents": v.intrinsic, "booster_only": v.booster_only,
+            "market_source": v.sealed_market_source if v.sealed_market is not None else None, "contents": v.intrinsic, "booster_only": v.booster_only,
             "notes": [d for d in v.diagnostics if not _LEDGER_NOTE.search(d)], **_cost_totals(rows, v.booster_ev)}
 
 
 def _sld_cost(name: str, finish: str | None) -> dict:
+    """A Secret Lair drop's worth. When MTGJSON lists the drop's sealed product
+    (base or foil edition), it is valued through that product — the drop's
+    cards PLUS its bonus card (``contents.card``; flagged ``bonus`` on its line)
+    or bonus-pack EV (``contents.pack``), and the product's own market price.
+    Older drops without a sealed product fall back to the drop's cards alone."""
     from . import sld
     drop = sld.identify_drop(name)
+    fin = "foil" if finish == "foil" else "nonfoil"
+    product = valuation.sld_sealed_product(drop["name"], fin, strict=True)
+    if product is not None:
+        out = _sealed_cost("sld", product.get("name") or "")
+        if out["known_exact"] is not None or out["booster_ev"] is not None:
+            bonus = set(construct.product_card_ids(product))
+            for ln in out["lines"]:
+                ln["bonus"] = ln["scryfall_id"] in bonus
+            return {**out, "kind": "sld", "name": drop["name"], "finish": finish,
+                    "category": "secret_lair", "subtype": None, "release_date": drop.get("release_date"),
+                    "sealed_name": product.get("name")}
     ids = drop.get("ids") or sld.collect_drop_ids(drop["file_names"])
     notes = []
-    fin = "foil" if finish == "foil" else "nonfoil"
     exp = construct.expand_printings(ids, finish=fin, label=drop["name"], set_code="sld")
     if fin == "foil" and not any(n.unit_usd is not None for n in exp.needs):
         exp = construct.expand_printings(ids, finish="nonfoil", label=drop["name"], set_code="sld")
         notes.append("foil edition, but these cards are only priced nonfoil — cards use nonfoil prices")
-    market, source = valuation.sld_sealed_market(drop["name"], "foil" if finish == "foil" else "auto")
+    market, source = valuation.sld_sealed_market(drop["name"], fin)
     totals = _cost_totals(construct.net_against_loose(exp.needs), None)
     return {"kind": "sld", "set_code": "sld", "name": drop["name"], "finish": finish,
             "category": "secret_lair", "subtype": None, "release_date": drop.get("release_date"),
             "market": market, "market_source": source, "contents": totals["exact"], "booster_only": False,
-            "notes": notes, **totals}
+            "sealed_name": product.get("name") if product else None, "notes": notes, **totals}
 
 
 def deck_cost(slug: str, *, with_sealed: bool = True) -> dict:

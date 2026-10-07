@@ -66,6 +66,7 @@ export function CardLines({ title, lines, unitBasis, worth = false, labels = DEC
           <tr key={`${l.scryfall_id}|${l.finish}`} className="border-b border-rule/60">
             <th scope="row" className="py-1.5 pr-3 text-left font-normal">
               <span className="text-ink">{l.name}</span>
+              {l.bonus && <span className="ml-2 text-xs voice-semi text-accent-ink" title="Shipped with the drop as its bonus card">bonus</span>}
               <span className="ml-2 text-xs text-ink-muted">{l.set_code.toUpperCase()} {l.collector_number}{l.finish !== 'nonfoil' ? ` · ${l.finish}` : ''}</span>
             </th>
             <td className="py-1.5 pl-3 text-right text-ink">{l.need}</td>
