@@ -18,7 +18,8 @@ export function PriceTarget({ product: p, cost }: { product: DealProduct; cost?:
   const [mode, setMode] = useState<Mode>(t?.mode ?? 'price');
   const [text, setText] = useState(t ? String(t.value) : '');
   const value = Number(text);
-  const valid = text.trim() !== '' && Number.isFinite(value) && value > 0 && (mode === 'price' || value < 100);
+  const stored = Math.round(value * 100) / 100; // the engine rounds to cents, then validates
+  const valid = text.trim() !== '' && Number.isFinite(value) && stored > 0 && (mode === 'price' || stored < 100);
   const changed = !t || t.mode !== mode || t.value !== value;
   const refresh = () => qc.invalidateQueries({ queryKey: ['deals', 'watched'] });
   const save = useMutation({

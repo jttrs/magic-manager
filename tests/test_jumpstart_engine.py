@@ -133,3 +133,22 @@ def test_api_view_not_ready_until_read(jt, monkeypatch):
     monkeypatch.setattr(jumpstart, "deck_cached", lambda fn: False)
     v = api.view(jt)
     assert not v.ready and v.packs == []
+
+
+def test_picker_count_matches_sheet_with_legacy_pack_row(jt):
+    from magic_manager.api import jumpstart as api
+    with db.connect() as conn:  # a pre-fileName pack row: no source_precon_file_name
+        decks.deck_create("pack:cats-2-jt", "Cats (2)", conn=conn)
+    assert jumpstart.owned_file_names(jt) == {"Dogs_JT", "Cats2_JT"}
+    row = next(x for x in api.sets().sets if x.code == "jt")
+    sheet = sum(1 for p in jumpstart.set_packs(jt) if p.built + p.deconstructed)
+    assert row.owned_packs == sheet == 2
+    assert jumpstart.missing_packs(jt).total - len(jumpstart.missing_packs(jt).packs) == 2
+
+
+def test_ensure_ready_raises_when_sets_stay_unsynced(jt, monkeypatch):
+    from magic_manager import sets
+    monkeypatch.setattr(sets, "ensure_priced", lambda *a, **k: {"missing": [], "stale": []})
+    monkeypatch.setattr(sets, "unsynced_set_codes", lambda codes: ["jt"])
+    with pytest.raises(RuntimeError, match="JT"):
+        jumpstart.ensure_ready(jt)

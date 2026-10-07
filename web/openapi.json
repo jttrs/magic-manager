@@ -3465,6 +3465,17 @@
             "type": "object",
             "title": "Matched",
             "description": "Per on-theme printing, the tags (incl. child tags) that matched."
+          },
+          "free_by_finish": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Free By Finish",
+            "description": "Per printing you own, free copies per finish (`nonfoil`/`foil`); `printings[sid].free` is the finish-agnostic total."
           }
         },
         "type": "object",
@@ -6233,6 +6244,18 @@
             "title": "Live",
             "description": "Floors checked across every set on Scryfall (else local prices).",
             "default": false
+          },
+          "live_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Live Error",
+            "description": "Why the live Scryfall check failed (prices fell back to local)."
           }
         },
         "type": "object",

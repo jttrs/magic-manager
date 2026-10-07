@@ -11,7 +11,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from .. import addcards, decks, jumpstart, scryfall
+from .. import addcards, jumpstart, scryfall
 from .ingest import PrintingOut
 from .jobs import Artifact, JobResult, JobSpec, ProgressEvent, ProgressFn, register
 
@@ -106,7 +106,6 @@ def _name(code: str, names: dict[str, dict]) -> str:
 
 def sets() -> JumpstartSetsOut:
     names = _set_names()
-    units = decks.precon_unit_counts()
     out: list[JumpstartSetOut] = []
     for code in jumpstart.jumpstart_set_codes():
         vs = jumpstart.variants(code)
@@ -114,7 +113,7 @@ def sets() -> JumpstartSetsOut:
             code=code, name=_name(code, names),
             released=(names.get(code) or {}).get("released_at") or (vs[0].get("releaseDate") if vs else None),
             packs=len(vs), themes=len({jumpstart.theme_of(v.get("name") or "") for v in vs}),
-            owned_packs=sum(1 for v in vs if sum(units.get(v["fileName"], (0, 0)))),
+            owned_packs=len(jumpstart.owned_file_names(code)),
         ))
     out.sort(key=lambda s: s.released or "", reverse=True)
     return JumpstartSetsOut(sets=out)

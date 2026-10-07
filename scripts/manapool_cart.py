@@ -8,7 +8,7 @@ by one of two paths, trying the automatic one first:
   headless — password-grant against Supabase auth → session JWT (in memory
              only, never written) → read the RLS-scoped `cart_items` table →
              enrich inventoryIds via the same `inventory?id=in.(...)` select the
-             site uses. Requires MANAPOOL_PASSWORD in .env. Fully hands-off.
+             site uses. Requires MANAPOOL_PASSWORD in the Keychain (`uv run mm secret set MANAPOOL_PASSWORD`). Fully hands-off.
   bookmarklet — fallback that always works: click the cart-bookmarklet on the
              cart page; it copies normalized cart JSON to your clipboard; paste
              it here via --file - (stdin) or --file PATH.
@@ -21,7 +21,7 @@ the rendered rows); headless carries ManaPool ids and relies on downstream
 mtgjson-id mapping. Which path produced the output is reported on stderr.
 
 SECURITY: the session JWT is short-lived and held in memory only — never
-written to disk or logged. MANAPOOL_PASSWORD is read from the gitignored .env.
+written to disk or logged. MANAPOOL_PASSWORD is read from the Keychain (`uv run mm secret set`).
 
 Usage:
     uv run python scripts/manapool_cart.py                    # headless, else stdin if piped

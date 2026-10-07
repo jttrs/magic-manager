@@ -15,7 +15,8 @@ import { SearchSelect } from '../components/SearchSelect';
 import { Segmented, SelectField, SideSection, TextField } from '../components/Sidebar';
 import { SplitPanes } from '../components/SplitPanes';
 import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../components/States';
-import { CardKingdomMark, ManaPoolMark, RereadMark, TcgplayerMark } from '../components/StoreMarks';
+import { buyListTargets } from '../components/buyTargets';
+import { RereadMark } from '../components/StoreMarks';
 import { VirtualGuide } from '../components/VirtualGuide';
 import { jumpstartBuyList, type JumpstartOut, type JumpstartPackOut } from '../core/api';
 import { fmtCount, fmtInt, fmtUsd } from '../core/format';
@@ -48,21 +49,32 @@ export function JumpstartView() {
   const { live: jobLive, start, reset } = useJob();
   const [startedFor, setStartedFor] = useState<string | null>(null);
   const startedRef = useRef<string | null>(null);
+  const [startError, setStartError] = useState<string | null>(null);
+  // Set once the post-job refetch of the set has landed, so "succeeded but still not ready" can't flash.
+  const [rechecked, setRechecked] = useState<string | null>(null);
   const read = useCallback(() => {
     if (!code) return;
     startedRef.current = code;
     setStartedFor(code);
+    setStartError(null);
+    setRechecked(null);
     reset();
-    void start('jumpstart.read', { code });
+    void start('jumpstart.read', { code }).then((err) => {
+      if (err) {
+        setStartError(err);
+        startedRef.current = null;
+      }
+    });
   }, [code, reset, start]);
   useEffect(() => {
-    if (data && !data.ready && !q.isFetching && startedRef.current !== code) read();
-  }, [data, q.isFetching, code, read]);
+    if (data && !data.ready && !q.isFetching && startedRef.current !== code && !startError) read();
+  }, [data, q.isFetching, code, read, startError]);
   const live = startedFor === code ? jobLive : null;
   const running = Boolean(live && live.status !== 'succeeded' && live.status !== 'failed');
   useEffect(() => {
-    if (live?.status === 'succeeded') void qc.invalidateQueries({ queryKey: ['jumpstart'] });
-  }, [live?.status, qc]);
+    if (live?.status === 'succeeded' && code) void qc.invalidateQueries({ queryKey: ['jumpstart'] }).then(() => setRechecked(code));
+  }, [live?.status, qc, code]);
+  const readError = startError ?? (live?.status === 'failed' ? (live.error ?? 'Reading the packs failed.') : live?.status === 'succeeded' && rechecked === code ? 'The packs were read, but their card prices are still missing. Try again.' : null);
 
   const packs = useMemo(() => data?.packs ?? [], [data]);
   const shown = useMemo(() => filterPacks(packs, search), [packs, search]);
@@ -118,11 +130,7 @@ export function JumpstartView() {
         {data?.ready && (
           <CopyTargets
             lead={shopLead(search.shop, data)}
-            targets={[
-              { id: 'manapool', name: 'ManaPool', Mark: ManaPoolMark, getText: buyText('manapool') },
-              { id: 'tcgplayer', name: 'TCGplayer', Mark: TcgplayerMark, getText: buyText('tcgplayer') },
-              { id: 'cardkingdom', name: 'Card Kingdom', Mark: CardKingdomMark, getText: buyText('cardkingdom'), note: 'Card Kingdom takes names only; pick each printing and foil after Find Cards' },
-            ]}
+            targets={buyListTargets(buyText)}
           />
         )}
       </SideSection>
@@ -136,8 +144,8 @@ export function JumpstartView() {
   else if (!q.data.ready) {
     body = (
       <div className="mx-auto mt-[12vh] flex max-w-[52ch] flex-col gap-3 px-6">
-        {live?.status === 'failed' ? (
-          <ErrorNote error={new Error(live.error ?? 'Reading the packs failed.')} onRetry={read} />
+        {readError ? (
+          <ErrorNote error={new Error(readError)} onRetry={read} />
         ) : (
           <>
             <ProgressRule label="Reading the packs" verb="Reading" done={live?.done ?? 0} total={live?.total ?? null} message={live?.log.at(-1)?.msg ?? 'pack lists'} />

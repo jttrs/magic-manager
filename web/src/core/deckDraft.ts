@@ -17,6 +17,8 @@ export type DraftRow = {
   saved: number;
   /** The saved printing + finish this row was swapped from (art swaps). */
   origin?: { printing: PrintingOut; finish: DraftFinish };
+  /** Copies swapped onto this row from other rows (art swaps that merged); undo moves them back. */
+  absorbed?: { key: string; printing: PrintingOut; count: number }[];
 };
 
 export type Draft = { rows: DraftRow[] };
@@ -71,7 +73,7 @@ function rekey(d: Draft, key: string, board: Board, finish: DraftFinish): Draft 
   const target = rows.find((r) => r.key === next);
   rows = target
     ? rows.map((r) => (r.key === next ? { ...r, count: r.count + moved } : r))
-    : [...rows, { ...row, key: next, board, finish, count: moved, saved: 0, origin: undefined }];
+    : [...rows, { ...row, key: next, board, finish, count: moved, saved: 0, origin: undefined, absorbed: undefined }];
   return { rows: rows.filter((r) => r.count > 0 || r.saved > 0) };
 }
 
@@ -99,9 +101,13 @@ export function swapPrinting(d: Draft, key: string, p: PrintingOut, finish?: Dra
   if (next === key) return d;
   const target = d.rows.find((r) => r.key === next);
   if (target) {
+    // The source row stays (count 0) and the target remembers what it took, so undo can give it back.
+    const took = [{ key, printing: row.printing, count: row.count }, ...(row.absorbed ?? [])];
     return {
       rows: d.rows
-        .map((r) => (r.key === next ? { ...r, count: r.count + row.count } : r.key === key ? { ...r, count: 0 } : r))
+        .map((r) => (r.key === next
+          ? { ...r, count: r.count + row.count, absorbed: [...(r.absorbed ?? []), ...took] }
+          : r.key === key ? { ...r, count: 0, absorbed: undefined } : r))
         .filter((r) => r.count > 0 || r.saved > 0),
     };
   }
@@ -111,10 +117,34 @@ export function swapPrinting(d: Draft, key: string, p: PrintingOut, finish?: Dra
   };
 }
 
-/** Undo an art swap: back onto the saved printing and finish. */
+/** Undo an art swap: copies that merged in go back to their rows, and the row
+ *  itself returns to the saved printing and finish. */
 export function restorePrinting(d: Draft, key: string): Draft {
-  const row = d.rows.find((r) => r.key === key);
-  return row?.origin ? swapPrinting(d, key, row.origin.printing, row.origin.finish) : d;
+  let cur = d;
+  const row = cur.rows.find((r) => r.key === key);
+  if (!row) return d;
+  if (row.absorbed?.length) {
+    const back = new Map<string, number>();
+    let left = row.count;
+    for (const a of row.absorbed) {
+      const n = Math.min(a.count, left);
+      left -= n;
+      back.set(a.key, (back.get(a.key) ?? 0) + n);
+    }
+    const gone = row.absorbed.filter((a, i, all) => !cur.rows.some((r) => r.key === a.key) && all.findIndex((b) => b.key === a.key) === i);
+    const revived: DraftRow[] = gone.map((a) => {
+      const [, board, finish] = a.key.split('|');
+      return { key: a.key, printing: a.printing, board: board as Board, finish: finish as DraftFinish, count: back.get(a.key) ?? 0, saved: 0 };
+    });
+    cur = {
+      rows: [
+        ...cur.rows.map((r) => (r.key === key ? { ...r, count: left, absorbed: undefined } : back.has(r.key) ? { ...r, count: r.count + back.get(r.key)! } : r)),
+        ...revived,
+      ].filter((r) => r.count > 0 || r.saved > 0),
+    };
+  }
+  const now = cur.rows.find((r) => r.key === key);
+  return now?.origin ? swapPrinting(cur, key, now.origin.printing, now.origin.finish) : cur;
 }
 
 export type DraftStats = { size: number; target: number | null; added: number; removed: number; swapped: number; dirty: boolean };

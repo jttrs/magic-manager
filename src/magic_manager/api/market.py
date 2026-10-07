@@ -116,6 +116,7 @@ class DeckCostOut(BaseModel):
     total_need: int
     lines: list[DeckLineOut]
     live: bool = Field(False, description="Floors checked across every set on Scryfall (else local prices).")
+    live_error: str | None = Field(None, description="Why the live Scryfall check failed (prices fell back to local).")
 
 
 class ProductCostOut(BaseModel):

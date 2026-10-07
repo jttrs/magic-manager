@@ -81,13 +81,13 @@ def test_printing_floors_local_per_finish(cards):
     assert got[B].foil is None
 
 
-def test_printing_floors_live_is_opt_in(cards, monkeypatch):
+def test_printing_floors_live_is_opt_in(cards, make_card, monkeypatch):
     calls = []
 
     def fake_search(q, **k):
         calls.append(q)
-        return [{"id": "anywhere", "oracle_id": OA, "set": "sld", "collector_number": "7",
-                 "prices": {"usd": "0.50", "usd_foil": None}}]
+        return [make_card(id="anywhere", oracle_id=OA, name="Skullclamp", set="sld", collector_number="7",
+                          prices={"usd": "0.50", "usd_foil": None})]
     monkeypatch.setattr(scryfall, "search", fake_search)
     card_floor.printing_floors([A])
     assert calls == []                                  # local by default
@@ -96,12 +96,12 @@ def test_printing_floors_live_is_opt_in(cards, monkeypatch):
     assert (got[A].nonfoil.usd, got[A].nonfoil.set_code, got[A].nonfoil.scryfall_id) == (0.5, "sld", "anywhere")
 
 
-def test_deck_cost_live_uses_anywhere_floor(cards, monkeypatch):
+def test_deck_cost_live_uses_anywhere_floor(cards, make_card, monkeypatch):
     decks.deck_create("clamp", "Clamp")
     decks.deck_add_card("clamp", A, "main", "nonfoil", 1)
     monkeypatch.setattr(scryfall, "search", lambda q, **k: [
-        {"id": "anywhere", "oracle_id": OA, "set": "sld", "collector_number": "7",
-         "prices": {"usd": "0.50", "usd_foil": None}}])
+        make_card(id="anywhere", oracle_id=OA, name="Skullclamp", set="sld", collector_number="7",
+                  prices={"usd": "0.50", "usd_foil": None})])
     local = market.deck_cost("clamp", with_sealed=False)
     assert local["live"] is False and local["lines"][0]["floor_set_code"] == "msc"
     live = market.deck_cost("clamp", with_sealed=False, live=True)

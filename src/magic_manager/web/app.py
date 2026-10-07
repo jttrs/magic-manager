@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sqlite3
 from collections.abc import AsyncIterable
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -249,7 +250,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             raise HTTPException(403, str(e)) from e
         except LookupError as e:
             raise HTTPException(404, str(e)) from e
-        except ValueError as e:
+        except (ValueError, sqlite3.IntegrityError) as e:
             raise HTTPException(422, str(e)) from e
 
     @app.delete("/api/deals/target", status_code=204, tags=["deals"], dependencies=[write("before clearing a price target")])
@@ -538,6 +539,8 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             return art_api.lookup(body)
         except LookupError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
+        except scryfall.ScryfallError as e:
+            raise HTTPException(status_code=502, detail=f"Couldn't reach Scryfall: {e}") from e
 
     # ---------- card surfer ----------
 

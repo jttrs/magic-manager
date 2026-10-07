@@ -7,12 +7,13 @@ Composes :mod:`tabs` (read the browser), :mod:`vendors` + :mod:`storefetch`
 from __future__ import annotations
 
 import json
+import logging
 import re
 import time
 from collections import defaultdict
 from urllib.parse import urlsplit
 
-from . import db, earmarks, listing_match, market, sld, storefetch, storepage, tabs as tabs_mod, vendors
+from . import db, earmarks, listing_match, market, mtgjson, scryfall, sld, storefetch, storepage, tabs as tabs_mod, vendors
 
 
 def open_tabs(browser: str = "chrome", **read_kw) -> dict:
@@ -351,7 +352,10 @@ def _with_target_prices(rows: list[dict]) -> list[dict]:
         if r["target"] and r["target_price"] is None and r["kind"] != "single":
             try:
                 market_price = _value(_earmark_choice_of(r))["market"]
-            except Exception:  # noqa: BLE001 — no market, no threshold
+            except (LookupError, scryfall.ScryfallError, mtgjson.MtgJsonError):
+                continue  # expected: no market, no threshold
+            except Exception:  # noqa: BLE001 — a code bug, not "no market price"; keep the instant watchlist alive
+                logging.getLogger(__name__).exception("BUG: target price for %r failed unexpectedly", r.get("name"))
                 continue
             r["target_price"] = earmarks.target_threshold(r["target"], market_price)
             in_stock = min((s["price"] for s in r["stores"] if s["price"] is not None and s["available"] is not False), default=None)

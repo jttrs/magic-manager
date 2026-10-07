@@ -48,6 +48,12 @@ export function CardSurfer({ raw, onChange, onClose }: { raw: string | undefined
     scroller.current?.scrollTo({ top: 0 });
   }, [key, seed]);
 
+  // A page can come back empty yet not exhausted (your cards scan a slice at a
+  // time): keep drawing until something shows or the server says it's done.
+  useEffect(() => {
+    if (open && !feed.isPending && !cards.length && hasNextPage && !isFetchingNextPage && !isError) void fetchNextPage();
+  }, [open, feed.isPending, cards.length, hasNextPage, isFetchingNextPage, isError, fetchNextPage]);
+
   // Endless: draw the next few cards well before the reader reaches the end.
   useEffect(() => {
     const root = scroller.current;
@@ -150,6 +156,10 @@ export function CardSurfer({ raw, onChange, onClose }: { raw: string | undefined
                 <FeedNote title="Couldn’t draw cards">
                   {(feed.error as Error).message}
                   <Button tone="paper" className="mt-3" onClick={() => feed.refetch()}>Try again</Button>
+                </FeedNote>
+              ) : !cards.length && (hasNextPage || isFetchingNextPage) && !isError ? (
+                <FeedNote title={state.source === 'owned' ? 'Searching your cards…' : 'Drawing random cards…'}>
+                  <span role="status">This can take a moment.</span>
                 </FeedNote>
               ) : !cards.length ? (
                 <FeedNote title={state.source === 'owned' ? 'None of your cards match' : 'No cards match'}>

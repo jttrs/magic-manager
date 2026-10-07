@@ -16,6 +16,7 @@ const swaps = (sids: string[]) => ({
       : { scryfall_id: sid, status: 'none', pick: null, candidates: [] })),
   printings: { [cur.scryfall_id]: cur, 'cat-free': pick, 'cat-cheap': alt },
   matched: { 'cat-free': ['cat'], 'cat-cheap': ['housecat'] },
+  free_by_finish: { 'cat-free': { nonfoil: 2, foil: 0 } },
 });
 
 test('editor: the Art tab swaps a card onto an on-theme printing you have free, and undoes it', async ({ page }) => {

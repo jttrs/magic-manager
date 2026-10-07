@@ -46,7 +46,7 @@ export function ArtTagField({ value, onChange }: { value: string[]; onChange: (v
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
             e.preventDefault();
-            add(hits[0]?.slug ?? slugify(text));
+            add((text.trim() === needle && !res.isPlaceholderData ? hits[0]?.slug : undefined) ?? slugify(text));
           }
         }}
         placeholder="dragon, moon, ocean…"

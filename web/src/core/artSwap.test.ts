@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ArtSwapsOut, DeckCardOut, PrintingOut } from './api';
-import { artView, choiceNote, draftPrintingIds, swapAllFree } from './artSwap';
-import { draftCards, draftFromDeck, draftStats, restorePrinting, swapPrinting } from './deckDraft';
+import { artView, choiceNote, swapChoice, draftPrintingIds, swapAllFree, wasPrinting } from './artSwap';
+import { addCard, draftCards, draftFromDeck, draftStats, restorePrinting, swapPrinting } from './deckDraft';
 
 const pr = (id: string, o: Partial<PrintingOut> = {}): PrintingOut => ({
   scryfall_id: id, oracle_id: `o-${id[0]}`, name: id[0], set_code: id, set_name: null, collector_number: '1', rarity: 'rare',
@@ -28,6 +28,7 @@ const data: ArtSwapsOut = {
   ],
   printings: P,
   matched: { a2: ['cat'], a3: ['housecat'], b2: ['cat'], c1: ['cat'] },
+  free_by_finish: { a2: { nonfoil: 2, foil: 0 } },
 };
 
 describe('art swaps', () => {
@@ -79,5 +80,38 @@ describe('art swaps', () => {
     expect(choiceNote(P.a2)).toBe('2 free');
     expect(choiceNote(P.b2)).toBe('$3.00');
     expect(choiceNote(pr('x', { price_usd: null, owned: { foil: 1 } }))).toBe('no price · yours, all in decks');
+  });
+
+  it('only calls a swap free when one finish covers the row', () => {
+    const foilOnly = pr('f2', { finishes: ['nonfoil', 'foil'], owned: { foil: 2 }, free: 2 });
+    const row = (o = {}) => draftFromDeck([dc(P.a1, { count: 2, ...o })]).rows[0];
+    const fb = { f2: { nonfoil: 0, foil: 2 }, a2: { nonfoil: 1, foil: 0 } };
+    expect(swapChoice(row(), foilOnly, fb)).toEqual({ finish: 'foil', free: 2, covered: true });
+    expect(swapChoice(row({ finish: 'either' }), foilOnly, fb).finish).toBe('foil');
+    expect(swapChoice(row(), P.a2, fb)).toEqual({ finish: undefined, free: 1, covered: false }); // 1 free < 2 in the row
+    expect(choiceNote(P.a2, 0)).toBe('$1.00 · yours, all in decks');
+    const d = { ...data, free_by_finish: fb, printings: { ...P, a2: { ...P.a2, free: 1 } } };
+    const v = artView(draftFromDeck([dc(P.a1, { count: 2 })]), d);
+    expect(v.freeSwaps).toBe(0);
+    expect(draftPrintingIds(swapAllFree(draftFromDeck([dc(P.a1, { count: 2 })]), v))).toEqual(['a1']);
+  });
+
+  it('undoes a swap that merged into a row already in the deck', () => {
+    const d0 = draftFromDeck([dc(P.a1, { count: 2 }), dc(P.a2)]);
+    const d1 = swapPrinting(d0, 'a1|main|nonfoil', P.a2);
+    expect(draftCards(d1)).toEqual([{ scryfall_id: 'a2', board: 'main', finish: 'nonfoil', count: 3 }]);
+    const v = artView(d1, data);
+    expect(v.onTheme.map((r) => r.status)).toEqual(['swapped']);
+    expect(wasPrinting(v.onTheme[0].row)?.scryfall_id).toBe('a1');
+    const back = restorePrinting(d1, 'a2|main|nonfoil');
+    expect(draftCards(back).map((c) => [c.scryfall_id, c.count])).toEqual([['a1', 2], ['a2', 1]]);
+    expect(draftStats(back, 'commander').dirty).toBe(false);
+  });
+
+  it('undoes a merge of a row that was not saved', () => {
+    const d0 = addCard(draftFromDeck([dc(P.a2)]), P.a1);
+    const d1 = swapPrinting(d0, 'a1|main|either', P.a2, 'nonfoil');
+    expect(draftCards(d1)).toEqual([{ scryfall_id: 'a2', board: 'main', finish: 'nonfoil', count: 2 }]);
+    expect(draftCards(restorePrinting(d1, 'a2|main|nonfoil')).map((c) => [c.scryfall_id, c.count])).toEqual([['a2', 1], ['a1', 1]]);
   });
 });

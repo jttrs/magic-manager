@@ -23,13 +23,16 @@ the same basis the pack ``usd_total`` uses. Pack ``usd_total`` also folds in
 the decorative front/title card price (as the checklist does); the front card
 itself is NOT listed on either sheet (it isn't a version signal).
 
-Prices/colors come from the local ``cards`` table, so the script syncs each
-referenced set's family first (Jumpstart contents span the parent expansion).
+Prices/colors come from the local ``cards`` table (local-first, CLAUDE.md
+§ Price freshness): card sets with no local rows are synced, stale (>7d) ones
+are warned about and re-synced only with ``--refresh``. Ends with a
+``Prices fetched:`` footer.
 
 Usage:
     uv run python scripts/jumpstart_reference.py            # ALL jumpstart sets
     uv run python scripts/jumpstart_reference.py j25        # one set
     uv run python scripts/jumpstart_reference.py --out /tmp/jr.xlsx
+    uv run python scripts/jumpstart_reference.py j25 --refresh   # re-sync stale prices
 
 Exit codes:
     0 — written
@@ -51,8 +54,10 @@ DEFAULT_OUT = ROOT / "reference" / "jumpstart-versions.xlsx"
 _color_sort_key = jumpstart.color_sort_key
 
 
-def _gather(codes: list[str]) -> tuple[list[dict], list[dict]]:
-    """Build (pack_rows, card_rows) across the given set codes from the engine."""
+def _gather(codes: list[str], *, refresh_stale: bool = False,
+            price_ids: set[str] | None = None) -> tuple[list[dict], list[dict]]:
+    """Build (pack_rows, card_rows) across the given set codes from the engine.
+    ``price_ids`` (if given) collects every priced printing for the footer."""
     pack_rows: list[dict] = []
     card_rows: list[dict] = []
     for code in codes:
@@ -60,8 +65,10 @@ def _gather(codes: list[str]) -> tuple[list[dict], list[dict]]:
             print(f"  (no Jumpstart variants for {code.upper()}, skipping)", file=sys.stderr)
             continue
         print(f"  {code.upper()}: reading packs (fills sets with no local cards)…")
-        jumpstart.ensure_ready(code)
+        jumpstart.ensure_ready(code, refresh_stale=refresh_stale, log=print)
         for p in jumpstart.set_packs(code):
+            if price_ids is not None:
+                price_ids.update(c.scryfall_id for c in p.cards if c.known)
             pack_rows.append({
                 "set": code.upper(), "theme": p.name, "color": p.color, "top_card": p.top_card,
                 "top_card_usd": p.top_card_usd, "card_count": p.card_count, "usd_total": p.usd_total,
@@ -120,6 +127,8 @@ def main() -> int:
                     help="Jumpstart set code (e.g. j25). Omit for ALL Jumpstart sets.")
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT,
                     help=f"Output path (default: {DEFAULT_OUT.relative_to(ROOT)}).")
+    ap.add_argument("--refresh", action="store_true",
+                    help="Re-sync stale (>7d) card sets too (default: local prices, warn when stale).")
     args = ap.parse_args()
 
     if args.set_code:
@@ -132,7 +141,8 @@ def main() -> int:
             return 2
         print(f"  {len(codes)} set(s): {', '.join(c.upper() for c in codes)}")
 
-    pack_rows, card_rows = _gather(codes)
+    price_ids: set[str] = set()
+    pack_rows, card_rows = _gather(codes, refresh_stale=args.refresh, price_ids=price_ids)
     if not pack_rows:
         print(f"error: no Jumpstart variants found for {codes}.", file=sys.stderr)
         return 2
@@ -140,6 +150,9 @@ def main() -> int:
     _write_xlsx(pack_rows, card_rows, args.out)
     print(f"\nWrote {len(pack_rows)} pack row(s) + {len(card_rows)} card row(s) "
           f"across {len(codes)} set(s) to {args.out}")
+    basis = sets.prices_fetched_note(price_ids)
+    if basis:
+        print(basis)
     return 0
 
 

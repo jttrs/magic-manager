@@ -69,6 +69,14 @@ def test_matches(make_card, f, ok):
     assert matches(_card(make_card), f) is ok
 
 
+def test_unknown_treatment_keys_are_ignored(make_card):
+    f = Filters(treatments=("nope",), types=("nope",), rarity=("nope",))
+    assert build_query(f) == surf.BASE
+    assert matches(_card(make_card), f)
+    mixed = Filters(treatments=("nope", "borderless"))
+    assert build_query(mixed) == f"{surf.BASE} border:borderless"
+
+
 def test_matches_tokens_never(make_card):
     assert not matches(_card(make_card, type_line="Token Creature — Dragon"), Filters())
 

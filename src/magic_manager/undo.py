@@ -27,6 +27,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import db
+from .analytics import consent
 
 # Your data, parents before children. Card/price/EDHREC/tag tables are caches
 # and are never touched (cards only ever grow, so restored rows' FKs hold).
@@ -36,6 +37,10 @@ USER_TABLES = (
     "decks", "deck_cards", "deck_versions", "deck_assignments",
     "wishlist_entries", "earmarked_products", "earmark_links", "earmark_prices", "earmark_targets",
 )
+
+# ``settings`` keys a restore must NOT roll back: they reflect the latest choice
+# (opting out of tracking, then pressing Undo, must not opt you back in).
+KEEP_SETTINGS = (consent.SETTING_KEY,)
 
 SESSION_GAP_SECONDS = 30 * 60
 SNAPSHOT_FILE = "undo.db"
@@ -162,6 +167,11 @@ def restore() -> dict:
             conn.execute("BEGIN IMMEDIATE")
             conn.execute("PRAGMA defer_foreign_keys = ON")
             live, saved = _tables(conn), _tables(conn, "snap")
+            kept = []
+            if "settings" in live:
+                marks = ", ".join("?" for _ in KEEP_SETTINGS)
+                kept = conn.execute(f"SELECT key, value FROM main.settings WHERE key IN ({marks})",
+                                    KEEP_SETTINGS).fetchall()
             tables = [t for t in USER_TABLES if t in live]
             for t in reversed(tables):
                 conn.execute(f"DELETE FROM main.{t}")
@@ -171,6 +181,9 @@ def restore() -> dict:
                 cols = [c for c in _columns(conn, "main", t) if c in set(_columns(conn, "snap", t))]
                 cl = ", ".join(f'"{c}"' for c in cols)
                 conn.execute(f"INSERT INTO main.{t} ({cl}) SELECT {cl} FROM snap.{t}")
+            for k, v in kept:
+                conn.execute("INSERT INTO main.settings (key, value) VALUES (?, ?) "
+                             "ON CONFLICT (key) DO UPDATE SET value = excluded.value", (k, v))
             conn.commit()
         except Exception:
             conn.rollback()
@@ -179,6 +192,7 @@ def restore() -> dict:
         finally:
             conn.execute("DETACH DATABASE snap")
     os.replace(swap, path)
+    consent.clear_cache()
     return info() or {}
 
 
