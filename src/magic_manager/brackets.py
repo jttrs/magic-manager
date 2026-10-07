@@ -146,12 +146,15 @@ def _names_in(cards: list[dict], pool: frozenset[str]) -> list[str]:
 
 
 def _extract_combos(response: dict) -> list[dict]:
-    """Best-effort extraction of the combo list from a ``/find-my-combos``
-    response. The exact API shape isn't pinned down here — try common
-    top-level keys in order and fall back to an empty list rather than
-    raising; this keeps :func:`suggest` resilient to a shape mismatch."""
+    """The combos a ``/find-my-combos`` response says the deck CONTAINS
+    (``results.included`` — the live shape), with older flat shapes tried
+    after; an empty list rather than raising on a shape mismatch."""
     if not isinstance(response, dict):
         return []
+    results = response.get("results")
+    if isinstance(results, dict):
+        included = results.get("included")
+        return included if isinstance(included, list) else []
     for key in ("results", "included", "combos"):
         val = response.get(key)
         if isinstance(val, list):

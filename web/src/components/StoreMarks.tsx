@@ -211,6 +211,17 @@ export function CountCardsMark(p: MarkProps) {
   );
 }
 
+/** Commander Spellbook: an open spellbook with a spark over its spine. */
+export function SpellbookMark(p: MarkProps) {
+  return (
+    <svg {...base} {...p}>
+      <path d="M12 9.2c-2.2-1.5-5.2-1.9-8.6-1.3v12c3.4-.6 6.4-.2 8.6 1.3 2.2-1.5 5.2-1.9 8.6-1.3v-12c-3.4-.6-6.4-.2-8.6 1.3Z" />
+      <path d="M12 9.2v12" />
+      <path d="M12 2.4v3.4M10.3 4.1h3.4" />
+    </svg>
+  );
+}
+
 /** A ranked list under a circling arrow (read it again from the source). */
 export function RereadMark(p: MarkProps) {
   return (
@@ -218,6 +229,15 @@ export function RereadMark(p: MarkProps) {
       <path d="M4 5.4h8M4 9.4h6M4 13.4h4" />
       <path d="M20.2 14.2a5.6 5.6 0 1 1-1.9-4.3" />
       <path d="M18.6 6.6v3.4H15.2" />
+    </svg>
+  );
+}
+
+/** Combos: an endless loop — cards that go infinite together. */
+export function ComboMark(p: MarkProps) {
+  return (
+    <svg {...base} {...p}>
+      <path d="M12 12c-1.7-2.3-3.2-3.6-5-3.6a3.6 3.6 0 0 0 0 7.2c1.8 0 3.3-1.3 5-3.6Zm0 0c1.7 2.3 3.2 3.6 5 3.6a3.6 3.6 0 0 0 0-7.2c-1.8 0-3.3 1.3-5 3.6Z" />
     </svg>
   );
 }

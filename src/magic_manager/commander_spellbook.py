@@ -52,16 +52,14 @@ def _run(args: list[str], stdin: str | None = None) -> dict:
 
 
 def _decklist_body(*, commander: list[str] | None, main: list[str] | None) -> dict:
-    """Build the shared request-body shape for /find-my-combos and /estimate-bracket.
+    """Build the shared request-body shape for /find-my-combos and /estimate-bracket:
+    ``commanders`` and ``main`` lists of ``{"card": NAME, "quantity": 1}``
+    (the API rejects bare strings with HTTP 400). Names are de-duplicated and
+    sorted so the same deck always hits the wrapper's on-disk cache."""
+    def entries(names: list[str] | None) -> list[dict]:
+        return [{"card": n, "quantity": 1} for n in sorted(set(names or []))]
 
-    Best-effort against the documented Commander Spellbook API: a
-    ``commanders`` list and a ``main`` list of card NAMES. Centralized here so
-    a shape fix (if the real API disagrees) is a one-line change.
-    """
-    return {
-        "commanders": list(commander or []),
-        "main": list(main or []),
-    }
+    return {"commanders": entries(commander), "main": entries(main)}
 
 
 def find_my_combos(*, commander: list[str] | None = None, main: list[str] | None = None) -> dict:
@@ -84,3 +82,10 @@ def estimate_bracket(*, commander: list[str] | None = None, main: list[str] | No
     """
     body = _decklist_body(commander=commander, main=main)
     return _run(["estimate-bracket"], stdin=json.dumps(body))
+
+
+def variants(query: str, *, limit: int = 50) -> dict:
+    """GET /variants/?q=<query> — combos matching a Spellbook search (e.g.
+    ``card="Sol Ring"``), most popular first. Network I/O behind spellbook.sh;
+    raises ``CommanderSpellbookError`` on failure."""
+    return _run(["variants", query, str(int(limit))])

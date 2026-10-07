@@ -167,15 +167,19 @@ def fake_spellbook(monkeypatch):
     """
     from magic_manager import commander_spellbook
 
-    state = {"find_my_combos": {}, "estimate_bracket": {}}
+    state = {"find_my_combos": {}, "estimate_bracket": {}, "variants": {}, "calls": []}
 
-    def configure(*, find_my_combos=None, estimate_bracket=None):
+    def configure(*, find_my_combos=None, estimate_bracket=None, variants=None):
         if find_my_combos is not None:
             state["find_my_combos"] = find_my_combos
         if estimate_bracket is not None:
             state["estimate_bracket"] = estimate_bracket
+        if variants is not None:
+            state["variants"] = variants
+        return state
 
     def _find_my_combos(*, commander=None, main=None):
+        state["calls"].append(("find_my_combos", commander, main))
         result = state["find_my_combos"]
         if isinstance(result, BaseException):
             raise result
@@ -191,7 +195,15 @@ def fake_spellbook(monkeypatch):
             return result(commander=commander, main=main)
         return result
 
+    def _variants(query, *, limit=50):
+        state["calls"].append(("variants", query, limit))
+        result = state["variants"]
+        if isinstance(result, BaseException):
+            raise result
+        return result
+
     monkeypatch.setattr(commander_spellbook, "find_my_combos", _find_my_combos)
+    monkeypatch.setattr(commander_spellbook, "variants", _variants)
     monkeypatch.setattr(commander_spellbook, "estimate_bracket", _estimate_bracket)
     return configure
 

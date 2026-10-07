@@ -22,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
 from .. import api, sets as sets_mod, tabs as tabs_engine, undo as undo_engine, cart as cart_engine, deck_edit, edhrec as edhrec_engine, features as features_engine, scryfall
-from ..api import deals as deals_api, undo as undo_api, cart as cart_api, cards as cards_api, collection as collection_api, explore as explore_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api, market as market_api, trueup as trueup_api, history as history_api
+from ..api import deals as deals_api, undo as undo_api, cart as cart_api, cards as cards_api, collection as collection_api, explore as explore_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api, market as market_api, trueup as trueup_api, history as history_api, combos as combos_api
 from .runtime import TERMINAL, JobManager
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -394,6 +394,21 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             return decks_api.suggestions(commander)
         except edhrec_engine.EdhrecError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
+
+    # ---------- combos (Commander Spellbook) ----------
+
+    @app.get("/api/decks/{slug}/combos", response_model=combos_api.DeckCombosOut, tags=["combos"])
+    def deck_combos(slug: str):
+        return _deck_call(combos_api.deck, slug)
+
+    @app.post("/api/combos/draft", response_model=combos_api.DeckCombosOut, tags=["combos"])
+    def draft_combos(body: combos_api.DraftCombosIn):
+        return combos_api.draft(body)
+
+    @app.get("/api/combos/card", response_model=combos_api.CardCombosOut, tags=["combos"])
+    def card_combos(name: Annotated[str, Query(min_length=1, max_length=200)],
+                    limit: Annotated[int, Query(ge=1, le=100)] = 30):
+        return combos_api.card(name, limit=limit)
 
     # ---------- cards ----------
 

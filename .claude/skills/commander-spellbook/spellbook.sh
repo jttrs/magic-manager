@@ -6,6 +6,8 @@
 # Usage:
 #   spellbook.sh find-my-combos    [path-to-body.json]   (or pipe JSON body on stdin)
 #   spellbook.sh estimate-bracket  [path-to-body.json]   (or pipe JSON body on stdin)
+#   spellbook.sh variants <query> [limit]   GET /variants/?q=<query>&ordering=-popularity
+#                                           (Spellbook search syntax, e.g. card="Sol Ring")
 #
 # All output is the raw JSON body from Commander Spellbook.
 # Exits non-zero with a message on rate-limit or HTTP errors.
@@ -71,13 +73,15 @@ pace() {
 }
 
 call_api() {
-  # $1 = path (e.g. /find-my-combos)
-  # $2 = JSON body for POST
+  # $1 = path (e.g. /find-my-combos, or /variants/?q=... for GET)
+  # $2 = JSON body for POST; empty -> GET
   local path="$1" body="${2:-}"
+  local method=POST
+  [ -z "$body" ] && method=GET
   local url="https://backend.commanderspellbook.com${path}"
 
   local cache_key cache_file
-  cache_key=$(printf '%s\n%s\n%s' "POST" "$url" "$body" | sha)
+  cache_key=$(printf '%s\n%s\n%s' "$method" "$url" "$body" | sha)
   cache_file="$CACHE_DIR/$cache_key.json"
 
   if [ -f "$cache_file" ]; then
@@ -102,17 +106,29 @@ call_api() {
   # a bare abort would kill a whole batch on an occasional 503.
   local http_code attempt=0
   while : ; do
-    http_code=$(curl -sS -X POST \
-      -H "User-Agent: $UA" \
-      -H 'Accept: application/json' \
-      -H 'Content-Type: application/json' \
-      --data-binary "$body" \
-      -o "$tmp_body" \
-      -w '%{http_code}' \
-      "$url") || {
-        echo "spellbook.sh: curl POST failed for $url" >&2
-        exit 4
-      }
+    if [ "$method" = POST ]; then
+      http_code=$(curl -sS -X POST \
+        -H "User-Agent: $UA" \
+        -H 'Accept: application/json' \
+        -H 'Content-Type: application/json' \
+        --data-binary "$body" \
+        -o "$tmp_body" \
+        -w '%{http_code}' \
+        "$url") || {
+          echo "spellbook.sh: curl POST failed for $url" >&2
+          exit 4
+        }
+    else
+      http_code=$(curl -sS \
+        -H "User-Agent: $UA" \
+        -H 'Accept: application/json' \
+        -o "$tmp_body" \
+        -w '%{http_code}' \
+        "$url") || {
+          echo "spellbook.sh: curl GET failed for $url" >&2
+          exit 4
+        }
+    fi
     case "$http_code" in
       500|502|503|504)
         attempt=$((attempt+1))
@@ -166,12 +182,20 @@ case "$cmd" in
     [ -z "$body" ] && { echo "usage: spellbook.sh estimate-bracket [path-to-body.json]  (or pipe JSON on stdin)" >&2; exit 1; }
     call_api /estimate-bracket "$body"
     ;;
+  variants)
+    q="${1:-}"; limit="${2:-50}"
+    [ -z "$q" ] && { echo "usage: spellbook.sh variants <query> [limit]" >&2; exit 1; }
+    case "$limit" in ''|*[!0-9]*) echo "spellbook.sh: limit must be a number" >&2; exit 1 ;; esac
+    enc=$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$q")
+    call_api "/variants/?q=${enc}&ordering=-popularity&limit=${limit}"
+    ;;
   *)
     cat >&2 <<EOF
 spellbook.sh: unknown subcommand '$cmd'
 Subcommands:
   find-my-combos    [path-to-body.json]   (or pipe JSON body on stdin)
   estimate-bracket  [path-to-body.json]   (or pipe JSON body on stdin)
+  variants          <query> [limit]       (GET, most popular first)
 EOF
     exit 1
     ;;

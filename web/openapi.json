@@ -444,147 +444,6 @@
         }
       }
     },
-    "/api/explore/ranking": {
-      "get": {
-        "tags": [
-          "explore"
-        ],
-        "summary": "Explore Ranking",
-        "description": "A cached EDHREC ranking joined to your collection (never fetches \u2014\n``cached: false`` means run the ``edhrec.rankings`` job).",
-        "operationId": "explore_ranking",
-        "parameters": [
-          {
-            "name": "scope",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "enum": [
-                "commanders",
-                "cards",
-                "salt"
-              ],
-              "type": "string",
-              "default": "commanders",
-              "title": "Scope"
-            }
-          },
-          {
-            "name": "timeframe",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "enum": [
-                "week",
-                "month",
-                "year"
-              ],
-              "type": "string",
-              "description": "Ignored by salt, tag and set rankings.",
-              "default": "week",
-              "title": "Timeframe"
-            },
-            "description": "Ignored by salt, tag and set rankings."
-          },
-          {
-            "name": "color",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Color identity: WUBRG letters or an EDHREC name (azorius, mono-red\u2026).",
-              "title": "Color"
-            },
-            "description": "Color identity: WUBRG letters or an EDHREC name (azorius, mono-red\u2026)."
-          },
-          {
-            "name": "tag",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Creature type or theme, e.g. goblins, treasure.",
-              "title": "Tag"
-            },
-            "description": "Creature type or theme, e.g. goblins, treasure."
-          },
-          {
-            "name": "set_family",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Set family anchor or name, e.g. fin.",
-              "title": "Set Family"
-            },
-            "description": "Set family anchor or name, e.g. fin."
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RankingOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/explore/ranking/options": {
-      "get": {
-        "tags": [
-          "explore"
-        ],
-        "summary": "Explore Ranking Options",
-        "operationId": "explore_ranking_options",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RankingOptionsOut"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/deals/tabs": {
       "get": {
         "tags": [
@@ -1144,51 +1003,6 @@
         }
       }
     },
-    "/api/market/secret-lair": {
-      "get": {
-        "tags": [
-          "market"
-        ],
-        "summary": "Market Secret Lair",
-        "operationId": "market_secret_lair",
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 200,
-              "minimum": 1,
-              "default": 30,
-              "title": "Limit"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SldDropsOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/market/cards": {
       "get": {
         "tags": [
@@ -1370,47 +1184,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/BuyListOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/collection/checklist": {
-      "post": {
-        "tags": [
-          "collection"
-        ],
-        "summary": "Collection Checklist",
-        "operationId": "collection_checklist",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ChecklistIn"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ChecklistOut"
                 }
               }
             }
@@ -1960,6 +1733,145 @@
         }
       }
     },
+    "/api/decks/{slug}/combos": {
+      "get": {
+        "tags": [
+          "combos"
+        ],
+        "summary": "Deck Combos",
+        "operationId": "deck_combos",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeckCombosOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/combos/draft": {
+      "post": {
+        "tags": [
+          "combos"
+        ],
+        "summary": "Draft Combos",
+        "operationId": "draft_combos",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftCombosIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeckCombosOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/combos/card": {
+      "get": {
+        "tags": [
+          "combos"
+        ],
+        "summary": "Card Combos",
+        "operationId": "card_combos",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "title": "Name"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 30,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CardCombosOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/cards/{scryfall_id}/holdings": {
       "get": {
         "tags": [
@@ -1985,69 +1897,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HoldingsOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/history": {
-      "get": {
-        "tags": [
-          "history"
-        ],
-        "summary": "History List",
-        "operationId": "history_list",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HistoryOut"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/history/{ingest_id}": {
-      "get": {
-        "tags": [
-          "history"
-        ],
-        "summary": "History Event",
-        "operationId": "history_event",
-        "parameters": [
-          {
-            "name": "ingest_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Ingest Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HistoryEventOut"
                 }
               }
             }
@@ -2481,6 +2330,43 @@
           "lines"
         ],
         "title": "BuyListOut"
+      },
+      "CardCombosOut": {
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "combos": {
+            "items": {
+              "$ref": "#/components/schemas/ComboOut"
+            },
+            "type": "array",
+            "title": "Combos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "available",
+          "name",
+          "combos"
+        ],
+        "title": "CardCombosOut"
       },
       "CardExploreOut": {
         "properties": {
@@ -3092,85 +2978,6 @@
         ],
         "title": "CheckOut"
       },
-      "ChecklistIn": {
-        "properties": {
-          "family": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Family",
-            "description": "Family label for the ingest event, e.g. 'Final Fantasy'."
-          },
-          "changes": {
-            "items": {
-              "$ref": "#/components/schemas/CountIn"
-            },
-            "type": "array",
-            "maxItems": 5000,
-            "minItems": 1,
-            "title": "Changes"
-          }
-        },
-        "type": "object",
-        "required": [
-          "family",
-          "changes"
-        ],
-        "title": "ChecklistIn"
-      },
-      "ChecklistOut": {
-        "properties": {
-          "ingest_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ingest Id",
-            "description": "The checklist ingest event; null when nothing changed."
-          },
-          "added": {
-            "type": "integer",
-            "title": "Added"
-          },
-          "updated": {
-            "type": "integer",
-            "title": "Updated"
-          },
-          "zeroed": {
-            "type": "integer",
-            "title": "Zeroed"
-          },
-          "copies_added": {
-            "type": "integer",
-            "title": "Copies Added"
-          },
-          "copies_removed": {
-            "type": "integer",
-            "title": "Copies Removed"
-          },
-          "rows": {
-            "items": {
-              "$ref": "#/components/schemas/CountRowOut"
-            },
-            "type": "array",
-            "title": "Rows"
-          }
-        },
-        "type": "object",
-        "required": [
-          "ingest_id",
-          "added",
-          "updated",
-          "zeroed",
-          "copies_added",
-          "copies_removed",
-          "rows"
-        ],
-        "title": "ChecklistOut"
-      },
       "CollectionCardOut": {
         "properties": {
           "scryfall_id": {
@@ -3430,29 +3237,95 @@
         ],
         "title": "CollectionOut"
       },
-      "ColorOptionOut": {
+      "ComboOut": {
         "properties": {
-          "slug": {
+          "id": {
             "type": "string",
-            "title": "Slug"
+            "title": "Id"
           },
-          "label": {
+          "url": {
             "type": "string",
-            "title": "Label"
+            "title": "Url",
+            "description": "The combo's page on Commander Spellbook."
           },
-          "colors": {
+          "pieces": {
+            "items": {
+              "$ref": "#/components/schemas/PieceOut"
+            },
+            "type": "array",
+            "title": "Pieces"
+          },
+          "produces": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Produces",
+            "description": "What it does (e.g. 'Infinite colorless mana')."
+          },
+          "requires": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Requires",
+            "description": "Extra pieces described, not named (any card that fits)."
+          },
+          "description": {
             "type": "string",
-            "title": "Colors",
-            "description": "WUBRG identity letters ('' = colorless)."
+            "title": "Description",
+            "description": "Steps, one per line."
+          },
+          "prerequisites": {
+            "type": "string",
+            "title": "Prerequisites"
+          },
+          "mana_needed": {
+            "type": "string",
+            "title": "Mana Needed"
+          },
+          "popularity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Popularity",
+            "description": "Decks on EDHREC running every piece."
+          },
+          "identity": {
+            "type": "string",
+            "title": "Identity"
+          },
+          "missing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PieceOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "One-card-away combos: the card to add."
           }
         },
         "type": "object",
         "required": [
-          "slug",
-          "label",
-          "colors"
+          "id",
+          "url",
+          "pieces",
+          "produces",
+          "requires",
+          "description",
+          "prerequisites",
+          "mana_needed",
+          "popularity",
+          "identity"
         ],
-        "title": "ColorOptionOut"
+        "title": "ComboOut"
       },
       "CommanderOption": {
         "properties": {
@@ -4084,76 +3957,6 @@
         "type": "object",
         "title": "CopyIn"
       },
-      "CountIn": {
-        "properties": {
-          "scryfall_id": {
-            "type": "string",
-            "title": "Scryfall Id"
-          },
-          "finish": {
-            "type": "string",
-            "enum": [
-              "nonfoil",
-              "foil"
-            ],
-            "title": "Finish"
-          },
-          "qty": {
-            "type": "integer",
-            "maximum": 9999.0,
-            "minimum": 0.0,
-            "title": "Qty"
-          },
-          "expected": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": 0.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Expected",
-            "description": "Count the editor started from; refused (409) if the collection moved since."
-          }
-        },
-        "type": "object",
-        "required": [
-          "scryfall_id",
-          "finish",
-          "qty"
-        ],
-        "title": "CountIn"
-      },
-      "CountRowOut": {
-        "properties": {
-          "scryfall_id": {
-            "type": "string",
-            "title": "Scryfall Id"
-          },
-          "finish": {
-            "type": "string",
-            "title": "Finish"
-          },
-          "old_qty": {
-            "type": "integer",
-            "title": "Old Qty"
-          },
-          "new_qty": {
-            "type": "integer",
-            "title": "New Qty"
-          }
-        },
-        "type": "object",
-        "required": [
-          "scryfall_id",
-          "finish",
-          "old_qty",
-          "new_qty"
-        ],
-        "title": "CountRowOut"
-      },
       "DeckCardOut": {
         "properties": {
           "printing": {
@@ -4237,6 +4040,74 @@
           "free"
         ],
         "title": "DeckCardOut"
+      },
+      "DeckCombosOut": {
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "title": "Available",
+            "description": "False when Commander Spellbook couldn't be reached; see `error`."
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "identity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Identity"
+          },
+          "included": {
+            "items": {
+              "$ref": "#/components/schemas/ComboOut"
+            },
+            "type": "array",
+            "title": "Included"
+          },
+          "almost": {
+            "items": {
+              "$ref": "#/components/schemas/ComboOut"
+            },
+            "type": "array",
+            "title": "Almost",
+            "description": "Combos one card away, in the deck's colours."
+          },
+          "missing_cards": {
+            "items": {
+              "$ref": "#/components/schemas/MissingCardOut"
+            },
+            "type": "array",
+            "title": "Missing Cards",
+            "description": "The near-misses rolled up per missing card, most combos first."
+          },
+          "off_color": {
+            "type": "integer",
+            "title": "Off Color",
+            "description": "Near-misses that would need another colour (not listed)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "available",
+          "included",
+          "almost",
+          "missing_cards",
+          "off_color"
+        ],
+        "title": "DeckCombosOut"
       },
       "DeckCostOut": {
         "properties": {
@@ -4446,12 +4317,6 @@
             "type": "string",
             "title": "Floor Scryfall Id",
             "description": "The cheapest printing (this one when unpriced elsewhere)."
-          },
-          "bonus": {
-            "type": "boolean",
-            "title": "Bonus",
-            "description": "A Secret Lair drop's bonus card (shipped with the drop, not in its decklist).",
-            "default": false
           }
         },
         "type": "object",
@@ -4768,6 +4633,22 @@
           "count"
         ],
         "title": "DraftCardIn"
+      },
+      "DraftCombosIn": {
+        "properties": {
+          "cards": {
+            "items": {
+              "$ref": "#/components/schemas/DraftCardIn"
+            },
+            "type": "array",
+            "title": "Cards"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cards"
+        ],
+        "title": "DraftCombosIn"
       },
       "DraftIn": {
         "properties": {
@@ -5251,252 +5132,6 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
-      "HistoryEntryOut": {
-        "properties": {
-          "ingest_id": {
-            "type": "integer",
-            "title": "Ingest Id"
-          },
-          "at": {
-            "type": "string",
-            "title": "At",
-            "description": "ISO timestamp of the ingest."
-          },
-          "method": {
-            "type": "string",
-            "title": "Method"
-          },
-          "kind": {
-            "type": "string",
-            "enum": [
-              "deck",
-              "pool",
-              "singles",
-              "checklist",
-              "unknown",
-              "move"
-            ],
-            "title": "Kind",
-            "description": "deck = playable product; pool = card pool (land pack, scene box, Secret Lair\u2026); singles = cards added individually; checklist = a bulk checklist ingest (source product not recorded); unknown = reconstructed bucket with no known source; move = cards pledged to / released from a deck."
-          },
-          "title": {
-            "type": "string",
-            "title": "Title"
-          },
-          "detail": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Detail"
-          },
-          "dated": {
-            "type": "string",
-            "enum": [
-              "acquired",
-              "identified",
-              "reconstructed"
-            ],
-            "title": "Dated",
-            "description": "acquired = when you added it; identified = when Find products attributed loose cards to it; reconstructed = the V19 backfill."
-          },
-          "ledgered": {
-            "type": "boolean",
-            "title": "Ledgered",
-            "description": "False for ingests before the ledger existed: their copies are counted in 'Checklists before the ledger' / the unknown buckets."
-          },
-          "copies_in": {
-            "type": "integer",
-            "title": "Copies In"
-          },
-          "copies_out": {
-            "type": "integer",
-            "title": "Copies Out",
-            "description": "Copies later removed or re-attributed to an identified product."
-          },
-          "held": {
-            "type": "integer",
-            "title": "Held",
-            "description": "Copies this entry still accounts for."
-          },
-          "printings": {
-            "type": "integer",
-            "title": "Printings"
-          },
-          "value_usd": {
-            "type": "number",
-            "title": "Value Usd",
-            "description": "Held copies at today's prices."
-          },
-          "lines": {
-            "type": "integer",
-            "title": "Lines",
-            "description": "Rows the ingest touched (checklist rows, deck-move lines)."
-          },
-          "product": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Product",
-            "description": "MTGJSON fileName for product entries."
-          },
-          "set_code": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Set Code"
-          },
-          "deck_slug": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Deck Slug",
-            "description": "Deck to open: the moved deck, or the playable product's deck row."
-          }
-        },
-        "type": "object",
-        "required": [
-          "ingest_id",
-          "at",
-          "method",
-          "kind",
-          "title",
-          "dated",
-          "ledgered",
-          "copies_in",
-          "copies_out",
-          "held",
-          "printings",
-          "value_usd",
-          "lines"
-        ],
-        "title": "HistoryEntryOut"
-      },
-      "HistoryEventOut": {
-        "properties": {
-          "entry": {
-            "$ref": "#/components/schemas/HistoryEntryOut"
-          },
-          "lines": {
-            "items": {
-              "$ref": "#/components/schemas/HistoryLineOut"
-            },
-            "type": "array",
-            "title": "Lines"
-          }
-        },
-        "type": "object",
-        "required": [
-          "entry",
-          "lines"
-        ],
-        "title": "HistoryEventOut"
-      },
-      "HistoryLineOut": {
-        "properties": {
-          "printing": {
-            "$ref": "#/components/schemas/PrintingOut"
-          },
-          "finish": {
-            "type": "string",
-            "enum": [
-              "nonfoil",
-              "foil"
-            ],
-            "title": "Finish"
-          },
-          "copies_in": {
-            "type": "integer",
-            "title": "Copies In"
-          },
-          "copies_out": {
-            "type": "integer",
-            "title": "Copies Out"
-          },
-          "held": {
-            "type": "integer",
-            "title": "Held"
-          },
-          "unit_usd": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Unit Usd"
-          }
-        },
-        "type": "object",
-        "required": [
-          "printing",
-          "finish",
-          "copies_in",
-          "copies_out",
-          "held",
-          "unit_usd"
-        ],
-        "title": "HistoryLineOut"
-      },
-      "HistoryOut": {
-        "properties": {
-          "entries": {
-            "items": {
-              "$ref": "#/components/schemas/HistoryEntryOut"
-            },
-            "type": "array",
-            "title": "Entries"
-          },
-          "prices_as_of": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Prices As Of",
-            "description": "Newest local price fetch date (YYYY-MM-DD)."
-          },
-          "stale_sets": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Stale Sets",
-            "description": "Set codes whose local prices are older than a week (not refreshed)."
-          }
-        },
-        "type": "object",
-        "required": [
-          "entries",
-          "prices_as_of",
-          "stale_sets"
-        ],
-        "title": "HistoryOut"
-      },
       "HoldingsOut": {
         "properties": {
           "scryfall_id": {
@@ -5836,6 +5471,32 @@
           "name"
         ],
         "title": "MatchOut"
+      },
+      "MissingCardOut": {
+        "properties": {
+          "piece": {
+            "$ref": "#/components/schemas/PieceOut"
+          },
+          "combos": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Combos",
+            "description": "Ids of the near-miss combos this card completes, most popular first."
+          },
+          "popularity": {
+            "type": "integer",
+            "title": "Popularity"
+          }
+        },
+        "type": "object",
+        "required": [
+          "piece",
+          "combos",
+          "popularity"
+        ],
+        "title": "MissingCardOut"
       },
       "MissingOut": {
         "properties": {
@@ -6219,6 +5880,66 @@
           "gap"
         ],
         "title": "PairedOut"
+      },
+      "PieceOut": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "oracle_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oracle Id"
+          },
+          "in_deck": {
+            "type": "boolean",
+            "title": "In Deck",
+            "description": "The deck already runs this card (deck combos only)."
+          },
+          "facts": {
+            "$ref": "#/components/schemas/FactsOut",
+            "description": "Owned / free copies across printings, cheapest price, display printing."
+          },
+          "image_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Uri",
+            "description": "Spellbook's art crop, for cards not in the local catalog."
+          },
+          "printing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PrintingOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The printing to add: your copy with the most free, else the first standard printing."
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "oracle_id",
+          "in_deck",
+          "facts",
+          "image_uri"
+        ],
+        "title": "PieceOut"
       },
       "PreconOptionOut": {
         "properties": {
@@ -6886,18 +6607,6 @@
             "type": "array",
             "title": "Notes"
           },
-          "sealed_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sealed Name",
-            "description": "Secret Lair: the MTGJSON sealed product valued (None for older drops without one)."
-          },
           "lines": {
             "items": {
               "$ref": "#/components/schemas/DeckLineOut"
@@ -7098,169 +6807,6 @@
           "name"
         ],
         "title": "ProductValueOut"
-      },
-      "RankedOut": {
-        "properties": {
-          "rank": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Rank"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "slug": {
-            "type": "string",
-            "title": "Slug"
-          },
-          "facts": {
-            "$ref": "#/components/schemas/FactsOut"
-          },
-          "num_decks": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Num Decks"
-          },
-          "salt": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Salt",
-            "description": "Average 0\u20134 'unfun to play against' rating (salt rankings)."
-          },
-          "trend": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Trend",
-            "description": "EDHREC trend z-score."
-          }
-        },
-        "type": "object",
-        "required": [
-          "rank",
-          "name",
-          "slug",
-          "facts"
-        ],
-        "title": "RankedOut"
-      },
-      "RankingOptionsOut": {
-        "properties": {
-          "timeframes": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Timeframes"
-          },
-          "colors": {
-            "items": {
-              "$ref": "#/components/schemas/ColorOptionOut"
-            },
-            "type": "array",
-            "title": "Colors"
-          },
-          "tags": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Tags",
-            "description": "Tags already fetched (suggestions)."
-          }
-        },
-        "type": "object",
-        "required": [
-          "timeframes",
-          "colors",
-          "tags"
-        ],
-        "title": "RankingOptionsOut"
-      },
-      "RankingOut": {
-        "properties": {
-          "scope": {
-            "type": "string",
-            "enum": [
-              "commanders",
-              "cards",
-              "salt"
-            ],
-            "title": "Scope"
-          },
-          "timeframe": {
-            "type": "string",
-            "title": "Timeframe",
-            "description": "Stored timeframe: week|month|year, 'all' (salt, tag) or '' (set)."
-          },
-          "filter": {
-            "type": "string",
-            "title": "Filter",
-            "description": "'' | color:<slug> | tag:<slug> | set:<anchor>."
-          },
-          "title": {
-            "type": "string",
-            "title": "Title"
-          },
-          "cached": {
-            "type": "boolean",
-            "title": "Cached",
-            "description": "False = never fetched; run the edhrec.rankings job."
-          },
-          "fetched_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Fetched At"
-          },
-          "rows": {
-            "items": {
-              "$ref": "#/components/schemas/RankedOut"
-            },
-            "type": "array",
-            "title": "Rows"
-          }
-        },
-        "type": "object",
-        "required": [
-          "scope",
-          "timeframe",
-          "filter",
-          "title",
-          "cached",
-          "fetched_at",
-          "rows"
-        ],
-        "title": "RankingOut"
       },
       "ResolveIn": {
         "properties": {
@@ -7566,102 +7112,6 @@
           "name"
         ],
         "title": "SetRefOut"
-      },
-      "SldDropOut": {
-        "properties": {
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "release_date": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Release Date"
-          },
-          "editions": {
-            "items": {
-              "$ref": "#/components/schemas/SldEditionOut"
-            },
-            "type": "array",
-            "title": "Editions"
-          }
-        },
-        "type": "object",
-        "required": [
-          "name",
-          "editions"
-        ],
-        "title": "SldDropOut"
-      },
-      "SldDropsOut": {
-        "properties": {
-          "total": {
-            "type": "integer",
-            "title": "Total",
-            "description": "Every Secret Lair drop known."
-          },
-          "drops": {
-            "items": {
-              "$ref": "#/components/schemas/SldDropOut"
-            },
-            "type": "array",
-            "title": "Drops",
-            "description": "The most recent drops, newest first. Values: GET /api/market/product-cost?kind=sld."
-          }
-        },
-        "type": "object",
-        "required": [
-          "total",
-          "drops"
-        ],
-        "title": "SldDropsOut"
-      },
-      "SldEditionOut": {
-        "properties": {
-          "finish": {
-            "type": "string",
-            "enum": [
-              "nonfoil",
-              "foil"
-            ],
-            "title": "Finish"
-          },
-          "sealed_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sealed Name",
-            "description": "The MTGJSON sealed product for this edition, if listed."
-          },
-          "tcgplayer_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tcgplayer Url",
-            "description": "Its TCGplayer product page \u2014 the link a watched drop tracks."
-          }
-        },
-        "type": "object",
-        "required": [
-          "finish"
-        ],
-        "title": "SldEditionOut"
       },
       "SourceOut": {
         "properties": {

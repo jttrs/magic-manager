@@ -398,16 +398,14 @@ def check(slug: str, cards: list[DraftCard], *, combos: bool = False) -> dict:
 
 # ---------- editor: commander suggestions ----------
 
-def suggestions(commander: str, *, limit: int = 300) -> dict:
-    """EDHREC's recommended cards for ``commander`` (cached page, synced once if
-    absent), highest inclusion first, each on a printing you can use: your
-    printing with the most FREE copies when you own the card, else its first
-    standard printing. ``owned`` / ``free`` count copies across every printing."""
-    from . import addcards, edhrec, sets
+def usable_printings(oracle_ids) -> tuple[dict[str, str], dict[str, list[tuple[str, int]]], dict[str, int]]:
+    """The printing to add for each oracle card: your printing with the most FREE
+    copies when you own the card, else its first standard printing. Returns
+    ``(pick {oracle_id: scryfall_id}, owned {oracle_id: [(scryfall_id, qty)]},
+    free {scryfall_id: qty})`` — shared by suggestions and combo near-misses."""
+    from . import sets
 
-    name, _slug, entries = edhrec._commander_card_entries(commander)
-    ranked = sorted(entries.values(), key=lambda e: -(e.inclusion_pct or 0))[:limit]
-    oids = [e.oracle_id for e in ranked if e.oracle_id]
+    oids = list(dict.fromkeys(o for o in oracle_ids if o))
     owned_by_oracle: dict[str, list[tuple[str, int]]] = {}
     if oids:
         with db.connect() as conn:
@@ -429,6 +427,18 @@ def suggestions(commander: str, *, limit: int = 300) -> dict:
             pick[oid] = max(mine, key=lambda t: (free.get(t[0], 0), t[1]))[0]
         elif oid in std:
             pick[oid] = std[oid]["scryfall_id"]
+    return pick, owned_by_oracle, free
+
+def suggestions(commander: str, *, limit: int = 300) -> dict:
+    """EDHREC's recommended cards for ``commander`` (cached page, synced once if
+    absent), highest inclusion first, each on a printing you can use: your
+    printing with the most FREE copies when you own the card, else its first
+    standard printing. ``owned`` / ``free`` count copies across every printing."""
+    from . import addcards, edhrec
+
+    name, _slug, entries = edhrec._commander_card_entries(commander)
+    ranked = sorted(entries.values(), key=lambda e: -(e.inclusion_pct or 0))[:limit]
+    pick, owned_by_oracle, free = usable_printings([e.oracle_id for e in ranked if e.oracle_id])
     printings = addcards.printings_for_ids(pick.values())
     cards = []
     for e in ranked:
