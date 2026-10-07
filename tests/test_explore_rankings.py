@@ -133,3 +133,16 @@ def test_ranking_endpoint_and_job(client, pages):
     opts = client.get("/api/explore/ranking/options").json()
     assert opts["timeframes"] == ["week", "month", "year"]
     assert len(opts["colors"]) == 32 and opts["colors"][0] == {"slug": "colorless", "label": "Colorless", "colors": ""}
+
+
+def test_empty_ranking_fails_instead_of_storing_nothing(tmp_db, monkeypatch):
+    """A page with no lists (e.g. a redirect for a mistyped tag) must fail the
+    sync, or the ranking stays 'never read' and the web view waits forever."""
+    monkeypatch.setattr(edhrec, "tag_ranking", lambda slug: {"redirect": "/tags/goblins"})
+    with pytest.raises(edhrec.EdhrecError, match="lists nothing"):
+        edhrec.rankings(tag="goblin")
+    assert edhrec.cached_rankings(edhrec.ranking_key(tag="goblin")) is None
+
+
+def test_sync_rankings_names_with_the_shared_title(tmp_db, pages):
+    assert edhrec.sync_rankings("commanders", color="r").name == "Top commanders · Mono-Red · past week"

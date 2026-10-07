@@ -46,7 +46,9 @@ export const rankingQuery = (req: RankingRequest | null) =>
     queryKey: ['explore', 'ranking', req],
     queryFn: async ({ signal }) => unwrap(await exploreRanking({ query: req!, signal })),
     enabled: req != null,
-    staleTime: 5 * 60_000,
+    // A never-read answer is always stale, so returning to the view re-checks the server
+    // instead of re-running a job another visit already finished.
+    staleTime: (q) => (q.state.data?.cached ? 5 * 60_000 : 0),
     placeholderData: keepPreviousData,
   });
 

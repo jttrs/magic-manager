@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { HoverCard } from 'radix-ui';
-import { useCallback, useEffect, useId, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { familiesQuery, rankingOptionsQuery, rankingQuery } from '../../app/queries';
 import { useJob } from '../../app/useJob';
 import { useSelection } from '../../app/selection';
@@ -47,16 +47,20 @@ export function RankingsExplore({ search, set, modeSwitch }: Props) {
   // A ranking never read is fetched once per visit; Refresh re-reads it.
   const { live: jobLive, start, reset } = useJob();
   const [startedKey, setStartedKey] = useState<string | null>(null);
+  // Mirrors startedKey synchronously so a double-run effect can't submit twice.
+  const startedRef = useRef<string | null>(null);
   const fetchRanking = useCallback((refresh: boolean) => {
     if (!req) return;
+    startedRef.current = reqKey;
     setStartedKey(reqKey);
     reset();
     void start('edhrec.rankings', { ...req, refresh });
   }, [req, reqKey, reset, start]);
   const data = ranking.isPlaceholderData ? undefined : ranking.data;
   useEffect(() => {
-    if (data && !data.cached && startedKey !== reqKey) fetchRanking(false);
-  }, [data, startedKey, reqKey, fetchRanking]);
+    // Wait for a fresh read: a stale "never read" answer may already be outdated.
+    if (data && !data.cached && !ranking.isFetching && startedRef.current !== reqKey) fetchRanking(false);
+  }, [data, ranking.isFetching, reqKey, fetchRanking]);
   const live = startedKey === reqKey ? jobLive : null;
   const running = Boolean(live && live.status !== 'succeeded' && live.status !== 'failed');
   useEffect(() => {

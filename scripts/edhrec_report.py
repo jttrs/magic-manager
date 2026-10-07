@@ -105,7 +105,6 @@ def _md_rankings(res, top: int, prices_note: str) -> str:
     is_salt = res.scope == "salt"
     metric_hdr = "Salt" if is_salt else "Decks"
     entity_hdr = "Commander" if res.scope == "commanders" else "Card"
-    # res.name is already the shared engine title (edhrec.ranking_title).
     title = res.name
     out = [
         f"## EDHREC rankings — {title}",
@@ -520,10 +519,8 @@ def main() -> int:
         else:  # rankings
             # validation (mutually-exclusive, commander-only filters) lives in
             # the engine; a bad request raises EdhrecError → exit 2 below.
-            filt = dict(color=args.color, tag=args.tag, set_family=args.set_family)
-            key = edhrec.ranking_key(args.scope, args.timeframe, **filt)
-            res = edhrec.sync_rankings(args.scope, args.timeframe, **filt)
-            res.name = edhrec.ranking_title(key)
+            res = edhrec.sync_rankings(args.scope, args.timeframe, color=args.color,
+                                       tag=args.tag, set_family=args.set_family)
             renderer = _md_rankings
             base = f"rankings-{res.scope}-{res.slug}-{res.timeframe or 'all'}-{ts}"
     except edhrec.EdhrecError as e:

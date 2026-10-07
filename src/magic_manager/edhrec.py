@@ -686,7 +686,6 @@ class _RankingPlan:
     cardviews: list[dict]                  # the ranking list (deck-count-ordered)
     filter_key: str                        # '' | 'color:…' | 'tag:…' | 'set:…'
     result_slug: str                       # SyncResult.slug (used in artifact names)
-    display_name: str                      # human title for the report header
     timeframe: str                         # effective timeframe stored on rows
     snapshots: list[tuple[str, str, dict]] # (page_type, slug, page) to _store_page
     primary_page: dict                     # SyncResult.raw
@@ -719,7 +718,6 @@ def _plan_rankings(scope: str, timeframe: str, *,
         cardviews = lists.get(f"{slug}commanders") or next((cv for cv in lists.values() if cv), [])
         return _RankingPlan(
             cardviews=cardviews, filter_key=f"color:{slug}", result_slug=slug,
-            display_name=page.get("header") or f"{slug} commanders",
             timeframe=timeframe, snapshots=[("commanders", slug, page)],
             primary_page=page,
         )
@@ -734,7 +732,6 @@ def _plan_rankings(scope: str, timeframe: str, *,
                                       + list(lists.get("newcommanders") or []))
         return _RankingPlan(
             cardviews=cardviews, filter_key=f"tag:{tslug}", result_slug=f"tag-{tslug}",
-            display_name=f"{page.get('header') or tslug} commanders (tag)",
             timeframe="all", snapshots=[("commanders", f"tags/{tslug}", page)],
             primary_page=page,
         )
@@ -761,7 +758,6 @@ def _plan_rankings(scope: str, timeframe: str, *,
         return _RankingPlan(
             cardviews=_dedupe_cardviews(merged), filter_key=f"set:{anchor}",
             result_slug=f"set-{anchor}",
-            display_name=f"{(primary.get('header') if primary else None) or anchor} commanders (set)",
             timeframe="", snapshots=snapshots, primary_page=primary,
         )
 
@@ -779,7 +775,7 @@ def _plan_rankings(scope: str, timeframe: str, *,
     cardviews = next((cv for cv in lists.values() if cv), [])
     return _RankingPlan(
         cardviews=cardviews, filter_key="", result_slug=scope,
-        display_name=f"{scope} ({tf})", timeframe=tf,
+        timeframe=tf,
         snapshots=[(("commanders" if scope == "commanders" else "top"), scope, page)],
         primary_page=page,
     )
@@ -801,6 +797,7 @@ def sync_rankings(scope: str = "commanders", timeframe: str = "week", *,
     ``progress(done, total, message)`` (optional) ticks per page fetched — a set
     family fetches one page per code."""
     n_filters = _check_ranking_args(scope, color, tag, set_family)
+    key = ranking_key(scope, timeframe, color=color, tag=tag, set_family=set_family)
     plan = _plan_rankings(scope, timeframe, color=color, tag=tag,
                           set_family=set_family, progress=progress)
     # Filtered rankings are always commander rankings; unfiltered keeps its scope.
@@ -808,6 +805,10 @@ def sync_rankings(scope: str = "commanders", timeframe: str = "week", *,
     at = db._utcnow_iso()
 
     names = [cv["name"] for cv in plan.cardviews if cv.get("name")]
+    if not names:
+        # An empty page (no lists, or a redirect for a mistyped tag) would store
+        # nothing and leave the ranking looking never-read; fail loudly instead.
+        raise EdhrecError(f"EDHREC lists nothing for {ranking_title(key)} — check the spelling or try another filter")
     if progress:
         progress(1, 1, f"Matching {len(names)} cards to your collection")
     resolved = resolve_names_to_oracle(names)
@@ -847,7 +848,7 @@ def sync_rankings(scope: str = "commanders", timeframe: str = "week", *,
                 list_tag=row_scope, num_decks=cv.get("num_decks"),
                 salt=cv.get("salt"), rank=rank, trend_zscore=cv.get("trend_zscore"),
             ))
-    return SyncResult(kind="rankings", slug=plan.result_slug, name=plan.display_name,
+    return SyncResult(kind="rankings", slug=plan.result_slug, name=ranking_title(key),
                       scope=row_scope, timeframe=plan.timeframe, rows=rows,
                       raw=plan.primary_page, fetched_at=at)
 
