@@ -55,20 +55,16 @@ INV_SELECT = (
 
 
 def _load_env() -> dict:
-    env = {}
+    """Your own Mana Pool login, used only to read YOUR cart: from the shell
+    environment or the macOS Keychain (``mm secret set MANAPOOL_EMAIL`` /
+    ``MANAPOOL_PASSWORD``) — never from the repo's ``.env``."""
+    from magic_manager import secrets
+
     envfile = ROOT / ".env"
-    if envfile.exists():
-        for line in envfile.read_text().splitlines():
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            k, _, v = line.partition("=")
-            env[k.strip()] = v.strip()
-    # environment overrides file
-    for k in ("MANAPOOL_EMAIL", "MANAPOOL_PASSWORD", "MANAPOOL_ACCESS_TOKEN"):
-        if os.environ.get(k):
-            env[k] = os.environ[k]
-    return env
+    if envfile.exists() and any(l.strip().startswith("MANAPOOL_PASSWORD=") for l in envfile.read_text().splitlines()):
+        print("note: MANAPOOL_PASSWORD in .env is ignored — store it with `uv run mm secret set MANAPOOL_PASSWORD` "
+              "and remove it from .env", file=sys.stderr)
+    return {k: v for k in secrets.PERSONAL if (v := secrets.get(k))}
 
 
 def _http_json(url: str, headers: dict, method: str = "GET", body: bytes | None = None):
@@ -83,7 +79,7 @@ def fetch_headless(env: dict) -> list[dict] | None:
     email = env.get("MANAPOOL_EMAIL")
     password = env.get("MANAPOOL_PASSWORD")
     if not email or not password:
-        print("headless: no MANAPOOL_PASSWORD in .env — skipping headless login", file=sys.stderr)
+        print("headless: no Mana Pool login — run `uv run mm secret set MANAPOOL_EMAIL` and `... MANAPOOL_PASSWORD` (macOS Keychain); skipping headless login", file=sys.stderr)
         return None
     try:
         # 1. password grant → JWT (in memory only)

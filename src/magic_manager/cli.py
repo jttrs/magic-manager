@@ -88,6 +88,35 @@ app.add_typer(edhrec_app, name="edhrec")
 app.add_typer(collection_app, name="collection")
 
 
+secret_app = typer.Typer(no_args_is_help=True,
+                         help="Personal secrets in the macOS Keychain (e.g. your Mana Pool login for reading your cart). Never stored in .env.")
+app.add_typer(secret_app, name="secret")
+
+
+@secret_app.command("set")
+def secret_set(name: str = typer.Argument(..., help="e.g. MANAPOOL_EMAIL or MANAPOOL_PASSWORD.")):
+    """Store a secret in the Keychain; macOS prompts for the value, so it never lands in a command line or file."""
+    from . import secrets as secrets_mod
+    raise typer.Exit(secrets_mod.set_interactive(name))
+
+
+@secret_app.command("status")
+def secret_status():
+    """Which personal secrets are set (names only — values are never shown)."""
+    from . import secrets as secrets_mod
+    import os
+    for name in secrets_mod.PERSONAL:
+        where = "environment" if os.environ.get(name) else "Keychain" if secrets_mod.keychain_get(name) else "not set"
+        typer.echo(f"{name}: {where}")
+
+
+@secret_app.command("delete")
+def secret_delete(name: str = typer.Argument(...)):
+    """Remove a secret from the Keychain."""
+    from . import secrets as secrets_mod
+    typer.echo("removed" if secrets_mod.delete(name) else "not found")
+
+
 def _slug(s: str) -> str:
     raw = "".join(c if c.isalnum() else "-" for c in s.lower())
     # Collapse runs of hyphens so "Final Fantasy: Through the Ages" → "final-fantasy-through-the-ages"

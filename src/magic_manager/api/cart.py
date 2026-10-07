@@ -1,9 +1,11 @@
 """Cart surface of the typed API: audit a Mana Pool cart against your collection.
 
-Internal-only — every route checks the ``cart_check`` feature flag, and the
-cart is read with the Mana Pool account configured in this machine's ``.env``
-(``MANAPOOL_*``) via ``scripts/manapool_cart.py`` — the one sanctioned home of
-the login code; its session token stays in memory there. Never ask users for
+Internal-only and local-only — every route checks the ``cart_check`` feature
+flag, and the cart is read with YOUR Mana Pool login from the shell environment
+or the macOS Keychain (``mm secret set MANAPOOL_EMAIL`` / ``MANAPOOL_PASSWORD``;
+never ``.env``) via ``scripts/manapool_cart.py`` — the one sanctioned home of the
+login code; its session token stays in memory there. Hosted, a cart is read in
+the user's own browser and only its lines reach the server (Phase 3 decision H13). Never ask users for
 these credentials (real money); a cart-page bookmarklet was considered and parked.
 """
 from __future__ import annotations
@@ -13,10 +15,10 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from .. import cart, features
+from .. import cart, features, secrets
 
 _CART_SCRIPT = Path(__file__).resolve().parents[3] / "scripts" / "manapool_cart.py"
-_ACCOUNT_KEYS = ("MANAPOOL_EMAIL", "MANAPOOL_PASSWORD", "MANAPOOL_ACCESS_TOKEN")
+_ACCOUNT_KEYS = secrets.PERSONAL
 
 
 class FeaturesOut(BaseModel):
@@ -24,7 +26,7 @@ class FeaturesOut(BaseModel):
 
 
 class CartSetupOut(BaseModel):
-    account: bool = Field(description="MANAPOOL_EMAIL, _PASSWORD and _ACCESS_TOKEN are configured, so the cart can be read directly.")
+    account: bool = Field(description="Your Mana Pool login (MANAPOOL_EMAIL + MANAPOOL_PASSWORD) is in the Keychain or environment, so the cart can be read directly.")
 
 
 class CartIn(BaseModel):
@@ -107,7 +109,7 @@ def check(req: CartIn) -> CartAuditOut:
     mod = _cart_script()
     items = mod.fetch_headless(mod._load_env())
     if items is None:
-        raise cart.CartFormatError("Couldn’t read your cart with the Mana Pool account — check MANAPOOL_* in .env.")
+        raise cart.CartFormatError("Couldn’t read your cart with your Mana Pool login — check it with `uv run mm secret status`.")
     if not items:
         raise cart.CartFormatError("Your Mana Pool cart is empty.")
     return CartAuditOut(**cart.audit(items, anchor=req.family))
