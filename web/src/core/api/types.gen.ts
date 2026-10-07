@@ -2381,6 +2381,266 @@ export type JobSpecOut = {
 };
 
 /**
+ * JumpstartBuyIn
+ */
+export type JumpstartBuyIn = {
+    /**
+     * Shop
+     */
+    shop: 'buildable' | 'packs';
+    /**
+     * Target
+     */
+    target: 'manapool' | 'tcgplayer' | 'cardkingdom';
+};
+
+/**
+ * JumpstartBuyOut
+ */
+export type JumpstartBuyOut = {
+    /**
+     * Text
+     */
+    text: string;
+    /**
+     * Lines
+     */
+    lines: number;
+};
+
+/**
+ * JumpstartOut
+ */
+export type JumpstartOut = {
+    /**
+     * Code
+     */
+    code: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Ready
+     *
+     * False = deck files not read yet; run the jumpstart.read job.
+     */
+    ready: boolean;
+    /**
+     * Close Short
+     *
+     * A pack this many cards short or fewer is 'close'.
+     */
+    close_short?: number;
+    /**
+     * Packs
+     */
+    packs?: Array<JumpstartPackOut>;
+    /**
+     * Themes
+     */
+    themes?: number;
+    /**
+     * Cards to make every theme buildable (one built copy of each + other versions' extras).
+     */
+    buildable?: JumpstartShopOut | null;
+    /**
+     * Every pack version you don't own, full contents.
+     */
+    whole?: JumpstartShopOut | null;
+    /**
+     * Whole Packs
+     */
+    whole_packs?: number;
+};
+
+/**
+ * JumpstartPackCardOut
+ */
+export type JumpstartPackCardOut = {
+    printing: PrintingOut;
+    /**
+     * Count
+     */
+    count: number;
+    /**
+     * Foil
+     */
+    foil: boolean;
+    /**
+     * Unit Usd
+     */
+    unit_usd: number | null;
+    /**
+     * Free
+     */
+    free: number;
+};
+
+/**
+ * JumpstartPackDetailOut
+ */
+export type JumpstartPackDetailOut = {
+    pack: JumpstartPackOut;
+    /**
+     * Cards
+     */
+    cards: Array<JumpstartPackCardOut>;
+    /**
+     * Unknown
+     *
+     * Card names not in the local cards table.
+     */
+    unknown?: Array<string>;
+};
+
+/**
+ * JumpstartPackOut
+ */
+export type JumpstartPackOut = {
+    /**
+     * File Name
+     */
+    file_name: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Theme
+     */
+    theme: string;
+    /**
+     * Version
+     */
+    version: number | null;
+    /**
+     * Color
+     *
+     * WUBRG letters of the pack's cards; 'C' = colorless.
+     */
+    color: string;
+    /**
+     * Card Count
+     */
+    card_count: number;
+    /**
+     * Usd Total
+     *
+     * Cards at their shipped finish plus the front card.
+     */
+    usd_total: number | null;
+    /**
+     * Top Card
+     */
+    top_card: string | null;
+    /**
+     * Top Card Usd
+     */
+    top_card_usd: number | null;
+    /**
+     * Front Card
+     */
+    front_card: string | null;
+    /**
+     * Top Card Image
+     */
+    top_card_image?: string | null;
+    /**
+     * Built
+     */
+    built: number;
+    /**
+     * Deconstructed
+     */
+    deconstructed: number;
+    /**
+     * Deck Slug
+     *
+     * A deck row for this version you own (built first).
+     */
+    deck_slug?: string | null;
+    /**
+     * Have
+     *
+     * Pack cards your free copies cover (each pack on its own).
+     */
+    have: number;
+    /**
+     * Short
+     *
+     * Pack cards you have no free copy for.
+     */
+    short: number;
+    /**
+     * Status
+     */
+    status: 'build' | 'close' | 'far';
+};
+
+/**
+ * JumpstartSetOut
+ */
+export type JumpstartSetOut = {
+    /**
+     * Code
+     */
+    code: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Released
+     */
+    released: string | null;
+    /**
+     * Packs
+     *
+     * Pack versions.
+     */
+    packs: number;
+    /**
+     * Themes
+     */
+    themes: number;
+    /**
+     * Owned Packs
+     *
+     * Versions you own at least one copy of (built or broken down).
+     */
+    owned_packs: number;
+};
+
+/**
+ * JumpstartSetsOut
+ */
+export type JumpstartSetsOut = {
+    /**
+     * Sets
+     */
+    sets: Array<JumpstartSetOut>;
+};
+
+/**
+ * JumpstartShopOut
+ */
+export type JumpstartShopOut = {
+    /**
+     * Cards
+     */
+    cards: number;
+    /**
+     * Copies
+     */
+    copies: number;
+    /**
+     * Usd
+     */
+    usd: number;
+};
+
+/**
  * LegalityOut
  */
 export type LegalityOut = {
@@ -5650,6 +5910,116 @@ export type HistoryEventResponses = {
 };
 
 export type HistoryEventResponse = HistoryEventResponses[keyof HistoryEventResponses];
+
+export type JumpstartSetsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/jumpstart';
+};
+
+export type JumpstartSetsResponses = {
+    /**
+     * Successful Response
+     */
+    200: JumpstartSetsOut;
+};
+
+export type JumpstartSetsResponse = JumpstartSetsResponses[keyof JumpstartSetsResponses];
+
+export type JumpstartViewData = {
+    body?: never;
+    path: {
+        /**
+         * Code
+         */
+        code: string;
+    };
+    query?: never;
+    url: '/api/jumpstart/{code}';
+};
+
+export type JumpstartViewErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type JumpstartViewError = JumpstartViewErrors[keyof JumpstartViewErrors];
+
+export type JumpstartViewResponses = {
+    /**
+     * Successful Response
+     */
+    200: JumpstartOut;
+};
+
+export type JumpstartViewResponse = JumpstartViewResponses[keyof JumpstartViewResponses];
+
+export type JumpstartPackData = {
+    body?: never;
+    path: {
+        /**
+         * Code
+         */
+        code: string;
+        /**
+         * File Name
+         */
+        file_name: string;
+    };
+    query?: never;
+    url: '/api/jumpstart/{code}/packs/{file_name}';
+};
+
+export type JumpstartPackErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type JumpstartPackError = JumpstartPackErrors[keyof JumpstartPackErrors];
+
+export type JumpstartPackResponses = {
+    /**
+     * Successful Response
+     */
+    200: JumpstartPackDetailOut;
+};
+
+export type JumpstartPackResponse = JumpstartPackResponses[keyof JumpstartPackResponses];
+
+export type JumpstartBuyListData = {
+    body: JumpstartBuyIn;
+    path: {
+        /**
+         * Code
+         */
+        code: string;
+    };
+    query?: never;
+    url: '/api/jumpstart/{code}/buy-list';
+};
+
+export type JumpstartBuyListErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type JumpstartBuyListError = JumpstartBuyListErrors[keyof JumpstartBuyListErrors];
+
+export type JumpstartBuyListResponses = {
+    /**
+     * Successful Response
+     */
+    200: JumpstartBuyOut;
+};
+
+export type JumpstartBuyListResponse = JumpstartBuyListResponses[keyof JumpstartBuyListResponses];
 
 export type IngestSearchData = {
     body?: never;

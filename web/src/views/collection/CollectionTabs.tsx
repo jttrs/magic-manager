@@ -3,9 +3,10 @@ import { Link } from '@tanstack/react-router';
 const TABS = [
   { to: '/collection', label: 'Cards', exact: true },
   { to: '/collection/history', label: 'Purchase history', exact: false },
+  { to: '/collection/jumpstart', label: 'Jumpstart', exact: false },
 ] as const;
 
-/** Collection's two sheets: the cards you own, and how they came in. */
+/** Collection's sheets: the cards you own, how they came in, and Jumpstart packs. */
 export function CollectionTabs() {
   return (
     <nav aria-label="Collection views" className="flex gap-5 border-b border-rule px-5 pt-2">

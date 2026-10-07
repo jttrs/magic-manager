@@ -2,6 +2,7 @@ import { createRootRoute, createRoute, createRouter, lazyRouteComponent, Outlet,
 import { AppShell } from '../components/AppShell';
 import { collectionSearch, compareSearch, decksSearch, marketSearch } from '../core/search';
 import { historySearch } from '../core/history';
+import { jumpstartSearch } from '../core/jumpstart';
 
 const rootRoute = createRootRoute({
   component: () => (
@@ -55,6 +56,14 @@ const historyRoute = createRoute({
   component: lazyRouteComponent(() => import('../views/HistoryView'), 'HistoryView'),
 });
 
+const jumpstartRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/collection/jumpstart',
+  validateSearch: jumpstartSearch,
+  search: { middlewares: [stripSearchParams(jumpstartSearch.parse({}))] },
+  component: lazyRouteComponent(() => import('../views/JumpstartView'), 'JumpstartView'),
+});
+
 // The old missing-set view lived at /sets; it is now a filter of Collection.
 const legacySetsRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -94,7 +103,7 @@ const jobsRoute = createRoute({
 });
 
 export const router = createRouter({
-  routeTree: rootRoute.addChildren([indexRoute, collectionRoute, historyRoute, legacySetsRoute, decksRoute, deckEditRoute, exploreRoute, legacyCommandersRoute, marketRoute, jobsRoute]),
+  routeTree: rootRoute.addChildren([indexRoute, collectionRoute, historyRoute, jumpstartRoute, legacySetsRoute, decksRoute, deckEditRoute, exploreRoute, legacyCommandersRoute, marketRoute, jobsRoute]),
   defaultPreload: 'intent',
 });
 

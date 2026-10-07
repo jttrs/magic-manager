@@ -13,7 +13,7 @@ The exceptions are intentional, not oversights:
   - `mm export` / `export.build(fmt, rows)` on an explicit user selector — the
     user asked for exactly those rows; forcing a filter would be wrong.
   - `mm deck push-moxfield` — pushes a deck's own cards, not a missing-set union.
-  - `mm query missing-jumpstart` — emits WHOLE un-owned pack contents (you buy
+  - `mm query missing-jumpstart` / `jumpstart.missing_packs` — emits WHOLE un-owned pack contents (you buy
     the pack, token included); a different semantic from a singles buy-list.
   - `src/magic_manager/card_diff_tiles.py` (card-diff gallery + web view) — the gallery's "copy buy-list" button exports
     exactly the tiles currently DISPLAYED, which are the card-diff pools already
@@ -67,8 +67,9 @@ def test_jumpstart_buildable_gate_drops_tokens_by_default(tmp_db, jfam, seed_car
     # Default gate: token dropped.
     kept = {r.scryfall_id for r in missing_mod.physical_buyable(rows, "jtest")}
     assert kept == {"real"}
-    # The producer uses this exact call; confirm the module wires it (not a dict shadow).
-    assert hasattr(jb, "missing_mod") and jb.missing_mod is missing_mod
+    # The producer (the jumpstart engine) uses this exact call; confirm it's wired.
+    from magic_manager import jumpstart
+    assert jb.jumpstart is jumpstart and jumpstart.missing_mod is missing_mod
 
 
 # ---------- 2. source: pin which producers filter ----------
@@ -84,11 +85,11 @@ def _calls_missing_printings(path: Path) -> bool:
 
 
 def test_jumpstart_buildable_source_routes_through_gate():
-    jb = ROOT / "scripts" / "jumpstart_buildable.py"
-    assert _calls_physical_buyable(jb), \
-        "jumpstart_buildable must call physical_buyable (buy-list singles gate)"
-    # and expose the --no-filter escape hatch
-    assert "--no-filter" in jb.read_text(encoding="utf-8")
+    engine = ROOT / "src" / "magic_manager" / "jumpstart.py"
+    assert _calls_physical_buyable(engine), \
+        "jumpstart.buildable_missing must call physical_buyable (buy-list singles gate)"
+    # and the script exposes the --no-filter escape hatch
+    assert "--no-filter" in (ROOT / "scripts" / "jumpstart_buildable.py").read_text(encoding="utf-8")
 
 
 def test_cli_missing_set_filters_via_missing_printings():
@@ -110,7 +111,8 @@ def test_no_new_unfiltered_buylist_producer():
                 producers.add(p.relative_to(ROOT).as_posix())
 
     # Known filtered producers.
-    filtered = {"scripts/jumpstart_buildable.py", "src/magic_manager/cli.py"}
+    filtered = {"scripts/jumpstart_buildable.py", "src/magic_manager/cli.py",
+                "src/magic_manager/jumpstart.py"}
     # Documented exceptions (see module docstring).
     exceptions: dict[str, str] = {
         "src/magic_manager/card_diff_tiles.py": "re-formats the already-filtered, deduped "

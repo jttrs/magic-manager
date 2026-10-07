@@ -1,5 +1,7 @@
 """Deterministic two-sheet XLSX reference of Jumpstart pack versions.
 
+Thin driver over :mod:`magic_manager.jumpstart` (``set_packs``).
+
 Answers "which version of a Jumpstart pack is this?" (Angels (1) vs Angels (2),
 etc.) and "what's in each version?". Emits ``reference/jumpstart-versions.xlsx``
 with two sheets:
@@ -42,133 +44,40 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from magic_manager import db, exports, mtgjson, sets, util  # noqa: E402
+from magic_manager import exports, jumpstart, sets, util  # noqa: E402
 
 DEFAULT_OUT = ROOT / "reference" / "jumpstart-versions.xlsx"
 
-# Color-code sort: single symbols rank C<W<U<B<R<G; any multicolor code sorts
-# as one trailing block (rank 6), ordered among itself by its letter sequence.
-_MONO_RANK = {"C": 0, "W": 1, "U": 2, "B": 3, "R": 4, "G": 5}
-
-
-def _color_sort_key(code: str) -> tuple[int, str]:
-    """Sort key for a color code. Mono/colorless first in C,W,U,B,R,G order;
-    every multicolor code (2+ letters) after, grouped and ordered by sequence."""
-    if code in _MONO_RANK:
-        return (_MONO_RANK[code], "")
-    return (6, code)  # multicolor block ("M" tier), ordered by letters
-
-
-def _all_jumpstart_set_codes() -> list[str]:
-    """Every set code that publishes ``type: Jumpstart`` products, from the
-    global DeckList (deduped, lowercased, sorted)."""
-    codes = {
-        (d.get("code") or "").lower()
-        for d in mtgjson.deck_list()
-        if d.get("type") == "Jumpstart" and d.get("code")
-    }
-    return sorted(codes)
-
-
-def _sync_family(code: str) -> None:
-    """Sync ``code``'s family into the local cards table so prices/colors
-    resolve (Jumpstart contents span the parent expansion). Best-effort:
-    a resolution/sync failure leaves the set's rows under-reported, not fatal."""
-    try:
-        resolved = sets.resolve(code)
-        sets.sync(resolved.filtered_codes())
-    except Exception as e:  # noqa: BLE001 — best-effort, mirrors sets.py contract
-        print(f"  ! sync failed for {code}: {e}", file=sys.stderr)
-
-
-def _card_rows_for_variant(code: str, variant: dict, summary: dict) -> tuple[list[dict], int]:
-    """Per-distinct-card rows for one pack. Returns (rows, n_skipped) where
-    n_skipped counts scryfall_ids absent from the local cards table."""
-    deck_data = mtgjson.deck(variant["fileName"])
-    theme = summary["theme"]
-
-    # Accumulate copies per (scryfall_id, is_foil): the shipped finish is part
-    # of the identity, so a card shipped both foil and nonfoil (rare) is two
-    # rows. count = summed copies of that (printing, finish) across boards.
-    counts: dict[tuple[str, bool], int] = {}
-    order: list[tuple[str, bool]] = []
-    for board_key in ("commander", "mainBoard", "sideBoard"):
-        for entry in deck_data.get(board_key) or []:
-            sid = (entry.get("identifiers") or {}).get("scryfallId")
-            if not sid:
-                continue
-            key = (sid, bool(entry.get("isFoil")))
-            if key not in counts:
-                order.append(key)
-            counts[key] = counts.get(key, 0) + int(entry.get("count", 1) or 1)
-
-    sids = [k[0] for k in order]
-    card_data: dict[str, tuple] = {}
-    if sids:
-        with db.connect() as conn:
-            placeholders = ",".join("?" for _ in sids)
-            card_data = {
-                r["scryfall_id"]: (r["name"], r["prices_usd"], r["prices_usd_foil"],
-                                   r["color_identity"], r["rarity"], r["collector_number"])
-                for r in conn.execute(
-                    f"SELECT scryfall_id, name, prices_usd, prices_usd_foil, "
-                    f"color_identity, rarity, collector_number "
-                    f"FROM cards WHERE scryfall_id IN ({placeholders})",
-                    sids,
-                ).fetchall()
-            }
-
-    rows: list[dict] = []
-    n_skipped = 0
-    for (sid, is_foil) in order:
-        data = card_data.get(sid)
-        if data is None:
-            n_skipped += 1
-            continue
-        name, nonfoil, foil, ci, rarity, cn = data
-        price = foil if is_foil else nonfoil
-        rows.append({
-            "set": code.upper(),
-            "theme": theme,
-            "color": util.format_color_identity(ci, collapse_multicolor=False),
-            "card_name": name,
-            "card_value": float(price) if price is not None else None,
-            "count": counts[(sid, is_foil)],
-            "rarity": rarity or "",
-            "collector_number": cn or "",
-        })
-    return rows, n_skipped
+_color_sort_key = jumpstart.color_sort_key
 
 
 def _gather(codes: list[str]) -> tuple[list[dict], list[dict]]:
-    """Build (pack_rows, card_rows) across the given set codes."""
+    """Build (pack_rows, card_rows) across the given set codes from the engine."""
     pack_rows: list[dict] = []
     card_rows: list[dict] = []
-    total_skipped = 0
     for code in codes:
-        variants = mtgjson.jumpstart_variants(code)
-        if not variants:
+        if not jumpstart.variants(code):
             print(f"  (no Jumpstart variants for {code.upper()}, skipping)", file=sys.stderr)
             continue
-        print(f"  {code.upper()}: syncing family + {len(variants)} pack(s)…")
-        _sync_family(code)
-        for v in variants:
-            summary = sets._jumpstart_variant_summary(v, anchor=code)
+        print(f"  {code.upper()}: reading packs (fills sets with no local cards)…")
+        jumpstart.ensure_ready(code)
+        for p in jumpstart.set_packs(code):
             pack_rows.append({
-                "set": code.upper(),
-                "theme": summary["theme"],
-                "color": summary["color"],
-                "top_card": summary["top_card"],
-                "top_card_usd": summary["top_card_usd"],
-                "card_count": summary["card_count"],
-                "usd_total": summary["usd_total"],
+                "set": code.upper(), "theme": p.name, "color": p.color, "top_card": p.top_card,
+                "top_card_usd": p.top_card_usd, "card_count": p.card_count, "usd_total": p.usd_total,
             })
-            crows, skipped = _card_rows_for_variant(code, v, summary)
-            card_rows.extend(crows)
-            total_skipped += skipped
-    if total_skipped:
-        print(f"  ! {total_skipped} card printing(s) not found locally, omitted from cards sheet",
-              file=sys.stderr)
+            # One row per (printing, shipped finish); count summed across boards.
+            merged: dict[tuple[str, bool], dict] = {}
+            for c in p.cards:
+                if not c.known:
+                    continue
+                row = merged.setdefault((c.scryfall_id, c.foil), {
+                    "set": code.upper(), "theme": p.name, "color": c.color, "card_name": c.name,
+                    "card_value": c.unit_usd, "count": 0, "rarity": c.rarity or "",
+                    "collector_number": c.collector_number or "",
+                })
+                row["count"] += c.count
+            card_rows.extend(merged.values())
     return pack_rows, card_rows
 
 
@@ -217,7 +126,7 @@ def main() -> int:
         codes = [args.set_code.lower()]
     else:
         print("Discovering all Jumpstart sets from MTGJSON DeckList…")
-        codes = _all_jumpstart_set_codes()
+        codes = jumpstart.jumpstart_set_codes()
         if not codes:
             print("error: no Jumpstart sets found in DeckList.", file=sys.stderr)
             return 2

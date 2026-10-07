@@ -731,59 +731,10 @@ def set_jumpstart_list(
 def _jumpstart_pack_rows(
     code: str, matched: dict, *, include_front: bool = True
 ) -> tuple[list, int]:
-    """Materialize one Jumpstart pack's cards into export-ready rows.
-
-    Walks the matched MTGJSON variant's commander/main/side boards, resolves
-    each scryfall_id against the local ``cards`` table, and (optionally)
-    appends the pack's front/title card from the quarantined ``front_cards``
-    table. Returns ``(rows, n_skipped)`` where ``n_skipped`` counts gameplay
-    printings absent from ``cards`` (caller decides whether to warn).
-
-    Shared by ``jumpstart-pack`` (one pack) and ``query missing-jumpstart``
-    (every un-owned pack in a set). Assumes the family is already synced.
-    """
-    deck_data = mtgjson_mod.deck(matched["fileName"])
-
-    entries: list[tuple[str, int, bool]] = []  # (scryfall_id, count, is_foil)
-    for board_key in ("commander", "mainBoard", "sideBoard"):
-        for entry in deck_data.get(board_key) or []:
-            sid = (entry.get("identifiers") or {}).get("scryfallId")
-            if not sid:
-                continue
-            count = int(entry.get("count", 1) or 1)
-            entries.append((sid, count, bool(entry.get("isFoil"))))
-
-    rows: list[sel_mod.MaterializedRow] = []
-    n_skipped = 0
-    if entries:
-        with db.connect() as conn:
-            placeholders = ",".join("?" for _ in entries)
-            card_rows = {
-                cr["scryfall_id"]: cr
-                for cr in conn.execute(
-                    f"SELECT {sel_mod._CARD_COLS} FROM cards c "
-                    f"WHERE c.scryfall_id IN ({placeholders})",
-                    [e[0] for e in entries],
-                ).fetchall()
-            }
-        for sid, count, is_foil in entries:
-            cr = card_rows.get(sid)
-            if cr is None:
-                n_skipped += 1
-                continue
-            rows.append(sel_mod.MaterializedRow(
-                scryfall_id=sid,
-                quantity=count,
-                finish="foil" if is_foil else "nonfoil",
-                card=sel_mod._card_dict(cr),
-            ))
-
-    if include_front:
-        fc = front_cards_mod.front_card_for_theme(code, matched.get("name") or "")
-        if fc is not None:
-            rows.append(front_cards_mod.front_card_row(fc))
-
-    return rows, n_skipped
+    """One Jumpstart pack as export-ready rows (+ its front card) — the
+    :func:`magic_manager.jumpstart.pack_rows` engine seam."""
+    from . import jumpstart as jumpstart_mod
+    return jumpstart_mod.pack_rows(code, matched, include_front=include_front)
 
 
 @set_app.command("jumpstart-pack")
@@ -3953,39 +3904,23 @@ def query_missing_jumpstart_cmd(
         )
         raise typer.Exit(2)
 
-    # Diff against owned pack:* decks. Copy suffixes (-2/-3) share the base
-    # slug, so an owned base slug counts the theme as owned.
-    with db.connect() as conn:
-        owned_slugs = {
-            row["slug"]
-            for row in conn.execute(
-                "SELECT slug FROM decks WHERE slug LIKE ?", (f"pack:%-{code_l}",)
-            ).fetchall()
-        }
-    missing_variants = [
-        v for v in variants
-        if sets_mod._slug_theme(v.get("name") or v.get("fileName") or "", code_l)
-        not in owned_slugs
-    ]
-    missing_variants.sort(key=lambda v: (v.get("name") or v.get("fileName") or ""))
-
+    # Un-owned packs (no deck row for the version, built or broken down) with
+    # their full contents + front card — the jumpstart engine's whole-pack list.
+    from . import jumpstart as jumpstart_mod
+    res = jumpstart_mod.missing_packs(code_l)
+    missing_variants = [v for v, _ in res.packs]
     if not missing_variants:
         typer.echo(
             f"# You own all {len(variants)} Jumpstart pack(s) for set:{code_l}. Nothing missing."
         )
         raise typer.Exit(0)
-
-    # Build combined rows across every missing pack (no cross-pack dedup —
-    # each pack's buy list is its full contents). Track a per-pack summary.
-    all_rows: list[sel_mod.MaterializedRow] = []
-    pack_summaries: list[tuple[str, int, float]] = []  # (theme, card_count, usd_total)
-    total_skipped = 0
-    for v in missing_variants:
-        rows, n_skipped = _jumpstart_pack_rows(code_l, v)
-        total_skipped += n_skipped
-        pack_usd = sum((_row_line_value(r) or 0.0) for r in rows)
-        pack_summaries.append((v.get("name") or v.get("fileName") or "?", len(rows), pack_usd))
-        all_rows.extend(rows)
+    all_rows = [r for _, rows in res.packs for r in rows]
+    pack_summaries = [
+        (v.get("name") or v.get("fileName") or "?", len(rows),
+         sum((_row_line_value(r) or 0.0) for r in rows))
+        for v, rows in res.packs
+    ]
+    total_skipped = res.skipped
 
     if not all_rows:
         typer.echo(

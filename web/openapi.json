@@ -2467,6 +2467,172 @@
         }
       }
     },
+    "/api/jumpstart": {
+      "get": {
+        "tags": [
+          "jumpstart"
+        ],
+        "summary": "Jumpstart Sets",
+        "operationId": "jumpstart_sets",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JumpstartSetsOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/jumpstart/{code}": {
+      "get": {
+        "tags": [
+          "jumpstart"
+        ],
+        "summary": "Jumpstart View",
+        "operationId": "jumpstart_view",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Code"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JumpstartOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/jumpstart/{code}/packs/{file_name}": {
+      "get": {
+        "tags": [
+          "jumpstart"
+        ],
+        "summary": "Jumpstart Pack",
+        "operationId": "jumpstart_pack",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Code"
+            }
+          },
+          {
+            "name": "file_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "File Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JumpstartPackDetailOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/jumpstart/{code}/buy-list": {
+      "post": {
+        "tags": [
+          "jumpstart"
+        ],
+        "summary": "Jumpstart Buy List",
+        "operationId": "jumpstart_buy_list",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Code"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JumpstartBuyIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JumpstartBuyOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/ingest/search": {
       "get": {
         "tags": [
@@ -6689,6 +6855,423 @@
           "input_schema"
         ],
         "title": "JobSpecOut"
+      },
+      "JumpstartBuyIn": {
+        "properties": {
+          "shop": {
+            "type": "string",
+            "enum": [
+              "buildable",
+              "packs"
+            ],
+            "title": "Shop"
+          },
+          "target": {
+            "type": "string",
+            "enum": [
+              "manapool",
+              "tcgplayer",
+              "cardkingdom"
+            ],
+            "title": "Target"
+          }
+        },
+        "type": "object",
+        "required": [
+          "shop",
+          "target"
+        ],
+        "title": "JumpstartBuyIn"
+      },
+      "JumpstartBuyOut": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "lines": {
+            "type": "integer",
+            "title": "Lines"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text",
+          "lines"
+        ],
+        "title": "JumpstartBuyOut"
+      },
+      "JumpstartOut": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "ready": {
+            "type": "boolean",
+            "title": "Ready",
+            "description": "False = deck files not read yet; run the jumpstart.read job."
+          },
+          "close_short": {
+            "type": "integer",
+            "title": "Close Short",
+            "description": "A pack this many cards short or fewer is 'close'.",
+            "default": 3
+          },
+          "packs": {
+            "items": {
+              "$ref": "#/components/schemas/JumpstartPackOut"
+            },
+            "type": "array",
+            "title": "Packs"
+          },
+          "themes": {
+            "type": "integer",
+            "title": "Themes",
+            "default": 0
+          },
+          "buildable": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JumpstartShopOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Cards to make every theme buildable (one built copy of each + other versions' extras)."
+          },
+          "whole": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JumpstartShopOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Every pack version you don't own, full contents."
+          },
+          "whole_packs": {
+            "type": "integer",
+            "title": "Whole Packs",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "ready"
+        ],
+        "title": "JumpstartOut"
+      },
+      "JumpstartPackCardOut": {
+        "properties": {
+          "printing": {
+            "$ref": "#/components/schemas/PrintingOut"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "foil": {
+            "type": "boolean",
+            "title": "Foil"
+          },
+          "unit_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Usd"
+          },
+          "free": {
+            "type": "integer",
+            "title": "Free"
+          }
+        },
+        "type": "object",
+        "required": [
+          "printing",
+          "count",
+          "foil",
+          "unit_usd",
+          "free"
+        ],
+        "title": "JumpstartPackCardOut"
+      },
+      "JumpstartPackDetailOut": {
+        "properties": {
+          "pack": {
+            "$ref": "#/components/schemas/JumpstartPackOut"
+          },
+          "cards": {
+            "items": {
+              "$ref": "#/components/schemas/JumpstartPackCardOut"
+            },
+            "type": "array",
+            "title": "Cards"
+          },
+          "unknown": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unknown",
+            "description": "Card names not in the local cards table."
+          }
+        },
+        "type": "object",
+        "required": [
+          "pack",
+          "cards"
+        ],
+        "title": "JumpstartPackDetailOut"
+      },
+      "JumpstartPackOut": {
+        "properties": {
+          "file_name": {
+            "type": "string",
+            "title": "File Name"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "theme": {
+            "type": "string",
+            "title": "Theme"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "color": {
+            "type": "string",
+            "title": "Color",
+            "description": "WUBRG letters of the pack's cards; 'C' = colorless."
+          },
+          "card_count": {
+            "type": "integer",
+            "title": "Card Count"
+          },
+          "usd_total": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usd Total",
+            "description": "Cards at their shipped finish plus the front card."
+          },
+          "top_card": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top Card"
+          },
+          "top_card_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top Card Usd"
+          },
+          "front_card": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Front Card"
+          },
+          "top_card_image": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top Card Image"
+          },
+          "built": {
+            "type": "integer",
+            "title": "Built"
+          },
+          "deconstructed": {
+            "type": "integer",
+            "title": "Deconstructed"
+          },
+          "deck_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deck Slug",
+            "description": "A deck row for this version you own (built first)."
+          },
+          "have": {
+            "type": "integer",
+            "title": "Have",
+            "description": "Pack cards your free copies cover (each pack on its own)."
+          },
+          "short": {
+            "type": "integer",
+            "title": "Short",
+            "description": "Pack cards you have no free copy for."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "build",
+              "close",
+              "far"
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file_name",
+          "name",
+          "theme",
+          "version",
+          "color",
+          "card_count",
+          "usd_total",
+          "top_card",
+          "top_card_usd",
+          "front_card",
+          "built",
+          "deconstructed",
+          "have",
+          "short",
+          "status"
+        ],
+        "title": "JumpstartPackOut"
+      },
+      "JumpstartSetOut": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "released": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Released"
+          },
+          "packs": {
+            "type": "integer",
+            "title": "Packs",
+            "description": "Pack versions."
+          },
+          "themes": {
+            "type": "integer",
+            "title": "Themes"
+          },
+          "owned_packs": {
+            "type": "integer",
+            "title": "Owned Packs",
+            "description": "Versions you own at least one copy of (built or broken down)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "released",
+          "packs",
+          "themes",
+          "owned_packs"
+        ],
+        "title": "JumpstartSetOut"
+      },
+      "JumpstartSetsOut": {
+        "properties": {
+          "sets": {
+            "items": {
+              "$ref": "#/components/schemas/JumpstartSetOut"
+            },
+            "type": "array",
+            "title": "Sets"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sets"
+        ],
+        "title": "JumpstartSetsOut"
+      },
+      "JumpstartShopOut": {
+        "properties": {
+          "cards": {
+            "type": "integer",
+            "title": "Cards"
+          },
+          "copies": {
+            "type": "integer",
+            "title": "Copies"
+          },
+          "usd": {
+            "type": "number",
+            "title": "Usd"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cards",
+          "copies",
+          "usd"
+        ],
+        "title": "JumpstartShopOut"
       },
       "LegalityOut": {
         "properties": {

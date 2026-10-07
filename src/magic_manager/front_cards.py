@@ -245,12 +245,20 @@ def _f(v):
 
 def front_card_for_theme(anchor: str, theme: str) -> sqlite3.Row | None:
     """Look up the cached front card matching ``theme`` within ``anchor``'s
-    family, by normalized-name match. Returns ``None`` if not found."""
+    family, by normalized-name match; a versioned pack name (``Angels (1)``)
+    falls back to its theme (``Angels``). Returns ``None`` if not found."""
+    from .jumpstart import theme_of
+
+    names = list(dict.fromkeys([normalize_theme(theme), normalize_theme(theme_of(theme))]))
     with db.connect() as conn:
-        return conn.execute(
-            "SELECT * FROM front_cards WHERE family_anchor = ? AND normalized_name = ? LIMIT 1",
-            (anchor.lower(), normalize_theme(theme)),
-        ).fetchone()
+        for n in names:
+            row = conn.execute(
+                "SELECT * FROM front_cards WHERE family_anchor = ? AND normalized_name = ? LIMIT 1",
+                (anchor.lower(), n),
+            ).fetchone()
+            if row is not None:
+                return row
+    return None
 
 
 def front_card_row(fc) -> MaterializedRow:
