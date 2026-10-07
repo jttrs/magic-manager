@@ -21,7 +21,7 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
-from .. import api, tabs as tabs_engine, undo as undo_engine, cart as cart_engine, deck_edit, edhrec as edhrec_engine, features as features_engine, scryfall
+from .. import api, sets as sets_mod, tabs as tabs_engine, undo as undo_engine, cart as cart_engine, deck_edit, edhrec as edhrec_engine, features as features_engine, scryfall
 from ..api import deals as deals_api, undo as undo_api, cart as cart_api, cards as cards_api, collection as collection_api, explore as explore_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api, market as market_api, trueup as trueup_api
 from .runtime import TERMINAL, JobManager
 
@@ -295,6 +295,20 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     @app.post("/api/collection/buy-list", response_model=collection_api.BuyListOut, tags=["collection"])
     def collection_buy_list(body: collection_api.BuyListIn):
         return collection_api.buy_list(body)
+
+    @app.post("/api/collection/checklist", response_model=collection_api.ChecklistOut, tags=["collection"], dependencies=[write("before saving a checklist")])
+    def collection_checklist(body: collection_api.ChecklistIn):
+        try:
+            return collection_api.save_checklist(body)
+        except sets_mod.StaleCounts as e:
+            # The editor rebases and flags exactly these cells (structured detail).
+            raise HTTPException(status_code=409, detail={"message": str(e), "stale": e.rows}) from e
+        except sets_mod.BelowPledged as e:
+            raise HTTPException(status_code=409, detail=str(e)) from e
+        except LookupError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e)) from e
 
     # ---------- decks ----------
 

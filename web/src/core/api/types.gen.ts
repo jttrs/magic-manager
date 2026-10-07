@@ -488,6 +488,58 @@ export type CheckOut = {
 };
 
 /**
+ * ChecklistIn
+ */
+export type ChecklistIn = {
+    /**
+     * Family
+     *
+     * Family label for the ingest event, e.g. 'Final Fantasy'.
+     */
+    family: string;
+    /**
+     * Changes
+     */
+    changes: Array<CountIn>;
+};
+
+/**
+ * ChecklistOut
+ */
+export type ChecklistOut = {
+    /**
+     * Ingest Id
+     *
+     * The checklist ingest event; null when nothing changed.
+     */
+    ingest_id: number | null;
+    /**
+     * Added
+     */
+    added: number;
+    /**
+     * Updated
+     */
+    updated: number;
+    /**
+     * Zeroed
+     */
+    zeroed: number;
+    /**
+     * Copies Added
+     */
+    copies_added: number;
+    /**
+     * Copies Removed
+     */
+    copies_removed: number;
+    /**
+     * Rows
+     */
+    rows: Array<CountRowOut>;
+};
+
+/**
  * CollectionCardOut
  */
 export type CollectionCardOut = {
@@ -939,6 +991,52 @@ export type CopyIn = {
      * Name
      */
     name?: string | null;
+};
+
+/**
+ * CountIn
+ */
+export type CountIn = {
+    /**
+     * Scryfall Id
+     */
+    scryfall_id: string;
+    /**
+     * Finish
+     */
+    finish: 'nonfoil' | 'foil';
+    /**
+     * Qty
+     */
+    qty: number;
+    /**
+     * Expected
+     *
+     * Count the editor started from; refused (409) if the collection moved since.
+     */
+    expected?: number | null;
+};
+
+/**
+ * CountRowOut
+ */
+export type CountRowOut = {
+    /**
+     * Scryfall Id
+     */
+    scryfall_id: string;
+    /**
+     * Finish
+     */
+    finish: string;
+    /**
+     * Old Qty
+     */
+    old_qty: number;
+    /**
+     * New Qty
+     */
+    new_qty: number;
 };
 
 /**
@@ -4020,6 +4118,31 @@ export type CollectionBuyListResponses = {
 };
 
 export type CollectionBuyListResponse = CollectionBuyListResponses[keyof CollectionBuyListResponses];
+
+export type CollectionChecklistData = {
+    body: ChecklistIn;
+    path?: never;
+    query?: never;
+    url: '/api/collection/checklist';
+};
+
+export type CollectionChecklistErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CollectionChecklistError = CollectionChecklistErrors[keyof CollectionChecklistErrors];
+
+export type CollectionChecklistResponses = {
+    /**
+     * Successful Response
+     */
+    200: ChecklistOut;
+};
+
+export type CollectionChecklistResponse = CollectionChecklistResponses[keyof CollectionChecklistResponses];
 
 export type DeckListData = {
     body?: never;

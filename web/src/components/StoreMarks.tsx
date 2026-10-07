@@ -198,3 +198,15 @@ export function FindProductsMark(p: MarkProps) {
     </svg>
   );
 }
+
+/** A card with tally marks (count the cards you have). */
+export function CountCardsMark(p: MarkProps) {
+  return (
+    <svg {...base} {...p}>
+      <rect x="4.6" y="2.8" width="12.2" height="17.4" rx="1.4" />
+      <path d="M7.8 7.6v6.8M10.2 7.6v6.8M12.6 7.6v6.8" />
+      <path d="M6.6 13.2 14.4 8.8" />
+      <path d="m15.8 17.6 2 2 3.6-4.4" />
+    </svg>
+  );
+}

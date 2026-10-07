@@ -6,10 +6,12 @@ import { useSelection } from '../app/selection';
 import { ViewLayout } from '../components/AppShell';
 import { AddCardsDialog } from '../components/addcards/AddCardsDialog';
 import { CopyTargets } from '../components/CopyButton';
-import { AddCardMark, CardKingdomMark, FindProductsMark, ManaPoolMark, TcgplayerMark } from '../components/StoreMarks';
+import { AddCardMark, CardKingdomMark, CountCardsMark, FindProductsMark, ManaPoolMark, TcgplayerMark } from '../components/StoreMarks';
 import { IconAction } from '../components/IconAction';
 import { FindProductsDialog } from './collection/FindProductsDialog';
 import { CartCheckDialog } from './collection/CartCheckDialog';
+import { ChecklistActions, ChecklistLeaveGuard, ChecklistNotes, ChecklistTable } from './collection/Checklist';
+import { useChecklist } from './collection/useChecklist';
 import { useFeature } from '../app/features';
 import { Button } from '../components/Button';
 import { MultiSelect } from '../components/MultiSelect';
@@ -21,6 +23,7 @@ import { collectionBuyList, type CollectionCardOut, type CollectionOut } from '.
 import { CARD_SORT, CARD_SORT_PRESETS, type CardSortKey } from '../core/cardSort';
 import { buyFinish, buyTotal, collectionStats, filterCollection, functionCounts, isMissing, NO_FUNCTION, setGroupIncluded, sourceKinds, sourceOptions, TRAITS, traitCounts, traitsIn, type TraitGroup } from '../core/collection';
 import { InfoTip } from '../components/InfoTip';
+import { summaryLine } from '../core/checklist';
 import { fmtInt, fmtUsd } from '../core/format';
 import { fromCollection, groupCards, type GuideCard } from '../core/guideCard';
 import { SHOW, type CollectionSearch } from '../core/search';
@@ -72,6 +75,8 @@ export function CollectionView() {
   const srcOptions = useMemo(() => (q.data?.sources?.length ? sourceOptions(q.data.cards, q.data.sources) : null), [q.data]);
 
   const cartCheck = useFeature('cart_check');
+  const checklist = useChecklist();
+  const counting = search.count && search.families.length > 0;
   const marked = view ? [...selected].map((k) => view.byId.get(k)).filter((c) => c != null) : [];
   const buyPool = marked.length ? marked : (view?.shown.filter((c) => isMissing(c, search.exclude)) ?? []);
   const buyText = (target: 'manapool' | 'tcgplayer' | 'cardkingdom') => async () => {
@@ -239,6 +244,14 @@ export function CollectionView() {
     body = <ErrorNote error={q.error} onRetry={() => q.refetch()} />;
   } else if (!view || view.cards.length === 0) {
     body = <EmptyNote title="Nothing matches">No printings match these filters. Check a card type back on, or show both owned and missing cards.</EmptyNote>;
+  } else if (counting) {
+    const familyNames = new Map(q.data.families.map((f) => [f.code, f.name]));
+    body = (
+      <div className="flex h-full min-h-0 flex-col">
+        <ChecklistNotes checklist={checklist} />
+        <ChecklistTable sections={view.sections} byId={view.byId} familyNames={familyNames} checklist={checklist} />
+      </div>
+    );
   } else {
     body = <VirtualGuide sections={view.sections} density={search.view} selected={selected} onToggle={toggle} label="Collection cards" minCardWidth={128} />;
   }
@@ -251,18 +264,30 @@ export function CollectionView() {
         title="Collection"
         actions={
           <span role="toolbar" aria-label="Collection actions" className="flex items-center gap-0.5">
+            {counting && <ChecklistActions checklist={checklist} />}
+            <IconAction
+              Icon={CountCardsMark}
+              aria-pressed={counting}
+              label={counting ? 'Done counting' : checklist.dirty ? `Count cards · ${fmtInt(checklist.summary.cells)} unsaved` : 'Count cards'}
+              disabled={!search.families.length}
+              disabledReason="Choose a set family to count"
+              onClick={() => set({ count: !search.count })}
+            />
             <AddCardsDialog trigger={<IconAction Icon={AddCardMark} label="Add cards" />} />
             <FindProductsDialog trigger={<IconAction Icon={FindProductsMark} label="Find products in your cards" />} />
           </span>
         }
         summary={
-          s
+          counting
+            ? summaryLine(checklist.summary, checklist.saved)
+            : s
             ? `${famN} set ${famN === 1 ? 'family' : 'families'} · showing ${fmtInt(s.printings)} printings: ${fmtInt(s.owned)} owned (${fmtInt(s.copies)} copies), ${search.gaps ? `${fmtInt(s.missingCards)} cards you own in no printing · ${fmtUsd(s.missingCardsUsd)} at the cheapest printing of each` : `${fmtInt(s.missing)} missing · ${fmtUsd(s.missingUsd)} to complete`}${q.data?.skipped?.length ? ` · skipped ${q.data.skipped.join(', ')}` : ''}`
             : undefined
         }
       >
         {body}
       </GuideSheet>
+      <ChecklistLeaveGuard checklist={checklist} />
     </ViewLayout>
   );
 }
