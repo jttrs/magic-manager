@@ -354,7 +354,8 @@ def set_target(product_id: int, mode: str, value: float, *, conn=None) -> dict:
     on a bad mode/value, ``LookupError`` when the product isn't watched."""
     if mode not in TARGET_MODES:
         raise ValueError(f"target mode must be one of {', '.join(TARGET_MODES)}")
-    if not value or value <= 0 or (mode == "pct_under" and value >= 100):
+    value = round(float(value or 0), 2)  # validate what is stored: 99.996 → 100.0 / 0.004 → 0.0 would trip the CHECK
+    if value <= 0 or (mode == "pct_under" and value >= 100):
         raise ValueError("a price target must be above $0" if mode == "price" else "a percentage must be between 0 and 100")
     with db.transaction(conn) as conn:
         if conn.execute("SELECT 1 FROM earmarked_products WHERE product_id = ?", (product_id,)).fetchone() is None:
@@ -362,7 +363,7 @@ def set_target(product_id: int, mode: str, value: float, *, conn=None) -> dict:
         conn.execute(
             "INSERT INTO earmark_targets (product_id, mode, value, set_at) VALUES (?, ?, ?, ?) "
             "ON CONFLICT(product_id) DO UPDATE SET mode = excluded.mode, value = excluded.value, set_at = excluded.set_at",
-            (product_id, mode, round(float(value), 2), db._utcnow_iso()))
+            (product_id, mode, value, db._utcnow_iso()))
     return targets([product_id])[product_id]
 
 

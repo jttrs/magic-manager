@@ -125,3 +125,39 @@ def test_target_routes(watched, monkeypatch):
     assert client.put("/api/deals/target", json={"product_id": 999, "mode": "price", "value": 5}).status_code == 404
     assert client.delete(f"/api/deals/target?product_id={pid}").status_code == 204
     assert client.get("/api/deals/watched").json()[0]["target"] is None
+
+
+@pytest.mark.parametrize("mode,value", [("pct_under", 99.996), ("price", 0.004)])
+def test_target_rounds_before_validating(watched, monkeypatch, mode, value):
+    with pytest.raises(ValueError):
+        earmarks.set_target(watched["pid"], mode, value)
+    from fastapi.testclient import TestClient
+    from magic_manager.web.app import create_app
+    monkeypatch.setenv("MM_FEATURES", "deals")
+    client = TestClient(create_app(serve_frontend=False))
+    r = client.put("/api/deals/target", json={"product_id": watched["pid"], "mode": mode, "value": value})
+    assert r.status_code == 422
+
+
+def test_target_route_maps_integrity_error(watched, monkeypatch):
+    from fastapi.testclient import TestClient
+    from magic_manager.web.app import create_app
+    monkeypatch.setenv("MM_FEATURES", "deals")
+    def boom(*a, **k):
+        raise sqlite3.IntegrityError("CHECK failed")
+    monkeypatch.setattr(earmarks, "set_target", boom)
+    client = TestClient(create_app(serve_frontend=False))
+    r = client.put("/api/deals/target", json={"product_id": watched["pid"], "mode": "price", "value": 5})
+    assert r.status_code == 422
+
+
+def test_unexpected_target_price_error_is_logged_not_hidden(watched, monkeypatch, caplog):
+    earmarks.set_target(watched["pid"], "pct_under", 10)
+    market._cost_memo.clear()
+    def bug(*a, **k):
+        raise AttributeError("oops")
+    monkeypatch.setattr(valuation, "value_sealed_product", bug)
+    with caplog.at_level("ERROR"):
+        rows = deals._with_target_prices(deals.watchlist(values=False))
+    assert rows[0]["target_price"] is None
+    assert "BUG" in caplog.text

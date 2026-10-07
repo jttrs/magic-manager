@@ -307,6 +307,13 @@ def _verify_v19_subsume(
     return ok, lines
 
 
+def _table_status(n_pre: int, h_pre: str, n_post: int, h_post: str) -> str:
+    """Classify one precious table across the migration."""
+    if h_pre == "<absent>" and n_post == 0:
+        return "NEW"  # created empty by this migration
+    return "OK" if (n_pre == n_post and h_pre == h_post) else "DIVERGED"
+
+
 def main(argv: list[str] | None = None) -> int:
     # Tiny argparse just for --help / -h. The rehearsal itself takes no
     # arguments — it operates on the live DB at db.db_path() unconditionally.
@@ -405,10 +412,7 @@ def main(argv: list[str] | None = None) -> int:
     for t in precious:
         n_pre, h_pre = pre[t]
         n_post, h_post = post[t]
-        if h_pre == "<absent>" and n_post == 0:
-            status = "NEW"  # created empty by this migration
-        else:
-            status = "OK" if (n_pre == n_post and h_pre == h_post) else "DIVERGED"
+        status = _table_status(n_pre, h_pre, n_post, h_post)
         if status == "DIVERGED":
             fail = True
         print(f"  {t:16}  {n_pre:>6} rows → {n_post:>6} rows  {status}")
