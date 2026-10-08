@@ -1,6 +1,6 @@
 ---
 name: generate-jumpstart-checklist
-description: Build the pack-level checklist (XLSX or markdown) for one Jumpstart set — one row per sealed Jumpstart pack variant (e.g. ~51 for MSH, ~121 for J25) with a single acquired_qty column the user fills in per pack (copies opened; ingest splits built vs deconstructed). Use whenever the user wants to catalog Jumpstart packs they opened, by set code. Mechanical workflow: invoke `mm set jumpstart-list <code>` and relay the result. Triggers: "jumpstart checklist for j25", "generate a jumpstart checklist for msh", "catalog my jumpstart packs", "checklist of all <set> jumpstart packs", "I opened some Foundations Jumpstart packs".
+description: "Build the pack-level checklist (XLSX or markdown) for one Jumpstart set — one row per sealed Jumpstart pack variant (e.g. ~51 for MSH, ~121 for J25) with a single acquired_qty column the user fills in per pack (copies opened; ingest splits built vs deconstructed). Use whenever the user wants to catalog Jumpstart packs they opened, by set code. Mechanical workflow: invoke `mm set jumpstart-list <code>` and relay the result. Triggers: \"jumpstart checklist for j25\", \"generate a jumpstart checklist for msh\", \"catalog my jumpstart packs\", \"checklist of all <set> jumpstart packs\", \"I opened some Foundations Jumpstart packs\"."
 ---
 
 # Generate Jumpstart Checklist

@@ -1,6 +1,6 @@
 ---
 name: jumpstart-reference
-description: Generate the durable two-sheet XLSX reference that tells apart Jumpstart pack VERSIONS (Angels (1) vs Angels (2), …) and shows what's in each — a `packs` sheet (one row per variant: set/theme/color/top_card/value/count) and a `cards` sheet (one row per distinct card: color/value/count/rarity/collector_number). Optional set-code arg, else all Jumpstart sets. Script-driven via `scripts/jumpstart_reference.py`; writes the committed `reference/jumpstart-versions.xlsx`. Triggers: "/jumpstart-reference", "which version of a jumpstart pack is this", "jumpstart versions reference", "what's in Angels 1 vs Angels 2", "jumpstart pack reference sheet", "regenerate the jumpstart reference".
+description: "Generate the durable two-sheet XLSX reference that tells apart Jumpstart pack VERSIONS (Angels (1) vs Angels (2), …) and shows what's in each — a `packs` sheet (one row per variant: set/theme/color/top_card/value/count) and a `cards` sheet (one row per distinct card: color/value/count/rarity/collector_number). Optional set-code arg, else all Jumpstart sets. Script-driven via `scripts/jumpstart_reference.py`; writes the committed `reference/jumpstart-versions.xlsx`. Triggers: \"/jumpstart-reference\", \"which version of a jumpstart pack is this\", \"jumpstart versions reference\", \"what's in Angels 1 vs Angels 2\", \"jumpstart pack reference sheet\", \"regenerate the jumpstart reference\"."
 ---
 
 # jumpstart-reference

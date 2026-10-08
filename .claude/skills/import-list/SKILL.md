@@ -1,6 +1,6 @@
 ---
 name: import-list
-description: Save a pasted decklist or filled-in inventory checklist into the local DB. Use whenever the user has copied a deck/wishlist/cube/etc. block from Moxfield, Archidekt, MTGA, MTGO, deckstats, or any platform that uses the common "<qty> <name> (SET) CN" text format — OR when they've finished filling in the quantity columns of a set inventory checklist (XLSX or markdown) from generate-set-checklist. Each import routes to one of three tables: `inventory` (cards I own), `wishlist_entries` (cards I want, by category), or `deck_cards` (a named deck's contents).
+description: "Save a pasted decklist or filled-in inventory checklist into the local DB. Use whenever the user has copied a deck/wishlist/cube/etc. block from Moxfield, Archidekt, MTGA, MTGO, deckstats, or any platform that uses the common \"<qty> <name> (SET) CN\" text format — OR when they've finished filling in the quantity columns of a set inventory checklist (XLSX or markdown) from generate-set-checklist. Each import routes to one of three tables: `inventory` (cards I own), `wishlist_entries` (cards I want, by category), or `deck_cards` (a named deck's contents)."
 ---
 
 # Import List

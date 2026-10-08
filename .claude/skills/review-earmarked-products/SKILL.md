@@ -1,6 +1,6 @@
 ---
 name: review-earmarked-products
-description: Print a deterministic, well-formatted deal table of all earmarked sealed products and single cards — each product's storefront links + snapshot asking price alongside a LIVE-recomputed market and intrinsic (card) value, with a "deal delta" (market − best asking) so good deals sort to the top. Product names are hyperlinked to their store pages; products earmarked on multiple storefronts collate to one row. Triggers: "/review-earmarked-products", "show my earmarked products", "review my watchlist", "which earmarked products are good deals", "what's on my sealed watchlist", "are any of my earmarks worth buying".
+description: "Print a deterministic, well-formatted deal table of all earmarked sealed products and single cards — each product's storefront links + snapshot asking price alongside a LIVE-recomputed market and intrinsic (card) value, with a \"deal delta\" (market − best asking) so good deals sort to the top. Product names are hyperlinked to their store pages; products earmarked on multiple storefronts collate to one row. Triggers: \"/review-earmarked-products\", \"show my earmarked products\", \"review my watchlist\", \"which earmarked products are good deals\", \"what's on my sealed watchlist\", \"are any of my earmarks worth buying\"."
 ---
 
 # review-earmarked-products

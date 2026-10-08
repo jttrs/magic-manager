@@ -1,6 +1,6 @@
 ---
 name: characterize-set
-description: Thorough investigation of one Scryfall set family to produce or update `docs/sets/<anchor>.md` — the durable per-family memory doc. Covers family topology, treatment audit, chase-variant detection, scene/poster grouping, unobtainable candidates, PRM promo destinations, and edge-case card inspection. Also proposes `config/families.toml` entries for any dupe-foil / unobtainable rules the audit surfaces. Triggers: "characterize <set>", "audit <set> family", "onboard <set>", "what do I know about <set>?", "bootstrap docs for <set>", "run the new-family protocol for <set>", any first-time reference to a set that has no `docs/sets/<anchor>.md`.
+description: "Thorough investigation of one Scryfall set family to produce or update `docs/sets/<anchor>.md` — the durable per-family memory doc. Covers family topology, treatment audit, chase-variant detection, scene/poster grouping, unobtainable candidates, PRM promo destinations, and edge-case card inspection. Also proposes `config/families.toml` entries for any dupe-foil / unobtainable rules the audit surfaces. Triggers: \"characterize <set>\", \"audit <set> family\", \"onboard <set>\", \"what do I know about <set>?\", \"bootstrap docs for <set>\", \"run the new-family protocol for <set>\", any first-time reference to a set that has no `docs/sets/<anchor>.md`."
 ---
 
 # Characterize-set

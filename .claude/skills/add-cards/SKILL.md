@@ -1,6 +1,6 @@
 ---
 name: add-cards
-description: One-liner wrapper around `mm inventory add-card` — adds a short, explicit list of specific cards to inventory by set code + collector number, no need to look up a scryfall_id first. Resolves via Scryfall's /cards/collection in one batched call and syncs unsynced sets on demand. Additive by default; --replace sets quantity outright. Triggers: "add SPG 60 nonfoil and BLC 123", "add these: FIN 5 foil, TLA 118 foil", "put 2x BLC 123 foil in my collection", "add these specific cards to inventory".
+description: "One-liner wrapper around `mm inventory add-card` — adds a short, explicit list of specific cards to inventory by set code + collector number, no need to look up a scryfall_id first. Resolves via Scryfall's /cards/collection in one batched call and syncs unsynced sets on demand. Additive by default; --replace sets quantity outright. Triggers: \"add SPG 60 nonfoil and BLC 123\", \"add these: FIN 5 foil, TLA 118 foil\", \"put 2x BLC 123 foil in my collection\", \"add these specific cards to inventory\"."
 ---
 
 # Add Cards

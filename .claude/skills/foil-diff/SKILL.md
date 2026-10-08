@@ -1,6 +1,6 @@
 ---
 name: foil-diff
-description: Rank a list of cards by the price gap between the simple-foil and nonfoil versions, sorted ascending by percent difference. Excludes fancy foils (surgefoil / etched / textured / rainbowfoil / etc.) and foil-only prints (nothing to compare against). Output is a deterministic markdown table with hyperlinked card/set/CN, nonfoil USD, foil USD, % diff, and $ diff columns. Every price live-fetched via the /cards/collection batch endpoint. Triggers: "/foil-diff", "rank foil vs nonfoil for <X>", "which foils are cheap upgrades", "foil-diff for this cart", "is foil worth it for <X>", "foil premium for missing <X>", or any question about how much extra foil costs for a purchase list.
+description: "Rank a list of cards by the price gap between the simple-foil and nonfoil versions, sorted ascending by percent difference. Excludes fancy foils (surgefoil / etched / textured / rainbowfoil / etc.) and foil-only prints (nothing to compare against). Output is a deterministic markdown table with hyperlinked card/set/CN, nonfoil USD, foil USD, % diff, and $ diff columns. Every price live-fetched via the /cards/collection batch endpoint. Triggers: \"/foil-diff\", \"rank foil vs nonfoil for <X>\", \"which foils are cheap upgrades\", \"foil-diff for this cart\", \"is foil worth it for <X>\", \"foil premium for missing <X>\", or any question about how much extra foil costs for a purchase list."
 ---
 
 # foil-diff

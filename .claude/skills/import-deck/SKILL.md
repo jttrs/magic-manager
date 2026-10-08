@@ -1,6 +1,6 @@
 ---
 name: import-deck
-description: Read a deck from Moxfield, Archidekt, MTGGoldfish, ManaBox, or Scryfall into the local DB (creating/appending a deck), or push a local deck back to Moxfield. Archidekt/MTGGoldfish/ManaBox/Scryfall fetch directly; Moxfield uses a Playwright browser session (Cloudflare-gated) with a clipboard-bookmarklet + UI-export fallback. Re-pulling a deck already imported from a source is refused unless --force (which replaces its cards). Triggers: "import my moxfield/archidekt/mtggoldfish/manabox/scryfall deck", "pull this deck <url>", "add this decklist from <url>", "load <deck url> into a deck", "push <deck> to moxfield", "sync <deck> to moxfield".
+description: "Read a deck from Moxfield, Archidekt, MTGGoldfish, ManaBox, or Scryfall into the local DB (creating/appending a deck), or push a local deck back to Moxfield. Archidekt/MTGGoldfish/ManaBox/Scryfall fetch directly; Moxfield uses a Playwright browser session (Cloudflare-gated) with a clipboard-bookmarklet + UI-export fallback. Re-pulling a deck already imported from a source is refused unless --force (which replaces its cards). Triggers: \"import my moxfield/archidekt/mtggoldfish/manabox/scryfall deck\", \"pull this deck <url>\", \"add this decklist from <url>\", \"load <deck url> into a deck\", \"push <deck> to moxfield\", \"sync <deck> to moxfield\"."
 ---
 
 # import-deck

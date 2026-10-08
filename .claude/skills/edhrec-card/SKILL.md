@@ -1,6 +1,6 @@
 ---
 name: edhrec-card
-description: EDHREC "which commanders run this card?" workflow. Given any card, reports the most common commanders whose decks include it in the 99 (workflow B — the inverse of edhrec-commander), enriched with local type/mana-value/lowest-USD. Always invokes `mm edhrec card "<card>"`, which emits a markdown table to chat plus JSON + XLSX artifacts under output/edhrec/reports/. Triggers: "which commanders run <card>", "what decks use <card>", "top commanders for <card> on edhrec", "who plays <card>", "best commanders for <card>", "where does <card> get played".
+description: "EDHREC \"which commanders run this card?\" workflow. Given any card, reports the most common commanders whose decks include it in the 99 (workflow B — the inverse of edhrec-commander), enriched with local type/mana-value/lowest-USD. Always invokes `mm edhrec card \"<card>\"`, which emits a markdown table to chat plus JSON + XLSX artifacts under output/edhrec/reports/. Triggers: \"which commanders run <card>\", \"what decks use <card>\", \"top commanders for <card> on edhrec\", \"who plays <card>\", \"best commanders for <card>\", \"where does <card> get played\"."
 ---
 
 # EDHREC — top commanders running a card (workflow B)

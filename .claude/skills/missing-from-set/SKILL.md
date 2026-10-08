@@ -1,6 +1,6 @@
 ---
 name: missing-from-set
-description: Canonical "what am I missing from set X?" workflow for any set/family. Always invokes `mm query missing-set <CODE>` which emits Scryfall printing-specific URL chunks to chat plus file:// links (XLSX checklist + plain-text ManaPool bulk-add + plain-text TCGplayer Mass Entry). Triggers: "what am I missing from FIN/avatar/tmnt/<set>?", "what's left to buy from <set>?", "missing rare/mythics from <set>?", "give me a checklist of what I need from <set>", "build me a ManaPool cart for the <set> gaps", "TCGplayer mass entry for missing <set>".
+description: "Canonical \"what am I missing from set X?\" workflow for any set/family. Always invokes `mm query missing-set <CODE>` which emits Scryfall printing-specific URL chunks to chat plus file:// links (XLSX checklist + plain-text ManaPool bulk-add + plain-text TCGplayer Mass Entry). Triggers: \"what am I missing from FIN/avatar/tmnt/<set>?\", \"what's left to buy from <set>?\", \"missing rare/mythics from <set>?\", \"give me a checklist of what I need from <set>\", \"build me a ManaPool cart for the <set> gaps\", \"TCGplayer mass entry for missing <set>\"."
 ---
 
 # Missing-from-set

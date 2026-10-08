@@ -1,6 +1,6 @@
 ---
 name: price-check
-description: Check whether the prices you're about to pay for cards are sane vs true (TCGplayer/Scryfall) market — flagging any card priced X%+ over market, usually a scarcity/limited-availability premium. Organized by marketplace MODE; the only mode implemented today is `manapool` (fetches your live Mana Pool cart automatically and grades each line). Triggers: "price-check my cart", "check my manapool cart", "am I overpaying on manapool", "am I getting swindled", "is this cart a good deal", "grade my cart vs market".
+description: "Check whether the prices you're about to pay for cards are sane vs true (TCGplayer/Scryfall) market — flagging any card priced X%+ over market, usually a scarcity/limited-availability premium. Organized by marketplace MODE; the only mode implemented today is `manapool` (fetches your live Mana Pool cart automatically and grades each line). Triggers: \"price-check my cart\", \"check my manapool cart\", \"am I overpaying on manapool\", \"am I getting swindled\", \"is this cart a good deal\", \"grade my cart vs market\"."
 ---
 
 # price-check

@@ -1,6 +1,6 @@
 ---
 name: secret-lair-value
-description: Deterministic markdown table of the most recent N Secret Lair drops by release date (newest first), each valued sealed vs the cards inside — the drop's sealed market price (TCGplayer), its cards PLUS its bonus card at their exact printings, and each of those cards at its cheapest printing anywhere, with the gap (sealed − exact cards). Regular edition by default, `--foil` for the Foil Editions. Same engine as the web Market → Secret Lair view. Triggers: "/secret-lair-value", "value of recent Secret Lairs", "how much are the latest Secret Lair drops worth", "recent SLD drop values", "newest Secret Lairs value", "which Secret Lairs are a good deal", "Secret Lair drop price table".
+description: "Deterministic markdown table of the most recent N Secret Lair drops by release date (newest first), each valued sealed vs the cards inside — the drop's sealed market price (TCGplayer), its cards PLUS its bonus card at their exact printings, and each of those cards at its cheapest printing anywhere, with the gap (sealed − exact cards). Regular edition by default, `--foil` for the Foil Editions. Same engine as the web Market → Secret Lair view. Triggers: \"/secret-lair-value\", \"value of recent Secret Lairs\", \"how much are the latest Secret Lair drops worth\", \"recent SLD drop values\", \"newest Secret Lairs value\", \"which Secret Lairs are a good deal\", \"Secret Lair drop price table\"."
 ---
 
 # Secret Lair Value
