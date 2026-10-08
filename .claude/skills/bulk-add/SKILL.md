@@ -1,6 +1,6 @@
 ---
 name: bulk-add
-description: Inline chat workflow for adding small batches of cards from a set by collector-number range. Use whenever the user says they have cards from Secret Lair (SLD), Special Guests (SPG), Magazine Inserts (PMEI), a single Commander precon, or any other set where they want to add specific CNs without seeding the whole set as an inventory checklist. Triggers: "add SLD 1858-1872", "I just opened a Secret Lair drop", "I have these SPG cards", "add (CODE) CN1, CN2, CN3 foil", or any phrasing combining a set code + CN ranges/lists.
+description: "Inline chat workflow for adding small batches of cards from a set by collector-number range. Use whenever the user says they have cards from Secret Lair (SLD), Special Guests (SPG), Magazine Inserts (PMEI), a single Commander precon, or any other set where they want to add specific CNs without seeding the whole set as an inventory checklist. Triggers: \"add SLD 1858-1872\", \"I just opened a Secret Lair drop\", \"I have these SPG cards\", \"add (CODE) CN1, CN2, CN3 foil\", or any phrasing combining a set code + CN ranges/lists."
 ---
 
 # Bulk Add

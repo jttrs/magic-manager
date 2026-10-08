@@ -1,6 +1,6 @@
 ---
 name: jumpstart-missing
-description: Build a buy list for the Jumpstart packs you DON'T own from a set — every pack with no pack:* deck, emitted as combined ManaPool + TCGplayer + XLSX shopping artifacts under output/missing-jumpstart/{checklists,buy-lists}/, each pack's full singles plus its front/title card. Read-only shopping list, not an ingestible checklist. Mechanical workflow: invoke `mm query missing-jumpstart <code>` and relay the result. Triggers: "what jumpstart packs am I missing", "buy list for the jumpstart packs I don't have", "missing jumpstart packs for msh", "shopping list for j25 jumpstarts", "which jumpstart packs do I still need".
+description: "Build a buy list for the Jumpstart packs you DON'T own from a set — every pack with no pack:* deck, emitted as combined ManaPool + TCGplayer + XLSX shopping artifacts under output/missing-jumpstart/{checklists,buy-lists}/, each pack's full singles plus its front/title card. Read-only shopping list, not an ingestible checklist. Mechanical workflow: invoke `mm query missing-jumpstart <code>` and relay the result. Triggers: \"what jumpstart packs am I missing\", \"buy list for the jumpstart packs I don't have\", \"missing jumpstart packs for msh\", \"shopping list for j25 jumpstarts\", \"which jumpstart packs do I still need\"."
 ---
 
 # Jumpstart Missing (buy list)

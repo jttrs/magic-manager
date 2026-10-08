@@ -1,6 +1,6 @@
 ---
 name: earmark-product
-description: Save a sealed MTG product (or a single card printing) from a storefront URL onto a cross-store watchlist ("earmarks"). Claude fetches the store page, extracts the product name + asking price, resolves it to an MTGJSON identity, and records it via `mm earmark add`. The same product on multiple storefronts collates to one product with several links. Triggers: "/earmark-product <url>", "earmark this product", "add this to my watchlist", "save this sealed product link", "track this product's price", "watch this on <store>", "earmark this card", "watch this single".
+description: "Save a sealed MTG product (or a single card printing) from a storefront URL onto a cross-store watchlist (\"earmarks\"). Claude fetches the store page, extracts the product name + asking price, resolves it to an MTGJSON identity, and records it via `mm earmark add`. The same product on multiple storefronts collates to one product with several links. Triggers: \"/earmark-product <url>\", \"earmark this product\", \"add this to my watchlist\", \"save this sealed product link\", \"track this product's price\", \"watch this on <store>\", \"earmark this card\", \"watch this single\"."
 ---
 
 # earmark-product

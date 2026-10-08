@@ -1,6 +1,6 @@
 ---
 name: inventory-query
-description: Inline workflow for asking the local DB questions about owned cards, missing cards from sets/ranges, collection value, and Scryfall search URLs informed by what you do/don't own. Triggers: "what's missing from <set>?", "what do I own from <set>?", "value of my <X>?", "top N most valuable?", "scryfall URL for <selector>?", "missing mythics from FCA under $20?", or any English question that maps to a local-DB query.
+description: "Inline workflow for asking the local DB questions about owned cards, missing cards from sets/ranges, collection value, and Scryfall search URLs informed by what you do/don't own. Triggers: \"what's missing from <set>?\", \"what do I own from <set>?\", \"value of my <X>?\", \"top N most valuable?\", \"scryfall URL for <selector>?\", \"missing mythics from FCA under $20?\", or any English question that maps to a local-DB query."
 ---
 
 # Inventory Query

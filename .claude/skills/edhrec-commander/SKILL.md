@@ -1,6 +1,6 @@
 ---
 name: edhrec-commander
-description: EDHREC "what do people run in this commander's deck?" workflow. Given a card that CAN be a commander, reports the cards with the highest inclusion rate across that commander's decks (workflow A), enriched with local type/mana-value/lowest-USD. Always invokes `mm edhrec commander "<card>"`, which emits a markdown table to chat plus JSON + XLSX artifacts under output/edhrec/reports/. Triggers: "what do people run with <commander>", "top cards for <commander> on edhrec", "edhrec staples for <commander>", "highest inclusion cards when <card> is my commander", "build around <commander>", "what goes in a <commander> deck".
+description: "EDHREC \"what do people run in this commander's deck?\" workflow. Given a card that CAN be a commander, reports the cards with the highest inclusion rate across that commander's decks (workflow A), enriched with local type/mana-value/lowest-USD. Always invokes `mm edhrec commander \"<card>\"`, which emits a markdown table to chat plus JSON + XLSX artifacts under output/edhrec/reports/. Triggers: \"what do people run with <commander>\", \"top cards for <commander> on edhrec\", \"edhrec staples for <commander>\", \"highest inclusion cards when <card> is my commander\", \"build around <commander>\", \"what goes in a <commander> deck\"."
 ---
 
 # EDHREC — top cards for a commander (workflow A)

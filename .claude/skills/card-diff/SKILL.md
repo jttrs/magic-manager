@@ -1,6 +1,6 @@
 ---
 name: card-diff
-description: Three-pool "diff vs collection" report for a Magic set family (or a collection-wide chart across every owned family) — missing printing (every art/frame variant not owned), missing functional (mechanically-unique cards owned in ZERO printings), and variant-chase (missing printings whose card you ALREADY own — the borderless/alt-art/fancy-foil chase). Triggers: "card diff", "variant chase", "what variants am I missing", "collection diff chart", "missing printing vs functional", "what alt-arts do I need for cards I already own".
+description: "Three-pool \"diff vs collection\" report for a Magic set family (or a collection-wide chart across every owned family) — missing printing (every art/frame variant not owned), missing functional (mechanically-unique cards owned in ZERO printings), and variant-chase (missing printings whose card you ALREADY own — the borderless/alt-art/fancy-foil chase). Triggers: \"card diff\", \"variant chase\", \"what variants am I missing\", \"collection diff chart\", \"missing printing vs functional\", \"what alt-arts do I need for cards I already own\"."
 ---
 
 # card-diff

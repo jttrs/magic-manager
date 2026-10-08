@@ -1,6 +1,6 @@
 ---
 name: card-diff-gallery
-description: Image-first HTML gallery of the three card-diff pools (missing printing, missing functional, variant-chase) across one or more Magic set families — a visual, filterable alternative to card-diff's text tables. Writes a single self-contained local HTML file (no server) with family + pool filter chips, a name search box, and a value/name sort control; card images lazy-load from Scryfall's CDN. Triggers: "card diff gallery", "html view of missing cards", "visual missing-set review", "scan missing cards as images", "card gallery by set family", "show me what I'm missing as pictures".
+description: "Image-first HTML gallery of the three card-diff pools (missing printing, missing functional, variant-chase) across one or more Magic set families — a visual, filterable alternative to card-diff's text tables. Writes a single self-contained local HTML file (no server) with family + pool filter chips, a name search box, and a value/name sort control; card images lazy-load from Scryfall's CDN. Triggers: \"card diff gallery\", \"html view of missing cards\", \"visual missing-set review\", \"scan missing cards as images\", \"card gallery by set family\", \"show me what I'm missing as pictures\"."
 ---
 
 # card-diff-gallery
