@@ -180,8 +180,8 @@ def run(path: Path) -> int:
     for t, (n, h, _) in before.items():
         print(f"  {'✓' if t not in bad else '✗'} {t}: {n} rows {'unchanged' if t not in bad else f'CHANGED → {after[t][0]} rows'}")
     print(f"  {'✓' if not drift else '✗'} ledger reconciles (inventory == SUM(delta)): {len(drift)} drifting pairs")
-    print(f"  {'✓' if not built_problems else '✗'} 'built' follows pledges: {changed_states} deck(s) built → not built, "
-          f"all predicted ({len(allowed)} allowed); {len(built_problems)} problem(s)")
+    print(f"  {'✓' if not built_problems else '✗'} 'built' follows pledges: {changed_states} deck(s) changed state, "
+          f"{len(allowed)} predicted built → not built; {len(built_problems)} problem(s)")
     for p in built_problems[:20]:
         print(f"      ✗ {p}")
     print(f"  decks by kind: {dict(kinds)}")

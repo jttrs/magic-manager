@@ -57,7 +57,7 @@ def _states():
 def test_run_passes_when_backfill_flips_only_predicted_decks(pmu, upgrade_db, capsys):
     assert pmu.run(upgrade_db) == 0
     assert _states() == {"old-import": "deconstructed", "precon": "deconstructed", "precon-2": "built"}
-    assert "2 deck(s) built → not built" in capsys.readouterr().out
+    assert "2 deck(s) changed state, 2 predicted built → not built; 0 problem(s)" in capsys.readouterr().out
 
 
 def test_run_fails_when_a_pledged_deck_is_flipped(pmu, upgrade_db, monkeypatch, capsys):
