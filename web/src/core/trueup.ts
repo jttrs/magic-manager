@@ -9,9 +9,12 @@ export type CoverageProduct = {
   recipe_qty: number;
   usd: number;
 };
+/** A product list that couldn't be read, so its products weren't checked. */
+type UnreadList = { ref: string; name: string; error: string };
 export type CoverageScan = {
   ready: CoverageProduct[];
   conflicts: (CoverageProduct & { lost_to: string[] })[];
+  unread?: UnreadList[];
   applied: boolean;
   registered: number;
   reattributed: number;
@@ -31,6 +34,22 @@ export function productMeta(p: CoverageProduct): string {
 /** Products confirmed for recording: ready ones not marked "not mine". */
 export function confirmed(scan: CoverageScan, notMine: ReadonlySet<string>): CoverageProduct[] {
   return scan.ready.filter((p) => !notMine.has(p.fileName));
+}
+
+export type CoveragePhase = 'scan' | 'review' | 'record' | 'done';
+
+/** Where the review dialog is: a FAILED record drops back to review (the
+ *  failure is shown) instead of staying stuck in 'record'. */
+export function coveragePhase(scanned: boolean, recordStatus: string | null | undefined, recorded: boolean): CoveragePhase {
+  if (recorded) return 'done';
+  if (recordStatus === 'queued' || recordStatus === 'running') return 'record';
+  return scanned ? 'review' : 'scan';
+}
+
+/** "I opened this one": the product becomes the LATEST pick (the engine lets
+ *  the latest pick win a contest between picks), so a second click always steers. */
+export function withPick(picks: readonly string[], fileName: string): string[] {
+  return [...picks.filter((f) => f !== fileName), fileName];
 }
 
 const REFUTED = 'mm.trueup.notMine';

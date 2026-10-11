@@ -26,3 +26,67 @@ test('find products: scan, uncheck one, record the rest', async ({ page }) => {
   expect(applied).toEqual({ expect: ['A_HOB'], picks: [] });
   expect(await page.evaluate(() => localStorage.getItem('mm.trueup.notMine'))).toBe('["B_HOB"]');
 });
+
+const open = async (page: import('@playwright/test').Page) => {
+  await page.goto(COLLECTION_URL);
+  await page.getByRole('toolbar', { name: 'Collection actions' }).getByRole('button', { name: 'Find products in your cards' }).click();
+  return page.getByRole('dialog', { name: 'Find products in your cards' });
+};
+
+test('find products: unreadable lists are named, not reported as "no products"', async ({ page }) => {
+  await page.route('**/api/jobs/trueup.scan', (r) => r.fulfill({ status: 202, json: job('s1', 'trueup.scan') }));
+  await page.route('**/api/jobs/s1/events', (r) => r.fulfill({ status: 200, contentType: 'text/event-stream', body: sse({ ready: [], conflicts: [], unread: [{ ref: 'set:hob', name: 'HOB products', error: 'offline' }], applied: false, registered: 0, reattributed: 0 }) }));
+  const dialog = await open(page);
+  await expect(dialog.getByRole('alert')).toContainText('1 product list couldn’t be read, so its products weren’t checked: HOB products.');
+  await expect(dialog).not.toContainText('No products found');
+});
+
+test('find products: unchecking then cancelling still remembers not-mine', async ({ page }) => {
+  await page.route('**/api/jobs/trueup.scan', (r) => r.fulfill({ status: 202, json: job('s1', 'trueup.scan') }));
+  await page.route('**/api/jobs/s1/events', (r) => r.fulfill({ status: 200, contentType: 'text/event-stream', body: sse({ ready: [product('A_HOB', 'Crack the Plates')], conflicts: [], applied: false, registered: 0, reattributed: 0 }) }));
+  const dialog = await open(page);
+  await dialog.getByRole('checkbox', { name: /Crack the Plates/ }).uncheck();
+  await expect(dialog.getByRole('button', { name: 'Record products' })).toBeDisabled();
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toBeHidden();
+  expect(await page.evaluate(() => localStorage.getItem('mm.trueup.notMine'))).toBe('["A_HOB"]');
+});
+
+test('find products: the latest "I opened this one" is sent last', async ({ page }) => {
+  const scans: { picks: string[] }[] = [];
+  await page.route('**/api/jobs/trueup.scan', (r) => { scans.push(r.request().postDataJSON()); return r.fulfill({ status: 202, json: job(`s${scans.length}`, 'trueup.scan') }); });
+  await page.route('**/api/jobs/s*/events', (r) => r.fulfill({ status: 200, contentType: 'text/event-stream', body: sse({ ready: [], conflicts: [{ ...product('A_HOB', 'Alpha'), lost_to: ['Zed'] }, { ...product('B_HOB', 'Beta'), lost_to: ['Zed'] }], applied: false, registered: 0, reattributed: 0 }) }));
+  const dialog = await open(page);
+  const pick = (name: string) => dialog.getByRole('listitem').filter({ hasText: name }).getByRole('button', { name: 'I opened this one' }).click();
+  await pick('Beta');
+  await expect.poll(() => scans.length).toBe(2);
+  await pick('Alpha');
+  await expect.poll(() => scans.length).toBe(3);
+  await pick('Beta');
+  await expect.poll(() => scans.at(-1)?.picks).toEqual(['A_HOB', 'B_HOB']);
+});
+
+test('find products: one record per click, Escape waits, a failed record can be cancelled', async ({ page }) => {
+  let applies = 0;
+  let release: () => void = () => {};
+  const held = new Promise<void>((res) => { release = res; });
+  await page.route('**/api/jobs/trueup.scan', (r) => r.fulfill({ status: 202, json: job('s1', 'trueup.scan') }));
+  await page.route('**/api/jobs/s1/events', (r) => r.fulfill({ status: 200, contentType: 'text/event-stream', body: sse({ ready: [product('A_HOB', 'Crack the Plates')], conflicts: [], applied: false, registered: 0, reattributed: 0 }) }));
+  await page.route('**/api/jobs/trueup.apply', async (r) => { applies += 1; await held; return r.fulfill({ status: 202, json: job('a1', 'trueup.apply') }); });
+  await page.route('**/api/jobs/a1/events', (r) => r.fulfill({ status: 200, contentType: 'text/event-stream', body: [
+    ['status', { status: 'running' }], ['error', { error: 'Your cards changed since the scan — scan again and review the list.' }], ['status', { status: 'failed' }],
+  ].map(([e, d], i) => `event: ${e}\ndata: ${JSON.stringify(d)}\nid: ${i + 1}\n\n`).join('') }));
+  const dialog = await open(page);
+  const record = dialog.getByRole('button', { name: 'Record 1 product' });
+  await record.dblclick();
+  await expect(record).toBeDisabled();
+  await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeVisible();
+  release();
+  await expect(dialog.getByRole('alert')).toContainText('Your cards changed since the scan');
+  expect(applies).toBe(1);
+  await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeEnabled();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+});

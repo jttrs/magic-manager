@@ -27,9 +27,16 @@ class ConflictOut(ProductOut):
     lost_to: list[str] = Field(default_factory=list, description="Products that took the shared cards.")
 
 
+class UnreadOut(BaseModel):
+    ref: str = Field(description="fileName, or set:<code> / sld for a whole list of products.")
+    name: str
+    error: str
+
+
 class ScanOut(BaseModel):
     ready: list[ProductOut] = Field(description="Products your loose cards fully cover.")
     conflicts: list[ConflictOut] = Field(description="Covered, but a shared card went to a higher-priority product.")
+    unread: list[UnreadOut] = Field(default_factory=list, description="Product lists that couldn't be read, so weren't checked.")
     applied: bool = False
     registered: int = 0
     reattributed: int = 0
@@ -37,12 +44,12 @@ class ScanOut(BaseModel):
 
 class ScanInput(BaseModel):
     refute: list[str] = Field(default_factory=list, max_length=500, description="fileNames you did not buy.")
-    picks: list[str] = Field(default_factory=list, max_length=500, description="fileNames to win contested cards.")
+    picks: list[str] = Field(default_factory=list, max_length=500, description="fileNames to win contested cards; the latest wins between picks.")
 
 
 class ApplyInput(BaseModel):
     expect: list[str] = Field(min_length=1, max_length=500, description="fileNames the user reviewed and confirmed.")
-    picks: list[str] = Field(default_factory=list, max_length=500, description="fileNames to win contested cards.")
+    picks: list[str] = Field(default_factory=list, max_length=500, description="fileNames to win contested cards; the latest wins between picks.")
 
 
 def _out(result: dict) -> ScanOut:
@@ -52,6 +59,7 @@ def _out(result: dict) -> ScanOut:
         for c in result["conflicts"]
     ]
     return ScanOut(ready=[ProductOut(**p) for p in result["ready"]], conflicts=conflicts,
+                   unread=[UnreadOut(**u) for u in result.get("unread", [])],
                    applied=bool(result.get("applied")), registered=result.get("registered", 0),
                    reattributed=result.get("reattributed", 0))
 
@@ -62,21 +70,35 @@ def _tick(progress: ProgressFn):
 
 def _run_scan(inp: ScanInput, progress: ProgressFn) -> JobResult:
     progress(ProgressEvent(0, None, "Reading product lists…"))
-    out = _out(trueup.plan(refute=set(inp.refute), picks=set(inp.picks), progress=_tick(progress)))
+    out = _out(trueup.plan(refute=set(inp.refute), picks=inp.picks, progress=_tick(progress)))
     return JobResult(
-        summary=f"{len(out.ready)} products your cards complete" + (f" · {len(out.conflicts)} lost a shared card" if out.conflicts else ""),
+        summary=f"{len(out.ready)} products your cards complete"
+        + (f" · {len(out.conflicts)} lost a shared card" if out.conflicts else "")
+        + (f" · {len(out.unread)} lists could not be read" if out.unread else ""),
         artifacts=[Artifact(kind="json", label="scan", data=out.model_dump())],
     )
+
+
+def _check_reviewed(preview: dict, keep: set[str]) -> None:
+    """Refuse unless the re-check covers exactly the reviewed products — naming
+    unreadable lists rather than blaming a collection change on them."""
+    ready = {p["fileName"] for p in preview["ready"]}
+    if ready == keep:
+        return
+    unread = preview.get("unread") or []
+    if keep - ready and unread:
+        names = ", ".join(u["name"] for u in unread[:3]) + ("…" if len(unread) > 3 else "")
+        raise ValueError(f"Couldn’t read the product lists again ({names}) — nothing was recorded. Try again in a moment.")
+    raise ValueError("Your cards changed since the scan — scan again and review the list.")
 
 
 def _run_apply(inp: ApplyInput, progress: ProgressFn) -> JobResult:
     """Re-plan with the user's decisions and record only if the covered set is
     exactly what they reviewed — the collection may have changed since."""
     progress(ProgressEvent(0, None, "Checking the products again…"))
-    keep, picks = set(inp.expect), set(inp.picks)
+    keep, picks = set(inp.expect), inp.picks
     preview = trueup.plan(only=keep, picks=picks, progress=_tick(progress))
-    if {p["fileName"] for p in preview["ready"]} != keep:
-        raise ValueError("Your cards changed since the scan — scan again and review the list.")
+    _check_reviewed(preview, keep)
     out = _out(trueup.plan(only=keep, picks=picks, apply=True))
     return JobResult(
         summary=f"Recorded {out.registered} products · {out.reattributed} cards now traced to them",

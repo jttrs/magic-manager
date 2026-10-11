@@ -3228,7 +3228,7 @@ def deck_product_coverage_cmd(
     """
     from . import trueup as tp
     mode = "all" if all_sets else ("target" if target else "from-unattributed")
-    picks = {s.strip() for s in pick.split(",") if s.strip()}
+    picks = [s.strip() for s in pick.split(",") if s.strip()]
     refute_set = {s.strip() for s in refute.split(",") if s.strip()}
     tp.run(mode=mode, target=target, apply=apply, picks=picks,
            sld_threshold=sld_partial_threshold, json_out=json_out, refute=refute_set)

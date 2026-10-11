@@ -22,7 +22,7 @@ def test_scan_maps_products_and_conflict_winners(monkeypatch):
     monkeypatch.setattr(trueup, "plan", lambda **kw: seen.update(kw) or _result([P], [lost]))
     res = api._run_scan(api.ScanInput(refute=["Nope_X"], picks=["Other_HOB"]), lambda e: None)
     out = res.artifacts[0].data
-    assert seen["refute"] == {"Nope_X"} and seen["picks"] == {"Other_HOB"}
+    assert seen["refute"] == {"Nope_X"} and seen["picks"] == ["Other_HOB"]
     assert out["ready"][0]["usd"] == 37.37
     assert out["conflicts"][0]["lost_to"] == ["Crack the Plates", "Z"]
     assert res.summary == "1 products your cards complete · 1 lost a shared card"
@@ -47,3 +47,27 @@ def test_apply_records_only_the_reviewed_products(monkeypatch):
     assert [c["only"] for c in calls] == [{"Box_HOB"}, {"Box_HOB"}]
     assert calls[1]["apply"] is True
     assert res.summary == "Recorded 1 products · 6 cards now traced to them"
+
+
+def test_scan_reports_unreadable_lists(monkeypatch):
+    unread = [{"ref": "set:hob", "name": "HOB products", "error": "offline"}]
+    monkeypatch.setattr(trueup, "plan", lambda **kw: _result([], unread=unread))
+    res = api._run_scan(api.ScanInput(), lambda e: None)
+    assert res.artifacts[0].data["unread"] == unread
+    assert res.summary == "0 products your cards complete · 1 lists could not be read"
+
+
+def test_apply_names_unreadable_lists_instead_of_blaming_a_change(monkeypatch):
+    calls = []
+    unread = [{"ref": "Box_HOB", "name": "Crack the Plates", "error": "mtgjson down"}]
+    monkeypatch.setattr(trueup, "plan", lambda **kw: calls.append(kw) or _result([], unread=unread))
+    with pytest.raises(ValueError, match="Couldn’t read the product lists again \\(Crack the Plates\\)"):
+        api._run_apply(api.ApplyInput(expect=["Box_HOB"]), lambda e: None)
+    assert len(calls) == 1 and not calls[0].get("apply")
+
+
+def test_apply_keeps_pick_order(monkeypatch):
+    calls = []
+    monkeypatch.setattr(trueup, "plan", lambda **kw: calls.append(kw) or _result([P], registered=1))
+    api._run_apply(api.ApplyInput(expect=["Box_HOB"], picks=["B", "A"]), lambda e: None)
+    assert [c["picks"] for c in calls] == [["B", "A"], ["B", "A"]]
