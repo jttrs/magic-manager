@@ -1,10 +1,10 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Tooltip } from 'radix-ui';
 import { useState } from 'react';
 import { undoQuery, unwrap } from '../app/queries';
 import { undoRestore } from '../core/api';
 import { changeLines, detailLines, whenLabel } from '../core/undo';
 import { ConfirmDialog } from './ConfirmDialog';
+import { IconTooltip } from './IconTooltip';
 
 /** The one restore point: a quiet header icon once one exists (taken before the
  *  first change of each session); confirming swaps your data with it. */
@@ -20,28 +20,19 @@ export function UndoButton() {
   const label = `Restore point · ${when}`;
   return (
     <>
-      <Tooltip.Provider delayDuration={200}>
-        <Tooltip.Root>
-          <Tooltip.Trigger asChild>
-            <button
-              type="button"
-              aria-label={label}
-              onClick={() => { void q.refetch(); setOpen(true); }}
-              className="grid size-8 cursor-pointer place-items-center rounded-sm text-on-chrome-muted transition-colors ease-guide hover:text-on-chrome"
-            >
-              <svg viewBox="0 0 16 16" aria-hidden="true" className="size-4">
-                <path d="M3.5 6.5h6a3.5 3.5 0 0 1 0 7H6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M6 3.5 3 6.5l3 3" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-          </Tooltip.Trigger>
-          <Tooltip.Portal>
-            <Tooltip.Content side="bottom" sideOffset={6} collisionPadding={12} className="z-50 rounded-sm border border-chrome-line bg-chrome-raised px-2.5 py-1.5 text-sm text-on-chrome shadow-[0_12px_28px_-12px_var(--theme-scrim)]">
-              {label}
-            </Tooltip.Content>
-          </Tooltip.Portal>
-        </Tooltip.Root>
-      </Tooltip.Provider>
+      <IconTooltip label={label}>
+        <button
+          type="button"
+          aria-label={label}
+          onClick={() => { void q.refetch(); setOpen(true); }}
+          className="touch-hit grid size-8 cursor-pointer place-items-center rounded-sm text-on-chrome-muted transition-colors ease-guide hover:text-on-chrome"
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true" className="size-4">
+            <path d="M3.5 6.5h6a3.5 3.5 0 0 1 0 7H6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M6 3.5 3 6.5l3 3" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      </IconTooltip>
       <ConfirmDialog
         open={open}
         onOpenChange={setOpen}

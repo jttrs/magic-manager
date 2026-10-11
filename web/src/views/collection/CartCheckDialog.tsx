@@ -190,8 +190,8 @@ function Results({ r }: { r: CartAuditOut }) {
         {r.owned.map((o, i) => <Line key={`${o.scryfall_id}${o.fin}${i}`} card={o} right={<>you own {fmtInt(o.owned_qty)} · {fmtUsd(o.your)}</>} />)}
       </Section>
       <Section title="Over market" n={r.overpay.length} empty="Nothing is priced well over market.">
-        {r.overpay.map((o) => (
-          <Line key={`${o.scryfall_id}${o.fin}`} card={o} right={<><span className="text-ink">{fmtUsd(o.your)}</span> vs {fmtUsd(o.market)} · <span className="font-medium text-danger">+{Math.round(o.pct ?? 0)}%</span></>} />
+        {r.overpay.map((o, i) => (
+          <Line key={`${o.scryfall_id}${o.fin}${i}`} card={o} right={<><span className="text-ink">{fmtUsd(o.your)}</span> vs {fmtUsd(o.market)} · <span className="font-medium text-danger">+{Math.round(o.pct ?? 0)}%</span></>} />
         ))}
       </Section>
       {(r.not_compared ?? 0) > 0 && (

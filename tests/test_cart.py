@@ -98,3 +98,26 @@ def test_cart_route_is_gated_by_the_flag(client, monkeypatch):
     assert r.status_code == 200 and r.json()["owned"][0]["name"] == "Beta"
     fetched["items"] = None
     assert client.post("/api/cart/check", json={}).status_code == 422
+
+
+@pytest.mark.parametrize("line", [
+    {"quantity": "2x"}, {"price": float("nan")}, {"price": "3"}, {"scryfall_id": []},
+    {"set": {"a": 1}}, {"tcgplayer_product_id": "abc"}, {"quantity": -1}, {"quantity": True},
+])
+def test_parse_rejects_malformed_line_values(line):
+    with pytest.raises(cart.CartFormatError, match="line 2"):
+        cart.parse([{"set": "tst", "number": "1"}, line])
+
+
+def test_parse_accepts_numeric_strings_and_ints():
+    items = [{"set": "tst", "number": 7, "quantity": "2", "tcgplayer_product_id": "123", "price": 1}]
+    assert cart.parse(items) == items
+
+
+def test_map_cart_catalog_all_fetches_product_for_local_lines(cards):
+    prod = {"scryfall_id": A, "name": "Alpha", "variants": [{"finish_id": "NF", "condition_id": "NM", "low_price": 180}]}
+    line = {"set": "tst", "number": "1", "card_id": "uuid-a", "price": 3.0}
+    assert cart.map_cart([line], product_fn=lambda u: prod)[0].prod is None        # web: local wins, no catalog call
+    (m,) = cart.map_cart([line], catalog_all=True, product_fn=lambda u: prod)
+    assert m.scryfall_id == A and m.prod is prod
+    assert cart.overpay_rows([m], prices_fn=cart.local_prices)["rows"][0]["mp_cheap"] == 1.8

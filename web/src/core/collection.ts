@@ -151,19 +151,21 @@ export type CollectionStats = {
 
 export function collectionStats(cards: readonly CollectionCardOut[], exclude: readonly string[]): CollectionStats {
   let owned = 0, copies = 0, missing = 0, missingUsd = 0;
-  const cheapest = new Map<string, number>();
+  // Per card: its cheapest PRICED missing printing (null while all are unpriced).
+  const cheapest = new Map<string, number | null>();
   for (const c of cards) {
     const n = ownedCopies(c, exclude);
     if (n > 0) { owned++; copies += n; }
     if (isMissing(c, exclude)) {
       missing++;
-      const p = (buyFinish(c, exclude) === 'foil' ? c.price_usd_foil : c.price_usd) ?? 0;
-      missingUsd += p;
+      const p = (buyFinish(c, exclude) === 'foil' ? c.price_usd_foil : c.price_usd) ?? null;
+      missingUsd += p ?? 0;
       const k = c.oracle_id ?? c.scryfall_id;
-      cheapest.set(k, Math.min(cheapest.get(k) ?? Infinity, p));
+      const prev = cheapest.get(k) ?? null;
+      cheapest.set(k, p == null ? prev : Math.min(prev ?? Infinity, p));
     }
   }
-  const missingCardsUsd = [...cheapest.values()].reduce((s, p) => s + p, 0);
+  const missingCardsUsd = [...cheapest.values()].reduce<number>((s, p) => s + (p ?? 0), 0);
   return { printings: cards.length, owned, copies, missing, missingUsd, missingCards: cheapest.size, missingCardsUsd };
 }
 

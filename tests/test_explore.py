@@ -70,3 +70,25 @@ def test_search_cards_finds_any_card_and_flags_leaders(seeded):
     hits = explore.search_cards("ti")
     assert [(h["name"], h["commander_eligible"]) for h in hits] == [("Tifa", True)]
     assert [h["name"] for h in explore.search_cards("ring")] == ["Sol Ring"]
+
+
+def test_search_is_one_engine_for_both_pickers(seed_cards, make_card):
+    """PR90-1: the commander picker is the card search filtered to leaders —
+    same front-face names, same prefix-first ordering."""
+    from magic_manager.api import edhrec as edhrec_api
+
+    seed_cards([
+        make_card(id=SOL, oracle_id=OID["Sol Ring"], name="Sol Ring", type_line="Artifact", collector_number="1"),
+        make_card(id=CMD, oracle_id=OID["Tifa"], name="Tifa // Tifa's Fist",
+                  type_line="Legendary Creature — Human Monk // Legendary Artifact", collector_number="3"),
+        make_card(id=BIRD, oracle_id=OID["Birds"], name="Atifa", type_line="Legendary Creature — Bird", collector_number="4"),
+    ])
+    with db.connect() as conn:
+        conn.execute("INSERT INTO edhrec_pages (page_type, slug, timeframe, json, http_status, fetched_at) "
+                     "VALUES ('commander', 'atifa', '', '{}', 200, '2026-01-01')")
+        conn.commit()
+    leaders = edhrec_api.search_commanders("tif")
+    assert [(o.name, o.cached) for o in leaders] == [("Tifa", False), ("Atifa", True)]   # prefix beats cached
+    anyc = explore.search_cards("tif")
+    assert [c["name"] for c in anyc] == ["Tifa", "Atifa"] and all(not c["cached"] for c in anyc)
+    assert explore.search_cards("sol", commanders_only=True) == []

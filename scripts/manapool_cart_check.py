@@ -248,7 +248,7 @@ def main() -> int:
         return 2
     print(f"mapping {len({c['card_id'] for c in cart if c.get('card_id')})} "
           f"cart cards via Mana Pool products…", file=sys.stderr)
-    mapped = map_cart(cart)
+    mapped = map_cart(cart, catalog_all=True)   # the MP cheapest column
 
     # Run every requested check first (collect results), so the summary table can
     # lead the report. Notes accumulate for stderr.

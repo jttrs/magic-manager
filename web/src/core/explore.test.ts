@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CardExploreOut, CardProfileOut, EntryOut, FactsOut, PairedOut } from './api';
-import { coplayGroups, deckShare, defaultRole, fromEntry, fromPaired, pairedSections, profileSections } from './explore';
+import { coplayGroups, deckShare, defaultRole, fromEntry, fromPaired, pairedSections, profileSections, resolveRole, roleTags } from './explore';
 
 const facts = (o: Partial<FactsOut> = {}): FactsOut => ({ oracle_id: null, type_line: 'Artifact', cmc: 1, color_identity: [], lowest_usd: 1, scryfall_id: null, image_uri: null, set_code: 'cmd', collector_number: '1', scryfall_url: null, owned: 0, free: 0, ...o });
 const entry = (name: string, o: Partial<EntryOut> = {}): EntryOut => ({ name, slug: name.toLowerCase(), facts: facts({ oracle_id: `o-${name}` }), num_decks: 10, potential_decks: 100, share: 10, lift: 1, group: null, ...o });
@@ -14,6 +14,22 @@ describe('explore (card role)', () => {
     expect(defaultRole(true)).toBe('commander');
     expect(defaultRole(false)).toBe('card');
     expect(defaultRole(undefined)).toBe('card');
+  });
+
+  it('leaves the role unresolved until eligibility is known', () => {
+    expect(resolveRole(undefined, undefined, true)).toBeNull();
+    expect(resolveRole(undefined, undefined)).toBe('card');           // no card, or the read failed
+    expect(resolveRole(undefined, true)).toBe('commander');
+    expect(resolveRole(undefined, false)).toBe('card');
+    expect(resolveRole('card', undefined)).toBe('card');
+    expect(resolveRole('commander', undefined)).toBe('commander');
+    expect(resolveRole('commander', false)).toBe('card');
+  });
+
+  it('keeps only the tags the active role offers', () => {
+    expect(roleTags(['creatures', 'Mana rocks'], ['Creatures', 'Mana rocks'])).toEqual(['Mana rocks']);
+    expect(roleTags(['Creatures'], ['creatures', 'lands'])).toEqual([]);
+    expect(roleTags([], ['creatures'])).toEqual([]);
   });
 
   it('maps entries: share is the guide %, lift the note, ownership a tag', () => {

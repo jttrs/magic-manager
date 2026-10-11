@@ -3,12 +3,14 @@ import { Popover } from 'radix-ui';
 import { useId, useState, type KeyboardEvent } from 'react';
 import { cardSearchQuery, commanderSearchQuery } from '../app/queries';
 
-type Props = { label: string; value?: string; onCommit: (name: string) => void; name: string; scope?: 'commander' | 'any'; placeholder?: string };
+export type PickedCard = { name: string; commander_eligible?: boolean };
+type Props = { label: string; value?: string; onCommit: (name: string, picked?: PickedCard) => void; name: string; scope?: 'commander' | 'any'; placeholder?: string };
 
 /**
  * Commander input: an ARIA 1.2 combobox with local suggestions (commander-eligible
  * cards in your DB; EDHREC-cached first). Free text is accepted — the engine
- * resolves any card name via Scryfall.
+ * resolves any card name via Scryfall. A commit matching a suggestion hands it
+ * back too (its `commander_eligible` lets Explore pick the role up front).
  */
 export function CommanderPicker({ label, value = '', onCommit, name, scope = 'commander', placeholder }: Props) {
   // `draft` holds in-progress typing; when null the field shows the committed value.
@@ -29,7 +31,8 @@ export function CommanderPicker({ label, value = '', onCommit, name, scope = 'co
     const t = v.trim();
     setOpen(false);
     setActive(-1);
-    if (t && t !== value) onCommit(t);
+    const picked = (q.data ?? []).find((o) => o.name.toLowerCase() === t.toLowerCase());
+    if (t && t !== value) onCommit(t, picked);
     setDraft(null);
   }
 

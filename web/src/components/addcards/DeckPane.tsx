@@ -138,7 +138,7 @@ function PreconRow({ p, open, onOpen }: { p: PreconOptionOut; open: boolean; onO
   const running = live != null && live.status !== 'succeeded' && live.status !== 'failed';
 
   useEffect(() => {
-    if (live?.status === 'succeeded') qc.invalidateQueries({ queryKey: ['collection'] }).then(() => Promise.all([qc.invalidateQueries({ queryKey: ['ingest', 'precons'] }), qc.invalidateQueries({ queryKey: ['history'] })]));
+    if (live?.status === 'succeeded') qc.invalidateQueries({ queryKey: ['collection'] }).then(() => Promise.all([qc.invalidateQueries({ queryKey: ['ingest', 'precons'] }), qc.invalidateQueries({ queryKey: ['history'] }), qc.invalidateQueries({ queryKey: ['holdings'] })]));
   }, [live?.status, qc]);
 
   async function add() {

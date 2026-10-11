@@ -141,3 +141,66 @@ test('old /commanders links land on Explore as commander; the inspector offers E
   await expect(page).toHaveURL(/\/explore\?a=/);
   await expect(page.getByRole('combobox', { name: 'Card' })).toHaveValue(name.split(' // ')[0]);
 });
+
+test('switching role clears the list filter; a filter from the other role never blanks results (PR90-2)', async ({ page }) => {
+  await page.goto('/explore?a=Tifa%20Lockhart&role=commander&tags=creatures');
+  await expect(page.getByRole('article').first()).toBeVisible();
+  await page.getByRole('radio', { name: 'As a card' }).click();
+  await expect(page).not.toHaveURL(/tags=/);
+
+  // The automatic fallback (card can't lead) keeps the URL but ignores a commander list slug.
+  const { profile } = await import('./support');
+  const e = (name: string, o: Record<string, unknown> = {}) => ({ name, slug: name.toLowerCase(), facts: profile(name).facts, num_decks: 10, potential_decks: 20, share: 50, lift: 1.5, group: null, ...o });
+  await page.route('**/api/explore/card?**', (r) => r.fulfill({ json: {
+    a: profile('Sol Ring', { commander_eligible: false, coplayed: [e('Arcane Signet', { group: 'Mana rocks' })] }),
+    b: null, commanders: [], coplayed: [], tags: {},
+  } }));
+  await page.goto('/explore?a=Sol%20Ring&role=commander&tags=creatures');
+  await expect(page.getByRole('heading', { name: /^Played alongside/ })).toBeVisible();
+  await expect(page.getByTitle('Arcane Signet')).toBeVisible();
+});
+
+test('a commander picked from the suggestions starts its request alongside the card profile (PR90-3)', async ({ page }) => {
+  let release!: () => void;
+  const held = new Promise<void>((r) => { release = r; });
+  const { profile } = await import('./support');
+  await page.route('**/api/explore/card?**', async (r) => {
+    await held;
+    await r.fulfill({ json: { a: profile('Tifa Lockhart'), b: null, commanders: [], coplayed: [], tags: {} } });
+  });
+  await page.goto('/explore?mode=card');
+  const box = page.getByRole('combobox', { name: 'Card' });
+  await box.fill('tifa');
+  await expect(page.getByRole('listbox')).toBeVisible();
+  const compareReq = page.waitForRequest((r) => new URL(r.url()).pathname === '/api/edhrec/compare');
+  await box.press('ArrowDown');
+  await box.press('Enter');
+  await compareReq;                                     // fired while the card profile is still pending
+  await expect(page.getByRole('radio', { name: 'As commander' })).toHaveAttribute('aria-checked', 'true');
+  release();
+  await expect(page.getByRole('article').first()).toBeVisible();
+});
+
+test('the role control waits for eligibility instead of flipping card → commander (PR90-3)', async ({ page }) => {
+  let release!: () => void;
+  const held = new Promise<void>((r) => { release = r; });
+  const { profile } = await import('./support');
+  await page.route('**/api/explore/card?**', async (r) => {
+    await held;
+    await r.fulfill({ json: { a: profile('Tifa Lockhart'), b: null, commanders: [], coplayed: [], tags: {} } });
+  });
+  await page.goto('/explore?a=Tifa%20Lockhart');
+  await expect(page.getByRole('status', { name: 'Checking whether it can lead a deck' })).toBeVisible();
+  await expect(page.getByRole('radio', { name: 'As a card' })).toHaveCount(0);
+  release();
+  await expect(page.getByRole('radio', { name: 'As commander' })).toHaveAttribute('aria-checked', 'true');
+});
+
+test('with no card, or after the card read fails, the role control still shows (review #1)', async ({ page }) => {
+  await page.goto('/explore?mode=card');
+  await expect(page.getByRole('radio', { name: 'As a card' })).toHaveAttribute('aria-checked', 'true');
+  await page.route('**/api/explore/card?**', (r) => r.fulfill({ status: 500, json: { detail: 'boom', code: 'boom' } }));
+  await page.goto('/explore?a=Tifa%20Lockhart');
+  await expect(page.getByRole('alert')).toBeVisible();
+  await expect(page.getByRole('radio', { name: 'As a card' })).toBeVisible();
+});

@@ -21,7 +21,6 @@ unique_product_id}. Headless carries no name/set — those come from the product
 
 from __future__ import annotations
 
-import json
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -44,11 +43,11 @@ def _read_json_cart(src: str | None) -> list[dict]:
         text = Path(src).read_text()
     else:
         text = sys.stdin.read()
-    data = json.loads(text)
-    items = data.get("items") if isinstance(data, dict) else data
-    if not isinstance(items, list):
-        raise SystemExit("input is not a cart JSON array (or {items:[...]})")
-    return items
+    from magic_manager import cart
+    try:
+        return cart.parse(text)
+    except cart.CartFormatError as e:
+        raise SystemExit(f"input is not a cart JSON array (or {{items:[...]}}): {e}") from e
 
 
 def load_cart(file: str | None, method: str | None = None) -> list[dict]:
