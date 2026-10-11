@@ -133,3 +133,95 @@ def test_compare_values_at_face_price_and_honors_confirmations(monkeypatch):
 def test_pack_counts_on_box_titles_are_quantities(title, kept):
     assert " ".join(lm.norm_tokens(lm._strip_pack_count(title))).endswith(" ".join(lm.norm_tokens(kept)))
     assert ("pack" in lm.norm_tokens(lm._strip_pack_count(title))) is title.endswith("Pack")
+
+
+# ---------- retro review B: non-foil, language, collector's, correctable matches ----------
+
+def _more_cards(seed_cards, make_card):
+    seed_cards([
+        make_card(id="m10-146", oracle_id="o-bolt", set="m10", collector_number="146", name="Lightning Bolt", prices={"usd": "2.00", "usd_foil": "9.00"}),
+        make_card(id="2xm-117", oracle_id="o-bolt", set="2xm", collector_number="117", name="Lightning Bolt", prices={"usd": "3.00", "usd_foil": "11.00"}),
+    ])
+
+
+@pytest.fixture
+def bolt(monkeypatch, seed_cards, make_card):
+    monkeypatch.setattr(scryfall, "all_sets", lambda: [{"code": c, "name": n, "set_type": t, "digital": False} for c, n, t in SETS]
+                        + [{"code": "m10", "name": "Magic 2010", "set_type": "core", "digital": False}])
+    lm._set_names.cache_clear()
+    lm._set_tails.cache_clear()
+    _more_cards(seed_cards, make_card)
+
+
+@pytest.mark.parametrize("text,foil", [
+    ("Lightning Bolt (Non Foil) (146) (M10)", False), ("Lightning Bolt (Nonfoil) (146) (M10)", False),
+    ("Lightning Bolt (Non-Foil) (146) (M10)", False), ("Lightning Bolt (Foil) (146) (M10)", True),
+])
+def test_single_finish_shares_one_nonfoil_test(bolt, text, foil):
+    assert lm.match(text).match.finish == ("foil" if foil else "nonfoil")
+
+
+@pytest.mark.parametrize("name,expected", [
+    ("Secret Lair Drop Series: Uncharted | Nonfoil", "nonfoil"), ("Uncharted | Non Foil", "nonfoil"),
+    ("Uncharted | Non-Foil Edition", "nonfoil"), ("Uncharted | Foil", "foil"), ("Uncharted", "nonfoil"),
+])
+def test_edition_from_name_nonfoil_spellings(name, expected):
+    assert sld.edition_from_name(name) == expected
+    assert sld.is_nonfoil_marked(name) is (expected == "nonfoil" and "Uncharted" != name)
+
+
+def test_language_marker_downgrades_every_kind(bolt):
+    m = lm.match("Lightning Bolt (Japanese) (146) (M10)")
+    assert m.kind == "single" and m.status == "ambiguous" and "Japanese" in m.note
+    assert lm.match("Secret Lair Drop - Goblingram Japanese").status == "ambiguous"
+    assert lm.match("The Hobbit Play Booster Box Japanese").status == "ambiguous"
+
+
+def test_collectors_word_on_one_side_caps_sealed_at_ambiguous(monkeypatch):
+    # Title says Collector's, the only close product doesn't (and vice versa).
+    m = lm.match("Secrets of Strixhaven Commander Deck Lorehold Spirit Collector's Edition")
+    assert m.status == "ambiguous" and m.match is None and m.candidates
+    monkeypatch.setitem(PRODUCTS, "sos", ["Secrets of Strixhaven Commander Deck Lorehold Spirit Collectors Edition"])
+    m = lm.match("Secrets of Strixhaven Commander Deck Lorehold Spirit")
+    assert m.status == "ambiguous" and m.candidates[0].name.endswith("Collectors Edition")
+
+
+def test_matched_single_offers_other_printings(bolt):
+    m = lm.match("Lightning Bolt (146) (M10)")
+    assert m.status == "matched" and m.match.scryfall_id == "m10-146"
+    assert [c.scryfall_id for c in m.candidates] == ["2xm-117"]
+
+
+def test_matched_sld_offers_the_other_edition(monkeypatch):
+    monkeypatch.setattr(sld, "all_drops", lambda: {"Goblingram": {"name": "Goblingram", "file_names": ["a", "b"]}})
+    m = lm.match("Secret Lair Drop - Goblingram [Rainbow Foil Edition]")
+    assert m.status == "matched" and [(c.name, c.finish) for c in m.candidates] == [("Goblingram", "nonfoil")]
+
+
+@pytest.mark.parametrize("title", ["Bloomburrow Play Booster Box (36)", "The Hobbit Holiday Gift Bundle (2024)"])
+def test_bare_parenthesized_number_is_not_a_single(title):
+    assert lm.classify(title) == "sealed"
+
+
+@pytest.mark.parametrize("title", [
+    "Lightning Bolt (63) (Strixhaven Mystical Archive)", "Sol Ring (12) (Special Guests)", "Sol Ring (SPG-12)",
+    "Lightning Bolt (146) (M10) (Foil)",
+])
+def test_number_beside_an_unresolved_set_is_still_a_single(bolt, title):
+    assert lm.classify(title) == "single"
+
+
+@pytest.mark.parametrize("title,kind", [
+    ("Mystery Booster 2 Booster Box", "sealed"), ("The Hobbit Bundle with Sleeves", "sealed"),
+    ("Ultra Pro Bloomburrow Deck Protector Sleeves (100ct)", "unknown"),
+    ("Ultra Pro Deck Box", "unknown"), ("Dragon Shield Sleeves 100ct", "unknown"), ("Mystery Box - 10 Rares", "unknown"),
+])
+def test_supply_and_mystery_patterns_are_narrow(title, kind):
+    assert lm.classify(title) == kind
+
+
+def test_confirming_a_fallback_single_adds_it_locally(monkeypatch, make_card):
+    card = make_card(id="far-1", oracle_id="o-far", set="far", collector_number="1", name="Faraway", prices={"usd": "4.50", "usd_foil": None})
+    monkeypatch.setattr(scryfall, "collection", lambda ids: ([card], []))
+    deals.confirm_match("u9", {"kind": "single", "set_code": "far", "name": "Faraway (FAR 1)", "scryfall_id": "far-1", "finish": "nonfoil"})
+    assert deals._value({"kind": "single", "scryfall_id": "far-1", "finish": "nonfoil"})["market"] == 4.5

@@ -117,16 +117,26 @@ def _family(code: str) -> list[str]:
         return [code]
 
 
+_SEALED_WORD = re.compile(r"\bbooster|\bbundle|\bbox set\b|\bdeck|\bcollection\b", re.I)
+
+
 def classify(title: str) -> Kind:
     t = title or ""
     if _OTHER_GAMES.search(t):
         return "other_game"
-    if re.search(r"custom[\s-]+built|\bproxy\b|\bproxies\b|\bmystery\b|\brepack\b|uncut sheet|\bgraded\b|beckett|\bpsa \d|\bcgc\b|"
-                 r"\bsupplies\b|sleeves|playmat|deck box|binder|\bpins?\b|pin set|token bundle|acrylic", t, re.I):
+    if re.search(r"custom[\s-]+built|\bproxy\b|\bproxies\b|\bmystery\s+(?:box|pack|bundle)\b(?!\s+booster)|\brepack\b|uncut sheet|"
+                 r"\bgraded\b|beckett|\bpsa \d|\bcgc\b|playmat|binder|\bpins?\b|pin set|token bundle|acrylic", t, re.I):
+        return "unknown"
+    # Supplies words ("Bundle with Sleeves") only mean accessories when no sealed product is named.
+    if re.search(r"\bsupplies\b|sleeves|deck box", t, re.I) and not _SEALED_WORD.search(re.sub(r"(?i)deck (?:box|protector)", " ", t)):
         return "unknown"
     groups = re.findall(r"\(([^()]*)\)", t)
     if any(_CN.match(g.strip()) for g in groups):
-        return "single"
+        # A bare "(36)" / "(2024)" with no set beside it is a quantity or year. A set we
+        # can't resolve (Mystical Archive, Special Guests, promos) still makes a single.
+        set_name = _single_parts(t)[2]
+        if _set_code_for(set_name) or (set_name and not _SEALED_WORD.search(t)):
+            return "single"
     if re.search(r"secret lair", t, re.I) and not re.search(r"commander deck|countdown kit|bundle", t, re.I):
         return "sld"
     return "sealed"
@@ -183,15 +193,21 @@ MATCH_AT = 0.75
 MARGIN = 0.08
 
 
+_DISTINGUISHING = {"collector", "collectors"}
+
+
+def _disagrees(title: str, name: str) -> bool:
+    """A distinguishing word ("Collector's") on only one of title / product name."""
+    return (set(norm_tokens(title)) & _DISTINGUISHING) != (set(norm_tokens(name)) & _DISTINGUISHING)
+
+
 _LANG = re.compile(r"\b(japanese|jp|jpn|korean|chinese|s-chinese|t-chinese|german|french|italian|spanish|portuguese|russian)\b", re.I)
 
 
 def match_sealed(title: str) -> Match:
-    lang = _LANG.search(title)
     m = _match_sealed(title)
-    if lang and m.status == "matched":
-        return Match("sealed", "ambiguous", None, m.candidates,
-                     note=f"A {lang.group(1).title()}-language product — MTGJSON prices the English one. Confirm if you want it compared anyway.")
+    if m.status == "matched" and m.match and _disagrees(_strip_pack_count(title), m.match.name):
+        return Match("sealed", "ambiguous", None, m.candidates, note="Collector’s and regular editions differ — pick the right product.")
     return m
 
 
@@ -237,7 +253,8 @@ def match_sld(title: str) -> Match:
         drop = sld.identify_drop(sld.strip_finish_marker(sld.normalize_name(core)))
     except LookupError as e:
         return Match("sld", "unmatched", note=str(e))
-    return Match("sld", "matched", Candidate("sld", drop["name"], 1.0, finish=edition))
+    other = [Candidate("sld", drop["name"], 0.5, finish="nonfoil" if edition == "foil" else "foil")] if len(drop.get("file_names") or []) > 1 else []
+    return Match("sld", "matched", Candidate("sld", drop["name"], 1.0, finish=edition), other)
 
 
 # ---------- singles ----------
@@ -262,7 +279,7 @@ def _single_parts(title: str) -> tuple[str, str | None, str | None, str]:
     if cn and cn[0] == "0" and cn.isdigit():
         cn = cn.lstrip("0") or "0"
     low = title.lower()
-    finish = "foil" if (("foil" in low and "non-foil" not in low and "nonfoil" not in low) or "etched" in low) else "nonfoil"
+    finish = "foil" if (("foil" in low and not sld.is_nonfoil_marked(title)) or "etched" in low) else "nonfoil"
     return name, cn, set_name, finish
 
 
@@ -298,6 +315,15 @@ def _rank(cands: list[Candidate], title: str, price: float | None) -> list[Candi
     return sorted(cands, key=key)
 
 
+def _same_name_candidates(conn, name: str, finish: str, title: str, price: float | None) -> list[Candidate]:
+    """Every local printing of ``name``, ranked (hinted set, then nearest price)."""
+    same_name = [dict(r) for r in conn.execute(
+        "SELECT scryfall_id, name, set_code, collector_number, prices_usd, prices_usd_foil FROM cards WHERE lower(name) = lower(?) "
+        "OR lower(name) LIKE lower(?) OR lower(flavor_name) = lower(?) LIMIT 40", (name, name + " // %", name))]
+    return _rank([Candidate(r["set_code"], f"{r['name']} ({r['set_code'].upper()} {r['collector_number']})", 0.5, r["scryfall_id"], finish, _price(r, finish))
+                  for r in same_name], title, price)
+
+
 def match_single(title: str, price: float | None = None) -> Match:
     name, cn, set_name, finish = _single_parts(title)
     code = _set_code_for(set_name)
@@ -319,12 +345,10 @@ def match_single(title: str, price: float | None = None) -> Match:
                 row = {"scryfall_id": c["id"], "name": c["name"], "set_code": c["set"], "collector_number": c["collector_number"],
                        "prices_usd": prices.get("usd"), "prices_usd_foil": prices.get("usd_foil"), "_names": names}
         if row and want in (row.get("_names") or {_front(row["name"]), _front(row.get("flavor_name") or "")}):
-            return Match("single", "matched", Candidate(row["set_code"], row["name"], 1.0, row["scryfall_id"], finish, _price(row, finish)))
-        same_name = [dict(r) for r in conn.execute(
-            "SELECT scryfall_id, name, set_code, collector_number, prices_usd, prices_usd_foil FROM cards WHERE lower(name) = lower(?) "
-            "OR lower(name) LIKE lower(?) OR lower(flavor_name) = lower(?) LIMIT 40", (name, name + " // %", name))]
-    cands = _rank([Candidate(r["set_code"], f"{r['name']} ({r['set_code'].upper()} {r['collector_number']})", 0.5, r["scryfall_id"], finish, _price(r, finish))
-                   for r in same_name], title, price)
+            # Matched — but store metadata can lie, so the other printings of the name stay one click away.
+            others = [c for c in _same_name_candidates(conn, name, finish, title, price) if c.scryfall_id != row["scryfall_id"]]
+            return Match("single", "matched", Candidate(row["set_code"], row["name"], 1.0, row["scryfall_id"], finish, _price(row, finish)), others[:8])
+        cands = _same_name_candidates(conn, name, finish, title, price)
     if not cands and row:
         # No card carries the store's name (e.g. an unlisted crossover name): offer
         # the printing its set + number point at, for you to confirm.
@@ -339,6 +363,16 @@ def match_single(title: str, price: float | None = None) -> Match:
 
 def match(title: str, price: float | None = None) -> Match:
     """What ``title`` sells; ``price`` (the listing's) ranks candidate printings."""
+    m = _match(title, price)
+    lang = _LANG.search(title or "")
+    if lang and m.status == "matched":       # MTGJSON / Scryfall price the English product
+        keep = [m.match] if m.match and m.match not in m.candidates else []
+        return Match(m.kind, "ambiguous", None, keep + m.candidates,
+                     note=f"A {lang.group(1).title()}-language product — we price the English one. Confirm if you want it compared anyway.")
+    return m
+
+
+def _match(title: str, price: float | None) -> Match:
     kind = classify(title)
     if kind == "other_game":
         return Match("other_game", "skipped", note="Not a Magic product.")

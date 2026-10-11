@@ -65,6 +65,15 @@ _FINISH_MARKERS = (
 )
 
 
+NONFOIL_RE = re.compile(r"\bnon[\s-]?foil\b", re.I)
+
+
+def is_nonfoil_marked(text: str | None) -> bool:
+    """Whether ``text`` says non-foil ("Nonfoil", "Non Foil", "Non-Foil") — the
+    one shared test, so every finish sniffer agrees."""
+    return bool(NONFOIL_RE.search(text or ""))
+
+
 def edition_from_name(name: str) -> str:
     """Infer a Secret Lair listing's finish from its (raw, un-normalized) name.
 
@@ -73,8 +82,7 @@ def edition_from_name(name: str) -> str:
     does not. Returns ``"foil"`` unless the name is an explicit non-foil (default
     ``"nonfoil"`` for an unmarked drop name). The single source of finish-sniffing
     truth for the earmark resolver + review."""
-    n = (name or "").lower()
-    if "foil" in n and "non foil" not in n and "non-foil" not in n:
+    if "foil" in (name or "").lower() and not is_nonfoil_marked(name):
         return "foil"
     return "nonfoil"
 

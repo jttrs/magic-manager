@@ -14,7 +14,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlsplit
 
-from . import db, earmarks, listing_match, market, mtgjson, scryfall, sld, storefetch, storepage, tabs as tabs_mod, vendors
+from . import db, earmarks, listing_match, market, mtgjson, scryfall, sets, sld, storefetch, storepage, tabs as tabs_mod, vendors
 
 
 def open_tabs(browser: str = "chrome", **read_kw) -> dict:
@@ -181,8 +181,24 @@ def confirm_match(url: str, choice: dict | None) -> None:
             conn.execute("DELETE FROM settings WHERE key = ?", (_MATCH_KEY + url,))
         else:
             keep = {k: choice.get(k) for k in ("kind", "set_code", "name", "scryfall_id", "finish")}
+            _ensure_local_printing(conn, keep)
             conn.execute("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
                          (_MATCH_KEY + url, json.dumps(keep)))
+
+
+def _ensure_local_printing(conn, choice: dict) -> None:
+    """A single offered from a Scryfall fallback may not be in ``cards`` yet; add
+    it so ``_value`` can price it."""
+    sid = choice.get("scryfall_id")
+    if choice.get("kind") != "single" or not sid:
+        return
+    if conn.execute("SELECT 1 FROM cards WHERE scryfall_id = ?", (sid,)).fetchone():
+        return
+    try:
+        found, _ = scryfall.collection([{"id": sid}])
+    except scryfall.ScryfallError:
+        return                      # offline: the confirmation is still kept, just unpriced
+    sets.upsert_lookup_cards(conn, found)
 
 
 def _cand(c: listing_match.Candidate, kind: str) -> dict:

@@ -222,6 +222,9 @@ function Listing({ url, title, p, shared, onConfirmed }: { url: string; title: s
   );
 }
 
+const sameChoice = (a: MatchOut, b: MatchOut | null | undefined) =>
+  !!b && a.set_code === b.set_code && a.name === b.name && a.scryfall_id === b.scryfall_id && a.finish === b.finish;
+
 /** What the listing is and how it compares: a matched/confirmed product line, a
  *  picker when it's ambiguous, or the reason it isn't valued. */
 function Identity({ p, delta, onConfirmed }: { p: PriceRow; delta: ReturnType<typeof deltaLabel>; onConfirmed: (row: PriceRow) => void }) {
@@ -243,7 +246,7 @@ function Identity({ p, delta, onConfirmed }: { p: PriceRow; delta: ReturnType<ty
         {delta && <span className={`font-medium ${delta.tone === 'good' ? 'text-accent-ink' : delta.tone === 'bad' ? 'text-danger' : ''}`}>· {delta.text}</span>}
         {p.status === 'confirmed' ? (
           <button type="button" onClick={() => save.mutate(null)} className="cursor-pointer underline hover:text-ink">you confirmed this · change</button>
-        ) : p.status === 'matched' && candidates.length > 1 ? (
+        ) : p.status === 'matched' && candidates.some((c) => !sameChoice(c, p.match)) ? (
           <button type="button" onClick={() => setChanging(true)} className="cursor-pointer underline hover:text-ink">not this?</button>
         ) : null}
       </p>
@@ -260,7 +263,7 @@ function Identity({ p, delta, onConfirmed }: { p: PriceRow; delta: ReturnType<ty
             onChange={(e) => setPick(Number(e.target.value))}
             className="max-w-full rounded-sm border border-rule-strong bg-paper-raised px-2 py-1 text-sm text-ink"
           >
-            {candidates.map((c, i) => <option key={`${c.set_code}|${c.name}|${c.scryfall_id}`} value={i}>{c.name}{c.price != null ? ` — ${fmtUsd(c.price)}` : ''}</option>)}
+            {candidates.map((c, i) => <option key={`${c.set_code}|${c.name}|${c.scryfall_id}|${c.finish}`} value={i}>{c.name}{p.kind === 'sld' && c.finish ? ` · ${c.finish}` : ''}{c.price != null ? ` — ${fmtUsd(c.price)}` : ''}</option>)}
           </select>
           <Button tone="paper" onClick={() => save.mutate(candidates[pick], { onSuccess: () => setChanging(false) })} disabled={save.isPending}>{save.isPending ? 'Saving…' : 'This one'}</Button>
           {changing && <button type="button" onClick={() => setChanging(false)} className="cursor-pointer text-ink-muted underline hover:text-ink">cancel</button>}
