@@ -136,6 +136,26 @@ def test_cardkingdom_cart_from_the_reader_golden(carts):
     assert r["unidentified"] == [] and [n["name"] for n in r["not_cards"]] == ["The Hobbit Gift Bundle"]
 
 
+def test_ck_index_does_not_cache_a_transient_mtgjson_failure(monkeypatch):
+    calls = []
+
+    def flaky(code):
+        calls.append(code)
+        if len(calls) == 1:
+            raise OSError("offline")
+        return {"data": {"cards": [{"identifiers": {"scryfallId": "abc", "cardKingdomId": "42"}}], "tokens": []}}
+
+    monkeypatch.setattr(mtgjson, "set_file", flaky)
+    store_ids._ck_index.cache_clear()
+    try:
+        assert store_ids._ck_index("zzz") == {}
+        assert store_ids._ck_index("zzz") == {42: store_ids.CkPrinting("abc", "nonfoil")}
+        assert store_ids._ck_index("zzz") == {42: store_ids.CkPrinting("abc", "nonfoil")}
+        assert len(calls) == 2
+    finally:
+        store_ids._ck_index.cache_clear()
+
+
 def test_cardkingdom_edition_ranking_reads_the_likeliest_set_first(carts):
     rows = [{"set_code": s, "collector_number": "1"} for s in ("dsc", "fdc", "3ed", "fdn")]
     assert store_ids._ranked_sets(rows, store_ids.CkLine(1, "Sol Ring", "3rd Edition"))[0] == "3ed"

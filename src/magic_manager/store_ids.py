@@ -73,13 +73,9 @@ def _tokens(name: str) -> set[str]:
 
 
 @functools.lru_cache(maxsize=64)
-def _ck_index(set_code: str) -> dict[int, CkPrinting]:
-    """Card Kingdom product id → printing, from one MTGJSON set file (cached)."""
+def _ck_index_cached(set_code: str) -> dict[int, CkPrinting]:
     from . import mtgjson
-    try:
-        data = mtgjson.set_file(set_code.upper())
-    except Exception:  # noqa: BLE001 — no MTGJSON file for this code / offline
-        return {}
+    data = mtgjson.set_file(set_code.upper())
     data = data.get("data", data) if isinstance(data, dict) else {}
     out: dict[int, CkPrinting] = {}
     for card in (data.get("cards") or []) + (data.get("tokens") or []):
@@ -91,6 +87,17 @@ def _ck_index(set_code: str) -> dict[int, CkPrinting]:
             if str(ids.get(key) or "").isdigit():
                 out[int(ids[key])] = CkPrinting(sid, finish)
     return out
+
+
+def _ck_index(set_code: str) -> dict[int, CkPrinting]:
+    """Card Kingdom product id → printing, from one MTGJSON set file. Successes are cached; failures are not."""
+    try:
+        return _ck_index_cached(set_code)
+    except Exception:  # noqa: BLE001 — no MTGJSON file for this code / offline
+        return {}
+
+
+_ck_index.cache_clear = _ck_index_cached.cache_clear  # type: ignore[attr-defined]
 
 
 def _local_candidates(conn, name: str) -> list[dict]:
