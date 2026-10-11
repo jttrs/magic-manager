@@ -52,6 +52,8 @@ REASONS: dict[str, tuple[str, str]] = {
                         "Update the store's recipe in config/vendors.toml and re-capture its fixture."),
     "scrape.no_cards": ("The deck page returned no cards — its format changed.",
                         "Fix the parser in decksource.py against a fresh copy of the page."),
+    "scrape.empty_deck": ("The deck had no cards, so there was nothing to check.",
+                          "Nothing to fix — an empty deck isn't a broken importer."),
     "scrape.shape_changed": ("The page's data no longer has the fields we read.",
                              "Fix the parser against a fresh copy of the page."),
     "scrape.expectation": ("The page reads, but not what it showed when it was validated.",
@@ -345,6 +347,8 @@ def classify_error(text: str, *, missing: Outcome = "unverified",
     (private, removed) are ``unverified``. ``missing`` = what a 404 means (a
     removed sample, or — for a fixed endpoint like EDHREC's — a moved one)."""
     t = text or ""
+    if re.search(r"deck is empty", t, re.I):
+        return "unverified", "scrape.empty_deck"
     if re.search(r"no cards parsed", t, re.I):
         return "fail", "scrape.no_cards"
     if re.search(r"non-JSON|JSONDecodeError|KeyError|TypeError|AttributeError|IndexError", t):
@@ -353,7 +357,7 @@ def classify_error(text: str, *, missing: Outcome = "unverified",
     status = int(m.group(1)) if m else None
     if status == 404:
         return missing, ("scrape.sample_gone" if missing == "unverified" else "scrape.shape_changed")
-    if status in (401, 403, 429) or re.search(r"cloudflare|interstitial|blocked|never fired|private", t, re.I):
+    if status in (401, 403, 429) or re.search(r"cloudflare|interstitial|blocked|never fired|private|backoff window|\b429\b", t, re.I):
         return "unverified", "scrape.blocked"
     if (status and status >= 500) or re.search(r"urlopen error|curl failed|timed? ?out|connection|"
                                                r"name resolution|network", t, re.I):

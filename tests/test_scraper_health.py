@@ -162,9 +162,15 @@ def test_a_confirming_read_skips_the_write(health_file, monkeypatch):
     ("json.decoder.JSONDecodeError: Expecting value", "fail", "scrape.shape_changed"),
     ("Moxfield deck page never fired its api2 call (Cloudflare interstitial …)", "unverified", "scrape.blocked"),
     ("something odd", "unverified", "scrape.error"),
+    ("import_deck: deck is empty", "unverified", "scrape.empty_deck"),
 ])
 def test_classify_error(text, outcome, code):
     assert sh.classify_error(text) == (outcome, code)
+
+
+def test_classify_error_wrapper_backoff_is_blocked_not_a_failure():
+    text = "edhrec.sh: in backoff window after a 429, 42s remaining. Aborting."
+    assert sh.classify_error(text, unknown="fail") == ("unverified", "scrape.blocked")
 
 
 def test_classify_error_for_fixed_endpoints():
@@ -226,6 +232,13 @@ def test_deck_check_runs_the_apps_fetcher_and_classifies_failures(monkeypatch):
     monkeypatch.setattr(addcards, "fetch_deck_payload", boom)
     c = scrape_canary.check_deck("archidekt", SAMPLE)
     assert (c.outcome, c.code) == ("unverified", "scrape.sample_gone")
+
+    # Real use treats an empty deck as nothing to check; the canary's sample is known to have cards.
+    def empty(url, **_):
+        raise RuntimeError("import_deck: deck is empty")
+    monkeypatch.setattr(addcards, "fetch_deck_payload", empty)
+    c = scrape_canary.check_deck("archidekt", SAMPLE)
+    assert (c.outcome, c.code) == ("fail", "scrape.expectation")
 
 
 def test_every_deck_sample_is_checked_except_moxfield_which_needs_the_browser(monkeypatch):
@@ -328,6 +341,75 @@ def test_moxfield_canary_checks_the_server_import_and_the_companion_reader_in_on
     assert {(c.outcome, c.code) for c in walled} == {("unverified", "scrape.blocked")}
 
 
+class _NavFailPage(_Page):
+    def goto(self, *a, **k):
+        raise TimeoutError("net::ERR_INTERNET_DISCONNECTED")
+
+    def expect_response(self, *a, **k):
+        page = self
+
+        class _Info:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *e):
+                return False   # let the goto error propagate, as Playwright does
+        return _Info()
+
+
+class _ReaderCrashPage(_Page):
+    def evaluate(self, *a):
+        raise RuntimeError("readMoxfieldDeck is not defined")
+
+
+def test_moxfield_navigation_failure_is_unverified_unreachable_for_both_keys():
+    got = scrape_canary.check_moxfield(_Ctx(_NavFailPage()), MOX)
+    assert {(c.key, c.outcome, c.code) for c in got} == {
+        ("deck-import/moxfield", "unverified", "scrape.unreachable"),
+        ("companion-deck/moxfield", "unverified", "scrape.unreachable")}
+
+
+def test_moxfield_reader_crash_fails_only_the_reader_key_and_keeps_the_server_check():
+    got = scrape_canary.check_moxfield(_Ctx(_ReaderCrashPage(resp=_Resp(200, MOX_DECK))), MOX)
+    assert {(c.key, c.outcome, c.code) for c in got} == {
+        ("deck-import/moxfield", "ok", None), ("companion-deck/moxfield", "fail", "moxfield.changed")}
+    got = scrape_canary.check_moxfield(_Ctx(_Page(resp=_Resp(200, MOX_DECK), reader=None)), MOX)
+    assert ("companion-deck/moxfield", "fail", "moxfield.changed") in {(c.key, c.outcome, c.code) for c in got}
+
+
+def test_browser_pass_continues_past_a_crashing_target(monkeypatch):
+    import sys
+    import types
+    from magic_manager import browser_launch
+
+    class _C:
+        def close(self):
+            pass
+
+    class _B:
+        def new_context(self, **k):
+            return _C()
+
+        def close(self):
+            pass
+
+    class _PW:
+        def stop(self):
+            pass
+
+    pw_mod = types.ModuleType("playwright.sync_api")
+    pw_mod.sync_playwright = lambda: types.SimpleNamespace(start=lambda: _PW())
+    monkeypatch.setitem(sys.modules, "playwright", types.ModuleType("playwright"))
+    monkeypatch.setitem(sys.modules, "playwright.sync_api", pw_mod)
+    monkeypatch.setattr(browser_launch, "launch", lambda pw, headless: _B())
+
+    def boom(ctx):
+        raise RuntimeError("page crashed")
+    targets = [("a", ["k/a"], boom), ("b", ["k/b"], lambda ctx: [scrape_canary.Check("k/b", "ok")])]
+    got = {c.key: (c.outcome, c.code) for c in scrape_canary._browser_pass(targets, headless=True, progress=None)}
+    assert got == {"k/a": ("unverified", "scrape.unreachable"), "k/b": ("ok", None)}
+
+
 @pytest.mark.parametrize("reader,outcome,code", [
     ({"ok": False, "code": "cart.empty"}, "ok", None),
     ({"ok": False, "code": "cart.page_changed"}, "fail", "cart.page_changed"),
@@ -420,3 +502,16 @@ def test_reason_codes_are_plain_and_complete():
     for code, (msg, fix) in sh.REASONS.items():
         assert re.fullmatch(r"[a-z]+\.[a-z_]+", code) and msg.endswith(".") and fix
     assert set(sh.REPORTABLE_CODES) <= set(sh.REASONS)
+
+
+def test_import_deck_script_tells_an_empty_deck_from_a_changed_shape():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("import_deck_script", TESTS.parent / "scripts" / "import_deck.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    with pytest.raises(mod.EmptyDeck, match="deck is empty"):
+        mod._moxfield_cards({"boards": {"mainboard": {"cards": {}}}})
+    assert mod._moxfield_cards({"mainboard": []}) == []      # unrecognised structure → caller says "no cards parsed"
+    # Entries present (whatever their shape) are never reported as an empty deck.
+    assert mod._moxfield_cards({"boards": {"mainboard": {"cards": {"x": {"renamed": {}}}}}}) != []
+    assert mod._moxfield_cards(MOX_DECK)
