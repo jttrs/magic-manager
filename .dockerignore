@@ -11,5 +11,7 @@ checklists
 output
 .env
 .env.*
+config/features.local.toml
+.playwright-mcp
 .deck-sessions
 .impeccable

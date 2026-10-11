@@ -41,6 +41,22 @@ def tmp_db(tmp_path, monkeypatch):
     return db_file
 
 
+@pytest.fixture
+def copy_real_config():
+    """Return ``copy(tmp_path)``: copy the real config/*.toml into a tmp config dir.
+
+    Point-at-tmp tests write their own features.toml; this copies the rest so a route
+    reading another config file works whether or not an earlier test cached it. Skips
+    every ``features*.toml`` so a git-ignored features.local.toml can't leak flags in."""
+    import shutil
+
+    def copy(tmp_path):
+        for f in (ROOT / "config").glob("*.toml"):
+            if not f.name.startswith("features") and not (tmp_path / f.name).exists():
+                shutil.copy(f, tmp_path / f.name)
+    return copy
+
+
 # ---------- card fixtures (raw Scryfall API shape) ----------
 
 def _make_card(**overrides) -> dict:

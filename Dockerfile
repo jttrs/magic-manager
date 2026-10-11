@@ -16,16 +16,18 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
-COPY pyproject.toml uv.lock* ./
-RUN uv sync --no-dev --no-install-project
+COPY pyproject.toml uv.lock ./
+RUN uv sync --locked --no-dev --no-install-project
 COPY src/ src/
 COPY scripts/ scripts/
 COPY config/ config/
 COPY .claude/skills/ .claude/skills/
-RUN uv sync --no-dev
+RUN uv sync --locked --no-dev
 COPY --from=web /app/web/dist web/dist
+RUN useradd --create-home --uid 10001 app && mkdir -p /data && chown -R app:app /app /data
+USER app
 
 ENV MAGIC_MANAGER_DB=/data/magic_manager.db
 VOLUME /data
 EXPOSE 8765
-CMD ["uv", "run", "--no-dev", "mm", "serve", "--host", "0.0.0.0", "--port", "8765"]
+CMD ["uv", "run", "--frozen", "--no-dev", "mm", "serve", "--host", "0.0.0.0", "--port", "8765"]

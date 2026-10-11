@@ -218,7 +218,7 @@ export function MarketView() {
     }
   }
 
-  const sideSummary = search.subject === 'family' ? famName : search.subject === 'sld' ? 'Secret Lair' : deckName;
+  const sideSummary = search.subject === 'family' ? famName : search.subject === 'sld' ? 'Secret Lair' : search.subject === 'deals' ? 'Deals' : deckName;
   return (
     <ViewLayout label="Market controls" summary={sideSummary} sidebar={sidebar} startOpen={!(search.code || search.deck || search.subject === 'deals' || search.subject === 'sld')}>
       <GuideSheet title={title} summary={summary}>

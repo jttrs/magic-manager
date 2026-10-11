@@ -57,6 +57,17 @@ def test_restore_does_not_roll_back_consent(owned):
         assert conn.execute("SELECT value FROM settings WHERE key = 'other'").fetchone()[0] == "old"
 
 
+def test_restore_does_not_resurrect_kept_setting_absent_live(owned):
+    with db.connect() as conn:
+        conn.execute("INSERT INTO settings (key, value) VALUES ('sets.partial', '[\"tst\"]')")
+    undo.take("before sync")
+    with db.connect() as conn:
+        conn.execute("DELETE FROM settings WHERE key = 'sets.partial'")
+    undo.restore()
+    with db.connect() as conn:
+        assert conn.execute("SELECT 1 FROM settings WHERE key = 'sets.partial'").fetchone() is None
+
+
 def test_restore_refuses_without_a_snapshot_or_across_schema_change(owned):
     with pytest.raises(undo.UndoError):
         undo.restore()
