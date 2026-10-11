@@ -128,7 +128,7 @@ test.describe('Add cards → Moxfield collection', () => {
     await expect(read).toBeDisabled();
     await d.getByRole('textbox', { name: /collection or binder link/ }).fill('https://moxfield.com/collection/hgsItGBwRUybHyN0WZR41w');
     await read.click();
-    expect((await page.evaluate(() => (window as unknown as { __companionRequests: { params: unknown }[] }).__companionRequests)).at(-1)).toEqual(
+    await expect.poll(async () => (await page.evaluate(() => (window as unknown as { __companionRequests: { params: unknown }[] }).__companionRequests)).at(-1)).toEqual(
       { kind: 'moxfield_collection', params: { url: 'https://moxfield.com/collection/hgsItGBwRUybHyN0WZR41w' } });
   });
 });
