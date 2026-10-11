@@ -434,6 +434,14 @@ def _store_page(conn, *, page_type: str, slug: str, timeframe: str, page: dict, 
     )
 
 
+def _healthy(key: str, rows: list) -> None:
+    """A real EDHREC read that parsed rows clears a 'temporarily down' flag
+    (docs/scraper-health.md). Empty pages say nothing (a typo, a new card)."""
+    if rows:
+        from . import scraper_health
+        scraper_health.record_use(key, "ok")
+
+
 def sync_commander(commander_name: str) -> SyncResult:
     """Workflow A: fetch a commander page, persist it, and return its card rows.
 
@@ -498,6 +506,7 @@ def sync_commander(commander_name: str) -> SyncResult:
                     inclusion_pct=pct, synergy=cv.get("synergy"),
                     trend_zscore=cv.get("trend_zscore"),
                 ))
+    _healthy("edhrec-commander/edhrec", rows)
     return SyncResult(kind="commander", slug=slug, name=header, rows=rows, raw=page)
 
 
@@ -558,6 +567,7 @@ def sync_card(card_name: str) -> SyncResult:
                     list_tag=tag, num_decks=num, potential_decks=pot,
                     inclusion_pct=pct, lift=cv.get("lift"),
                 ))
+    _healthy("edhrec-card/edhrec", rows)
     return SyncResult(kind="card", slug=slug, name=header, rows=rows, raw=page)
 
 
@@ -848,6 +858,7 @@ def sync_rankings(scope: str = "commanders", timeframe: str = "week", *,
                 list_tag=row_scope, num_decks=cv.get("num_decks"),
                 salt=cv.get("salt"), rank=rank, trend_zscore=cv.get("trend_zscore"),
             ))
+    _healthy("edhrec-rankings/edhrec", rows)
     return SyncResult(kind="rankings", slug=plan.result_slug, name=ranking_title(key),
                       scope=row_scope, timeframe=plan.timeframe, rows=rows,
                       raw=plan.primary_page, fetched_at=at)

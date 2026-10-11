@@ -1,0 +1,74 @@
+# Live canary samples for the scrapers that aren't Deals store recipes
+# (stores use their own `sample_url` in config/vendors.toml — picked up
+# generically, including stores added later). Loaded by
+# magic_manager.scrape_canary; design + coverage: docs/scraper-health.md.
+#
+# Each sample is a PUBLIC page validated by hand when it was added; the canary
+# asserts the same shape/values today. When a sample disappears (404), the
+# canary reports `scrape.sample_gone` (not "down") — pick a new sample here.
+
+# ---- Deck importers (scripts/import_deck.py → decksource.parse_*) ----
+# min_cards = total copies (sum of quantities) the parser must return;
+# card = a card the deck must contain (validated 2026-10-10).
+
+[deck.archidekt]
+url = "https://archidekt.com/decks/13106730"
+min_cards = 100
+card = "Terra, Herald of Hope"
+commander = "Terra, Herald of Hope"
+
+[deck.mtggoldfish]
+url = "https://www.mtggoldfish.com/deck/7967063"
+min_cards = 100
+card = "Giada, Font of Hope"
+
+[deck.manabox]
+url = "https://manabox.app/decks/AZsqTaLVf-Ghvr1Fv8_OSg"
+min_cards = 80
+card = "Lord Windgrace"
+commander = "Lord Windgrace"
+
+[deck.scryfall]
+url = "https://scryfall.com/@fakeality/decks/438f7793-6d9d-49c3-bcfb-92ea42e00141"
+min_cards = 75
+card = "Patron of the Orochi"
+commander = "Patron of the Orochi"
+
+# Moxfield is Cloudflare-gated: read in a real (headed) Chrome, so this one
+# opens a browser window briefly. One visit checks both the server import
+# (the deck API response → decksource.parse_moxfield) and the companion's
+# reader (extension/src/readers/moxfield-deck.js).
+[deck.moxfield]
+url = "https://moxfield.com/decks/ogBtbQTPTU-9Cy9Bqc8Dlw"
+min_cards = 100
+card = "Ms. Bumbleflower"
+commander = "Ms. Bumbleflower"
+
+# ---- Browser companion: Mana Pool cart reader ----
+# A guest browser has an empty cart: the reader must recognise the real cart
+# page as `cart.empty` (as pinned by tests/fixtures/companion/manapool-cart-empty.html).
+# Nothing is ever added to a cart — the canary never writes to a site.
+[cart.manapool]
+url = "https://manapool.com/cart"
+expect_code = "cart.empty"
+
+# ---- EDHREC (unofficial JSON) ----
+[edhrec]
+commander = "Atraxa, Praetors' Voice"
+card = "Sol Ring"
+min_cards = 50          # recommendation rows on the commander page
+min_commanders = 10     # commanders on the card page
+min_ranked = 50         # rows on the weekly commander ranking
+
+# ---- Open-tab stores without a sample_url in vendors.toml ----
+# The canary opens the page in a real Chrome and reads it with the companion's
+# store reader (extension/src/readers/store-page.js) + the store's recipe.
+# eBay has none: listings end, so it relies on real use (a read that finds no
+# price flags it). Walmart/Amazon/GameStop: add a [store.<key>] here once
+# their recipes land, or give them a sample_url in vendors.toml.
+
+[store.bestbuy]
+url = "https://www.bestbuy.com/product/wizards-of-the-coast-magic-the-gathering-foundations-play-booster-box-36-packs/JJ8VP7QW4V/sku/6593867"
+
+[store.target]
+url = "https://www.target.com/p/wizards-of-the-coast-magic-the-gathering-foundations-play-booster-box/-/A-1001200700"

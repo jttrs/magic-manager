@@ -135,23 +135,12 @@ class MoxfieldSession:
     # -- internals --------------------------------------------------------
 
     def _launch(self):
-        """Launch Chromium, preferring the real installed Chrome channel — the
-        bundled headless Chromium trips Cloudflare's bot interstitial ("Attention
-        Required!"), whereas real Chrome (esp. headed) clears the managed
-        challenge automatically. Falls back to bundled Chromium if Chrome is
-        absent. ``--disable-blink-features=AutomationControlled`` drops the most
-        obvious automation tell."""
-        args = ["--disable-blink-features=AutomationControlled"]
-        for channel in ("chrome", None):
-            try:
-                kw = {"headless": self.headless, "args": args}
-                if channel:
-                    kw["channel"] = channel
-                return self._pw.chromium.launch(**kw)
-            except Exception:
-                continue
-        # last resort: default bundled chromium, no channel
-        return self._pw.chromium.launch(headless=self.headless)
+        """Real Chrome when installed (clears Cloudflare's managed challenge),
+        else bundled Chromium — the shared rule in ``magic_manager.browser_launch``."""
+        if str(ROOT / "src") not in sys.path:
+            sys.path.insert(0, str(ROOT / "src"))
+        from magic_manager import browser_launch
+        return browser_launch.launch(self._pw, headless=self.headless)
 
     def _new_context(self, *, with_state: bool):
         kwargs = {

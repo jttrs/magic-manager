@@ -413,6 +413,28 @@ def add_precon(file_name: str, *, copies: int = 1, state: str = "auto") -> dict:
 # ---------- 6. fetch a deck URL ----------
 
 def fetch_deck_lines(url: str, *, progress: Callable[[str], None] | None = None) -> dict:
+    from . import decksource, scraper_health
+    try:
+        key = scraper_health.deck_key(decksource.source_of(url))
+    except ValueError:
+        key = None
+    try:
+        payload = fetch_deck_payload(url, progress=progress)
+    except RuntimeError as e:
+        if key:
+            outcome, code = scraper_health.classify_error(str(e))
+            scraper_health.record_use(key, outcome, code, str(e))
+        raise
+    if key:
+        scraper_health.record_use(key, "ok")
+    return deck_lines_from_payload(payload)
+
+
+def fetch_deck_payload(url: str, *, progress: Callable[[str], None] | None = None) -> dict:
+    """Run the sanctioned deck fetcher (``scripts/import_deck.py``) for one deck
+    URL → its normalized payload (``source``/``id``/``name``/``author``/
+    ``cards``). Raises ``RuntimeError`` with the fetcher's last message. Shared
+    by Add cards and the scrape canary (``scrape_canary``)."""
     proc = subprocess.Popen(
         [sys.executable, str(_IMPORT_DECK), url],
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
@@ -434,7 +456,7 @@ def fetch_deck_lines(url: str, *, progress: Callable[[str], None] | None = None)
     t.join()
     if proc.returncode != 0:
         raise RuntimeError(err_lines[-1] if err_lines else f"import_deck exited {proc.returncode}")
-    return deck_lines_from_payload(json.loads(out))
+    return json.loads(out)
 
 
 def deck_lines_from_payload(payload: dict) -> dict:
