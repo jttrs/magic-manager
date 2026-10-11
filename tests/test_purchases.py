@@ -188,3 +188,20 @@ def test_held_after_a_reattribution_from_a_raw_balance(cards):
         held = provenance._held(conn, [A])
     assert (held[(other, A, "nonfoil")], held[(src, A, "nonfoil")], held[(to, A, "nonfoil")]) == (1, 0, 2)
     assert _reconciled()
+
+
+def test_purchase_after_a_reattribution_from_a_raw_balance(cards):
+    """The shortfall of a raw-balance re-attribution stays on its target, so a later
+    purchase add holds its own copy and the apply guard doesn't roll it back."""
+    src = _event("unattributed-backfill", "backfill:unattributed", status="backfill")
+    inventory.inventory_add(A, "nonfoil", 3, ingest_id=src)
+    inventory.inventory_remove(A, "nonfoil", 1)
+    with db.connect() as conn:
+        to = ingest.create_event(conn, "precon", label="trueup:X")
+        ingest.reattribute(conn, to_ingest_id=to, needs={(A, "nonfoil"): 3}, sources=[(src, {(A, "nonfoil"): 3})])
+    pid = purchases.save([_order("9", lines=[OrderLine(name="Alpha", quantity=1, unit_price=1.0, scryfall_id=A)])]).saved[0]
+    res = purchases.apply(pid, [Decision(1, add=1)])
+    with db.connect() as conn:
+        held = provenance._held(conn, [A])
+    assert (held[(to, A, "nonfoil")], held[(res.ingest_id, A, "nonfoil")]) == (2, 1)
+    assert _qty(A, "nonfoil") == 3 and _reconciled()
