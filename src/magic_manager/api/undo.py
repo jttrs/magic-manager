@@ -15,6 +15,11 @@ class UndoSummary(BaseModel):
     earmarks: int
 
 
+class UndoDetail(BaseModel):
+    label: str = Field(description="Plain-words group of your data, e.g. 'deck lists'.")
+    rows: int = Field(description="Rows added, removed or edited since the restore point.")
+
+
 class UndoOut(BaseModel):
     taken_at: str = Field(description="UTC ISO time the restore point was taken.")
     reason: str
@@ -22,6 +27,7 @@ class UndoOut(BaseModel):
     current: UndoSummary
     snapshot: UndoSummary
     changes: UndoSummary = Field(description="Snapshot minus current: what restoring would change.")
+    details: list[UndoDetail] = Field(default_factory=list, description="Every group of your data a restore would roll back, with how many rows differ.")
 
 
 def info() -> UndoOut | None:

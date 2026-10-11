@@ -28,7 +28,7 @@ from .. import api, companion as companion_engine, sets as sets_mod, tabs as tab
 from .. import collection_sync, purchases as purchases_engine
 from ..api import purchases as purchases_api
 from ..api import collection_import as collection_import_api, companion as companion_api, deals as deals_api, undo as undo_api, cart as cart_api, cards as cards_api, collection as collection_api, explore as explore_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api, market as market_api, trueup as trueup_api, history as history_api, combos as combos_api, art as art_api, jumpstart as jumpstart_api, surf as surf_api
-from .runtime import TERMINAL, JobManager
+from .runtime import TERMINAL, JobManager, JobsBusy
 from . import analytics_routes, scraper_routes, telemetry
 from ..analytics import store as analytics_store
 
@@ -76,7 +76,10 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     guard = undo_engine.SessionGuard()
 
     def write(label: str):
-        return Depends(lambda: guard.before_write(label))
+        def begin(request: Request) -> None:
+            if guard.begin(label):
+                request.state.undo_session = True
+        return Depends(begin)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
@@ -107,6 +110,23 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         return await call_next(request)
 
     telemetry.install(app)
+
+    # Settle the session restore point by the request's outcome: a refused
+    # request (4xx) wrote nothing, so it must not rotate the one slot.
+    @app.middleware("http")
+    async def undo_session(request: Request, call_next):
+        try:
+            response = await call_next(request)
+        except BaseException:
+            await _settle(request, wrote=True)
+            raise
+        await _settle(request, wrote=not 400 <= response.status_code < 500)
+        return response
+
+    async def _settle(request: Request, *, wrote: bool) -> None:
+        if getattr(request.state, "undo_session", False):
+            request.state.undo_session = False
+            await asyncio.to_thread(guard.end, wrote)
     app.include_router(analytics_routes.router)
     app.include_router(scraper_routes.router)
 
@@ -124,9 +144,14 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     async def submit_job(name: str, body: dict):
         try:
             spec = jobs_api.get(name)
-            if spec.mutates:
-                guard.before_write(f"before {spec.title.lower()}")
-            rec = await manager.submit(name, body)
+            spec.input_model.model_validate(body)  # refuse bad input before touching the restore point
+            begun = spec.mutates and await asyncio.to_thread(guard.begin, f"before {spec.title.lower()}")
+            rec = None
+            try:
+                rec = await manager.submit(name, body)
+            finally:
+                if begun:
+                    await asyncio.to_thread(guard.end, rec is not None)
         except KeyError as e:
             raise HTTPException(404, str(e)) from e
         except ValidationError as e:
@@ -279,7 +304,10 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     @app.post("/api/undo/restore", response_model=undo_api.UndoOut, tags=["undo"])
     def undo_restore():
         try:
-            return undo_api.restore()
+            with manager.no_mutating_jobs():
+                return undo_api.restore()
+        except JobsBusy as e:
+            raise HTTPException(409, f"Wait for “{e.title}” to finish, then restore.") from e
         except undo_engine.UndoError as e:
             raise HTTPException(409, str(e)) from e
 

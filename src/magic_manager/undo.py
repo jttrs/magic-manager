@@ -82,39 +82,100 @@ def _summary(conn: sqlite3.Connection, schema: str = "main") -> dict[str, int]:
     }
 
 
+# Every user table, grouped in plain words, so a restore never rolls back
+# something the confirm dialog didn't mention. Each group counts the rows that
+# differ (added, removed or edited) between now and the snapshot.
+DETAIL_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("cards in your collection", ("inventory",)),
+    ("acquisition history", ("ingest_events", "inventory_events", "imports")),
+    ("decks", ("decks",)),
+    ("deck lists", ("deck_cards", "deck_versions")),
+    ("cards sleeved in decks", ("deck_assignments",)),
+    ("wishlist", ("wishlist_entries",)),
+    ("watched products", ("earmarked_products", "earmark_links", "earmark_targets")),
+    ("price history", ("earmark_prices",)),
+    ("store orders", ("purchases", "purchase_lines")),
+    ("set targets", ("set_targets",)),
+    ("settings", ("settings",)),
+)
+assert sorted(t for _, ts in DETAIL_GROUPS for t in ts) == sorted(USER_TABLES)
+
+
+def _details(conn: sqlite3.Connection) -> list[dict]:
+    """Rows that differ per :data:`DETAIL_GROUPS` group (nonzero groups only).
+    Assumes ``snap`` is attached with the same schema."""
+    live, saved = _tables(conn), _tables(conn, "snap")
+    out = []
+    for label, tables in DETAIL_GROUPS:
+        rows = 0
+        for t in tables:
+            if t not in live or t not in saved:
+                continue
+            cl = ", ".join(f'"{c}"' for c in _columns(conn, "main", t))
+            where, args = "", ()
+            if t == "settings":
+                where = f" WHERE key NOT IN ({', '.join('?' for _ in KEEP_SETTINGS)})"
+                args = KEEP_SETTINGS
+            for a, b in (("main", "snap"), ("snap", "main")):
+                rows += conn.execute(
+                    f"SELECT COUNT(*) FROM (SELECT {cl} FROM {a}.{t}{where} EXCEPT SELECT {cl} FROM {b}.{t}{where})",
+                    args * 2).fetchone()[0]
+        if rows:
+            out.append({"label": label, "rows": rows})
+    return out
+
+
 def _schema_version(conn: sqlite3.Connection, schema: str = "main") -> int:
     return int(conn.execute(f"SELECT MAX(version) FROM {schema}.schema_version").fetchone()[0] or 0)
 
 
-def _write(conn: sqlite3.Connection, dest: Path, reason: str) -> None:
-    """Copy the user tables into a fresh file, then atomically move it to ``dest``."""
+def _copy_into(conn: sqlite3.Connection, schema: str, reason: str) -> None:
+    """Copy the user tables into the attached, empty ``schema``. Runs inside the
+    caller's transaction, so every table comes from the same point in time."""
+    present = _tables(conn)
+    for t in USER_TABLES:
+        if t in present:
+            conn.execute(f"CREATE TABLE {schema}.{t} AS SELECT * FROM main.{t}")
+    conn.execute(f"CREATE TABLE {schema}._meta (key TEXT PRIMARY KEY, value TEXT)")
+    conn.execute(f"CREATE TABLE {schema}.schema_version (version INTEGER)")
+    conn.execute(f"INSERT INTO {schema}.schema_version VALUES (?)", (_schema_version(conn),))
+    conn.executemany(f"INSERT INTO {schema}._meta VALUES (?, ?)", [
+        ("taken_at", datetime.now(timezone.utc).isoformat(timespec="seconds")),
+        ("reason", reason),
+    ])
+
+
+def _fresh_tmp(dest: Path) -> Path:
     tmp = dest.with_name(dest.name + ".tmp")
     tmp.unlink(missing_ok=True)
+    return tmp
+
+
+def _write(conn: sqlite3.Connection, dest: Path, reason: str) -> None:
+    """Copy the user tables into a fresh file, then atomically move it to ``dest``."""
+    tmp = _fresh_tmp(dest)
     conn.commit()
     conn.execute("ATTACH DATABASE ? AS snap", (str(tmp),))
     try:
-        present = _tables(conn)
-        for t in USER_TABLES:
-            if t in present:
-                conn.execute(f"CREATE TABLE snap.{t} AS SELECT * FROM main.{t}")
-        conn.execute("CREATE TABLE snap._meta (key TEXT PRIMARY KEY, value TEXT)")
-        conn.execute("CREATE TABLE snap.schema_version (version INTEGER)")
-        conn.execute("INSERT INTO snap.schema_version VALUES (?)", (_schema_version(conn),))
-        conn.executemany("INSERT INTO snap._meta VALUES (?, ?)", [
-            ("taken_at", datetime.now(timezone.utc).isoformat(timespec="seconds")),
-            ("reason", reason),
-        ])
-        conn.commit()
+        # One read transaction: a concurrent writer can't commit between the
+        # inventory and inventory_events copies (inventory == SUM(delta) holds).
+        conn.execute("BEGIN")
+        try:
+            _copy_into(conn, "snap", reason)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
     finally:
         conn.execute("DETACH DATABASE snap")
     os.replace(tmp, dest)
 
 
-def take(reason: str = "manual") -> dict:
-    """Overwrite the one snapshot slot with your current data."""
+def take(reason: str = "manual", dest: Path | None = None) -> dict | None:
+    """Overwrite the one snapshot slot (or ``dest``) with your current data."""
     with db.connect() as conn:
-        _write(conn, snapshot_path(), reason)
-    return info()
+        _write(conn, dest or snapshot_path(), reason)
+    return info() if dest is None else None
 
 
 @dataclass
@@ -141,84 +202,140 @@ def info() -> dict | None:
             meta = _read_meta(conn)
             now, then = _summary(conn, "main"), _summary(conn, "snap")
             restorable = meta.schema_version == _schema_version(conn)
+            details = _details(conn) if restorable else []
         finally:
             conn.execute("DETACH DATABASE snap")
     return {
         "taken_at": meta.taken_at, "reason": meta.reason, "restorable": restorable,
         "current": now, "snapshot": then,
         "changes": {k: then[k] - now[k] for k in now},
+        "details": details,
     }
 
 
 def restore() -> dict:
-    """Swap: your current data becomes the snapshot, the snapshot becomes live."""
+    """Swap: your current data becomes the snapshot, the snapshot becomes live.
+
+    The swap copy and the replacement happen in ONE write transaction, so no
+    write can land between them (it would be overwritten and missing from the
+    swap file). The web app also holds the job runner's user-data lock."""
     path = snapshot_path()
     if not path.exists():
         raise UndoError("There’s no restore point yet.")
-    swap = path.with_name(path.name + ".next")
-    with db.connect() as conn:
-        conn.execute("ATTACH DATABASE ? AS snap", (str(path),))
-        try:
-            meta = _read_meta(conn)
-            if meta.schema_version != _schema_version(conn):
-                raise UndoError("The app’s database changed shape since this restore point was taken, so it can’t be restored.")
-        finally:
-            conn.execute("DETACH DATABASE snap")
-        _write(conn, swap, "before your last restore")
-        conn.execute("ATTACH DATABASE ? AS snap", (str(path),))
-        try:
-            conn.execute("BEGIN IMMEDIATE")
-            conn.execute("PRAGMA defer_foreign_keys = ON")
-            live, saved = _tables(conn), _tables(conn, "snap")
-            kept = []
-            if "settings" in live:
-                marks = ", ".join("?" for _ in KEEP_SETTINGS)
-                kept = conn.execute(f"SELECT key, value FROM main.settings WHERE key IN ({marks})",
-                                    KEEP_SETTINGS).fetchall()
-            tables = [t for t in USER_TABLES if t in live]
-            for t in reversed(tables):
-                conn.execute(f"DELETE FROM main.{t}")
-            for t in tables:
-                if t not in saved:
-                    continue
-                cols = [c for c in _columns(conn, "main", t) if c in set(_columns(conn, "snap", t))]
-                cl = ", ".join(f'"{c}"' for c in cols)
-                conn.execute(f"INSERT INTO main.{t} ({cl}) SELECT {cl} FROM snap.{t}")
-            for k, v in kept:
-                conn.execute("INSERT INTO main.settings (key, value) VALUES (?, ?) "
-                             "ON CONFLICT (key) DO UPDATE SET value = excluded.value", (k, v))
-            if "settings" in live:  # a kept key absent live stays absent (not resurrected from the snapshot)
-                gone = [k for k in KEEP_SETTINGS if k not in {k for k, _ in kept}]
-                if gone:
-                    conn.execute(f"DELETE FROM main.settings WHERE key IN ({', '.join('?' for _ in gone)})", gone)
+    tmp = _fresh_tmp(path.with_name(path.name + ".next"))
+    try:
+        with db.connect() as conn:
             conn.commit()
-        except Exception:
-            conn.rollback()
-            swap.unlink(missing_ok=True)
-            raise
-        finally:
-            conn.execute("DETACH DATABASE snap")
-    os.replace(swap, path)
+            conn.execute("ATTACH DATABASE ? AS snap", (str(path),))
+            try:
+                conn.execute("ATTACH DATABASE ? AS swap", (str(tmp),))
+                try:
+                    meta = _read_meta(conn)
+                    if meta.schema_version != _schema_version(conn):
+                        raise UndoError("The app’s database changed shape since this restore point was taken, so it can’t be restored.")
+                    conn.execute("BEGIN IMMEDIATE")
+                    try:
+                        _copy_into(conn, "swap", "before your last restore")
+                        _replace_from_snap(conn)
+                        conn.commit()
+                    except Exception:
+                        conn.rollback()
+                        raise
+                finally:
+                    conn.execute("DETACH DATABASE swap")
+            finally:
+                conn.execute("DETACH DATABASE snap")
+        os.replace(tmp, path)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
     consent.clear_cache()
     return info() or {}
 
 
+def _replace_from_snap(conn: sqlite3.Connection) -> None:
+    conn.execute("PRAGMA defer_foreign_keys = ON")
+    live, saved = _tables(conn), _tables(conn, "snap")
+    kept = []
+    if "settings" in live:
+        marks = ", ".join("?" for _ in KEEP_SETTINGS)
+        kept = conn.execute(f"SELECT key, value FROM main.settings WHERE key IN ({marks})",
+                            KEEP_SETTINGS).fetchall()
+    tables = [t for t in USER_TABLES if t in live]
+    for t in reversed(tables):
+        conn.execute(f"DELETE FROM main.{t}")
+    for t in tables:
+        if t not in saved:
+            continue
+        cols = [c for c in _columns(conn, "main", t) if c in set(_columns(conn, "snap", t))]
+        cl = ", ".join(f'"{c}"' for c in cols)
+        conn.execute(f"INSERT INTO main.{t} ({cl}) SELECT {cl} FROM snap.{t}")
+    for k, v in kept:
+        conn.execute("INSERT INTO main.settings (key, value) VALUES (?, ?) "
+                     "ON CONFLICT (key) DO UPDATE SET value = excluded.value", (k, v))
+    if "settings" in live:  # a kept key absent live stays absent (not resurrected from the snapshot)
+        gone = [k for k in KEEP_SETTINGS if k not in {k for k, _ in kept}]
+        if gone:
+            conn.execute(f"DELETE FROM main.settings WHERE key IN ({', '.join('?' for _ in gone)})", gone)
+
+
 class SessionGuard:
     """Takes the snapshot before the first write of each app session: the first
-    write after the server starts, or after ``gap`` seconds without a write."""
+    write after the server starts, or after ``gap`` seconds without a write.
+
+    The snapshot is taken into a pending file and only becomes THE restore
+    point once a request that may have written finishes (:meth:`end` with
+    ``wrote=True``). A request refused before writing (a 4xx) must not rotate
+    the one slot — it would destroy the previous session's restore point while
+    nothing changed. Requests overlapping an in-flight pending snapshot join it.
+    """
 
     def __init__(self, gap: float = SESSION_GAP_SECONDS, clock=time.monotonic):
         self._gap = gap
         self._clock = clock
         self._last: float | None = None
         self._lock = threading.Lock()
+        self._inflight = 0       # requests sharing the pending snapshot
+        self._wrote = False      # any of them may have written
+
+    @staticmethod
+    def pending_path() -> Path:
+        return snapshot_path().with_name(SNAPSHOT_FILE + ".pending")
+
+    def begin(self, reason: str) -> bool:
+        """Call before a write. Returns True when the caller must call
+        :meth:`end` (this request takes part in a new session's snapshot).
+        If the snapshot fails, the session is NOT marked started."""
+        with self._lock:
+            if self._inflight:
+                self._inflight += 1
+                return True
+            now = self._clock()
+            if self._last is not None and now - self._last <= self._gap:
+                self._last = now
+                return False
+            take(reason, dest=self.pending_path())
+            self._inflight, self._wrote = 1, False
+            return True
+
+    def end(self, wrote: bool) -> None:
+        """Settle a :meth:`begin` that returned True. ``wrote`` = the request
+        succeeded or failed unexpectedly (it may have written)."""
+        with self._lock:
+            self._wrote = self._wrote or wrote
+            self._inflight -= 1
+            if self._inflight:
+                return
+            pending = self.pending_path()
+            if self._wrote:
+                os.replace(pending, snapshot_path())
+                self._last = self._clock()
+            else:
+                pending.unlink(missing_ok=True)
 
     def before_write(self, reason: str) -> bool:
-        """Snapshot if this write starts a new session. Returns True when it did."""
-        with self._lock:
-            now = self._clock()
-            fresh = self._last is None or now - self._last > self._gap
-            self._last = now
-            if fresh:
-                take(reason)
-            return fresh
+        """Snapshot now and keep it (a write follows for sure). True when it did."""
+        joined = self.begin(reason)
+        if joined:
+            self.end(wrote=True)
+        return joined
