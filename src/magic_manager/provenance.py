@@ -349,9 +349,11 @@ def _held(conn, sids=None) -> dict[tuple[int, str, str], int]:
     """``(ingest_id, sid, finish) -> held``: the copies each event still accounts for,
     from a walk of the ledger rows in the order they were written. A negative row
     first takes the event's OWN held copies (a re-attribution moving them, or an
-    event undoing itself); the rest is a removal drawn from the copies held at that
-    moment, most recently acquired first. Per printing-finish the held copies sum
-    to the owned quantity. Walking rows (not per-event sums ordered by id) keeps a
+    event undoing itself); only the part that takes the event's own balance below
+    zero is a removal, drawn from the copies held at that moment, most recently
+    acquired first. Any surplus left (a re-attribution from a raw balance that
+    exceeded what the event still held) is netted newest-first at the end, so per
+    printing-finish the held copies sum to the owned quantity. Walking rows (not per-event sums ordered by id) keeps a
     removal from landing on copies re-attributed after it (a purchase match or a
     trueup), which would make the source look as if it still held them."""
     rows: list = []
@@ -365,9 +367,13 @@ def _held(conn, sids=None) -> dict[tuple[int, str, str], int]:
             rows += conn.execute(q.format(f"WHERE scryfall_id IN ({','.join('?' * len(part))})"), part).fetchall()
     rows.sort(key=lambda r: r[0])
     by_key: dict[tuple[str, str], dict[int, int]] = {}
-    out: dict[tuple[int, str, str], int] = {}
+    raw: dict[tuple[int, str, str], int] = {}
+    total: dict[tuple[str, str], int] = {}
     for _eid, iid, sid, fin, delta in rows:
         held = by_key.setdefault((sid, fin), {})
+        before = raw.get((iid, sid, fin), 0)
+        raw[(iid, sid, fin)] = before + delta
+        total[(sid, fin)] = total.get((sid, fin), 0) + delta
         if delta > 0:
             held[iid] = held.pop(iid, 0) + delta   # re-insert: now the most recent acquisition
             continue
@@ -376,6 +382,9 @@ def _held(conn, sids=None) -> dict[tuple[int, str, str], int]:
         if own:
             held[iid] -= own
             need -= own
+        # Only the part that takes the event below zero is a removal of someone else's copies;
+        # a transfer out of copies already removed elsewhere is settled by the final netting.
+        need = min(need, max(0, -(before + delta)) - max(0, -before))
         for other in reversed(list(held)):
             if need <= 0:
                 break
@@ -383,7 +392,15 @@ def _held(conn, sids=None) -> dict[tuple[int, str, str], int]:
             held[other] -= take
             need -= take
         held.setdefault(iid, 0)
+    out: dict[tuple[int, str, str], int] = {}
     for (sid, fin), held in by_key.items():
+        excess = sum(held.values()) - max(total[(sid, fin)], 0)
+        for iid in reversed(list(held)):
+            if excess <= 0:
+                break
+            take = min(excess, held[iid])
+            held[iid] -= take
+            excess -= take
         for iid, n in held.items():
             out[(iid, sid, fin)] = n
     return out

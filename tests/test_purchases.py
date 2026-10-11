@@ -172,3 +172,19 @@ def test_held_draws_a_removal_from_copies_held_at_that_time(cards):
         held = provenance._held(conn, [A])
     # The removed copy came from the first batch, not one acquired after it.
     assert (held[(first, A, "nonfoil")], held[(later, A, "nonfoil")]) == (2, 2)
+
+
+def test_held_after_a_reattribution_from_a_raw_balance(cards):
+    """Trueup draws raw per-event balances: moving 3 out of a source that holds 2
+    (one was removed) leaves the target holding 2 and never touches another event."""
+    other = _event("checklist", "set:tla")
+    inventory.inventory_add(A, "nonfoil", 1, ingest_id=other)
+    src = _event("unattributed-backfill", "backfill:unattributed", status="backfill")
+    inventory.inventory_add(A, "nonfoil", 3, ingest_id=src)
+    inventory.inventory_remove(A, "nonfoil", 1)
+    with db.connect() as conn:
+        to = ingest.create_event(conn, "precon", label="trueup:X")
+        ingest.reattribute(conn, to_ingest_id=to, needs={(A, "nonfoil"): 3}, sources=[(src, {(A, "nonfoil"): 3})])
+        held = provenance._held(conn, [A])
+    assert (held[(other, A, "nonfoil")], held[(src, A, "nonfoil")], held[(to, A, "nonfoil")]) == (1, 0, 2)
+    assert _reconciled()
