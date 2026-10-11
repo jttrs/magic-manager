@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CardPriceOut, DeckCostOut, DeckLineOut, ProductValueOut } from './api';
-import { categoryLabel, contentsGap, partialNote, deckBuyItems, deckLedger, filterCardPrices, fmtFoilGap, premium, productGroups, withinFoilMax } from './market';
+import { categoryLabel, contentsGap, partialNote, deckBuyItems, deckLedger, filterCardPrices, fmtFoilGap, hasPricingErrors, premium, productGroups, withinFoilMax } from './market';
 
 const card = (p: Partial<CardPriceOut>): CardPriceOut => ({
   scryfall_id: 'x', oracle_id: 'o', name: 'Card', set_code: 'fin', collector_number: '1', rarity: 'rare', type_line: null,
@@ -58,7 +58,7 @@ describe('market view-model', () => {
   it('builds the three-way ledger and marks the lowest cell', () => {
     const rows = deckLedger(deck({ sealed: 20, sealed_product: 'Box' }));
     expect(rows.map((r) => r.key)).toEqual(['sealed', 'new', 'free']);
-    expect(rows[0].exact).toEqual({ value: 20, best: true });
+    expect(rows[0].exact).toEqual({ value: 20, best: true, partial: false });
     expect(rows.flatMap((r) => [r.exact.best, r.floor.best]).filter(Boolean)).toHaveLength(1);
     const noSealed = deckLedger(deck({}));
     expect(noSealed.map((r) => r.key)).toEqual(['new', 'free']);
@@ -69,5 +69,39 @@ describe('market view-model', () => {
     const lines = [line({ buy: 2, finish: 'foil' }), line({ scryfall_id: 'covered', buy: 0 })];
     expect(deckBuyItems(lines, 'floor')).toEqual([{ scryfall_id: 'cheap', finish: 'nonfoil', qty: 2 }]);
     expect(deckBuyItems(lines, 'exact')).toEqual([{ scryfall_id: 's', finish: 'foil', qty: 2 }]);
+  });
+
+  it('keeps a foil-only card foil in the cheapest-printing buy list', () => {
+    const lines = [line({ scryfall_id: 'sld-foil', finish: 'foil', floor_scryfall_id: 'sld-foil', floor_finish: 'foil' })];
+    expect(deckBuyItems(lines, 'floor')).toEqual([{ scryfall_id: 'sld-foil', finish: 'foil', qty: 1 }]);
+  });
+
+  it('never marks a total with unpriced cards as the lowest', () => {
+    // Exact printings partly unpriced: $5 undercounts, so the complete $8 floor wins.
+    const partial = deckLedger(deck({ scratch: 5, with_collection: 5, scratch_floor: 8, with_collection_floor: 8, unpriced: 3, floor_unpriced: 0, lines: [line({ unit_usd: null, floor_usd: 3, need: 3, buy: 3 })] }));
+    expect(partial[0].exact).toEqual({ value: 5, best: false, partial: true });
+    expect(partial[0].floor).toEqual({ value: 8, best: true, partial: false });
+    // Nothing priced at all: no card total, the sealed price is the only complete figure.
+    const none = deckLedger(deck({ sealed: 30, scratch: null, with_collection: null, scratch_floor: null, with_collection_floor: null, unpriced: 3, floor_unpriced: 3 }));
+    expect(none[0].exact).toEqual({ value: 30, best: true, partial: false });
+    expect(none.slice(1).flatMap((r) => [r.exact.value, r.floor.value])).toEqual([null, null, null, null]);
+    // Partial everywhere and no sealed price: nothing is "lowest".
+    const unknown = deckLedger(deck({ unpriced: 1, floor_unpriced: 1, lines: [line({ unit_usd: null, floor_usd: null })] }));
+    expect(unknown.flatMap((r) => [r.exact.best, r.floor.best]).some(Boolean)).toBe(false);
+  });
+
+  it('keeps "free cards first" complete when the unpriced cards are all covered by free copies', () => {
+    const d = deck({ scratch: 5, with_collection: 3, scratch_floor: 4, with_collection_floor: 2, unpriced: 1, floor_unpriced: 1,
+      lines: [line({ buy: 1, unit_usd: 3, floor_usd: 2 }), line({ scryfall_id: 'mine', buy: 0, free: 1, unit_usd: null, floor_usd: null })] });
+    const [neu, free] = deckLedger(d);
+    expect([neu.exact.partial, neu.floor.partial]).toEqual([true, true]);
+    expect(free.exact).toEqual({ value: 3, best: false, partial: false });
+    expect(free.floor).toEqual({ value: 2, best: true, partial: false });
+  });
+
+  it('flags a valuation with products that failed to price', () => {
+    expect(hasPricingErrors(null)).toBe(false);
+    expect(hasPricingErrors([{ set_code: 'fin', name: 'A', error: null } as ProductValueOut])).toBe(false);
+    expect(hasPricingErrors([{ set_code: 'fin', name: 'A', error: null }, { set_code: 'fin', name: 'B', error: 'timeout' }] as ProductValueOut[])).toBe(true);
   });
 });

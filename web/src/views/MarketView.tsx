@@ -1,8 +1,7 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { getRouteApi, useNavigate } from '@tanstack/react-router';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { decksQuery, deckCostQuery, familiesQuery, marketCardsQuery, marketProductsQuery } from '../app/queries';
-import { useJob } from '../app/useJob';
 import { ViewLayout } from '../components/AppShell';
 import { useFeature } from '../app/features';
 import { DealsPanel } from './market/DealsPanel';
@@ -13,6 +12,7 @@ import { CardLines } from './market/CardLines';
 import { ProductContents } from './market/ProductContents';
 import { FoilGapCell, FoilPremiumFilter } from './market/FoilGap';
 import { FloorBasis } from './market/FloorBasis';
+import { useFamilyValues } from './market/useFamilyValues';
 import { Chevron } from '../components/Chevron';
 import { CopyTargets } from '../components/CopyButton';
 import { InfoTip } from '../components/InfoTip';
@@ -23,7 +23,7 @@ import { MultiSelect } from '../components/MultiSelect';
 import { EmptyNote, ErrorNote, GuideSheet } from '../components/States';
 import { buyListTargets } from '../components/buyTargets';
 import { TcgplayerMark } from '../components/StoreMarks';
-import { collectionBuyList, type CardPriceOut, type DeckCostOut, type ProductValueOut } from '../core/api';
+import { collectionBuyList, type CardPriceOut, type DeckCostOut } from '../core/api';
 import { fmtCount, fmtInt, fmtUsd } from '../core/format';
 import { filterSortProducts, PRODUCT_TYPE_LABEL, PRODUCT_TYPES, typeCounts, type Basis, type DealSort } from '../core/deals';
 import { contentsGap, deckBuyItems, deckLedger, filterCardPrices, partialNote, premium, productGroups, type ProductRow } from '../core/market';
@@ -234,74 +234,31 @@ function Loading({ label }: { label: string }) {
 
 // ---------- sealed products ----------
 
-type Artifact = { label: string; data: unknown };
-
-// Product valuations are slow to compute and prices move about daily: keep each
-// family's for 12 hours across reloads.
-const VALUES_TTL = 12 * 3600_000;
-const valuesStorageKey = (code: string) => `mm.market.values.v2.${code}`;
-function readValues(code: string): ProductValueOut[] | null {
-  try {
-    const hit = JSON.parse(localStorage.getItem(valuesStorageKey(code)) ?? 'null') as { at: number; rows: ProductValueOut[] } | null;
-    return hit && Date.now() - hit.at < VALUES_TTL ? hit.rows : null;
-  } catch {
-    return null;
-  }
-}
-function saveValues(code: string, rows: ProductValueOut[]) {
-  try {
-    localStorage.setItem(valuesStorageKey(code), JSON.stringify({ at: Date.now(), rows }));
-  } catch {
-    // Storage full or blocked: the values still show for this visit.
-  }
-}
-
 function ProductsPanel({ code, q }: { code: string; q: string }) {
-  const qc = useQueryClient();
   const products = useQuery(marketProductsQuery(code));
-  const valuesKey = useMemo(() => ['market', 'values', code], [code]);
-  const values = useQuery({ queryKey: valuesKey, queryFn: () => qc.getQueryData<ProductValueOut[]>(valuesKey) ?? readValues(code), staleTime: Infinity, gcTime: 30 * 60_000 });
-  const { live, start, reset } = useJob();
-  const started = useRef<string | null>(null);
+  const { values, live, running, failure, reprice } = useFamilyValues(code, Boolean(products.data?.products.length));
   const [open, setOpen] = useState<string | null>(null);
 
-  // Price the family's products once per visit (cached for the session).
-  useEffect(() => {
-    if (!products.data?.products.length || values.data || started.current === code) return;
-    started.current = code;
-    reset();
-    void start('market.value_family', { code });
-  }, [code, products.data, values.data, start, reset]);
-
-  useEffect(() => {
-    const art = (live?.artifacts as Artifact[] | undefined)?.find((a) => a.label === 'values');
-    if (live?.status === 'succeeded' && art && started.current === code) {
-      qc.setQueryData(valuesKey, art.data as ProductValueOut[]);
-      saveValues(code, art.data as ProductValueOut[]);
-    }
-  }, [live?.status, live?.artifacts, code, qc, valuesKey]);
-
-  const retry = () => {
-    started.current = code;
-    reset();
-    void start('market.value_family', { code });
-  };
-
-  const groups = useMemo(() => (products.data ? productGroups(products.data.products, values.data ?? undefined, q) : []), [products.data, values.data, q]);
+  const groups = useMemo(() => (products.data ? productGroups(products.data.products, values ?? undefined, q) : []), [products.data, values, q]);
 
   if (products.isPending) return <Loading label="Reading the family’s sealed products…" />;
   if (products.isError) return <ErrorNote error={products.error} onRetry={() => products.refetch()} />;
   if (!products.data.products.length) return <EmptyNote title="No sealed products">MTGJSON lists no sealed products for this family.</EmptyNote>;
 
-  const running = !values.data && live && live.status !== 'succeeded' && live.status !== 'failed';
-  const failed = !values.data && live?.status === 'failed';
+  const unpriced = values?.filter((v) => v.error).length ?? 0;
   return (
     <div className="flex flex-col gap-2">
-      {running && <div className="mx-5"><ProgressRule label="Pricing products" verb="Pricing" done={live.done} total={live.total} message={live.log.at(-1)?.msg} /></div>}
-      {failed && (
+      {running && live && <div className="mx-5"><ProgressRule label="Pricing products" verb="Pricing" done={live.done} total={live.total} message={live.log.at(-1)?.msg} /></div>}
+      {failure && (
         <p role="alert" className="mx-5 text-sm text-danger">
-          Couldn’t price these products: {live.error ?? 'the job failed'}.{' '}
-          <button type="button" className="cursor-pointer underline" onClick={retry}>Try again</button>
+          Couldn’t price these products: {failure}.{' '}
+          <button type="button" className="cursor-pointer underline" onClick={reprice}>Try again</button>
+        </p>
+      )}
+      {unpriced > 0 && (
+        <p className="mx-5 text-sm text-ink-muted">
+          {fmtCount(unpriced, 'product')} couldn’t be priced.{' '}
+          <button type="button" className="cursor-pointer text-ink underline" onClick={reprice}>Price again</button>
         </p>
       )}
       {groups.length === 0 ? (
@@ -327,7 +284,7 @@ function ProductsPanel({ code, q }: { code: string; q: string }) {
                 </th>
               </tr>
               {g.rows.map((p) => (
-                <ProductLine key={`${p.set_code}|${p.name}`} p={p} open={open === `${p.set_code}|${p.name}`} onToggle={() => setOpen((o) => (o === `${p.set_code}|${p.name}` ? null : `${p.set_code}|${p.name}`))} pricing={Boolean(running)} />
+                <ProductLine key={`${p.set_code}|${p.name}`} p={p} open={open === `${p.set_code}|${p.name}`} onToggle={() => setOpen((o) => (o === `${p.set_code}|${p.name}` ? null : `${p.set_code}|${p.name}`))} pricing={running} />
               ))}
             </tbody>
           ))}
@@ -372,16 +329,20 @@ function Money({ v, pending, partial }: { v: number | null | undefined; pending?
   if (v == null) return <td className="py-1.5 pl-3 text-right"><span className="text-ink-muted">{pending ? '…' : '—'}</span></td>;
   return (
     <td className="py-1.5 pl-3 text-right text-ink">
-      {partial ? (
-        <span title={partial}>
-          {fmtUsd(v)}
-          <span aria-hidden="true" className="text-ink-muted">+</span>
-          <span className="sr-only"> or more: {partial}</span>
-        </span>
-      ) : (
-        fmtUsd(v)
-      )}
+      <PartialUsd v={v} partial={partial} />
     </td>
+  );
+}
+
+/** A dollar figure; `partial` (why it undercounts) adds a muted "+" — the real value is higher. */
+function PartialUsd({ v, partial }: { v: number; partial?: string | null }) {
+  if (!partial) return <span className="tabular text-ink">{fmtUsd(v)}</span>;
+  return (
+    <span className="tabular text-ink" title={partial}>
+      {fmtUsd(v)}
+      <span aria-hidden="true" className="text-ink-muted">+</span>
+      <span className="sr-only"> or more: {partial}</span>
+    </span>
   );
 }
 
@@ -395,10 +356,16 @@ function ProductDetail({ p }: { p: ProductRow }) {
   const v = p.value;
   return (
     <div className="flex flex-col gap-3">
-      {v && !v.error && !v.booster_only && v.floor_singles != null && (
+      {v && !v.error && !v.booster_only && (v.exact_singles != null || v.floor_singles != null) && (
         <p className="text-sm text-ink-muted">
-          At the cheapest printing of each card: <span className="tabular text-ink">{fmtUsd(v.floor_singles)}</span>
-          {' '}(boosters at their expected value)
+          {v.exact_singles != null && (
+            <>At each card’s own printing: <PartialUsd v={v.exact_singles} partial={partialNote(v)} /></>
+          )}
+          {v.exact_singles != null && v.floor_singles != null && ' · '}
+          {v.floor_singles != null && (
+            <>At the cheapest printing of each card: <PartialUsd v={v.floor_singles} /></>
+          )}
+          {v.booster_ev != null && ' (boosters at their expected value)'}
         </p>
       )}
       <ProductContents set={p.set_code} name={p.name} />
@@ -512,7 +479,14 @@ function DeckPanel({ d, buyAt, onCheckLive }: { d: DeckCostOut; buyAt: MarketSea
         </tbody>
       </table>
       <FloorBasis live={d.live ?? false} liveError={d.live_error} onCheckLive={onCheckLive} />
-      {d.unpriced > 0 && <p className="-mt-3 text-sm text-ink-muted">{fmtCount(d.unpriced, 'printing')} without a price — totals undercount.</p>}
+      {(d.unpriced > 0 || (d.floor_unpriced ?? 0) > 0) && (
+        <p className="-mt-3 text-sm text-ink-muted">
+          {d.unpriced > 0 && `${fmtCount(d.unpriced, 'card')} without a price at the deck’s printing`}
+          {d.unpriced > 0 && (d.floor_unpriced ?? 0) > 0 && ' · '}
+          {(d.floor_unpriced ?? 0) > 0 && `${fmtCount(d.floor_unpriced ?? 0, 'card')} without a price at any printing`}
+          {' '}— totals marked + undercount, so they can’t be the lowest.
+        </p>
+      )}
 
       <CardLines title="To buy" lines={toBuy} unitBasis={buyAt} />
       <CardLines title="Covered by your free cards" worth lines={covered} unitBasis={buyAt} />
@@ -520,7 +494,7 @@ function DeckPanel({ d, buyAt, onCheckLive }: { d: DeckCostOut; buyAt: MarketSea
   );
 }
 
-function LedgerCell({ cell, colSpan }: { cell: { value: number | null; best: boolean }; colSpan?: number }) {
+function LedgerCell({ cell, colSpan }: { cell: { value: number | null; best: boolean; partial: boolean }; colSpan?: number }) {
   return (
     <td colSpan={colSpan} className="py-2.5 pl-3 text-right">
       {cell.value == null ? (
@@ -528,6 +502,12 @@ function LedgerCell({ cell, colSpan }: { cell: { value: number | null; best: boo
       ) : (
         <span className={cell.best ? 'text-xl voice-condensed font-bold text-accent-ink' : 'text-xl voice-condensed text-ink'}>
           {fmtUsd(cell.value)}
+          {cell.partial && (
+            <>
+              <span aria-hidden="true" className="text-ink-muted">+</span>
+              <span className="sr-only"> or more: some cards have no price</span>
+            </>
+          )}
           {cell.best && <span className="ml-1.5 align-middle text-xs voice-semi font-medium">lowest</span>}
         </span>
       )}

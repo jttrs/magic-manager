@@ -97,7 +97,7 @@ def test_family_products_spans_member_sets(monkeypatch):
 
     def fake_products(code):
         if code == "fic":
-            raise FileNotFoundError(code)
+            raise mtgjson.MtgJsonError("mtgjson.sh set fic exited 6: mtgjson.sh: HTTP 404 from https://x/FIC.json")
         return [{"name": "Play Booster Box", "category": "booster_box"},
                 {"name": "Bundle", "category": "bundle"}]
     monkeypatch.setattr(mtgjson, "sealed_products", fake_products)
@@ -167,3 +167,174 @@ def test_deck_cost_live_failure_falls_back_to_local(deck, monkeypatch):
     out = market.deck_cost(deck, with_sealed=False, live=True)
     assert out["live"] is False and "503" in out["live_error"]
     assert out["scratch_floor"] == 4.0   # local floor (msc 2.00 + 2·1)
+
+
+def test_family_products_outage_is_not_no_products(monkeypatch):
+    """PR91-6: an MTGJSON outage must raise, not read as 'no sealed products'."""
+    monkeypatch.setattr(market, "family_codes", lambda code: ("fin", "Final Fantasy", ["fin"]))
+
+    def down(code):
+        raise mtgjson.MtgJsonError("mtgjson.sh set fin exited 4: mtgjson.sh: curl failed")
+    monkeypatch.setattr(mtgjson, "sealed_products", down)
+    with pytest.raises(mtgjson.MtgJsonError):
+        market.family_products("fin")
+
+
+def test_value_products_carries_booster_ev_and_strict_reraises(monkeypatch):
+    monkeypatch.setattr(valuation, "value_sealed_product", lambda set_code, name, **kw: sealed.ProductValuation(
+        label=name, kind="sealed", exact_singles=40.0, floor_singles=30.0, booster_ev=25.0))
+    assert market.value_products([("fin", "Bundle")])[0]["booster_ev"] == 25.0
+
+    def boom(*a, **k):
+        raise LookupError("no such product")
+    monkeypatch.setattr(valuation, "value_sealed_product", boom)
+    with pytest.raises(LookupError):
+        market.value_products([("fin", "Nope")], strict=True)
+
+
+# ---------- PR91-2: which sealed product IS this precon ----------
+
+def _precon_with(monkeypatch, products):
+    monkeypatch.setattr(mtgjson, "sealed_products", lambda code: products)
+    return market._precon_product("counter-blitz")
+
+
+def test_precon_product_matches_single_deck_product(deck, monkeypatch):
+    cmd = {"name": "Commander Deck Counter Blitz", "category": "deck",
+           "contents": {"deck": [{"name": "Counter Blitz (FINAL FANTASY X)"}], "sealed": [{"name": "Sample Pack"}]}}
+    assert _precon_with(monkeypatch, [cmd]) == ("fic", "Commander Deck Counter Blitz")
+
+
+def test_precon_product_skips_multi_deck_and_bundles(deck, monkeypatch):
+    kit = {"name": "Starter Kit", "category": "multiple_decks",
+           "contents": {"deck": [{"name": "Counter Blitz (FINAL FANTASY X)"}, {"name": "Other Deck"}]}}
+    bundle = {"name": "Bundle", "category": "bundle",
+              "contents": {"deck": [{"name": "Counter Blitz (FINAL FANTASY X)"}], "sealed": [{"name": "Play Booster", "count": 9}]}}
+    assert _precon_with(monkeypatch, [kit, bundle]) is None
+
+
+# ---------- PR91-1: the cheapest printing keeps a real finish ----------
+
+FOIL_ONLY = "33333333-0000-0000-0000-0000000000f0"
+
+
+def test_card_lines_foil_only_floor_keeps_foil(tmp_db, seed_cards, make_card):
+    from magic_manager import construct
+    seed_cards([make_card(id=FOIL_ONLY, oracle_id="bbbbbbbb-0000-0000-0000-0000000000f0", name="Foil Thing",
+                          set="sld", collector_number="5", finishes=["foil"],
+                          prices={"usd": None, "usd_foil": "12.00"})])
+    rows = construct.net_against_loose([construct.CardNeed(FOIL_ONLY, "foil", 1, "x", "Foil Thing", "sld", "5", 12.0)])
+    lines, need_floor, _ = market.card_lines(rows)
+    (ln,) = lines
+    assert (ln["floor_scryfall_id"], ln["floor_finish"], ln["floor_usd"]) == (FOIL_ONLY, "foil", 12.0)
+    assert need_floor == 12.0
+
+
+def test_card_lines_cheaper_nonfoil_floor_is_nonfoil(deck):
+    from magic_manager import construct
+    rows = construct.net_against_loose([construct.CardNeed(A, "foil", 1, "x", "Skullclamp", "fic", "1", 9.0)])
+    (ln,), _, _ = market.card_lines(rows)
+    assert (ln["floor_scryfall_id"], ln["floor_finish"], ln["floor_usd"]) == (A_CHEAP, "nonfoil", 2.0)
+
+
+# ---------- PR91-3: unpriced cards never make a total look complete ----------
+
+def test_deck_cost_reports_floor_coverage(deck, monkeypatch):
+    from magic_manager import db
+    with db.connect() as conn:
+        conn.execute("UPDATE cards SET prices_usd = NULL, prices_usd_foil = NULL")
+    out = market.deck_cost(deck, with_sealed=False)
+    assert out["scratch"] is None and out["with_collection"] is None
+    assert out["scratch_floor"] is None and out["with_collection_floor"] is None
+    assert (out["unpriced"], out["floor_unpriced"], out["total_need"]) == (3, 3, 3)
+
+
+def test_deck_cost_partial_floor_counts_unpriced(deck):
+    from magic_manager import db
+    with db.connect() as conn:
+        conn.execute("UPDATE cards SET prices_usd = NULL WHERE scryfall_id = ?", (B,))
+    out = market.deck_cost(deck, with_sealed=False)
+    assert out["unpriced"] == 2 and out["floor_unpriced"] == 2   # Sol Ring has no price anywhere
+    assert out["scratch"] == 5.0 and out["scratch_floor"] == 2.0
+
+
+# ---------- PR91-6 / PR91-12: routes + the value_family job ----------
+
+@pytest.fixture
+def client(tmp_db):
+    from fastapi.testclient import TestClient
+    from magic_manager.web.app import create_app
+    with TestClient(create_app(serve_frontend=False)) as c:
+        yield c
+
+
+def test_value_route_maps_errors(client, monkeypatch):
+    from magic_manager import scryfall
+
+    def fake_value(set_code, name, **kw):
+        if name == "Nope":
+            raise LookupError("no product matches 'Nope'")
+        if name == "Down":
+            raise scryfall.ScryfallError("HTTP 503")
+        return sealed.ProductValuation(label=name, kind="sealed", sealed_market=10.0)
+    monkeypatch.setattr(valuation, "value_sealed_product", fake_value)
+    ok = client.get("/api/market/value", params={"set": "fin", "name": "Bundle"})
+    assert ok.status_code == 200 and ok.json()["sealed_market"] == 10.0
+    assert client.get("/api/market/value", params={"set": "fin", "name": "Nope"}).status_code == 404
+    assert client.get("/api/market/value", params={"set": "fin", "name": "Down"}).status_code == 502
+
+
+def test_products_and_tree_routes_map_mtgjson_outage(client, monkeypatch):
+    def down(*a, **k):
+        raise mtgjson.MtgJsonError("curl failed")
+    monkeypatch.setattr(market, "family_products", down)
+    monkeypatch.setattr(market, "product_tree", down)
+    assert client.get("/api/market/products", params={"code": "fin"}).status_code == 502
+    assert client.get("/api/market/product-tree", params={"set": "fin", "name": "Bundle"}).status_code == 502
+
+
+def test_value_family_job_values_every_product(monkeypatch):
+    from magic_manager.api import market as market_api
+    monkeypatch.setattr(market, "family_products", lambda code: {"code": "fin", "name": "Final Fantasy", "products": [
+        {"set_code": "fin", "name": "Bundle"}, {"set_code": "fin", "name": "Bad"}]})
+
+    def fake_value(set_code, name, **kw):
+        if name == "Bad":
+            raise RuntimeError("timeout")
+        return sealed.ProductValuation(label=name, kind="sealed", sealed_market=50.0, intrinsic=60.0, booster_ev=40.0)
+    monkeypatch.setattr(valuation, "value_sealed_product", fake_value)
+    events = []
+    res = market_api._run_value_family(market_api.ValueFamilyInput(code="fin"), events.append)
+    assert res.summary == "Final Fantasy · 1 products valued · 1 failed"
+    rows = res.artifacts[0].data
+    assert [r["name"] for r in rows] == ["Bundle", "Bad"]
+    assert rows[0]["booster_ev"] == 40.0 and rows[1]["error"] == "timeout"
+    assert events[-1].done == events[-1].total == 2
+
+
+def test_is_missing_file_only_matches_404():
+    assert mtgjson.is_missing_file(mtgjson.MtgJsonError("mtgjson.sh: HTTP 404 from https://mtgjson.com/api/v5/ZZZ.json"))
+    assert not mtgjson.is_missing_file(mtgjson.MtgJsonError("mtgjson.sh: HTTP 403 from https://mtgjson.com/api/v5/FIN.json"))
+    assert not mtgjson.is_missing_file(mtgjson.MtgJsonError("mtgjson.sh: curl failed for https://x"))
+    assert not mtgjson.is_missing_file(LookupError("HTTP 404 from"))
+
+
+def test_product_cost_route_maps_outage(client, monkeypatch):
+    from magic_manager import scryfall
+
+    def down(*a, **k):
+        raise scryfall.ScryfallError("HTTP 503")
+    monkeypatch.setattr(market, "product_cost", down)
+    r = client.get("/api/market/product-cost", params={"kind": "sealed", "set": "fin", "name": "Bundle"})
+    assert r.status_code == 502
+
+
+def test_deck_cost_all_free_unpriced_is_known_zero(deck):
+    """Cards you already have loose cost $0 more, even when they have no price."""
+    from magic_manager import db
+    with db.connect() as conn:
+        conn.execute("UPDATE cards SET prices_usd = NULL WHERE scryfall_id = ?", (B,))
+    inventory.inventory_add(A, "nonfoil", 1)
+    out = market.deck_cost(deck, with_sealed=False)
+    assert out["with_collection"] == 0.0 and out["with_collection_floor"] == 0.0
+    assert out["scratch"] == 5.0 and out["unpriced"] == 2

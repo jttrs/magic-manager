@@ -44,6 +44,12 @@ class MtgJsonError(RuntimeError):
     """Raised when the wrapper exits non-zero or returns non-JSON."""
 
 
+def is_missing_file(e: Exception) -> bool:
+    """True when ``e`` is the wrapper reporting that MTGJSON has no such file
+    (HTTP 404) — as opposed to an outage, a network failure or a bad response."""
+    return isinstance(e, MtgJsonError) and "HTTP 404 from" in str(e)
+
+
 def _run(args: list[str]) -> str:
     if not WRAPPER.exists():
         raise MtgJsonError(f"wrapper missing: {WRAPPER}")

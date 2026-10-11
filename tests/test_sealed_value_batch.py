@@ -157,3 +157,25 @@ def test_render_error_row_no_crash():
     rows = [svb.BatchRow("Bad", "error", None, note="no product matching")]
     out = "\n".join(svb._render(rows))
     assert "Bad" in out and "—" in out
+
+
+def test_render_marks_partial_exact_singles():
+    """Fixed cards with no price at their exact printing: col 3 is a lower bound."""
+    rows = [svb.BatchRow("CE Deck", "sealed", _pv(
+        label="CE Deck", listing=100.0, sealed_market=120.0,
+        exact_singles=80.0, floor_singles=60.0, unpriced_cards=11, total_cards=100)),
+        svb.BatchRow("No listing", "sealed", _pv(
+            label="No listing", listing=None, sealed_market=50.0,
+            exact_singles=40.0, floor_singles=30.0, unpriced_cards=2, total_cards=10))]
+    out = "\n".join(svb._render(rows))
+    assert "$80.00+ (+$20.00)" in out
+    assert "| $40.00+ |" in out
+    assert "$60.00 (+$40.00)" in out   # floor column unchanged
+
+
+def test_render_partial_booster_mix_keeps_ev_label():
+    rows = [svb.BatchRow("Bundle", "sealed", _pv(
+        label="Bundle", listing=50.0, sealed_market=55.0, exact_singles=60.0,
+        floor_singles=45.0, booster_only=True, unpriced_cards=1, total_cards=5))]
+    out = "\n".join(svb._render(rows))
+    assert "$60.00+ (-$10.00) EV" in out

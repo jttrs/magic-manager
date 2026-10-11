@@ -127,7 +127,9 @@ def _render(rows: list[BatchRow]) -> list[str]:
         finish = pv.finish or "nonfoil"
         listing = _fmt(pv.listing)
         # Booster-only products: cols 3/4 are the booster EV (labeled), not singles.
-        c3 = util.fmt_delta_cell(pv.exact_singles, pv.listing)
+        # Fixed cards with no price at their exact printing make col 3 a lower
+        # bound ("unknown is not $0"), marked like the web's "$X+".
+        c3 = util.fmt_delta_cell(pv.exact_singles, pv.listing, partial=bool(pv.unpriced_cards))
         c4 = util.fmt_delta_cell(pv.floor_singles, pv.listing)
         if pv.booster_only:
             c3 = f"{c3} EV"
@@ -180,7 +182,8 @@ def main() -> int:
     print()
     print("*Cols: Listing = asking price · Sealed mkt = wider secondary market · "
           "Exact singles = the product's own printings · Floor singles = cheapest "
-          "printing of each card anywhere. (±$) in cols 2-4 = listing − value: "
+          "printing of each card anywhere; a trailing + = some cards have no price at "
+          "their exact printing, so the real value is higher. (±$) in cols 2-4 = listing − value: "
           "NEGATIVE = the listing is BELOW that measure (a discount). Sorted by "
           "steepest sealed-mkt discount first.*")
     # Surface per-row notes/errors below the table. A container-size-mismatch

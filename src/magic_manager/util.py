@@ -178,7 +178,7 @@ def delta_of(value: float | None, listing: float | None) -> float | None:
     return round(listing - value, 2)
 
 
-def fmt_delta_cell(value: float | None, listing: float | None) -> str:
+def fmt_delta_cell(value: float | None, listing: float | None, *, partial: bool = False) -> str:
     """Render a price cell with an in-parens delta of the LISTING vs this value.
 
     Used by the sealed-value renderers so every price column reads the same: the
@@ -192,15 +192,18 @@ def fmt_delta_cell(value: float | None, listing: float | None) -> str:
     - else → ``"$X.XX (+$Y.YY)"`` / ``"$X.XX (-$Y.YY)"`` with ``Y = listing − value``
       (``(+$0.00)`` when exactly equal).
 
+    ``partial`` marks the value a lower bound (``"$X.XX+"``: some of it is unpriced).
+
     Pure arithmetic on numbers already shown elsewhere — introduces no new data.
     """
     if value is None:
         return "—"
+    shown = fmt_usd(value) + ("+" if partial else "")
     if listing is None:
-        return fmt_usd(value)
+        return shown
     d = delta_of(value, listing)
     sign = "+" if d >= 0 else "-"
-    return f"{fmt_usd(value)} ({sign}${abs(d):.2f})"
+    return f"{shown} ({sign}${abs(d):.2f})"
 
 
 def fmt_mana_cost(raw: str | None) -> str:

@@ -6,8 +6,8 @@ Thin composition over the existing engines (no new valuation math):
   4-column valuation: sealed market · exact singles · floor singles · contents
   value incl. booster EV) and :func:`sealed.build_product_tree` for drill-down;
 * a family's cards → every printing's exact price (``collection_view``) next to
-  its functional floor (``sets.lowest_price_by_oracle``: cheapest printing
-  anywhere) and what you own;
+  its functional floor (``sets.lowest_price_by_oracle``: cheapest locally synced
+  printing) and what you own;
 * a deck recipe's cost → ``construct`` (expand → net against loose → summarize)
   plus the floor alternative per line and, for precons, the sealed product price.
 """
@@ -30,14 +30,20 @@ def family_codes(code: str) -> tuple[str, str, list[str]]:
 
 
 def family_products(code: str) -> dict:
-    """Every sealed product (MTGJSON ``sealedProduct``) across a family's sets."""
+    """Every sealed product (MTGJSON ``sealedProduct``) across a family's sets.
+
+    A member set MTGJSON has no file for (``mtgjson.is_missing_file``) has no products; any other
+    failure (network, MTGJSON down) raises ``mtgjson.MtgJsonError`` instead of
+    reading as "no sealed products"."""
     parent, name, codes = family_codes(code)
     out = []
     for c in codes:
         try:
             products = mtgjson.sealed_products(c)
-        except Exception:  # noqa: BLE001 — a member set without an MTGJSON file has no products
-            continue
+        except mtgjson.MtgJsonError as e:
+            if mtgjson.is_missing_file(e):
+                continue
+            raise
         for p in products:
             out.append({
                 "set_code": c, "name": p.get("name") or "", "category": p.get("category"),
@@ -49,8 +55,10 @@ def family_products(code: str) -> dict:
 
 
 def value_products(items: list[tuple[str, str]], *,
-                   progress: Callable[[int, int, str], None] | None = None) -> list[dict]:
-    """Value each ``(set_code, product name)`` — failures become error rows."""
+                   progress: Callable[[int, int, str], None] | None = None,
+                   strict: bool = False) -> list[dict]:
+    """Value each ``(set_code, product name)`` — failures become error rows
+    (``strict`` re-raises instead, for a single-product lookup)."""
     floors: dict = {}
     rows = []
     for i, (set_code, name) in enumerate(items, 1):
@@ -62,11 +70,13 @@ def value_products(items: list[tuple[str, str]], *,
                 "set_code": set_code, "name": name, "sealed_market": v.sealed_market,
                 "market_source": v.sealed_market_source, "contents_value": v.intrinsic,
                 "exact_singles": v.exact_singles, "floor_singles": v.floor_singles,
-                "booster_only": v.booster_only, "coverage": round(v.coverage, 3),
+                "booster_only": v.booster_only, "booster_ev": v.booster_ev, "coverage": round(v.coverage, 3),
                 "unpriced_cards": v.unpriced_cards, "total_cards": v.total_cards,
                 "notes": [*v.diagnostics, *([v.note] if v.note else [])], "error": None,
             })
         except Exception as e:  # noqa: BLE001 — one bad product never sinks the batch
+            if strict:
+                raise
             rows.append({"set_code": set_code, "name": name, "error": str(e)})
     return rows
 
@@ -98,7 +108,7 @@ def product_tree(set_code: str, name: str) -> TreeNode:
 
 def family_card_prices(code: str) -> dict:
     """Every printing in the family at its exact price, beside the card's
-    functional floor (cheapest printing anywhere), its foil-vs-nonfoil gap
+    functional floor (cheapest locally synced printing), its foil-vs-nonfoil gap
     (:mod:`foil_gap`; local prices) and your copies. The printing universe is
     the Collection's (``collection_view.family_cards``), so a configured scene
     panel's printings are listed even where the set-type/variant/unobtainable
@@ -126,8 +136,15 @@ def family_card_prices(code: str) -> dict:
 
 # ---------- deck recipe cost ----------
 
+# A bundle ships its land pack beside boosters: the bundle isn't the deck sealed.
+_NOT_THE_DECK = {"bundle", "bundle_case"}
+
+
 def _precon_product(slug: str) -> tuple[str, str] | None:
-    """The sealed product that ships this precon (set code, product name), if any."""
+    """The sealed product that IS this precon (set code, product name), if any:
+    one whose contents ship this deck and no other deck. A multi-deck product
+    (Starter Kit, Beginner Box) or a bundle around a land pack isn't one deck's
+    sealed price, so it doesn't count."""
     with db.connect() as conn:
         row = conn.execute("SELECT name, source_precon_file_name FROM decks WHERE slug = ?", (slug,)).fetchone()
     if not row or not row["source_precon_file_name"]:
@@ -137,10 +154,13 @@ def _precon_product(slug: str) -> tuple[str, str] | None:
         products = mtgjson.sealed_products(code)
     except Exception:  # noqa: BLE001
         return None
+    want = (row["name"] or "").casefold()
     for p in products:
-        for d in (p.get("contents") or {}).get("deck") or []:
-            if (d.get("name") or "").casefold() == (row["name"] or "").casefold():
-                return code, p.get("name") or ""
+        decks = (p.get("contents") or {}).get("deck") or []
+        if (p.get("category") or "") in _NOT_THE_DECK or len(decks) != 1:
+            continue
+        if (decks[0].get("name") or "").casefold() == want:
+            return code, p.get("name") or ""
     return None
 
 
@@ -148,8 +168,13 @@ def card_lines(rows: list[construct.NetRow], *, live: bool = False) -> tuple[lis
     """Each netted card at its exact printing and at its cheapest nonfoil
     printing (the functional floor via :func:`card_floor.printing_floors` —
     local prices, or every set live when ``live`` — capped at the exact price,
-    since that printing is one of the card's printings). Returns ``(lines,
-    Σ floor·need, Σ floor·buy)``. Shared by deck cost and product cost."""
+    since that printing is one of the card's printings). Each line carries the
+    floor printing AND its finish (``floor_finish``: nonfoil when a cheaper
+    nonfoil printing was found, else the line's own finish — a foil-only card
+    stays foil). Returns ``(lines, Σ floor·need, Σ floor·buy)``; a line without
+    any floor adds nothing (count them via ``floor_usd is None``), and a total
+    with nothing priced is ``None`` — unknown, not $0 (Σ floor·buy is a known $0
+    when nothing is left to buy). Shared by deck cost and product cost."""
     floors = card_floor.printing_floors([r.scryfall_id for r in rows], live=live)
     lines = []
     need_floor = buy_floor = 0.0
@@ -172,9 +197,14 @@ def card_lines(rows: list[construct.NetRow], *, live: bool = False) -> tuple[lis
             "need": r.need_qty, "free": r.loose_qty, "buy": r.buy_qty,
             "unit_usd": r.unit_usd, "floor_usd": floor,
             "floor_set_code": f.get("set_code"), "floor_collector_number": f.get("collector_number"),
-            "floor_scryfall_id": f.get("scryfall_id") or r.scryfall_id, "bonus": False,
+            "floor_scryfall_id": f.get("scryfall_id") or r.scryfall_id,
+            "floor_finish": "nonfoil" if f else r.finish, "bonus": False,
         })
-    return lines, round(need_floor, 2), round(buy_floor, 2)
+    buying = [ln for ln in lines if ln["buy"] > 0]
+    need_known = any(ln["floor_usd"] is not None for ln in lines)
+    buy_known = bool(lines) and (not buying or any(ln["floor_usd"] is not None for ln in buying))
+    return (lines, round(need_floor, 2) if need_known else None,
+            round(buy_floor, 2) if buy_known else None)
 
 
 _COST_TTL = 30 * 60
@@ -200,7 +230,7 @@ def _cost_totals(rows: list[construct.NetRow], ev: float | None) -> dict:
     lines, floor_cards, _ = card_lines(rows)
     priced = [ln for ln in lines if ln["unit_usd"] is not None]
     known_exact = round(sum(ln["unit_usd"] * ln["need"] for ln in priced), 2) if priced else None
-    known_floor = floor_cards if any(ln["floor_usd"] is not None for ln in lines) else None
+    known_floor = floor_cards
     plus = lambda v: None if v is None and ev is None else round((v or 0.0) + (ev or 0.0), 2)  # noqa: E731
     total = sum(ln["need"] for ln in lines)
     return {"known_exact": known_exact, "known_floor": known_floor, "booster_ev": ev,
@@ -279,10 +309,12 @@ def deck_cost(slug: str, *, with_sealed: bool = True, live: bool = False) -> dic
         live = False
         lines, scratch_floor, with_collection_floor = card_lines(rows, live=False)
     lines.sort(key=lambda ln: -((ln["floor_usd"] or 0) * ln["buy"]))
+    floor_unpriced = sum(ln["need"] for ln in lines if ln["floor_usd"] is None)
     return {
         "slug": slug, "sealed_product": sealed_name, "sealed": sealed_market,
         "scratch": summary["scratch"], "with_collection": summary["with_collection"],
         "scratch_floor": scratch_floor, "with_collection_floor": with_collection_floor,
         "coverage": round(summary["coverage"], 3), "unpriced": summary["n_unpriced"],
+        "floor_unpriced": floor_unpriced,
         "total_need": summary["total_need"], "lines": lines, "live": live, "live_error": live_error,
     }

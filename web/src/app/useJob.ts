@@ -15,6 +15,16 @@ export type JobLive = {
 
 const fresh = (): JobLive => ({ status: 'queued', done: 0, total: null, log: [] });
 
+/** Submit a registered job: its id, or a plain-language reason it didn't start. */
+export async function enqueueJob(name: string, body: Record<string, unknown>): Promise<{ id: string } | { error: string }> {
+  try {
+    const r = await submitJob({ path: { name }, body });
+    return r.error || !r.data ? { error: 'The server rejected the job.' } : { id: r.data.id };
+  } catch {
+    return { error: 'Couldn’t reach the server. Is `uv run mm serve` running?' };
+  }
+}
+
 /** Watch one job's SSE stream; `start` enqueues a registered job and follows it. */
 export function useJob() {
   const qc = useQueryClient();
@@ -51,15 +61,11 @@ export function useJob() {
 
   /** Enqueue `name` with `body`; resolves to an error message, or null when started. */
   const start = useCallback(async (name: string, body: Record<string, unknown>): Promise<string | null> => {
-    try {
-      const r = await submitJob({ path: { name }, body });
-      if (r.error || !r.data) return 'The server rejected the job.';
-      follow(r.data.id);
-      qc.invalidateQueries({ queryKey: ['jobs'] });
-      return null;
-    } catch {
-      return 'Couldn’t reach the server. Is `uv run mm serve` running?';
-    }
+    const r = await enqueueJob(name, body);
+    if ('error' in r) return r.error;
+    follow(r.id);
+    qc.invalidateQueries({ queryKey: ['jobs'] });
+    return null;
   }, [follow, qc]);
 
   const reset = useCallback(() => {
