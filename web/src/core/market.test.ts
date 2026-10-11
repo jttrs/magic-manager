@@ -78,7 +78,7 @@ describe('market view-model', () => {
 
   it('never marks a total with unpriced cards as the lowest', () => {
     // Exact printings partly unpriced: $5 undercounts, so the complete $8 floor wins.
-    const partial = deckLedger(deck({ scratch: 5, with_collection: 5, scratch_floor: 8, with_collection_floor: 8, unpriced: 3, floor_unpriced: 0 }));
+    const partial = deckLedger(deck({ scratch: 5, with_collection: 5, scratch_floor: 8, with_collection_floor: 8, unpriced: 3, floor_unpriced: 0, lines: [line({ unit_usd: null, floor_usd: 3, need: 3, buy: 3 })] }));
     expect(partial[0].exact).toEqual({ value: 5, best: false, partial: true });
     expect(partial[0].floor).toEqual({ value: 8, best: true, partial: false });
     // Nothing priced at all: no card total, the sealed price is the only complete figure.
@@ -86,8 +86,17 @@ describe('market view-model', () => {
     expect(none[0].exact).toEqual({ value: 30, best: true, partial: false });
     expect(none.slice(1).flatMap((r) => [r.exact.value, r.floor.value])).toEqual([null, null, null, null]);
     // Partial everywhere and no sealed price: nothing is "lowest".
-    const unknown = deckLedger(deck({ unpriced: 1, floor_unpriced: 1 }));
+    const unknown = deckLedger(deck({ unpriced: 1, floor_unpriced: 1, lines: [line({ unit_usd: null, floor_usd: null })] }));
     expect(unknown.flatMap((r) => [r.exact.best, r.floor.best]).some(Boolean)).toBe(false);
+  });
+
+  it('keeps "free cards first" complete when the unpriced cards are all covered by free copies', () => {
+    const d = deck({ scratch: 5, with_collection: 3, scratch_floor: 4, with_collection_floor: 2, unpriced: 1, floor_unpriced: 1,
+      lines: [line({ buy: 1, unit_usd: 3, floor_usd: 2 }), line({ scryfall_id: 'mine', buy: 0, free: 1, unit_usd: null, floor_usd: null })] });
+    const [neu, free] = deckLedger(d);
+    expect([neu.exact.partial, neu.floor.partial]).toEqual([true, true]);
+    expect(free.exact).toEqual({ value: 3, best: false, partial: false });
+    expect(free.floor).toEqual({ value: 2, best: true, partial: false });
   });
 
   it('flags a valuation with products that failed to price', () => {

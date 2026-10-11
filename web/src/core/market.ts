@@ -92,12 +92,17 @@ type LedgerCell = { value: number | null; best: boolean; partial: boolean };
 export type LedgerRow = { key: 'sealed' | 'new' | 'free'; label: string; exact: LedgerCell; floor: LedgerCell };
 
 /** The three ways to get a deck × exact printing vs cheapest printing. A
- *  column with unpriced cards is a lower bound (`partial`) and never competes:
- *  the lowest COMPLETE cell is marked best. Sealed has one price (both columns). */
+ *  total missing prices is a lower bound (`partial`) and never competes: the
+ *  lowest COMPLETE cell is marked best. "Free cards first" only misses the
+ *  prices of cards still to buy. Sealed has one price (both columns). */
 export function deckLedger(d: DeckCostOut): LedgerRow[] {
   const rows: Omit<LedgerRow, 'exact' | 'floor'>[] = [];
-  const exactPartial = d.unpriced > 0;
-  const floorPartial = (d.floor_unpriced ?? 0) > 0;
+  const buying = d.lines.filter((l) => l.buy > 0);
+  const missing: Record<LedgerRow['key'], [boolean, boolean]> = {
+    sealed: [false, false],
+    new: [d.unpriced > 0, (d.floor_unpriced ?? 0) > 0],
+    free: [buying.some((l) => l.unit_usd == null), buying.some((l) => l.floor_usd == null)],
+  };
   const raw: Record<LedgerRow['key'], [number | null, number | null]> = {
     sealed: [d.sealed ?? null, null],
     new: [d.scratch ?? null, d.scratch_floor ?? null],
@@ -105,7 +110,7 @@ export function deckLedger(d: DeckCostOut): LedgerRow[] {
   };
   if (d.sealed != null) rows.push({ key: 'sealed', label: 'Buy it sealed' });
   rows.push({ key: 'new', label: 'Buy every card' }, { key: 'free', label: 'Use your free cards first' });
-  const partial = (key: LedgerRow['key'], col: 0 | 1) => key !== 'sealed' && (col === 0 ? exactPartial : floorPartial);
+  const partial = (key: LedgerRow['key'], col: 0 | 1) => missing[key][col];
   const complete = rows.flatMap((r) => raw[r.key].filter((v, col) => v != null && !partial(r.key, col as 0 | 1))) as number[];
   const min = complete.length ? Math.min(...complete) : null;
   const cell = (key: LedgerRow['key'], col: 0 | 1): LedgerCell => {

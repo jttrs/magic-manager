@@ -405,13 +405,21 @@ def net_against_loose(needs: list[CardNeed]) -> list[NetRow]:
     return out
 
 
+def _buy_priced(rows: list[NetRow]) -> bool:
+    """A with-collection total is known when something is priced among the
+    copies still to buy, or nothing is left to buy at all."""
+    buying = [r for r in rows if r.buy_qty > 0]
+    return bool(rows) and (not buying or any(r.unit_usd is not None for r in buying))
+
+
 def summarize(rows: list[NetRow], sealed_market: float | None) -> dict:
     """Fold netted rows into the three headline totals + coverage.
 
     ``scratch`` = Σ need·unit (buy everything new); ``with_collection`` =
     Σ buy·unit (use loose copies first). ``coverage`` is the priced fraction of
     total need (an unpriced printing drags both scratch and with_collection
-    down); when no row is priced both totals are ``None`` (unknown, not $0)."""
+    down). A total with nothing priced is ``None`` (unknown, not $0); when every
+    card is covered by loose copies, ``with_collection`` is a known $0."""
     scratch = 0.0
     with_collection = 0.0
     total_need = 0
@@ -427,9 +435,9 @@ def summarize(rows: list[NetRow], sealed_market: float | None) -> dict:
         with_collection += r.unit_usd * r.buy_qty
     return {
         "sealed": sealed_market,
-        # Nothing priced → unknown (None), not $0.
+        # Nothing priced → unknown (None), not $0. Nothing left to buy → $0.
         "scratch": round(scratch, 2) if priced_need else None,
-        "with_collection": round(with_collection, 2) if priced_need else None,
+        "with_collection": round(with_collection, 2) if _buy_priced(rows) else None,
         "coverage": (priced_need / total_need) if total_need else 1.0,
         "n_unpriced": n_unpriced,
         "total_need": total_need,

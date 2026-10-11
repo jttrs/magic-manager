@@ -447,6 +447,8 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             return market_api.product_cost(kind, set, name, finish)
         except LookupError as e:
             raise HTTPException(404, str(e)) from e
+        except (mtgjson.MtgJsonError, scryfall.ScryfallError) as e:
+            raise HTTPException(502, f"Couldn't price this product: {e}") from e
 
     @app.get("/api/market/secret-lair", response_model=market_api.SldDropsOut, tags=["market"])
     def market_secret_lair(limit: Annotated[int, Query(ge=1, le=200)] = 30):

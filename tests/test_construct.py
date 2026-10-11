@@ -176,3 +176,18 @@ def test_expand_deck_file_unknown_raises(tmp_db, fake_mtgjson):
     fake_mtgjson(deck={})  # empty → treated as missing
     with pytest.raises(LookupError):
         construct.expand_deck_file("DoesNotExist_XXX")
+
+
+def test_summarize_unknown_is_none_and_all_free_is_zero():
+    """Nothing priced → totals are unknown (None), not $0; every card covered
+    by loose copies → with_collection is a known $0 even when unpriced."""
+    row = lambda unit, buy: construct.NetRow(scryfall_id="x", finish="nonfoil", name="X", set_code="t",
+                                             collector_number="1", need_qty=1, loose_qty=1 - buy,
+                                             buy_qty=buy, unit_usd=unit)
+    s = construct.summarize([row(None, 1)], None)
+    assert (s["scratch"], s["with_collection"]) == (None, None)
+    s = construct.summarize([row(None, 0)], None)
+    assert (s["scratch"], s["with_collection"]) == (None, 0.0)
+    s = construct.summarize([row(4.0, 0), row(None, 1)], None)
+    assert (s["scratch"], s["with_collection"]) == (4.0, None)
+    assert construct.summarize([], None)["scratch"] is None

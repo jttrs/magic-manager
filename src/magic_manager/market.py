@@ -29,13 +29,10 @@ def family_codes(code: str) -> tuple[str, str, list[str]]:
     return parent, name, sorted(family_status._family_code_set(parent, related))
 
 
-_MISSING_SET_FILE = re.compile(r"HTTP 40[34]\b")
-
-
 def family_products(code: str) -> dict:
     """Every sealed product (MTGJSON ``sealedProduct``) across a family's sets.
 
-    A member set MTGJSON has no file for (HTTP 404) has no products; any other
+    A member set MTGJSON has no file for (``mtgjson.is_missing_file``) has no products; any other
     failure (network, MTGJSON down) raises ``mtgjson.MtgJsonError`` instead of
     reading as "no sealed products"."""
     parent, name, codes = family_codes(code)
@@ -44,7 +41,7 @@ def family_products(code: str) -> dict:
         try:
             products = mtgjson.sealed_products(c)
         except mtgjson.MtgJsonError as e:
-            if _MISSING_SET_FILE.search(str(e)):
+            if mtgjson.is_missing_file(e):
                 continue
             raise
         for p in products:
@@ -175,8 +172,9 @@ def card_lines(rows: list[construct.NetRow], *, live: bool = False) -> tuple[lis
     floor printing AND its finish (``floor_finish``: nonfoil when a cheaper
     nonfoil printing was found, else the line's own finish — a foil-only card
     stays foil). Returns ``(lines, Σ floor·need, Σ floor·buy)``; a line without
-    any floor adds nothing (count them via ``floor_usd is None``). Shared by deck
-    cost and product cost."""
+    any floor adds nothing (count them via ``floor_usd is None``), and a total
+    with nothing priced is ``None`` — unknown, not $0 (Σ floor·buy is a known $0
+    when nothing is left to buy). Shared by deck cost and product cost."""
     floors = card_floor.printing_floors([r.scryfall_id for r in rows], live=live)
     lines = []
     need_floor = buy_floor = 0.0
@@ -202,7 +200,11 @@ def card_lines(rows: list[construct.NetRow], *, live: bool = False) -> tuple[lis
             "floor_scryfall_id": f.get("scryfall_id") or r.scryfall_id,
             "floor_finish": "nonfoil" if f else r.finish, "bonus": False,
         })
-    return lines, round(need_floor, 2), round(buy_floor, 2)
+    buying = [ln for ln in lines if ln["buy"] > 0]
+    need_known = any(ln["floor_usd"] is not None for ln in lines)
+    buy_known = bool(lines) and (not buying or any(ln["floor_usd"] is not None for ln in buying))
+    return (lines, round(need_floor, 2) if need_known else None,
+            round(buy_floor, 2) if buy_known else None)
 
 
 _COST_TTL = 30 * 60
@@ -228,7 +230,7 @@ def _cost_totals(rows: list[construct.NetRow], ev: float | None) -> dict:
     lines, floor_cards, _ = card_lines(rows)
     priced = [ln for ln in lines if ln["unit_usd"] is not None]
     known_exact = round(sum(ln["unit_usd"] * ln["need"] for ln in priced), 2) if priced else None
-    known_floor = floor_cards if any(ln["floor_usd"] is not None for ln in lines) else None
+    known_floor = floor_cards
     plus = lambda v: None if v is None and ev is None else round((v or 0.0) + (ev or 0.0), 2)  # noqa: E731
     total = sum(ln["need"] for ln in lines)
     return {"known_exact": known_exact, "known_floor": known_floor, "booster_ev": ev,
@@ -308,8 +310,6 @@ def deck_cost(slug: str, *, with_sealed: bool = True, live: bool = False) -> dic
         lines, scratch_floor, with_collection_floor = card_lines(rows, live=False)
     lines.sort(key=lambda ln: -((ln["floor_usd"] or 0) * ln["buy"]))
     floor_unpriced = sum(ln["need"] for ln in lines if ln["floor_usd"] is None)
-    if lines and floor_unpriced == sum(ln["need"] for ln in lines):
-        scratch_floor = with_collection_floor = None  # nothing priced: unknown, not $0
     return {
         "slug": slug, "sealed_product": sealed_name, "sealed": sealed_market,
         "scratch": summary["scratch"], "with_collection": summary["with_collection"],

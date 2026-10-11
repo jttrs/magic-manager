@@ -310,3 +310,31 @@ def test_value_family_job_values_every_product(monkeypatch):
     assert [r["name"] for r in rows] == ["Bundle", "Bad"]
     assert rows[0]["booster_ev"] == 40.0 and rows[1]["error"] == "timeout"
     assert events[-1].done == events[-1].total == 2
+
+
+def test_is_missing_file_only_matches_404():
+    assert mtgjson.is_missing_file(mtgjson.MtgJsonError("mtgjson.sh: HTTP 404 from https://mtgjson.com/api/v5/ZZZ.json"))
+    assert not mtgjson.is_missing_file(mtgjson.MtgJsonError("mtgjson.sh: HTTP 403 from https://mtgjson.com/api/v5/FIN.json"))
+    assert not mtgjson.is_missing_file(mtgjson.MtgJsonError("mtgjson.sh: curl failed for https://x"))
+    assert not mtgjson.is_missing_file(LookupError("HTTP 404 from"))
+
+
+def test_product_cost_route_maps_outage(client, monkeypatch):
+    from magic_manager import scryfall
+
+    def down(*a, **k):
+        raise scryfall.ScryfallError("HTTP 503")
+    monkeypatch.setattr(market, "product_cost", down)
+    r = client.get("/api/market/product-cost", params={"kind": "sealed", "set": "fin", "name": "Bundle"})
+    assert r.status_code == 502
+
+
+def test_deck_cost_all_free_unpriced_is_known_zero(deck):
+    """Cards you already have loose cost $0 more, even when they have no price."""
+    from magic_manager import db
+    with db.connect() as conn:
+        conn.execute("UPDATE cards SET prices_usd = NULL WHERE scryfall_id = ?", (B,))
+    inventory.inventory_add(A, "nonfoil", 1)
+    out = market.deck_cost(deck, with_sealed=False)
+    assert out["with_collection"] == 0.0 and out["with_collection_floor"] == 0.0
+    assert out["scratch"] == 5.0 and out["unpriced"] == 2

@@ -127,13 +127,10 @@ def _render(rows: list[BatchRow]) -> list[str]:
         finish = pv.finish or "nonfoil"
         listing = _fmt(pv.listing)
         # Booster-only products: cols 3/4 are the booster EV (labeled), not singles.
-        c3 = util.fmt_delta_cell(pv.exact_singles, pv.listing)
+        # Fixed cards with no price at their exact printing make col 3 a lower
+        # bound ("unknown is not $0"), marked like the web's "$X+".
+        c3 = util.fmt_delta_cell(pv.exact_singles, pv.listing, partial=bool(pv.unpriced_cards))
         c4 = util.fmt_delta_cell(pv.floor_singles, pv.listing)
-        if pv.unpriced_cards and pv.exact_singles is not None:
-            # Some fixed cards have no price at their exact printing: col 3 is a
-            # lower bound ("unknown is not $0"), marked like the web's "$X+".
-            value, _, delta = c3.partition(" ")
-            c3 = f"{value}+ {delta}".rstrip()
         if pv.booster_only:
             c3 = f"{c3} EV"
             c4 = f"{c4} EV"

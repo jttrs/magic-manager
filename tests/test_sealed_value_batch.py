@@ -171,3 +171,11 @@ def test_render_marks_partial_exact_singles():
     assert "$80.00+ (+$20.00)" in out
     assert "| $40.00+ |" in out
     assert "$60.00 (+$40.00)" in out   # floor column unchanged
+
+
+def test_render_partial_booster_mix_keeps_ev_label():
+    rows = [svb.BatchRow("Bundle", "sealed", _pv(
+        label="Bundle", listing=50.0, sealed_market=55.0, exact_singles=60.0,
+        floor_singles=45.0, booster_only=True, unpriced_cards=1, total_cards=5))]
+    out = "\n".join(svb._render(rows))
+    assert "$60.00+ (-$10.00) EV" in out

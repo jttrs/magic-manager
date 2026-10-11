@@ -1,14 +1,14 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useJob } from '../../app/useJob';
-import { submitJob, type ProductValueOut } from '../../core/api';
+import { enqueueJob, useJob } from '../../app/useJob';
+import type { ProductValueOut } from '../../core/api';
 import { hasPricingErrors } from '../../core/market';
 
 // Product valuations are slow to compute and prices move about daily: keep each
 // family's for 12 hours across reloads — unless a product failed to price, so a
 // passing outage doesn't stick for the day.
 const VALUES_TTL = 12 * 3600_000;
-const storageKey = (code: string) => `mm.market.values.v2.${code}`;
+const storageKey = (code: string) => `mm.market.values.v3.${code}`;
 
 function readValues(code: string): ProductValueOut[] | null {
   try {
@@ -38,10 +38,7 @@ const pending = new Map<string, Promise<Submitted>>();
 function submit(code: string): Promise<Submitted> {
   let p = pending.get(code);
   if (!p) {
-    p = submitJob({ path: { name: 'market.value_family' }, body: { code } }).then(
-      (r): Submitted => (r.error || !r.data ? { error: 'The server rejected the job.' } : { id: r.data.id }),
-      (): Submitted => ({ error: 'Couldn’t reach the server. Is `uv run mm serve` running?' }),
-    );
+    p = enqueueJob('market.value_family', { code });
     pending.set(code, p);
     void p.then((r) => {
       if ('error' in r && pending.get(code) === p) pending.delete(code);
@@ -61,6 +58,8 @@ export function useFamilyValues(code: string, hasProducts: boolean) {
   const { live, follow, reset } = useJob();
   const [jobCode, setJobCode] = useState<string | null>(null);
   const [startError, setStartError] = useState<string | null>(null);
+  // Bumped by reprice: re-runs the start effect even when nothing was cached.
+  const [attempt, setAttempt] = useState(0);
 
   const run = useCallback(() => {
     let alive = true;
@@ -83,7 +82,7 @@ export function useFamilyValues(code: string, hasProducts: boolean) {
   useEffect(() => {
     if (!hasProducts || values.isPending || values.data) return;
     return run();
-  }, [hasProducts, values.isPending, values.data, run]);
+  }, [hasProducts, values.isPending, values.data, run, attempt]);
 
   useEffect(() => {
     if (jobCode !== code || !live) return;
@@ -92,7 +91,7 @@ export function useFamilyValues(code: string, hasProducts: boolean) {
       if (art) {
         qc.setQueryData(key, art.data as ProductValueOut[]);
         storeValues(code, art.data as ProductValueOut[]);
-      }
+      } else setStartError('the job finished without prices');
       pending.delete(code);
     } else if (live.status === 'failed') pending.delete(code);
   }, [live, jobCode, code, qc, key]);
@@ -106,6 +105,7 @@ export function useFamilyValues(code: string, hasProducts: boolean) {
       // Storage blocked: nothing to clear.
     }
     qc.setQueryData(key, null);
+    setAttempt((n) => n + 1);
   }, [code, qc, key]);
 
   const data = values.data ?? null;

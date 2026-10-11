@@ -180,11 +180,11 @@ test('products that failed to price can be priced again, and are not kept across
 
   await page.goto('/market?code=blb');
   await expect(page.getByRole('row', { name: /Bloomburrow Bundle/ })).toContainText('Couldn’t price: timeout');
-  expect(await page.evaluate(() => localStorage.getItem('mm.market.values.v2.blb'))).toBeNull();
+  expect(await page.evaluate(() => localStorage.getItem('mm.market.values.v3.blb'))).toBeNull();
   await page.getByRole('button', { name: 'Price again' }).click();
   await expect(page.getByRole('row', { name: /Bloomburrow Bundle/ })).toContainText('$55.50');
   expect(submits).toBe(2);
-  expect(await page.evaluate(() => localStorage.getItem('mm.market.values.v2.blb'))).not.toBeNull();
+  expect(await page.evaluate(() => localStorage.getItem('mm.market.values.v3.blb'))).not.toBeNull();
 });
 
 test('a deck total with unpriced cards is marked partial and never the lowest', async ({ page }) => {
@@ -198,4 +198,49 @@ test('a deck total with unpriced cards is marked partial and never the lowest', 
   await expect(row).toContainText('$3.00+');
   await expect(row).toContainText('$5.00lowest');
   await expect(page.getByText(/1 card without a price at the deck’s printing/)).toBeVisible();
+});
+
+test('Try again after a failed pricing job, or one the server lost, starts a new job', async ({ page }) => {
+  let submits = 0;
+  await page.route('**/api/jobs/market.value_family', (r) => {
+    submits += 1;
+    return r.fulfill({ status: 202, json: { ...jobRow, id: `mv${submits}` } });
+  });
+  const failedSse = [['status', { status: 'running' }], ['error', { error: 'MTGJSON is down' }], ['status', { status: 'failed' }]]
+    .map(([e, d], i) => `event: ${e}\ndata: ${JSON.stringify(d)}\nid: ${i + 1}\n\n`).join('');
+  await page.route('**/api/jobs/mv1/events', (r) => r.fulfill({ status: 200, contentType: 'text/event-stream', body: failedSse }));
+  await page.route('**/api/jobs/mv2/events', (r) => r.fulfill({ status: 404, json: { detail: 'unknown job' } }));
+  await page.route('**/api/jobs/mv3/events', (r) => r.fulfill({ status: 200, contentType: 'text/event-stream', body: sseBody(values) }));
+  await page.route('**/api/market/products?*', (r) => r.fulfill({ json: products }));
+
+  await page.goto('/market?code=blb');
+  const alert = page.getByRole('alert');
+  await expect(alert).toContainText('MTGJSON is down');
+  await alert.getByRole('button', { name: 'Try again' }).click();
+  await expect(alert).toContainText('the server lost track of this job');
+  await alert.getByRole('button', { name: 'Try again' }).click();
+  await expect(page.getByRole('row', { name: /Bloomburrow Bundle/ })).toContainText('$55.50');
+  expect(submits).toBe(3);
+});
+
+test('product detail shows both printings’ totals, marks a partial one, and names booster EV only when there are boosters', async ({ page }) => {
+  const rows = [
+    { set_code: 'blb', name: 'Bloomburrow Bundle', sealed_market: 40, contents_value: 55.5, exact_singles: 30, floor_singles: 20, booster_ev: 25, booster_only: false, unpriced_cards: 2, total_cards: 10, coverage: 1, notes: [], error: null },
+    { set_code: 'blb', name: 'Bloomburrow Play Booster Box', sealed_market: 50, contents_value: 45, exact_singles: 45, floor_singles: 30, booster_ev: null, booster_only: false, unpriced_cards: 0, total_cards: 60, coverage: 1, notes: [], error: null },
+  ];
+  await page.route('**/api/jobs/market.value_family', (r) => r.fulfill({ status: 202, json: jobRow }));
+  await page.route('**/api/jobs/mv1/events', (r) => r.fulfill({ status: 200, contentType: 'text/event-stream', body: sseBody(rows) }));
+  await page.route('**/api/market/products?*', (r) => r.fulfill({ json: products }));
+  await page.route('**/api/market/product-tree?*', (r) => r.fulfill({ json: tree }));
+
+  await page.goto('/market?code=blb');
+  await page.getByRole('button', { name: 'Bloomburrow Bundle' }).click();
+  const bundle = page.getByText(/At each card’s own printing/);
+  await expect(bundle).toContainText('$30.00+');
+  await expect(bundle).toContainText('At the cheapest printing of each card: $20.00');
+  await expect(bundle).toContainText('(boosters at their expected value)');
+  await page.getByRole('button', { name: 'Bloomburrow Play Booster Box' }).click();
+  const box = page.getByText(/At each card’s own printing: \$45\.00/);
+  await expect(box).not.toContainText('boosters');
+  await expect(box).not.toContainText('+');
 });
