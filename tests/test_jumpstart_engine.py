@@ -152,3 +152,14 @@ def test_ensure_ready_raises_when_sets_stay_unsynced(jt, monkeypatch):
     monkeypatch.setattr(sets, "unsynced_set_codes", lambda codes: ["jt"])
     with pytest.raises(RuntimeError, match="JT"):
         jumpstart.ensure_ready(jt)
+
+
+def test_deck_cached_reads_the_wrapper_cache_layout(tmp_path, monkeypatch):
+    from magic_manager import mtgjson
+    monkeypatch.setenv("MTGJSON_CACHE_DIR", str(tmp_path))
+    assert not jumpstart.deck_cached("AngelsJ25_J25")
+    (tmp_path / "decks").mkdir()
+    (tmp_path / "decks" / "AngelsJ25_J25.json").write_text("{}")
+    assert jumpstart.deck_cached("AngelsJ25_J25.json") and mtgjson.is_cached("decks/AngelsJ25_J25.json")
+    (tmp_path / "decks" / "Empty_J25.json").write_text("")
+    assert not jumpstart.deck_cached("Empty_J25")      # an interrupted (empty) download isn't cached

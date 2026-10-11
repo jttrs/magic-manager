@@ -29,6 +29,15 @@ def test_foil_gap_buckets_in_fixed_precedence():
     assert (g.status, g.pct, g.usd) == ("ok", 0.5, 1.0)
 
 
+def test_etched_only_gets_the_same_label_from_raw_and_normalized_finishes():
+    from magic_manager import collection_view
+    raw = ["etched"]                                         # the script passes Scryfall's finishes
+    web = collection_view.inventory_finishes('["etched"]')  # the web passes the Collection's finishes
+    assert foil_gap.foil_gap(finishes=raw, treatment="", nonfoil=None, foil=None).status == "foil_only"
+    assert foil_gap.foil_gap(finishes=web, treatment="", nonfoil=None, foil=None).status == "foil_only"
+    assert foil_gap.foil_gap(finishes=["nonfoil", "etched"], treatment="", nonfoil=1, foil=None).status == "unpriced"
+
+
 def test_foil_gap_keep_bounds_are_inclusive_and_percent():
     g = foil_gap.FoilGap("ok", 0.25, 0.5)
     assert foil_gap.keep(g, max_pct=25) and not foil_gap.keep(g, max_pct=24.9)
@@ -94,6 +103,23 @@ def test_printing_floors_live_is_opt_in(cards, make_card, monkeypatch):
     got = card_floor.printing_floors([A], live=True)
     assert len(calls) == 1
     assert (got[A].nonfoil.usd, got[A].nonfoil.set_code, got[A].nonfoil.scryfall_id) == (0.5, "sld", "anywhere")
+
+
+def test_live_floor_skips_the_scan_for_basic_lands(cards, seed_cards, make_card, monkeypatch):
+    seed_cards([make_card(id="plains1", oracle_id="o-plains", name="Plains", set="fdn", collector_number="272",
+                          type_line="Basic Land — Plains", prices={"usd": "0.05", "usd_foil": "0.30"})])
+    calls = []
+
+    def fake_search(q, **k):
+        calls.append(q)
+        return []
+    monkeypatch.setattr(scryfall, "search", fake_search)
+    got = card_floor.anywhere_floors(["o-plains", OA], finish_mode="preserve")
+    assert calls and all("o-plains" not in q for q in calls)     # Skullclamp scanned live, Plains not
+    assert (got["o-plains"].nonfoil.usd, got["o-plains"].foil.usd) == (0.05, 0.30)
+    calls.clear()
+    card_floor.anywhere_floors(["o-plains"])
+    assert calls == []
 
 
 def test_deck_cost_live_uses_anywhere_floor(cards, make_card, monkeypatch):

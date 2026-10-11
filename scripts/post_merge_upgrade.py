@@ -65,6 +65,7 @@ OWNERSHIP: tuple[tuple[str, tuple[str, ...] | None], ...] = (
     ("earmarked_products", None),
     ("earmark_links", None),
     ("earmark_targets", None),
+    ("earmark_prices", None),  # V32 price history (absent before V32 → not compared)
 )
 
 

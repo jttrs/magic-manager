@@ -2713,47 +2713,6 @@
         }
       }
     },
-    "/api/art/lookup": {
-      "post": {
-        "tags": [
-          "art"
-        ],
-        "summary": "Art Lookup",
-        "operationId": "art_lookup",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ArtSwapsIn"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ArtLookupOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/surf/draw": {
       "post": {
         "tags": [
@@ -3346,26 +3305,6 @@
           "summary"
         ],
         "title": "ActionOut"
-      },
-      "ArtLookupOut": {
-        "properties": {
-          "searched": {
-            "type": "integer",
-            "title": "Searched",
-            "description": "Cards asked about."
-          },
-          "added": {
-            "type": "integer",
-            "title": "Added",
-            "description": "On-theme printings new to the local catalog."
-          }
-        },
-        "type": "object",
-        "required": [
-          "searched",
-          "added"
-        ],
-        "title": "ArtLookupOut"
       },
       "ArtSwapRowOut": {
         "properties": {

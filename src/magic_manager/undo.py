@@ -28,6 +28,7 @@ from pathlib import Path
 
 from . import db
 from .analytics import consent
+from .sets import PARTIAL_SETS_KEY
 
 # Your data, parents before children. Card/price/EDHREC/tag tables are caches
 # and are never touched (cards only ever grow, so restored rows' FKs hold).
@@ -39,8 +40,9 @@ USER_TABLES = (
 )
 
 # ``settings`` keys a restore must NOT roll back: they reflect the latest choice
-# (opting out of tracking, then pressing Undo, must not opt you back in).
-KEEP_SETTINGS = (consent.SETTING_KEY,)
+# (opting out of tracking, then pressing Undo, must not opt you back in), or
+# describe the card catalog, which a restore never touches.
+KEEP_SETTINGS = (consent.SETTING_KEY, PARTIAL_SETS_KEY)
 
 SESSION_GAP_SECONDS = 30 * 60
 SNAPSHOT_FILE = "undo.db"

@@ -62,40 +62,42 @@ an empty duplicate of #118.
   - **Deferred to hosting (§25.4):** the analytics `user_key` is always `local`, so under hosting every user would share one key and delete-my-data would delete everyone's events. The 600/min event limit is global rather than per user.
 
 - **#115**
-  - `deals._with_target_prices` catches every exception, so a code bug looks like a missing market price.
-  - `target_met` can rest on an old snapshot when later reads keep failing.
-  - The NEW/DIVERGED classification in `rehearse_migration` has no test.
-  - Pre-existing: `earmark_prices` isn't in `_EARMARK_TABLES` or `OWNERSHIP`.
+  - `deals._with_target_prices` catches every exception, so a code bug looks like a missing market price. No longer applies: #126 split expected misses from bugs, which are logged as `BUG:`.
+  - `target_met` can rest on an old snapshot when later reads keep failing. Fixed: a store whose latest read failed can't meet a target (`deals._target_met` in the refresh; web `targetMet` skips offers with a read error).
+  - The NEW/DIVERGED classification in `rehearse_migration` has no test. No longer applies: #126 added `tests/test_rehearse_status.py`.
+  - Pre-existing: `earmark_prices` isn't in `_EARMARK_TABLES` or `OWNERSHIP`. Fixed: protected by the rehearsal from V32 on (it is created already seeded) and fingerprinted by `post_merge_upgrade`.
 - **#118**
-  - Look-up upserts make never-synced sets look synced.
-  - `POST /api/art/lookup` does long writes inside the request instead of as a job.
-  - Quick-pick chips assume a tag's label equals its slug.
-  - Swapping onto a printing already in the deck loses the undo.
+  - Look-up upserts make never-synced sets look synced. Fixed: look-up paths (search fallback, art look-up, live floor, cart) upsert through `sets.upsert_lookup_cards`, which marks a set first seen that way as partial (`settings['sets.partial']`); `unsynced_set_codes` still reports it until `sets.sync` pulls it whole.
+  - `POST /api/art/lookup` does long writes inside the request instead of as a job. Fixed: it is the `art.lookup` job now.
+  - Quick-pick chips assume a tag's label equals its slug. Fixed: an answer for the current query is fresh whatever its label, and the field shows the server's label.
+  - Swapping onto a printing already in the deck loses the undo. No longer applies: fixed in #126 (`absorbed`).
 - **#121**
-  - `surf._list` duplicates `util.decode_json_list`.
-  - The token layout check is hard-coded.
-  - `tcgplayerSearch` is copied from CardInspector.
-  - The "every card" stop message can show while fewer than `total` cards are on screen.
-  - Cmd-click on a card link closes the surfer.
+  - `surf._list` duplicates `util.decode_json_list`. No longer applies: fixed in #126.
+  - The token layout check is hard-coded. No longer applies: fixed in #126 (`util.is_token_layout`).
+  - `tcgplayerSearch` is copied from CardInspector. No longer applies: fixed in #126 (one copy in `core/surf.ts`).
+  - The "every card" stop message can show while fewer than `total` cards are on screen. Fixed: `feedEnd` tells "every match shown" from "random draws keep repeating".
+  - Cmd-click on a card link closes the surfer. No longer applies: fixed in #126.
 - **#117**
-  - `row_value` duplicates `cli._row_line_value`.
-  - The engine hard-codes the `mtgjson.sh` cache layout.
+  - `row_value` duplicates `cli._row_line_value`. No longer applies: fixed in #126 (the CLI delegates).
+  - The engine hard-codes the `mtgjson.sh` cache layout. Fixed: `mtgjson.cache_path`/`is_cached` are the one Python mirror of it.
 - **#120**
-  - `SceneOut.kind` isn't validated against the config.
-  - `scene_table.py` now reads only local cards.
-  - The scene exemption reaches Market → Cards, and that isn't documented.
+  - `SceneOut.kind` isn't validated against the config. Fixed: `config.family_scenes` rejects a `kind` outside `SCENE_KINDS`.
+  - `scene_table.py` now reads only local cards. No longer applies: fixed in #126 (live by default, `--local`).
+  - The scene exemption reaches Market → Cards, and that isn't documented. Fixed: documented (`market.family_card_prices`, CLAUDE.md) and tested.
 - **#122**
-  - The Keychain calls have no timeout.
-  - No test covers the `security` arguments.
+  - The Keychain calls have no timeout. No longer applies: fixed in #126.
+  - No test covers the `security` arguments. No longer applies: fixed in #126 (`tests/test_secrets.py`).
 - **#114**
-  - Live scans of basic lands are slow.
-  - Etched-only printings get a different label in the web than in the script.
+  - Live scans of basic lands are slow. Fixed: basic lands use their local floor instead of a many-page live scan.
+  - Etched-only printings get a different label in the web than in the script. Fixed: `foil_gap` counts etched as foil, so both say "foil only".
 
 ## Fix status
 
 All P1 and P2 findings were fixed in the follow-up PR on branch
 `torre/post-merge-code-reviews`, one commit per area. The cheap P3s that sat in
-the same code were fixed alongside them. The rest of the P3s are recorded above.
+the same code were fixed alongside them. The remaining P3s were fixed on branch
+`torre/fix-review-p3-findings`; each entry above says how (or why it no longer
+applies). Only the #124 hosting items stay deferred.
 
 Decisions:
 - **#122 (finding 14):** the Keychain items keep their names. `secrets.get` now

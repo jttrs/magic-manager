@@ -7,7 +7,8 @@ Two notions of a card's floor, both oracle-grain (functional equivalence = same
 * **anywhere** — the cheapest printing of a card across EVERY set, from a LIVE
   Scryfall ``oracleid:`` search. :func:`anywhere_floors` batches many oracle_ids
   into a few ``(oracleid:a or oracleid:b …) unique=prints`` queries (⌈N/20⌉
-  requests, not one per card) and is memoized per run.
+  requests, not one per card) and is memoized per run. Basic lands (thousands
+  of printings, cents anywhere) use their local floor instead of a live scan.
 * **local / in-family** — the cheapest printing among the locally-synced
   ``cards`` rows (optionally restricted to a set family), NO network. This is the
   oracle-grain sibling of :func:`sets.card_price_map`; :func:`sets.lowest_price_by_oracle`
@@ -124,6 +125,11 @@ def _scan_anywhere(oracle_ids: list[str], *, cards: dict[str, dict] | None = Non
     abort a batch catch it and degrade the affected ids to unpriced)."""
     ids = [o for o in dict.fromkeys(oracle_ids) if o]
     out: dict[str, FloorPair] = {o: FloorPair() for o in ids}
+    # Basic lands have thousands of printings (dozens of search pages each) and
+    # cost cents anywhere: their locally synced floor stands in for the live scan.
+    local = local_floors(_basic_land_oracles(ids), finish_mode="preserve")
+    out.update(local)
+    ids = [o for o in ids if o not in local]
     for i in range(0, len(ids), _FLOOR_CHUNK):
         chunk = ids[i:i + _FLOOR_CHUNK]
         q = "(" + " or ".join(f"oracleid:{o}" for o in chunk) + ")"
@@ -145,6 +151,16 @@ def _scan_anywhere(oracle_ids: list[str], *, cards: dict[str, dict] | None = Non
                 if cards is not None and p.get("id"):
                     cards[p["id"]] = p
     return out
+
+
+def _basic_land_oracles(oracle_ids: list[str]) -> list[str]:
+    """The ids that are basic lands (incl. snow basics), per the local catalog."""
+    if not oracle_ids:
+        return []
+    with db.connect() as c:
+        return [r[0] for r in c.execute(
+            f"SELECT DISTINCT oracle_id FROM cards WHERE oracle_id IN ({','.join('?' * len(oracle_ids))}) "
+            "AND type_line LIKE 'Basic %Land%'", oracle_ids)]
 
 
 def anywhere_floors(
@@ -266,7 +282,8 @@ def _persist_floor_printings(conn, pairs: Iterable[Floor | FloorPair], found: di
         f"SELECT scryfall_id FROM cards WHERE scryfall_id IN ({','.join('?' * len(ids))})", ids)}
     new = [found[i] for i in ids if i not in known]
     if new:
-        db.upsert_cards(conn, new)
+        from . import sets
+        sets.upsert_lookup_cards(conn, new)
 
 
 def printing_floors(scryfall_ids: Iterable[str], *, live: bool = False) -> dict[str, PrintingFloor]:

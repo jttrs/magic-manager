@@ -26,6 +26,8 @@ describe('price targets', () => {
     expect(targetMet({ ...p, targetPrice: 74.99 }, undefined)).toBe(false);
     expect(targetMet(prod({ offers: [offer({ available: false, price: 1 })], targetPrice: 70, target: T('price', 70) }), undefined)).toBe(false);
     expect(targetMet(prod({}), undefined)).toBeNull();
+    // the cheap store's last refresh failed: its old price can't meet the target
+    expect(targetMet(prod({ offers: [offer({ price: 60, error: 'Blocked' }), offer({ price: 90 })], targetPrice: 70, target: T('price', 70) }), undefined)).toBe(false);
   });
   it('describes the target the way it was set', () => {
     expect(targetText(T('price', 72), 'sealed')).toBe('$72.00');

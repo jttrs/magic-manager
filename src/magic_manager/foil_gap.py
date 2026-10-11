@@ -33,8 +33,10 @@ def is_fancy(treatment: str | None) -> bool:
 
 def foil_gap(*, finishes: Iterable[str], treatment: str | None,
              nonfoil: float | None, foil: float | None) -> FoilGap:
-    """Bucket a printing and, when both plain finishes are priced, its gap."""
-    fins = list(finishes or [])
+    """Bucket a printing and, when both plain finishes are priced, its gap.
+    An ``etched`` finish counts as foil (the Collection/ledger rule), so the
+    script's raw Scryfall finishes and the web's normalized ones agree."""
+    fins = list(dict.fromkeys("foil" if f == "etched" else f for f in (finishes or [])))
     if is_fancy(treatment):
         return FoilGap("fancy")
     if fins == ["foil"]:

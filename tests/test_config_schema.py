@@ -218,3 +218,12 @@ def test_override_dir_yields_distinct_result(tmp_path):
     assert set(alt) == {"zzztest"}
     # the real repo config is unaffected (distinct cache entry, not clobbered)
     assert "zzztest" not in config.family_scenes()
+
+
+def test_scene_kind_is_validated(tmp_path):
+    assert all(sc.get("kind", "scene") in config.SCENE_KINDS for scs in config.family_scenes().values() for sc in scs)
+    (tmp_path / "families.toml").write_text(
+        '[[scenes.zzzkind]]\n'
+        'name = "T"\nartist = "N"\nset = "zzzkind"\ncn_lo = 1\ncn_hi = 2\nkind = "Poster"\n')
+    with pytest.raises(config.ConfigError, match="kind must be one of"):
+        config.family_scenes(override=tmp_path)

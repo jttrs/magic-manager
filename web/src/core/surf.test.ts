@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { SurfCardOut, SurfDrawOut } from './api';
 import {
-  activeFilters, artists, decodeSurf, drawRequest, EMPTY_FILTERS, encodeSurf, feedCards, feedSummary, nextPage, ownedLine, printingLine, textFaces, toggleColor,
+  activeFilters, artists, decodeSurf, drawRequest, EMPTY_FILTERS, encodeSurf, feedCards, feedEnd, feedSummary, nextPage, ownedLine, printingLine, textFaces, toggleColor,
 } from './surf';
 
 const card = (id: string, o: Partial<SurfCardOut> = {}): SurfCardOut => ({
@@ -61,6 +61,13 @@ describe('feed', () => {
     expect(nextPage(dry)).toEqual({ offset: 0, first: false });
     expect(nextPage([...dry, page(['a'])])).toBeUndefined();
     expect(nextPage([...dry, page(['b'])])).toEqual({ offset: 0, first: false });
+  });
+
+  it('says why it stopped: every match shown, or random draws repeating short of the total', () => {
+    expect(feedEnd([page(['a', 'b'], { total: 2 })])).toBe('all');
+    expect(feedEnd([page(['a'], { exhausted: true, total: 9 })])).toBe('all');
+    expect(feedEnd([page(['a'], { total: 50 }), page(['a']), page(['a']), page(['a'])])).toBe('repeating');
+    expect(feedEnd([page(['a'], { source: 'owned', next_offset: 40, exhausted: true, total: 40 })])).toBe('all');
   });
 
   it('keeps paging your cards through empty, unexhausted pages until the server says done', () => {

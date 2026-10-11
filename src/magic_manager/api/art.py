@@ -2,7 +2,8 @@
 editor — Scryfall Tagger art tags, and for each card in a draft the printings
 whose artwork carries the chosen tag.
 
-Adapts :mod:`magic_manager.art_swap` (the engine).
+Adapts :mod:`magic_manager.art_swap` (the engine); the Scryfall look-up is
+the ``art.lookup`` job.
 """
 from __future__ import annotations
 
@@ -11,6 +12,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from .. import art_swap
+from .jobs import Artifact, JobResult, JobSpec, ProgressEvent, ProgressFn, register
 from .decks import DraftCardIn
 from .ingest import PrintingOut
 
@@ -54,11 +56,6 @@ class ArtSwapsOut(BaseModel):
         description="Per printing you own, free copies per finish (`nonfoil`/`foil`); `printings[sid].free` is the finish-agnostic total.")
 
 
-class ArtLookupOut(BaseModel):
-    searched: int = Field(description="Cards asked about.")
-    added: int = Field(description="On-theme printings new to the local catalog.")
-
-
 def tags(q: str, limit: int = 20) -> ArtTagsOut:
     return ArtTagsOut.model_validate(art_swap.search_tags(q, limit))
 
@@ -71,5 +68,22 @@ def swaps(body: ArtSwapsIn) -> ArtSwapsOut:
     return ArtSwapsOut.model_validate(art_swap.swaps(body.tag, _sids(body)))
 
 
-def lookup(body: ArtSwapsIn) -> ArtLookupOut:
-    return ArtLookupOut.model_validate(art_swap.lookup_scryfall(body.tag, _sids(body)))
+def _run_lookup(inputs: ArtSwapsIn, progress: ProgressFn) -> JobResult:
+    """Ask Scryfall for more on-theme printings of the draft's cards (network,
+    upserts the catalog) — a job, so the request never waits on Scryfall."""
+    def tick(done: int, total: int) -> None:
+        progress(ProgressEvent(done, total, f"asking Scryfall about {total} cards"))
+    r = art_swap.lookup_scryfall(inputs.tag, _sids(inputs), progress=tick)
+    found = f"found {r['added']} more printing{'' if r['added'] == 1 else 's'}" if r["added"] else "nothing new"
+    n = r["searched"]
+    return JobResult(summary=f"Scryfall: {found} for {n} card{'' if n == 1 else 's'}",
+                     artifacts=[Artifact(kind="json", label="lookup", data=r)])
+
+
+LOOKUP = register(JobSpec(
+    name="art.lookup",
+    title="Look on Scryfall for on-theme art",
+    description="Ask Scryfall for printings of the draft's cards whose art carries the tag, and add any missing to the local catalog.",
+    input_model=ArtSwapsIn,
+    run=_run_lookup,
+))

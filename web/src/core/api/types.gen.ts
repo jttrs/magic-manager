@@ -19,24 +19,6 @@ export type ActionOut = {
 };
 
 /**
- * ArtLookupOut
- */
-export type ArtLookupOut = {
-    /**
-     * Searched
-     *
-     * Cards asked about.
-     */
-    searched: number;
-    /**
-     * Added
-     *
-     * On-theme printings new to the local catalog.
-     */
-    added: number;
-};
-
-/**
  * ArtSwapRowOut
  */
 export type ArtSwapRowOut = {
@@ -7254,31 +7236,6 @@ export type ArtSwapsResponses = {
 };
 
 export type ArtSwapsResponse = ArtSwapsResponses[keyof ArtSwapsResponses];
-
-export type ArtLookupData = {
-    body: ArtSwapsIn;
-    path?: never;
-    query?: never;
-    url: '/api/art/lookup';
-};
-
-export type ArtLookupErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type ArtLookupError = ArtLookupErrors[keyof ArtLookupErrors];
-
-export type ArtLookupResponses = {
-    /**
-     * Successful Response
-     */
-    200: ArtLookupOut;
-};
-
-export type ArtLookupResponse = ArtLookupResponses[keyof ArtLookupResponses];
 
 export type SurfDrawData = {
     body: SurfDrawIn;

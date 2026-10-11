@@ -208,11 +208,12 @@ export function inStockBest(p: DealProduct): Offer | null {
   return p.offers.find((o) => o.price != null && o.available !== false) ?? null;
 }
 
-/** Met: the best in-stock price is at or under the target's price. Null when that price isn't known. */
+/** Met: the best in-stock price is at or under the target's price. Null when that price isn't known.
+ *  A store whose last refresh failed can't meet it — its price is an old one (mirrors `deals._target_met`). */
 export function targetMet(p: DealProduct, cost: ProductCostOut | undefined): boolean | null {
   const at = targetPriceOf(p, cost);
   if (at == null) return null;
-  const best = inStockBest(p);
+  const best = p.offers.find((o) => o.price != null && o.available !== false && !o.error);
   return best?.price != null && best.price <= at + 1e-9;
 }
 
