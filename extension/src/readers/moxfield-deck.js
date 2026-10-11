@@ -20,11 +20,12 @@ async function readMoxfieldDeck(deckId) {
 
   function str(v, n) { return v == null ? null : String(v).slice(0, n); }
   var boards = {};
-  var count = 0;
+  var count = 0, shaped = false;
   Object.keys(data.boards).slice(0, 20).forEach(function (bn) {
     var board = data.boards[bn];
     var entries = board && board.cards;
-    if (!entries || typeof entries !== 'object') return;
+    if (!entries || typeof entries !== 'object' || Array.isArray(entries)) return;
+    shaped = true;
     var cards = {};
     Object.keys(entries).slice(0, 1000).forEach(function (k, i) {
       var e = entries[k] || {};
@@ -45,7 +46,8 @@ async function readMoxfieldDeck(deckId) {
     });
     boards[str(bn, 40)] = { cards: cards };
   });
-  if (!count) return { ok: false, code: 'moxfield.changed' };
+  // A board in the known shape with no cards is an empty deck; no board in that shape is a page change.
+  if (!count) return { ok: false, code: shaped ? 'moxfield.empty' : 'moxfield.changed' };
   var author = data.createdByUser && (data.createdByUser.userName || data.createdByUser.displayName);
   return {
     ok: true,

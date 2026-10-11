@@ -77,7 +77,7 @@ function readTcgplayerCart(doc) {
       tcgplayer_product_id: pid ? Number(pid[1]) : null,
       name: name || null,
       set_name: setName,
-      number: number,
+      number: kind === 'single' ? number : null,
       finish: finish,
       condition: condition,
       language: kind === 'single' ? (language || 'English') : null,

@@ -80,7 +80,7 @@ async function startCartRead(context: BrowserContext, page: Page) {
   await page.bringToFront();
   await page.getByRole('button', { name: 'Check my cart' }).click();
   const dialog = page.getByRole('dialog', { name: 'Check my cart' });
-  const approval = context.waitForEvent('page', (p) => p.url().endsWith('/src/approve.html'));
+  const approval = context.waitForEvent('page', (p) => p.url().includes('/src/approve.html'));
   await dialog.getByRole('button', { name: 'Read my cart' }).click();
   return { dialog, approve: await approval };
 }
@@ -115,11 +115,11 @@ test('a TCGplayer cart: the real extension reads your cart tab, you approve, the
   await page.getByRole('button', { name: 'Check my cart' }).click();
   const dialog = page.getByRole('dialog', { name: 'Check my cart' });
   await dialog.getByRole('radio', { name: 'TCGplayer' }).click();
-  const approval = ext.context.waitForEvent('page', (p) => p.url().endsWith('/src/approve.html'));
+  const approval = ext.context.waitForEvent('page', (p) => p.url().includes('/src/approve.html'));
   await dialog.getByRole('button', { name: 'Read my cart' }).click();
   const approve = await approval;
   await expect(approve.locator('#title')).toHaveText('Send your TCGplayer cart?');
-  await expect(approve.locator('#summary')).toHaveText('TCGplayer cart · 7 lines · 8 items · $126.69');
+  await expect(approve.locator('#summary')).toHaveText('TCGplayer cart · 8 lines · 9 items · $128.54');
   await expect(approve.locator('#table')).toContainText('TCGplayer #487805');
   await expect(approve.locator('#table')).toContainText('LP');
   expect(bodies).toEqual([]);
@@ -152,7 +152,7 @@ test('a Moxfield collection: the real extension reads every page in your Moxfiel
   await d.getByRole('tab', { name: 'Moxfield collection' }).click();
   await d.getByRole('radio', { name: /A shared link/ }).check();
   await d.getByRole('textbox', { name: /collection or binder link/ }).fill('https://moxfield.com/collection/hgsItGBwRUybHyN0WZR41w');
-  const approval = ext.context.waitForEvent('page', (p) => p.url().endsWith('/src/approve.html'));
+  const approval = ext.context.waitForEvent('page', (p) => p.url().includes('/src/approve.html'));
   await d.getByRole('button', { name: 'Read from Moxfield' }).click();
   const approve = await approval;
   await expect(approve.locator('#title')).toHaveText('Send your Moxfield cards?');
@@ -188,7 +188,7 @@ test('a request while a long read is still reading (no window yet) is refused as
   const first = ask('long-read-0001', 'moxfield_collection', { url: 'https://moxfield.com/collection/hgsItGBwRUybHyN0WZR41w' });
   await expect.poll(() => ext.worker.evaluate(async () => (await chrome.storage.session.get('pending')).pending?.stage)).toBe('reading');
   expect(await ask('second-request-2', 'cart', {})).toMatchObject({ ok: false, code: 'request.busy' });
-  const approval = ext.context.waitForEvent('page', (p) => p.url().endsWith('/src/approve.html'));
+  const approval = ext.context.waitForEvent('page', (p) => p.url().includes('/src/approve.html'));
   release();
   expect(await first).toMatchObject({ ok: true, status: 'awaiting_approval' });
   await (await approval).getByRole('button', { name: 'Don’t send' }).click();
@@ -218,6 +218,38 @@ test('a second request while one waits is refused as busy', async ({ ext }) => {
     window.postMessage({ channel: 'magic-manager/companion', from: 'app', type: 'request', id: 'second-request-1', kind: 'cart', params: {} }, location.origin);
   }));
   expect(second).toMatchObject({ type: 'ack', ok: false, code: 'request.busy' });
+});
+
+test('two requests sent back to back: the second is busy, and Send in the one window delivers the FIRST request’s data', async ({ ext }) => {
+  const { page } = await appPage(ext.context);
+  await openCartTab(ext.context);
+  await page.bringToFront();
+  await expect(page.getByRole('button', { name: 'Browser companion · connected' })).toBeVisible();
+  const approval = ext.context.waitForEvent('page', (p) => p.url().includes('/src/approve.html'));
+  // Both posted in the same tick, so the second reaches the worker while the first is still reading.
+  const acks = await page.evaluate(() => new Promise<{ id: string; ok: boolean; code?: string; status?: string }[]>((resolve) => {
+    const got: { id: string; ok: boolean; code?: string; status?: string }[] = [];
+    window.addEventListener('message', (ev) => {
+      if (ev.data?.from !== 'companion' || ev.data.type !== 'ack') return;
+      got.push({ id: ev.data.id, ok: ev.data.ok, code: ev.data.code, status: ev.data.status });
+      if (got.length === 2) resolve(got);
+    });
+    for (const id of ['back-to-back-A1', 'back-to-back-B2']) {
+      window.postMessage({ channel: 'magic-manager/companion', from: 'app', type: 'request', id, kind: 'cart', params: {} }, location.origin);
+    }
+  }));
+  expect(acks.find((a) => a.id === 'back-to-back-A1')).toMatchObject({ ok: true, status: 'awaiting_approval' });
+  expect(acks.find((a) => a.id === 'back-to-back-B2')).toMatchObject({ ok: false, code: 'request.busy' });
+  const approve = await approval;
+  expect(new URL(approve.url()).searchParams.get('id')).toBe('back-to-back-A1');   // the window is bound to its own request
+  const result = page.evaluate(() => new Promise<{ id: string; ok: boolean; data: { items: unknown[] } }>((resolve) => {
+    window.addEventListener('message', (ev) => { if (ev.data?.from === 'companion' && ev.data.type === 'result') resolve(ev.data); });
+  }));
+  await expect(approve.getByRole('button', { name: 'Send to magic-manager' })).toBeEnabled();
+  await approve.getByRole('button', { name: 'Send to magic-manager' }).click();
+  const delivered = await result;
+  expect(delivered).toMatchObject({ id: 'back-to-back-A1', ok: true });
+  expect(delivered.data.items).toEqual(EXPECTED.items);
 });
 
 const forgedRequest = (page: Page) => page.evaluate(() => new Promise((resolve) => {

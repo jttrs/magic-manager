@@ -155,6 +155,8 @@ test.describe('Moxfield deck reader', () => {
     ['a deleted deck', { status: 404, contentType: 'application/json', body: '{}' }, 'moxfield.not_found'],
     ['a server error', { status: 500, contentType: 'application/json', body: '{}' }, 'moxfield.http'],
     ['a changed format', { status: 200, contentType: 'application/json', body: '{"mainboard":[]}' }, 'moxfield.changed'],
+    ['boards whose cards changed shape', { status: 200, contentType: 'application/json', body: '{"boards":{"mainboard":{"cards":[]}}}' }, 'moxfield.changed'],
+    ['a recognised deck with no cards (not a page change)', { status: 200, contentType: 'application/json', body: '{"boards":{"mainboard":{"cards":{}}}}' }, 'moxfield.empty'],
   ] as const) {
     test(`names ${what} (${code})`, async ({ page }) => {
       expect(await readDeck(page, api)).toMatchObject({ ok: false, code });

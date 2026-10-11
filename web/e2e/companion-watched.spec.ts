@@ -79,7 +79,7 @@ test('approve the list, then the readings — only then the read gets the pages;
   await page.goto(`${APP}/market?subject=deals&deals=watching`);
   await expect(page.getByRole('button', { name: 'Browser companion · connected' })).toBeVisible();
 
-  const approval = context.waitForEvent('page', (p) => p.url().endsWith('/src/approve.html'));
+  const approval = context.waitForEvent('page', (p) => p.url().includes('/src/approve.html'));
   await page.getByRole('button', { name: 'Read watched prices' }).click();
   const approve = await approval;
 
@@ -125,7 +125,7 @@ test('Don’t read at the list: nothing is opened, read or sent', async ({ ext }
   await page.route('**/api/jobs/deals.watchlist', (r) => { jobs.push(r.request().postDataJSON()); return r.fulfill({ status: 500, json: { detail: 'stop here' } }); });
   await page.goto(`${APP}/market?subject=deals&deals=watching`);
   await expect(page.getByRole('button', { name: 'Browser companion · connected' })).toBeVisible();
-  const approval = context.waitForEvent('page', (p) => p.url().endsWith('/src/approve.html'));
+  const approval = context.waitForEvent('page', (p) => p.url().includes('/src/approve.html'));
   await page.getByRole('button', { name: 'Read watched prices' }).click();
   const approve = await approval;
   await approve.getByRole('button', { name: 'Don’t read' }).click();
@@ -144,7 +144,7 @@ test('a forged "send" of the list itself is refused — the plan is never delive
   });
   await page.goto(`${APP}/market?subject=deals&deals=watching`);
   await expect(page.getByRole('button', { name: 'Browser companion · connected' })).toBeVisible();
-  const approval = context.waitForEvent('page', (p) => p.url().endsWith('/src/approve.html'));
+  const approval = context.waitForEvent('page', (p) => p.url().includes('/src/approve.html'));
   await page.getByRole('button', { name: 'Read watched prices' }).click();
   const approve = await approval;
   await expect(approve.locator('#title')).toHaveText('Read your watched store pages?');

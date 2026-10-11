@@ -101,9 +101,9 @@ def test_tcgplayer_cart_from_the_reader_golden(carts):
     _price(4, "1.00", "6.00")  # Ardyn foil at $5.49 — under market
     _own(2)                    # an Aerith Gainsborough already owned
     r = cart.audit([i.model_dump() for i in req.items])
-    assert (r["lines"], r["copies"], r["total"]) == (7, 8, 126.69)
+    assert (r["lines"], r["copies"], r["total"]) == (8, 9, 128.54)   # + the non-Magic Pikachu line
     assert r["unidentified"] == []
-    assert [(n["name"], n["kind"]) for n in r["not_cards"]] == [("FINAL FANTASY - Play Booster Pack", "sealed")]
+    assert [(n["name"], n["kind"]) for n in r["not_cards"]] == [("FINAL FANTASY - Play Booster Pack", "sealed"), ("Pikachu", "other")]
     # Japanese + English Aerith = the same printing: bought twice, and already owned (both lines).
     assert {(d["name"], d["note"]) for d in r["dupes"]} == {("Aerith Gainsborough", "×2 nonfoil"), ("Vengeful Bloodwitch", "×2 nonfoil")}
     assert {(o["name"], o["language"]) for o in r["owned"]} == {("Aerith Gainsborough", "Japanese"), ("Aerith Gainsborough", "English")}
@@ -196,7 +196,10 @@ def client(carts, tmp_path, monkeypatch, copy_real_config):
 def test_cart_lines_route_takes_each_store_and_refuses_extras(client):
     items = _golden("tcgplayer-cart.expected.json")["items"]
     r = client.post("/api/cart/lines", json={"items": items, "source": "extension", "store": "tcgplayer"})
-    assert r.status_code == 200 and r.json()["copies"] == 8 and r.json()["not_cards"][0]["kind"] == "sealed"
+    assert r.status_code == 200 and r.json()["copies"] == 9 and r.json()["not_cards"][0]["kind"] == "sealed"
+    # The reader sends number: null for a non-Magic line; a "025/165" would 422 the whole cart (strict pattern).
+    assert items[-1]["kind"] == "other" and items[-1]["number"] is None
+    assert client.post("/api/cart/lines", json={"items": [{**items[-1], "number": "025/165"}], "source": "extension", "store": "tcgplayer"}).status_code == 422
     assert next(h for h in scraper_health.health() if h.scraper.key == "companion-cart/tcgplayer").status == "ok"
     ck = _golden("cardkingdom-cart.expected.json")["items"]
     assert client.post("/api/cart/lines", json={"items": ck, "source": "extension", "store": "cardkingdom"}).status_code == 200

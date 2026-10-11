@@ -166,6 +166,11 @@
       "message": "Moxfield answered with a deck format the companion doesn’t recognise.",
       "fix": "Export the deck as text on Moxfield and paste it instead, and report this (the scrape-doctor skill has the steps)."
     },
+    "moxfield.empty": {
+      "where": "extension",
+      "message": "This deck has no cards yet.",
+      "fix": "Add cards on Moxfield, then read it again."
+    },
     "moxfield.http": {
       "where": "extension",
       "message": "Moxfield returned an error.",

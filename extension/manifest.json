@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "magic-manager companion",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Reads your Mana Pool, TCGplayer or Card Kingdom cart, open store tabs, Moxfield decks, collection and binders, Archidekt decks, watched store pages and store order history in your own browser and, only after you approve, hands the card lines to your magic-manager app.",
   "minimum_chrome_version": "116",
   "permissions": [

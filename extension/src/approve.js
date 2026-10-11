@@ -101,13 +101,15 @@ function render(p) {
 }
 
 let created = 0;
+/** The request this window was opened for (from its address) — decisions are always sent for THIS id. */
+let requestId = null;
 
 async function decide(approve) {
   $('approve').disabled = $('deny').disabled = true;
   const p = (await chrome.storage.session.get('pending')).pending;
-  if (!p) { window.close(); return; }
+  if (!p || p.id !== requestId) { window.close(); return; }   // a newer request replaced ours
   if (approve === true && p.stage === 'confirm') return readPages(p);
-  const r = await chrome.runtime.sendMessage({ type: 'decision', id: p.id, approve });
+  const r = await chrome.runtime.sendMessage({ type: 'decision', id: requestId, approve });
   if (approve === true && r && !r.ok) { $('status').textContent = r.message || 'Not sent.'; return; }
   window.close();
 }
@@ -149,8 +151,9 @@ function ready(p) {
 }
 
 async function main() {
+  requestId = new URLSearchParams(location.search).get('id');
   const p = (await chrome.storage.session.get('pending')).pending;
-  if (!p) { $('status').textContent = 'Nothing is waiting for approval.'; $('approve').disabled = true; return; }
+  if (!p || p.id !== requestId) { $('status').textContent = 'Nothing is waiting for approval.'; $('approve').disabled = true; return; }
   $('approve').addEventListener('click', () => decide(true));
   $('deny').addEventListener('click', () => decide(false));
   const tick = () => {

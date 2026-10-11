@@ -70,6 +70,22 @@ async function fromApp(msg, sender) {
   if (typeof msg.id !== 'string' || !/^[A-Za-z0-9_-]{8,64}$/.test(msg.id) || !KINDS.includes(msg.kind)) return fail('request.invalid');
   const params = msg.params && typeof msg.params === 'object' ? msg.params : {};
 
+  // Claim the one-request slot in memory BEFORE any await after this check, so two overlapping
+  // requests can't both pass it; the placeholder in session storage (below) survives a worker restart.
+  if (claimed && Date.now() - claimed.at < APPROVAL_TTL_MS) return fail('request.busy');
+  const mine = { id: msg.id, at: Date.now() };
+  claimed = mine;
+  try {
+    return await handleRequest(msg, sender, pinned, params);
+  } finally {
+    if (claimed === mine) claimed = null;
+  }
+}
+
+/** In-memory claim on the request slot while fromApp reads (see fromApp); expires like a pending request. */
+let claimed = null;
+
+async function handleRequest(msg, sender, pinned, params) {
   const busy = await pendingRequest();
   if (busy) {
     if (Date.now() - busy.created < APPROVAL_TTL_MS) {
@@ -103,7 +119,7 @@ async function fromApp(msg, sender) {
     summary: summarize(msg.kind, read.data), created: Date.now(), windowId: null,
     stage: msg.kind === 'watched' ? 'confirm' : 'send' };
   await chrome.storage.session.set({ pending });
-  const win = await chrome.windows.create({ url: chrome.runtime.getURL('src/approve.html'), type: 'popup', width: 620, height: 720, focused: true });
+  const win = await chrome.windows.create({ url: chrome.runtime.getURL(`src/approve.html?id=${msg.id}`), type: 'popup', width: 620, height: 720, focused: true });
   pending.windowId = win.id;
   await chrome.storage.session.set({ pending });
   return { ok: true, status: 'awaiting_approval', summary: pending.summary };

@@ -124,6 +124,7 @@ code = { type = "enum", required = true, values = [
   "moxfield.blocked",
   "moxfield.load_timeout",
   "moxfield.changed",
+  "moxfield.empty",
   "moxfield.http",
   "deck.empty",
   "permission.orders_off",
