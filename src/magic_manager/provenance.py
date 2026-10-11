@@ -203,7 +203,8 @@ def card_holdings(scryfall_id: str) -> Holdings:
 # (before V19) carry no deltas — their copies live in the reconstructed buckets —
 # and product-coverage (``trueup:``) entries are dated when they were IDENTIFIED,
 # not when bought. A removal is its own (negative) event, so "held" nets removals
-# against acquisitions newest-first (LIFO): per printing-finish, the held copies
+# against the copies held when the removal was written, newest acquisition first
+# (LIFO, walking the ledger rows in order): per printing-finish, the held copies
 # across all entries always sum to what is owned today.
 
 HistoryKind = Literal["deck", "pool", "singles", "checklist", "unknown", "move", "purchase"]
@@ -345,11 +346,16 @@ def _balances(conn, ingest_id: int | None = None):
 
 
 def _held(conn, sids=None) -> dict[tuple[int, str, str], int]:
-    """``(ingest_id, sid, finish) -> held``: each event's positive balance with later
-    removals (negative balances on other events) drawn from the NEWEST acquisition
-    first, so per printing-finish the held copies sum to the owned quantity."""
+    """``(ingest_id, sid, finish) -> held``: the copies each event still accounts for,
+    from a walk of the ledger rows in the order they were written. A negative row
+    first takes the event's OWN held copies (a re-attribution moving them, or an
+    event undoing itself); the rest is a removal drawn from the copies held at that
+    moment, most recently acquired first. Per printing-finish the held copies sum
+    to the owned quantity. Walking rows (not per-event sums ordered by id) keeps a
+    removal from landing on copies re-attributed after it (a purchase match or a
+    trueup), which would make the source look as if it still held them."""
     rows: list = []
-    q = "SELECT ingest_id, scryfall_id, finish, SUM(delta) FROM inventory_events {} GROUP BY ingest_id, scryfall_id, finish"
+    q = "SELECT event_id, ingest_id, scryfall_id, finish, delta FROM inventory_events {}"
     if sids is None:
         rows = conn.execute(q.format("")).fetchall()
     else:
@@ -357,17 +363,29 @@ def _held(conn, sids=None) -> dict[tuple[int, str, str], int]:
         for i in range(0, len(ids), 500):
             part = ids[i:i + 500]
             rows += conn.execute(q.format(f"WHERE scryfall_id IN ({','.join('?' * len(part))})"), part).fetchall()
-    by_key: dict[tuple[str, str], list[tuple[int, int]]] = {}
-    for iid, sid, fin, bal in rows:
-        by_key.setdefault((sid, fin), []).append((iid, bal))
+    rows.sort(key=lambda r: r[0])
+    by_key: dict[tuple[str, str], dict[int, int]] = {}
     out: dict[tuple[int, str, str], int] = {}
-    for (sid, fin), evs in by_key.items():
-        pos = sorted((iid, b) for iid, b in evs if b > 0)
-        excess = sum(b for _, b in pos) - max(sum(b for _, b in evs), 0)
-        for iid, b in reversed(pos):
-            take = min(b, excess)
-            excess -= take
-            out[(iid, sid, fin)] = b - take
+    for _eid, iid, sid, fin, delta in rows:
+        held = by_key.setdefault((sid, fin), {})
+        if delta > 0:
+            held[iid] = held.pop(iid, 0) + delta   # re-insert: now the most recent acquisition
+            continue
+        need = -delta
+        own = min(need, held.get(iid, 0))
+        if own:
+            held[iid] -= own
+            need -= own
+        for other in reversed(list(held)):
+            if need <= 0:
+                break
+            take = min(need, held[other])
+            held[other] -= take
+            need -= take
+        held.setdefault(iid, 0)
+    for (sid, fin), held in by_key.items():
+        for iid, n in held.items():
+            out[(iid, sid, fin)] = n
     return out
 
 

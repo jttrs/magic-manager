@@ -141,3 +141,34 @@ def test_rejects_bad_orders(cards):
         purchases.save([Order(store="ebay", order_id="1", ordered_at="2026-01-01", lines=[])])
     with pytest.raises(purchases.PurchaseError):
         purchases.save([Order(store="manapool", order_id="1", ordered_at="yesterday", lines=[])])
+
+
+def test_removed_copy_is_not_matched_twice(cards):
+    """A removal written before a match must not land on the order later, which
+    would make the source look as if it still held the copy (retro review, #133)."""
+    unknown = _event("unattributed-backfill", "backfill:unattributed", status="backfill")
+    inventory.inventory_add(A, "nonfoil", 3, ingest_id=unknown)
+    inventory.inventory_remove(A, "nonfoil", 1)
+    alpha = lambda n: [OrderLine(name="Alpha", quantity=n, unit_price=1.0, scryfall_id=A)]  # noqa: E731
+    one = purchases.save([_order("1", lines=alpha(2))]).saved[0]
+    res = purchases.apply(one, [Decision(1, match=2)])
+    two = purchases.save([_order("2", lines=alpha(1))]).saved[0]
+    assert purchases.review(two).lines[0].matchable == 0
+    with pytest.raises(purchases.PurchaseError):
+        purchases.apply(two, [Decision(1, match=1)])
+    with db.connect() as conn:
+        held = provenance._held(conn, [A])
+    assert held[(res.ingest_id, A, "nonfoil")] == 2 and held[(unknown, A, "nonfoil")] == 0
+    assert _qty(A, "nonfoil") == 2 and _reconciled()
+
+
+def test_held_draws_a_removal_from_copies_held_at_that_time(cards):
+    first = _event("checklist", "set:fin")
+    inventory.inventory_add(A, "nonfoil", 3, ingest_id=first)
+    inventory.inventory_remove(A, "nonfoil", 1)
+    later = _event("checklist", "set:fin")
+    inventory.inventory_add(A, "nonfoil", 2, ingest_id=later)
+    with db.connect() as conn:
+        held = provenance._held(conn, [A])
+    # The removed copy came from the first batch, not one acquired after it.
+    assert (held[(first, A, "nonfoil")], held[(later, A, "nonfoil")]) == (2, 2)
