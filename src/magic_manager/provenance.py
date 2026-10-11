@@ -203,7 +203,8 @@ def card_holdings(scryfall_id: str) -> Holdings:
 # (before V19) carry no deltas — their copies live in the reconstructed buckets —
 # and product-coverage (``trueup:``) entries are dated when they were IDENTIFIED,
 # not when bought. A removal is its own (negative) event, so "held" nets removals
-# against acquisitions newest-first (LIFO): per printing-finish, the held copies
+# against the copies held when the removal was written, newest acquisition first
+# (LIFO, walking the ledger rows in order): per printing-finish, the held copies
 # across all entries always sum to what is owned today.
 
 HistoryKind = Literal["deck", "pool", "singles", "checklist", "unknown", "move", "purchase"]
@@ -345,11 +346,19 @@ def _balances(conn, ingest_id: int | None = None):
 
 
 def _held(conn, sids=None) -> dict[tuple[int, str, str], int]:
-    """``(ingest_id, sid, finish) -> held``: each event's positive balance with later
-    removals (negative balances on other events) drawn from the NEWEST acquisition
-    first, so per printing-finish the held copies sum to the owned quantity."""
+    """``(ingest_id, sid, finish) -> held``: the copies each event still accounts for,
+    from a walk of the ledger rows in the order they were written. A negative row
+    first takes the event's OWN held copies (a re-attribution moving them, or an
+    event undoing itself); only the part that takes the event's own balance below
+    zero is a removal, drawn from the copies held at that moment, most recently
+    acquired first. A re-attribution from a raw balance larger than what the event
+    still held moves copies already removed; that shortfall is taken off the
+    transfer's target (the next positive row), and a final newest-first netting is
+    the safety net, so per printing-finish the held copies sum to the owned quantity. Walking rows (not per-event sums ordered by id) keeps a
+    removal from landing on copies re-attributed after it (a purchase match or a
+    trueup), which would make the source look as if it still held them."""
     rows: list = []
-    q = "SELECT ingest_id, scryfall_id, finish, SUM(delta) FROM inventory_events {} GROUP BY ingest_id, scryfall_id, finish"
+    q = "SELECT event_id, ingest_id, scryfall_id, finish, delta FROM inventory_events {}"
     if sids is None:
         rows = conn.execute(q.format("")).fetchall()
     else:
@@ -357,17 +366,51 @@ def _held(conn, sids=None) -> dict[tuple[int, str, str], int]:
         for i in range(0, len(ids), 500):
             part = ids[i:i + 500]
             rows += conn.execute(q.format(f"WHERE scryfall_id IN ({','.join('?' * len(part))})"), part).fetchall()
-    by_key: dict[tuple[str, str], list[tuple[int, int]]] = {}
-    for iid, sid, fin, bal in rows:
-        by_key.setdefault((sid, fin), []).append((iid, bal))
+    rows.sort(key=lambda r: r[0])
+    by_key: dict[tuple[str, str], dict[int, int]] = {}
+    raw: dict[tuple[int, str, str], int] = {}
+    total: dict[tuple[str, str], int] = {}
+    owed: dict[tuple[str, str], int] = {}   # copies a transfer moved out but no longer held
+    for _eid, iid, sid, fin, delta in rows:
+        held = by_key.setdefault((sid, fin), {})
+        before = raw.get((iid, sid, fin), 0)
+        raw[(iid, sid, fin)] = before + delta
+        total[(sid, fin)] = total.get((sid, fin), 0) + delta
+        if delta > 0:
+            # A re-attribution writes +take right after -take: the copies it moved but
+            # its source no longer held were already removed, so they aren't held here.
+            absorb = min(delta, owed.get((sid, fin), 0))
+            owed[(sid, fin)] = owed.get((sid, fin), 0) - absorb
+            held[iid] = held.pop(iid, 0) + delta - absorb   # re-insert: now the most recent acquisition
+            continue
+        need = -delta
+        own = min(need, held.get(iid, 0))
+        if own:
+            held[iid] -= own
+            need -= own
+        # Only the part that takes the event below zero is a removal of someone else's copies;
+        # the rest moved copies already removed elsewhere (owed to the next acquisition).
+        removal = min(need, max(0, -(before + delta)) - max(0, -before))
+        owed[(sid, fin)] = owed.get((sid, fin), 0) + need - removal
+        need = removal
+        for other in reversed(list(held)):
+            if need <= 0:
+                break
+            take = min(need, held[other])
+            held[other] -= take
+            need -= take
+        held.setdefault(iid, 0)
     out: dict[tuple[int, str, str], int] = {}
-    for (sid, fin), evs in by_key.items():
-        pos = sorted((iid, b) for iid, b in evs if b > 0)
-        excess = sum(b for _, b in pos) - max(sum(b for _, b in evs), 0)
-        for iid, b in reversed(pos):
-            take = min(b, excess)
+    for (sid, fin), held in by_key.items():
+        excess = sum(held.values()) - max(total[(sid, fin)], 0)
+        for iid in reversed(list(held)):
+            if excess <= 0:
+                break
+            take = min(excess, held[iid])
+            held[iid] -= take
             excess -= take
-            out[(iid, sid, fin)] = b - take
+        for iid, n in held.items():
+            out[(iid, sid, fin)] = n
     return out
 
 

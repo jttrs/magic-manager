@@ -480,6 +480,8 @@ def apply(purchase_id: int, decisions: Iterable[Decision]) -> ApplyResult:
         short = [k for k, n in needs.items() if n > avail.get(k, 0)]
         if short:
             raise PurchaseError(f"{len(short)} line(s) ask to match more copies than you own unassigned")
+        from .provenance import _held
+        held_before = _held(conn, {ln["scryfall_id"] for ln in lines.values() if ln["scryfall_id"]})
 
         ingest_id = p["ingest_id"]
         if ingest_id is None:
@@ -504,6 +506,20 @@ def apply(purchase_id: int, decisions: Iterable[Decision]) -> ApplyResult:
         drift = ingest_mod.reconcile_inventory_ledger(conn)
         if drift:
             raise RuntimeError(f"ledger drift after applying the order ({len(drift)} rows); rolled back")
+        # The order must hold exactly what it was just given, taken from no other order.
+        keys = {(ln["scryfall_id"], ln["finish"]) for ln in lines.values() if ln["scryfall_id"]}
+        held = _held(conn, {k[0] for k in keys})
+        given = {k: needs.get(k, 0) for k in keys}
+        for d in decisions:
+            if d.add:
+                k = (lines[d.line_no]["scryfall_id"], lines[d.line_no]["finish"])
+                given[k] += d.add
+        purchase_ids = {r[0] for r in conn.execute("SELECT ingest_id FROM ingest_events WHERE method = 'purchase'")}
+        for (iid, sid, fin), n in held.items():
+            before = held_before.get((iid, sid, fin), 0)
+            mine = iid == ingest_id and n != before + given.get((sid, fin), 0)
+            if mine or (iid in purchase_ids and iid != ingest_id and n < before):
+                raise RuntimeError("the order would not hold exactly the copies assigned to it; rolled back")
     return ApplyResult(purchase_id, ingest_id, moved, added)
 
 

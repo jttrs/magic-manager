@@ -30,7 +30,7 @@ export function OrderReview({ purchaseId, onBack, onForgotten }: { purchaseId: n
   const [confirmForget, setConfirmForget] = useState(false);
   const [saved, setSaved] = useState<{ matched: number; added: number } | null>(null);
 
-  const refresh = () => Promise.all([qc.invalidateQueries({ queryKey: ['purchases'] }), qc.invalidateQueries({ queryKey: ['history'] }), qc.invalidateQueries({ queryKey: ['collection'] })]);
+  const refresh = () => Promise.all(['purchases', 'history', 'collection', 'holdings', 'undo'].map((k) => qc.invalidateQueries({ queryKey: [k] })));
   const apply = useMutation({
     mutationFn: async (body: ReturnType<typeof decisionsBody>) => unwrap(await purchaseApply({ path: { purchase_id: purchaseId }, body: { lines: body } })),
     onSuccess: async (r) => {
