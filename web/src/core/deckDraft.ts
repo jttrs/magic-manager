@@ -21,7 +21,9 @@ export type DraftRow = {
   absorbed?: { key: string; printing: PrintingOut; count: number }[];
 };
 
-export type Draft = { rows: DraftRow[] };
+/** `tokens`: the saved token board — not editable here, carried unchanged into
+ *  every save so a save never drops a deck's tokens. */
+export type Draft = { rows: DraftRow[]; tokens?: DraftCardIn[] };
 
 const rowKey = (sid: string, board: Board, finish: DraftFinish) => `${sid}|${board}|${finish}`;
 
@@ -30,6 +32,9 @@ const COUNTED: readonly Board[] = ['commander', 'main', 'companion'];
 
 export function draftFromDeck(cards: readonly DeckCardOut[]): Draft {
   return {
+    tokens: cards
+      .filter((c) => c.board === 'token')
+      .map((c) => ({ scryfall_id: c.printing.scryfall_id, board: c.board, finish: c.finish, count: c.count })),
     rows: cards
       .filter((c) => c.board !== 'token')
       .map((c) => ({
@@ -49,13 +54,14 @@ export function addCard(d: Draft, p: PrintingOut, board: Board = 'main', finish:
   const key = rowKey(p.scryfall_id, board, finish);
   const hit = d.rows.find((r) => r.key === key);
   if (hit) return setCount(d, key, hit.count + 1);
-  return { rows: [...d.rows, { key, printing: p, board, finish, count: 1, saved: 0 }] };
+  return { ...d, rows: [...d.rows, { key, printing: p, board, finish, count: 1, saved: 0 }] };
 }
 
 /** Set a row's count. A new row dropped to 0 disappears; a saved row stays (count 0 = removed, undoable). */
 export function setCount(d: Draft, key: string, count: number): Draft {
   const n = Math.max(0, Math.min(999, Math.floor(count)));
   return {
+    ...d,
     rows: d.rows
       .map((r) => (r.key === key ? { ...r, count: n } : r))
       .filter((r) => r.count > 0 || r.saved > 0),
@@ -74,7 +80,7 @@ function rekey(d: Draft, key: string, board: Board, finish: DraftFinish): Draft 
   rows = target
     ? rows.map((r) => (r.key === next ? { ...r, count: r.count + moved } : r))
     : [...rows, { ...row, key: next, board, finish, count: moved, saved: 0, origin: undefined, absorbed: undefined }];
-  return { rows: rows.filter((r) => r.count > 0 || r.saved > 0) };
+  return { ...d, rows: rows.filter((r) => r.count > 0 || r.saved > 0) };
 }
 
 export const moveCard = (d: Draft, key: string, board: Board) => {
@@ -104,6 +110,7 @@ export function swapPrinting(d: Draft, key: string, p: PrintingOut, finish?: Dra
     // The source row stays (count 0) and the target remembers what it took, so undo can give it back.
     const took = [{ key, printing: row.printing, count: row.count }, ...(row.absorbed ?? [])];
     return {
+      ...d,
       rows: d.rows
         .map((r) => (r.key === next
           ? { ...r, count: r.count + row.count, absorbed: [...(r.absorbed ?? []), ...took] }
@@ -113,6 +120,7 @@ export function swapPrinting(d: Draft, key: string, p: PrintingOut, finish?: Dra
   }
   const back = origin && origin.printing.scryfall_id === p.scryfall_id && origin.finish === fin;
   return {
+    ...d,
     rows: d.rows.map((r) => (r.key === key ? { ...r, key: next, printing: p, finish: fin, origin: back ? undefined : origin } : r)),
   };
 }
@@ -137,6 +145,7 @@ export function restorePrinting(d: Draft, key: string): Draft {
       return { key: a.key, printing: a.printing, board: board as Board, finish: finish as DraftFinish, count: back.get(a.key) ?? 0, saved: 0 };
     });
     cur = {
+      ...cur,
       rows: [
         ...cur.rows.map((r) => (r.key === key ? { ...r, count: left, absorbed: undefined } : back.has(r.key) ? { ...r, count: r.count + back.get(r.key)! } : r)),
         ...revived,
@@ -198,9 +207,12 @@ export function draftSections(d: Draft): DraftSection[] {
   });
 }
 
-/** Save payload: every live row (count 0 rows are dropped = removed). */
-export const draftCards = (d: Draft): DraftCardIn[] =>
-  d.rows.filter((r) => r.count > 0).map((r) => ({ scryfall_id: r.printing.scryfall_id, board: r.board, finish: r.finish, count: r.count }));
+/** Save payload: every live row (count 0 rows are dropped = removed), plus the
+ *  saved token board unchanged. */
+export const draftCards = (d: Draft): DraftCardIn[] => [
+  ...d.rows.filter((r) => r.count > 0).map((r) => ({ scryfall_id: r.printing.scryfall_id, board: r.board, finish: r.finish, count: r.count })),
+  ...(d.tokens ?? []),
+];
 
 /** Oracle ids already in the deck (any board), to mark search/suggestion hits. */
 export const draftOracles = (d: Draft): Set<string> =>

@@ -18,7 +18,7 @@ from dataclasses import dataclass
 
 from . import db, decks, inventory
 
-PLAYABLE = ("commander", "main", "side", "companion")
+PLAYABLE = decks.PLAYABLE_BOARDS
 
 
 class ReadOnlyDeck(PermissionError):
@@ -75,45 +75,54 @@ def _state(conn, slug: str) -> str:
     return _deck(conn, slug)["precon_state"]
 
 
-def set_state(slug: str, state: str) -> None:
-    if state not in ("built", "deconstructed"):
-        raise ValueError(f"invalid state {state!r}")
-    with db.transaction() as conn:
-        _deck(conn, slug)
-        conn.execute("UPDATE decks SET precon_state = ?, updated_at = ? WHERE slug = ?",
-                     (state, db._utcnow_iso(), slug))
-
-
-def _unique_slug(conn, base: str) -> str:
-    base = decks._slug(base) or "deck"
-    slug, n = base, 2
-    while conn.execute("SELECT 1 FROM decks WHERE slug = ?", (slug,)).fetchone():
-        slug, n = f"{base}-{n}", n + 1
-    return slug
+def _unique_slug(conn, name: str) -> str:
+    return decks.unique_slug(conn, decks._slug(name) or "deck")
 
 
 def _needs(cards: list[DraftCard], pledged: dict[tuple[str, str], int],
            free: dict[tuple[str, str], int]) -> dict[tuple[str, str], int]:
-    """Collapse a playable decklist to per-(sid, finish) copies. An 'either' slot
-    keeps the finish already pledged, then nonfoil if free, else foil."""
+    """Collapse a playable decklist to per-(sid, finish) copies. Exact finishes
+    first; then each 'either' slot keeps copies already pledged, then takes free
+    nonfoil, then free foil (splitting across finishes), and any excess lands on
+    nonfoil (short). Free copies are shared across slots, never double-counted.
+    Token rows aren't pledged by a Build, but copies already pledged to them stay
+    (never sleeved, never pulled)."""
     out: dict[tuple[str, str], int] = {}
-    for c in cards:
-        if c.board not in PLAYABLE or c.count <= 0:
-            continue
+
+    def add(key: tuple[str, str], n: int) -> None:
+        if n > 0:
+            out[key] = out.get(key, 0) + n
+
+    def kept(key: tuple[str, str]) -> int:       # pledged copies not yet claimed
+        return max(0, pledged.get(key, 0) - out.get(key, 0))
+
+    def room(key: tuple[str, str]) -> int:       # free copies not yet claimed
+        return max(0, free.get(key, 0) - max(0, out.get(key, 0) - pledged.get(key, 0)))
+
+    playable = [c for c in cards if c.board in PLAYABLE and c.count > 0]
+    for c in playable:
         if c.finish in ("nonfoil", "foil"):
-            out[(c.scryfall_id, c.finish)] = out.get((c.scryfall_id, c.finish), 0) + c.count
+            add((c.scryfall_id, c.finish), c.count)
+    for c in playable:
+        if c.finish in ("nonfoil", "foil"):
             continue
         left = c.count
-        for fin in ("nonfoil", "foil"):        # keep what's already sleeved
-            have = pledged.get((c.scryfall_id, fin), 0) - out.get((c.scryfall_id, fin), 0)
-            take = min(left, max(0, have))
-            if take:
-                out[(c.scryfall_id, fin)] = out.get((c.scryfall_id, fin), 0) + take
+        for pick in (kept, room):
+            for fin in ("nonfoil", "foil"):
+                key = (c.scryfall_id, fin)
+                take = min(left, pick(key))
+                add(key, take)
                 left -= take
-        if left:
-            nf, fo = free.get((c.scryfall_id, "nonfoil"), 0), free.get((c.scryfall_id, "foil"), 0)
-            fin = "foil" if nf < left <= fo else "nonfoil"
-            out[(c.scryfall_id, fin)] = out.get((c.scryfall_id, fin), 0) + left
+        add((c.scryfall_id, "nonfoil"), left)
+    for c in cards:
+        if c.board != "token" or c.count <= 0:
+            continue
+        left = c.count
+        for fin in (("nonfoil", "foil") if c.finish == "either" else (c.finish,)):
+            key = (c.scryfall_id, fin)
+            take = min(left, kept(key))
+            add(key, take)
+            left -= take
     return out
 
 
@@ -159,11 +168,20 @@ def build_target(slug: str) -> str | None:
         for s in rows:
             if _state(conn, s) != "built":
                 return s
-    plan = decks.deck_compose_plan(slug)
+    sw = _target_swap(slug)
+    return slug if sw["sleeve"] or sw["short"] else None
+
+
+def _target_swap(slug: str) -> dict:
+    """pull / sleeve / short turning ``slug``'s pledges into its PLAYABLE recipe
+    (the one completeness rule shared by build_target, build_plan and build)."""
     with db.connect() as conn:
-        pledged = _pledged(conn, _deck(conn, slug)["deck_id"])
-    need = sum(r["need"] for r in plan["rows"])
-    return slug if sum(pledged.values()) < need else None
+        d = _deck(conn, slug)
+        pledged = _pledged(conn, d["deck_id"])
+        cards = _current_cards(conn, d["current_version_id"])
+    free = _free_map(c.scryfall_id for c in cards)
+    needs = _needs(cards, pledged, free)
+    return {**_swap(needs, pledged, free), "need": sum(needs.values()), "pledged": sum(pledged.values())}
 
 
 def build_plan(slug: str) -> dict:
@@ -172,38 +190,30 @@ def build_plan(slug: str) -> dict:
     target = build_target(slug)
     if target is None:
         return {"target": None, "need": 0, "covered": 0, "short": []}
-    with db.connect() as conn:
-        d = _deck(conn, target)
-        pledged = _pledged(conn, d["deck_id"])
-        cards = _current_cards(conn, d["current_version_id"])
-    free = _free_map(c.scryfall_id for c in cards)
-    needs = _needs(cards, pledged, free)
-    sw = _swap(needs, pledged, free)
-    need = sum(needs.values())
+    sw = _target_swap(target)
     short = sum(s["qty"] for s in sw["short"])
-    return {"target": target, "need": need, "covered": need - short, "short": sw["short"]}
+    return {"target": target, "need": sw["need"], "covered": sw["need"] - short, "short": sw["short"]}
 
 
 def build(slug: str, *, allow_shortfall: bool = False) -> dict:
     """Assemble a copy of the recipe from free cards: pledge them and mark the
     copy built. Refuses on shortfalls unless ``allow_shortfall`` (then pledges
-    what's free)."""
-    plan = build_plan(slug)
-    target = plan["target"]
+    what's free). Built follows pledges: a Build that would leave the copy with
+    nothing pledged refuses (:class:`Shortfall`) even with ``allow_shortfall``."""
+    target = build_target(slug)
     if target is None:
         raise ValueError("every copy of this deck is already built")
-    if plan["short"] and not allow_shortfall:
-        raise Shortfall(plan["short"])
-    with db.connect() as conn:
-        d = _deck(conn, target)
-        pledged = _pledged(conn, d["deck_id"])
-        cards = _current_cards(conn, d["current_version_id"])
-    free = _free_map(c.scryfall_id for c in cards)
-    sw = _swap(_needs(cards, pledged, free), pledged, free)
+    sw = _target_swap(target)
+    if sw["short"] and not allow_shortfall:
+        raise Shortfall(sw["short"])
+    if not sw["sleeve"] and not sw["pledged"]:
+        if sw["short"]:
+            raise Shortfall(sw["short"])
+        raise ValueError("this deck has no cards to build")
     if sw["sleeve"]:
         decks.deck_assign_batch(target, [(s["scryfall_id"], s["finish"], s["qty"]) for s in sw["sleeve"]],
                                 allow_shortfall=True)
-    set_state(target, "built")
+    decks.set_precon_state(target, "built")
     return {"slug": target, "sleeved": sum(s["qty"] for s in sw["sleeve"]), "short": sw["short"]}
 
 
@@ -217,7 +227,7 @@ def break_down(slug: str) -> dict:
         raise ValueError("no built copy of this deck to break down")
     target = slug if slug in built else built[-1]
     res = decks.deck_unassign_batch(target, "all")
-    set_state(target, "deconstructed")
+    decks.set_precon_state(target, "deconstructed")
     return {"slug": target, "pulled": res["unassigned_qty"]}
 
 
@@ -305,14 +315,24 @@ def is_editable(slug: str) -> bool:
         return not _deck(conn, slug)["source_precon_file_name"]
 
 
+def _keep_tokens(cards: list[DraftCard], current: list[DraftCard]) -> list[DraftCard]:
+    """The editor doesn't show the token board: a draft with no token rows keeps
+    the current version's tokens (so a save never silently drops them)."""
+    if any(c.board == "token" for c in cards):
+        return cards
+    return [*cards, *(c for c in current if c.board == "token")]
+
+
 def preview(slug: str, cards: list[DraftCard]) -> dict:
     """What saving ``cards`` would change: per-row diff vs the current version,
-    and — for a built copy — the physical pull / sleeve / short lists."""
+    and — for a built copy — the physical pull / sleeve / short lists. A draft
+    without token rows keeps the deck's tokens (:func:`_keep_tokens`)."""
     with db.connect() as conn:
         d = _deck(conn, slug)
         current = _current_cards(conn, d["current_version_id"])
         pledged = _pledged(conn, d["deck_id"])
         built = d["precon_state"] == "built"
+    cards = _keep_tokens(cards, current)
     cur = {(c.scryfall_id, c.board, c.finish): c.count for c in current}
     new = {(c.scryfall_id, c.board, c.finish): c.count for c in cards if c.count > 0}
     changes = [
@@ -345,6 +365,7 @@ def save(slug: str, cards: list[DraftCard], *, expected_version_id: int,
             raise StaleDraft("this deck changed since you opened it — reload to see the latest list")
         status = conn.execute("SELECT status FROM deck_versions WHERE deck_version_id = ?",
                               (d["current_version_id"],)).fetchone()[0]
+        cards = _keep_tokens(cards, _current_cards(conn, d["current_version_id"]))
     pv = preview(slug, cards)
     if not pv["changes"] and not (name and name.strip() and name.strip() != d["name"]):
         return {**pv, "version_number": None, "pulled": 0, "sleeved": 0}
@@ -379,13 +400,23 @@ def check(slug: str, cards: list[DraftCard], *, combos: bool = False) -> dict:
     Scryfall's per-format legality; for Commander-like formats it also returns
     the bracket FLOOR from Wizards' official criteria (Game Changers, mass land
     denial, extra turns; two-card combos only when ``combos`` asks Commander
-    Spellbook — network). Advisory, never blocking."""
+    Spellbook — network). Advisory, never blocking. A deck with no format
+    (imports record none) is checked as Commander when it has a commander,
+    else not checked at all (``format`` None, one ``no_format`` note)."""
     from . import brackets, legality
 
+    live = [c for c in cards if c.count > 0]
     with db.connect() as conn:
-        fmt = (_deck(conn, slug)["format"] or "commander").lower()
+        fmt = (_deck(conn, slug)["format"] or "").lower()
         rows = decks.materialize_rows_for_checks(
-            conn, [(c.scryfall_id, c.board, c.finish, c.count) for c in cards if c.count > 0])
+            conn, [(c.scryfall_id, c.board, c.finish, c.count) for c in live])
+    if not fmt and any(c.board == "commander" for c in live):
+        fmt = "commander"           # imports record no format; a commander makes it Commander-shaped
+    if not fmt:
+        return {"format": None, "bracket": None, "legality": {
+            "format": "", "legal": True, "checked_count": len(legality._non_token_cards(rows)),
+            "violations": [{"code": "no_format", "severity": "info", "cards": [],
+                            "message": "This deck has no format, so legality isn't checked."}]}}
     report = legality.validate(rows, format=fmt).to_json()
     bracket = None
     if fmt in legality._COMMANDER_LIKE_FORMATS:

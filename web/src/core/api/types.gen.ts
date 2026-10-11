@@ -941,8 +941,10 @@ export type CheckIn = {
 export type CheckOut = {
     /**
      * Format
+     *
+     * Format checked; None when the deck has no format (legality not checked).
      */
-    format: string;
+    format: string | null;
     legality: LegalityOut;
     bracket: BracketOut | null;
 };

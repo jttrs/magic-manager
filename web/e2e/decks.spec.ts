@@ -121,12 +121,13 @@ test('deck actions are icons with tooltips; precons offer Copy to edit; building
 test('editor: add a card from search, see the diff, save a new version (built decks review the swap)', async ({ page }) => {
   let saved: { cards: { scryfall_id: string; count: number }[]; expected_version_id: number } | null = null;
   const extra = { ...detail.cards[0].printing, scryfall_id: 'new-card', oracle_id: 'o-new', name: 'Sol Ring', type_line: 'Artifact', owned: { nonfoil: 2 }, free: 2 };
+  const token = { ...detail.cards[0], board: 'token', finish: 'nonfoil', count: 2, printing: { ...detail.cards[0].printing, scryfall_id: 'tok-1', oracle_id: 'o-tok', name: 'Soldier', type_line: 'Token Creature — Soldier' } };
   await page.route((u) => u.pathname === `/api/decks/${detail.deck.slug}`, (r) => {
     if (r.request().method() === 'PUT') {
       saved = r.request().postDataJSON();
       return r.fulfill({ json: { built: true, changes: [], swap: null, version_number: 8, pulled: 0, sleeved: 1 } });
     }
-    return r.fulfill({ json: editable });
+    return r.fulfill({ json: { ...editable, cards: [...editable.cards, token] } });
   });
   await page.route('**/api/ingest/search**', (r) => r.fulfill({ json: { query: 'sol', source: 'local', printings: [{ ...extra, scryfall_id: 'unowned', name: 'Sol Talisman', owned: {}, free: 0 }, extra] } }));
   await page.route('**/api/decks/*/preview', (r) => r.fulfill({ json: { built: true, changes: [], swap: { pull: [], sleeve: [{ printing: extra, finish: 'nonfoil', qty: 1 }], short: [] } } }));
@@ -146,6 +147,8 @@ test('editor: add a card from search, see the diff, save a new version (built de
   await expect(page).toHaveURL(/\/decks\?deck=/);
   expect(saved!.expected_version_id).toBe(7);
   expect(saved!.cards.find((c) => c.scryfall_id === 'new-card')?.count).toBe(1);
+  // The token board isn't shown in the editor but rides every save unchanged.
+  expect((saved!.cards as unknown[]).filter((c) => (c as { board: string }).board === 'token')).toEqual([{ scryfall_id: 'tok-1', board: 'token', finish: 'nonfoil', count: 2 }]);
 });
 
 const sse = (events: [string, unknown][]) => events.map(([e, d], i) => `event: ${e}\ndata: ${JSON.stringify(d)}\nid: ${i + 1}\n\n`).join('');
@@ -167,6 +170,27 @@ test('import a deck: saves the decklist (not built); "I have these cards" opens 
   await expect(page).toHaveURL(new RegExp(`deck=${encodeURIComponent(detail.deck.slug).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
   await expect(page.getByRole('dialog', { name: 'Add cards' })).toBeVisible();
   expect(imported!.deck).toMatchObject({ source: 'archidekt', id: '42' });
+});
+
+test('import dialog: reopening and ticking "I have these cards" never re-imports the last deck', async ({ page }) => {
+  const posts: unknown[] = [];
+  const fetched = { format: 'deck', lines: [], warnings: [], deck_name: detail.deck.name, deck: { source: 'archidekt', id: '42', name: detail.deck.name, author: null, cards: [{ qty: 1, name: 'x' }] } };
+  await page.route('**/api/jobs/ingest.fetch_deck', (r) => r.fulfill({ status: 202, json: queued('jf', 'ingest.fetch_deck') }));
+  await page.route('**/api/jobs/jf/events', (r) => r.fulfill({ status: 200, contentType: 'text/event-stream', body: sse([['result', { summary: 'ok', artifacts: [{ kind: 'json', label: 'lines', data: fetched }] }], ['status', { status: 'succeeded' }]]) }));
+  await page.route('**/api/decks/import', (r) => { posts.push(r.request().postDataJSON()); return r.fulfill({ json: { slug: detail.deck.slug, duplicate: false, summary: 'Decklist saved' } }); });
+  await page.goto('/decks');
+  const open = () => page.getByRole('toolbar', { name: 'Deck list actions' }).getByRole('button', { name: 'Import a deck from a link' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Import a deck' });
+  await open();
+  await dialog.getByRole('textbox').fill('https://archidekt.com/decks/42/x');
+  await dialog.getByRole('button', { name: 'Import deck' }).click();
+  await expect(dialog).toBeHidden();
+  expect(posts).toHaveLength(1);
+  await open();
+  await dialog.getByRole('checkbox', { name: /Also add these cards/ }).check();
+  await page.waitForTimeout(300);
+  await expect(dialog).toBeVisible();
+  expect(posts).toHaveLength(1);
 });
 
 test('editor: card names open the inspector; checks show legality and the bracket floor', async ({ page }) => {

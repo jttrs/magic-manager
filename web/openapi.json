@@ -5252,8 +5252,16 @@
       "CheckOut": {
         "properties": {
           "format": {
-            "type": "string",
-            "title": "Format"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Format",
+            "description": "Format checked; None when the deck has no format (legality not checked)."
           },
           "legality": {
             "$ref": "#/components/schemas/LegalityOut"

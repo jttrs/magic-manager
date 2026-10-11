@@ -171,7 +171,7 @@ class CheckIn(DraftIn):
 
 
 class CheckOut(BaseModel):
-    format: str
+    format: str | None = Field(description="Format checked; None when the deck has no format (legality not checked).")
     legality: LegalityOut
     bracket: BracketOut | None
 

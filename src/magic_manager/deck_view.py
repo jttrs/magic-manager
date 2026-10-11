@@ -12,6 +12,8 @@ from .decks import _BOARD_ORDER_SQL
 
 # Per-deck aggregates over the CURRENT version's non-token rows, set-based.
 # image: the commander's art if any, else the priciest card's (window function).
+# playable: the copies a Build pledges (no maybeboard) — pledged_pct's denominator.
+_PLAYABLE_SQL = ",".join(f"'{b}'" for b in decks.PLAYABLE_BOARDS)
 _SUMMARY_SQL = """
 WITH rows_ AS (
     SELECT d.deck_id, dc.board, dc.count, c.image_uri,
@@ -21,7 +23,9 @@ WITH rows_ AS (
     JOIN cards c ON c.scryfall_id = dc.scryfall_id
     {where}
 ), agg AS (
-    SELECT deck_id, SUM(count) AS cards, SUM(count * unit) AS value FROM rows_ GROUP BY deck_id
+    SELECT deck_id, SUM(count) AS cards, SUM(count * unit) AS value,
+           SUM(CASE WHEN board IN ({playable}) THEN count ELSE 0 END) AS playable
+    FROM rows_ GROUP BY deck_id
 ), img AS (
     SELECT deck_id, image_uri FROM (
         SELECT deck_id, image_uri,
@@ -34,7 +38,7 @@ WITH rows_ AS (
 )
 SELECT d.deck_id, d.slug, d.name, d.format, d.precon_state, d.source_precon_file_name,
        d.source, d.author, d.source_set_code, d.kind,
-       COALESCE(agg.cards, 0) AS cards, COALESCE(agg.value, 0) AS value,
+       COALESCE(agg.cards, 0) AS cards, COALESCE(agg.value, 0) AS value, COALESCE(agg.playable, 0) AS playable,
        COALESCE(pl.pledged, 0) AS pledged, img.image_uri
 FROM decks d
 LEFT JOIN agg ON agg.deck_id = d.deck_id
@@ -95,7 +99,7 @@ def deck_type(fmt: str | None, product_type: str | None) -> str:
 def _summaries(where: str = "", params: tuple = ()) -> list[dict]:
     """One summary per deck ROW matching ``where`` (a SQL predicate on ``d``)."""
     clause = f"WHERE {where}" if where else ""
-    sql = _SUMMARY_SQL.format(where=clause, dwhere=clause)
+    sql = _SUMMARY_SQL.format(where=clause, dwhere=clause, playable=_PLAYABLE_SQL)
     with db.connect() as conn:
         rows = conn.execute(sql, params + params).fetchall()
     precons, sets = _precon_index(), _sets_index()
@@ -114,7 +118,7 @@ def _summaries(where: str = "", params: tuple = ()) -> list[dict]:
             released = None
         sset = sets.get(code) if code else None
         released = released or (sset or {}).get("released_at")
-        cards = int(r["cards"])
+        cards, playable = int(r["cards"]), int(r["playable"])
         out.append({
             "slug": r["slug"], "name": r["name"], "format": r["format"],
             "deck_type": deck_type(r["format"], source if origin == "precon" else None),
@@ -122,7 +126,7 @@ def _summaries(where: str = "", params: tuple = ()) -> list[dict]:
             "author": r["author"], "set_code": code,
             "set_name": (sset or {}).get("name"), "released": released,
             "cards": cards, "value_usd": round(float(r["value"]), 2),
-            "pledged_pct": round(100.0 * min(1, r["pledged"] / cards), 1) if cards else 0.0,
+            "pledged_pct": round(100.0 * min(1, r["pledged"] / playable), 1) if playable else 0.0,
             "image_uri": r["image_uri"],
             "_kind": r["kind"], "_recipe": fn or r["slug"],
         })

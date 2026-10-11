@@ -26,8 +26,9 @@ _ALLOWED_FINISHES = ("nonfoil", "foil", "either")
 _PRECON_STATES = ("built", "deconstructed")
 _KINDS = ("deck", "pool")
 # Boards that count toward a deck's "playable card count" (mirrors
-# mtgjson._deck_total_cards: commander + main + side, plus companion).
-_PLAYABLE_BOARDS = ("commander", "main", "side", "companion")
+# mtgjson._deck_total_cards: commander + main + side, plus companion) — also the
+# boards a Build pledges (deck_edit). Maybe and token boards ride along unpledged.
+PLAYABLE_BOARDS = ("commander", "main", "side", "companion")
 
 # V17 composition-lifecycle statuses (per deck VERSION, not the deck). 'brew' =
 # in-progress list; 'tuned' = locked-in (finalized, legality/bracket recorded).
@@ -653,7 +654,7 @@ def backfill_kinds(*, conn=None) -> dict:
         index = mtgjson_mod._decklist_by_filename()
     except Exception:
         index = {}
-    marks = ",".join("?" for _ in _PLAYABLE_BOARDS)
+    marks = ",".join("?" for _ in PLAYABLE_BOARDS)
     with db.transaction(conn) as conn:
         rows = conn.execute(
             f"""
@@ -665,7 +666,7 @@ def backfill_kinds(*, conn=None) -> dict:
             WHERE d.source_precon_file_name IS NOT NULL
               AND (d.kind_source IS NULL OR d.kind_source = 'auto')
             """,
-            _PLAYABLE_BOARDS,
+            PLAYABLE_BOARDS,
         ).fetchall()
         counts = {"classified": 0, "changed": 0, "deck": 0, "pool": 0}
         memo: dict[tuple, str] = {}  # copies of one precon classify identically
@@ -1555,6 +1556,11 @@ def deck_unassign_batch(
                     )
                     unassigned_qty += qty
                     unassigned_rows += 1
+            # Built follows pledges: pulling the last pledged copy breaks the deck down.
+            if unassigned_rows and not conn.execute(
+                "SELECT 1 FROM deck_assignments WHERE deck_id = ? LIMIT 1", (deck_id,)
+            ).fetchone():
+                conn.execute("UPDATE decks SET precon_state = 'deconstructed' WHERE deck_id = ?", (deck_id,))
 
         if unassigned_rows:
             _touch_deck(conn, deck_id)
@@ -1917,12 +1923,7 @@ def register_precon_from_loose(
 
         # Pick a non-colliding slug: base, else base-2/-3/… (a built copy or an
         # unrelated deck may already hold the base slug).
-        base = slug or _slug(name or file_name)
-        copy_slug = base
-        i = 2
-        while deck_get(copy_slug, conn=conn) is not None:
-            copy_slug = f"{base}-{i}"
-            i += 1
+        copy_slug = unique_slug(conn, slug or _slug(name or file_name))
 
         imp = import_precon(
             file_name, slug=copy_slug, name=name,
@@ -1967,6 +1968,27 @@ def _slug(s: str) -> str:
     while "--" in raw:
         raw = raw.replace("--", "-")
     return raw.strip("-")
+
+
+def unique_slug(conn, base: str) -> str:
+    """The first free deck slug among ``base``, ``base-2``, ``base-3``, … — the
+    ONE copy-slug rule (web new/copy/import, precon copies, loose registration)."""
+    slug, n = base, 2
+    while conn.execute("SELECT 1 FROM decks WHERE slug = ?", (slug,)).fetchone():
+        slug, n = f"{base}-{n}", n + 1
+    return slug
+
+
+def set_precon_state(slug: str, state: str, *, conn=None) -> None:
+    """Set a deck's PHYSICAL state (``built`` / ``deconstructed``) — the one
+    writer behind ``mm deck state`` and the web Build / Break down."""
+    if state not in ("built", "deconstructed"):
+        raise ValueError(f"invalid state {state!r}")
+    with db.transaction(conn) as conn:
+        n = conn.execute("UPDATE decks SET precon_state = ?, updated_at = ? WHERE slug = ?",
+                         (state, db._utcnow_iso(), slug)).rowcount
+        if not n:
+            raise LookupError(f"deck with slug {slug!r} not found")
 
 
 def import_precon(

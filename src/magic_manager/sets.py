@@ -2884,20 +2884,6 @@ def _apply_acquired_checklist(parsed, *, slug_fn, deck_format) -> dict:
     return summary
 
 
-def _count_precon_deck_copies(base_slug: str) -> int:
-    """How many decks already exist for ``base_slug`` (the bare slug plus any
-    ``-2``/``-3``… copies). Used to pick the next free copy slug."""
-    from . import decks as decks_mod
-    n = 0
-    if decks_mod.deck_get(base_slug) is not None:
-        n += 1
-    i = 2
-    while decks_mod.deck_get(f"{base_slug}-{i}") is not None:
-        n += 1
-        i += 1
-    return n
-
-
 def _build_precon_copies(*, base_slug: str, file_name: str, n: int, state: str,
                          deck_format, summary: dict, per_row: dict) -> None:
     """Create ``n`` deck-unit copies of one precon/pack in a single ``state``,
@@ -2914,8 +2900,8 @@ def _build_precon_copies(*, base_slug: str, file_name: str, n: int, state: str,
     """
     from . import decks as decks_mod
     for _ in range(n):
-        n_existing = _count_precon_deck_copies(base_slug)
-        copy_slug = base_slug if n_existing == 0 else f"{base_slug}-{n_existing + 1}"
+        with db.connect() as conn:
+            copy_slug = decks_mod.unique_slug(conn, base_slug)
         r = decks_mod.import_precon(
             file_name, slug=copy_slug, format=deck_format, copies=1,
             add_inventory=True,
