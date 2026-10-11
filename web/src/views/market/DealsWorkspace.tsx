@@ -1,4 +1,6 @@
 import { useMemo, useRef, type KeyboardEvent, type ReactNode } from 'react';
+import { useStoreHealth } from '../../app/scraperHealth';
+import { ScraperDownMark } from '../../components/ScraperNotice';
 import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panels';
 import { useMediaQuery } from '../../app/useMediaQuery';
 import { Button } from '../../components/Button';
@@ -126,6 +128,7 @@ function ProductRow({ p, cost, state, basis, selected, onPick }: { p: DealProduc
   const label = gap ? deltaLabel({ delta: gap.usd, pct: gap.pct }) : null;
   const toneCls = label?.tone === 'good' ? 'text-accent-ink' : label?.tone === 'bad' ? 'text-danger' : 'text-ink-muted';
   const best = p.best;
+  const storeHealth = useStoreHealth();
   const soldOut = best != null && best.available === false;
   const pct = gap == null ? null : Math.abs(gap.pct) < 1 ? 'even' : `${gap.pct < 0 ? '−' : '+'}${Math.abs(Math.round(gap.pct))}%`;
   const dash = (title?: string) => <span className="text-ink-muted" title={title}>{loading ? '…' : '—'}</span>;
@@ -160,7 +163,7 @@ function ProductRow({ p, cost, state, basis, selected, onPick }: { p: DealProduc
                 </a>
               )}
             </span>
-            <span className="block text-xs text-ink-muted">{best.store}</span>
+            <span className="flex items-baseline justify-end gap-1.5 text-xs text-ink-muted">{best.store}<ScraperDownMark health={storeHealth(best.store)} /></span>
             {soldOut && <span className="block text-xs text-danger">{stockLabel(best)}</span>}
             {target != null && (
               <span className={`block text-xs ${met ? 'voice-semi text-accent-ink' : 'text-ink-muted'}`}>{met ? `at target ${fmtUsd(target)}` : `target ${fmtUsd(target)}`}</span>

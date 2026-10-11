@@ -241,6 +241,13 @@ def _reset_all_sets_memo():
 
 
 @pytest.fixture(autouse=True)
+def _isolated_scraper_health(tmp_path, monkeypatch):
+    """Scraper health (docs/scraper-health.md) never touches a real status file:
+    real-use reads in any test (deals, deck fetch, EDHREC) write to a temp one."""
+    monkeypatch.setenv("MM_SCRAPER_HEALTH", str(tmp_path / "scraper_health-test.json"))
+
+
+@pytest.fixture(autouse=True)
 def _isolated_analytics(tmp_path, monkeypatch):
     """Analytics never touches a real store or secret: each test gets its own
     analytics file and a fixed HMAC secret, the consent cache starts empty, and

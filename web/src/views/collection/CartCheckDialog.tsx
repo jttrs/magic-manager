@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Dialog } from 'radix-ui';
 import { useState, type ReactNode } from 'react';
 import { useFeature } from '../../app/features';
@@ -9,6 +9,9 @@ import { AwaitingNote, BookmarkletLink, FailureNote } from '../../components/com
 import { cartCheck, cartLines, companionBookmarklet, type CartAuditOut } from '../../core/api';
 import { CompanionError, parseBookmarkletPaste, warningLines, type CartLine } from '../../core/companion';
 import { trackCompanionError } from '../../app/analytics';
+import { reportScraperFailure, useDownScrapers } from '../../app/scraperHealth';
+import { ScraperNotice } from '../../components/ScraperNotice';
+import { CART_KEY } from '../../core/scraperHealth';
 import { fmtCount, fmtInt, fmtUsd } from '../../core/format';
 
 /** Internal (cart_check flag): audit a Mana Pool cart against your collection —
@@ -49,13 +52,15 @@ function CartCheck({ family }: { family?: string }) {
 
   const audit = async (items: CartLine[], source: 'extension' | 'bookmarklet') =>
     unwrap(await cartLines({ body: { items, source, family: family ?? null } }));
+  const qc = useQueryClient();
+  const cartDown = useDownScrapers([CART_KEY]);
   const viaCompanion = useMutation({
     mutationFn: async () => {
       const d = await c.read('cart', {}, (summary) => setAwaiting(summary));
       setAwaiting(null);
       return { r: await audit(d.items, 'extension'), source: 'extension' as const, warnings: warningLines(d.warnings, c.catalog) };
     },
-    onSuccess: setResult,
+    onSuccess: (r) => { setResult(r); void qc.invalidateQueries({ queryKey: ['scrapers', 'health'] }); },
     onSettled: () => setAwaiting(null),
   });
   const viaPaste = useMutation({
@@ -63,8 +68,12 @@ function CartCheck({ family }: { family?: string }) {
       const d = parseBookmarkletPaste(paste, c.catalog);
       return { r: await audit(d.items, 'bookmarklet'), source: 'bookmarklet' as const, warnings: warningLines(d.warnings, c.catalog) };
     },
-    onSuccess: setResult,
-    onError: (e) => { if (e instanceof CompanionError) trackCompanionError(e.code); },
+    onSuccess: (r) => { setResult(r); void qc.invalidateQueries({ queryKey: ['scrapers', 'health'] }); },
+    onError: (e) => {
+      if (!(e instanceof CompanionError)) return;
+      trackCompanionError(e.code);
+      void reportScraperFailure(e.code, qc);
+    },
   });
   const viaAccount = useMutation({
     mutationFn: async () => ({ r: unwrap(await cartCheck({ body: { family: family ?? null } })), source: 'account' as const, warnings: [] }),
@@ -89,6 +98,7 @@ function CartCheck({ family }: { family?: string }) {
           </div>
         ) : (
           <div className="flex flex-col gap-6">
+            <ScraperNotice down={cartDown} />
             {companionOn && (
               <section aria-labelledby="cart-companion" className="flex flex-col gap-2">
                 <h3 id="cart-companion" className={H3}>In this browser</h3>

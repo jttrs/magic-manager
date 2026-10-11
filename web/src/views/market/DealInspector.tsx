@@ -1,4 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useStoreHealth } from '../../app/scraperHealth';
+import { ScraperDownMark } from '../../components/ScraperNotice';
 import { useState, type ReactNode } from 'react';
 import { dealsTabsQuery, unwrap } from '../../app/queries';
 import { Button } from '../../components/Button';
@@ -72,6 +74,7 @@ export function DealInspector({ product: p, cost, costState }: { product: DealPr
 
 function OfferLine({ o, fromTab }: { o: Offer; fromTab: boolean }) {
   const tabs = useQuery(dealsTabsQuery());
+  const storeHealth = useStoreHealth();
   const mode = tabs.data?.stores.find((s) => s.name === o.store)?.mode;
   const stock = stockLabel(o);
   const name = o.store ?? new URL(o.url).hostname.replace(/^www\./, '');
@@ -81,6 +84,7 @@ function OfferLine({ o, fromTab }: { o: Offer; fromTab: boolean }) {
         <a href={o.url} target="_blank" rel="noreferrer" className="touch-hit min-w-0 flex-1 text-accent-ink underline">
           {name}<span aria-hidden="true"> ↗</span><span className="sr-only"> (opens in a new tab)</span>
         </a>
+        <ScraperDownMark health={storeHealth(o.store)} />
         {stock && <span className={`text-xs ${o.available ? 'text-ink-muted' : 'text-danger'}`}>{stock}</span>}
         {o.readAge && <span className="text-xs text-ink-muted">{o.readAge}</span>}
         <span className="w-20 shrink-0 text-right tabular text-ink">{o.price != null ? fmtUsd(o.price) : <span className="text-ink-muted">—</span>}</span>

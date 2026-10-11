@@ -27,7 +27,7 @@ from pydantic import BaseModel, ValidationError
 from .. import api, companion as companion_engine, sets as sets_mod, tabs as tabs_engine, undo as undo_engine, cart as cart_engine, deck_edit, edhrec as edhrec_engine, features as features_engine, scryfall
 from ..api import companion as companion_api, deals as deals_api, undo as undo_api, cart as cart_api, cards as cards_api, collection as collection_api, explore as explore_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api, market as market_api, trueup as trueup_api, history as history_api, combos as combos_api, art as art_api, jumpstart as jumpstart_api, surf as surf_api
 from .runtime import TERMINAL, JobManager
-from . import analytics_routes, telemetry
+from . import analytics_routes, scraper_routes, telemetry
 from ..analytics import store as analytics_store
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -106,6 +106,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
 
     telemetry.install(app)
     app.include_router(analytics_routes.router)
+    app.include_router(scraper_routes.router)
 
     # ---------- jobs chassis ----------
 

@@ -52,6 +52,7 @@ export async function mockApi(page: Page, overrides: Record<string, (url: URL) =
     if (url.pathname === '/api/analytics/consent') return route.fulfill({ json: { errors: true, usage: true, asked: true, mode: 'local', disabled: false } });
     if (url.pathname === '/api/analytics/events') return route.fulfill({ json: { accepted: 0, rejected: [], dropped_props: 0, skipped_by_consent: 0 } });
     if (url.pathname === '/api/features') return route.fulfill({ json: { flags: { cart_check: false } } });
+    if (url.pathname === '/api/scrapers/health') return route.fulfill({ json: { scrapers: [], down: 0 } });
     if (url.pathname === '/api/companion') return route.fulfill({ json: COMPANION_INFO });
     if (url.pathname === '/api/companion/bookmarklet') return route.fulfill({ json: { href: 'javascript:void(0)', version: '0.1.0' } });
     return route.fulfill({ status: 404, json: { detail: `unmocked ${url.pathname}` } });

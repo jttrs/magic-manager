@@ -6,6 +6,7 @@ import type { PreconOptionOut, ResolveOut } from '../../core/api';
 import { fmtInt } from '../../core/format';
 import { Button } from '../Button';
 import { useBrowserDeck } from '../../app/useBrowserDeck';
+import { DeckSourceHealth } from '../DeckSourceHealth';
 import { AwaitingNote, FailureNote } from '../companion/CompanionNotes';
 
 /** Bring a whole deck: a deck-builder URL (reviewed before adding) or a precon (added directly). */
@@ -71,6 +72,7 @@ function DeckUrl({ onFetched }: { onFetched: (r: ResolveOut) => void }) {
           className="h-10 rounded-sm border border-rule-strong bg-paper-raised px-3 text-md text-ink placeholder:text-ink-muted focus-visible:border-accent"
         />
       </label>
+      <DeckSourceHealth url={url} viaBrowser={browser.handles(url)} settled={live?.status === 'succeeded' || live?.status === 'failed' ? live.status : browser.error ? 'error' : ''} />
       <Button tone="paper" onClick={fetchDeck} disabled={running} className="self-start">{running ? 'Fetching…' : 'Fetch deck'}</Button>
       {url.includes('moxfield') && (
         <p className="text-xs text-ink-muted">{browser.handles(url) ? 'Read in this browser by the companion — you approve what it sends.' : 'Moxfield opens a Chrome window to read the deck.'}</p>

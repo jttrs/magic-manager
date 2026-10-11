@@ -15,7 +15,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from .. import addcards, cart, companion, deals, decksource, features
+from .. import addcards, cart, companion, deals, decksource, features, scraper_health
 from .cart import CartAuditOut
 from .deals import OpenTabsOut
 from .ingest import ResolveOut
@@ -96,6 +96,7 @@ def check_lines(req: CartLinesIn) -> CartAuditOut:
     if not req.items:
         raise CompanionFailure("cart.no_lines")
     items = [i.model_dump() for i in req.items]
+    scraper_health.record_use("companion-cart/manapool", "ok")
     return CartAuditOut(**cart.audit(items, anchor=req.family))
 
 
@@ -169,4 +170,5 @@ def deck_lines(req: DeckFromBrowserIn) -> ResolveOut:
     payload = decksource.payload_from_moxfield(data, req.deck.publicId)
     if not payload["cards"]:
         raise CompanionFailure("deck.empty")
+    scraper_health.record_use("companion-deck/moxfield", "ok")
     return ResolveOut(**addcards.deck_lines_from_payload(payload))

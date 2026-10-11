@@ -366,6 +366,7 @@ Hairline borders are the main geometry. `ruled` is a 1px bottom border; column a
 
 ### States
 - **EmptyNote:** centered guide copy, no illustration.
+- **Temporarily down (scraper health):** where a site read is offered and flagged down (`ScraperNotice`): a ruled notice — 2px rules above and below, no fill — heading `<what> — temporarily down` in condensed bold danger ink with a small broken-link glyph, the reason in ink plus `You can still try — a read that works clears this.`, then a muted tabular line `Since today 6:30 AM · found by the daily check · Code scrape.no_cards`. Never blocks the action. In rows (Deals stores) it is the compact `ScraperDownMark`: glyph + `DOWN` in small semibold uppercase danger ink, focusable, whose chrome tooltip carries the same three lines. Rust, never amber.
 - **ErrorNote:** `role="alert"`, rust heading, optional ruled retry button. An `ApiError` adds a muted line `Ref 3f9a12c0 · stale_draft` (select-all ref) so a user can quote it; 5xx messages already end in `(ref …)`.
 - **GridSkeleton:** pulsing card-aspect blocks with `role="status"` and `aria-live="polite"`.
 

@@ -122,7 +122,25 @@ def read_prices(urls: list[str], *, progress=None, fresh: bool = False,
         except Exception as e:  # noqa: BLE001 — one store's surprise never sinks the batch
             row["error"] = f"Couldn’t read this page ({type(e).__name__})."
         rows.append(row)
+    _record_store_health(rows)
     return rows
+
+
+def _record_store_health(rows: list[dict]) -> None:
+    """Each store read is a health signal (docs/scraper-health.md): a price
+    read → ok, a page that loaded but had no price → the recipe is down.
+    Blocked / closed-tab / JS-off reads say nothing about the recipe."""
+    from . import scraper_health
+    uses = []
+    for r in rows:
+        if not r.get("vendor"):
+            continue
+        key = scraper_health.store_key(r["vendor"])
+        if r.get("price") is not None:
+            uses.append((key, "ok", None, None))
+        elif (r.get("error") or "").startswith("No price found"):
+            uses.append((key, "fail", "scrape.no_price", None))
+    scraper_health.record_uses(uses)
 
 
 # ---------- what each listing is, and what it's worth ----------

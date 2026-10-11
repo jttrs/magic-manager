@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useState } from 'react';
 import {
   CompanionError, isOlder, onHello, ping, request, type CompanionHello, type CompanionKind, type ErrorCatalog,
@@ -6,6 +6,7 @@ import {
 import { ApiError } from '../core/apiError';
 import { trackCompanionError } from './analytics';
 import { companionInfoQuery } from './queries';
+import { reportScraperFailure } from './scraperHealth';
 
 export type CompanionState = {
   /** checking: waiting for the bridge to say hello; absent: no paired companion on this page. */
@@ -24,6 +25,7 @@ const EMPTY: ErrorCatalog = {};
 /** The browser companion as this page sees it (detected via its bridge's hello). */
 export function useCompanion(): CompanionState {
   const info = useQuery(companionInfoQuery());
+  const qc = useQueryClient();
   const catalog = (info.data?.errors as ErrorCatalog | undefined) ?? EMPTY;
   const [hello, setHello] = useState<CompanionHello | null>(null);
   const [checked, setChecked] = useState(false);
@@ -38,10 +40,13 @@ export function useCompanion(): CompanionState {
   const read = useCallback(
     <K extends CompanionKind>(kind: K, params: { url?: string } = {}, onAwaiting?: (summary: string) => void) =>
       request(window, kind, params, { catalog, onAwaitingApproval: onAwaiting }).catch((e: unknown) => {
-        if (e instanceof CompanionError) trackCompanionError(e.code);
+        if (e instanceof CompanionError) {
+          trackCompanionError(e.code);
+          void reportScraperFailure(e.code, qc);   // a changed page flags that read "temporarily down"
+        }
         throw e;
       }),
-    [catalog],
+    [catalog, qc],
   );
 
   const latest = info.data?.version ?? null;

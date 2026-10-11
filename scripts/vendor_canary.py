@@ -18,22 +18,21 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from magic_manager import storefetch, vendors  # noqa: E402
+from magic_manager import scrape_canary, vendors  # noqa: E402
 
 
 def run() -> tuple[list[tuple], list[str]]:
+    """Thin driver over ``scrape_canary.check_store`` (the one store check the
+    scheduled scraper-health run also uses). Any non-ok result fails CI."""
     rows, skipped = [], []
     for v in vendors.catalog():
         if v.mode == "rendered" or not v.sample_url:
             skipped.append(v.name)
             continue
-        try:
-            _, listing = storefetch.read(v.sample_url, fresh=True)
-            ok = listing.price is not None and bool(listing.title)
-            note = "" if ok else "no price/title found — the page changed"
-            rows.append((v, ok, listing.price, listing.available, note))
-        except Exception as e:  # noqa: BLE001 — report every store
-            rows.append((v, False, None, None, f"{type(e).__name__}: {e}"))
+        c = scrape_canary.check_store(v)
+        d = c.detail
+        note = "" if c.outcome == "ok" else (c.message or c.code or "")
+        rows.append((v, c.outcome == "ok", d.get("price"), d.get("available"), note))
     return rows, skipped
 
 
