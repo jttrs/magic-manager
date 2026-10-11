@@ -111,6 +111,15 @@ export function nextPage(pages: SurfDrawOut[]): Page | undefined {
   return dry >= DRY_PAGES ? undefined : { offset: 0, first: false };
 }
 
+/** Why a feed with no next page stopped: it showed every match, or random draws kept repeating
+ *  (DRY_PAGES pages with nothing new) before reaching `total`. */
+export function feedEnd(pages: SurfDrawOut[]): 'all' | 'repeating' {
+  const last = pages.at(-1);
+  if (!last || last.exhausted || last.source === 'owned') return 'all';
+  const total = pages[0]?.total;
+  return total == null || feedCards(pages).length >= total ? 'all' : 'repeating';
+}
+
 const RARITY: Record<string, string> = { common: 'Common', uncommon: 'Uncommon', rare: 'Rare', mythic: 'Mythic', special: 'Special', bonus: 'Bonus' };
 
 /** `Bloomburrow · BLB #12 · Rare · 2024` */

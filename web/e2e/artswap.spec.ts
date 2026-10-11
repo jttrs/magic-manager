@@ -30,7 +30,18 @@ test('editor: the Art tab swaps a card onto an on-theme printing you have free, 
     asked.push(sids);
     return r.fulfill({ json: swaps(sids) });
   });
-  await page.route('**/api/art/lookup', (r) => { looked += 1; return r.fulfill({ json: { searched: 3, added: 0 } }); });
+  await page.route('**/api/jobs/art.lookup', (r) => {
+    looked += 1;
+    return r.fulfill({ status: 202, json: { id: 'al1', name: 'art.lookup', title: 'Look on Scryfall for on-theme art', inputs: {}, status: 'queued', created_at: '2026-01-01T00:00:00+00:00', started_at: null, finished_at: null, progress: null, summary: null, artifacts: [], error: null } });
+  });
+  await page.route('**/api/jobs/al1/events', (r) => r.fulfill({
+    status: 200, contentType: 'text/event-stream',
+    body: [
+      ['status', { status: 'running' }],
+      ['result', { summary: 'Scryfall: nothing new for 3 cards', artifacts: [{ kind: 'json', label: 'lookup', data: { searched: 3, added: 0 }, path: null }] }],
+      ['status', { status: 'succeeded' }],
+    ].map(([e, d], i) => `event: ${e}\ndata: ${JSON.stringify(d)}\nid: ${i + 1}\n\n`).join(''),
+  }));
   await page.goto(`/decks/${encodeURIComponent(detail.deck.slug)}/edit`);
   await page.getByRole('tab', { name: 'Art' }).click();
 
@@ -64,4 +75,19 @@ test('editor: the Art tab offers to load art themes when the tag cache is empty'
   await page.getByRole('tab', { name: 'Art' }).click();
   await expect(page.getByText('Art themes aren’t loaded yet')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Load art themes' })).toBeEnabled();
+});
+
+test('editor: a quick-pick art theme whose label differs from its slug still answers', async ({ page }) => {
+  await page.route((u) => u.pathname === `/api/decks/${detail.deck.slug}`, (r) => r.fulfill({ json: editable }));
+  await page.route('**/api/decks/*/check', (r) => r.fulfill({ json: { format: 'commander', legality: { format: 'commander', legal: true, checked_count: 1, violations: [] }, bracket: null } }));
+  await page.route('**/api/art/tags**', (r) => r.fulfill({ json: TAGS }));
+  await page.route('**/api/art/swaps', (r) => {
+    const sids = (r.request().postDataJSON() as { cards: { scryfall_id: string }[] }).cards.map((c) => c.scryfall_id);
+    return r.fulfill({ json: { ...swaps(sids), tag: { id: 'tag-moon', label: 'moon (celestial body)' } } });
+  });
+  await page.goto(`/decks/${encodeURIComponent(detail.deck.slug)}/edit`);
+  await page.getByRole('tab', { name: 'Art' }).click();
+  await page.getByRole('button', { name: 'moon', exact: true }).click();
+  await expect(page.getByRole('heading', { name: /Can swap/ })).toContainText('1');
+  await expect(page.getByLabel('Art theme')).toHaveValue('moon (celestial body)');
 });

@@ -8,7 +8,7 @@ import { IconAction } from '../../../components/IconAction';
 import { ScryfallMark, ShuffleMark } from '../../../components/StoreMarks';
 import { surfDraw, type SurfDrawOut } from '../../../core/api';
 import { fmtInt } from '../../../core/format';
-import { activeFilters, decodeSurf, drawRequest, encodeSurf, EMPTY_FILTERS, feedCards, feedSummary, nextPage, scryfallSearchUrl, type Page, type SurfState } from '../../../core/surf';
+import { activeFilters, decodeSurf, drawRequest, encodeSurf, EMPTY_FILTERS, feedCards, feedEnd, feedSummary, nextPage, scryfallSearchUrl, type Page, type SurfState } from '../../../core/surf';
 import { SurfCardEntry } from './SurfCardEntry';
 import { SurfFilterRail } from './SurfFilterRail';
 
@@ -181,7 +181,11 @@ export function CardSurfer({ raw, onChange, onClose }: { raw: string | undefined
                       </>
                     ) : !hasNextPage ? (
                       <>
-                        <span>That’s every card that matches — {fmtInt(cards.length)} {cards.length === 1 ? 'card' : 'cards'}.</span>
+                        <span>
+                          {feedEnd(pages) === 'all'
+                            ? <>That’s every card that matches — {fmtInt(cards.length)} {cards.length === 1 ? 'card' : 'cards'}.</>
+                            : <>Random draws keep repeating — {fmtInt(cards.length)} of {fmtInt(total ?? cards.length)} matches seen.</>}
+                        </span>
                         <Button tone="paper" onClick={() => setSeed(newSeed())}>Shuffle and start again</Button>
                       </>
                     ) : null}

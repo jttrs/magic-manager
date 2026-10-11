@@ -99,7 +99,10 @@ def product_tree(set_code: str, name: str) -> TreeNode:
 def family_card_prices(code: str) -> dict:
     """Every printing in the family at its exact price, beside the card's
     functional floor (cheapest printing anywhere), its foil-vs-nonfoil gap
-    (:mod:`foil_gap`; local prices) and your copies."""
+    (:mod:`foil_gap`; local prices) and your copies. The printing universe is
+    the Collection's (``collection_view.family_cards``), so a configured scene
+    panel's printings are listed even where the set-type/variant/unobtainable
+    rules would drop them (e.g. LTR's prerelease-stamped Shire run)."""
     fc = collection_view.family_cards(code)
     floors = sets.lowest_price_by_oracle({c.oracle_id for c in fc.cards if c.oracle_id})
     cards = []

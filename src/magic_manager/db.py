@@ -1081,6 +1081,8 @@ CREATE TABLE IF NOT EXISTS earmark_targets (
 #                         composition. The user typed these in — not re-derivable.
 #   - earmarked_products / earmark_links / earmark_targets   watchlist + price
 #                         targets (V12, V33) — typed in by the user
+#   - earmark_prices    (V32) price history of watched links — past reads can't
+#                         be re-fetched
 #   - precons / precon_cards    (when V2 ships them)
 #
 # Re-derivable tables (recovery = re-run a sync):

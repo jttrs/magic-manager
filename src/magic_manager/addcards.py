@@ -118,7 +118,7 @@ def printings_for_ids(sids: Iterable[str]) -> dict[str, dict]:
 def _upsert(cards: list[dict]) -> None:
     if cards:
         with db.connect() as conn:
-            db.upsert_cards(conn, cards)
+            sets_mod.upsert_lookup_cards(conn, cards)
 
 
 def _newest_first(cards: list[dict]) -> list[dict]:

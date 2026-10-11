@@ -62,6 +62,9 @@ V4_NEW_TABLES = ("inventory", "wishlist_entries", "decks", "deck_cards", "set_ta
 _LEDGER_TABLES = ("ingest_events", "inventory_events")
 # V12+ earmarks are user-entered (store URLs + asking prices) — protected like the ledger.
 _EARMARK_TABLES = ("earmarked_products", "earmark_links", "earmark_targets")
+# V32 creates earmark_prices already SEEDED from each link's asking price, so it
+# can only be byte-compared on a DB that is already at V32+.
+_PRICE_HISTORY_TABLES = ("earmark_prices",)
 _INGEST_LOG_CARRIED_COLS = (
     "at", "label", "source_path", "archived_path", "mode",
     "rows_added", "rows_updated", "rows_zeroed", "status", "error",
@@ -314,6 +317,18 @@ def _table_status(n_pre: int, h_pre: str, n_post: int, h_post: str) -> str:
     return "OK" if (n_pre == n_post and h_pre == h_post) else "DIVERGED"
 
 
+def _precious_tables(pre_version: int) -> list[str]:
+    """The tables that must survive this migration byte-for-byte (version-dependent)."""
+    precious = list(PRECIOUS_TABLES)
+    if pre_version >= 19:
+        precious += list(_LEDGER_TABLES)
+    if pre_version >= 12:
+        precious += list(_EARMARK_TABLES)
+    if pre_version >= 32:
+        precious += list(_PRICE_HISTORY_TABLES)
+    return precious
+
+
 def main(argv: list[str] | None = None) -> int:
     # Tiny argparse just for --help / -h. The rehearsal itself takes no
     # arguments — it operates on the live DB at db.db_path() unconditionally.
@@ -351,11 +366,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # The precious set is version-dependent: pre-V19 DBs carry ingest_log (checked
     # via the subsume verifier, not byte-hash); V19+ DBs carry the ledger tables.
-    precious = list(PRECIOUS_TABLES)
-    if pre_version >= 19:
-        precious += list(_LEDGER_TABLES)
-    if pre_version >= 12:
-        precious += list(_EARMARK_TABLES)
+    precious = _precious_tables(pre_version)
 
     pre: dict[str, tuple[int, str]] = {}
     for t in precious:

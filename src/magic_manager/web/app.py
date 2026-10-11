@@ -533,15 +533,6 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         except LookupError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @app.post("/api/art/lookup", response_model=art_api.ArtLookupOut, tags=["art"])
-    def art_lookup(body: art_api.ArtSwapsIn):
-        try:
-            return art_api.lookup(body)
-        except LookupError as e:
-            raise HTTPException(status_code=404, detail=str(e)) from e
-        except scryfall.ScryfallError as e:
-            raise HTTPException(status_code=502, detail=f"Couldn't reach Scryfall: {e}") from e
-
     # ---------- card surfer ----------
 
     @app.post("/api/surf/draw", response_model=surf_api.SurfDrawOut, tags=["surf"])

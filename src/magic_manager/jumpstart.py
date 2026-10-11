@@ -21,11 +21,9 @@ copy. The *buildable set* target counts OWNED copies including pledged ones
 """
 from __future__ import annotations
 
-import os
 import re
 from collections import defaultdict
 from dataclasses import dataclass, field, replace
-from pathlib import Path
 from typing import Callable, Iterable, Literal
 
 from . import (
@@ -135,13 +133,9 @@ def counts_by_id(es: Iterable[Entry]) -> dict[str, int]:
 
 # ---------- readiness (the one network step) ----------
 
-def _cache_dir() -> Path:
-    return Path(os.environ.get("MTGJSON_CACHE_DIR") or Path(os.environ.get("TMPDIR") or "/tmp") / "mtgjson-cache")
-
-
 def deck_cached(file_name: str) -> bool:
     """True when the MTGJSON deck file is already in the wrapper's disk cache."""
-    return (_cache_dir() / "decks" / f"{file_name.removesuffix('.json')}.json").exists()
+    return mtgjson.is_cached(f"decks/{file_name.removesuffix('.json')}.json")
 
 
 def is_ready(code: str) -> bool:

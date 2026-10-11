@@ -127,7 +127,7 @@ def _fill_ids(ids: set[str]) -> dict[str, dict]:
     except Exception:  # noqa: BLE001 — offline: those lines stay unidentified, named
         return {}
     with db.connect() as conn:
-        db.upsert_cards(conn, found)
+        sets_mod.upsert_lookup_cards(conn, found)
     return {c["id"]: {"scryfall_id": c["id"], "name": c.get("name"), "set_code": c.get("set"),
                       "collector_number": c.get("collector_number")} for c in found}
 

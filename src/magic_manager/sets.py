@@ -8,6 +8,7 @@ promos, art series, etc.). The resolver returns the parent + every set whose
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -248,6 +249,8 @@ def sync(set_codes: Iterable[str], *, progress=None) -> int:
                 for card in scryfall.search(query, unique="prints"):
                     db.upsert_card(conn, card, priced_at=priced_at)
                     n += 1
+                if (partial := _partial_codes(conn)) & set(batch):
+                    _save_partial_codes(conn, partial - set(batch))  # pulled whole now
         except Exception as e:
             # Prior batches are already committed. Surface where we stopped and
             # re-raise so the caller (and process exit code) still see the failure.
@@ -1849,8 +1852,45 @@ def _precon_variant_summary(variant_meta: dict) -> dict:
 _PRECON_TYPES_DEFAULT = object()
 
 
+# Printings added by a LOOKUP (search fallback, art look-up, live floor, cart)
+# instead of a full ``sync``. A set whose first rows came that way holds only a
+# few of its printings, so it stays "unsynced" until ``sync`` pulls it whole.
+# A ``settings`` key (no schema): JSON list of lowercased set codes.
+PARTIAL_SETS_KEY = "sets.partial"
+
+
+def _partial_codes(conn) -> set[str]:
+    row = conn.execute("SELECT value FROM settings WHERE key = ?", (PARTIAL_SETS_KEY,)).fetchone()
+    return set(json.loads(row[0])) if row and row[0] else set()
+
+
+def _save_partial_codes(conn, codes: set[str]) -> None:
+    if codes:
+        conn.execute("INSERT INTO settings (key, value) VALUES (?, ?) "
+                     "ON CONFLICT(key) DO UPDATE SET value = excluded.value", (PARTIAL_SETS_KEY, json.dumps(sorted(codes))))
+    else:
+        conn.execute("DELETE FROM settings WHERE key = ?", (PARTIAL_SETS_KEY,))
+
+
+def upsert_lookup_cards(conn, cards: Iterable[dict]) -> int:
+    """Upsert printings found by a lookup (not a full set sync). Sets that had
+    no local rows before are marked partial, so ``unsynced_set_codes`` still
+    reports them. Returns rows upserted."""
+    cards = list(cards)
+    if not cards:
+        return 0
+    codes = sorted({(c.get("set") or "").lower() for c in cards} - {""})
+    present = {r[0] for r in conn.execute(
+        f"SELECT DISTINCT set_code FROM cards WHERE set_code IN ({','.join('?' * len(codes))})", codes)} if codes else set()
+    n = db.upsert_cards(conn, cards)
+    if new := set(codes) - present:
+        _save_partial_codes(conn, _partial_codes(conn) | new)
+    return n
+
+
 def unsynced_set_codes(codes: Iterable[str]) -> list[str]:
-    """Return the subset of ``codes`` (lowercased) with zero rows in ``cards``.
+    """Return the subset of ``codes`` (lowercased) with zero rows in ``cards``,
+    or only the few printings a lookup added (see ``upsert_lookup_cards``).
 
     Used to decide which sets still need a Scryfall pull before a price
     rollup can see them.
@@ -1867,6 +1907,7 @@ def unsynced_set_codes(codes: Iterable[str]) -> list[str]:
                 wanted,
             ).fetchall()
         }
+        present -= _partial_codes(conn)
     return [c for c in wanted if c not in present]
 
 

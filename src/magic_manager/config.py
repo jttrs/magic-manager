@@ -195,10 +195,19 @@ def family_unobtainable_rules(*, override: str | Path | None = None) -> dict[str
     return build_unobtainable_rules(load_toml("families.toml", override=override, required=True))
 
 
+SCENE_KINDS = ("scene", "poster")
+
+
 def family_scenes(*, override: str | Path | None = None) -> dict[str, list[dict]]:
     """``config/families.toml`` ``[[scenes.<fam>]]`` → ``{family: [scene-dict, …]}``
-    (plain dicts: name/artist/set/cn_lo/cn_hi). families.toml is REQUIRED."""
+    (plain dicts: name/artist/set/cn_lo/cn_hi, optional ``kind`` ∈
+    :data:`SCENE_KINDS`, default scene). families.toml is REQUIRED; an unknown
+    ``kind`` raises :class:`ConfigError`."""
     raw = load_toml("families.toml", override=override, required=True).get("scenes") or {}
+    for fam, scenes in raw.items():
+        for i, sc in enumerate(scenes):
+            if sc.get("kind", "scene") not in SCENE_KINDS:
+                raise ConfigError(f"families.toml scenes.{fam}[{i}]: kind must be one of {SCENE_KINDS}, got {sc['kind']!r}")
     return {k.lower(): [dict(sc) for sc in scenes] for k, scenes in raw.items()}
 
 

@@ -62,6 +62,13 @@ def test_scene_printings_survive_variant_exclusions(tmp_db, family):
     assert "pre" not in ids        # prerelease outside any scene still drops
 
 
+def test_market_cards_list_scene_printings_too(tmp_db, family):
+    """Market → Cards shares the Collection universe, scene exemption included (documented)."""
+    from magic_manager import market
+    ids = {c["scryfall_id"] for c in market.family_card_prices("tst")["cards"]}
+    assert "s11" in ids and "pre" not in ids
+
+
 def test_per_finish_progress(tmp_db, family):
     from magic_manager import scenes
     _own("s10", "nonfoil")

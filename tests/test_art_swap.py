@@ -99,6 +99,16 @@ def test_lookup_scryfall_adds_missing_printings(art, make_card, monkeypatch):
     assert art_swap.lookup_scryfall("cat", [A1]) == {"searched": 1, "added": 0}
 
 
+def test_lookup_upserts_leave_never_synced_sets_unsynced(art, make_card, monkeypatch):
+    from magic_manager import sets
+    new = make_card(id="a4", oracle_id="oa", name="Alpha", set="ddd", collector_number="9", illustration_id="ill-cat")
+    monkeypatch.setattr(scryfall, "search", lambda q, **_: iter([new]))
+    art_swap.lookup_scryfall("cat", [A1])
+    assert sets.unsynced_set_codes(["aaa", "ddd"]) == ["ddd"]     # one looked-up printing isn't the set
+    sets.sync(["ddd"])                                             # a full pull clears it
+    assert sets.unsynced_set_codes(["ddd"]) == []
+
+
 def test_lookup_scryfall_reraises_real_failures(art, monkeypatch):
     def boom(q, **_):
         raise scryfall.ScryfallError("scryfall.sh search exited 7: network down")
@@ -132,3 +142,16 @@ def test_api_routes(art):
         s = client.post("/api/art/swaps", json=body).json()
         assert s["rows"][0]["pick"] == A3 and s["printings"][A3]["set_code"] == "ccc"
         assert client.post("/api/art/swaps", json={**body, "tag": "nope"}).status_code == 404
+
+
+def test_lookup_is_a_job(art, make_card, monkeypatch):
+    from magic_manager.api import art as art_api, jobs
+
+    new = make_card(id="a4", oracle_id="oa", name="Alpha", set="ddd", collector_number="9", illustration_id="ill-cat")
+    monkeypatch.setattr(scryfall, "search", lambda q, **_: iter([new]))
+    ticks = []
+    spec = jobs.get("art.lookup")
+    res = spec.run(art_api.ArtSwapsIn(tag="cat", cards=[{"scryfall_id": A1, "board": "main", "finish": "either", "count": 1}]),
+                   ticks.append)
+    assert res.artifacts[0].label == "lookup" and res.artifacts[0].data == {"searched": 1, "added": 1}
+    assert res.summary == "Scryfall: found 1 more printing for 1 card" and ticks

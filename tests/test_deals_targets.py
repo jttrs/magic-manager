@@ -107,6 +107,19 @@ def test_read_reports_only_newly_met_targets(watched, monkeypatch):
     assert [h["url"] for h in deals.read_watched()["newly_met"]] == [watched["b"]]
 
 
+def test_a_failed_read_cannot_meet_a_target(watched, monkeypatch):
+    """The saved $75 at store a is under the $76 target, but a's reads keep failing — not met on an old price."""
+    earmarks.set_target(watched["pid"], "price", 76)
+    assert deals.watchlist(values=False)[0]["target_met"] is True       # instant list: a's saved price
+    monkeypatch.setattr(deals, "read_prices", lambda urls, **kw: [
+        {"url": u, "price": None if u == watched["a"] else 90.0, "currency": "USD", "available": True, "title": None,
+         "signal": "shopify", "error": "Blocked" if u == watched["a"] else None} for u in urls])
+    res = deals.read_watched()
+    assert res["rows"][0]["target_met"] is False and res["newly_met"] == []
+    _stub_reads(monkeypatch, {watched["a"]: (75.0, True), watched["b"]: (90.0, True)})
+    assert deals.read_watched()["rows"][0]["target_met"] is True       # confirmed by a read: met again
+
+
 def test_no_target_no_notice(watched, monkeypatch):
     _stub_reads(monkeypatch, {watched["a"]: (1.0, True), watched["b"]: (1.0, True)})
     assert deals.read_watched()["newly_met"] == []

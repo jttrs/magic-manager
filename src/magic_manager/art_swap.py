@@ -101,7 +101,7 @@ def swaps(tag_ref: str, scryfall_ids) -> dict:
             "printings": printings, "matched": matched, "free_by_finish": free_by_finish}
 
 
-def lookup_scryfall(tag_ref: str, scryfall_ids) -> dict:
+def lookup_scryfall(tag_ref: str, scryfall_ids, *, progress=None) -> dict:
     """Ask Scryfall for on-theme printings of the cards behind these printings
     (``art:<tag>``) and add any missing from the local catalog. Network; returns
     ``{searched, added}``; raises ``scryfall.ScryfallError`` on a real lookup failure (searched = cards, added = printings new to the catalog)."""
@@ -113,6 +113,8 @@ def lookup_scryfall(tag_ref: str, scryfall_ids) -> dict:
     oids = sorted({p["oracle_id"] for p in addcards.printings_for_ids(scryfall_ids).values() if p.get("oracle_id")})
     found: list[dict] = []
     for i in range(0, len(oids), _ORACLE_CHUNK):
+        if progress:
+            progress(i, len(oids))
         part = " or ".join(f"oracleid:{o}" for o in oids[i:i + _ORACLE_CHUNK])
         try:
             found += itertools.islice(scryfall.search(f"art:{slug} game:paper unique:prints ({part})"), 500)

@@ -1,13 +1,13 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
-import { artSwapsQuery, artTagsQuery, unwrap } from '../../app/queries';
+import { artSwapsQuery, artTagsQuery } from '../../app/queries';
 import { useDebounced } from '../../app/useDebounced';
 import { useJob } from '../../app/useJob';
 import { Button } from '../../components/Button';
 import { Chevron } from '../../components/Chevron';
 import { ProgressRule } from '../../components/ProgressRule';
 import { EmptyNote } from '../../components/States';
-import { artLookup, type ArtTagRefOut, type PrintingOut } from '../../core/api';
+import type { ArtTagRefOut, PrintingOut } from '../../core/api';
 import { artView, choiceFor, choiceNote, draftPrintingIds, swapAllFree, wasPrinting, type ArtRow } from '../../core/artSwap';
 import { restorePrinting, swapPrinting, type Draft } from '../../core/deckDraft';
 import { fmtCount, fmtInt } from '../../core/format';
@@ -25,8 +25,9 @@ export function ArtSwapTab({ draft, onEdit, onInspect, tag, onTag }: { draft: Dr
   const sids = useDebounced(draftPrintingIds(draft), 400);
   const q = useQuery(artSwapsQuery(tag?.id ?? null, sids));
   const tagsQ = useQuery(artTagsQuery(''));
-  // A quick pick names the tag by slug; the answer carries its id.
-  const fresh = q.data && tag && (q.data.tag.id === tag.id || q.data.tag.label === tag.label) ? q.data : undefined;
+  // The answer for the current key is fresh; a kept-previous one only while it's for the same tag
+  // (a quick pick names the tag by slug, whose label may differ — the answer carries its id).
+  const fresh = q.data && tag && (!q.isPlaceholderData || q.data.tag.id === tag.id) ? q.data : undefined;
   const view = useMemo(() => artView(draft, fresh), [draft, fresh]);
   // Swap the quick pick's slug for the server's tag so the answer keeps matching.
   const answered = q.data?.tag;
@@ -57,6 +58,11 @@ export function ArtSwapTab({ draft, onEdit, onInspect, tag, onTag }: { draft: Dr
 function TagPicker({ tag, onTag }: { tag: ArtTagRefOut | null; onTag: (t: ArtTagRefOut | null) => void }) {
   const id = useId();
   const [text, setText] = useState(tag?.label ?? '');
+  // The server's label replaces a quick pick's slug; show it rather than treat it as an edit.
+  const label = tag?.label;
+  useEffect(() => {
+    if (label) setText(label);
+  }, [label]);
   const needle = useDebounced(text.trim(), 200);
   const editing = needle.length > 0 && needle !== tag?.label;
   const res = useQuery({ ...artTagsQuery(needle), enabled: editing });
@@ -225,26 +231,29 @@ function ArtLine({ r, onEdit, onInspect }: { r: ArtRow; onEdit: Edit; onInspect:
   );
 }
 
-/** Cards without a local on-theme printing, and the way to ask Scryfall for more. */
+/** Cards without a local on-theme printing, and the way to ask Scryfall for more (the `art.lookup` job). */
 function Lookup({ tag, sids, without }: { tag: ArtTagRefOut; sids: string[]; without: number }) {
   const qc = useQueryClient();
-  const [state, setState] = useState<{ busy: boolean; msg: string | null; error: boolean }>({ busy: false, msg: null, error: false });
+  const { live, start } = useJob();
+  const [err, setErr] = useState<string | null>(null);
+  const busy = Boolean(live && live.status !== 'succeeded' && live.status !== 'failed');
+  useEffect(() => {
+    if (live?.status === 'succeeded') void qc.invalidateQueries({ queryKey: ['art', 'swaps'] });
+  }, [live?.status, qc]);
   const run = async () => {
-    setState({ busy: true, msg: null, error: false });
-    try {
-      const r = unwrap(await artLookup({ body: { tag: tag.id, cards: sids.map((scryfall_id) => ({ scryfall_id, board: 'main', finish: 'either', count: 1 })) } }));
-      await qc.invalidateQueries({ queryKey: ['art', 'swaps'] });
-      setState({ busy: false, error: false, msg: r.added ? `Found ${fmtCount(r.added, 'more printing')}.` : 'Scryfall has nothing new for these cards.' });
-    } catch (e) {
-      setState({ busy: false, error: true, msg: `Couldn’t reach Scryfall: ${(e as Error).message}` });
-    }
+    setErr(await start('art.lookup', { tag: tag.id, cards: sids.map((scryfall_id) => ({ scryfall_id, board: 'main', finish: 'either', count: 1 })) }));
   };
+  const found = (live?.artifacts as { label: string; data: { added: number } }[] | undefined)?.find((a) => a.label === 'lookup')?.data;
+  const failed = err ?? (live?.status === 'failed' ? live.error ?? 'the look-up failed' : null);
+  const msg = failed ? `Couldn’t reach Scryfall: ${failed}`
+    : live?.status === 'succeeded' && found ? (found.added ? `Found ${fmtCount(found.added, 'more printing')}.` : 'Scryfall has nothing new for these cards.')
+      : null;
   return (
     <div className="mt-4 flex flex-col gap-2 border-t border-rule pt-3 text-sm text-ink-muted">
       {without > 0 && <p>{fmtCount(without, 'card')} {without === 1 ? 'has' : 'have'} no {tag.label} printing in your catalog.</p>}
       <div className="flex flex-wrap items-center gap-3">
-        <Button tone="paper" disabled={state.busy} onClick={run}>{state.busy ? 'Asking Scryfall…' : 'Look on Scryfall for more'}</Button>
-        {state.msg && <span role={state.error ? 'alert' : 'status'} className={state.error ? 'text-danger' : ''}>{state.msg}</span>}
+        <Button tone="paper" disabled={busy} onClick={run}>{busy ? 'Asking Scryfall…' : 'Look on Scryfall for more'}</Button>
+        {msg && <span role={failed ? 'alert' : 'status'} className={failed ? 'text-danger' : ''}>{msg}</span>}
       </div>
     </div>
   );

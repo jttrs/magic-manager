@@ -26,6 +26,7 @@ field or from a product's absence in a per-set ``DeckList`` scan; check
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from functools import lru_cache
 from pathlib import Path
@@ -587,6 +588,19 @@ def precon_variants(
 
 
 # ---------- staleness + cache management ----------
+
+def cache_path(resource_path: str) -> Path:
+    """Where mtgjson.sh caches ``resource_path`` (its ``CACHE_DIR``/<resource>
+    layout — the one Python mirror of it). Offline; the file may not exist."""
+    base = os.environ.get("MTGJSON_CACHE_DIR") or Path(os.environ.get("TMPDIR") or "/tmp") / "mtgjson-cache"
+    return Path(base) / resource_path
+
+
+def is_cached(resource_path: str) -> bool:
+    """True when ``resource_path`` is already in the wrapper's disk cache (no network)."""
+    p = cache_path(resource_path)
+    return p.is_file() and p.stat().st_size > 0
+
 
 def is_stale(resource_path: str) -> bool:
     """True if the cached SHA-256 for ``resource_path`` differs from MTGJSON's
