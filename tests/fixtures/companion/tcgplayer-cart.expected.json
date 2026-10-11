@@ -1,0 +1,90 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "kind": "single",
+      "tcgplayer_product_id": 563893,
+      "name": "Vengeful Bloodwitch",
+      "set_name": "Foundations",
+      "number": "76",
+      "finish": "nonfoil",
+      "condition": "NM",
+      "language": "English",
+      "quantity": 2,
+      "price": 0.4
+    },
+    {
+      "kind": "sealed",
+      "tcgplayer_product_id": null,
+      "name": "FINAL FANTASY - Play Booster Pack",
+      "set_name": "FINAL FANTASY",
+      "number": null,
+      "finish": "nonfoil",
+      "condition": null,
+      "language": null,
+      "quantity": 1,
+      "price": 8.49
+    },
+    {
+      "kind": "single",
+      "tcgplayer_product_id": 630864,
+      "name": "Aerith Gainsborough",
+      "set_name": "FINAL FANTASY",
+      "number": "4",
+      "finish": "nonfoil",
+      "condition": "NM",
+      "language": "Japanese",
+      "quantity": 1,
+      "price": 0.16
+    },
+    {
+      "kind": "single",
+      "tcgplayer_product_id": 487805,
+      "name": "The One Ring",
+      "set_name": "Universes Beyond: The Lord of the Rings: Tales of Middle-earth",
+      "number": "246",
+      "finish": "nonfoil",
+      "condition": "LP",
+      "language": "English",
+      "quantity": 1,
+      "price": 108.15
+    },
+    {
+      "kind": "single",
+      "tcgplayer_product_id": 630864,
+      "name": "Aerith Gainsborough",
+      "set_name": "FINAL FANTASY",
+      "number": "4",
+      "finish": "nonfoil",
+      "condition": "NM",
+      "language": "English",
+      "quantity": 1,
+      "price": 1.75
+    },
+    {
+      "kind": "single",
+      "tcgplayer_product_id": 630958,
+      "name": "Ardyn, the Usurper",
+      "set_name": "FINAL FANTASY",
+      "number": "315",
+      "finish": "foil",
+      "condition": "NM",
+      "language": "English",
+      "quantity": 1,
+      "price": 5.49
+    },
+    {
+      "kind": "single",
+      "tcgplayer_product_id": 577866,
+      "name": "Sol Ring",
+      "set_name": "Commander: Duskmourn: House of Horror",
+      "number": "94",
+      "finish": "nonfoil",
+      "condition": "NM",
+      "language": "English",
+      "quantity": 1,
+      "price": 1.85
+    }
+  ],
+  "warnings": []
+}

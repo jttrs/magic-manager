@@ -128,23 +128,13 @@ _UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1
 
 def _tcgplayer_ids(lines: list[OrderLine]) -> None:
     """TCGplayer lines name a TCGplayer product id: ask Scryfall which printing it
-    is (``/cards/tcgplayer/<id>``, cached by the wrapper) and upsert it."""
-    from . import scryfall
-    found = []
-    for ln in lines:
-        if ln.kind != "single" or ln.scryfall_id or not ln.tcgplayer_product_id:
-            continue
-        try:
-            card = scryfall.by_tcgplayer_id(ln.tcgplayer_product_id)
-        except Exception:  # noqa: BLE001 — offline: the line stays unidentified, named
-            continue
-        if card and card.get("id"):
-            ln.scryfall_id = card["id"]
-            found.append(card)
-    if found:
-        from . import sets as sets_mod
-        with db.connect() as conn:
-            sets_mod.upsert_lookup_cards(conn, found)
+    is (``store_ids.tcgplayer_printings``, cached + upserted)."""
+    from . import store_ids
+    todo = [ln for ln in lines if ln.kind == "single" and not ln.scryfall_id and ln.tcgplayer_product_id]
+    found = store_ids.tcgplayer_printings(ln.tcgplayer_product_id for ln in todo)
+    for ln in todo:
+        if ln.tcgplayer_product_id in found:
+            ln.scryfall_id = found[ln.tcgplayer_product_id]["id"]
 
 
 def _resolve(lines: list[OrderLine], *, remote: bool = True) -> None:

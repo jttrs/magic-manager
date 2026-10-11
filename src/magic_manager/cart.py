@@ -1,18 +1,26 @@
-"""Mana Pool cart audit — the DRY engine behind the cart tools.
+"""Cart audit (Mana Pool, TCGplayer, Card Kingdom) — the DRY engine behind the cart tools.
 
 A cart is a list of line dicts; any of these identify the printing (tried in
 order, the first that resolves wins):
 
-  ``scryfall_id``                 direct.
+  ``scryfall_id``                 direct (Mana Pool's cart page).
   ``set`` + ``number``            the safe bookmarklet's shape (it reads only the
                                   rendered cart page) → the local ``cards`` table.
+  ``tcgplayer_product_id``        a TCGplayer cart → Scryfall (``store_ids``).
+  ``cardkingdom_product_id``      a Card Kingdom cart (+ ``name``, ``set_name`` =
+                                  its edition, ``number`` hint) → MTGJSON (``store_ids``).
   ``card_id`` (MTGJSON uuid)      the headless / legacy bookmarklet shape → Mana
                                   Pool's catalog via ``manapool.sh`` (needs
                                   ``MANAPOOL_*`` credentials; skipped without).
 
 plus ``quantity``, ``price_cents`` (or ``price`` in dollars), and a finish
 (``finish_id`` FO/NF/ET or ``finish`` foil/nonfoil/etched), optional
-``condition_id``.
+``condition_id`` / ``condition`` (NM, LP… or Card Kingdom's NM/EX/VG/G) and
+``language``. A line with ``kind`` other than ``single`` (a sealed product) is
+not a card: it's counted in the cart's totals and listed, never checked.
+
+Market prices are Near Mint English, so a played or non-English line is shown
+with its condition/language but never flagged as over market (owner, 2026-10-10).
 
 Four atomic checks share ONE mapping pass:
 
@@ -32,7 +40,7 @@ import urllib.parse
 from dataclasses import dataclass
 from typing import Callable
 
-from . import db, manapool, missing as missing_mod, sets as sets_mod
+from . import db, manapool, missing as missing_mod, sets as sets_mod, store_ids
 from .util import cn_sort_key
 
 # Mana Pool finish_id -> is_foil. FO=foil, NF/FN=nonfoil, ET=etched (foil-like).
@@ -60,6 +68,13 @@ class CartLine:
     number: str | None
     foil: bool
     prod: dict | None              # Mana Pool product row (only via the catalog path)
+    language: str | None = None
+    kind: str = "single"           # single | sealed | other (not a card: never checked)
+
+
+def comparable(m: CartLine) -> bool:
+    """Whether a line's price compares with the market (Near Mint, English)."""
+    return (m.condition_id or "NM").upper() == "NM" and (m.language or "English").lower() in ("english", "en")
 
 
 # ---------- parsing ----------
@@ -125,13 +140,27 @@ def _fill_ids(ids: set[str]) -> dict[str, dict]:
                       "collector_number": c.get("collector_number")} for c in addcards.ensure_printings(ids)}
 
 
+def _store_ids(cart: list[dict], remote: bool) -> tuple[dict[int, str], dict[int, str]]:
+    """TCGplayer / Card Kingdom product ids → scryfall_id (only lines no
+    scryfall_id identifies; offline → empty)."""
+    if not remote:
+        return {}, {}
+    singles = [c for c in cart if (c.get("kind") or "single") == "single" and not c.get("scryfall_id")]
+    tcg = store_ids.tcgplayer_printings(c["tcgplayer_product_id"] for c in singles if c.get("tcgplayer_product_id"))
+    ck = store_ids.cardkingdom_printings([
+        store_ids.CkLine(int(c["cardkingdom_product_id"]), c.get("name") or "", c.get("set_name"), c.get("number"))
+        for c in singles if c.get("cardkingdom_product_id")])
+    return {k: v["id"] for k, v in tcg.items()}, {k: v.scryfall_id for k, v in ck.items()}
+
+
 def map_cart(cart: list[dict], *, remote: bool = True,
              product_fn: Callable[[str], dict | None] | None = None) -> list[CartLine]:
     """Identify every cart line once (see module doc for the order). The Mana
     Pool catalog is consulted only for lines nothing local identified, once per
     uuid, and not at all after it reports missing credentials. Cart order kept."""
     product_fn = product_fn or single_product
-    ids = {c["scryfall_id"] for c in cart if c.get("scryfall_id")}
+    tcg_ids, ck_ids = _store_ids(cart, remote)
+    ids = {c["scryfall_id"] for c in cart if c.get("scryfall_id")} | set(tcg_ids.values()) | set(ck_ids.values())
     sns = {(str(c["set"]).lower(), str(c["number"])) for c in cart if c.get("set") and c.get("number")}
     by_id, by_sn = _local_cards(ids=ids, set_numbers=sns)
     if remote and ids - by_id.keys():
@@ -141,10 +170,12 @@ def map_cart(cart: list[dict], *, remote: bool = True,
     configured = remote
     out: list[CartLine] = []
     for c in cart:
-        local = by_id.get(c.get("scryfall_id") or "") or by_sn.get((str(c.get("set") or "").lower(), str(c.get("number") or "")))
+        kind = c.get("kind") or "single"
+        sid_in = c.get("scryfall_id") or tcg_ids.get(c.get("tcgplayer_product_id") or 0) or ck_ids.get(c.get("cardkingdom_product_id") or 0) or ""
+        local = None if kind != "single" else (by_id.get(sid_in) or by_sn.get((str(c.get("set") or "").lower(), str(c.get("number") or ""))))
         prod = None
         uuid = c.get("card_id")
-        if not local and uuid and configured:
+        if kind == "single" and not local and uuid and configured:
             if uuid not in prod_by_uuid:
                 try:
                     prod_by_uuid[uuid] = product_fn(uuid)
@@ -158,12 +189,12 @@ def map_cart(cart: list[dict], *, remote: bool = True,
         number = (local or {}).get("collector_number") or ((prod or {}).get("number"))
         out.append(CartLine(
             card_id=uuid, price_cents=_price_cents(c), finish_id=c.get("finish_id"),
-            condition_id=c.get("condition_id"), quantity=int(c.get("quantity") or 1),
+            condition_id=c.get("condition_id") or c.get("condition"), quantity=int(c.get("quantity") or 1),
             scryfall_id=sid,
             name=(local or {}).get("name") or (prod or {}).get("name") or c.get("name"),
             set_code=((local or {}).get("set_code") or (prod or {}).get("set_code") or c.get("set") or "").upper() or None,
             number=str(number) if number is not None else (str(c["number"]) if c.get("number") else None),
-            foil=_is_foil(c), prod=prod,
+            foil=_is_foil(c), prod=prod, language=c.get("language"), kind=kind,
         ))
     return out
 
@@ -223,6 +254,7 @@ def overpay_rows(mapped: list[CartLine], prices_fn: Callable[[list[str]], dict] 
             "num": m.number or "", "fin": "foil" if m.foil else "nonfoil", "qty": m.quantity,
             "your": your, "market": market,
             "mp_cheap": _usd(_variant_low(m.prod, m.foil, m.condition_id or "NM")) if m.prod else None,
+            "condition": m.condition_id, "language": m.language, "comparable": comparable(m),
         }
         if market is None or your is None:
             no_market.append(rec)
@@ -272,7 +304,8 @@ def check_owned(mapped: list[CartLine], family_codes: set[str] | None) -> tuple[
         qty = owned.get((m.scryfall_id, fin), 0)
         if qty > 0:
             rows.append({"scryfall_id": m.scryfall_id, "name": m.name or "?", "set": m.set_code or "",
-                         "num": m.number or "", "fin": fin, "owned_qty": qty, "your": (m.price_cents or 0) / 100.0})
+                         "num": m.number or "", "fin": fin, "owned_qty": qty, "your": (m.price_cents or 0) / 100.0,
+                         "condition": m.condition_id, "language": m.language})
     rows.sort(key=lambda r: (r["set"], cn_sort_key(r["num"]), r["fin"]))
     return rows, skipped
 
@@ -371,21 +404,24 @@ def audit(cart: list[dict], *, anchor: str | None = None, over_market_pct: float
           remote: bool = True, prices_fn: Callable[[list[str]], dict] = local_prices) -> dict:
     """Every check in one pass, for the web: the family is ``anchor`` or, when
     the cart sits in exactly one family, imputed from it."""
-    mapped = map_cart(cart, remote=remote)
+    every = map_cart(cart, remote=remote)
+    mapped = [m for m in every if m.kind == "single"]
     anchors = infer_set_anchors(mapped)
     family = anchor or (anchors[0] if len(anchors) == 1 else None)
     owned, _ = check_owned(mapped, None)
     over, _ = check_overpay(mapped, None, prices_fn)
     return {
-        "lines": len(mapped),
-        "copies": sum(m.quantity for m in mapped),
-        "total": round(sum((m.price_cents or 0) * m.quantity for m in mapped) / 100, 2),
+        "lines": len(every),
+        "copies": sum(m.quantity for m in every),
+        "total": round(sum((m.price_cents or 0) * m.quantity for m in every) / 100, 2),
         "unidentified": [{"name": m.name, "set": m.set_code, "num": m.number} for m in mapped if not m.scryfall_id],
+        "not_cards": [{"name": m.name, "kind": m.kind, "qty": m.quantity, "price": _usd(m.price_cents)} for m in every if m.kind != "single"],
+        "not_compared": sum(1 for m in mapped if m.scryfall_id and not comparable(m)),
         "family": family,
         "families": anchors,
         "dupes": check_dupes(mapped),
         "owned": owned,
         "missing": check_missing(family, mapped) if family else [],
-        "overpay": [r for r in over["rows"] if is_flagged(r, over_market_pct)],
+        "overpay": [r for r in over["rows"] if r["comparable"] and is_flagged(r, over_market_pct)],
         "no_market": over["no_market"],
     }

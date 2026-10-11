@@ -12,6 +12,23 @@ export const MAX_WATCHED = 50;
 
 export const MANAPOOL_CART_URL = 'https://manapool.com/cart';
 export const MANAPOOL_ORIGINS = ['https://manapool.com/*'];
+// Other carts (opt-in, one switch per store): the cart page's own host only.
+export const TCGPLAYER_CART_ORIGINS = ['https://www.tcgplayer.com/*'];
+export const CARDKINGDOM_CART_ORIGINS = ['https://www.cardkingdom.com/*'];
+export const CART_STORES = {
+  manapool: {
+    name: 'Mana Pool', url: MANAPOOL_CART_URL, matches: ['https://manapool.com/cart*'], origins: MANAPOOL_ORIGINS,
+    reader: 'src/readers/manapool-cart.js', fn: 'readManaPoolCart', permission: 'permission.manapool_missing',
+  },
+  tcgplayer: {
+    name: 'TCGplayer', url: 'https://www.tcgplayer.com/cart', matches: ['https://www.tcgplayer.com/cart*'], origins: TCGPLAYER_CART_ORIGINS,
+    reader: 'src/readers/tcgplayer-cart.js', fn: 'readTcgplayerCart', permission: 'permission.tcgplayer_cart_off',
+  },
+  cardkingdom: {
+    name: 'Card Kingdom', url: 'https://www.cardkingdom.com/cart', matches: ['https://www.cardkingdom.com/cart*'], origins: CARDKINGDOM_CART_ORIGINS,
+    reader: 'src/readers/cardkingdom-cart.js', fn: 'readCardKingdomCart', permission: 'permission.cardkingdom_cart_off',
+  },
+};
 export const MOXFIELD_ORIGINS = ['https://moxfield.com/*', 'https://*.moxfield.com/*'];
 // Order history (purchases). Mana Pool needs no extra permission (install-time);
 // TCGplayer + Card Kingdom are the optional "Order history" feature.
@@ -68,7 +85,7 @@ export function summarize(kind, data) {
     const items = data.items || [];
     const copies = items.reduce((n, i) => n + (i.quantity || 0), 0);
     const total = items.reduce((n, i) => n + (i.price || 0) * (i.quantity || 0), 0);
-    return `${items.length} cart lines · ${copies} cards · $${total.toFixed(2)}`;
+    return `${CART_STORES[data.store]?.name || 'Mana Pool'} cart · ${items.length} lines · ${copies} items · $${total.toFixed(2)}`;
   }
   if (kind === 'tabs') {
     const pages = Object.keys(data.pages || {}).length;

@@ -61,19 +61,29 @@
       "message": "The companion can’t open Mana Pool pages — its Mana Pool permission was removed.",
       "fix": "Allow manapool.com in the extension’s Chrome site access settings, or remove and re-add the extension."
     },
+    "permission.tcgplayer_cart_off": {
+      "where": "extension",
+      "message": "The companion isn’t allowed to read your TCGplayer cart yet.",
+      "fix": "Open the companion’s settings and switch on TCGplayer cart (Chrome will ask to allow www.tcgplayer.com)."
+    },
+    "permission.cardkingdom_cart_off": {
+      "where": "extension",
+      "message": "The companion isn’t allowed to read your Card Kingdom cart yet.",
+      "fix": "Open the companion’s settings and switch on Card Kingdom cart (Chrome will ask to allow www.cardkingdom.com)."
+    },
     "cart.load_timeout": {
       "where": "extension",
-      "message": "Your Mana Pool cart page didn’t finish loading.",
-      "fix": "Open manapool.com/cart yourself, wait until the cards show, then try again."
+      "message": "Your cart page didn’t finish loading.",
+      "fix": "Open your cart on that store yourself, wait until the cards show, then try again."
     },
     "cart.empty": {
       "where": "extension",
-      "message": "Your Mana Pool cart is empty in this browser.",
-      "fix": "Add cards on Mana Pool (signed in to the account you shop with), then try again."
+      "message": "That cart is empty in this browser.",
+      "fix": "Add cards on the store (signed in to the account you shop with), then try again."
     },
     "cart.page_changed": {
       "where": "extension",
-      "message": "The companion couldn’t find any cards on your Mana Pool cart page — Mana Pool may have changed its page.",
+      "message": "The companion couldn’t find any cards on your cart page — the store may have changed its page.",
       "fix": "Report this so the reader can be updated (the scrape-doctor skill has the steps)."
     },
     "cart.row_unreadable": {
@@ -83,18 +93,18 @@
     },
     "cart.signed_out": {
       "where": "extension",
-      "message": "You’re not signed in to Mana Pool in this browser, so this is the browser’s guest cart.",
-      "fix": "Sign in to Mana Pool if your cart lives on your account, then try again."
+      "message": "You’re not signed in to that store in this browser, so this is the browser’s guest cart.",
+      "fix": "Sign in to the store if your cart lives on your account, then try again."
     },
     "cart.sign_in": {
       "where": "extension",
-      "message": "Mana Pool sent the companion to its sign-in page instead of your cart.",
-      "fix": "Sign in to Mana Pool in this browser, open your cart once, then try again."
+      "message": "The store sent the companion to its sign-in page instead of your cart.",
+      "fix": "Sign in to the store in this browser, open your cart once, then try again."
     },
     "cart.not_scriptable": {
       "where": "extension",
-      "message": "Chrome didn’t let the companion read the Mana Pool page.",
-      "fix": "Make sure manapool.com loads normally in this browser, then try again."
+      "message": "Chrome didn’t let the companion read the store’s cart page.",
+      "fix": "Make sure the store’s site loads normally in this browser, then try again."
     },
     "cart.paste_invalid": {
       "where": "app",

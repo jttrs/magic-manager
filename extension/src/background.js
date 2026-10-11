@@ -11,7 +11,7 @@
 
 import { STORES } from './stores.js';
 import {
-  APPROVAL_TTL_MS, KINDS, MANAPOOL_CART_URL, MANAPOOL_ORIGINS, MAX_PAYLOAD_BYTES, MOXFIELD_DECK,
+  APPROVAL_TTL_MS, CART_STORES, KINDS, MANAPOOL_ORIGINS, MAX_PAYLOAD_BYTES, MOXFIELD_DECK,
   MOXFIELD_ORIGINS, STORE_ORIGINS, storeOf, summarize,
 } from './protocol.js';
 import { readOrderList, readOrders, ORDER_FEATURES } from './orders.js';
@@ -34,7 +34,11 @@ async function appOrigin() {
 
 async function features() {
   const has = (origins) => chrome.permissions.contains({ origins }).catch(() => false);
-  return { cart: await has(MANAPOOL_ORIGINS), deals: await has(STORE_ORIGINS), moxfield: await has(MOXFIELD_ORIGINS), ...await ORDER_FEATURES(has) };
+  return {
+    cart: await has(MANAPOOL_ORIGINS), deals: await has(STORE_ORIGINS), moxfield: await has(MOXFIELD_ORIGINS),
+    cart_tcgplayer: await has(CART_STORES.tcgplayer.origins), cart_cardkingdom: await has(CART_STORES.cardkingdom.origins),
+    ...await ORDER_FEATURES(has),
+  };
 }
 
 chrome.action.onClicked.addListener(() => chrome.runtime.openOptionsPage());
@@ -178,25 +182,29 @@ async function withTab(url, matches, fn) {
   }
 }
 
-async function readCart() {
-  if (!await chrome.permissions.contains({ origins: MANAPOOL_ORIGINS })) return fail('permission.manapool_missing');
-  return withTab(MANAPOOL_CART_URL, ['https://manapool.com/cart*'], async (tab, opened) => {
-    if (opened && !await loaded(tab.id, 20_000)) return fail('cart.load_timeout');
+/** A store's cart page (Mana Pool by default): your open cart tab, else a background tab it closes. */
+async function readCart(params) {
+  const key = params.store == null ? 'manapool' : String(params.store);
+  if (!Object.hasOwn(CART_STORES, key)) return fail('request.invalid', { detail: 'unknown store' });
+  const store = CART_STORES[key];
+  if (!await chrome.permissions.contains({ origins: store.origins })) return fail(store.permission);
+  return withTab(store.url, store.matches, async (tab, opened) => {
+    if (opened && !await loaded(tab.id, 20_000)) return fail('cart.load_timeout', { store: key });
     // The cart renders after load: give rows up to 8 s to appear.
     const end = Date.now() + 8_000;
     let out;
     for (;;) {
       try {
-        out = await inject(tab.id, 'src/readers/manapool-cart.js', () => readManaPoolCart(document)); // eslint-disable-line no-undef
+        out = await inject(tab.id, store.reader, (fn) => globalThis[fn](document), [store.fn]);
       } catch {
-        return fail('cart.not_scriptable');
+        return fail('cart.not_scriptable', { store: key });
       }
       if (out?.ok || Date.now() > end) break;
       await sleep(500);
     }
-    if (!out) return fail('cart.page_changed');
-    if (!out.ok) return fail(out.code, { warnings: out.warnings || [] });
-    return { ok: true, data: { items: out.items, warnings: out.warnings || [], source: 'extension' } };
+    if (!out) return fail('cart.page_changed', { store: key });
+    if (!out.ok) return fail(out.code, { warnings: out.warnings || [], store: key });
+    return { ok: true, data: { store: key, items: out.items, warnings: out.warnings || [], source: 'extension' } };
   });
 }
 

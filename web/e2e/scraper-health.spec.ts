@@ -36,8 +36,8 @@ test('cart check: a changed Mana Pool cart page is flagged above the ways to rea
   await health(page, [row('companion-cart/manapool', 'Mana Pool cart read in your browser', 'Mana Pool',
     { code: 'cart.page_changed', message: 'Mana Pool’s cart page changed — the reader found no cart.', via: 'use' })]);
   await page.goto(COLLECTION_URL);
-  await page.getByRole('button', { name: 'Check my Mana Pool cart' }).click();
-  const notice = page.getByRole('dialog', { name: 'Check my Mana Pool cart' }).getByRole('status', { name: 'Temporarily down' });
+  await page.getByRole('button', { name: 'Check my cart' }).click();
+  const notice = page.getByRole('dialog', { name: 'Check my cart' }).getByRole('status', { name: 'Temporarily down' });
   await expect(notice).toContainText('Mana Pool cart read in your browser — temporarily down');
   await expect(notice).toContainText('found while reading · Code cart.page_changed');
 });

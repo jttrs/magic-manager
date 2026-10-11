@@ -1,4 +1,4 @@
-"""Cart surface of the typed API: audit a Mana Pool cart against your collection.
+"""Cart surface of the typed API: audit a cart against your collection.
 
 Internal-only and local-only — every route checks the ``cart_check`` feature
 flag, and the cart is read with YOUR Mana Pool login from the shell environment
@@ -54,6 +54,8 @@ class DupeOut(CartCardOut):
 class OwnedOut(CartCardOut):
     owned_qty: int
     your: float
+    condition: str | None = Field(None, description="The cart line's condition (NM, LP… or Card Kingdom's NM/EX/VG/G), when the store shows one.")
+    language: str | None = None
 
 
 class MissingOut(CartCardOut):
@@ -66,6 +68,8 @@ class OverpayOut(CartCardOut):
     market: float | None
     over: float | None = None
     pct: float | None = None
+    condition: str | None = None
+    language: str | None = None
 
 
 class UnidentifiedOut(BaseModel):
@@ -74,11 +78,20 @@ class UnidentifiedOut(BaseModel):
     num: str | None
 
 
+class NotCardOut(BaseModel):
+    name: str | None
+    kind: str = Field(description="sealed | other — not a card, so not checked.")
+    qty: int
+    price: float | None
+
+
 class CartAuditOut(BaseModel):
     lines: int
     copies: int
     total: float
     unidentified: list[UnidentifiedOut]
+    not_cards: list[NotCardOut] = []
+    not_compared: int = Field(0, description="Played or non-English lines left out of Over market (market prices are Near Mint English).")
     family: str | None
     families: list[str]
     dupes: list[DupeOut]

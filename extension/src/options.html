@@ -25,6 +25,14 @@
       <span id="cart-state" class="ok"></span>
     </div>
     <div class="row">
+      <div><strong>TCGplayer cart</strong><br><span class="muted">Reads your cart page on www.tcgplayer.com when you check it in the app (cards, conditions, quantities, prices — never the sellers, your sign-in or your address). Chrome will ask to allow www.tcgplayer.com.</span></div>
+      <button type="button" id="cart-tcgplayer"></button>
+    </div>
+    <div class="row">
+      <div><strong>Card Kingdom cart</strong><br><span class="muted">Reads your cart page on www.cardkingdom.com when you check it in the app (cards, grades, quantities, prices — never your sign-in or your address). Chrome will ask to allow www.cardkingdom.com.</span></div>
+      <button type="button" id="cart-cardkingdom"></button>
+    </div>
+    <div class="row">
       <div><strong>Deals — your open store tabs</strong><br><span class="muted">Lets the companion see which tabs are open on the <span id="store-count"></span> Deals stores and read the price on product pages you have open. Chrome will ask to allow those sites.</span></div>
       <button type="button" id="deals"></button>
     </div>
@@ -40,7 +48,7 @@
     <h2>What it never does</h2>
     <ul class="plain">
       <li>Read cookies, passwords, sign-in tokens, email or addresses.</li>
-      <li>Change anything on Mana Pool, Moxfield or a store — no cart edits, no purchases, no form submissions.</li>
+      <li>Change anything on Mana Pool, TCGplayer, Card Kingdom, Moxfield or a store — no cart edits, no purchases, no form submissions.</li>
       <li>Read anything unless the app asks <em>and</em> you press Send in its own window.</li>
       <li>Collect in the background, run analytics, or load code from the internet.</li>
     </ul>

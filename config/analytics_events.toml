@@ -103,6 +103,8 @@ code = { type = "enum", required = true, values = [
   "permission.deals_off",
   "permission.moxfield_off",
   "permission.manapool_missing",
+  "permission.tcgplayer_cart_off",
+  "permission.cardkingdom_cart_off",
   "cart.load_timeout",
   "cart.empty",
   "cart.page_changed",

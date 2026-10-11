@@ -2,11 +2,15 @@
 // (each asks Chrome for just its sites, at that moment).
 
 import { STORES } from './stores.js';
-import { MOXFIELD_ORIGINS, ORDER_ORIGINS, STORE_ORIGINS, MANAPOOL_ORIGINS, parseAppOrigin } from './protocol.js';
+import { CART_STORES, MOXFIELD_ORIGINS, ORDER_ORIGINS, STORE_ORIGINS, MANAPOOL_ORIGINS, parseAppOrigin } from './protocol.js';
 
 const $ = (id) => document.getElementById(id);
 const BRIDGE = 'mm-bridge';
-const granted = { deals: false, moxfield: false, orders: false };
+const granted = { deals: false, moxfield: false, orders: false, 'cart-tcgplayer': false, 'cart-cardkingdom': false };
+const GROUPS = {
+  deals: STORE_ORIGINS, moxfield: MOXFIELD_ORIGINS, orders: ORDER_ORIGINS,
+  'cart-tcgplayer': CART_STORES.tcgplayer.origins, 'cart-cardkingdom': CART_STORES.cardkingdom.origins,
+};
 
 async function status(text, isError = false) {
   $('pair-status').textContent = text;
@@ -28,6 +32,10 @@ async function refresh() {
   $('moxfield').textContent = granted.moxfield ? 'Switch off' : 'Switch on';
   granted.orders = await has(ORDER_ORIGINS);
   $('orders').textContent = granted.orders ? 'Switch off' : 'Switch on';
+  for (const key of ['cart-tcgplayer', 'cart-cardkingdom']) {
+    granted[key] = await has(GROUPS[key]);
+    $(key).textContent = granted[key] ? 'Switch off' : 'Switch on';
+  }
 }
 
 async function pair() {
@@ -61,8 +69,12 @@ async function unpair() {
 
 async function toggle(key, origins) {
   // request() must be the first await so Chrome still sees the click.
-  if (granted[key]) await chrome.permissions.remove({ origins });
-  else await chrome.permissions.request({ origins });
+  if (granted[key]) {
+    // Keep a site another switched-on feature still needs (Card Kingdom is in three).
+    const shared = new Set(Object.entries(GROUPS).filter(([k]) => k !== key && granted[k]).flatMap(([, o]) => o));
+    const drop = origins.filter((o) => !shared.has(o));
+    if (drop.length) await chrome.permissions.remove({ origins: drop });
+  } else await chrome.permissions.request({ origins });
   await refresh();
 }
 
@@ -71,4 +83,6 @@ $('unpair').addEventListener('click', unpair);
 $('deals').addEventListener('click', () => toggle('deals', STORE_ORIGINS));
 $('moxfield').addEventListener('click', () => toggle('moxfield', MOXFIELD_ORIGINS));
 $('orders').addEventListener('click', () => toggle('orders', ORDER_ORIGINS));
+$('cart-tcgplayer').addEventListener('click', () => toggle('cart-tcgplayer', GROUPS['cart-tcgplayer']));
+$('cart-cardkingdom').addEventListener('click', () => toggle('cart-cardkingdom', GROUPS['cart-cardkingdom']));
 refresh();

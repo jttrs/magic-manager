@@ -44,12 +44,20 @@ min_cards = 100
 card = "Ms. Bumbleflower"
 commander = "Ms. Bumbleflower"
 
-# ---- Browser companion: Mana Pool cart reader ----
-# A guest browser has an empty cart: the reader must recognise the real cart
-# page as `cart.empty` (as pinned by tests/fixtures/companion/manapool-cart-empty.html).
+# ---- Browser companion: cart readers (Mana Pool, TCGplayer, Card Kingdom) ----
+# A guest browser has an empty cart: each reader must recognise the real cart
+# page as `cart.empty` (as pinned by tests/fixtures/companion/<store>-cart-empty.html).
 # Nothing is ever added to a cart — the canary never writes to a site.
 [cart.manapool]
 url = "https://manapool.com/cart"
+expect_code = "cart.empty"
+
+[cart.tcgplayer]
+url = "https://www.tcgplayer.com/cart"
+expect_code = "cart.empty"
+
+[cart.cardkingdom]
+url = "https://www.cardkingdom.com/cart"
 expect_code = "cart.empty"
 
 # ---- EDHREC (unofficial JSON) ----

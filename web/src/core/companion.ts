@@ -9,6 +9,9 @@ import { z } from 'zod';
 export const CHANNEL = 'magic-manager/companion';
 export type CompanionKind = 'cart' | 'tabs' | 'moxfield' | 'order_list' | 'orders' | 'watched';
 export type OrderStore = 'manapool' | 'tcgplayer' | 'cardkingdom';
+/** The carts the companion reads (Mana Pool always; the other two are opt-in switches). */
+export type CartStore = OrderStore;
+export const CART_STORE_NAME: Record<CartStore, string> = { manapool: 'Mana Pool', tcgplayer: 'TCGplayer', cardkingdom: 'Card Kingdom' };
 export type RequestParams = { url?: string; store?: OrderStore; ids?: string[]; urls?: string[] };
 
 const helloSchema = z.object({
@@ -17,22 +20,36 @@ const helloSchema = z.object({
     cart: z.boolean(), deals: z.boolean(), moxfield: z.boolean(),
     // Order history (companion ≥ 0.2.0); absent on older installs.
     orders_tcgplayer: z.boolean().optional(), orders_cardkingdom: z.boolean().optional(),
+    // TCGplayer / Card Kingdom carts (companion ≥ 0.3.0); absent on older installs.
+    cart_tcgplayer: z.boolean().optional(), cart_cardkingdom: z.boolean().optional(),
   }),
 });
 export type CompanionHello = z.infer<typeof helloSchema>;
 
+// One cart line. Mana Pool names the printing by scryfall_id; TCGplayer / Card Kingdom
+// by their own product id (the server finds the printing). Unknown keys are dropped.
+const productId = z.number().int().min(1).max(99_999_999).nullable().optional();
 const cartLine = z.object({
-  scryfall_id: z.string().regex(/^[0-9a-f-]{36}$/).nullable(),
+  kind: z.enum(['single', 'sealed', 'other']).optional(),
+  scryfall_id: z.string().regex(/^[0-9a-f-]{36}$/).nullable().optional(),
+  tcgplayer_product_id: productId,
+  cardkingdom_product_id: productId,
   name: z.string().max(300).nullable(),
   set_name: z.string().max(200).nullable(),
+  number: z.string().max(12).nullable().optional(),
   finish: z.enum(['nonfoil', 'foil', 'etched']),
   condition: z.string().max(8).nullable(),
-  treatments: z.array(z.string().max(40)).max(10),
+  language: z.string().max(30).nullable().optional(),
+  treatments: z.array(z.string().max(40)).max(10).optional(),
   quantity: z.number().int().min(1).max(999),
   price: z.number().min(0).nullable(),
 });
 const warning = z.object({ code: z.string().max(60) }).passthrough();
-const cartDataSchema = z.object({ items: z.array(cartLine).max(2000), warnings: z.array(warning).max(2000) });
+const cartDataSchema = z.object({
+  store: z.enum(['manapool', 'tcgplayer', 'cardkingdom']).optional(),
+  items: z.array(cartLine).max(2000),
+  warnings: z.array(warning).max(2000),
+});
 export type CartData = z.infer<typeof cartDataSchema>;
 export type CartLine = z.infer<typeof cartLine>;
 

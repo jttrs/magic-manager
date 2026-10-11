@@ -42,7 +42,7 @@ export function useCompanion(): CompanionState {
       request(window, kind, params, { catalog, onAwaitingApproval: onAwaiting }).catch((e: unknown) => {
         if (e instanceof CompanionError) {
           trackCompanionError(e.code);
-          void reportScraperFailure(e.code, qc);   // a changed page flags that read "temporarily down"
+          void reportScraperFailure(e.code, qc, kind === 'cart' ? params.store : undefined);   // a changed page flags that read "temporarily down"
         }
         throw e;
       }),

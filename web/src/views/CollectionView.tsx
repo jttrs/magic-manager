@@ -216,7 +216,7 @@ export function CollectionView() {
           targets={buyListTargets(buyText)}
         />
         {cartCheck && (
-          <CartCheckDialog family={search.families.length === 1 ? search.families[0] : undefined} trigger={<Button>Check my Mana Pool cart</Button>} />
+          <CartCheckDialog family={search.families.length === 1 ? search.families[0] : undefined} trigger={<Button>Check my cart</Button>} />
         )}
         {selected.size > 0 && (
           <button type="button" onClick={clear} className="self-start cursor-pointer text-sm text-on-chrome-muted underline hover:text-on-chrome">Clear marks</button>

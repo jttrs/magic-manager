@@ -5,7 +5,8 @@
 // no answer at all.
 //
 // Harness-only change: the test copy of the manifest grants http://localhost/*
-// up front, because Chrome's permission prompt (what users see when pairing)
+// (and www.tcgplayer.com, the TCGplayer cart switch) up front, because Chrome's
+// permission prompts (what users see when pairing / switching a feature on)
 // can't be clicked by automation. Everything else is the shipped extension.
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -18,6 +19,8 @@ const PORT = Number(process.env.MM_E2E_PORT ?? 5174);
 const APP = `http://localhost:${PORT}`;
 const CART_HTML = readFileSync(resolve(ROOT, 'tests/fixtures/companion/manapool-cart.html'), 'utf8');
 const EXPECTED = JSON.parse(readFileSync(resolve(ROOT, 'tests/fixtures/companion/manapool-cart.expected.json'), 'utf8'));
+const TCG_HTML = readFileSync(resolve(ROOT, 'tests/fixtures/companion/tcgplayer-cart.html'), 'utf8');
+const TCG_EXPECTED = JSON.parse(readFileSync(resolve(ROOT, 'tests/fixtures/companion/tcgplayer-cart.expected.json'), 'utf8'));
 
 type Fixtures = { ext: { context: BrowserContext; worker: Worker; id: string } };
 
@@ -27,7 +30,7 @@ const test = base.extend<Fixtures>({
     const dir = mkdtempSync(join(tmpdir(), 'mm-companion-'));
     cpSync(resolve(ROOT, 'extension'), dir, { recursive: true });
     const manifest = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8'));
-    manifest.host_permissions.push('http://localhost/*');
+    manifest.host_permissions.push('http://localhost/*', 'https://www.tcgplayer.com/*');
     writeFileSync(join(dir, 'manifest.json'), JSON.stringify(manifest));
     const context = await chromium.launchPersistentContext('', {
       channel: 'chromium',
@@ -75,8 +78,8 @@ async function openCartTab(context: BrowserContext) {
 async function startCartRead(context: BrowserContext, page: Page) {
   await openCartTab(context);
   await page.bringToFront();
-  await page.getByRole('button', { name: 'Check my Mana Pool cart' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Check my Mana Pool cart' });
+  await page.getByRole('button', { name: 'Check my cart' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Check my cart' });
   const approval = context.waitForEvent('page', (p) => p.url().endsWith('/src/approve.html'));
   await dialog.getByRole('button', { name: 'Read my cart' }).click();
   return { dialog, approve: await approval };
@@ -88,17 +91,42 @@ test('read the cart, review exactly what will be sent, approve — only then the
   const { dialog, approve } = await startCartRead(ext.context, page);
   await expect(dialog.getByText('Waiting for you to approve in the companion window')).toBeVisible();
   await expect(approve.locator('#origin')).toHaveText(APP);
-  await expect(approve.locator('#summary')).toHaveText('3 cart lines · 4 cards · $71.00');
+  await expect(approve.locator('#summary')).toHaveText('Mana Pool cart · 3 lines · 4 items · $71.00');
   await expect(approve.locator('#table')).toContainText('Ajani, Nacatl Pariah // Ajani, Nacatl Avenger');
   expect(bodies).toEqual([]);                                     // nothing sent yet
   const send = approve.getByRole('button', { name: 'Send to magic-manager' });
   expect(await approve.evaluate(() => document.activeElement?.id)).toBe('deny');   // the safe choice has focus
   await expect(send).toBeEnabled();
   await send.click();
-  await expect(dialog).toContainText('Read in this browser by the companion.');
-  expect(bodies).toEqual([{ items: EXPECTED.items, source: 'extension', family: 'blb' }]);
+  await expect(dialog).toContainText('Mana Pool cart · read in this browser by the companion.');
+  expect(bodies).toEqual([{ items: EXPECTED.items, source: 'extension', store: 'manapool', family: 'blb' }]);
   const tabs = await ext.worker.evaluate(() => chrome.tabs.query({ url: 'https://manapool.com/*' }));
   expect(tabs).toHaveLength(1);                                   // your own cart tab is left alone
+});
+
+test('a TCGplayer cart: the real extension reads your cart tab, you approve, the app gets only its lines', async ({ ext }) => {
+  const { page, bodies } = await appPage(ext.context);
+  const tab = await ext.context.newPage();
+  await tab.route('https://www.tcgplayer.com/**', (r) => (r.request().url() === 'https://www.tcgplayer.com/cart'
+    ? r.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: TCG_HTML })
+    : r.fulfill({ status: 404, body: '' })));
+  await tab.goto('https://www.tcgplayer.com/cart', { waitUntil: 'domcontentloaded' });
+  await page.bringToFront();
+  await page.getByRole('button', { name: 'Check my cart' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Check my cart' });
+  await dialog.getByRole('radio', { name: 'TCGplayer' }).click();
+  const approval = ext.context.waitForEvent('page', (p) => p.url().endsWith('/src/approve.html'));
+  await dialog.getByRole('button', { name: 'Read my cart' }).click();
+  const approve = await approval;
+  await expect(approve.locator('#title')).toHaveText('Send your TCGplayer cart?');
+  await expect(approve.locator('#summary')).toHaveText('TCGplayer cart · 7 lines · 8 items · $126.69');
+  await expect(approve.locator('#table')).toContainText('TCGplayer #487805');
+  await expect(approve.locator('#table')).toContainText('LP');
+  expect(bodies).toEqual([]);
+  await approve.getByRole('button', { name: 'Send to magic-manager' }).click();
+  await expect(dialog).toContainText('TCGplayer cart · read in this browser by the companion.');
+  expect(bodies).toEqual([{ items: TCG_EXPECTED.items, source: 'extension', store: 'tcgplayer', family: 'blb' }]);
+  expect(JSON.stringify(bodies)).not.toContain('Addicted2packz');   // never the sellers
 });
 
 test('Don’t send: the app is told, and gets nothing', async ({ ext }) => {

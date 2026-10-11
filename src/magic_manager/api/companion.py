@@ -13,7 +13,7 @@ from __future__ import annotations
 import re
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .. import addcards, cart, companion, deals, decksource, features, scraper_health
 from .cart import CartAuditOut
@@ -69,11 +69,19 @@ def extension_zip() -> bytes:
 # ---------- cart ----------
 
 class CartLineIn(_Strict):
+    """One cart line. Mana Pool names the printing by ``scryfall_id``; TCGplayer
+    by ``tcgplayer_product_id`` (+ set name and ``number`` as shown); Card Kingdom
+    by ``cardkingdom_product_id`` (+ its edition in ``set_name``)."""
+    kind: Literal["single", "sealed", "other"] = "single"
     scryfall_id: str | None = Field(None, pattern=_UUID)
+    tcgplayer_product_id: int | None = Field(None, ge=1, le=99_999_999)
+    cardkingdom_product_id: int | None = Field(None, ge=1, le=99_999_999)
     name: str | None = Field(None, max_length=300)
     set_name: str | None = Field(None, max_length=200)
+    number: str | None = Field(None, max_length=12, pattern=r"^[0-9A-Za-z★†\-]+$")
     finish: Literal["nonfoil", "foil", "etched"] = "nonfoil"
     condition: str | None = Field(None, max_length=8)
+    language: str | None = Field(None, max_length=30)
     treatments: list[str] = Field(default_factory=list, max_length=10)
     quantity: int = Field(ge=1, le=999)
     price: float | None = Field(None, ge=0, le=1_000_000)
@@ -84,19 +92,29 @@ class CartLineIn(_Strict):
         return [t[:40] for t in v]
 
 
+CartStore = Literal["manapool", "tcgplayer", "cardkingdom"]
+
+
 class CartLinesIn(_Strict):
     items: list[CartLineIn] = Field(max_length=2000)
     source: Literal["extension", "bookmarklet"]
+    store: CartStore = Field("manapool", description="Whose cart page the lines were read from (the bookmarklet reads Mana Pool only).")
     family: str | None = Field(None, max_length=10, description="Set family to check gaps against; imputed when the cart sits in one.")
+
+    @model_validator(mode="after")
+    def _bookmarklet_is_mana_pool(self):
+        if self.source == "bookmarklet" and self.store != "manapool":
+            raise ValueError("the bookmarklet reads Mana Pool carts only")
+        return self
 
 
 def check_lines(req: CartLinesIn) -> CartAuditOut:
-    """Audit cart lines read in the user's browser. No Mana Pool account is used."""
+    """Audit cart lines read in the user's browser. No store account is used."""
     features.require("cart_check")
     if not req.items:
         raise CompanionFailure("cart.no_lines")
     items = [i.model_dump() for i in req.items]
-    scraper_health.record_use("companion-cart/manapool", "ok")
+    scraper_health.record_use(f"companion-cart/{req.store}", "ok")
     return CartAuditOut(**cart.audit(items, anchor=req.family))
 
 
