@@ -82,6 +82,14 @@ def test_restore_refuses_without_a_snapshot_or_across_schema_change(owned):
         undo.restore()
 
 
+def _write(g, reason):
+    """One write request through the guard: begin, then settle as written."""
+    joined = g.begin(reason)
+    if joined:
+        g.end(wrote=True)
+    return joined
+
+
 def _guard(monkeypatch, t):
     taken = []
 
@@ -95,11 +103,11 @@ def _guard(monkeypatch, t):
 def test_session_guard_snapshots_once_per_session(owned, monkeypatch):
     t = [0.0]
     g, taken = _guard(monkeypatch, t)
-    assert g.before_write("first") is True
+    assert _write(g, "first") is True
     t[0] = 30
-    assert g.before_write("second") is False
+    assert _write(g, "second") is False
     t[0] = 200                     # a long pause starts a new session
-    assert g.before_write("third") is True
+    assert _write(g, "third") is True
     assert taken == ["first", "third"]
     assert undo.snapshot_path().read_text() == "third"
 
@@ -110,10 +118,10 @@ def test_session_guard_failed_snapshot_does_not_start_the_session(owned, monkeyp
     g, taken = _guard(monkeypatch, t)
     monkeypatch.setattr(undo, "take", lambda reason, dest=None: (_ for _ in ()).throw(OSError("disk full")))
     with pytest.raises(OSError):
-        g.before_write("first")
+        _write(g, "first")
     _, taken = _guard(monkeypatch, t)  # take works again
     t[0] = 1
-    assert g.before_write("retry") is True and taken == ["retry"]
+    assert _write(g, "retry") is True and taken == ["retry"]
 
 
 def test_session_guard_refused_request_keeps_the_previous_restore_point(owned, monkeypatch):
@@ -133,6 +141,19 @@ def test_session_guard_refused_request_keeps_the_previous_restore_point(owned, m
     assert taken == ["refused", "real"] and undo.snapshot_path().read_text() == "real"
     t[0] = 10
     assert g.begin("same session") is False
+
+
+def test_restore_refused_while_a_session_snapshot_is_pending(owned, monkeypatch):
+    """A pending snapshot promoted after a restore would overwrite its swap copy."""
+    t = [0.0]
+    g, _ = _guard(monkeypatch, t)
+    assert g.begin("in flight") is True
+    with pytest.raises(undo.UndoError, match="still being saved"):
+        with g.restoring():
+            pass
+    g.end(wrote=True)
+    with g.restoring():
+        pass
 
 
 def _probe_during(monkeypatch, statement_prefix: str) -> list[str]:
@@ -189,8 +210,10 @@ def test_info_details_cover_every_restored_table(owned):
     decks.deck_add_card("d", A, "main", "nonfoil", 1)
     info = undo.info()
     assert all(v == 0 for v in info["changes"].values())
-    assert [d["label"] for d in info["details"]] == ["deck lists"]
-    assert info["details"][0]["rows"] >= 1
+    assert info["details"] == [{"label": "deck lists", "rows": 1}]
+    with db.connect() as conn:          # an edit in place counts once, not twice
+        conn.execute("UPDATE decks SET name = 'Renamed' WHERE slug = 'd'")
+    assert {"label": "decks", "rows": 1} in undo.info()["details"]
 
 
 def test_prune_keeps_the_newest(tmp_db):
@@ -256,3 +279,19 @@ def test_cli_undo_says_nothing_when_nothing_changed(owned):
     r = CliRunner().invoke(app, ["db", "undo", "--take"])
     assert r.exit_code == 0, r.output
     assert "restoring would change: nothing" in r.output
+
+
+def test_unexpected_server_error_keeps_the_session_snapshot(owned, monkeypatch):
+    """A 5xx/crash may have written something: keep the snapshot taken before it."""
+    from fastapi.testclient import TestClient
+    from magic_manager.api import decks as decks_api
+    from magic_manager.web.app import create_app
+
+    def boom(body):
+        decks.deck_create("half-written", "Half")
+        raise RuntimeError("crashed after writing")
+    monkeypatch.setattr(decks_api, "create", boom)
+    client = TestClient(create_app(serve_frontend=False), raise_server_exceptions=False)
+    assert client.post("/api/decks", json={"name": "X", "format": "commander"}).status_code == 500
+    info = client.get("/api/undo").json()
+    assert info["reason"] == "before creating a deck" and info["changes"]["decks"] == -1

@@ -118,15 +118,17 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         try:
             response = await call_next(request)
         except BaseException:
-            await _settle(request, wrote=True)
+            _settle(request, wrote=True)
             raise
-        await _settle(request, wrote=not 400 <= response.status_code < 500)
+        _settle(request, wrote=not 400 <= response.status_code < 500)
         return response
 
-    async def _settle(request: Request, *, wrote: bool) -> None:
+    def _settle(request: Request, *, wrote: bool) -> None:
+        # Synchronous (a rename or unlink): an await could be cancelled with a
+        # disconnected request and leave the guard's in-flight count stuck.
         if getattr(request.state, "undo_session", False):
             request.state.undo_session = False
-            await asyncio.to_thread(guard.end, wrote)
+            guard.end(wrote)
     app.include_router(analytics_routes.router)
     app.include_router(scraper_routes.router)
 
@@ -304,7 +306,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     @app.post("/api/undo/restore", response_model=undo_api.UndoOut, tags=["undo"])
     def undo_restore():
         try:
-            with manager.no_mutating_jobs():
+            with manager.no_mutating_jobs(), guard.restoring():
                 return undo_api.restore()
         except JobsBusy as e:
             raise HTTPException(409, f"Wait for “{e.title}” to finish, then restore.") from e

@@ -22,6 +22,8 @@ import os
 import sqlite3
 import threading
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -101,6 +103,11 @@ DETAIL_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
 assert sorted(t for _, ts in DETAIL_GROUPS for t in ts) == sorted(USER_TABLES)
 
 
+def _pk_columns(conn: sqlite3.Connection, table: str) -> list[str]:
+    cols = [(r[5], r[1]) for r in conn.execute(f"PRAGMA main.table_info({table})") if r[5]]
+    return [c for _, c in sorted(cols)]
+
+
 def _details(conn: sqlite3.Connection) -> list[dict]:
     """Rows that differ per :data:`DETAIL_GROUPS` group (nonzero groups only).
     Assumes ``snap`` is attached with the same schema."""
@@ -112,14 +119,18 @@ def _details(conn: sqlite3.Connection) -> list[dict]:
             if t not in live or t not in saved:
                 continue
             cl = ", ".join(f'"{c}"' for c in _columns(conn, "main", t))
+            pk = ", ".join(f'"{c}"' for c in _pk_columns(conn, t)) or cl
             where, args = "", ()
             if t == "settings":
                 where = f" WHERE key NOT IN ({', '.join('?' for _ in KEEP_SETTINGS)})"
                 args = KEEP_SETTINGS
-            for a, b in (("main", "snap"), ("snap", "main")):
-                rows += conn.execute(
-                    f"SELECT COUNT(*) FROM (SELECT {cl} FROM {a}.{t}{where} EXCEPT SELECT {cl} FROM {b}.{t}{where})",
-                    args * 2).fetchone()[0]
+            # Distinct keys present on either side of the difference: an edited
+            # row counts once, like an added or removed one.
+            rows += conn.execute(
+                f"SELECT COUNT(*) FROM ("
+                f"SELECT {pk} FROM (SELECT {cl} FROM main.{t}{where} EXCEPT SELECT {cl} FROM snap.{t}{where}) "
+                f"UNION SELECT {pk} FROM (SELECT {cl} FROM snap.{t}{where} EXCEPT SELECT {cl} FROM main.{t}{where}))",
+                args * 4).fetchone()[0]
         if rows:
             out.append({"label": label, "rows": rows})
     return out
@@ -333,9 +344,12 @@ class SessionGuard:
             else:
                 pending.unlink(missing_ok=True)
 
-    def before_write(self, reason: str) -> bool:
-        """Snapshot now and keep it (a write follows for sure). True when it did."""
-        joined = self.begin(reason)
-        if joined:
-            self.end(wrote=True)
-        return joined
+    @contextmanager
+    def restoring(self) -> Iterator[None]:
+        """Hold off session snapshots while a restore runs. :class:`UndoError`
+        if a write that opened a session is still in flight — its pending
+        snapshot would later be promoted over the restore's swap copy."""
+        with self._lock:
+            if self._inflight:
+                raise UndoError("A change is still being saved — try again in a moment.")
+            yield

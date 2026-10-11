@@ -36,6 +36,13 @@ from ..api import jobs as jobs_api
 log = logging.getLogger("magic_manager.web")
 
 
+def _mutates(name: str) -> bool:
+    try:
+        return bool(getattr(jobs_api.get(name), "mutates", False))
+    except KeyError:
+        return False
+
+
 class JobsBusy(RuntimeError):
     """A mutating job is queued or running."""
 
@@ -140,8 +147,8 @@ class JobManager:
             self._user_data_lock.release()
 
     def _busy_title(self) -> str:
-        for r in self.list():
-            if r.status in ("queued", "running") and jobs_api.get(r.name).mutates:
+        for r in list(self._jobs.values()):  # snapshot: the loop thread may add jobs
+            if r.status in ("queued", "running") and _mutates(r.name):
                 return r.title
         return ""
 
@@ -173,7 +180,7 @@ class JobManager:
             self._emit(rec, "progress", rec.progress)
 
         def body() -> jobs_api.JobResult:
-            with self._run_lock, (self._user_data_lock if spec.mutates else nullcontext()):
+            with self._run_lock, (self._user_data_lock if getattr(spec, "mutates", False) else nullcontext()):
                 rec.status, rec.started_at = "running", _now()
                 self._emit(rec, "status", {"status": rec.status})
                 return spec.run(inputs, progress)
