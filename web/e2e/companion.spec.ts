@@ -47,8 +47,8 @@ async function flags(page: Page, f: Record<string, boolean>) {
 
 async function openCart(page: Page) {
   await page.goto(COLLECTION_URL);
-  await page.getByRole('button', { name: 'Check my Mana Pool cart' }).click();
-  return page.getByRole('dialog', { name: 'Check my Mana Pool cart' });
+  await page.getByRole('button', { name: 'Check my cart' }).click();
+  return page.getByRole('dialog', { name: 'Check my cart' });
 }
 
 test.describe('setup', () => {
@@ -84,6 +84,50 @@ test.describe('setup', () => {
   });
 });
 
+const TCG_CART = {
+  store: 'tcgplayer',
+  items: [
+    { kind: 'single', tcgplayer_product_id: 487805, name: 'The One Ring', set_name: 'Universes Beyond: The Lord of the Rings: Tales of Middle-earth', number: '246', finish: 'nonfoil', condition: 'LP', language: 'English', quantity: 1, price: 108.15 },
+    { kind: 'sealed', tcgplayer_product_id: null, name: 'FINAL FANTASY - Play Booster Pack', set_name: 'FINAL FANTASY', number: null, finish: 'nonfoil', condition: null, language: null, quantity: 1, price: 8.49 },
+  ],
+  warnings: [],
+};
+const TCG_AUDIT = {
+  lines: 2, copies: 2, total: 116.64, unidentified: [], family: null, families: ['ltr'], dupes: [], missing: [], no_market: [], overpay: [],
+  owned: [{ scryfall_id: 'd5806e68-1054-458e-866d-1f2470f682b2', name: 'The One Ring', set: 'LTR', num: '246', fin: 'nonfoil', owned_qty: 1, your: 108.15, condition: 'LP', language: 'English' }],
+  not_cards: [{ name: 'FINAL FANTASY - Play Booster Pack', kind: 'sealed', qty: 1, price: 8.49 }],
+  not_compared: 1,
+};
+
+test.describe('TCGplayer and Card Kingdom carts', () => {
+  test('each store needs its own companion switch; the bookmarklet is Mana Pool only', async ({ page }) => {
+    await flags(page, { companion: true, cart_check: true });
+    await fakeCompanion(page, { version: '0.3.0' });
+    const d = await openCart(page);
+    await expect(d.getByRole('heading', { name: 'With the bookmarklet' })).toBeVisible();
+    await d.getByRole('radio', { name: 'Card Kingdom' }).click();
+    await expect(d.getByRole('heading', { name: 'With the bookmarklet' })).toHaveCount(0);
+    await expect(d).toContainText('Switch on Card Kingdom cart in the companion’s settings');
+    await expect(d.getByRole('button', { name: 'Read my cart' })).toBeDisabled();
+  });
+
+  test('a TCGplayer cart: read in this browser, audited by store, played lines named and left out of Over market', async ({ page }) => {
+    await flags(page, { companion: true, cart_check: true });
+    await fakeCompanion(page, { version: '0.3.0', features: { cart: true, deals: false, moxfield: false, cart_tcgplayer: true } as never, answers: { cart: { ok: true, data: TCG_CART } } });
+    let body: unknown = null;
+    await page.route('**/api/cart/lines', (r) => { body = r.request().postDataJSON(); return r.fulfill({ json: TCG_AUDIT }); });
+    const d = await openCart(page);
+    await d.getByRole('radio', { name: 'TCGplayer' }).click();
+    await d.getByRole('button', { name: 'Read my cart' }).click();
+    await expect(d).toContainText('TCGplayer cart · read in this browser by the companion.');
+    await expect(d.getByRole('region', { name: 'Already in your collection' })).toContainText('LTR 246 · LP');
+    await expect(d.getByRole('region', { name: 'Not single cards' })).toContainText('sealed · not checked');
+    await expect(d).toContainText('1 played or non-English line left out — market prices are Near Mint English.');
+    expect(await page.evaluate(() => (window as unknown as { __companionRequests: unknown[] }).__companionRequests)).toEqual([{ kind: 'cart', params: { store: 'tcgplayer' } }]);
+    expect(body).toMatchObject({ source: 'extension', store: 'tcgplayer', family: 'blb' });
+  });
+});
+
 test.describe('Mana Pool cart', () => {
   test('read in this browser: waits for approval, then audits only the lines', async ({ page }) => {
     await flags(page, { companion: true, cart_check: true });
@@ -94,9 +138,9 @@ test.describe('Mana Pool cart', () => {
     await d.getByRole('button', { name: 'Read my cart' }).click();
     await expect(d.getByText('Waiting for you to approve in the companion window — the stuff.')).toBeVisible();
     await expect(d.getByRole('region', { name: 'Already in your collection' })).toContainText('Sire of Seven Deaths');
-    await expect(d).toContainText('Read in this browser by the companion.');
+    await expect(d).toContainText('Mana Pool cart · read in this browser by the companion.');
     await expect(d).toContainText('this is the browser’s guest cart');
-    expect(body).toEqual({ items: CART.items, source: 'extension', family: 'blb' });
+    expect(body).toEqual({ items: CART.items, source: 'extension', store: 'manapool', family: 'blb' });
   });
 
   test('declining in the companion window says nothing was sent, with its code', async ({ page }) => {
@@ -114,7 +158,7 @@ test.describe('Mana Pool cart', () => {
     await fakeCompanion(page, { answers: { cart: { ok: false, code: 'cart.page_changed' } } });
     const d = await openCart(page);
     await d.getByRole('button', { name: 'Read my cart' }).click();
-    await expect(d.getByRole('alert')).toContainText('Mana Pool may have changed its page');
+    await expect(d.getByRole('alert')).toContainText('the store may have changed its page');
     await expect(d.getByRole('alert')).toContainText('scrape-doctor skill');
   });
 
@@ -130,8 +174,8 @@ test.describe('Mana Pool cart', () => {
     await expect(d.getByRole('alert')).toContainText('That isn’t what the cart bookmarklet copies.');
     await d.getByRole('textbox', { name: 'Paste what it copied' }).fill(JSON.stringify({ source: 'manapool-cart-page', version: '0.1.0', ...CART }));
     await d.getByRole('button', { name: 'Check pasted cart' }).click();
-    await expect(d).toContainText('Pasted from the bookmarklet.');
-    expect(body).toEqual({ items: CART.items, source: 'bookmarklet', family: 'blb' });
+    await expect(d).toContainText('Mana Pool cart · pasted from the bookmarklet.');
+    expect(body).toEqual({ items: CART.items, source: 'bookmarklet', store: 'manapool', family: 'blb' });
   });
 
   test('a coded server refusal shows its message and fix', async ({ page }) => {

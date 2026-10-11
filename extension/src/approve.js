@@ -2,10 +2,10 @@
 // exactly the data that would be sent; nothing leaves until "Send". Built with
 // textContent only — page data is never parsed as HTML.
 
-import { APPROVAL_TTL_MS } from './protocol.js';
+import { APPROVAL_TTL_MS, CART_STORES } from './protocol.js';
 
 const $ = (id) => document.getElementById(id);
-const KIND_TITLE = { cart: 'Send your Mana Pool cart?', tabs: 'Send your open store tabs?', moxfield: 'Send this Moxfield deck?', order_list: 'Send your list of orders?', orders: 'Send these orders?', watched: 'Send your watched store prices?' };
+const KIND_TITLE = { tabs: 'Send your open store tabs?', moxfield: 'Send this Moxfield deck?', order_list: 'Send your list of orders?', orders: 'Send these orders?', watched: 'Send your watched store prices?' };
 const MAX_ROWS = 500;
 
 function cell(tr, text, cls) {
@@ -29,7 +29,8 @@ const money = (n) => (n == null ? '—' : `$${Number(n).toFixed(2)}`);
 
 function render(p) {
   const confirm = p.stage === 'confirm';
-  $('title').textContent = confirm ? 'Read your watched store pages?' : KIND_TITLE[p.kind] || 'Send to magic-manager?';
+  $('title').textContent = confirm ? 'Read your watched store pages?'
+    : p.kind === 'cart' ? `Send your ${CART_STORES[p.data.store]?.name || 'Mana Pool'} cart?` : KIND_TITLE[p.kind] || 'Send to magic-manager?';
   $('what').textContent = confirm ? 'The pages the companion will read' : 'Exactly what will be sent';
   $('approve').textContent = confirm ? 'Read these pages' : 'Send to magic-manager';
   $('deny').textContent = confirm ? 'Don’t read' : 'Don’t send';
@@ -40,8 +41,13 @@ function render(p) {
   $('summary').textContent = p.summary;
   const d = p.data;
   if (p.kind === 'cart') {
+    const printing = (i) => i.scryfall_id ? i.scryfall_id.slice(0, 8) + '…'
+      : i.tcgplayer_product_id ? `TCGplayer #${i.tcgplayer_product_id}${i.number ? ` · ${i.set_name || ''} ${i.number}` : ''}`
+        : i.cardkingdom_product_id ? `Card Kingdom #${i.cardkingdom_product_id} · ${i.set_name || ''}`
+          : i.kind && i.kind !== 'single' ? `${i.kind} — not a card` : 'unknown';
     table([['Card'], ['Printing'], ['Finish'], ['Cond.'], ['Qty', 'num'], ['Price each', 'num']],
-      d.items.map((i) => [i.name, i.scryfall_id ? i.scryfall_id.slice(0, 8) + '…' : 'unknown', [i.finish, ...(i.treatments || [])].join(' · '), i.condition, i.quantity, money(i.price)]));
+      d.items.map((i) => [i.name, printing(i), [i.finish, ...(i.treatments || [])].join(' · '),
+        [i.condition, i.language && i.language !== 'English' ? i.language : null].filter(Boolean).join(' · '), i.quantity, money(i.price)]));
   } else if (p.kind === 'tabs') {
     table([['Store page'], ['Page reading']],
       d.tabs.map((t) => [t.title || t.url, d.pages[t.url] ? `title, price tags, ${d.pages[t.url].text.split('\n').filter(Boolean).length} price/stock lines` : 'link and title only']));
@@ -66,7 +72,7 @@ function render(p) {
   $('warnings').replaceChildren(...warnings.slice(0, 20).map((w) => {
     const div = document.createElement('div');
     div.className = 'warn';
-    div.textContent = w.code === 'cart.signed_out' ? 'You are not signed in to Mana Pool in this browser — this is the guest cart.'
+    div.textContent = w.code === 'cart.signed_out' ? `You are not signed in to ${CART_STORES[d.store]?.name || 'Mana Pool'} in this browser — this is the guest cart.`
       : w.code === 'cart.row_unreadable' ? `Cart line ${w.row}: couldn't read ${w.missing.join(', ')}.`
       : w.code === 'tabs.page_unreadable' ? `Couldn't read ${w.url} — reload that tab and read again.`
       : w.code === 'orders.row_unreadable' ? `Order ${w.order || ''} line ${w.row || ''}: couldn't read ${(w.missing || []).join(', ')}.`

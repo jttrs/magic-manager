@@ -40,7 +40,7 @@ class ScrapersHealthOut(BaseModel):
 class ScraperReportIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     code: Literal["cart.page_changed", "moxfield.changed", "orders.page_changed"]
-    store: Literal["manapool", "tcgplayer", "cardkingdom"] | None = Field(None, description="Order-history reports: which store's reader.")
+    store: Literal["manapool", "tcgplayer", "cardkingdom"] | None = Field(None, description="Cart and order-history reports: which store's reader (a cart report without one is Mana Pool's).")
 
 
 def _out(h: scraper_health.Health) -> ScraperHealthOut:

@@ -66,7 +66,7 @@ REASONS: dict[str, tuple[str, str]] = {
                            "Usually temporary. The next check retries."),
     "scrape.browser_unavailable": ("No browser to run the check in.",
                                    "Install Chrome, or run `uv run playwright install chromium`."),
-    "cart.page_changed": ("Mana Pool's cart page changed — the reader found no cart.",
+    "cart.page_changed": ("The store's cart page changed — the reader found no cart.",
                           "Follow the scrape-doctor skill: recapture the cart page and fix the reader."),
     "moxfield.changed": ("Moxfield's deck data changed format.",
                          "Follow the scrape-doctor skill: update the reader and decksource.parse_moxfield."),
@@ -78,17 +78,20 @@ REASONS: dict[str, tuple[str, str]] = {
 # (POST /api/scrapers/report): a code that means the PAGE changed → the scraper
 # it flags. User-situation codes (empty cart, private deck, …) never flag.
 REPORTABLE_CODES: dict[str, str] = {
-    "cart.page_changed": "companion-cart/manapool",
+    "cart.page_changed": "companion-cart/{store}",       # per store; Mana Pool when unnamed (older companions)
     "moxfield.changed": "companion-deck/moxfield",
     "orders.page_changed": "companion-orders/{store}",   # per store (report carries `store`)
 }
 ORDER_STORES = {"manapool": "Mana Pool", "tcgplayer": "TCGplayer", "cardkingdom": "Card Kingdom"}
+CART_STORES = ORDER_STORES   # the companion reads these three carts too
 
 
 def reported_key(code: str, store: str | None = None) -> str:
-    """The scraper a reported companion code flags (order codes are per store)."""
+    """The scraper a reported companion code flags (cart and order codes are per store)."""
     key = REPORTABLE_CODES[code]
     if "{store}" in key:
+        if code.startswith("cart.") and store is None:
+            store = "manapool"
         if store not in ORDER_STORES:
             raise ValueError("an order-history report names its store")
         key = key.format(store=store)
@@ -161,10 +164,11 @@ def registry() -> list[Scraper]:
                        "Moxfield deck read in your browser", "Add cards · Decks import (companion)",
                        "browser" if (decks.get("moxfield") or {}).get("url") else "none",
                        (decks.get("moxfield") or {}).get("url")))
-    cart = (samples.get("cart", {}).get("manapool") or {}).get("url")
-    out.append(Scraper("companion-cart/manapool", "companion-cart", "manapool", "Mana Pool",
-                       "Mana Pool cart read in your browser", "Collection · cart check",
-                       "browser" if cart else "none", cart))
+    for site, name in CART_STORES.items():
+        cart = (samples.get("cart", {}).get(site) or {}).get("url")
+        out.append(Scraper(f"companion-cart/{site}", "companion-cart", site, name,
+                           f"{name} cart read in your browser", "Collection · cart check",
+                           "browser" if cart else "none", cart))
     # Order history pages are signed in: no public sample → real use only (canary none).
     for site, name in ORDER_STORES.items():
         out.append(Scraper(f"companion-orders/{site}", "companion-orders", site, name,

@@ -14,8 +14,8 @@ the sample is gone → no flag).
   runs) and EDHREC's commander / card / ranking pages.
 * **Browser** (a real Chrome window opens briefly): open-tab stores with a
   sample page, Moxfield (the server import's deck response AND the companion's
-  reader in one visit) and the companion's Mana Pool cart reader on a guest
-  (empty) cart. Readers are the extension's own files, injected verbatim.
+  reader in one visit) and the companion's cart readers (Mana Pool, TCGplayer,
+  Card Kingdom) on a guest (empty) cart. Readers are the extension's own files, injected verbatim.
 
 Samples + expectations: ``config/vendors.toml`` (stores) and
 ``config/scraper_canaries.toml`` (everything else). Design: docs/scraper-health.md.
@@ -228,7 +228,7 @@ def check_edhrec(progress: Progress | None = None) -> list[Check]:
     return out
 
 
-# ---------- browser: open-tab stores, Moxfield, the Mana Pool cart ----------
+# ---------- browser: open-tab stores, Moxfield, the carts ----------
 
 def _reader(name: str) -> str:
     return (READERS / name).read_text(encoding="utf-8")
@@ -329,8 +329,17 @@ def check_moxfield(ctx, sample: dict) -> list[Check]:
         page.close()
 
 
-def check_cart(ctx, sample: dict) -> Check:
-    key = "companion-cart/manapool"
+# The companion's cart readers per store: (reader file, global function).
+CART_READERS = {
+    "manapool": ("manapool-cart.js", "readManaPoolCart"),
+    "tcgplayer": ("tcgplayer-cart.js", "readTcgplayerCart"),
+    "cardkingdom": ("cardkingdom-cart.js", "readCardKingdomCart"),
+}
+
+
+def check_cart(ctx, sample: dict, store: str = "manapool") -> Check:
+    key = f"companion-cart/{store}"
+    file, fn = CART_READERS[store]
     url = sample["url"]
     page = ctx.new_page()
     try:
@@ -338,8 +347,8 @@ def check_cart(ctx, sample: dict) -> Check:
         _settle(page)
         if _bot_wall(page) or (resp is not None and resp.status in (401, 403, 429)):
             return _unverified(key, "scrape.blocked", url=url)
-        page.add_script_tag(content=_reader("manapool-cart.js"))
-        out = page.evaluate("() => readManaPoolCart(document)")
+        page.add_script_tag(content=_reader(file))
+        out = page.evaluate(f"() => {fn}(document)")
     except Exception as e:  # noqa: BLE001
         return _unverified(key, "scrape.unreachable", f"{type(e).__name__}: {e}"[:300], url=url)
     finally:
@@ -372,9 +381,11 @@ def _browser_targets(only: set[str] | None = None) -> list[tuple[str, list[str],
     if mox.get("url"):
         out.append(("Moxfield deck (browser)", [health.deck_key("moxfield"), "companion-deck/moxfield"],
                     lambda ctx: check_moxfield(ctx, mox)))
-    cart = samples.get("cart", {}).get("manapool") or {}
-    if cart.get("url"):
-        out.append(("Mana Pool cart (browser)", ["companion-cart/manapool"], lambda ctx: [check_cart(ctx, cart)]))
+    for store, name in health.CART_STORES.items():
+        cart = samples.get("cart", {}).get(store) or {}
+        if cart.get("url") and store in CART_READERS:
+            out.append((f"{name} cart (browser)", [f"companion-cart/{store}"],
+                        lambda ctx, cart=cart, store=store: [check_cart(ctx, cart, store)]))
     return [t for t in out if only is None or set(t[1]) & only]
 
 

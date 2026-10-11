@@ -63,6 +63,8 @@ PINS = {
     "deck-import/moxfield": ("test_decksource.py", "test_parse_moxfield_boards_and_finishes"),
     "companion-deck/moxfield": ("test_companion.py", "test_moxfield_reader_output_becomes_deck_lines"),
     "companion-cart/manapool": ("test_companion.py", "test_cart_reader_output_is_exactly_what_the_server_accepts"),
+    "companion-cart/tcgplayer": ("test_companion_carts.py", "test_tcgplayer_cart_from_the_reader_golden"),
+    "companion-cart/cardkingdom": ("test_companion_carts.py", "test_cardkingdom_cart_from_the_reader_golden"),
     "companion-orders/manapool": ("test_companion_orders.py", "test_manapool_order_from_the_reader_golden"),
     "companion-orders/tcgplayer": ("test_companion_orders.py", "test_tcgplayer_orders_resolve_by_product_id"),
     "companion-orders/cardkingdom": ("test_companion_orders.py", "test_cardkingdom_unverified_lines_are_never_cards"),
@@ -334,6 +336,16 @@ def test_cart_canary(reader, outcome, code):
     assert (c.outcome, c.code) == (outcome, code)
 
 
+def test_every_cart_reader_has_a_canary_and_its_own_key():
+    samples = sh.canary_samples()["cart"]
+    assert set(samples) == set(scrape_canary.CART_READERS) == set(sh.CART_STORES)
+    targets = {ks[0] for _, ks, _ in scrape_canary._browser_targets() if ks[0].startswith("companion-cart/")}
+    assert targets == {f"companion-cart/{s}" for s in sh.CART_STORES}
+    c = scrape_canary.check_cart(_Ctx(_Page(resp=_Resp(200), reader={"ok": False, "code": "cart.page_changed"})),
+                                 samples["tcgplayer"], "tcgplayer")
+    assert (c.key, c.outcome) == ("companion-cart/tcgplayer", "fail")
+
+
 def test_browser_failures_headless_are_retried_in_a_window_and_never_flag_without_one(monkeypatch):
     calls = []
 
@@ -395,6 +407,8 @@ def test_health_api_lists_every_scraper_and_the_down_count(client):
 def test_report_api_flags_only_page_changed_codes_from_this_app(client):
     r = client.post("/api/scrapers/report", json={"code": "cart.page_changed"})
     assert r.status_code == 200 and (r.json()["key"], r.json()["status"]) == ("companion-cart/manapool", "down")
+    r = client.post("/api/scrapers/report", json={"code": "cart.page_changed", "store": "cardkingdom"})
+    assert r.status_code == 200 and r.json()["key"] == "companion-cart/cardkingdom"
     assert client.post("/api/scrapers/report", json={"code": "cart.empty"}).status_code == 422
     assert client.post("/api/scrapers/report", json={"code": "moxfield.changed"},
                        headers={"sec-fetch-site": "cross-site"}).status_code == 403

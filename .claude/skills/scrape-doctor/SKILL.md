@@ -1,6 +1,6 @@
 ---
 name: scrape-doctor
-description: Diagnose and fix a deterministic scrape that stopped reading right — the browser companion's page readers (Mana Pool cart, open store tabs, Moxfield decks), the cart bookmarklet, the Deals vendor recipes (config/vendors.toml), and the deck-import parsers (decksource). Knows where each one is pinned, how to recapture a fixture safely, how to re-pin the goldens, and which error code a failure should surface. Triggers "the cart reader broke", "cart.page_changed", "moxfield.changed", "a store's price stopped reading", "vendor canary failed", "deck import returns no cards", "re-pin the readers", "check the scrapers", "/scrape-doctor".
+description: Diagnose and fix a deterministic scrape that stopped reading right — the browser companion's page readers (Mana Pool / TCGplayer / Card Kingdom carts, open store tabs, Moxfield decks), the cart bookmarklet, the Deals vendor recipes (config/vendors.toml), and the deck-import parsers (decksource). Knows where each one is pinned, how to recapture a fixture safely, how to re-pin the goldens, and which error code a failure should surface. Triggers "the cart reader broke", "cart.page_changed", "moxfield.changed", "a store's price stopped reading", "vendor canary failed", "deck import returns no cards", "re-pin the readers", "check the scrapers", "/scrape-doctor".
 ---
 
 # scrape-doctor
@@ -31,6 +31,7 @@ browser before reading tabs on macOS (`docs/deals-scraping.md` failure mode 1).
 | Scrape | Code (single source of truth) | Saved page(s) | Pinned by |
 |---|---|---|---|
 | Mana Pool cart (extension + bookmarklet) | `extension/src/readers/manapool-cart.js` | `tests/fixtures/companion/manapool-cart*.html` | `web/e2e/companion-readers.spec.ts` → `manapool-cart.expected.json` → `tests/test_companion.py` |
+| TCGplayer / Card Kingdom cart (extension) | `extension/src/readers/{tcgplayer,cardkingdom}-cart.js` → `store_ids` (product id → printing) | `tests/fixtures/companion/{tcgplayer,cardkingdom}-cart*.html` (guest carts) | `web/e2e/companion-cart-readers.spec.ts` → `*-cart.expected.json` → `tests/test_companion_carts.py`; real extension in `companion-extension.spec.ts` |
 | Open-tab store page (Deals, `rendered` stores) | `extension/src/readers/store-page.js` + recipe in `config/vendors.toml` | `store-rendered.html`, `tests/fixtures/vendors/*.html.gz` | same chain → `store-*.expected.json`; server parse in `vendors.read_listing` |
 | Open-tab marketplaces (Amazon, Walmart, GameStop) | recipe in `config/vendors.toml` (`sellers`, `new_only`, `seller_pattern`, …) | `tests/fixtures/vendors/rendered/<vendor>-<case>.json.gz` (companion extract + AppleScript tab read) | `tests/test_vendor_recipes.py::RENDERED` (both read paths) |
 | Moxfield deck (extension) | `extension/src/readers/moxfield-deck.js` → `decksource.parse_moxfield` | `moxfield-deck.json` | same chain → `moxfield-deck.expected.json` |
@@ -67,6 +68,12 @@ A new failure shape that users would only see as a generic error is a bug. Add a
   printing. Save `section[aria-labelledby="cart-heading"]` into `manapool-cart.html`, then clear the
   cart. Do it through a headless Playwright browser (`npx playwright` script or the Playwright MCP —
   close it afterwards). Never curl Mana Pool's API (hooks block it, and the companion never uses it).
+- **TCGplayer / Card Kingdom cart:** same idea, in a throwaway headless Playwright browser (guest
+  cart, no account): add a NM single, a foil, a played grade (TCGplayer LP / Card Kingdom EX or VG),
+  a non-English listing (TCGplayer), a sealed product and a quantity of 2, open `/cart`, save
+  `page.content()`, then reduce it with JavaScript off: drop scripts/styles/svg/meta/nav/header/footer,
+  the sign-in form and any `_token` input, strip `style`/`data-v-*`/`srcset`, keep `<main>` (TCGplayer)
+  or `.cartItemList` (Card Kingdom). Also save the empty guest cart as `<store>-cart-empty.html`.
 - **Store page:** save the product page, or let `scripts/vendor_canary.py` show what it reads.
   Server-read stores keep a gzipped fixture under `tests/fixtures/vendors/`.
 - **Open-tab store (Amazon, Walmart, GameStop):** `uv run python scripts/capture_store_tab.py

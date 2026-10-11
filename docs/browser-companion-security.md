@@ -68,6 +68,12 @@ sequenceDiagram
   the user approves it:
   - cart: card name, printing id (Scryfall id from the image link), set name, finish, condition,
     treatments, quantity and unit price. No seller, address, totals, account or Mana Pool ids.
+  - TCGplayer / Card Kingdom carts (extension 0.3.0): per line its kind (single / sealed), the store's
+    product id (TCGplayer: from the product link; Card Kingdom: from the card image), card name (the
+    catalog name — never a seller's own listing title), set name / edition, collector number as shown,
+    finish, condition / grade, language, quantity and unit price. Never the sellers, shipping, totals,
+    saved-for-later items, the sign-in form, Card Kingdom's request token or line-item ids (the
+    reader e2e asserts seller names, the token and totals are absent).
   - tabs: URL and title of open tabs on the Deals stores. For open-tab stores also the page title,
     whitelisted price/stock meta tags, schema.org Product JSON-LD, and visible lines that mention a
     price or stock, plus the main offer's short (≤ 80 characters) "Sold by" / "Ships from" /
@@ -113,6 +119,9 @@ sequenceDiagram
   - **Moxfield**: `moxfield.com` + subdomains.
   - **Order history**: `store.tcgplayer.com` + `www.cardkingdom.com` (Mana Pool order pages are on
     the install-time `manapool.com`).
+  - **TCGplayer cart**: `www.tcgplayer.com`; **Card Kingdom cart**: `www.cardkingdom.com` — one switch
+    per store (owner, 2026-10-10). Switching one off keeps a site another switched-on feature still
+    needs (Card Kingdom's host is shared with Order history and Deals).
   No `<all_urls>`, `tabs`, `cookies`, `webRequest`, `history`, `debugger`, `nativeMessaging`
   (all asserted absent).
 - **No remote code**: no `eval`/`new Function`/`importScripts`/`innerHTML`, no remote URLs beyond the
@@ -160,6 +169,16 @@ schema (`parseBookmarkletPaste`) and the server's strict model.
   cookies). The companion itself is unaffected, because it pairs by exact origin.
 - **Moxfield private decks** are read through the user's own signed-in browser session. The browser
   attaches its own cookies to the one deck request, and the companion never reads them.
+
+## Security review (2026-10-10, TCGplayer + Card Kingdom carts, extension 0.3.0)
+
+The security-review agent reviewed the diff: **no findings.** Checked: the Scryfall name search built
+from a cart line (argument list, URL-encoded by the wrapper, fixed host), store selection
+(`Object.hasOwn` against the fixed `CART_STORES` table — reader file, function, URL, tab patterns and
+origins all come from it; the call runs in the extension's isolated world), hostile cart-page text
+(rendered as text only; strict server models with a character whitelist on `number`; bound SQL),
+data sent (only the documented line fields), and permissions (one new opt-in host, `www.tcgplayer.com`;
+switching off keeps sites another feature needs; the bookmarklet stays Mana Pool only server-side).
 
 ## Security review (2026-10-07)
 

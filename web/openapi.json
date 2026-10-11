@@ -4541,6 +4541,20 @@
             "type": "array",
             "title": "Unidentified"
           },
+          "not_cards": {
+            "items": {
+              "$ref": "#/components/schemas/NotCardOut"
+            },
+            "type": "array",
+            "title": "Not Cards",
+            "default": []
+          },
+          "not_compared": {
+            "type": "integer",
+            "title": "Not Compared",
+            "description": "Played or non-English lines left out of Over market (market prices are Near Mint English).",
+            "default": 0
+          },
           "family": {
             "anyOf": [
               {
@@ -4624,6 +4638,16 @@
       },
       "CartLineIn": {
         "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "single",
+              "sealed",
+              "other"
+            ],
+            "title": "Kind",
+            "default": "single"
+          },
           "scryfall_id": {
             "anyOf": [
               {
@@ -4635,6 +4659,32 @@
               }
             ],
             "title": "Scryfall Id"
+          },
+          "tcgplayer_product_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 99999999.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tcgplayer Product Id"
+          },
+          "cardkingdom_product_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 99999999.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cardkingdom Product Id"
           },
           "name": {
             "anyOf": [
@@ -4660,6 +4710,19 @@
             ],
             "title": "Set Name"
           },
+          "number": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 12,
+                "pattern": "^[0-9A-Za-z\u2605\u2020\\-]+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Number"
+          },
           "finish": {
             "type": "string",
             "enum": [
@@ -4681,6 +4744,18 @@
               }
             ],
             "title": "Condition"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 30
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
           },
           "treatments": {
             "items": {
@@ -4715,7 +4790,8 @@
         "required": [
           "quantity"
         ],
-        "title": "CartLineIn"
+        "title": "CartLineIn",
+        "description": "One cart line. Mana Pool names the printing by ``scryfall_id``; TCGplayer\nby ``tcgplayer_product_id`` (+ set name and ``number`` as shown); Card Kingdom\nby ``cardkingdom_product_id`` (+ its edition in ``set_name``)."
       },
       "CartLinesIn": {
         "properties": {
@@ -4734,6 +4810,17 @@
               "bookmarklet"
             ],
             "title": "Source"
+          },
+          "store": {
+            "type": "string",
+            "enum": [
+              "manapool",
+              "tcgplayer",
+              "cardkingdom"
+            ],
+            "title": "Store",
+            "description": "Whose cart page the lines were read from (the bookmarklet reads Mana Pool only).",
+            "default": "manapool"
           },
           "family": {
             "anyOf": [
@@ -9184,6 +9271,49 @@
         ],
         "title": "NewDeckIn"
       },
+      "NotCardOut": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "description": "sealed | other \u2014 not a card, so not checked."
+          },
+          "qty": {
+            "type": "integer",
+            "title": "Qty"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "kind",
+          "qty",
+          "price"
+        ],
+        "title": "NotCardOut"
+      },
       "OpenTabsOut": {
         "properties": {
           "browser": {
@@ -9743,6 +9873,28 @@
               }
             ],
             "title": "Pct"
+          },
+          "condition": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Condition"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
           }
         },
         "type": "object",
@@ -9793,6 +9945,29 @@
           "your": {
             "type": "number",
             "title": "Your"
+          },
+          "condition": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Condition",
+            "description": "The cart line's condition (NM, LP\u2026 or Card Kingdom's NM/EX/VG/G), when the store shows one."
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
           }
         },
         "type": "object",
@@ -11937,7 +12112,7 @@
               }
             ],
             "title": "Store",
-            "description": "Order-history reports: which store's reader."
+            "description": "Cart and order-history reports: which store's reader (a cart report without one is Mana Pool's)."
           }
         },
         "additionalProperties": false,

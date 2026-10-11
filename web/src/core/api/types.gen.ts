@@ -606,6 +606,16 @@ export type CartAuditOut = {
      */
     unidentified: Array<UnidentifiedOut>;
     /**
+     * Not Cards
+     */
+    not_cards?: Array<NotCardOut>;
+    /**
+     * Not Compared
+     *
+     * Played or non-English lines left out of Over market (market prices are Near Mint English).
+     */
+    not_compared?: number;
+    /**
      * Family
      */
     family: string | null;
@@ -645,12 +655,28 @@ export type CartIn = {
 
 /**
  * CartLineIn
+ *
+ * One cart line. Mana Pool names the printing by ``scryfall_id``; TCGplayer
+ * by ``tcgplayer_product_id`` (+ set name and ``number`` as shown); Card Kingdom
+ * by ``cardkingdom_product_id`` (+ its edition in ``set_name``).
  */
 export type CartLineIn = {
+    /**
+     * Kind
+     */
+    kind?: 'single' | 'sealed' | 'other';
     /**
      * Scryfall Id
      */
     scryfall_id?: string | null;
+    /**
+     * Tcgplayer Product Id
+     */
+    tcgplayer_product_id?: number | null;
+    /**
+     * Cardkingdom Product Id
+     */
+    cardkingdom_product_id?: number | null;
     /**
      * Name
      */
@@ -660,6 +686,10 @@ export type CartLineIn = {
      */
     set_name?: string | null;
     /**
+     * Number
+     */
+    number?: string | null;
+    /**
      * Finish
      */
     finish?: 'nonfoil' | 'foil' | 'etched';
@@ -667,6 +697,10 @@ export type CartLineIn = {
      * Condition
      */
     condition?: string | null;
+    /**
+     * Language
+     */
+    language?: string | null;
     /**
      * Treatments
      */
@@ -693,6 +727,12 @@ export type CartLinesIn = {
      * Source
      */
     source: 'extension' | 'bookmarklet';
+    /**
+     * Store
+     *
+     * Whose cart page the lines were read from (the bookmarklet reads Mana Pool only).
+     */
+    store?: 'manapool' | 'tcgplayer' | 'cardkingdom';
     /**
      * Family
      *
@@ -3349,6 +3389,30 @@ export type NewDeckIn = {
 };
 
 /**
+ * NotCardOut
+ */
+export type NotCardOut = {
+    /**
+     * Name
+     */
+    name: string | null;
+    /**
+     * Kind
+     *
+     * sealed | other — not a card, so not checked.
+     */
+    kind: string;
+    /**
+     * Qty
+     */
+    qty: number;
+    /**
+     * Price
+     */
+    price: number | null;
+};
+
+/**
  * OpenTabsOut
  */
 export type OpenTabsOut = {
@@ -3618,6 +3682,14 @@ export type OverpayOut = {
      * Pct
      */
     pct?: number | null;
+    /**
+     * Condition
+     */
+    condition?: string | null;
+    /**
+     * Language
+     */
+    language?: string | null;
 };
 
 /**
@@ -3652,6 +3724,16 @@ export type OwnedOut = {
      * Your
      */
     your: number;
+    /**
+     * Condition
+     *
+     * The cart line's condition (NM, LP… or Card Kingdom's NM/EX/VG/G), when the store shows one.
+     */
+    condition?: string | null;
+    /**
+     * Language
+     */
+    language?: string | null;
 };
 
 /**
@@ -4830,7 +4912,7 @@ export type ScraperReportIn = {
     /**
      * Store
      *
-     * Order-history reports: which store's reader.
+     * Cart and order-history reports: which store's reader (a cart report without one is Mana Pool's).
      */
     store?: 'manapool' | 'tcgplayer' | 'cardkingdom' | null;
 };

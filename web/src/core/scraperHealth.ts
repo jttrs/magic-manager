@@ -5,7 +5,7 @@ import type { ScraperHealthOut } from './api';
 export type ScraperHealth = ScraperHealthOut;
 
 export const deckKey = (source: string) => `deck-import/${source}`;
-export const CART_KEY = 'companion-cart/manapool';
+export const cartKey = (store: string) => `companion-cart/${store}`;
 export const MOXFIELD_READER_KEY = 'companion-deck/moxfield';
 export const ordersKey = (store: string) => `companion-orders/${store}`;
 export const EDHREC_KEYS = ['edhrec-commander/edhrec', 'edhrec-card/edhrec', 'edhrec-rankings/edhrec'] as const;
