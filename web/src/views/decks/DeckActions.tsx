@@ -78,13 +78,16 @@ export function DeckActions({ detail, slug, onAddToCollection }: { detail: DeckD
         open={dialog?.kind === 'build'}
         onOpenChange={(o) => !o && setDialog(null)}
         title={`Build ${deck.name}?`}
-        confirmLabel={short ? `Build with ${fmtInt(short)} missing` : 'Build deck'}
+        confirmLabel={short && plan?.buildable !== false ? `Build with ${fmtInt(short)} missing` : 'Build deck'}
         onConfirm={build(short > 0)}
+        confirmDisabled={plan != null && !plan.buildable}
       >
         {plan && (
           <>
             <p>
-              {short
+              {!plan.buildable
+                ? <>None of the <b>{fmtInt(plan.need)}</b> cards are free in your collection, so there’s nothing to pledge yet.</>
+                : short
                 ? <>You have <b>{fmtInt(plan.covered)}</b> of the <b>{fmtInt(plan.need)}</b> cards free. Building pledges those to the deck; the rest stay listed as missing.</>
                 : <>{plan.need === 1 ? 'Its card is' : <>All <b>{fmtInt(plan.need)}</b> cards are</>} free in your collection. Building pledges {plan.need === 1 ? 'it' : 'them'} to this deck, so {plan.need === 1 ? 'it stops' : 'they stop'} counting as free.</>}
             </p>

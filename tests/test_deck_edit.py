@@ -332,3 +332,35 @@ def test_check_and_import_routes(cards, make_card, monkeypatch):
     r = client.post("/api/decks/import", json={"deck": deck})
     assert r.status_code == 200 and r.json() == {"slug": "via-api", "duplicate": True, "summary": "Already in your decks"}
     assert client.post("/api/decks/import", json={"deck": {**deck, "id": "8", "cards": []}}).status_code == 422
+
+
+def test_pledged_pct_counts_only_playable_pledges(cards):
+    from magic_manager import deck_view
+
+    inventory.inventory_add(A, "nonfoil", 1)
+    inventory.inventory_add(B, "nonfoil", 3)
+    slug = deck_edit.create_deck("Short")
+    decks.deck_add_card(slug, A, "main", "nonfoil", 1)
+    decks.deck_add_card(slug, C, "main", "nonfoil", 1)        # never free → the deck stays short
+    decks.deck_add_card(slug, B, "maybe", "nonfoil", 3)
+    decks.deck_assign_batch(slug, [(A, "nonfoil", 1), (B, "nonfoil", 3)])   # compose pledges maybe too
+    summary = next(s for s in deck_view._summaries() if s["slug"] == slug)
+    assert summary["pledged_pct"] == 50.0                       # 1 of 2 playable, maybe pledges ignored
+    assert deck_edit.build_target(slug) == slug
+
+
+def test_build_plan_flags_unbuildable_and_save_swap_stays_built(cards):
+    slug = deck_edit.create_deck("Nothing free")
+    decks.deck_add_card(slug, C, "main", "nonfoil", 2)
+    plan = deck_edit.build_plan(slug)
+    assert plan["buildable"] is False and plan["covered"] == 0
+
+    inventory.inventory_add(A, "nonfoil", 1)
+    inventory.inventory_add(B, "nonfoil", 1)
+    built = deck_edit.create_deck("Swap all")
+    decks.deck_add_card(built, A, "main", "nonfoil", 1)
+    assert deck_edit.build_plan(built)["buildable"] is True
+    deck_edit.build(built)
+    # Every pledge is pulled and a free replacement sleeved in one save → still built.
+    deck_edit.save(built, [DraftCard(B, "main", "nonfoil", 1)], expected_version_id=_vid(built))
+    assert _pledged(built) == {(B, "nonfoil"): 1} and _state(built) == "built"

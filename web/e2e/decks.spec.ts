@@ -100,7 +100,7 @@ const editable = { ...detail, version_id: 7, editable: true, deck: { ...detail.d
 
 test('deck actions are icons with tooltips; precons offer Copy to edit; building confirms first', async ({ page }) => {
   let built: unknown = null;
-  await page.route('**/api/decks/*/build-plan', (r) => r.fulfill({ json: { target: detail.deck.slug, need: 3, covered: 2, short: [{ printing: detail.cards[0].printing, finish: 'nonfoil', qty: 1 }] } }));
+  await page.route('**/api/decks/*/build-plan', (r) => r.fulfill({ json: { target: detail.deck.slug, need: 3, covered: 2, short: [{ printing: detail.cards[0].printing, finish: 'nonfoil', qty: 1 }], buildable: true } }));
   await page.route('**/api/decks/*/build', (r) => { built = r.request().postDataJSON(); return r.fulfill({ json: { slug: detail.deck.slug, summary: 'Built — 2 cards pledged, 1 still missing' } }); });
   await page.route((u) => u.pathname === `/api/decks/${detail.deck.slug}`, (r) => r.fulfill({ json: { ...detail, version_id: 1, editable: false, deck: { ...detail.deck, built: 0, slugs: [detail.deck.slug], pledged_pct: 0 } } }));
   await page.goto(DECK_URL);
@@ -116,6 +116,19 @@ test('deck actions are icons with tooltips; precons offer Copy to edit; building
   await dialog.getByRole('button', { name: 'Build with 1 missing' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Built —' })).toBeVisible();
   expect(built).toEqual({ allow_shortfall: true });
+});
+
+test('build dialog: with no card free, Build is disabled and says why', async ({ page }) => {
+  let calls = 0;
+  await page.route('**/api/decks/*/build-plan', (r) => r.fulfill({ json: { target: detail.deck.slug, need: 2, covered: 0, short: [{ printing: detail.cards[0].printing, finish: 'nonfoil', qty: 2 }], buildable: false } }));
+  await page.route('**/api/decks/*/build', (r) => { calls += 1; return r.fulfill({ status: 409, json: { detail: 'x' } }); });
+  await page.route((u) => u.pathname === `/api/decks/${detail.deck.slug}`, (r) => r.fulfill({ json: { ...detail, version_id: 1, editable: false, deck: { ...detail.deck, built: 0, slugs: [detail.deck.slug], pledged_pct: 0 } } }));
+  await page.goto(DECK_URL);
+  await page.getByRole('toolbar', { name: 'Deck actions' }).getByRole('button', { name: 'Build from your cards' }).click();
+  const dialog = page.getByRole('alertdialog', { name: /Build/ });
+  await expect(dialog).toContainText('None of the 2 cards are free');
+  await expect(dialog.getByRole('button', { name: 'Build deck' })).toBeDisabled();
+  expect(calls).toBe(0);
 });
 
 test('editor: add a card from search, see the diff, save a new version (built decks review the swap)', async ({ page }) => {

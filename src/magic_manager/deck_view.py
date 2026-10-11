@@ -33,8 +33,18 @@ WITH rows_ AS (
                                   ORDER BY (board = 'commander') DESC, unit DESC) AS rn
         FROM rows_ WHERE image_uri IS NOT NULL
     ) WHERE rn = 1
+), need AS (
+    SELECT d.deck_id, dc.scryfall_id, SUM(dc.count) AS n
+    FROM decks d
+    JOIN deck_cards dc ON dc.deck_version_id = d.current_version_id AND dc.board IN ({playable})
+    {where}
+    GROUP BY d.deck_id, dc.scryfall_id
 ), pl AS (
-    SELECT deck_id, SUM(count) AS pledged FROM deck_assignments GROUP BY deck_id
+    -- Pledged copies that fill a playable slot (maybe/token pledges don't count), capped per printing.
+    SELECT a.deck_id, SUM(MIN(a.n, need.n)) AS pledged
+    FROM (SELECT deck_id, scryfall_id, SUM(count) AS n FROM deck_assignments GROUP BY deck_id, scryfall_id) a
+    JOIN need ON need.deck_id = a.deck_id AND need.scryfall_id = a.scryfall_id
+    GROUP BY a.deck_id
 )
 SELECT d.deck_id, d.slug, d.name, d.format, d.precon_state, d.source_precon_file_name,
        d.source, d.author, d.source_set_code, d.kind,
@@ -101,7 +111,7 @@ def _summaries(where: str = "", params: tuple = ()) -> list[dict]:
     clause = f"WHERE {where}" if where else ""
     sql = _SUMMARY_SQL.format(where=clause, dwhere=clause, playable=_PLAYABLE_SQL)
     with db.connect() as conn:
-        rows = conn.execute(sql, params + params).fetchall()
+        rows = conn.execute(sql, params * 3).fetchall()
     precons, sets = _precon_index(), _sets_index()
     out = []
     for r in rows:

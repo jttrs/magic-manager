@@ -186,13 +186,16 @@ def _target_swap(slug: str) -> dict:
 
 def build_plan(slug: str) -> dict:
     """Preview a Build: which copy, copies the recipe needs, how many are free,
-    and the shortfalls (per printing)."""
+    the shortfalls (per printing), and whether a Build can pledge anything at
+    all (``buildable`` — False when no card is free and nothing is pledged yet,
+    so :func:`build` would refuse)."""
     target = build_target(slug)
     if target is None:
-        return {"target": None, "need": 0, "covered": 0, "short": []}
+        return {"target": None, "need": 0, "covered": 0, "short": [], "buildable": False}
     sw = _target_swap(target)
     short = sum(s["qty"] for s in sw["short"])
-    return {"target": target, "need": sw["need"], "covered": sw["need"] - short, "short": sw["short"]}
+    return {"target": target, "need": sw["need"], "covered": sw["need"] - short, "short": sw["short"],
+            "buildable": bool(sw["sleeve"] or sw["pledged"])}
 
 
 def build(slug: str, *, allow_shortfall: bool = False) -> dict:
@@ -413,10 +416,11 @@ def check(slug: str, cards: list[DraftCard], *, combos: bool = False) -> dict:
     if not fmt and any(c.board == "commander" for c in live):
         fmt = "commander"           # imports record no format; a commander makes it Commander-shaped
     if not fmt:
-        return {"format": None, "bracket": None, "legality": {
-            "format": "", "legal": True, "checked_count": len(legality._non_token_cards(rows)),
-            "violations": [{"code": "no_format", "severity": "info", "cards": [],
-                            "message": "This deck has no format, so legality isn't checked."}]}}
+        report = legality.LegalityReport(
+            format="", legal=True, checked_count=len(legality._non_token_cards(rows)),
+            violations=[legality.Violation(code="no_format", severity="info", cards=[],
+                                           message="This deck has no format, so legality isn't checked.")])
+        return {"format": None, "bracket": None, "legality": report.to_json()}
     report = legality.validate(rows, format=fmt).to_json()
     bracket = None
     if fmt in legality._COMMANDER_LIKE_FORMATS:

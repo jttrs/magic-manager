@@ -364,6 +364,12 @@ export type BuildPlanOut = {
      * Short
      */
     short: Array<SwapLineOut>;
+    /**
+     * Buildable
+     *
+     * False when nothing is free and nothing is pledged — a Build would be refused.
+     */
+    buildable: boolean;
 };
 
 /**

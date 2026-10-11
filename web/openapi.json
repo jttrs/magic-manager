@@ -4209,6 +4209,11 @@
             },
             "type": "array",
             "title": "Short"
+          },
+          "buildable": {
+            "type": "boolean",
+            "title": "Buildable",
+            "description": "False when nothing is free and nothing is pledged \u2014 a Build would be refused."
           }
         },
         "type": "object",
@@ -4216,7 +4221,8 @@
           "target",
           "need",
           "covered",
-          "short"
+          "short",
+          "buildable"
         ],
         "title": "BuildPlanOut"
       },
