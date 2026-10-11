@@ -841,7 +841,7 @@ export type CartSetupOut = {
     /**
      * Account
      *
-     * Your Mana Pool login (MANAPOOL_EMAIL + MANAPOOL_PASSWORD) is in the Keychain or environment, so the cart can be read directly.
+     * Your Mana Pool login (MANAPOOL_EMAIL + MANAPOOL_PASSWORD) is in this computer's .env or environment, so the cart can be read directly.
      */
     account: boolean;
 };

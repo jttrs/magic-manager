@@ -5115,7 +5115,7 @@
           "account": {
             "type": "boolean",
             "title": "Account",
-            "description": "Your Mana Pool login (MANAPOOL_EMAIL + MANAPOOL_PASSWORD) is in the Keychain or environment, so the cart can be read directly."
+            "description": "Your Mana Pool login (MANAPOOL_EMAIL + MANAPOOL_PASSWORD) is in this computer's .env or environment, so the cart can be read directly."
           }
         },
         "type": "object",

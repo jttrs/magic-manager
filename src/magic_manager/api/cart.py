@@ -2,8 +2,8 @@
 
 Internal-only and local-only — every route checks the ``cart_check`` feature
 flag, and the cart is read with YOUR Mana Pool login from the shell environment
-or the macOS Keychain (``mm secret set MANAPOOL_EMAIL`` / ``MANAPOOL_PASSWORD``;
-never ``.env``) via ``scripts/manapool_cart.py`` — the one sanctioned home of the
+or the gitignored repo-root ``.env`` (``MANAPOOL_EMAIL`` / ``MANAPOOL_PASSWORD``;
+check with ``mm secret status``) via ``scripts/manapool_cart.py`` — the one sanctioned home of the
 login code; its session token stays in memory there. Hosted, a cart is read in
 the user's own browser and only its lines reach the server (Phase 3 decision H13). Never ask users for
 these credentials (real money); a cart-page bookmarklet was considered and parked.
@@ -26,7 +26,7 @@ class FeaturesOut(BaseModel):
 
 
 class CartSetupOut(BaseModel):
-    account: bool = Field(description="Your Mana Pool login (MANAPOOL_EMAIL + MANAPOOL_PASSWORD) is in the Keychain or environment, so the cart can be read directly.")
+    account: bool = Field(description="Your Mana Pool login (MANAPOOL_EMAIL + MANAPOOL_PASSWORD) is in this computer's .env or environment, so the cart can be read directly.")
 
 
 class CartIn(BaseModel):

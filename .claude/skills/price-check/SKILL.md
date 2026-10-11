@@ -45,8 +45,8 @@ table. Relay the table + the footer verbatim.
 `manapool_cart.py` tries the automatic path first:
 
 - **headless (default, no browser).** Uses your Mana Pool login
-  (`MANAPOOL_EMAIL` + `MANAPOOL_PASSWORD`) from the macOS Keychain
-  (`uv run mm secret set …`; never `.env`) to mint a short-lived Supabase
+  (`MANAPOOL_EMAIL` + `MANAPOOL_PASSWORD`) from the gitignored `.env`
+  (check with `uv run mm secret status`) to mint a short-lived Supabase
   session token (in memory only, never written), reads your RLS-scoped cart
   server-side, enriches it. Fully hands-off. **This is what runs if the password
   is set** — nothing for the user to do.
@@ -166,9 +166,8 @@ template), and secrets in the gitignored `.env`.
 ## Guardrails
 
 - **Read-only.** No writes to the DB or to any marketplace; never modifies a cart.
-- **Secrets**: your personal Mana Pool login only from the Keychain (`mm secret`);
-  catalog API credentials (`MANAPOOL_EMAIL` + `MANAPOOL_ACCESS_TOKEN`) from the
-  gitignored `.env`. Session JWTs are held in memory
+- **Secrets**: your personal Mana Pool login from the gitignored `.env` (`mm secret status`);
+  catalog API credentials (`MANAPOOL_EMAIL` + `MANAPOOL_ACCESS_TOKEN`) likewise. Session JWTs are held in memory
   only — never logged/written.
 - **Sanctioned APIs via rate-limited wrappers** (`manapool-search/manapool.sh`),
   with a PreToolUse guard hook blocking ad-hoc curl to marketplace hosts.

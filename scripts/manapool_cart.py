@@ -8,7 +8,7 @@ by one of two paths, trying the automatic one first:
   headless — password-grant against Supabase auth → session JWT (in memory
              only, never written) → read the RLS-scoped `cart_items` table →
              enrich inventoryIds via the same `inventory?id=in.(...)` select the
-             site uses. Requires MANAPOOL_PASSWORD in the Keychain (`uv run mm secret set MANAPOOL_PASSWORD`). Fully hands-off.
+             site uses. Requires MANAPOOL_EMAIL and MANAPOOL_PASSWORD in .env. Fully hands-off.
   bookmarklet — fallback that always works: click the cart-bookmarklet on the
              cart page; it copies normalized cart JSON to your clipboard; paste
              it here via --file - (stdin) or --file PATH.
@@ -21,7 +21,7 @@ the rendered rows); headless carries ManaPool ids and relies on downstream
 mtgjson-id mapping. Which path produced the output is reported on stderr.
 
 SECURITY: the session JWT is short-lived and held in memory only — never
-written to disk or logged. MANAPOOL_PASSWORD is read from the Keychain (`uv run mm secret set`).
+written to disk or logged. MANAPOOL_PASSWORD is read from .env (or the environment).
 
 Usage:
     uv run python scripts/manapool_cart.py                    # headless, else stdin if piped
@@ -56,14 +56,10 @@ INV_SELECT = (
 
 def _load_env() -> dict:
     """Your own Mana Pool login, used only to read YOUR cart: from the shell
-    environment or the macOS Keychain (``mm secret set MANAPOOL_EMAIL`` /
-    ``MANAPOOL_PASSWORD``) — never from the repo's ``.env``."""
+    environment or the repo's gitignored ``.env`` (``MANAPOOL_EMAIL`` /
+    ``MANAPOOL_PASSWORD``)."""
     from magic_manager import secrets
 
-    envfile = ROOT / ".env"
-    if envfile.exists() and any(l.strip().startswith("MANAPOOL_PASSWORD=") for l in envfile.read_text().splitlines()):
-        print("note: MANAPOOL_PASSWORD in .env is ignored — store it with `uv run mm secret set MANAPOOL_PASSWORD` "
-              "and remove it from .env", file=sys.stderr)
     return {k: v for k in secrets.PERSONAL if (v := secrets.get(k))}
 
 
@@ -79,7 +75,7 @@ def fetch_headless(env: dict) -> list[dict] | None:
     email = env.get("MANAPOOL_EMAIL")
     password = env.get("MANAPOOL_PASSWORD")
     if not email or not password:
-        print("headless: no Mana Pool login — run `uv run mm secret set MANAPOOL_EMAIL` and `... MANAPOOL_PASSWORD` (macOS Keychain); skipping headless login", file=sys.stderr)
+        print("headless: no Mana Pool login — add MANAPOOL_EMAIL and MANAPOOL_PASSWORD to .env (check with `uv run mm secret status`); skipping headless login", file=sys.stderr)
         return None
     try:
         # 1. password grant → JWT (in memory only)

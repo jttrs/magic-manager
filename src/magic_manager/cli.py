@@ -89,32 +89,16 @@ app.add_typer(collection_app, name="collection")
 
 
 secret_app = typer.Typer(no_args_is_help=True,
-                         help="Personal secrets in the macOS Keychain (e.g. your Mana Pool login for reading your cart). Never stored in .env.")
+                         help="Check your personal Mana Pool login (for reading your cart). It lives in the gitignored .env at the repo root.")
 app.add_typer(secret_app, name="secret")
-
-
-@secret_app.command("set")
-def secret_set(name: str = typer.Argument(..., help="e.g. MANAPOOL_EMAIL or MANAPOOL_PASSWORD.")):
-    """Store a secret in the Keychain; macOS prompts for the value, so it never lands in a command line or file."""
-    from . import secrets as secrets_mod
-    raise typer.Exit(secrets_mod.set_interactive(name))
 
 
 @secret_app.command("status")
 def secret_status():
-    """Which personal secrets are set (names only — values are never shown)."""
+    """Where each personal secret comes from: environment, .env or not set (names only — values are never shown)."""
     from . import secrets as secrets_mod
-    import os
     for name in secrets_mod.PERSONAL:
-        where = "Keychain" if secrets_mod.keychain_get(name) else "environment" if os.environ.get(name) else "not set"
-        typer.echo(f"{name}: {where}")
-
-
-@secret_app.command("delete")
-def secret_delete(name: str = typer.Argument(...)):
-    """Remove a secret from the Keychain."""
-    from . import secrets as secrets_mod
-    typer.echo("removed" if secrets_mod.delete(name) else "not found")
+        typer.echo(f"{name}: {secrets_mod.source(name) or 'not set'}")
 
 
 analytics_app = typer.Typer(no_args_is_help=True,

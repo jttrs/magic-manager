@@ -3,7 +3,7 @@
 A Manifest V3 Chrome extension (`extension/`) plus a cart bookmarklet. They read, in the user's
 **own** browser, what the server can't or shouldn't: the Mana Pool cart, open store tabs (Deals),
 Moxfield and Archidekt decks, and your Moxfield collection / binders. They hand the app only the normalized lines, after the user approves each time.
-This replaces the local-only paths (H9): the Keychain cart login, AppleScript tab reads and the
+This replaces the local-only paths (H9): the .env cart login, AppleScript tab reads and the
 headed-Chrome Moxfield import. Those keep working on the owner's Mac when the companion isn't
 connected. Security design: [`browser-companion-security.md`](browser-companion-security.md).
 
@@ -21,7 +21,7 @@ connected. Security design: [`browser-companion-security.md`](browser-companion-
 Where it shows up: Collection → Purchase history → *Read my orders* (flag `purchases`; Mana Pool,
 TCGplayer, Card Kingdom order history — see [`purchases.md`](purchases.md), incl. what is and isn't
 verified per store), Collection → *Check my cart* (pick Mana Pool, TCGplayer or Card Kingdom, then **Read my cart**;
-the bookmarklet paste and Keychain login are Mana Pool only — see *Other carts* below), Market → Deals → **Read my open tabs** (tabs + open-tab store prices), Market → Deals →
+the bookmarklet paste and .env login are Mana Pool only — see *Other carts* below), Market → Deals → **Read my open tabs** (tabs + open-tab store prices), Market → Deals →
 Watching → **Read watched prices** (the watched open-tab store pages), Add cards → Deck and
 Decks → Import (Moxfield links; Archidekt links once Archidekt is switched on — private decks too),
 Add cards → **Moxfield collection** (your collection, one binder, or a shared link). Without a connected companion each falls back to the existing path.

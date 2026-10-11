@@ -18,7 +18,7 @@ import { fmtCount, fmtInt, fmtUsd } from '../../core/format';
 /** Internal (cart_check flag): audit a Mana Pool, TCGplayer or Card Kingdom cart against
  *  your collection — bought twice, already owned, priced over market, and family gaps still
  *  missing. The cart is read in YOUR browser (companion, or the Mana Pool bookmarklet) —
- *  only its lines reach the app — or, for Mana Pool on the owner's own Mac, with the Keychain login. */
+ *  only its lines reach the app — or, for Mana Pool on the owner's own Mac, with the Mana Pool login in this computer’s .env. */
 export function CartCheckDialog({ trigger, family }: { trigger: ReactNode; family?: string }) {
   const [open, setOpen] = useState(false);
   return (
@@ -154,7 +154,7 @@ function CartCheck({ family }: { family?: string }) {
             {store === 'manapool' && setup.data?.account && (
               <section aria-labelledby="cart-account" className="flex flex-col gap-2">
                 <h3 id="cart-account" className={H3}>With your login on this computer</h3>
-                <p className="max-w-[62ch] text-md leading-relaxed text-ink-muted">Uses the Mana Pool login saved in this Mac’s Keychain. Only works where the app runs on your own computer.</p>
+                <p className="max-w-[62ch] text-md leading-relaxed text-ink-muted">Uses the Mana Pool login in this computer’s .env file. Only works where the app runs on your own computer.</p>
                 <Button tone="paper" className="self-start" onClick={() => viaAccount.mutate()} disabled={busy}>
                   {viaAccount.isPending ? 'Reading your cart…' : 'Read with my login'}
                 </Button>
