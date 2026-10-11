@@ -410,7 +410,8 @@ def summarize(rows: list[NetRow], sealed_market: float | None) -> dict:
 
     ``scratch`` = Σ need·unit (buy everything new); ``with_collection`` =
     Σ buy·unit (use loose copies first). ``coverage`` is the priced fraction of
-    total need (an unpriced printing drags both scratch and with_collection down)."""
+    total need (an unpriced printing drags both scratch and with_collection
+    down); when no row is priced both totals are ``None`` (unknown, not $0)."""
     scratch = 0.0
     with_collection = 0.0
     total_need = 0
@@ -426,8 +427,9 @@ def summarize(rows: list[NetRow], sealed_market: float | None) -> dict:
         with_collection += r.unit_usd * r.buy_qty
     return {
         "sealed": sealed_market,
-        "scratch": round(scratch, 2) if scratch else (0.0 if rows else None),
-        "with_collection": round(with_collection, 2) if with_collection else (0.0 if rows else None),
+        # Nothing priced → unknown (None), not $0.
+        "scratch": round(scratch, 2) if priced_need else None,
+        "with_collection": round(with_collection, 2) if priced_need else None,
         "coverage": (priced_need / total_need) if total_need else 1.0,
         "n_unpriced": n_unpriced,
         "total_need": total_need,

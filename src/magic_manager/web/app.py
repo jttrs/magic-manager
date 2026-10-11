@@ -24,7 +24,7 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
-from .. import api, companion as companion_engine, sets as sets_mod, tabs as tabs_engine, undo as undo_engine, cart as cart_engine, deck_edit, edhrec as edhrec_engine, features as features_engine, scryfall
+from .. import api, companion as companion_engine, sets as sets_mod, tabs as tabs_engine, undo as undo_engine, cart as cart_engine, deck_edit, edhrec as edhrec_engine, features as features_engine, scryfall, mtgjson
 from .. import collection_sync, purchases as purchases_engine
 from ..api import purchases as purchases_api
 from ..api import collection_import as collection_import_api, companion as companion_api, deals as deals_api, undo as undo_api, cart as cart_api, cards as cards_api, collection as collection_api, explore as explore_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api, market as market_api, trueup as trueup_api, history as history_api, combos as combos_api, art as art_api, jumpstart as jumpstart_api, surf as surf_api
@@ -419,10 +419,17 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             return market_api.family_products(code)
         except LookupError as e:
             raise HTTPException(404, str(e)) from e
+        except mtgjson.MtgJsonError as e:
+            raise HTTPException(502, f"Couldn't read MTGJSON: {e}") from e
 
     @app.get("/api/market/value", response_model=market_api.ProductValueOut, tags=["market"])
     def market_value(set: Annotated[str, Query(min_length=2)], name: Annotated[str, Query(min_length=1)]):
-        return market_api.value_product(set, name)
+        try:
+            return market_api.value_product(set, name)
+        except LookupError as e:
+            raise HTTPException(404, str(e)) from e
+        except (mtgjson.MtgJsonError, scryfall.ScryfallError) as e:
+            raise HTTPException(502, f"Couldn't price this product: {e}") from e
 
     @app.get("/api/market/product-tree", response_model=market_api.TreeNodeOut, tags=["market"])
     def market_product_tree(set: Annotated[str, Query(min_length=2)], name: Annotated[str, Query(min_length=1)]):
@@ -430,6 +437,8 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             return market_api.product_tree(set, name)
         except LookupError as e:
             raise HTTPException(404, str(e)) from e
+        except (mtgjson.MtgJsonError, scryfall.ScryfallError) as e:
+            raise HTTPException(502, f"Couldn't read this product: {e}") from e
 
     @app.get("/api/market/product-cost", response_model=market_api.ProductCostOut, tags=["market"])
     def market_product_cost(kind: Annotated[Literal["sealed", "sld"], Query()], set: Annotated[str, Query(min_length=2)],

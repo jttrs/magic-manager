@@ -557,7 +557,7 @@ export type CardPriceOut = {
     /**
      * Floor Usd
      *
-     * Cheapest nonfoil printing of this card anywhere.
+     * Cheapest nonfoil printing of this card among the sets synced locally.
      */
     floor_usd?: number | null;
     /**
@@ -2021,20 +2021,32 @@ export type DeckCostOut = {
     with_collection?: number | null;
     /**
      * Scratch Floor
+     *
+     * Every card new, cheapest printings (None when no card has a price).
      */
-    scratch_floor: number;
+    scratch_floor?: number | null;
     /**
      * With Collection Floor
+     *
+     * Your free cards first, cheapest printings.
      */
-    with_collection_floor: number;
+    with_collection_floor?: number | null;
     /**
      * Coverage
      */
     coverage: number;
     /**
      * Unpriced
+     *
+     * Cards with no price at their exact printing (the exact totals undercount).
      */
     unpriced: number;
+    /**
+     * Floor Unpriced
+     *
+     * Cards with no price at any printing (the cheapest-printing totals undercount).
+     */
+    floor_unpriced?: number;
     /**
      * Total Need
      */
@@ -2152,6 +2164,12 @@ export type DeckLineOut = {
      * The cheapest printing (this one when unpriced elsewhere).
      */
     floor_scryfall_id: string;
+    /**
+     * Floor Finish
+     *
+     * The floor printing's finish: nonfoil when a cheaper nonfoil printing exists, else this line's finish.
+     */
+    floor_finish?: 'nonfoil' | 'foil';
     /**
      * Bonus
      *
@@ -4586,13 +4604,19 @@ export type ProductValueOut = {
     /**
      * Floor Singles
      *
-     * Σ the cheapest printing of each card anywhere.
+     * Σ the cheapest printing of each card anywhere (+ booster EV).
      */
     floor_singles?: number | null;
     /**
      * Booster Only
      */
     booster_only?: boolean;
+    /**
+     * Booster Ev
+     *
+     * Random-booster EV included in exact/floor singles (None = no boosters inside).
+     */
+    booster_ev?: number | null;
     /**
      * Coverage
      */

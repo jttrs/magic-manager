@@ -88,33 +88,50 @@ export function filterCardPrices(cards: CardPriceOut[], s: Pick<MarketSearch, 'q
   return [...shown].sort((a, b) => cmp[s.sort](a, b) || a.name.localeCompare(b.name));
 }
 
-type LedgerCell = { value: number | null; best: boolean };
+type LedgerCell = { value: number | null; best: boolean; partial: boolean };
 export type LedgerRow = { key: 'sealed' | 'new' | 'free'; label: string; exact: LedgerCell; floor: LedgerCell };
 
-/** The three ways to get a deck × exact printing vs cheapest printing; the
- *  cheapest priced cell is marked best. Sealed has one price (both columns). */
+/** The three ways to get a deck × exact printing vs cheapest printing. A
+ *  column with unpriced cards is a lower bound (`partial`) and never competes:
+ *  the lowest COMPLETE cell is marked best. Sealed has one price (both columns). */
 export function deckLedger(d: DeckCostOut): LedgerRow[] {
   const rows: Omit<LedgerRow, 'exact' | 'floor'>[] = [];
+  const exactPartial = d.unpriced > 0;
+  const floorPartial = (d.floor_unpriced ?? 0) > 0;
   const raw: Record<LedgerRow['key'], [number | null, number | null]> = {
     sealed: [d.sealed ?? null, null],
-    new: [d.scratch ?? null, d.scratch_floor],
-    free: [d.with_collection ?? null, d.with_collection_floor],
+    new: [d.scratch ?? null, d.scratch_floor ?? null],
+    free: [d.with_collection ?? null, d.with_collection_floor ?? null],
   };
   if (d.sealed != null) rows.push({ key: 'sealed', label: 'Buy it sealed' });
   rows.push({ key: 'new', label: 'Buy every card' }, { key: 'free', label: 'Use your free cards first' });
-  const priced = rows.flatMap((r) => raw[r.key]).filter((v): v is number => v != null);
-  const min = priced.length ? Math.min(...priced) : null;
-  return rows.map((r) => {
-    const [exact, floor] = raw[r.key];
-    return { ...r, exact: { value: exact, best: exact != null && exact === min }, floor: { value: floor, best: floor != null && floor === min } };
-  });
+  const partial = (key: LedgerRow['key'], col: 0 | 1) => key !== 'sealed' && (col === 0 ? exactPartial : floorPartial);
+  const complete = rows.flatMap((r) => raw[r.key].filter((v, col) => v != null && !partial(r.key, col as 0 | 1))) as number[];
+  const min = complete.length ? Math.min(...complete) : null;
+  const cell = (key: LedgerRow['key'], col: 0 | 1): LedgerCell => {
+    const value = raw[key][col];
+    const p = value != null && partial(key, col);
+    return { value, partial: p, best: value != null && !p && value === min };
+  };
+  return rows.map((r) => ({ ...r, exact: cell(r.key, 0), floor: cell(r.key, 1) }));
 }
 
-/** Lines still to buy, as buy-list items at the chosen printing basis. */
+/** Lines still to buy, as buy-list items at the chosen printing basis. The
+ *  cheapest printing keeps its own finish (a foil-only card stays foil). */
 export function deckBuyItems(lines: DeckLineOut[], at: MarketSearch['buyAt']) {
   return lines
     .filter((l) => l.buy > 0)
-    .map((l) => (at === 'floor' ? { scryfall_id: l.floor_scryfall_id, finish: 'nonfoil' as const, qty: l.buy } : { scryfall_id: l.scryfall_id, finish: l.finish as 'nonfoil' | 'foil', qty: l.buy }));
+    .map((l) =>
+      at === 'floor'
+        ? { scryfall_id: l.floor_scryfall_id, finish: l.floor_finish ?? 'nonfoil', qty: l.buy }
+        : { scryfall_id: l.scryfall_id, finish: l.finish as 'nonfoil' | 'foil', qty: l.buy },
+    );
+}
+
+/** True when any product in a family's valuation failed to price — those
+ *  results aren't worth keeping across reloads, and a re-price is offered. */
+export function hasPricingErrors(values: ProductValueOut[] | null | undefined): boolean {
+  return Boolean(values?.some((v) => v.error));
 }
 
 /** "11 of 100 cards priced" when some fixed cards have no price at their exact printing. */

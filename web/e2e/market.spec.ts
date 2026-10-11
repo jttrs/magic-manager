@@ -128,3 +128,74 @@ test('a deck’s cheapest printings can be checked across every set', async ({ p
   await expect(page.getByRole('table', { name: 'Three ways to get this deck' })).toContainText('$1.00');
   expect(seen).toEqual(['false', 'true']);
 });
+
+const jobRow = { id: 'mv1', name: 'market.value_family', title: 'Value sealed products', inputs: {}, status: 'queued', created_at: '2026-01-01T00:00:00+00:00', started_at: null, finished_at: null, progress: null, summary: null, artifacts: [], error: null };
+const sseBody = (rows: unknown) =>
+  [
+    ['status', { status: 'running' }],
+    ['result', { summary: 'done', artifacts: [{ kind: 'json', label: 'values', data: rows }] }],
+    ['status', { status: 'succeeded' }],
+  ].map(([e, d], i) => `event: ${e}\ndata: ${JSON.stringify(d)}\nid: ${i + 1}\n\n`).join('');
+
+test('switching to Cards mid-pricing keeps following the same job instead of starting another', async ({ page }) => {
+  let submits = 0;
+  let streams = 0;
+  let release: () => void = () => {};
+  const held = new Promise<void>((r) => (release = r));
+  await page.route('**/api/jobs/market.value_family', (r) => {
+    submits += 1;
+    return r.fulfill({ status: 202, json: { ...jobRow, id: `mv${submits}` } });
+  });
+  await page.route('**/api/jobs/mv1/events', async (r) => {
+    streams += 1;
+    if (streams === 1) {
+      await held; // the first visit never sees the result
+      return r.abort().catch(() => {});
+    }
+    return r.fulfill({ status: 200, contentType: 'text/event-stream', body: sseBody(values) });
+  });
+  await page.route('**/api/market/products?*', (r) => r.fulfill({ json: products }));
+  await page.route('**/api/market/cards?*', (r) => r.fulfill({ json: { code: 'blb', name: 'Bloomburrow', cards: [] } }));
+
+  await page.goto('/market?code=blb');
+  await expect.poll(() => streams).toBe(1);
+  await page.getByRole('radio', { name: 'Cards' }).click();
+  await expect(page).toHaveURL(/tab=cards/);
+  await page.getByRole('radio', { name: 'Sealed' }).click();
+  await expect(page.getByRole('row', { name: /Bloomburrow Bundle/ })).toContainText('$55.50');
+  expect(submits).toBe(1);
+  release();
+});
+
+test('products that failed to price can be priced again, and are not kept across reloads', async ({ page }) => {
+  let submits = 0;
+  const failedOnce = [values[0], { set_code: 'blb', name: 'Bloomburrow Bundle', error: 'timeout' }];
+  await page.route('**/api/jobs/market.value_family', (r) => {
+    submits += 1;
+    return r.fulfill({ status: 202, json: { ...jobRow, id: `mv${submits}` } });
+  });
+  await page.route('**/api/jobs/mv1/events', (r) => r.fulfill({ status: 200, contentType: 'text/event-stream', body: sseBody(failedOnce) }));
+  await page.route('**/api/jobs/mv2/events', (r) => r.fulfill({ status: 200, contentType: 'text/event-stream', body: sseBody(values) }));
+  await page.route('**/api/market/products?*', (r) => r.fulfill({ json: products }));
+
+  await page.goto('/market?code=blb');
+  await expect(page.getByRole('row', { name: /Bloomburrow Bundle/ })).toContainText('Couldn’t price: timeout');
+  expect(await page.evaluate(() => localStorage.getItem('mm.market.values.v2.blb'))).toBeNull();
+  await page.getByRole('button', { name: 'Price again' }).click();
+  await expect(page.getByRole('row', { name: /Bloomburrow Bundle/ })).toContainText('$55.50');
+  expect(submits).toBe(2);
+  expect(await page.evaluate(() => localStorage.getItem('mm.market.values.v2.blb'))).not.toBeNull();
+});
+
+test('a deck total with unpriced cards is marked partial and never the lowest', async ({ page }) => {
+  const deck = fixtures.decks[0];
+  await page.route('**/api/market/deck?*', (r) => r.fulfill({ json: {
+    slug: deck.slug, sealed_product: null, sealed: null, scratch: 3, with_collection: 3, scratch_floor: 5, with_collection_floor: 5, coverage: 0.5, unpriced: 1, floor_unpriced: 0, total_need: 2,
+    lines: [{ scryfall_id: 'x', finish: 'foil', name: 'Foil Only', set_code: 'sld', collector_number: '1', need: 1, free: 0, buy: 1, unit_usd: null, floor_usd: 2, floor_set_code: 'abc', floor_collector_number: '2', floor_scryfall_id: 'y', floor_finish: 'nonfoil' }],
+  } }));
+  await page.goto(`/market?subject=deck&deck=${deck.slug}`);
+  const row = page.getByRole('table', { name: 'Three ways to get this deck' }).getByRole('row', { name: /Buy every card/ });
+  await expect(row).toContainText('$3.00+');
+  await expect(row).toContainText('$5.00lowest');
+  await expect(page.getByText(/1 card without a price at the deck’s printing/)).toBeVisible();
+});

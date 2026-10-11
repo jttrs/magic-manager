@@ -37,8 +37,9 @@ class ProductValueOut(BaseModel):
     market_source: str | None = None
     contents_value: float | None = Field(None, description="What's inside: fixed cards + booster EV.")
     exact_singles: float | None = Field(None, description="Σ the product's exact card printings.")
-    floor_singles: float | None = Field(None, description="Σ the cheapest printing of each card anywhere.")
+    floor_singles: float | None = Field(None, description="Σ the cheapest printing of each card anywhere (+ booster EV).")
     booster_only: bool = False
+    booster_ev: float | None = Field(None, description="Random-booster EV included in exact/floor singles (None = no boosters inside).")
     coverage: float | None = None
     unpriced_cards: int = Field(0, description="Fixed cards with no price at their exact printing (contents value undercounts).")
     total_cards: int = 0
@@ -70,7 +71,7 @@ class CardPriceOut(BaseModel):
     is_chase: bool
     price_usd: float | None
     price_usd_foil: float | None
-    floor_usd: float | None = Field(None, description="Cheapest nonfoil printing of this card anywhere.")
+    floor_usd: float | None = Field(None, description="Cheapest nonfoil printing of this card among the sets synced locally.")
     floor_set_code: str | None = None
     floor_collector_number: str | None = None
     foil_gap_status: Literal["ok", "fancy", "foil_only", "nonfoil_only", "unpriced"] = Field(
@@ -100,6 +101,8 @@ class DeckLineOut(BaseModel):
     floor_set_code: str | None = None
     floor_collector_number: str | None = None
     floor_scryfall_id: str = Field(description="The cheapest printing (this one when unpriced elsewhere).")
+    floor_finish: Literal["nonfoil", "foil"] = Field(
+        "nonfoil", description="The floor printing's finish: nonfoil when a cheaper nonfoil printing exists, else this line's finish.")
     bonus: bool = Field(False, description="A Secret Lair drop's bonus card (shipped with the drop, not in its decklist).")
 
 
@@ -109,10 +112,11 @@ class DeckCostOut(BaseModel):
     sealed: float | None
     scratch: float | None = Field(None, description="Every card new, exact printings.")
     with_collection: float | None = Field(None, description="Your free cards first, buy the rest (exact).")
-    scratch_floor: float
-    with_collection_floor: float
+    scratch_floor: float | None = Field(None, description="Every card new, cheapest printings (None when no card has a price).")
+    with_collection_floor: float | None = Field(None, description="Your free cards first, cheapest printings.")
     coverage: float
-    unpriced: int
+    unpriced: int = Field(description="Cards with no price at their exact printing (the exact totals undercount).")
+    floor_unpriced: int = Field(0, description="Cards with no price at any printing (the cheapest-printing totals undercount).")
     total_need: int
     lines: list[DeckLineOut]
     live: bool = Field(False, description="Floors checked across every set on Scryfall (else local prices).")
@@ -152,7 +156,8 @@ def family_products(code: str) -> FamilyProductsOut:
 
 
 def value_product(set_code: str, name: str) -> ProductValueOut:
-    return ProductValueOut(**market.value_products([(set_code, name)])[0])
+    """Raises ``LookupError`` (unknown product) or the price source's error."""
+    return ProductValueOut(**market.value_products([(set_code, name)], strict=True)[0])
 
 
 def product_tree(set_code: str, name: str) -> TreeNodeOut:

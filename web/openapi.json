@@ -4550,7 +4550,7 @@
               }
             ],
             "title": "Floor Usd",
-            "description": "Cheapest nonfoil printing of this card anywhere."
+            "description": "Cheapest nonfoil printing of this card among the sets synced locally."
           },
           "floor_set_code": {
             "anyOf": [
@@ -7174,12 +7174,28 @@
             "description": "Your free cards first, buy the rest (exact)."
           },
           "scratch_floor": {
-            "type": "number",
-            "title": "Scratch Floor"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scratch Floor",
+            "description": "Every card new, cheapest printings (None when no card has a price)."
           },
           "with_collection_floor": {
-            "type": "number",
-            "title": "With Collection Floor"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "With Collection Floor",
+            "description": "Your free cards first, cheapest printings."
           },
           "coverage": {
             "type": "number",
@@ -7187,7 +7203,14 @@
           },
           "unpriced": {
             "type": "integer",
-            "title": "Unpriced"
+            "title": "Unpriced",
+            "description": "Cards with no price at their exact printing (the exact totals undercount)."
+          },
+          "floor_unpriced": {
+            "type": "integer",
+            "title": "Floor Unpriced",
+            "description": "Cards with no price at any printing (the cheapest-printing totals undercount).",
+            "default": 0
           },
           "total_need": {
             "type": "integer",
@@ -7223,8 +7246,6 @@
         "required": [
           "slug",
           "sealed",
-          "scratch_floor",
-          "with_collection_floor",
           "coverage",
           "unpriced",
           "total_need",
@@ -7376,6 +7397,16 @@
             "type": "string",
             "title": "Floor Scryfall Id",
             "description": "The cheapest printing (this one when unpriced elsewhere)."
+          },
+          "floor_finish": {
+            "type": "string",
+            "enum": [
+              "nonfoil",
+              "foil"
+            ],
+            "title": "Floor Finish",
+            "description": "The floor printing's finish: nonfoil when a cheaper nonfoil printing exists, else this line's finish.",
+            "default": "nonfoil"
           },
           "bonus": {
             "type": "boolean",
@@ -11707,12 +11738,24 @@
               }
             ],
             "title": "Floor Singles",
-            "description": "\u03a3 the cheapest printing of each card anywhere."
+            "description": "\u03a3 the cheapest printing of each card anywhere (+ booster EV)."
           },
           "booster_only": {
             "type": "boolean",
             "title": "Booster Only",
             "default": false
+          },
+          "booster_ev": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Booster Ev",
+            "description": "Random-booster EV included in exact/floor singles (None = no boosters inside)."
           },
           "coverage": {
             "anyOf": [
