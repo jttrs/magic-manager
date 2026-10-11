@@ -168,3 +168,16 @@ def test_check_reports_legality_and_bracket_floor(cards, monkeypatch):
     assert r["format"] == "commander"
     assert r["legality"]["legal"] is False                                 # 2 of 100 cards
     assert r["bracket"]["game_changers"] == ["Beta"] and r["bracket"]["suggested_bracket"] >= 3
+
+
+def test_backfill_built_state_keeps_the_pledged_precon_copy_built(cards):
+    inventory.inventory_add(A, "nonfoil", 1)
+    decks.deck_create("precon", "Precon", source_precon_file_name="X_TST")       # lowest id, nothing pledged
+    decks.deck_create("precon-2", "Precon", source_precon_file_name="X_TST")     # really assembled
+    decks.deck_add_card("precon-2", A, "main", "nonfoil", 1)
+    decks.deck_assign_batch("precon-2", [(A, "nonfoil", 1)])
+    with db.connect() as conn:
+        first = conn.execute("SELECT deck_id FROM decks WHERE slug = 'precon'").fetchone()[0]
+    assert decks.built_state_correction_ids() == {first}
+    assert decks.backfill_built_state() == {"corrected": 0, "precon_extras": 1}
+    assert (_state("precon"), _state("precon-2")) == ("deconstructed", "built")

@@ -73,8 +73,11 @@ OWNERSHIP: tuple[tuple[str, tuple[str, ...] | None], ...] = (
 )
 
 
-# Columns a registered backfill is ALLOWED to change (verified by their own check
-# below instead of byte-equality). decks.precon_state is derived from pledges.
+# Columns a registered backfill is ALLOWED to change. They are left out of the
+# byte-equality hash and verified EXACTLY by their own check instead:
+# decks.precon_state may only go built → deconstructed, and only on the decks
+# decks.built_state_correction_ids() predicted BEFORE the upgrade (see
+# _built_state_problems); every other deck's state must be unchanged.
 CORRECTED: dict[str, frozenset[str]] = {"decks": frozenset({"precon_state"})}
 
 
@@ -95,6 +98,37 @@ def _fingerprint(conn: sqlite3.Connection, cols_by_table: dict[str, list[str]] |
     return out
 
 
+def _deck_states(conn: sqlite3.Connection) -> dict[int, str]:
+    if "precon_state" not in _columns(conn, "decks"):
+        return {}
+    return dict(conn.execute("SELECT deck_id, precon_state FROM decks"))
+
+
+def _pledged_deconstructed(conn: sqlite3.Connection) -> list[int]:
+    return [r[0] for r in conn.execute(
+        "SELECT d.deck_id FROM decks d WHERE d.precon_state = 'deconstructed' "
+        "AND EXISTS (SELECT 1 FROM deck_assignments a WHERE a.deck_id = d.deck_id)")]
+
+
+def _built_state_problems(before: dict[int, str], allowed: set[int], after: dict[int, str],
+                          pledged_deconstructed: list[int], still_off: int) -> list[str]:
+    """Exact precon_state proof: every changed deck went built → deconstructed AND
+    was predicted by the backfill; no deconstructed deck holds pledges; and the
+    'built follows pledges' rule now holds (``still_off`` = rows the backfill
+    would still correct). Empty list = consistent."""
+    out = []
+    for deck_id in sorted(before.keys() | after.keys()):
+        old, new = before.get(deck_id), after.get(deck_id)
+        if old == new or old is None or new is None:
+            continue  # added / removed decks are caught by the decks row count
+        if not (old == "built" and new == "deconstructed" and deck_id in allowed):
+            out.append(f"deck {deck_id}: {old} → {new} (not an allowed correction)")
+    out += [f"deck {d}: deconstructed but holds pledged cards" for d in pledged_deconstructed]
+    if still_off:
+        out.append(f"{still_off} deck(s) still violate 'built follows pledges'")
+    return out
+
+
 def _step(label: str, fn) -> None:
     t = time.time()
     print(f"  · {label} …", flush=True)
@@ -104,8 +138,11 @@ def _step(label: str, fn) -> None:
 
 def run(path: Path) -> int:
     os.environ["MAGIC_MANAGER_DB"] = str(path)
+    from magic_manager import decks
     raw = sqlite3.connect(path)
     before = _fingerprint(raw)
+    states_before = _deck_states(raw)
+    allowed = decks.built_state_correction_ids(conn=raw) if states_before else None
     raw.close()
     print(f"before: {', '.join(f'{t}={n}' for t, (n, _, _) in before.items())}")
 
@@ -113,7 +150,9 @@ def run(path: Path) -> int:
     with db.connect() as conn:  # applies pending migrations (V27–V31), snapshotting first
         version = conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] if _columns(conn, "schema_version") else "?"
     print(f"  · schema at V{version}")
-    from magic_manager import decks, scryfall_art, scryfall_tags, sets
+    if allowed is None:  # pre-V11 DB: predict after the migrations, before any backfill
+        allowed = decks.built_state_correction_ids()
+    from magic_manager import scryfall_art, scryfall_tags, sets
     _step("V27 backfill release dates", lambda: f"{sets.backfill_released_at()} card rows filled")
     _step("V28 + V30 sync Scryfall oracle + art tags", lambda: scryfall_tags.sync_kinds())
     # Classification hits MTGJSON per precon (~3.5 min); skip when every precon row is already classified.
@@ -130,13 +169,10 @@ def run(path: Path) -> int:
     drift = ingest.reconcile_inventory_ledger(raw)
     kinds = raw.execute("SELECT kind, COUNT(*) FROM decks GROUP BY kind").fetchall() if "kind" in _columns(raw, "decks") else []
     price_rows = raw.execute("SELECT COUNT(*) FROM earmark_prices").fetchone()[0] if _columns(raw, "earmark_prices") else None
-    # CORRECTED columns: precon_state may change, but only toward the rule
-    # "a non-precon deck is built iff something is pledged to it".
-    unpledged_built = raw.execute(
-        "SELECT COUNT(*) FROM decks d WHERE d.precon_state = 'built' AND d.source_precon_file_name IS NULL "
-        "AND NOT EXISTS (SELECT 1 FROM deck_assignments a WHERE a.deck_id = d.deck_id)").fetchone()[0]
-    from magic_manager import decks as _decks
-    unpledged_built += _decks.extra_built_precon_count(conn=raw)
+    built_problems = _built_state_problems(
+        states_before, allowed, _deck_states(raw), _pledged_deconstructed(raw),
+        decks.unpledged_built_count(conn=raw) + decks.extra_built_precon_count(conn=raw))
+    changed_states = sum(1 for d, s in _deck_states(raw).items() if states_before.get(d, s) != s)
     raw.close()
 
     bad = [t for t in before if before[t][:2] != after.get(t, (None, None))[:2]]
@@ -144,11 +180,14 @@ def run(path: Path) -> int:
     for t, (n, h, _) in before.items():
         print(f"  {'✓' if t not in bad else '✗'} {t}: {n} rows {'unchanged' if t not in bad else f'CHANGED → {after[t][0]} rows'}")
     print(f"  {'✓' if not drift else '✗'} ledger reconciles (inventory == SUM(delta)): {len(drift)} drifting pairs")
-    print(f"  {'✓' if not unpledged_built else '✗'} 'built' is consistent (no unpledged imports; one built copy per precon unless pledged): {unpledged_built} off")
+    print(f"  {'✓' if not built_problems else '✗'} 'built' follows pledges: {changed_states} deck(s) changed state, "
+          f"{len(allowed)} predicted built → not built; {len(built_problems)} problem(s)")
+    for p in built_problems[:20]:
+        print(f"      ✗ {p}")
     print(f"  decks by kind: {dict(kinds)}")
     if price_rows is not None:
         print(f"  earmark price history: {price_rows} rows (V32 seeds one per priced earmark link)")
-    return 1 if bad or drift or unpledged_built else 0
+    return 1 if bad or drift or built_problems else 0
 
 
 def main(argv: list[str] | None = None) -> int:

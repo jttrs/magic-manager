@@ -727,6 +727,15 @@ def extra_built_precon_count(*, conn=None) -> int:
         return conn.execute(f"SELECT COUNT(*) {_EXTRA_BUILT_PRECON_SQL}").fetchone()[0]
 
 
+def built_state_correction_ids(*, conn=None) -> set[int]:
+    """Deck ids ``backfill_built_state`` would flip built → deconstructed
+    (unpledged imports + extra unpledged built precon copies). The upgrade
+    proof predicts its allowed changes from this, before the backfill runs."""
+    with db.transaction(conn) as conn:
+        return {r[0] for sql in (_UNPLEDGED_BUILT_SQL, _EXTRA_BUILT_PRECON_SQL)
+                for r in conn.execute(f"SELECT d.deck_id {sql}")}
+
+
 def backfill_built_state(*, conn=None) -> dict:
     """One-off, idempotent: 'built' means assembled.
     * Imported / hand-built decks with no pledged cards → not built (imports
