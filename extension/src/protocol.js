@@ -4,13 +4,34 @@
 import { STORES } from './stores.js';
 
 export const CHANNEL = 'magic-manager/companion';
-export const KINDS = ['cart', 'tabs', 'moxfield'];
+export const KINDS = ['cart', 'tabs', 'moxfield', 'order_list', 'orders'];
 export const APPROVAL_TTL_MS = 5 * 60 * 1000;
 export const MAX_PAYLOAD_BYTES = 2_000_000;
 
 export const MANAPOOL_CART_URL = 'https://manapool.com/cart';
 export const MANAPOOL_ORIGINS = ['https://manapool.com/*'];
 export const MOXFIELD_ORIGINS = ['https://moxfield.com/*', 'https://*.moxfield.com/*'];
+// Order history (purchases). Mana Pool needs no extra permission (install-time);
+// TCGplayer + Card Kingdom are the optional "Order history" feature.
+export const TCGPLAYER_ORDER_ORIGINS = ['https://store.tcgplayer.com/*'];
+export const CARDKINGDOM_ORDER_ORIGINS = ['https://www.cardkingdom.com/*'];
+export const ORDER_ORIGINS = [...TCGPLAYER_ORDER_ORIGINS, ...CARDKINGDOM_ORDER_ORIGINS];
+export const ORDER_STORES = {
+  manapool: {
+    name: 'Mana Pool', origins: MANAPOOL_ORIGINS, list: 'https://manapool.com/settings/orders',
+    reader: 'src/readers/manapool-orders.js', origin: 'https://manapool.com',
+  },
+  tcgplayer: {
+    name: 'TCGplayer', origins: TCGPLAYER_ORDER_ORIGINS, list: 'https://store.tcgplayer.com/myaccount/orderhistory',
+    reader: 'src/readers/tcgplayer-orders.js', origin: 'https://store.tcgplayer.com',
+  },
+  cardkingdom: {
+    name: 'Card Kingdom', origins: CARDKINGDOM_ORDER_ORIGINS, list: 'https://www.cardkingdom.com/myaccount/order_history',
+    reader: 'src/readers/cardkingdom-orders.js', origin: 'https://www.cardkingdom.com',
+  },
+};
+export const MAX_ORDER_PAGES = 30;
+export const MAX_ORDERS_PER_READ = 100;
 export const MOXFIELD_DECK = /^https:\/\/(?:www\.)?moxfield\.com\/decks\/([A-Za-z0-9_-]{4,64})(?:[/?#]|$)/;
 
 /** Chrome match patterns for every Deals store (bare host + subdomains). */
@@ -54,6 +75,16 @@ export function summarize(kind, data) {
   if (kind === 'moxfield') {
     const n = Object.values(data.deck?.boards || {}).reduce((t, b) => t + Object.values(b.cards || {}).reduce((s, c) => s + (c.quantity || 0), 0), 0);
     return `${data.deck?.name || 'Deck'} · ${n} cards`;
+  }
+  if (kind === 'order_list') {
+    const n = (data.orders || []).length;
+    return `${n} ${ORDER_STORES[data.store]?.name || ''} orders`.replace('  ', ' ');
+  }
+  if (kind === 'orders') {
+    const orders = data.orders || [];
+    const lines = orders.reduce((t, o) => t + (o.lines || []).length, 0);
+    const paid = orders.reduce((t, o) => t + (o.lines || []).reduce((s, l) => s + (l.price || 0) * (l.quantity || 0), 0), 0);
+    return `${orders.length} ${ORDER_STORES[data.store]?.name || ''} orders · ${lines} lines · $${paid.toFixed(2)} in items`;
   }
   return '';
 }

@@ -75,6 +75,13 @@ sequenceDiagram
     (added 2026-10-10 so marketplaces count only the store's own new offers). The store-page fixture
     plants a name, an address and a CSRF token — and a long personal line right after a "Condition"
     label — and the test asserts none are read.
+  - order history (Mana Pool, TCGplayer, Card Kingdom): per order its number, date, and the
+    store's subtotal / shipping / tax / fees / store credit / total; per line the item name, set
+    name, printing (Scryfall id or TCGplayer product id, set code + number), finish, condition,
+    quantity and unit price. Never the shipping/billing name or address, payment card, tracking,
+    sellers, e-mail, the page's request token or Card Kingdom's embedded per-order JSON (payment
+    data) — the readers read table cells only and the fixtures plant those fields to assert they're
+    dropped. The store page links the companion follows stay in the worker; they aren't sent.
   - Moxfield: deck name, author user name, and per card: printing, quantity, finish and board.
     Profile, likes, prices and internal ids are dropped (pinned).
 - **The user sees exactly what is sent**: a table plus the raw JSON, before anything leaves.
@@ -90,6 +97,8 @@ sequenceDiagram
     when stale). Amazon, Walmart and GameStop were added 2026-10-10 (extension 0.1.1): Chrome asks
     for the whole store set, so a user who had Deals on switches it on again once to grant them,
   - **Moxfield**: `moxfield.com` + subdomains.
+  - **Order history**: `store.tcgplayer.com` + `www.cardkingdom.com` (Mana Pool order pages are on
+    the install-time `manapool.com`).
   No `<all_urls>`, `tabs`, `cookies`, `webRequest`, `history`, `debugger`, `nativeMessaging`
   (all asserted absent).
 - **No remote code**: no `eval`/`new Function`/`importScripts`/`innerHTML`, no remote URLs beyond the
@@ -109,7 +118,10 @@ sequenceDiagram
   `extension/errors.json`), under the user's analytics consent. Never any cart, tab or deck content.
 - Storage: the paired origin (`storage.local`), plus the one pending request in `storage.session`
   (memory only, not readable by content scripts, cleared on decision).
-- Tabs the companion opens itself (a cart or deck tab, in the background) are closed afterwards.
+- Tabs the companion opens itself (a cart, deck or order-history tab, in the background) are closed
+  afterwards. Order reads always open their own tab (never navigate one of yours), follow only the
+  store's own same-origin page links, press only Mana Pool's "Item List" view tab, and never submit
+  a form (TCGplayer's year filter is a form, so you pick the year on the page yourself).
   Your own open tabs are left alone.
 
 ### 5. The bookmarklet fallback

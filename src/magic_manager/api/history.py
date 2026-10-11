@@ -22,7 +22,8 @@ class HistoryEntryOut(BaseModel):
     method: str
     kind: HistoryKind = Field(description="deck = playable product; pool = card pool (land pack, scene box, Secret Lair…); "
                                           "singles = cards added individually; checklist = a bulk checklist ingest (source product not recorded); "
-                                          "unknown = reconstructed bucket with no known source; move = cards pledged to / released from a deck.")
+                                          "unknown = reconstructed bucket with no known source; move = cards pledged to / released from a deck; "
+                                          "purchase = a store order read with the browser companion.")
     title: str
     detail: str | None = None
     dated: Literal["acquired", "identified", "reconstructed"] = Field(
@@ -37,6 +38,8 @@ class HistoryEntryOut(BaseModel):
     product: str | None = Field(None, description="MTGJSON fileName for product entries.")
     set_code: str | None = None
     deck_slug: str | None = Field(None, description="Deck to open: the moved deck, or the playable product's deck row.")
+    purchase_id: int | None = Field(None, description="Purchase entries: the stored store order.")
+    paid_usd: float | None = Field(None, description="Purchase entries: what you paid for the copies it still holds (item prices).")
 
 
 class HistoryOut(BaseModel):

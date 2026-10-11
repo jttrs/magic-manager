@@ -74,7 +74,7 @@ def test_no_remote_code_eval_or_html_injection():
         for bad in ("eval(", "new Function", "importScripts", "innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "setTimeout('", 'setTimeout("'):
             assert bad not in src, f"{p.name}: {bad}"
         for url in re.findall(r"https?://[a-z0-9*$][^\s'\"`)]*", src):
-            assert re.match(r"https://(?:manapool\.com|api2\.moxfield\.com|moxfield\.com|\*\.moxfield\.com|\$\{h\}|\*\.\$\{h\}|www\.)", url) or "localhost" in url, f"{p.name}: unexpected URL {url}"
+            assert re.match(r"https://(?:manapool\.com|store\.tcgplayer\.com|api2\.moxfield\.com|moxfield\.com|\*\.moxfield\.com|\$\{h\}|\*\.\$\{h\}|www\.)", url) or "localhost" in url, f"{p.name}: unexpected URL {url}"
     for html in EXT.rglob("*.html"):
         src = html.read_text()
         assert not re.search(r"<script(?![^>]*\bsrc=)", src), f"{html.name}: inline script"

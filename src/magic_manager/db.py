@@ -1053,6 +1053,95 @@ CREATE TABLE IF NOT EXISTS earmark_targets (
 );
 """
 
+# V34: purchases — store orders read by the browser companion (Mana Pool, TCGplayer,
+# Card Kingdom), with what you paid. Two parts, in this order:
+#   1. widen ingest_events.method with 'purchase' — the same copy-rebuild as V26
+#      (FK-off migration: every column copied verbatim, ingest_id preserved, the
+#      three indexes recreated). One 'purchase' event per applied order, dated at
+#      the order date: adds are +deltas, matches to copies you already owned are
+#      net-zero re-attribution (ingest.reattribute, the seam trueup uses).
+#   2. the purchase tables (created AFTER the rebuild so their FK targets the
+#      rebuilt ingest_events). `purchases` is one row per store order (deduped by
+#      store + order id); `purchase_lines` one row per order line with the unit
+#      price paid and how many copies were matched to owned copies / added new.
+#      scryfall_id carries no FK (cards is a rebuildable cache; printings are
+#      upserted lazily) — same as inventory_events. Both tables are PRECIOUS.
+SCHEMA_V34 = """
+CREATE TABLE ingest_events__new (
+    ingest_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    at            TEXT NOT NULL,
+    method        TEXT NOT NULL CHECK (method IN (
+                    'checklist','precon','intake','adhoc','import-block',
+                    'deck-assign','deck-unassign','migration-backfill',
+                    'unattributed-backfill','collection-import','collection-export',
+                    'purchase')),
+    label         TEXT,
+    source_path   TEXT,
+    archived_path TEXT,
+    source_sha256 TEXT,
+    mode          TEXT,
+    rows_added    INTEGER NOT NULL DEFAULT 0,
+    rows_updated  INTEGER NOT NULL DEFAULT 0,
+    rows_zeroed   INTEGER NOT NULL DEFAULT 0,
+    status        TEXT NOT NULL DEFAULT 'success'
+                    CHECK (status IN ('success','failed','backfill')),
+    error         TEXT,
+    notes         TEXT
+);
+
+INSERT INTO ingest_events__new
+    (ingest_id, at, method, label, source_path, archived_path, source_sha256,
+     mode, rows_added, rows_updated, rows_zeroed, status, error, notes)
+SELECT
+    ingest_id, at, method, label, source_path, archived_path, source_sha256,
+    mode, rows_added, rows_updated, rows_zeroed, status, error, notes
+FROM ingest_events;
+
+DROP TABLE ingest_events;
+ALTER TABLE ingest_events__new RENAME TO ingest_events;
+
+CREATE INDEX IF NOT EXISTS ingest_events_method_idx ON ingest_events (method);
+CREATE INDEX IF NOT EXISTS ingest_events_at_idx     ON ingest_events (at);
+CREATE INDEX IF NOT EXISTS ingest_events_sha_idx    ON ingest_events (source_sha256);
+
+CREATE TABLE IF NOT EXISTS purchases (
+    purchase_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    store           TEXT NOT NULL CHECK (store IN ('manapool','tcgplayer','cardkingdom')),
+    store_order_id  TEXT NOT NULL,
+    ordered_at      TEXT NOT NULL,
+    currency        TEXT NOT NULL DEFAULT 'USD',
+    subtotal_cents  INTEGER,
+    shipping_cents  INTEGER,
+    tax_cents       INTEGER,
+    fees_cents      INTEGER,
+    credit_cents    INTEGER,
+    total_cents     INTEGER,
+    read_at         TEXT NOT NULL,
+    ingest_id       INTEGER REFERENCES ingest_events (ingest_id),
+    UNIQUE (store, store_order_id)
+);
+CREATE INDEX IF NOT EXISTS purchases_ingest_idx ON purchases (ingest_id);
+
+CREATE TABLE IF NOT EXISTS purchase_lines (
+    line_id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    purchase_id      INTEGER NOT NULL REFERENCES purchases (purchase_id) ON DELETE CASCADE,
+    line_no          INTEGER NOT NULL,
+    kind             TEXT NOT NULL DEFAULT 'single' CHECK (kind IN ('single','sealed','other')),
+    name             TEXT NOT NULL,
+    set_name         TEXT,
+    condition        TEXT,
+    finish           TEXT NOT NULL CHECK (finish IN ('nonfoil','foil')),
+    scryfall_id      TEXT,
+    quantity         INTEGER NOT NULL CHECK (quantity > 0),
+    unit_price_cents INTEGER,
+    matched          INTEGER NOT NULL DEFAULT 0 CHECK (matched >= 0),
+    added            INTEGER NOT NULL DEFAULT 0 CHECK (added >= 0),
+    CHECK (matched + added <= quantity),
+    UNIQUE (purchase_id, line_no)
+);
+CREATE INDEX IF NOT EXISTS purchase_lines_card_idx ON purchase_lines (scryfall_id, finish);
+"""
+
 # ---------- migration-authoring convention ----------
 #
 # Always-safe ops in a migration: CREATE TABLE, ALTER TABLE ADD COLUMN,
@@ -1083,6 +1172,9 @@ CREATE TABLE IF NOT EXISTS earmark_targets (
 #                         targets (V12, V33) — typed in by the user
 #   - earmark_prices    (V32) price history of watched links — past reads can't
 #                         be re-fetched
+#   - purchases / purchase_lines   store orders + price paid (V34) — read from
+#                         the user's own order history; the price paid lives
+#                         nowhere else
 #   - precons / precon_cards    (when V2 ships them)
 #
 # Re-derivable tables (recovery = re-run a sync):
@@ -1147,6 +1239,7 @@ MIGRATIONS: list[str] = [
     SCHEMA_V31,
     SCHEMA_V32,
     SCHEMA_V33,
+    SCHEMA_V34,
 ]
 CURRENT_VERSION = len(MIGRATIONS)
 
@@ -1161,7 +1254,7 @@ CURRENT_VERSION = len(MIGRATIONS)
 # Scoping to the child(ren) also avoids a DB-wide check flagging unrelated
 # PRE-EXISTING dangling FKs (foreign_keys=ON only enforces NEW writes, so a
 # legacy orphan can sit elsewhere) and aborting an otherwise-clean upgrade.
-_FK_OFF_MIGRATIONS: dict[int, tuple[str, ...]] = {26: ("inventory_events",)}
+_FK_OFF_MIGRATIONS: dict[int, tuple[str, ...]] = {26: ("inventory_events",), 34: ("inventory_events",)}
 
 
 @contextmanager

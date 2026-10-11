@@ -39,12 +39,12 @@ class FamilySummaryOut(BaseModel):
     sets: list[SetRefOut] = Field(default_factory=list, description="Member sets with printings, oldest first.")
 
 
-SourceKind = Literal["singles", "unknown", "deck", "pool"]
+SourceKind = Literal["singles", "unknown", "deck", "pool", "purchase"]
 
 
 class SourceOut(BaseModel):
-    key: str = Field(description="'singles' | 'unknown' | 'product:<MTGJSON fileName>'")
-    kind: SourceKind = Field(description="deck = playable precon; pool = card pool (land pack, scene box, most Secret Lair drops); singles = bought/added individually; unknown = provenance not reconstructed.")
+    key: str = Field(description="'singles' | 'unknown' | 'product:<MTGJSON fileName>' | 'purchase:<store>:<order id>'")
+    kind: SourceKind = Field(description="deck = playable precon; pool = card pool (land pack, scene box, most Secret Lair drops); singles = bought/added individually; purchase = a store order you read with the companion; unknown = provenance not reconstructed.")
     label: str
     set_code: str | None = None
     printings: int = Field(0, description="Owned printings in this view acquired from this source.")

@@ -7,11 +7,17 @@
 import { z } from 'zod';
 
 export const CHANNEL = 'magic-manager/companion';
-export type CompanionKind = 'cart' | 'tabs' | 'moxfield';
+export type CompanionKind = 'cart' | 'tabs' | 'moxfield' | 'order_list' | 'orders';
+export type OrderStore = 'manapool' | 'tcgplayer' | 'cardkingdom';
+export type RequestParams = { url?: string; store?: OrderStore; ids?: string[] };
 
 const helloSchema = z.object({
   version: z.string().max(20),
-  features: z.object({ cart: z.boolean(), deals: z.boolean(), moxfield: z.boolean() }),
+  features: z.object({
+    cart: z.boolean(), deals: z.boolean(), moxfield: z.boolean(),
+    // Order history (companion ≥ 0.2.0); absent on older installs.
+    orders_tcgplayer: z.boolean().optional(), orders_cardkingdom: z.boolean().optional(),
+  }),
 });
 export type CompanionHello = z.infer<typeof helloSchema>;
 
@@ -54,7 +60,47 @@ const moxDataSchema = z.object({
   }),
 });
 
-const SCHEMAS = { cart: cartDataSchema, tabs: tabsDataSchema, moxfield: moxDataSchema } as const;
+// Order history. The readers' shapes (extension/src/readers/*-orders.js); the
+// server re-validates them with strict models (api/purchases.py).
+const orderStore = z.enum(['manapool', 'tcgplayer', 'cardkingdom']);
+const orderId = z.string().regex(/^[A-Za-z0-9-]{1,64}$/);
+const orderListSchema = z.object({
+  store: orderStore,
+  range: z.string().max(40).nullable().optional(),
+  pages: z.number().int().min(1).max(100).optional(),
+  orders: z.array(z.object({ order_id: orderId, ordered_at: z.string().max(32), total: z.number().nullable(), lines: z.number().int().nullable() })).max(5000),
+  warnings: z.array(warning).max(2000),
+});
+const orderLine = z.object({
+  kind: z.enum(['single', 'sealed', 'other']),
+  name: z.string().max(300).nullable(),
+  set_name: z.string().max(200).nullable().optional(),
+  set_code: z.string().max(12).nullable().optional(),
+  collector_number: z.string().max(16).nullable().optional(),
+  scryfall_id: z.string().regex(/^[0-9a-f-]{36}$/).nullable().optional(),
+  tcgplayer_product_id: z.number().int().positive().nullable().optional(),
+  finish: z.enum(['nonfoil', 'foil', 'etched']).optional(),
+  condition: z.string().max(24).nullable().optional(),
+  rarity: z.string().max(4).nullable().optional(),
+  treatments: z.array(z.string().max(40)).max(10).optional(),
+  detail: z.string().max(120).nullable().optional(),
+  quantity: z.number().int().min(1).max(9999),
+  price: z.number().min(0).nullable(),
+});
+const money = z.number().min(0).nullable().optional();
+const ordersSchema = z.object({
+  store: orderStore,
+  orders: z.array(z.object({
+    order_id: orderId, ordered_at: z.string().max(32), ordered_on: z.string().max(10).nullable().optional(),
+    lines: z.array(orderLine).max(2000),
+    subtotal: money, shipping: money, tax: money, fees: money, credit: money, total: money,
+  })).max(100),
+  warnings: z.array(warning).max(2000),
+});
+export type OrderListData = z.infer<typeof orderListSchema>;
+export type OrdersData = z.infer<typeof ordersSchema>;
+
+const SCHEMAS = { cart: cartDataSchema, tabs: tabsDataSchema, moxfield: moxDataSchema, order_list: orderListSchema, orders: ordersSchema } as const;
 type DataOf<K extends CompanionKind> = z.infer<(typeof SCHEMAS)[K]>;
 
 export type ErrorCatalog = Record<string, { message: string; fix?: string | null }>;
@@ -116,7 +162,7 @@ export type RequestOptions = {
  * Ask the companion to read something; resolves with the validated data once
  * you press Send in its approval window, or rejects with a CompanionError.
  */
-export function request<K extends CompanionKind>(win: Window, kind: K, params: { url?: string } = {}, opts: RequestOptions = {}): Promise<DataOf<K>> {
+export function request<K extends CompanionKind>(win: Window, kind: K, params: RequestParams = {}, opts: RequestOptions = {}): Promise<DataOf<K>> {
   const { catalog = {}, ackTimeoutMs = 45_000, resultTimeoutMs = 5 * 60_000 + 15_000 } = opts;
   const id = newId();
   return new Promise((resolve, reject) => {

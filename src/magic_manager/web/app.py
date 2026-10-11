@@ -25,6 +25,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
 from .. import api, companion as companion_engine, sets as sets_mod, tabs as tabs_engine, undo as undo_engine, cart as cart_engine, deck_edit, edhrec as edhrec_engine, features as features_engine, scryfall
+from .. import purchases as purchases_engine
+from ..api import purchases as purchases_api
 from ..api import companion as companion_api, deals as deals_api, undo as undo_api, cart as cart_api, cards as cards_api, collection as collection_api, explore as explore_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api, market as market_api, trueup as trueup_api, history as history_api, combos as combos_api, art as art_api, jumpstart as jumpstart_api, surf as surf_api
 from .runtime import TERMINAL, JobManager
 from . import analytics_routes, scraper_routes, telemetry
@@ -575,6 +577,49 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             return history_api.event(ingest_id)
         except LookupError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
+
+    # ---------- purchases (store orders read by the companion) ----------
+
+    def _purchases(fn):
+        try:
+            return fn()
+        except features_engine.FeatureDisabled as e:
+            raise HTTPException(403, str(e)) from e
+        except companion_api.CompanionFailure as e:
+            raise _companion_failure(e) from e
+        except LookupError as e:
+            raise HTTPException(404, str(e)) from e
+        except purchases_engine.AlreadyApplied as e:
+            raise HTTPException(409, str(e)) from e
+        except purchases_engine.PurchaseError as e:
+            raise HTTPException(422, str(e)) from e
+
+    @app.get("/api/purchases/stores", response_model=list[purchases_api.StoreOut], tags=["purchases"])
+    def purchase_stores():
+        return _purchases(purchases_api.stores)
+
+    @app.get("/api/purchases", response_model=purchases_api.PurchasesOut, tags=["purchases"])
+    def purchase_list():
+        return _purchases(purchases_api.catalog)
+
+    @app.post("/api/purchases/orders", response_model=purchases_api.SaveOut, tags=["purchases"],
+              dependencies=[write("before saving store orders")])
+    def purchase_save(req: purchases_api.OrdersIn):
+        return _purchases(lambda: purchases_api.save(req))
+
+    @app.get("/api/purchases/{purchase_id}", response_model=purchases_api.ReviewOut, tags=["purchases"])
+    def purchase_review(purchase_id: int):
+        return _purchases(lambda: purchases_api.review(purchase_id))
+
+    @app.post("/api/purchases/{purchase_id}/apply", response_model=purchases_api.ApplyOut, tags=["purchases"],
+              dependencies=[write("before adding an order to your collection")])
+    def purchase_apply(purchase_id: int, req: purchases_api.ApplyIn):
+        return _purchases(lambda: purchases_api.apply(purchase_id, req))
+
+    @app.delete("/api/purchases/{purchase_id}", status_code=204, tags=["purchases"],
+                dependencies=[write("before forgetting an order")])
+    def purchase_forget(purchase_id: int):
+        _purchases(lambda: purchases_api.forget(purchase_id))
 
     # ---------- jumpstart ----------
 

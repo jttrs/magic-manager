@@ -21,3 +21,7 @@ analytics = false
 # reading the cart, store tabs and Moxfield decks in your own browser.
 # Internal while it's in beta.
 companion = false
+# Order history → purchases: read your Mana Pool / TCGplayer / Card Kingdom orders
+# with the browser companion and record what you paid. Internal: not every store
+# path is verified yet (see docs/purchases.md § Verification).
+purchases = false

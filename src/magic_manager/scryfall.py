@@ -126,6 +126,18 @@ def random_card(query: str = "") -> dict | None:
         raise
 
 
+def by_tcgplayer_id(product_id: int) -> dict | None:
+    """GET /cards/tcgplayer/<id> — the printing behind a TCGplayer product id (used
+    to identify lines of a TCGplayer order). ``None`` when Scryfall has no card for
+    it (sealed products, other games)."""
+    try:
+        return _run(["raw", f"/cards/tcgplayer/{int(product_id)}", ""])
+    except ScryfallError as e:
+        if "404" in str(e) or "not_found" in str(e):
+            return None
+        raise
+
+
 def get_set(set_code: str) -> dict:
     """GET /sets/<code>."""
     return _run(["raw", f"/sets/{set_code.lower()}", ""])
