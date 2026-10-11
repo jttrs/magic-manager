@@ -122,7 +122,7 @@ def read_prices(urls: list[str], *, progress=None, fresh: bool = False,
         except storefetch.JsEventsOff as e:
             js_off = str(e)
             row["error"] = js_off
-        except (storepage.Blocked, storefetch.TabGone, LookupError) as e:
+        except (storepage.Blocked, storefetch.TabGone, storefetch.TabUnreadable, LookupError) as e:
             row["error"] = str(e)[:1].upper() + str(e)[1:]
             row["not_counted"] = isinstance(e, storepage.NotCounted)  # a page the recipe skips isn't a failed read
         except Exception as e:  # noqa: BLE001 — one store's surprise never sinks the batch

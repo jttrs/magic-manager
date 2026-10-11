@@ -165,7 +165,8 @@ mode = "rendered"
 product_path = "^/(site|product)/.+"
 # The first $ amount is the price; the second is the ÷4 installment.
 price_pattern = '\$\s?(\d[\d,]*\.\d{2})'
-sold_out_pattern = 'sold out|out of stock|coming soon'
+# Whole-line buy-box wording only: "pickup not available" etc. elsewhere on the page must not flip it.
+sold_out_pattern = '^(?:Sold Out|Coming Soon)$'
 
 [[vendor]]
 key = "target"
@@ -174,7 +175,7 @@ hosts = ["target.com"]
 mode = "rendered"
 product_path = "^/p/.+/-/A-\\d+"
 price_pattern = '\$\s?(\d[\d,]*\.\d{2})'
-sold_out_pattern = 'out of stock|sold out|not available'
+sold_out_pattern = '^(?:Out of stock|Sold out)\b'
 
 [[vendor]]
 key = "ebay"

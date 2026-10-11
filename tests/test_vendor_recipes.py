@@ -15,6 +15,7 @@ from __future__ import annotations
 import gzip
 import json
 import re
+import subprocess
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -277,3 +278,96 @@ def test_read_prices_reports_per_url_errors_and_stops_tab_reads_once_js_is_off(m
     assert rows[1]["error"] == rows[2]["error"] == "Turn on Allow JavaScript from Apple Events"
     assert "https://www.bestbuy.com/product/y/2" not in calls          # skipped after the first JS-off
     assert rows[3]["error"].startswith("The store blocked")
+
+
+# ---------- retro review B: store reads ----------
+
+def test_osascript_times_out_with_a_plain_message(monkeypatch):
+    seen = {}
+
+    def boom(*a, **kw):
+        seen.update(kw)
+        raise subprocess.TimeoutExpired("osascript", kw["timeout"])
+
+    monkeypatch.setattr(storefetch.subprocess, "run", boom)
+    with pytest.raises(storefetch.TabUnreadable, match="Chrome didn’t answer in 30 s"):
+        storefetch._osascript("x")
+    assert seen["timeout"] == 30
+
+
+def test_osascript_failure_is_tab_unreadable_but_js_off_is_kept(monkeypatch):
+    def fake(err):
+        return lambda *a, **kw: subprocess.CompletedProcess(a, 1, "", err)
+
+    monkeypatch.setattr(storefetch.subprocess, "run", fake("execution error: boom"))
+    with pytest.raises(storefetch.TabUnreadable):
+        storefetch._osascript("x")
+    monkeypatch.setattr(storefetch.subprocess, "run", fake("Allow JavaScript from Apple Events is turned off"))
+    with pytest.raises(storefetch.JsEventsOff):
+        storefetch._osascript("x")
+
+
+def test_read_prices_shows_the_tab_unreadable_message(monkeypatch):
+    def fake_read(url, fresh=False, rendered=None):
+        raise storefetch.TabUnreadable("Chrome didn’t answer in 30 s — close any open Chrome dialog and read again")
+
+    monkeypatch.setattr(storefetch, "read", fake_read)
+    monkeypatch.setattr(deals, "_record_store_health", lambda rows: None)
+    rows = deals.read_prices(["https://www.bestbuy.com/product/x/1"], pages={"https://www.bestbuy.com/product/x/1": {}})
+    assert rows[0]["error"].startswith("Chrome didn’t answer")
+
+
+class _Resp:
+    def __init__(self, status, text="body"):
+        self.status_code, self.text = status, text
+
+
+class _Client:
+    def __init__(self, status):
+        self.status, self.calls = status, 0
+
+    def get(self, *a, **kw):
+        self.calls += 1
+        return _Resp(self.status)
+
+
+@pytest.mark.parametrize("status,cached", [(200, True), (404, True), (403, False), (429, False), (401, False), (500, False), (503, False)])
+def test_only_200_and_404_are_cached(monkeypatch, tmp_path, status, cached):
+    monkeypatch.setenv("MM_VENDOR_CACHE", str(tmp_path))
+    monkeypatch.setattr(storefetch, "_pace", lambda host: None)
+    c = _Client(status)
+    storefetch._get("https://x.example/p", client=c)
+    storefetch._get("https://x.example/p", client=c)
+    assert c.calls == (1 if cached else 2)
+
+
+def test_server_errors_say_the_site_is_unavailable():
+    with pytest.raises(storepage.Blocked, match=r"unavailable right now \(HTTP 503\)"):
+        storepage.check_blocked("", 503)
+    storepage.check_blocked("<html></html>", 200)
+    with pytest.raises(storepage.Blocked, match="blocked the request"):
+        storepage.check_blocked("", 429)
+
+
+@pytest.mark.parametrize("key,text", [
+    ("bestbuy", "Box\n$159.99\nAdd to Cart\nPickup not available at Springfield\nShipping: sold out of express"),
+    ("target", "Box\n$59.99\nAdd to cart\nShip it\nPickup not available\nNot available at your store"),
+])
+def test_buy_box_sold_out_patterns_ignore_stray_wording(key, text):
+    listing = vendors.read_listing(vendors.by_key(key), "<html><head><title>x</title></head></html>", text=text)
+    assert listing.available is not False
+
+
+def test_jsonld_first_product_in_document_order_wins():
+    ld = json.dumps([{"@type": "Product", "name": "Main", "offers": {"price": "100"}},
+                     {"@type": "Product", "name": "Related", "offers": {"price": "5"}}])
+    page = f'<html><head><script type="application/ld+json">{ld}</script></head></html>'
+    listing = storepage.read_meta(page)
+    assert (listing.price, listing.title) == (100.0, "Main")
+
+
+def test_meta_content_may_contain_apostrophes():
+    page = '<meta property="og:title" content="Tarkir Collector\'s Booster Box"><meta property="product:price:amount" content="9.99">'
+    assert storepage.read_meta(page).title == "Tarkir Collector's Booster Box"
+    page = '<meta content="Collector\'s Box" property="og:title">'
+    assert storepage._meta(page, "og:title") == "Collector's Box"
