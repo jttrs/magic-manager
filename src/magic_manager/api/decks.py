@@ -72,6 +72,7 @@ class BuildPlanOut(BaseModel):
     need: int
     covered: int = Field(description="Copies of `need` you have free.")
     short: list[SwapLineOut]
+    buildable: bool = Field(description="False when nothing is free and nothing is pledged — a Build would be refused.")
 
 
 class BuildIn(BaseModel):
@@ -171,7 +172,7 @@ class CheckIn(DraftIn):
 
 
 class CheckOut(BaseModel):
-    format: str
+    format: str | None = Field(description="Format checked; None when the deck has no format (legality not checked).")
     legality: LegalityOut
     bracket: BracketOut | None
 
@@ -228,7 +229,7 @@ def import_deck(body: ImportIn) -> ImportOut:
 
 def build_plan(slug: str) -> BuildPlanOut:
     p = deck_edit.build_plan(slug)
-    return BuildPlanOut(target=p["target"], need=p["need"], covered=p["covered"], short=_lines(p["short"]))
+    return BuildPlanOut(target=p["target"], need=p["need"], covered=p["covered"], short=_lines(p["short"]), buildable=p["buildable"])
 
 
 def build(slug: str, body: BuildIn) -> ActionOut:

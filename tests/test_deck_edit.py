@@ -181,3 +181,186 @@ def test_backfill_built_state_keeps_the_pledged_precon_copy_built(cards):
     assert decks.built_state_correction_ids() == {first}
     assert decks.backfill_built_state() == {"corrected": 0, "precon_extras": 1}
     assert (_state("precon"), _state("precon-2")) == ("deconstructed", "built")
+
+
+# ---------- retro-review fixes (PR88-2/3/4, PR89-1/8/9, PR88-7/8) ----------
+
+def _vid(slug):
+    with db.connect() as conn:
+        return conn.execute("SELECT current_version_id FROM decks WHERE slug = ?", (slug,)).fetchone()[0]
+
+
+def test_either_slot_splits_across_finishes_and_shares_free():
+    free = {(A, "nonfoil"): 2, (A, "foil"): 1}
+    assert deck_edit._needs([DraftCard(A, "main", "either", 3)], {}, free) == {(A, "nonfoil"): 2, (A, "foil"): 1}
+    # Two 'either' rows of one printing share the free pool (no double count).
+    two = [DraftCard(A, "main", "either", 2), DraftCard(A, "side", "either", 1)]
+    assert deck_edit._needs(two, {}, free) == {(A, "nonfoil"): 2, (A, "foil"): 1}
+    # An exact-finish row later in the list still claims its copies first.
+    mixed = [DraftCard(A, "main", "either", 2), DraftCard(A, "side", "nonfoil", 1)]
+    assert deck_edit._needs(mixed, {}, free) == {(A, "nonfoil"): 2, (A, "foil"): 1}
+    # Excess beyond free lands on nonfoil (short).
+    assert deck_edit._needs([DraftCard(A, "main", "either", 5)], {}, free) == {(A, "nonfoil"): 4, (A, "foil"): 1}
+    # Already-pledged copies are kept before free ones are taken.
+    assert deck_edit._needs([DraftCard(A, "main", "either", 2)], {(A, "foil"): 1}, free) == {(A, "foil"): 1, (A, "nonfoil"): 1}
+
+
+def test_build_either_split_has_no_false_shortfall(cards):
+    inventory.inventory_add(A, "nonfoil", 2)
+    inventory.inventory_add(A, "foil", 1)
+    slug = deck_edit.create_deck("Split")
+    decks.deck_add_card(slug, A, "main", "either", 3)
+    assert deck_edit.build_plan(slug)["short"] == []
+    r = deck_edit.build(slug)
+    assert r["sleeved"] == 3 and _pledged(slug) == {(A, "nonfoil"): 2, (A, "foil"): 1}
+    assert deck_edit.build_target(slug) is None
+
+
+def test_maybeboard_does_not_keep_a_built_deck_incomplete(cards):
+    from magic_manager import deck_view
+
+    inventory.inventory_add(A, "nonfoil", 1)
+    slug = deck_edit.create_deck("Maybe")
+    decks.deck_add_card(slug, A, "main", "nonfoil", 1)
+    decks.deck_add_card(slug, B, "maybe", "nonfoil", 2)
+    deck_edit.build(slug)
+    assert deck_edit.build_target(slug) is None
+    assert deck_edit.build_plan(slug)["target"] is None
+    with pytest.raises(ValueError):
+        deck_edit.build(slug)
+    summary = next(s for s in deck_view._summaries() if s["slug"] == slug)
+    assert summary["pledged_pct"] == 100.0
+
+
+def test_save_keeps_tokens_and_their_pledges(cards, make_card, seed_cards):
+    T = "00000000-0000-0000-0000-00000000000f"
+    seed_cards([make_card(id=T, oracle_id="aaaaaaaa-0000-0000-0000-00000000000f", name="Soldier", collector_number="9")])
+    inventory.inventory_add(A, "nonfoil", 2)
+    inventory.inventory_add(T, "nonfoil", 1)
+    slug = deck_edit.create_deck("Tokens")
+    decks.deck_add_card(slug, A, "main", "nonfoil", 1)
+    decks.deck_add_card(slug, T, "token", "nonfoil", 1)
+    deck_edit.build(slug)
+    # A token pledged by hand (e.g. CLI) must survive a save of the built copy.
+    with db.connect() as conn:
+        did = conn.execute("SELECT deck_id FROM decks WHERE slug = ?", (slug,)).fetchone()[0]
+        conn.execute("INSERT INTO deck_assignments (deck_id, scryfall_id, finish, count, assigned_at) "
+                     "VALUES (?, ?, 'nonfoil', 1, 'x')", (did, T))
+    draft = [DraftCard(A, "main", "nonfoil", 2)]                    # the editor never sends the token board
+    pv = deck_edit.preview(slug, draft)
+    assert [c["scryfall_id"] for c in pv["changes"]] == [A] and pv["swap"]["pull"] == []
+    deck_edit.save(slug, draft, expected_version_id=_vid(slug))
+    assert (T, "token", "nonfoil", 1) in _cards(slug)
+    assert _pledged(slug) == {(A, "nonfoil"): 2, (T, "nonfoil"): 1}
+    # A rename-only save with no token rows is a no-op for the cards.
+    r = deck_edit.save(slug, draft, expected_version_id=_vid(slug), name="Tokens!")
+    assert r["version_number"] is None and r["changes"] == []
+
+
+def test_built_follows_pledges_on_pull_and_empty_build(cards):
+    inventory.inventory_add(A, "nonfoil", 1)
+    slug = deck_edit.create_deck("Emptied")
+    decks.deck_add_card(slug, A, "main", "nonfoil", 1)
+    deck_edit.build(slug)
+    assert _state(slug) == "built"
+    deck_edit.save(slug, [DraftCard(B, "main", "nonfoil", 1)], expected_version_id=_vid(slug))
+    assert _pledged(slug) == {} and _state(slug) == "deconstructed"   # every pledge pulled → not built
+
+    # A Build that can pledge nothing refuses even with allow_shortfall.
+    other = deck_edit.create_deck("Nothing free")
+    decks.deck_add_card(other, C, "main", "nonfoil", 1)
+    with pytest.raises(deck_edit.Shortfall):
+        deck_edit.build(other, allow_shortfall=True)
+    assert _state(other) == "deconstructed"
+
+    # The explicit-rows unassign also flips state when the last copy leaves.
+    inventory.inventory_add(B, "nonfoil", 1)
+    third = deck_edit.create_deck("Third")
+    decks.deck_add_card(third, B, "main", "nonfoil", 1)
+    deck_edit.build(third)
+    decks.deck_unassign_batch(third, [(B, "nonfoil", 1)])
+    assert _state(third) == "deconstructed"
+
+
+def test_check_without_a_format(cards):
+    decks.deck_create("imp", "Imported", precon_state="deconstructed")      # imports record no format
+    r = deck_edit.check("imp", [DraftCard(A, "main", "nonfoil", 1)])
+    assert r["format"] is None and r["bracket"] is None and r["legality"]["legal"] is True
+    assert [v["code"] for v in r["legality"]["violations"]] == ["no_format"]
+    r = deck_edit.check("imp", [DraftCard(A, "commander", "nonfoil", 1), DraftCard(B, "main", "nonfoil", 1)])
+    assert r["format"] == "commander" and r["bracket"] is not None
+
+
+def test_unique_slug_and_set_precon_state(cards):
+    decks.deck_create("brew", "Brew")
+    decks.deck_create("brew-3", "Brew 3")
+    with db.connect() as conn:
+        assert decks.unique_slug(conn, "brew") == "brew-2"
+        assert decks.unique_slug(conn, "fresh") == "fresh"
+    decks.set_precon_state("brew", "deconstructed")
+    assert _state("brew") == "deconstructed"
+    with pytest.raises(ValueError):
+        decks.set_precon_state("brew", "melted")
+    with pytest.raises(LookupError):
+        decks.set_precon_state("nope", "built")
+
+
+def test_check_and_import_routes(cards, make_card, monkeypatch):
+    from fastapi.testclient import TestClient
+    from magic_manager import decksource
+    from magic_manager.web.app import create_app
+
+    client = TestClient(create_app(serve_frontend=False))
+    body = {"cards": [{"scryfall_id": A, "board": "commander", "finish": "nonfoil", "count": 1}]}
+    assert client.post("/api/decks/nope/check", json=body).status_code == 404
+    slug = deck_edit.create_deck("Routed")
+    r = client.post(f"/api/decks/{slug}/check", json=body)
+    assert r.status_code == 200 and r.json()["format"] == "commander" and r.json()["bracket"] is not None
+    decks.deck_create("std", "Std", format="standard", precon_state="deconstructed")
+    r = client.post("/api/decks/std/check", json={"cards": [{"scryfall_id": A, "board": "main", "finish": "nonfoil", "count": 1}]})
+    assert r.status_code == 200 and r.json()["format"] == "standard" and r.json()["bracket"] is None
+    decks.deck_create("nofmt", "No format", precon_state="deconstructed")
+    r = client.post("/api/decks/nofmt/check", json={"cards": [{"scryfall_id": A, "board": "main", "finish": "nonfoil", "count": 1}]})
+    assert r.status_code == 200 and r.json()["format"] is None
+
+    raw = make_card(id=A, oracle_id="aaaaaaaa-0000-0000-0000-00000000000a", name="Alpha", collector_number="1")
+    monkeypatch.setattr(decksource, "_resolve_cards", lambda cs: ({A: raw}, {}, {}, []))
+    deck = {"source": "archidekt", "id": "7", "name": "Via Api", "author": None,
+            "cards": [{"qty": 1, "name": "Alpha", "scryfall_id": A, "board": "main", "finish": "nonfoil"}]}
+    r = client.post("/api/decks/import", json={"deck": deck})
+    assert r.status_code == 200 and r.json() == {"slug": "via-api", "duplicate": False, "summary": "Decklist saved"}
+    r = client.post("/api/decks/import", json={"deck": deck})
+    assert r.status_code == 200 and r.json() == {"slug": "via-api", "duplicate": True, "summary": "Already in your decks"}
+    assert client.post("/api/decks/import", json={"deck": {**deck, "id": "8", "cards": []}}).status_code == 422
+
+
+def test_pledged_pct_counts_only_playable_pledges(cards):
+    from magic_manager import deck_view
+
+    inventory.inventory_add(A, "nonfoil", 1)
+    inventory.inventory_add(B, "nonfoil", 3)
+    slug = deck_edit.create_deck("Short")
+    decks.deck_add_card(slug, A, "main", "nonfoil", 1)
+    decks.deck_add_card(slug, C, "main", "nonfoil", 1)        # never free → the deck stays short
+    decks.deck_add_card(slug, B, "maybe", "nonfoil", 3)
+    decks.deck_assign_batch(slug, [(A, "nonfoil", 1), (B, "nonfoil", 3)])   # compose pledges maybe too
+    summary = next(s for s in deck_view._summaries() if s["slug"] == slug)
+    assert summary["pledged_pct"] == 50.0                       # 1 of 2 playable, maybe pledges ignored
+    assert deck_edit.build_target(slug) == slug
+
+
+def test_build_plan_flags_unbuildable_and_save_swap_stays_built(cards):
+    slug = deck_edit.create_deck("Nothing free")
+    decks.deck_add_card(slug, C, "main", "nonfoil", 2)
+    plan = deck_edit.build_plan(slug)
+    assert plan["buildable"] is False and plan["covered"] == 0
+
+    inventory.inventory_add(A, "nonfoil", 1)
+    inventory.inventory_add(B, "nonfoil", 1)
+    built = deck_edit.create_deck("Swap all")
+    decks.deck_add_card(built, A, "main", "nonfoil", 1)
+    assert deck_edit.build_plan(built)["buildable"] is True
+    deck_edit.build(built)
+    # Every pledge is pulled and a free replacement sleeved in one save → still built.
+    deck_edit.save(built, [DraftCard(B, "main", "nonfoil", 1)], expected_version_id=_vid(built))
+    assert _pledged(built) == {(B, "nonfoil"): 1} and _state(built) == "built"

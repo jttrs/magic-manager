@@ -12,11 +12,13 @@ type Props = {
   onConfirm: () => Promise<void>;
   /** An optional second commit (e.g. "Build with 3 missing"). */
   alternate?: { label: string; onConfirm: () => Promise<void> };
+  /** Confirm can't succeed (the body says why). */
+  confirmDisabled?: boolean;
 };
 
 /** Confirms a physical-collection change (pledges move). The commit is the one
  *  filled amber button; failures stay in the dialog with the engine's message. */
-export function ConfirmDialog({ open, onOpenChange, title, children, confirmLabel, onConfirm, alternate }: Props) {
+export function ConfirmDialog({ open, onOpenChange, title, children, confirmLabel, onConfirm, alternate, confirmDisabled }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const run = (fn: () => Promise<void>) => async () => {
@@ -46,7 +48,7 @@ export function ConfirmDialog({ open, onOpenChange, title, children, confirmLabe
               <Button tone="paper" disabled={busy}>Cancel</Button>
             </AlertDialog.Cancel>
             {alternate && <Button tone="paper" disabled={busy} onClick={run(alternate.onConfirm)}>{alternate.label}</Button>}
-            <Button emphasis="primary" disabled={busy} onClick={run(onConfirm)}>{busy ? 'Working…' : confirmLabel}</Button>
+            <Button emphasis="primary" disabled={busy || confirmDisabled} onClick={run(onConfirm)}>{busy ? 'Working…' : confirmLabel}</Button>
           </div>
         </AlertDialog.Content>
       </AlertDialog.Portal>

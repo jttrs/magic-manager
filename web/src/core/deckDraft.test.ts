@@ -32,7 +32,17 @@ describe('deck draft', () => {
     expect(draftStats(d, 'commander')).toMatchObject({ size: 4, added: 2, removed: 2, dirty: true });
     expect(d.rows.find((r) => r.key === 'Elf|main|nonfoil')?.count).toBe(0);       // removed rows stay (undoable)
     expect(setCount(d, 'Sol|main|either', 0).rows.some((r) => r.key.startsWith('Sol'))).toBe(false); // new rows vanish
-    expect(draftCards(d).map((c) => [c.scryfall_id, c.count])).toEqual([['Cmd', 1], ['Bolt', 1], ['Sol', 2]]);
+    expect(draftCards(d).map((c) => [c.scryfall_id, c.count])).toEqual([['Cmd', 1], ['Bolt', 1], ['Sol', 2], ['Tok', 1]]);
+  });
+
+  it('carries the saved token board unchanged through every edit into the save payload', () => {
+    let d = addCard(saved, pr('Sol'));
+    d = setCount(d, 'Elf|main|nonfoil', 0);
+    d = moveCard(d, 'Bolt|main|nonfoil', 'side');
+    d = setFinish(d, 'Cmd|commander|nonfoil', 'either');
+    expect(d.rows.some((r) => r.board === 'token')).toBe(false);                     // never shown or edited
+    expect(draftCards(d).filter((c) => c.board === 'token')).toEqual([{ scryfall_id: 'Tok', board: 'token', finish: 'nonfoil', count: 1 }]);
+    expect(draftStats(saved, 'commander').dirty).toBe(false);
   });
 
   it('moves boards and switches finish by re-keying (merging into an existing row)', () => {

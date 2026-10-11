@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { Dialog } from 'radix-ui';
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { unwrap } from '../../app/queries';
 import { useJob } from '../../app/useJob';
 import { Button } from '../../components/Button';
@@ -19,7 +19,12 @@ export function ImportDeckDialog({ trigger }: { trigger: ReactNode }) {
   const [url, setUrl] = useState('');
   const [haveCards, setHaveCards] = useState(false);
   const [error, setError] = useState('');
-  const { live, start } = useJob();
+  const { live, start, reset } = useJob();
+  // Read at save time, not a dependency: ticking the box must not re-run the
+  // job effect (which would re-import the last deck).
+  const haveCardsRef = useRef(haveCards);
+  // The job result already imported — never imported twice.
+  const consumed = useRef<unknown>(null);
   const qc = useQueryClient();
   const navigate = useNavigate();
   const browser = useBrowserDeck();
@@ -36,19 +41,20 @@ export function ImportDeckDialog({ trigger }: { trigger: ReactNode }) {
       await qc.invalidateQueries({ queryKey: ['decks'] });
       setOpen(false);
       setUrl('');
-      navigate({ to: '/decks', search: (s) => ({ ...s, deck: r.slug, types: [], add: haveCards || undefined }) });
+      navigate({ to: '/decks', search: (s) => ({ ...s, deck: r.slug, types: [], add: haveCardsRef.current || undefined }) });
     } catch (e) {
       if (!isCancelled()) setError((e as Error).message);
     } finally {
       setSaving(false);
     }
-  }, [haveCards, navigate, qc]);
+  }, [navigate, qc]);
 
   useEffect(() => {
     if (live?.status === 'failed') setError(live.error ?? 'Couldn’t read that deck.');
     if (live?.status !== 'succeeded') return;
     const art = (live.artifacts as { label: string; data: ResolveOut }[] | undefined)?.find((a) => a.label === 'lines');
-    if (!art?.data.deck) return;
+    if (!art?.data.deck || consumed.current === live.artifacts) return;
+    consumed.current = live.artifacts;
     let cancelled = false;
     void save(art.data, () => cancelled);
     return () => { cancelled = true; };
@@ -62,6 +68,7 @@ export function ImportDeckDialog({ trigger }: { trigger: ReactNode }) {
     }
     setError('');
     browser.reset();
+    reset();
     if (browser.handles(url)) {
       try {
         await save(await browser.read(url.trim()));
@@ -75,7 +82,11 @@ export function ImportDeckDialog({ trigger }: { trigger: ReactNode }) {
   };
 
   return (
-    <Dialog.Root open={open} onOpenChange={(o) => !running && setOpen(o)}>
+    <Dialog.Root open={open} onOpenChange={(o) => {
+      if (running) return;
+      if (o) { reset(); setError(''); }
+      setOpen(o);
+    }}>
       <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim backdrop-blur-[1px]" />
@@ -95,7 +106,7 @@ export function ImportDeckDialog({ trigger }: { trigger: ReactNode }) {
               />
             </label>
             <label className="inline-flex cursor-pointer items-start gap-2 text-md">
-              <input type="checkbox" checked={haveCards} onChange={(e) => setHaveCards(e.target.checked)} className="mt-1 accent-[var(--theme-accent)]" />
+              <input type="checkbox" checked={haveCards} onChange={(e) => { haveCardsRef.current = e.target.checked; setHaveCards(e.target.checked); }} className="mt-1 accent-[var(--theme-accent)]" />
               <span>Also add these cards to my collection <span className="block text-sm text-ink-muted">You’ll review the printings before anything is added.</span></span>
             </label>
             <DeckSourceHealth url={url} viaBrowser={browser.handles(url)} settled={live?.status === 'succeeded' || live?.status === 'failed' ? live.status : browser.error ? 'error' : ''} />

@@ -2149,9 +2149,7 @@ def deck_state_cmd(
     norm = "deconstructed" if state in ("decon", "deconstructed") else state
     if norm not in ("built", "deconstructed"):
         typer.echo(f"error: state must be built|decon, got {state!r}", err=True); raise typer.Exit(2)
-    with db.connect() as conn:
-        conn.execute("UPDATE decks SET precon_state = ?, updated_at = ? WHERE slug = ?",
-                     (norm, db._utcnow_iso(), slug))
+    decks_mod.set_precon_state(slug, norm)
     typer.echo(f"{slug}: state set to {norm}")
 
 

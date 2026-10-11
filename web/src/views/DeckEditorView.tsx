@@ -518,7 +518,7 @@ function DeckChecks({ slug, draft }: { slug: string; draft: Draft }) {
       <dd>
         <Popover.Root>
           <Popover.Trigger className="cursor-pointer rounded-sm px-1 text-xl voice-condensed font-bold hover:bg-paper-sunk data-[state=open]:bg-paper-sunk" aria-label="Deck checks">
-            {!r ? <span className="text-ink-muted">…</span> : (
+            {!r ? <span className="text-ink-muted">…</span> : !r.format ? <span className="text-ink-muted">No format</span> : (
               <>
                 <span className={errors.length ? 'text-danger' : 'text-ink'}>{errors.length ? `${errors.length} issue${errors.length > 1 ? 's' : ''}` : 'Legal'}</span>
                 {b?.suggested_bracket != null && <span className="text-ink"> · B{b.suggested_bracket}+</span>}
@@ -530,7 +530,7 @@ function DeckChecks({ slug, draft }: { slug: string; draft: Draft }) {
               {!r ? <p className="text-on-chrome-muted">Checking…</p> : (
                 <>
                   <section className="flex flex-col gap-1">
-                    <h3 className="voice-semi font-medium">{errors.length ? 'Not legal' : 'Legal'} in {formatName(r.format)}</h3>
+                    <h3 className="voice-semi font-medium">{r.format ? `${errors.length ? 'Not legal' : 'Legal'} in ${formatName(r.format)}` : 'Legality not checked'}</h3>
                     {r.legality.violations.length === 0 && <p className="text-on-chrome-muted">No problems found.</p>}
                     <ul className="flex flex-col gap-1">
                       {r.legality.violations.map((v, i) => (

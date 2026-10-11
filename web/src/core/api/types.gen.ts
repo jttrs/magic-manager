@@ -364,6 +364,12 @@ export type BuildPlanOut = {
      * Short
      */
     short: Array<SwapLineOut>;
+    /**
+     * Buildable
+     *
+     * False when nothing is free and nothing is pledged — a Build would be refused.
+     */
+    buildable: boolean;
 };
 
 /**
@@ -941,8 +947,10 @@ export type CheckIn = {
 export type CheckOut = {
     /**
      * Format
+     *
+     * Format checked; None when the deck has no format (legality not checked).
      */
-    format: string;
+    format: string | null;
     legality: LegalityOut;
     bracket: BracketOut | null;
 };
