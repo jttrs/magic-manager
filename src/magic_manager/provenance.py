@@ -15,9 +15,9 @@ net-zero, so balances stay exact). Each event classifies into a *source*:
 * **unknown** — the generic best-effort buckets (``backfill:precon``,
   ``unattributed-backfill``, ``migration-backfill``).
 
-Acquisition is history: a later removal is its own (negative) event, so the
-sources of a printing can sum past what is owned today. Callers show them as
-"acquired from", and only for printings still owned.
+A later removal is its own (negative) event; ``card_sources`` nets it against
+the newest acquisition first (the same rule purchase history uses), so the
+sources of a printing sum to what is owned today.
 """
 from __future__ import annotations
 
@@ -124,30 +124,31 @@ def _products(conn) -> dict[str, tuple[str, str]]:
 
 
 def card_sources(scryfall_ids, *, conn=None) -> dict[str, list[CardSource]]:
-    """Batched: per printing, the copies acquired from each source, per finish
-    (only positive event balances; largest first)."""
+    """Batched: per printing, the copies each source still accounts for, per finish
+    (largest first). Removals are netted newest-first like purchase history
+    (``_held``), so per finish the copies sum to what is owned today and a source
+    whose copies are all gone drops out."""
     ids = list(dict.fromkeys(scryfall_ids))
 
     def _q(c) -> dict[str, list[CardSource]]:
         products = _products(c)
+        held = {k: n for k, n in _held(c, ids).items() if n > 0}
+        meta: dict[int, tuple] = {}
+        iids = list({iid for iid, _, _ in held})
+        for i in range(0, len(iids), 500):
+            part = iids[i:i + 500]
+            for iid, method, label, path in c.execute(
+                f"SELECT ingest_id, method, label, source_path FROM ingest_events "
+                f"WHERE ingest_id IN ({','.join('?' * len(part))})", part,
+            ):
+                meta[iid] = (method, label, path)
         agg: dict[str, dict[tuple[Source, str], int]] = {}
         events: dict[tuple[str, Source, str], set[int]] = {}
-        for i in range(0, len(ids), 500):
-            part = ids[i:i + 500]
-            ph = ",".join("?" * len(part))
-            for sid, fin, method, label, path, q, iid in c.execute(
-                f"""
-                SELECT v.scryfall_id, v.finish, e.method, e.label, e.source_path, SUM(v.delta) AS q, v.ingest_id
-                FROM inventory_events v JOIN ingest_events e ON e.ingest_id = v.ingest_id
-                WHERE v.scryfall_id IN ({ph})
-                GROUP BY v.scryfall_id, v.finish, v.ingest_id
-                HAVING q > 0
-                """, part,
-            ):
-                src = _classify(method, label, path, products)
-                d = agg.setdefault(sid, {})
-                d[(src, fin)] = d.get((src, fin), 0) + q
-                events.setdefault((sid, src, fin), set()).add(iid)
+        for (iid, sid, fin), q in held.items():
+            src = _classify(*meta[iid], products)
+            d = agg.setdefault(sid, {})
+            d[(src, fin)] = d.get((src, fin), 0) + q
+            events.setdefault((sid, src, fin), set()).add(iid)
         return {
             sid: sorted((CardSource(s, f, n, len(events[(sid, s, f)])) for (s, f), n in d.items()),
                         key=lambda cs: (-cs.copies, cs.source.label, cs.finish))

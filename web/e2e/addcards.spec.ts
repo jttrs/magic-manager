@@ -118,3 +118,28 @@ test('precon: search the catalog, add a copy via a job', async ({ page }) => {
   await expect(page.getByText('Added Counter Blitz ×1 · 100 cards · built')).toBeVisible();
   expect(submitted).toEqual({ file_name: 'CounterBlitz_FIC', copies: 1, state: 'deconstructed' });
 });
+
+test('adding cards refreshes the inspector’s Your copies (PR87-2)', async ({ page }) => {
+  let holdings = 0;
+  await page.route('**/api/cards/*/holdings', (r) => {
+    holdings++;
+    return r.fulfill({ json: { scryfall_id: 'x', owned: { nonfoil: holdings }, pledged: {}, free: { nonfoil: holdings }, decks: [], sources: [], other_printings_owned: 0 } });
+  });
+  await page.route('**/api/ingest/search**', (r) => r.fulfill({ json: { query: 'sol', source: 'local', printings: [printing('sol1')] } }));
+  await captureCommit(page);
+  await page.goto(COLLECTION_URL);
+  const inspect = page.getByRole('button', { name: /^Inspect / }).first();
+  await inspect.click();
+  await expect(page.getByRole('dialog').getByRole('region', { name: 'Your copies' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  expect(holdings).toBe(1);
+
+  await page.getByRole('button', { name: 'Add cards' }).click();
+  await page.getByRole('searchbox', { name: 'Card name' }).fill('sol');
+  await page.getByRole('button', { name: /^Add Sol Ring, CMM · 1/ }).click();
+  await page.getByRole('button', { name: 'Add 1 copy' }).click();
+  await expect(page.getByRole('status')).toContainText('Added 1 cop');
+  await page.keyboard.press('Escape');
+  await inspect.click();
+  await expect.poll(() => holdings).toBe(2);              // refetched, not the 30 s cache
+});

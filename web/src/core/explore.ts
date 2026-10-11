@@ -10,6 +10,23 @@ type Section = GuideGroup & { level: 1 | 2; noun?: string };
 /** Role when none is chosen: lead with the commander view when the card can lead. */
 export const defaultRole = (eligible: boolean | undefined): Role => (eligible ? 'commander' : 'card');
 
+/** The role in effect: the chosen one (commander falls back to card when the
+ *  card can't lead), else the default once eligibility is known — `null` while
+ *  it isn't, so the view doesn't show card-role controls that then flip. */
+export function resolveRole(chosen: Role | undefined, canLead: boolean | undefined): Role | null {
+  if (chosen === 'commander' && canLead === false) return 'card';
+  if (chosen) return chosen;
+  return canLead === undefined ? null : defaultRole(canLead);
+}
+
+/** The shared `tags` URL filter means EDHREC list slugs in the commander role and
+ *  played-alongside groups in the card role: keep only values the active role
+ *  offers, so a value left over from the other role never blanks the results. */
+export const roleTags = (tags: readonly string[], offered: readonly string[]): string[] => {
+  const ok = new Set(offered);
+  return tags.filter((t) => ok.has(t));
+};
+
 const fmtLift = (l: number | null | undefined) => (l == null ? null : `${l.toFixed(l >= 10 ? 0 : 2)}× lift`);
 
 /** Local card facts (display printing, cheapest price, owned/free) → the guide view-model. */

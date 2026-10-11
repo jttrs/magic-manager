@@ -125,4 +125,4 @@ def check(req: CartIn) -> CartAuditOut:
         raise cart.CartFormatError("Couldn’t read your cart with your Mana Pool login — check it with `uv run mm secret status`.")
     if not items:
         raise cart.CartFormatError("Your Mana Pool cart is empty.")
-    return CartAuditOut(**cart.audit(items, anchor=req.family))
+    return CartAuditOut(**cart.audit(cart.parse(items), anchor=req.family))

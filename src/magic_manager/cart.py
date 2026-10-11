@@ -36,6 +36,7 @@ and ``api.cart`` (web, behind the ``cart_check`` feature flag).
 from __future__ import annotations
 
 import json
+import math
 import urllib.parse
 from dataclasses import dataclass
 from typing import Callable
@@ -90,7 +91,44 @@ def parse(data) -> list[dict]:
     items = data.get("items") if isinstance(data, dict) else data
     if not isinstance(items, list) or not all(isinstance(i, dict) for i in items):
         raise CartFormatError("That isn't cart data — paste what the bookmarklet copied.")
+    for n, item in enumerate(items, 1):
+        _check_line(n, item)
     return items
+
+
+_TEXT_FIELDS = ("scryfall_id", "card_id", "name", "set_name", "finish_id", "finish",
+                "condition_id", "condition", "language", "kind")
+
+
+def _check_line(n: int, c: dict) -> None:
+    """A pasted line's fields have the types the mapping pass reads, so a bad
+    paste is a ``CartFormatError`` naming the line — never a crash."""
+    def bad(field: str) -> CartFormatError:
+        return CartFormatError(f"Cart line {n} has an unreadable {field} — paste what the bookmarklet copied.")
+
+    def is_num(v) -> bool:
+        return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+
+    for f in _TEXT_FIELDS:
+        if c.get(f) is not None and not isinstance(c[f], str):
+            raise bad(f)
+    for f in ("set", "number"):
+        if c.get(f) is not None and not (isinstance(c[f], str) or (is_num(c[f]) and isinstance(c[f], int))):
+            raise bad(f)
+    q = c.get("quantity")
+    if q is not None:
+        if isinstance(q, str) and q.strip().isdigit():
+            q = int(q)
+        if not (is_num(q) and q == int(q) and q >= 0):
+            raise bad("quantity")
+    for f in ("price", "price_cents"):
+        if c.get(f) is not None and not is_num(c[f]):
+            raise bad(f)
+    for f in ("tcgplayer_product_id", "cardkingdom_product_id"):
+        v = c.get(f)
+        if v is not None and not (isinstance(v, int) and not isinstance(v, bool)
+                                  or isinstance(v, str) and v.strip().isdigit()):
+            raise bad(f)
 
 
 def _is_foil(c: dict) -> bool:
@@ -153,11 +191,13 @@ def _store_ids(cart: list[dict], remote: bool) -> tuple[dict[int, str], dict[int
     return {k: v["id"] for k, v in tcg.items()}, {k: v.scryfall_id for k, v in ck.items()}
 
 
-def map_cart(cart: list[dict], *, remote: bool = True,
+def map_cart(cart: list[dict], *, remote: bool = True, catalog_all: bool = False,
              product_fn: Callable[[str], dict | None] | None = None) -> list[CartLine]:
     """Identify every cart line once (see module doc for the order). The Mana
-    Pool catalog is consulted only for lines nothing local identified, once per
-    uuid, and not at all after it reports missing credentials. Cart order kept."""
+    Pool catalog is consulted only for lines nothing local identified — or, with
+    ``catalog_all`` (the CLI's "MP cheapest" column), for every line carrying a
+    uuid — once per uuid, and not at all after it reports missing credentials.
+    Cart order kept."""
     product_fn = product_fn or single_product
     tcg_ids, ck_ids = _store_ids(cart, remote)
     ids = {c["scryfall_id"] for c in cart if c.get("scryfall_id")} | set(tcg_ids.values()) | set(ck_ids.values())
@@ -175,7 +215,7 @@ def map_cart(cart: list[dict], *, remote: bool = True,
         local = None if kind != "single" else (by_id.get(sid_in) or by_sn.get((str(c.get("set") or "").lower(), str(c.get("number") or ""))))
         prod = None
         uuid = c.get("card_id")
-        if kind == "single" and not local and uuid and configured:
+        if kind == "single" and (catalog_all or not local) and uuid and configured:
             if uuid not in prod_by_uuid:
                 try:
                     prod_by_uuid[uuid] = product_fn(uuid)

@@ -6,12 +6,11 @@ Response models are Pydantic so delivery layers get a typed, schema'd contract
 """
 from __future__ import annotations
 
-import json
 from dataclasses import asdict
 
 from pydantic import BaseModel, Field, model_validator
 
-from .. import config, db, edhrec, legality
+from .. import config, edhrec
 from .. import gallery
 from .jobs import Artifact, JobResult, JobSpec, ProgressEvent, ProgressFn, register
 
@@ -164,39 +163,9 @@ class CommanderOption(BaseModel):
 
 def search_commanders(q: str, *, limit: int = 20) -> list[CommanderOption]:
     """Commander-eligible cards whose name contains ``q`` (local ``cards`` only),
-    cached-on-EDHREC first, then prefix matches, then alphabetical. Free-text
-    names not in the local DB still work downstream (compare resolves via
-    Scryfall) — this only powers suggestions."""
-    q = (q or "").strip()
-    if not q:
-        return []
-    with db.connect() as conn:
-        rows = conn.execute(
-            """
-            SELECT oracle_id, name, type_line, oracle_text, color_identity, image_uri
-            FROM cards
-            WHERE name LIKE ? COLLATE NOCASE AND is_token = 0
-              AND (type_line LIKE '%Legendary%' OR oracle_text LIKE '%can be your commander%'
-                   OR type_line LIKE '%Background%')
-            GROUP BY oracle_id
-            """,
-            (f"%{q}%",),
-        ).fetchall()
-        cached = {
-            r[0] for r in conn.execute(
-                "SELECT DISTINCT slug FROM edhrec_pages WHERE page_type='commander'"
-            )
-        }
-    out = []
-    for r in rows:
-        if not legality.is_commander_eligible(dict(r)):
-            continue
-        ci = r["color_identity"]
-        out.append(CommanderOption(
-            name=r["name"], oracle_id=r["oracle_id"], type_line=r["type_line"],
-            color_identity=json.loads(ci) if ci else [], image_uri=r["image_uri"],
-            cached=edhrec.slugify(r["name"]) in cached,
-        ))
-    ql = q.lower()
-    out.sort(key=lambda o: (not o.cached, not o.name.lower().startswith(ql), o.name))
-    return out[:limit]
+    via the shared :func:`explore.search_cards`. Free-text names not in the
+    local DB still work downstream (compare resolves via Scryfall) — this only
+    powers suggestions."""
+    from .. import explore
+    return [CommanderOption(**{k: v for k, v in c.items() if k != "commander_eligible"})
+            for c in explore.search_cards(q, limit=limit, commanders_only=True)]

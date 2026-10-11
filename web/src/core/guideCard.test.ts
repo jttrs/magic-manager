@@ -92,6 +92,11 @@ describe('collection filters', () => {
     expect(filterCollection(pool, { ...ALL, gaps: true }).map((c) => c.scryfall_id)).toEqual(['own', 'gap', 'gap2']);
     const s = collectionStats([gap, gap2], []);
     expect([s.missing, s.missingCards, s.missingCardsUsd]).toEqual([2, 1, 1]);
+    // An unpriced printing doesn't make the card free; it counts $0 only when no printing is priced.
+    const unpriced = card({ scryfall_id: 'gap3', oracle_id: 'o-gap', card_owned: 0, price_usd: null });
+    const lone = card({ scryfall_id: 'gap4', oracle_id: 'o-lone', card_owned: 0, price_usd: null });
+    const t = collectionStats([unpriced, gap, gap2, lone], []);
+    expect([t.missingCards, t.missingCardsUsd]).toEqual([2, 1]);
   });
 
   it('finish traits OR together and set the owned/missing basis', () => {

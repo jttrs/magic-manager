@@ -3,7 +3,8 @@ import { Link } from '@tanstack/react-router';
 import { jobsQuery } from '../app/queries';
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
-import { ToggleGroup, Tooltip } from 'radix-ui';
+import { ToggleGroup } from 'radix-ui';
+import { IconTooltip } from './IconTooltip';
 import { applyTheme, readTheme, type ThemePref } from '../app/theme';
 import { useMediaQuery } from '../app/useMediaQuery';
 import { UndoButton } from './UndoButton';
@@ -135,7 +136,6 @@ function ThemeSwitch() {
   );
 }
 
-/** Background work lives behind a utility link, not in the primary IA. */
 /** Background jobs: housekeeping, not a destination — a quiet icon that pulses
  *  while something runs; the tooltip names it. */
 function JobsLink() {
@@ -143,26 +143,17 @@ function JobsLink() {
   const running = jobs.data?.filter((j) => j.status === 'queued' || j.status === 'running').length ?? 0;
   const label = running ? `Background jobs · ${running} running` : 'Background jobs';
   return (
-    <Tooltip.Provider delayDuration={200}>
-      <Tooltip.Root>
-        <Tooltip.Trigger asChild>
-          <Link
-            to="/jobs"
-            aria-label={label}
-            className="relative grid size-8 place-items-center rounded-sm text-on-chrome-muted no-underline transition-colors ease-guide hover:text-on-chrome data-[status=active]:text-on-chrome"
-          >
-            <svg viewBox="0 0 16 16" aria-hidden="true" className="size-4">
-              <path d="M3 4.5h10M3 8h10M3 11.5h6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-            </svg>
-            {running > 0 && <span aria-hidden="true" className="absolute right-1 top-1 size-2 animate-pulse rounded-pill bg-accent" />}
-          </Link>
-        </Tooltip.Trigger>
-        <Tooltip.Portal>
-          <Tooltip.Content side="bottom" sideOffset={6} collisionPadding={12} className="z-50 rounded-sm border border-chrome-line bg-chrome-raised px-2.5 py-1.5 text-sm text-on-chrome shadow-[0_12px_28px_-12px_var(--theme-scrim)]">
-            {label}
-          </Tooltip.Content>
-        </Tooltip.Portal>
-      </Tooltip.Root>
-    </Tooltip.Provider>
+    <IconTooltip label={label}>
+      <Link
+        to="/jobs"
+        aria-label={label}
+        className="touch-hit relative grid size-8 place-items-center rounded-sm text-on-chrome-muted no-underline transition-colors ease-guide hover:text-on-chrome data-[status=active]:text-on-chrome"
+      >
+        <svg viewBox="0 0 16 16" aria-hidden="true" className="size-4">
+          <path d="M3 4.5h10M3 8h10M3 11.5h6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        </svg>
+        {running > 0 && <span aria-hidden="true" className="absolute right-1 top-1 size-2 animate-pulse rounded-pill bg-accent" />}
+      </Link>
+    </IconTooltip>
   );
 }

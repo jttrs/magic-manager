@@ -901,7 +901,7 @@ def sync_both(ref: str, *, resolved: tuple[str, dict | None] | None = None) -> D
 
 # ---------- bulk cache-warming (selector-driven) ----------
 
-def _cached_slugs() -> tuple[set[str], set[str]]:
+def cached_slugs() -> tuple[set[str], set[str]]:
     """``(commander_slugs, card_slugs)`` already present in ``edhrec_pages``.
 
     Both sets are needed for a correct resume: an eligible card is only fully
@@ -1018,7 +1018,7 @@ def sync_bulk(
     """
     names = list(names)
     result = BulkSyncResult(total=len(names))
-    cmd_cached, card_cached = _cached_slugs() if resume else (set(), set())
+    cmd_cached, card_cached = cached_slugs() if resume else (set(), set())
 
     # Resolve-then-partition: resolve each name once (24h-cached), decide the
     # resume-skip against the correct page-set for its eligibility, and carry the
@@ -1224,7 +1224,7 @@ def _commander_card_entries(ref: str) -> tuple[str, str, dict]:
     if card is not None and not legality.is_commander_eligible(card):
         raise EdhrecError(f"{name!r} is not commander-eligible — no commander page to compare.")
     slug = slugify(name)
-    cmd_cached, _ = _cached_slugs()
+    cmd_cached, _ = cached_slugs()
     if slug in cmd_cached:
         with db.connect() as conn:
             rows = conn.execute(

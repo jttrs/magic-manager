@@ -5,7 +5,7 @@ import { compareQuery, exploreCardQuery } from '../app/queries';
 import { useSelection } from '../app/selection';
 import { ViewLayout } from '../components/AppShell';
 import { CardInspector } from '../components/CardInspector';
-import { CommanderPicker } from '../components/CommanderPicker';
+import { CommanderPicker, type PickedCard } from '../components/CommanderPicker';
 import { CopyButton } from '../components/CopyButton';
 import { GuideColumns, type Column } from '../components/GuideColumns';
 import { InfoTip } from '../components/InfoTip';
@@ -18,7 +18,7 @@ import { ComboMark, EdhrecMark, ScryfallMark } from '../components/StoreMarks';
 import { VirtualGuide, type GuideSection } from '../components/VirtualGuide';
 import type { CardExploreOut, CardProfileOut, CompareOut, OracleTagOut } from '../core/api';
 import { bucketCards, COMPARE_SORT, COMPARE_SORT_PRESETS, matches, tagCounts, tagLabel } from '../core/compare';
-import { coplayGroups, deckShare, defaultRole, pairedSections, profileCard, profileSections } from '../core/explore';
+import { coplayGroups, deckShare, pairedSections, profileCard, profileSections, resolveRole, roleTags } from '../core/explore';
 import { fmtInt, fmtUsd } from '../core/format';
 import { exportLines, fromCompare, type GuideCard } from '../core/guideCard';
 import { compareSections, hasFunctionData } from '../core/groupBy';
@@ -45,13 +45,17 @@ export function ExploreView() {
   const set = (patch: Partial<CompareSearch>) => navigate({ search: (s) => ({ ...s, ...patch }), replace: true });
   const { selected, toggle, clear } = useSelection('explore');
   const [inspecting, setInspecting] = useState<GuideCard | null>(null);
+  // Eligibility of the card just picked from the suggestions, so the commander
+  // request can start alongside the card profile instead of after it.
+  const [picked, setPicked] = useState<PickedCard | null>(null);
 
   const mode = exploreMode(search.mode, search.a);
   const modeSwitch = <ExploreModeSwitch value={mode} onChange={(m) => set({ mode: m })} />;
   const cards = useQuery({ ...exploreCardQuery(search.a, search.b), enabled: Boolean(search.a) && mode === 'card' });
   const prof = cards.data;
-  const canLead = prof ? prof.a.commander_eligible && (!prof.b || prof.b.commander_eligible) : undefined;
-  const role: Role = search.role === 'commander' && canLead === false ? 'card' : search.role ?? defaultRole(canLead);
+  const hint = !search.b && picked && picked.name === search.a ? picked.commander_eligible : undefined;
+  const canLead = prof ? prof.a.commander_eligible && (!prof.b || prof.b.commander_eligible) : hint;
+  const role = resolveRole(search.role, canLead);
   const cmd = useQuery({ ...compareQuery(search.a, search.b), enabled: Boolean(search.a) && mode === 'card' && role === 'commander' && canLead !== false });
 
   const names = {
@@ -63,19 +67,21 @@ export function ExploreView() {
   // ---- commander role: recommended cards (today's compare, or one commander) ----
   const rules = useMemo(() => decodeSort(search.sort, COMPARE_SORT), [search.sort]);
   const cmdView = useMemo(() => (cmd.data && role === 'commander' ? buildCommander(cmd.data, search, rules) : null), [cmd.data, role, search, rules]);
+  const cardGroups = useMemo(() => (prof ? coplayGroups(prof) : []), [prof]);
+  const cardTags = useMemo(() => roleTags(search.tags, cardGroups.map(([g]) => g)), [search.tags, cardGroups]);
 
   // ---- card role: commanders that run it, played alongside, similar ----
   const cardView = useMemo(() => {
     if (!prof || role !== 'card') return null;
-    if (!prof.b) return { single: withTotals(profileSections(prof.a, search.q, search.tags)) };
+    if (!prof.b) return { single: withTotals(profileSections(prof.a, search.q, cardTags)) };
     return {
       cols: {
-        a_only: pairedSections(prof, 'a_only', search.q, search.tags) as GuideSection[],
-        both: pairedSections(prof, 'both', search.q, search.tags) as GuideSection[],
-        b_only: pairedSections(prof, 'b_only', search.q, search.tags) as GuideSection[],
+        a_only: pairedSections(prof, 'a_only', search.q, cardTags) as GuideSection[],
+        both: pairedSections(prof, 'both', search.q, cardTags) as GuideSection[],
+        b_only: pairedSections(prof, 'b_only', search.q, cardTags) as GuideSection[],
       },
     };
-  }, [prof, role, search.q, search.tags]);
+  }, [prof, role, search.q, cardTags]);
 
   const byKey = useMemo(() => {
     const m = new Map<string, GuideCard>();
@@ -100,7 +106,7 @@ export function ExploreView() {
       {modeSwitch}
       <SideSection title="Cards">
         <div className="flex flex-col gap-3">
-          <CommanderPicker scope="any" name="card-a" label="Card" value={search.a} onCommit={(a) => set({ a })} />
+          <CommanderPicker scope="any" name="card-a" label="Card" value={search.a} onCommit={(a, p) => { setPicked(p ?? null); set({ a }); }} />
           <CommanderPicker scope="any" name="card-b" label="Compare with" placeholder="Add a second card…" value={search.b} onCommit={(b) => set({ b })} />
           {search.b && (
             <button type="button" onClick={() => set({ b: undefined })} className="self-start cursor-pointer text-sm text-on-chrome-muted underline hover:text-on-chrome">
@@ -110,7 +116,9 @@ export function ExploreView() {
         </div>
       </SideSection>
       <SideSection title="Role">
-        <Segmented<Role>
+        {role === null ? (
+          <div role="status" aria-label="Checking whether it can lead a deck" className="h-16 animate-pulse rounded-sm bg-chrome-raised motion-reduce:animate-none" />
+        ) : <Segmented<Role>
           label="Explore as"
           showLabel
           labelExtra={
@@ -119,12 +127,12 @@ export function ExploreView() {
             </InfoTip>
           }
           value={role}
-          onChange={(r) => set({ role: r })}
+          onChange={(r) => set({ role: r, tags: [] })}
           options={[
             { value: 'commander', label: 'As commander', disabled: canLead === false, title: canLead === false ? (comparing ? 'One of these cards can’t be a commander' : 'This card can’t be a commander') : undefined },
             { value: 'card', label: 'As a card' },
           ]}
-        />
+        />}
       </SideSection>
       {comparing && (
         <SideSection title="Columns">
@@ -164,10 +172,10 @@ export function ExploreView() {
       <SideSection title="Filter">
         <TextField name="q" label="Card name" value={search.q} placeholder="e.g. Sol Ring…" onChange={(q) => set({ q })} />
         {role === 'commander' && cmdView && cmdView.tags.length > 0 && (
-          <MultiSelect label="EDHREC lists" noun="lists" value={search.tags} onChange={(tags) => set({ tags })} options={cmdView.tags.map(([t, n]) => ({ value: t, label: tagLabel(t), count: n }))} />
+          <MultiSelect label="EDHREC lists" noun="lists" value={cmdView.activeTags} onChange={(tags) => set({ tags })} options={cmdView.tags.map(([t, n]) => ({ value: t, label: tagLabel(t), count: n }))} />
         )}
         {role === 'card' && prof && (
-          <MultiSelect label="Played alongside · card types" noun="types" searchable={false} keepOrder summary={search.tags.length ? undefined : 'All card types'} value={search.tags} onChange={(tags) => set({ tags })} options={coplayGroups(prof).map(([g, n]) => ({ value: g, label: g, count: n }))} />
+          <MultiSelect label="Played alongside · card types" noun="types" searchable={false} keepOrder summary={cardTags.length ? undefined : 'All card types'} value={cardTags} onChange={(tags) => set({ tags })} options={cardGroups.map(([g, n]) => ({ value: g, label: g, count: n }))} />
         )}
       </SideSection>
       <SideSection title={`Marked · ${marked.length}`}>
@@ -205,11 +213,11 @@ export function ExploreView() {
   if (mode === 'rankings') return <RankingsExplore search={search} set={set} modeSwitch={modeSwitch} />;
 
   return (
-    <ViewLayout label="Explore controls" summary={search.a ? `${search.a}${search.b ? ` vs ${search.b}` : ''} · ${role === 'commander' ? 'as commander' : 'as a card'}` : undefined} sidebar={sidebar} startOpen={!search.a}>
-      <GuideSheet title="Explore" summary={summaryLine(role, prof, cmd.data)}>
+    <ViewLayout label="Explore controls" summary={search.a ? `${search.a}${search.b ? ` vs ${search.b}` : ''}${role ? ` · ${role === 'commander' ? 'as commander' : 'as a card'}` : ''}` : undefined} sidebar={sidebar} startOpen={!search.a}>
+      <GuideSheet title="Explore" summary={role ? summaryLine(role, prof, cmd.data) : undefined}>
         <div className="flex h-full min-h-0 flex-col">
           <EdhrecHealth keys={role === 'commander' ? COMMANDER_HEALTH : CARD_HEALTH} />
-          {prof && <Plates r={prof} role={role} onInspect={(p) => setInspecting(profileCard(p))} />}
+          {prof && role && <Plates r={prof} role={role} onInspect={(p) => setInspecting(profileCard(p))} />}
           <div className="min-h-0 flex-1">{body}</div>
         </div>
       </GuideSheet>
@@ -236,7 +244,9 @@ function summaryLine(role: Role, prof?: CardExploreOut, cmd?: CompareOut): strin
 }
 
 function buildCommander(data: CompareOut, search: CompareSearch, rules: ReturnType<typeof decodeSort>) {
-  const shown = sortBy(data.cards.filter((c) => matches(c, search.q, search.tags)), rules, COMPARE_SORT);
+  const tags = tagCounts(data.cards);
+  const activeTags = roleTags(search.tags, tags.map(([t]) => t));
+  const shown = sortBy(data.cards.filter((c) => matches(c, search.q, activeTags)), rules, COMPARE_SORT);
   const buckets = bucketCards(shown);
   const roots = data.functions ?? [];
   const noun = search.groupBy === 'function' ? 'function' : 'card type';
@@ -244,7 +254,8 @@ function buildCommander(data: CompareOut, search: CompareSearch, rules: ReturnTy
   return {
     buckets,
     sections: { a_only: sec('a_only'), both: sec('both'), b_only: sec('b_only') },
-    tags: tagCounts(data.cards),
+    tags,
+    activeTags,
     all: shown.map((c) => fromCompare(c)),
     tagged: hasFunctionData(data.cards),
   };

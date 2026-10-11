@@ -77,7 +77,7 @@ def main() -> int:
         raise SystemExit("no card_id (mtgjson uuid) on any cart line; can't map.")
 
     print(f"mapping {len(set(uuids))} cart cards via Mana Pool products…", file=sys.stderr)
-    mapped = map_cart(cart)
+    mapped = map_cart(cart, catalog_all=True)   # the MP cheapest column
     buckets = overpay_rows(mapped)
     rows = buckets["rows"]
     no_market = buckets["no_market"]

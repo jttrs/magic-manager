@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 
-from . import db, edhrec, inventory, legality, scryfall_tags, sets
+from . import db, edhrec, inventory, legality, scryfall_tags, sets, util
 
 # Card-page cardlists that are co-played cards, grouped by type (EDHREC's tags).
 COPLAY_TAGS: dict[str, str] = {
@@ -84,7 +84,7 @@ def _local_card(ref: str) -> tuple[str, dict | None]:
                ORDER BY released_at LIMIT 1""", (ref, ref),
         ).fetchone()
     if row:
-        return row["name"].split(" // ")[0], dict(row)
+        return util.front_face(row["name"]), dict(row)
     return edhrec.resolve_oracle_card(ref)
 
 
@@ -248,28 +248,39 @@ def compare_cards(ref_a: str, ref_b: str) -> CardComparison:
     )
 
 
-def search_cards(q: str, *, limit: int = 20) -> list[dict]:
-    """Any physical, non-token card whose name contains ``q`` (local), one per
-    oracle card: prefix matches first, EDHREC-cached next, then alphabetical."""
+_LEADER_PREFILTER = ("(type_line LIKE '%Legendary%' OR oracle_text LIKE '%can be your commander%' "
+                     "OR type_line LIKE '%Background%')")
+
+
+def search_cards(q: str, *, limit: int = 20, commanders_only: bool = False) -> list[dict]:
+    """The ONE local card search behind both pickers: physical, non-token cards
+    whose name contains ``q``, one per oracle card, named by front face. Prefix
+    matches first, then EDHREC-cached (the commander page with
+    ``commanders_only``, else the card page), then alphabetical."""
     q = (q or "").strip()
     if not q:
         return []
-    _, card_cached = edhrec._cached_slugs()
+    cmd_cached, card_cached = edhrec.cached_slugs()
+    cached = cmd_cached if commanders_only else card_cached
+    leaders = f" AND {_LEADER_PREFILTER}" if commanders_only else ""
     with db.connect() as conn:
         rows = conn.execute(
-            """SELECT oracle_id, name, type_line, oracle_text, color_identity, image_uri FROM cards
-               WHERE name LIKE ? COLLATE NOCASE AND is_token = 0 AND oracle_id IS NOT NULL
+            f"""SELECT oracle_id, name, type_line, oracle_text, color_identity, image_uri FROM cards
+               WHERE name LIKE ? COLLATE NOCASE AND is_token = 0 AND oracle_id IS NOT NULL{leaders}
                GROUP BY oracle_id""", (f"%{q}%",),
         ).fetchall()
     ql = q.lower()
     out = []
     for r in rows:
-        front = r["name"].split(" // ")[0]
+        eligible = legality.is_commander_eligible(dict(r))
+        if commanders_only and not eligible:
+            continue
+        front = util.front_face(r["name"])
         out.append({
             "name": front, "oracle_id": r["oracle_id"], "type_line": r["type_line"],
             "color_identity": json.loads(r["color_identity"]) if r["color_identity"] else [],
-            "image_uri": r["image_uri"], "cached": edhrec.slugify(front) in card_cached,
-            "commander_eligible": legality.is_commander_eligible(dict(r)),
+            "image_uri": r["image_uri"], "cached": edhrec.slugify(front) in cached,
+            "commander_eligible": eligible,
         })
     out.sort(key=lambda c: (not c["name"].lower().startswith(ql), not c["cached"], c["name"]))
     return out[:limit]
