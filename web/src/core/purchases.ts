@@ -88,3 +88,16 @@ export function subtotalGap(p: Pick<PurchaseOut, 'paid_usd' | 'subtotal_usd'>): 
   const gap = Math.round((p.paid_usd - p.subtotal_usd) * 100) / 100;
   return Math.abs(gap) >= 0.01 ? gap : null;
 }
+
+export type Valuation =
+  | { kind: 'none' }
+  | { kind: 'full'; worth: number; gain: number }
+  | { kind: 'partial'; worth: number; gain: number; comparedPaid: number };
+
+/** What "worth today" can honestly say: it values only lines with a price today (compared_paid_usd).
+ *  No such lines → nothing to show; some lines unvalued → show it as a partial figure. */
+export function valuation(p: { paid_usd: number; compared_paid_usd: number; worth_usd: number; gain_usd: number }): Valuation {
+  if (p.compared_paid_usd <= 0.005) return { kind: 'none' };
+  if (p.compared_paid_usd < p.paid_usd - 0.005) return { kind: 'partial', worth: p.worth_usd, gain: p.gain_usd, comparedPaid: p.compared_paid_usd };
+  return { kind: 'full', worth: p.worth_usd, gain: p.gain_usd };
+}

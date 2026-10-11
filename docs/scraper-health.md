@@ -20,6 +20,7 @@ covered with no other change (offline pin: its fixture + `EXPECT` row, which
 | `deck-import/moxfield` | headed Chrome → the deck API response → `parse_moxfield` | `test_parse_moxfield_boards_and_finishes` | Browser: a public precon deck |
 | `companion-deck/moxfield` | `extension/src/readers/moxfield-deck.js` → the app's strict model | `companion-readers.spec.ts` → `test_companion.py` | Browser: the same visit, reader injected verbatim |
 | `companion-cart/manapool` | `extension/src/readers/manapool-cart.js` | `companion-readers.spec.ts` → `test_companion.py` | Browser: a guest (empty) cart must read as `cart.empty` — nothing is ever added to a cart |
+| `companion-orders/manapool` · `tcgplayer` · `cardkingdom` | `extension/src/readers/*-orders.js` (order history, signed in) → `api/purchases.py` strict models | `companion-order-readers.spec.ts` → `test_companion_orders.py` | None — signed-in pages have no public sample. Real use only: a read that saves orders clears it; the app reports `orders.page_changed` (with the store) |
 | `edhrec-commander` · `edhrec-card` · `edhrec-rankings` | EDHREC's unofficial JSON → `edhrec.cardlists` / `_plan_rankings` | `tests/test_edhrec.py` | HTTP: a commander page, a card page, the weekly ranking |
 
 `tests/test_scraper_health.py::test_every_scraper_has_an_offline_pin` keeps this table honest.
@@ -42,7 +43,7 @@ those checks are then unverified, never down.
 
 **Real use is the backup** for what the canary can't reach (eBay, your own cart, private decks):
 a Deals read that finds no price flags the store; a read that works clears it; the companion
-reports `cart.page_changed` / `moxfield.changed` (`POST /api/scrapers/report`); a server deck
+reports `cart.page_changed` / `moxfield.changed` / `orders.page_changed` + store (`POST /api/scrapers/report`); a server deck
 fetch that parses no cards flags that builder; any successful EDHREC sync clears its flag.
 Blocks, private decks and empty carts never flag.
 

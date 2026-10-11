@@ -3531,6 +3531,32 @@ export type OrderLineIn = {
 };
 
 /**
+ * OrderWarningIn
+ */
+export type OrderWarningIn = {
+    /**
+     * Code
+     */
+    code: string;
+    /**
+     * Order
+     */
+    order?: string | null;
+    /**
+     * Row
+     */
+    row?: number | null;
+    /**
+     * Missing
+     */
+    missing?: Array<string>;
+    /**
+     * Pages
+     */
+    pages?: number | null;
+};
+
+/**
  * OrdersIn
  */
 export type OrdersIn = {
@@ -3545,9 +3571,7 @@ export type OrdersIn = {
     /**
      * Warnings
      */
-    warnings?: Array<{
-        [key: string]: unknown;
-    }>;
+    warnings?: Array<OrderWarningIn>;
 };
 
 /**
@@ -4802,7 +4826,13 @@ export type ScraperReportIn = {
     /**
      * Code
      */
-    code: 'cart.page_changed' | 'moxfield.changed';
+    code: 'cart.page_changed' | 'moxfield.changed' | 'orders.page_changed';
+    /**
+     * Store
+     *
+     * Order-history reports: which store's reader.
+     */
+    store?: 'manapool' | 'tcgplayer' | 'cardkingdom' | null;
 };
 
 /**

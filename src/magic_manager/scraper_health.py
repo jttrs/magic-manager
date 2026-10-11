@@ -70,6 +70,8 @@ REASONS: dict[str, tuple[str, str]] = {
                           "Follow the scrape-doctor skill: recapture the cart page and fix the reader."),
     "moxfield.changed": ("Moxfield's deck data changed format.",
                          "Follow the scrape-doctor skill: update the reader and decksource.parse_moxfield."),
+    "orders.page_changed": ("The store's order history page changed — the reader found no orders or lines.",
+                            "Follow the scrape-doctor skill: recapture the order page (de-personalised) and fix the reader."),
 }
 
 # Failures the browser companion reports from the user's own browser
@@ -78,7 +80,19 @@ REASONS: dict[str, tuple[str, str]] = {
 REPORTABLE_CODES: dict[str, str] = {
     "cart.page_changed": "companion-cart/manapool",
     "moxfield.changed": "companion-deck/moxfield",
+    "orders.page_changed": "companion-orders/{store}",   # per store (report carries `store`)
 }
+ORDER_STORES = {"manapool": "Mana Pool", "tcgplayer": "TCGplayer", "cardkingdom": "Card Kingdom"}
+
+
+def reported_key(code: str, store: str | None = None) -> str:
+    """The scraper a reported companion code flags (order codes are per store)."""
+    key = REPORTABLE_CODES[code]
+    if "{store}" in key:
+        if store not in ORDER_STORES:
+            raise ValueError("an order-history report names its store")
+        key = key.format(store=store)
+    return key
 
 DECK_SOURCES = ("archidekt", "mtggoldfish", "manabox", "scryfall", "moxfield")
 _DECK_SITE_NAMES = {"archidekt": "Archidekt", "mtggoldfish": "MTGGoldfish", "manabox": "ManaBox",
@@ -88,7 +102,7 @@ _DECK_SITE_NAMES = {"archidekt": "Archidekt", "mtggoldfish": "MTGGoldfish", "man
 @dataclass(frozen=True)
 class Scraper:
     key: str             # "<scraper>/<site>"
-    scraper: str         # store-price | deck-import | companion-cart | companion-deck | edhrec-*
+    scraper: str         # store-price | deck-import | companion-cart | companion-deck | companion-orders | edhrec-*
     site: str            # vendor key / deck source / manapool / edhrec
     site_name: str
     label: str           # what it reads, in plain words
@@ -151,6 +165,10 @@ def registry() -> list[Scraper]:
     out.append(Scraper("companion-cart/manapool", "companion-cart", "manapool", "Mana Pool",
                        "Mana Pool cart read in your browser", "Collection · cart check",
                        "browser" if cart else "none", cart))
+    # Order history pages are signed in: no public sample → real use only (canary none).
+    for site, name in ORDER_STORES.items():
+        out.append(Scraper(f"companion-orders/{site}", "companion-orders", site, name,
+                           f"{name} order history read in your browser", "Purchase history · Read my orders", "none"))
     ed = samples.get("edhrec") or {}
     for scr, label, sample in (("edhrec-commander", "EDHREC commander pages", ed.get("commander")),
                                ("edhrec-card", "EDHREC card pages", ed.get("card")),

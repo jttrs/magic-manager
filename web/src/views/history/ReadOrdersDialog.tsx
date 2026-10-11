@@ -5,8 +5,10 @@ import { purchaseStoresQuery, purchasesQuery, unwrap } from '../../app/queries';
 import { useCompanion } from '../../app/useCompanion';
 import { Button } from '../../components/Button';
 import { AwaitingNote, FailureNote } from '../../components/companion/CompanionNotes';
+import { reportScraperFailure, useDownScrapers } from '../../app/scraperHealth';
+import { ordersKey } from '../../core/scraperHealth';
 import { purchaseSave, type MagicManagerApiPurchasesSaveOut as SaveOut } from '../../core/api';
-import { warningLines, type OrderListData, type OrdersData } from '../../core/companion';
+import { CompanionError, warningLines, type OrderListData, type OrdersData } from '../../core/companion';
 import { fmtCount, fmtInt, fmtUsd } from '../../core/format';
 import { chunk, listStatus, STATUS_LABEL, type Store } from '../../core/purchases';
 import { VerificationMark } from './StoreVerification';
@@ -61,8 +63,13 @@ function ReadOrders({ onClose, onReview }: { onClose: () => void; onReview: (pur
   const known = purchases.data?.purchases ?? [];
   const statusOf = (id: string) => listStatus(id, store, known);
 
+  const down = useDownScrapers([ordersKey(store)])[0];
+  // A changed store page flags its reader "temporarily down" (docs/scraper-health.md).
+  const flagIfChanged = (e: unknown) => { if (e instanceof CompanionError) void reportScraperFailure(e.code, qc, store); };
+
   const readList = useMutation({
     mutationFn: async () => c.read('order_list', { store }, (s) => setAwaiting(s)),
+    onError: flagIfChanged,
     onSuccess: (d) => { setList(d); setPicked(new Set(d.orders.filter((o) => statusOf(o.order_id) === 'unread').map((o) => o.order_id))); },
     onSettled: () => setAwaiting(null),
   });
@@ -89,6 +96,7 @@ function ReadOrders({ onClose, onReview }: { onClose: () => void; onReview: (pur
       setResult({ ...r, warnings: [...new Set(r.warnings)] });
       await Promise.all([qc.invalidateQueries({ queryKey: ['purchases'] }), qc.invalidateQueries({ queryKey: ['history'] })]);
     },
+    onError: flagIfChanged,
     onSettled: () => { setAwaiting(null); setProgress(null); },
   });
   const busy = readList.isPending || readOrders.isPending;
@@ -166,6 +174,11 @@ function ReadOrders({ onClose, onReview }: { onClose: () => void; onReview: (pur
               <Button tone="paper" emphasis="primary" className="self-start" disabled={c.status !== 'ready' || !allowed(store) || busy} onClick={() => readList.mutate()}>
                 {readList.isPending ? (awaiting != null ? 'Waiting for approval…' : 'Reading your orders…') : 'Read order list'}
               </Button>
+              {down && (
+                <p role="status" className="max-w-[62ch] text-md leading-relaxed text-ink">
+                  Reading {STORE_NAME[store]} orders is temporarily down{down.message ? `: ${down.message}` : '.'}
+                </p>
+              )}
               {awaiting != null && <AwaitingNote summary={awaiting} />}
               {readList.isError && <FailureNote error={readList.error} />}
             </section>

@@ -39,7 +39,8 @@ class ScrapersHealthOut(BaseModel):
 
 class ScraperReportIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    code: Literal["cart.page_changed", "moxfield.changed"]
+    code: Literal["cart.page_changed", "moxfield.changed", "orders.page_changed"]
+    store: Literal["manapool", "tcgplayer", "cardkingdom"] | None = Field(None, description="Order-history reports: which store's reader.")
 
 
 def _out(h: scraper_health.Health) -> ScraperHealthOut:
@@ -56,6 +57,6 @@ def health() -> ScrapersHealthOut:
 
 
 def report(req: ScraperReportIn) -> ScraperHealthOut:
-    key = scraper_health.REPORTABLE_CODES[req.code]
+    key = scraper_health.reported_key(req.code, req.store)
     scraper_health.record([(key, "fail", req.code, scraper_health.reason(req.code), None)], via="use")
     return next(_out(h) for h in scraper_health.health() if h.scraper.key == key)

@@ -2,7 +2,7 @@ import { useRovingFocus } from '../../app/useRovingFocus';
 import { EmptyNote } from '../../components/States';
 import type { PurchaseOut, PurchasesOut } from '../../core/api';
 import { fmtCount, fmtUsd } from '../../core/format';
-import { signedParts, STATUS_LABEL } from '../../core/purchases';
+import { signedParts, STATUS_LABEL, valuation } from '../../core/purchases';
 
 const DAY = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: '2-digit', timeZone: 'UTC' });
 const orderDay = (at: string) => {
@@ -11,20 +11,33 @@ const orderDay = (at: string) => {
 };
 
 /** A signed gain or loss; a loss reads in the danger colour, a gain in plain ink. */
-export function Gain({ usd, tone = 'paper' }: { usd: number; tone?: 'chrome' | 'paper' }) {
+function Gain({ usd, tone = 'paper' }: { usd: number; tone?: 'chrome' | 'paper' }) {
   const { sign, abs } = signedParts(usd);
   return <span className={sign === '−' ? 'text-danger' : tone === 'chrome' ? 'text-on-chrome' : 'text-ink'}>{sign}{fmtUsd(abs)}</span>;
 }
 
+/** Worth today or the gain: "—" when no line has a price today; marked "cards" with a tip when only some lines are valued. */
+export function Valued({ p, field, tone = 'paper' }: { p: Pick<PurchaseOut, 'paid_usd' | 'compared_paid_usd' | 'worth_usd' | 'gain_usd'>; field: 'worth' | 'gain'; tone?: 'chrome' | 'paper' }) {
+  const v = valuation(p);
+  if (v.kind === 'none') return <span title="No line in this order has a price today (sealed products and unpriced lines aren’t valued).">—</span>;
+  const node = field === 'worth' ? fmtUsd(v.worth) : <Gain usd={v.gain} tone={tone} />;
+  if (v.kind === 'full') return <>{node}</>;
+  return (
+    <span title={`Today’s value of the ${fmtUsd(v.comparedPaid)} of cards with a price today. Sealed products and unpriced lines aren’t valued.`}>
+      {node} <span className={`text-xs font-normal ${tone === 'chrome' ? 'text-on-chrome-muted' : 'text-ink-muted'}`}>cards</span>
+    </span>
+  );
+}
+
 /** The totals line for every order read so far (`chrome` on the sidebar). */
-export function OrdersTotals({ totals, tone = 'paper' }: { totals: Pick<PurchasesOut, 'paid_usd' | 'worth_usd' | 'gain_usd'>; tone?: 'chrome' | 'paper' }) {
+export function OrdersTotals({ totals, tone = 'paper' }: { totals: Pick<PurchasesOut, 'paid_usd' | 'compared_paid_usd' | 'worth_usd' | 'gain_usd'>; tone?: 'chrome' | 'paper' }) {
   const dt = `text-xs voice-semi uppercase tracking-[0.06em] ${tone === 'chrome' ? 'text-on-chrome-muted' : 'text-ink-muted'}`;
   const dd = tone === 'chrome' ? 'text-on-chrome' : 'text-ink';
   return (
     <dl className="flex flex-wrap gap-x-5 gap-y-1 text-sm tabular">
       <div className="flex items-baseline gap-1.5"><dt className={dt}>Paid</dt><dd className={dd}>{fmtUsd(totals.paid_usd)}</dd></div>
-      <div className="flex items-baseline gap-1.5"><dt className={dt}>Worth today</dt><dd className={dd}>{fmtUsd(totals.worth_usd)}</dd></div>
-      <div className="flex items-baseline gap-1.5"><dt className={dt}>Gain / loss</dt><dd className="voice-semi font-medium"><Gain usd={totals.gain_usd} tone={tone} /></dd></div>
+      <div className="flex items-baseline gap-1.5"><dt className={dt}>Worth today</dt><dd className={dd}><Valued p={totals} field="worth" tone={tone} /></dd></div>
+      <div className="flex items-baseline gap-1.5"><dt className={dt}>Gain / loss</dt><dd className="voice-semi font-medium"><Valued p={totals} field="gain" tone={tone} /></dd></div>
     </dl>
   );
 }
@@ -68,8 +81,8 @@ function OrderRow({ p, active, tabbable, onFocus, onPick }: { p: PurchaseOut; ac
       </span>
       <span className="grid shrink-0 grid-cols-[auto_auto] items-baseline gap-x-3 text-xs tabular">
         <span className="text-right text-ink-muted">Paid</span><span className="text-right text-ink">{fmtUsd(p.paid_usd)}</span>
-        <span className="text-right text-ink-muted">Worth</span><span className="text-right text-ink">{fmtUsd(p.worth_usd)}</span>
-        <span className="text-right text-ink-muted">Gain</span><span className="text-right"><Gain usd={p.gain_usd} /></span>
+        <span className="text-right text-ink-muted">Worth</span><span className="text-right text-ink"><Valued p={p} field="worth" /></span>
+        <span className="text-right text-ink-muted">Gain</span><span className="text-right"><Valued p={p} field="gain" /></span>
       </span>
     </button>
   );

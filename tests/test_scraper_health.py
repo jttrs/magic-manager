@@ -63,6 +63,9 @@ PINS = {
     "deck-import/moxfield": ("test_decksource.py", "test_parse_moxfield_boards_and_finishes"),
     "companion-deck/moxfield": ("test_companion.py", "test_moxfield_reader_output_becomes_deck_lines"),
     "companion-cart/manapool": ("test_companion.py", "test_cart_reader_output_is_exactly_what_the_server_accepts"),
+    "companion-orders/manapool": ("test_companion_orders.py", "test_manapool_order_from_the_reader_golden"),
+    "companion-orders/tcgplayer": ("test_companion_orders.py", "test_tcgplayer_orders_resolve_by_product_id"),
+    "companion-orders/cardkingdom": ("test_companion_orders.py", "test_cardkingdom_unverified_lines_are_never_cards"),
     "edhrec-commander/edhrec": ("test_edhrec.py", "def test_"),
     "edhrec-card/edhrec": ("test_edhrec.py", "def test_"),
     "edhrec-rankings/edhrec": ("test_edhrec.py", "def test_"),
@@ -90,8 +93,11 @@ def test_canary_samples_are_valid_for_their_scraper():
         assert v.mode == "rendered", f"{key}: server-read stores use sample_url in vendors.toml"
         assert v.is_product(urlsplit(sample["url"]).path), key
     assert samples["cart"]["manapool"]["expect_code"] == "cart.empty"
-    # Only eBay (listings end) has no live canary; everything else is reached.
-    assert {s.key for s in sh.registry() if s.canary == "none"} <= {f"store-price/{v.key}" for v in vendors.catalog() if v.mode == "rendered"}
+    # Only eBay (listings end) and the signed-in order-history readers (no public sample)
+    # have no live canary; everything else is reached.
+    assert {s.key for s in sh.registry() if s.canary == "none"} <= (
+        {f"store-price/{v.key}" for v in vendors.catalog() if v.mode == "rendered"}
+        | {f"companion-orders/{k}" for k in sh.ORDER_STORES})
 
 
 # ---------- the status machine ----------

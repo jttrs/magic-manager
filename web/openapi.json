@@ -9569,6 +9569,68 @@
         ],
         "title": "OrderLineIn"
       },
+      "OrderWarningIn": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 60,
+            "pattern": "^[a-z_]+\\.[a-z_]+$",
+            "title": "Code"
+          },
+          "order": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order"
+          },
+          "row": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Row"
+          },
+          "missing": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Missing"
+          },
+          "pages": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pages"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "title": "OrderWarningIn"
+      },
       "OrdersIn": {
         "properties": {
           "store": {
@@ -9590,8 +9652,7 @@
           },
           "warnings": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/OrderWarningIn"
             },
             "type": "array",
             "maxItems": 500,
@@ -11856,9 +11917,27 @@
             "type": "string",
             "enum": [
               "cart.page_changed",
-              "moxfield.changed"
+              "moxfield.changed",
+              "orders.page_changed"
             ],
             "title": "Code"
+          },
+          "store": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "manapool",
+                  "tcgplayer",
+                  "cardkingdom"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Store",
+            "description": "Order-history reports: which store's reader."
           }
         },
         "additionalProperties": false,

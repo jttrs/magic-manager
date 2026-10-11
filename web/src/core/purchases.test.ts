@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PurchaseOut, ReviewLineOut } from './api';
-import { chunk, clampDecision, decisionsBody, decisionTotals, defaultDecisions, listStatus, STATUS_LABEL, subtotalGap } from './purchases';
+import { chunk, clampDecision, decisionsBody, decisionTotals, defaultDecisions, listStatus, STATUS_LABEL, subtotalGap, valuation } from './purchases';
 
 const line = (o: Partial<ReviewLineOut>): ReviewLineOut => ({
   line_no: 1, kind: 'single', name: 'Sol Ring', set_name: 'Commander', condition: 'NM', finish: 'nonfoil',
@@ -54,5 +54,15 @@ describe('purchases view-model', () => {
     expect(subtotalGap(purchase({ paid_usd: 10, subtotal_usd: 10.004 }))).toBeNull();
     expect(subtotalGap(purchase({ paid_usd: 10, subtotal_usd: null }))).toBeNull();
     expect(subtotalGap(purchase({ paid_usd: 10 }))).toBeNull();
+  });
+});
+
+describe('valuation', () => {
+  const v = (paid_usd: number, compared_paid_usd: number) => valuation({ paid_usd, compared_paid_usd, worth_usd: 145.3, gain_usd: 25.02 });
+  it('shows nothing when no line has a price today', () => expect(v(375, 0)).toEqual({ kind: 'none' }));
+  it('is partial when some paid lines are unvalued', () => expect(v(495.28, 120.28)).toEqual({ kind: 'partial', worth: 145.3, gain: 25.02, comparedPaid: 120.28 }));
+  it('is full when every paid line is valued (within a cent)', () => {
+    expect(v(120.28, 120.28).kind).toBe('full');
+    expect(v(120.284, 120.28).kind).toBe('full');
   });
 });

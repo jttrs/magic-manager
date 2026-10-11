@@ -18,10 +18,11 @@ export function useStoreHealth() {
 }
 
 /** A companion read found the site's page changed: flag it (best effort, never throws). */
-export async function reportScraperFailure(code: string, qc?: QueryClient) {
+export async function reportScraperFailure(code: string, qc?: QueryClient, store?: 'manapool' | 'tcgplayer' | 'cardkingdom') {
   if (!isReportable(code)) return;
+  if (code === 'orders.page_changed' && !store) return;
   try {
-    await scrapersReport({ body: { code } });
+    await scrapersReport({ body: { code, store: store ?? null } });
   } catch {
     return;
   }

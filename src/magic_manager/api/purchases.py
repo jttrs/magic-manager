@@ -73,10 +73,18 @@ class OrderIn(_Strict):
     total: float | None = Field(None, ge=0, le=10_000_000)
 
 
+class OrderWarningIn(_Strict):
+    code: str = Field(max_length=60, pattern=r"^[a-z_]+\.[a-z_]+$")
+    order: str | None = Field(None, max_length=64)
+    row: int | None = Field(None, ge=0, le=100_000)
+    missing: list[str] = Field(default_factory=list, max_length=10)
+    pages: int | None = Field(None, ge=0, le=1000)
+
+
 class OrdersIn(_Strict):
     store: Store
     orders: list[OrderIn] = Field(max_length=100)
-    warnings: list[dict] = Field(default_factory=list, max_length=500)
+    warnings: list[OrderWarningIn] = Field(default_factory=list, max_length=500)
 
 
 class SaveOut(BaseModel):
@@ -101,6 +109,8 @@ def save(req: OrdersIn) -> SaveOut:
         ) for ln in o.lines],
     ) for o in req.orders]
     r = purchases.save(orders)
+    from .. import scraper_health
+    scraper_health.record_use(f"companion-orders/{req.store}", "ok")   # a real read worked: clears a down flag
     return SaveOut(saved=len(r.saved), skipped=r.skipped, unresolved=r.unresolved, purchase_ids=r.saved)
 
 
