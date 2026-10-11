@@ -72,16 +72,17 @@ async function fromApp(msg, sender) {
 
   // Claim the one-request slot in memory BEFORE any await after this check, so two overlapping
   // requests can't both pass it; the placeholder in session storage (below) survives a worker restart.
-  if (claimed) return fail('request.busy');
-  claimed = msg.id;
+  if (claimed && Date.now() - claimed.at < APPROVAL_TTL_MS) return fail('request.busy');
+  const mine = { id: msg.id, at: Date.now() };
+  claimed = mine;
   try {
     return await handleRequest(msg, sender, pinned, params);
   } finally {
-    claimed = null;
+    if (claimed === mine) claimed = null;
   }
 }
 
-/** In-memory claim on the request slot while fromApp reads (see fromApp). */
+/** In-memory claim on the request slot while fromApp reads (see fromApp); expires like a pending request. */
 let claimed = null;
 
 async function handleRequest(msg, sender, pinned, params) {
