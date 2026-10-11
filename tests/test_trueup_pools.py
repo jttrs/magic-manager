@@ -632,3 +632,126 @@ def test_plan_reports_value_and_only_restricts(tmp_db, seed_cards, make_card, st
     assert by["One_TLA"]["usd"] == 3.5 and by["One_TLA"]["recipe_qty"] == 2 and by["One_TLA"]["type"] == "Box Set"
     assert ticks and ticks[0] == 2
     assert [p["fileName"] for p in tp.plan(only={"Two_TLA"})["ready"]] == ["Two_TLA"]
+
+
+def _two_products(seed_cards, make_card, stub_products, *, decks=None):
+    """One_TLA = {a, b}, Two_TLA = {b}; the backfill holds a×1 and b×2 so both
+    are covered on their own."""
+    from magic_manager import db
+    a = "abab0000-0000-0000-0000-000000000001"
+    b = "abab0000-0000-0000-0000-000000000002"
+    seed_cards([
+        make_card(id=a, set="tla", collector_number="1", name="A", prices={"usd": "2.50", "usd_foil": None}),
+        make_card(id=b, set="tla", collector_number="2", name="B", prices={"usd": "1.00", "usd_foil": None}),
+    ])
+    with db.connect() as conn:
+        _seed_unattributed(conn, [(a, "nonfoil", 1), (b, "nonfoil", 2)])
+    stub_products(
+        decklist={"tla": [{"fileName": "One_TLA", "name": "One", "code": "TLA", "type": "Box Set"},
+                          {"fileName": "Two_TLA", "name": "Two", "code": "TLA", "type": "Box Set"}]},
+        decks=decks if decks is not None else {
+            "One_TLA": _deck("One", "TLA", "Box Set", [(a, 1, False, "tla"), (b, 1, False, "tla")]),
+            "Two_TLA": _deck("Two", "TLA", "Box Set", [(b, 1, False, "tla")])},
+    )
+    return a, b
+
+
+def _unattributed_balance(conn, sid):
+    return conn.execute(
+        "SELECT COALESCE(SUM(ie.delta),0) s FROM inventory_events ie "
+        "JOIN ingest_events ev ON ev.ingest_id=ie.ingest_id "
+        "WHERE ev.method='unattributed-backfill' AND ie.scryfall_id=?", (sid,)).fetchone()["s"]
+
+
+def test_plan_only_apply_records_just_the_reviewed_products(tmp_db, seed_cards, make_card,
+                                                             stub_products, fake_scryfall):
+    """The web apply path: plan(only=…, apply=True) registers ONLY the reviewed
+    product, moves only its copies, leaves the unchecked one untouched, and the
+    ledger still reconciles (inventory == SUM(delta))."""
+    from magic_manager import db, ingest
+    fake_scryfall()
+    a, b = _two_products(seed_cards, make_card, stub_products)
+    tp = _load()
+    r = tp.plan(only={"Two_TLA"}, apply=True)
+    assert r["applied"] and r["registered"] == 1 and r["reattributed"] == 1
+    assert [p["fileName"] for p in r["ready"]] == ["Two_TLA"]
+    with db.connect() as conn:
+        rows = [x["source_precon_file_name"] for x in conn.execute(
+            "SELECT source_precon_file_name FROM decks WHERE source_precon_file_name LIKE '%_TLA'")]
+        assert rows == ["Two_TLA"]
+        assert _unattributed_balance(conn, a) == 1  # One_TLA's own card never moved
+        assert _unattributed_balance(conn, b) == 1  # exactly Two_TLA's one copy moved
+        moved = conn.execute(
+            "SELECT ie.scryfall_id, ie.delta FROM inventory_events ie JOIN ingest_events ev "
+            "ON ev.ingest_id=ie.ingest_id WHERE ev.label='trueup:Two_TLA'").fetchall()
+        assert [(m["scryfall_id"], m["delta"]) for m in moved] == [(b, 1)]
+        assert ingest.reconcile_inventory_ledger(conn) == []
+
+
+def test_plan_reports_unreadable_lists(tmp_db, seed_cards, make_card, stub_products,
+                                       fake_scryfall, monkeypatch):
+    """A list that can't be read is reported as unread — not silently dropped as
+    'no match' — at both the product and the set level."""
+    from magic_manager import mtgjson
+    fake_scryfall()
+    _two_products(seed_cards, make_card, stub_products)
+    real_deck = mtgjson.deck
+
+    def flaky(fn):
+        if fn == "One_TLA":
+            raise mtgjson.MtgJsonError("mtgjson down")
+        return real_deck(fn)
+    monkeypatch.setattr(mtgjson, "deck", flaky)
+    tp = _load()
+    r = tp.plan()
+    assert [p["fileName"] for p in r["ready"]] == ["Two_TLA"]
+    assert r["unread"] == [{"ref": "One_TLA", "name": "One", "error": "mtgjson down"}]
+
+    def down(*, set_code=None):
+        raise mtgjson.MtgJsonError("offline")
+    monkeypatch.setattr(mtgjson, "deck_list", down)
+    r = tp.plan()
+    assert r["ready"] == [] and r["unread"] == [{"ref": "set:tla", "name": "TLA products", "error": "offline"}]
+
+
+def test_latest_pick_wins_a_contest_between_picks(tmp_db, seed_cards, make_card, stub_products,
+                                                  fake_scryfall):
+    """Two products contest the one copy of b. Picking one, then the other, must
+    let the LATEST pick win — otherwise the second click does nothing."""
+    fake_scryfall()
+    a = "abab0000-0000-0000-0000-000000000001"
+    b = "abab0000-0000-0000-0000-000000000002"
+    from magic_manager import db
+    seed_cards([make_card(id=a, set="tla", collector_number="1", name="A"),
+                make_card(id=b, set="tla", collector_number="2", name="B")])
+    with db.connect() as conn:
+        _seed_unattributed(conn, [(a, "nonfoil", 1), (b, "nonfoil", 1)])
+    stub_products(
+        decklist={"tla": [{"fileName": "One_TLA", "name": "One", "code": "TLA", "type": "Box Set"},
+                          {"fileName": "Two_TLA", "name": "Two", "code": "TLA", "type": "Box Set"}]},
+        decks={"One_TLA": _deck("One", "TLA", "Box Set", [(a, 1, False, "tla"), (b, 1, False, "tla")]),
+               "Two_TLA": _deck("Two", "TLA", "Box Set", [(b, 1, False, "tla")])},
+    )
+    tp = _load()
+    for picks, winner in ((["Two_TLA"], "Two_TLA"), (["Two_TLA", "One_TLA"], "One_TLA"),
+                          (["One_TLA", "Two_TLA"], "Two_TLA")):
+        r = tp.plan(picks=picks)
+        assert [p["fileName"] for p in r["ready"]] == [winner], picks
+
+
+def test_plan_apply_require_refuses_a_different_covered_set(tmp_db, seed_cards, make_card,
+                                                            stub_products, fake_scryfall):
+    """apply with ``require`` writes nothing unless the covered products are
+    exactly the reviewed ones."""
+    from magic_manager import db, ingest
+    fake_scryfall()
+    _two_products(seed_cards, make_card, stub_products)
+    tp = _load()
+    with pytest.raises(tp.ReviewChanged):
+        tp.plan(apply=True, require={"Two_TLA"})  # both products are covered
+    with db.connect() as conn:
+        assert conn.execute("SELECT COUNT(*) c FROM decks").fetchone()["c"] == 0
+        assert conn.execute("SELECT COUNT(*) c FROM ingest_events WHERE label LIKE 'trueup:%'").fetchone()["c"] == 0
+        assert ingest.reconcile_inventory_ledger(conn) == []
+    r = tp.plan(only={"Two_TLA"}, apply=True, require={"Two_TLA"})
+    assert r["registered"] == 1

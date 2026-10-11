@@ -35,6 +35,7 @@ from __future__ import annotations
 import json
 import sys
 from collections import defaultdict
+from collections.abc import Iterable
 
 from . import (
     config as config_mod, db, decks as decks_mod, ingest as ingest_mod, mtgjson as mtgjson_mod,
@@ -148,11 +149,18 @@ def _loose_set_codes(conn) -> set[str]:
     }
 
 
-def _enumerate_products(set_codes: set[str]) -> list[dict]:
+def _unread(ref: str, name: str, err: Exception) -> dict:
+    """A product list (or a set's list of products) that couldn't be read —
+    reported in the result so a scan never passes off "not read" as "no match"."""
+    return {"ref": ref, "name": name, "error": str(err) or type(err).__name__}
+
+
+def _enumerate_products(set_codes: set[str], unread: list[dict] | None = None) -> list[dict]:
     """DeckList products (precon/jumpstart/pool decks) for the given sets.
 
     Returns entries ``{fileName, name, code, type}`` excluding SLD/MTGO. SLD
-    drops are enumerated separately.
+    drops are enumerated separately. A set whose list can't be read is appended
+    to ``unread``.
     """
     products: list[dict] = []
     seen: set[str] = set()
@@ -167,7 +175,8 @@ def _enumerate_products(set_codes: set[str]) -> list[dict]:
                 seen.add(fn)
                 products.append(d)
         except Exception as e:  # noqa: BLE001
-            print(f"  warn: deck_list({sc}) failed: {e!r}", file=sys.stderr)
+            if unread is not None:
+                unread.append(_unread(f"set:{sc}", f"{sc.upper()} products", e))
     return products
 
 
@@ -194,7 +203,7 @@ def _owned_map(conn) -> dict[tuple[str, str], int]:
 
 
 def _match_products(conn, products: list[dict], supply: dict,
-                    progress=None) -> tuple[list[dict], dict]:
+                    progress=None, unread: list[dict] | None = None) -> tuple[list[dict], dict]:
     """Compute per-product coverage against the UNATTRIBUTED-BALANCE ``supply``.
 
     ``supply`` maps ``(sid, finish) -> copies not yet attributed to any product``
@@ -207,7 +216,8 @@ def _match_products(conn, products: list[dict], supply: dict,
     Returns ``(covered, need_map)``; each covered product carries ``needs``,
     ``recipe_qty``, and coverage detail (``covered_qty``/``committed``/``missing``
     vs the raw owned map) for tier reporting. ``need_map`` sums demand across
-    covered products (for conflict detection).
+    covered products (for conflict detection). A product whose list can't be
+    read is appended to ``unread``.
     """
     owned = _owned_map(conn)
     covered: list[dict] = []
@@ -221,7 +231,8 @@ def _match_products(conn, products: list[dict], supply: dict,
         try:
             needs = decks_mod.precon_recipe_needs(fn)
         except Exception as e:  # noqa: BLE001
-            print(f"  warn: recipe fetch failed for {fn}: {e!r}", file=sys.stderr)
+            if unread is not None:
+                unread.append(_unread(fn, d.get("name") or fn, e))
             continue
         if not needs:
             continue
@@ -238,7 +249,7 @@ def _match_products(conn, products: list[dict], supply: dict,
 
 
 def _partition_ready_conflicts(covered: list[dict], need_map: dict, supply: dict,
-                               picks: set[str], cfg: dict | None = None
+                               picks: Iterable[str], cfg: dict | None = None
                                ) -> tuple[list[dict], list[dict], list[dict]]:
     """Allocate the unattributed ``supply`` to covered products by PRIORITY.
 
@@ -252,11 +263,17 @@ def _partition_ready_conflicts(covered: list[dict], need_map: dict, supply: dict
     shared card — is **conflicted**.
 
     ``--pick`` forces a product to the FRONT of the order (user override beats
-    priority). A conflicted product is reported with the specific cards it lost
+    priority); among several picks the LATEST one comes first, so a later pick
+    of a product that lost to an earlier pick wins the contest. A conflicted product is reported with the specific cards it lost
     and to whom, so a genuine same-tier tie is actionable via ``--pick``.
     """
     cfg = cfg or _load_priority_config()
-    picked = [p for p in covered if p["fileName"] in picks or _slug_of(p) in picks]
+    rank = {v: i for i, v in enumerate(dict.fromkeys(picks))}
+
+    def _pick_rank(p: dict) -> int:
+        return max(rank.get(p["fileName"], -1), rank.get(_slug_of(p), -1))
+
+    picked = sorted((p for p in covered if _pick_rank(p) >= 0), key=lambda p: -_pick_rank(p))
     rest = sorted((p for p in covered if p not in picked),
                   key=lambda p: _priority_key(p, cfg))
     ordered = picked + rest  # picks first, then priority order
@@ -303,7 +320,8 @@ def _slug_of(product: dict) -> str:
 
 # ---------- SLD ----------
 
-def _sld_status(conn, threshold: float) -> tuple[list[dict], list[dict]]:
+def _sld_status(conn, threshold: float,
+                unread: list[dict] | None = None) -> tuple[list[dict], list[dict]]:
     """Return (complete, partial) Secret Lair drops by CN ownership.
 
     A drop is COMPLETE if every one of its collector numbers is owned (any
@@ -314,7 +332,8 @@ def _sld_status(conn, threshold: float) -> tuple[list[dict], list[dict]]:
     try:
         drops = sld_mod.all_drops()
     except Exception as e:  # noqa: BLE001
-        print(f"  warn: sld.all_drops failed: {e!r}", file=sys.stderr)
+        if unread is not None:
+            unread.append(_unread("sld", "Secret Lair drops", e))
         return complete, partial
 
     owned_cn = {
@@ -326,7 +345,9 @@ def _sld_status(conn, threshold: float) -> tuple[list[dict], list[dict]]:
     for name, drop in drops.items():
         try:
             ids = sld_mod.collect_drop_ids(drop.get("file_names", []))
-        except Exception:  # noqa: BLE001
+        except Exception as e:  # noqa: BLE001
+            if unread is not None:
+                unread.append(_unread(f"sld:{name}", name, e))
             continue
         # Map the drop's cards to collector numbers via the local cards table.
         cns = {r["collector_number"] for r in conn.execute(
@@ -464,16 +485,26 @@ def _apply(conn, ready: list[dict]) -> dict:
 
 # ---------- orchestration ----------
 
+class ReviewChanged(ValueError):
+    """``plan(apply=True, require=…)`` found a different covered set than reviewed."""
+
+
 def plan(*, mode: str = "from-unattributed", target: str | None = None, apply: bool = False,
-         picks: set[str] | None = None, sld_threshold: float = 0.9,
+         picks: Iterable[str] | None = None, sld_threshold: float = 0.9,
          refute: set[str] | None = None, progress=None,
-         only: set[str] | None = None) -> dict:
+         only: set[str] | None = None, require: set[str] | None = None) -> dict:
     """Match re-attributable loose cards to products; with ``apply`` impute the
     covered ones. Returns the result dict (ready / conflicts / contested / SLD).
     ``progress(done, total, product_name)`` ticks once per candidate product (the
     first run fetches every decklist, so it is slow cold). ``only`` restricts the
-    candidates to those fileNames (re-checking a reviewed list is then fast)."""
-    picks = picks or set()
+    candidates to those fileNames (re-checking a reviewed list is then fast).
+    ``picks`` are ordered — the latest pick wins a contest between picks.
+    ``unread`` lists every product list that couldn't be read (MTGJSON down, a
+    missing deck file): those products were not checked, not "not matched".
+    ``require`` (with ``apply``) refuses to write unless the covered products are
+    exactly that set — the web records only the list the user reviewed."""
+    picks = list(picks or ())
+    unread: list[dict] = []
     with db.connect() as conn:
         # Supply = per-(sid,finish) copies still held by BEST-EFFORT backfill
         # events (status='backfill': unattributed + generic precon/checklist
@@ -495,14 +526,14 @@ def plan(*, mode: str = "from-unattributed", target: str | None = None, apply: b
         else:  # from-unattributed (default): sets with any re-attributable balance
             set_codes = _backfill_set_codes(conn)
 
-        products = _enumerate_products(set_codes)
+        products = _enumerate_products(set_codes, unread)
 
         # SLD (only when sld is in scope or --all). Complete drops become
         # matchable products (one per sibling fileName) folded into the same
         # coverage/conflict/apply pipeline; partials are advisory-only.
         sld_complete, sld_partial = ([], [])
         if "sld" in set_codes or mode == "all":
-            sld_complete, sld_partial = _sld_status(conn, sld_threshold)
+            sld_complete, sld_partial = _sld_status(conn, sld_threshold, unread)
             products = products + _sld_products(sld_complete, supply)
 
         # --refute: products the user reviewed and says they did NOT buy. Drop
@@ -515,7 +546,7 @@ def plan(*, mode: str = "from-unattributed", target: str | None = None, apply: b
 
         if only is not None:
             products = [p for p in products if p["fileName"] in only]
-        covered, need_map = _match_products(conn, products, supply, progress)
+        covered, need_map = _match_products(conn, products, supply, progress, unread)
         cfg = _load_priority_config()
         ready, conflicted, contested = _partition_ready_conflicts(
             covered, need_map, supply, picks, cfg)
@@ -526,9 +557,12 @@ def plan(*, mode: str = "from-unattributed", target: str | None = None, apply: b
             "conflicts": [{**_product_out(conn, p), "lost": p.get("lost", [])} for p in conflicted],
             "contested_cards": contested,
             "sld_complete": sld_complete, "sld_partial": sld_partial,
+            "unread": unread,
             "applied": False,
         }
 
+        if apply and require is not None and {p["fileName"] for p in ready} != require:
+            raise ReviewChanged("The covered products changed since they were reviewed; nothing was recorded.")
         if apply and ready:
             result.update(_apply(conn, ready))
             result["applied"] = True
@@ -537,22 +571,18 @@ def plan(*, mode: str = "from-unattributed", target: str | None = None, apply: b
 
 def _product_out(conn, p: dict) -> dict:
     """A product as reported: identity + recipe size + its cards' local value."""
-    sids = sorted({sid for sid, _ in p.get("needs", {})})
-    prices = {
-        r[0]: (r[1], r[2]) for r in conn.execute(
-            f"SELECT scryfall_id, prices_usd, prices_usd_foil FROM cards "
-            f"WHERE scryfall_id IN ({','.join('?' * len(sids)) or 'NULL'})", sids)
-    }
+    needs = p.get("needs", {})
+    prices = sets_mod.card_price_map((sid for sid, _ in needs), conn=conn)
     usd = 0.0
-    for (sid, fin), qty in p.get("needs", {}).items():
-        nf, foil = prices.get(sid, (None, None))
-        usd += ((foil if fin == "foil" else nf) or 0) * qty
+    for (sid, fin), qty in needs.items():
+        row = prices.get(sid, {})
+        usd += (row.get("prices_usd_foil" if fin == "foil" else "prices_usd") or 0) * qty
     return {"fileName": p["fileName"], "name": p["name"], "type": p.get("type"),
             "code": p.get("code"), "release_date": p.get("release_date"),
             "recipe_qty": p.get("recipe_qty", 0), "usd": round(usd, 2)}
 
 
-def run(*, mode: str, target: str | None, apply: bool, picks: set[str],
+def run(*, mode: str, target: str | None, apply: bool, picks: Iterable[str],
         sld_threshold: float, json_out: bool, refute: set[str] | None = None) -> int:
     """CLI driver: :func:`plan` then print the report."""
     result = plan(mode=mode, target=target, apply=apply, picks=picks,
@@ -594,6 +624,12 @@ def _report(result: dict, *, json_out: bool, apply: bool) -> None:
         print(f"\nSECRET LAIR — near-complete (>= threshold, confirm) ({len(sld_p)}):")
         for d in sld_p:
             print(f"  {d['name']}  ({d['owned']}/{d['cns']} CNs, {d['frac']*100:.0f}%)")
+    unread = result.get("unread") or []
+    if unread:
+        print(f"\nNOT CHECKED — {len(unread)} product list(s) couldn't be read "
+              f"(re-run once MTGJSON is reachable):")
+        for u in unread:
+            print(f"  {u['name']}  [{u['ref']}]  {u['error']}")
 
     print()
     if result.get("applied"):

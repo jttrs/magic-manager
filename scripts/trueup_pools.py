@@ -33,7 +33,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     mode = "all" if args.all else ("target" if args.target else "from-unattributed")
-    picks = {s.strip() for s in args.pick.split(",") if s.strip()}
+    picks = [s.strip() for s in args.pick.split(",") if s.strip()]
     refute = {s.strip() for s in args.refute.split(",") if s.strip()}
     return run(mode=mode, target=args.target, apply=args.apply, picks=picks,
                sld_threshold=args.sld_partial_threshold, json_out=args.json, refute=refute)

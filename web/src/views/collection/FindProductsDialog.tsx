@@ -4,38 +4,41 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useJob, type JobLive } from '../../app/useJob';
 import { Button } from '../../components/Button';
 import { fmtCount, fmtInt, fmtUsd } from '../../core/format';
-import { confirmed, productMeta, readNotMine, rememberNotMine, scanFrom, type CoverageScan } from '../../core/trueup';
-
-type Phase = 'scan' | 'review' | 'record' | 'done';
+import { confirmed, coveragePhase, productMeta, readNotMine, rememberNotMine, scanFrom, withPick, type CoverageScan } from '../../core/trueup';
 
 /** Find which products your loose cards came from — scene boxes, precon and
  *  jumpstart decks, land packs, complete Secret Lair drops — review the matches,
  *  and record the ones you bought, so Acquired from can trace their cards. */
 export function FindProductsDialog({ trigger }: { trigger: ReactNode }) {
   const [open, setOpen] = useState(false);
+  // While products are being recorded the dialog stays open (Escape included),
+  // so the outcome is shown and the caches refresh.
+  const [busy, setBusy] = useState(false);
   return (
-    <Dialog.Root open={open} onOpenChange={setOpen}>
+    <Dialog.Root open={open} onOpenChange={(o) => { if (o || !busy) setOpen(o); }}>
       <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim backdrop-blur-[1px]" />
         <Dialog.Content
           onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => { if (busy) e.preventDefault(); }}
           className="paper-grain fixed left-1/2 top-1/2 z-50 flex max-h-[min(44rem,calc(100dvh-1.5rem))] w-[min(40rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col rounded-sm bg-paper text-ink shadow-[0_24px_60px_-24px_var(--theme-scrim)] focus:outline-none"
         >
-          {open && <Review onClose={() => setOpen(false)} />}
+          {open && <Review onClose={() => { setBusy(false); setOpen(false); }} onBusy={setBusy} />}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
   );
 }
 
-function Review({ onClose }: { onClose: () => void }) {
+function Review({ onClose, onBusy }: { onClose: () => void; onBusy: (busy: boolean) => void }) {
   const qc = useQueryClient();
   const scanJob = useJob();
   const recordJob = useJob();
   const [picks, setPicks] = useState<string[]>([]);
   const [notMine, setNotMine] = useState<Set<string>>(new Set());
   const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const scan = (p: string[]) => {
     setError('');
@@ -52,8 +55,15 @@ function Review({ onClose }: { onClose: () => void }) {
 
   const result: CoverageScan | null = scanJob.live?.status === 'succeeded' ? scanFrom(scanJob.live.artifacts) : null;
   const recorded: CoverageScan | null = recordJob.live?.status === 'succeeded' ? scanFrom(recordJob.live.artifacts) : null;
-  const phase: Phase = recorded ? 'done' : recordJob.live ? 'record' : result ? 'review' : 'scan';
+  const phase = coveragePhase(result !== null, recordJob.live?.status, recorded !== null);
   const keep = result ? confirmed(result, notMine) : [];
+  const busy = submitting || phase === 'record';
+  useEffect(() => { onBusy(busy); }, [busy, onBusy]);
+
+  // "Not mine" sticks however the dialog closes — Record, Cancel or Escape.
+  const notMineRef = useRef(notMine);
+  useEffect(() => { notMineRef.current = notMine; }, [notMine]);
+  useEffect(() => () => rememberNotMine([...notMineRef.current]), []);
 
   useEffect(() => {
     if (!recorded) return;
@@ -64,10 +74,19 @@ function Review({ onClose }: { onClose: () => void }) {
   }, [recorded, qc]);
 
   const record = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    onBusy(true);
+    setError('');
     rememberNotMine([...notMine]);
-    const err = await recordJob.start('trueup.apply', { expect: keep.map((p) => p.fileName), picks });
-    if (err) setError(err);
+    try {
+      const err = await recordJob.start('trueup.apply', { expect: keep.map((p) => p.fileName), picks });
+      if (err) setError(err);
+    } finally {
+      setSubmitting(false);
+    }
   };
+  const unread = result?.unread ?? [];
   const failure = scanJob.live?.status === 'failed' ? scanJob.live.error : recordJob.live?.status === 'failed' ? recordJob.live.error : null;
 
   return (
@@ -88,9 +107,15 @@ function Review({ onClose }: { onClose: () => void }) {
             <button type="button" className="cursor-pointer underline" onClick={() => { recordJob.reset(); scan(picks); }}>Scan again</button>
           </p>
         )}
+        {phase === 'review' && result && unread.length > 0 && (
+          <p role="alert" className="mb-4 text-md leading-relaxed text-danger">
+            {fmtCount(unread.length, 'product list')} couldn’t be read, so {unread.length === 1 ? 'its products weren’t' : 'their products weren’t'} checked: {unread.slice(0, 3).map((u) => u.name).join(', ')}{unread.length > 3 ? '…' : ''}.{' '}
+            <button type="button" className="cursor-pointer underline" onClick={() => scan(picks)}>Scan again</button>
+          </p>
+        )}
         {phase === 'review' && result && (
           result.ready.length === 0 && result.conflicts.length === 0 ? (
-            <p className="text-md leading-relaxed text-ink-muted">No products found. Your cards with no known source don’t complete any product’s list.</p>
+            unread.length === 0 && <p className="text-md leading-relaxed text-ink-muted">No products found. Your cards with no known source don’t complete any product’s list.</p>
           ) : (
             <div className="flex flex-col gap-5">
               {result.ready.length > 0 && (
@@ -133,7 +158,7 @@ function Review({ onClose }: { onClose: () => void }) {
                         </span>
                         <button
                           type="button"
-                          onClick={() => { const next = [...picks, p.fileName]; setPicks(next); scan(next); }}
+                          onClick={() => { const next = withPick(picks, p.fileName); setPicks(next); scan(next); }}
                           className="shrink-0 cursor-pointer rounded-sm border border-rule px-2.5 py-1 text-sm voice-semi text-ink hover:border-rule-strong"
                         >
                           I opened this one
@@ -160,9 +185,9 @@ function Review({ onClose }: { onClose: () => void }) {
         ) : (
           <>
             <Dialog.Close asChild>
-              <Button tone="paper" disabled={phase === 'record'}>Cancel</Button>
+              <Button tone="paper" disabled={busy}>Cancel</Button>
             </Dialog.Close>
-            <Button emphasis="primary" onClick={record} disabled={phase !== 'review' || keep.length === 0}>
+            <Button emphasis="primary" onClick={record} disabled={phase !== 'review' || busy || keep.length === 0}>
               {keep.length ? `Record ${fmtCount(keep.length, 'product')}` : 'Record products'}
             </Button>
           </>
