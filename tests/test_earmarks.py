@@ -240,6 +240,15 @@ def test_resolve_single_scryfall_fill(tmp_db, make_card, monkeypatch):
     assert r["scryfall_id"] == "sid-9"
     with db.connect() as conn:
         assert conn.execute("SELECT name FROM cards WHERE scryfall_id='sid-9'").fetchone()[0] == "Remote Card"
+    # a lookup-filled single must not make its set look synced
+    from magic_manager import sets
+    assert sets.unsynced_set_codes(["tst"]) == ["tst"]
+
+
+def test_resolve_single_rejects_non_nonfoil_foil_finish(tmp_db, seed_cards, make_card):
+    seed_cards([make_card(id="sid-1", set="tst", collector_number="7", finishes=["nonfoil", "etched"])])
+    with pytest.raises(LookupError, match="nonfoil or foil"):
+        earmarks.resolve_single("tst", "7", "etched")
 
 
 # ---------- CLI singles ----------

@@ -9,16 +9,6 @@ from magic_manager import config, deals, tabs, vendors
 F, R = "\x1f", "\x1e"
 
 
-def _copy_real_config(tmp_path):
-    """Point-at-tmp tests replace only features.toml; copy the rest so a route that
-    reads another config file works whether or not an earlier test cached it."""
-    import shutil
-    from pathlib import Path
-    for f in (Path(__file__).resolve().parents[1] / "config").glob("*.toml"):
-        if f.name != "features.toml" and not (tmp_path / f.name).exists():
-            shutil.copy(f, tmp_path / f.name)
-
-
 def _raw(windows: int, rows: list[tuple[str, str, int, int]]) -> str:
     return f"{windows}{R}" + "".join(f"{u}{F}{t}{F}{w}{F}{i}{R}" for u, t, w, i in rows)
 
@@ -84,11 +74,11 @@ def test_open_tabs_groups_by_store():
     assert (out["other"], out["store_pages"]) == (2, 0)
 
 
-def test_deals_route_is_gated(tmp_db, tmp_path, monkeypatch):
+def test_deals_route_is_gated(tmp_db, tmp_path, monkeypatch, copy_real_config):
     from magic_manager.web.app import create_app  # import before pointing config at a temp dir
     monkeypatch.setenv("MAGIC_MANAGER_CONFIG_DIR", str(tmp_path))
     (tmp_path / "features.toml").write_text("[features]\ndeals = false\n")
-    _copy_real_config(tmp_path)  # every other config file the routes read
+    copy_real_config(tmp_path)  # every other config file the routes read
     monkeypatch.delenv("MM_FEATURES", raising=False)
     config._cached_toml.cache_clear()
     monkeypatch.setattr(tabs, "_osascript", lambda script: _raw(3, ROWS))

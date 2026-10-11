@@ -34,7 +34,7 @@ import json
 from dataclasses import dataclass, field
 from urllib.parse import urlparse
 
-from . import db, scryfall
+from . import db, scryfall, sets
 
 
 # ---------- row shapes ----------
@@ -110,10 +110,12 @@ def resolve_single(set_code: str, collector_number: str, finish: str = "nonfoil"
         if row is None:
             found, _ = scryfall.collection([{"set": set_code, "collector_number": cn}])
             if found:
-                db.upsert_card(conn, found[0])
+                sets.upsert_lookup_cards(conn, [found[0]])
                 conn.commit()
             row = conn.execute(sql, (set_code, cn)).fetchone()
     tag = f"{set_code.upper()} #{cn}"
+    if finish not in ("nonfoil", "foil"):
+        raise LookupError("single earmarks track nonfoil or foil")
     if row is None:
         raise LookupError(f"no printing {tag}")
     try:

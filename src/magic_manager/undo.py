@@ -187,6 +187,10 @@ def restore() -> dict:
             for k, v in kept:
                 conn.execute("INSERT INTO main.settings (key, value) VALUES (?, ?) "
                              "ON CONFLICT (key) DO UPDATE SET value = excluded.value", (k, v))
+            if "settings" in live:  # a kept key absent live stays absent (not resurrected from the snapshot)
+                gone = [k for k in KEEP_SETTINGS if k not in {k for k, _ in kept}]
+                if gone:
+                    conn.execute(f"DELETE FROM main.settings WHERE key IN ({', '.join('?' for _ in gone)})", gone)
             conn.commit()
         except Exception:
             conn.rollback()
