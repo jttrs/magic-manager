@@ -187,7 +187,9 @@ def read_shopify(product: dict, variant: str | None = None) -> Listing:
     product-level ``available``. A ``variant`` (from the link's ``?variant=``)
     reads that variant — a multi-deck page's links each name one deck — and
     its title joins the product's; otherwise the cheapest available variant
-    wins (else the cheapest overall, marked unavailable)."""
+    wins (else the cheapest overall, marked unavailable). A requested variant
+    that can't be found raises ``LookupError`` (like a 404 product) — never
+    another variant's price, and not a "page changed" recipe failure."""
     variants = product.get("variants") or []
     title = product.get("title")
     chosen = _variant_for(variants, variant) if variant else None
@@ -196,6 +198,8 @@ def read_shopify(product: dict, variant: str | None = None) -> Listing:
         vt = str(chosen.get("title") or "")
         if vt and vt.lower() != "default title":
             title = f"{title} — {vt}"
+    elif variant:
+        raise LookupError("the store no longer has this variant")
     else:
         live = [v for v in variants if v.get("available")]
         pick = min(live or variants, key=lambda v: v.get("price") or 0, default=None)

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ProductCostOut } from './api';
-import { filterSortProducts, inStockBest, newlyMetFrom, targetMet, targetPriceOf, targetText, type DealFilters, type DealProduct, type Offer } from './deals';
+import { filterSortProducts, inStockBest, newlyMetFrom, targetMet, targetPriceOf, targetText, trustedBest, type DealFilters, type DealProduct, type Offer } from './deals';
 import { historyChart } from './priceHistory';
 
 const offer = (o: Partial<Offer>): Offer => ({ url: 'https://a.example/x', store: 'A', price: 80, available: true, ...o });
@@ -33,6 +33,16 @@ describe('price targets', () => {
     expect(targetMet(aged('2026-10-04T12:00:00Z'), undefined, now)).toBe(true);
     // the cheap store's last refresh failed: its old price can't meet the target
     expect(targetMet(prod({ offers: [offer({ price: 60, error: 'Blocked' }), offer({ price: 90 })], targetPrice: 70, target: T('price', 70) }), undefined)).toBe(false);
+  });
+  it('a store whose latest read failed can’t meet a target; trustedBest skips it and stale prices', () => {
+    const now = new Date('2026-10-10T12:00:00Z');
+    const failed = offer({ price: 60, readFailed: true, readAt: '2026-10-09T12:00:00Z' });
+    const stale = offer({ url: 's', price: 65, readAt: '2026-10-01T12:00:00Z' });
+    const good = offer({ url: 'g', price: 90, readAt: '2026-10-09T12:00:00Z' });
+    const p = prod({ offers: [failed, stale, good], targetPrice: 70, target: T('price', 70) });
+    expect(trustedBest(p, now)?.price).toBe(90);
+    expect(targetMet(p, undefined, now)).toBe(false);
+    expect(trustedBest(prod({ offers: [failed, stale] }), now)).toBeNull();
   });
   it('describes the target the way it was set', () => {
     expect(targetText(T('price', 72), 'sealed')).toBe('$72.00');
@@ -72,6 +82,12 @@ describe('price history chart', () => {
     expect(sa.path).toMatch(/^M0 [\d.]+ H50 V[\d.]+ H100$/);
     expect(sa.points[1].y).toBeGreaterThan(sb.points[0].y);  // $70 sits below $90
     expect([sa.first, sa.low, sa.high, sa.now]).toEqual([80, 70, 80, 70]);
+  });
+  it('skips failed (null-price) readings', () => {
+    const o = offer({ history: [{ price: 80, at: '2026-10-01T12:00:00Z' }, { price: null, at: '2026-10-05T12:00:00Z' }, { price: 70, at: '2026-10-09T12:00:00Z' }] });
+    const c = historyChart([o])!;
+    expect(c.series[0].points).toHaveLength(2);
+    expect(c.rows.map((r) => r.price)).toEqual([70, 80]);
   });
   it('fits the target in the axis and lists every reading newest first', () => {
     const c = historyChart([a, b], 60)!;

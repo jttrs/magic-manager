@@ -3,7 +3,7 @@ import { useId, useState, type FormEvent } from 'react';
 import { unwrap } from '../../app/queries';
 import { Button } from '../../components/Button';
 import { dealsClearTarget, dealsSetTarget, type ProductCostOut, type TargetOut } from '../../core/api';
-import { inStockBest, targetMet, targetPriceOf, targetText, type DealProduct } from '../../core/deals';
+import { targetMet, trustedBest, targetPriceOf, targetText, type DealProduct } from '../../core/deals';
 import { fmtUsd } from '../../core/format';
 import { H3 } from './inspectorStyles';
 
@@ -90,7 +90,7 @@ function Status({ p, cost }: { p: DealProduct; cost?: ProductCostOut }) {
   if (!t) return <p className="text-sm text-ink-muted">No target yet. Set one and reading watched prices tells you when the best in-stock price reaches it.</p>;
   const at = targetPriceOf(p, cost);
   const met = targetMet(p, cost);
-  const best = inStockBest(p);
+  const best = trustedBest(p);
   const how = t.mode === 'price' ? fmtUsd(t.value) : `${fmtUsd(at ?? 0)} (${targetText(t, p.kind)})`;
   if (at == null) return <p role="status" className="text-sm text-ink-muted">Target {targetText(t, p.kind)} — waiting for the sealed price to work out the price.</p>;
   if (met && best?.price != null) {
@@ -104,7 +104,7 @@ function Status({ p, cost }: { p: DealProduct; cost?: ProductCostOut }) {
     <p role="status" className="text-sm text-ink">
       Target {how}.{' '}
       <span className="text-ink-muted">
-        {best?.price != null ? `Best in stock is ${fmtUsd(best.price)} — ${fmtUsd(best.price - at)} to go.` : 'No store has it in stock right now.'}
+        {best?.price != null ? `Best in stock is ${fmtUsd(best.price)} — ${fmtUsd(best.price - at)} to go.` : 'No store has a recent, in-stock price right now.'}
       </span>
     </p>
   );

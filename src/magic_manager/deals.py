@@ -124,6 +124,7 @@ def read_prices(urls: list[str], *, progress=None, fresh: bool = False,
             row["error"] = js_off
         except (storepage.Blocked, storefetch.TabGone, LookupError) as e:
             row["error"] = str(e)[:1].upper() + str(e)[1:]
+            row["not_counted"] = isinstance(e, storepage.NotCounted)  # a page the recipe skips isn't a failed read
         except Exception as e:  # noqa: BLE001 — one store's surprise never sinks the batch
             row["error"] = f"Couldn’t read this page ({type(e).__name__})."
         rows.append(row)
@@ -324,7 +325,8 @@ def _store_name(url: str, saved: str | None) -> str | None:
 
 def watchlist(*, progress=None, values: bool = True) -> list[dict]:
     """Every watched product: each store's latest price + stock + when read, the
-    first price seen there, the best current in-stock price, and — with
+    first price seen there (a failed read — NULL price — is skipped, flagged
+    ``read_failed``), the best current in-stock price, and — with
     ``values`` — market + cards inside and the face-price gap. Best deals first.
     ``values=False`` is instant (no valuation): the web app fills values per
     product from ``market.product_cost``."""
@@ -345,13 +347,18 @@ def watchlist(*, progress=None, values: bool = True) -> list[dict]:
         stores = []
         for l in p.links:
             h = history.get(l.link_id) or []
-            last = h[-1] if h else {"price": l.asking_price, "available": None, "read_at": l.captured_at, "source": "snapshot"}
-            first = h[0] if h else last
-            seen = [x["price"] for x in (h or [last]) if x["price"] is not None]
+            # A NULL-price row is a failed read: the store's figures come from its newest
+            # NON-NULL row, and ``read_failed`` flags that the latest read didn't land.
+            good = [x for x in h if x["price"] is not None]
+            snapshot = {"price": l.asking_price, "available": None, "read_at": l.captured_at, "source": "snapshot"}
+            last = good[-1] if good else snapshot
+            first = good[0] if good else last
+            seen = [x["price"] for x in (good or [last]) if x["price"] is not None]
             stores.append({
                 "url": l.store_url, "store": _store_name(l.store_url, l.store_name), "price": last["price"], "available": last["available"],
                 "read_in_browser": reads_in_browser(l.store_url),
                 "read_at": last["read_at"], "read": last["source"] == "read",
+                "read_failed": bool(h) and h[-1]["price"] is None,
                 "first_price": first["price"], "first_at": first["read_at"],
                 "change": None if last["price"] is None or first["price"] is None else round(last["price"] - first["price"], 2),
                 "low": min(seen, default=None), "high": max(seen, default=None),
@@ -388,6 +395,13 @@ def _fresh(read_at: str | None, now: datetime) -> bool:
     return now - at <= timedelta(days=earmarks.TARGET_FRESH_DAYS)
 
 
+def _trusted(stores: list[dict], failed: frozenset[str], now: datetime) -> list[dict]:
+    """In-stock stores whose price can be trusted: latest read didn't fail
+    (persisted ``read_failed``, or this job's ``failed`` URLs) and is fresh."""
+    return [s for s in stores if s["price"] is not None and s["available"] is not False
+            and not s.get("read_failed") and s["url"] not in failed and _fresh(s.get("read_at"), now)]
+
+
 def _target_met(stores: list[dict], threshold: float | None, failed: frozenset[str] = frozenset(),
                 *, now: datetime | None = None) -> bool | None:
     """Met: the best in-stock price is at or under ``threshold``. Only a price we
@@ -396,8 +410,7 @@ def _target_met(stores: list[dict], threshold: float | None, failed: frozenset[s
     if threshold is None:
         return None
     now = now or datetime.now(timezone.utc)
-    in_stock = min((s["price"] for s in stores if s["price"] is not None and s["available"] is not False
-                    and s["url"] not in failed and _fresh(s.get("read_at"), now)), default=None)
+    in_stock = min((s["price"] for s in _trusted(stores, failed, now)), default=None)
     return in_stock is not None and in_stock <= threshold
 
 
@@ -430,12 +443,13 @@ def read_watched(*, progress=None, pages: dict[str, dict] | None = None, tabs_on
     """Read every watched link's price (its history grows), then report the
     products whose target was met by THIS read: met now (best in-stock price at
     or under the target) and not met just before. A store this read failed on
-    can't meet a target (its price is an old one). Returns ``{rows, read,
+    can't meet a target (its price is an old one; the failed read is kept in the
+    history, so the watchlist says so too). Reads bypass the page cache. Returns ``{rows, read,
     newly_met}`` — ``rows`` is the instant watchlist, ``read`` the price rows.
     ``pages``/``tabs_on_mac``: open-tab store pages the browser companion read
     (see :func:`read_prices`)."""
     before = {r["product_id"]: r for r in _with_target_prices(watchlist(values=False))}
-    read = read_and_compare(watched_urls(), progress=progress, pages=pages, tabs_on_mac=tabs_on_mac)
+    read = read_and_compare(watched_urls(), progress=progress, fresh=True, pages=pages, tabs_on_mac=tabs_on_mac)
     failed = frozenset(x["url"] for x in read if x.get("error") or x.get("price") is None)
     rows = _with_target_prices(watchlist(values=False), failed)
     newly = []
@@ -445,9 +459,7 @@ def read_watched(*, progress=None, pages: dict[str, dict] | None = None, tabs_on
         prev = before.get(r["product_id"])
         if prev is None or prev["target_met"] is not True:
             now = datetime.now(timezone.utc)
-            live = [s for s in r["stores"] if s["price"] is not None and s["available"] is not False
-                    and s["url"] not in failed and _fresh(s.get("read_at"), now)]
-            best = min(live, key=lambda s: s["price"])
+            best = min(_trusted(r["stores"], failed, now), key=lambda s: s["price"])
             newly.append({"product_id": r["product_id"], "name": r["name"], "kind": r["kind"], "set_code": r["set_code"],
                           "finish": r.get("finish"), "scryfall_id": r.get("scryfall_id"),
                           "price": best["price"], "store": best["store"], "url": best["url"], "target_price": r["target_price"]})

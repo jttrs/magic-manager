@@ -76,11 +76,24 @@ def test_metadata_coalesces_on_readd(tmp_db):
     assert p.release_date == "2019-08-23"  # filled in
 
 
+def test_rm_last_link_removes_the_product_with_target_and_history(tmp_db):
+    from magic_manager import db
+    earmarks.earmark_add("c19", "Faceless Menace", URL_A, asking_price=50.0)
+    pid = earmarks.earmark_list()[0].product_id
+    earmarks.set_target(pid, "price", 40)
+    res = earmarks.earmark_remove_link(URL_A)
+    assert res == {"removed": True, "product_removed": True}
+    assert earmarks.earmark_list() == [] and earmarks.targets() == {}
+    with db.connect() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM earmark_prices").fetchone()[0] == 0
+        assert conn.execute("SELECT COUNT(*) FROM earmarked_products").fetchone()[0] == 0
+
+
 def test_rm_link_keeps_product(tmp_db):
     earmarks.earmark_add("c19", "Faceless Menace", URL_A, asking_price=50.0)
     earmarks.earmark_add("c19", "Faceless Menace", URL_B, asking_price=46.5)
     res = earmarks.earmark_remove_link(URL_A)
-    assert res["removed"] is True
+    assert res == {"removed": True, "product_removed": False}
     p = earmarks.earmark_list()[0]
     assert len(p.links) == 1
     assert p.links[0].store_url == URL_B
@@ -100,7 +113,7 @@ def test_rm_product_cascades_links(tmp_db):
 
 
 def test_rm_missing_returns_false(tmp_db):
-    assert earmarks.earmark_remove_link("https://nope.example/x")["removed"] is False
+    assert earmarks.earmark_remove_link("https://nope.example/x") == {"removed": False, "product_removed": False}
     assert earmarks.earmark_remove_product("zzz", "Nope")["removed"] is False
 
 

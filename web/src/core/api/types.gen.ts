@@ -6304,6 +6304,12 @@ export type WatchStoreOut = {
      */
     read_in_browser?: boolean;
     /**
+     * Read Failed
+     *
+     * The latest read of this link failed; the price shown is the last good one.
+     */
+    read_failed?: boolean;
+    /**
      * First Price
      */
     first_price: number | null;
