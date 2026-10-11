@@ -1,0 +1,22 @@
+name: pr-review
+# CLAUDE.md rule 4: every PR carries a /ce-code-review + /findings-review stamp
+# that matches its current changes (scripts/pr_review.py). Docs-only PRs are exempt.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+permissions:
+  contents: read
+jobs:
+  review-stamp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Check the review stamp
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          git fetch -q origin "${{ github.event.pull_request.base.ref }}"
+          python3 scripts/pr_review.py check --base "origin/${{ github.event.pull_request.base.ref }}" --head HEAD
