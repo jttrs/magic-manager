@@ -4350,6 +4350,108 @@ export type SceneOut = {
 };
 
 /**
+ * ScraperHealthOut
+ */
+export type ScraperHealthOut = {
+    /**
+     * Key
+     *
+     * `<scraper>/<site>`, e.g. `store-price/manyrealms`, `deck-import/moxfield`.
+     */
+    key: string;
+    /**
+     * Scraper
+     */
+    scraper: string;
+    /**
+     * Site
+     */
+    site: string;
+    /**
+     * Site Name
+     */
+    site_name: string;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Where
+     *
+     * Where the app offers it.
+     */
+    where: string;
+    /**
+     * Canary
+     *
+     * How the scheduled check reaches it (`none` = real use only).
+     */
+    canary: 'http' | 'browser' | 'none';
+    /**
+     * Status
+     */
+    status: 'ok' | 'down' | 'unverified' | 'unknown';
+    /**
+     * Since
+     *
+     * UTC ISO time the current status began.
+     */
+    since?: string | null;
+    /**
+     * Checked At
+     */
+    checked_at?: string | null;
+    /**
+     * Last Ok
+     */
+    last_ok?: string | null;
+    /**
+     * Code
+     *
+     * Reason code (`scrape.*`, or a companion code).
+     */
+    code?: string | null;
+    /**
+     * Message
+     */
+    message?: string | null;
+    /**
+     * Fix
+     */
+    fix?: string | null;
+    /**
+     * Via
+     */
+    via?: 'canary' | 'use' | null;
+};
+
+/**
+ * ScraperReportIn
+ */
+export type ScraperReportIn = {
+    /**
+     * Code
+     */
+    code: 'cart.page_changed' | 'moxfield.changed';
+};
+
+/**
+ * ScrapersHealthOut
+ */
+export type ScrapersHealthOut = {
+    /**
+     * Scrapers
+     */
+    scrapers: Array<ScraperHealthOut>;
+    /**
+     * Down
+     *
+     * How many are flagged temporarily down.
+     */
+    down: number;
+};
+
+/**
  * SearchOut
  */
 export type SearchOut = {
@@ -5684,6 +5786,47 @@ export type AnalyticsTraceResponses = {
 };
 
 export type AnalyticsTraceResponse = AnalyticsTraceResponses[keyof AnalyticsTraceResponses];
+
+export type ScrapersHealthData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/scrapers/health';
+};
+
+export type ScrapersHealthResponses = {
+    /**
+     * Successful Response
+     */
+    200: ScrapersHealthOut;
+};
+
+export type ScrapersHealthResponse = ScrapersHealthResponses[keyof ScrapersHealthResponses];
+
+export type ScrapersReportData = {
+    body: ScraperReportIn;
+    path?: never;
+    query?: never;
+    url: '/api/scrapers/report';
+};
+
+export type ScrapersReportErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ScrapersReportError = ScrapersReportErrors[keyof ScrapersReportErrors];
+
+export type ScrapersReportResponses = {
+    /**
+     * Successful Response
+     */
+    200: ScraperHealthOut;
+};
+
+export type ScrapersReportResponse = ScrapersReportResponses[keyof ScrapersReportResponses];
 
 export type JobSpecsData = {
     body?: never;

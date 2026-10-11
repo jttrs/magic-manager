@@ -1,4 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useStoreHealth } from '../../app/scraperHealth';
+import { ScraperDownMark } from '../../components/ScraperNotice';
 import { useEffect, useMemo, useState } from 'react';
 import { useJob } from '../../app/useJob';
 import { deltaLabel, pricesFrom, sharedErrors, stockLabel, type PriceRow } from '../../core/deals';
@@ -64,7 +66,9 @@ export function DealsPanel({ search, set }: { search: MarketSearch; set: (patch:
   const reading = live != null && live.status !== 'succeeded' && live.status !== 'failed';
   const prices = useQuery(dealsPricesQuery()).data ?? NO_PRICES;
   useEffect(() => {
-    if (live?.status === 'succeeded') setPrices(qc, pricesFrom(live.artifacts));
+    if (live?.status !== 'succeeded') return;
+    setPrices(qc, pricesFrom(live.artifacts));
+    void qc.invalidateQueries({ queryKey: ['scrapers', 'health'] });   // reads set/clear store flags
   }, [live?.status, live?.artifacts, qc]);
   const data = useDealsData('tabs', true);
   const costs = useDealCosts(data.products);
@@ -131,6 +135,7 @@ export function DealsPanel({ search, set }: { search: MarketSearch; set: (patch:
 }
 
 function Results({ r }: { r: OpenTabsOut }) {
+  const storeHealth = useStoreHealth();
   const products = r.stores.reduce((n, s) => n + s.tabs.length, 0);
   if (!products && !r.uncatalogued.length) {
     return r.warnings.length
@@ -144,6 +149,7 @@ function Results({ r }: { r: OpenTabsOut }) {
           <h2 className={H2}>
             {s.name}
             <span className="text-sm font-normal tabular text-ink-muted">{fmtInt(s.tabs.length)}</span>
+            <ScraperDownMark health={storeHealth(s.key)} />
             <span className="ml-auto text-xs font-normal text-ink-muted">{MODE_NOTE[s.mode]}{s.no_sales_tax ? ' · no sales tax' : ''}</span>
           </h2>
           <ul>

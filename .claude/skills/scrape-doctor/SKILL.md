@@ -14,8 +14,14 @@ it without guessing, and without weakening the security model
 
 ```bash
 uv run python scripts/check_scrapers.py            # offline: python pins + real-Chromium reader/extension pins
-uv run python scripts/check_scrapers.py --live     # + reads every server-read store's sample_url today
+uv run python scripts/check_scrapers.py --live     # + reads a public sample for EVERY scraper today (stores, deck importers, EDHREC, browser readers)
+uv run mm scrapers health --down                   # what the daily canary / real use flagged "temporarily down" in the app
 ```
+
+The daily launchd canary (docs/scraper-health.md) flags a scraper down in the app; once fixed,
+`uv run python scripts/check_scrapers.py --live --no-pins --record` clears the flag right away.
+A `scrape.sample_gone` means the canary's sample page was removed — pick a new one in
+`config/scraper_canaries.toml` (or the store's `sample_url`), not a code fix.
 
 Use your own e2e port in a parallel worktree (`MM_E2E_PORT=<port>`). Close any Playwright MCP
 browser before reading tabs on macOS (`docs/deals-scraping.md` failure mode 1).
@@ -29,7 +35,8 @@ browser before reading tabs on macOS (`docs/deals-scraping.md` failure mode 1).
 | Open-tab marketplaces (Amazon, Walmart, GameStop) | recipe in `config/vendors.toml` (`sellers`, `new_only`, `seller_pattern`, …) | `tests/fixtures/vendors/rendered/<vendor>-<case>.json.gz` (companion extract + AppleScript tab read) | `tests/test_vendor_recipes.py::RENDERED` (both read paths) |
 | Moxfield deck (extension) | `extension/src/readers/moxfield-deck.js` → `decksource.parse_moxfield` | `moxfield-deck.json` | same chain → `moxfield-deck.expected.json` |
 | Server-read stores (`shopify`/`meta`) | `config/vendors.toml` + `storepage.py` | `tests/fixtures/vendors/*` | `tests/test_vendor_recipes.py`; nightly `scripts/vendor_canary.py` |
-| Deck builders (server) | `decksource.parse_*`, `scripts/import_deck.py` | inline in `tests/test_decksource.py` | `tests/test_decksource.py` |
+| Deck builders (server) | `decksource.parse_*`, `scripts/import_deck.py` | inline in `tests/test_decksource.py` | `tests/test_decksource.py`; live: `scrape_canary` samples in `config/scraper_canaries.toml` |
+| EDHREC (unofficial JSON) | `edhrec.cardlists`, `edhrec._plan_rankings` | `tests/test_edhrec.py` | live: `scrape_canary.check_edhrec` |
 
 The whole companion path (pairing, approval window, refusals) is pinned by
 `web/e2e/companion-extension.spec.ts`, which loads the real unpacked extension into Chromium.

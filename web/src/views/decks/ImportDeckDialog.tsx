@@ -6,6 +6,7 @@ import { unwrap } from '../../app/queries';
 import { useJob } from '../../app/useJob';
 import { Button } from '../../components/Button';
 import { useBrowserDeck } from '../../app/useBrowserDeck';
+import { DeckSourceHealth } from '../../components/DeckSourceHealth';
 import { AwaitingNote, FailureNote } from '../../components/companion/CompanionNotes';
 import { deckImport, type ResolveOut } from '../../core/api';
 
@@ -97,6 +98,7 @@ export function ImportDeckDialog({ trigger }: { trigger: ReactNode }) {
               <input type="checkbox" checked={haveCards} onChange={(e) => setHaveCards(e.target.checked)} className="mt-1 accent-[var(--theme-accent)]" />
               <span>Also add these cards to my collection <span className="block text-sm text-ink-muted">You’ll review the printings before anything is added.</span></span>
             </label>
+            <DeckSourceHealth url={url} viaBrowser={browser.handles(url)} settled={live?.status === 'succeeded' || live?.status === 'failed' ? live.status : browser.error ? 'error' : ''} />
             {url.includes('moxfield') && (
               <p className="text-xs text-ink-muted">{browser.handles(url) ? 'Read in this browser by the companion — you approve what it sends.' : 'Moxfield opens a Chrome window to read the deck.'}</p>
             )}

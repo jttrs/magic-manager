@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.magic-manager.scrape-canary</string>
+  <key>ProgramArguments</key><array><string>/Users/torre/Library/Application Support/magic-manager-live/scrape-canary.sh</string></array>
+  <key>StartCalendarInterval</key><dict><key>Hour</key><integer>6</integer><key>Minute</key><integer>30</integer></dict>
+  <key>StandardOutPath</key><string>/Users/torre/Library/Logs/magic-manager/scrape-canary.log</string>
+  <key>StandardErrorPath</key><string>/Users/torre/Library/Logs/magic-manager/scrape-canary.log</string>
+</dict></plist>

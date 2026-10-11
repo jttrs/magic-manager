@@ -261,6 +261,68 @@
         }
       }
     },
+    "/api/scrapers/health": {
+      "get": {
+        "tags": [
+          "scrapers"
+        ],
+        "summary": "Scrapers Health",
+        "operationId": "scrapers_health",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScrapersHealthOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/scrapers/report": {
+      "post": {
+        "tags": [
+          "scrapers"
+        ],
+        "summary": "Scrapers Report",
+        "operationId": "scrapers_report",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScraperReportIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScraperHealthOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/jobs/specs": {
       "get": {
         "tags": [
@@ -10692,6 +10754,191 @@
           "finishes"
         ],
         "title": "SceneOut"
+      },
+      "ScraperHealthOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key",
+            "description": "`<scraper>/<site>`, e.g. `store-price/manyrealms`, `deck-import/moxfield`."
+          },
+          "scraper": {
+            "type": "string",
+            "title": "Scraper"
+          },
+          "site": {
+            "type": "string",
+            "title": "Site"
+          },
+          "site_name": {
+            "type": "string",
+            "title": "Site Name"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "where": {
+            "type": "string",
+            "title": "Where",
+            "description": "Where the app offers it."
+          },
+          "canary": {
+            "type": "string",
+            "enum": [
+              "http",
+              "browser",
+              "none"
+            ],
+            "title": "Canary",
+            "description": "How the scheduled check reaches it (`none` = real use only)."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "down",
+              "unverified",
+              "unknown"
+            ],
+            "title": "Status"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since",
+            "description": "UTC ISO time the current status began."
+          },
+          "checked_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checked At"
+          },
+          "last_ok": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Ok"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code",
+            "description": "Reason code (`scrape.*`, or a companion code)."
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "fix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fix"
+          },
+          "via": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "canary",
+                  "use"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Via"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "scraper",
+          "site",
+          "site_name",
+          "label",
+          "where",
+          "canary",
+          "status"
+        ],
+        "title": "ScraperHealthOut"
+      },
+      "ScraperReportIn": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "cart.page_changed",
+              "moxfield.changed"
+            ],
+            "title": "Code"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "title": "ScraperReportIn"
+      },
+      "ScrapersHealthOut": {
+        "properties": {
+          "scrapers": {
+            "items": {
+              "$ref": "#/components/schemas/ScraperHealthOut"
+            },
+            "type": "array",
+            "title": "Scrapers"
+          },
+          "down": {
+            "type": "integer",
+            "title": "Down",
+            "description": "How many are flagged temporarily down."
+          }
+        },
+        "type": "object",
+        "required": [
+          "scrapers",
+          "down"
+        ],
+        "title": "ScrapersHealthOut"
       },
       "SearchOut": {
         "properties": {

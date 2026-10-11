@@ -19,6 +19,7 @@ import { Segmented, SelectField, SideSection, TextField } from '../../components
 import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../../components/States';
 import { EdhrecMark, RereadMark } from '../../components/StoreMarks';
 import { VirtualGuide } from '../../components/VirtualGuide';
+import { EdhrecHealth } from '../../components/EdhrecHealth';
 import type { RankedOut, RankingOut } from '../../core/api';
 import { fmtUsd } from '../../core/format';
 import { exportLines, type GuideCard } from '../../core/guideCard';
@@ -26,6 +27,8 @@ import {
   BY_LABEL, edhrecUrl, fetchedAgo, fmtMetric, metricLabel, narrowBy, OWN_LABEL, rankedCard, rankingRequest, rankingSummary,
   roleFor, SCOPE_LABEL, shownRows, TIMEFRAME_LABEL, timeframeApplies,
 } from '../../core/rankings';
+
+const RANKING_HEALTH = ['edhrec-rankings/edhrec'];
 import { RANK_BYS, RANK_OWN, RANK_SCOPES, RANK_TIMEFRAMES, type CompareSearch, type RankBy, type RankOwn, type RankScope, type RankTimeframe } from '../../core/search';
 
 type Props = { search: CompareSearch; set: (p: Partial<CompareSearch>) => void; modeSwitch: ReactNode };
@@ -178,6 +181,7 @@ export function RankingsExplore({ search, set, modeSwitch }: Props) {
         }
       >
         <div className={`flex h-full min-h-0 flex-col transition-opacity duration-150 ease-guide ${ranking.isPlaceholderData ? 'opacity-60' : ''}`}>
+          <EdhrecHealth keys={RANKING_HEALTH} />
           {r && running && (
             <div className="mx-5 mb-2">
               <ProgressRule label="Reading the ranking again" verb="Reading" done={live?.done ?? 0} total={live?.total ?? null} message={live?.log.at(-1)?.msg} />

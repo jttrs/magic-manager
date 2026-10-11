@@ -156,4 +156,8 @@ ChannelFireball / Barnes & Noble (no current sealed found).
   `--redact OLD=NEW` for your town/ZIP. Each `tests/fixtures/vendors/rendered/*.json.gz` holds BOTH
   read paths — the companion reader's extract and the AppleScript tab read — and
   `tests/test_vendor_recipes.py::RENDERED` checks every expectation against each.
+- Locally, the **daily scrape canary** (docs/scraper-health.md) reads every store's sample —
+  `rendered` ones in a real Chrome (samples in `config/scraper_canaries.toml`) — and flags a store
+  that stops reading as *temporarily down* in Deals (a rust `DOWN` mark). Your own reads in Deals
+  flag and clear it too.
 - Fetching is polite: cached, rate-limited per host, honest User-Agent, robots-respecting.

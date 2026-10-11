@@ -121,6 +121,29 @@ analytics_app = typer.Typer(no_args_is_help=True,
                             help="Self-hosted product analytics: dashboards, saved SQL, consent, retention (docs/analytics.md).")
 app.add_typer(analytics_app, name="analytics")
 
+scrapers_app = typer.Typer(no_args_is_help=True,
+                           help="Scraper health: is each site's scrape still reading right? (docs/scraper-health.md)")
+app.add_typer(scrapers_app, name="scrapers")
+
+
+@scrapers_app.command("health")
+def scrapers_health(down_only: bool = typer.Option(False, "--down", help="Only scrapers flagged down.")) -> None:
+    """Every scraper, per site: ok / DOWN since … / unverified / unknown. The
+    daily canary (scripts/check_scrapers.py --live --record) keeps it current."""
+    from . import scraper_health
+    rows = scraper_health.health()
+    for h in rows:
+        if down_only and h.status != "down":
+            continue
+        since = f" since {h.since[:16].replace('T', ' ')}" if h.since and h.status != "ok" else ""
+        why = f"  {h.code}: {h.message}" if h.status in ("down", "unverified") and h.code else ""
+        typer.echo(f"{h.status.upper() if h.status == 'down' else h.status:10} {h.scraper.key:34} "
+                   f"canary={h.scraper.canary:7}{since}{why}")
+    n = sum(h.status == "down" for h in rows)
+    typer.echo(f"\n{n} down of {len(rows)} · {scraper_health.path()}")
+    if n:
+        raise typer.Exit(1)
+
 
 def _echo_rows(rows: list[dict]) -> None:
     if not rows:

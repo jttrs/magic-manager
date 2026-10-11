@@ -22,7 +22,9 @@ export function WatchingPanel({ search, set }: { search: MarketSearch; set: (pat
   const data = useDealsData('watching', true, errors);
   const costs = useDealCosts(data.products);
   useEffect(() => {
-    if (live?.status === 'succeeded') void qc.invalidateQueries({ queryKey: ['deals', 'watched'] });
+    if (live?.status !== 'succeeded') return;
+    void qc.invalidateQueries({ queryKey: ['deals', 'watched'] });
+    void qc.invalidateQueries({ queryKey: ['scrapers', 'health'] });   // reads set/clear store flags
   }, [live?.status, qc]);
   const shared = sharedErrors(errors);
   const met = useMemo(() => (live?.status === 'succeeded' ? newlyMetFrom(live.artifacts) : []), [live]);

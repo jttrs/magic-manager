@@ -26,6 +26,10 @@ import { BUCKETS, type Bucket, type CompareSearch, type GroupBy, type Role } fro
 import { decodeSort, encodeSort, sortBy } from '../core/sort';
 import { exploreMode } from '../core/rankings';
 import { ExploreModeSwitch } from './explore/ExploreModeSwitch';
+import { EdhrecHealth } from '../components/EdhrecHealth';
+
+const COMMANDER_HEALTH = ['edhrec-commander/edhrec'];
+const CARD_HEALTH = ['edhrec-card/edhrec'];
 import { RankingsExplore } from './explore/RankingsExplore';
 
 const route = getRouteApi('/explore');
@@ -204,6 +208,7 @@ export function ExploreView() {
     <ViewLayout label="Explore controls" summary={search.a ? `${search.a}${search.b ? ` vs ${search.b}` : ''} · ${role === 'commander' ? 'as commander' : 'as a card'}` : undefined} sidebar={sidebar} startOpen={!search.a}>
       <GuideSheet title="Explore" summary={summaryLine(role, prof, cmd.data)}>
         <div className="flex h-full min-h-0 flex-col">
+          <EdhrecHealth keys={role === 'commander' ? COMMANDER_HEALTH : CARD_HEALTH} />
           {prof && <Plates r={prof} role={role} onInspect={(p) => setInspecting(profileCard(p))} />}
           <div className="min-h-0 flex-1">{body}</div>
         </div>
