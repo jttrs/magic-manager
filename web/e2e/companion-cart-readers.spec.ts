@@ -50,6 +50,8 @@ test.describe('TCGplayer cart reader', () => {
       ['single', 630864, 'Aerith Gainsborough', '4', 'nonfoil', 'NM', 'English', 1, 1.75],
       ['single', 630958, 'Ardyn, the Usurper', '315', 'foil', 'NM', 'English', 1, 5.49],
       ['single', 577866, 'Sol Ring', '94', 'nonfoil', 'NM', 'English', 1, 1.85],
+      // A non-Magic line's "025/165" never leaves the reader (the server's number pattern would 422 the cart).
+      ['other', 284472, 'Pikachu', null, 'nonfoil', null, null, 1, 1.85],
     ]);
     // Never the sellers, a seller's own listing title, shipping or totals.
     const sent = JSON.stringify(out);

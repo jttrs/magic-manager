@@ -84,6 +84,18 @@
       "language": "English",
       "quantity": 1,
       "price": 1.85
+    },
+    {
+      "kind": "other",
+      "tcgplayer_product_id": 284472,
+      "name": "Pikachu",
+      "set_name": "SV: Scarlet & Violet 151",
+      "number": null,
+      "finish": "nonfoil",
+      "condition": null,
+      "language": null,
+      "quantity": 1,
+      "price": 1.85
     }
   ],
   "warnings": []
