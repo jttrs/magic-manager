@@ -203,8 +203,17 @@ def test_bare_parenthesized_number_is_not_a_single(title):
     assert lm.classify(title) == "sealed"
 
 
+@pytest.mark.parametrize("title", [
+    "Lightning Bolt (63) (Strixhaven Mystical Archive)", "Sol Ring (12) (Special Guests)", "Sol Ring (SPG-12)",
+    "Lightning Bolt (146) (M10) (Foil)",
+])
+def test_number_beside_an_unresolved_set_is_still_a_single(bolt, title):
+    assert lm.classify(title) == "single"
+
+
 @pytest.mark.parametrize("title,kind", [
     ("Mystery Booster 2 Booster Box", "sealed"), ("The Hobbit Bundle with Sleeves", "sealed"),
+    ("Ultra Pro Bloomburrow Deck Protector Sleeves (100ct)", "unknown"),
     ("Ultra Pro Deck Box", "unknown"), ("Dragon Shield Sleeves 100ct", "unknown"), ("Mystery Box - 10 Rares", "unknown"),
 ])
 def test_supply_and_mystery_patterns_are_narrow(title, kind):

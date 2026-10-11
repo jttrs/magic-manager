@@ -128,11 +128,15 @@ def classify(title: str) -> Kind:
                  r"\bgraded\b|beckett|\bpsa \d|\bcgc\b|playmat|binder|\bpins?\b|pin set|token bundle|acrylic", t, re.I):
         return "unknown"
     # Supplies words ("Bundle with Sleeves") only mean accessories when no sealed product is named.
-    if re.search(r"\bsupplies\b|sleeves|deck box", t, re.I) and not _SEALED_WORD.search(re.sub(r"(?i)deck box", " ", t)):
+    if re.search(r"\bsupplies\b|sleeves|deck box", t, re.I) and not _SEALED_WORD.search(re.sub(r"(?i)deck (?:box|protector)", " ", t)):
         return "unknown"
     groups = re.findall(r"\(([^()]*)\)", t)
-    if any(_CN.match(g.strip()) for g in groups) and _set_code_for(_single_parts(t)[2]):
-        return "single"          # a bare "(36)" / "(2024)" with no set is a quantity or year, not a collector number
+    if any(_CN.match(g.strip()) for g in groups):
+        # A bare "(36)" / "(2024)" with no set beside it is a quantity or year. A set we
+        # can't resolve (Mystical Archive, Special Guests, promos) still makes a single.
+        set_name = _single_parts(t)[2]
+        if _set_code_for(set_name) or (set_name and not _SEALED_WORD.search(t)):
+            return "single"
     if re.search(r"secret lair", t, re.I) and not re.search(r"commander deck|countdown kit|bundle", t, re.I):
         return "sld"
     return "sealed"
