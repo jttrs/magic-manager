@@ -74,3 +74,38 @@ def test_missing_stamp_fails_and_docs_only_is_exempt(repo, capsys):
     _git(repo, "checkout", "-q", "main"); _git(repo, "checkout", "-qb", "docs")
     (repo / "README.md").write_text("hello\n"); _git(repo, "commit", "-qam", "docs")
     assert _check("no stamp", repo) == 0
+
+
+def test_whitespace_change_after_review_needs_a_fresh_stamp(repo, capsys):
+    body = _stamp(capsys)
+    (repo / "a.py").write_text("x  = 2\n"); _git(repo, "commit", "-qam", "reindent")
+    assert _check(body, repo) == 1
+
+
+def test_rebase_past_neighbouring_changes_keeps_the_stamp(repo, capsys):
+    _git(repo, "checkout", "-q", "main")
+    (repo / "b.py").write_text("".join(f"l{i} = {i}\n" for i in range(10)))
+    _git(repo, "add", "."); _git(repo, "commit", "-qm", "b")
+    _git(repo, "checkout", "-qb", "feat2")
+    (repo / "b.py").write_text((repo / "b.py").read_text().replace("l0 = 0", "l0 = 100"))
+    _git(repo, "commit", "-qam", "change l0")
+    body = _stamp(capsys)
+    _git(repo, "checkout", "-q", "main")  # main edits a line inside l0's 3-line context
+    (repo / "b.py").write_text((repo / "b.py").read_text().replace("l3 = 3", "l3 = 33"))
+    _git(repo, "commit", "-qam", "neighbour")
+    _git(repo, "checkout", "-q", "feat2"); _git(repo, "rebase", "-q", "main")
+    assert _check(body, repo) == 0
+
+
+def test_agent_instructions_and_renames_are_not_docs_only(repo, capsys):
+    _git(repo, "checkout", "-q", "main"); _git(repo, "checkout", "-qb", "rules")
+    (repo / "CLAUDE.md").write_text("rule\n"); _git(repo, "add", "."); _git(repo, "commit", "-qm", "rules")
+    assert _check("no stamp", repo) == 1
+    _git(repo, "checkout", "-q", "main"); _git(repo, "checkout", "-qb", "ren")
+    _git(repo, "mv", "a.py", "a.md"); _git(repo, "commit", "-qm", "rename")
+    assert _check("no stamp", repo) == 1
+
+
+def test_the_newest_stamp_wins(repo, capsys):
+    old = _stamp(capsys).replace(pr.patch_id("main", "HEAD"), "f" * 40)
+    assert _check(old + "\n" + _stamp(capsys), repo) == 0

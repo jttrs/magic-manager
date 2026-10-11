@@ -18,5 +18,13 @@ jobs:
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
         run: |
-          git fetch -q origin "${{ github.event.pull_request.base.ref }}"
-          python3 scripts/pr_review.py check --base "origin/${{ github.event.pull_request.base.ref }}" --head HEAD
+          BASE="${{ github.event.pull_request.base.ref }}"
+          git fetch -q origin "$BASE"
+          # Run the BASE branch's checker so a PR can't weaken the check that judges it
+          # (the head copy is used only while the base has none — the bootstrap PR).
+          if git show "origin/$BASE:scripts/pr_review.py" > "$RUNNER_TEMP/pr_review.py" 2>/dev/null; then
+            CHECKER="$RUNNER_TEMP/pr_review.py"
+          else
+            CHECKER=scripts/pr_review.py
+          fi
+          python3 "$CHECKER" check --base "origin/$BASE" --head HEAD
