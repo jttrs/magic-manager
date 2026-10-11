@@ -62,6 +62,8 @@ PINS = {
     "deck-import/scryfall": ("test_decksource.py", "test_parse_scryfall_shape"),
     "deck-import/moxfield": ("test_decksource.py", "test_parse_moxfield_boards_and_finishes"),
     "companion-deck/moxfield": ("test_companion.py", "test_moxfield_reader_output_becomes_deck_lines"),
+    "companion-deck/archidekt": ("test_companion_imports.py", "test_archidekt_reader_output_becomes_the_same_payload_as_the_api_import"),
+    "companion-collection/moxfield": ("test_companion_imports.py", "test_collection_reader_output_is_exactly_what_the_server_accepts"),
     "companion-cart/manapool": ("test_companion.py", "test_cart_reader_output_is_exactly_what_the_server_accepts"),
     "companion-cart/tcgplayer": ("test_companion_carts.py", "test_tcgplayer_cart_from_the_reader_golden"),
     "companion-cart/cardkingdom": ("test_companion_carts.py", "test_cardkingdom_cart_from_the_reader_golden"),

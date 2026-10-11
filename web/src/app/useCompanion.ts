@@ -17,7 +17,7 @@ export type CompanionState = {
   outdated: boolean;
   catalog: ErrorCatalog;
   /** Ask the companion to read; resolves after you approve in its window. */
-  read: <K extends CompanionKind>(kind: K, params?: RequestParams, onAwaiting?: (summary: string) => void) => ReturnType<typeof request<K>>;
+  read: <K extends CompanionKind>(kind: K, params?: RequestParams, onAwaiting?: (summary: string) => void, opts?: { ackTimeoutMs?: number }) => ReturnType<typeof request<K>>;
 };
 
 const EMPTY: ErrorCatalog = {};
@@ -38,8 +38,8 @@ export function useCompanion(): CompanionState {
   }, []);
 
   const read = useCallback(
-    <K extends CompanionKind>(kind: K, params: RequestParams = {}, onAwaiting?: (summary: string) => void) =>
-      request(window, kind, params, { catalog, onAwaitingApproval: onAwaiting }).catch((e: unknown) => {
+    <K extends CompanionKind>(kind: K, params: RequestParams = {}, onAwaiting?: (summary: string) => void, opts: { ackTimeoutMs?: number } = {}) =>
+      request(window, kind, params, { catalog, onAwaitingApproval: onAwaiting, ...opts }).catch((e: unknown) => {
         if (e instanceof CompanionError) {
           trackCompanionError(e.code);
           void reportScraperFailure(e.code, qc, kind === 'cart' ? params.store : undefined);   // a changed page flags that read "temporarily down"

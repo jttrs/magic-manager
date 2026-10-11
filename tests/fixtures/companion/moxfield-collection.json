@@ -1,0 +1,1126 @@
+{
+ "page1": {
+  "totalOverall": 4236,
+  "totalCommon": 2481,
+  "totalUncommon": 1197,
+  "totalRare": 478,
+  "totalMythic": 79,
+  "totals": {
+   "totalOverall": 4236,
+   "totalCommon": 2481,
+   "totalUncommon": 1197,
+   "totalRare": 478,
+   "totalMythic": 79
+  },
+  "totalPrices": {
+   "usd": 2009.48,
+   "usd_foil": 270.59,
+   "usd_etched": 12.95,
+   "eur": 1527.77,
+   "eur_foil": 169.78,
+   "eur_etched": 0.0,
+   "tix": 487.18,
+   "ck": 3208.55,
+   "ck_foil": 390.82,
+   "ck_etched": 13.05,
+   "lastUpdatedAtUtc": "2026-10-11T14:41:55.62Z",
+   "ck_buy": 873.64,
+   "ck_buy_foil": 124.86,
+   "csi": 3051.17,
+   "csi_foil": 361.87,
+   "csi_etched": 0.0,
+   "csi_buy": 479.86,
+   "csi_buy_foil": 80.85,
+   "csi_buy_etched": 0.0,
+   "ct": 1850.35,
+   "ct_foil": 197.58,
+   "ct_etched": 14.74,
+   "f2f": 0.0,
+   "f2f_foil": 0.0,
+   "f2f_etched": 0.0,
+   "scg": 2670.26,
+   "scg_foil": 298.53,
+   "scg_etched": 15.75,
+   "scg_buy": 641.79,
+   "scg_foil_buy": 77.82,
+   "scg_etched_buy": 5.13,
+   "mp": 1508.13,
+   "mp_foil": 177.38,
+   "mp_etched": 11.24
+  },
+  "areTotalsPartial": false,
+  "isEmpty": false,
+  "pageNumber": 1,
+  "pageSize": 5000,
+  "totalResults": 25,
+  "totalPages": 2,
+  "user": {
+   "userName": "fixture-user",
+   "displayName": "Fixture User",
+   "profileImageUrl": "https://example.invalid/p.png",
+   "badges": []
+  },
+  "data": [
+   {
+    "id": "BXloNj5",
+    "quantity": 1,
+    "condition": "nearMint",
+    "game": "paper",
+    "finish": "nonFoil",
+    "isFoil": false,
+    "isAlter": false,
+    "isProxy": false,
+    "purchasePrice": 0.38,
+    "isPrefPrinting": false,
+    "createdAtUtc": "2025-11-17T05:31:03.397Z",
+    "lastUpdatedAtUtc": "2025-11-17T05:31:03.397Z",
+    "rarity": "uncommon",
+    "language": {
+     "id": "LD58x",
+     "code": "en",
+     "name": "English"
+    },
+    "card": {
+     "id": "OxJDK",
+     "scryfall_id": "245e008c-e073-443f-9592-6f628c0026ec",
+     "set": "tla",
+     "set_name": "Avatar: The Last Airbender",
+     "cn": "4",
+     "name": "Aang, the Last Airbender",
+     "rarity": "uncommon",
+     "lang": "en",
+     "prices": {
+      "usd": 0.28,
+      "usd_foil": 0.3
+     },
+     "tcgplayer_id": 649354,
+     "cardkingdom_id": 318311,
+     "type_line": "Legendary Creature \u2014 Human Avatar Ally",
+     "isToken": false
+    },
+    "notes": "bought at FNM from Sam"
+   },
+   {
+    "id": "enrK77P",
+    "quantity": 4,
+    "condition": "nearMint",
+    "game": "paper",
+    "finish": "foil",
+    "isFoil": true,
+    "isAlter": false,
+    "isProxy": false,
+    "purchasePrice": 0.1,
+    "isPrefPrinting": false,
+    "createdAtUtc": "2025-11-26T01:53:54.12Z",
+    "lastUpdatedAtUtc": "2026-01-19T15:51:20.077Z",
+    "rarity": "uncommon",
+    "language": {
+     "id": "LD58x",
+     "code": "en",
+     "name": "English"
+    },
+    "card": {
+     "id": "OxJDK",
+     "scryfall_id": "245e008c-e073-443f-9592-6f628c0026ec",
+     "set": "tla",
+     "set_name": "Avatar: The Last Airbender",
+     "cn": "4",
+     "name": "Aang, the Last Airbender",
+     "rarity": "uncommon",
+     "lang": "en",
+     "prices": {
+      "usd": 0.28,
+      "usd_foil": 0.3
+     },
+     "tcgplayer_id": 649354,
+     "cardkingdom_id": 318311,
+     "type_line": "Legendary Creature \u2014 Human Avatar Ally",
+     "isToken": false
+    },
+    "notes": "bought at FNM from Sam"
+   },
+   {
+    "id": "N9KzzeM",
+    "quantity": 1,
+    "condition": "nearMint",
+    "game": "paper",
+    "finish": "etched",
+    "isFoil": false,
+    "isAlter": false,
+    "isProxy": false,
+    "purchasePrice": 0.1,
+    "isPrefPrinting": false,
+    "createdAtUtc": "2026-01-19T15:51:10.58Z",
+    "lastUpdatedAtUtc": "2026-01-19T15:51:10.58Z",
+    "rarity": "common",
+    "language": {
+     "id": "LD58x",
+     "code": "en",
+     "name": "English"
+    },
+    "card": {
+     "id": "x7aeP",
+     "scryfall_id": "5e51f727-5a9b-4bc7-83a9-dbcf1c933e15",
+     "set": "tla",
+     "set_name": "Avatar: The Last Airbender",
+     "cn": "1",
+     "name": "Aang's Journey",
+     "rarity": "common",
+     "lang": "en",
+     "prices": {
+      "usd": 0.24,
+      "usd_foil": 0.25
+     },
+     "tcgplayer_id": 648730,
+     "cardkingdom_id": 318310,
+     "type_line": "Sorcery \u2014 Lesson",
+     "isToken": false
+    },
+    "notes": "bought at FNM from Sam"
+   },
+   {
+    "id": "XdW64a1",
+    "quantity": 1,
+    "condition": "nearMint",
+    "game": "paper",
+    "finish": "nonFoil",
+    "isFoil": false,
+    "isAlter": false,
+    "isProxy": true,
+    "purchasePrice": 0.11,
+    "isPrefPrinting": false,
+    "createdAtUtc": "2025-11-26T01:53:54.12Z",
+    "lastUpdatedAtUtc": "2025-11-26T01:53:54.12Z",
+    "rarity": "common",
+    "language": {
+     "id": "LD58x",
+     "code": "en",
+     "name": "English"
+    },
+    "card": {
+     "id": "x7aeP",
+     "scryfall_id": "5e51f727-5a9b-4bc7-83a9-dbcf1c933e15",
+     "set": "tla",
+     "set_name": "Avatar: The Last Airbender",
+     "cn": "1",
+     "name": "Aang's Journey",
+     "rarity": "common",
+     "lang": "en",
+     "prices": {
+      "usd": 0.24,
+      "usd_foil": 0.25
+     },
+     "tcgplayer_id": 648730,
+     "cardkingdom_id": 318310,
+     "type_line": "Sorcery \u2014 Lesson",
+     "isToken": false
+    },
+    "notes": "bought at FNM from Sam"
+   },
+   {
+    "id": "016bl8W",
+    "quantity": 1,
+    "condition": "nearMint",
+    "game": "arena",
+    "finish": "nonFoil",
+    "isFoil": false,
+    "isAlter": false,
+    "isProxy": false,
+    "purchasePrice": 0.34,
+    "isPrefPrinting": false,
+    "createdAtUtc": "2025-11-17T05:31:03.397Z",
+    "lastUpdatedAtUtc": "2025-11-17T05:31:03.397Z",
+    "rarity": "common",
+    "language": {
+     "id": "LD58x",
+     "code": "en",
+     "name": "English"
+    },
+    "card": {
+     "id": "x7aeP",
+     "scryfall_id": "5e51f727-5a9b-4bc7-83a9-dbcf1c933e15",
+     "set": "tla",
+     "set_name": "Avatar: The Last Airbender",
+     "cn": "1",
+     "name": "Aang's Journey",
+     "rarity": "common",
+     "lang": "en",
+     "prices": {
+      "usd": 0.24,
+      "usd_foil": 0.25
+     },
+     "tcgplayer_id": 648730,
+     "cardkingdom_id": 318310,
+     "type_line": "Sorcery \u2014 Lesson",
+     "isToken": false
+    },
+    "notes": "bought at FNM from Sam"
+   },
+   {
+    "id": "dupcond1",
+    "quantity": 2,
+    "condition": "lightlyPlayed",
+    "game": "paper",
+    "finish": "nonFoil",
+    "isFoil": false,
+    "isAlter": false,
+    "isProxy": false,
+    "purchasePrice": 0.38,
+    "isPrefPrinting": false,
+    "createdAtUtc": "2025-11-17T05:31:03.397Z",
+    "lastUpdatedAtUtc": "2025-11-17T05:31:03.397Z",
+    "rarity": "uncommon",
+    "language": {
+     "id": "x",
+     "code": "ja",
+     "name": "Japanese"
+    },
+    "card": {
+     "id": "OxJDK",
+     "scryfall_id": "245e008c-e073-443f-9592-6f628c0026ec",
+     "set": "tla",
+     "set_name": "Avatar: The Last Airbender",
+     "cn": "4",
+     "name": "Aang, the Last Airbender",
+     "rarity": "uncommon",
+     "lang": "en",
+     "prices": {
+      "usd": 0.28,
+      "usd_foil": 0.3
+     },
+     "tcgplayer_id": 649354,
+     "cardkingdom_id": 318311,
+     "type_line": "Legendary Creature \u2014 Human Avatar Ally",
+     "isToken": false
+    },
+    "notes": "bought at FNM from Sam"
+   },
+   {
+    "id": "Dj22rzN",
+    "quantity": 1,
+    "condition": "nearMint",
+    "game": "paper",
+    "finish": "nonFoil",
+    "isFoil": false,
+    "isAlter": false,
+    "isProxy": false,
+    "purchasePrice": 0.32,
+    "isPrefPrinting": false,
+    "createdAtUtc": "2025-11-17T16:30:54.523Z",
+    "lastUpdatedAtUtc": "2025-11-17T16:30:54.523Z",
+    "rarity": "common",
+    "language": {
+     "id": "LD58x",
+     "code": "en",
+     "name": "English"
+    },
+    "card": {
+     "id": "0vGgm",
+     "scryfall_id": "74ca45a4-97ab-4255-9129-884e8b42b984",
+     "set": "tla",
+     "set_name": "Avatar: The Last Airbender",
+     "cn": "205",
+     "name": "Abandon Attachments",
+     "rarity": "common",
+     "lang": "en",
+     "prices": {
+      "usd": 0.33,
+      "usd_foil": 0.41
+     },
+     "tcgplayer_id": 649367,
+     "cardkingdom_id": 318376,
+     "type_line": "Instant \u2014 Lesson",
+     "isToken": false
+    },
+    "notes": "bought at FNM from Sam"
+   },
+   {
+    "id": "8O7DDWw",
+    "quantity": 1,
+    "condition": "nearMint",
+    "game": "paper",
+    "finish": "nonFoil",
+    "isFoil": false,
+    "isAlter": false,
+    "isProxy": false,
+    "purchasePrice": 0.17,
+    "isPrefPrinting": false,
+    "createdAtUtc": "2026-01-19T15:51:10.58Z",
+    "lastUpdatedAtUtc": "2026-01-19T15:51:10.58Z",
+    "rarity": "common",
+    "language": {
+     "id": "LD58x",
+     "code": "en",
+     "name": "English"
+    },
+    "card": {
+     "id": "0vGgm",
+     "scryfall_id": "74ca45a4-97ab-4255-9129-884e8b42b984",
+     "set": "tla",
+     "set_name": "Avatar: The Last Airbender",
+     "cn": "205",
+     "name": "Abandon Attachments",
+     "rarity": "common",
+     "lang": "en",
+     "prices": {
+      "usd": 0.33,
+      "usd_foil": 0.41
+     },
+     "tcgplayer_id": 649367,
+     "cardkingdom_id": 318376,
+     "type_line": "Instant \u2014 Lesson",
+     "isToken": false
+    },
+    "notes": "bought at FNM from Sam"
+   },
+   {
+    "id": "6J3ZMvw",
+    "quantity": 1,
+    "condition": "nearMint",
+    "game": "paper",
+    "finish": "nonFoil",
+    "isFoil": false,
+    "isAlter": false,
+    "isProxy": false,
+    "purchasePrice": 0.16,
+    "isPrefPrinting": false,
+    "createdAtUtc": "2025-11-26T01:53:54.12Z",
+    "lastUpdatedAtUtc": "2025-11-26T01:53:54.12Z",
+    "rarity": "common",
+    "language": {
+     "id": "LD58x",
+     "code": "en",
+     "name": "English"
+    },
+    "card": {
+     "id": "0vGgm",
+     "scryfall_id": "74ca45a4-97ab-4255-9129-884e8b42b984",
+     "set": "tla",
+     "set_name": "Avatar: The Last Airbender",
+     "cn": "205",
+     "name": "Abandon Attachments",
+     "rarity": "common",
+     "lang": "en",
+     "prices": {
+      "usd": 0.33,
+      "usd_foil": 0.41
+     },
+     "tcgplayer_id": 649367,
+     "cardkingdom_id": 318376,
+     "type_line": "Instant \u2014 Lesson",
+     "isToken": false
+    },
+    "notes": "bought at FNM from Sam"
+   },
+   {
+    "id": "Mx4pqne",
+    "quantity": 2,
+    "condition": "nearMint",
+    "game": "paper",
+    "finish": "nonFoil",
+    "isFoil": false,
+    "isAlter": false,
+    "isProxy": false,
+    "purchasePrice": 0.34,
+    "isPrefPrinting": false,
+    "createdAtUtc": "2025-11-17T05:31:03.397Z",
+    "lastUpdatedAtUtc": "2025-11-17T05:31:03.397Z",
+    "rarity": "common",
+    "language": {
+     "id": "LD58x",
+     "code": "en",
+     "name": "English"
+    },
+    "card": {
+     "id": "0vGgm",
+     "scryfall_id": "74ca45a4-97ab-4255-9129-884e8b42b984",
+     "set": "tla",
+     "set_name": "Avatar: The Last Airbender",
+     "cn": "205",
+     "name": "Abandon Attachments",
+     "rarity": "common",
+     "lang": "en",
+     "prices": {
+      "usd": 0.33,
+      "usd_foil": 0.41
+     },
+     "tcgplayer_id": 649367,
+     "cardkingdom_id": 318376,
+     "type_line": "Instant \u2014 Lesson",
+     "isToken": false
+    },
+    "notes": "bought at FNM from Sam"
+   },
+   {
+    "id": "zbZ9WJa",
+    "quantity": 1,
+    "condition": "nearMint",
+    "game": "paper",
+    "finish": "foil",
+    "isFoil": true,
+    "isAlter": false,
+    "isProxy": false,
+    "purchasePrice": 0.15,
+    "isPrefPrinting": false,
+    "createdAtUtc": "2025-10-30T04:16:46.677Z",
+    "lastUpdatedAtUtc": "2025-10-30T04:16:46.677Z",
+    "rarity": "common",
+    "language": {
+     "id": "LD58x",
+     "code": "en",
+     "name": "English"
+    },
+    "card": {
+     "id": "WaPP5",
+     "scryfall_id": "ee0565f5-ebdb-43f9-bbb4-0485b1968937",
+     "set": "dsk",
+     "set_name": "Duskmourn: House of Horror",
+     "cn": "255",
+     "name": "Abandoned Campground",
+     "rarity": "common",
+     "lang": "en",
+     "prices": {
+      "usd": 0.24,
+      "usd_foil": 0.25
+     },
+     "tcgplayer_id": 575112,
+     "cardkingdom_id": 301407,
+     "type_line": "Land",
+     "isToken": false
+    },
+    "notes": "bought at FNM from Sam"
+   },
+   {
+    "id": "DABX84x",
+    "quantity": 1,
+    "condition": "nearMint",
+    "game": "paper",
+    "finish": "nonFoil",
+    "isFoil": false,
+    "isAlter": false,
+    "isProxy": false,
+    "purchasePrice": 0.51,
+    "isPrefPrinting": false,
+    "createdAtUtc": "2026-09-29T21:49:57.953Z",
+    "lastUpdatedAtUtc": "2026-09-29T21:49:57.953Z",
+    "rarity": "rare",
+    "language": {
+     "id": "LD58x",
+     "code": "en",
+     "name": "English"
+    },
+    "card": {
+     "id": "Y8yrl",
+     "scryfall_id": "a7f9b11f-1b37-45b1-8e4d-f469b89ab6fb",
+     "set": "cmb2",
+     "set_name": "Mystery Booster Playtest Cards 2021",
+     "cn": "87",
+     "name": "Abian, Luvion Usurper",
+     "rarity": "rare",
+     "lang": "en",
+     "prices": {
+      "usd": 0.36
+     },
+     "tcgplayer_id": 246942,
+     "cardkingdom_id": 250035,
+     "type_line": "Legendary Planeswalker \u2014 Abian",
+     "isToken": false
+    },
+    "notes": "bought at FNM from Sam"
+   },
+   {
+    "id": "q4y3jBx",
+    "quantity": 1,
+    "condition": "nearMint",
+    "game": "paper",
+    "finish": "nonFoil",
+    "isFoil": false,
+    "isAlter": false,
+    "isProxy": false,
+    "purchasePrice": 0.64,
+    "isPrefPrinting": false,
+    "createdAtUtc": "2026-03-12T17:57:04.28Z",
+    "lastUpdatedAtUtc": "2026-03-12T17:57:04.28Z",
+    "rarity": "rare",
+    "language": {
+     "id": "LD58x",
+     "code": "en",
+     "name": "English"
+    },
+    "card": {
+     "id": "PJeOv",
+     "scryfall_id": "bf708169-a307-494b-b8d8-baae53b2e2f2",
+     "set": "ecl",
+     "set_name": "Lorwyn Eclipsed",
+     "cn": "204",
+     "name": "Abigale, Eloquent First-Year",
+     "rarity": "rare",
+     "lang": "en",
+     "prices": {
+      "usd": 0.31,
+      "usd_foil": 0.58
+     },
+     "tcgplayer_id": 670978,
+     "cardkingdom_id": 322007,
+     "type_line": "Legendary Creature \u2014 Bird Bard",
+     "isToken": false
+    },
+    "notes": "bought at FNM from Sam"
+   },
+   {
+    "id": "OxOyyro",
+    "quantity": 1,
+    "condition": "nearMint",
+    "game": "paper",
+    "finish": "nonFoil",
+    "isFoil": false,
+    "isAlter": false,
+    "isProxy": false,
+    "purchasePrice": 0.41,
+    "isPrefPrinting": false,
+    "createdAtUtc": "2026-05-02T05:42:29.903Z",
+    "lastUpdatedAtUtc": "2026-05-02T05:42:29.903Z",
+    "rarity": "uncommon",
+    "language": {
+     "id": "LD58x",
+     "code": "en",
+     "name": "English"
+    },
+    "card": {
+     "id": "7RZ8p",
+     "scryfall_id": "77285d12-e658-4eb3-ba13-ff202afab9c8",
+     "set": "sos",
+     "set_name": "Secrets of Strixhaven",
+     "cn": "170",
+     "name": "Abigale, Poet Laureate // Heroic Stanza",
+     "rarity": "uncommon",
+     "lang": "en",
+     "prices": {
+      "usd": 0.26,
+      "usd_foil": 0.28
+     },
+     "tcgplayer_id": 686529,
+     "cardkingdom_id": 324879,
+     "type_line": "Legendary Creature \u2014 Bird Bard // Sorcery",
+     "isToken": false
+    },
+    "notes": "bought at FNM from Sam"
+   },
+   {
+    "id": "yjRKnBN",
+    "quantity": 1,
+    "condition": "nearMint",
+    "game": "paper",
+    "finish": "nonFoil",
+    "isFoil": false,
+    "isAlter": false,
+    "isProxy": false,
+    "isPrefPrinting": false,
+    "createdAtUtc": "2025-04-23T06:17:42.907Z",
+    "lastUpdatedAtUtc": "2025-07-30T01:45:23.567Z",
+    "rarity": "common",
+    "language": {
+     "id": "LD58x",
+     "code": "en",
+     "name": "English"
+    },
+    "card": {
+     "id": "LGy7x",
+     "scryfall_id": "a0e47d11-cb21-402b-a39e-588a94cc57b4",
+     "set": "vow",
+     "set_name": "Innistrad: Crimson Vow",
+     "cn": "139",
+     "name": "Abrade",
+     "rarity": "common",
+     "lang": "en",
+     "prices": {
+      "usd": 0.24,
+      "usd_foil": 0.43
+     },
+     "tcgplayer_id": 253063,
+     "cardkingdom_id": 252546,
+     "type_line": "Instant",
+     "isToken": false
+    },
+    "notes": "bought at FNM from Sam"
+   }
+  ]
+ },
+ "page2": {
+  "totalOverall": 4236,
+  "totalCommon": 2481,
+  "totalUncommon": 1197,
+  "totalRare": 478,
+  "totalMythic": 79,
+  "totals": {
+   "totalOverall": 4236,
+   "totalCommon": 2481,
+   "totalUncommon": 1197,
+   "totalRare": 478,
+   "totalMythic": 79
+  },
+  "totalPrices": {
+   "usd": 2009.48,
+   "usd_foil": 270.59,
+   "usd_etched": 12.95,
+   "eur": 1527.77,
+   "eur_foil": 169.78,
+   "eur_etched": 0.0,
+   "tix": 487.18,
+   "ck": 3208.55,
+   "ck_foil": 390.82,
+   "ck_etched": 13.05,
+   "lastUpdatedAtUtc": "2026-10-11T14:41:55.62Z",
+   "ck_buy": 873.64,
+   "ck_buy_foil": 124.86,
+   "csi": 3051.17,
+   "csi_foil": 361.87,
+   "csi_etched": 0.0,
+   "csi_buy": 479.86,
+   "csi_buy_foil": 80.85,
+   "csi_buy_etched": 0.0,
+   "ct": 1850.35,
+   "ct_foil": 197.58,
+   "ct_etched": 14.74,
+   "f2f": 0.0,
+   "f2f_foil": 0.0,
+   "f2f_etched": 0.0,
+   "scg": 2670.26,
+   "scg_foil": 298.53,
+   "scg_etched": 15.75,
+   "scg_buy": 641.79,
+   "scg_foil_buy": 77.82,
+   "scg_etched_buy": 5.13,
+   "mp": 1508.13,
+   "mp_foil": 177.38,
+   "mp_etched": 11.24
+  },
+  "areTotalsPartial": false,
+  "isEmpty": false,
+  "pageNumber": 2,
+  "pageSize": 5000,
+  "totalResults": 25,
+  "totalPages": 2,
+  "user": {
+   "userName": "fixture-user",
+   "displayName": "Fixture User",
+   "profileImageUrl": "https://example.invalid/p.png",
+   "badges": []
+  },
+  "data": [
+   {
+    "id": "gdRzzp5",
+    "quantity": 1,
+    "condition": "nearMint",
+    "game": "paper",
+    "finish": "nonFoil",
+    "isFoil": false,
+    "isAlter": false,
+    "isProxy": false,
+    "purchasePrice": 0.41,
+    "isPrefPrinting": false,
+    "createdAtUtc": "2026-05-02T05:42:29.903Z",
+    "lastUpdatedAtUtc": "2026-05-02T05:42:29.903Z",
+    "rarity": "uncommon",
+    "language": {
+     "id": "LD58x",
+     "code": "en",
+     "name": "English"
+    },
+    "card": {
+     "id": "J7a75",
+     "scryfall_id": "c5bb5307-e874-42c4-b85d-06b9f6c474c8",
+     "set": "soa",
+     "set_name": "Secrets of Strixhaven Mystical Archive",
+     "cn": "37",
+     "name": "Abrade",
+     "rarity": "uncommon",
+     "lang": "en",
+     "prices": {
+      "usd": 0.28,
+      "usd_foil": 0.5
+     },
+     "tcgplayer_id": 688837,
+     "cardkingdom_id": 325916,
+     "type_line": "Instant",
+     "isToken": false
+    },
+    "notes": "bought at FNM from Sam"
+   },
+   {
+    "id": "KPZoZ4g",
+    "quantity": 1,
+    "condition": "nearMint",
+    "game": "paper",
+    "finish": "nonFoil",
+    "isFoil": false,
+    "isAlter": false,
+    "isProxy": false,
+    "purchasePrice": 0.14,
+    "isPrefPrinting": false,
+    "createdAtUtc": "2025-07-16T14:41:09.13Z",
+    "lastUpdatedAtUtc": "2025-07-30T01:45:25.583Z",
+    "rarity": "common",
+    "language": {
+     "id": "LD58x",
+     "code": "en",
+     "name": "English"
+    },
+    "tradeBinder": {
+     "id": "dAoMv",
+     "publicId": "nbwg00p2tEyFAtQO2oeCMw",
+     "name": "Longbox additions"
+    },
+    "card": {
+     "id": "AWrlx",
+     "scryfall_id": "47f39b5e-2e85-4f31-bbab-0b0bf58f701d",
+     "set": "lci",
+     "set_name": "The Lost Caverns of Ixalan",
+     "cn": "131",
+     "name": "Abrade",
+     "rarity": "common",
+     "lang": "en",
+     "prices": {
+      "usd": 0.24,
+      "usd_foil": 0.28
+     },
+     "tcgplayer_id": 526138,
+     "cardkingdom_id": 287191,
+     "type_line": "Instant",
+     "isToken": false
+    },
+    "notes": "bought at FNM from Sam"
+   },
+   {
+    "id": "AWDnDNJ",
+    "quantity": 1,
+    "condition": "nearMint",
+    "game": "paper",
+    "finish": "foil",
+    "isFoil": true,
+    "isAlter": false,
+    "isProxy": false,
+    "purchasePrice": 0.36,
+    "isPrefPrinting": false,
+    "createdAtUtc": "2025-07-16T14:41:19.903Z",
+    "lastUpdatedAtUtc": "2025-07-16T14:41:19.903Z",
+    "rarity": "rare",
+    "language": {
+     "id": "LD58x",
+     "code": "en",
+     "name": "English"
+    },
+    "tradeBinder": {
+     "id": "dAoMv",
+     "publicId": "nbwg00p2tEyFAtQO2oeCMw",
+     "name": "Longbox additions"
+    },
+    "card": {
+     "id": "PbMr8",
+     "scryfall_id": "e0bcc6f3-bae4-485c-82da-56c15c97c7f8",
+     "set": "lci",
+     "set_name": "The Lost Caverns of Ixalan",
+     "cn": "297",
+     "name": "Abuelo, Ancestral Echo",
+     "rarity": "rare",
+     "lang": "en",
+     "prices": {
+      "usd": 0.31,
+      "usd_foil": 0.4
+     },
+     "tcgplayer_id": 524237,
+     "cardkingdom_id": 285620,
+     "type_line": "Legendary Creature \u2014 Spirit",
+     "isToken": false
+    },
+    "notes": "bought at FNM from Sam"
+   },
+   {
+    "id": "GG1Jo6",
+    "quantity": 1,
+    "condition": "nearMint",
+    "game": "paper",
+    "finish": "nonFoil",
+    "isFoil": false,
+    "isAlter": false,
+    "isProxy": false,
+    "isPrefPrinting": false,
+    "createdAtUtc": "2025-03-09T19:42:43.543Z",
+    "lastUpdatedAtUtc": "2025-03-09T19:42:43.543Z",
+    "rarity": "common",
+    "language": {
+     "id": "LD58x",
+     "code": "en",
+     "name": "English"
+    },
+    "card": {
+     "id": "PbNwm",
+     "scryfall_id": "c5620c22-910c-4d33-a5e9-4c4eac8c6304",
+     "set": "inr",
+     "set_name": "Innistrad Remastered",
+     "cn": "1",
+     "name": "Abundant Maw",
+     "rarity": "common",
+     "lang": "en",
+     "prices": {
+      "usd": 0.16,
+      "usd_foil": 0.14
+     },
+     "tcgplayer_id": 609840,
+     "cardkingdom_id": 307942,
+     "type_line": "Creature \u2014 Eldrazi Leech",
+     "isToken": false
+    },
+    "notes": "bought at FNM from Sam"
+   },
+   {
+    "id": "yDq8gGD",
+    "quantity": 2,
+    "condition": "nearMint",
+    "game": "paper",
+    "finish": "nonFoil",
+    "isFoil": false,
+    "isAlter": false,
+    "isProxy": false,
+    "purchasePrice": 0.33,
+    "isPrefPrinting": false,
+    "createdAtUtc": "2026-09-29T21:49:39.81Z",
+    "lastUpdatedAtUtc": "2026-09-29T21:49:39.81Z",
+    "rarity": "common",
+    "language": {
+     "id": "LD58x",
+     "code": "en",
+     "name": "English"
+    },
+    "tradeBinder": {
+     "id": "NQaWg",
+     "publicId": "QO5T-qBYwk2PhirCPPyYxw",
+     "name": "Reality Fracture Sealed 2"
+    },
+    "card": {
+     "id": "GAA4Q",
+     "scryfall_id": "730d8c28-1e58-4b8e-89e9-445d154d2e83",
+     "set": "fra",
+     "set_name": "Reality Fracture",
+     "cn": "2",
+     "name": "Academic Ascent",
+     "rarity": "common",
+     "lang": "en",
+     "prices": {
+      "usd": 0.11,
+      "usd_foil": 0.24
+     },
+     "tcgplayer_id": 715889,
+     "cardkingdom_id": 332510,
+     "type_line": "Instant",
+     "isToken": false
+    },
+    "notes": "bought at FNM from Sam"
+   },
+   {
+    "id": "WOZ9VDV",
+    "quantity": 1,
+    "condition": "nearMint",
+    "game": "paper",
+    "finish": "nonFoil",
+    "isFoil": false,
+    "isAlter": false,
+    "isProxy": false,
+    "purchasePrice": 0.33,
+    "isPrefPrinting": false,
+    "createdAtUtc": "2026-09-29T21:49:49.877Z",
+    "lastUpdatedAtUtc": "2026-09-29T21:49:49.877Z",
+    "rarity": "common",
+    "language": {
+     "id": "LD58x",
+     "code": "en",
+     "name": "English"
+    },
+    "card": {
+     "id": "GAA4Q",
+     "scryfall_id": "730d8c28-1e58-4b8e-89e9-445d154d2e83",
+     "set": "fra",
+     "set_name": "Reality Fracture",
+     "cn": "2",
+     "name": "Academic Ascent",
+     "rarity": "common",
+     "lang": "en",
+     "prices": {
+      "usd": 0.11,
+      "usd_foil": 0.24
+     },
+     "tcgplayer_id": 715889,
+     "cardkingdom_id": 332510,
+     "type_line": "Instant",
+     "isToken": false
+    },
+    "notes": "bought at FNM from Sam"
+   },
+   {
+    "id": "bROMOJX",
+    "quantity": 1,
+    "condition": "nearMint",
+    "game": "paper",
+    "finish": "nonFoil",
+    "isFoil": false,
+    "isAlter": false,
+    "isProxy": false,
+    "purchasePrice": 0.21,
+    "isPrefPrinting": false,
+    "createdAtUtc": "2025-07-16T14:39:04.163Z",
+    "lastUpdatedAtUtc": "2025-07-16T14:39:04.163Z",
+    "rarity": "common",
+    "language": {
+     "id": "LD58x",
+     "code": "en",
+     "name": "English"
+    },
+    "tradeBinder": {
+     "id": "dAoMv",
+     "publicId": "nbwg00p2tEyFAtQO2oeCMw",
+     "name": "Longbox additions"
+    },
+    "card": {
+     "id": "YodBV",
+     "scryfall_id": "a7305c18-5058-42dd-b62a-7f6a42624036",
+     "set": "som",
+     "set_name": "Scars of Mirrodin",
+     "cn": "136",
+     "name": "Accorder's Shield",
+     "rarity": "common",
+     "lang": "en",
+     "prices": {
+      "usd": 0.31,
+      "usd_foil": 2.64
+     },
+     "tcgplayer_id": 36498,
+     "cardkingdom_id": 132204,
+     "type_line": "Artifact \u2014 Equipment",
+     "isToken": false
+    },
+    "notes": "bought at FNM from Sam"
+   },
+   {
+    "id": "pDgAM1q",
+    "quantity": 1,
+    "condition": "nearMint",
+    "game": "paper",
+    "finish": "nonFoil",
+    "isFoil": false,
+    "isAlter": false,
+    "isProxy": false,
+    "purchasePrice": 0.08,
+    "isPrefPrinting": false,
+    "createdAtUtc": "2026-09-26T03:15:30.183Z",
+    "lastUpdatedAtUtc": "2026-09-26T03:15:30.183Z",
+    "rarity": "common",
+    "language": {
+     "id": "LD58x",
+     "code": "en",
+     "name": "English"
+    },
+    "card": {
+     "id": "WO3JG",
+     "scryfall_id": "bc0f5ca8-47bd-4451-8fd1-a312ff7d31ec",
+     "set": "tmt",
+     "set_name": "Teenage Mutant Ninja Turtles",
+     "cn": "1",
+     "name": "Action News Crew",
+     "rarity": "common",
+     "lang": "en",
+     "prices": {
+      "usd": 0.09,
+      "usd_foil": 0.16
+     },
+     "tcgplayer_id": 679056,
+     "cardkingdom_id": 323693,
+     "type_line": "Creature \u2014 Human Citizen",
+     "isToken": false
+    },
+    "notes": "bought at FNM from Sam"
+   },
+   {
+    "id": "vPPa6Gw",
+    "quantity": 1,
+    "condition": "nearMint",
+    "game": "paper",
+    "finish": "nonFoil",
+    "isFoil": false,
+    "isAlter": false,
+    "isProxy": false,
+    "purchasePrice": 0.93,
+    "isPrefPrinting": false,
+    "createdAtUtc": "2026-04-07T14:22:19.213Z",
+    "lastUpdatedAtUtc": "2026-04-07T14:22:19.213Z",
+    "rarity": "rare",
+    "language": {
+     "id": "LD58x",
+     "code": "en",
+     "name": "English"
+    },
+    "tradeBinder": {
+     "id": "WnQyV",
+     "publicId": "OM3ul_hWbUaFzI3inT4_xA",
+     "name": "FE 2026 Draft and Winnings"
+    },
+    "card": {
+     "id": "vPXwV",
+     "scryfall_id": "6e53f246-8347-4632-9d5b-4aeb12f7b762",
+     "set": "ecl",
+     "set_name": "Lorwyn Eclipsed",
+     "cn": "3",
+     "name": "Adept Watershaper",
+     "rarity": "rare",
+     "lang": "en",
+     "prices": {
+      "usd": 0.35,
+      "usd_foil": 0.48
+     },
+     "tcgplayer_id": 671950,
+     "cardkingdom_id": 322381,
+     "type_line": "Creature \u2014 Merfolk Cleric",
+     "isToken": false
+    },
+    "notes": "bought at FNM from Sam"
+   },
+   {
+    "id": "NdJjvQ",
+    "quantity": 1,
+    "condition": "nearMint",
+    "game": "paper",
+    "finish": "nonFoil",
+    "isFoil": false,
+    "isAlter": false,
+    "isProxy": false,
+    "isPrefPrinting": false,
+    "createdAtUtc": "2025-04-07T00:00:53.553Z",
+    "lastUpdatedAtUtc": "2025-04-07T00:00:53.553Z",
+    "rarity": "common",
+    "language": {
+     "id": "LD58x",
+     "code": "en",
+     "name": "English"
+    },
+    "card": {
+     "id": "DAvDl",
+     "scryfall_id": "bb13a34b-6ac8-47cb-9e91-47106a585fc1",
+     "set": "tdm",
+     "set_name": "Tarkir: Dragonstorm",
+     "cn": "69",
+     "name": "Adorned Crocodile",
+     "rarity": "common",
+     "lang": "en",
+     "prices": {
+      "usd": 0.16,
+      "usd_foil": 0.2
+     },
+     "tcgplayer_id": 625195,
+     "cardkingdom_id": 311924,
+     "type_line": "Creature \u2014 Crocodile",
+     "isToken": false
+    },
+    "notes": "bought at FNM from Sam"
+   }
+  ]
+ }
+}

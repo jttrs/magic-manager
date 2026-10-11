@@ -1,6 +1,6 @@
 # magic-manager companion (Chrome extension)
 
-Reads your Mana Pool, TCGplayer or Card Kingdom cart, your open store tabs (Deals), watched store pages, store order history and Moxfield decks in **your own browser**.
+Reads your Mana Pool, TCGplayer or Card Kingdom cart, your open store tabs (Deals), watched store pages, store order history, Moxfield and Archidekt decks and your Moxfield collection / binders in **your own browser**.
 Each time, it shows you exactly what it would send and waits for you to press Send. Plain
 JavaScript, no dependencies, no build step: what you see here is what runs.
 

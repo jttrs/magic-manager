@@ -4,9 +4,12 @@
 import { STORES } from './stores.js';
 
 export const CHANNEL = 'magic-manager/companion';
-export const KINDS = ['cart', 'tabs', 'moxfield', 'order_list', 'orders', 'watched'];
+export const KINDS = ['cart', 'tabs', 'moxfield', 'order_list', 'orders', 'watched', 'archidekt', 'moxfield_collection', 'moxfield_binders'];
 export const APPROVAL_TTL_MS = 5 * 60 * 1000;
 export const MAX_PAYLOAD_BYTES = 2_000_000;
+/** A whole Moxfield collection can run to tens of thousands of lines (session storage holds 10 MB). */
+export const MAX_COLLECTION_BYTES = 8_000_000;
+export const maxPayload = (kind) => (kind === 'moxfield_collection' ? MAX_COLLECTION_BYTES : MAX_PAYLOAD_BYTES);
 /** Most watched store pages one Watching read may open + read. */
 export const MAX_WATCHED = 50;
 
@@ -30,6 +33,13 @@ export const CART_STORES = {
   },
 };
 export const MOXFIELD_ORIGINS = ['https://moxfield.com/*', 'https://*.moxfield.com/*'];
+export const MOXFIELD_TABS = ['https://moxfield.com/*', 'https://www.moxfield.com/*'];
+// Archidekt decks (opt-in): the deck page itself, read with your own session.
+export const ARCHIDEKT_ORIGINS = ['https://archidekt.com/*', 'https://www.archidekt.com/*'];
+export const ARCHIDEKT_DECK = /^https:\/\/(?:www\.)?archidekt\.com\/decks\/(\d{1,12})(?:[/?#-]|$)/;
+// Moxfield collection / binder share links.
+export const MOXFIELD_COLLECTION = /^https:\/\/(?:www\.)?moxfield\.com\/collection\/([A-Za-z0-9_-]{4,64})(?:[/?#]|$)/;
+export const MOXFIELD_BINDER = /^https:\/\/(?:www\.)?moxfield\.com\/binders\/([A-Za-z0-9_-]{4,64})(?:[/?#]|$)/;
 // Order history (purchases). Mana Pool needs no extra permission (install-time);
 // TCGplayer + Card Kingdom are the optional "Order history" feature.
 export const TCGPLAYER_ORDER_ORIGINS = ['https://store.tcgplayer.com/*'];
@@ -102,6 +112,18 @@ export function summarize(kind, data) {
   if (kind === 'moxfield') {
     const n = Object.values(data.deck?.boards || {}).reduce((t, b) => t + Object.values(b.cards || {}).reduce((s, c) => s + (c.quantity || 0), 0), 0);
     return `${data.deck?.name || 'Deck'} · ${n} cards`;
+  }
+  if (kind === 'archidekt') {
+    const n = (data.deck?.cards || []).reduce((t, c) => t + (c.quantity || 0), 0);
+    return `${data.deck?.name || 'Deck'} · ${n} cards`;
+  }
+  if (kind === 'moxfield_binders') return `${(data.binders || []).length} Moxfield binders`;
+  if (kind === 'moxfield_collection') {
+    const c = data.collection || {};
+    const lines = c.lines || [];
+    const copies = lines.reduce((t, l) => t + (l.quantity || 0), 0);
+    const what = c.scope === 'binder' ? `Moxfield binder${c.name ? ` “${c.name}”` : ''}` : c.id ? 'Moxfield collection (shared link)' : 'Your Moxfield collection';
+    return `${what} · ${lines.length} printings · ${copies} cards`;
   }
   if (kind === 'order_list') {
     const n = (data.orders || []).length;

@@ -7,12 +7,13 @@
 import { z } from 'zod';
 
 export const CHANNEL = 'magic-manager/companion';
-export type CompanionKind = 'cart' | 'tabs' | 'moxfield' | 'order_list' | 'orders' | 'watched';
+export type CompanionKind = 'cart' | 'tabs' | 'moxfield' | 'order_list' | 'orders' | 'watched' | 'archidekt' | 'moxfield_collection' | 'moxfield_binders';
 export type OrderStore = 'manapool' | 'tcgplayer' | 'cardkingdom';
 /** The carts the companion reads (Mana Pool always; the other two are opt-in switches). */
 export type CartStore = OrderStore;
 export const CART_STORE_NAME: Record<CartStore, string> = { manapool: 'Mana Pool', tcgplayer: 'TCGplayer', cardkingdom: 'Card Kingdom' };
-export type RequestParams = { url?: string; store?: OrderStore; ids?: string[]; urls?: string[] };
+/** `what` + `binder`: the Moxfield collection read (whole collection, one of your binders by id, or a share `url`). */
+export type RequestParams = { url?: string; store?: OrderStore; ids?: string[]; urls?: string[]; what?: 'collection' | 'binder'; binder?: string };
 
 const helloSchema = z.object({
   version: z.string().max(20),
@@ -22,6 +23,8 @@ const helloSchema = z.object({
     orders_tcgplayer: z.boolean().optional(), orders_cardkingdom: z.boolean().optional(),
     // TCGplayer / Card Kingdom carts (companion ≥ 0.3.0); absent on older installs.
     cart_tcgplayer: z.boolean().optional(), cart_cardkingdom: z.boolean().optional(),
+    // Archidekt decks (companion ≥ 0.4.0); absent on older installs.
+    archidekt: z.boolean().optional(),
   }),
 });
 export type CompanionHello = z.infer<typeof helloSchema>;
@@ -84,6 +87,55 @@ const moxDataSchema = z.object({
   }),
 });
 
+// Archidekt decks (extension/src/readers/archidekt-deck.js) — Archidekt's own deck-API shape.
+const archDataSchema = z.object({
+  url: z.string().max(200),
+  deck: z.object({
+    id: z.number().int().positive(),
+    name: z.string().max(200).nullable(),
+    owner: z.object({ username: z.string().max(100).nullable() }),
+    cards: z.array(z.object({
+      quantity: z.number().int().min(1).max(999),
+      modifier: z.string().max(20).nullable(),
+      categories: z.array(z.string().max(60)).max(10),
+      card: z.object({
+        uid: z.string().max(40).nullable(), collectorNumber: z.string().max(12).nullable(),
+        edition: z.object({ editioncode: z.string().max(10).nullable() }), oracleCard: z.object({ name: z.string().max(200).nullable() }),
+      }),
+    })).max(2000),
+  }),
+});
+
+
+// Moxfield collection / binder (extension/src/readers/moxfield-collection.js): printing × finish lines only.
+const collectionLine = z.object({
+  quantity: z.number().int().min(1).max(99_999),
+  finish: z.enum(['nonfoil', 'foil', 'etched']),
+  scryfall_id: z.string().max(40).nullable(),
+  set: z.string().max(10).nullable(),
+  cn: z.string().max(12).nullable(),
+  name: z.string().max(200).nullable(),
+  proxy: z.boolean().optional(),
+  digital: z.boolean().optional(),
+});
+const collectionDataSchema = z.object({
+  collection: z.object({
+    scope: z.enum(['collection', 'binder']),
+    id: z.string().regex(/^[A-Za-z0-9_-]{4,64}$/).nullable(),
+    name: z.string().max(200).nullable(),
+    signed_in: z.boolean(),
+    total: z.number().int().nullable(),
+    entries: z.number().int(),
+    lines: z.array(collectionLine).max(60_000),
+  }),
+  warnings: z.array(warning).max(100),
+});
+
+const bindersDataSchema = z.object({
+  binders: z.array(z.object({ id: z.string().regex(/^[A-Za-z0-9_-]{4,64}$/), name: z.string().max(200).nullable(), cards: z.number().int().nullable() })).max(500),
+});
+export type MoxfieldBinder = z.infer<typeof bindersDataSchema>['binders'][number];
+
 // Order history. The readers' shapes (extension/src/readers/*-orders.js); the
 // server re-validates them with strict models (api/purchases.py).
 const orderStore = z.enum(['manapool', 'tcgplayer', 'cardkingdom']);
@@ -124,7 +176,10 @@ const ordersSchema = z.object({
 export type OrderListData = z.infer<typeof orderListSchema>;
 export type OrdersData = z.infer<typeof ordersSchema>;
 
-const SCHEMAS = { cart: cartDataSchema, tabs: tabsDataSchema, moxfield: moxDataSchema, order_list: orderListSchema, orders: ordersSchema, watched: watchedDataSchema } as const;
+const SCHEMAS = {
+  cart: cartDataSchema, tabs: tabsDataSchema, moxfield: moxDataSchema, order_list: orderListSchema, orders: ordersSchema, watched: watchedDataSchema,
+  archidekt: archDataSchema, moxfield_collection: collectionDataSchema, moxfield_binders: bindersDataSchema,
+} as const;
 type DataOf<K extends CompanionKind> = z.infer<(typeof SCHEMAS)[K]>;
 
 export type ErrorCatalog = Record<string, { message: string; fix?: string | null }>;

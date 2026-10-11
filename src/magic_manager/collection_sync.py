@@ -633,3 +633,145 @@ def write_diff_artifacts(diff: dict, *, direction: Direction, service: str,
     xlsx_path = out_dir / f"{base}.xlsx"
     xlsx_mod.write_workbook(xlsx_path, sheets)
     return {"json": json_path, "xlsx": xlsx_path}
+
+
+# ---------------------------------------------------------------------------
+# Lines read in the user's browser (the companion's Moxfield collection/binder
+# read) → the same resolve + apply_import path the CSV import uses.
+# ---------------------------------------------------------------------------
+
+@dataclass
+class LinesRead:
+    """Service lines split into importable rows and what was skipped."""
+    rows: list[CollectionRow]
+    skipped: dict[str, int]          # {"proxy": copies, "digital": copies}
+
+
+def rows_from_lines(lines: Iterable[dict]) -> LinesRead:
+    """Normalized service lines (``quantity``/``finish``/``scryfall_id``/``set``/
+    ``cn``/``name``/``proxy``/``digital``) → :class:`CollectionRow`s.
+
+    Owner rules (2026-10-11): inventory is printing × finish, so condition and
+    language are merged; ``etched`` counts as foil (the manabox ``finish_map``
+    does the same); proxies and digital (Arena/MTGO) copies are skipped and
+    counted, never imported."""
+    rows: list[CollectionRow] = []
+    skipped = {"proxy": 0, "digital": 0}
+    for ln in lines:
+        qty = int(ln.get("quantity") or 0)
+        if qty <= 0:
+            continue
+        if ln.get("proxy"):
+            skipped["proxy"] += qty
+            continue
+        if ln.get("digital"):
+            skipped["digital"] += qty
+            continue
+        finish = "foil" if ln.get("finish") in ("foil", "etched") else "nonfoil"
+        rows.append(CollectionRow(qty=qty, finish=finish, scryfall_id=ln.get("scryfall_id") or None,
+                                  set=ln.get("set") or None, collector_number=ln.get("cn") or None,
+                                  name=ln.get("name") or None))
+    return LinesRead(rows, skipped)
+
+
+def resolve_rows_local_first(rows: list[CollectionRow]) -> ResolveResult:
+    """:func:`resolve_rows`, but a row whose ``scryfall_id`` is already in the
+    local ``cards`` table is taken as resolved without a network call — a
+    whole collection is tens of thousands of lines, nearly all known. Only the
+    rest go through the Scryfall resolve (and upsert)."""
+    ids = list({r.scryfall_id for r in rows if r.scryfall_id})
+    known: set[str] = set()
+    with db.connect() as conn:
+        for i in range(0, len(ids), 900):
+            chunk = ids[i:i + 900]
+            known |= {r[0] for r in conn.execute(
+                f"SELECT scryfall_id FROM cards WHERE scryfall_id IN ({','.join('?' * len(chunk))})", chunk)}
+    local = [r for r in rows if r.scryfall_id in known]
+    rest = [r for r in rows if r.scryfall_id not in known]
+    res = resolve_rows(rest) if rest else ResolveResult()
+    res.resolved = local + res.resolved
+    return res
+
+
+def lines_sha256(rows: Iterable[CollectionRow]) -> str:
+    """A stable fingerprint of a read (printing × finish × qty, order-free) —
+    the ``source_sha256`` dedup key, like a CSV file's hash."""
+    import hashlib
+    agg: dict[tuple[str, str], int] = {}
+    for r in rows:
+        agg[(r.scryfall_id or "", r.finish)] = agg.get((r.scryfall_id or "", r.finish), 0) + r.qty
+    body = "\n".join(f"{s}\t{f}\t{q}" for (s, f), q in sorted(agg.items()))
+    return hashlib.sha256(body.encode()).hexdigest()
+
+
+def preview_lines(lines: Iterable[dict]) -> dict:
+    """What importing ``lines`` would do, before anything is written.
+
+    Returns ``rows`` (one per printing × finish: ``current`` owned vs the read's
+    ``incoming``, with name/set/cn), ``not_found`` (lines that resolve to no
+    printing — reported, never guessed), ``skipped`` (proxy/digital copies),
+    ``not_in_read`` (printings you own that the read doesn't list — always left
+    alone), ``sha256`` and ``already_imported_at`` (an earlier import of this
+    exact read, if any). The caller picks ``add`` or ``replace`` per import;
+    both effects derive from current/incoming (see :func:`apply_lines`)."""
+    read = rows_from_lines(lines)
+    res = resolve_rows_local_first(read.rows)
+    agg: dict[tuple[str, str], dict] = {}
+    for r in res.resolved:
+        slot = agg.setdefault((r.scryfall_id, r.finish), {"scryfall_id": r.scryfall_id, "finish": r.finish, "incoming": 0})
+        slot["incoming"] += r.qty
+    keys = list(agg)
+    meta: dict[str, dict] = {}
+    owned: dict[tuple[str, str], int] = {}
+    with db.connect() as conn:
+        ids = list({k[0] for k in keys})
+        for i in range(0, len(ids), 900):
+            chunk = ids[i:i + 900]
+            ph = ",".join("?" * len(chunk))
+            for row in conn.execute(f"SELECT scryfall_id, name, set_code, collector_number FROM cards WHERE scryfall_id IN ({ph})", chunk):
+                meta[row[0]] = {"name": row[1], "set": row[2], "collector_number": row[3]}
+            for row in conn.execute(f"SELECT scryfall_id, finish, quantity FROM inventory WHERE scryfall_id IN ({ph})", chunk):
+                owned[(row[0], row[1])] = int(row[2])
+        total_owned = conn.execute("SELECT COUNT(*) FROM inventory WHERE quantity > 0").fetchone()[0]
+        sha = lines_sha256(res.resolved)
+        prior = ingest_mod.find_events_by_sha(conn, sha)
+    rows = []
+    for k, slot in agg.items():
+        rows.append({**slot, **meta.get(k[0], {"name": None, "set": None, "collector_number": None}),
+                     "current": owned.get(k, 0)})
+    rows.sort(key=lambda r: ((r["set"] or ""), util.cn_sort_key(r["collector_number"] or ""), r["finish"]))
+    in_read_owned = sum(1 for k in keys if owned.get(k, 0) > 0)
+    return {
+        "rows": rows, "not_found": res.not_found, "warnings": res.warnings, "skipped": read.skipped,
+        "not_in_read": max(0, int(total_owned) - in_read_owned), "sha256": sha,
+        "already_imported_at": prior[0]["at"] if prior else None,
+    }
+
+
+class AlreadyImported(ValueError):
+    """This exact read was imported before; adding it again would double it."""
+
+
+def apply_lines(lines: Iterable[dict], *, mode: Literal["add", "replace"], label: str,
+                force: bool = False) -> dict:
+    """Import ``lines`` as ONE ``collection-import`` ingest event (via
+    :func:`apply_import`): ``add`` sums each printing's copies onto what you
+    own; ``replace`` sets each listed printing to the read's count (3 → 5 nets
+    +2). Printings the read doesn't list are never touched. Unresolvable lines
+    are left out (the preview lists them). An identical read already imported is
+    refused in ``add`` mode unless ``force`` (``replace`` is idempotent)."""
+    if mode not in ("add", "replace"):
+        raise ValueError(f"unknown mode {mode!r}")
+    read = rows_from_lines(lines)
+    res = resolve_rows_local_first(read.rows)
+    if not res.resolved:
+        raise ValueError("nothing to import")
+    sha = lines_sha256(res.resolved)
+    if mode == "add" and not force:
+        with db.connect() as conn:
+            prior = ingest_mod.find_events_by_sha(conn, sha)
+        if prior:
+            raise AlreadyImported(f"this exact read was already imported on {prior[0]['at']}")
+    out = apply_import(res.resolved, mode="add" if mode == "add" else "modify", label=label,
+                       source_sha256=sha)
+    return {**out, "mode": mode, "not_found": len(res.not_found)}

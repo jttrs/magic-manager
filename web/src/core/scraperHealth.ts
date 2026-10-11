@@ -7,11 +7,13 @@ export type ScraperHealth = ScraperHealthOut;
 export const deckKey = (source: string) => `deck-import/${source}`;
 export const cartKey = (store: string) => `companion-cart/${store}`;
 export const MOXFIELD_READER_KEY = 'companion-deck/moxfield';
+export const ARCHIDEKT_READER_KEY = 'companion-deck/archidekt';
+export const MOXFIELD_COLLECTION_KEY = 'companion-collection/moxfield';
 export const ordersKey = (store: string) => `companion-orders/${store}`;
 export const EDHREC_KEYS = ['edhrec-commander/edhrec', 'edhrec-card/edhrec', 'edhrec-rankings/edhrec'] as const;
 
 /** Companion codes that mean the site's page changed (POST /api/scrapers/report). */
-const REPORTABLE_CODES = ['cart.page_changed', 'moxfield.changed', 'orders.page_changed'] as const;
+const REPORTABLE_CODES = ['cart.page_changed', 'moxfield.changed', 'moxfield.collection_changed', 'archidekt.changed', 'orders.page_changed'] as const;
 export type ReportableCode = (typeof REPORTABLE_CODES)[number];
 export const isReportable = (code: string): code is ReportableCode => (REPORTABLE_CODES as readonly string[]).includes(code);
 

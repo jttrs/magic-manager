@@ -11,8 +11,9 @@
 
 import { STORES } from './stores.js';
 import {
-  APPROVAL_TTL_MS, CART_STORES, KINDS, MANAPOOL_ORIGINS, MAX_PAYLOAD_BYTES, MOXFIELD_DECK,
-  MOXFIELD_ORIGINS, STORE_ORIGINS, storeOf, summarize,
+  APPROVAL_TTL_MS, ARCHIDEKT_DECK, ARCHIDEKT_ORIGINS, CART_STORES, KINDS, MANAPOOL_ORIGINS, MAX_PAYLOAD_BYTES,
+  MOXFIELD_BINDER, MOXFIELD_COLLECTION, MOXFIELD_DECK, MOXFIELD_ORIGINS, MOXFIELD_TABS, STORE_ORIGINS, maxPayload,
+  storeOf, summarize,
 } from './protocol.js';
 import { readOrderList, readOrders, ORDER_FEATURES } from './orders.js';
 import { planWatched, readWatched } from './watched.js';
@@ -36,6 +37,7 @@ async function features() {
   const has = (origins) => chrome.permissions.contains({ origins }).catch(() => false);
   return {
     cart: await has(MANAPOOL_ORIGINS), deals: await has(STORE_ORIGINS), moxfield: await has(MOXFIELD_ORIGINS),
+    archidekt: await has(ARCHIDEKT_ORIGINS),
     cart_tcgplayer: await has(CART_STORES.tcgplayer.origins), cart_cardkingdom: await has(CART_STORES.cardkingdom.origins),
     ...await ORDER_FEATURES(has),
   };
@@ -78,7 +80,7 @@ async function fromApp(msg, sender) {
   // Watched pages: plan only — nothing is opened or read until you approve the list.
   const read = msg.kind === 'watched' ? await planWatched(params, fail, STORE_ORIGINS) : await READERS[msg.kind](params);
   if (!read.ok) return read;
-  if (JSON.stringify(read.data).length > MAX_PAYLOAD_BYTES) return fail('request.invalid', { detail: 'too large' });
+  if (JSON.stringify(read.data).length > maxPayload(msg.kind)) return fail('request.invalid', { detail: 'too large' });
 
   const pending = { id: msg.id, kind: msg.kind, tabId: sender.tab.id, origin: pinned, data: read.data,
     summary: summarize(msg.kind, read.data), created: Date.now(), windowId: null,
@@ -149,7 +151,8 @@ chrome.windows.onRemoved.addListener(async (windowId) => {
 // ---------- readers ----------
 
 const READERS = {
-  cart: readCart, tabs: readTabs, moxfield: readMoxfield,
+  cart: readCart, tabs: readTabs, moxfield: readMoxfield, archidekt: readArchidekt,
+  moxfield_collection: readMoxfieldCollection, moxfield_binders: () => readMoxfieldCollection({ what: 'binders' }),
   order_list: (params) => readOrderList(params, { fail, loaded, inject }),
   orders: (params) => readOrders(params, { fail, loaded, inject }),
 };
@@ -167,7 +170,7 @@ async function loaded(tabId, timeoutMs) {
 }
 
 async function inject(tabId, file, func, args = []) {
-  await chrome.scripting.executeScript({ target: { tabId, frameIds: [0] }, files: [file] });
+  await chrome.scripting.executeScript({ target: { tabId, frameIds: [0] }, files: Array.isArray(file) ? file : [file] });
   const [res] = await chrome.scripting.executeScript({ target: { tabId, frameIds: [0] }, func, args });
   return res?.result;
 }
@@ -243,15 +246,68 @@ async function readMoxfield(params) {
   if (!m) return fail('moxfield.bad_url');
   if (!await chrome.permissions.contains({ origins: MOXFIELD_ORIGINS })) return fail('permission.moxfield_off');
   const id = m[1];
-  return withTab(`https://moxfield.com/decks/${id}`, ['https://moxfield.com/*', 'https://www.moxfield.com/*'], async (tab, opened) => {
+  return withTab(`https://moxfield.com/decks/${id}`, MOXFIELD_TABS, async (tab, opened) => {
     if (opened && !await loaded(tab.id, 20_000)) return fail('moxfield.load_timeout');
     let out;
     try {
-      out = await inject(tab.id, 'src/readers/moxfield-deck.js', (deckId) => readMoxfieldDeck(deckId), [id]); // eslint-disable-line no-undef
+      out = await inject(tab.id, ['src/readers/moxfield-api.js', 'src/readers/moxfield-deck.js'], (deckId) => readMoxfieldDeck(deckId), [id]); // eslint-disable-line no-undef
     } catch {
       return fail('moxfield.blocked');
     }
     if (!out?.ok) return fail(out?.code || 'moxfield.changed', out?.status ? { status: out.status } : {});
     return { ok: true, data: { url: `https://moxfield.com/decks/${id}`, deck: out.deck } };
+  });
+}
+
+/**
+ * Your Moxfield collection, a collection / binder share link, or your binder list.
+ * params: {what: 'collection' | 'binder', url?: share link, binder?: binder id}.
+ */
+async function readMoxfieldCollection(params) {
+  let what = params.what;
+  let id = null;
+  if (what === 'binders') id = null;
+  else if (typeof params.url === 'string' && params.url) {
+    const c = MOXFIELD_COLLECTION.exec(params.url);
+    const b = MOXFIELD_BINDER.exec(params.url);
+    if (c) { what = 'collection'; id = c[1]; } else if (b) { what = 'binder'; id = b[1]; } else return fail('moxfield.bad_url');
+  } else if (what === 'binder') {
+    if (typeof params.binder !== 'string' || !/^[A-Za-z0-9_-]{4,64}$/.test(params.binder)) return fail('moxfield.bad_url');
+    id = params.binder;
+  } else if (what !== 'collection') return fail('request.invalid');
+  if (!await chrome.permissions.contains({ origins: MOXFIELD_ORIGINS })) return fail('permission.moxfield_off');
+  return withTab('https://moxfield.com/', MOXFIELD_TABS, async (tab, opened) => {
+    if (opened && !await loaded(tab.id, 20_000)) return fail('moxfield.load_timeout');
+    let out;
+    try {
+      out = await inject(tab.id, ['src/readers/moxfield-api.js', 'src/readers/moxfield-collection.js'], (o) => readMoxfieldCollection(o), [{ what, id }]); // eslint-disable-line no-undef
+    } catch {
+      return fail('moxfield.blocked');
+    }
+    if (!out?.ok) {
+      const code = !out?.code || out.code === 'moxfield.changed' ? 'moxfield.collection_changed' : out.code;
+      return fail(code, out?.status ? { status: out.status } : {});
+    }
+    if (what === 'binders') return { ok: true, data: { binders: out.binders } };
+    return { ok: true, data: { collection: out.collection, warnings: [] } };
+  });
+}
+
+/** An Archidekt deck — public or your own private one — read from its page with your session. */
+async function readArchidekt(params) {
+  const m = ARCHIDEKT_DECK.exec(String(params.url || ''));
+  if (!m) return fail('archidekt.bad_url');
+  if (!await chrome.permissions.contains({ origins: ARCHIDEKT_ORIGINS })) return fail('permission.archidekt_off');
+  const id = m[1];
+  return withTab(`https://archidekt.com/decks/${id}`, ARCHIDEKT_ORIGINS, async (tab, opened) => {
+    if (opened && !await loaded(tab.id, 20_000)) return fail('archidekt.load_timeout');
+    let out;
+    try {
+      out = await inject(tab.id, 'src/readers/archidekt-deck.js', (deckId) => readArchidektDeck(deckId), [id]); // eslint-disable-line no-undef
+    } catch {
+      return fail('archidekt.blocked');
+    }
+    if (!out?.ok) return fail(out?.code || 'archidekt.changed', out?.status ? { status: out.status } : {});
+    return { ok: true, data: { url: `https://archidekt.com/decks/${id}`, deck: out.deck } };
   });
 }

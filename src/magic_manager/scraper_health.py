@@ -70,6 +70,10 @@ REASONS: dict[str, tuple[str, str]] = {
                           "Follow the scrape-doctor skill: recapture the cart page and fix the reader."),
     "moxfield.changed": ("Moxfield's deck data changed format.",
                          "Follow the scrape-doctor skill: update the reader and decksource.parse_moxfield."),
+    "moxfield.collection_changed": ("Moxfield's collection data changed format.",
+                                    "Follow the scrape-doctor skill: update extension/src/readers/moxfield-collection.js."),
+    "archidekt.changed": ("Archidekt's deck page changed (its embedded deck data).",
+                          "Follow the scrape-doctor skill: recapture a deck page and fix extension/src/readers/archidekt-deck.js."),
     "orders.page_changed": ("The store's order history page changed — the reader found no orders or lines.",
                             "Follow the scrape-doctor skill: recapture the order page (de-personalised) and fix the reader."),
 }
@@ -80,6 +84,8 @@ REASONS: dict[str, tuple[str, str]] = {
 REPORTABLE_CODES: dict[str, str] = {
     "cart.page_changed": "companion-cart/{store}",       # per store; Mana Pool when unnamed (older companions)
     "moxfield.changed": "companion-deck/moxfield",
+    "moxfield.collection_changed": "companion-collection/moxfield",
+    "archidekt.changed": "companion-deck/archidekt",
     "orders.page_changed": "companion-orders/{store}",   # per store (report carries `store`)
 }
 ORDER_STORES = {"manapool": "Mana Pool", "tcgplayer": "TCGplayer", "cardkingdom": "Card Kingdom"}
@@ -105,7 +111,7 @@ _DECK_SITE_NAMES = {"archidekt": "Archidekt", "mtggoldfish": "MTGGoldfish", "man
 @dataclass(frozen=True)
 class Scraper:
     key: str             # "<scraper>/<site>"
-    scraper: str         # store-price | deck-import | companion-cart | companion-deck | companion-orders | edhrec-*
+    scraper: str         # store-price | deck-import | companion-cart | companion-deck | companion-collection | companion-orders | edhrec-*
     site: str            # vendor key / deck source / manapool / edhrec
     site_name: str
     label: str           # what it reads, in plain words
@@ -164,6 +170,14 @@ def registry() -> list[Scraper]:
                        "Moxfield deck read in your browser", "Add cards · Decks import (companion)",
                        "browser" if (decks.get("moxfield") or {}).get("url") else "none",
                        (decks.get("moxfield") or {}).get("url")))
+    arch = (decks.get("archidekt") or {}).get("url")
+    out.append(Scraper("companion-deck/archidekt", "companion-deck", "archidekt", "Archidekt",
+                       "Archidekt deck read in your browser", "Add cards · Decks import (companion)",
+                       "browser" if arch else "none", arch))
+    coll = (samples.get("collection", {}).get("moxfield") or {}).get("url")
+    out.append(Scraper("companion-collection/moxfield", "companion-collection", "moxfield", "Moxfield",
+                       "Moxfield collection / binder read in your browser", "Add cards · Collection (companion)",
+                       "browser" if coll else "none", coll))
     for site, name in CART_STORES.items():
         cart = (samples.get("cart", {}).get(site) or {}).get("url")
         out.append(Scraper(f"companion-cart/{site}", "companion-cart", site, name,

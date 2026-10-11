@@ -43,7 +43,7 @@ export function CompanionButton() {
           <div className="flex flex-col gap-2 border-b-2 border-rule-strong px-5 pb-3 pt-5">
             <Dialog.Title className="text-2xl voice-condensed font-bold leading-none">Browser companion</Dialog.Title>
             <Dialog.Description className="max-w-[62ch] text-md leading-relaxed text-ink-muted">
-              A Chrome extension that reads your Mana Pool cart, your open store tabs and Moxfield decks in your own browser. Each time, it shows you exactly what it would send and waits for you to approve.
+              A Chrome extension that reads your carts, your open store tabs, Moxfield and Archidekt decks and your Moxfield collection in your own browser. Each time, it shows you exactly what it would send and waits for you to approve.
             </Dialog.Description>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
@@ -92,14 +92,16 @@ function Setup({ c }: { c: CompanionState }) {
         <h3 id="cmp-reads" className={H3}>What it can read</h3>
         <Feature on={c.hello?.features.cart} name="Mana Pool cart" detail="Your cart page: each card’s printing, finish, condition, quantity and price. Always on." />
         <Feature on={c.hello?.features.deals} name="Deals — your open store tabs" detail="Which product pages you have open on the Deals stores, and the price on open-tab stores. Switch it on in the companion’s settings." />
-        <Feature on={c.hello?.features.moxfield} name="Moxfield decks" detail="A deck you choose, as your browser sees it — including your own private decks when you’re signed in. Switch it on in the companion’s settings." />
+        <Feature on={c.hello?.features.moxfield} name="Moxfield decks, collection and binders" detail="A deck, your collection or a binder you choose. Shared links are read without signing in; for your own private ones it uses Moxfield’s short-lived sign-in in that tab. Switch it on in the companion’s settings." />
+        <Feature on={c.hello?.features.archidekt} name="Archidekt decks" detail="A deck you choose, as your browser sees it — including your own private decks when you’re signed in. Switch it on in the companion’s settings." />
       </section>
 
       <section aria-labelledby="cmp-never" className="flex flex-col gap-1">
         <h3 id="cmp-never" className={H3}>What it never does</h3>
         <ul className="flex list-disc flex-col gap-0.5 pl-5 text-md leading-relaxed">
-          <li>Read cookies, passwords, sign-in tokens, email or addresses.</li>
-          <li>Change anything on Mana Pool, Moxfield or a store — no cart edits, no purchases.</li>
+          <li>Read cookies, passwords, email or addresses.</li>
+          <li>Send a sign-in token anywhere. Moxfield’s own short-lived token, for your private Moxfield cards, stays in that Moxfield tab for the one read.</li>
+          <li>Change anything on Mana Pool, Moxfield, Archidekt or a store — no cart edits, no purchases.</li>
           <li>Answer any website but this app, or send anything you haven’t approved.</li>
           <li>Collect in the background, run analytics, or load code from the internet.</li>
         </ul>

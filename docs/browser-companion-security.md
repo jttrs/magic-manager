@@ -90,6 +90,14 @@ sequenceDiagram
     dropped. The store page links the companion follows stay in the worker; they aren't sent.
   - Moxfield: deck name, author user name, and per card: printing, quantity, finish and board.
     Profile, likes, prices and internal ids are dropped (pinned).
+  - Archidekt deck (extension 0.4.0): deck id, name, owner user name, and per card: printing (Scryfall
+    id, set code, collector number), name, quantity, finish (modifier) and categories. The page's
+    embedded data also carries your IP address, avatar, prices and Archidekt's internal ids — the
+    fixture plants an IP and a fake session string and the test asserts none are read.
+  - Moxfield collection / binder (extension 0.4.0): per printing × finish the Scryfall id, set code,
+    collector number, name, quantity, finish, and `proxy` / `digital` flags (so the app can skip them).
+    Plus the read's scope, share id and binder name. Never condition, language, purchase price, notes,
+    dates, your profile or Moxfield's ids (fixture plants a personal note; pinned).
   - watched store pages (Deals → Watching, added 2026-10-10, extension 0.2.1): for each watched link
     the URL, store name and whether it was your open tab, plus exactly the open-tab page reading above
     (the same `readers/store-page.js`). Nothing about any other tab.
@@ -116,7 +124,8 @@ sequenceDiagram
   - **Deals**: the 21 store sites from `config/vendors.toml` (generated into the manifest; CI fails
     when stale). Amazon, Walmart and GameStop were added 2026-10-10 (extension 0.1.1): Chrome asks
     for the whole store set, so a user who had Deals on switches it on again once to grant them,
-  - **Moxfield**: `moxfield.com` + subdomains.
+  - **Moxfield**: `moxfield.com` + subdomains (decks, collection and binders).
+  - **Archidekt** (0.4.0): `archidekt.com` + `www.archidekt.com`.
   - **Order history**: `store.tcgplayer.com` + `www.cardkingdom.com` (Mana Pool order pages are on
     the install-time `manapool.com`).
   - **TCGplayer cart**: `www.tcgplayer.com`; **Card Kingdom cart**: `www.cardkingdom.com` — one switch
@@ -167,8 +176,34 @@ schema (`parseBookmarkletPaste`) and the server's strict model.
 - **DNS rebinding** against a localhost app (a hostile domain resolving to 127.0.0.1) isn't stopped by
   `Sec-Fetch-Site`. Mitigation belongs with hosted auth (Phase 3, H4: a Host allowlist plus session
   cookies). The companion itself is unaffected, because it pairs by exact origin.
-- **Moxfield private decks** are read through the user's own signed-in browser session. The browser
-  attaches its own cookies to the one deck request, and the companion never reads them.
+- **Archidekt private decks** are read from the deck page the user's own signed-in browser loads. The
+  browser attaches its own cookies, and the companion never reads them.
+
+## Moxfield sign-in token — the one exception (owner-approved, 2026-10-11)
+
+Moxfield's private data (your collection, your binder list, private decks, binders and collection links)
+is served only with a short-lived bearer token. Moxfield's page keeps it in memory and gets it from
+`POST https://api2.moxfield.com/v1/account/token/refresh` using the browser's own `refresh_token`
+cookie. The owner chose to support private reads anyway (*"Both — share link now, plus private via
+Moxfield's sign-in token (security exception)"*). The design keeps the exception as narrow as possible:
+
+- **Only when needed.** Share links and public decks are read anonymously. The reader asks for a token
+  only for your own collection / binder list, or after Moxfield answers *private* to an anonymous request
+  (`moxfield-api.js`).
+- **Minted, not read.** It never reads cookies, storage or Moxfield's page state. It makes the same
+  refresh call moxfield.com makes; the browser attaches the cookie. A token string over 8 KB is ignored.
+- **Lives in one closure, for one read.** It is held in a local variable of `moxfieldSession()` in the
+  injected reader (the extension's isolated world). It is sent only as `Authorization: Bearer` to
+  `api2.moxfield.com` — the only host the helper calls — and is never returned, stored, logged or sent
+  to the app or the approval window. The e2e asserts the token string is absent from every result.
+- **Read-only.** Only GETs (plus the refresh POST itself). No Moxfield write endpoint is called.
+- **Residual:** the refresh call can rotate Moxfield's refresh cookie (the browser stores the new one,
+  as on moxfield.com). A compromised reader file could misuse the token — the same trust as the
+  extension's code, mitigated by no remote code, a reproducible zip and code review.
+
+## Security review (2026-10-11, Archidekt decks + Moxfield collection / binders, extension 0.4.0)
+
+SECURITY_REVIEW_PLACEHOLDER
 
 ## Security review (2026-10-10, TCGplayer + Card Kingdom carts, extension 0.3.0)
 

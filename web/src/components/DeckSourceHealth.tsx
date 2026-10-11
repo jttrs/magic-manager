@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useDownScrapers, useRefreshScraperHealth } from '../app/scraperHealth';
-import { deckKey, deckSourceOf, MOXFIELD_READER_KEY } from '../core/scraperHealth';
+import { ARCHIDEKT_READER_KEY, deckKey, deckSourceOf, MOXFIELD_READER_KEY } from '../core/scraperHealth';
 import { ScraperNotice } from './ScraperNotice';
 
 /**
@@ -10,7 +10,8 @@ import { ScraperNotice } from './ScraperNotice';
  */
 export function DeckSourceHealth({ url, viaBrowser, settled }: { url: string; viaBrowser: boolean; settled: string }) {
   const source = deckSourceOf(url);
-  const keys = source ? [viaBrowser && source === 'moxfield' ? MOXFIELD_READER_KEY : deckKey(source)] : [];
+  const reader = source === 'moxfield' ? MOXFIELD_READER_KEY : source === 'archidekt' ? ARCHIDEKT_READER_KEY : null;
+  const keys = source ? [viaBrowser && reader ? reader : deckKey(source)] : [];
   const down = useDownScrapers(keys);
   const refresh = useRefreshScraperHealth();
   useEffect(() => {

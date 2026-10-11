@@ -5,7 +5,7 @@
 // no answer at all.
 //
 // Harness-only change: the test copy of the manifest grants http://localhost/*
-// (and www.tcgplayer.com, the TCGplayer cart switch) up front, because Chrome's
+// (and www.tcgplayer.com + moxfield.com, the TCGplayer cart and Moxfield switches) up front, because Chrome's
 // permission prompts (what users see when pairing / switching a feature on)
 // can't be clicked by automation. Everything else is the shipped extension.
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -30,7 +30,7 @@ const test = base.extend<Fixtures>({
     const dir = mkdtempSync(join(tmpdir(), 'mm-companion-'));
     cpSync(resolve(ROOT, 'extension'), dir, { recursive: true });
     const manifest = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8'));
-    manifest.host_permissions.push('http://localhost/*', 'https://www.tcgplayer.com/*');
+    manifest.host_permissions.push('http://localhost/*', 'https://www.tcgplayer.com/*', 'https://moxfield.com/*', 'https://*.moxfield.com/*');
     writeFileSync(join(dir, 'manifest.json'), JSON.stringify(manifest));
     const context = await chromium.launchPersistentContext('', {
       channel: 'chromium',
@@ -127,6 +127,43 @@ test('a TCGplayer cart: the real extension reads your cart tab, you approve, the
   await expect(dialog).toContainText('TCGplayer cart · read in this browser by the companion.');
   expect(bodies).toEqual([{ items: TCG_EXPECTED.items, source: 'extension', store: 'tcgplayer', family: 'blb' }]);
   expect(JSON.stringify(bodies)).not.toContain('Addicted2packz');   // never the sellers
+});
+
+test('a Moxfield collection: the real extension reads every page in your Moxfield tab, you approve, the app previews only the lines', async ({ ext }) => {
+  const COLL = JSON.parse(readFileSync(resolve(ROOT, 'tests/fixtures/companion/moxfield-collection.json'), 'utf8'));
+  const GOLD = JSON.parse(readFileSync(resolve(ROOT, 'tests/fixtures/companion/moxfield-collection.expected.json'), 'utf8')).collection;
+  const cors = { 'access-control-allow-origin': 'https://moxfield.com', 'access-control-allow-credentials': 'true' };
+  await ext.context.route('https://api2.moxfield.com/**', (r) => {
+    const u = new URL(r.request().url());
+    if (!u.pathname.startsWith('/v1/collections/search/')) return r.fulfill({ status: 404, headers: cors, contentType: 'application/json', body: '{}' });
+    return r.fulfill({ status: 200, headers: cors, contentType: 'application/json', body: JSON.stringify(u.searchParams.get('pageNumber') === '2' ? COLL.page2 : COLL.page1) });
+  });
+  const tab = await ext.context.newPage();
+  await tab.route('https://moxfield.com/', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>Moxfield</title>' }));
+  await tab.goto('https://moxfield.com/');
+  const { page } = await appPage(ext.context);
+  const previews: unknown[] = [];
+  await page.route('**/api/collection/import/preview', (r) => {
+    previews.push(r.request().postDataJSON());
+    return r.fulfill({ json: { label: 'web:moxfield shared collection', rows: [], not_found: [], skipped: { proxy: 1, digital: 1 }, not_in_read: 0, already_imported_at: null, warnings: [] } });
+  });
+  await page.getByRole('button', { name: 'Add cards' }).click();
+  const d = page.getByRole('dialog', { name: 'Add cards' });
+  await d.getByRole('tab', { name: 'Moxfield collection' }).click();
+  await d.getByRole('radio', { name: /A shared link/ }).check();
+  await d.getByRole('textbox', { name: /collection or binder link/ }).fill('https://moxfield.com/collection/hgsItGBwRUybHyN0WZR41w');
+  const approval = ext.context.waitForEvent('page', (p) => p.url().endsWith('/src/approve.html'));
+  await d.getByRole('button', { name: 'Read from Moxfield' }).click();
+  const approve = await approval;
+  await expect(approve.locator('#title')).toHaveText('Send your Moxfield cards?');
+  const copies = GOLD.lines.reduce((t: number, l: { quantity: number }) => t + l.quantity, 0);
+  await expect(approve.locator('#summary')).toHaveText(`Moxfield collection (shared link) · 20 printings · ${copies} cards`);
+  await expect(approve.locator('#table')).toContainText('proxy — skipped');
+  expect(previews).toEqual([]);
+  await approve.getByRole('button', { name: 'Send to magic-manager' }).click();
+  await expect(d.getByRole('heading', { name: 'Moxfield collection (shared link)' })).toBeVisible();
+  expect(previews).toEqual([{ source: 'moxfield', scope: 'collection', id: 'hgsItGBwRUybHyN0WZR41w', name: null, lines: GOLD.lines }]);
+  expect(await ext.worker.evaluate(() => chrome.tabs.query({ url: 'https://moxfield.com/*' }))).toHaveLength(1);   // your tab, nothing extra left open
 });
 
 test('Don’t send: the app is told, and gets nothing', async ({ ext }) => {

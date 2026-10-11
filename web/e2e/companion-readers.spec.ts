@@ -135,6 +135,7 @@ test.describe('Moxfield deck reader', () => {
   async function readDeck(page: Page, api: { status: number; contentType: string; body: string }, id = 'AbCd1234') {
     await page.route('https://api2.moxfield.com/**', (r) => r.fulfill({ ...api, headers: { 'access-control-allow-origin': 'https://moxfield.com', 'access-control-allow-credentials': 'true' } }));
     await servePage(page, deckUrl, '<!doctype html><title>Moxfield</title>');
+    await page.addScriptTag({ content: reader('moxfield-api.js') });
     await page.addScriptTag({ content: reader('moxfield-deck.js') });
     return page.evaluate((deckId) => (window as unknown as { readMoxfieldDeck: (id: string) => Promise<unknown> }).readMoxfieldDeck(deckId), id);
   }

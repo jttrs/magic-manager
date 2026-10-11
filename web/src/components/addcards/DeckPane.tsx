@@ -74,9 +74,11 @@ function DeckUrl({ onFetched }: { onFetched: (r: ResolveOut) => void }) {
       </label>
       <DeckSourceHealth url={url} viaBrowser={browser.handles(url)} settled={live?.status === 'succeeded' || live?.status === 'failed' ? live.status : browser.error ? 'error' : ''} />
       <Button tone="paper" onClick={fetchDeck} disabled={running} className="self-start">{running ? 'Fetching…' : 'Fetch deck'}</Button>
-      {url.includes('moxfield') && (
-        <p className="text-xs text-ink-muted">{browser.handles(url) ? 'Read in this browser by the companion — you approve what it sends.' : 'Moxfield opens a Chrome window to read the deck.'}</p>
-      )}
+      {browser.handles(url) ? (
+        <p className="text-xs text-ink-muted">Read in this browser by the companion, so your private decks work too. You approve what it sends.</p>
+      ) : url.includes('moxfield') ? (
+        <p className="text-xs text-ink-muted">Moxfield opens a Chrome window to read the deck.</p>
+      ) : null}
       {browser.awaiting != null && <AwaitingNote summary={browser.awaiting} />}
       {browser.error && <FailureNote error={browser.error} />}
       {error && <p role="alert" className="text-sm text-danger">{error}</p>}
