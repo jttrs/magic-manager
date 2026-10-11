@@ -79,9 +79,9 @@ export function storeOf(hostname) {
  */
 export function parseAppOrigin(input) {
   let u;
-  try { u = new URL(String(input || '').trim()); } catch { return { error: 'Enter the address you open the app at, like http://localhost:8765.' }; }
+  try { u = new URL(String(input || '').trim()); } catch { return { error: 'Enter the address you open the app at, like http://localhost:8766.' }; }
   if (u.username || u.password) return { error: 'The address must not contain a user name or password.' };
-  if (u.pathname !== '/' || u.search || u.hash) return { error: 'Enter just the address (no path), like http://localhost:8765.' };
+  if (u.pathname !== '/' || u.search || u.hash) return { error: 'Enter just the address (no path), like http://localhost:8766.' };
   const local = u.hostname === 'localhost' || u.hostname === '127.0.0.1';
   if (u.protocol === 'http:' && !local) return { error: 'Plain http is only allowed for this computer (localhost). Use https.' };
   if (u.protocol !== 'http:' && u.protocol !== 'https:') return { error: 'The address must start with http:// or https://.' };

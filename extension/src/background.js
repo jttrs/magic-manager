@@ -65,7 +65,10 @@ async function route(msg, sender) {
 async function fromApp(msg, sender) {
   const pinned = await appOrigin();
   if (!pinned || sender.frameId !== 0 || sender.origin !== pinned || !sameOrigin(sender.tab.url, pinned)) return undefined;
-  if (msg.type === 'hello') return { ok: true, version: chrome.runtime.getManifest().version, features: await features() };
+  if (msg.type === 'hello') {
+    await noteHello(pinned);
+    return { ok: true, version: chrome.runtime.getManifest().version, features: await features() };
+  }
   if (msg.type !== 'request') return undefined;
   if (typeof msg.id !== 'string' || !/^[A-Za-z0-9_-]{8,64}$/.test(msg.id) || !KINDS.includes(msg.kind)) return fail('request.invalid');
   const params = msg.params && typeof msg.params === 'object' ? msg.params : {};
@@ -123,6 +126,14 @@ async function handleRequest(msg, sender, pinned, params) {
   pending.windowId = win.id;
   await chrome.storage.session.set({ pending });
   return { ok: true, status: 'awaiting_approval', summary: pending.summary };
+}
+
+/** When the paired app last said hello (the settings page shows it, so a pairing
+ *  with the wrong address doesn't look connected). Only the paired origin gets here. */
+async function noteHello(origin) {
+  const { lastHello } = await chrome.storage.local.get('lastHello');
+  if (lastHello?.origin === origin && Date.now() - lastHello.at < 30_000) return;
+  await chrome.storage.local.set({ lastHello: { origin, at: Date.now() } });
 }
 
 function sameOrigin(url, origin) {

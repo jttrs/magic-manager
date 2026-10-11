@@ -13,7 +13,7 @@ connected. Security design: [`browser-companion-security.md`](browser-companion-
    `config/features.local.toml`. Restart `mm serve`.
 2. App header → plug icon → **Download the companion**, unzip, `chrome://extensions` → Developer mode
    → **Load unpacked**.
-3. Companion icon → enter the app address → **Pair** (Chrome asks to allow it) → reload the app tab.
+3. Companion icon → paste the app's exact address (the app's header → **Browser companion** shows it with a copy button; the field starts empty, no default port) → **Pair** (Chrome asks to allow it) → reload the app tab. The settings page then says whether that address has checked in (the worker records the paired app's last hello, `storage.local` `lastHello`); "hasn't checked in yet" means the app isn't open at exactly that address.
 4. Optional: switch on **TCGplayer cart**, **Card Kingdom cart**, **Deals**, **Moxfield**, **Archidekt** and/or **Order history**
    (TCGplayer + Card Kingdom; Mana Pool needs nothing extra) on the companion's settings page (each asks
    Chrome for just its sites).

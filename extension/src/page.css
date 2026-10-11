@@ -40,3 +40,6 @@ ul.plain { margin: 6px 0; padding-left: 18px; }
 details summary { cursor: pointer; color: var(--muted); }
 .warn { border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); padding: 6px 0; margin: 8px 0; color: var(--ink); }
 .warn::before { content: "Note · "; font-weight: 600; color: var(--accent-ink); }
+.field-label { display: block; margin-top: 10px; font-weight: 600; }
+.row.pair { border-bottom: 0; padding-top: 4px; align-items: center; }
+#pair-status:empty { display: none; }

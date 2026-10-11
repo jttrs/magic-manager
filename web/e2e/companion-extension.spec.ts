@@ -276,6 +276,28 @@ test('another app on this computer (a different port) gets no answer either', as
   expect(await forgedRequest(other)).toBe('no answer');
 });
 
+test('the settings page says whether the paired app has checked in', async ({ ext }) => {
+  const opts = await ext.context.newPage();
+  await opts.goto(`chrome-extension://${ext.id}/src/options.html`);
+  await expect(opts.locator('#pair-status')).toContainText('hasn’t checked in yet');
+  await expect(opts.locator('#pair-status')).toHaveClass('warn');
+  const { page } = await appPage(ext.context);
+  await expect(page.getByRole('button', { name: 'Browser companion · connected' })).toBeVisible();
+  await expect(opts.locator('#pair-status')).toContainText(`Paired with ${APP}. Connected: the app last checked in just now.`);   // live, no reload
+  await expect(opts.getByRole('textbox', { name: 'App address' })).toHaveValue(APP);
+});
+
+test('paired with the wrong address: the app never checks in, and the settings page says so', async ({ ext }) => {
+  await ext.worker.evaluate(() => chrome.storage.local.set({ appOrigin: 'http://localhost:5999' }));
+  const { page } = await appPage(ext.context);
+  await page.getByRole('button', { name: 'Browser companion · set up' }).click();
+  await expect(page.getByRole('dialog').getByRole('status')).toContainText('Not connected');
+  await expect(page.getByRole('dialog').getByRole('status')).toContainText(APP);
+  const opts = await ext.context.newPage();
+  await opts.goto(`chrome-extension://${ext.id}/src/options.html`);
+  await expect(opts.locator('#pair-status')).toContainText('Paired with http://localhost:5999, but the app hasn’t checked in yet');
+});
+
 test('the settings page refuses addresses it may not pair with', async ({ ext }) => {
   const opts = await ext.context.newPage();
   await opts.goto(`chrome-extension://${ext.id}/src/options.html`);

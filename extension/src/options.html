@@ -11,9 +11,10 @@
     <p class="muted">Reads things only your own browser can see and, after you approve each time, hands the card lines to your magic-manager app. Version <span id="version"></span>.</p>
 
     <h2>1 · Pair with your app</h2>
-    <p>The address you open magic-manager at. The companion answers only that address — no other website can talk to it.</p>
-    <div class="row">
-      <div><input type="url" id="origin" placeholder="http://localhost:8765" autocomplete="off" spellcheck="false" aria-label="App address"></div>
+    <p>Paste the exact address the app shows under <strong>Browser companion</strong> in its header. The companion answers only that address — no other website can talk to it.</p>
+    <label for="origin" class="field-label">App address</label>
+    <div class="row pair">
+      <div><input type="url" id="origin" placeholder="http://localhost:8766" autocomplete="off" spellcheck="false" aria-describedby="pair-status"></div>
       <button type="button" id="pair" class="primary">Pair</button>
       <button type="button" id="unpair">Unpair</button>
     </div>

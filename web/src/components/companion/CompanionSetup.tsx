@@ -114,10 +114,18 @@ function Setup({ c }: { c: CompanionState }) {
 function Status({ c }: { c: CompanionState }) {
   if (c.status === 'checking') return <p role="status" className="text-md text-ink-muted">Looking for the companion on this page…</p>;
   if (c.status === 'absent') {
+    const origin = window.location.origin;
     return (
-      <p role="status" className="text-md leading-relaxed">
-        <span className="font-medium">Not connected.</span> <span className="text-ink-muted">Either it isn’t installed, it isn’t paired with {window.location.origin}, or this page was open before you paired — reload it.</span>
-      </p>
+      <div role="status" className="flex flex-col gap-2 text-md leading-relaxed">
+        <p>
+          <span className="font-medium">Not connected.</span>{' '}
+          <span className="text-ink-muted">The companion must be paired with exactly this address. Paste it into the companion’s settings, press Pair, then reload this page.</span>
+        </p>
+        <span className="flex flex-wrap items-center gap-2">
+          <code className="rounded-xs bg-paper-sunk px-2 py-1 tabular text-sm">{origin}</code>
+          <CopyButton getText={() => origin} label="Copy this app’s address" tone="paper" />
+        </span>
+      </div>
     );
   }
   return (
