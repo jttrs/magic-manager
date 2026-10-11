@@ -111,7 +111,20 @@ def test_shopify_requested_variant_never_falls_back_to_another_variants_price():
     from magic_manager import storepage
     product = {"title": "Decks", "variants": [{"id": 1, "title": "Lorehold", "price": 5000, "available": True},
                                               {"id": 2, "title": "Quandrix", "price": 4000, "available": True}]}
-    assert storepage.read_shopify(product, "999").price is None            # unknown variant: no price, not the cheapest
-    assert storepage.read_shopify(product, "999").title == "Decks"
+    with pytest.raises(LookupError, match="no longer has this variant"):   # unknown variant: no price, not the cheapest
+        storepage.read_shopify(product, "999")
     assert storepage.read_shopify(product, "1").price == 50.0
     assert storepage.read_shopify(product).price == 40.0                   # none requested: cheapest
+
+
+def test_a_gone_shopify_variant_is_a_failed_read_not_a_down_recipe(tmp_db, monkeypatch):
+    """A delisted variant must not flag the store's recipe as down (scrape.no_price)."""
+    import json
+    from magic_manager import scraper_health, storefetch
+    product = {"title": "Decks", "variants": [{"id": 1, "title": "Lorehold", "price": 5000, "available": True}]}
+    monkeypatch.setattr(storefetch, "_get", lambda url, **kw: (200, json.dumps(product)))
+    uses = []
+    monkeypatch.setattr(scraper_health, "record_uses", lambda u: uses.extend(u))
+    [row] = deals.read_prices(["https://www.stompinggroundstcg.com/products/decks?variant=999"])
+    assert row["price"] is None and row["error"] == "The store no longer has this variant"
+    assert row["not_counted"] is False and uses == []
