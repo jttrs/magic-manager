@@ -181,6 +181,64 @@ test.describe('Deals', () => {
     expect(jobBody!.pages).toEqual(TABS.pages);
   });
 
+  const BESTBUY = 'https://www.bestbuy.com/site/x/123.p';
+  const TARGET = 'https://www.target.com/p/x/-/A-1';
+  const watchStore = (url: string, store: string, read_in_browser: boolean) => ({
+    url, store, price: 40, available: true, read_at: '2026-09-10T12:00:00', read: true, read_in_browser,
+    first_price: 40, first_at: '2026-09-10T12:00:00', change: null, low: 40, high: 40, history: [],
+  });
+  const WATCHED = [{
+    product_id: 7, set_code: 'tdm', name: 'Reign of Dragons', kind: 'sealed', finish: null, category: 'deck', subtype: null, release_date: '2025-04-11',
+    best_price: 40, best_store: 'Best Buy', best_url: BESTBUY, target: null, target_price: null, target_met: null,
+    stores: [watchStore(BESTBUY, 'Best Buy', true), watchStore(TARGET, 'Target', true), watchStore('https://manyrealms.com/products/rod', 'Many Realms', false)],
+  }];
+  const watchingRoutes = async (page: Page, onJob: (body: Record<string, unknown>) => void) => {
+    await page.route('**/api/deals/watched', (r) => r.fulfill({ json: WATCHED }));
+    await page.route('**/api/market/product-cost?*', (r) => r.fulfill({ status: 404, json: { detail: 'n/a' } }));
+    await page.route('**/api/jobs/deals.watchlist', (r) => { onJob(r.request().postDataJSON()); return r.fulfill({ status: 500, json: { detail: 'stop here' } }); });
+  };
+
+  test('Watching: open-tab stores are read in this browser, only the watched links, and handed to the read', async ({ page }) => {
+    await flags(page, { companion: true, deals: true });
+    const data = {
+      urls: [{ url: BESTBUY, store: 'Best Buy', open: true }, { url: TARGET, store: 'Target', open: false }],
+      pages: { [BESTBUY]: { title: 'Reign of Dragons', head: '', ld: [], text: '$39.99' } },
+      warnings: [{ code: 'watched.load_timeout', url: TARGET }],
+    };
+    await fakeCompanion(page, { answers: { watched: { ok: true, data } } });
+    let jobBody: Record<string, unknown> | null = null;
+    await watchingRoutes(page, (b) => { jobBody = b; });
+    await page.goto('/market?subject=deals&deals=watching');
+    await expect(page.getByText('Open-tab stores are read in this browser by the companion')).toBeVisible();
+    await page.getByRole('button', { name: 'Read watched prices' }).click();
+    await expect(page.getByText('Waiting for you to approve in the companion window')).toBeVisible();
+    await expect.poll(() => jobBody).not.toBeNull();
+    expect(jobBody).toEqual({ refresh: true, in_browser: true, pages: data.pages });
+    const asked = await page.evaluate(() => (window as unknown as { __companionRequests: unknown[] }).__companionRequests);
+    expect(asked).toEqual([{ kind: 'watched', params: { urls: [BESTBUY, TARGET] } }]);   // the server-read store isn't asked for
+    await expect(page.getByText('didn’t finish loading')).toBeVisible();
+  });
+
+  test('Watching: declined in the companion window → nothing is read', async ({ page }) => {
+    await flags(page, { companion: true, deals: true });
+    await fakeCompanion(page, { answers: { watched: { ok: false, code: 'request.denied', message: 'You chose not to send it. Nothing was sent.' } } });
+    let jobBody: unknown = null;
+    await watchingRoutes(page, (b) => { jobBody = b; });
+    await page.goto('/market?subject=deals&deals=watching');
+    await page.getByRole('button', { name: 'Read watched prices' }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'Nothing was sent' })).toBeVisible();
+    expect(jobBody).toBeNull();
+  });
+
+  test('Watching without the companion reads on this Mac, as before', async ({ page }) => {
+    await flags(page, { companion: true, deals: true });
+    let jobBody: unknown = null;
+    await watchingRoutes(page, (b) => { jobBody = b; });
+    await page.goto('/market?subject=deals&deals=watching');
+    await page.getByRole('button', { name: 'Read watched prices' }).click();
+    await expect.poll(() => jobBody).toEqual({ refresh: true });
+  });
+
   test('Deals switched off in the companion: says how to switch it on', async ({ page }) => {
     await flags(page, { companion: true, deals: true });
     await fakeCompanion(page, { answers: { tabs: { ok: false, code: 'permission.deals_off' } } });

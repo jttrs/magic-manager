@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ProductCostOut } from './api';
-import { basisValue, deltaLabel, filterSortProducts, gapOf, pricesFrom, productsFromTabs, productsFromWatched, productType, readAge, sharedErrors, stockLabel, trendLabel, watchlistErrors, type DealFilters, type DealProduct, type PriceRow } from './deals';
+import { browserReadUrls, MAX_BROWSER_READS, basisValue, deltaLabel, filterSortProducts, gapOf, pricesFrom, productsFromTabs, productsFromWatched, productType, readAge, sharedErrors, stockLabel, trendLabel, watchlistErrors, type DealFilters, type DealProduct, type PriceRow } from './deals';
 
 type WatchStore = Parameters<typeof trendLabel>[0];
 
@@ -24,6 +24,16 @@ describe('deals view-model', () => {
     expect(deltaLabel(row({ delta: 6.99, pct: 13.2 }))).toEqual({ text: '$6.99 over market (+13%)', tone: 'bad' });
     expect(deltaLabel(row({ delta: null }))).toBeNull();
     expect(deltaLabel(row({ delta: -0.41, pct: -0.4 }))?.text).toBe('$0.41 under market');
+  });
+
+  it('lists the watched open-tab store links for the companion, deduped and capped', () => {
+    const store = (url: string, read_in_browser: boolean) => ({ url, read_in_browser }) as unknown as WatchStore;
+    const w = (stores: WatchStore[]) => ({ stores }) as unknown as Parameters<typeof browserReadUrls>[0][number];
+    expect(browserReadUrls([w([store('https://a/1', true), store('https://shop/2', false)]), w([store('https://a/1', true)])]))
+      .toEqual({ urls: ['https://a/1'], skipped: 0 });
+    const many = Array.from({ length: MAX_BROWSER_READS + 3 }, (_, i) => store(`https://a/${i}`, true));
+    expect(browserReadUrls([w(many)]).skipped).toBe(3);
+    expect(browserReadUrls([])).toEqual({ urls: [], skipped: 0 });
   });
 
   it('reads the watchlist errors artifact', () => {

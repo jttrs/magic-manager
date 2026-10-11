@@ -7,9 +7,9 @@
 import { z } from 'zod';
 
 export const CHANNEL = 'magic-manager/companion';
-export type CompanionKind = 'cart' | 'tabs' | 'moxfield' | 'order_list' | 'orders';
+export type CompanionKind = 'cart' | 'tabs' | 'moxfield' | 'order_list' | 'orders' | 'watched';
 export type OrderStore = 'manapool' | 'tcgplayer' | 'cardkingdom';
-export type RequestParams = { url?: string; store?: OrderStore; ids?: string[] };
+export type RequestParams = { url?: string; store?: OrderStore; ids?: string[]; urls?: string[] };
 
 const helloSchema = z.object({
   version: z.string().max(20),
@@ -43,6 +43,13 @@ const tabsDataSchema = z.object({
   warnings: z.array(warning).max(500),
 });
 export type RenderedPage = z.infer<typeof page>;
+
+/** Watched open-tab store pages the companion read (after you approved the list, then the readings). */
+const watchedDataSchema = z.object({
+  urls: z.array(z.object({ url: z.string().max(2000).regex(/^https:\/\//), store: z.string().max(200), open: z.boolean() })).max(50),
+  pages: z.record(z.string().max(2000), page),
+  warnings: z.array(warning).max(100),
+});
 
 const moxCard = z.object({
   quantity: z.number().int().min(1).max(999),
@@ -100,7 +107,7 @@ const ordersSchema = z.object({
 export type OrderListData = z.infer<typeof orderListSchema>;
 export type OrdersData = z.infer<typeof ordersSchema>;
 
-const SCHEMAS = { cart: cartDataSchema, tabs: tabsDataSchema, moxfield: moxDataSchema, order_list: orderListSchema, orders: ordersSchema } as const;
+const SCHEMAS = { cart: cartDataSchema, tabs: tabsDataSchema, moxfield: moxDataSchema, order_list: orderListSchema, orders: ordersSchema, watched: watchedDataSchema } as const;
 type DataOf<K extends CompanionKind> = z.infer<(typeof SCHEMAS)[K]>;
 
 export type ErrorCatalog = Record<string, { message: string; fix?: string | null }>;
@@ -153,7 +160,8 @@ export type RequestOptions = {
   catalog?: ErrorCatalog;
   /** The extension reads before it asks you (opening a cart tab can take ~30 s). */
   ackTimeoutMs?: number;
-  /** How long the approval window may stay open (the extension's own limit is 5 min). */
+  /** How long the approval window may stay open (the extension's own limit is 5 min;
+   *  a watched read has two approvals with the reading between them). */
   resultTimeoutMs?: number;
   onAwaitingApproval?: (summary: string) => void;
 };
@@ -163,7 +171,7 @@ export type RequestOptions = {
  * you press Send in its approval window, or rejects with a CompanionError.
  */
 export function request<K extends CompanionKind>(win: Window, kind: K, params: RequestParams = {}, opts: RequestOptions = {}): Promise<DataOf<K>> {
-  const { catalog = {}, ackTimeoutMs = 45_000, resultTimeoutMs = 5 * 60_000 + 15_000 } = opts;
+  const { catalog = {}, ackTimeoutMs = 45_000, resultTimeoutMs = (kind === 'watched' ? 15 : 5) * 60_000 + 15_000 } = opts;
   const id = newId();
   return new Promise((resolve, reject) => {
     let timer = win.setTimeout(() => done(companionError('companion.not_installed', catalog)), ackTimeoutMs);

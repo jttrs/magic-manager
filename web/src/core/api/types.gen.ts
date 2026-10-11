@@ -5863,6 +5863,12 @@ export type WatchStoreOut = {
      */
     read: boolean;
     /**
+     * Read In Browser
+     *
+     * An open-tab store page: read from a browser tab (the companion's, or Chrome on this Mac).
+     */
+    read_in_browser?: boolean;
+    /**
      * First Price
      */
     first_price: number | null;

@@ -42,10 +42,12 @@
     if (d.type === 'ping') { hello(); return; }
     if (d.type !== 'request' || typeof d.id !== 'string' || d.id.length > 64) return;
     const p = d.params && typeof d.params === 'object' ? d.params : {};
-    // Only these, typed and capped: a deck url; an order-history store + order numbers.
+    // Only these, typed and capped: a deck url; an order-history store + order numbers;
+    // watched store pages (the worker re-checks each one and caps the count).
     const params = {
       url: typeof p.url === 'string' ? p.url.slice(0, 500) : undefined,
       store: typeof p.store === 'string' ? p.store.slice(0, 20) : undefined,
+      urls: Array.isArray(p.urls) ? p.urls.slice(0, 51).filter((u) => typeof u === 'string').map((u) => u.slice(0, 2000)) : undefined,
       ids: Array.isArray(p.ids) ? p.ids.slice(0, 100).filter((x) => typeof x === 'string').map((x) => x.slice(0, 64)) : undefined,
     };
     const r = await ask({ type: 'request', id: d.id, kind: String(d.kind), params });

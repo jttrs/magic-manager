@@ -181,6 +181,7 @@ class WatchStoreOut(BaseModel):
     available: bool | None
     read_at: str
     read: bool = Field(description="False when the latest price is still the earmark's saved asking price.")
+    read_in_browser: bool = Field(False, description="An open-tab store page: read from a browser tab (the companion's, or Chrome on this Mac).")
     first_price: float | None
     first_at: str
     change: float | None = Field(description="Latest minus first price seen here.")
@@ -258,13 +259,18 @@ def watched() -> list[WatchedOut]:
 
 class WatchlistInput(BaseModel):
     refresh: bool = Field(False, description="Read every watched link's price first.")
+    pages: dict[str, RenderedPageIn] = Field(
+        default_factory=dict, max_length=300,
+        description="Watched open-tab store pages the browser companion read (url → page reading).")
+    in_browser: bool = Field(False, description="The companion read the open-tab stores: one it couldn't read is reported, not read on this Mac.")
 
 
 def _run_watchlist(inp: WatchlistInput, progress: ProgressFn) -> JobResult:
     features.require("deals")
     read, newly = [], []
     if inp.refresh:
-        res = deals.read_watched(progress=lambda i, n, msg: progress(ProgressEvent(i - 1, n, f"reading {msg}")))
+        res = deals.read_watched(progress=lambda i, n, msg: progress(ProgressEvent(i - 1, n, f"reading {msg}")),
+                                 pages={u: p.model_dump() for u, p in inp.pages.items()}, tabs_on_mac=not inp.in_browser)
         rows, read, newly = res["rows"], res["read"], res["newly_met"]
     else:
         rows = deals.watchlist(values=False)

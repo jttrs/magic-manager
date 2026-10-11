@@ -292,3 +292,13 @@ export function typeCounts(products: DealProduct[], costs: Map<string, ProductCo
 export function storeNames(products: DealProduct[]): string[] {
   return [...new Set(products.flatMap((p) => p.offers.map((o) => o.store).filter((s): s is string => s != null)))].sort((a, b) => a.localeCompare(b));
 }
+
+/** The most watched pages one companion read may cover (the extension's MAX_WATCHED). */
+export const MAX_BROWSER_READS = 50;
+
+/** Watched links on open-tab stores (read in a browser tab), deduped, at most MAX_BROWSER_READS;
+ *  `skipped` = how many more there were (reported as not read this time). */
+export function browserReadUrls(rows: readonly WatchedOut[]): { urls: string[]; skipped: number } {
+  const all = [...new Set(rows.flatMap((r) => r.stores.filter((s) => s.read_in_browser).map((s) => s.url)))];
+  return { urls: all.slice(0, MAX_BROWSER_READS), skipped: Math.max(0, all.length - MAX_BROWSER_READS) };
+}

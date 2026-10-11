@@ -83,6 +83,21 @@ describe('request', () => {
     await expect(p).rejects.toMatchObject({ code: 'request.invalid' });
   });
 
+  it('asks for watched pages by URL and validates the readings', async () => {
+    const { win, sent, deliver } = fakeWindow();
+    const urls = ['https://www.bestbuy.com/site/x/1.p'];
+    const p = request(win, 'watched', { urls }, { catalog });
+    const req = sent[0].data;
+    expect(req).toMatchObject({ kind: 'watched', params: { urls } });
+    const page = { title: 'X', head: '', ld: [], text: '$9.99' };
+    const data = { urls: [{ url: urls[0], store: 'Best Buy', open: false }], pages: { [urls[0]]: page }, warnings: [] };
+    deliver({ channel: CHANNEL, from: 'companion', type: 'result', id: req.id, ok: true, data });
+    await expect(p).resolves.toEqual(data);
+    const q = request(win, 'watched', { urls }, { catalog });
+    deliver({ channel: CHANNEL, from: 'companion', type: 'result', id: sent[1].data.id, ok: true, data: { ...data, urls: [{ url: 'http://x', store: 'a', open: true }] } });
+    await expect(q).rejects.toMatchObject({ code: 'request.invalid' });   // only https pages
+  });
+
   it('times out as not installed when nothing answers', async () => {
     const { win } = fakeWindow();
     await expect(request(win, 'tabs', {}, { catalog, ackTimeoutMs: 10 })).rejects.toMatchObject({ code: 'companion.not_installed', fix: 'Install it.' });

@@ -23,7 +23,9 @@ store sites (an opt-in permission), reads each open-tab store page's title, pric
 JSON-LD and price/stock lines, and the server applies the same recipes (`deals.supplied_tabs`,
 `storefetch.page_from_extract`). No macOS, no "Allow JavaScript from Apple Events", no one-window
 latch. See `docs/browser-companion.md`. Open-tab recipes can't use `title_pattern` (the page body
-isn't sent); a test enforces it.
+isn't sent); a test enforces it. **Watching → Read watched prices** does the same for watched links
+(companion `watched` request, below), with `tabs_on_mac=False` so a page it couldn't read is reported,
+never read via AppleScript.
 
 ## Read modes (per recipe)
 
@@ -124,7 +126,13 @@ row to `earmark_prices` (V32). Singles are watched as one exact printing + finis
 validated by `earmarks.resolve_single`). Rules that carry over from above: key by URL
 (a watched link is a URL), keep the face price (the history is the store's price, never tax-adjusted),
 and a `rendered` store can only be re-read while its tab is open — the watchlist keeps the last price
-and says *saved*/*read N days ago* rather than guessing. Multi-variant Shopify links keep their
+and says *saved*/*read N days ago* rather than guessing. **With the browser companion connected**, Read
+watched prices asks it for the watched `rendered` links (`WatchStoreOut.read_in_browser`, ≤ 50): you
+approve the list first, it reads each from your open tab or from a background tab it opens and always
+closes, you approve the readings, then the `deals.watchlist` job gets them as `pages` + `in_browser`.
+Server-readable stores (shopify/meta) still read server-side; without the companion everything reads as
+before (AppleScript for open tabs). A page that loaded but had no price flags its store down via the
+normal `scrape.no_price` health signal. Multi-variant Shopify links keep their
 `?variant=` so the history follows that variant.
 
 **Price targets (V33).** Each watched product may carry ONE target in `earmark_targets`: a price (USD)
