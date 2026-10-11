@@ -56,8 +56,8 @@ def _http_get(url: str, *, accept: str) -> str:
 
 def fetch_archidekt(deck_id: str) -> tuple[list[dict], str | None, str | None]:
     url = f"https://archidekt.com/api/decks/{deck_id}/"
-    data = json.loads(_http_get(url, accept="application/json"))
-    return decksource.parse_archidekt(data), data.get("name"), decksource.author_archidekt(data)
+    p = decksource.payload_from_archidekt(json.loads(_http_get(url, accept="application/json")), deck_id)
+    return p["cards"], p["name"], p["author"]
 
 
 # ---------- MTGGoldfish: per-deck text download ----------

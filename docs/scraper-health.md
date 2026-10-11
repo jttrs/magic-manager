@@ -18,7 +18,9 @@ covered with no other change (offline pin: its fixture + `EXPECT` row, which
 | `store-price/<open-tab store>` (Best Buy, Target, eBay, …) | rendered page (companion reader / AppleScript) → recipe | `test_rendered_recipes_pick_the_right_price`, `companion-readers.spec.ts` | Browser: `[store.<key>]` in `config/scraper_canaries.toml` (or a `sample_url`). eBay: none (listings end) → real use only |
 | `deck-import/archidekt` · `mtggoldfish` · `manabox` · `scryfall` | `scripts/import_deck.py` → `decksource.parse_*` | `tests/test_decksource.py` | HTTP: a public sample deck (same fetcher the app runs) |
 | `deck-import/moxfield` | headed Chrome → the deck API response → `parse_moxfield` | `test_parse_moxfield_boards_and_finishes` | Browser: a public precon deck |
-| `companion-deck/moxfield` | `extension/src/readers/moxfield-deck.js` → the app's strict model | `companion-readers.spec.ts` → `test_companion.py` | Browser: the same visit, reader injected verbatim |
+| `companion-deck/moxfield` | `extension/src/readers/moxfield-deck.js` (+ `moxfield-api.js`) → the app's strict model | `companion-readers.spec.ts` → `test_companion.py` | Browser: the same visit, reader injected verbatim |
+| `companion-deck/archidekt` | `extension/src/readers/archidekt-deck.js` (the deck page's embedded data) → strict model → `parse_archidekt` | `companion-import-readers.spec.ts` → `test_companion_imports.py` | Browser: the `[deck.archidekt]` sample page, reader injected |
+| `companion-collection/moxfield` | `extension/src/readers/moxfield-collection.js` → `api/collection_import.py` strict model | `companion-import-readers.spec.ts` → `test_companion_imports.py` | Browser: `[collection.moxfield]` — a public collection link, read anonymously (signed-in reads: real use only) |
 | `companion-cart/manapool` | `extension/src/readers/manapool-cart.js` | `companion-readers.spec.ts` → `test_companion.py` | Browser: a guest (empty) cart must read as `cart.empty` — nothing is ever added to a cart |
 | `companion-cart/tcgplayer` · `cardkingdom` | `extension/src/readers/{tcgplayer,cardkingdom}-cart.js` | `companion-cart-readers.spec.ts` → `test_companion_carts.py` | Browser: the guest (empty) cart must read as `cart.empty` |
 | `companion-orders/manapool` · `tcgplayer` · `cardkingdom` | `extension/src/readers/*-orders.js` (order history, signed in) → `api/purchases.py` strict models | `companion-order-readers.spec.ts` → `test_companion_orders.py` | None — signed-in pages have no public sample. Real use only: a read that saves orders clears it; the app reports `orders.page_changed` (with the store) |
@@ -44,7 +46,7 @@ those checks are then unverified, never down.
 
 **Real use is the backup** for what the canary can't reach (eBay, your own cart, private decks):
 a Deals read that finds no price flags the store; a read that works clears it; the companion
-reports `cart.page_changed` / `moxfield.changed` / `orders.page_changed` + store (cart reports name their store; none = Mana Pool) (`POST /api/scrapers/report`); a server deck
+reports `cart.page_changed` / `moxfield.changed` / `moxfield.collection_changed` / `archidekt.changed` / `orders.page_changed` + store (cart reports name their store; none = Mana Pool) (`POST /api/scrapers/report`); a server deck
 fetch that parses no cards flags that builder; any successful EDHREC sync clears its flag.
 Blocks, private decks and empty carts never flag.
 
@@ -72,6 +74,7 @@ Written atomically under a file lock.
 - Add cards → Deck and Decks → Import: a ruled notice for the pasted link's builder (the
   companion reader when it will read a Moxfield deck).
 - Collection → Check my cart: a notice for the chosen store above the ways to read it.
+- Add cards → Moxfield collection: a notice when the collection reader is down.
 - Market → Deals: a rust **DOWN** mark beside the store (store sections, the table's best store,
   the inspector's store lines); its tooltip says why and since when.
 - Explore: a notice above the sheet for the EDHREC read it uses (commander / card / rankings).

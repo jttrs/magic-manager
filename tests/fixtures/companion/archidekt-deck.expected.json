@@ -1,0 +1,420 @@
+{
+  "ok": true,
+  "deck": {
+    "id": 13106730,
+    "name": "Revival Trance - Final Fantasy Commander",
+    "owner": {
+      "username": "Archidekt_Precons"
+    },
+    "cards": [
+      {
+        "quantity": 1,
+        "modifier": "Normal",
+        "categories": [
+          "Commander"
+        ],
+        "card": {
+          "uid": "5aa1a2d7-6133-41a9-9662-9008d1309935",
+          "collectorNumber": "4",
+          "edition": {
+            "editioncode": "fic"
+          },
+          "oracleCard": {
+            "name": "Terra, Herald of Hope"
+          }
+        }
+      },
+      {
+        "quantity": 1,
+        "modifier": "Normal",
+        "categories": [
+          "Land"
+        ],
+        "card": {
+          "uid": "4d02658c-bbe8-4673-8b44-0b24e0155a85",
+          "collectorNumber": "421",
+          "edition": {
+            "editioncode": "fic"
+          },
+          "oracleCard": {
+            "name": "Shadowblood Ridge"
+          }
+        }
+      },
+      {
+        "quantity": 1,
+        "modifier": "Foil",
+        "categories": [
+          "Land"
+        ],
+        "card": {
+          "uid": "7f6d8cae-face-4bff-8c0a-348cefe1e9dd",
+          "collectorNumber": "385",
+          "edition": {
+            "editioncode": "fic"
+          },
+          "oracleCard": {
+            "name": "Demolition Field"
+          }
+        }
+      },
+      {
+        "quantity": 1,
+        "modifier": "Normal",
+        "categories": [
+          "Maybeboard"
+        ],
+        "card": {
+          "uid": "fd9c99f0-390d-4ab1-ac0a-b18f1b0af12c",
+          "collectorNumber": "229",
+          "edition": {
+            "editioncode": "fic"
+          },
+          "oracleCard": {
+            "name": "Angel of the Ruins"
+          }
+        }
+      },
+      {
+        "quantity": 1,
+        "modifier": "Normal",
+        "categories": [
+          "Creature"
+        ],
+        "card": {
+          "uid": "aa0ba9cb-e45c-4c23-baab-38e01391ec6b",
+          "collectorNumber": "273",
+          "edition": {
+            "editioncode": "fic"
+          },
+          "oracleCard": {
+            "name": "Archfiend of Depravity"
+          }
+        }
+      },
+      {
+        "quantity": 1,
+        "modifier": "Normal",
+        "categories": [
+          "Creature"
+        ],
+        "card": {
+          "uid": "63e84ece-b129-457d-84ed-b4280120f08b",
+          "collectorNumber": "78",
+          "edition": {
+            "editioncode": "fic"
+          },
+          "oracleCard": {
+            "name": "Banon, the Returners' Leader"
+          }
+        }
+      },
+      {
+        "quantity": 1,
+        "modifier": "Normal",
+        "categories": [
+          "Land"
+        ],
+        "card": {
+          "uid": "a2de3346-9647-4540-ba41-e67c24ddf141",
+          "collectorNumber": "375",
+          "edition": {
+            "editioncode": "fic"
+          },
+          "oracleCard": {
+            "name": "Battlefield Forge"
+          }
+        }
+      },
+      {
+        "quantity": 1,
+        "modifier": "Normal",
+        "categories": [
+          "Instant"
+        ],
+        "card": {
+          "uid": "284fe591-88e6-46f0-8b9c-9ec7d143a2d0",
+          "collectorNumber": "319",
+          "edition": {
+            "editioncode": "fic"
+          },
+          "oracleCard": {
+            "name": "Bedevil"
+          }
+        }
+      },
+      {
+        "quantity": 1,
+        "modifier": "Normal",
+        "categories": [
+          "Instant"
+        ],
+        "card": {
+          "uid": "67d41ba2-a908-4613-b275-6ffe4165e48a",
+          "collectorNumber": "290",
+          "edition": {
+            "editioncode": "fic"
+          },
+          "oracleCard": {
+            "name": "Big Score"
+          }
+        }
+      },
+      {
+        "quantity": 1,
+        "modifier": "Normal",
+        "categories": [
+          "Creature"
+        ],
+        "card": {
+          "uid": "30584c53-533b-4dc7-b07c-8600164a99b3",
+          "collectorNumber": "1",
+          "edition": {
+            "editioncode": "fic"
+          },
+          "oracleCard": {
+            "name": "Celes, Rune Knight"
+          }
+        }
+      },
+      {
+        "quantity": 1,
+        "modifier": "Normal",
+        "categories": [
+          "Artifact"
+        ],
+        "card": {
+          "uid": "0851660f-fa02-4f08-b28b-10279c58d4e4",
+          "collectorNumber": "339",
+          "edition": {
+            "editioncode": "fic"
+          },
+          "oracleCard": {
+            "name": "Commander's Sphere"
+          }
+        }
+      },
+      {
+        "quantity": 1,
+        "modifier": "Normal",
+        "categories": [
+          "Instant"
+        ],
+        "card": {
+          "uid": "e7674039-7640-4f70-84e9-d1fa76a59dbe",
+          "collectorNumber": "322",
+          "edition": {
+            "editioncode": "fic"
+          },
+          "oracleCard": {
+            "name": "Crackling Doom"
+          }
+        }
+      },
+      {
+        "quantity": 1,
+        "modifier": "Normal",
+        "categories": [
+          "Creature"
+        ],
+        "card": {
+          "uid": "a1e779b4-32dd-406b-8b68-48f6df458005",
+          "collectorNumber": "16",
+          "edition": {
+            "editioncode": "fic"
+          },
+          "oracleCard": {
+            "name": "Cyan, Vengeful Samurai"
+          }
+        }
+      },
+      {
+        "quantity": 1,
+        "modifier": "Normal",
+        "categories": [
+          "Creature"
+        ],
+        "card": {
+          "uid": "07cc036d-f46e-490d-adbb-d6974c4e10fd",
+          "collectorNumber": "292",
+          "edition": {
+            "editioncode": "fic"
+          },
+          "oracleCard": {
+            "name": "Combustible Gearhulk"
+          }
+        }
+      },
+      {
+        "quantity": 1,
+        "modifier": "Normal",
+        "categories": [
+          "Land"
+        ],
+        "card": {
+          "uid": "a0ecbdad-aebf-421d-a71e-e112f8c0e4bb",
+          "collectorNumber": "386",
+          "edition": {
+            "editioncode": "fic"
+          },
+          "oracleCard": {
+            "name": "Desolate Mire"
+          }
+        }
+      },
+      {
+        "quantity": 1,
+        "modifier": "Normal",
+        "categories": [
+          "Land"
+        ],
+        "card": {
+          "uid": "44f78cab-06d4-4786-987f-4d0d15654fd5",
+          "collectorNumber": "387",
+          "edition": {
+            "editioncode": "fic"
+          },
+          "oracleCard": {
+            "name": "Dragonskull Summit"
+          }
+        }
+      },
+      {
+        "quantity": 1,
+        "modifier": "Normal",
+        "categories": [
+          "Creature"
+        ],
+        "card": {
+          "uid": "098a8025-6454-45d8-abe3-2c3dada3f582",
+          "collectorNumber": "80",
+          "edition": {
+            "editioncode": "fic"
+          },
+          "oracleCard": {
+            "name": "Edgar, Master Machinist"
+          }
+        }
+      },
+      {
+        "quantity": 1,
+        "modifier": "Normal",
+        "categories": [
+          "Instant"
+        ],
+        "card": {
+          "uid": "6cb18871-dd23-4ce8-a535-16adefae63c0",
+          "collectorNumber": "43",
+          "edition": {
+            "editioncode": "fic"
+          },
+          "oracleCard": {
+            "name": "Espers to Magicite"
+          }
+        }
+      },
+      {
+        "quantity": 1,
+        "modifier": "Normal",
+        "categories": [
+          "Land"
+        ],
+        "card": {
+          "uid": "351f791c-4bee-4fce-aee4-d0214ca0c945",
+          "collectorNumber": "389",
+          "edition": {
+            "editioncode": "fic"
+          },
+          "oracleCard": {
+            "name": "Evolving Wilds"
+          }
+        }
+      },
+      {
+        "quantity": 1,
+        "modifier": "Normal",
+        "categories": [
+          "Land"
+        ],
+        "card": {
+          "uid": "47c2b572-b54a-444c-8d74-b005e94d751f",
+          "collectorNumber": "390",
+          "edition": {
+            "editioncode": "fic"
+          },
+          "oracleCard": {
+            "name": "Exotic Orchard"
+          }
+        }
+      },
+      {
+        "quantity": 1,
+        "modifier": "Normal",
+        "categories": [
+          "Land"
+        ],
+        "card": {
+          "uid": "5277f73d-b964-4ce6-823d-ce0fbf0a2d28",
+          "collectorNumber": "391",
+          "edition": {
+            "editioncode": "fic"
+          },
+          "oracleCard": {
+            "name": "Fetid Heath"
+          }
+        }
+      },
+      {
+        "quantity": 1,
+        "modifier": "Normal",
+        "categories": [
+          "Creature"
+        ],
+        "card": {
+          "uid": "fe233fa7-bc38-45f5-bfe5-da93877f1075",
+          "collectorNumber": "293",
+          "edition": {
+            "editioncode": "fic"
+          },
+          "oracleCard": {
+            "name": "Flayer of the Hatebound"
+          }
+        }
+      },
+      {
+        "quantity": 1,
+        "modifier": "Normal",
+        "categories": [
+          "Land"
+        ],
+        "card": {
+          "uid": "a7659f3f-a26a-4097-88ea-d72c3abb5e1d",
+          "collectorNumber": "394",
+          "edition": {
+            "editioncode": "fic"
+          },
+          "oracleCard": {
+            "name": "Foreboding Ruins"
+          }
+        }
+      },
+      {
+        "quantity": 1,
+        "modifier": "Normal",
+        "categories": [
+          "Land"
+        ],
+        "card": {
+          "uid": "67e44005-d0a5-49d2-b2f7-4b991ffbb5ce",
+          "collectorNumber": "397",
+          "edition": {
+            "editioncode": "fic"
+          },
+          "oracleCard": {
+            "name": "Furycalm Snarl"
+          }
+        }
+      }
+    ]
+  }
+}

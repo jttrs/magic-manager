@@ -310,6 +310,7 @@ def check_moxfield(ctx, sample: dict) -> list[Check]:
             checks.append(validate_deck(server_key, decksource.payload_from_moxfield(data, deck_id), sample))
         except Exception as e:  # noqa: BLE001
             checks.append(_fail(server_key, "scrape.shape_changed", f"{type(e).__name__}: {e}"[:300], url=url))
+        page.add_script_tag(content=_reader("moxfield-api.js"))
         page.add_script_tag(content=_reader("moxfield-deck.js"))
         out = page.evaluate("id => readMoxfieldDeck(id)", deck_id)
         if not out.get("ok"):
@@ -327,6 +328,78 @@ def check_moxfield(ctx, sample: dict) -> list[Check]:
         return checks
     finally:
         page.close()
+
+
+def check_archidekt_reader(ctx, sample: dict) -> Check:
+    """The companion's Archidekt reader on a public deck page (the same sample as
+    the server import) → the app's strict model → ``parse_archidekt``."""
+    from . import decksource
+    from .api import companion as companion_api
+    key, url = "companion-deck/archidekt", sample["url"]
+    deck_id = decksource.deck_id_from_url(url)
+    page = ctx.new_page()
+    try:
+        resp = page.goto(url, wait_until="domcontentloaded", timeout=45_000)
+        if resp is not None and resp.status == 404:
+            return _unverified(key, "scrape.sample_gone", url=url)
+        if _bot_wall(page) or (resp is not None and resp.status in (401, 403, 429)):
+            return _unverified(key, "scrape.blocked", url=url)
+        page.add_script_tag(content=_reader("archidekt-deck.js"))
+        out = page.evaluate("id => readArchidektDeck(id)", deck_id)
+    except Exception as e:  # noqa: BLE001
+        return _unverified(key, "scrape.unreachable", f"{type(e).__name__}: {e}"[:300], url=url)
+    finally:
+        page.close()
+    if not out.get("ok"):
+        code = out.get("code") or "archidekt.changed"
+        if code == "archidekt.changed":
+            return _fail(key, code, "The reader found no deck data on the page.", url=url)
+        return _unverified(key, "scrape.sample_gone" if code == "archidekt.not_found" else "scrape.blocked",
+                           f"The reader said {code}.", url=url)
+    try:
+        req = companion_api.DeckFromBrowserIn(source="archidekt", deck=out["deck"])
+        payload = decksource.payload_from_archidekt(req.deck.model_dump(), req.deck.id)
+    except Exception as e:  # noqa: BLE001 — the reader's output no longer fits the app
+        return _fail(key, "archidekt.changed", f"{type(e).__name__}: {e}"[:300], url=url)
+    return validate_deck(key, payload, sample)
+
+
+def check_moxfield_collection(ctx, sample: dict) -> Check:
+    """The companion's collection reader on a public Moxfield collection link
+    (anonymous — no sign-in involved) → the app's strict model."""
+    from .api import collection_import as ci
+    key, url = "companion-collection/moxfield", sample["url"]
+    cid = url.rstrip("/").rsplit("/", 1)[-1]
+    page = ctx.new_page()
+    try:
+        page.goto("https://moxfield.com/", wait_until="domcontentloaded", timeout=45_000)
+        if _bot_wall(page):
+            return _unverified(key, "scrape.blocked", url=url)
+        page.add_script_tag(content=_reader("moxfield-api.js"))
+        page.add_script_tag(content=_reader("moxfield-collection.js"))
+        out = page.evaluate("id => readMoxfieldCollection({what: 'collection', id})", cid)
+    except Exception as e:  # noqa: BLE001
+        return _unverified(key, "scrape.unreachable", f"{type(e).__name__}: {e}"[:300], url=url)
+    finally:
+        page.close()
+    if not out.get("ok"):
+        code = out.get("code") or "moxfield.changed"
+        if code == "moxfield.changed":
+            return _fail(key, "moxfield.collection_changed", "The reader didn't recognise the collection data.", url=url)
+        return _unverified(key, "scrape.sample_gone" if code in ("moxfield.not_found", "moxfield.private") else "scrape.blocked",
+                           f"The reader said {code}.", url=url)
+    c = out["collection"]
+    detail = {"url": url, "lines": len(c.get("lines") or []), "entries": c.get("entries")}
+    try:
+        req = ci.CollectionReadIn(source="moxfield", scope="collection", id=c.get("id"), name=c.get("name"), lines=c["lines"])
+    except Exception as e:  # noqa: BLE001
+        return _fail(key, "moxfield.collection_changed", f"{type(e).__name__}: {e}"[:300], **detail)
+    if any(not (ln.scryfall_id or (ln.set and ln.cn)) for ln in req.lines):
+        return _fail(key, "scrape.shape_changed", "Some lines came back without a printing.", **detail)
+    want = int(sample.get("min_lines") or 1)
+    if len(req.lines) < want:
+        return _fail(key, "scrape.expectation", f"Read {len(req.lines)} printings; the sample had at least {want}.", **detail)
+    return Check(key, "ok", detail=detail)
 
 
 # The companion's cart readers per store: (reader file, global function).
@@ -381,6 +454,14 @@ def _browser_targets(only: set[str] | None = None) -> list[tuple[str, list[str],
     if mox.get("url"):
         out.append(("Moxfield deck (browser)", [health.deck_key("moxfield"), "companion-deck/moxfield"],
                     lambda ctx: check_moxfield(ctx, mox)))
+    arch = samples.get("deck", {}).get("archidekt") or {}
+    if arch.get("url"):
+        out.append(("Archidekt deck (browser)", ["companion-deck/archidekt"],
+                    lambda ctx: [check_archidekt_reader(ctx, arch)]))
+    coll = samples.get("collection", {}).get("moxfield") or {}
+    if coll.get("url"):
+        out.append(("Moxfield collection (browser)", ["companion-collection/moxfield"],
+                    lambda ctx: [check_moxfield_collection(ctx, coll)]))
     for store, name in health.CART_STORES.items():
         cart = samples.get("cart", {}).get(store) or {}
         if cart.get("url") and store in CART_READERS:

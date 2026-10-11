@@ -411,6 +411,16 @@ def author_archidekt(data: dict) -> str | None:
     return o if isinstance(o, str) else None
 
 
+def payload_from_archidekt(data: dict, deck_id: str | int | None = None) -> dict:
+    """An Archidekt deck JSON (the ``/api/decks/{id}/`` shape) → the normalized
+    deck payload — shared by ``scripts/import_deck.py`` and the browser companion
+    (which reads the deck page in the user's own browser, so private decks work,
+    and sends only these fields in the same shape)."""
+    did = deck_id if deck_id is not None else data.get("id")
+    return {"source": "archidekt", "id": None if did is None else str(did), "name": data.get("name"),
+            "author": author_archidekt(data), "cards": parse_archidekt(data)}
+
+
 # ---------------------------------------------------------------------------
 # Shared resolve + write orchestrator
 # ---------------------------------------------------------------------------

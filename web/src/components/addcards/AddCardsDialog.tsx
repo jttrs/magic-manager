@@ -7,12 +7,14 @@ import { fmtInt } from '../../core/format';
 import { commitItems, fromResolved, reviewStats, stagePrinting, updateLine, type Finish, type ReviewLine } from '../../core/ingest';
 import { Button } from '../Button';
 import { Chevron } from '../Chevron';
+import { useFeature } from '../../app/features';
+import { CollectionPane } from './CollectionPane';
 import { DeckPane } from './DeckPane';
 import { PastePane } from './PastePane';
 import { ReviewTable } from './ReviewTable';
 import { SearchPane } from './SearchPane';
 
-type Mode = 'search' | 'paste' | 'deck';
+type Mode = 'search' | 'paste' | 'deck' | 'collection';
 type Done = { summary: string; mode: Mode };
 
 export type AddCardsSeed = { name: string; lines: ResolvedLineOut[] };
@@ -23,6 +25,7 @@ export type AddCardsSeed = { name: string; lines: ResolvedLineOut[] };
 export function AddCardsDialog({ trigger, seed, onSeedDone }: { trigger?: ReactNode; seed?: AddCardsSeed | null; onSeedDone?: () => void }) {
   const qc = useQueryClient();
   const [open, setOpenState] = useState(false);
+  const companionOn = useFeature('companion');
   const [mode, setMode] = useState<Mode>('search');
   const [staged, setStaged] = useState<ReviewLine[]>([]);
   const [pasteText, setPasteText] = useState('');
@@ -45,7 +48,7 @@ export function AddCardsDialog({ trigger, seed, onSeedDone }: { trigger?: ReactN
     if (!o) onSeedDone?.();
   };
 
-  const lines = mode === 'search' ? staged : mode === 'paste' ? pasted?.lines : deck?.lines;
+  const lines = mode === 'search' ? staged : mode === 'paste' ? pasted?.lines : mode === 'deck' ? deck?.lines : undefined;
   const setLines = (fn: (ls: ReviewLine[]) => ReviewLine[]) => {
     if (mode === 'search') setStaged(fn);
     else if (mode === 'paste') setPasted((p) => (p ? { ...p, lines: fn(p.lines) } : p));
@@ -55,7 +58,7 @@ export function AddCardsDialog({ trigger, seed, onSeedDone }: { trigger?: ReactN
   const [saveList, setSaveList] = useState(true);
 
   async function commit() {
-    if (!lines) return;
+    if (!lines || mode === 'collection') return;
     const items = commitItems(lines);
     if (!items.length) return;
     setBusy(true);
@@ -86,7 +89,7 @@ export function AddCardsDialog({ trigger, seed, onSeedDone }: { trigger?: ReactN
   }
 
   const stats = lines ? reviewStats(lines) : null;
-  const reviewing = mode === 'search' ? staged.length > 0 : mode === 'paste' ? pasted != null : deck != null;
+  const reviewing = mode === 'search' ? staged.length > 0 : mode === 'paste' ? pasted != null : mode === 'deck' && deck != null;
 
   return (
     <Dialog.Root open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setDone(null); setError(''); } }}>
@@ -100,18 +103,19 @@ export function AddCardsDialog({ trigger, seed, onSeedDone }: { trigger?: ReactN
             <header className="flex flex-wrap items-end gap-x-6 gap-y-2 border-b-2 border-rule-strong px-5 pt-4">
               <Dialog.Title className="pb-2 text-3xl voice-condensed font-bold leading-none">Add cards</Dialog.Title>
               <Dialog.Description className="sr-only">Search for a printing, paste a card list, or bring a deck or precon. Review every line, then add the copies to your collection.</Dialog.Description>
-              <Tabs.List aria-label="How to add" className="flex gap-5">
+              <Tabs.List aria-label="How to add" className="flex max-w-full gap-5 overflow-x-auto">
                 {(
                   [
                     ['search', 'Search'],
                     ['paste', 'Paste a list'],
                     ['deck', 'Deck or precon'],
+                    ...(companionOn ? [['collection', 'Moxfield collection']] as const : []),
                   ] as const
                 ).map(([v, label]) => (
                   <Tabs.Trigger
                     key={v}
                     value={v}
-                    className="-mb-0.5 cursor-pointer border-b-2 border-transparent pb-2 text-md voice-semi text-ink-muted transition-colors ease-guide hover:text-ink data-[state=active]:border-accent data-[state=active]:text-ink"
+                    className="-mb-0.5 shrink-0 cursor-pointer whitespace-nowrap border-b-2 border-transparent pb-2 text-md voice-semi text-ink-muted transition-colors ease-guide hover:text-ink data-[state=active]:border-accent data-[state=active]:text-ink"
                   >
                     {label}
                   </Tabs.Trigger>
@@ -155,6 +159,12 @@ export function AddCardsDialog({ trigger, seed, onSeedDone }: { trigger?: ReactN
                   <PastePane text={pasteText} onText={setPasteText} onResolved={(r) => { setDone(null); setPasted({ lines: fromResolved(r.lines, 'p'), warnings: r.warnings ?? [] }); }} />
                 )}
               </Tabs.Content>
+
+              {companionOn && (
+                <Tabs.Content value="collection" className="flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden">
+                  <CollectionPane />
+                </Tabs.Content>
+              )}
 
               <Tabs.Content value="deck" className="flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden">
                 {deck ? (

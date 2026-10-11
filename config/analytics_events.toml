@@ -137,6 +137,19 @@ code = { type = "enum", required = true, values = [
   "orders.not_found",
   "orders.too_many_pages",
   "orders.no_lines",
+  "permission.archidekt_off",
+  "archidekt.bad_url",
+  "archidekt.private",
+  "archidekt.not_found",
+  "archidekt.blocked",
+  "archidekt.load_timeout",
+  "archidekt.changed",
+  "archidekt.http",
+  "moxfield.signed_out",
+  "moxfield.collection_empty",
+  "moxfield.too_large",
+  "collection.empty",
+  "moxfield.collection_changed",
 ] }
 
 # ---------------------------------------------------------------- usage

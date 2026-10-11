@@ -26,6 +26,13 @@ _CN_RE = re.compile(r"^(\d+)(.*)$")
 OUTPUT_ROOT = Path(__file__).resolve().parents[2] / "output"
 
 
+def chunks(seq, n: int = 900):
+    """Consecutive slices of ``seq`` of at most ``n`` items — the shared SQLite
+    ``IN (...)`` batching (SQLite caps bound parameters)."""
+    for i in range(0, len(seq), n):
+        yield seq[i:i + n]
+
+
 def output_dir(type_: str, category: str) -> Path:
     """Return (and create) ``output/<type>/<category>/`` for a generated artifact.
 

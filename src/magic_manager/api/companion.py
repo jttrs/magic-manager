@@ -3,7 +3,8 @@
 Thin adapters: the browser companion (``extension/``) or the cart bookmarklet
 reads in the user's OWN browser and the app posts only the normalized lines here;
 each route hands them to an existing engine seam — ``cart.audit``,
-``deals.supplied_tabs``, ``decksource.payload_from_moxfield`` →
+``deals.supplied_tabs``, ``decksource.payload_from_moxfield`` /
+``payload_from_archidekt`` →
 ``addcards.deck_lines_from_payload``. Inputs are strict (unknown fields are
 refused, sizes capped) so nothing beyond card lines can ride along.
 Threat model: ``docs/browser-companion-security.md``.
@@ -175,9 +176,57 @@ class MoxDeckIn(_Strict):
         return v
 
 
+# ---------- archidekt ----------
+
+class ArchEditionIn(_Strict):
+    editioncode: str | None = Field(None, max_length=10)
+
+
+class ArchOracleIn(_Strict):
+    name: str | None = Field(None, max_length=200)
+
+
+class ArchCardIn(_Strict):
+    uid: str | None = Field(None, max_length=40)
+    collectorNumber: str | None = Field(None, max_length=12)
+    edition: ArchEditionIn = ArchEditionIn()
+    oracleCard: ArchOracleIn = ArchOracleIn()
+
+
+class ArchEntryIn(_Strict):
+    quantity: int = Field(ge=1, le=999)
+    modifier: str | None = Field(None, max_length=20)
+    categories: list[str] = Field(default_factory=list, max_length=10)
+    card: ArchCardIn
+
+    @field_validator("categories")
+    @classmethod
+    def _short(cls, v: list[str]) -> list[str]:
+        return [c[:60] for c in v]
+
+
+class ArchOwnerIn(_Strict):
+    username: str | None = Field(None, max_length=100)
+
+
+class ArchDeckIn(_Strict):
+    """The Archidekt reader's output — the same shape as Archidekt's own deck
+    API, so ``decksource.parse_archidekt`` reads it unchanged."""
+    id: int = Field(ge=1, le=999_999_999_999)
+    name: str | None = Field(None, max_length=200)
+    owner: ArchOwnerIn = ArchOwnerIn()
+    cards: list[ArchEntryIn] = Field(max_length=2000)
+
+
 class DeckFromBrowserIn(_Strict):
-    source: Literal["moxfield"]
-    deck: MoxDeckIn
+    source: Literal["moxfield", "archidekt"]
+    deck: MoxDeckIn | ArchDeckIn
+
+    @model_validator(mode="after")
+    def _deck_matches_source(self):
+        if isinstance(self.deck, MoxDeckIn) != (self.source == "moxfield"):
+            raise ValueError("deck doesn't match its source")
+        return self
 
 
 def deck_lines(req: DeckFromBrowserIn) -> ResolveOut:
@@ -185,8 +234,11 @@ def deck_lines(req: DeckFromBrowserIn) -> ResolveOut:
     shape as the server-side deck fetch)."""
     features.require("companion")
     data = req.deck.model_dump()
-    payload = decksource.payload_from_moxfield(data, req.deck.publicId)
+    if isinstance(req.deck, MoxDeckIn):
+        payload = decksource.payload_from_moxfield(data, req.deck.publicId)
+    else:
+        payload = decksource.payload_from_archidekt(data, req.deck.id)
     if not payload["cards"]:
         raise CompanionFailure("deck.empty")
-    scraper_health.record_use("companion-deck/moxfield", "ok")
+    scraper_health.record_use(f"companion-deck/{req.source}", "ok")
     return ResolveOut(**addcards.deck_lines_from_payload(payload))

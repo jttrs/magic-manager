@@ -25,9 +25,9 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
 from .. import api, companion as companion_engine, sets as sets_mod, tabs as tabs_engine, undo as undo_engine, cart as cart_engine, deck_edit, edhrec as edhrec_engine, features as features_engine, scryfall
-from .. import purchases as purchases_engine
+from .. import collection_sync, purchases as purchases_engine
 from ..api import purchases as purchases_api
-from ..api import companion as companion_api, deals as deals_api, undo as undo_api, cart as cart_api, cards as cards_api, collection as collection_api, explore as explore_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api, market as market_api, trueup as trueup_api, history as history_api, combos as combos_api, art as art_api, jumpstart as jumpstart_api, surf as surf_api
+from ..api import collection_import as collection_import_api, companion as companion_api, deals as deals_api, undo as undo_api, cart as cart_api, cards as cards_api, collection as collection_api, explore as explore_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api, market as market_api, trueup as trueup_api, history as history_api, combos as combos_api, art as art_api, jumpstart as jumpstart_api, surf as surf_api
 from .runtime import TERMINAL, JobManager
 from . import analytics_routes, scraper_routes, telemetry
 from ..analytics import store as analytics_store
@@ -355,6 +355,29 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             return companion_api.deck_lines(req)
         except features_engine.FeatureDisabled as e:
             raise HTTPException(403, str(e)) from e
+        except companion_api.CompanionFailure as e:
+            raise _companion_failure(e) from e
+
+    @app.post("/api/collection/import/preview", response_model=collection_import_api.CollectionPreviewOut, tags=["collection"])
+    def collection_import_preview(req: collection_import_api.CollectionReadIn):
+        try:
+            return collection_import_api.preview(req)
+        except features_engine.FeatureDisabled as e:
+            raise HTTPException(403, str(e)) from e
+        except companion_api.CompanionFailure as e:
+            raise _companion_failure(e) from e
+
+    @app.post("/api/collection/import/apply", response_model=collection_import_api.CollectionApplyOut, tags=["collection"],
+              dependencies=[write("before importing a collection")])
+    def collection_import_apply(req: collection_import_api.CollectionApplyIn):
+        try:
+            return collection_import_api.apply(req)
+        except features_engine.FeatureDisabled as e:
+            raise HTTPException(403, str(e)) from e
+        except collection_sync.AlreadyImported as e:
+            raise HTTPException(409, str(e)) from e
+        except collection_sync.BelowPledged as e:
+            raise HTTPException(409, {"message": str(e), "below_pledged": e.rows}) from e
         except companion_api.CompanionFailure as e:
             raise _companion_failure(e) from e
 

@@ -1,0 +1,77 @@
+{
+  "ok": true,
+  "collection": {
+    "scope": "binder",
+    "id": "LbwVB1hSiU2THiRQeR2QlQ",
+    "name": "Trade Box 1",
+    "signed_in": false,
+    "total": 8,
+    "entries": 8,
+    "lines": [
+      {
+        "quantity": 2,
+        "finish": "nonfoil",
+        "scryfall_id": "d15adc93-1a71-453b-8277-4a525a9cbc7b",
+        "set": "inr",
+        "cn": "184",
+        "name": "Abundant Growth"
+      },
+      {
+        "quantity": 1,
+        "finish": "nonfoil",
+        "scryfall_id": "516e137a-d9d9-4ba7-89fb-e680ddb2c2d1",
+        "set": "cmm",
+        "cn": "269",
+        "name": "Abundant Harvest"
+      },
+      {
+        "quantity": 1,
+        "finish": "nonfoil",
+        "scryfall_id": "66555946-e747-46fa-b1ac-b103a8edcd93",
+        "set": "tdm",
+        "cn": "68",
+        "name": "Abzan Devotee"
+      },
+      {
+        "quantity": 1,
+        "finish": "nonfoil",
+        "scryfall_id": "1a67a991-1e52-4676-a2e3-2bc7aa943ab3",
+        "set": "fin",
+        "cn": "3",
+        "name": "Adelbert Steiner"
+      },
+      {
+        "quantity": 2,
+        "finish": "nonfoil",
+        "scryfall_id": "bb13a34b-6ac8-47cb-9e91-47106a585fc1",
+        "set": "tdm",
+        "cn": "69",
+        "name": "Adorned Crocodile"
+      },
+      {
+        "quantity": 3,
+        "finish": "nonfoil",
+        "scryfall_id": "0a1d6dcd-bd41-4f57-a35b-6613811fe4d4",
+        "set": "fin",
+        "cn": "252",
+        "name": "Adventurer's Airship"
+      },
+      {
+        "quantity": 2,
+        "finish": "nonfoil",
+        "scryfall_id": "f0da2ee1-986e-4cbf-92eb-d96fdb572ca5",
+        "set": "fin",
+        "cn": "271",
+        "name": "Adventurer's Inn"
+      },
+      {
+        "quantity": 2,
+        "finish": "nonfoil",
+        "scryfall_id": "19c1417a-9719-46f6-8749-d92b93ce0529",
+        "set": "tdm",
+        "cn": "35",
+        "name": "Aegis Sculptor"
+      }
+    ]
+  }
+}

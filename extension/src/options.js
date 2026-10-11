@@ -2,13 +2,13 @@
 // (each asks Chrome for just its sites, at that moment).
 
 import { STORES } from './stores.js';
-import { CART_STORES, MOXFIELD_ORIGINS, ORDER_ORIGINS, STORE_ORIGINS, MANAPOOL_ORIGINS, parseAppOrigin } from './protocol.js';
+import { ARCHIDEKT_ORIGINS, CART_STORES, MOXFIELD_ORIGINS, ORDER_ORIGINS, STORE_ORIGINS, MANAPOOL_ORIGINS, parseAppOrigin } from './protocol.js';
 
 const $ = (id) => document.getElementById(id);
 const BRIDGE = 'mm-bridge';
-const granted = { deals: false, moxfield: false, orders: false, 'cart-tcgplayer': false, 'cart-cardkingdom': false };
+const granted = { deals: false, moxfield: false, archidekt: false, orders: false, 'cart-tcgplayer': false, 'cart-cardkingdom': false };
 const GROUPS = {
-  deals: STORE_ORIGINS, moxfield: MOXFIELD_ORIGINS, orders: ORDER_ORIGINS,
+  deals: STORE_ORIGINS, moxfield: MOXFIELD_ORIGINS, archidekt: ARCHIDEKT_ORIGINS, orders: ORDER_ORIGINS,
   'cart-tcgplayer': CART_STORES.tcgplayer.origins, 'cart-cardkingdom': CART_STORES.cardkingdom.origins,
 };
 
@@ -30,6 +30,8 @@ async function refresh() {
   granted.moxfield = await has(MOXFIELD_ORIGINS);
   $('deals').textContent = granted.deals ? 'Switch off' : 'Switch on';
   $('moxfield').textContent = granted.moxfield ? 'Switch off' : 'Switch on';
+  granted.archidekt = await has(ARCHIDEKT_ORIGINS);
+  $('archidekt').textContent = granted.archidekt ? 'Switch off' : 'Switch on';
   granted.orders = await has(ORDER_ORIGINS);
   $('orders').textContent = granted.orders ? 'Switch off' : 'Switch on';
   for (const key of ['cart-tcgplayer', 'cart-cardkingdom']) {
@@ -82,6 +84,7 @@ $('pair').addEventListener('click', pair);
 $('unpair').addEventListener('click', unpair);
 $('deals').addEventListener('click', () => toggle('deals', STORE_ORIGINS));
 $('moxfield').addEventListener('click', () => toggle('moxfield', MOXFIELD_ORIGINS));
+$('archidekt').addEventListener('click', () => toggle('archidekt', ARCHIDEKT_ORIGINS));
 $('orders').addEventListener('click', () => toggle('orders', ORDER_ORIGINS));
 $('cart-tcgplayer').addEventListener('click', () => toggle('cart-tcgplayer', GROUPS['cart-tcgplayer']));
 $('cart-cardkingdom').addEventListener('click', () => toggle('cart-cardkingdom', GROUPS['cart-cardkingdom']));

@@ -37,8 +37,12 @@
       <button type="button" id="deals"></button>
     </div>
     <div class="row">
-      <div><strong>Moxfield decks</strong><br><span class="muted">Reads a deck you choose from moxfield.com, as your browser sees it (including your own private decks when you're signed in). Chrome will ask to allow moxfield.com.</span></div>
+      <div><strong>Moxfield decks, collection and binders</strong><br><span class="muted">Reads a deck, your collection or a binder you choose from moxfield.com, as your browser sees it. Shared links are read without signing in. For your own private ones it uses Moxfield's sign-in the way moxfield.com itself does: a short-lived token, kept in memory for that one read and sent only to Moxfield — never stored or sent to the app. Chrome will ask to allow moxfield.com.</span></div>
       <button type="button" id="moxfield"></button>
+    </div>
+    <div class="row">
+      <div><strong>Archidekt decks</strong><br><span class="muted">Reads a deck you choose from archidekt.com, as your browser sees it (including your own private decks when you're signed in) — only its cards, never your sign-in. Chrome will ask to allow archidekt.com.</span></div>
+      <button type="button" id="archidekt"></button>
     </div>
     <div class="row">
       <div><strong>Order history — TCGplayer and Card Kingdom</strong><br><span class="muted">Reads your order history pages on store.tcgplayer.com and cardkingdom.com when the app asks (orders, items, prices paid — never your address, payment or tracking). Mana Pool orders need nothing extra. Chrome will ask to allow those two sites.</span></div>
@@ -47,8 +51,8 @@
 
     <h2>What it never does</h2>
     <ul class="plain">
-      <li>Read cookies, passwords, sign-in tokens, email or addresses.</li>
-      <li>Change anything on Mana Pool, TCGplayer, Card Kingdom, Moxfield or a store — no cart edits, no purchases, no form submissions.</li>
+      <li>Read cookies, passwords, email or addresses, or send any sign-in token anywhere but the site it belongs to (Moxfield's own short-lived token, for your private Moxfield cards, is the one token it ever holds — in memory, for that read).</li>
+      <li>Change anything on Mana Pool, TCGplayer, Card Kingdom, Moxfield, Archidekt or a store — no cart edits, no purchases, no form submissions.</li>
       <li>Read anything unless the app asks <em>and</em> you press Send in its own window.</li>
       <li>Collect in the background, run analytics, or load code from the internet.</li>
     </ul>

@@ -5,8 +5,11 @@
 import { APPROVAL_TTL_MS, CART_STORES } from './protocol.js';
 
 const $ = (id) => document.getElementById(id);
-const KIND_TITLE = { tabs: 'Send your open store tabs?', moxfield: 'Send this Moxfield deck?', order_list: 'Send your list of orders?', orders: 'Send these orders?', watched: 'Send your watched store prices?' };
+const KIND_TITLE = { tabs: 'Send your open store tabs?', moxfield: 'Send this Moxfield deck?', archidekt: 'Send this Archidekt deck?',
+  moxfield_collection: 'Send your Moxfield cards?', moxfield_binders: 'Send your list of Moxfield binders?', order_list: 'Send your list of orders?', orders: 'Send these orders?', watched: 'Send your watched store prices?' };
 const MAX_ROWS = 500;
+/** A collection read is listed in full (scrollable) up to this many lines; the raw data has the rest. */
+const MAX_COLLECTION_ROWS = 20000;
 
 function cell(tr, text, cls) {
   const td = document.createElement(tr.parentElement?.tagName === 'THEAD' ? 'th' : 'td');
@@ -15,14 +18,14 @@ function cell(tr, text, cls) {
   tr.appendChild(td);
 }
 
-function table(headers, rows) {
+function table(headers, rows, max = MAX_ROWS) {
   const t = $('table');
   t.replaceChildren();
   const head = t.createTHead().insertRow();
   headers.forEach(([h, cls]) => { const th = document.createElement('th'); th.textContent = h; if (cls) th.className = cls; head.appendChild(th); });
   const body = t.createTBody();
-  rows.slice(0, MAX_ROWS).forEach((r) => { const tr = body.insertRow(); r.forEach((v, i) => cell(tr, v, headers[i][1])); });
-  if (rows.length > MAX_ROWS) { const tr = body.insertRow(); cell(tr, `…and ${rows.length - MAX_ROWS} more (see the raw data)`); }
+  rows.slice(0, max).forEach((r) => { const tr = body.insertRow(); r.forEach((v, i) => cell(tr, v, headers[i][1])); });
+  if (rows.length > max) { const tr = body.insertRow(); cell(tr, `…and ${rows.length - max} more (see the raw data)`); }
 }
 
 const money = (n) => (n == null ? '—' : `$${Number(n).toFixed(2)}`);
@@ -61,6 +64,16 @@ function render(p) {
     const rows = [];
     Object.entries(d.deck.boards).forEach(([board, b]) => Object.values(b.cards).forEach((c) => rows.push([c.card.name, board, c.card.set ? `${c.card.set.toUpperCase()} ${c.card.cn || ''}` : '', c.isFoil ? 'foil' : (c.finish || ''), c.quantity])));
     table([['Card'], ['Board'], ['Printing'], ['Finish'], ['Qty', 'num']], rows);
+  } else if (p.kind === 'archidekt') {
+    table([['Card'], ['Category'], ['Printing'], ['Finish'], ['Qty', 'num']],
+      d.deck.cards.map((c) => [c.card.oracleCard.name, (c.categories || []).join(', '), c.card.edition.editioncode ? `${c.card.edition.editioncode.toUpperCase()} ${c.card.collectorNumber || ''}` : '', c.modifier || '', c.quantity]));
+  } else if (p.kind === 'moxfield_binders') {
+    table([['Binder'], ['Cards', 'num']], d.binders.map((b) => [b.name, b.cards ?? '']));
+  } else if (p.kind === 'moxfield_collection') {
+    const c = d.collection;
+    table([['Card'], ['Printing'], ['Finish'], ['Qty', 'num'], ['Note']],
+      c.lines.map((l) => [l.name, l.set ? `${l.set.toUpperCase()} ${l.cn || ''}` : (l.scryfall_id || '').slice(0, 8), l.finish, l.quantity,
+        [l.proxy ? 'proxy — skipped' : '', l.digital ? 'digital — skipped' : ''].filter(Boolean).join(', ')]), MAX_COLLECTION_ROWS);
   } else if (p.kind === 'order_list') {
     table([['Order'], ['Placed'], ['Total', 'num']], d.orders.map((o) => [o.order_id, o.ordered_at, money(o.total)]));
   } else if (p.kind === 'orders') {
@@ -81,7 +94,10 @@ function render(p) {
       : w.code === 'watched.load_timeout' ? `${w.url} didn't finish loading — open it yourself and read again.` : w.code;
     return div;
   }));
-  $('raw').textContent = JSON.stringify(d, null, 2);
+  // Filled when opened: a whole collection is megabytes of text.
+  const details = $('raw').closest('details');
+  const fill = () => { $('raw').textContent = JSON.stringify(d, null, 2); };
+  if (details.open) fill(); else { $('raw').textContent = ''; details.addEventListener('toggle', fill, { once: true }); }
 }
 
 let created = 0;

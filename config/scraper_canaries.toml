@@ -44,6 +44,18 @@ min_cards = 100
 card = "Ms. Bumbleflower"
 commander = "Ms. Bumbleflower"
 
+# ---- Browser companion: Moxfield collection / binder reader ----
+# A public collection share link, read anonymously in a real Chrome with the
+# companion's readers (moxfield-api.js + moxfield-collection.js) → the app's
+# strict model. Someone's live collection: only its size is asserted
+# (3,618 printings when validated 2026-10-11).
+[collection.moxfield]
+url = "https://moxfield.com/collection/hgsItGBwRUybHyN0WZR41w"
+min_lines = 1000
+
+# (The Archidekt deck reader reuses [deck.archidekt] above: the same public
+# deck page, read in a real Chrome by extension/src/readers/archidekt-deck.js.)
+
 # ---- Browser companion: cart readers (Mana Pool, TCGplayer, Card Kingdom) ----
 # A guest browser has an empty cart: each reader must recognise the real cart
 # page as `cart.empty` (as pinned by tests/fixtures/companion/<store>-cart-empty.html).

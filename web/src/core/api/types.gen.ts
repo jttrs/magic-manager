@@ -51,6 +51,93 @@ export type ApplyOut = {
 };
 
 /**
+ * ArchCardIn
+ */
+export type ArchCardIn = {
+    /**
+     * Uid
+     */
+    uid?: string | null;
+    /**
+     * Collectornumber
+     */
+    collectorNumber?: string | null;
+    edition?: ArchEditionIn;
+    oracleCard?: ArchOracleIn;
+};
+
+/**
+ * ArchDeckIn
+ *
+ * The Archidekt reader's output — the same shape as Archidekt's own deck
+ * API, so ``decksource.parse_archidekt`` reads it unchanged.
+ */
+export type ArchDeckIn = {
+    /**
+     * Id
+     */
+    id: number;
+    /**
+     * Name
+     */
+    name?: string | null;
+    owner?: ArchOwnerIn;
+    /**
+     * Cards
+     */
+    cards: Array<ArchEntryIn>;
+};
+
+/**
+ * ArchEditionIn
+ */
+export type ArchEditionIn = {
+    /**
+     * Editioncode
+     */
+    editioncode?: string | null;
+};
+
+/**
+ * ArchEntryIn
+ */
+export type ArchEntryIn = {
+    /**
+     * Quantity
+     */
+    quantity: number;
+    /**
+     * Modifier
+     */
+    modifier?: string | null;
+    /**
+     * Categories
+     */
+    categories?: Array<string>;
+    card: ArchCardIn;
+};
+
+/**
+ * ArchOracleIn
+ */
+export type ArchOracleIn = {
+    /**
+     * Name
+     */
+    name?: string | null;
+};
+
+/**
+ * ArchOwnerIn
+ */
+export type ArchOwnerIn = {
+    /**
+     * Username
+     */
+    username?: string | null;
+};
+
+/**
  * ArtSwapRowOut
  */
 export type ArtSwapRowOut = {
@@ -935,6 +1022,80 @@ export type ClientEventIn = {
 };
 
 /**
+ * CollectionApplyIn
+ */
+export type CollectionApplyIn = {
+    /**
+     * Source
+     */
+    source: 'moxfield';
+    /**
+     * Scope
+     */
+    scope: 'collection' | 'binder';
+    /**
+     * Id
+     *
+     * The shared link's id; none = your own whole collection.
+     */
+    id?: string | null;
+    /**
+     * Name
+     *
+     * The binder's name, for the ingest label.
+     */
+    name?: string | null;
+    /**
+     * Lines
+     */
+    lines: Array<CollectionLineIn>;
+    /**
+     * Mode
+     */
+    mode: 'add' | 'replace';
+    /**
+     * Force
+     *
+     * Add an identical read again (it was imported before).
+     */
+    force?: boolean;
+};
+
+/**
+ * CollectionApplyOut
+ */
+export type CollectionApplyOut = {
+    /**
+     * Mode
+     */
+    mode: 'add' | 'replace';
+    /**
+     * Ingest Id
+     */
+    ingest_id: number;
+    /**
+     * Added
+     *
+     * Printings new to your collection.
+     */
+    added: number;
+    /**
+     * Updated
+     *
+     * Printings whose count changed.
+     */
+    updated: number;
+    /**
+     * Not Found
+     */
+    not_found: number;
+    /**
+     * Label
+     */
+    label: string;
+};
+
+/**
  * CollectionCardOut
  */
 export type CollectionCardOut = {
@@ -1063,6 +1224,46 @@ export type CollectionCardOut = {
 };
 
 /**
+ * CollectionLineIn
+ *
+ * One printing × finish from the read (copies of the same printing summed).
+ */
+export type CollectionLineIn = {
+    /**
+     * Quantity
+     */
+    quantity: number;
+    /**
+     * Finish
+     */
+    finish: 'nonfoil' | 'foil' | 'etched';
+    /**
+     * Scryfall Id
+     */
+    scryfall_id?: string | null;
+    /**
+     * Set
+     */
+    set?: string | null;
+    /**
+     * Cn
+     */
+    cn?: string | null;
+    /**
+     * Name
+     */
+    name?: string | null;
+    /**
+     * Proxy
+     */
+    proxy?: boolean;
+    /**
+     * Digital
+     */
+    digital?: boolean;
+};
+
+/**
  * CollectionOut
  */
 export type CollectionOut = {
@@ -1098,6 +1299,71 @@ export type CollectionOut = {
      * Configured scenes/posters of these families, family then config order, with per-finish completion.
      */
     scenes?: Array<SceneOut>;
+};
+
+/**
+ * CollectionPreviewOut
+ */
+export type CollectionPreviewOut = {
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Rows
+     */
+    rows: Array<ImportRowOut>;
+    /**
+     * Not Found
+     */
+    not_found: Array<NotFoundOut>;
+    skipped: SkippedOut;
+    /**
+     * Not In Read
+     *
+     * Printings you own that the read doesn't list — always left as they are.
+     */
+    not_in_read: number;
+    /**
+     * Already Imported At
+     *
+     * When this exact read was imported before, if it was.
+     */
+    already_imported_at: string | null;
+    /**
+     * Warnings
+     */
+    warnings?: Array<string>;
+};
+
+/**
+ * CollectionReadIn
+ */
+export type CollectionReadIn = {
+    /**
+     * Source
+     */
+    source: 'moxfield';
+    /**
+     * Scope
+     */
+    scope: 'collection' | 'binder';
+    /**
+     * Id
+     *
+     * The shared link's id; none = your own whole collection.
+     */
+    id?: string | null;
+    /**
+     * Name
+     *
+     * The binder's name, for the ingest label.
+     */
+    name?: string | null;
+    /**
+     * Lines
+     */
+    lines: Array<CollectionLineIn>;
 };
 
 /**
@@ -1821,8 +2087,11 @@ export type DeckFromBrowserIn = {
     /**
      * Source
      */
-    source: 'moxfield';
-    deck: MoxDeckIn;
+    source: 'moxfield' | 'archidekt';
+    /**
+     * Deck
+     */
+    deck: MoxDeckIn | ArchDeckIn;
 };
 
 /**
@@ -2806,6 +3075,50 @@ export type ImportOut = {
 };
 
 /**
+ * ImportRowOut
+ */
+export type ImportRowOut = {
+    /**
+     * Scryfall Id
+     */
+    scryfall_id: string;
+    /**
+     * Finish
+     */
+    finish: 'nonfoil' | 'foil';
+    /**
+     * Name
+     */
+    name: string | null;
+    /**
+     * Set
+     */
+    set: string | null;
+    /**
+     * Collector Number
+     */
+    collector_number: string | null;
+    /**
+     * Current
+     *
+     * Copies you own now.
+     */
+    current: number;
+    /**
+     * Incoming
+     *
+     * Copies in the read.
+     */
+    incoming: number;
+    /**
+     * Pledged
+     *
+     * Copies in built decks — replace can't go below this.
+     */
+    pledged?: number;
+};
+
+/**
  * JobOut
  */
 export type JobOut = {
@@ -3410,6 +3723,32 @@ export type NotCardOut = {
      * Price
      */
     price: number | null;
+};
+
+/**
+ * NotFoundOut
+ */
+export type NotFoundOut = {
+    /**
+     * Qty
+     */
+    qty: number;
+    /**
+     * Name
+     */
+    name: string | null;
+    /**
+     * Set
+     */
+    set: string | null;
+    /**
+     * Collector Number
+     */
+    collector_number: string | null;
+    /**
+     * Finish
+     */
+    finish: string;
 };
 
 /**
@@ -4908,7 +5247,7 @@ export type ScraperReportIn = {
     /**
      * Code
      */
-    code: 'cart.page_changed' | 'moxfield.changed' | 'orders.page_changed';
+    code: 'cart.page_changed' | 'moxfield.changed' | 'moxfield.collection_changed' | 'archidekt.changed' | 'orders.page_changed';
     /**
      * Store
      *
@@ -4981,6 +5320,20 @@ export type SetRefOut = {
      * Name
      */
     name: string;
+};
+
+/**
+ * SkippedOut
+ */
+export type SkippedOut = {
+    /**
+     * Proxy
+     */
+    proxy?: number;
+    /**
+     * Digital
+     */
+    digital?: number;
 };
 
 /**
@@ -7139,6 +7492,56 @@ export type IngestDeckFromBrowserResponses = {
 };
 
 export type IngestDeckFromBrowserResponse = IngestDeckFromBrowserResponses[keyof IngestDeckFromBrowserResponses];
+
+export type CollectionImportPreviewData = {
+    body: CollectionReadIn;
+    path?: never;
+    query?: never;
+    url: '/api/collection/import/preview';
+};
+
+export type CollectionImportPreviewErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CollectionImportPreviewError = CollectionImportPreviewErrors[keyof CollectionImportPreviewErrors];
+
+export type CollectionImportPreviewResponses = {
+    /**
+     * Successful Response
+     */
+    200: CollectionPreviewOut;
+};
+
+export type CollectionImportPreviewResponse = CollectionImportPreviewResponses[keyof CollectionImportPreviewResponses];
+
+export type CollectionImportApplyData = {
+    body: CollectionApplyIn;
+    path?: never;
+    query?: never;
+    url: '/api/collection/import/apply';
+};
+
+export type CollectionImportApplyErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CollectionImportApplyError = CollectionImportApplyErrors[keyof CollectionImportApplyErrors];
+
+export type CollectionImportApplyResponses = {
+    /**
+     * Successful Response
+     */
+    200: CollectionApplyOut;
+};
+
+export type CollectionImportApplyResponse = CollectionImportApplyResponses[keyof CollectionImportApplyResponses];
 
 export type MarketProductsData = {
     body?: never;

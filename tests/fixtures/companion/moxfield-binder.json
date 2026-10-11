@@ -1,0 +1,417 @@
+{
+ "totalOverall": 2095,
+ "totalCommon": 1327,
+ "totalUncommon": 740,
+ "totalRare": 26,
+ "totalMythic": 0,
+ "totals": {
+  "totalOverall": 2095,
+  "totalCommon": 1327,
+  "totalUncommon": 740,
+  "totalRare": 26,
+  "totalMythic": 0
+ },
+ "totalPrices": {
+  "usd": 466.99,
+  "usd_foil": 0.37,
+  "usd_etched": 0.0,
+  "eur": 265.64,
+  "eur_foil": 0.18,
+  "eur_etched": 0.0,
+  "tix": 124.23,
+  "ck": 866.38,
+  "ck_foil": 0.49,
+  "ck_etched": 0.0,
+  "lastUpdatedAtUtc": "2026-10-11T14:41:56.843Z",
+  "ck_buy": 62.22,
+  "ck_buy_foil": 0.08,
+  "csi": 841.01,
+  "csi_foil": 0.29,
+  "csi_etched": 0.0,
+  "csi_buy": 19.05,
+  "csi_buy_foil": 0.02,
+  "csi_buy_etched": 0.0,
+  "ct": 336.54,
+  "ct_foil": 0.13,
+  "ct_etched": 0.0,
+  "f2f": 0.0,
+  "f2f_foil": 0.0,
+  "f2f_etched": 0.0,
+  "scg": 713.2,
+  "scg_foil": 0.44,
+  "scg_etched": 0.0,
+  "scg_buy": 30.8,
+  "scg_foil_buy": 0.01,
+  "scg_etched_buy": 0.0,
+  "mp": 331.58,
+  "mp_foil": 0.15,
+  "mp_etched": 0.0
+ },
+ "isEmpty": false,
+ "tradeBinder": {
+  "id": "RB2mJ",
+  "publicId": "LbwVB1hSiU2THiRQeR2QlQ",
+  "name": "Trade Box 1",
+  "owner": {
+   "userName": "fixture-user"
+  }
+ },
+ "pageNumber": 1,
+ "pageSize": 5000,
+ "totalResults": 8,
+ "totalPages": 1,
+ "data": [
+  {
+   "id": "5MnzXaW",
+   "quantity": 2,
+   "condition": "nearMint",
+   "game": "paper",
+   "finish": "nonFoil",
+   "isFoil": false,
+   "isAlter": false,
+   "isProxy": false,
+   "purchasePrice": 0.18,
+   "isPrefPrinting": false,
+   "createdAtUtc": "2025-06-19T15:41:18.607Z",
+   "lastUpdatedAtUtc": "2025-06-19T15:41:18.607Z",
+   "rarity": "common",
+   "language": {
+    "id": "LD58x",
+    "code": "en",
+    "name": "English"
+   },
+   "tradeBinder": {
+    "id": "RB2mJ",
+    "publicId": "LbwVB1hSiU2THiRQeR2QlQ",
+    "name": "020 Box1"
+   },
+   "card": {
+    "id": "2zVn4",
+    "scryfall_id": "d15adc93-1a71-453b-8277-4a525a9cbc7b",
+    "set": "inr",
+    "set_name": "Innistrad Remastered",
+    "cn": "184",
+    "name": "Abundant Growth",
+    "rarity": "common",
+    "lang": "en",
+    "prices": {
+     "usd": 0.28,
+     "usd_foil": 0.32
+    },
+    "tcgplayer_id": 609770,
+    "cardkingdom_id": 308114,
+    "type_line": "Enchantment \u2014 Aura",
+    "isToken": false
+   },
+   "notes": "bought at FNM from Sam"
+  },
+  {
+   "id": "3qQ4wBN",
+   "quantity": 1,
+   "condition": "nearMint",
+   "game": "paper",
+   "finish": "nonFoil",
+   "isFoil": false,
+   "isAlter": false,
+   "isProxy": false,
+   "purchasePrice": 0.07,
+   "isPrefPrinting": false,
+   "createdAtUtc": "2025-06-19T15:41:18.607Z",
+   "lastUpdatedAtUtc": "2025-06-19T15:41:18.607Z",
+   "rarity": "common",
+   "language": {
+    "id": "LD58x",
+    "code": "en",
+    "name": "English"
+   },
+   "tradeBinder": {
+    "id": "RB2mJ",
+    "publicId": "LbwVB1hSiU2THiRQeR2QlQ",
+    "name": "020 Box1"
+   },
+   "card": {
+    "id": "pR0M4",
+    "scryfall_id": "516e137a-d9d9-4ba7-89fb-e680ddb2c2d1",
+    "set": "cmm",
+    "set_name": "Commander Masters",
+    "cn": "269",
+    "name": "Abundant Harvest",
+    "rarity": "common",
+    "lang": "en",
+    "prices": {
+     "usd": 0.2,
+     "usd_foil": 0.3
+    },
+    "tcgplayer_id": 507173,
+    "cardkingdom_id": 280536,
+    "type_line": "Sorcery",
+    "isToken": false
+   },
+   "notes": "bought at FNM from Sam"
+  },
+  {
+   "id": "3qQ4Xr6",
+   "quantity": 1,
+   "condition": "nearMint",
+   "game": "paper",
+   "finish": "nonFoil",
+   "isFoil": false,
+   "isAlter": false,
+   "isProxy": false,
+   "purchasePrice": 0.06,
+   "isPrefPrinting": false,
+   "createdAtUtc": "2025-06-19T15:41:18.607Z",
+   "lastUpdatedAtUtc": "2025-06-19T15:41:18.607Z",
+   "rarity": "common",
+   "language": {
+    "id": "LD58x",
+    "code": "en",
+    "name": "English"
+   },
+   "tradeBinder": {
+    "id": "RB2mJ",
+    "publicId": "LbwVB1hSiU2THiRQeR2QlQ",
+    "name": "020 Box1"
+   },
+   "card": {
+    "id": "2DN54",
+    "scryfall_id": "66555946-e747-46fa-b1ac-b103a8edcd93",
+    "set": "tdm",
+    "set_name": "Tarkir: Dragonstorm",
+    "cn": "68",
+    "name": "Abzan Devotee",
+    "rarity": "common",
+    "lang": "en",
+    "prices": {
+     "usd": 0.19,
+     "usd_foil": 0.21
+    },
+    "tcgplayer_id": 624378,
+    "cardkingdom_id": 311139,
+    "type_line": "Creature \u2014 Dog Cleric",
+    "isToken": false
+   },
+   "notes": "bought at FNM from Sam"
+  },
+  {
+   "id": "J9BP7jp",
+   "quantity": 1,
+   "condition": "nearMint",
+   "game": "paper",
+   "finish": "nonFoil",
+   "isFoil": false,
+   "isAlter": false,
+   "isProxy": false,
+   "purchasePrice": 0.09,
+   "isPrefPrinting": false,
+   "createdAtUtc": "2025-08-03T15:00:58.627Z",
+   "lastUpdatedAtUtc": "2025-08-03T15:00:58.627Z",
+   "rarity": "uncommon",
+   "language": {
+    "id": "LD58x",
+    "code": "en",
+    "name": "English"
+   },
+   "tradeBinder": {
+    "id": "RB2mJ",
+    "publicId": "LbwVB1hSiU2THiRQeR2QlQ",
+    "name": "020 Box1"
+   },
+   "card": {
+    "id": "PJ9Dv",
+    "scryfall_id": "1a67a991-1e52-4676-a2e3-2bc7aa943ab3",
+    "set": "fin",
+    "set_name": "Final Fantasy",
+    "cn": "3",
+    "name": "Adelbert Steiner",
+    "rarity": "uncommon",
+    "lang": "en",
+    "prices": {
+     "usd": 0.19,
+     "usd_foil": 0.31
+    },
+    "tcgplayer_id": 633057,
+    "cardkingdom_id": 315060,
+    "type_line": "Legendary Creature \u2014 Human Knight",
+    "isToken": false
+   },
+   "notes": "bought at FNM from Sam"
+  },
+  {
+   "id": "Pbpmd7v",
+   "quantity": 2,
+   "condition": "nearMint",
+   "game": "paper",
+   "finish": "nonFoil",
+   "isFoil": false,
+   "isAlter": false,
+   "isProxy": false,
+   "purchasePrice": 0.02,
+   "isPrefPrinting": false,
+   "createdAtUtc": "2025-06-19T15:41:18.607Z",
+   "lastUpdatedAtUtc": "2025-06-19T15:41:18.607Z",
+   "rarity": "common",
+   "language": {
+    "id": "LD58x",
+    "code": "en",
+    "name": "English"
+   },
+   "tradeBinder": {
+    "id": "RB2mJ",
+    "publicId": "LbwVB1hSiU2THiRQeR2QlQ",
+    "name": "020 Box1"
+   },
+   "card": {
+    "id": "DAvDl",
+    "scryfall_id": "bb13a34b-6ac8-47cb-9e91-47106a585fc1",
+    "set": "tdm",
+    "set_name": "Tarkir: Dragonstorm",
+    "cn": "69",
+    "name": "Adorned Crocodile",
+    "rarity": "common",
+    "lang": "en",
+    "prices": {
+     "usd": 0.16,
+     "usd_foil": 0.2
+    },
+    "tcgplayer_id": 625195,
+    "cardkingdom_id": 311924,
+    "type_line": "Creature \u2014 Crocodile",
+    "isToken": false
+   },
+   "notes": "bought at FNM from Sam"
+  },
+  {
+   "id": "mPbZnbz",
+   "quantity": 3,
+   "condition": "nearMint",
+   "game": "paper",
+   "finish": "nonFoil",
+   "isFoil": false,
+   "isAlter": false,
+   "isProxy": false,
+   "purchasePrice": 0.05,
+   "isPrefPrinting": false,
+   "createdAtUtc": "2025-06-19T15:41:18.607Z",
+   "lastUpdatedAtUtc": "2025-06-19T15:41:18.607Z",
+   "rarity": "common",
+   "language": {
+    "id": "LD58x",
+    "code": "en",
+    "name": "English"
+   },
+   "tradeBinder": {
+    "id": "RB2mJ",
+    "publicId": "LbwVB1hSiU2THiRQeR2QlQ",
+    "name": "020 Box1"
+   },
+   "card": {
+    "id": "OxNJn",
+    "scryfall_id": "0a1d6dcd-bd41-4f57-a35b-6613811fe4d4",
+    "set": "fin",
+    "set_name": "Final Fantasy",
+    "cn": "252",
+    "name": "Adventurer's Airship",
+    "rarity": "common",
+    "lang": "en",
+    "prices": {
+     "usd": 0.21,
+     "usd_foil": 0.24
+    },
+    "tcgplayer_id": 634231,
+    "cardkingdom_id": 315477,
+    "type_line": "Artifact \u2014 Vehicle",
+    "isToken": false
+   },
+   "notes": "bought at FNM from Sam"
+  },
+  {
+   "id": "J9oj8gp",
+   "quantity": 2,
+   "condition": "nearMint",
+   "game": "paper",
+   "finish": "nonFoil",
+   "isFoil": false,
+   "isAlter": false,
+   "isProxy": false,
+   "purchasePrice": 0.02,
+   "isPrefPrinting": false,
+   "createdAtUtc": "2025-06-19T17:49:07.35Z",
+   "lastUpdatedAtUtc": "2025-06-19T17:49:07.35Z",
+   "rarity": "common",
+   "language": {
+    "id": "LD58x",
+    "code": "en",
+    "name": "English"
+   },
+   "tradeBinder": {
+    "id": "RB2mJ",
+    "publicId": "LbwVB1hSiU2THiRQeR2QlQ",
+    "name": "020 Box1"
+   },
+   "card": {
+    "id": "x7mDg",
+    "scryfall_id": "f0da2ee1-986e-4cbf-92eb-d96fdb572ca5",
+    "set": "fin",
+    "set_name": "Final Fantasy",
+    "cn": "271",
+    "name": "Adventurer's Inn",
+    "rarity": "common",
+    "lang": "en",
+    "prices": {
+     "usd": 0.23,
+     "usd_foil": 0.32
+    },
+    "tcgplayer_id": 630853,
+    "cardkingdom_id": 313624,
+    "type_line": "Land \u2014 Town",
+    "isToken": false
+   },
+   "notes": "bought at FNM from Sam"
+  },
+  {
+   "id": "9m1aKjg",
+   "quantity": 2,
+   "condition": "nearMint",
+   "game": "paper",
+   "finish": "nonFoil",
+   "isFoil": false,
+   "isAlter": false,
+   "isProxy": false,
+   "purchasePrice": 0.08,
+   "isPrefPrinting": false,
+   "createdAtUtc": "2025-06-19T15:41:18.607Z",
+   "lastUpdatedAtUtc": "2025-06-19T15:41:18.607Z",
+   "rarity": "uncommon",
+   "language": {
+    "id": "LD58x",
+    "code": "en",
+    "name": "English"
+   },
+   "tradeBinder": {
+    "id": "RB2mJ",
+    "publicId": "LbwVB1hSiU2THiRQeR2QlQ",
+    "name": "020 Box1"
+   },
+   "card": {
+    "id": "J7pDm",
+    "scryfall_id": "19c1417a-9719-46f6-8749-d92b93ce0529",
+    "set": "tdm",
+    "set_name": "Tarkir: Dragonstorm",
+    "cn": "35",
+    "name": "Aegis Sculptor",
+    "rarity": "uncommon",
+    "lang": "en",
+    "prices": {
+     "usd": 0.09,
+     "usd_foil": 0.17
+    },
+    "tcgplayer_id": 623967,
+    "cardkingdom_id": 311132,
+    "type_line": "Creature \u2014 Bird Wizard",
+    "isToken": false
+   },
+   "notes": "bought at FNM from Sam"
+  }
+ ]
+}

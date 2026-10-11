@@ -1482,6 +1482,88 @@
         }
       }
     },
+    "/api/collection/import/preview": {
+      "post": {
+        "tags": [
+          "collection"
+        ],
+        "summary": "Collection Import Preview",
+        "operationId": "collection_import_preview",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionReadIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionPreviewOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collection/import/apply": {
+      "post": {
+        "tags": [
+          "collection"
+        ],
+        "summary": "Collection Import Apply",
+        "operationId": "collection_import_apply",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionApplyIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionApplyOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/market/products": {
       "get": {
         "tags": [
@@ -3628,6 +3710,184 @@
         ],
         "title": "ApplyOut"
       },
+      "ArchCardIn": {
+        "properties": {
+          "uid": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uid"
+          },
+          "collectorNumber": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 12
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collectornumber"
+          },
+          "edition": {
+            "$ref": "#/components/schemas/ArchEditionIn",
+            "default": {}
+          },
+          "oracleCard": {
+            "$ref": "#/components/schemas/ArchOracleIn",
+            "default": {}
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ArchCardIn"
+      },
+      "ArchDeckIn": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "maximum": 999999999999.0,
+            "minimum": 1.0,
+            "title": "Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "owner": {
+            "$ref": "#/components/schemas/ArchOwnerIn",
+            "default": {}
+          },
+          "cards": {
+            "items": {
+              "$ref": "#/components/schemas/ArchEntryIn"
+            },
+            "type": "array",
+            "maxItems": 2000,
+            "title": "Cards"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "cards"
+        ],
+        "title": "ArchDeckIn",
+        "description": "The Archidekt reader's output \u2014 the same shape as Archidekt's own deck\nAPI, so ``decksource.parse_archidekt`` reads it unchanged."
+      },
+      "ArchEditionIn": {
+        "properties": {
+          "editioncode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Editioncode"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ArchEditionIn"
+      },
+      "ArchEntryIn": {
+        "properties": {
+          "quantity": {
+            "type": "integer",
+            "maximum": 999.0,
+            "minimum": 1.0,
+            "title": "Quantity"
+          },
+          "modifier": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modifier"
+          },
+          "categories": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Categories"
+          },
+          "card": {
+            "$ref": "#/components/schemas/ArchCardIn"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "quantity",
+          "card"
+        ],
+        "title": "ArchEntryIn"
+      },
+      "ArchOracleIn": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ArchOracleIn"
+      },
+      "ArchOwnerIn": {
+        "properties": {
+          "username": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ArchOwnerIn"
+      },
       "ArtSwapRowOut": {
         "properties": {
           "scryfall_id": {
@@ -5144,6 +5404,124 @@
         ],
         "title": "ClientEventIn"
       },
+      "CollectionApplyIn": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "const": "moxfield",
+            "title": "Source"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "collection",
+              "binder"
+            ],
+            "title": "Scope"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{4,64}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id",
+            "description": "The shared link's id; none = your own whole collection."
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name",
+            "description": "The binder's name, for the ingest label."
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/CollectionLineIn"
+            },
+            "type": "array",
+            "maxItems": 60000,
+            "title": "Lines"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "add",
+              "replace"
+            ],
+            "title": "Mode"
+          },
+          "force": {
+            "type": "boolean",
+            "title": "Force",
+            "description": "Add an identical read again (it was imported before).",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "source",
+          "scope",
+          "lines",
+          "mode"
+        ],
+        "title": "CollectionApplyIn"
+      },
+      "CollectionApplyOut": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "add",
+              "replace"
+            ],
+            "title": "Mode"
+          },
+          "ingest_id": {
+            "type": "integer",
+            "title": "Ingest Id"
+          },
+          "added": {
+            "type": "integer",
+            "title": "Added",
+            "description": "Printings new to your collection."
+          },
+          "updated": {
+            "type": "integer",
+            "title": "Updated",
+            "description": "Printings whose count changed."
+          },
+          "not_found": {
+            "type": "integer",
+            "title": "Not Found"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode",
+          "ingest_id",
+          "added",
+          "updated",
+          "not_found",
+          "label"
+        ],
+        "title": "CollectionApplyOut"
+      },
       "CollectionCardOut": {
         "properties": {
           "scryfall_id": {
@@ -5367,6 +5745,93 @@
         ],
         "title": "CollectionCardOut"
       },
+      "CollectionLineIn": {
+        "properties": {
+          "quantity": {
+            "type": "integer",
+            "maximum": 99999.0,
+            "minimum": 1.0,
+            "title": "Quantity"
+          },
+          "finish": {
+            "type": "string",
+            "enum": [
+              "nonfoil",
+              "foil",
+              "etched"
+            ],
+            "title": "Finish"
+          },
+          "scryfall_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scryfall Id"
+          },
+          "set": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10,
+                "pattern": "^[0-9A-Za-z]+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Set"
+          },
+          "cn": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 12,
+                "pattern": "^[^\\s<>\\\"'&]+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cn"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "proxy": {
+            "type": "boolean",
+            "title": "Proxy",
+            "default": false
+          },
+          "digital": {
+            "type": "boolean",
+            "title": "Digital",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "quantity",
+          "finish"
+        ],
+        "title": "CollectionLineIn",
+        "description": "One printing \u00d7 finish from the read (copies of the same printing summed)."
+      },
       "CollectionOut": {
         "properties": {
           "families": {
@@ -5422,6 +5887,125 @@
           "cards"
         ],
         "title": "CollectionOut"
+      },
+      "CollectionPreviewOut": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/ImportRowOut"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "not_found": {
+            "items": {
+              "$ref": "#/components/schemas/NotFoundOut"
+            },
+            "type": "array",
+            "title": "Not Found"
+          },
+          "skipped": {
+            "$ref": "#/components/schemas/SkippedOut"
+          },
+          "not_in_read": {
+            "type": "integer",
+            "title": "Not In Read",
+            "description": "Printings you own that the read doesn't list \u2014 always left as they are."
+          },
+          "already_imported_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Already Imported At",
+            "description": "When this exact read was imported before, if it was."
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "rows",
+          "not_found",
+          "skipped",
+          "not_in_read",
+          "already_imported_at"
+        ],
+        "title": "CollectionPreviewOut"
+      },
+      "CollectionReadIn": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "const": "moxfield",
+            "title": "Source"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "collection",
+              "binder"
+            ],
+            "title": "Scope"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{4,64}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id",
+            "description": "The shared link's id; none = your own whole collection."
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name",
+            "description": "The binder's name, for the ingest label."
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/CollectionLineIn"
+            },
+            "type": "array",
+            "maxItems": 60000,
+            "title": "Lines"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "source",
+          "scope",
+          "lines"
+        ],
+        "title": "CollectionReadIn"
       },
       "ColorOptionOut": {
         "properties": {
@@ -6684,11 +7268,22 @@
         "properties": {
           "source": {
             "type": "string",
-            "const": "moxfield",
+            "enum": [
+              "moxfield",
+              "archidekt"
+            ],
             "title": "Source"
           },
           "deck": {
-            "$ref": "#/components/schemas/MoxDeckIn"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MoxDeckIn"
+              },
+              {
+                "$ref": "#/components/schemas/ArchDeckIn"
+              }
+            ],
+            "title": "Deck"
           }
         },
         "additionalProperties": false,
@@ -8282,6 +8877,82 @@
         ],
         "title": "ImportOut"
       },
+      "ImportRowOut": {
+        "properties": {
+          "scryfall_id": {
+            "type": "string",
+            "title": "Scryfall Id"
+          },
+          "finish": {
+            "type": "string",
+            "enum": [
+              "nonfoil",
+              "foil"
+            ],
+            "title": "Finish"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "set": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Set"
+          },
+          "collector_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collector Number"
+          },
+          "current": {
+            "type": "integer",
+            "title": "Current",
+            "description": "Copies you own now."
+          },
+          "incoming": {
+            "type": "integer",
+            "title": "Incoming",
+            "description": "Copies in the read."
+          },
+          "pledged": {
+            "type": "integer",
+            "title": "Pledged",
+            "description": "Copies in built decks \u2014 replace can't go below this.",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "scryfall_id",
+          "finish",
+          "name",
+          "set",
+          "collector_number",
+          "current",
+          "incoming"
+        ],
+        "title": "ImportRowOut"
+      },
       "JobOut": {
         "properties": {
           "id": {
@@ -9313,6 +9984,60 @@
           "price"
         ],
         "title": "NotCardOut"
+      },
+      "NotFoundOut": {
+        "properties": {
+          "qty": {
+            "type": "integer",
+            "title": "Qty"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "set": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Set"
+          },
+          "collector_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collector Number"
+          },
+          "finish": {
+            "type": "string",
+            "title": "Finish"
+          }
+        },
+        "type": "object",
+        "required": [
+          "qty",
+          "name",
+          "set",
+          "collector_number",
+          "finish"
+        ],
+        "title": "NotFoundOut"
       },
       "OpenTabsOut": {
         "properties": {
@@ -12093,6 +12818,8 @@
             "enum": [
               "cart.page_changed",
               "moxfield.changed",
+              "moxfield.collection_changed",
+              "archidekt.changed",
               "orders.page_changed"
             ],
             "title": "Code"
@@ -12231,6 +12958,22 @@
           "name"
         ],
         "title": "SetRefOut"
+      },
+      "SkippedOut": {
+        "properties": {
+          "proxy": {
+            "type": "integer",
+            "title": "Proxy",
+            "default": 0
+          },
+          "digital": {
+            "type": "integer",
+            "title": "Digital",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "SkippedOut"
       },
       "SldDropOut": {
         "properties": {

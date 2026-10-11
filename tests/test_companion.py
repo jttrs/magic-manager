@@ -25,7 +25,7 @@ from magic_manager.api import companion as companion_api
 ROOT = Path(__file__).resolve().parents[1]
 FIX = ROOT / "tests" / "fixtures" / "companion"
 EXT = ROOT / "extension"
-CODE = re.compile(r"""['"]((?:companion|request|permission|cart|tabs|moxfield|deck)\.(?!com\b|net\b|app\b)[a-z_]+)['"]""")
+CODE = re.compile(r"""['"]((?:companion|request|permission|cart|tabs|moxfield|archidekt|collection|deck)\.(?!com\b|net\b|app\b)[a-z_]+)['"]""")
 
 
 def _copy_real_config(tmp_path):
@@ -74,7 +74,7 @@ def test_no_remote_code_eval_or_html_injection():
         for bad in ("eval(", "new Function", "importScripts", "innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "setTimeout('", 'setTimeout("'):
             assert bad not in src, f"{p.name}: {bad}"
         for url in re.findall(r"https?://[a-z0-9*$][^\s'\"`)]*", src):
-            assert re.match(r"https://(?:manapool\.com|store\.tcgplayer\.com|api2\.moxfield\.com|moxfield\.com|\*\.moxfield\.com|\$\{h\}|\*\.\$\{h\}|www\.)", url) or "localhost" in url, f"{p.name}: unexpected URL {url}"
+            assert re.match(r"https://(?:manapool\.com|store\.tcgplayer\.com|api2\.moxfield\.com|moxfield\.com|\*\.moxfield\.com|archidekt\.com|\$\{h\}|\*\.\$\{h\}|www\.)", url) or "localhost" in url, f"{p.name}: unexpected URL {url}"
     for html in EXT.rglob("*.html"):
         src = html.read_text()
         assert not re.search(r"<script(?![^>]*\bsrc=)", src), f"{html.name}: inline script"

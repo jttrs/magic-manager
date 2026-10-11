@@ -62,7 +62,8 @@ test.describe('setup', () => {
     await expect(d.getByRole('status')).toContainText('Not connected');
     await expect(d.getByRole('link', { name: 'Download the companion' })).toHaveAttribute('href', '/api/companion/extension.zip');
     await expect(d).toContainText(new URL(page.url()).origin);
-    await expect(d).toContainText('Read cookies, passwords, sign-in tokens, email or addresses.');
+    await expect(d).toContainText('Read cookies, passwords, email or addresses.');
+    await expect(d).toContainText('Send a sign-in token anywhere.');
   });
 
   test('connected: version and what each feature may read', async ({ page }) => {
@@ -309,7 +310,7 @@ test.describe('Moxfield', () => {
     await page.getByRole('button', { name: 'Add cards' }).click();
     await page.getByRole('tab', { name: 'Deck or precon' }).click();
     await page.getByRole('textbox', { name: /Archidekt/ }).fill(DECK.url);
-    await expect(page.getByText('Read in this browser by the companion — you approve what it sends.')).toBeVisible();
+    await expect(page.getByText('Read in this browser by the companion, so your private decks work too. You approve what it sends.')).toBeVisible();
     await page.getByRole('button', { name: 'Fetch deck' }).click();
     await expect(page.getByRole('heading', { name: 'Goblin Party' })).toBeVisible();
     expect(body).toEqual({ source: 'moxfield', deck: DECK.deck });
@@ -324,6 +325,6 @@ test.describe('Moxfield', () => {
     await page.getByRole('tab', { name: 'Deck or precon' }).click();
     await page.getByRole('textbox', { name: /Archidekt/ }).fill(DECK.url);
     await page.getByRole('button', { name: 'Fetch deck' }).click();
-    await expect(page.getByRole('alert')).toContainText('Moxfield says this deck is private');
+    await expect(page.getByRole('alert')).toContainText('Moxfield says this is private to its owner');
   });
 });

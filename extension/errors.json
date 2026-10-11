@@ -138,13 +138,13 @@
     },
     "moxfield.bad_url": {
       "where": "extension",
-      "message": "That isn’t a Moxfield deck link.",
-      "fix": "Paste a link like https://moxfield.com/decks/AbC123."
+      "message": "That isn’t a Moxfield deck, collection or binder link.",
+      "fix": "Paste a link like https://moxfield.com/decks/AbC123, https://moxfield.com/collection/AbC123 or https://moxfield.com/binders/AbC123."
     },
     "moxfield.private": {
       "where": "extension",
-      "message": "Moxfield says this deck is private to its owner.",
-      "fix": "Sign in to Moxfield in this browser as the owner, or set the deck to Unlisted, then try again."
+      "message": "Moxfield says this is private to its owner.",
+      "fix": "Sign in to Moxfield in this browser as the owner, or share it as Unlisted/Public, then try again."
     },
     "moxfield.not_found": {
       "where": "extension",
@@ -174,7 +174,7 @@
     "deck.empty": {
       "where": "server",
       "message": "The deck arrived but had no cards in it.",
-      "fix": "Check the deck has cards on Moxfield, then try again."
+      "fix": "Check the deck has cards on the deck site, then try again."
     },
     "permission.orders_off": {
       "where": "extension",
@@ -230,6 +230,71 @@
       "where": "app",
       "message": "The companion sent no orders.",
       "fix": "Read your orders again."
+    },
+    "permission.archidekt_off": {
+      "where": "extension",
+      "message": "The companion isn’t allowed to read Archidekt yet.",
+      "fix": "Open the companion’s settings and switch on Archidekt decks (Chrome will ask to allow archidekt.com)."
+    },
+    "archidekt.bad_url": {
+      "where": "extension",
+      "message": "That isn’t an Archidekt deck link.",
+      "fix": "Paste a link like https://archidekt.com/decks/123456."
+    },
+    "archidekt.private": {
+      "where": "extension",
+      "message": "Archidekt didn’t show this deck to your browser.",
+      "fix": "If it’s your private deck, sign in to Archidekt in this browser, then try again."
+    },
+    "archidekt.not_found": {
+      "where": "extension",
+      "message": "Archidekt has no deck at that link.",
+      "fix": "Check the link — the deck may have been deleted."
+    },
+    "archidekt.blocked": {
+      "where": "extension",
+      "message": "Archidekt didn’t answer the companion.",
+      "fix": "Open the deck on archidekt.com in this browser, wait for it to load, then try again."
+    },
+    "archidekt.load_timeout": {
+      "where": "extension",
+      "message": "The Archidekt page didn’t finish loading.",
+      "fix": "Open the deck on archidekt.com yourself, then try again."
+    },
+    "archidekt.changed": {
+      "where": "extension",
+      "message": "Archidekt’s deck page changed, so the companion couldn’t read it.",
+      "fix": "Nothing was read. Export the deck as text on Archidekt and paste it instead, and report this (the scrape-doctor skill has the steps)."
+    },
+    "archidekt.http": {
+      "where": "extension",
+      "message": "Archidekt returned an error.",
+      "fix": "Try again in a minute."
+    },
+    "moxfield.signed_out": {
+      "where": "extension",
+      "message": "You aren’t signed in to Moxfield in this browser.",
+      "fix": "Sign in on moxfield.com in this browser, or use your collection’s or binder’s share link, then try again."
+    },
+    "moxfield.collection_empty": {
+      "where": "extension",
+      "message": "That Moxfield collection or binder has no cards.",
+      "fix": "Check you picked the right one on Moxfield, then try again."
+    },
+    "moxfield.too_large": {
+      "where": "extension",
+      "message": "That Moxfield collection is larger than the companion reads at once (60,000 printings).",
+      "fix": "Import it a binder at a time."
+    },
+    "collection.empty": {
+      "where": "server",
+      "message": "Nothing in that read can be imported — every line was a proxy, a digital copy or unidentified.",
+      "fix": "Check the collection or binder on Moxfield, then try again."
+    },
+    "moxfield.collection_changed": {
+      "where": "extension",
+      "message": "Moxfield answered with a collection format the companion doesn’t recognise.",
+      "fix": "Nothing was read. Export the collection as CSV on Moxfield instead, and report this (the scrape-doctor skill has the steps)."
     }
   }
 }
