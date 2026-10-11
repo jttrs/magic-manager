@@ -233,6 +233,13 @@ def test_deck_check_runs_the_apps_fetcher_and_classifies_failures(monkeypatch):
     c = scrape_canary.check_deck("archidekt", SAMPLE)
     assert (c.outcome, c.code) == ("unverified", "scrape.sample_gone")
 
+    # Real use treats an empty deck as nothing to check; the canary's sample is known to have cards.
+    def empty(url, **_):
+        raise RuntimeError("import_deck: deck is empty")
+    monkeypatch.setattr(addcards, "fetch_deck_payload", empty)
+    c = scrape_canary.check_deck("archidekt", SAMPLE)
+    assert (c.outcome, c.code) == ("fail", "scrape.expectation")
+
 
 def test_every_deck_sample_is_checked_except_moxfield_which_needs_the_browser(monkeypatch):
     seen = []

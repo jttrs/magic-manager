@@ -157,6 +157,8 @@ def check_deck(source: str, sample: dict) -> Check:
         payload = addcards.fetch_deck_payload(sample["url"])
     except RuntimeError as e:
         outcome, code = health.classify_error(str(e), unknown="fail")
+        if code == "scrape.empty_deck":  # the sample is known to have cards: empty means broken
+            return _fail(key, "scrape.expectation", "The sample deck came back empty.", url=sample["url"])
         return Check(key, outcome, code, str(e), {"url": sample["url"]})
     except ValueError as e:  # the fetcher printed something that isn't JSON
         return _fail(key, "scrape.shape_changed", str(e), url=sample["url"])
