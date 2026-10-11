@@ -3,8 +3,11 @@
 // For stores whose prices only exist in the rendered page (Best Buy, Target,
 // eBay …), reads the minimum the app's store recipes need, from a tab YOU have
 // open: the page title, its product price/stock tags, its schema.org Product
-// data, and only the visible text lines that mention a price or stock. Nothing
-// else on the page (your name, address, cart, account) is collected.
+// data, and only the visible text lines that mention a price or stock, plus
+// the offer's "Sold by" / "Ships from" / "Condition" lines (and the seller or
+// condition right after a bare label) so marketplace and used offers can be
+// told apart. Nothing else on the page (your name, address, cart, account) is
+// collected.
 //
 // The app applies the store's recipe (config/vendors.toml) to this — the
 // extension holds no price logic. A classic script: one global function.
@@ -14,6 +17,9 @@ function readStorePage(doc) {
   var META = /^(og:title|og:price:amount|og:price:currency|product:price:amount|product:price:currency|product:availability|og:availability|twitter:title)$/i;
   var LINE = /\$\s?\d|sold out|out of stock|in stock|coming soon|not available|pre-?order|add to cart|listing (?:was |has )?ended|unavailable/i;
   var CURRENCY = /\bUSD?\s?\$|\bUSD\b/; // case-sensitive: "US $12.00", not "Contact Us"
+  var OFFER = /^(?:sold (?:and shipped )?by|ships from(?: and sold by)?|shipper \/ seller|fulfilled by|condition)\b/i;
+  var LABEL = /^(?:sold (?:and shipped )?by|ships from|shipper \/ seller|fulfilled by|condition):?$/i;
+  var MAX_OFFER = 80;
   var MAX_LINES = 60;
   var MAX_TEXT = 6000;
   var MAX_LD = 8;
@@ -59,9 +65,13 @@ function readStorePage(doc) {
   var lines = [];
   var total = 0;
   var all = ((doc.body && doc.body.innerText) || '').split(/\n+/);
+  var afterLabel = false;
   for (var l = 0; l < all.length && lines.length < MAX_LINES; l++) {
     var line = all[l].replace(/\s+/g, ' ').trim();
-    if (!line || line.length > 200 || !(LINE.test(line) || CURRENCY.test(line))) continue;
+    if (!line) continue;
+    var offer = line.length <= MAX_OFFER && (afterLabel || OFFER.test(line));
+    afterLabel = offer && LABEL.test(line);
+    if (!offer && (line.length > 200 || !(LINE.test(line) || CURRENCY.test(line)))) continue;
     if (total + line.length > MAX_TEXT) break;
     lines.push(line);
     total += line.length + 1;

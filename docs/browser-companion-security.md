@@ -70,8 +70,11 @@ sequenceDiagram
     treatments, quantity and unit price. No seller, address, totals, account or Mana Pool ids.
   - tabs: URL and title of open tabs on the Deals stores. For open-tab stores also the page title,
     whitelisted price/stock meta tags, schema.org Product JSON-LD, and visible lines that mention a
-    price or stock. The store-page fixture plants a name, an address and a CSRF token, and the test
-    asserts none are read.
+    price or stock, plus the main offer's short (≤ 80 characters) "Sold by" / "Ships from" /
+    "Shipper / Seller" / "Condition" lines and the seller or condition right after a bare label
+    (added 2026-10-10 so marketplaces count only the store's own new offers). The store-page fixture
+    plants a name, an address and a CSRF token — and a long personal line right after a "Condition"
+    label — and the test asserts none are read.
   - Moxfield: deck name, author user name, and per card: printing, quantity, finish and board.
     Profile, likes, prices and internal ids are dropped (pinned).
 - **The user sees exactly what is sent**: a table plus the raw JSON, before anything leaves.
@@ -83,8 +86,9 @@ sequenceDiagram
   `https://manapool.com/*` only: the cart page, **not** its `sb-api` host. Everything else is
   **optional** and asked for when the user switches a feature on:
   - the paired app address,
-  - **Deals**: the 18 store sites from `config/vendors.toml` (generated into the manifest; CI fails
-    when stale),
+  - **Deals**: the 21 store sites from `config/vendors.toml` (generated into the manifest; CI fails
+    when stale). Amazon, Walmart and GameStop were added 2026-10-10 (extension 0.1.1): Chrome asks
+    for the whole store set, so a user who had Deals on switches it on again once to grant them,
   - **Moxfield**: `moxfield.com` + subdomains.
   No `<all_urls>`, `tabs`, `cookies`, `webRequest`, `history`, `debugger`, `nativeMessaging`
   (all asserted absent).
@@ -122,8 +126,9 @@ schema (`parseBookmarkletPaste`) and the server's strict model.
 - **XSS in the paired app** could trigger requests. Each still needs the user's Send in the
   extension's window, which names the asking origin and shows the data.
 - **Store page text lines** are filtered to lines mentioning a price or stock, so a personal line that
-  also contains a price (e.g. "Jared's cart: $0.00") could be included. It's shown in the approval
-  window before sending.
+  also contains a price (e.g. "Jared's cart: $0.00") could be included. The same holds for a short
+  line that starts like an offer label ("Sold by …", "Condition …") or follows a bare one. Both are
+  shown in the approval window before sending.
 - **DNS rebinding** against a localhost app (a hostile domain resolving to 127.0.0.1) isn't stopped by
   `Sec-Fetch-Site`. Mitigation belongs with hosted auth (Phase 3, H4: a Host allowlist plus session
   cookies). The companion itself is unaffected, because it pairs by exact origin.

@@ -26,6 +26,7 @@ browser before reading tabs on macOS (`docs/deals-scraping.md` failure mode 1).
 |---|---|---|---|
 | Mana Pool cart (extension + bookmarklet) | `extension/src/readers/manapool-cart.js` | `tests/fixtures/companion/manapool-cart*.html` | `web/e2e/companion-readers.spec.ts` → `manapool-cart.expected.json` → `tests/test_companion.py` |
 | Open-tab store page (Deals, `rendered` stores) | `extension/src/readers/store-page.js` + recipe in `config/vendors.toml` | `store-rendered.html`, `tests/fixtures/vendors/*.html.gz` | same chain → `store-*.expected.json`; server parse in `vendors.read_listing` |
+| Open-tab marketplaces (Amazon, Walmart, GameStop) | recipe in `config/vendors.toml` (`sellers`, `new_only`, `seller_pattern`, …) | `tests/fixtures/vendors/rendered/<vendor>-<case>.json.gz` (companion extract + AppleScript tab read) | `tests/test_vendor_recipes.py::RENDERED` (both read paths) |
 | Moxfield deck (extension) | `extension/src/readers/moxfield-deck.js` → `decksource.parse_moxfield` | `moxfield-deck.json` | same chain → `moxfield-deck.expected.json` |
 | Server-read stores (`shopify`/`meta`) | `config/vendors.toml` + `storepage.py` | `tests/fixtures/vendors/*` | `tests/test_vendor_recipes.py`; nightly `scripts/vendor_canary.py` |
 | Deck builders (server) | `decksource.parse_*`, `scripts/import_deck.py` | inline in `tests/test_decksource.py` | `tests/test_decksource.py` |
@@ -60,6 +61,13 @@ A new failure shape that users would only see as a generic error is a bug. Add a
   close it afterwards). Never curl Mana Pool's API (hooks block it, and the companion never uses it).
 - **Store page:** save the product page, or let `scripts/vendor_canary.py` show what it reads.
   Server-read stores keep a gzipped fixture under `tests/fixtures/vendors/`.
+- **Open-tab store (Amazon, Walmart, GameStop):** `uv run python scripts/capture_store_tab.py
+  <vendor>-<case> --url <product> [--headed]` reads it in a throwaway Chrome profile with both read
+  paths. Stores that wall every automated browser (Walmart): ask the owner to save the page from their
+  own Chrome (File → Save Page As → HTML Only) and pass `--html <file> --url <product>`. Always
+  `--redact "<town>=Springfield" --redact "<zip>=00000"` (the tool refuses to write while they remain);
+  it drops scripts and cuts the text before customer reviews. Never solve a captcha or reuse the
+  owner's profile. Recapture after changing `store-page.js` — the extract is the reader's output.
 - **Moxfield:** the deck JSON shape is what `api2.moxfield.com/v3/decks/all/<id>` returns. Update
   `moxfield-deck.json` keeping the extra fields the reader must DROP. The test asserts they're dropped.
 

@@ -122,3 +122,14 @@ def test_compare_values_at_face_price_and_honors_confirmations(monkeypatch):
     assert out["status"] == "confirmed" and calls[-1] == "The Hobbit Bundle"
     deals.confirm_match("u1", None)
     assert deals.confirmed_matches(["u1"]) == {}
+
+
+@pytest.mark.parametrize("title,kept", [
+    ("Magic: the Gathering Lorwyn Eclipsed - Play Booster Box | 30 Packs", "lorwyn eclipsed play booster box"),
+    ("Secrets of Strixhaven - Play Booster Box (30 Packs)", "secrets of strixhaven play booster box"),
+    ("Duskmourn Play Booster Display, 36 Play Booster Packs", "duskmourn play booster display"),
+    ("Foundations Play Booster Pack", "foundations play booster pack"),       # not a box: the pack IS the product
+])
+def test_pack_counts_on_box_titles_are_quantities(title, kept):
+    assert " ".join(lm.norm_tokens(lm._strip_pack_count(title))).endswith(" ".join(lm.norm_tokens(kept)))
+    assert ("pack" in lm.norm_tokens(lm._strip_pack_count(title))) is title.endswith("Pack")

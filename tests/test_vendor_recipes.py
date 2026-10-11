@@ -4,11 +4,17 @@ Fixtures in tests/fixtures/vendors/ are real pages captured 2026-10-05
 (``<key>.html.gz`` for page-tag stores, ``<key>.js.json.gz`` for Shopify). When a
 store changes its markup, re-capture the page and update the expectation —
 the nightly canary (scripts/vendor_canary.py) flags it live first.
+
+Open-tab (``rendered``) marketplaces keep real tab reads under
+``rendered/<key>-<case>.json.gz`` (scripts/capture_store_tab.py, 2026-10-10):
+each holds BOTH read paths — the browser companion's extract and the AppleScript
+tab read — and every recipe expectation is checked against each.
 """
 from __future__ import annotations
 
 import gzip
 import json
+import re
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -36,6 +42,139 @@ EXPECT = {
     "costco": (46.99, False, "Magic: The Gathering Bloomburrow Commander Kit"),
     "cardkingdom": (274.99, True, "Edge of Eternities Play Booster Box"),
 }
+
+
+# fixture -> (price, available, title starts with, seller, why not counted (substring) or None)
+RENDERED = {
+    "amazon-1p": (129.42, True, "Magic: the Gathering Lorwyn Eclipsed - Play Booster Box", "Amazon.com", None),
+    "amazon-preorder": (224.97, True, "Magic: The Gathering | Star Trek Commander Deck Bundle", "Amazon.com", None),
+    "amazon-third-party": (129.99, True, "Magic: The Gathering Secrets of Strixhaven", "Bigg Time Sales", "third-party seller (Bigg Time Sales)"),
+    "amazon-merchant-fulfilled": (109.97, None, "Magic: The Gathering Fallout Commander Deck", "EmpireGameCenter", "third-party seller (EmpireGameCenter)"),
+    "walmart-1p": (45.99, True, "Magic: The Gathering Tarkir Dragonstorm Commander Deck - Jeskai Striker", "Walmart.com", None),
+    "walmart-third-party": (109.99, True, "Magic: The Gathering Lorwyn Eclipsed Play Booster Box", "CardsHQ", "third-party seller (CardsHQ)"),
+    "gamestop-in-stock": (139.99, True, "Magic: The Gathering Marvel", "GameStop", None),
+    "gamestop-sold-out": (159.99, False, "Magic: The Gathering Edge of Eternities", "GameStop", None),
+}
+
+
+def _rendered(name: str) -> dict:
+    return json.loads(gzip.decompress((FIX / "rendered" / f"{name}.json.gz").read_bytes()))
+
+
+@pytest.mark.parametrize("path", ["extract", "tab"])
+@pytest.mark.parametrize("name", sorted(RENDERED))
+def test_open_tab_recipe_reads_both_read_paths(name, path):
+    price, available, title, seller, skipped = RENDERED[name]
+    fixture = _rendered(name)
+    v = vendors.by_key(name.split("-")[0])
+    html, text = storefetch.page_from_extract(fixture[path])
+    listing = vendors.read_listing(v, html, text=text)
+    assert (listing.price, listing.available, listing.seller) == (pytest.approx(price), available, seller)
+    assert (listing.title or "").startswith(title)
+    assert not re.search(r"Amazon\.com:|Walmart\.com|\| GameStop", listing.title)    # store noise stripped
+    if skipped is None:
+        assert listing.skipped is None
+        assert storefetch.read(fixture["url"], rendered=fixture[path])[1].price == pytest.approx(price)
+    else:
+        assert skipped in listing.skipped
+        with pytest.raises(storepage.NotCounted, match=re.escape(skipped)):
+            storefetch.read(fixture["url"], rendered=fixture[path])
+
+
+def test_every_rendered_fixture_has_an_expectation():
+    assert {p.name.removesuffix(".json.gz") for p in (FIX / "rendered").glob("*.json.gz")} == set(RENDERED)
+    marketplaces = {v.key for v in vendors.catalog() if v.mode == "rendered" and v.sellers}
+    assert marketplaces == {"amazon", "walmart", "gamestop"}
+    assert marketplaces <= {n.split("-")[0] for n in RENDERED}, "every marketplace recipe needs a captured tab"
+
+
+@pytest.mark.parametrize("key,text,skipped", [
+    # Amazon: no buy box — the only prices on the page are other items'.
+    ("amazon", "Under $10\n$74.95\nCurrently unavailable.\nWe don't know when or if this item will be back in stock.", "no offer"),
+    ("amazon", "$54.99\nIn Stock\nShips from and sold by Amazon.com.", None),
+    ("amazon", "$41.10\nIn Stock\nShips from\nAmazon\nSold by\nAmazon Resale", "third-party seller (Amazon Resale)"),
+    ("amazon", "$54.99\nTemporarily out of stock.\nShipper / Seller\nAmazon.com", None),
+    # Walmart: a used / restored main offer.
+    ("walmart", "Condition\nRestored: Like New\nCurrent price is Now $89.00\nSold and shipped by Walmart.com", "used / pre-owned offer (Restored: Like New)"),
+    ("walmart", "$0.00\nCondition\nNew\nCurrent price is $45.99\nOut of stock\nSold and shipped by Walmart.com", None),
+])
+def test_marketplace_rules_on_page_text(key, text, skipped):
+    listing = vendors.read_listing(vendors.by_key(key), "<html><head><title>x</title></head></html>", text=text)
+    if skipped is None:
+        assert listing.skipped is None and listing.price is not None
+    else:
+        assert skipped in listing.skipped
+
+
+def test_amazon_and_walmart_text_rules_take_the_buy_box_not_the_cart_or_installments():
+    amazon = vendors.read_listing(vendors.by_key("amazon"), "<title>x</title>", text="$54.99\nTemporarily out of stock.\nShipper / Seller\nAmazon.com")
+    assert (amazon.price, amazon.available) == (54.99, False)
+    walmart = vendors.read_listing(vendors.by_key("walmart"), "<title>x</title>",
+                                   text="$0.00\nCurrent price is\nNow $109.99\nAs low as $20/mo\nOut of stock")
+    assert (walmart.price, walmart.available) == (109.99, False)
+
+
+def _ld(offer: dict) -> str:
+    return ('<html><head><title>Box | GameStop</title><script type="application/ld+json">'
+            + json.dumps({"@type": "Product", "name": "Box", "offers": [{"@type": "Offer", "price": "99.99", "priceCurrency": "USD",
+                                                                          "availability": "https://schema.org/InStock", **offer}]})
+            + "</script></head></html>")
+
+
+@pytest.mark.parametrize("offer,skipped", [
+    ({"seller": {"@type": "Organization", "name": "GameStop"}, "itemCondition": "https://schema.org/NewCondition"}, None),
+    ({"seller": {"@type": "Organization", "name": "GameStop"}, "itemCondition": "https://schema.org/UsedCondition"}, "used / pre-owned offer (used)"),
+    ({"seller": {"@type": "Organization", "name": "Card Shack"}, "itemCondition": "NewCondition"}, "third-party seller (Card Shack)"),
+    ({}, None),                                                       # the page doesn't say → counted
+])
+def test_json_ld_seller_and_condition_decide_for_gamestop(offer, skipped):
+    listing = vendors.read_listing(vendors.by_key("gamestop"), _ld(offer), text="")
+    assert listing.price == 99.99 and listing.title == "Box"
+    assert listing.skipped is None if skipped is None else skipped in listing.skipped
+
+
+def test_seller_and_condition_rules_are_opt_in():
+    """Other stores keep reading used / marketplace offers (eBay singles are often 'Used')."""
+    listing = vendors.read_listing(vendors.by_key("ebay"), _ld({"seller": {"name": "someone"}, "itemCondition": "https://schema.org/UsedCondition"}), text="")
+    assert (listing.price, listing.seller, listing.condition, listing.skipped) == (99.99, "someone", "used", None)
+
+
+@pytest.mark.parametrize("value,cond,new", [
+    ("https://schema.org/NewCondition", "new", True), ("http://schema.org/RefurbishedCondition", "refurbished", False),
+    ("UsedCondition", "used", False), ("New", "New", True), ("Brand New", "Brand New", True), ("Pre-owned", "Pre-owned", False), (None, None, False),
+])
+def test_condition_of(value, cond, new):
+    assert storepage.condition_of(value) == cond
+    assert storepage.is_new(cond) is new
+
+
+@pytest.mark.parametrize("url,key", [
+    ("https://www.amazon.com/Magic-Gathering-Lorwyn-Eclipsed-Booster/dp/B0FP42WVL7/ref=sr_1_2", "amazon"),
+    ("https://www.amazon.com/dp/B0FP42WVL7", "amazon"),
+    ("https://www.amazon.com/gp/product/B0FP42WVL7", "amazon"),
+    ("https://www.walmart.com/ip/Magic-The-Gathering-Lorwyn-Eclipsed-Play-Booster-Box-30-Packs/18433274568", "walmart"),
+    ("https://www.walmart.com/ip/18433274568", "walmart"),
+    ("https://www.gamestop.com/toys-games/trading-cards/products/magic-the-gathering-edge-of-eternities-play-booster-box/425777.html", "gamestop"),
+])
+def test_marketplace_product_urls(url, key):
+    parts = urlsplit(url)
+    m = vendors.classify(parts.hostname, parts.path)
+    assert (m.kind, m.vendor.key) == ("product", key)
+
+
+@pytest.mark.parametrize("url", ["https://www.amazon.com/s?k=magic", "https://www.amazon.com/gp/cart/view.html",
+                                 "https://www.walmart.com/search?q=magic", "https://www.walmart.com/cart",
+                                 "https://www.gamestop.com/toys-games/trading-cards", "https://www.gamestop.com/search/?q=magic"])
+def test_marketplace_other_pages_arent_products(url):
+    parts = urlsplit(url)
+    assert vendors.classify(parts.hostname, parts.path).kind == "store_page"
+
+
+def test_read_prices_says_why_a_marketplace_offer_isnt_counted():
+    fixture = _rendered("walmart-third-party")
+    rows = deals.read_prices([fixture["url"]], pages={fixture["url"]: fixture["extract"]})
+    assert rows[0]["price"] is None
+    assert rows[0]["error"] == "Sold by a third-party seller (CardsHQ) — Deals only counts Walmart itself."
 
 
 def _page(key: str):
