@@ -147,7 +147,17 @@ def read(url: str, *, fresh: bool = False, client: httpx.Client | None = None,
     """Read ``url`` with its store's recipe. ``rendered`` = the extract the
     browser companion read from the user's open tab (open-tab stores only).
     Raises :class:`LookupError` for an uncatalogued store,
-    :class:`storepage.Blocked`, :class:`JsEventsOff`, :class:`TabGone`."""
+    :class:`storepage.NotCounted` when the recipe doesn't count the page's main
+    offer (marketplace seller, used, no offer), :class:`storepage.Blocked`,
+    :class:`JsEventsOff`, :class:`TabGone`."""
+    v, listing = _read(url, fresh=fresh, client=client, tab_runner=tab_runner, rendered=rendered)
+    if listing.skipped:
+        raise storepage.NotCounted(listing.skipped)
+    return v, listing
+
+
+def _read(url: str, *, fresh: bool, client: httpx.Client | None, tab_runner: Callable[[str], str] | None,
+          rendered: dict | None) -> tuple[vendors.Vendor, storepage.Listing]:
     parts = urlsplit(url)
     m = vendors.classify(parts.hostname or "", parts.path)
     if m.vendor is None or m.kind != "product":

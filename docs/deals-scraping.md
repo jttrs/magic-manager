@@ -31,7 +31,7 @@ isn't sent); a test enforces it.
 |---|---|---|---|
 | `shopify` | server GET `<product-url>.js` → variant price (cents) + `available` (`.json` has no stock) | Shopify stores (Many Realms, PokeBox, most card shops) | yes — live canary + fixtures |
 | `meta` | server GET page → `meta[property="og:price:amount"]` / `product:price:amount`, JSON-LD `Product.offers.price` | stores that serve structured data to plain GETs | yes |
-| `rendered` | read the **already-rendered tab** in the user's browser via AppleScript `execute javascript` | bot-blocked and JS-priced retailers (Best Buy, eBay, Amazon) | fixtures only (needs a real browser session) |
+| `rendered` | read the **already-rendered tab** in the user's browser (browser companion, or AppleScript `execute javascript`) | bot-blocked and JS-priced retailers (Best Buy, Target, eBay, Amazon, Walmart, GameStop) | fixtures only (needs a real browser session) |
 
 Never fetch a `rendered` vendor server-side: big retailers bot-block automated fetches (timeouts,
 closed sockets) and their prices are JS-rendered, absent from raw HTML anyway.
@@ -75,7 +75,31 @@ closed sockets) and their prices are JS-rendered, absent from raw HTML anyway.
    disambiguate by price (and image) — same-name variants (base / borderless / stamped / extended
    art) differ wildly (e.g. PFDN 11p stamped $21 vs FDN 11 $2.53). Flag for confirmation, never
    silently pick.
-10. **Tax.** Deltas are **face price vs pre-tax market** — never pre-discount a no-tax store's price.
+10. **Marketplace sellers, used offers, no offer** (Amazon, Walmart, GameStop — owner, 2026-10-10).
+    Count only an offer the store itself sells, new. Recipe keys: `sellers` (the store's own seller
+    names), `new_only`, `seller_pattern` / `condition_pattern` (visible text) — JSON-LD
+    `offers.seller` / `itemCondition` win when the page has them — and `no_offer_pattern`. A listing
+    that fails is **read but not counted**: `storefetch.read` raises `storepage.NotCounted` and the
+    Deals row says why ("Sold by a third-party seller (CardsHQ) — Deals only counts Walmart itself.",
+    "A used / pre-owned offer (Restored: Like New) — …", "Amazon has no offer on this page right
+    now …"). No price is recorded, so a watched link's history never gets a marketplace or carousel
+    price. Per store:
+    - **Amazon** — no page tags: the **first** `$NN.NN` is the buy box ("Under $10" in the menu has no
+      cents; "List Price", card offers, "Other sellers" and carousels come after). Seller =
+      `Sold by` / `Shipper / Seller` (next line) or `Ships from and sold by X.`; own = `Amazon.com`.
+      "Ships from Amazon · Sold by X" (FBA) is third-party; *Amazon Resale* (used) is too.
+      `Currently unavailable.` = no buy box → not counted (the page's prices are other items').
+      Title noise `Amazon.com: … : Toys & Games` stripped (`title_strip`).
+    - **Walmart** — price from the hero `itemprop="price"` ("Now $109.99"); the visible text starts
+      with the **cart total `$0.00`**, and "As low as $20/mo" is financing, so the text fallback is
+      anchored on "Current price is". Seller "Sold and shipped by X" (own = `Walmart.com`), condition
+      from the "Condition / New" tile. Walmart walls every automated browser ("Robot or human?"),
+      even a headed throwaway Chrome — its fixtures are pages the owner saved from their own Chrome.
+    - **GameStop** — Product JSON-LD has price, stock, `seller` (GameStop) and `itemCondition`; the
+      visible "$NN.NN for Pros" is a member price (never read). Cloudflare walls headless browsers.
+11. **Pack counts in titles.** "Play Booster Box | 30 Packs" tied *Box* with *Pack*;
+    `listing_match` drops a pack count from box/display titles before scoring.
+12. **Tax.** Deltas are **face price vs pre-tax market** — never pre-discount a no-tax store's price.
     "No sales tax" is a per-vendor attribute used only as a cross-store tiebreaker for the SAME
     item (gross up taxed competitors ≈ × 1.10).
 
@@ -116,9 +140,10 @@ is in-app only (no email/push).
 Gamers Guild USA · **page tags** — Forge and Fire Gaming, CoolStuffInc, Star City Games, Miniature Market,
 GameNerdz, Noble Knight Games, Dragon's Lair Hobbies, Costco, Card Kingdom · **open tab** — Best Buy,
 Target, eBay · added 2026-10-06: Cash Cards Unlimited (Shopify; where the owner's earmarks live —
-multi-deck pages, so `?variant=<id|name>` links read that variant). Considered, not added: Amazon / Walmart / GameStop / DA Card World (bot-walled — open-tab
-candidates), Face to Face Games (CAD), Troll and Toad (mid-relaunch), ChannelFireball / Barnes & Noble
-(no current sealed found).
+multi-deck pages, so `?variant=<id|name>` links read that variant) · added 2026-10-10: **Amazon,
+Walmart, GameStop** (open tab; own new offers only — failure mode 10). Considered, not added: DA Card
+World (bot-walled — an open-tab candidate), Face to Face Games (CAD), Troll and Toad (mid-relaunch),
+ChannelFireball / Barnes & Noble (no current sealed found).
 
 ## Recipe book + CI
 
@@ -126,5 +151,9 @@ candidates), Face to Face Games (CAD), Troll and Toad (mid-relaunch), ChannelFir
   that parse them (every PR).
 - `shopify` / `meta` recipes also get a **nightly live canary** (one known URL per vendor) that opens
   an issue when title or price stops parsing. `rendered` recipes can't run in CI; their fixtures
-  are saved DOM snapshots captured from a real tab.
+  are real tab reads: `scripts/capture_store_tab.py <vendor>-<case> --url … [--headed]` (a throwaway
+  Chrome profile) or `--html <page you saved>` (stores that wall every automated browser), with
+  `--redact OLD=NEW` for your town/ZIP. Each `tests/fixtures/vendors/rendered/*.json.gz` holds BOTH
+  read paths — the companion reader's extract and the AppleScript tab read — and
+  `tests/test_vendor_recipes.py::RENDERED` checks every expectation against each.
 - Fetching is polite: cached, rate-limited per host, honest User-Agent, robots-respecting.

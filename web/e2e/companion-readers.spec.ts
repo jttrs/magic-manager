@@ -111,6 +111,8 @@ test.describe('open-tab store page reader', () => {
     for (const secret of ['Jared', 'Main St', 'Springfield', 'secret-csrf-value', 'Organization', 'Orders']) expect(all).not.toContain(secret);
     expect(out.ld).toHaveLength(1);
     expect(out.text.split('\n')[0]).toBe('$144.99');
+    // The offer's seller / condition (marketplaces count only the store's own new offers):
+    expect(out.text).toContain('Sold by\nBest Buy\nCondition\nNew');
     golden('store-rendered.expected.json', out);
   });
 

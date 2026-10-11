@@ -61,7 +61,9 @@ and `/bookmarklet`, `POST /api/cart/lines`, `POST /api/deals/tabs`,
   approve, lines only, deduped by store + order id. Likely needs a new ingest method, so ask the
   coordinator before any schema change.
 - **Other carts**: TCGplayer and Card Kingdom carts through the same `cart.audit` seam.
-- **Bot-walled stores** as Deals `rendered` recipes: Amazon, Walmart, GameStop.
+- ~~**Bot-walled stores** as Deals `rendered` recipes: Amazon, Walmart, GameStop.~~ Done 2026-10-10
+  (extension 0.1.1): open-tab recipes that count only the store's own new offers
+  (`docs/deals-scraping.md` failure mode 10).
 - **Private Archidekt decks; Moxfield collection/binders.**
 - Deals **Watching → refresh** still reads open-tab stores on this Mac. Route it through the companion
   when connected.

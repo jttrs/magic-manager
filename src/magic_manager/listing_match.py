@@ -195,7 +195,17 @@ def match_sealed(title: str) -> Match:
     return m
 
 
+_PACK_COUNT = re.compile(r"\(?\b\d+[\s-]*(?:play |draft |set |collector )?(?:booster )?packs?\b\)?", re.I)
+
+
+def _strip_pack_count(title: str) -> str:
+    """"Play Booster Box | 30 Packs" → the count is the box's size, not a pack
+    product (Amazon / CoolStuff style titles); only on box / display titles."""
+    return _PACK_COUNT.sub(" ", title) if re.search(r"\b(?:box|display)\b", title, re.I) else title
+
+
 def _match_sealed(title: str) -> Match:
+    title = _strip_pack_count(title)
     code = detect_set(title)
     scored = _score_products(title, _family(code)) if code else []
     if not scored or scored[0].score < MATCH_AT:

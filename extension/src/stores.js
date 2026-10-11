@@ -163,5 +163,32 @@ export const STORES = [
       "ebay.com"
     ],
     "product_path": "^/itm/\\d+"
+  },
+  {
+    "key": "amazon",
+    "name": "Amazon",
+    "mode": "rendered",
+    "hosts": [
+      "amazon.com"
+    ],
+    "product_path": "/(?:dp|gp/product|gp/aw/d)/[A-Z0-9]{10}(?:/|$)"
+  },
+  {
+    "key": "walmart",
+    "name": "Walmart",
+    "mode": "rendered",
+    "hosts": [
+      "walmart.com"
+    ],
+    "product_path": "^/ip/(?:[^/]+/)?\\d+"
+  },
+  {
+    "key": "gamestop",
+    "name": "GameStop",
+    "mode": "rendered",
+    "hosts": [
+      "gamestop.com"
+    ],
+    "product_path": "/products/[^/]+/\\d+\\.html$"
   }
 ];

@@ -12,6 +12,15 @@
 #   price_pattern / stock_pattern / sold_out_pattern / title_pattern
 #                  optional regexes (first group = value) when page tags aren't enough;
 #                  for `rendered` they run over the tab's visible text.
+#                  (case-insensitive; ^ and $ anchor a line)
+#   seller_pattern / condition_pattern
+#                  regexes (group 1) for the main offer's seller / condition when
+#                  JSON-LD doesn't say (JSON-LD offers.seller / itemCondition win)
+#   sellers        the store's own seller names — an offer sold by anyone else
+#                  isn't counted ("Sold by a third-party seller (X)")
+#   new_only       a used / pre-owned / renewed offer isn't counted
+#   no_offer_pattern  the page has no main offer (its prices are other items')
+#   title_strip    regex removed from the title (store name / category noise)
 
 # ---- Shopify stores ----
 
@@ -176,3 +185,54 @@ product_path = "^/itm/\\d+"
 # The first "US $" amount is the item price; later ones are installments/shipping.
 price_pattern = 'US \$\s?(\d[\d,]*\.\d{2})'
 sold_out_pattern = 'this listing (?:was ended|has ended)|out of stock|sold out'
+
+# Marketplaces: count only offers the store itself sells, new (owner, 2026-10-10).
+# A marketplace seller, a used / pre-owned offer, or a page with no main offer
+# is read but not counted — the Deals row says why (docs/deals-scraping.md).
+
+[[vendor]]
+key = "amazon"
+name = "Amazon"
+hosts = ["amazon.com"]
+mode = "rendered"
+product_path = "/(?:dp|gp/product|gp/aw/d)/[A-Z0-9]{10}(?:/|$)"
+# The first $NN.NN is the buy box ("Under $10" in the menu has no cents; list
+# prices, card offers and carousels come later).
+price_pattern = '\$\s?(\d[\d,]*\.\d{2})'
+stock_pattern = '^(?:In Stock|Pre-order now)\.?$'
+sold_out_pattern = '^(?:Temporarily out of stock|Out of stock)\b'
+no_offer_pattern = '^Currently unavailable\.?$'
+seller_pattern = '^(?:(?:Sold by|Shipper / Seller)[ \t]*\n\s*|Ships from and sold by[ \t]+)(\S.*?)\.?[ \t]*$'
+sellers = ["Amazon.com", "Amazon", "Amazon.com Services LLC"]
+new_only = true
+title_strip = '^Amazon\.com\s*:\s*|\s+:\s+[^:]+$'
+
+[[vendor]]
+key = "walmart"
+name = "Walmart"
+hosts = ["walmart.com"]
+mode = "rendered"
+product_path = "^/ip/(?:[^/]+/)?\\d+"
+# Price: the hero itemprop="price" ("Now $109.99"); the cart total ($0.00)
+# comes first in the page text, so the text fallback is anchored.
+price_pattern = 'Current price is\s*(?:USD\s*)?(?:Now\s+)?\$\s?(\d[\d,]*\.\d{2})'
+sold_out_pattern = '^(?:Out of stock|Get in-stock alert)\b'
+stock_pattern = '^(?:Add to cart|Buy now)$'
+seller_pattern = '^Sold (?:and shipped )?by\s+(\S.*?)[ \t]*$'
+sellers = ["Walmart.com", "Walmart"]
+condition_pattern = '^Condition[ \t]*\n\s*(\S.*?)[ \t]*$'
+new_only = true
+title_strip = '\s+-\s+Walmart\.com$'
+
+[[vendor]]
+key = "gamestop"
+name = "GameStop"
+hosts = ["gamestop.com"]
+mode = "rendered"
+product_path = "/products/[^/]+/\\d+\\.html$"
+# Product JSON-LD carries price, stock, seller and condition. The text fallback
+# takes the first $ amount: the "$NN.NN for Pros" member price comes after it.
+price_pattern = '\$\s?(\d[\d,]*\.\d{2})'
+sellers = ["GameStop"]
+new_only = true
+title_strip = '\s*\|\s*GameStop$'

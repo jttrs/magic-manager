@@ -12,6 +12,10 @@ pages. Signals, most authoritative first (see docs/deals-scraping.md):
 
 Bot walls ("Just a moment…", "Robot or human?", "Attention Required!") are
 recognized so a blocked read says so instead of returning a wrong price.
+
+JSON-LD offers also say WHO sells the offer and in what condition; a recipe
+may refuse to count a listing (marketplace seller, used offer) — the listing
+then carries ``skipped`` (a plain note) and the read raises :class:`NotCounted`.
 """
 from __future__ import annotations
 
@@ -30,10 +34,18 @@ class Listing:
     available: bool | None = None       # None = the page doesn't say
     title: str | None = None
     signal: str = ""                    # which signal produced the price
+    seller: str | None = None           # who sells the main offer, when the page says
+    condition: str | None = None        # the main offer's condition ("new", "used", "Pre-owned"…)
+    skipped: str | None = None          # why the store's recipe doesn't count this listing
 
 
 class Blocked(RuntimeError):
     """The store served a bot wall or refused the request."""
+
+
+class NotCounted(LookupError):
+    """The page's main offer isn't one Deals counts (a marketplace seller, a
+    used offer, no offer at all) — the message says which, in plain words."""
 
 
 def _num(v) -> float | None:
@@ -75,8 +87,29 @@ def _meta(page: str, *names: str) -> str | None:
     return None
 
 
+def _ld_name(v) -> str | None:
+    if isinstance(v, dict):
+        v = v.get("name")
+    return str(v).strip() if isinstance(v, str) and v.strip() else None
+
+
+def condition_of(v) -> str | None:
+    """A condition as the page states it; schema.org URLs → ``new`` / ``used``
+    / ``refurbished`` / ``damaged``."""
+    s = str(v or "").strip()
+    if not s:
+        return None
+    m = re.fullmatch(r"(?:https?://schema\.org/)?(\w+?)Condition", s, re.I)
+    return m.group(1).lower() if m else s
+
+
+def is_new(condition: str | None) -> bool:
+    return bool(re.fullmatch(r"(?:brand[\s-]+)?new(?:condition)?", (condition or "").strip(), re.I))
+
+
 def _jsonld_offers(page: str):
-    """Yield (price, currency, availability, name) from schema.org JSON-LD."""
+    """Yield (price, currency, availability, name, seller, condition) from
+    schema.org JSON-LD."""
     for block in re.findall(r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>', page, re.S | re.I):
         try:
             data = json.loads(block.strip())
@@ -98,7 +131,8 @@ def _jsonld_offers(page: str):
                 for o in offers if isinstance(offers, list) else [offers] if offers else []:
                     if isinstance(o, dict):
                         price = o.get("price", o.get("lowPrice"))
-                        yield _num(price), o.get("priceCurrency"), o.get("availability"), node.get("name")
+                        yield (_num(price), o.get("priceCurrency"), o.get("availability"), node.get("name"),
+                               _ld_name(o.get("seller")), condition_of(o.get("itemCondition")))
 
 
 def read_meta(page: str) -> Listing:
@@ -108,14 +142,14 @@ def read_meta(page: str) -> Listing:
     if price is not None:
         avail = _avail(_meta(page, "product:availability", "og:availability"))
         if avail is None:
-            avail = next((_avail(av) for _p, _c, av, _n in _jsonld_offers(page) if av), None)
+            avail = next((_avail(o[2]) for o in _jsonld_offers(page) if o[2]), None)
         if avail is None:
             m = re.search(r'itemprop=["\']availability["\'][^>]*(?:href|content)=["\']([^"\']+)["\']', page, re.I)
             avail = _avail(m.group(1)) if m else None
         return Listing(price, _meta(page, "product:price:currency", "og:price:currency"), avail, title, "meta")
-    for p, cur, av, name in _jsonld_offers(page):
+    for p, cur, av, name, seller, cond in _jsonld_offers(page):
         if p is not None:
-            return Listing(p, cur, _avail(av), name or title, "json-ld")
+            return Listing(p, cur, _avail(av), name or title, "json-ld", seller=seller, condition=cond)
     m = re.search(r'itemprop=["\']price["\'][^>]*content=["\']([^"\']+)["\']', page, re.I) or \
         re.search(r'content=["\']([^"\']+)["\'][^>]*itemprop=["\']price["\']', page, re.I)
     if m:
