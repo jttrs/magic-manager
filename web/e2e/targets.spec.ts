@@ -27,6 +27,9 @@ const other = { ...product(), product_id: 8, name: 'Secret Lair Drop: Frogs', ki
 const cost = { kind: 'sealed', set_code: 'c13', name: NAME, category: 'deck', release_date: '2013-11-01', market: 75.5, market_source: 'tcgplayer', contents: 90, exact: 90, floor: 70,
   known_exact: 80, known_floor: 62, booster_ev: 0, total_cards: 100, unpriced: 0, notes: [], lines: [] };
 
+// Fixture prices were read 2026-09-10; a price older than 7 days can't meet a target, so pin "now" close by.
+test.beforeEach(async ({ page }) => { await page.clock.setFixedTime(new Date('2026-09-12T12:00:00')); });
+
 test('Watching: set a target, see rows that meet it, filter to them, and read the history', async ({ page }) => {
   let watched = [product(), other];
   const puts: unknown[] = [];

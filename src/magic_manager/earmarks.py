@@ -346,6 +346,9 @@ def price_history(link_ids: list[int]) -> dict[int, list[dict]]:
 # ---------- price targets (V33) ----------
 
 TARGET_MODES = ("price", "pct_under")
+# A store price older than this can't meet a target: it may have moved since
+# (mirrored by web core/deals.ts TARGET_FRESH_DAYS). Same budget as card prices.
+TARGET_FRESH_DAYS = 7
 
 
 def set_target(product_id: int, mode: str, value: float, *, conn=None) -> dict:

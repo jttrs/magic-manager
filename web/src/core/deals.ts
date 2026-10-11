@@ -88,6 +88,8 @@ export type DealSort = (typeof DEAL_SORTS)[number];
 export type Offer = {
   url: string; store: string | null; price: number | null; available: boolean | null;
   readAge?: string; trend?: ReturnType<typeof trendLabel>; error?: string | null; title?: string | null;
+  /** Watched links: when this price was read (or saved). */
+  readAt?: string;
   /** Watched links: every price seen there, oldest first, and its first / low / high. */
   history?: PricePointOut[]; first?: number | null; low?: number | null; high?: number | null;
 };
@@ -130,7 +132,7 @@ export function productsFromWatched(rows: WatchedOut[], errors: PriceRow[] = [])
   return rows.map((w) => {
     const offers = sortOffers(w.stores.map((s) => ({
       url: s.url, store: s.store, price: s.price, available: s.available,
-      readAge: readAge(s), trend: trendLabel(s), error: errorOf.get(s.url) ?? null,
+      readAge: readAge(s), readAt: s.read_at, trend: trendLabel(s), error: errorOf.get(s.url) ?? null,
       history: s.history, first: s.first_price, low: s.low ?? null, high: s.high ?? null,
     })));
     return {
@@ -208,12 +210,17 @@ export function inStockBest(p: DealProduct): Offer | null {
   return p.offers.find((o) => o.price != null && o.available !== false) ?? null;
 }
 
+/** A store price older than this can't meet a target (mirrors `earmarks.TARGET_FRESH_DAYS`). */
+const TARGET_FRESH_DAYS = 7;
+
 /** Met: the best in-stock price is at or under the target's price. Null when that price isn't known.
- *  A store whose last refresh failed can't meet it — its price is an old one (mirrors `deals._target_met`). */
-export function targetMet(p: DealProduct, cost: ProductCostOut | undefined): boolean | null {
+ *  Only a trusted price counts: not from a store whose last refresh failed, and read or saved within
+ *  TARGET_FRESH_DAYS (mirrors `deals._target_met`). */
+export function targetMet(p: DealProduct, cost: ProductCostOut | undefined, now: Date = new Date()): boolean | null {
   const at = targetPriceOf(p, cost);
   if (at == null) return null;
-  const best = p.offers.find((o) => o.price != null && o.available !== false && !o.error);
+  const fresh = (o: Offer) => o.readAt == null || now.getTime() - new Date(o.readAt).getTime() <= TARGET_FRESH_DAYS * DAY;
+  const best = p.offers.find((o) => o.price != null && o.available !== false && !o.error && fresh(o));
   return best?.price != null && best.price <= at + 1e-9;
 }
 

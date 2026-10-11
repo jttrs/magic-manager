@@ -26,6 +26,11 @@ describe('price targets', () => {
     expect(targetMet({ ...p, targetPrice: 74.99 }, undefined)).toBe(false);
     expect(targetMet(prod({ offers: [offer({ available: false, price: 1 })], targetPrice: 70, target: T('price', 70) }), undefined)).toBe(false);
     expect(targetMet(prod({}), undefined)).toBeNull();
+    // a price last seen 8 days ago is too old to call the target met
+    const now = new Date('2026-10-10T12:00:00Z');
+    const aged = (d: string) => prod({ offers: [offer({ price: 60, readAt: d })], targetPrice: 70, target: T('price', 70) });
+    expect(targetMet(aged('2026-10-02T12:00:00Z'), undefined, now)).toBe(false);
+    expect(targetMet(aged('2026-10-04T12:00:00Z'), undefined, now)).toBe(true);
     // the cheap store's last refresh failed: its old price can't meet the target
     expect(targetMet(prod({ offers: [offer({ price: 60, error: 'Blocked' }), offer({ price: 90 })], targetPrice: 70, target: T('price', 70) }), undefined)).toBe(false);
   });
