@@ -14563,6 +14563,12 @@
             "description": "An open-tab store page: read from a browser tab (the companion's, or Chrome on this Mac).",
             "default": false
           },
+          "read_failed": {
+            "type": "boolean",
+            "title": "Read Failed",
+            "description": "The latest read of this link failed; the price shown is the last good one.",
+            "default": false
+          },
           "first_price": {
             "anyOf": [
               {

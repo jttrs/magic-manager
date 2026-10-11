@@ -105,3 +105,13 @@ def test_watched_tcgplayer_link_without_market_price(tmp_db, stub_identity, monk
     market._cost_memo.clear()
     row = deals.read_prices([url])[0]
     assert row["price"] is None and row["error"] == "TCGplayer has no market price for this yet."
+
+
+def test_shopify_requested_variant_never_falls_back_to_another_variants_price():
+    from magic_manager import storepage
+    product = {"title": "Decks", "variants": [{"id": 1, "title": "Lorehold", "price": 5000, "available": True},
+                                              {"id": 2, "title": "Quandrix", "price": 4000, "available": True}]}
+    assert storepage.read_shopify(product, "999").price is None            # unknown variant: no price, not the cheapest
+    assert storepage.read_shopify(product, "999").title == "Decks"
+    assert storepage.read_shopify(product, "1").price == 50.0
+    assert storepage.read_shopify(product).price == 40.0                   # none requested: cheapest

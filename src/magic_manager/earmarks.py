@@ -310,8 +310,12 @@ def record_price(link_id: int, price: float | None, *, currency: str = "USD", av
 
 
 def record_reads(rows: list[dict], *, conn=None) -> int:
-    """Record every read row whose URL is an earmarked link; returns how many."""
-    urls = [r["url"] for r in rows if r.get("price") is not None]
+    """Record every read row whose URL is an earmarked link; returns how many.
+    A failed read (no price, and not a "not counted" page) is recorded too, as a
+    NULL-price row: the link's latest history row being NULL means *its last
+    read failed*, so its older price can't be trusted (see ``deals``)."""
+    rows = [r for r in rows if not r.get("not_counted")]
+    urls = [r["url"] for r in rows]
     if not urls:
         return 0
     now = db._utcnow_iso()
@@ -320,9 +324,10 @@ def record_reads(rows: list[dict], *, conn=None) -> int:
             f"SELECT store_url, link_id FROM earmark_links WHERE store_url IN ({','.join('?' * len(urls))})", urls)}
         n = 0
         for r in rows:
-            if r["url"] in ids and r.get("price") is not None:
-                record_price(ids[r["url"]], r["price"], currency=r.get("currency") or "USD",
-                             available=r.get("available"), at=now, conn=conn)
+            if r["url"] in ids:
+                ok = r.get("price") is not None
+                record_price(ids[r["url"]], r["price"] if ok else None, currency=r.get("currency") or "USD",
+                             available=r.get("available") if ok else None, at=now, conn=conn)
                 n += 1
     return n
 
@@ -441,11 +446,19 @@ def resolve_identity(set_code: str, name: str | None, *,
 
 
 def earmark_remove_link(store_url: str, *, conn=None) -> dict:
-    """Remove one storefront link. The product row survives (other links may
-    reference it). Returns ``{"removed": bool}``."""
+    """Remove one storefront link. When it was the product's last link the
+    product goes too (its target and price history cascade) — a product with no
+    links is invisible yet still blocks re-watching it fresh. Returns
+    ``{"removed": bool, "product_removed": bool}``."""
     with db.transaction(conn) as conn:
-        cur = conn.execute("DELETE FROM earmark_links WHERE store_url = ?", (store_url,))
-        return {"removed": cur.rowcount > 0}
+        row = conn.execute("SELECT product_id FROM earmark_links WHERE store_url = ?", (store_url,)).fetchone()
+        if row is None:
+            return {"removed": False, "product_removed": False}
+        conn.execute("DELETE FROM earmark_links WHERE store_url = ?", (store_url,))
+        orphan = conn.execute("SELECT 1 FROM earmark_links WHERE product_id = ?", (row["product_id"],)).fetchone() is None
+        if orphan:
+            conn.execute("DELETE FROM earmarked_products WHERE product_id = ?", (row["product_id"],))
+        return {"removed": True, "product_removed": orphan}
 
 
 def earmark_remove_product(set_code: str, product_name: str, *, conn=None) -> dict:

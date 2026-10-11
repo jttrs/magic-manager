@@ -58,7 +58,7 @@ export function DealInspector({ product: p, cost, costState }: { product: DealPr
         )}
       </section>
 
-      {sealed && (
+      {p.kind === 'sealed' && (
         <section aria-label="Contents" className="flex flex-col gap-1">
           <h3 className={H3}>Contents</h3>
           <ProductContents set={p.set_code} name={p.name} />

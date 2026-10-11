@@ -122,6 +122,7 @@ READ_PRICES = register(JobSpec(
     description="Read price and stock for store product pages, identify each product, and compare it to market.",
     input_model=ReadPricesInput,
     run=_run_read_prices,
+    mutates=True,
 ))
 
 
@@ -182,6 +183,7 @@ class WatchStoreOut(BaseModel):
     read_at: str
     read: bool = Field(description="False when the latest price is still the earmark's saved asking price.")
     read_in_browser: bool = Field(False, description="An open-tab store page: read from a browser tab (the companion's, or Chrome on this Mac).")
+    read_failed: bool = Field(False, description="The latest read of this link failed; the price shown is the last good one.")
     first_price: float | None
     first_at: str
     change: float | None = Field(description="Latest minus first price seen here.")
@@ -291,4 +293,5 @@ WATCHLIST = register(JobSpec(
     description="Read every watched link's current price (history grows) and list what you watch.",
     input_model=WatchlistInput,
     run=_run_watchlist,
+    mutates=True,
 ))

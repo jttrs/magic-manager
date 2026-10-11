@@ -5154,12 +5154,12 @@ def earmark_list_cmd(
 def earmark_rm_link_cmd(
     url: str = typer.Argument(..., help="Storefront URL to remove."),
 ):
-    """Remove one storefront link (the product row + other links survive)."""
+    """Remove one storefront link (the product goes too when it was its last link)."""
     result = earmarks_mod.earmark_remove_link(url)
     if not result["removed"]:
         typer.echo(f"(no earmark link for {url})", err=True)
         raise typer.Exit(2)
-    typer.echo(f"removed link: {url}")
+    typer.echo(f"removed link: {url}" + (" (last link — product no longer watched)" if result["product_removed"] else ""))
 
 
 @earmark_app.command("rm-product")

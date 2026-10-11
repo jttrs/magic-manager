@@ -120,6 +120,48 @@ def test_a_failed_read_cannot_meet_a_target(watched, monkeypatch):
     assert deals.read_watched()["rows"][0]["target_met"] is True       # confirmed by a read: met again
 
 
+def test_failed_reads_are_recorded_and_the_watchlist_keeps_the_last_good_price(watched):
+    earmarks.set_target(watched["pid"], "price", 76)
+    earmarks.record_reads([
+        {"url": watched["a"], "price": None, "error": "Blocked"},
+        {"url": watched["b"], "price": None, "error": "Skipped", "not_counted": True}])   # not counted: not a failure
+    hist = earmarks.price_history([l.link_id for l in earmarks.earmark_list()[0].links])
+    by_url = {l.store_url: hist[l.link_id] for l in earmarks.earmark_list()[0].links}
+    assert [(h["price"], h["available"], h["source"]) for h in by_url[watched["a"]]] == [(75.0, None, "snapshot"), (None, None, "read")]
+    assert len(by_url[watched["b"]]) == 1
+    [w] = deals.watchlist(values=False)
+    a = next(s for s in w["stores"] if s["url"] == watched["a"])
+    b = next(s for s in w["stores"] if s["url"] == watched["b"])
+    assert (a["price"], a["read_failed"], a["low"], a["high"], a["first_price"], a["change"]) == (75.0, True, 75.0, 75.0, 75.0, 0.0)
+    assert b["read_failed"] is False
+    assert w["target_met"] is False                       # a's old $75 can't meet the $76 target
+    earmarks.record_reads([{"url": watched["a"], "price": 75.0, "available": True}])
+    [w] = deals.watchlist(values=False)
+    assert w["target_met"] is True and not any(s["read_failed"] for s in w["stores"])
+
+
+def test_a_not_counted_page_is_not_a_failed_read(watched, monkeypatch):
+    from magic_manager import storefetch, storepage
+    def boom(url, **kw):
+        raise storepage.NotCounted("Marketplace seller")
+    monkeypatch.setattr(storefetch, "read", boom)
+    rows = deals.read_prices([watched["a"]])
+    assert rows[0]["not_counted"] is True and earmarks.record_reads(rows) == 0
+
+
+def test_watchlist_values_false_best_and_latest_per_store(watched):
+    earmarks.record_reads([{"url": watched["a"], "price": 82.0, "available": True},
+                           {"url": watched["b"], "price": 70.0, "available": True},
+                           {"url": watched["b"], "price": 72.0, "available": True},
+                           {"url": watched["a"], "price": 60.0, "available": False}])
+    [w] = deals.watchlist(values=False)
+    by = {s["url"]: s for s in w["stores"]}
+    assert (by[watched["a"]]["price"], by[watched["a"]]["available"]) == (60.0, False)   # latest, though sold out
+    assert (by[watched["b"]]["price"], by[watched["b"]]["low"]) == (72.0, 70.0)
+    assert (w["best_price"], w["best_url"]) == (72.0, watched["b"])                      # best IN-STOCK
+    assert w["market"] is None and w["delta"] is None                                    # no valuation
+
+
 def test_a_stale_price_cannot_meet_a_target(watched):
     """a's $75 is under the $76 target but was last seen 8 days ago — too old to call it met."""
     earmarks.set_target(watched["pid"], "price", 76)
