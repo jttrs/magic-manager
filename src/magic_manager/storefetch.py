@@ -1,7 +1,7 @@
 """Fetch a store product page for its recipe — politely, or from your open tab.
 
-* Server modes (``shopify`` / ``meta``): one GET per page with an honest
-  User-Agent, at most one request per host per ``PACE_SECONDS``, a short disk
+* Server modes (``shopify`` / ``meta``): one GET per page with a browser-like
+  User-Agent (``magic-manager`` suffix), at most one request per host per ``PACE_SECONDS``, a short disk
   cache (prices move; 30 min), and bot-wall detection (:class:`storepage.Blocked`).
 * ``rendered``: the page already open in your Chrome tab is read in place via
   AppleScript ``execute javascript`` (its head tags, JSON-LD and visible text).
@@ -30,6 +30,7 @@ from . import storepage, vendors
 
 PACE_SECONDS = 1.0
 CACHE_SECONDS = 30 * 60
+OSASCRIPT_TIMEOUT = 30
 USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36 magic-manager/0.1"
 
 _last_hit: dict[str, float] = {}
@@ -38,6 +39,10 @@ _pace_lock = threading.Lock()
 
 class JsEventsOff(RuntimeError):
     """Chrome refuses JavaScript from Apple Events (off by default)."""
+
+
+class TabUnreadable(RuntimeError):
+    """Chrome didn't answer (timed out, or the read failed)."""
 
 
 class TabGone(RuntimeError):
@@ -69,7 +74,7 @@ def _get(url: str, *, fresh: bool = False, client: httpx.Client | None = None) -
                                   timeout=20, follow_redirects=True)
     except httpx.TimeoutException as e:
         raise storepage.Blocked("the store didn’t answer (timed out) — it may block automated reads") from e
-    if r.status_code < 500:
+    if r.status_code in (200, 404):
         key.write_text(f"{r.status_code}\n{r.text}")
     return r.status_code, r.text
 
@@ -108,13 +113,18 @@ end tell
 
 
 def _osascript(script: str) -> str:
-    res = subprocess.run(["osascript", "-e", script], text=True, capture_output=True, check=False)
+    try:
+        res = subprocess.run(["osascript", "-e", script], text=True, capture_output=True, check=False,
+                             timeout=OSASCRIPT_TIMEOUT)
+    except subprocess.TimeoutExpired as e:
+        raise TabUnreadable(f"Chrome didn’t answer in {OSASCRIPT_TIMEOUT} s — close any open Chrome dialog "
+                            "and read again") from e
     if res.returncode != 0:
         err = res.stderr.strip()
         if "turned off" in err.lower() or "allow javascript from apple events" in err.lower():
             raise JsEventsOff("Chrome blocks reading open tabs. Turn on Chrome → View → Developer → "
                               "Allow JavaScript from Apple Events (once), then read again.")
-        raise RuntimeError(f"Couldn’t read the tab: {err or 'osascript failed'}")
+        raise TabUnreadable(f"Couldn’t read the tab: {err or 'osascript failed'}")
     return res.stdout.strip()
 
 
@@ -149,7 +159,7 @@ def read(url: str, *, fresh: bool = False, client: httpx.Client | None = None,
     Raises :class:`LookupError` for an uncatalogued store,
     :class:`storepage.NotCounted` when the recipe doesn't count the page's main
     offer (marketplace seller, used, no offer), :class:`storepage.Blocked`,
-    :class:`JsEventsOff`, :class:`TabGone`."""
+    :class:`JsEventsOff`, :class:`TabGone`, :class:`TabUnreadable`."""
     v, listing = _read(url, fresh=fresh, client=client, tab_runner=tab_runner, rendered=rendered)
     if listing.skipped:
         raise storepage.NotCounted(listing.skipped)

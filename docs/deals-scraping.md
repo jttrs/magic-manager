@@ -168,4 +168,5 @@ ChannelFireball / Barnes & Noble (no current sealed found).
   `rendered` ones in a real Chrome (samples in `config/scraper_canaries.toml`) — and flags a store
   that stops reading as *temporarily down* in Deals (a rust `DOWN` mark). Your own reads in Deals
   flag and clear it too.
-- Fetching is polite: cached, rate-limited per host, honest User-Agent, robots-respecting.
+- Fetching is polite: cached (30 min; only 200/404 are cached), rate-limited to 1 request/s per host, a browser-like
+  User-Agent with a `magic-manager` suffix. It does **not** check robots.txt.

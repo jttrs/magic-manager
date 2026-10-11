@@ -22,6 +22,7 @@ from __future__ import annotations
 import html as htmllib
 import json
 import re
+from collections import deque
 from dataclasses import dataclass
 
 _BLOCK_TITLES = ("just a moment", "robot or human", "attention required", "access denied", "are you a robot", "pardon our interruption")
@@ -75,15 +76,27 @@ def check_blocked(page: str, status: int = 200) -> None:
     t = (title_of(page) or "").lower()
     if status in (401, 403, 429) or any(b in t for b in _BLOCK_TITLES):
         raise Blocked(f"the store blocked the request ({status}{', ' + t if t else ''})")
+    if status not in (200, 404):
+        raise Blocked(f"the store’s site is unavailable right now (HTTP {status})")
+
+
+# An attribute value in either quote style; the other quote may appear inside
+# ("Collector's"), but it never runs past its own closing quote into another tag.
+_QUOTED = r'(?:"([^"]*)"|\'([^\']*)\')'
+_QUOTED_NONEMPTY = r'(?:"([^"]+)"|\'([^\']+)\')'
+
+
+def _quoted(m: re.Match) -> str:
+    return m.group(1) if m.group(1) is not None else m.group(2)
 
 
 def _meta(page: str, *names: str) -> str | None:
     for name in names:
-        for pat in (rf'<meta[^>]+(?:property|name|itemprop)=["\']{re.escape(name)}["\'][^>]*content=["\']([^"\']*)["\']',
-                    rf'<meta[^>]+content=["\']([^"\']*)["\'][^>]*(?:property|name|itemprop)=["\']{re.escape(name)}["\']'):
+        for pat in (rf'<meta[^>]+(?:property|name|itemprop)=["\']{re.escape(name)}["\'][^>]*content={_QUOTED}',
+                    rf'<meta[^>]+content={_QUOTED}[^>]*(?:property|name|itemprop)=["\']{re.escape(name)}["\']'):
             m = re.search(pat, page, re.I)
             if m:
-                return htmllib.unescape(m.group(1)).strip()
+                return htmllib.unescape(_quoted(m)).strip()
     return None
 
 
@@ -115,9 +128,9 @@ def _jsonld_offers(page: str):
             data = json.loads(block.strip())
         except ValueError:
             continue
-        stack = [data]
+        stack = deque([data])
         while stack:
-            node = stack.pop()
+            node = stack.popleft()
             if isinstance(node, list):
                 stack.extend(node)
                 continue
@@ -150,24 +163,14 @@ def read_meta(page: str) -> Listing:
     for p, cur, av, name, seller, cond in _jsonld_offers(page):
         if p is not None:
             return Listing(p, cur, _avail(av), name or title, "json-ld", seller=seller, condition=cond)
-    m = re.search(r'itemprop=["\']price["\'][^>]*content=["\']([^"\']+)["\']', page, re.I) or \
-        re.search(r'content=["\']([^"\']+)["\'][^>]*itemprop=["\']price["\']', page, re.I)
+    m = re.search(rf'itemprop=["\']price["\'][^>]*content={_QUOTED_NONEMPTY}', page, re.I) or \
+        re.search(rf'content={_QUOTED_NONEMPTY}[^>]*itemprop=["\']price["\']', page, re.I)
     if m:
         av = re.search(r'itemprop=["\']availability["\'][^>]*(?:href|content)=["\']([^"\']+)["\']', page, re.I)
-        cur = re.search(r'itemprop=["\']priceCurrency["\'][^>]*content=["\']([^"\']+)["\']', page, re.I)
-        return Listing(_num(m.group(1)), cur.group(1) if cur else None, _avail(av.group(1)) if av else None, title, "microdata")
+        cur = re.search(rf'itemprop=["\']priceCurrency["\'][^>]*content={_QUOTED_NONEMPTY}', page, re.I)
+        return Listing(_num(_quoted(m)), _quoted(cur) if cur else None,
+                       _avail(av.group(1)) if av else None, title, "microdata")
     return Listing(None, title=title)
-
-
-def read_text(page: str, pattern: str, *, stock_pattern: str | None = None, sold_out_pattern: str | None = None) -> Listing:
-    """A recipe's own regex (first group = the price) — for stores without tags."""
-    m = re.search(pattern, page, re.S | re.I)
-    available = None
-    if sold_out_pattern and re.search(sold_out_pattern, page, re.I):
-        available = False
-    elif stock_pattern and re.search(stock_pattern, page, re.I):
-        available = True
-    return Listing(_num(m.group(1)) if m else None, "USD" if m else None, available, _meta(page, "og:title") or title_of(page), "text")
 
 
 def _variant_for(variants: list[dict], want: str) -> dict | None:
