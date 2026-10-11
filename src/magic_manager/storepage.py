@@ -80,13 +80,23 @@ def check_blocked(page: str, status: int = 200) -> None:
         raise Blocked(f"the store’s site is unavailable right now (HTTP {status})")
 
 
+# An attribute value in either quote style; the other quote may appear inside
+# ("Collector's"), but it never runs past its own closing quote into another tag.
+_QUOTED = r'(?:"([^"]*)"|\'([^\']*)\')'
+_QUOTED_NONEMPTY = r'(?:"([^"]+)"|\'([^\']+)\')'
+
+
+def _quoted(m: re.Match) -> str:
+    return m.group(1) if m.group(1) is not None else m.group(2)
+
+
 def _meta(page: str, *names: str) -> str | None:
     for name in names:
-        for pat in (rf'<meta[^>]+(?:property|name|itemprop)=["\']{re.escape(name)}["\'][^>]*content=(["\'])(.*?)\1',
-                    rf'<meta[^>]+content=(["\'])(.*?)\1[^>]*(?:property|name|itemprop)=["\']{re.escape(name)}["\']'):
+        for pat in (rf'<meta[^>]+(?:property|name|itemprop)=["\']{re.escape(name)}["\'][^>]*content={_QUOTED}',
+                    rf'<meta[^>]+content={_QUOTED}[^>]*(?:property|name|itemprop)=["\']{re.escape(name)}["\']'):
             m = re.search(pat, page, re.I)
             if m:
-                return htmllib.unescape(m.group(2)).strip()
+                return htmllib.unescape(_quoted(m)).strip()
     return None
 
 
@@ -153,12 +163,13 @@ def read_meta(page: str) -> Listing:
     for p, cur, av, name, seller, cond in _jsonld_offers(page):
         if p is not None:
             return Listing(p, cur, _avail(av), name or title, "json-ld", seller=seller, condition=cond)
-    m = re.search(r'itemprop=["\']price["\'][^>]*content=(["\'])(.+?)\1', page, re.I) or \
-        re.search(r'content=(["\'])(.+?)\1[^>]*itemprop=["\']price["\']', page, re.I)
+    m = re.search(rf'itemprop=["\']price["\'][^>]*content={_QUOTED_NONEMPTY}', page, re.I) or \
+        re.search(rf'content={_QUOTED_NONEMPTY}[^>]*itemprop=["\']price["\']', page, re.I)
     if m:
         av = re.search(r'itemprop=["\']availability["\'][^>]*(?:href|content)=["\']([^"\']+)["\']', page, re.I)
-        cur = re.search(r'itemprop=["\']priceCurrency["\'][^>]*content=(["\'])(.+?)\1', page, re.I)
-        return Listing(_num(m.group(2)), cur.group(2) if cur else None, _avail(av.group(1)) if av else None, title, "microdata")
+        cur = re.search(rf'itemprop=["\']priceCurrency["\'][^>]*content={_QUOTED_NONEMPTY}', page, re.I)
+        return Listing(_num(_quoted(m)), _quoted(cur) if cur else None,
+                       _avail(av.group(1)) if av else None, title, "microdata")
     return Listing(None, title=title)
 
 

@@ -371,3 +371,24 @@ def test_meta_content_may_contain_apostrophes():
     assert storepage.read_meta(page).title == "Tarkir Collector's Booster Box"
     page = '<meta content="Collector\'s Box" property="og:title">'
     assert storepage._meta(page, "og:title") == "Collector's Box"
+
+
+def test_content_values_never_run_across_tags():
+    viewport = '<meta name="viewport" content="width=device-width, initial-scale=1">'
+    page = f'{viewport}<title>X</title><div class="a" itemprop="price">$49.99</div>'
+    assert storepage.read_meta(page).price is None
+    page = f'{viewport}<meta content="Real Box" property="og:title">'
+    assert storepage._meta(page, "og:title") == "Real Box"
+    page = f'{viewport}<span content=\'Collector"s\' itemprop="price">x</span><span itemprop="price" content="12.50">'
+    assert storepage.read_meta(page).price == 12.50
+
+
+@pytest.mark.parametrize("key,text", [
+    ("bestbuy", "Box\n$159.99\nSold Out\nPickup not available"),
+    ("bestbuy", "Box\n$159.99\ncoming soon"),
+    ("target", "Box\n$59.99\nOut of stock at your store\nShip it"),
+    ("target", "Box\n$59.99\nSold out"),
+])
+def test_buy_box_sold_out_patterns_still_catch_sold_out(key, text):
+    listing = vendors.read_listing(vendors.by_key(key), "<html><head><title>x</title></head></html>", text=text)
+    assert listing.available is False
