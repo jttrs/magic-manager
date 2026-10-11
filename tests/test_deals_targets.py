@@ -120,6 +120,19 @@ def test_a_failed_read_cannot_meet_a_target(watched, monkeypatch):
     assert deals.read_watched()["rows"][0]["target_met"] is True       # confirmed by a read: met again
 
 
+def test_a_stale_price_cannot_meet_a_target(watched):
+    """a's $75 is under the $76 target but was last seen 8 days ago — too old to call it met."""
+    earmarks.set_target(watched["pid"], "price", 76)
+    assert deals.watchlist(values=False)[0]["target_met"] is True
+    with db.connect() as conn:
+        conn.execute("UPDATE earmark_prices SET read_at = datetime('now', '-8 days') "
+                     "WHERE link_id = (SELECT link_id FROM earmark_links WHERE store_url = ?)", (watched["a"],))
+    [w] = deals.watchlist(values=False)
+    assert w["target_met"] is False and w["best_price"] == 75.0        # still shown, just not trusted
+    earmarks.record_reads([{"url": watched["a"], "price": 75.0, "available": True}])
+    assert deals.watchlist(values=False)[0]["target_met"] is True     # a fresh read confirms it
+
+
 def test_no_target_no_notice(watched, monkeypatch):
     _stub_reads(monkeypatch, {watched["a"]: (1.0, True), watched["b"]: (1.0, True)})
     assert deals.read_watched()["newly_met"] == []

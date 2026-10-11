@@ -63,7 +63,7 @@ an empty duplicate of #118.
 
 - **#115**
   - `deals._with_target_prices` catches every exception, so a code bug looks like a missing market price. No longer applies: #126 split expected misses from bugs, which are logged as `BUG:`.
-  - `target_met` can rest on an old snapshot when later reads keep failing. Fixed: a store whose latest read failed can't meet a target (`deals._target_met` in the refresh; web `targetMet` skips offers with a read error).
+  - `target_met` can rest on an old snapshot when later reads keep failing. Fixed: a store whose latest read failed can't meet a target (`deals._target_met` in the refresh; web `targetMet` skips offers with a read error). Follow-up: a price older than 7 days (`earmarks.TARGET_FRESH_DAYS`) can't meet a target either, so a weeks-old saved price no longer shows as met between refreshes.
   - The NEW/DIVERGED classification in `rehearse_migration` has no test. No longer applies: #126 added `tests/test_rehearse_status.py`.
   - Pre-existing: `earmark_prices` isn't in `_EARMARK_TABLES` or `OWNERSHIP`. Fixed: protected by the rehearsal from V32 on (it is created already seeded) and fingerprinted by `post_merge_upgrade`.
 - **#118**

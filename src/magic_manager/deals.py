@@ -11,6 +11,7 @@ import logging
 import re
 import time
 from collections import defaultdict
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlsplit
 
 from . import db, earmarks, listing_match, market, mtgjson, scryfall, sld, storefetch, storepage, tabs as tabs_mod, vendors
@@ -343,14 +344,26 @@ def watchlist(*, progress=None, values: bool = True) -> list[dict]:
     return sorted(out, key=lambda r: (r["pct"] is None, r["pct"] if r["pct"] is not None else 0))
 
 
-def _target_met(stores: list[dict], threshold: float | None, failed: frozenset[str] = frozenset()) -> bool | None:
-    """Met: the best in-stock price is at or under ``threshold``. A store whose
-    latest read FAILED (``failed`` URLs) can't meet it — its last price is an
-    old one we couldn't confirm."""
+def _fresh(read_at: str | None, now: datetime) -> bool:
+    try:
+        at = datetime.fromisoformat(read_at or "")
+    except ValueError:
+        return False
+    if at.tzinfo is None:
+        at = at.replace(tzinfo=timezone.utc)
+    return now - at <= timedelta(days=earmarks.TARGET_FRESH_DAYS)
+
+
+def _target_met(stores: list[dict], threshold: float | None, failed: frozenset[str] = frozenset(),
+                *, now: datetime | None = None) -> bool | None:
+    """Met: the best in-stock price is at or under ``threshold``. Only a price we
+    can trust counts: not from a store whose latest read FAILED (``failed``
+    URLs), and read or saved within ``earmarks.TARGET_FRESH_DAYS``."""
     if threshold is None:
         return None
+    now = now or datetime.now(timezone.utc)
     in_stock = min((s["price"] for s in stores if s["price"] is not None and s["available"] is not False
-                    and s["url"] not in failed), default=None)
+                    and s["url"] not in failed and _fresh(s.get("read_at"), now)), default=None)
     return in_stock is not None and in_stock <= threshold
 
 
@@ -395,7 +408,9 @@ def read_watched(*, progress=None) -> dict:
             continue
         prev = before.get(r["product_id"])
         if prev is None or prev["target_met"] is not True:
-            live = [s for s in r["stores"] if s["price"] is not None and s["available"] is not False and s["url"] not in failed]
+            now = datetime.now(timezone.utc)
+            live = [s for s in r["stores"] if s["price"] is not None and s["available"] is not False
+                    and s["url"] not in failed and _fresh(s.get("read_at"), now)]
             best = min(live, key=lambda s: s["price"])
             newly.append({"product_id": r["product_id"], "name": r["name"], "kind": r["kind"], "set_code": r["set_code"],
                           "finish": r.get("finish"), "scryfall_id": r.get("scryfall_id"),
