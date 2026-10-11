@@ -17,7 +17,8 @@ describe('explore (card role)', () => {
   });
 
   it('leaves the role unresolved until eligibility is known', () => {
-    expect(resolveRole(undefined, undefined)).toBeNull();
+    expect(resolveRole(undefined, undefined, true)).toBeNull();
+    expect(resolveRole(undefined, undefined)).toBe('card');           // no card, or the read failed
     expect(resolveRole(undefined, true)).toBe('commander');
     expect(resolveRole(undefined, false)).toBe('card');
     expect(resolveRole('card', undefined)).toBe('card');

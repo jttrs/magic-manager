@@ -15,9 +15,9 @@ net-zero, so balances stay exact). Each event classifies into a *source*:
 * **unknown** — the generic best-effort buckets (``backfill:precon``,
   ``unattributed-backfill``, ``migration-backfill``).
 
-A later removal is its own (negative) event; ``card_sources`` nets it against
-the newest acquisition first (the same rule purchase history uses), so the
-sources of a printing sum to what is owned today.
+A later removal is its own (negative) event; ``card_sources`` nets it with the
+same in-order ledger walk purchase history uses (``_held``), so the sources of
+a printing sum to what is owned today.
 """
 from __future__ import annotations
 
@@ -125,9 +125,9 @@ def _products(conn) -> dict[str, tuple[str, str]]:
 
 def card_sources(scryfall_ids, *, conn=None) -> dict[str, list[CardSource]]:
     """Batched: per printing, the copies each source still accounts for, per finish
-    (largest first). Removals are netted newest-first like purchase history
-    (``_held``), so per finish the copies sum to what is owned today and a source
-    whose copies are all gone drops out."""
+    (largest first). Removals are netted by ``_held`` like purchase history, so
+    per finish the copies sum to what is owned today and a source whose copies
+    are all gone drops out."""
     ids = list(dict.fromkeys(scryfall_ids))
 
     def _q(c) -> dict[str, list[CardSource]]:

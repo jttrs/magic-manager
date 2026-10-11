@@ -195,3 +195,12 @@ test('the role control waits for eligibility instead of flipping card → comman
   release();
   await expect(page.getByRole('radio', { name: 'As commander' })).toHaveAttribute('aria-checked', 'true');
 });
+
+test('with no card, or after the card read fails, the role control still shows (review #1)', async ({ page }) => {
+  await page.goto('/explore?mode=card');
+  await expect(page.getByRole('radio', { name: 'As a card' })).toHaveAttribute('aria-checked', 'true');
+  await page.route('**/api/explore/card?**', (r) => r.fulfill({ status: 500, json: { detail: 'boom', code: 'boom' } }));
+  await page.goto('/explore?a=Tifa%20Lockhart');
+  await expect(page.getByRole('alert')).toBeVisible();
+  await expect(page.getByRole('radio', { name: 'As a card' })).toBeVisible();
+});

@@ -11,12 +11,13 @@ type Section = GuideGroup & { level: 1 | 2; noun?: string };
 export const defaultRole = (eligible: boolean | undefined): Role => (eligible ? 'commander' : 'card');
 
 /** The role in effect: the chosen one (commander falls back to card when the
- *  card can't lead), else the default once eligibility is known — `null` while
- *  it isn't, so the view doesn't show card-role controls that then flip. */
-export function resolveRole(chosen: Role | undefined, canLead: boolean | undefined): Role | null {
+ *  card can't lead), else the default for its eligibility — `null` only while
+ *  that eligibility is still `loading`, so the view doesn't show card-role
+ *  controls that then flip. No card, or a failed read, defaults to card. */
+export function resolveRole(chosen: Role | undefined, canLead: boolean | undefined, loading = false): Role | null {
   if (chosen === 'commander' && canLead === false) return 'card';
   if (chosen) return chosen;
-  return canLead === undefined ? null : defaultRole(canLead);
+  return canLead === undefined && loading ? null : defaultRole(canLead);
 }
 
 /** The shared `tags` URL filter means EDHREC list slugs in the commander role and

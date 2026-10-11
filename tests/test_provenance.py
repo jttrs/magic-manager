@@ -81,6 +81,17 @@ def test_sources_net_removals_newest_first(seed_cards, make_card):
     assert got == {("product:Goblins_FDN", "nonfoil"): 1}   # newest acquisition drawn first; sums to owned
 
 
+def test_a_removal_only_draws_on_copies_acquired_before_it(seed_cards, make_card):
+    _seed(seed_cards, make_card)
+    inventory.inventory_add(A, "nonfoil", 1, ingest_id=_event("precon", "precon:Goblins_FDN", "Goblins_FDN"))
+    inventory.inventory_remove(A, "nonfoil", 1)          # the precon copy leaves…
+    inventory.inventory_add(A, "nonfoil", 1)             # …and a single is bought later
+    got = {(cs.source.key, cs.finish): cs.copies for cs in provenance.card_sources([A])[A]}
+    assert got == {("singles", "nonfoil"): 1}
+    held = {e.title: e.held for e in provenance.history().entries if e.held}
+    assert held == {"Added by hand": 1}                  # purchase history agrees
+
+
 def test_holdings_per_finish_pledges_and_other_printings(seed_cards, make_card):
     _seed(seed_cards, make_card)
     inventory.inventory_add(A, "nonfoil", 3)

@@ -55,7 +55,7 @@ export function ExploreView() {
   const prof = cards.data;
   const hint = !search.b && picked && picked.name === search.a ? picked.commander_eligible : undefined;
   const canLead = prof ? prof.a.commander_eligible && (!prof.b || prof.b.commander_eligible) : hint;
-  const role = resolveRole(search.role, canLead);
+  const role = resolveRole(search.role, canLead, Boolean(search.a) && mode === 'card' && cards.isPending);
   const cmd = useQuery({ ...compareQuery(search.a, search.b), enabled: Boolean(search.a) && mode === 'card' && role === 'commander' && canLead !== false });
 
   const names = {
