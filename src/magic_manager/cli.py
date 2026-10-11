@@ -4526,7 +4526,9 @@ def db_undo_cmd(
         raise typer.Exit(0)
     ch = info["changes"]
     typer.echo(f"restore point: {info['taken_at']} ({info['reason']})")
-    typer.echo("restoring would change: " + ", ".join(f"{k} {v:+d}" for k, v in ch.items() if v) or "nothing")
+    typer.echo("restoring would change: " + (", ".join(f"{k} {v:+d}" for k, v in ch.items() if v) or "nothing"))
+    if info["details"]:
+        typer.echo("rows that differ: " + ", ".join(f"{d['label']} {d['rows']}" for d in info["details"]))
     if restore:
         if not yes:
             typer.confirm("Swap your data with this restore point?", abort=True)

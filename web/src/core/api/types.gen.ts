@@ -6087,6 +6087,24 @@ export type UncataloguedOut = {
 };
 
 /**
+ * UndoDetail
+ */
+export type UndoDetail = {
+    /**
+     * Label
+     *
+     * Plain-words group of your data, e.g. 'deck lists'.
+     */
+    label: string;
+    /**
+     * Rows
+     *
+     * Rows added, removed or edited since the restore point.
+     */
+    rows: number;
+};
+
+/**
  * UndoOut
  */
 export type UndoOut = {
@@ -6112,6 +6130,12 @@ export type UndoOut = {
      * Snapshot minus current: what restoring would change.
      */
     changes: UndoSummary;
+    /**
+     * Details
+     *
+     * Every group of your data a restore would roll back, with how many rows differ.
+     */
+    details?: Array<UndoDetail>;
 };
 
 /**

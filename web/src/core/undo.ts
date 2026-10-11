@@ -1,5 +1,5 @@
 // The one restore point: plain-language description of what restoring changes.
-import type { UndoSummary } from './api';
+import type { UndoDetail, UndoSummary } from './api';
 
 const fmt = new Intl.NumberFormat('en-US');
 
@@ -19,6 +19,14 @@ export function changeLines(changes: UndoSummary): string[] {
     if (!n) return [];
     const abs = Math.abs(n);
     return [`${fmt.format(abs)} ${n > 0 ? 'more' : 'fewer'} ${abs === 1 ? one : many}`];
+  });
+}
+
+/** "Deck lists · 4 changes" — every other part of your data a restore rolls back. */
+export function detailLines(details: readonly UndoDetail[] | undefined): string[] {
+  return (details ?? []).filter((d) => d.rows > 0).map((d) => {
+    const label = d.label.charAt(0).toUpperCase() + d.label.slice(1);
+    return `${label} · ${fmt.format(d.rows)} ${d.rows === 1 ? 'change' : 'changes'}`;
   });
 }
 

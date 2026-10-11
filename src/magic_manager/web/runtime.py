@@ -20,6 +20,8 @@ import threading
 import time
 import traceback
 import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager, nullcontext
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal
@@ -32,6 +34,21 @@ from ..analytics import consent as analytics_consent
 from ..api import jobs as jobs_api
 
 log = logging.getLogger("magic_manager.web")
+
+
+def _mutates(name: str) -> bool:
+    try:
+        return bool(getattr(jobs_api.get(name), "mutates", False))
+    except KeyError:
+        return False
+
+
+class JobsBusy(RuntimeError):
+    """A mutating job is queued or running."""
+
+    def __init__(self, title: str) -> None:
+        super().__init__(title)
+        self.title = title
 
 Status = Literal["queued", "running", "succeeded", "failed"]
 TERMINAL: frozenset[str] = frozenset({"succeeded", "failed"})
@@ -80,6 +97,9 @@ class JobManager:
         self._jobs: dict[str, JobRecord] = {}
         self._subs: dict[str, list[asyncio.Queue]] = {}
         self._run_lock = threading.Lock()     # SQLite: one writer at a time
+        # Held while a mutating job runs and while Undo restores: a job must
+        # never write on top of (or underneath) a restore.
+        self._user_data_lock = threading.Lock()
         self._events_lock = threading.Lock()  # orders event seqs across threads
         self._max_history = max_history
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -112,6 +132,26 @@ class JobManager:
         await asyncio.to_thread(analytics.record, "job.started", {"job": rec.name, "job_id": rec.id}, ctx=rec.ctx)
         return rec
 
+    @contextmanager
+    def no_mutating_jobs(self) -> Iterator[None]:
+        """Hold off mutating jobs for the body; :class:`JobsBusy` if one is
+        queued or running (so its writes can't land on top of the body's)."""
+        if not self._user_data_lock.acquire(blocking=False):
+            raise JobsBusy(self._busy_title() or "a job")
+        try:
+            title = self._busy_title()
+            if title:
+                raise JobsBusy(title)
+            yield
+        finally:
+            self._user_data_lock.release()
+
+    def _busy_title(self) -> str:
+        for r in list(self._jobs.values()):  # snapshot: the loop thread may add jobs
+            if r.status in ("queued", "running") and _mutates(r.name):
+                return r.title
+        return ""
+
     def get(self, job_id: str) -> JobRecord:
         return self._jobs[job_id]
 
@@ -140,7 +180,7 @@ class JobManager:
             self._emit(rec, "progress", rec.progress)
 
         def body() -> jobs_api.JobResult:
-            with self._run_lock:
+            with self._run_lock, (self._user_data_lock if getattr(spec, "mutates", False) else nullcontext()):
                 rec.status, rec.started_at = "running", _now()
                 self._emit(rec, "status", {"status": rec.status})
                 return spec.run(inputs, progress)

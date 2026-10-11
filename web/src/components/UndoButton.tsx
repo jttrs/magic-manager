@@ -3,7 +3,7 @@ import { Tooltip } from 'radix-ui';
 import { useState } from 'react';
 import { undoQuery, unwrap } from '../app/queries';
 import { undoRestore } from '../core/api';
-import { changeLines, whenLabel } from '../core/undo';
+import { changeLines, detailLines, whenLabel } from '../core/undo';
 import { ConfirmDialog } from './ConfirmDialog';
 
 /** The one restore point: a quiet header icon once one exists (taken before the
@@ -16,6 +16,7 @@ export function UndoButton() {
   if (!info?.taken_at) return null;
   const when = whenLabel(info.taken_at);
   const lines = changeLines(info.changes);
+  const details = detailLines(info.details);
   const label = `Restore point · ${when}`;
   return (
     <>
@@ -53,13 +54,21 @@ export function UndoButton() {
         }}
       >
         <div className="flex flex-col gap-3 text-md leading-relaxed">
-          <p>Taken {info.reason}. Restoring puts your cards, decks, wishlist and earmarks back as they were then.</p>
-          {lines.length ? (
+          <p>Taken {info.reason}. Restoring puts your cards, decks, wishlist, watchlist and the rest of your data back as they were then.</p>
+          {lines.length > 0 && (
             <ul aria-label="What changes" className="flex list-disc flex-col gap-0.5 pl-5">
               {lines.map((l) => <li key={l}>{l}</li>)}
             </ul>
-          ) : (
-            <p className="text-ink-muted">Your collection and decks look the same as then — only details (edits, provenance) would change.</p>
+          )}
+          {details.length > 0 ? (
+            <div className="flex flex-col gap-1">
+              <p className="text-sm text-ink-muted">{lines.length ? 'Also rolled back:' : 'Your counts look the same as then, but these are rolled back:'}</p>
+              <ul aria-label="Also rolled back" className="flex list-disc flex-col gap-0.5 pl-5 text-sm text-ink-muted">
+                {details.map((l) => <li key={l}>{l}</li>)}
+              </ul>
+            </div>
+          ) : !lines.length && (
+            <p className="text-ink-muted">Nothing has changed since then.</p>
           )}
           <p className="text-sm text-ink-muted">It swaps rather than discards: restore again to come back to now.</p>
         </div>

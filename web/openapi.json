@@ -14227,6 +14227,26 @@
         ],
         "title": "UncataloguedOut"
       },
+      "UndoDetail": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "Plain-words group of your data, e.g. 'deck lists'."
+          },
+          "rows": {
+            "type": "integer",
+            "title": "Rows",
+            "description": "Rows added, removed or edited since the restore point."
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "rows"
+        ],
+        "title": "UndoDetail"
+      },
       "UndoOut": {
         "properties": {
           "taken_at": {
@@ -14252,6 +14272,14 @@
           "changes": {
             "$ref": "#/components/schemas/UndoSummary",
             "description": "Snapshot minus current: what restoring would change."
+          },
+          "details": {
+            "items": {
+              "$ref": "#/components/schemas/UndoDetail"
+            },
+            "type": "array",
+            "title": "Details",
+            "description": "Every group of your data a restore would roll back, with how many rows differ."
           }
         },
         "type": "object",
