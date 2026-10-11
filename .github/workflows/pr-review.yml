@@ -1,0 +1,41 @@
+name: pr-review
+# CLAUDE.md rule 4: every PR carries a /ce-code-review + /findings-review stamp
+# that matches its current changes (scripts/pr_review.py). Docs-only PRs are exempt.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+permissions:
+  contents: read
+  pull-requests: write   # only to set/clear the `reviewed` label
+jobs:
+  review-stamp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Check the review stamp
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          BASE="${{ github.event.pull_request.base.ref }}"
+          git fetch -q origin "$BASE"
+          # Run the BASE branch's checker so a PR can't weaken the check that judges it
+          # (the head copy is used only while the base has none — the bootstrap PR).
+          if git show "origin/$BASE:scripts/pr_review.py" > "$RUNNER_TEMP/pr_review.py" 2>/dev/null; then
+            CHECKER="$RUNNER_TEMP/pr_review.py"
+          else
+            CHECKER=scripts/pr_review.py
+          fi
+          ok=0; python3 "$CHECKER" check --base "origin/$BASE" --head HEAD || ok=$?
+          # The `reviewed` label mirrors this result — set by CI only, never by hand.
+          if [ $ok = 0 ]; then
+            gh pr edit "$PR" --add-label reviewed || echo "::warning::could not add the reviewed label"
+          else
+            gh pr edit "$PR" --remove-label reviewed || true
+          fi
+          exit $ok
