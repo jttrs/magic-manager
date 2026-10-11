@@ -46,6 +46,19 @@ from magic_manager import decksource  # noqa: E402
 UA = "ClaudeCode-magic-manager-DeckImport/1.0 (personal collection tool; respects rate-limits)"
 
 
+class EmptyDeck(RuntimeError):
+    """The payload had the expected structure but no cards — a genuinely empty
+    deck, not a changed page shape (so it must not flag the importer down)."""
+
+
+def _cards_or_empty(cards: list[dict], empty: bool) -> list[dict]:
+    """``empty`` = the payload's own card containers are present and hold nothing;
+    entries that exist but don't parse stay "no cards parsed" (a changed shape)."""
+    if not cards and empty:
+        raise EmptyDeck("deck is empty")
+    return cards
+
+
 def _http_get(url: str, *, accept: str) -> str:
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": accept})
     with urllib.request.urlopen(req, timeout=30) as r:
@@ -56,8 +69,9 @@ def _http_get(url: str, *, accept: str) -> str:
 
 def fetch_archidekt(deck_id: str) -> tuple[list[dict], str | None, str | None]:
     url = f"https://archidekt.com/api/decks/{deck_id}/"
-    p = decksource.payload_from_archidekt(json.loads(_http_get(url, accept="application/json")), deck_id)
-    return p["cards"], p["name"], p["author"]
+    data = json.loads(_http_get(url, accept="application/json"))
+    p = decksource.payload_from_archidekt(data, deck_id)
+    return _cards_or_empty(p["cards"], data.get("cards") == []), p["name"], p["author"]
 
 
 # ---------- MTGGoldfish: per-deck text download ----------
@@ -87,7 +101,8 @@ def fetch_scryfall(deck_id: str) -> tuple[list[dict], str | None, str | None]:
     # wrapper (a bare GET would trip the scryfall guard hook), not _http_get.
     from magic_manager import scryfall
     deck = scryfall.deck_export(deck_id)
-    return decksource.parse_scryfall(deck), decksource.deck_name_scryfall(deck), None
+    cards = _cards_or_empty(decksource.parse_scryfall(deck), isinstance(deck.get("entries"), dict) and not any(deck["entries"].values()))
+    return cards, decksource.deck_name_scryfall(deck), None
 
 
 # ---------- Moxfield: Playwright authed context ----------
@@ -130,7 +145,7 @@ def fetch_moxfield(deck_id: str, *, fresh: bool) -> tuple[list[dict], str | None
             status, data = _read(ctx)
         if status and status < 400 and data is not None:
             print("moxfield: read as public deck (no login)", file=sys.stderr)
-            return decksource.parse_moxfield(data), data.get("name"), decksource.author_moxfield(data)
+            return _moxfield_cards(data), data.get("name"), decksource.author_moxfield(data)
         if status and status not in (401, 403):
             raise RuntimeError(f"Moxfield api2 returned HTTP {status}")
         why = "is private" if status in (401, 403) else "did not load (timeout)"
@@ -155,7 +170,14 @@ def fetch_moxfield(deck_id: str, *, fresh: bool) -> tuple[list[dict], str | None
             )
         if status >= 400 or data is None:
             raise RuntimeError(f"Moxfield api2 returned HTTP {status}")
-    return decksource.parse_moxfield(data), data.get("name"), decksource.author_moxfield(data)
+    return _moxfield_cards(data), data.get("name"), decksource.author_moxfield(data)
+
+
+def _moxfield_cards(data: dict) -> list[dict]:
+    boards = data.get("boards")
+    known = [b for k, b in boards.items() if str(k).lower() in decksource.MOXFIELD_BOARD_MAP] if isinstance(boards, dict) else []
+    empty = bool(known) and all(isinstance(b, dict) and b.get("cards") == {} for b in known)
+    return _cards_or_empty(decksource.parse_moxfield(data), empty)
 
 
 # ---------- --file passthrough (bookmarklet / manual JSON) ----------
@@ -197,7 +219,7 @@ def main() -> int:
         except (urllib.error.HTTPError, urllib.error.URLError) as e:
             print(f"import_deck: fetch failed: {e}", file=sys.stderr)
             return 1
-        except RuntimeError as e:
+        except RuntimeError as e:  # includes EmptyDeck → "import_deck: deck is empty"
             print(f"import_deck: {e}", file=sys.stderr)
             return 1
     else:

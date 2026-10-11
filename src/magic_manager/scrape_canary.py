@@ -289,11 +289,19 @@ def check_moxfield(ctx, sample: dict) -> list[Check]:
     server_key, reader_key = health.deck_key("moxfield"), "companion-deck/moxfield"
     page = ctx.new_page()
     try:
+        nav_error: Exception | None = None
         try:
             with page.expect_response(lambda r: "/decks/all/" in r.url and deck_id in r.url, timeout=45_000) as info:
-                page.goto(url, wait_until="domcontentloaded", timeout=45_000)
+                try:
+                    page.goto(url, wait_until="domcontentloaded", timeout=45_000)
+                except Exception as e:  # noqa: BLE001 — the page never loaded: offline, DNS, timeout
+                    nav_error = e
+                    raise
             resp = info.value
-        except Exception:  # noqa: BLE001 — no deck call: a bot wall or an SPA that changed
+        except Exception:  # noqa: BLE001 — no deck call
+            if nav_error is not None:  # couldn't reach the site: says nothing about the page
+                msg = f"{type(nav_error).__name__}: {nav_error}"[:300]
+                return [_unverified(k, "scrape.unreachable", msg, url=url) for k in (server_key, reader_key)]
             blocked = _bot_wall(page)
             code = "scrape.blocked" if blocked else "scrape.shape_changed"
             msg = None if blocked else "The deck page no longer asks for the deck data where we listen."
@@ -310,9 +318,15 @@ def check_moxfield(ctx, sample: dict) -> list[Check]:
             checks.append(validate_deck(server_key, decksource.payload_from_moxfield(data, deck_id), sample))
         except Exception as e:  # noqa: BLE001
             checks.append(_fail(server_key, "scrape.shape_changed", f"{type(e).__name__}: {e}"[:300], url=url))
-        page.add_script_tag(content=_reader("moxfield-api.js"))
-        page.add_script_tag(content=_reader("moxfield-deck.js"))
-        out = page.evaluate("id => readMoxfieldDeck(id)", deck_id)
+        try:
+            page.add_script_tag(content=_reader("moxfield-api.js"))
+            page.add_script_tag(content=_reader("moxfield-deck.js"))
+            out = page.evaluate("id => readMoxfieldDeck(id)", deck_id)
+            if not isinstance(out, dict):
+                raise TypeError(f"reader returned {type(out).__name__}, not an object")
+        except Exception as e:  # noqa: BLE001 — the reader itself broke on a page that loaded
+            checks.append(_fail(reader_key, "moxfield.changed", f"{type(e).__name__}: {e}"[:300], url=url))
+            return checks
         if not out.get("ok"):
             code = out.get("code") or "moxfield.changed"
             mk = _fail if code == "moxfield.changed" else _unverified
@@ -482,12 +496,15 @@ def _browser_pass(targets, *, headless: bool, progress: Progress | None) -> list
     try:
         browser = browser_launch.launch(pw, headless=headless)
         try:
-            for label, _, run_one in targets:
+            for label, target_keys, run_one in targets:
                 if progress:
                     progress(label + ("" if headless else " — window"))
                 ctx = browser.new_context(viewport={"width": 1280, "height": 900}, bypass_csp=True)
                 try:
                     out.extend(run_one(ctx))
+                except Exception as e:  # noqa: BLE001 — one target crashing must not sink the rest
+                    out += [_unverified(k, "scrape.unreachable", f"{type(e).__name__}: {e}"[:300])
+                            for k in target_keys]
                 finally:
                     ctx.close()
         finally:

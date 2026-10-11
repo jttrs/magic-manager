@@ -36,7 +36,7 @@ out of scope by the owner's choice (2026-10-10).
 |---|---|---|
 | `ok` | read the sample and it matched what was validated | clears a down flag |
 | `fail` | the page loaded but no longer reads as validated (`scrape.no_price`, `scrape.no_cards`, `scrape.shape_changed`, `scrape.expectation`, `scrape.error`, `cart.page_changed`, `moxfield.changed`) | flags **down** (since = first failure) |
-| `unverified` | the check couldn't run: blocked (`scrape.blocked`), offline (`scrape.unreachable`), sample removed (`scrape.sample_gone`), no browser | never flags, never clears |
+| `unverified` | the check couldn't run: blocked (`scrape.blocked`), offline (`scrape.unreachable`), sample removed (`scrape.sample_gone`), an empty deck (`scrape.empty_deck`), a wrapper's 429 backoff abort, no browser | never flags, never clears |
 
 Browser checks run headless first; anything that didn't read is retried once in a visible real
 Chrome window and that verdict stands (bot defenses serve headless browsers a stripped page —
@@ -48,7 +48,8 @@ those checks are then unverified, never down.
 a Deals read that finds no price flags the store; a read that works clears it; the companion
 reports `cart.page_changed` / `moxfield.changed` / `moxfield.collection_changed` / `archidekt.changed` / `orders.page_changed` + store (cart reports name their store; none = Mana Pool) (`POST /api/scrapers/report`); a server deck
 fetch that parses no cards flags that builder; any successful EDHREC sync clears its flag.
-Blocks, private decks and empty carts never flag.
+Blocks, private decks, empty decks and empty carts never flag. In the Moxfield canary a navigation
+error (offline, DNS, timeout) is `unverified`; only a page that loaded without firing the deck call is `fail`.
 
 ## Status file
 
