@@ -45,7 +45,7 @@ def test_apply_records_only_the_reviewed_products(monkeypatch):
     monkeypatch.setattr(trueup, "plan", fake)
     res = api._run_apply(api.ApplyInput(expect=["Box_HOB"]), lambda e: None)
     assert [c["only"] for c in calls] == [{"Box_HOB"}, {"Box_HOB"}]
-    assert calls[1]["apply"] is True
+    assert calls[1]["apply"] is True and calls[1]["require"] == {"Box_HOB"}
     assert res.summary == "Recorded 1 products · 6 cards now traced to them"
 
 
@@ -71,3 +71,18 @@ def test_apply_keeps_pick_order(monkeypatch):
     monkeypatch.setattr(trueup, "plan", lambda **kw: calls.append(kw) or _result([P], registered=1))
     api._run_apply(api.ApplyInput(expect=["Box_HOB"], picks=["B", "A"]), lambda e: None)
     assert [c["picks"] for c in calls] == [["B", "A"], ["B", "A"]]
+
+
+def test_apply_does_not_blame_an_unrelated_unreadable_list(monkeypatch):
+    unread = [{"ref": "Unrelated_HOB", "name": "Unrelated", "error": "mtgjson down"},
+              {"ref": "sld:Other drop", "name": "Other drop", "error": "x"}]
+    monkeypatch.setattr(trueup, "plan", lambda **kw: _result([], unread=unread))
+    with pytest.raises(ValueError, match="changed since the scan"):
+        api._run_apply(api.ApplyInput(expect=["Box_HOB"]), lambda e: None)
+
+
+def test_apply_blames_a_set_list_that_could_not_be_read(monkeypatch):
+    unread = [{"ref": "set:hob", "name": "HOB products", "error": "offline"}]
+    monkeypatch.setattr(trueup, "plan", lambda **kw: _result([], unread=unread))
+    with pytest.raises(ValueError, match="HOB products"):
+        api._run_apply(api.ApplyInput(expect=["Box_HOB"]), lambda e: None)

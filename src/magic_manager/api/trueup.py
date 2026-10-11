@@ -85,8 +85,12 @@ def _check_reviewed(preview: dict, keep: set[str]) -> None:
     ready = {p["fileName"] for p in preview["ready"]}
     if ready == keep:
         return
-    unread = preview.get("unread") or []
-    if keep - ready and unread:
+    missing = keep - ready
+    # A missing product is explained by its own unread list, or by a whole list
+    # of products (a set's, or the Secret Lair drops) that couldn't be read.
+    unread = [u for u in preview.get("unread") or []
+              if u["ref"] in missing or u["ref"] == "sld" or u["ref"].startswith("set:")]
+    if missing and unread:
         names = ", ".join(u["name"] for u in unread[:3]) + ("…" if len(unread) > 3 else "")
         raise ValueError(f"Couldn’t read the product lists again ({names}) — nothing was recorded. Try again in a moment.")
     raise ValueError("Your cards changed since the scan — scan again and review the list.")
@@ -99,7 +103,7 @@ def _run_apply(inp: ApplyInput, progress: ProgressFn) -> JobResult:
     keep, picks = set(inp.expect), inp.picks
     preview = trueup.plan(only=keep, picks=picks, progress=_tick(progress))
     _check_reviewed(preview, keep)
-    out = _out(trueup.plan(only=keep, picks=picks, apply=True))
+    out = _out(trueup.plan(only=keep, picks=picks, apply=True, require=keep))
     return JobResult(
         summary=f"Recorded {out.registered} products · {out.reattributed} cards now traced to them",
         artifacts=[Artifact(kind="json", label="scan", data=out.model_dump())],

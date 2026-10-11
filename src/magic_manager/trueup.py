@@ -485,10 +485,14 @@ def _apply(conn, ready: list[dict]) -> dict:
 
 # ---------- orchestration ----------
 
+class ReviewChanged(ValueError):
+    """``plan(apply=True, require=…)`` found a different covered set than reviewed."""
+
+
 def plan(*, mode: str = "from-unattributed", target: str | None = None, apply: bool = False,
          picks: Iterable[str] | None = None, sld_threshold: float = 0.9,
          refute: set[str] | None = None, progress=None,
-         only: set[str] | None = None) -> dict:
+         only: set[str] | None = None, require: set[str] | None = None) -> dict:
     """Match re-attributable loose cards to products; with ``apply`` impute the
     covered ones. Returns the result dict (ready / conflicts / contested / SLD).
     ``progress(done, total, product_name)`` ticks once per candidate product (the
@@ -496,7 +500,9 @@ def plan(*, mode: str = "from-unattributed", target: str | None = None, apply: b
     candidates to those fileNames (re-checking a reviewed list is then fast).
     ``picks`` are ordered — the latest pick wins a contest between picks.
     ``unread`` lists every product list that couldn't be read (MTGJSON down, a
-    missing deck file): those products were not checked, not "not matched"."""
+    missing deck file): those products were not checked, not "not matched".
+    ``require`` (with ``apply``) refuses to write unless the covered products are
+    exactly that set — the web records only the list the user reviewed."""
     picks = list(picks or ())
     unread: list[dict] = []
     with db.connect() as conn:
@@ -555,6 +561,8 @@ def plan(*, mode: str = "from-unattributed", target: str | None = None, apply: b
             "applied": False,
         }
 
+        if apply and require is not None and {p["fileName"] for p in ready} != require:
+            raise ReviewChanged("The covered products changed since they were reviewed; nothing was recorded.")
         if apply and ready:
             result.update(_apply(conn, ready))
             result["applied"] = True

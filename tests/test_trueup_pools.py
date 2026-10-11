@@ -737,3 +737,21 @@ def test_latest_pick_wins_a_contest_between_picks(tmp_db, seed_cards, make_card,
                           (["One_TLA", "Two_TLA"], "Two_TLA")):
         r = tp.plan(picks=picks)
         assert [p["fileName"] for p in r["ready"]] == [winner], picks
+
+
+def test_plan_apply_require_refuses_a_different_covered_set(tmp_db, seed_cards, make_card,
+                                                            stub_products, fake_scryfall):
+    """apply with ``require`` writes nothing unless the covered products are
+    exactly the reviewed ones."""
+    from magic_manager import db, ingest
+    fake_scryfall()
+    _two_products(seed_cards, make_card, stub_products)
+    tp = _load()
+    with pytest.raises(tp.ReviewChanged):
+        tp.plan(apply=True, require={"Two_TLA"})  # both products are covered
+    with db.connect() as conn:
+        assert conn.execute("SELECT COUNT(*) c FROM decks").fetchone()["c"] == 0
+        assert conn.execute("SELECT COUNT(*) c FROM ingest_events WHERE label LIKE 'trueup:%'").fetchone()["c"] == 0
+        assert ingest.reconcile_inventory_ledger(conn) == []
+    r = tp.plan(only={"Two_TLA"}, apply=True, require={"Two_TLA"})
+    assert r["registered"] == 1
