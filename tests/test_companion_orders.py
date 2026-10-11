@@ -7,7 +7,6 @@ saved, de-personalised store pages), so reader → app → engine stays one chai
 from __future__ import annotations
 
 import json
-import shutil
 from pathlib import Path
 
 import pytest
@@ -24,11 +23,9 @@ def _golden(name: str) -> dict:
 
 
 @pytest.fixture
-def client(tmp_db, tmp_path, monkeypatch, seed_cards, make_card):
+def client(tmp_db, tmp_path, monkeypatch, seed_cards, make_card, copy_real_config):
     monkeypatch.setenv("MAGIC_MANAGER_CONFIG_DIR", str(tmp_path))
-    for f in (ROOT / "config").iterdir():
-        if f.is_file() and f.name != "features.toml":
-            shutil.copy(f, tmp_path / f.name)
+    copy_real_config(tmp_path)  # every other config file the routes read
     (tmp_path / "features.toml").write_text("[features]\npurchases = false\n")
     monkeypatch.delenv("MM_FEATURES", raising=False)
     config._cached_toml.cache_clear()

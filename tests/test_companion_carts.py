@@ -8,7 +8,6 @@ Offline: Scryfall's TCGplayer lookup and MTGJSON's set files are faked.
 from __future__ import annotations
 
 import json
-import shutil
 from pathlib import Path
 
 import pytest
@@ -162,11 +161,9 @@ def test_offline_store_lookups_leave_lines_named_not_dropped(carts, monkeypatch)
 # ---------- API ----------
 
 @pytest.fixture
-def client(carts, tmp_path, monkeypatch):
+def client(carts, tmp_path, monkeypatch, copy_real_config):
     monkeypatch.setenv("MAGIC_MANAGER_CONFIG_DIR", str(tmp_path))
-    for f in (ROOT / "config").iterdir():
-        if f.is_file() and f.name != "features.toml":
-            shutil.copy(f, tmp_path / f.name)
+    copy_real_config(tmp_path)  # every other config file the routes read
     (tmp_path / "features.toml").write_text("[features]\ncart_check = false\n")
     monkeypatch.setenv("MM_FEATURES", "cart_check")
     monkeypatch.setenv("MM_SCRAPER_HEALTH", str(tmp_path / "health.json"))
