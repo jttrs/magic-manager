@@ -135,6 +135,8 @@ def _not_counted(vendor: Vendor, listing: storepage.Listing, hay: str) -> str | 
     if vendor.new_only and listing.condition and not storepage.is_new(listing.condition):
         return f"A used / pre-owned offer ({listing.condition}) — Deals only counts new."
     own = {s.casefold() for s in vendor.sellers}
-    if own and listing.seller and listing.seller.casefold() not in own:
+    if own and not listing.seller:
+        return f"No seller shown for the main offer — Deals only counts {vendor.name} itself."
+    if own and listing.seller.casefold() not in own:
         return f"Sold by a third-party seller ({listing.seller}) — Deals only counts {vendor.name} itself."
     return None

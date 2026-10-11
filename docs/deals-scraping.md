@@ -80,7 +80,8 @@ closed sockets) and their prices are JS-rendered, absent from raw HTML anyway.
 10. **Marketplace sellers, used offers, no offer** (Amazon, Walmart, GameStop — owner, 2026-10-10).
     Count only an offer the store itself sells, new. Recipe keys: `sellers` (the store's own seller
     names), `new_only`, `seller_pattern` / `condition_pattern` (visible text) — JSON-LD
-    `offers.seller` / `itemCondition` win when the page has them — and `no_offer_pattern`. A listing
+    `offers.seller` / `itemCondition` win when the page has them — and `no_offer_pattern`. A seller-gated
+    store whose page shows no seller at all is not counted either (fail closed). A listing
     that fails is **read but not counted**: `storefetch.read` raises `storepage.NotCounted` and the
     Deals row says why ("Sold by a third-party seller (CardsHQ) — Deals only counts Walmart itself.",
     "A used / pre-owned offer (Restored: Like New) — …", "Amazon has no offer on this page right

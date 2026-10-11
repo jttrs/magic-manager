@@ -95,6 +95,9 @@ def test_every_rendered_fixture_has_an_expectation():
     ("amazon", "$54.99\nIn Stock\nShips from and sold by Amazon.com.", None),
     ("amazon", "$41.10\nIn Stock\nShips from\nAmazon\nSold by\nAmazon Resale", "third-party seller (Amazon Resale)"),
     ("amazon", "$54.99\nTemporarily out of stock.\nShipper / Seller\nAmazon.com", None),
+    ("amazon", "Magic Booster Box\nNo featured offers available\n$95.00 (12 new offers)\nSee All Buying Options\n", "no offer"),
+    # Seller-gated store with a price but no seller line: fail closed.
+    ("walmart", "Current price is $45.99\nIn stock", "No seller shown"),
     # Walmart: a used / restored main offer.
     ("walmart", "Condition\nRestored: Like New\nCurrent price is Now $89.00\nSold and shipped by Walmart.com", "used / pre-owned offer (Restored: Like New)"),
     ("walmart", "$0.00\nCondition\nNew\nCurrent price is $45.99\nOut of stock\nSold and shipped by Walmart.com", None),
@@ -126,7 +129,7 @@ def _ld(offer: dict) -> str:
     ({"seller": {"@type": "Organization", "name": "GameStop"}, "itemCondition": "https://schema.org/NewCondition"}, None),
     ({"seller": {"@type": "Organization", "name": "GameStop"}, "itemCondition": "https://schema.org/UsedCondition"}, "used / pre-owned offer (used)"),
     ({"seller": {"@type": "Organization", "name": "Card Shack"}, "itemCondition": "NewCondition"}, "third-party seller (Card Shack)"),
-    ({}, None),                                                       # the page doesn't say → counted
+    ({}, "No seller shown"),                                        # the page doesn't say → fail closed
 ])
 def test_json_ld_seller_and_condition_decide_for_gamestop(offer, skipped):
     listing = vendors.read_listing(vendors.by_key("gamestop"), _ld(offer), text="")
