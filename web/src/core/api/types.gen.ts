@@ -3110,6 +3110,12 @@ export type ImportRowOut = {
      * Copies in the read.
      */
     incoming: number;
+    /**
+     * Pledged
+     *
+     * Copies in built decks — replace can't go below this.
+     */
+    pledged?: number;
 };
 
 /**

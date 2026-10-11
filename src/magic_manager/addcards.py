@@ -29,8 +29,7 @@ _METHOD = {"search": "adhoc", "paste": "import-block", "deck": "import-block"}
 # ---------- local card rows → printing dicts ----------
 
 def _chunks(items: list, n: int = _CHUNK) -> Iterable[list]:
-    for i in range(0, len(items), n):
-        yield items[i:i + n]
+    return util.chunks(items, n)
 
 
 def _load(where: str, params: list | tuple = (), *, conn=None, limit: int | None = None) -> list[dict]:

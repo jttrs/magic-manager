@@ -13,7 +13,7 @@ import json
 import sqlite3
 from typing import Callable, Iterable, Sequence
 
-from . import db, scryfall, scryfall_tags
+from . import db, scryfall, scryfall_tags, util
 from .scryfall_tags import WEIGHT_RANK, _CHUNK
 from .selectors import _is_digital_only
 
@@ -117,8 +117,7 @@ def art_tag_search(q: str, limit: int = 20, *,
 # ---------- engine query ----------
 
 def _chunks(seq: Sequence, n: int = _CHUNK):
-    for i in range(0, len(seq), n):
-        yield seq[i:i + n]
+    return util.chunks(seq, n)
 
 
 def _owned_qty(c: sqlite3.Connection, sids: Sequence[str]) -> dict[str, int]:

@@ -151,6 +151,32 @@ def test_add_sums_and_refuses_the_same_read_twice(owned, monkeypatch):
         assert ingest.reconcile_inventory_ledger(conn) == []
 
 
+def test_replace_refuses_to_go_below_built_deck_copies(owned, monkeypatch):
+    _no_network(monkeypatch)
+    from magic_manager import decks
+    d = decks.deck_create("built", "Built")
+    with db.connect() as conn:
+        conn.execute("INSERT INTO deck_assignments (deck_id, scryfall_id, finish, count, assigned_at) "
+                     "VALUES (?, ?, 'nonfoil', 6, '2026-01-01')", (d.deck_id, SID[0]))
+        conn.commit()
+    p = collection_sync.preview_lines(_lines())
+    assert {r["scryfall_id"]: r["pledged"] for r in p["rows"]}[SID[0]] == 6
+    with pytest.raises(collection_sync.BelowPledged) as e:
+        collection_sync.apply_lines(_lines(), mode="replace", label="x")
+    assert e.value.rows == [{"scryfall_id": SID[0], "finish": "nonfoil", "incoming": 5, "pledged": 6}]
+    assert _qty(SID[0]) == 3 and _qty(SID[2]) == 0          # all-or-nothing: nothing written
+    collection_sync.apply_lines(_lines(), mode="add", label="y")   # adding never lowers anything
+    assert _qty(SID[0]) == 8
+
+
+def test_any_real_collector_number_is_accepted():
+    ci.CollectionReadIn(source="moxfield", scope="collection",
+                        lines=[{"quantity": 1, "finish": "nonfoil", "set": "sld", "cn": "633Φ", "name": "X"}])
+    with pytest.raises(ValueError):
+        ci.CollectionReadIn(source="moxfield", scope="collection",
+                            lines=[{"quantity": 1, "finish": "nonfoil", "set": "sld", "cn": "<b>1", "name": "X"}])
+
+
 def test_unknown_printings_resolve_through_scryfall_and_unresolvable_are_reported(owned, monkeypatch, make_card):
     new = "00000000-0000-4000-8000-000000000009"
     card = make_card(id=new, oracle_id="o9", set="tst", collector_number="9", name="Card 9")
@@ -199,6 +225,15 @@ def test_collection_import_routes(client, monkeypatch):
     assert r.status_code == 422 and r.json()["detail"]["code"] == "collection.empty"
     assert client.post("/api/collection/import/apply", json={**body, "mode": "replace"},
                        headers={"sec-fetch-site": "cross-site"}).status_code == 403
+    low = {**body, "lines": [{**_lines()[0], "quantity": 1}]}
+    from magic_manager import decks
+    d = decks.deck_create("built", "Built")
+    with db.connect() as conn:
+        conn.execute("INSERT INTO deck_assignments (deck_id, scryfall_id, finish, count, assigned_at) "
+                     "VALUES (?, ?, 'nonfoil', 2, '2026-01-01')", (d.deck_id, SID[0]))
+        conn.commit()
+    r = client.post("/api/collection/import/apply", json={**low, "mode": "replace"})
+    assert r.status_code == 409 and r.json()["detail"]["below_pledged"][0]["pledged"] == 2
     assert {h.scraper.key: h.status for h in scraper_health.health()}["companion-collection/moxfield"] == "ok"
 
 

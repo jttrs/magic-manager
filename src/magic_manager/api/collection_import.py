@@ -30,7 +30,8 @@ class CollectionLineIn(_Strict):
     finish: Literal["nonfoil", "foil", "etched"]
     scryfall_id: str | None = Field(None, pattern=_UUID)
     set: str | None = Field(None, max_length=10, pattern=r"^[0-9A-Za-z]+$")
-    cn: str | None = Field(None, max_length=12, pattern=r"^[0-9A-Za-z★†\-]+$")
+    # Any collector number Scryfall uses (e.g. SLD "633Φ"), but no spaces or markup.
+    cn: str | None = Field(None, max_length=12, pattern=r"^[^\s<>\"'&]+$")
     name: str | None = Field(None, max_length=200)
     proxy: bool = False
     digital: bool = False
@@ -52,6 +53,7 @@ class ImportRowOut(BaseModel):
     collector_number: str | None
     current: int = Field(description="Copies you own now.")
     incoming: int = Field(description="Copies in the read.")
+    pledged: int = Field(0, description="Copies in built decks — replace can't go below this.")
 
 
 class NotFoundOut(BaseModel):
@@ -119,9 +121,7 @@ def apply(req: CollectionApplyIn) -> CollectionApplyOut:
     label = label_for(req)
     try:
         out = collection_sync.apply_lines(_lines(req), mode=req.mode, label=label, force=req.force)
-    except collection_sync.AlreadyImported:
-        raise
-    except ValueError as e:
+    except collection_sync.NothingToImport as e:
         raise CompanionFailure("collection.empty") from e
     return CollectionApplyOut(mode=req.mode, ingest_id=out["ingest_id"], added=out["added"], updated=out["updated"],
                               not_found=out["not_found"], label=label)

@@ -376,6 +376,8 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             raise HTTPException(403, str(e)) from e
         except collection_sync.AlreadyImported as e:
             raise HTTPException(409, str(e)) from e
+        except collection_sync.BelowPledged as e:
+            raise HTTPException(409, {"message": str(e), "below_pledged": e.rows}) from e
         except companion_api.CompanionFailure as e:
             raise _companion_failure(e) from e
 

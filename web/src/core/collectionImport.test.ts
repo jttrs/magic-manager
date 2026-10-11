@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { afterImport, changedRows, effectLine, effectOf, previewNotes, readTitle, shareLinkKind } from './collectionImport';
+import { afterImport, belowPledged, changedRows, effectLine, effectOf, previewNotes, readTitle, shareLinkKind } from './collectionImport';
 
 const row = (id: string, current: number, incoming: number) => ({
   scryfall_id: id, finish: 'nonfoil' as const, name: id, set: 'tst', collector_number: '1', current, incoming,
@@ -23,6 +23,10 @@ describe('collection import view-model', () => {
     expect(effectLine(effectOf(rows, 'replace'))).toBe('+4 copies · −3 copies · 1 new printing');
     expect(effectLine(effectOf(rows, 'add'))).toBe('+9 copies · 1 new printing');
     expect(effectLine(effectOf([row('x', 2, 2)], 'replace'))).toBe('No change');
+  });
+
+  it('counts rows replace would push below built-deck copies', () => {
+    expect(belowPledged([{ incoming: 1, pledged: 2 }, { incoming: 2, pledged: 2 }, { incoming: 0, pledged: 0 }])).toBe(1);
   });
 
   it('recognises share links', () => {

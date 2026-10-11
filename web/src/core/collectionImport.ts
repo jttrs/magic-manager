@@ -60,6 +60,10 @@ export function effectLine(e: Effect): string {
   return parts.join(' · ');
 }
 
+/** Rows replace would set below the copies pledged to built decks (the server refuses those). */
+export const belowPledged = (rows: readonly Pick<ImportRowOut, 'incoming' | 'pledged'>[]): number =>
+  rows.filter((r) => r.incoming < (r.pledged ?? 0)).length;
+
 /** A Moxfield share link → what it is, or null. */
 export function shareLinkKind(url: string): 'collection' | 'binder' | null {
   const u = url.trim();

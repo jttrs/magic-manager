@@ -7,7 +7,9 @@
 //  * the read happens in your browser and stays here until you press Send in the
 //    companion's own approval window; one request at a time; nothing is stored
 //    beyond the pending request (session memory, cleared on decision);
-//  * reads are page/tab reads only — no cookies, storage, tokens or writes to any site.
+//  * reads are page/tab reads only — no cookies, storage or writes to any site. The one
+//    exception: Moxfield's short-lived sign-in token, minted and used only inside
+//    readers/moxfield-api.js for private Moxfield reads (docs/browser-companion-security.md).
 
 import { STORES } from './stores.js';
 import {
@@ -77,10 +79,25 @@ async function fromApp(msg, sender) {
     await finish(busy, await fail('request.expired'));
   }
 
-  // Watched pages: plan only — nothing is opened or read until you approve the list.
-  const read = msg.kind === 'watched' ? await planWatched(params, fail, STORE_ORIGINS) : await READERS[msg.kind](params);
-  if (!read.ok) return read;
-  if (JSON.stringify(read.data).length > maxPayload(msg.kind)) return fail('request.invalid', { detail: 'too large' });
+  // Hold the one-request slot while reading (a whole Moxfield collection takes minutes):
+  // anything that asks meanwhile is told request.busy instead of racing this read.
+  const slot = { id: msg.id, kind: msg.kind, tabId: sender.tab.id, origin: pinned, data: null, summary: '',
+    created: Date.now(), windowId: null, stage: 'reading' };
+  await chrome.storage.session.set({ pending: slot });
+  const ours = async () => (await pendingRequest())?.id === msg.id;
+  let read;
+  try {
+    // Watched pages: plan only — nothing is opened or read until you approve the list.
+    read = msg.kind === 'watched' ? await planWatched(params, fail, STORE_ORIGINS) : await READERS[msg.kind](params);
+  } catch (e) {
+    if (await ours()) await chrome.storage.session.remove('pending');
+    throw e;
+  }
+  if (!await ours()) return fail('request.expired');   // the slot expired while reading
+  if (!read.ok || JSON.stringify(read.data).length > maxPayload(msg.kind)) {
+    await chrome.storage.session.remove('pending');
+    return read.ok ? fail('request.invalid', { detail: 'too large' }) : read;
+  }
 
   const pending = { id: msg.id, kind: msg.kind, tabId: sender.tab.id, origin: pinned, data: read.data,
     summary: summarize(msg.kind, read.data), created: Date.now(), windowId: null,

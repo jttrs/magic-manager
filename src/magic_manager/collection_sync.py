@@ -682,8 +682,7 @@ def resolve_rows_local_first(rows: list[CollectionRow]) -> ResolveResult:
     ids = list({r.scryfall_id for r in rows if r.scryfall_id})
     known: set[str] = set()
     with db.connect() as conn:
-        for i in range(0, len(ids), 900):
-            chunk = ids[i:i + 900]
+        for chunk in util.chunks(ids):
             known |= {r[0] for r in conn.execute(
                 f"SELECT scryfall_id FROM cards WHERE scryfall_id IN ({','.join('?' * len(chunk))})", chunk)}
     local = [r for r in rows if r.scryfall_id in known]
@@ -725,8 +724,8 @@ def preview_lines(lines: Iterable[dict]) -> dict:
     owned: dict[tuple[str, str], int] = {}
     with db.connect() as conn:
         ids = list({k[0] for k in keys})
-        for i in range(0, len(ids), 900):
-            chunk = ids[i:i + 900]
+        pledged = _pledged(conn, ids)
+        for chunk in util.chunks(ids):
             ph = ",".join("?" * len(chunk))
             for row in conn.execute(f"SELECT scryfall_id, name, set_code, collector_number FROM cards WHERE scryfall_id IN ({ph})", chunk):
                 meta[row[0]] = {"name": row[1], "set": row[2], "collector_number": row[3]}
@@ -738,7 +737,7 @@ def preview_lines(lines: Iterable[dict]) -> dict:
     rows = []
     for k, slot in agg.items():
         rows.append({**slot, **meta.get(k[0], {"name": None, "set": None, "collector_number": None}),
-                     "current": owned.get(k, 0)})
+                     "current": owned.get(k, 0), "pledged": pledged.get(k, 0)})
     rows.sort(key=lambda r: ((r["set"] or ""), util.cn_sort_key(r["collector_number"] or ""), r["finish"]))
     in_read_owned = sum(1 for k in keys if owned.get(k, 0) > 0)
     return {
@@ -748,8 +747,32 @@ def preview_lines(lines: Iterable[dict]) -> dict:
     }
 
 
-class AlreadyImported(ValueError):
+class AlreadyImported(Exception):
     """This exact read was imported before; adding it again would double it."""
+
+
+class NothingToImport(ValueError):
+    """No line of the read resolved to a printing (all proxies/digital/unmatched)."""
+
+
+class BelowPledged(ValueError):
+    """Replacing would set a printing below the copies pledged to built decks."""
+
+    def __init__(self, message: str, rows: list[dict]):
+        super().__init__(message)
+        self.rows = rows
+
+
+def _pledged(conn, ids: list[str]) -> dict[tuple[str, str], int]:
+    """Copies pledged to built decks per (scryfall_id, finish)."""
+    out: dict[tuple[str, str], int] = {}
+    for chunk in util.chunks(ids):
+        ph = ",".join("?" * len(chunk))
+        for sid, fin, q in conn.execute(
+                f"SELECT scryfall_id, finish, SUM(count) FROM deck_assignments "
+                f"WHERE scryfall_id IN ({ph}) GROUP BY scryfall_id, finish", chunk):
+            out[(sid, fin)] = int(q or 0)
+    return out
 
 
 def apply_lines(lines: Iterable[dict], *, mode: Literal["add", "replace"], label: str,
@@ -765,7 +788,20 @@ def apply_lines(lines: Iterable[dict], *, mode: Literal["add", "replace"], label
     read = rows_from_lines(lines)
     res = resolve_rows_local_first(read.rows)
     if not res.resolved:
-        raise ValueError("nothing to import")
+        raise NothingToImport("nothing to import")
+    if mode == "replace":
+        # Like the web checklist (sets.apply_counts): never count fewer than are in built decks.
+        agg: dict[tuple[str, str], int] = {}
+        for r in res.resolved:
+            agg[(r.scryfall_id, r.finish)] = agg.get((r.scryfall_id, r.finish), 0) + r.qty
+        with db.connect() as conn:
+            pledged = _pledged(conn, list({k[0] for k in agg}))
+        low = [{"scryfall_id": s, "finish": f, "incoming": q, "pledged": pledged[(s, f)]}
+               for (s, f), q in agg.items() if q < pledged.get((s, f), 0)]
+        if low:
+            n = len(low)
+            raise BelowPledged(f"{n} {'printing has' if n == 1 else 'printings have'} more copies in built decks "
+                               f"than this read lists — break those decks down, or add instead of replacing", low)
     sha = lines_sha256(res.resolved)
     if mode == "add" and not force:
         with db.connect() as conn:

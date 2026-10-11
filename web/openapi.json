@@ -5792,7 +5792,7 @@
               {
                 "type": "string",
                 "maxLength": 12,
-                "pattern": "^[0-9A-Za-z\u2605\u2020\\-]+$"
+                "pattern": "^[^\\s<>\\\"'&]+$"
               },
               {
                 "type": "null"
@@ -8933,6 +8933,12 @@
             "type": "integer",
             "title": "Incoming",
             "description": "Copies in the read."
+          },
+          "pledged": {
+            "type": "integer",
+            "title": "Pledged",
+            "description": "Copies in built decks \u2014 replace can't go below this.",
+            "default": 0
           }
         },
         "type": "object",

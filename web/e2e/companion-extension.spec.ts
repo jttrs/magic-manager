@@ -166,6 +166,34 @@ test('a Moxfield collection: the real extension reads every page in your Moxfiel
   expect(await ext.worker.evaluate(() => chrome.tabs.query({ url: 'https://moxfield.com/*' }))).toHaveLength(1);   // your tab, nothing extra left open
 });
 
+test('a request while a long read is still reading (no window yet) is refused as busy, and the read still completes', async ({ ext }) => {
+  const COLL = JSON.parse(readFileSync(resolve(ROOT, 'tests/fixtures/companion/moxfield-collection.json'), 'utf8'));
+  const cors = { 'access-control-allow-origin': 'https://moxfield.com', 'access-control-allow-credentials': 'true' };
+  let release: () => void = () => {};
+  const gate = new Promise<void>((r) => { release = r; });
+  await ext.context.route('https://api2.moxfield.com/**', async (r) => {
+    await gate;
+    const u = new URL(r.request().url());
+    return r.fulfill({ status: 200, headers: cors, contentType: 'application/json', body: JSON.stringify(u.searchParams.get('pageNumber') === '2' ? COLL.page2 : COLL.page1) });
+  });
+  const tab = await ext.context.newPage();
+  await tab.route('https://moxfield.com/', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>Moxfield</title>' }));
+  await tab.goto('https://moxfield.com/');
+  const { page } = await appPage(ext.context);
+  await expect(page.getByRole('button', { name: 'Browser companion · connected' })).toBeVisible();
+  const ask = (id: string, kind: string, params: object) => page.evaluate(([id, kind, params]) => new Promise((resolve) => {
+    window.addEventListener('message', (ev) => { if (ev.data?.from === 'companion' && ev.data.id === id && ev.data.type === 'ack') resolve(ev.data); });
+    window.postMessage({ channel: 'magic-manager/companion', from: 'app', type: 'request', id, kind, params }, location.origin);
+  }), [id, kind, params] as const);
+  const first = ask('long-read-0001', 'moxfield_collection', { url: 'https://moxfield.com/collection/hgsItGBwRUybHyN0WZR41w' });
+  await expect.poll(() => ext.worker.evaluate(async () => (await chrome.storage.session.get('pending')).pending?.stage)).toBe('reading');
+  expect(await ask('second-request-2', 'cart', {})).toMatchObject({ ok: false, code: 'request.busy' });
+  const approval = ext.context.waitForEvent('page', (p) => p.url().endsWith('/src/approve.html'));
+  release();
+  expect(await first).toMatchObject({ ok: true, status: 'awaiting_approval' });
+  await (await approval).getByRole('button', { name: 'Don’t send' }).click();
+});
+
 test('Don’t send: the app is told, and gets nothing', async ({ ext }) => {
   const { page, bodies } = await appPage(ext.context);
   const { dialog, approve } = await startCartRead(ext.context, page);

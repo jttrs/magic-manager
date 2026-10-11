@@ -105,7 +105,8 @@ background tab it closes), you approve the lines, the app posts them to `POST /a
   per import**: *add* sums onto what you own; *replace* sets each listed printing to Moxfield's count
   (3 → 5 nets +2). Printings the read doesn't list are never touched. Inventory is printing × finish:
   condition and language merge, **etched counts as foil**, and **proxies and digital (Arena/MTGO)
-  copies are skipped** and counted. An identical read already imported needs explicit confirmation
+  copies are skipped** and counted. *Replace* never goes below copies pledged to built decks: the
+  whole import is refused (409, all-or-nothing like the web checklist) and the review says so first. An identical read already imported needs explicit confirmation
   to add again (replace is idempotent). Large reads: the approval window lists every line in a
   scrollable table (20,000 lines, then the raw data); the app shows the full change list, virtualized.
 - **Unverified:** a signed-in Moxfield read (your collection, binder list, private link/deck) was

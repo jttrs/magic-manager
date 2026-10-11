@@ -203,7 +203,15 @@ Moxfield's sign-in token (security exception)"*). The design keeps the exception
 
 ## Security review (2026-10-11, Archidekt decks + Moxfield collection / binders, extension 0.4.0)
 
-SECURITY_REVIEW_PLACEHOLDER
+The security-review agent reviewed the diff: **no findings.** Checked: the Moxfield token never leaves
+`moxfieldSession()` (isolated world, fixed `api2.moxfield.com` host, ids regex-checked and URL-encoded,
+never returned/stored/logged), the exception is as narrow as documented (only `always` reads or a JSON
+401/403 — a Cloudflare HTML 403 never mints a token), the Archidekt reader (numeric id, fixed URL,
+DOMParser so page scripts never run, capped fields), new kinds' URL regexes + permission checks,
+`textContent`-only approval rendering (raw data filled on open), the 8 MB cap scoped to collection
+reads, strict server models, bound SQL, and the write-guarded `/apply`. The code review that followed
+added one hardening: the worker now holds the one-request slot while a read runs, so a request arriving
+during a minutes-long collection read is refused as `request.busy` instead of racing it (pinned).
 
 ## Security review (2026-10-10, TCGplayer + Card Kingdom carts, extension 0.3.0)
 

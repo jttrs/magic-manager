@@ -5,7 +5,7 @@ import { unwrap } from '../../app/queries';
 import { useDownScrapers } from '../../app/scraperHealth';
 import { useCompanion } from '../../app/useCompanion';
 import { collectionImportApply, collectionImportPreview, type CollectionApplyOut, type CollectionPreviewOut, type CollectionReadIn } from '../../core/api';
-import { changedRows, effectLine, effectOf, previewNotes, readTitle, shareLinkKind, type ImportMode, type ImportScope } from '../../core/collectionImport';
+import { belowPledged, changedRows, effectLine, effectOf, previewNotes, readTitle, shareLinkKind, type ImportMode, type ImportScope } from '../../core/collectionImport';
 import type { MoxfieldBinder } from '../../core/companion';
 import { fmtInt } from '../../core/format';
 import { MOXFIELD_COLLECTION_KEY } from '../../core/scraperHealth';
@@ -71,7 +71,7 @@ export function CollectionPane() {
   });
 
   const linkKind = shareLinkKind(link);
-  const canRead = ready && moxOn && !readColl.isPending && (scope === 'collection' || (scope === 'binder' && Boolean(binder)) || (scope === 'link' && linkKind != null));
+  const canRead = ready && moxOn && !readColl.isPending && !listBinders.isPending && (scope === 'collection' || (scope === 'binder' && Boolean(binder)) || (scope === 'link' && linkKind != null));
 
   if (read) {
     return <Review read={read} mode={mode} onMode={setMode} again={again} onAgain={setAgain} onBack={() => setRead(null)}
@@ -105,7 +105,7 @@ export function CollectionPane() {
               ) : binders ? (
                 <span className="text-sm text-ink-muted">You have no binders on Moxfield.</span>
               ) : null}
-              <Button tone="paper" onClick={() => listBinders.mutate()} disabled={!ready || !moxOn || listBinders.isPending}>
+              <Button tone="paper" onClick={() => listBinders.mutate()} disabled={!ready || !moxOn || listBinders.isPending || readColl.isPending}>
                 {listBinders.isPending ? (awaiting != null ? 'Waiting for approval…' : 'Listing…') : binders ? 'List again' : 'List my binders'}
               </Button>
             </span>
@@ -170,6 +170,8 @@ function Review({ read, mode, onMode, again, onAgain, onBack, onImport, busy, er
   const rows = useMemo(() => (mode ? changedRows(p.rows, mode) : []), [p.rows, mode]);
   const notes = previewNotes(p);
   const dup = mode === 'add' && p.already_imported_at != null;
+  const pledgedLow = belowPledged(p.rows);
+  const blocked = mode === 'replace' && pledgedLow > 0;
   const effect = mode ? effects[mode] : null;
   const title = readTitle(body.scope, body.id ?? null, body.name ?? null);
 
@@ -201,6 +203,11 @@ function Review({ read, mode, onMode, again, onAgain, onBack, onImport, busy, er
         ))}
       </fieldset>
 
+      {pledgedLow > 0 && (
+        <p className={`border-b border-rule py-1.5 text-sm ${mode === 'replace' ? 'text-danger' : 'text-ink-muted'}`}>
+          {fmtInt(pledgedLow)} {pledgedLow === 1 ? 'printing has' : 'printings have'} more copies in built decks than this read lists, so setting your counts would go below them. Break those decks down first, or add instead.
+        </p>
+      )}
       {notes.length > 0 && (
         <ul className="flex flex-col gap-0.5 border-b border-rule py-1.5 text-sm text-ink-muted">
           {notes.map((n) => <li key={n}>{n}</li>)}
@@ -230,7 +237,7 @@ function Review({ read, mode, onMode, again, onAgain, onBack, onImport, busy, er
         )}
         {error != null && <FailureNote error={error} />}
         <Button tone="paper" emphasis="primary" className="ml-auto" onClick={onImport}
-          disabled={busy || !mode || !effect?.printings || (dup && !again)}>
+          disabled={busy || !mode || !effect?.printings || (dup && !again) || blocked}>
           {busy ? 'Importing…' : effect?.printings ? `Import · ${effectLine(effect)}` : 'Import'}
         </Button>
       </footer>
