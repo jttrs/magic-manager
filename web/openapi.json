@@ -2145,7 +2145,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SaveOut"
+                  "$ref": "#/components/schemas/magic_manager__api__decks__SaveOut"
                 }
               }
             }
@@ -2984,6 +2984,220 @@
         }
       }
     },
+    "/api/purchases/stores": {
+      "get": {
+        "tags": [
+          "purchases"
+        ],
+        "summary": "Purchase Stores",
+        "operationId": "purchase_stores",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/magic_manager__api__purchases__StoreOut"
+                  },
+                  "type": "array",
+                  "title": "Response Purchase Stores"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/purchases": {
+      "get": {
+        "tags": [
+          "purchases"
+        ],
+        "summary": "Purchase List",
+        "operationId": "purchase_list",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchasesOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/purchases/orders": {
+      "post": {
+        "tags": [
+          "purchases"
+        ],
+        "summary": "Purchase Save",
+        "operationId": "purchase_save",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrdersIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/magic_manager__api__purchases__SaveOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/purchases/{purchase_id}": {
+      "get": {
+        "tags": [
+          "purchases"
+        ],
+        "summary": "Purchase Review",
+        "operationId": "purchase_review",
+        "parameters": [
+          {
+            "name": "purchase_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Purchase Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "purchases"
+        ],
+        "summary": "Purchase Forget",
+        "operationId": "purchase_forget",
+        "parameters": [
+          {
+            "name": "purchase_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Purchase Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/purchases/{purchase_id}/apply": {
+      "post": {
+        "tags": [
+          "purchases"
+        ],
+        "summary": "Purchase Apply",
+        "operationId": "purchase_apply",
+        "parameters": [
+          {
+            "name": "purchase_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Purchase Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplyOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/jumpstart": {
       "get": {
         "tags": [
@@ -3367,6 +3581,52 @@
           "summary"
         ],
         "title": "ActionOut"
+      },
+      "ApplyIn": {
+        "properties": {
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/DecisionIn"
+            },
+            "type": "array",
+            "maxItems": 2000,
+            "title": "Lines"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "lines"
+        ],
+        "title": "ApplyIn"
+      },
+      "ApplyOut": {
+        "properties": {
+          "purchase_id": {
+            "type": "integer",
+            "title": "Purchase Id"
+          },
+          "ingest_id": {
+            "type": "integer",
+            "title": "Ingest Id"
+          },
+          "matched": {
+            "type": "integer",
+            "title": "Matched"
+          },
+          "added": {
+            "type": "integer",
+            "title": "Added"
+          }
+        },
+        "type": "object",
+        "required": [
+          "purchase_id",
+          "ingest_id",
+          "matched",
+          "added"
+        ],
+        "title": "ApplyOut"
       },
       "ArtSwapRowOut": {
         "properties": {
@@ -6008,6 +6268,35 @@
         ],
         "title": "DayCount"
       },
+      "DecisionIn": {
+        "properties": {
+          "line_no": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Line No"
+          },
+          "match": {
+            "type": "integer",
+            "maximum": 9999.0,
+            "minimum": 0.0,
+            "title": "Match",
+            "default": 0
+          },
+          "add": {
+            "type": "integer",
+            "maximum": 9999.0,
+            "minimum": 0.0,
+            "title": "Add",
+            "default": 0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "line_no"
+        ],
+        "title": "DecisionIn"
+      },
       "DeckCardOut": {
         "properties": {
           "printing": {
@@ -7554,10 +7843,11 @@
               "singles",
               "checklist",
               "unknown",
-              "move"
+              "move",
+              "purchase"
             ],
             "title": "Kind",
-            "description": "deck = playable product; pool = card pool (land pack, scene box, Secret Lair\u2026); singles = cards added individually; checklist = a bulk checklist ingest (source product not recorded); unknown = reconstructed bucket with no known source; move = cards pledged to / released from a deck."
+            "description": "deck = playable product; pool = card pool (land pack, scene box, Secret Lair\u2026); singles = cards added individually; checklist = a bulk checklist ingest (source product not recorded); unknown = reconstructed bucket with no known source; move = cards pledged to / released from a deck; purchase = a store order read with the browser companion."
           },
           "title": {
             "type": "string",
@@ -7651,6 +7941,30 @@
             ],
             "title": "Deck Slug",
             "description": "Deck to open: the moved deck, or the playable product's deck row."
+          },
+          "purchase_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purchase Id",
+            "description": "Purchase entries: the stored store order."
+          },
+          "paid_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paid Usd",
+            "description": "Purchase entries: what you paid for the copies it still holds (item prices)."
           }
         },
         "type": "object",
@@ -8965,6 +9279,333 @@
         "title": "OracleTagOut",
         "description": "A Scryfall Tagger oracle tag (``id`` is the stable UUID)."
       },
+      "OrderIn": {
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9-]+$",
+            "title": "Order Id"
+          },
+          "ordered_at": {
+            "type": "string",
+            "maxLength": 32,
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}(:\\d{2})?Z?)?$",
+            "title": "Ordered At"
+          },
+          "ordered_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ordered On"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/OrderLineIn"
+            },
+            "type": "array",
+            "maxItems": 2000,
+            "title": "Lines"
+          },
+          "subtotal": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 10000000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subtotal"
+          },
+          "shipping": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1000000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shipping"
+          },
+          "tax": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1000000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tax"
+          },
+          "fees": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1000000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fees"
+          },
+          "credit": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1000000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credit"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 10000000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "order_id",
+          "ordered_at",
+          "lines"
+        ],
+        "title": "OrderIn"
+      },
+      "OrderLineIn": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "single",
+              "sealed",
+              "other"
+            ],
+            "title": "Kind",
+            "default": "single"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "set_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Set Name"
+          },
+          "set_code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 12,
+                "pattern": "^[a-z0-9]+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Set Code"
+          },
+          "collector_number": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 16
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collector Number"
+          },
+          "scryfall_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scryfall Id"
+          },
+          "tcgplayer_product_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100000000.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tcgplayer Product Id"
+          },
+          "finish": {
+            "type": "string",
+            "enum": [
+              "nonfoil",
+              "foil",
+              "etched"
+            ],
+            "title": "Finish",
+            "default": "nonfoil"
+          },
+          "condition": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 24
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Condition"
+          },
+          "rarity": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rarity"
+          },
+          "treatments": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Treatments"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "quantity": {
+            "type": "integer",
+            "maximum": 9999.0,
+            "minimum": 1.0,
+            "title": "Quantity"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1000000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "quantity"
+        ],
+        "title": "OrderLineIn"
+      },
+      "OrdersIn": {
+        "properties": {
+          "store": {
+            "type": "string",
+            "enum": [
+              "manapool",
+              "tcgplayer",
+              "cardkingdom"
+            ],
+            "title": "Store"
+          },
+          "orders": {
+            "items": {
+              "$ref": "#/components/schemas/OrderIn"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Orders"
+          },
+          "warnings": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "title": "Warnings"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "store",
+          "orders"
+        ],
+        "title": "OrdersIn"
+      },
       "OverpayOut": {
         "properties": {
           "scryfall_id": {
@@ -10160,6 +10801,224 @@
         ],
         "title": "ProductValueOut"
       },
+      "PurchaseOut": {
+        "properties": {
+          "purchase_id": {
+            "type": "integer",
+            "title": "Purchase Id"
+          },
+          "store": {
+            "type": "string",
+            "enum": [
+              "manapool",
+              "tcgplayer",
+              "cardkingdom"
+            ],
+            "title": "Store"
+          },
+          "store_name": {
+            "type": "string",
+            "title": "Store Name"
+          },
+          "order_id": {
+            "type": "string",
+            "title": "Order Id"
+          },
+          "ordered_at": {
+            "type": "string",
+            "title": "Ordered At"
+          },
+          "read_at": {
+            "type": "string",
+            "title": "Read At"
+          },
+          "lines": {
+            "type": "integer",
+            "title": "Lines"
+          },
+          "copies": {
+            "type": "integer",
+            "title": "Copies"
+          },
+          "assigned": {
+            "type": "integer",
+            "title": "Assigned",
+            "description": "Copies matched to cards you owned or added new."
+          },
+          "assignable": {
+            "type": "integer",
+            "title": "Assignable",
+            "description": "Copies on lines with a known printing."
+          },
+          "unresolved": {
+            "type": "integer",
+            "title": "Unresolved"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "new",
+              "partial",
+              "done",
+              "nothing"
+            ],
+            "title": "Status"
+          },
+          "paid_usd": {
+            "type": "number",
+            "title": "Paid Usd",
+            "description": "Item prices \u00d7 quantity, every line."
+          },
+          "worth_usd": {
+            "type": "number",
+            "title": "Worth Usd",
+            "description": "Lines with a price today, at today's local prices."
+          },
+          "compared_paid_usd": {
+            "type": "number",
+            "title": "Compared Paid Usd",
+            "description": "What those same lines cost you."
+          },
+          "gain_usd": {
+            "type": "number",
+            "title": "Gain Usd"
+          },
+          "subtotal_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subtotal Usd",
+            "description": "The store's own item subtotal. When it differs from paid_usd, the store's line list includes replacements or refunds the companion can't price exactly."
+          },
+          "shipping_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shipping Usd"
+          },
+          "tax_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tax Usd"
+          },
+          "fees_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fees Usd"
+          },
+          "credit_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credit Usd"
+          },
+          "total_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Usd"
+          },
+          "ingest_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingest Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "purchase_id",
+          "store",
+          "store_name",
+          "order_id",
+          "ordered_at",
+          "read_at",
+          "lines",
+          "copies",
+          "assigned",
+          "assignable",
+          "unresolved",
+          "status",
+          "paid_usd",
+          "worth_usd",
+          "compared_paid_usd",
+          "gain_usd"
+        ],
+        "title": "PurchaseOut"
+      },
+      "PurchasesOut": {
+        "properties": {
+          "purchases": {
+            "items": {
+              "$ref": "#/components/schemas/PurchaseOut"
+            },
+            "type": "array",
+            "title": "Purchases"
+          },
+          "paid_usd": {
+            "type": "number",
+            "title": "Paid Usd"
+          },
+          "compared_paid_usd": {
+            "type": "number",
+            "title": "Compared Paid Usd"
+          },
+          "worth_usd": {
+            "type": "number",
+            "title": "Worth Usd"
+          },
+          "gain_usd": {
+            "type": "number",
+            "title": "Gain Usd"
+          }
+        },
+        "type": "object",
+        "required": [
+          "purchases",
+          "paid_usd",
+          "compared_paid_usd",
+          "worth_usd",
+          "gain_usd"
+        ],
+        "title": "PurchasesOut"
+      },
       "RankedOut": {
         "properties": {
           "rank": {
@@ -10532,6 +11391,153 @@
         ],
         "title": "RetentionCell"
       },
+      "ReviewLineOut": {
+        "properties": {
+          "line_no": {
+            "type": "integer",
+            "title": "Line No"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "single",
+              "sealed",
+              "other"
+            ],
+            "title": "Kind"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "set_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Set Name"
+          },
+          "condition": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Condition"
+          },
+          "finish": {
+            "type": "string",
+            "enum": [
+              "nonfoil",
+              "foil"
+            ],
+            "title": "Finish"
+          },
+          "printing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PrintingOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "quantity": {
+            "type": "integer",
+            "title": "Quantity"
+          },
+          "unit_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Usd"
+          },
+          "today_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Today Usd"
+          },
+          "matched": {
+            "type": "integer",
+            "title": "Matched"
+          },
+          "added": {
+            "type": "integer",
+            "title": "Added"
+          },
+          "remaining": {
+            "type": "integer",
+            "title": "Remaining"
+          },
+          "owned": {
+            "type": "integer",
+            "title": "Owned"
+          },
+          "matchable": {
+            "type": "integer",
+            "title": "Matchable",
+            "description": "Owned copies whose source is unknown or singles \u2014 they can be matched to this order."
+          }
+        },
+        "type": "object",
+        "required": [
+          "line_no",
+          "kind",
+          "name",
+          "set_name",
+          "condition",
+          "finish",
+          "printing",
+          "quantity",
+          "unit_usd",
+          "today_usd",
+          "matched",
+          "added",
+          "remaining",
+          "owned",
+          "matchable"
+        ],
+        "title": "ReviewLineOut"
+      },
+      "ReviewOut": {
+        "properties": {
+          "purchase": {
+            "$ref": "#/components/schemas/PurchaseOut"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewLineOut"
+            },
+            "type": "array",
+            "title": "Lines"
+          }
+        },
+        "type": "object",
+        "required": [
+          "purchase",
+          "lines"
+        ],
+        "title": "ReviewOut"
+      },
       "SaveIn": {
         "properties": {
           "cards": {
@@ -10564,62 +11570,6 @@
           "expected_version_id"
         ],
         "title": "SaveIn"
-      },
-      "SaveOut": {
-        "properties": {
-          "built": {
-            "type": "boolean",
-            "title": "Built"
-          },
-          "changes": {
-            "items": {
-              "$ref": "#/components/schemas/ChangeOut"
-            },
-            "type": "array",
-            "title": "Changes"
-          },
-          "swap": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SwapOut"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Physical swap list; only for a built deck."
-          },
-          "version_number": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Version Number",
-            "description": "New version number; null when nothing changed."
-          },
-          "pulled": {
-            "type": "integer",
-            "title": "Pulled"
-          },
-          "sleeved": {
-            "type": "integer",
-            "title": "Sleeved"
-          }
-        },
-        "type": "object",
-        "required": [
-          "built",
-          "changes",
-          "swap",
-          "version_number",
-          "pulled",
-          "sleeved"
-        ],
-        "title": "SaveOut"
       },
       "SceneFinishOut": {
         "properties": {
@@ -11129,7 +12079,7 @@
           "key": {
             "type": "string",
             "title": "Key",
-            "description": "'singles' | 'unknown' | 'product:<MTGJSON fileName>'"
+            "description": "'singles' | 'unknown' | 'product:<MTGJSON fileName>' | 'purchase:<store>:<order id>'"
           },
           "kind": {
             "type": "string",
@@ -11137,10 +12087,11 @@
               "singles",
               "unknown",
               "deck",
-              "pool"
+              "pool",
+              "purchase"
             ],
             "title": "Kind",
-            "description": "deck = playable precon; pool = card pool (land pack, scene box, most Secret Lair drops); singles = bought/added individually; unknown = provenance not reconstructed."
+            "description": "deck = playable precon; pool = card pool (land pack, scene box, most Secret Lair drops); singles = bought/added individually; purchase = a store order you read with the companion; unknown = provenance not reconstructed."
           },
           "label": {
             "type": "string",
@@ -11171,56 +12122,6 @@
           "label"
         ],
         "title": "SourceOut"
-      },
-      "StoreOut": {
-        "properties": {
-          "path": {
-            "type": "string",
-            "title": "Path"
-          },
-          "schema_version": {
-            "type": "integer",
-            "title": "Schema Version"
-          },
-          "last_pruned": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Pruned"
-          },
-          "events": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "type": "object",
-            "title": "Events"
-          },
-          "first_day": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "First Day"
-          }
-        },
-        "type": "object",
-        "required": [
-          "path",
-          "schema_version",
-          "last_pruned",
-          "events",
-          "first_day"
-        ],
-        "title": "StoreOut"
       },
       "StoreTabsOut": {
         "properties": {
@@ -11418,7 +12319,7 @@
             "title": "Retention"
           },
           "store": {
-            "$ref": "#/components/schemas/StoreOut"
+            "$ref": "#/components/schemas/magic_manager__api__analytics__StoreOut"
           },
           "consent": {
             "$ref": "#/components/schemas/ConsentOut"
@@ -12961,6 +13862,194 @@
           "stores"
         ],
         "title": "WatchedOut"
+      },
+      "magic_manager__api__analytics__StoreOut": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "schema_version": {
+            "type": "integer",
+            "title": "Schema Version"
+          },
+          "last_pruned": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Pruned"
+          },
+          "events": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Events"
+          },
+          "first_day": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Day"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "schema_version",
+          "last_pruned",
+          "events",
+          "first_day"
+        ],
+        "title": "StoreOut"
+      },
+      "magic_manager__api__decks__SaveOut": {
+        "properties": {
+          "built": {
+            "type": "boolean",
+            "title": "Built"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/ChangeOut"
+            },
+            "type": "array",
+            "title": "Changes"
+          },
+          "swap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SwapOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Physical swap list; only for a built deck."
+          },
+          "version_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Number",
+            "description": "New version number; null when nothing changed."
+          },
+          "pulled": {
+            "type": "integer",
+            "title": "Pulled"
+          },
+          "sleeved": {
+            "type": "integer",
+            "title": "Sleeved"
+          }
+        },
+        "type": "object",
+        "required": [
+          "built",
+          "changes",
+          "swap",
+          "version_number",
+          "pulled",
+          "sleeved"
+        ],
+        "title": "SaveOut"
+      },
+      "magic_manager__api__purchases__SaveOut": {
+        "properties": {
+          "saved": {
+            "type": "integer",
+            "title": "Saved"
+          },
+          "skipped": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Skipped",
+            "description": "Order numbers already assigned to your collection (left untouched)."
+          },
+          "unresolved": {
+            "type": "integer",
+            "title": "Unresolved",
+            "description": "Single-card lines no exact printing was found for (recorded, never added)."
+          },
+          "purchase_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Purchase Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "saved",
+          "skipped",
+          "unresolved",
+          "purchase_ids"
+        ],
+        "title": "SaveOut"
+      },
+      "magic_manager__api__purchases__StoreOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "enum": [
+              "manapool",
+              "tcgplayer",
+              "cardkingdom"
+            ],
+            "title": "Key"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "verification": {
+            "type": "string",
+            "enum": [
+              "verified",
+              "partial",
+              "unverified"
+            ],
+            "title": "Verification",
+            "description": "How much of this store's reading has been checked against its real pages."
+          },
+          "note": {
+            "type": "string",
+            "title": "Note",
+            "description": "What is and isn't verified, in plain words."
+          },
+          "needs_permission": {
+            "type": "boolean",
+            "title": "Needs Permission",
+            "description": "True when the companion's optional 'Order history' switch must be on."
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "name",
+          "verification",
+          "note",
+          "needs_permission"
+        ],
+        "title": "StoreOut"
       }
     }
   }

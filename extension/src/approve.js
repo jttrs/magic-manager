@@ -5,7 +5,7 @@
 import { APPROVAL_TTL_MS } from './protocol.js';
 
 const $ = (id) => document.getElementById(id);
-const KIND_TITLE = { cart: 'Send your Mana Pool cart?', tabs: 'Send your open store tabs?', moxfield: 'Send this Moxfield deck?' };
+const KIND_TITLE = { cart: 'Send your Mana Pool cart?', tabs: 'Send your open store tabs?', moxfield: 'Send this Moxfield deck?', order_list: 'Send your list of orders?', orders: 'Send these orders?' };
 const MAX_ROWS = 500;
 
 function cell(tr, text, cls) {
@@ -42,6 +42,12 @@ function render(p) {
     const rows = [];
     Object.entries(d.deck.boards).forEach(([board, b]) => Object.values(b.cards).forEach((c) => rows.push([c.card.name, board, c.card.set ? `${c.card.set.toUpperCase()} ${c.card.cn || ''}` : '', c.isFoil ? 'foil' : (c.finish || ''), c.quantity])));
     table([['Card'], ['Board'], ['Printing'], ['Finish'], ['Qty', 'num']], rows);
+  } else if (p.kind === 'order_list') {
+    table([['Order'], ['Placed'], ['Total', 'num']], d.orders.map((o) => [o.order_id, o.ordered_at, money(o.total)]));
+  } else if (p.kind === 'orders') {
+    const rows = [];
+    d.orders.forEach((o) => o.lines.forEach((l) => rows.push([o.order_id, l.name, l.set_name || l.detail || '', l.kind === 'single' ? l.finish : l.kind, l.quantity, money(l.price)])));
+    table([['Order'], ['Item'], ['Set'], ['Finish'], ['Qty', 'num'], ['Price each', 'num']], rows);
   }
   const warnings = d.warnings || [];
   $('warnings').replaceChildren(...warnings.slice(0, 20).map((w) => {
@@ -49,7 +55,10 @@ function render(p) {
     div.className = 'warn';
     div.textContent = w.code === 'cart.signed_out' ? 'You are not signed in to Mana Pool in this browser — this is the guest cart.'
       : w.code === 'cart.row_unreadable' ? `Cart line ${w.row}: couldn't read ${w.missing.join(', ')}.`
-      : w.code === 'tabs.page_unreadable' ? `Couldn't read ${w.url} — reload that tab and read again.` : w.code;
+      : w.code === 'tabs.page_unreadable' ? `Couldn't read ${w.url} — reload that tab and read again.`
+      : w.code === 'orders.row_unreadable' ? `Order ${w.order || ''} line ${w.row || ''}: couldn't read ${(w.missing || []).join(', ')}.`
+      : w.code === 'orders.unverified_line' ? `Order ${w.order || ''} line ${w.row}: not a recognised product line — it will be recorded but never added to your collection.`
+      : w.code === 'orders.not_found' ? `Order ${w.order} wasn't on your order pages.` : w.code;
     return div;
   }));
   $('raw').textContent = JSON.stringify(d, null, 2);

@@ -1,0 +1,19 @@
+{
+  "ok": true,
+  "orders": [
+    {
+      "order_id": "100102",
+      "ordered_at": "2026-09-23T18:07:31Z",
+      "total": 123.45,
+      "path": "/settings/orders/00000000-0000-4000-8000-000000000102"
+    },
+    {
+      "order_id": "100101",
+      "ordered_at": "2026-02-18T06:42:00Z",
+      "total": 76.36,
+      "path": "/settings/orders/00000000-0000-4000-8000-000000000101"
+    }
+  ],
+  "next": null,
+  "warnings": []
+}

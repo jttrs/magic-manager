@@ -1,11 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { getRouteApi, Link, useNavigate } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
-import { historyEventQuery, historyQuery } from '../app/queries';
+import { useFeature } from '../app/features';
+import { historyEventQuery, historyQuery, purchasesQuery } from '../app/queries';
 import { useMediaQuery } from '../app/useMediaQuery';
 import { useSelection } from '../app/selection';
 import { useRovingFocus } from '../app/useRovingFocus';
 import { ViewLayout } from '../components/AppShell';
+import { Button } from '../components/Button';
 import { Chevron } from '../components/Chevron';
 import { InfoTip } from '../components/InfoTip';
 import { MultiSelect } from '../components/MultiSelect';
@@ -17,6 +19,9 @@ import type { HistoryEntryOut } from '../core/api';
 import { fmtCount, fmtInt, fmtUsd } from '../core/format';
 import { datedNote, filterHistory, groupTimeline, historyCardGroups, KIND_HELP, KIND_LABEL, kindCounts, movesSummary, type HistorySearch, type MonthGroup, type TimelineRow } from '../core/history';
 import { CollectionTabs } from './collection/CollectionTabs';
+import { OrderReview } from './history/OrderReview';
+import { OrdersList, OrdersTotals } from './history/OrdersList';
+import { ReadOrdersDialog } from './history/ReadOrdersDialog';
 
 const route = getRouteApi('/collection/history');
 const DAY = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
@@ -30,6 +35,9 @@ export function HistoryView() {
   const set = (patch: Partial<HistorySearch>) => navigate({ search: (s) => ({ ...s, ...patch }), replace: true });
   const q = useQuery(historyQuery());
   const narrow = useMediaQuery('(max-width: 47.99rem)');
+  const purchasesOn = useFeature('purchases');
+  const orders = useQuery(purchasesQuery(purchasesOn));
+  const showOrders = purchasesOn && search.orders;
 
   const entries = q.data?.entries;
   const shown = useMemo(() => (entries ? filterHistory(entries, search) : []), [entries, search]);
@@ -65,6 +73,15 @@ export function HistoryView() {
           </button>
         )}
       </SideSection>
+      {purchasesOn && (
+        <SideSection title="Store orders">
+          {orders.data && orders.data.purchases.length > 0 && <OrdersTotals totals={orders.data} tone="chrome" />}
+          <ReadOrdersDialog trigger={<Button>Read my orders</Button>} onReview={(order) => set({ orders: true, order })} />
+          <button type="button" onClick={() => set({ orders: !search.orders, order: undefined })} className="self-start cursor-pointer text-sm text-on-chrome-muted underline hover:text-on-chrome">
+            {search.orders ? 'Show timeline' : 'Show orders'}
+          </button>
+        </SideSection>
+      )}
       <SideSection title="What the kinds mean">
         <dl className="flex flex-col gap-1.5 text-xs leading-snug text-on-chrome-muted">
           {kinds.map((k) => (
@@ -79,13 +96,25 @@ export function HistoryView() {
   );
 
   let body;
-  if (q.isPending) body = <GridSkeleton label="Reading your purchase history…" />;
+  if (showOrders) {
+    if (orders.isPending) body = <GridSkeleton label="Reading your store orders…" />;
+    else if (orders.isError) body = <ErrorNote error={orders.error} onRetry={() => orders.refetch()} />;
+    else {
+      const list = <OrdersList data={orders.data} active={search.order} onPick={(order) => set({ order })} />;
+      const inspector = search.order ? (
+        <OrderReview key={search.order} purchaseId={search.order} onBack={narrow ? () => set({ order: undefined }) : undefined} onForgotten={() => set({ order: undefined })} />
+      ) : (
+        <EmptyNote title="Pick an order">Choose an order to see what you paid for each card and match it to cards you own.</EmptyNote>
+      );
+      body = narrow ? (search.order ? inspector : list) : <SplitPanes id="mm.history.orders.split" label="Resize orders list" list={list} inspector={inspector} defaults={[40, 60]} />;
+    }
+  } else if (q.isPending) body = <GridSkeleton label="Reading your purchase history…" />;
   else if (q.isError) body = <ErrorNote error={q.error} onRetry={() => q.refetch()} />;
   else if (!q.data.entries.length) body = <EmptyNote title="Nothing added yet">Add cards from Collection → Add cards; every addition appears here with what came in and what it is worth.</EmptyNote>;
   else {
     const list = <Timeline groups={groups} total={shown.length} active={search.entry} onPick={(entry) => set({ entry })} />;
     const inspector = search.entry ? (
-      <EntryInspector key={search.entry} ingestId={search.entry} view={search.view} onView={(view) => set({ view })} onOpen={(entry) => set({ entry })} onBack={narrow ? () => set({ entry: undefined }) : undefined} />
+      <EntryInspector key={search.entry} ingestId={search.entry} view={search.view} onReview={(order) => set({ orders: true, order })} onView={(view) => set({ view })} onOpen={(entry) => set({ entry })} onBack={narrow ? () => set({ entry: undefined }) : undefined} />
     ) : (
       <EmptyNote title="Pick an entry">Choose an entry to see the exact cards it brought in and what they are worth today.</EmptyNote>
     );
@@ -166,6 +195,7 @@ function EntryRow({ e, rowKey, active, tabbable, onFocus, onPick }: { e: History
         {e.ledgered ? (
           <>
             <span className="text-ink">{fmtUsd(e.value_usd)}</span>
+            {e.kind === 'purchase' && e.paid_usd != null && <span className="text-ink-muted">Paid {fmtUsd(e.paid_usd)}</span>}
             <span className="text-ink-muted">{e.copies_in ? `+${fmtInt(e.copies_in)}` : ''}{e.copies_out ? ` −${fmtInt(e.copies_out)}` : ''}</span>
           </>
         ) : (
@@ -211,7 +241,7 @@ function MovesRun({ row, active, tabbable, onFocus, onPick }: { row: Extract<Tim
   );
 }
 
-function EntryInspector({ ingestId, view, onView, onOpen, onBack }: { ingestId: number; view: 'grid' | 'list'; onView: (v: 'grid' | 'list') => void; onOpen: (id: number) => void; onBack?: () => void }) {
+function EntryInspector({ ingestId, view, onView, onReview, onOpen, onBack }: { ingestId: number; view: 'grid' | 'list'; onView: (v: 'grid' | 'list') => void; onReview: (purchaseId: number) => void; onOpen: (id: number) => void; onBack?: () => void }) {
   const q = useQuery(historyEventQuery(ingestId));
   const all = useQuery(historyQuery());
   const reconstructed = all.data?.entries.find((x) => x.kind === 'checklist' && x.dated === 'reconstructed')?.ingest_id;
@@ -267,6 +297,9 @@ function EntryInspector({ ingestId, view, onView, onOpen, onBack }: { ingestId: 
             {note && <p className="mt-0.5 text-xs text-ink-muted">{note}</p>}
           </div>
           <span className="ml-auto flex items-center gap-3 text-sm">
+            {e.kind === 'purchase' && e.purchase_id != null && (
+              <Button tone="paper" onClick={() => onReview(e.purchase_id!)}>Review order</Button>
+            )}
             {e.deck_slug && (
               <Link to="/decks" search={{ deck: e.deck_slug }} className="voice-semi text-accent-ink underline-offset-2 hover:underline">
                 Open deck
@@ -284,6 +317,7 @@ function EntryInspector({ ingestId, view, onView, onOpen, onBack }: { ingestId: 
             <Fact label="Came in" value={fmtCount(e.copies_in, 'copy', 'copies')} />
             {e.copies_out > 0 && <Fact label={e.dated === 'reconstructed' ? 'Moved to products' : 'Removed'} value={`−${fmtInt(e.copies_out)}`} />}
             <Fact label="Still held" value={`${fmtInt(e.held)} · ${fmtCount(e.printings, 'printing')}`} />
+            {e.kind === 'purchase' && e.paid_usd != null && <Fact label="Paid" value={fmtUsd(e.paid_usd)} />}
             <Fact label="Worth today" value={fmtUsd(e.value_usd)} strong />
           </dl>
         )}

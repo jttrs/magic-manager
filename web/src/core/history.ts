@@ -5,7 +5,7 @@ import type { HistoryEntryOut, HistoryLineOut } from './api';
 import { typeGroup, TYPE_GROUPS } from './cardFacts';
 import { fromPrinting, groupCards, type GuideCard, type GuideGroup } from './guideCard';
 
-const KINDS = ['deck', 'pool', 'singles', 'checklist', 'unknown', 'move'] as const;
+const KINDS = ['deck', 'pool', 'singles', 'checklist', 'unknown', 'move', 'purchase'] as const;
 export type HistoryKind = (typeof KINDS)[number];
 
 export const KIND_LABEL: Record<HistoryKind, string> = {
@@ -15,6 +15,7 @@ export const KIND_LABEL: Record<HistoryKind, string> = {
   checklist: 'Checklist',
   unknown: 'Unknown',
   move: 'Deck move',
+  purchase: 'Order',
 };
 
 export const KIND_HELP: Record<HistoryKind, string> = {
@@ -24,6 +25,7 @@ export const KIND_HELP: Record<HistoryKind, string> = {
   checklist: 'A bulk checklist ingest. Which product the cards came out of was not recorded.',
   unknown: 'Copies reconstructed when the ledger began, with no known source.',
   move: 'Cards pledged to a built deck or released from one. What you own does not change.',
+  purchase: 'A store order read from your order history (Mana Pool, TCGplayer, Card Kingdom) with what you paid.',
 };
 
 const list = <T extends z.ZodTypeAny>(item: T) =>
@@ -40,6 +42,10 @@ export const historySearch = z.object({
   /** The entry open in the inspector (ingest id). */
   entry: z.coerce.number().int().positive().optional().catch(undefined),
   view: z.enum(['grid', 'list']).catch('list').default('list'),
+  /** Show the store orders list instead of the timeline. */
+  orders: z.boolean().catch(false).default(false),
+  /** The store order open in the inspector (purchase id). */
+  order: z.coerce.number().int().positive().optional().catch(undefined),
 });
 export type HistorySearch = z.infer<typeof historySearch>;
 

@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useState } from 'react';
 import {
-  CompanionError, isOlder, onHello, ping, request, type CompanionHello, type CompanionKind, type ErrorCatalog,
+  CompanionError, isOlder, onHello, ping, request, type CompanionHello, type CompanionKind, type ErrorCatalog, type RequestParams,
 } from '../core/companion';
 import { ApiError } from '../core/apiError';
 import { trackCompanionError } from './analytics';
@@ -17,7 +17,7 @@ export type CompanionState = {
   outdated: boolean;
   catalog: ErrorCatalog;
   /** Ask the companion to read; resolves after you approve in its window. */
-  read: <K extends CompanionKind>(kind: K, params?: { url?: string }, onAwaiting?: (summary: string) => void) => ReturnType<typeof request<K>>;
+  read: <K extends CompanionKind>(kind: K, params?: RequestParams, onAwaiting?: (summary: string) => void) => ReturnType<typeof request<K>>;
 };
 
 const EMPTY: ErrorCatalog = {};
@@ -38,7 +38,7 @@ export function useCompanion(): CompanionState {
   }, []);
 
   const read = useCallback(
-    <K extends CompanionKind>(kind: K, params: { url?: string } = {}, onAwaiting?: (summary: string) => void) =>
+    <K extends CompanionKind>(kind: K, params: RequestParams = {}, onAwaiting?: (summary: string) => void) =>
       request(window, kind, params, { catalog, onAwaitingApproval: onAwaiting }).catch((e: unknown) => {
         if (e instanceof CompanionError) {
           trackCompanionError(e.code);

@@ -45,6 +45,7 @@ METHODS = frozenset({
     "unattributed-backfill",
     "collection-import",
     "collection-export",
+    "purchase",
 })
 
 

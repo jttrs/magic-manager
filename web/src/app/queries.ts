@@ -3,7 +3,7 @@ import { keepPreviousData, queryOptions } from '@tanstack/react-query';
 import type { DraftCardIn } from '../core/api';
 import { apiErrorFrom } from '../core/apiError';
 import type { RankingRequest } from '../core/rankings';
-import { analyticsConsent, analyticsSummary, analyticsCatalog, dealsTabs, dealsWatched, marketProductCost, marketSecretLair, undoInfo, cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, cardFloors, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs, historyList, historyEvent, exploreRanking, exploreRankingOptions, cardCombos, deckCombos, draftCombos, artTags, artSwaps, jumpstartSets, jumpstartView, jumpstartPack, surfOptions, companionInfo, scrapersHealth } from '../core/api';
+import { analyticsConsent, analyticsSummary, analyticsCatalog, dealsTabs, dealsWatched, marketProductCost, marketSecretLair, undoInfo, cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, cardFloors, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs, historyList, historyEvent, exploreRanking, exploreRankingOptions, cardCombos, deckCombos, draftCombos, artTags, artSwaps, jumpstartSets, jumpstartView, jumpstartPack, surfOptions, companionInfo, scrapersHealth, purchaseStores, purchaseList, purchaseReview } from '../core/api';
 
 export function unwrap<T>(r: { data?: T; error?: unknown; response?: Response }): T {
   if (r.error !== undefined || r.data === undefined) throw apiErrorFrom(r.error, r.response);
@@ -263,6 +263,32 @@ export const historyEventQuery = (ingestId?: number) =>
     queryKey: ['history', ingestId],
     queryFn: async ({ signal }) => unwrap(await historyEvent({ path: { ingest_id: ingestId! }, signal })),
     enabled: ingestId != null,
+    staleTime: 30_000,
+  });
+
+/** Order history (purchases flag): what each store's reader can be trusted for. */
+export const purchaseStoresQuery = (enabled: boolean) =>
+  queryOptions({
+    queryKey: ['purchases', 'stores'],
+    queryFn: async ({ signal }) => unwrap(await purchaseStores({ signal })),
+    enabled,
+    staleTime: Infinity,
+  });
+
+/** Every store order read so far, with the paid / worth / gain totals. */
+export const purchasesQuery = (enabled: boolean) =>
+  queryOptions({
+    queryKey: ['purchases'],
+    queryFn: async ({ signal }) => unwrap(await purchaseList({ signal })),
+    enabled,
+    staleTime: 30_000,
+  });
+
+export const purchaseReviewQuery = (id: number | undefined, enabled: boolean) =>
+  queryOptions({
+    queryKey: ['purchases', id],
+    queryFn: async ({ signal }) => unwrap(await purchaseReview({ path: { purchase_id: id! }, signal })),
+    enabled: enabled && id != null,
     staleTime: 30_000,
   });
 

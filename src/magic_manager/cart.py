@@ -119,17 +119,10 @@ def _local_cards(*, ids: set[str], set_numbers: set[tuple[str, str]]) -> tuple[d
 
 def _fill_ids(ids: set[str]) -> dict[str, dict]:
     """Printings the cart names by scryfall_id that aren't in the local catalog
-    yet (an unsynced set) — fetched once from Scryfall and upserted, so a cart
-    read in the browser identifies every exact printing."""
-    from . import scryfall
-    try:
-        found, _ = scryfall.collection([{"id": s} for s in sorted(ids)])
-    except Exception:  # noqa: BLE001 — offline: those lines stay unidentified, named
-        return {}
-    with db.connect() as conn:
-        sets_mod.upsert_lookup_cards(conn, found)
+    yet (an unsynced set) — fetched once and upserted (``addcards.ensure_printings``)."""
+    from . import addcards
     return {c["id"]: {"scryfall_id": c["id"], "name": c.get("name"), "set_code": c.get("set"),
-                      "collector_number": c.get("collector_number")} for c in found}
+                      "collector_number": c.get("collector_number")} for c in addcards.ensure_printings(ids)}
 
 
 def map_cart(cart: list[dict], *, remote: bool = True,

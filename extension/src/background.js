@@ -14,6 +14,7 @@ import {
   APPROVAL_TTL_MS, KINDS, MANAPOOL_CART_URL, MANAPOOL_ORIGINS, MAX_PAYLOAD_BYTES, MOXFIELD_DECK,
   MOXFIELD_ORIGINS, STORE_ORIGINS, storeOf, summarize,
 } from './protocol.js';
+import { readOrderList, readOrders, ORDER_FEATURES } from './orders.js';
 
 const SELF = chrome.runtime.getURL('');
 const CATALOG = fetch(chrome.runtime.getURL('errors.json')).then((r) => r.json()).then((j) => j.codes);
@@ -32,7 +33,7 @@ async function appOrigin() {
 
 async function features() {
   const has = (origins) => chrome.permissions.contains({ origins }).catch(() => false);
-  return { cart: await has(MANAPOOL_ORIGINS), deals: await has(STORE_ORIGINS), moxfield: await has(MOXFIELD_ORIGINS) };
+  return { cart: await has(MANAPOOL_ORIGINS), deals: await has(STORE_ORIGINS), moxfield: await has(MOXFIELD_ORIGINS), ...await ORDER_FEATURES(has) };
 }
 
 chrome.action.onClicked.addListener(() => chrome.runtime.openOptionsPage());
@@ -126,7 +127,11 @@ chrome.windows.onRemoved.addListener(async (windowId) => {
 
 // ---------- readers ----------
 
-const READERS = { cart: readCart, tabs: readTabs, moxfield: readMoxfield };
+const READERS = {
+  cart: readCart, tabs: readTabs, moxfield: readMoxfield,
+  order_list: (params) => readOrderList(params, { fail, loaded, inject }),
+  orders: (params) => readOrders(params, { fail, loaded, inject }),
+};
 
 /** Wait until a tab we opened has loaded (or give up). */
 async function loaded(tabId, timeoutMs) {

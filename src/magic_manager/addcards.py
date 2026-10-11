@@ -115,6 +115,29 @@ def printings_for_ids(sids: Iterable[str]) -> dict[str, dict]:
     return _printings(_load_ids(sids).values())
 
 
+def ensure_printings(ids: Iterable[str]) -> list[dict]:
+    """Fetch printings (by scryfall_id) the local catalog lacks — an unsynced set —
+    once from Scryfall and upsert them. Returns the fetched cards; offline it
+    returns ``[]`` and those ids simply stay unknown. Shared by the cart audit
+    and purchases (orders read in the browser name exact printings)."""
+    from . import scryfall
+    ids = sorted({i for i in ids if i})
+    if not ids:
+        return []
+    with db.connect() as conn:
+        have = {r[0] for r in conn.execute(
+            f"SELECT scryfall_id FROM cards WHERE scryfall_id IN ({','.join('?' * len(ids))})", ids)}
+    missing = [i for i in ids if i not in have]
+    if not missing:
+        return []
+    try:
+        found, _ = scryfall.collection([{"id": s} for s in missing])
+    except Exception:  # noqa: BLE001 — offline: those printings stay unknown
+        return []
+    _upsert(found)
+    return found
+
+
 def _upsert(cards: list[dict]) -> None:
     if cards:
         with db.connect() as conn:

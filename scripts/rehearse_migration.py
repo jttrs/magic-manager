@@ -65,6 +65,8 @@ _EARMARK_TABLES = ("earmarked_products", "earmark_links", "earmark_targets")
 # V32 creates earmark_prices already SEEDED from each link's asking price, so it
 # can only be byte-compared on a DB that is already at V32+.
 _PRICE_HISTORY_TABLES = ("earmark_prices",)
+# V34+ store orders read from the user's own order history, with the price paid.
+_PURCHASE_TABLES = ("purchases", "purchase_lines")
 _INGEST_LOG_CARRIED_COLS = (
     "at", "label", "source_path", "archived_path", "mode",
     "rows_added", "rows_updated", "rows_zeroed", "status", "error",
@@ -326,6 +328,8 @@ def _precious_tables(pre_version: int) -> list[str]:
         precious += list(_EARMARK_TABLES)
     if pre_version >= 32:
         precious += list(_PRICE_HISTORY_TABLES)
+    if pre_version >= 34:
+        precious += list(_PURCHASE_TABLES)
     return precious
 
 

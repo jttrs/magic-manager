@@ -14,10 +14,12 @@ connected. Security design: [`browser-companion-security.md`](browser-companion-
 2. App header → plug icon → **Download the companion**, unzip, `chrome://extensions` → Developer mode
    → **Load unpacked**.
 3. Companion icon → enter the app address → **Pair** (Chrome asks to allow it) → reload the app tab.
-4. Optional: switch on **Deals** and/or **Moxfield** on the companion's settings page (each asks
-   Chrome for just its sites).
+4. Optional: switch on **Deals**, **Moxfield** and/or **Order history** (TCGplayer + Card Kingdom;
+   Mana Pool needs nothing extra) on the companion's settings page (each asks Chrome for just its sites).
 
-Where it shows up: Collection → *Check my Mana Pool cart* (**Read my cart**, plus the bookmarklet
+Where it shows up: Collection → Purchase history → *Read my orders* (flag `purchases`; Mana Pool,
+TCGplayer, Card Kingdom order history — see [`purchases.md`](purchases.md), incl. what is and isn't
+verified per store), Collection → *Check my Mana Pool cart* (**Read my cart**, plus the bookmarklet
 paste), Market → Deals → **Read my open tabs** (tabs + open-tab store prices), Add cards → Deck and
 Decks → Import (Moxfield links). Without a connected companion each falls back to the existing path.
 
@@ -25,7 +27,8 @@ Decks → Import (Moxfield links). Without a connected companion each falls back
 
 | Piece | Where | Role |
 |---|---|---|
-| Readers | `extension/src/readers/*.js` | Deterministic page reads (classic scripts, shared with the bookmarklet). |
+| Readers | `extension/src/readers/*.js` | Deterministic page reads (classic scripts, shared with the bookmarklet). Order history: `manapool-orders.js`, `tcgplayer-orders.js`, `cardkingdom-orders.js`. |
+| Order reads | `extension/src/orders.js` | `order_list` / `orders` requests: its own background tab on the store's order pages, follows the pager, never your tabs, never a form. |
 | Worker | `extension/src/background.js` | Validates the asker, runs a reader, opens the approval window, delivers the result. |
 | Bridge | `extension/src/bridge.js` | Content script on the paired app origin only; relays postMessage ↔ worker. |
 | Approval / settings | `extension/src/approve.*`, `options.*` | The extension's own pages. |
@@ -36,7 +39,7 @@ Decks → Import (Moxfield links). Without a connected companion each falls back
 | Server | `api/companion.py` → `cart.audit`, `deals.supplied_tabs`, `storefetch.page_from_extract`, `decksource.payload_from_moxfield` → `addcards.deck_lines_from_payload` | Thin adapters over existing engines. |
 | Engine helpers | `magic_manager/companion.py` | Generated files, reproducible zip, bookmarklet, error catalog. |
 
-Routes: `GET /api/companion` (version + error catalog, unflagged), `GET /api/companion/extension.zip`
+Routes: `POST /api/purchases/orders` (+ the `/api/purchases*` review/apply routes), `GET /api/companion` (version + error catalog, unflagged), `GET /api/companion/extension.zip`
 and `/bookmarklet`, `POST /api/cart/lines`, `POST /api/deals/tabs`,
 `POST /api/ingest/deck-from-browser`, and `pages` on the `deals.read_prices` job input.
 
@@ -55,11 +58,9 @@ and `/bookmarklet`, `POST /api/cart/lines`, `POST /api/deals/tabs`,
 
 ## Pinned follow-ups (owner, 2026-10-07)
 
-- **Order history → Purchase history** (new idea, don't lose it): read the user's own order history
-  (Mana Pool first, then TCGplayer and Card Kingdom) in their browser and record each order as an
-  acquisition in the V19 ledger, with the real price paid and date. Same rules: click-to-read,
-  approve, lines only, deduped by store + order id. Likely needs a new ingest method, so ask the
-  coordinator before any schema change.
+- ~~Order history → Purchase history~~ — built (V34, flag `purchases`): [`purchases.md`](purchases.md).
+  Still open there: TCGplayer pages 2+, Card Kingdom single cards, a live end-to-end run of the
+  extension's order flow.
 - **Other carts**: TCGplayer and Card Kingdom carts through the same `cart.audit` seam.
 - ~~**Bot-walled stores** as Deals `rendered` recipes: Amazon, Walmart, GameStop.~~ Done 2026-10-10
   (extension 0.1.1): open-tab recipes that count only the store's own new offers

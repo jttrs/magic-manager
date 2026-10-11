@@ -1,0 +1,112 @@
+{
+  "ok": true,
+  "order": {
+    "order_id": "100102",
+    "ordered_on": "2026-09-23",
+    "lines": [
+      {
+        "kind": "single",
+        "scryfall_id": "dcf3b17b-f2f6-4702-864d-8c96100b0563",
+        "set_code": "dsk",
+        "collector_number": "236",
+        "name": "The Swarmweaver",
+        "set_name": "Duskmourn: House of Horror",
+        "finish": "nonfoil",
+        "condition": "NM",
+        "treatments": [],
+        "quantity": 2,
+        "price": 0.15
+      },
+      {
+        "kind": "single",
+        "scryfall_id": "687695ad-d212-4da4-a326-ce9876afdda2",
+        "set_code": "bot",
+        "collector_number": "15",
+        "name": "Ultra Magnus, Tactician // Ultra Magnus, Armored Carrier",
+        "set_name": "Transformers",
+        "finish": "nonfoil",
+        "condition": "NM",
+        "treatments": [],
+        "quantity": 1,
+        "price": 0.31
+      },
+      {
+        "kind": "single",
+        "scryfall_id": "f01aaada-2525-4f92-83e8-bbc61fa7b9cd",
+        "set_code": "eoe",
+        "collector_number": "288",
+        "name": "Astelli Reclaimer",
+        "set_name": "Edge of Eternities",
+        "finish": "nonfoil",
+        "condition": "NM",
+        "treatments": [
+          "Borderless"
+        ],
+        "quantity": 1,
+        "price": 0.2
+      },
+      {
+        "kind": "sealed",
+        "scryfall_id": null,
+        "set_code": null,
+        "collector_number": null,
+        "name": "Adventures in the Forgotten Realms Commander Decks Set of 4",
+        "set_name": "Forgotten Realms Commander",
+        "finish": "nonfoil",
+        "condition": null,
+        "treatments": [],
+        "quantity": 1,
+        "price": 375
+      },
+      {
+        "kind": "single",
+        "scryfall_id": "c654737d-34ac-42ff-ae27-3a3bbb930fc1",
+        "set_code": "dom",
+        "collector_number": "199",
+        "name": "Muldrotha, the Gravetide",
+        "set_name": "Dominaria",
+        "finish": "nonfoil",
+        "condition": "NM",
+        "treatments": [],
+        "quantity": 1,
+        "price": 1
+      },
+      {
+        "kind": "single",
+        "scryfall_id": "00174be7-0dc8-43b9-81b6-f25a8c3fb4eb",
+        "set_code": "woe",
+        "collector_number": "1",
+        "name": "Archon of the Wild Rose",
+        "set_name": "Wilds of Eldraine",
+        "finish": "foil",
+        "condition": "NM",
+        "treatments": [],
+        "quantity": 1,
+        "price": 0.23
+      },
+      {
+        "kind": "single",
+        "scryfall_id": "392c3816-b2b2-48e8-970f-b407fa692368",
+        "set_code": "hoc",
+        "collector_number": "70",
+        "name": "Arwen, Mortal Queen",
+        "set_name": "The Hobbit Eternal",
+        "finish": "foil",
+        "condition": "NM",
+        "treatments": [
+          "Surge Foil",
+          "Borderless"
+        ],
+        "quantity": 1,
+        "price": 19.88
+      }
+    ],
+    "subtotal": 494.28,
+    "shipping": 2.7,
+    "tax": 51.93,
+    "fees": 23.85,
+    "credit": 28.61,
+    "total": 544.15
+  },
+  "warnings": []
+}

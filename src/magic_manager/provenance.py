@@ -10,6 +10,8 @@ net-zero, so balances stay exact). Each event classifies into a *source*:
   card ``pool``) and name come from the ``decks`` rows sharing that fileName;
 * **singles** — checklists, intake, ad-hoc adds, block/collection imports
   (``backfill:checklist`` reconstructed archived checklists, so it counts too);
+* a **purchase** — a store order read by the browser companion (V34 ``purchase``
+  events, labelled ``purchase:<store>:<order id>``);
 * **unknown** — the generic best-effort buckets (``backfill:precon``,
   ``unattributed-backfill``, ``migration-backfill``).
 
@@ -35,8 +37,8 @@ _PRODUCT_PREFIXES = ("precon:", "trueup:")
 
 @dataclass(frozen=True)
 class Source:
-    key: str                   # "singles" | "unknown" | "product:<fileName>"
-    kind: str                  # "singles" | "unknown" | "deck" | "pool"
+    key: str                   # "singles" | "unknown" | "product:<fileName>" | "purchase:<store>:<order id>"
+    kind: str                  # "singles" | "unknown" | "deck" | "pool" | "purchase"
     label: str
     set_code: str | None = None   # products: the fileName's set suffix (lowercase)
 
@@ -90,8 +92,18 @@ def _product_file_name(method: str, label: str | None, source_path: str | None) 
     return None
 
 
+_STORE_NAMES = {"manapool": "Mana Pool", "tcgplayer": "TCGplayer", "cardkingdom": "Card Kingdom"}
+
+
+def _purchase_title(label: str | None) -> str:
+    _, store, order = (label or "purchase::").split(":", 2)
+    return f"{_STORE_NAMES.get(store, store or 'Store')} order #{order}" if order else "Store order"
+
+
 def _classify(method: str, label: str | None, source_path: str | None,
               products: dict[str, tuple[str, str]]) -> Source:
+    if method == "purchase":
+        return Source(label or "purchase", "purchase", _purchase_title(label))
     if method in _UNKNOWN_METHODS or label in _UNKNOWN_LABELS:
         return Source(UNKNOWN_KEY, "unknown", "Unknown origin")
     fn = _product_file_name(method, label, source_path)
@@ -194,7 +206,7 @@ def card_holdings(scryfall_id: str) -> Holdings:
 # against acquisitions newest-first (LIFO): per printing-finish, the held copies
 # across all entries always sum to what is owned today.
 
-HistoryKind = Literal["deck", "pool", "singles", "checklist", "unknown", "move"]
+HistoryKind = Literal["deck", "pool", "singles", "checklist", "unknown", "move", "purchase"]
 
 _SINGLES_TITLES = {
     "adhoc": "Added by hand", "intake": "Scan session", "import-block": "Imported list",
@@ -226,6 +238,8 @@ class HistoryEntry:
     product: str | None = None   # MTGJSON fileName
     set_code: str | None = None
     deck_slug: str | None = None
+    purchase_id: int | None = None   # purchase entries: the stored order
+    paid_usd: float | None = None    # purchase entries: card prices paid (lines with a price today, like value_usd)
 
 
 @dataclass
@@ -274,6 +288,9 @@ def _describe(e, products: dict[str, tuple[str, str]], deck_names: dict[str, str
         h.title = f"Built {name}" if method == "deck-assign" else f"Broke down {name}"
         return h
     src = _classify(method, label, path, products)
+    if src.kind == "purchase":
+        h.kind, h.title, h.detail = "purchase", src.label, None
+        return h
     if src.kind == "unknown":
         h.kind, h.title = "unknown", "Provenance unknown"
         h.detail = _UNKNOWN_DETAIL.get(label, label or None)
@@ -398,6 +415,31 @@ def _as_of(prices: dict[str, dict]) -> str | None:
     return max(dates)[:10] if dates else None
 
 
+def _attach_purchases(conn, entries: list[HistoryEntry]) -> None:
+    """Purchase entries carry their stored order and what you paid for the
+    copies they still hold (the per-line unit price × held copies)."""
+    ids = [h.ingest_id for h in entries if h.kind == "purchase"]
+    if not ids:
+        return
+    ph = ",".join("?" * len(ids))
+    pid = {r[0]: r[1] for r in conn.execute(f"SELECT ingest_id, purchase_id FROM purchases WHERE ingest_id IN ({ph})", ids)}
+    unit: dict[tuple[int, str, str], int] = {}
+    for iid, sid, fin, cents, qty in conn.execute(
+        f"""SELECT p.ingest_id, l.scryfall_id, l.finish, SUM(l.unit_price_cents * (l.matched + l.added)),
+                   SUM(l.matched + l.added)
+            FROM purchase_lines l JOIN purchases p ON p.purchase_id = l.purchase_id
+            WHERE p.ingest_id IN ({ph}) AND l.scryfall_id IS NOT NULL AND l.unit_price_cents IS NOT NULL
+            GROUP BY p.ingest_id, l.scryfall_id, l.finish""", ids):
+        if qty:
+            unit[(iid, sid, fin)] = cents / qty
+    held = _held(conn, {k[1] for k in unit})
+    for h in entries:
+        if h.kind != "purchase":
+            continue
+        h.purchase_id = pid.get(h.ingest_id)
+        h.paid_usd = round(sum(c * held.get(k, 0) for k, c in unit.items() if k[0] == h.ingest_id) / 100, 2)
+
+
 def history(*, conn=None) -> History:
     """Every (non-failed) ingest event, newest first, with copies in/out, the copies
     it still accounts for and their value at local prices (never a network fetch
@@ -414,6 +456,7 @@ def history(*, conn=None) -> History:
             h = _describe(e, *ctx)
             _fill(h, by_event.get(h.ingest_id, []), held, prices)
             entries.append(h)
+        _attach_purchases(c, entries)
         return History(entries, _as_of(prices), sorted(set(stale)))
 
     if conn is not None:
@@ -435,6 +478,7 @@ def history_event(ingest_id: int) -> tuple[HistoryEntry, list[HistoryLine]]:
         prices, _ = _priced(c, {r[1] for r in bal})
         h = _describe(rows[0], *_context(c))
         _fill(h, bal, held, prices)
+        _attach_purchases(c, [h])
     lines = [HistoryLine(sid, fin, cin, cout, held.get((i, sid, fin), 0), _unit_usd(prices.get(sid), fin))
              for i, sid, fin, cin, cout, _b in bal]
     lines.sort(key=lambda ln: (-(max(ln.held, 0) * (ln.unit_usd or 0)), -ln.held, ln.scryfall_id))

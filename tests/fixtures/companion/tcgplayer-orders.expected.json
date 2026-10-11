@@ -1,0 +1,93 @@
+{
+  "ok": true,
+  "orders": [
+    {
+      "order_id": "AAAA0001-000001-00001",
+      "ordered_at": "2026-09-23",
+      "lines": [
+        {
+          "kind": "sealed",
+          "tcgplayer_product_id": 271583,
+          "name": "Commander Legends: Battle for Baldur's Gate - Commander Deck Display",
+          "set_name": "Commander Legends: Battle for Baldur's Gate",
+          "rarity": null,
+          "finish": "nonfoil",
+          "condition": null,
+          "quantity": 1,
+          "price": 665
+        }
+      ],
+      "subtotal": 665,
+      "shipping": 24.99,
+      "tax": 72.79,
+      "total": 762.78
+    },
+    {
+      "order_id": "AAAA0002-000002-00002",
+      "ordered_at": "2026-03-01",
+      "lines": [
+        {
+          "kind": "single",
+          "tcgplayer_product_id": 495609,
+          "name": "Tyvar the Bellicose",
+          "set_name": "March of the Machine: The Aftermath",
+          "rarity": "M",
+          "finish": "foil",
+          "condition": "Near Mint",
+          "quantity": 1,
+          "price": 17
+        }
+      ],
+      "subtotal": 17,
+      "shipping": 0.99,
+      "tax": 1.9,
+      "total": 19.89
+    },
+    {
+      "order_id": "AAAA0003-000003-00003",
+      "ordered_at": "2026-03-01",
+      "lines": [
+        {
+          "kind": "single",
+          "tcgplayer_product_id": 212168,
+          "name": "Species Specialist",
+          "set_name": "Commander 2020",
+          "rarity": "R",
+          "finish": "nonfoil",
+          "condition": "Near Mint",
+          "quantity": 1,
+          "price": 11.44
+        },
+        {
+          "kind": "single",
+          "tcgplayer_product_id": 269596,
+          "name": "Master of Ceremonies",
+          "set_name": "Commander: Streets of New Capenna",
+          "rarity": "R",
+          "finish": "nonfoil",
+          "condition": "Near Mint",
+          "quantity": 1,
+          "price": 16.95
+        },
+        {
+          "kind": "single",
+          "tcgplayer_product_id": 589341,
+          "name": "Gilded Lotus",
+          "set_name": "Foundations",
+          "rarity": "R",
+          "finish": "foil",
+          "condition": "Near Mint",
+          "quantity": 1,
+          "price": 0.74
+        }
+      ],
+      "subtotal": 29.13,
+      "shipping": 0.99,
+      "tax": 3.17,
+      "total": 33.29
+    }
+  ],
+  "next": "/myaccount/orderhistory?PageNumber=2",
+  "range": "2026",
+  "warnings": []
+}

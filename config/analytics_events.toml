@@ -122,6 +122,17 @@ code = { type = "enum", required = true, values = [
   "moxfield.changed",
   "moxfield.http",
   "deck.empty",
+  "permission.orders_off",
+  "orders.sign_in",
+  "orders.none",
+  "orders.page_changed",
+  "orders.load_timeout",
+  "orders.not_scriptable",
+  "orders.row_unreadable",
+  "orders.unverified_line",
+  "orders.not_found",
+  "orders.too_many_pages",
+  "orders.no_lines",
 ] }
 
 # ---------------------------------------------------------------- usage

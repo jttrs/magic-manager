@@ -2,11 +2,11 @@
 // (each asks Chrome for just its sites, at that moment).
 
 import { STORES } from './stores.js';
-import { MOXFIELD_ORIGINS, STORE_ORIGINS, MANAPOOL_ORIGINS, parseAppOrigin } from './protocol.js';
+import { MOXFIELD_ORIGINS, ORDER_ORIGINS, STORE_ORIGINS, MANAPOOL_ORIGINS, parseAppOrigin } from './protocol.js';
 
 const $ = (id) => document.getElementById(id);
 const BRIDGE = 'mm-bridge';
-const granted = { deals: false, moxfield: false };
+const granted = { deals: false, moxfield: false, orders: false };
 
 async function status(text, isError = false) {
   $('pair-status').textContent = text;
@@ -26,6 +26,8 @@ async function refresh() {
   granted.moxfield = await has(MOXFIELD_ORIGINS);
   $('deals').textContent = granted.deals ? 'Switch off' : 'Switch on';
   $('moxfield').textContent = granted.moxfield ? 'Switch off' : 'Switch on';
+  granted.orders = await has(ORDER_ORIGINS);
+  $('orders').textContent = granted.orders ? 'Switch off' : 'Switch on';
 }
 
 async function pair() {
@@ -68,4 +70,5 @@ $('pair').addEventListener('click', pair);
 $('unpair').addEventListener('click', unpair);
 $('deals').addEventListener('click', () => toggle('deals', STORE_ORIGINS));
 $('moxfield').addEventListener('click', () => toggle('moxfield', MOXFIELD_ORIGINS));
+$('orders').addEventListener('click', () => toggle('orders', ORDER_ORIGINS));
 refresh();

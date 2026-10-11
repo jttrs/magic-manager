@@ -42,6 +42,8 @@ CART_READER = EXT_DIR / "src" / "readers" / "manapool-cart.js"
 MANAPOOL_HOSTS = ["https://manapool.com/*"]
 MOXFIELD_HOSTS = ["https://moxfield.com/*", "https://*.moxfield.com/*"]
 APP_HOSTS = ["http://localhost/*", "http://127.0.0.1/*", "https://*.ts.net/*"]
+# Order history (purchases): TCGplayer's account site + Card Kingdom (optional "Order history" feature).
+ORDER_HOSTS = ["https://store.tcgplayer.com/*", "https://www.cardkingdom.com/*"]
 
 # Files that ship in the zip (everything under extension/ except these).
 _EXCLUDE = {"README.md"}
@@ -80,7 +82,7 @@ def generated_files() -> dict[Path, str]:
     """What the generated files must contain, keyed by path."""
     manifest = json.loads(MANIFEST.read_text())
     manifest["host_permissions"] = MANAPOOL_HOSTS
-    manifest["optional_host_permissions"] = APP_HOSTS + MOXFIELD_HOSTS + store_host_permissions()
+    manifest["optional_host_permissions"] = list(dict.fromkeys(APP_HOSTS + MOXFIELD_HOSTS + ORDER_HOSTS + store_host_permissions()))
     return {MANIFEST: json.dumps(manifest, indent=2) + "\n", STORES_JS: _stores_js()}
 
 

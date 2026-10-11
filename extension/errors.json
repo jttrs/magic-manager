@@ -155,6 +155,61 @@
       "where": "server",
       "message": "The deck arrived but had no cards in it.",
       "fix": "Check the deck has cards on Moxfield, then try again."
+    },
+    "permission.orders_off": {
+      "where": "extension",
+      "message": "The companion isn’t allowed to read your TCGplayer or Card Kingdom orders yet.",
+      "fix": "Open the companion’s settings and switch on Order history (Chrome will ask to allow store.tcgplayer.com and cardkingdom.com)."
+    },
+    "orders.sign_in": {
+      "where": "extension",
+      "message": "The store sent the companion to its sign-in page instead of your orders.",
+      "fix": "Sign in to that store in this browser, then try again."
+    },
+    "orders.none": {
+      "where": "extension",
+      "message": "No orders were found on your order history page.",
+      "fix": "On TCGplayer, pick the year to read in “Orders placed in” on the page itself, then try again."
+    },
+    "orders.page_changed": {
+      "where": "extension",
+      "message": "The store changed its order pages, so the companion couldn’t read them.",
+      "fix": "Nothing was read. Report it so the reader can be updated."
+    },
+    "orders.load_timeout": {
+      "where": "extension",
+      "message": "The store’s order page took too long to load.",
+      "fix": "Check you’re online and the store opens in this browser, then try again."
+    },
+    "orders.not_scriptable": {
+      "where": "extension",
+      "message": "Chrome didn’t let the companion read the store’s order page.",
+      "fix": "Check the companion still has access to that site (chrome://extensions → Details → Site access)."
+    },
+    "orders.row_unreadable": {
+      "where": "extension",
+      "message": "Some order lines couldn’t be fully read.",
+      "fix": "They’re listed in the approval window; check them against the store’s page."
+    },
+    "orders.unverified_line": {
+      "where": "extension",
+      "message": "A line isn’t in a format the companion has been checked against (Card Kingdom single cards are not verified yet).",
+      "fix": "It is recorded with its price but never added to your collection."
+    },
+    "orders.not_found": {
+      "where": "extension",
+      "message": "Some orders you picked weren’t on your order history pages.",
+      "fix": "Read the list again, then pick from it."
+    },
+    "orders.too_many_pages": {
+      "where": "extension",
+      "message": "Your order history has more pages than the companion reads at once.",
+      "fix": "Read the newest orders first; older ones can be read later."
+    },
+    "orders.no_lines": {
+      "where": "app",
+      "message": "The companion sent no orders.",
+      "fix": "Read your orders again."
     }
   }
 }

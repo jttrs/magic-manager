@@ -19,6 +19,38 @@ export type ActionOut = {
 };
 
 /**
+ * ApplyIn
+ */
+export type ApplyIn = {
+    /**
+     * Lines
+     */
+    lines: Array<DecisionIn>;
+};
+
+/**
+ * ApplyOut
+ */
+export type ApplyOut = {
+    /**
+     * Purchase Id
+     */
+    purchase_id: number;
+    /**
+     * Ingest Id
+     */
+    ingest_id: number;
+    /**
+     * Matched
+     */
+    matched: number;
+    /**
+     * Added
+     */
+    added: number;
+};
+
+/**
  * ArtSwapRowOut
  */
 export type ArtSwapRowOut = {
@@ -1549,6 +1581,24 @@ export type DayCount = {
 };
 
 /**
+ * DecisionIn
+ */
+export type DecisionIn = {
+    /**
+     * Line No
+     */
+    line_no: number;
+    /**
+     * Match
+     */
+    match?: number;
+    /**
+     * Add
+     */
+    add?: number;
+};
+
+/**
  * DeckCardOut
  */
 export type DeckCardOut = {
@@ -2489,9 +2539,9 @@ export type HistoryEntryOut = {
     /**
      * Kind
      *
-     * deck = playable product; pool = card pool (land pack, scene box, Secret Lair…); singles = cards added individually; checklist = a bulk checklist ingest (source product not recorded); unknown = reconstructed bucket with no known source; move = cards pledged to / released from a deck.
+     * deck = playable product; pool = card pool (land pack, scene box, Secret Lair…); singles = cards added individually; checklist = a bulk checklist ingest (source product not recorded); unknown = reconstructed bucket with no known source; move = cards pledged to / released from a deck; purchase = a store order read with the browser companion.
      */
-    kind: 'deck' | 'pool' | 'singles' | 'checklist' | 'unknown' | 'move';
+    kind: 'deck' | 'pool' | 'singles' | 'checklist' | 'unknown' | 'move' | 'purchase';
     /**
      * Title
      */
@@ -2560,6 +2610,18 @@ export type HistoryEntryOut = {
      * Deck to open: the moved deck, or the playable product's deck row.
      */
     deck_slug?: string | null;
+    /**
+     * Purchase Id
+     *
+     * Purchase entries: the stored store order.
+     */
+    purchase_id?: number | null;
+    /**
+     * Paid Usd
+     *
+     * Purchase entries: what you paid for the copies it still holds (item prices).
+     */
+    paid_usd?: number | null;
 };
 
 /**
@@ -3361,6 +3423,134 @@ export type OracleTagOut = {
 };
 
 /**
+ * OrderIn
+ */
+export type OrderIn = {
+    /**
+     * Order Id
+     */
+    order_id: string;
+    /**
+     * Ordered At
+     */
+    ordered_at: string;
+    /**
+     * Ordered On
+     */
+    ordered_on?: string | null;
+    /**
+     * Lines
+     */
+    lines: Array<OrderLineIn>;
+    /**
+     * Subtotal
+     */
+    subtotal?: number | null;
+    /**
+     * Shipping
+     */
+    shipping?: number | null;
+    /**
+     * Tax
+     */
+    tax?: number | null;
+    /**
+     * Fees
+     */
+    fees?: number | null;
+    /**
+     * Credit
+     */
+    credit?: number | null;
+    /**
+     * Total
+     */
+    total?: number | null;
+};
+
+/**
+ * OrderLineIn
+ */
+export type OrderLineIn = {
+    /**
+     * Kind
+     */
+    kind?: 'single' | 'sealed' | 'other';
+    /**
+     * Name
+     */
+    name?: string | null;
+    /**
+     * Set Name
+     */
+    set_name?: string | null;
+    /**
+     * Set Code
+     */
+    set_code?: string | null;
+    /**
+     * Collector Number
+     */
+    collector_number?: string | null;
+    /**
+     * Scryfall Id
+     */
+    scryfall_id?: string | null;
+    /**
+     * Tcgplayer Product Id
+     */
+    tcgplayer_product_id?: number | null;
+    /**
+     * Finish
+     */
+    finish?: 'nonfoil' | 'foil' | 'etched';
+    /**
+     * Condition
+     */
+    condition?: string | null;
+    /**
+     * Rarity
+     */
+    rarity?: string | null;
+    /**
+     * Treatments
+     */
+    treatments?: Array<string>;
+    /**
+     * Detail
+     */
+    detail?: string | null;
+    /**
+     * Quantity
+     */
+    quantity: number;
+    /**
+     * Price
+     */
+    price?: number | null;
+};
+
+/**
+ * OrdersIn
+ */
+export type OrdersIn = {
+    /**
+     * Store
+     */
+    store: 'manapool' | 'tcgplayer' | 'cardkingdom';
+    /**
+     * Orders
+     */
+    orders: Array<OrderIn>;
+    /**
+     * Warnings
+     */
+    warnings?: Array<{
+        [key: string]: unknown;
+    }>;
+};
+
+/**
  * OverpayOut
  */
 export type OverpayOut = {
@@ -3983,6 +4173,142 @@ export type ProductValueOut = {
 };
 
 /**
+ * PurchaseOut
+ */
+export type PurchaseOut = {
+    /**
+     * Purchase Id
+     */
+    purchase_id: number;
+    /**
+     * Store
+     */
+    store: 'manapool' | 'tcgplayer' | 'cardkingdom';
+    /**
+     * Store Name
+     */
+    store_name: string;
+    /**
+     * Order Id
+     */
+    order_id: string;
+    /**
+     * Ordered At
+     */
+    ordered_at: string;
+    /**
+     * Read At
+     */
+    read_at: string;
+    /**
+     * Lines
+     */
+    lines: number;
+    /**
+     * Copies
+     */
+    copies: number;
+    /**
+     * Assigned
+     *
+     * Copies matched to cards you owned or added new.
+     */
+    assigned: number;
+    /**
+     * Assignable
+     *
+     * Copies on lines with a known printing.
+     */
+    assignable: number;
+    /**
+     * Unresolved
+     */
+    unresolved: number;
+    /**
+     * Status
+     */
+    status: 'new' | 'partial' | 'done' | 'nothing';
+    /**
+     * Paid Usd
+     *
+     * Item prices × quantity, every line.
+     */
+    paid_usd: number;
+    /**
+     * Worth Usd
+     *
+     * Lines with a price today, at today's local prices.
+     */
+    worth_usd: number;
+    /**
+     * Compared Paid Usd
+     *
+     * What those same lines cost you.
+     */
+    compared_paid_usd: number;
+    /**
+     * Gain Usd
+     */
+    gain_usd: number;
+    /**
+     * Subtotal Usd
+     *
+     * The store's own item subtotal. When it differs from paid_usd, the store's line list includes replacements or refunds the companion can't price exactly.
+     */
+    subtotal_usd?: number | null;
+    /**
+     * Shipping Usd
+     */
+    shipping_usd?: number | null;
+    /**
+     * Tax Usd
+     */
+    tax_usd?: number | null;
+    /**
+     * Fees Usd
+     */
+    fees_usd?: number | null;
+    /**
+     * Credit Usd
+     */
+    credit_usd?: number | null;
+    /**
+     * Total Usd
+     */
+    total_usd?: number | null;
+    /**
+     * Ingest Id
+     */
+    ingest_id?: number | null;
+};
+
+/**
+ * PurchasesOut
+ */
+export type PurchasesOut = {
+    /**
+     * Purchases
+     */
+    purchases: Array<PurchaseOut>;
+    /**
+     * Paid Usd
+     */
+    paid_usd: number;
+    /**
+     * Compared Paid Usd
+     */
+    compared_paid_usd: number;
+    /**
+     * Worth Usd
+     */
+    worth_usd: number;
+    /**
+     * Gain Usd
+     */
+    gain_usd: number;
+};
+
+/**
  * RankedOut
  */
 export type RankedOut = {
@@ -4202,6 +4528,82 @@ export type RetentionCell = {
 };
 
 /**
+ * ReviewLineOut
+ */
+export type ReviewLineOut = {
+    /**
+     * Line No
+     */
+    line_no: number;
+    /**
+     * Kind
+     */
+    kind: 'single' | 'sealed' | 'other';
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Set Name
+     */
+    set_name: string | null;
+    /**
+     * Condition
+     */
+    condition: string | null;
+    /**
+     * Finish
+     */
+    finish: 'nonfoil' | 'foil';
+    printing: PrintingOut | null;
+    /**
+     * Quantity
+     */
+    quantity: number;
+    /**
+     * Unit Usd
+     */
+    unit_usd: number | null;
+    /**
+     * Today Usd
+     */
+    today_usd: number | null;
+    /**
+     * Matched
+     */
+    matched: number;
+    /**
+     * Added
+     */
+    added: number;
+    /**
+     * Remaining
+     */
+    remaining: number;
+    /**
+     * Owned
+     */
+    owned: number;
+    /**
+     * Matchable
+     *
+     * Owned copies whose source is unknown or singles — they can be matched to this order.
+     */
+    matchable: number;
+};
+
+/**
+ * ReviewOut
+ */
+export type ReviewOut = {
+    purchase: PurchaseOut;
+    /**
+     * Lines
+     */
+    lines: Array<ReviewLineOut>;
+};
+
+/**
  * SaveIn
  */
 export type SaveIn = {
@@ -4217,38 +4619,6 @@ export type SaveIn = {
      * Name
      */
     name?: string | null;
-};
-
-/**
- * SaveOut
- */
-export type SaveOut = {
-    /**
-     * Built
-     */
-    built: boolean;
-    /**
-     * Changes
-     */
-    changes: Array<ChangeOut>;
-    /**
-     * Physical swap list; only for a built deck.
-     */
-    swap: SwapOut | null;
-    /**
-     * Version Number
-     *
-     * New version number; null when nothing changed.
-     */
-    version_number: number | null;
-    /**
-     * Pulled
-     */
-    pulled: number;
-    /**
-     * Sleeved
-     */
-    sleeved: number;
 };
 
 /**
@@ -4566,15 +4936,15 @@ export type SourceOut = {
     /**
      * Key
      *
-     * 'singles' | 'unknown' | 'product:<MTGJSON fileName>'
+     * 'singles' | 'unknown' | 'product:<MTGJSON fileName>' | 'purchase:<store>:<order id>'
      */
     key: string;
     /**
      * Kind
      *
-     * deck = playable precon; pool = card pool (land pack, scene box, most Secret Lair drops); singles = bought/added individually; unknown = provenance not reconstructed.
+     * deck = playable precon; pool = card pool (land pack, scene box, most Secret Lair drops); singles = bought/added individually; purchase = a store order you read with the companion; unknown = provenance not reconstructed.
      */
-    kind: 'singles' | 'unknown' | 'deck' | 'pool';
+    kind: 'singles' | 'unknown' | 'deck' | 'pool' | 'purchase';
     /**
      * Label
      */
@@ -4589,34 +4959,6 @@ export type SourceOut = {
      * Owned printings in this view acquired from this source.
      */
     printings?: number;
-};
-
-/**
- * StoreOut
- */
-export type StoreOut = {
-    /**
-     * Path
-     */
-    path: string;
-    /**
-     * Schema Version
-     */
-    schema_version: number;
-    /**
-     * Last Pruned
-     */
-    last_pruned: string | null;
-    /**
-     * Events
-     */
-    events: {
-        [key: string]: number;
-    };
-    /**
-     * First Day
-     */
-    first_day: string | null;
 };
 
 /**
@@ -4742,7 +5084,7 @@ export type SummaryOut = {
      * Retention
      */
     retention: Array<RetentionCell>;
-    store: StoreOut;
+    store: MagicManagerApiAnalyticsStoreOut;
     consent: ConsentOut;
     /**
      * Retention Policy
@@ -5617,6 +5959,124 @@ export type WatchedOut = {
      * The best in-stock price is at or under the target (null when the target price isn't known).
      */
     target_met?: boolean | null;
+};
+
+/**
+ * StoreOut
+ */
+export type MagicManagerApiAnalyticsStoreOut = {
+    /**
+     * Path
+     */
+    path: string;
+    /**
+     * Schema Version
+     */
+    schema_version: number;
+    /**
+     * Last Pruned
+     */
+    last_pruned: string | null;
+    /**
+     * Events
+     */
+    events: {
+        [key: string]: number;
+    };
+    /**
+     * First Day
+     */
+    first_day: string | null;
+};
+
+/**
+ * SaveOut
+ */
+export type MagicManagerApiDecksSaveOut = {
+    /**
+     * Built
+     */
+    built: boolean;
+    /**
+     * Changes
+     */
+    changes: Array<ChangeOut>;
+    /**
+     * Physical swap list; only for a built deck.
+     */
+    swap: SwapOut | null;
+    /**
+     * Version Number
+     *
+     * New version number; null when nothing changed.
+     */
+    version_number: number | null;
+    /**
+     * Pulled
+     */
+    pulled: number;
+    /**
+     * Sleeved
+     */
+    sleeved: number;
+};
+
+/**
+ * SaveOut
+ */
+export type MagicManagerApiPurchasesSaveOut = {
+    /**
+     * Saved
+     */
+    saved: number;
+    /**
+     * Skipped
+     *
+     * Order numbers already assigned to your collection (left untouched).
+     */
+    skipped: Array<string>;
+    /**
+     * Unresolved
+     *
+     * Single-card lines no exact printing was found for (recorded, never added).
+     */
+    unresolved: number;
+    /**
+     * Purchase Ids
+     */
+    purchase_ids: Array<number>;
+};
+
+/**
+ * StoreOut
+ */
+export type MagicManagerApiPurchasesStoreOut = {
+    /**
+     * Key
+     */
+    key: 'manapool' | 'tcgplayer' | 'cardkingdom';
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Verification
+     *
+     * How much of this store's reading has been checked against its real pages.
+     */
+    verification: 'verified' | 'partial' | 'unverified';
+    /**
+     * Note
+     *
+     * What is and isn't verified, in plain words.
+     */
+    note: string;
+    /**
+     * Needs Permission
+     *
+     * True when the companion's optional 'Order history' switch must be on.
+     */
+    needs_permission: boolean;
 };
 
 export type AnalyticsConsentData = {
@@ -6992,7 +7452,7 @@ export type DeckSaveResponses = {
     /**
      * Successful Response
      */
-    200: SaveOut;
+    200: MagicManagerApiDecksSaveOut;
 };
 
 export type DeckSaveResponse = DeckSaveResponses[keyof DeckSaveResponses];
@@ -7521,6 +7981,155 @@ export type HistoryEventResponses = {
 };
 
 export type HistoryEventResponse = HistoryEventResponses[keyof HistoryEventResponses];
+
+export type PurchaseStoresData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/purchases/stores';
+};
+
+export type PurchaseStoresResponses = {
+    /**
+     * Response Purchase Stores
+     *
+     * Successful Response
+     */
+    200: Array<MagicManagerApiPurchasesStoreOut>;
+};
+
+export type PurchaseStoresResponse = PurchaseStoresResponses[keyof PurchaseStoresResponses];
+
+export type PurchaseListData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/purchases';
+};
+
+export type PurchaseListResponses = {
+    /**
+     * Successful Response
+     */
+    200: PurchasesOut;
+};
+
+export type PurchaseListResponse = PurchaseListResponses[keyof PurchaseListResponses];
+
+export type PurchaseSaveData = {
+    body: OrdersIn;
+    path?: never;
+    query?: never;
+    url: '/api/purchases/orders';
+};
+
+export type PurchaseSaveErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PurchaseSaveError = PurchaseSaveErrors[keyof PurchaseSaveErrors];
+
+export type PurchaseSaveResponses = {
+    /**
+     * Successful Response
+     */
+    200: MagicManagerApiPurchasesSaveOut;
+};
+
+export type PurchaseSaveResponse = PurchaseSaveResponses[keyof PurchaseSaveResponses];
+
+export type PurchaseForgetData = {
+    body?: never;
+    path: {
+        /**
+         * Purchase Id
+         */
+        purchase_id: number;
+    };
+    query?: never;
+    url: '/api/purchases/{purchase_id}';
+};
+
+export type PurchaseForgetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PurchaseForgetError = PurchaseForgetErrors[keyof PurchaseForgetErrors];
+
+export type PurchaseForgetResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type PurchaseForgetResponse = PurchaseForgetResponses[keyof PurchaseForgetResponses];
+
+export type PurchaseReviewData = {
+    body?: never;
+    path: {
+        /**
+         * Purchase Id
+         */
+        purchase_id: number;
+    };
+    query?: never;
+    url: '/api/purchases/{purchase_id}';
+};
+
+export type PurchaseReviewErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PurchaseReviewError = PurchaseReviewErrors[keyof PurchaseReviewErrors];
+
+export type PurchaseReviewResponses = {
+    /**
+     * Successful Response
+     */
+    200: ReviewOut;
+};
+
+export type PurchaseReviewResponse = PurchaseReviewResponses[keyof PurchaseReviewResponses];
+
+export type PurchaseApplyData = {
+    body: ApplyIn;
+    path: {
+        /**
+         * Purchase Id
+         */
+        purchase_id: number;
+    };
+    query?: never;
+    url: '/api/purchases/{purchase_id}/apply';
+};
+
+export type PurchaseApplyErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PurchaseApplyError = PurchaseApplyErrors[keyof PurchaseApplyErrors];
+
+export type PurchaseApplyResponses = {
+    /**
+     * Successful Response
+     */
+    200: ApplyOut;
+};
+
+export type PurchaseApplyResponse = PurchaseApplyResponses[keyof PurchaseApplyResponses];
 
 export type JumpstartSetsData = {
     body?: never;

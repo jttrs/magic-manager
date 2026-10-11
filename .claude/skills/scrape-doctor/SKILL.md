@@ -34,6 +34,7 @@ browser before reading tabs on macOS (`docs/deals-scraping.md` failure mode 1).
 | Open-tab store page (Deals, `rendered` stores) | `extension/src/readers/store-page.js` + recipe in `config/vendors.toml` | `store-rendered.html`, `tests/fixtures/vendors/*.html.gz` | same chain → `store-*.expected.json`; server parse in `vendors.read_listing` |
 | Open-tab marketplaces (Amazon, Walmart, GameStop) | recipe in `config/vendors.toml` (`sellers`, `new_only`, `seller_pattern`, …) | `tests/fixtures/vendors/rendered/<vendor>-<case>.json.gz` (companion extract + AppleScript tab read) | `tests/test_vendor_recipes.py::RENDERED` (both read paths) |
 | Moxfield deck (extension) | `extension/src/readers/moxfield-deck.js` → `decksource.parse_moxfield` | `moxfield-deck.json` | same chain → `moxfield-deck.expected.json` |
+| Order history (Mana Pool / TCGplayer / Card Kingdom) | `extension/src/readers/{manapool,tcgplayer,cardkingdom}-orders.js` (+ `extension/src/orders.js` paging) | `tests/fixtures/companion/{manapool-order*,tcgplayer-orders,cardkingdom-*}.html` (de-personalised; Card Kingdom singles UNVERIFIED) | `web/e2e/companion-order-readers.spec.ts` → `*-order*.expected.json` → `tests/test_companion_orders.py`; verification table in `docs/purchases.md` |
 | Server-read stores (`shopify`/`meta`) | `config/vendors.toml` + `storepage.py` | `tests/fixtures/vendors/*` | `tests/test_vendor_recipes.py`; nightly `scripts/vendor_canary.py` |
 | Deck builders (server) | `decksource.parse_*`, `scripts/import_deck.py` | inline in `tests/test_decksource.py` | `tests/test_decksource.py`; live: `scrape_canary` samples in `config/scraper_canaries.toml` |
 | EDHREC (unofficial JSON) | `edhrec.cardlists`, `edhrec._plan_rankings` | `tests/test_edhrec.py` | live: `scrape_canary.check_edhrec` |
@@ -75,6 +76,11 @@ A new failure shape that users would only see as a generic error is a bug. Add a
   `--redact "<town>=Springfield" --redact "<zip>=00000"` (the tool refuses to write while they remain);
   it drops scripts and cuts the text before customer reviews. Never solve a captcha or reuse the
   owner's profile. Recapture after changing `store-page.js` — the extract is the reader's output.
+- **Order history:** signed-in pages only, so hand-reduce: keep 2–3 orders, replace order numbers /
+  ids, REMOVE names, addresses, payment, tracking, sellers, request tokens and embedded scripts (Card
+  Kingdom's order list embeds per-order payment JSON). TCGplayer's sign-in has a captcha that blocks
+  automated browsers — save the page from your own Chrome (Cmd-S). Update `docs/purchases.md` §
+  Verification with what the new capture proves.
 - **Moxfield:** the deck JSON shape is what `api2.moxfield.com/v3/decks/all/<id>` returns. Update
   `moxfield-deck.json` keeping the extra fields the reader must DROP. The test asserts they're dropped.
 
