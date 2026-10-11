@@ -7,7 +7,7 @@
 
 [features]
 # Read your Mana Pool cart and audit it against your collection. Internal: read
-# with your own login from the Keychain, or in your browser by the browser
+# with your own login from .env, or in your browser by the browser
 # companion / cart bookmarklet (only cart lines reach the app).
 cart_check = false
 # Read your open browser tabs (macOS) and price store product pages against

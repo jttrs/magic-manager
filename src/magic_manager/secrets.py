@@ -1,76 +1,55 @@
-"""Personal secrets: the macOS Keychain first for the personal login, else the environment.
+"""Credentials: the process environment first, else the gitignored repo-root ``.env``.
 
-Personal credentials (your own Mana Pool login, used only to read YOUR cart) never
-live in the repo's ``.env``. Store them once with ``mm secret set <NAME>`` — the
-macOS ``security`` tool prompts for the value, so it never appears in a command
-line, shell history or file — and read them here. Service credentials that are
-not personal (e.g. a catalog API token) may still come from ``.env``.
+Your own Mana Pool login (``PERSONAL``, used only to read YOUR cart) lives in ``.env``
+alongside the service credentials — kept in a plain file for transparency (owner
+decision 2026-10-11). ``.env`` is gitignored; never commit or log its values. Python
+does not load ``.env`` into ``os.environ``, so ``get`` reads the file itself.
 
-Your personal login (``PERSONAL``) prefers the Keychain, falling back to the environment: its
-email shares a name with the service-account email the catalog API may export, which must not
-shadow it. Any other name is environment first, then Keychain.
-
-Keychain items: generic passwords, service ``magic-manager``, account = the name.
+``.env`` format: simple ``KEY=VALUE`` lines; blanks and ``#`` comments are ignored, an
+optional leading ``export `` is allowed, matching surrounding quotes are stripped, and
+the first match wins. ``get`` is the only place a value is returned — ``source`` reports
+where a name comes from, never its value.
 """
 from __future__ import annotations
 
 import os
-import shutil
-import subprocess
-import sys
+from pathlib import Path
 
-SERVICE = "magic-manager"
+# This file is at src/magic_manager/secrets.py, so parents[2] is the repo root.
+ROOT = Path(__file__).resolve().parents[2]
 
-# Your own Mana Pool login — used only to read your cart, never from .env.
+# Your own Mana Pool login — used only to read your cart.
 PERSONAL = ("MANAPOOL_EMAIL", "MANAPOOL_PASSWORD")
 
-TIMEOUT_S = 10
-# `set` is interactive: security waits for you to type the value, so allow time.
-SET_TIMEOUT_S = 120
 
-
-def keychain_available() -> bool:
-    return sys.platform == "darwin" and shutil.which("security") is not None
-
-
-def keychain_get(name: str) -> str | None:
-    if not keychain_available():
-        return None
+def _dotenv_get(name: str) -> str | None:
     try:
-        r = subprocess.run(["security", "find-generic-password", "-s", SERVICE, "-a", name, "-w"],
-                           capture_output=True, text=True, timeout=TIMEOUT_S)
-    except (subprocess.TimeoutExpired, OSError):
+        text = (ROOT / ".env").read_text()
+    except OSError:
         return None
-    value = r.stdout.rstrip("\n") if r.returncode == 0 else ""
-    return value or None
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export "):].lstrip()
+        key, sep, value = line.partition("=")
+        if not sep or key.strip() != name:
+            continue
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+            value = value[1:-1]
+        return value or None
+    return None
 
 
 def get(name: str) -> str | None:
-    """Personal names: the Keychain item, else the environment. Others: environment, else Keychain."""
-    if name in PERSONAL:
-        return keychain_get(name) or os.environ.get(name)
-    return os.environ.get(name) or keychain_get(name)
+    """The environment value if set and non-empty, else the ``.env`` value, else None."""
+    return os.environ.get(name) or _dotenv_get(name)
 
 
-def set_interactive(name: str) -> int:
-    """Store ``name`` in the Keychain; ``security`` prompts for the value (twice)."""
-    if not keychain_available():
-        print("The macOS Keychain isn't available here; set the value as an environment variable instead.", file=sys.stderr)
-        return 2
-    try:
-        return subprocess.run(["security", "add-generic-password", "-U", "-s", SERVICE, "-a", name, "-w"],
-                              timeout=SET_TIMEOUT_S).returncode
-    except (subprocess.TimeoutExpired, OSError):
-        print("Couldn't reach the macOS Keychain (timed out or `security` failed to run).", file=sys.stderr)
-        return 1
-
-
-def delete(name: str) -> bool:
-    if not keychain_available():
-        return False
-    try:
-        return subprocess.run(["security", "delete-generic-password", "-s", SERVICE, "-a", name],
-                              capture_output=True, timeout=TIMEOUT_S).returncode == 0
-    except (subprocess.TimeoutExpired, OSError):
-        print("Couldn't reach the macOS Keychain (timed out or `security` failed to run).", file=sys.stderr)
-        return False
+def source(name: str) -> str | None:
+    """Where ``get(name)`` comes from: ``"environment"``, ``".env"`` or None. Never the value."""
+    if os.environ.get(name):
+        return "environment"
+    return ".env" if _dotenv_get(name) else None
