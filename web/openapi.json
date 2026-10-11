@@ -13639,6 +13639,12 @@
             "title": "Read",
             "description": "False when the latest price is still the earmark's saved asking price."
           },
+          "read_in_browser": {
+            "type": "boolean",
+            "title": "Read In Browser",
+            "description": "An open-tab store page: read from a browser tab (the companion's, or Chrome on this Mac).",
+            "default": false
+          },
           "first_price": {
             "anyOf": [
               {

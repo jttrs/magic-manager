@@ -114,6 +114,8 @@ code = { type = "enum", required = true, values = [
   "cart.no_lines",
   "tabs.none",
   "tabs.page_unreadable",
+  "watched.none",
+  "watched.load_timeout",
   "moxfield.bad_url",
   "moxfield.private",
   "moxfield.not_found",

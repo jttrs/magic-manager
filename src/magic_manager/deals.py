@@ -85,14 +85,16 @@ def _market_read(row: dict, choice: dict | None) -> None:
 
 
 def read_prices(urls: list[str], *, progress=None, fresh: bool = False,
-                pages: dict[str, dict] | None = None) -> list[dict]:
+                pages: dict[str, dict] | None = None, tabs_on_mac: bool = True) -> list[dict]:
     """Price + stock for each product URL with its store's recipe. Never raises
     per URL: each row carries ``error`` (blocked, tab closed, JS events off, …)
     so one bad page doesn't sink the batch. A ``JsEventsOff`` is reported once
     and the remaining open-tab reads are skipped with the same message. A
     watched TCGplayer product link reads its product's TCGplayer market price.
     ``pages`` = rendered tabs the browser companion already read (url →
-    ``{title, head, ld, text}``), used instead of reading the tab on this Mac."""
+    ``{title, head, ld, text}``), used instead of reading the tab on this Mac;
+    with ``tabs_on_mac=False`` (the companion read them) an open-tab page it
+    couldn't read is reported, never read here."""
     rows: list[dict] = []
     js_off: str | None = None
     market_ids = watched_identities([u for u in urls if is_market_link(u)])
@@ -107,8 +109,11 @@ def read_prices(urls: list[str], *, progress=None, fresh: bool = False,
                 continue
             parts = urlsplit(url)
             m = vendors.classify(parts.hostname or "", parts.path)
-            if js_off and m.vendor and m.vendor.mode == "rendered" and url not in (pages or {}):
-                raise storefetch.JsEventsOff(js_off)
+            if m.vendor and m.vendor.mode == "rendered" and url not in (pages or {}):
+                if not tabs_on_mac:
+                    raise storefetch.TabGone(COMPANION_UNREAD)
+                if js_off:
+                    raise storefetch.JsEventsOff(js_off)
             v, listing = storefetch.read(url, fresh=fresh, rendered=(pages or {}).get(url))
             row.update(vendor=v.key, price=listing.price, currency=listing.currency,
                        available=listing.available, title=listing.title, signal=listing.signal)
@@ -124,6 +129,16 @@ def read_prices(urls: list[str], *, progress=None, fresh: bool = False,
         rows.append(row)
     _record_store_health(rows)
     return rows
+
+
+COMPANION_UNREAD = "The browser companion couldn’t read this page — open it in this browser, then read again."
+
+
+def reads_in_browser(url: str) -> bool:
+    """A product page of an open-tab (``rendered``) store: read from a browser tab."""
+    parts = urlsplit(url)
+    m = vendors.classify(parts.hostname or "", parts.path)
+    return bool(m.vendor and m.vendor.mode == "rendered" and m.kind == "product")
 
 
 def _record_store_health(rows: list[dict]) -> None:
@@ -239,10 +254,10 @@ def _earmark_choice(set_code: str, name: str, subtype: str | None, *, kind: str 
 
 
 def read_and_compare(urls: list[str], *, progress=None, fresh: bool = False,
-                     pages: dict[str, dict] | None = None) -> list[dict]:
+                     pages: dict[str, dict] | None = None, tabs_on_mac: bool = True) -> list[dict]:
     """Read every product page's price, then what it is and what it's worth.
     Prices of watched links are added to their history."""
-    rows = read_prices(urls, progress=progress, fresh=fresh, pages=pages)
+    rows = read_prices(urls, progress=progress, fresh=fresh, pages=pages, tabs_on_mac=tabs_on_mac)
     earmarks.record_reads(rows)
     watched = watched_identities(urls)
     confirmed = {**watched, **confirmed_matches(urls)}
@@ -335,6 +350,7 @@ def watchlist(*, progress=None, values: bool = True) -> list[dict]:
             seen = [x["price"] for x in (h or [last]) if x["price"] is not None]
             stores.append({
                 "url": l.store_url, "store": _store_name(l.store_url, l.store_name), "price": last["price"], "available": last["available"],
+                "read_in_browser": reads_in_browser(l.store_url),
                 "read_at": last["read_at"], "read": last["source"] == "read",
                 "first_price": first["price"], "first_at": first["read_at"],
                 "change": None if last["price"] is None or first["price"] is None else round(last["price"] - first["price"], 2),
@@ -410,14 +426,16 @@ def _earmark_choice_of(row: dict) -> dict:
             "scryfall_id": row.get("scryfall_id")}
 
 
-def read_watched(*, progress=None) -> dict:
+def read_watched(*, progress=None, pages: dict[str, dict] | None = None, tabs_on_mac: bool = True) -> dict:
     """Read every watched link's price (its history grows), then report the
     products whose target was met by THIS read: met now (best in-stock price at
     or under the target) and not met just before. A store this read failed on
     can't meet a target (its price is an old one). Returns ``{rows, read,
-    newly_met}`` — ``rows`` is the instant watchlist, ``read`` the price rows."""
+    newly_met}`` — ``rows`` is the instant watchlist, ``read`` the price rows.
+    ``pages``/``tabs_on_mac``: open-tab store pages the browser companion read
+    (see :func:`read_prices`)."""
     before = {r["product_id"]: r for r in _with_target_prices(watchlist(values=False))}
-    read = read_and_compare(watched_urls(), progress=progress)
+    read = read_and_compare(watched_urls(), progress=progress, pages=pages, tabs_on_mac=tabs_on_mac)
     failed = frozenset(x["url"] for x in read if x.get("error") or x.get("price") is None)
     rows = _with_target_prices(watchlist(values=False), failed)
     newly = []

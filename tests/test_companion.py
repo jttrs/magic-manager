@@ -232,6 +232,56 @@ def test_read_prices_uses_the_companion_page_instead_of_this_mac(monkeypatch):
     assert (rows[0]["price"], rows[0]["available"], rows[0]["error"]) == (144.99, True, None)
 
 
+def test_read_prices_in_browser_never_falls_back_to_this_mac(monkeypatch):
+    """The companion read the open-tab stores: a page it couldn't read is reported, not read via AppleScript."""
+    def no_applescript(*a, **k):
+        raise AssertionError("must not read the tab on this Mac")
+    monkeypatch.setattr(storefetch, "read_tab", no_applescript)
+    read, unread = "https://www.bestbuy.com/site/foundations/6589123.p", "https://www.bestbuy.com/site/other/1.p"
+    rows = deals.read_prices([read, unread], pages={read: _golden("store-rendered.expected.json")}, tabs_on_mac=False)
+    assert rows[0]["price"] == 144.99
+    assert (rows[1]["price"], rows[1]["error"]) == (None, deals.COMPANION_UNREAD)
+
+
+def test_reads_in_browser_is_open_tab_store_product_pages():
+    assert deals.reads_in_browser("https://www.bestbuy.com/site/foundations/6589123.p")
+    assert not deals.reads_in_browser("https://www.bestbuy.com/cart")            # not a product page
+    assert not deals.reads_in_browser("https://manyrealms.com/products/fdn-set")  # read by the server
+    assert not deals.reads_in_browser("https://www.tcgplayer.com/product/1")
+
+
+def test_watchlist_job_hands_companion_pages_to_the_read(tmp_db, monkeypatch):
+    from magic_manager.api import deals as deals_api
+    seen = {}
+
+    def fake(*, progress=None, pages=None, tabs_on_mac=True):
+        seen.update(pages=pages, tabs_on_mac=tabs_on_mac)
+        return {"rows": [], "read": [], "newly_met": []}
+    monkeypatch.setattr(deals, "read_watched", fake)
+    monkeypatch.setattr(deals_api.features, "require", lambda name: None)
+    url = "https://www.bestbuy.com/site/foundations/6589123.p"
+    page = _golden("store-rendered.expected.json")
+    inp = deals_api.WatchlistInput(refresh=True, in_browser=True, pages={url: page})
+    deals_api._run_watchlist(inp, lambda ev: None)
+    assert seen["tabs_on_mac"] is False and seen["pages"][url]["title"] == page["title"]
+    deals_api._run_watchlist(deals_api.WatchlistInput(refresh=True), lambda ev: None)
+    assert seen == {"pages": {}, "tabs_on_mac": True}                 # no companion: this Mac, as before
+    with pytest.raises(ValueError):
+        deals_api.WatchlistInput(refresh=True, pages={url: {**page, "cookie": "x"}})   # strict page model
+
+
+def test_watched_reader_revalidates_and_stays_within_its_lane():
+    """extension/src/watched.js: only rendered-store product pages; opened tabs always closed; plan before read."""
+    js = (ROOT / "extension/src/watched.js").read_text()
+    bg = (ROOT / "extension/src/background.js").read_text()
+    assert "store.mode !== 'rendered'" in js and "product_path" in js and "u.protocol !== 'https:'" in js
+    assert "active: false" in js and "finally" in js and "chrome.tabs.remove(tab.id)" in js
+    assert "readers/store-page.js" in js                       # the same reader as the open-tab Deals read
+    assert "planWatched(params" in bg and "stage: msg.kind === 'watched' ? 'confirm'" in bg
+    assert "pending.stage === 'confirm') return readApproved" in bg
+    assert "(pending.stage || 'send') !== 'send') return fail('request.invalid')" in bg   # never send a plan
+
+
 # ---------- API ----------
 
 @pytest.fixture

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "magic-manager companion",
-  "version": "0.2.0",
-  "description": "Reads your Mana Pool cart, open store tabs, Moxfield decks and store order history in your own browser and, only after you approve, hands the card lines to your magic-manager app.",
+  "version": "0.2.1",
+  "description": "Reads your Mana Pool cart, open store tabs, Moxfield decks, watched store pages and store order history in your own browser and, only after you approve, hands the card lines to your magic-manager app.",
   "minimum_chrome_version": "116",
   "permissions": [
     "scripting",

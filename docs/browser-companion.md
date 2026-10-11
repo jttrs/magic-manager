@@ -20,7 +20,8 @@ connected. Security design: [`browser-companion-security.md`](browser-companion-
 Where it shows up: Collection → Purchase history → *Read my orders* (flag `purchases`; Mana Pool,
 TCGplayer, Card Kingdom order history — see [`purchases.md`](purchases.md), incl. what is and isn't
 verified per store), Collection → *Check my Mana Pool cart* (**Read my cart**, plus the bookmarklet
-paste), Market → Deals → **Read my open tabs** (tabs + open-tab store prices), Add cards → Deck and
+paste), Market → Deals → **Read my open tabs** (tabs + open-tab store prices), Market → Deals →
+Watching → **Read watched prices** (the watched open-tab store pages), Add cards → Deck and
 Decks → Import (Moxfield links). Without a connected companion each falls back to the existing path.
 
 ## How it fits
@@ -29,6 +30,7 @@ Decks → Import (Moxfield links). Without a connected companion each falls back
 |---|---|---|
 | Readers | `extension/src/readers/*.js` | Deterministic page reads (classic scripts, shared with the bookmarklet). Order history: `manapool-orders.js`, `tcgplayer-orders.js`, `cardkingdom-orders.js`. |
 | Order reads | `extension/src/orders.js` | `order_list` / `orders` requests: its own background tab on the store's order pages, follows the pager, never your tabs, never a form. |
+| Watched pages | `extension/src/watched.js` | Plan (re-check the app's URL list) → you approve → read from your tab or a background tab it closes. |
 | Worker | `extension/src/background.js` | Validates the asker, runs a reader, opens the approval window, delivers the result. |
 | Bridge | `extension/src/bridge.js` | Content script on the paired app origin only; relays postMessage ↔ worker. |
 | Approval / settings | `extension/src/approve.*`, `options.*` | The extension's own pages. |
@@ -41,7 +43,12 @@ Decks → Import (Moxfield links). Without a connected companion each falls back
 
 Routes: `POST /api/purchases/orders` (+ the `/api/purchases*` review/apply routes), `GET /api/companion` (version + error catalog, unflagged), `GET /api/companion/extension.zip`
 and `/bookmarklet`, `POST /api/cart/lines`, `POST /api/deals/tabs`,
-`POST /api/ingest/deck-from-browser`, and `pages` on the `deals.read_prices` job input.
+`POST /api/ingest/deck-from-browser`, and `pages` on the `deals.read_prices` and `deals.watchlist` job
+inputs (the latter with `in_browser`).
+
+Request kinds: `cart`, `tabs`, `moxfield`, and `watched` (`params.urls`, ≤ 50). `watched` is the only
+two-step request: the approval window first shows the list (stage `confirm`, *Read these pages* /
+*Don't read*; nothing opened yet), then the readings (stage `send`, *Send* / *Don't send*).
 
 ## Tests (pinned behaviour)
 
@@ -54,6 +61,8 @@ and `/bookmarklet`, `POST /api/cart/lines`, `POST /api/deals/tabs`,
   code, one error catalog, reproducible zip, the cross-site write guard.
 - `web/e2e/companion-extension.spec.ts`: the real unpacked extension end to end (approve, deny,
   close, busy, other site, other port, pairing validation).
+- `web/e2e/companion-watched.spec.ts`: the real extension's watched read (list approved before any tab
+  opens, bogus URLs dropped, background tab closed, your tab kept, a forged send of the list refused).
 - `web/e2e/companion.spec.ts` + `web/src/core/companion.test.ts`: app flows and the protocol client.
 
 ## Pinned follow-ups (owner, 2026-10-07)
@@ -66,7 +75,7 @@ and `/bookmarklet`, `POST /api/cart/lines`, `POST /api/deals/tabs`,
   (extension 0.1.1): open-tab recipes that count only the store's own new offers
   (`docs/deals-scraping.md` failure mode 10).
 - **Private Archidekt decks; Moxfield collection/binders.**
-- Deals **Watching → refresh** still reads open-tab stores on this Mac. Route it through the companion
-  when connected.
+- ~~Deals **Watching → refresh** still reads open-tab stores on this Mac.~~ Done 2026-10-10 (extension
+  0.2.1): the companion's `watched` request reads them, opening background tabs for pages that aren't open.
 - Chrome Web Store distribution, plus pairing with a hosted domain (beyond `*.ts.net`) once Phase 3
   hosting picks one.

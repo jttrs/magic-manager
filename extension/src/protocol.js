@@ -4,9 +4,11 @@
 import { STORES } from './stores.js';
 
 export const CHANNEL = 'magic-manager/companion';
-export const KINDS = ['cart', 'tabs', 'moxfield', 'order_list', 'orders'];
+export const KINDS = ['cart', 'tabs', 'moxfield', 'order_list', 'orders', 'watched'];
 export const APPROVAL_TTL_MS = 5 * 60 * 1000;
 export const MAX_PAYLOAD_BYTES = 2_000_000;
+/** Most watched store pages one Watching read may open + read. */
+export const MAX_WATCHED = 50;
 
 export const MANAPOOL_CART_URL = 'https://manapool.com/cart';
 export const MANAPOOL_ORIGINS = ['https://manapool.com/*'];
@@ -71,6 +73,14 @@ export function summarize(kind, data) {
   if (kind === 'tabs') {
     const pages = Object.keys(data.pages || {}).length;
     return `${(data.tabs || []).length} store tabs${pages ? ` · ${pages} page readings` : ''}`;
+  }
+  if (kind === 'watched') {
+    const urls = data.urls || [];
+    if (!data.pages) {
+      const toOpen = urls.filter((u) => !u.open).length;
+      return `${urls.length} watched store pages${toOpen ? ` · ${toOpen} to open in a background tab` : ''}`;
+    }
+    return `${Object.keys(data.pages).length} of ${urls.length} watched store pages read`;
   }
   if (kind === 'moxfield') {
     const n = Object.values(data.deck?.boards || {}).reduce((t, b) => t + Object.values(b.cards || {}).reduce((s, c) => s + (c.quantity || 0), 0), 0);

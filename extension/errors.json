@@ -116,6 +116,16 @@
       "message": "Some open-tab store pages couldn’t be read.",
       "fix": "Reload those tabs, wait for the price to show, then read again."
     },
+    "watched.none": {
+      "where": "extension",
+      "message": "None of your watched links are open-tab store pages the companion can read.",
+      "fix": "Nothing to do — those stores are read by the app itself."
+    },
+    "watched.load_timeout": {
+      "where": "extension",
+      "message": "Some watched store pages didn’t finish loading in their background tab.",
+      "fix": "Open those pages in this browser, wait for the price to show, then read again."
+    },
     "moxfield.bad_url": {
       "where": "extension",
       "message": "That isn’t a Moxfield deck link.",

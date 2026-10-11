@@ -84,8 +84,22 @@ sequenceDiagram
     dropped. The store page links the companion follows stay in the worker; they aren't sent.
   - Moxfield: deck name, author user name, and per card: printing, quantity, finish and board.
     Profile, likes, prices and internal ids are dropped (pinned).
+  - watched store pages (Deals → Watching, added 2026-10-10, extension 0.2.1): for each watched link
+    the URL, store name and whether it was your open tab, plus exactly the open-tab page reading above
+    (the same `readers/store-page.js`). Nothing about any other tab.
 - **The user sees exactly what is sent**: a table plus the raw JSON, before anything leaves.
 - **Read-only to every site.** No cart edits, purchases or writes, and no form submission.
+- **Watched pages: the list is approved before any tab opens.** The app sends watched URLs; the worker
+  keeps only https product pages of a catalogued `rendered` store (host + the store's product-URL regex,
+  no credentials/port, ≤ 50 — re-checked in `watched.js`, the app's list is never trusted) and shows that
+  list first (stage `confirm`). Only *Read these pages* (a `decision` of `'read'`, accepted only in that
+  stage) opens anything; a `Send` (`approve: true`) is refused in any stage but `send`, so the plan can
+  never be delivered as data. Pages not open are opened **inactive**, at most 3 at a time, and closed in a
+  `finally` (also on load timeout or error); tabs you had open are never closed, and one is read only if
+  it still shows that exact page. *Don't read* / closing the window mid-read stops opening more pages.
+  Then the readings are shown and need *Send* as usual. Pinned by `companion-watched.spec.ts`.
+  Security review (2026-10-10): no findings; its two below-threshold notes (reads continuing after
+  *Don't read*, a tab navigated away mid-read) were fixed as above.
 
 ### 3. Supply chain / extension update
 
@@ -118,7 +132,7 @@ sequenceDiagram
   `extension/errors.json`), under the user's analytics consent. Never any cart, tab or deck content.
 - Storage: the paired origin (`storage.local`), plus the one pending request in `storage.session`
   (memory only, not readable by content scripts, cleared on decision).
-- Tabs the companion opens itself (a cart, deck or order-history tab, in the background) are closed
+- Tabs the companion opens itself (a cart, deck, order-history or watched store page, in the background) are closed
   afterwards. Order reads always open their own tab (never navigate one of yours), follow only the
   store's own same-origin page links, press only Mana Pool's "Item List" view tab, and never submit
   a form (TCGplayer's year filter is a form, so you pick the year on the page yourself).

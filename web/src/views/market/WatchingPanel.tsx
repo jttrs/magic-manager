@@ -1,9 +1,14 @@
-import { useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
+import { useFeature } from '../../app/features';
+import { watchedQuery } from '../../app/queries';
+import { useCompanion } from '../../app/useCompanion';
 import { useJob } from '../../app/useJob';
 import { Button } from '../../components/Button';
+import { AwaitingNote, FailureNote } from '../../components/companion/CompanionNotes';
 import { EmptyNote, ErrorNote } from '../../components/States';
-import { newlyMetFrom, sharedErrors, watchlistErrors, type DealProduct, type NewlyMet, type PriceRow } from '../../core/deals';
+import { warningLines } from '../../core/companion';
+import { browserReadUrls, newlyMetFrom, sharedErrors, watchlistErrors, type DealProduct, type NewlyMet, type PriceRow } from '../../core/deals';
 import { fmtInt, fmtUsd } from '../../core/format';
 import type { MarketSearch } from '../../core/search';
 import { DealsWorkspace } from './DealsWorkspace';
@@ -29,13 +34,48 @@ export function WatchingPanel({ search, set }: { search: MarketSearch; set: (pat
   const shared = sharedErrors(errors);
   const met = useMemo(() => (live?.status === 'succeeded' ? newlyMetFrom(live.artifacts) : []), [live]);
   const [dismissed, setDismissed] = useState(false);
-  const refresh = () => { setDismissed(false); job.reset(); void job.start('deals.watchlist', { refresh: true }); };
+  // Open-tab stores (Best Buy, Target …): read in this browser by the companion when it's
+  // connected — you approve the pages, then what is sent; else Chrome on this Mac (AppleScript).
+  const c = useCompanion();
+  const inBrowser = useFeature('companion') && c.status === 'ready';
+  const watchedRows = useQuery(watchedQuery()).data;
+  const browser = useMemo(() => browserReadUrls(watchedRows ?? []), [watchedRows]);
+  const [awaiting, setAwaiting] = useState<string | null>(null);
+  const [readNotes, setReadNotes] = useState<string[]>([]);
+  const viaCompanion = useMutation({
+    mutationFn: async () => {
+      const d = await c.read('watched', { urls: browser.urls }, (summary) => setAwaiting(summary));
+      setAwaiting(null);
+      setReadNotes([
+        ...warningLines(d.warnings, c.catalog),
+        ...(browser.skipped ? [`${fmtInt(browser.skipped)} more open-tab store links weren’t read this time (at most ${fmtInt(browser.urls.length)} per read).`] : []),
+      ]);
+      job.reset();
+      await job.start('deals.watchlist', { refresh: true, in_browser: true, pages: d.pages });
+    },
+    onSettled: () => setAwaiting(null),
+  });
+  const refresh = () => {
+    setDismissed(false);
+    setReadNotes([]);
+    if (inBrowser && browser.urls.length) viaCompanion.mutate();
+    else { job.reset(); void job.start('deals.watchlist', { refresh: true }); }
+  };
+  const waiting = awaiting != null || viaCompanion.isPending;
   const header = (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-3">
-        <Button tone="paper" emphasis="quiet" disabled={busy} onClick={refresh}>{busy ? 'Reading prices…' : 'Read watched prices'}</Button>
+        <Button tone="paper" emphasis="quiet" disabled={busy || waiting} onClick={refresh}>
+          {awaiting != null ? 'Waiting for approval…' : busy || waiting ? 'Reading prices…' : 'Read watched prices'}
+        </Button>
         {live?.status === 'succeeded' && live.summary && <span className="text-sm tabular text-ink-muted">{live.summary}</span>}
+        {!busy && !waiting && inBrowser && browser.urls.length > 0 && (
+          <span className="text-sm text-ink-muted">Open-tab stores are read in this browser by the companion</span>
+        )}
       </div>
+      {awaiting != null && <AwaitingNote summary={awaiting} />}
+      {viaCompanion.isError && <FailureNote error={viaCompanion.error} />}
+      {readNotes.map((w) => <p key={w} role="status" className="text-md leading-relaxed text-ink">{w}</p>)}
       {busy && (
         <p role="status" className="text-sm tabular text-ink-muted">
           {live?.total ? `Reading ${fmtInt(Math.min(live.done + 1, live.total))} of ${fmtInt(live.total)}` : 'Starting…'}

@@ -15,6 +15,7 @@ import {
   MOXFIELD_ORIGINS, STORE_ORIGINS, storeOf, summarize,
 } from './protocol.js';
 import { readOrderList, readOrders, ORDER_FEATURES } from './orders.js';
+import { planWatched, readWatched } from './watched.js';
 
 const SELF = chrome.runtime.getURL('');
 const CATALOG = fetch(chrome.runtime.getURL('errors.json')).then((r) => r.json()).then((j) => j.codes);
@@ -70,12 +71,14 @@ async function fromApp(msg, sender) {
     await finish(busy, await fail('request.expired'));
   }
 
-  const read = await READERS[msg.kind](params);
+  // Watched pages: plan only — nothing is opened or read until you approve the list.
+  const read = msg.kind === 'watched' ? await planWatched(params, fail, STORE_ORIGINS) : await READERS[msg.kind](params);
   if (!read.ok) return read;
   if (JSON.stringify(read.data).length > MAX_PAYLOAD_BYTES) return fail('request.invalid', { detail: 'too large' });
 
   const pending = { id: msg.id, kind: msg.kind, tabId: sender.tab.id, origin: pinned, data: read.data,
-    summary: summarize(msg.kind, read.data), created: Date.now(), windowId: null };
+    summary: summarize(msg.kind, read.data), created: Date.now(), windowId: null,
+    stage: msg.kind === 'watched' ? 'confirm' : 'send' };
   await chrome.storage.session.set({ pending });
   const win = await chrome.windows.create({ url: chrome.runtime.getURL('src/approve.html'), type: 'popup', width: 620, height: 720, focused: true });
   pending.windowId = win.id;
@@ -109,6 +112,8 @@ async function fromOwnPage(msg) {
   if (msg.type === 'decision') {
     const pending = await pendingRequest();
     if (!pending || pending.id !== msg.id) return { ok: false };
+    if (msg.approve === 'read' && pending.stage === 'confirm') return readApproved(pending);
+    if (msg.approve === true && (pending.stage || 'send') !== 'send') return fail('request.invalid');
     if (msg.approve === true && Date.now() - pending.created < APPROVAL_TTL_MS) {
       const sent = await finish(pending, { ok: true, data: pending.data });
       return sent ? { ok: true } : fail('request.tab_moved');
@@ -118,6 +123,18 @@ async function fromOwnPage(msg) {
   }
   if (msg.type === 'features') return { ok: true, features: await features() };
   return undefined;
+}
+
+/** Watched pages, after you approved the list: read them, then ask again before sending. */
+async function readApproved(pending) {
+  await chrome.storage.session.set({ pending: { ...pending, stage: 'reading', created: Date.now() } });
+  const alive = async () => { const p = await pendingRequest(); return p?.id === pending.id && p.stage === 'reading'; };
+  const data = await readWatched(pending.data, { inject, loaded, alive });
+  const now = await pendingRequest();
+  if (!now || now.id !== pending.id || now.stage !== 'reading') return { ok: false };
+  if (JSON.stringify(data).length > MAX_PAYLOAD_BYTES) { await finish(now, await fail('request.invalid', { detail: 'too large' })); return { ok: false }; }
+  await chrome.storage.session.set({ pending: { ...now, stage: 'send', data, summary: summarize('watched', data), created: Date.now() } });
+  return { ok: true };
 }
 
 chrome.windows.onRemoved.addListener(async (windowId) => {
