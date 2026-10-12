@@ -36,7 +36,7 @@ Add cards → **Moxfield collection** (your collection, one binder, or a shared 
 | Worker | `extension/src/background.js` | Validates the asker, runs a reader, opens the approval window, delivers the result. |
 | Bridge | `extension/src/bridge.js` | Content script on the paired app origin only; relays postMessage ↔ worker. |
 | Approval / settings | `extension/src/approve.*`, `options.*` | The extension's own pages. |
-| Generated | `extension/src/stores.js`, manifest permissions | From `config/vendors.toml` via `scripts/build_extension.py` (`--check` in tests). |
+| Generated | `extension/src/stores.js`, manifest permissions, `extension/src/tokens.css` | Stores/permissions from `config/vendors.toml`, colour + type tokens from `web/tokens/*.tokens.json`, via `scripts/build_extension.py` (`--check` in tests). The Archivo face is bundled in `extension/src/fonts/` (OFL). |
 | Error catalog | `extension/errors.json` | Every `<area>.<reason>` code → message + fix, used by extension, app and server. |
 | App protocol | `web/src/core/companion.ts` | Request/response over postMessage, zod-validated, coded errors. |
 | App hooks | `web/src/app/useCompanion.ts`, `useBrowserDeck.ts` | Detection (hello/ping), version check, reads. |

@@ -1,60 +1,50 @@
-/* The companion's own pages. Mirrors the app's guide-sheet look: ruled rows, one
-   amber accent, light + dark. No remote fonts or images. */
-:root {
-  color-scheme: light dark;
-  /* The app's theme tokens (web/tokens), copied: extension pages can't load the app's CSS. */
-  --paper: #efe7d6; --raised: #f7f2e7; --sunk: #e4dac4; --ink: #1d1912; --muted: #625846;
-  --rule: rgba(29, 25, 18, 0.15); --rule-strong: #1d1912; --accent: #f0a531; --accent-ink: #7a4b00; --on-accent: #1d1912; --danger: #9c3a22;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #221e17; --raised: #2e2920; --sunk: #1c1812; --ink: #efe7d6; --muted: #a59b87;
-    --rule: rgba(239, 231, 214, 0.14); --rule-strong: #d3c6aa; --accent: #f0a531; --accent-ink: #f7c66b; --on-accent: #1d1912; --danger: #e2785e;
-  }
-}
+/* The companion's own pages. The app's guide-sheet look: ruled rows, one amber
+   accent, light + dark. Colours, type family and width voices come from tokens.css
+   (generated from web/tokens); the Archivo face is bundled. Nothing remote. */
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--paper); color: var(--ink); font: 14px/1.5 "Archivo", "Helvetica Neue", system-ui, sans-serif; }
+body { margin: 0; background: var(--theme-paper); color: var(--theme-ink); font: 14px/1.5 var(--font-guide); font-variation-settings: 'wdth' var(--font-width-normal); font-variant-numeric: lining-nums; }
 main { max-width: 720px; margin: 0 auto; padding: 20px 24px 28px; }
-h1 { font-size: 24px; margin: 0 0 6px; font-weight: 700; letter-spacing: -0.01em; font-stretch: 80%; padding-bottom: 8px; border-bottom: 2px solid var(--rule-strong); }
-h2 { font-size: 13px; margin: 24px 0 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; padding-bottom: 3px; border-bottom: 1px solid var(--rule-strong); }
+h1 { font-size: 24px; margin: 0 0 6px; font-weight: 680; letter-spacing: -0.01em; font-variation-settings: 'wdth' var(--font-width-condensed); padding-bottom: 8px; border-bottom: 2px solid var(--theme-rule-strong); }
+h2 { font-size: 13px; margin: 24px 0 6px; font-weight: 680; font-variation-settings: 'wdth' var(--font-width-condensed); text-transform: uppercase; letter-spacing: 0.05em; padding-bottom: 3px; border-bottom: 1px solid var(--theme-rule-strong); }
 p { margin: 6px 0; }
-.muted { color: var(--muted); }
-.origin { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
-.row { display: flex; gap: 12px; align-items: baseline; border-bottom: 1px solid var(--rule); padding: 8px 0; }
+.muted { color: var(--theme-ink-muted); }
+.origin { font-weight: 600; font-variation-settings: 'wdth' var(--font-width-semi); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.row { display: flex; gap: 12px; align-items: baseline; border-bottom: 1px solid var(--theme-rule); padding: 8px 0; }
 .row > :first-child { flex: 1; min-width: 0; }
 table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
-th, td { text-align: left; padding: 5px 8px 5px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
-th { font-weight: 600; color: var(--muted); font-size: 12px; }
+th, td { text-align: left; padding: 5px 8px 5px 0; border-bottom: 1px solid var(--theme-rule); vertical-align: top; }
+th { font-weight: 600; color: var(--theme-ink-muted); font-size: 12px; font-variation-settings: 'wdth' var(--font-width-semi); }
 td.num, th.num { text-align: right; }
-.scroll { max-height: max(240px, calc(100vh - 380px)); overflow: auto; border-top: 1px solid var(--rule); }
-pre { white-space: pre-wrap; word-break: break-word; font-size: 12px; background: var(--sunk); padding: 10px; max-height: 260px; overflow: auto; }
-button { font: inherit; border-radius: 3px; padding: 7px 14px; cursor: pointer; border: 1px solid var(--rule); background: transparent; color: var(--ink); }
-button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
-button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.scroll { max-height: max(240px, calc(100vh - 380px)); overflow: auto; border-top: 1px solid var(--theme-rule); }
+/* Raw JSON is data: the one place the system mono is used (DESIGN.md). */
+pre { font-family: ui-monospace, monospace; white-space: pre-wrap; word-break: break-word; font-size: 12px; background: var(--theme-paper-sunk); padding: 10px; max-height: 260px; overflow: auto; }
+button { font: inherit; border-radius: 3px; padding: 7px 14px; cursor: pointer; border: 1px solid var(--theme-rule); background: transparent; color: var(--theme-ink); }
+button.primary { background: var(--theme-accent); border-color: var(--theme-accent); color: var(--theme-on-accent); font-weight: 600; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--theme-accent); outline-offset: 2px; }
 button:disabled { opacity: 0.5; cursor: default; }
-.actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; position: sticky; bottom: 0; background: var(--paper); padding: 10px 0; border-top: 1px solid var(--rule); }
-input[type="url"] { font: inherit; padding: 6px 8px; border: 1px solid var(--rule-strong); border-radius: 3px; background: var(--raised); color: var(--ink); width: 100%; }
-.error { color: var(--danger); }
-.ok { color: var(--accent-ink); font-weight: 600; }
+.actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; position: sticky; bottom: 0; background: var(--theme-paper); padding: 10px 0; border-top: 1px solid var(--theme-rule); }
+input[type="url"] { font: inherit; padding: 6px 8px; border: 1px solid var(--theme-rule-strong); border-radius: 3px; background: var(--theme-paper-raised); color: var(--theme-ink); width: 100%; }
+.error { color: var(--theme-danger); }
+.ok { color: var(--theme-accent-ink); font-weight: 600; }
 ul.plain { margin: 6px 0; padding-left: 18px; }
-details summary { cursor: pointer; color: var(--muted); }
-.warn { border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); padding: 6px 0; margin: 8px 0; color: var(--ink); }
-.warn::before { content: "Note · "; font-weight: 600; color: var(--accent-ink); }
+details summary { cursor: pointer; color: var(--theme-ink-muted); }
+.warn { border-top: 1px solid var(--theme-rule); border-bottom: 1px solid var(--theme-rule); padding: 6px 0; margin: 8px 0; color: var(--theme-ink); }
+.warn::before { content: "Note · "; font-weight: 600; color: var(--theme-accent-ink); }
 .field-label { display: block; margin-top: 10px; font-weight: 600; }
 .row.pair { border-bottom: 0; padding-top: 4px; align-items: center; }
 #pair-status:empty { display: none; }
 /* Feature switches: the app's amber switch (Privacy dialog) plus the state in words. */
-.switch { display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; min-width: 7.75em; padding: 6px 4px; border: 0; background: transparent; color: var(--ink); font-weight: 600; }
-.switch .track { position: relative; width: 44px; height: 24px; flex-shrink: 0; border: 1px solid var(--rule-strong); border-radius: 999px; background: var(--sunk); transition: background-color 160ms cubic-bezier(0.22, 1, 0.36, 1), border-color 160ms cubic-bezier(0.22, 1, 0.36, 1); }
-.switch .thumb { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 999px; background: var(--ink); transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1); }
-.switch[aria-checked="true"] .track, .switch.fixed[data-on="true"] .track { background: var(--accent); border-color: var(--accent); }
-.switch[aria-checked="true"] .thumb, .switch.fixed[data-on="true"] .thumb { transform: translateX(20px); background: var(--on-accent); }
-.switch[aria-checked="false"] .state, .switch.fixed[data-on="false"] .state { color: var(--muted); }
+.switch { display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; min-width: 7.75em; padding: 6px 4px; border: 0; background: transparent; color: var(--theme-ink); font-weight: 600; }
+.switch .track { position: relative; width: 44px; height: 24px; flex-shrink: 0; border: 1px solid var(--theme-rule-strong); border-radius: 999px; background: var(--theme-paper-sunk); transition: background-color var(--duration-base) var(--ease-out), border-color var(--duration-base) var(--ease-out); }
+.switch .thumb { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 999px; background: var(--theme-ink); transition: transform var(--duration-base) var(--ease-out); }
+.switch[aria-checked="true"] .track, .switch.fixed[data-on="true"] .track { background: var(--theme-accent); border-color: var(--theme-accent); }
+.switch[aria-checked="true"] .thumb, .switch.fixed[data-on="true"] .thumb { transform: translateX(20px); background: var(--theme-on-accent); }
+.switch[aria-checked="false"] .state, .switch.fixed[data-on="false"] .state { color: var(--theme-ink-muted); }
 .switch.fixed { cursor: default; }
-.switch.fixed[data-on="false"] .state { color: var(--danger); }
+.switch.fixed[data-on="false"] .state { color: var(--theme-danger); }
 .row.feature { align-items: center; }
 @media (prefers-reduced-motion: reduce) { .switch .track, .switch .thumb { transition: none; } }
-button.switch:hover .track { border-color: var(--accent); }
-td .meta { display: block; color: var(--muted); font-size: 12px; line-height: 1.4; }
+button.switch:hover .track { border-color: var(--theme-accent); }
+td .meta { display: block; color: var(--theme-ink-muted); font-size: 12px; line-height: 1.4; }
 td { overflow-wrap: anywhere; }
 td.num, th.num { white-space: nowrap; overflow-wrap: normal; padding-left: 12px; }

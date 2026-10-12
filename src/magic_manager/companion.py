@@ -35,6 +35,13 @@ MANIFEST = EXT_DIR / "manifest.json"
 STORES_JS = EXT_DIR / "src" / "stores.js"
 ERRORS = EXT_DIR / "errors.json"
 CART_READER = EXT_DIR / "src" / "readers" / "manapool-cart.js"
+TOKENS_CSS = EXT_DIR / "src" / "tokens.css"
+WEB_TOKENS = EXT_DIR.parent / "web" / "tokens"
+# Archivo Variable (wdth axis, latin), bundled from the web app's @fontsource-variable/archivo:
+# extension pages can't load the app's CSS or anything from the internet.
+FONT_FILE = "fonts/archivo-latin-wdth-normal.woff2"
+_LATIN = ("U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,"
+          "U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD")
 
 # Hosts the extension may be granted. Install-time: only the Mana Pool site (cart
 # page — never its API host). Everything else is optional and asked for at the
@@ -82,12 +89,64 @@ def _stores_js() -> str:
             f"export const STORES = {body};\n")
 
 
+def _token_values(*files: str) -> dict[str, object]:
+    """Flatten DTCG token files (``web/tokens``) to ``{"color.bone.100": value, …}``,
+    resolving ``{a.b.c}`` references the way style-dictionary does."""
+    flat: dict[str, object] = {}
+
+    def walk(node: dict, path: tuple[str, ...]) -> None:
+        if "$value" in node:
+            flat[".".join(path)] = node["$value"]
+            return
+        for k, v in node.items():
+            if not k.startswith("$") and isinstance(v, dict):
+                walk(v, path + (k,))
+
+    for f in files:
+        walk(json.loads((WEB_TOKENS / f).read_text()), ())
+
+    def resolve(v: object) -> object:
+        while isinstance(v, str) and v.startswith("{") and v.endswith("}"):
+            v = flat[v[1:-1]]
+        return v
+
+    return {k: resolve(v) for k, v in flat.items()}
+
+
+def _tokens_css() -> str:
+    """The extension's tokens: the app's semantic theme colours (light + dark by OS
+    setting), its type family and width voices, and the bundled Archivo face."""
+    light = _token_values("primitives.tokens.json", "light.tokens.json")
+    dark = _token_values("primitives.tokens.json", "dark.tokens.json")
+
+    def theme(vals: dict[str, object], indent: str) -> str:
+        return "\n".join(f"{indent}--theme-{k[6:]}: {v};" for k, v in vals.items() if k.startswith("theme."))
+
+    family = ", ".join(f"'{f}'" if " " in f else f for f in light["font.family.guide"])  # type: ignore[union-attr]
+    ease = ", ".join(str(x) for x in light["motion.ease.out"])  # type: ignore[union-attr]
+    return (
+        "/* GENERATED from web/tokens/*.tokens.json by scripts/build_extension.py — do not edit. */\n"
+        "@font-face {\n  font-family: 'Archivo Variable';\n  font-style: normal;\n  font-display: swap;\n"
+        "  font-weight: 100 900;\n  font-stretch: 62% 125%;\n"
+        f"  src: url({FONT_FILE}) format('woff2-variations');\n  unicode-range: {_LATIN};\n}}\n"
+        ":root {\n  color-scheme: light dark;\n"
+        f"  --font-guide: {family};\n"
+        f"  --font-width-condensed: {light['font.width.condensed']};\n"
+        f"  --font-width-semi: {light['font.width.semi']};\n"
+        f"  --font-width-normal: {light['font.width.normal']};\n"
+        f"  --ease-out: cubic-bezier({ease});\n"
+        f"  --duration-base: {light['motion.duration.base']};\n"
+        f"{theme(light, '  ')}\n}}\n"
+        f"@media (prefers-color-scheme: dark) {{\n  :root {{\n{theme(dark, '    ')}\n  }}\n}}\n"
+    )
+
+
 def generated_files() -> dict[Path, str]:
     """What the generated files must contain, keyed by path."""
     manifest = json.loads(MANIFEST.read_text())
     manifest["host_permissions"] = MANAPOOL_HOSTS
     manifest["optional_host_permissions"] = list(dict.fromkeys(APP_HOSTS + MOXFIELD_HOSTS + ARCHIDEKT_HOSTS + ORDER_HOSTS + CART_HOSTS + store_host_permissions()))
-    return {MANIFEST: json.dumps(manifest, indent=2) + "\n", STORES_JS: _stores_js()}
+    return {MANIFEST: json.dumps(manifest, indent=2) + "\n", STORES_JS: _stores_js(), TOKENS_CSS: _tokens_css()}
 
 
 def stale_files() -> list[Path]:
