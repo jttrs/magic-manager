@@ -4,7 +4,7 @@
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--theme-paper); color: var(--theme-ink); font: 14px/1.5 var(--font-guide); font-variation-settings: 'wdth' var(--font-width-normal); font-variant-numeric: lining-nums; }
 main { max-width: 720px; margin: 0 auto; padding: 20px 24px 28px; }
-h1 { font-size: 24px; margin: 0 0 6px; font-weight: 680; letter-spacing: -0.01em; font-variation-settings: 'wdth' var(--font-width-condensed); padding-bottom: 8px; border-bottom: 2px solid var(--theme-rule-strong); }
+h1 { font-size: 28px; line-height: 1.05; margin: 0 0 6px; font-weight: 680; letter-spacing: -0.01em; font-variation-settings: 'wdth' var(--font-width-condensed); padding-bottom: 8px; border-bottom: 2px solid var(--theme-rule-strong); }
 h2 { font-size: 13px; margin: 24px 0 6px; font-weight: 680; font-variation-settings: 'wdth' var(--font-width-condensed); text-transform: uppercase; letter-spacing: 0.05em; padding-bottom: 3px; border-bottom: 1px solid var(--theme-rule-strong); }
 p { margin: 6px 0; }
 .muted { color: var(--theme-ink-muted); }
@@ -34,7 +34,7 @@ details summary { cursor: pointer; color: var(--theme-ink-muted); }
 .row.pair { border-bottom: 0; padding-top: 4px; align-items: center; }
 #pair-status:empty { display: none; }
 /* Feature switches: the app's amber switch (Privacy dialog) plus the state in words. */
-.switch { display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; min-width: 7.75em; padding: 6px 4px; border: 0; background: transparent; color: var(--theme-ink); font-weight: 600; }
+.switch { display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; width: 9em; padding: 6px 4px; text-align: left; border: 0; background: transparent; color: var(--theme-ink); font-weight: 600; }
 .switch .track { position: relative; width: 44px; height: 24px; flex-shrink: 0; border: 1px solid var(--theme-rule-strong); border-radius: 999px; background: var(--theme-paper-sunk); transition: background-color var(--duration-base) var(--ease-out), border-color var(--duration-base) var(--ease-out); }
 .switch .thumb { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 999px; background: var(--theme-ink); transition: transform var(--duration-base) var(--ease-out); }
 .switch[aria-checked="true"] .track, .switch.fixed[data-on="true"] .track { background: var(--theme-accent); border-color: var(--theme-accent); }
@@ -53,3 +53,6 @@ td.num, th.num { white-space: nowrap; overflow-wrap: normal; padding-left: 12px;
 details.more { margin-top: 2px; }
 details.more summary { font-size: 12px; width: fit-content; }
 details.more p { margin: 4px 0 2px; color: var(--theme-ink-muted); max-width: 62ch; }
+input::placeholder { color: var(--theme-ink-muted); opacity: 1; }
+.switch .state { white-space: nowrap; }
+.switch.fixed[data-on="false"] .state { white-space: normal; }
