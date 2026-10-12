@@ -41,7 +41,7 @@ describe('add-cards review model', () => {
 });
 
 describe('sourceLine', () => {
-  const l = (raw: string, name: string, note: string | null = null) => ({ raw, name, note });
+  const l = (raw: string, name: string, note: string | null = null, status: 'exact' | 'ambiguous' | 'unresolved' = 'exact') => ({ raw, name, note, status });
   it('drops a source line that only repeats count, name, set and number', () => {
     expect(sourceLine(l('1 Insist', 'Insist'))).toBeNull();
     expect(sourceLine(l('4x Lightning Bolt (M10) 146', 'Lightning Bolt'))).toBeNull();
@@ -53,5 +53,7 @@ describe('sourceLine', () => {
     expect(sourceLine(l('1 Notacard', 'Notacard', "No card named 'Notacard'"))).toBe("No card named 'Notacard'");
     expect(sourceLine(l('1 Lightnig Bolt', 'Lightning Bolt'))).toBe('1 Lightnig Bolt');
     expect(sourceLine(l('Commander Masters', 'Sol Ring'))).toBe('Commander Masters');
+    expect(sourceLine(l('1 Sol Ring (XYZ) 999', 'Sol Ring', null, 'ambiguous'))).toBe('1 Sol Ring (XYZ) 999');
+    expect(sourceLine(l('1 Sol Ring', 'Sol Ring', null, 'ambiguous'))).toBeNull();
   });
 });
