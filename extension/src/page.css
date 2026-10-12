@@ -43,3 +43,15 @@ details summary { cursor: pointer; color: var(--muted); }
 .field-label { display: block; margin-top: 10px; font-weight: 600; }
 .row.pair { border-bottom: 0; padding-top: 4px; align-items: center; }
 #pair-status:empty { display: none; }
+/* Feature switches: the app's amber switch (Privacy dialog) plus the state in words. */
+.switch { display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; min-width: 7.75em; padding: 6px 4px; border: 0; background: transparent; color: var(--ink); font-weight: 600; }
+.switch .track { position: relative; width: 44px; height: 24px; flex-shrink: 0; border: 1px solid var(--rule-strong); border-radius: 999px; background: var(--sunk); transition: background-color 160ms cubic-bezier(0.22, 1, 0.36, 1), border-color 160ms cubic-bezier(0.22, 1, 0.36, 1); }
+.switch .thumb { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 999px; background: var(--ink); transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1); }
+.switch[aria-checked="true"] .track, .switch.fixed[data-on="true"] .track { background: var(--accent); border-color: var(--accent); }
+.switch[aria-checked="true"] .thumb, .switch.fixed[data-on="true"] .thumb { transform: translateX(20px); background: var(--on-accent); }
+.switch[aria-checked="false"] .state, .switch.fixed[data-on="false"] .state { color: var(--muted); }
+.switch.fixed { cursor: default; }
+.switch.fixed[data-on="false"] .state { color: var(--danger); }
+.row.feature { align-items: center; }
+@media (prefers-reduced-motion: reduce) { .switch .track, .switch .thumb { transition: none; } }
+button.switch:hover .track { border-color: var(--accent); }

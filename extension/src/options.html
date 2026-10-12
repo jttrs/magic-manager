@@ -21,33 +21,33 @@
     <p id="pair-status" role="status"></p>
 
     <h2>2 · Choose what it may read</h2>
-    <div class="row">
-      <div><strong>Mana Pool cart</strong> — always on<br><span class="muted">Reads your cart page on manapool.com (cards, finishes, quantities, prices). Never its API, your sign-in or your address.</span></div>
-      <span id="cart-state" class="ok"></span>
+    <div class="row feature">
+      <div><strong id="name-cart">Mana Pool cart</strong><br><span class="muted">Reads your cart page on manapool.com (cards, finishes, quantities, prices). Never its API, your sign-in or your address.</span></div>
+      <span id="cart-state" class="switch fixed" data-on="true"><span class="track" aria-hidden="true"><span class="thumb"></span></span><span class="state">Always on</span></span>
     </div>
-    <div class="row">
-      <div><strong>TCGplayer cart</strong><br><span class="muted">Reads your cart page on www.tcgplayer.com when you check it in the app (cards, conditions, quantities, prices — never the sellers, your sign-in or your address). Chrome will ask to allow www.tcgplayer.com.</span></div>
-      <button type="button" id="cart-tcgplayer"></button>
+    <div class="row feature">
+      <div><strong id="name-cart-tcgplayer">TCGplayer cart</strong><br><span class="muted">Reads your cart page on www.tcgplayer.com when you check it in the app (cards, conditions, quantities, prices — never the sellers, your sign-in or your address). Chrome will ask to allow www.tcgplayer.com.</span></div>
+      <button type="button" role="switch" id="cart-tcgplayer" class="switch" aria-checked="false" aria-labelledby="name-cart-tcgplayer"><span class="track" aria-hidden="true"><span class="thumb"></span></span><span class="state">Off</span></button>
     </div>
-    <div class="row">
-      <div><strong>Card Kingdom cart</strong><br><span class="muted">Reads your cart page on www.cardkingdom.com when you check it in the app (cards, grades, quantities, prices — never your sign-in or your address). Chrome will ask to allow www.cardkingdom.com.</span></div>
-      <button type="button" id="cart-cardkingdom"></button>
+    <div class="row feature">
+      <div><strong id="name-cart-cardkingdom">Card Kingdom cart</strong><br><span class="muted">Reads your cart page on www.cardkingdom.com when you check it in the app (cards, grades, quantities, prices — never your sign-in or your address). Chrome will ask to allow www.cardkingdom.com.</span></div>
+      <button type="button" role="switch" id="cart-cardkingdom" class="switch" aria-checked="false" aria-labelledby="name-cart-cardkingdom"><span class="track" aria-hidden="true"><span class="thumb"></span></span><span class="state">Off</span></button>
     </div>
-    <div class="row">
-      <div><strong>Deals — your open store tabs</strong><br><span class="muted">Lets the companion see which tabs are open on the <span id="store-count"></span> Deals stores and read the price on product pages you have open. Chrome will ask to allow those sites.</span></div>
-      <button type="button" id="deals"></button>
+    <div class="row feature">
+      <div><strong id="name-deals">Deals — your open store tabs</strong><br><span class="muted">Lets the companion see which tabs are open on the <span id="store-count"></span> Deals stores and read the price on product pages you have open. Chrome will ask to allow those sites.</span></div>
+      <button type="button" role="switch" id="deals" class="switch" aria-checked="false" aria-labelledby="name-deals"><span class="track" aria-hidden="true"><span class="thumb"></span></span><span class="state">Off</span></button>
     </div>
-    <div class="row">
-      <div><strong>Moxfield decks, collection and binders</strong><br><span class="muted">Reads a deck, your collection or a binder you choose from moxfield.com, as your browser sees it. Shared links are read without signing in. For your own private ones it uses Moxfield's sign-in the way moxfield.com itself does: a short-lived token, kept in memory for that one read and sent only to Moxfield — never stored or sent to the app. Chrome will ask to allow moxfield.com.</span></div>
-      <button type="button" id="moxfield"></button>
+    <div class="row feature">
+      <div><strong id="name-moxfield">Moxfield decks, collection and binders</strong><br><span class="muted">Reads a deck, your collection or a binder you choose from moxfield.com, as your browser sees it. Shared links are read without signing in. For your own private ones it uses Moxfield's sign-in the way moxfield.com itself does: a short-lived token, kept in memory for that one read and sent only to Moxfield — never stored or sent to the app. Chrome will ask to allow moxfield.com.</span></div>
+      <button type="button" role="switch" id="moxfield" class="switch" aria-checked="false" aria-labelledby="name-moxfield"><span class="track" aria-hidden="true"><span class="thumb"></span></span><span class="state">Off</span></button>
     </div>
-    <div class="row">
-      <div><strong>Archidekt decks</strong><br><span class="muted">Reads a deck you choose from archidekt.com, as your browser sees it (including your own private decks when you're signed in) — only its cards, never your sign-in. Chrome will ask to allow archidekt.com.</span></div>
-      <button type="button" id="archidekt"></button>
+    <div class="row feature">
+      <div><strong id="name-archidekt">Archidekt decks</strong><br><span class="muted">Reads a deck you choose from archidekt.com, as your browser sees it (including your own private decks when you're signed in) — only its cards, never your sign-in. Chrome will ask to allow archidekt.com.</span></div>
+      <button type="button" role="switch" id="archidekt" class="switch" aria-checked="false" aria-labelledby="name-archidekt"><span class="track" aria-hidden="true"><span class="thumb"></span></span><span class="state">Off</span></button>
     </div>
-    <div class="row">
-      <div><strong>Order history — TCGplayer and Card Kingdom</strong><br><span class="muted">Reads your order history pages on store.tcgplayer.com and cardkingdom.com when the app asks (orders, items, prices paid — never your address, payment or tracking). Mana Pool orders need nothing extra. Chrome will ask to allow those two sites.</span></div>
-      <button type="button" id="orders"></button>
+    <div class="row feature">
+      <div><strong id="name-orders">Order history — TCGplayer and Card Kingdom</strong><br><span class="muted">Reads your order history pages on store.tcgplayer.com and cardkingdom.com when the app asks (orders, items, prices paid — never your address, payment or tracking). Mana Pool orders need nothing extra. Chrome will ask to allow those two sites.</span></div>
+      <button type="button" role="switch" id="orders" class="switch" aria-checked="false" aria-labelledby="name-orders"><span class="track" aria-hidden="true"><span class="thumb"></span></span><span class="state">Off</span></button>
     </div>
 
     <h2>What it never does</h2>

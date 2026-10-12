@@ -48,18 +48,13 @@ async function refresh() {
   $('store-count').textContent = String(STORES.length);
   await showPairing();
   const has = (origins) => chrome.permissions.contains({ origins });
-  $('cart-state').textContent = await has(MANAPOOL_ORIGINS) ? 'On' : 'Blocked in Chrome site access';
-  granted.deals = await has(STORE_ORIGINS);
-  granted.moxfield = await has(MOXFIELD_ORIGINS);
-  $('deals').textContent = granted.deals ? 'Switch off' : 'Switch on';
-  $('moxfield').textContent = granted.moxfield ? 'Switch off' : 'Switch on';
-  granted.archidekt = await has(ARCHIDEKT_ORIGINS);
-  $('archidekt').textContent = granted.archidekt ? 'Switch off' : 'Switch on';
-  granted.orders = await has(ORDER_ORIGINS);
-  $('orders').textContent = granted.orders ? 'Switch off' : 'Switch on';
-  for (const key of ['cart-tcgplayer', 'cart-cardkingdom']) {
-    granted[key] = await has(GROUPS[key]);
-    $(key).textContent = granted[key] ? 'Switch off' : 'Switch on';
+  const cart = await has(MANAPOOL_ORIGINS);
+  $('cart-state').dataset.on = String(cart);
+  $('cart-state').querySelector('.state').textContent = cart ? 'Always on' : 'Blocked in Chrome’s site access';
+  for (const [key, origins] of Object.entries(GROUPS)) {
+    granted[key] = await has(origins);
+    $(key).setAttribute('aria-checked', String(granted[key]));
+    $(key).querySelector('.state').textContent = granted[key] ? 'On' : 'Off';
   }
 }
 
@@ -106,12 +101,7 @@ async function toggle(key, origins) {
 
 $('pair').addEventListener('click', pair);
 $('unpair').addEventListener('click', unpair);
-$('deals').addEventListener('click', () => toggle('deals', STORE_ORIGINS));
-$('moxfield').addEventListener('click', () => toggle('moxfield', MOXFIELD_ORIGINS));
-$('archidekt').addEventListener('click', () => toggle('archidekt', ARCHIDEKT_ORIGINS));
-$('orders').addEventListener('click', () => toggle('orders', ORDER_ORIGINS));
-$('cart-tcgplayer').addEventListener('click', () => toggle('cart-tcgplayer', GROUPS['cart-tcgplayer']));
-$('cart-cardkingdom').addEventListener('click', () => toggle('cart-cardkingdom', GROUPS['cart-cardkingdom']));
+for (const [key, origins] of Object.entries(GROUPS)) $(key).addEventListener('click', () => toggle(key, origins));
 // The app checking in (or a pairing change) updates the line while this page is open.
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && ('lastHello' in changes || 'appOrigin' in changes)) showPairing();

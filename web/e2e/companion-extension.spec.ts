@@ -287,6 +287,19 @@ test('the settings page says whether the paired app has checked in', async ({ ex
   await expect(opts.getByRole('textbox', { name: 'App address' })).toHaveValue(APP);
 });
 
+test('each optional feature is a real switch that shows its state', async ({ ext }) => {
+  const opts = await ext.context.newPage();
+  await opts.goto(`chrome-extension://${ext.id}/src/options.html`);
+  // The harness grants www.tcgplayer.com and moxfield.com up front (see the fixture).
+  await expect(opts.getByRole('switch', { name: 'TCGplayer cart' })).toHaveAttribute('aria-checked', 'true');
+  await expect(opts.getByRole('switch', { name: 'TCGplayer cart' })).toContainText('On');
+  await expect(opts.getByRole('switch', { name: 'Card Kingdom cart' })).toHaveAttribute('aria-checked', 'false');
+  await expect(opts.getByRole('switch', { name: 'Card Kingdom cart' })).toContainText('Off');
+  await expect(opts.getByRole('switch', { name: /Moxfield/ })).toHaveAttribute('aria-checked', 'true');
+  await expect(opts.locator('#cart-state')).toHaveText('Always on');
+  expect(await opts.getByRole('switch').count()).toBe(6);
+});
+
 test('paired with the wrong address: the app never checks in, and the settings page says so', async ({ ext }) => {
   await ext.worker.evaluate(() => chrome.storage.local.set({ appOrigin: 'http://localhost:5999' }));
   const { page } = await appPage(ext.context);
