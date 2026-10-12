@@ -162,11 +162,10 @@ test('a Moxfield collection: the real extension reads every page in your Moxfiel
   });
   await page.getByRole('button', { name: 'Add cards' }).click();
   const d = page.getByRole('dialog', { name: 'Add cards' });
-  await d.getByRole('tab', { name: 'Moxfield collection' }).click();
-  await d.getByRole('radio', { name: /A shared link/ }).check();
+  await d.getByRole('tab', { name: 'Import a collection' }).click();
   await d.getByRole('textbox', { name: /collection or binder link/ }).fill('https://moxfield.com/collection/hgsItGBwRUybHyN0WZR41w');
   const approval = ext.context.waitForEvent('page', (p) => p.url().includes('/src/approve.html'));
-  await d.getByRole('button', { name: 'Read from Moxfield' }).click();
+  await d.getByRole('button', { name: 'Read link' }).click();
   const approve = await approval;
   await expect(approve.locator('#title')).toHaveText('Send your Moxfield cards?');
   const copies = GOLD.lines.reduce((t: number, l: { quantity: number }) => t + l.quantity, 0);

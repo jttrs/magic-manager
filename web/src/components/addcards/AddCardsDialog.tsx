@@ -103,7 +103,7 @@ export function AddCardsDialog({ trigger, seed, onSeedDone }: { trigger?: ReactN
           <Tabs.Root value={mode} onValueChange={(m) => { setMode(m as Mode); setDone(null); setError(''); }} className="flex min-h-0 flex-1 flex-col">
             <header className="flex flex-wrap items-end gap-x-6 gap-y-2 border-b-2 border-rule-strong px-5 pt-4">
               <Dialog.Title className="pb-2 text-3xl voice-condensed font-bold leading-none">Add cards</Dialog.Title>
-              <Dialog.Description className="sr-only">Search for a printing, paste a card list, or bring a deck or precon. Review every line, then add the copies to your collection.</Dialog.Description>
+              <Dialog.Description className="sr-only">Search for a printing, paste a card list, bring a deck or precon, or import a collection you keep in another app. Review every change, then add it to your collection.</Dialog.Description>
               {/* The row (not each tab) hangs over the header rule, so the active underline
                   sits on it without overflowing the sideways-scrolling row. */}
               <Tabs.List aria-label="How to add" className="-mb-0.5 flex max-w-full gap-5 overflow-x-auto">
@@ -112,7 +112,7 @@ export function AddCardsDialog({ trigger, seed, onSeedDone }: { trigger?: ReactN
                     ['search', 'Search'],
                     ['paste', 'Paste a list'],
                     ['deck', 'Deck or precon'],
-                    ...(companionOn ? [['collection', 'Moxfield collection']] as const : []),
+                    ['collection', 'Import a collection'],
                   ] as const
                 ).map(([v, label]) => (
                   <Tabs.Trigger
@@ -163,11 +163,9 @@ export function AddCardsDialog({ trigger, seed, onSeedDone }: { trigger?: ReactN
                 )}
               </Tabs.Content>
 
-              {companionOn && (
-                <Tabs.Content value="collection" className="flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden">
-                  <CollectionPane />
-                </Tabs.Content>
-              )}
+              <Tabs.Content value="collection" className="flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden">
+                <CollectionPane companion={companionOn} />
+              </Tabs.Content>
 
               <Tabs.Content value="deck" className="flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden">
                 {deck ? (

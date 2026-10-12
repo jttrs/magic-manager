@@ -1,4 +1,4 @@
-// Add cards → Moxfield collection, and Archidekt deck links, through a stand-in
+// Add cards → Import a collection (an exported file, or Moxfield live), and Archidekt deck links, through a stand-in
 // for the companion's bridge (the readers themselves are pinned in
 // companion-import-readers.spec.ts; the real extension in companion-extension.spec.ts).
 import type { Page } from '@playwright/test';
@@ -50,15 +50,52 @@ const PREVIEW = {
 async function openCollectionTab(page: Page) {
   await page.goto(COLLECTION_URL);
   await page.getByRole('button', { name: 'Add cards' }).click();
-  await page.getByRole('tab', { name: 'Moxfield collection' }).click();
+  await page.getByRole('tab', { name: 'Import a collection' }).click();
   return page.getByRole('dialog', { name: 'Add cards' });
 }
 
-test.describe('Add cards → Moxfield collection', () => {
-  test('the tab is there only with the companion flag', async ({ page }) => {
-    await page.goto(COLLECTION_URL);
-    await page.getByRole('button', { name: 'Add cards' }).click();
-    await expect(page.getByRole('tab', { name: 'Moxfield collection' })).toHaveCount(0);
+test.describe('Add cards → Import a collection', () => {
+  test('without the companion, files still import; the Moxfield live read needs it', async ({ page }) => {
+    const d = await openCollectionTab(page);
+    await expect(d.getByRole('heading', { name: 'From an exported file' })).toBeVisible();
+    await expect(d.getByRole('button', { name: 'Choose a file to read' })).toBeEnabled();
+    await expect(d.getByRole('heading', { name: /Live from Moxfield/ })).toHaveCount(0);
+  });
+
+  test('a file: choosing it reads it, the app is detected, review, import once', async ({ page }) => {
+    await page.route('**/api/collection/import/formats', (r) => r.fulfill({ json: [
+      { id: 'deckbox', name: 'Deckbox', how: 'Inventory → Export (top right) → CSV.' },
+      { id: 'manabox', name: 'ManaBox', how: '' },
+    ] }));
+    let previewBody: Record<string, unknown> | null = null;
+    let applyBody: Record<string, unknown> | null = null;
+    await page.route('**/api/collection/import/file/preview', (r) => {
+      previewBody = r.request().postDataJSON();
+      return r.fulfill({ json: { ...PREVIEW, label: 'web:file ManaBox · cards.csv', format: 'manabox', format_name: 'ManaBox' } });
+    });
+    await page.route('**/api/collection/import/file/apply', (r) => {
+      applyBody = r.request().postDataJSON();
+      return r.fulfill({ json: { mode: 'add', ingest_id: 9, added: 1, updated: 1, not_found: 0, label: 'web:file ManaBox · cards.csv' } });
+    });
+    const d = await openCollectionTab(page);
+    await expect(d).toContainText('A CSV exported from Deckbox or ManaBox');
+    await d.getByText('Where each app keeps its export').click();
+    await expect(d).toContainText('Inventory → Export (top right) → CSV.');
+    const csv = 'Name,Set code,Collector number,Foil,Quantity,ManaBox ID,Scryfall ID\nX,tla,4,normal,5,1,' + SID(1) + '\n';
+    await d.locator('input[type=file]').setInputFiles({ name: 'cards.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
+    await expect(d.getByRole('heading', { name: 'ManaBox export · cards.csv' })).toBeVisible();
+    expect(previewBody).toEqual({ filename: 'cards.csv', text: csv });
+    await d.getByRole('radio', { name: /Add to what you own/ }).check();
+    await d.getByRole('button', { name: /^Import · / }).click();
+    await expect(d.getByRole('status')).toContainText('ManaBox file · cards.csv');
+    expect(applyBody).toEqual({ filename: 'cards.csv', text: csv, format: 'manabox', mode: 'add', force: false });
+  });
+
+  test('a file no app wrote says so, with the apps it can read', async ({ page }) => {
+    await page.route('**/api/collection/import/file/preview', (r) => r.fulfill({ status: 422, json: { detail: 'This file doesn’t look like a collection export we can read (Deckbox, ManaBox).', code: 'unknown_format' } }));
+    const d = await openCollectionTab(page);
+    await d.locator('input[type=file]').setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('hello') });
+    await expect(d.getByRole('alert')).toContainText('doesn’t look like a collection export');
   });
 
   test('a binder: list, read, review a diff, choose add or replace, import once', async ({ page }) => {
@@ -75,10 +112,8 @@ test.describe('Add cards → Moxfield collection', () => {
       return r.fulfill({ json: { mode: 'replace', ingest_id: 9, added: 1, updated: 1, not_found: 0, label: PREVIEW.label } });
     });
     const d = await openCollectionTab(page);
-    await d.getByRole('radio', { name: /One of your binders/ }).check();
-    await d.getByRole('button', { name: 'List my binders' }).click();
-    await expect(d.getByRole('combobox', { name: 'Binder' })).toHaveValue('LbwVB1hSiU2THiRQeR2QlQ');
-    await d.getByRole('button', { name: 'Read from Moxfield' }).click();
+    await d.getByRole('button', { name: 'Choose a binder…' }).click();
+    await d.getByRole('button', { name: 'Read binder Trade Box 1' }).click();
 
     await expect(d.getByRole('heading', { name: 'Moxfield binder · Trade Box 1' })).toBeVisible();
     expect(previewBody).toEqual({ source: 'moxfield', scope: 'binder', id: 'LbwVB1hSiU2THiRQeR2QlQ', name: 'Trade Box 1', lines: LINES });
@@ -107,7 +142,7 @@ test.describe('Add cards → Moxfield collection', () => {
     await fakeCompanion(page, { moxfield_collection: { ok: true, data: { ...READ, collection: { ...READ.collection, scope: 'collection', id: null, name: null } } } });
     await page.route('**/api/collection/import/preview', (r) => r.fulfill({ json: { ...PREVIEW, already_imported_at: '2026-10-01 10:00:00' } }));
     const d = await openCollectionTab(page);
-    await d.getByRole('button', { name: 'Read from Moxfield' }).click();
+    await d.getByRole('button', { name: 'Read my collection' }).click();
     await expect(d.getByRole('heading', { name: 'Your Moxfield collection' })).toBeVisible();
     await d.getByRole('radio', { name: /Add to what you own/ }).check();
     const go = d.getByRole('button', { name: /^Import/ });
@@ -120,10 +155,9 @@ test.describe('Add cards → Moxfield collection', () => {
     await flags(page);
     await fakeCompanion(page, { moxfield_collection: { ok: false, code: 'moxfield.signed_out' } });
     const d = await openCollectionTab(page);
-    await d.getByRole('button', { name: 'Read from Moxfield' }).click();
+    await d.getByRole('button', { name: 'Read my collection' }).click();
     await expect(d.getByRole('alert')).toContainText('You aren’t signed in to Moxfield in this browser');
-    await d.getByRole('radio', { name: /A shared link/ }).check();
-    const read = d.getByRole('button', { name: 'Read from Moxfield' });
+    const read = d.getByRole('button', { name: 'Read link' });
     await d.getByRole('textbox', { name: /collection or binder link/ }).fill('https://moxfield.com/decks/abc');
     await expect(read).toBeDisabled();
     await d.getByRole('textbox', { name: /collection or binder link/ }).fill('https://moxfield.com/collection/hgsItGBwRUybHyN0WZR41w');

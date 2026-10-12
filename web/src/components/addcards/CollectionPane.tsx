@@ -1,11 +1,17 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useId, useMemo, useRef, useState } from 'react';
+import { useId, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import { unwrap } from '../../app/queries';
 import { useDownScrapers } from '../../app/scraperHealth';
 import { useCompanion } from '../../app/useCompanion';
-import { collectionImportApply, collectionImportPreview, type CollectionApplyOut, type CollectionPreviewOut, type CollectionReadIn } from '../../core/api';
-import { belowPledged, changedRows, effectLine, effectOf, previewNotes, readTitle, shareLinkKind, type ImportMode, type ImportScope } from '../../core/collectionImport';
+import {
+  collectionImportApply, collectionImportFileApply, collectionImportFilePreview, collectionImportFormats, collectionImportPreview,
+  type CollectionApplyOut, type CollectionPreviewOut, type CollectionReadIn,
+} from '../../core/api';
+import {
+  MAX_FILE_BYTES, belowPledged, changedRows, effectLine, effectOf, fileTitle, importedLabel, previewNotes, readTitle, shareLinkKind,
+  type ImportMode,
+} from '../../core/collectionImport';
 import { ALLOW_ACCESS_HINT, type MoxfieldBinder } from '../../core/companion';
 import { fmtInt } from '../../core/format';
 import { MOXFIELD_COLLECTION_KEY } from '../../core/scraperHealth';
@@ -20,152 +26,240 @@ const READ_TIMEOUT_MS = 5 * 60_000;
 
 const DOWN_KEYS = [MOXFIELD_COLLECTION_KEY] as const;
 
-type Read = { body: CollectionReadIn; preview: CollectionPreviewOut };
+/** One read, whatever its source: what it is, what it would change, and how to import it. */
+type Read = { title: string; preview: CollectionPreviewOut; apply: (mode: ImportMode, force: boolean) => Promise<CollectionApplyOut> };
 
-/** Add cards → Collection: your Moxfield collection or one binder, read in your
- *  browser by the companion, reviewed as a diff, imported as ONE ingest event —
- *  adding to or setting your counts, chosen per import. */
-export function CollectionPane() {
-  const c = useCompanion();
+/** Add cards → Import a collection: cards you keep in another app — another
+ *  app's exported file, or (with the browser companion) your Moxfield
+ *  collection, a binder or a shared link read live. Every source is one
+ *  button that reads; every read lands in the same diff review and imports as
+ *  ONE ingest event, adding to or setting your counts, chosen per import. */
+export function CollectionPane({ companion }: { companion: boolean }) {
   const qc = useQueryClient();
-  const [scope, setScope] = useState<ImportScope>('collection');
-  const [binders, setBinders] = useState<MoxfieldBinder[] | null>(null);
-  const [binder, setBinder] = useState('');
-  const [link, setLink] = useState('');
-  const [awaiting, setAwaiting] = useState<string | null>(null);
   const [read, setRead] = useState<Read | null>(null);
   const [mode, setMode] = useState<ImportMode | null>(null);
   const [again, setAgain] = useState(false);
   const [done, setDone] = useState<CollectionApplyOut | null>(null);
-  const down = useDownScrapers(DOWN_KEYS);
-  const ready = c.status === 'ready';
-  const moxOn = Boolean(c.hello?.features.moxfield);
 
-  const listBinders = useMutation({
-    mutationFn: async () => (await c.read('moxfield_binders', {}, setAwaiting)).binders,
-    onSuccess: (b) => { setBinders(b); setBinder(b[0]?.id ?? ''); },
-    onSettled: () => setAwaiting(null),
-  });
-
-  const readColl = useMutation({
-    mutationFn: async (): Promise<Read> => {
-      const params = scope === 'link' ? { url: link.trim() } : scope === 'binder' ? { what: 'binder' as const, binder } : { what: 'collection' as const };
-      const d = await c.read('moxfield_collection', params, setAwaiting, { ackTimeoutMs: READ_TIMEOUT_MS });
-      setAwaiting(null);
-      const x = d.collection;
-      const body: CollectionReadIn = { source: 'moxfield', scope: x.scope, id: x.id, name: x.name ?? binders?.find((b) => b.id === x.id)?.name ?? null, lines: x.lines };
-      return { body, preview: unwrap(await collectionImportPreview({ body })) };
-    },
-    onSuccess: (r) => { setRead(r); setMode(null); setAgain(false); setDone(null); },
-    onSettled: () => setAwaiting(null),
-  });
+  const onRead = (r: Read) => { setRead(r); setMode(null); setAgain(false); setDone(null); };
 
   const apply = useMutation({
-    mutationFn: async () => unwrap(await collectionImportApply({ body: { ...read!.body, mode: mode!, force: again } })),
+    mutationFn: async () => read!.apply(mode!, again),
     onSuccess: async (r) => {
       setDone(r);
       setRead(null);
       await qc.invalidateQueries({ queryKey: ['collection'] });
+      await qc.invalidateQueries({ queryKey: ['holdings'] });
       await qc.invalidateQueries({ queryKey: ['history'] });
     },
   });
 
-  const linkKind = shareLinkKind(link);
-  const canRead = ready && moxOn && !readColl.isPending && !listBinders.isPending && (scope === 'collection' || (scope === 'binder' && Boolean(binder)) || (scope === 'link' && linkKind != null));
-
   if (read) {
-    return <Review read={read} mode={mode} onMode={setMode} again={again} onAgain={setAgain} onBack={() => setRead(null)}
+    return <Review read={read} mode={mode} onMode={setMode} again={again} onAgain={setAgain} onBack={() => { setRead(null); apply.reset(); }}
       onImport={() => apply.mutate()} busy={apply.isPending} error={apply.error} />;
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto pr-3 [scrollbar-gutter:stable]">
+    <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto pr-3 [scrollbar-gutter:stable]">
       {done && (
         <p role="status" className="flex flex-wrap items-baseline gap-3 rounded-sm bg-paper-sunk px-3 py-2 text-md">
           <span className="highlighter px-1 voice-semi font-medium">
             Imported: {fmtInt(done.added)} new {done.added === 1 ? 'printing' : 'printings'}, {fmtInt(done.updated)} changed
           </span>
-          <span className="text-sm text-ink-muted">One entry in Purchase history · {done.label.replace(/^web:moxfield /, 'Moxfield ')}</span>
+          <span className="text-sm text-ink-muted">One entry in Purchase history · {importedLabel(done.label)}</span>
         </p>
       )}
-      <ScraperNotice down={down} />
-      <fieldset className="flex flex-col gap-1" disabled={readColl.isPending || listBinders.isPending}>
-        <legend className={`${H3} w-full`}>1. Choose what to import from Moxfield</legend>
-        <Choice name="mx-scope" checked={scope === 'collection'} onPick={() => setScope('collection')} title="Your whole collection"
-          note="Every card in your Moxfield collection — you need to be signed in to Moxfield in this browser." />
-        <Choice name="mx-scope" checked={scope === 'binder'} onPick={() => setScope('binder')} title="One of your binders"
-          note="Only the cards in one binder. The binder’s name goes on the import’s history entry.">
-          {scope === 'binder' && (
-            <span className="mt-1.5 flex flex-wrap items-center gap-2">
-              {binders?.length ? (
-                <select aria-label="Binder" value={binder} onChange={(e) => setBinder(e.target.value)}
-                  className="h-9 min-w-[14rem] cursor-pointer rounded-sm border border-rule-strong bg-paper-raised px-2 text-md text-ink focus-visible:border-accent">
-                  {binders.map((b) => <option key={b.id} value={b.id}>{b.name ?? b.id}{b.cards != null ? ` · ${fmtInt(b.cards)} cards` : ''}</option>)}
-                </select>
-              ) : binders ? (
-                <span className="text-sm text-ink-muted">You have no binders on Moxfield.</span>
-              ) : null}
-              <Button tone="paper" onClick={() => listBinders.mutate()} disabled={!ready || !moxOn || listBinders.isPending || readColl.isPending}>
-                {listBinders.isPending ? (awaiting != null ? 'Waiting for approval…' : 'Listing…') : binders ? 'List again' : 'List my binders'}
-              </Button>
-            </span>
-          )}
-        </Choice>
-        <Choice name="mx-scope" checked={scope === 'link'} onPick={() => setScope('link')} title="A shared link"
-          note="A collection or binder someone shared (Public or Unlisted on Moxfield) — read without signing in.">
-          {scope === 'link' && (
-            <span className="mt-1.5 flex flex-col gap-1">
-              <input type="url" aria-label="Moxfield collection or binder link" value={link} onChange={(e) => setLink(e.target.value)}
-                placeholder="https://moxfield.com/binders/…"
-                className="h-9 w-full max-w-[34rem] rounded-sm border border-rule-strong bg-paper-raised px-3 text-md text-ink placeholder:text-ink-muted focus-visible:border-accent" />
-              {link.trim() && !linkKind && <span className="text-xs text-danger">Paste a moxfield.com/collection/… or moxfield.com/binders/… link.</span>}
-            </span>
-          )}
-        </Choice>
-      </fieldset>
-
-      <section aria-labelledby="mx-read" className="flex flex-col gap-2">
-        <h3 id="mx-read" className={H3}>2. Read it</h3>
-        <p className="max-w-[62ch] text-md leading-relaxed text-ink-muted">
-          {!ready
-            ? c.status === 'checking' ? 'Looking for the browser companion…' : 'Set up the browser companion first — the plug icon at the top of the app.'
-            : !moxOn
-              ? ALLOW_ACCESS_HINT
-              : 'The companion reads it in this browser — every page of it — and shows you exactly what it would send before anything leaves. Nothing changes in your collection until you review and import.'}
-        </p>
-        <Button tone="paper" emphasis="primary" className="self-start" disabled={!canRead} onClick={() => readColl.mutate()}>
-          {readColl.isPending ? (awaiting != null ? 'Waiting for approval…' : 'Reading Moxfield…') : 'Read from Moxfield'}
-        </Button>
-        {awaiting != null && <AwaitingNote summary={awaiting} />}
-        {(readColl.error ?? listBinders.error) && <FailureNote error={readColl.error ?? listBinders.error} />}
-      </section>
+      <p className="max-w-[62ch] text-md leading-relaxed text-ink-muted">
+        Bring in the cards you track in another app. You’ll see every card that would change before anything is saved.
+      </p>
+      <FileSource onRead={onRead} />
+      {companion && <MoxfieldSource onRead={onRead} />}
     </div>
   );
 }
 
-function Choice({ name, checked, onPick, title, note, children }: { name: string; checked: boolean; onPick: () => void; title: string; note: string; children?: React.ReactNode }) {
+/** An exported collection file: drop it or choose it — choosing reads it. The app is detected from the header. */
+function FileSource({ onRead }: { onRead: (r: Read) => void }) {
+  const formats = useQuery({ queryKey: ['collection-import-formats'], queryFn: async () => unwrap(await collectionImportFormats()), staleTime: Infinity });
+  const input = useRef<HTMLInputElement | null>(null);
+  const [drag, setDrag] = useState(false);
+  const hintId = useId();
+  const readFile = useMutation({
+    mutationFn: async (f: File): Promise<Read> => {
+      if (f.size > MAX_FILE_BYTES) throw new Error(`${f.name} is too big to import here (over 25 MB). Export a smaller part of your collection.`);
+      const body = { filename: f.name, text: await f.text() };
+      const p = unwrap(await collectionImportFilePreview({ body }));
+      return {
+        title: fileTitle(p.format_name, f.name), preview: p,
+        apply: async (mode, force) => unwrap(await collectionImportFileApply({ body: { ...body, format: p.format, mode, force } })),
+      };
+    },
+    onSuccess: onRead,
+  });
+  const pick = (f: File | undefined) => { if (f && !readFile.isPending) readFile.mutate(f); };
+  const onDrop = (e: DragEvent) => { e.preventDefault(); setDrag(false); pick(e.dataTransfer.files[0]); };
+  const names = formats.data?.map((f) => f.name) ?? [];
+
   return (
-    <label className="ruled flex cursor-pointer items-start gap-3 px-1 py-2">
-      <input type="radio" name={name} checked={checked} onChange={onPick} className="mt-1 accent-accent" />
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+    <section aria-labelledby="ci-file" className="flex flex-col gap-2">
+      <h3 id="ci-file" className={H3}>From an exported file</h3>
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
+        onDragLeave={() => setDrag(false)}
+        onDrop={onDrop}
+        className={`flex flex-wrap items-center gap-x-4 gap-y-2 rounded-sm border border-dashed px-4 py-4 transition-colors ease-guide ${drag ? 'border-accent bg-paper-sunk' : 'border-rule-strong'}`}
+      >
+        <input ref={input} type="file" accept=".csv,.txt,text/csv,text/plain" className="sr-only" tabIndex={-1} aria-hidden
+          onChange={(e) => { pick(e.target.files?.[0]); e.target.value = ''; }} />
+        <Button tone="paper" emphasis="primary" aria-describedby={hintId} disabled={readFile.isPending} onClick={() => input.current?.click()}>
+          {readFile.isPending ? `Reading ${readFile.variables?.name ?? 'file'}…` : 'Choose a file to read'}
+        </Button>
+        <p id={hintId} className="min-w-0 flex-1 basis-[22rem] text-md leading-relaxed text-ink">
+          or drop it here. A CSV exported from {names.length ? listWords(names) : 'your collection app'} — we tell which app wrote it.
+        </p>
+      </div>
+      {formats.data?.some((f) => f.how) && (
+        <details className="text-sm text-ink-muted">
+          <summary className="cursor-pointer py-1 voice-semi text-ink">Where each app keeps its export</summary>
+          <dl className="mt-1 flex max-w-[62ch] flex-col @container">
+            {formats.data.filter((f) => f.how).map((f) => (
+              <div key={f.id} className="ruled grid gap-x-4 py-1.5 @[24rem]:grid-cols-[8rem_minmax(0,1fr)]">
+                <dt className="voice-semi font-medium text-ink">{f.name}</dt>
+                <dd className="leading-snug">{f.how}</dd>
+              </div>
+            ))}
+          </dl>
+        </details>
+      )}
+      {readFile.error && <FailureNote error={readFile.error} />}
+    </section>
+  );
+}
+
+const listWords = (xs: string[]) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} or ${xs[xs.length - 1]}`);
+
+type MxRead = { what: 'collection' } | { what: 'binder'; binder: MoxfieldBinder } | { url: string };
+
+/** Moxfield read live in this browser by the companion: each row is one button that reads. */
+function MoxfieldSource({ onRead }: { onRead: (r: Read) => void }) {
+  const c = useCompanion();
+  const [awaiting, setAwaiting] = useState<string | null>(null);
+  const [binders, setBinders] = useState<MoxfieldBinder[] | null>(null);
+  const [link, setLink] = useState('');
+  const down = useDownScrapers(DOWN_KEYS);
+  const ready = c.status === 'ready';
+  const moxOn = Boolean(c.hello?.features.moxfield);
+  const linkErr = useId();
+
+  const listBinders = useMutation({
+    mutationFn: async () => (await c.read('moxfield_binders', {}, setAwaiting)).binders,
+    onSuccess: setBinders,
+    onSettled: () => setAwaiting(null),
+  });
+
+  const readMx = useMutation({
+    mutationFn: async (what: MxRead): Promise<Read> => {
+      const params = 'url' in what ? { url: what.url } : what.what === 'binder' ? { what: 'binder' as const, binder: what.binder.id } : { what: 'collection' as const };
+      const d = await c.read('moxfield_collection', params, setAwaiting, { ackTimeoutMs: READ_TIMEOUT_MS });
+      setAwaiting(null);
+      const x = d.collection;
+      const name = x.name ?? ('binder' in what ? what.binder.name : null) ?? null;
+      const body: CollectionReadIn = { source: 'moxfield', scope: x.scope, id: x.id, name, lines: x.lines };
+      return {
+        title: readTitle(body.scope, body.id ?? null, name), preview: unwrap(await collectionImportPreview({ body })),
+        apply: async (mode, force) => unwrap(await collectionImportApply({ body: { ...body, mode, force } })),
+      };
+    },
+    onSuccess: onRead,
+    onSettled: () => setAwaiting(null),
+  });
+
+  const busy = readMx.isPending || listBinders.isPending;
+  const off = !ready || !moxOn || busy;
+  const linkKind = shareLinkKind(link);
+  const v = readMx.variables;
+  const reading = (k: 'collection' | 'binder' | 'url', id?: string) =>
+    readMx.isPending && v != null && ('url' in v ? k === 'url' : v.what === k && (k !== 'binder' || (v.what === 'binder' && v.binder.id === id)));
+  const label = (k: Parameters<typeof reading>[0], idle: string, id?: string) => (reading(k, id) ? (awaiting != null ? 'Waiting for approval…' : 'Reading…') : idle);
+
+  return (
+    <section aria-labelledby="ci-mox" className="flex flex-col gap-1">
+      <h3 id="ci-mox" className={`${H3} flex flex-wrap items-baseline gap-x-3`}>
+        Live from Moxfield
+        <span className="text-sm normal-case voice-semi font-normal text-ink-muted">read in this browser by the companion</span>
+      </h3>
+      {(!ready || !moxOn) && (
+        <p className="max-w-[62ch] py-1 text-md leading-relaxed text-ink">
+          {!ready
+            ? c.status === 'checking' ? 'Looking for the browser companion…' : 'Set up the browser companion first — the plug icon at the top of the app.'
+            : ALLOW_ACCESS_HINT}
+        </p>
+      )}
+      <ScraperNotice down={down} />
+      <ul className="flex flex-col">
+        <SourceRow title="Your whole collection" note="Every card in your Moxfield collection. Sign in to Moxfield in this browser first."
+          action={<Button tone="paper" disabled={off} onClick={() => readMx.mutate({ what: 'collection' })}>{label('collection', 'Read my collection')}</Button>} />
+        <SourceRow title="One of your binders" note="Only that binder’s cards. Its name goes on the import’s history entry."
+          action={(
+            <Button tone="paper" disabled={off} onClick={() => listBinders.mutate()}>
+              {listBinders.isPending ? (awaiting != null ? 'Waiting for approval…' : 'Listing…') : binders ? 'List again' : 'Choose a binder…'}
+            </Button>
+          )}>
+          {binders && (binders.length ? (
+            <ul aria-label="Your Moxfield binders" className="mt-2 flex flex-wrap gap-2">
+              {binders.map((b) => (
+                <li key={b.id}>
+                  <Button tone="paper" disabled={off} aria-label={`Read binder ${b.name ?? b.id}`} onClick={() => readMx.mutate({ what: 'binder', binder: b })}>
+                    {label('binder', b.name ?? b.id, b.id)}
+                    {b.cards != null && !reading('binder', b.id) && <span className="tabular text-ink-muted">{fmtInt(b.cards)}</span>}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          ) : <p className="mt-1 text-sm text-ink-muted">You have no binders on Moxfield.</p>)}
+        </SourceRow>
+        <SourceRow title="A shared link" note="A collection or binder someone shared (Public or Unlisted on Moxfield) — read without signing in.">
+          <form className="mt-1 flex w-full flex-wrap items-start gap-2" onSubmit={(e) => { e.preventDefault(); if (linkKind && !off) readMx.mutate({ url: link.trim() }); }}>
+            <span className="flex min-w-0 flex-1 basis-[18rem] flex-col gap-1">
+              <input type="url" aria-label="Moxfield collection or binder link" value={link} onChange={(e) => setLink(e.target.value)}
+                placeholder="https://moxfield.com/binders/…" aria-invalid={Boolean(link.trim() && !linkKind)} aria-describedby={link.trim() && !linkKind ? linkErr : undefined}
+                className="h-9 w-full rounded-sm border border-rule-strong bg-paper-raised px-3 text-md text-ink placeholder:text-ink-muted focus-visible:border-accent aria-invalid:border-danger" />
+              {link.trim() && !linkKind && <span id={linkErr} className="text-xs text-danger">Paste a moxfield.com/collection/… or moxfield.com/binders/… link.</span>}
+            </span>
+            <Button type="submit" tone="paper" disabled={off || !linkKind}>{label('url', 'Read link')}</Button>
+          </form>
+        </SourceRow>
+      </ul>
+      {awaiting != null && <AwaitingNote summary={awaiting} />}
+      {(readMx.error ?? listBinders.error) && <FailureNote error={readMx.error ?? listBinders.error} />}
+    </section>
+  );
+}
+
+/** A ruled source row: what it reads on the left, its one action on the right (or below, in `children`). */
+function SourceRow({ title, note, action, children }: { title: string; note: string; action?: ReactNode; children?: ReactNode }) {
+  return (
+    <li className="ruled flex flex-wrap items-center gap-x-4 gap-y-1 px-1 py-2.5">
+      <span className="flex min-w-0 flex-1 basis-[20rem] flex-col gap-0.5">
         <span className="text-md voice-semi font-medium text-ink">{title}</span>
-        <span className="max-w-[62ch] text-xs leading-snug text-ink-muted">{note}</span>
-        {children}
+        <span className="max-w-[62ch] text-sm leading-snug text-ink-muted">{note}</span>
       </span>
-    </label>
+      {action}
+      {children && <div className="w-full">{children}</div>}
+    </li>
   );
 }
 
 const MODES: { mode: ImportMode; title: string; note: string }[] = [
-  { mode: 'add', title: 'Add to what you own', note: 'Moxfield’s count is added on top of yours — for new cards, like a binder of fresh pulls.' },
-  { mode: 'replace', title: 'Set your counts to Moxfield’s', note: 'Each listed printing becomes Moxfield’s count, which can lower it. Cards not in this read stay as they are.' },
+  { mode: 'add', title: 'Add to what you own', note: 'Each card’s count here is added on top of yours — for cards that are new to you, like a binder of fresh pulls.' },
+  { mode: 'replace', title: 'Set your counts to match', note: 'Each listed printing gets the count from this read, which can lower it. Cards not in it stay as they are.' },
 ];
 
 function Review({ read, mode, onMode, again, onAgain, onBack, onImport, busy, error }: {
   read: Read; mode: ImportMode | null; onMode: (m: ImportMode) => void; again: boolean; onAgain: (b: boolean) => void;
   onBack: () => void; onImport: () => void; busy: boolean; error: unknown;
 }) {
-  const { preview: p, body } = read;
+  const { preview: p, title } = read;
   const effects = useMemo(() => ({ add: effectOf(p.rows, 'add'), replace: effectOf(p.rows, 'replace') }), [p.rows]);
   const rows = useMemo(() => (mode ? changedRows(p.rows, mode) : []), [p.rows, mode]);
   const notes = previewNotes(p);
@@ -173,7 +267,6 @@ function Review({ read, mode, onMode, again, onAgain, onBack, onImport, busy, er
   const pledgedLow = belowPledged(p.rows);
   const blocked = mode === 'replace' && pledgedLow > 0;
   const effect = mode ? effects[mode] : null;
-  const title = readTitle(body.scope, body.id ?? null, body.name ?? null);
 
   return (
     <section aria-label={title} className="flex min-h-0 flex-1 flex-col overflow-y-auto @container">
@@ -231,7 +324,7 @@ function Review({ read, mode, onMode, again, onAgain, onBack, onImport, busy, er
       <footer className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-rule pt-3">
         {dup && (
           <label className="inline-flex cursor-pointer items-center gap-1.5 text-sm text-ink">
-            <input type="checkbox" checked={again} onChange={(e) => onAgain(e.target.checked)} className="accent-[var(--theme-accent)]" />
+            <input type="checkbox" checked={again} onChange={(e) => onAgain(e.target.checked)} className="accent-accent" />
             You imported this exact read on {p.already_imported_at!.slice(0, 10)} — add it again anyway
           </label>
         )}

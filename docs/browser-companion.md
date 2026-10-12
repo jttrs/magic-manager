@@ -30,7 +30,7 @@ verified per store), Collection → *Check my cart* (pick Mana Pool, TCGplayer o
 the bookmarklet paste and .env login are Mana Pool only — see *Other carts* below), Market → Deals → **Read my open tabs** (tabs + open-tab store prices), Market → Deals →
 Watching → **Read watched prices** (the watched open-tab store pages), Add cards → Deck and
 Decks → Import (Moxfield links; Archidekt links once Allow access is on — private decks too),
-Add cards → **Moxfield collection** (your collection, one binder, or a shared link). Without a connected companion each falls back to the existing path.
+Add cards → **Import a collection** → *Live from Moxfield* (your collection, one binder, or a shared link — each one button that reads). Without a connected companion each falls back to the existing path.
 
 ## The bridge survives a reload or update (0.4.3)
 
@@ -110,8 +110,8 @@ background tab it closes), you approve the lines, the app posts them to `POST /a
   `scripts/import_deck.py`). The app sends an Archidekt link to the companion only once Archidekt is
   switched on; otherwise the server reads the public deck as before. Verified on a public deck
   (live canary); a signed-in private deck uses the same page, so the owner confirms it live.
-- **Moxfield collection / binders** (Allow access): Add cards → *Moxfield collection*
-  → whole collection, one of your binders (*List my binders*), or a share link
+- **Moxfield collection / binders** (Allow access): Add cards → *Import a collection* → *Live from Moxfield*
+  → *Read my collection*, *Choose a binder…* (lists your binders; pressing one reads it), or a share link + *Read link*
   (`moxfield.com/collection/<id>`, `moxfield.com/binders/<id>`). The reader pages through Moxfield's
   own API (`/v1/collections/search[/<id>]`, `/v1/trade-binders[/<id>/search]`, 5,000 a page, ≤ 60,000
   printings). Share links are read **anonymously**. Your own collection, your binder list and private

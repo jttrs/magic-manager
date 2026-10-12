@@ -1235,6 +1235,125 @@ export type CollectionCardOut = {
 };
 
 /**
+ * CollectionFileApplyIn
+ */
+export type CollectionFileApplyIn = {
+    /**
+     * Filename
+     */
+    filename: string;
+    /**
+     * Text
+     */
+    text: string;
+    /**
+     * Format
+     *
+     * Skip detection: the service id.
+     */
+    format?: string | null;
+    /**
+     * Mode
+     */
+    mode: 'add' | 'replace';
+    /**
+     * Force
+     *
+     * Add an identical read again (it was imported before).
+     */
+    force?: boolean;
+};
+
+/**
+ * CollectionFileIn
+ *
+ * An exported collection file, read in the browser and posted as text.
+ */
+export type CollectionFileIn = {
+    /**
+     * Filename
+     */
+    filename: string;
+    /**
+     * Text
+     */
+    text: string;
+    /**
+     * Format
+     *
+     * Skip detection: the service id.
+     */
+    format?: string | null;
+};
+
+/**
+ * CollectionFilePreviewOut
+ */
+export type CollectionFilePreviewOut = {
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Rows
+     */
+    rows: Array<ImportRowOut>;
+    /**
+     * Not Found
+     */
+    not_found: Array<NotFoundOut>;
+    skipped: SkippedOut;
+    /**
+     * Not In Read
+     *
+     * Printings you own that the read doesn't list — always left as they are.
+     */
+    not_in_read: number;
+    /**
+     * Already Imported At
+     *
+     * When this exact read was imported before, if it was.
+     */
+    already_imported_at: string | null;
+    /**
+     * Warnings
+     */
+    warnings?: Array<string>;
+    /**
+     * Format
+     *
+     * The service id the file was read as.
+     */
+    format: string;
+    /**
+     * Format Name
+     */
+    format_name: string;
+};
+
+/**
+ * CollectionFormatOut
+ */
+export type CollectionFormatOut = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Name
+     *
+     * The app, as the user knows it.
+     */
+    name: string;
+    /**
+     * How
+     *
+     * Where that app's collection export lives.
+     */
+    how?: string;
+};
+
+/**
  * CollectionLineIn
  *
  * One printing × finish from the read (copies of the same printing summed).
@@ -7620,6 +7739,74 @@ export type CollectionImportApplyResponses = {
 };
 
 export type CollectionImportApplyResponse = CollectionImportApplyResponses[keyof CollectionImportApplyResponses];
+
+export type CollectionImportFormatsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/collection/import/formats';
+};
+
+export type CollectionImportFormatsResponses = {
+    /**
+     * Response Collection Import Formats
+     *
+     * Successful Response
+     */
+    200: Array<CollectionFormatOut>;
+};
+
+export type CollectionImportFormatsResponse = CollectionImportFormatsResponses[keyof CollectionImportFormatsResponses];
+
+export type CollectionImportFilePreviewData = {
+    body: CollectionFileIn;
+    path?: never;
+    query?: never;
+    url: '/api/collection/import/file/preview';
+};
+
+export type CollectionImportFilePreviewErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CollectionImportFilePreviewError = CollectionImportFilePreviewErrors[keyof CollectionImportFilePreviewErrors];
+
+export type CollectionImportFilePreviewResponses = {
+    /**
+     * Successful Response
+     */
+    200: CollectionFilePreviewOut;
+};
+
+export type CollectionImportFilePreviewResponse = CollectionImportFilePreviewResponses[keyof CollectionImportFilePreviewResponses];
+
+export type CollectionImportFileApplyData = {
+    body: CollectionFileApplyIn;
+    path?: never;
+    query?: never;
+    url: '/api/collection/import/file/apply';
+};
+
+export type CollectionImportFileApplyErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CollectionImportFileApplyError = CollectionImportFileApplyErrors[keyof CollectionImportFileApplyErrors];
+
+export type CollectionImportFileApplyResponses = {
+    /**
+     * Successful Response
+     */
+    200: CollectionApplyOut;
+};
+
+export type CollectionImportFileApplyResponse = CollectionImportFileApplyResponses[keyof CollectionImportFileApplyResponses];
 
 export type MarketProductsData = {
     body?: never;

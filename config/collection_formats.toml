@@ -33,6 +33,15 @@
 #     trip is stable. `write_default` is the condition emitted on export when a
 #     row has none.
 #
+#   [service.app]  the import screen: `name` (shown to the user), `how`
+#     (where the app's export lives — verified wording only), and `detect` —
+#     header names that must ALL be in a file's header row for it to be read
+#     as this service's export (collection_sync.detect_format).
+#
+#   Optional columns: `proxy` / `digital` (a true/yes/1 cell → skipped and
+#     counted, never imported) and `foil_quantity` (a separate foil count
+#     beside `quantity`, which is then the nonfoil count; no finish column).
+#
 #   write_header / write_order  — the exact column ORDER emitted by write_csv
 #     (a list of OUR normalized field names). Lets each service's export match
 #     the header its importer expects.
@@ -48,6 +57,11 @@
 [manabox]
 has_scryfall_id = true
 confidence = "high"
+
+[manabox.app]
+name   = "ManaBox"
+how    = "Collection → menu (top right) → Export — the whole collection, or one binder or list."
+detect = ["ManaBox ID", "Scryfall ID", "Collector number"]
 
 [manabox.columns]
 quantity         = "Quantity"
@@ -99,6 +113,10 @@ condition_default = "near_mint"
 has_scryfall_id = false
 confidence = "high"              # exact (set, collector_number) printing
 
+[moxfield.app]
+name   = "Moxfield"
+detect = ["Count", "Tradelist Count", "Edition", "Collector Number"]
+
 [moxfield.columns]
 quantity         = "Count"
 finish           = "Foil"
@@ -107,6 +125,7 @@ collector_number = "Collector Number"
 name             = "Name"
 condition        = "Condition"
 purchase_price   = "Purchase Price"
+proxy            = "Proxy"
 # no scryfall_id column
 
 [moxfield.finish_map]
@@ -142,6 +161,10 @@ condition_default = "Near Mint"
 [archidekt]
 has_scryfall_id = true
 confidence = "high"
+
+[archidekt.app]
+name   = "Archidekt"
+detect = ["Quantity", "Finish", "Edition Code", "Scryfall ID"]
 
 [archidekt.columns]
 quantity         = "Quantity"
@@ -189,6 +212,10 @@ condition_default = "NM"
 has_scryfall_id = true           # present on most rows; blank ones fall back to (set,cn)
 confidence = "low"
 
+[mtggoldfish.app]
+name   = "MTGGoldfish"
+detect = ["Card UUID", "Set ID", "Scryfall ID"]
+
 [mtggoldfish.columns]
 quantity         = "Quantity"
 finish           = "Foil"
@@ -214,3 +241,161 @@ etched  = "foil"
 [mtggoldfish.write]
 order = ["quantity", "name", "finish", "set", "collector_number", "scryfall_id"]
 condition_default = "near_mint"
+
+
+# ---------------------------------------------------------------------------
+# Deckbox (deckbox.org) — Inventory → Export. Current header (verified against
+# real exports 2025-26, StepKie/MtgCsvHelper Tests/deckbox-real-export.csv):
+#   Count,Tradelist Count,Name,Edition,Edition Code,Card Number,Condition,
+#   Language,Foil,Signed,Artist Proof,Altered Art,Misprint,Promo,Textless,
+#   Printing Id,Printing Note,Tags,My Price,Cost,Rarity,Price,TcgPlayer ID,
+#   Scryfall ID
+# Identity = Scryfall ID (exact even where Deckbox reshapes Card Number, e.g.
+# LTR 741z → 741), else Edition Code + Card Number. `Edition` is Deckbox's own
+# set NAME (not used). Foil = "" | "foil" (etched collapses to foil). Older
+# minimal exports without Edition Code / Scryfall ID are NOT detected
+# (set name only — no exact printing); re-export from Deckbox.
+# ---------------------------------------------------------------------------
+[deckbox]
+has_scryfall_id = true
+confidence = "high"
+
+[deckbox.app]
+name   = "Deckbox"
+how    = "Inventory → Export (top right) → CSV."
+detect = ["Count", "Tradelist Count", "Edition Code", "Card Number"]
+
+[deckbox.columns]
+quantity         = "Count"
+finish           = "Foil"
+scryfall_id      = "Scryfall ID"
+set              = "Edition Code"
+collector_number = "Card Number"
+name             = "Name"
+condition        = "Condition"
+
+[deckbox.finish_map]
+foil = "foil"
+""   = "nonfoil"
+
+[deckbox.set_remap]
+plist = "plst"        # The List (Deckbox code → Scryfall)
+
+[deckbox.write]
+order = ["quantity", "name", "set", "collector_number", "finish", "condition", "scryfall_id"]
+condition_default = "Near Mint"
+
+
+# ---------------------------------------------------------------------------
+# Dragon Shield MTG Card Manager — the WEBSITE export (mtg.dragonshield.com).
+# First line is literally "sep=," (quoted), then (verified, real exports in
+# StepKie/MtgCsvHelper Tests/dragonshield-real-export.csv and
+# Chazmus/dragonshield-converter tests/resources/dragon-shield.csv):
+#   Folder Name,Quantity,Trade Quantity,Card Name,Set Code,Set Name,
+#   Card Number,Condition,Printing,Language,Price Bought,Date Bought,LOW,MID,MARKET
+# (the last three price columns vary by price source). No Scryfall id —
+# identity is Set Code + Card Number. `Printing` is open-ended (Normal, Foil,
+# Etched, Rainbow Foil, Surge Foil, …) → anything containing "foil" or
+# "etched" is foil (foil_contains). The phone app writes a different,
+# unverified header and is not supported yet.
+# ---------------------------------------------------------------------------
+[dragonshield]
+has_scryfall_id = false
+confidence = "high"
+foil_contains = ["foil", "etched"]
+
+[dragonshield.app]
+name   = "Dragon Shield"
+how    = "On mtg.dragonshield.com, open a folder → Export CSV (the website’s export, not the phone app’s)."
+detect = ["Folder Name", "Quantity", "Trade Quantity", "Card Name", "Set Code", "Card Number", "Printing"]
+
+[dragonshield.columns]
+quantity         = "Quantity"
+finish           = "Printing"
+set              = "Set Code"
+collector_number = "Card Number"
+name             = "Card Name"
+condition        = "Condition"
+purchase_price   = "Price Bought"
+
+[dragonshield.set_remap]
+gk2_azoriu = "gk2"    # Guild Kit: Azorius
+gk1_dimir  = "gk1"    # Guild Kit: Dimir
+
+[dragonshield.write]
+order = ["quantity", "name", "set", "collector_number", "condition", "finish"]
+condition_default = "NearMint"
+
+
+# ---------------------------------------------------------------------------
+# TCGplayer app (phone scanner) — Settings → Email Export → CSV. Columns are
+# user-configurable; the full header (verified, EchoMTG/mtg-csv-reader
+# example_datasets/tcgplayer + MTGGoldfish's import docs):
+#   Quantity,Name,Simple Name,Set,Card Number,Set Code,Printing,Condition,
+#   Language,Rarity,Product ID,SKU
+# Identity = Set Code + Card Number (Card Number and Set Code must be switched
+# on). Printing = Normal | Foil. `Name` carries TCGplayer decorations
+# ("(Borderless)") — diagnostic only.
+# ---------------------------------------------------------------------------
+[tcgplayer]
+has_scryfall_id = false
+confidence = "high"
+
+[tcgplayer.app]
+name   = "TCGplayer app"
+how    = "Settings → Email Export → CSV, with Card Number and Set Code turned on under CSV Output Settings; then export from the Collection tab."
+detect = ["Quantity", "Name", "Simple Name", "Card Number", "Set Code", "Printing"]
+
+[tcgplayer.columns]
+quantity         = "Quantity"
+finish           = "Printing"
+set              = "Set Code"
+collector_number = "Card Number"
+name             = "Name"
+condition        = "Condition"
+
+[tcgplayer.finish_map]
+normal = "nonfoil"
+foil   = "foil"
+
+[tcgplayer.set_remap]
+list = "plst"         # The List
+
+[tcgplayer.write]
+order = ["quantity", "name", "set", "collector_number", "finish", "condition"]
+condition_default = "Near Mint"
+
+
+# ---------------------------------------------------------------------------
+# Delver Lens (Android scanner) — no native CSV: Export picks a per-site preset
+# (Moxfield, Archidekt, Deckbox, TCGplayer, …), which detection reads as that
+# site's format. This block is its custom preset (verified sample,
+# EchoMTG/mtg-csv-reader example_datasets/delver):
+#   Name,Acquired Price,Language,Set Code,TCGPlayer Product ID,Number,Foil,Quantity
+# Foil = "Foil" | "". Its EchoMTG preset (Reg Qty/Foil Qty + set NAME, no
+# number) has no exact printing and is not supported.
+# ---------------------------------------------------------------------------
+[delverlens]
+has_scryfall_id = false
+confidence = "high"
+
+[delverlens.app]
+name   = "Delver Lens"
+how    = "Export a list with the Moxfield, Archidekt, Deckbox or TCGplayer preset — any of them reads here."
+detect = ["Name", "Acquired Price", "Set Code", "TCGPlayer Product ID", "Number", "Foil", "Quantity"]
+
+[delverlens.columns]
+quantity         = "Quantity"
+finish           = "Foil"
+set              = "Set Code"
+collector_number = "Number"
+name             = "Name"
+purchase_price   = "Acquired Price"
+
+[delverlens.finish_map]
+foil = "foil"
+""   = "nonfoil"
+
+[delverlens.write]
+order = ["name", "set", "collector_number", "finish", "quantity"]
+condition_default = ""

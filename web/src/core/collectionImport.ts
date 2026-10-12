@@ -1,5 +1,6 @@
-// Collection import (Add cards → Collection): what a Moxfield collection or
-// binder read would do to your inventory, under the mode you pick for this
+// Collection import (Add cards → Import a collection): what a read — a Moxfield
+// collection or binder through the companion, or another app's exported file —
+// would do to your inventory, under the mode you pick for this
 // import. Pure — the engine (collection_sync.preview_lines / apply_lines) is
 // the source of truth; this mirrors its one rule for display:
 //   add     → you'll own current + incoming
@@ -8,7 +9,6 @@
 import type { CollectionPreviewOut, ImportRowOut } from './api';
 
 export type ImportMode = 'add' | 'replace';
-export type ImportScope = 'collection' | 'binder' | 'link';
 
 export const afterImport = (r: Pick<ImportRowOut, 'current' | 'incoming'>, mode: ImportMode): number =>
   mode === 'add' ? r.current + r.incoming : r.incoming;
@@ -77,6 +77,21 @@ export function readTitle(scope: 'collection' | 'binder', id: string | null, nam
   if (scope === 'binder') return name ? `Moxfield binder · ${name}` : 'Moxfield binder';
   return id ? 'Moxfield collection (shared link)' : 'Your Moxfield collection';
 }
+
+/** The review's heading for an exported file: `ManaBox export · collection.csv`. */
+export const fileTitle = (formatName: string, filename: string): string => `${formatName} export · ${filename}`;
+
+/** The import's history entry, in words: `web:moxfield binder · X` → `Moxfield binder · X`,
+ *  `web:file ManaBox · a.csv` → `ManaBox file · a.csv`. */
+export function importedLabel(label: string): string {
+  const s = label.replace(/^web:/, '');
+  const file = /^file (.+?) · (.+)$/.exec(s);
+  if (file) return `${file[1]} file · ${file[2]}`;
+  return s.replace(/^moxfield /, 'Moxfield ');
+}
+
+/** Exported files are read in the browser and posted whole; the server caps them (25M characters). */
+export const MAX_FILE_BYTES = 25_000_000;
 
 /** Notes under the review: what was left out and what stays as it is. */
 export function previewNotes(p: Pick<CollectionPreviewOut, 'skipped' | 'not_in_read' | 'not_found'>): string[] {

@@ -97,7 +97,12 @@ def _finish_from(fmt: dict, raw: str | None) -> str:
     (the ManaBox 'Foil' column is literally 'normal'/'foil'/'etched')."""
     fmap = {str(k).lower(): str(v).lower() for k, v in (fmt.get("finish_map") or {}).items()}
     token = (raw or "").strip().lower()
-    return fmap.get(token, "nonfoil")
+    if token in fmap:
+        return fmap[token]
+    # Open-ended finish names (Dragon Shield: "Rainbow Foil", "Etched", …).
+    if any(str(w).lower() in token for w in (fmt.get("foil_contains") or [])):
+        return "foil"
+    return "nonfoil"
 
 
 def _condition_from(fmt: dict, raw: str | None) -> str | None:
@@ -122,13 +127,36 @@ def read_csv(path: str | Path, service: str) -> list[CollectionRow]:
     same printing+finish (e.g. one per condition) are kept SEPARATE here —
     :func:`diff_collections` and :func:`apply_import` aggregate by key.
     """
-    fmt = service_format(service)
+    return read_text(Path(path).read_text(encoding="utf-8-sig"), service)
+
+
+def _csv_body(text: str) -> str:
+    """Strip a BOM and an Excel ``sep=,`` preamble line (Dragon Shield writes one)."""
+    text = text.lstrip("\ufeff")
+    first, _, rest = text.partition("\n")
+    if first.strip().strip('"').lower().startswith("sep="):
+        return rest
+    return text
+
+
+def _dialect(body: str):
+    """Comma unless the header line is clearly semicolon- or tab-separated."""
+    head = body.partition("\n")[0]
+    counts = {d: head.count(d) for d in (",", ";", "\t")}
+    delim = max(counts, key=lambda d: counts[d])
+    return delim if counts[delim] else ","
+
+
+def _read_rows(text: str, fmt: dict) -> tuple[list[CollectionRow], dict[str, int]]:
+    """``text`` under ``fmt`` → rows + copies skipped as ``proxy``/``digital``."""
     cols = fmt.get("columns") or {}
     # MTGGoldfish-style set-code remap (service → Scryfall code), lowercased.
     remap = {str(k).lower(): str(v).lower()
              for k, v in (fmt.get("set_remap") or {}).items()}
-    text = Path(path).read_text(encoding="utf-8-sig")  # tolerate a BOM
-    reader = csv.DictReader(io.StringIO(text))
+    truthy = {"true", "yes", "1", "x"}
+    body = _csv_body(text)
+    reader = csv.DictReader(io.StringIO(body), delimiter=_dialect(body))
+    skipped = {"proxy": 0, "digital": 0}
 
     def cell(row: dict, field_name: str) -> str | None:
         header = cols.get(field_name)
@@ -137,32 +165,111 @@ def read_csv(path: str | Path, service: str) -> list[CollectionRow]:
         v = row.get(header)
         return v.strip() if isinstance(v, str) else v
 
+    def count(s: str | None) -> int:
+        try:
+            return int(float(s)) if s not in (None, "") else 0
+        except (TypeError, ValueError):
+            return 0
+
     out: list[CollectionRow] = []
     for raw in reader:
-        qty_s = cell(raw, "quantity")
-        try:
-            qty = int(float(qty_s)) if qty_s not in (None, "") else 0
-        except (TypeError, ValueError):
-            qty = 0
         sid = cell(raw, "scryfall_id") or None
         setc = (cell(raw, "set") or None)
         set_lc = setc.lower() if setc else None
         if set_lc:
             set_lc = remap.get(set_lc, set_lc)  # apply the remap, if any
         cn = cell(raw, "collector_number") or None
-        if qty <= 0 or not (sid or (set_lc and cn)):
-            continue
-        out.append(CollectionRow(
-            qty=qty,
-            finish=_finish_from(fmt, cell(raw, "finish")),
-            scryfall_id=sid,
-            set=set_lc,
-            collector_number=cn,
-            name=cell(raw, "name") or None,
-            condition=_condition_from(fmt, cell(raw, "condition")),
-            purchase_price=cell(raw, "purchase_price") or None,
-        ))
-    return out
+        base = dict(scryfall_id=sid, set=set_lc, collector_number=cn,
+                    name=cell(raw, "name") or None,
+                    condition=_condition_from(fmt, cell(raw, "condition")),
+                    purchase_price=cell(raw, "purchase_price") or None)
+        # One row per finish: a single count + a finish column, or (Echo MTG
+        # style) a regular count beside a separate foil count.
+        if cols.get("foil_quantity"):
+            parts = [(count(cell(raw, "quantity")), "nonfoil"), (count(cell(raw, "foil_quantity")), "foil")]
+        else:
+            parts = [(count(cell(raw, "quantity")), _finish_from(fmt, cell(raw, "finish")))]
+        why = next((k for k in ("proxy", "digital") if (cell(raw, k) or "").lower() in truthy), None)
+        for qty, finish in parts:
+            if qty <= 0:
+                continue
+            if why:
+                skipped[why] += qty
+                continue
+            out.append(CollectionRow(qty=qty, finish=finish, **base))
+    return out, skipped
+
+
+def read_text(text: str, service: str) -> list[CollectionRow]:
+    """:func:`read_csv` over the file's text. Rows with no identity (no
+    scryfall_id, no set+cn) and proxy/digital rows are dropped here."""
+    rows, _ = _read_rows(text, service_format(service))
+    return [r for r in rows if r.scryfall_id or (r.set and r.collector_number)]
+
+
+# ---------------------------------------------------------------------------
+# Exported collection files — detect which app wrote it, read it as lines
+# ---------------------------------------------------------------------------
+
+class UnknownFormat(ValueError):
+    """The file's header matches no configured collection export."""
+
+
+def _header(text: str) -> list[str]:
+    body = _csv_body(text)
+    first = next(csv.reader(io.StringIO(body), delimiter=_dialect(body)), [])
+    return [h.strip() for h in first]
+
+
+def importable_formats() -> list[dict]:
+    """Every service a collection file can come from, for the import screen:
+    ``{id, name, how}`` (``name``/``how`` from the config's ``[<svc>.app]``)."""
+    out = []
+    for key, fmt in config_mod.collection_formats().items():
+        app = fmt.get("app") or {}
+        if app.get("name"):
+            out.append({"id": key, "name": str(app["name"]), "how": str(app.get("how") or "")})
+    return sorted(out, key=lambda f: f["name"].lower())
+
+
+def detect_format(text: str) -> str:
+    """Which configured service wrote this export, from its header row.
+
+    Each service declares ``[<svc>.app].detect`` — header names that must ALL be
+    present (case-insensitive). The match with the most declared headers wins,
+    so a superset export (Archidekt's all-fields variant) still matches."""
+    have = {h.lower() for h in _header(text)}
+    best: tuple[int, str] | None = None
+    for key, fmt in config_mod.collection_formats().items():
+        need = [str(h).lower() for h in ((fmt.get("app") or {}).get("detect") or [])]
+        if need and all(h in have for h in need) and (best is None or len(need) > best[0]):
+            best = (len(need), key)
+    if best is None:
+        names = ", ".join(f["name"] for f in importable_formats())
+        raise UnknownFormat(f"This file doesn’t look like a collection export we can read ({names}).")
+    return best[1]
+
+
+@dataclass
+class ExportRead:
+    """An exported collection file as companion-shaped lines (see :func:`rows_from_lines`)."""
+    service: str
+    name: str
+    lines: list[dict]
+    skipped: dict[str, int]
+
+
+def read_export(text: str, *, service: str | None = None) -> ExportRead:
+    """A collection export file → the normalized lines :func:`preview_lines` /
+    :func:`apply_lines` take — the SAME review + apply path a companion read
+    uses. ``service`` overrides detection. Lines with no usable identity are
+    kept so the preview reports them as not found (never silently dropped)."""
+    key = (service or detect_format(text)).lower()
+    fmt = service_format(key)
+    rows, skipped = _read_rows(text, fmt)
+    lines = [{"quantity": r.qty, "finish": r.finish, "scryfall_id": r.scryfall_id, "set": r.set,
+              "cn": r.collector_number, "name": r.name} for r in rows]
+    return ExportRead(key, str((fmt.get("app") or {}).get("name") or key), lines, skipped)
 
 
 # ---------------------------------------------------------------------------
