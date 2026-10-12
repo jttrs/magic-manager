@@ -4652,7 +4652,8 @@
             "title": "Slug"
           },
           "facts": {
-            "$ref": "#/components/schemas/FactsOut"
+            "$ref": "#/components/schemas/FactsOut",
+            "description": "Owned / free copies across printings, cheapest price, display printing."
           },
           "commander_eligible": {
             "type": "boolean",
@@ -7877,7 +7878,8 @@
             "title": "Slug"
           },
           "facts": {
-            "$ref": "#/components/schemas/FactsOut"
+            "$ref": "#/components/schemas/FactsOut",
+            "description": "Owned / free copies across printings, cheapest price, display printing."
           },
           "num_decks": {
             "anyOf": [
@@ -8131,6 +8133,18 @@
             ],
             "title": "Cmc"
           },
+          "mana_cost": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mana Cost",
+            "description": "Scryfall mana cost, e.g. '{2}{U}{R}' (front face)."
+          },
           "color_identity": {
             "items": {
               "type": "string"
@@ -8213,6 +8227,17 @@
             "type": "integer",
             "title": "Free",
             "default": 0
+          },
+          "partner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FactsOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Partner pairing: the second card's own facts. The pair's price, colour identity and copies (pairs you could put together) are on the outer facts; its printing/type are the first card's."
           }
         },
         "type": "object",
@@ -10762,7 +10787,8 @@
             "title": "Slug"
           },
           "facts": {
-            "$ref": "#/components/schemas/FactsOut"
+            "$ref": "#/components/schemas/FactsOut",
+            "description": "Owned / free copies across printings, cheapest price, display printing."
           },
           "bucket": {
             "type": "string",
@@ -12059,7 +12085,8 @@
             "title": "Slug"
           },
           "facts": {
-            "$ref": "#/components/schemas/FactsOut"
+            "$ref": "#/components/schemas/FactsOut",
+            "description": "Owned / free copies across printings, cheapest price, display printing."
           },
           "num_decks": {
             "anyOf": [

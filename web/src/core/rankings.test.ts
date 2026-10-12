@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FactsOut, RankedOut, RankingOut } from './api';
-import { edhrecUrl, exploreMode, fetchedAgo, fmtMetric, rankedCard, rankingRequest, rankingSummary, roleFor, shownRows, timeframeApplies, type RankingsState } from './rankings';
+import { cardType, creatureType, edhrecUrl, exploreMode, rankedTypes, fetchedAgo, fmtMetric, rankedCard, rankingRequest, rankingSummary, roleFor, shownRows, timeframeApplies, type RankingsState } from './rankings';
 
 const state = (o: Partial<RankingsState> = {}): RankingsState => ({ rank: 'commanders', by: 'any', tf: 'week', own: 'all', rq: '', ...o });
 const facts = (o: Partial<FactsOut> = {}): FactsOut => ({ oracle_id: 'o', type_line: 'Legendary Creature', cmc: 3, color_identity: ['R'], lowest_usd: 2, scryfall_id: 's', image_uri: null, set_code: 'm13', collector_number: '1', scryfall_url: null, owned: 0, free: 0, ...o });
@@ -74,5 +74,29 @@ describe('rankings', () => {
     const r = { rows } as RankingOut;
     expect(rankingSummary(r, rows)).toBe('2 ranked · you own 1 · 1 with free copies');
     expect(rankingSummary(r, rows.slice(0, 1))).toBe('1 of 2 shown · you own 1 · 1 with free copies');
+  });
+
+  it('splits the type line into card type and creature type', () => {
+    expect(cardType('Legendary Creature — Goblin Warrior', 'commanders')).toBe('Creature');
+    expect(cardType('Legendary Planeswalker — Jace', 'commanders')).toBe('Planeswalker');
+    expect(cardType('Legendary Artifact Creature — Golem', 'cards')).toBe('Legendary Artifact Creature');
+    expect(cardType('Instant', 'cards')).toBe('Instant');
+    expect(creatureType('Legendary Creature — Elf Druid // Legendary Land')).toBe('Elf Druid');
+    expect(creatureType('Instant')).toBeNull();
+    expect(cardType(null, 'cards')).toBeNull();
+  });
+
+  it('shows both partners in the type columns, once when they agree', () => {
+    const pair = row('Kraum // Tymna', { facts: facts({ oracle_id: null, type_line: 'Legendary Creature — Zombie Horror', partner: facts({ type_line: 'Legendary Creature — Human Cleric' }) }) });
+    expect(rankedTypes('commanders', pair)).toEqual({ card: 'Creature', sub: 'Zombie Horror / Human Cleric' });
+  });
+
+  it('a partner pairing is one guide card with both names and the partner behind it', () => {
+    const pair = row('Kraum, Ludevic’s Opus // Tymna the Weaver', { facts: facts({ oracle_id: null, image_uri: 'a.jpg', partner: facts({ image_uri: 'b.jpg' }) }) });
+    const c = rankedCard('commanders', pair);
+    expect(c.key).toBe('slug:kraum, ludevic’s opus // tymna the weaver');
+    expect(c.partner).toEqual({ name: 'Tymna the Weaver', image: 'b.jpg', href: null });
+    expect(c.lines.plain).toBe('1 Kraum, Ludevic’s Opus\n1 Tymna the Weaver');
+    expect(rankedCard('commanders', row('Sol Ring')).partner).toBeNull();
   });
 });

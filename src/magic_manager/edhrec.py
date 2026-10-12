@@ -236,20 +236,34 @@ def color_filter_slug(spec: str) -> str:
 
 # ---------- name -> oracle resolution ----------
 
-def resolve_names_to_oracle(names: Iterable[str]) -> dict[str, dict]:
+def partner_halves(name: str | None) -> tuple[str, str] | None:
+    """The two card names of an EDHREC partner pairing ("Kraum, Ludevic's Opus
+    // Tymna the Weaver"), or None for anything else. EDHREC writes a pair of
+    commanders with the same `` // `` a double-faced card uses, so this is only
+    a CANDIDATE split — :func:`resolve_names_to_oracle` treats the name as a
+    pair only when the full name is not itself one card."""
+    parts = [p.strip() for p in (name or "").split(" // ")]
+    return (parts[0], parts[1]) if len(parts) == 2 and all(parts) else None
+
+
+def resolve_names_to_oracle(names: Iterable[str], *, local_only: bool = False) -> dict[str, dict]:
     """Map card NAMES → ``{oracle_id, scryfall_id, name}`` (oracle identity).
 
     Local-first: resolve against the ``cards`` table by name (free, offline).
     For names with no local row, one batched Scryfall ``/cards/collection``
     by-name call fills the gap and the results are upserted into ``cards`` so the
-    metadata sticks for later (enrichment, pricing). Keys of the returned dict are
-    the CASEFOLDED names so callers can look up case-insensitively; unresolved
-    names are simply absent.
+    metadata sticks for later (enrichment, pricing) — skipped when
+    ``local_only``. Keys of the returned dict are the CASEFOLDED names so callers
+    can look up case-insensitively; unresolved names are simply absent.
+
+    Partner pairings ("A // B" that is not one double-faced card) resolve to
+    ``{oracle_id: None, scryfall_id: None, name, partners: [ident_a, ident_b]}``
+    when both halves are found — callers keyed on ``oracle_id`` skip them as
+    before; :func:`partner_halves` explains the split.
     """
     wanted = list(dict.fromkeys(n for n in names if n))
     if not wanted:
         return {}
-
     out: dict[str, dict] = {}
 
     def _record(name: str, oracle_id, scryfall_id) -> None:
@@ -265,41 +279,61 @@ def resolve_names_to_oracle(names: Iterable[str]) -> dict[str, dict]:
             if key not in out or (not out[key].get("oracle_id") and oracle_id):
                 out[key] = entry
 
-    with db.connect() as conn:
-        placeholders = ",".join("?" for _ in wanted)
-        # collate lower(name) so EDHREC's exact display names match our oracle names
-        rows = conn.execute(
-            f"SELECT scryfall_id, oracle_id, name FROM cards "
-            f"WHERE name COLLATE NOCASE IN ({placeholders})",
-            wanted,
-        ).fetchall()
-        for r in rows:
-            _record(r["name"], r["oracle_id"], r["scryfall_id"])
-
-        # DFC front-face pass: a name EDHREC gave as a front face ("Tergrid, God
-        # of Fright") won't match a full "Front // Back" row via IN, so look those
-        # still-missing names up in one batched query against the front-face slice
-        # of the name.
-        front_wanted = [n for n in wanted if n.casefold() not in out and " // " not in n]
-        if front_wanted:
-            ph = ",".join("?" for _ in front_wanted)
+    def _local(names: list[str]) -> None:
+        if not names:
+            return
+        with db.connect() as conn:
+            placeholders = ",".join("?" for _ in names)
+            # collate lower(name) so EDHREC's exact display names match our oracle names
             rows = conn.execute(
                 f"SELECT scryfall_id, oracle_id, name FROM cards "
-                f"WHERE name LIKE '% // %' "
-                f"AND substr(name, 1, instr(name, ' // ') - 1) COLLATE NOCASE IN ({ph})",
-                front_wanted,
+                f"WHERE name COLLATE NOCASE IN ({placeholders})",
+                names,
             ).fetchall()
             for r in rows:
                 _record(r["name"], r["oracle_id"], r["scryfall_id"])
 
-    missing = [n for n in wanted if n.casefold() not in out]
-    if missing:
+            # DFC front-face pass: a name EDHREC gave as a front face ("Tergrid,
+            # God of Fright") won't match a full "Front // Back" row via IN, so
+            # look those still-missing names up in one batched query against the
+            # front-face slice of the name.
+            front_wanted = [n for n in names if n.casefold() not in out and " // " not in n]
+            if front_wanted:
+                ph = ",".join("?" for _ in front_wanted)
+                rows = conn.execute(
+                    f"SELECT scryfall_id, oracle_id, name FROM cards "
+                    f"WHERE name LIKE '% // %' "
+                    f"AND substr(name, 1, instr(name, ' // ') - 1) COLLATE NOCASE IN ({ph})",
+                    front_wanted,
+                ).fetchall()
+                for r in rows:
+                    _record(r["name"], r["oracle_id"], r["scryfall_id"])
+
+    _local(wanted)
+    # "A // B" that isn't one local card may be a partner pairing: look up its halves.
+    pairs = {n: h for n in wanted if n.casefold() not in out and (h := partner_halves(n))}
+    halves = list(dict.fromkeys(x for h in pairs.values() for x in h))
+    _local(halves)
+
+    def _halves(full: str) -> list[dict] | None:
+        got = [out.get(h.casefold()) for h in pairs[full]]
+        if all(g and g.get("oracle_id") for g in got) and got[0]["oracle_id"] != got[1]["oracle_id"]:
+            return got
+        return None
+
+    # A pair whose halves are both known needs no lookup of its full name.
+    missing = [n for n in wanted if n.casefold() not in out and not (n in pairs and _halves(n))]
+    missing += [h for h in halves if h.casefold() not in out and h not in missing]
+    if missing and not local_only:
         found, _not_found = scryfall.collection([{"name": n} for n in missing])
         if found:
             with db.transaction() as conn:
                 db.upsert_cards(conn, found)
             for c in found:
                 _record(c.get("name"), c.get("oracle_id"), c.get("id"))
+    for full in pairs:
+        if full.casefold() not in out and (got := _halves(full)):
+            out[full.casefold()] = {"oracle_id": None, "scryfall_id": None, "name": full, "partners": got}
     return out
 
 

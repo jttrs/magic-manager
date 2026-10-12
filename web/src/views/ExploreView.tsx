@@ -25,7 +25,7 @@ import { compareSections, hasFunctionData } from '../core/groupBy';
 import { BUCKETS, type Bucket, type CompareSearch, type GroupBy, type Role } from '../core/search';
 import { decodeSort, encodeSort, sortBy } from '../core/sort';
 import { exploreMode } from '../core/rankings';
-import { ExploreModeSwitch } from './explore/ExploreModeSwitch';
+import { ExploreTabs, SurfSection } from './explore/ExploreTabs';
 import { EdhrecHealth } from '../components/EdhrecHealth';
 
 const COMMANDER_HEALTH = ['edhrec-commander/edhrec'];
@@ -50,7 +50,7 @@ export function ExploreView() {
   const [picked, setPicked] = useState<PickedCard | null>(null);
 
   const mode = exploreMode(search.mode, search.a);
-  const modeSwitch = <ExploreModeSwitch value={mode} onChange={(m) => set({ mode: m })} />;
+  const tabs = <ExploreTabs mode={mode} />;
   const cards = useQuery({ ...exploreCardQuery(search.a, search.b), enabled: Boolean(search.a) && mode === 'card' });
   const prof = cards.data;
   const hint = !search.b && picked && picked.name === search.a ? picked.commander_eligible : undefined;
@@ -103,7 +103,6 @@ export function ExploreView() {
 
   const sidebar = (
     <>
-      {modeSwitch}
       <SideSection title="Cards">
         <div className="flex flex-col gap-3">
           <CommanderPicker scope="any" name="card-a" label="Card" value={search.a} onCommit={(a, p) => { setPicked(p ?? null); set({ a }); }} />
@@ -115,7 +114,16 @@ export function ExploreView() {
           )}
         </div>
       </SideSection>
-      <SideSection title="Role">
+      <SideSection title="Find">
+        <TextField name="q" label="Card name" value={search.q} placeholder="e.g. Sol Ring…" onChange={(q) => set({ q })} />
+        {role === 'commander' && cmdView && cmdView.tags.length > 0 && (
+          <MultiSelect label="EDHREC lists" noun="lists" value={cmdView.activeTags} onChange={(tags) => set({ tags })} options={cmdView.tags.map(([t, n]) => ({ value: t, label: tagLabel(t), count: n }))} />
+        )}
+        {role === 'card' && prof && (
+          <MultiSelect label="Played alongside · card types" noun="types" searchable={false} keepOrder summary={cardTags.length ? undefined : 'All card types'} value={cardTags} onChange={(tags) => set({ tags })} options={cardGroups.map(([g, n]) => ({ value: g, label: g, count: n }))} />
+        )}
+      </SideSection>
+      <SideSection title="Show">
         {role === null ? (
           <div role="status" aria-label="Checking whether it can lead a deck" className="h-16 animate-pulse rounded-sm bg-chrome-raised motion-reduce:animate-none" />
         ) : <Segmented<Role>
@@ -133,18 +141,18 @@ export function ExploreView() {
             { value: 'card', label: 'As a card' },
           ]}
         />}
-      </SideSection>
-      {comparing && (
-        <SideSection title="Columns">
+        {comparing && (
           <ChipToggles
             label="Visible columns"
+            showLabel
             value={search.show}
             onChange={(show) => set({ show: BUCKETS.filter((b) => show.includes(b)) })}
             options={BUCKETS.map((b) => ({ value: b, label: titles[b] }))}
           />
-        </SideSection>
-      )}
-      <SideSection title="Display">
+        )}
+      </SideSection>
+      <SideSection title="Arrange">
+        <Segmented label="View type" showLabel value={search.view} onChange={(view) => set({ view })} options={[{ value: 'grid', label: 'Grid' }, { value: 'list', label: 'List' }]} />
         {role === 'commander' && (
           <>
             <Segmented<GroupBy>
@@ -166,17 +174,7 @@ export function ExploreView() {
             )}
           </>
         )}
-        <Segmented label="View type" showLabel value={search.view} onChange={(view) => set({ view })} options={[{ value: 'grid', label: 'Grid' }, { value: 'list', label: 'List' }]} />
         {role === 'commander' && <SortBuilder keys={COMPARE_SORT} rules={rules} presets={COMPARE_SORT_PRESETS} onChange={(r) => set({ sort: encodeSort(r, COMPARE_SORT) })} />}
-      </SideSection>
-      <SideSection title="Filter">
-        <TextField name="q" label="Card name" value={search.q} placeholder="e.g. Sol Ring…" onChange={(q) => set({ q })} />
-        {role === 'commander' && cmdView && cmdView.tags.length > 0 && (
-          <MultiSelect label="EDHREC lists" noun="lists" value={cmdView.activeTags} onChange={(tags) => set({ tags })} options={cmdView.tags.map(([t, n]) => ({ value: t, label: tagLabel(t), count: n }))} />
-        )}
-        {role === 'card' && prof && (
-          <MultiSelect label="Played alongside · card types" noun="types" searchable={false} keepOrder summary={cardTags.length ? undefined : 'All card types'} value={cardTags} onChange={(tags) => set({ tags })} options={cardGroups.map(([g, n]) => ({ value: g, label: g, count: n }))} />
-        )}
       </SideSection>
       <SideSection title={`Marked · ${marked.length}`}>
         <CopyButton label="Copy marked as list" emphasis="primary" getText={() => exportLines(marked, 'plain')} />
@@ -184,6 +182,7 @@ export function ExploreView() {
           <button type="button" onClick={clear} className="self-start cursor-pointer text-sm text-on-chrome-muted underline hover:text-on-chrome">Clear marks</button>
         )}
       </SideSection>
+      <SurfSection />
     </>
   );
 
@@ -210,11 +209,11 @@ export function ExploreView() {
     body = <GuideColumns columns={columns((b) => cols[b], (b) => cols[b].reduce((n, s) => n + s.items.length, 0), 'share of decks')} visible={search.show} onHide={(id) => set({ show: search.show.filter((s) => s !== id) })} storageKey="explore-card" />;
   }
 
-  if (mode === 'rankings') return <RankingsExplore search={search} set={set} modeSwitch={modeSwitch} />;
+  if (mode === 'rankings') return <RankingsExplore search={search} set={set} tabs={tabs} />;
 
   return (
     <ViewLayout label="Explore controls" summary={search.a ? `${search.a}${search.b ? ` vs ${search.b}` : ''}${role ? ` · ${role === 'commander' ? 'as commander' : 'as a card'}` : ''}` : undefined} sidebar={sidebar} startOpen={!search.a}>
-      <GuideSheet title="Explore" summary={role ? summaryLine(role, prof, cmd.data) : undefined}>
+      <GuideSheet title="Explore" nav={tabs} summary={role ? summaryLine(role, prof, cmd.data) : undefined}>
         <div className="flex h-full min-h-0 flex-col">
           <EdhrecHealth keys={role === 'commander' ? COMMANDER_HEALTH : CARD_HEALTH} />
           {prof && role && <Plates r={prof} role={role} onInspect={(p) => setInspecting(profileCard(p))} />}

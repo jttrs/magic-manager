@@ -1,14 +1,34 @@
 import { expect, fixtures, test } from './support';
+import partners from './fixtures/ranking-top-partners.json' with { type: 'json' };
 
 const ranking = fixtures.ranking;
 
-test('Explore opens on rankings: a ledger joined to what you own, names open the profile in the right role', async ({ page }) => {
+test('Explore opens on rankings, as a grid; Rankings is the first tab', async ({ page }) => {
   await page.goto('/explore');
+  const tabs = page.getByRole('navigation', { name: 'Explore views' }).getByRole('link');
+  await expect(tabs).toHaveText(['Rankings', 'Specific cards']);
+  await expect(tabs.first()).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('radio', { name: 'Grid' })).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByRole('table')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Inspect Krenko, Mob Boss' })).toBeVisible();
+  // the rail: find first, the card surfer last
+  const rail = page.getByRole('heading', { level: 2 });
+  await expect(rail.first()).toHaveText('Find');
+  await expect(rail.last()).toHaveText('Random cards');
+});
+
+test('the rankings list joins what you own, with type, colour and cost columns; names open the profile in the right role', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await page.goto('/explore?rview=list');
   await expect(page.getByRole('heading', { level: 1, name: ranking.title })).toBeVisible();
   const ledger = page.getByRole('table', { name: new RegExp(ranking.title) });
   await expect(ledger.getByRole('row')).toHaveCount(ranking.rows.length + 1);
   const krenko = ledger.getByRole('row', { name: /Krenko, Mob Boss/ });
   await expect(krenko).toContainText('2 · 1 free');
+  await expect(krenko.getByRole('cell', { name: 'Creature', exact: true })).toBeVisible();
+  await expect(krenko.getByRole('cell', { name: 'Goblin Warrior' })).toBeVisible();
+  await expect(krenko.getByRole('img', { name: 'Colour identity: red' })).toBeVisible();
+  await expect(krenko.getByRole('img', { name: 'Mana cost: 2, red, red' })).toBeVisible();
   await expect(page.getByText(/read from EDHREC/)).toBeVisible();
   await expect(page.getByRole('link', { name: /Open on EDHREC/ })).toHaveAttribute('href', 'https://edhrec.com/commanders/mono-red/week');
 
@@ -21,7 +41,18 @@ test('Explore opens on rankings: a ledger joined to what you own, names open the
   await expect(page).toHaveURL(/mode=card/);
   await expect(page).toHaveURL(/a=Krenko/);
   await expect(page).toHaveURL(/role=commander/);
-  await expect(page.getByRole('radio', { name: 'A card', exact: true })).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByRole('link', { name: 'Specific cards' })).toHaveAttribute('aria-current', 'page');
+});
+
+test('partner commanders show both cards: one in front, the partner peeking from behind', async ({ page }) => {
+  await page.route('**/api/explore/ranking?*', (r) => r.fulfill({ json: partners }));
+  await page.goto('/explore');
+  const pair = page.getByRole('img', { name: /Frodo, Adventurous Hobbit \/\/ Sam, Loyal Attendant: two partner commanders/ });
+  await expect(pair).toBeVisible();
+  await expect(pair.locator('img')).toHaveCount(2);
+  await page.getByRole('radio', { name: 'List' }).click();
+  const row = page.getByRole('row', { name: /Frodo/ });
+  await expect(row).toContainText('$0.78');
 });
 
 test('a ranking never read is fetched as a job with progress, then shown', async ({ page }) => {
@@ -47,7 +78,7 @@ test('a ranking never read is fetched as a job with progress, then shown', async
     await r.fulfill({ status: 200, contentType: 'text/event-stream', body: sse });
   });
 
-  await page.goto('/explore?rank=salt');
+  await page.goto('/explore?rank=salt&rview=list');
   await expect(page.getByRole('row', { name: /Stasis/ })).toContainText('3.06');
   expect(submitted).toEqual({ scope: 'salt', timeframe: 'week', refresh: false });
   await expect(page.getByRole('group', { name: 'Timeframe' })).toHaveCount(0);
@@ -72,12 +103,12 @@ test('narrowing commanders takes one axis and waits for its value', async ({ pag
   await expect(page).toHaveURL(/tag=goblins/);
 });
 
-test('the mode switch moves between a card and rankings, keeping both', async ({ page }) => {
+test('the mode tabs move between specific cards and rankings, keeping both', async ({ page }) => {
   await page.goto('/explore?a=Tifa%20Lockhart&role=card');
-  await expect(page.getByRole('radio', { name: 'A card', exact: true })).toHaveAttribute('aria-checked', 'true');
-  await page.getByRole('radio', { name: 'Rankings' }).click();
+  await expect(page.getByRole('link', { name: 'Specific cards' })).toHaveAttribute('aria-current', 'page');
+  await page.getByRole('link', { name: 'Rankings' }).click();
   await expect(page.getByRole('heading', { level: 1, name: ranking.title })).toBeVisible();
-  await page.getByRole('radio', { name: 'A card', exact: true }).click();
+  await page.getByRole('link', { name: 'Specific cards' }).click();
   await expect(page).toHaveURL(/a=Tifa/);
   await expect(page.getByRole('region', { name: /Tifa Lockhart on EDHREC/ }).or(page.getByText('Nothing matches'))).toBeVisible();
 });

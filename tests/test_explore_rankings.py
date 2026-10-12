@@ -36,7 +36,7 @@ def pages(monkeypatch, seed_cards, make_card):
     monkeypatch.setattr(edhrec, "color_ranking", color_ranking)
     monkeypatch.setattr(edhrec, "top_ranking", lambda seg="week": (calls.append(("top", seg)), _page("salt", [("Krenko, Mob Boss", 9, None)]))[1])
     monkeypatch.setattr(edhrec, "resolve_names_to_oracle",
-                        lambda names: {n.casefold(): {"oracle_id": OID.get(n)} for n in names if n in OID})
+                        lambda names, **_: {n.casefold(): {"oracle_id": OID.get(n)} for n in names if n in OID})
     return calls
 
 
@@ -146,3 +146,50 @@ def test_empty_ranking_fails_instead_of_storing_nothing(tmp_db, monkeypatch):
 
 def test_sync_rankings_names_with_the_shared_title(tmp_db, pages):
     assert edhrec.sync_rankings("commanders", color="r").name == "Top commanders · Mono-Red · past week"
+
+
+KRAUM, TYMNA, TERGRID = ("00000000-0000-0000-0000-0000000000b1", "00000000-0000-0000-0000-0000000000b2",
+                         "00000000-0000-0000-0000-0000000000b3")
+
+
+@pytest.fixture
+def partners(seed_cards, make_card):
+    seed_cards([
+        make_card(id=KRAUM, oracle_id="oracle-kraum", name="Kraum, Ludevic's Opus", collector_number="11",
+                  type_line="Legendary Creature — Zombie Horror", mana_cost="{3}{U}{R}", color_identity=["U", "R"],
+                  prices={"usd": "1.50"}),
+        make_card(id=TYMNA, oracle_id="oracle-tymna", name="Tymna the Weaver", collector_number="12",
+                  type_line="Legendary Creature — Human Cleric", mana_cost="{1}{W}{B}", color_identity=["W", "B"],
+                  prices={"usd": "2.25"}),
+        make_card(id=TERGRID, oracle_id="oracle-tergrid", name="Tergrid, God of Fright // Tergrid's Lantern",
+                  collector_number="13", type_line="Legendary Creature — God // Legendary Artifact"),
+    ])
+    inventory.inventory_add(KRAUM, "nonfoil", 3)
+    inventory.inventory_add(TYMNA, "nonfoil", 1)
+
+
+def test_resolve_partner_pair_but_not_a_double_faced_card(tmp_db, partners, monkeypatch):
+    monkeypatch.setattr(edhrec.scryfall, "collection", lambda *_: pytest.fail("local names need no Scryfall"))
+    got = edhrec.resolve_names_to_oracle(
+        ["Kraum, Ludevic's Opus // Tymna the Weaver", "Tergrid, God of Fright // Tergrid's Lantern"])
+    pair = got["kraum, ludevic's opus // tymna the weaver"]
+    assert pair["oracle_id"] is None and [p["oracle_id"] for p in pair["partners"]] == ["oracle-kraum", "oracle-tymna"]
+    assert got["tergrid, god of fright // tergrid's lantern"]["oracle_id"] == "oracle-tergrid"
+    assert edhrec.partner_halves("Sol Ring") is None
+    assert edhrec.partner_halves("A // B") == ("A", "B")
+
+
+def test_explore_ranking_joins_partner_pairs(tmp_db, partners, monkeypatch):
+    pair = "Kraum, Ludevic's Opus // Tymna the Weaver"
+    monkeypatch.setattr(edhrec, "commanders_ranking", lambda tf=None: _page("commanders", [(pair, 500, 1)]))
+    monkeypatch.setattr(edhrec.scryfall, "collection", lambda *_: ([], []))
+    edhrec.sync_rankings("commanders")
+    row, = explore.ranking().rows
+    f = row.facts
+    assert f.oracle_id is None and f.scryfall_id == KRAUM and f.mana_cost == "{3}{U}{R}"
+    assert f.partner.scryfall_id == TYMNA and f.partner.mana_cost == "{1}{W}{B}"
+    assert f.lowest_usd == 3.75 and f.color_identity == ["W", "U", "B", "R"]
+    assert (f.owned, f.free) == (1, 1)
+    from magic_manager.api import explore as api_explore
+    out = api_explore._facts(f)
+    assert out.partner.scryfall_url and out.partner.mana_cost == "{1}{W}{B}"

@@ -29,6 +29,7 @@ class FactsOut(BaseModel):
     oracle_id: str | None = None
     type_line: str | None = None
     cmc: float | None = None
+    mana_cost: str | None = Field(None, description="Scryfall mana cost, e.g. '{2}{U}{R}' (front face).")
     color_identity: list[str] = Field(default_factory=list)
     lowest_usd: float | None = None
     scryfall_id: str | None = None
@@ -38,6 +39,9 @@ class FactsOut(BaseModel):
     scryfall_url: str | None = None
     owned: int = 0
     free: int = 0
+    partner: FactsOut | None = Field(
+        None, description="Partner pairing: the second card's own facts. The pair's price, colour identity and "
+        "copies (pairs you could put together) are on the outer facts; its printing/type are the first card's.")
 
 
 class EntryOut(BaseModel):
@@ -86,7 +90,9 @@ class CardExploreOut(BaseModel):
 
 
 def _facts(f: explore.Facts) -> FactsOut:
-    return FactsOut(**asdict(f), scryfall_url=gallery.scryfall_card_url(f.set_code, f.collector_number) if f.set_code else None)
+    d = asdict(f)
+    d["partner"] = _facts(f.partner) if f.partner else None
+    return FactsOut(**d, scryfall_url=gallery.scryfall_card_url(f.set_code, f.collector_number) if f.set_code else None)
 
 
 def _entry(e: explore.Entry) -> EntryOut:

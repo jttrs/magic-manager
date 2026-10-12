@@ -1,10 +1,9 @@
-import { HoverCard } from 'radix-ui';
 import { memo } from 'react';
 import type { GuideCard } from '../core/guideCard';
 import { rarityLetter } from '../core/guideCard';
 import { fmtPct, fmtUsd } from '../core/format';
 import { CardArt, Holdings, InclusionBars, Tags } from './CardFace';
-import { CardPreview } from './CardMeta';
+import { CardHover } from './CardHover';
 import { MarkToggle } from './MarkToggle';
 
 type Props = { card: GuideCard; selected: boolean; onToggle: (key: string) => void; onInspect?: (card: GuideCard) => void; barLabels?: [string, string] };
@@ -17,29 +16,22 @@ export const CardRow = memo(function CardRow({ card, selected, onToggle, onInspe
       <span className="hidden h-[var(--size-thumb)] w-[var(--size-thumb)] overflow-hidden rounded-xs @[18rem]:block">
         <CardArt card={card} crop className={card.missing ? 'opacity-55 grayscale-[0.7]' : ''} />
       </span>
-      <HoverCard.Root openDelay={250} closeDelay={80}>
-        <HoverCard.Trigger asChild>
-          <button
-            type="button"
-            onClick={() => onInspect?.(card)}
-            aria-label={`Inspect ${card.name}`}
-            className="flex min-w-0 cursor-pointer items-baseline gap-2 text-left text-sm text-ink hover:underline"
-          >
-            <span className="truncate voice-semi">{card.name}</span>
-            <span className="hidden shrink-0 text-2xs tabular text-ink-muted @[30rem]:inline" translate="no">
-              {[card.setCode, card.cn, rarityLetter(card.rarity)].filter(Boolean).join(' · ')}
-              {card.finish === 'foil' ? ' ✦' : ''}
-            </span>
-            {card.tags.length > 0 && <span className="hidden min-w-0 @[36rem]:block"><Tags tags={card.tags} /></span>}
-            {card.note && <span className="hidden min-w-0 truncate text-2xs text-ink-muted @[24rem]:inline">{card.note}</span>}
-          </button>
-        </HoverCard.Trigger>
-        <HoverCard.Portal>
-          <HoverCard.Content side="right" align="center" sideOffset={12} collisionPadding={16} className="z-40 w-56 drop-shadow-[0_10px_24px_var(--theme-scrim)]">
-            <CardPreview card={card} />
-          </HoverCard.Content>
-        </HoverCard.Portal>
-      </HoverCard.Root>
+      <CardHover card={card}>
+        <button
+          type="button"
+          onClick={() => onInspect?.(card)}
+          aria-label={`Inspect ${card.name}`}
+          className="flex w-fit min-w-0 max-w-full cursor-pointer items-baseline gap-2 text-left text-sm text-ink hover:underline"
+        >
+          <span className="truncate voice-semi">{card.name}</span>
+          <span className="hidden shrink-0 text-2xs tabular text-ink-muted @[30rem]:inline" translate="no">
+            {[card.setCode, card.cn, rarityLetter(card.rarity)].filter(Boolean).join(' · ')}
+            {card.finish === 'foil' ? ' ✦' : ''}
+          </span>
+          {card.tags.length > 0 && <span className="hidden min-w-0 @[36rem]:block"><Tags tags={card.tags} /></span>}
+          {card.note && <span className="hidden min-w-0 truncate text-2xs text-ink-muted @[24rem]:inline">{card.note}</span>}
+        </button>
+      </CardHover>
       <span className="flex items-center justify-end gap-2">
         {card.bars ? (
           <>

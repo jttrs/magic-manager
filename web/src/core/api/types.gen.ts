@@ -610,6 +610,9 @@ export type CardProfileOut = {
      * Slug
      */
     slug: string;
+    /**
+     * Owned / free copies across printings, cheapest price, display printing.
+     */
     facts: FactsOut;
     /**
      * Commander Eligible
@@ -2438,6 +2441,9 @@ export type EntryOut = {
      * Slug
      */
     slug: string;
+    /**
+     * Owned / free copies across printings, cheapest price, display printing.
+     */
     facts: FactsOut;
     /**
      * Num Decks
@@ -2580,6 +2586,12 @@ export type FactsOut = {
      */
     cmc?: number | null;
     /**
+     * Mana Cost
+     *
+     * Scryfall mana cost, e.g. '{2}{U}{R}' (front face).
+     */
+    mana_cost?: string | null;
+    /**
      * Color Identity
      */
     color_identity?: Array<string>;
@@ -2615,6 +2627,10 @@ export type FactsOut = {
      * Free
      */
     free?: number;
+    /**
+     * Partner pairing: the second card's own facts. The pair's price, colour identity and copies (pairs you could put together) are on the outer facts; its printing/type are the first card's.
+     */
+    partner?: FactsOut | null;
 };
 
 /**
@@ -4113,6 +4129,9 @@ export type PairedOut = {
      * Slug
      */
     slug: string;
+    /**
+     * Owned / free copies across printings, cheapest price, display printing.
+     */
     facts: FactsOut;
     /**
      * Bucket
@@ -4801,6 +4820,9 @@ export type RankedOut = {
      * Slug
      */
     slug: string;
+    /**
+     * Owned / free copies across printings, cheapest price, display printing.
+     */
     facts: FactsOut;
     /**
      * Num Decks

@@ -1,6 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { HoverCard } from 'radix-ui';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { familiesQuery, rankingOptionsQuery, rankingQuery } from '../../app/queries';
 import { useJob } from '../../app/useJob';
@@ -8,7 +7,8 @@ import { useSelection } from '../../app/selection';
 import { ViewLayout } from '../../components/AppShell';
 import { CardArt } from '../../components/CardFace';
 import { CardInspector } from '../../components/CardInspector';
-import { CardPreview } from '../../components/CardMeta';
+import { CardHover } from '../../components/CardHover';
+import { ColorIdentity, ManaCost } from '../../components/ManaSymbols';
 import { CopyButton } from '../../components/CopyButton';
 import { IconAction } from '../../components/IconAction';
 import { InfoTip } from '../../components/InfoTip';
@@ -20,23 +20,24 @@ import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../../components
 import { EdhrecMark, RereadMark } from '../../components/StoreMarks';
 import { VirtualGuide } from '../../components/VirtualGuide';
 import { EdhrecHealth } from '../../components/EdhrecHealth';
+import { SurfSection } from './ExploreTabs';
 import type { RankedOut, RankingOut } from '../../core/api';
 import { fmtUsd } from '../../core/format';
 import { exportLines, type GuideCard } from '../../core/guideCard';
 import {
-  BY_LABEL, edhrecUrl, fetchedAgo, fmtMetric, metricLabel, narrowBy, OWN_LABEL, rankedCard, rankingRequest, rankingSummary,
+  BY_LABEL, edhrecUrl, fetchedAgo, fmtMetric, metricLabel, narrowBy, OWN_LABEL, rankedCard, rankedTypes, rankingRequest, rankingSummary,
   roleFor, SCOPE_LABEL, shownRows, TIMEFRAME_LABEL, timeframeApplies,
 } from '../../core/rankings';
 
 const RANKING_HEALTH = ['edhrec-rankings/edhrec'];
 import { RANK_BYS, RANK_OWN, RANK_SCOPES, RANK_TIMEFRAMES, type CompareSearch, type RankBy, type RankOwn, type RankScope, type RankTimeframe } from '../../core/search';
 
-type Props = { search: CompareSearch; set: (p: Partial<CompareSearch>) => void; modeSwitch: ReactNode };
+type Props = { search: CompareSearch; set: (p: Partial<CompareSearch>) => void; tabs: ReactNode };
 
 /** Explore → Rankings: EDHREC's top commanders (narrowed by one of colour, tag or
  *  set), top cards and saltiest cards, each joined to what you own. Cached lists
  *  read instantly; a list never read is fetched as a job with progress. */
-export function RankingsExplore({ search, set, modeSwitch }: Props) {
+export function RankingsExplore({ search, set, tabs }: Props) {
   const qc = useQueryClient();
   const req = useMemo(() => rankingRequest(search), [search]);
   const reqKey = JSON.stringify(req);
@@ -81,8 +82,10 @@ export function RankingsExplore({ search, set, modeSwitch }: Props) {
 
   const sidebar = (
     <>
-      {modeSwitch}
-      <SideSection title="Ranking">
+      <SideSection title="Find">
+        <TextField name="rq" label="Card name" value={search.rq} placeholder="e.g. Krenko…" onChange={(rq) => set({ rq })} />
+      </SideSection>
+      <SideSection title="Show">
         <SelectField<RankScope> label="List" value={search.rank} onChange={(rank) => set({ rank })} options={RANK_SCOPES.map((s) => ({ value: s, label: SCOPE_LABEL[s] }))} />
         {search.rank === 'commanders' && (
           <>
@@ -111,11 +114,10 @@ export function RankingsExplore({ search, set, modeSwitch }: Props) {
         {timeframeApplies(search) && (
           <Segmented<RankTimeframe> label="Timeframe" showLabel value={search.tf} onChange={(tf) => set({ tf })} options={RANK_TIMEFRAMES.map((t) => ({ value: t, label: TIMEFRAME_LABEL[t] }))} />
         )}
+        <Segmented<RankOwn> label="Ownership" showLabel value={search.own} onChange={(own) => set({ own })} options={RANK_OWN.map((o) => ({ value: o, label: OWN_LABEL[o] }))} />
       </SideSection>
-      <SideSection title="Show">
-        <Segmented<RankOwn> label="Show" value={search.own} onChange={(own) => set({ own })} options={RANK_OWN.map((o) => ({ value: o, label: OWN_LABEL[o] }))} />
-        <TextField name="rq" label="Card name" value={search.rq} placeholder="e.g. Krenko…" onChange={(rq) => set({ rq })} />
-        <Segmented label="View type" showLabel value={search.rview} onChange={(rview) => set({ rview })} options={[{ value: 'list', label: 'Ledger' }, { value: 'grid', label: 'Grid' }]} />
+      <SideSection title="Arrange">
+        <Segmented label="View type" showLabel value={search.rview} onChange={(rview) => set({ rview })} options={[{ value: 'grid', label: 'Grid' }, { value: 'list', label: 'List' }]} />
       </SideSection>
       <SideSection title={`Marked · ${marked.length}`}>
         <CopyButton label="Copy marked as list" emphasis="primary" getText={() => exportLines(marked, 'plain')} />
@@ -123,6 +125,7 @@ export function RankingsExplore({ search, set, modeSwitch }: Props) {
           <button type="button" onClick={clear} className="self-start cursor-pointer text-sm text-on-chrome-muted underline hover:text-on-chrome">Clear marks</button>
         )}
       </SideSection>
+      <SurfSection />
     </>
   );
 
@@ -157,7 +160,7 @@ export function RankingsExplore({ search, set, modeSwitch }: Props) {
   } else if (search.rview === 'grid') {
     body = <VirtualGuide sections={[{ key: 'ranking', label: ranking.data.title, items: cards, level: 2, noun: 'ranking' }]} density="grid" selected={selected} onToggle={toggle} label={ranking.data.title} />;
   } else {
-    body = <Ledger r={ranking.data} rows={shown} cards={cards} selected={selected} onToggle={toggle} onInspect={setInspecting} />;
+    body = <RankingList r={ranking.data} rows={shown} cards={cards} selected={selected} onToggle={toggle} onInspect={setInspecting} />;
   }
 
   const r = ranking.data?.cached ? ranking.data : undefined;
@@ -165,6 +168,7 @@ export function RankingsExplore({ search, set, modeSwitch }: Props) {
   return (
     <ViewLayout label="Explore controls" summary={r ? `Rankings · ${r.title}` : 'Rankings'} sidebar={sidebar}>
       <GuideSheet
+        nav={tabs}
         title={r?.title ?? (req ? SCOPE_LABEL[search.rank] : 'Rankings')}
         summary={r ? `${rankingSummary(r, shown)}${ago ? ` · read from EDHREC ${ago}` : ''}` : undefined}
         actions={
@@ -226,35 +230,43 @@ function TagField({ value, suggestions, onCommit }: { value: string; suggestions
   );
 }
 
-/** The ranking as a ruled ledger: # · art · name (type) · decks or salt · from $ · you own. */
-function Ledger({ r, rows, cards, selected, onToggle, onInspect }: { r: RankingOut; rows: RankedOut[]; cards: GuideCard[]; selected: ReadonlySet<string>; onToggle: (k: string) => void; onInspect: (c: GuideCard) => void }) {
+/** The ranking as a ruled list: # · art · name · card type · creature type ·
+ *  colour identity · mana cost · decks or salt · from $ · you own. Lower-priority
+ *  columns give way as the sheet narrows (container queries). */
+function RankingList({ r, rows, cards, selected, onToggle, onInspect }: { r: RankingOut; rows: RankedOut[]; cards: GuideCard[]; selected: ReadonlySet<string>; onToggle: (k: string) => void; onInspect: (c: GuideCard) => void }) {
   const scope = r.scope as RankScope;
   const role = roleFor(scope);
   return (
     <div className="@container h-full overflow-y-auto px-3 pb-6 sm:px-5" role="region" aria-label={r.title} tabIndex={0}>
       <table className="w-full table-fixed border-collapse text-sm tabular">
-        <caption className="sr-only">{r.title}: rank, card, {metricLabel(scope).toLowerCase()}, cheapest price, copies you own</caption>
+        <caption className="sr-only">{r.title}: rank, card, card type, creature type, colour identity, mana cost, {metricLabel(scope).toLowerCase()}, cheapest price, copies you own</caption>
         <thead className="sticky top-0 z-10 bg-paper">
           <tr className="border-b-2 border-rule-strong text-left text-xs voice-semi text-ink-muted">
-            <th scope="col" className="w-9"><span className="sr-only">Mark</span></th>
-            <th scope="col" className="w-10 py-1.5 pr-2 text-right font-medium">#</th>
+            <th scope="col" className="w-8"><span className="sr-only">Mark</span></th>
+            <th scope="col" className="w-8 py-1.5 pr-2 text-right font-medium @[30rem]:w-10">#</th>
             <th scope="col" className="hidden w-[calc(var(--size-thumb)+0.5rem)] @[22rem]:table-cell"><span className="sr-only">Art</span></th>
             <th scope="col" className="py-1.5 pl-1 font-medium">{scope === 'commanders' ? 'Commander' : 'Card'}</th>
-            <th scope="col" className="w-16 py-1.5 pl-3 text-right font-medium @[30rem]:w-20">
+            <th scope="col" className="hidden w-32 py-1.5 pl-3 font-medium @[46rem]:table-cell">Type</th>
+            <th scope="col" className="hidden w-36 py-1.5 pl-3 font-medium @[64rem]:table-cell">{scope === 'commanders' ? 'Creature type' : 'Subtype'}</th>
+            <th scope="col" className="hidden w-[5.5rem] py-1.5 pl-3 font-medium @[36rem]:table-cell">Colours</th>
+            <th scope="col" className="hidden w-28 py-1.5 pl-3 font-medium @[54rem]:table-cell">Cost</th>
+            <th scope="col" className="w-14 py-1.5 pl-3 text-right font-medium @[30rem]:w-20">
               {scope === 'salt' ? (
                 <span className="inline-flex items-center gap-1">Salt<InfoTip label="What is salt?" tone="paper">EDHREC players’ average rating (0–4) of how unfun a card is to play against.</InfoTip></span>
               ) : 'Decks'}
             </th>
             <th scope="col" className="hidden w-20 py-1.5 pl-3 text-right font-medium @[30rem]:table-cell">From</th>
-            <th scope="col" className="w-24 py-1.5 pl-3 text-right font-medium @[30rem]:w-28">You own</th>
+            <th scope="col" className="w-14 py-1.5 pl-3 text-right font-medium @[30rem]:w-28">You own</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((x, i) => {
             const c = cards[i];
             const on = selected.has(c.key);
+            const types = rankedTypes(scope, x);
+            const partner = x.facts.partner;
             return (
-              <tr key={x.slug} className={`border-b border-rule/60 [content-visibility:auto] ${on ? 'highlighter' : ''}`}>
+              <tr key={x.slug} className={`border-b border-rule/60 [contain-intrinsic-size:auto_2.75rem] [content-visibility:auto] ${on ? 'highlighter' : ''}`}>
                 <td className="py-0.5"><MarkToggle name={x.name} marked={on} onToggle={() => onToggle(c.key)} size="sm" /></td>
                 <td className="pr-2 text-right text-ink-muted">{x.rank ?? '—'}</td>
                 <td className="hidden py-1 @[22rem]:table-cell">
@@ -263,32 +275,33 @@ function Ledger({ r, rows, cards, selected, onToggle, onInspect }: { r: RankingO
                   </button>
                 </td>
                 <th scope="row" className="py-1 pl-1 text-left font-normal">
-                  <HoverCard.Root openDelay={250} closeDelay={80}>
-                    <HoverCard.Trigger asChild>
-                      <Link
-                        to="/explore"
-                        search={((s: CompareSearch) => ({ ...s, mode: 'card', a: x.name.split(' // ')[0], b: undefined, role })) as never}
-                        className="flex min-w-0 items-baseline gap-2 text-ink no-underline hover:underline"
-                        title={`Explore ${x.name} ${role === 'commander' ? 'as a commander' : 'as a card'}`}
-                      >
-                        <span className="max-w-full shrink-0 truncate voice-semi">{x.name}</span>
-                        {x.facts.type_line && <span className="hidden min-w-0 truncate text-2xs text-ink-muted @[34rem]:inline">{x.facts.type_line}</span>}
-                      </Link>
-                    </HoverCard.Trigger>
-                    <HoverCard.Portal>
-                      <HoverCard.Content side="right" align="center" sideOffset={12} collisionPadding={16} className="z-40 w-56 drop-shadow-[0_10px_24px_var(--theme-scrim)]">
-                        <CardPreview card={c} />
-                      </HoverCard.Content>
-                    </HoverCard.Portal>
-                  </HoverCard.Root>
+                  <CardHover card={c}>
+                    <Link
+                      to="/explore"
+                      search={((s: CompareSearch) => ({ ...s, mode: 'card', a: x.name.split(' // ')[0], b: undefined, role })) as never}
+                      className="line-clamp-2 w-fit max-w-full break-words voice-semi leading-snug text-ink no-underline hover:underline @[30rem]:line-clamp-1"
+                      title={`Explore ${x.name} ${role === 'commander' ? 'as a commander' : 'as a card'}`}
+                    >
+                      {x.name}
+                    </Link>
+                  </CardHover>
                 </th>
+                <td className="hidden truncate pl-3 text-ink-muted @[46rem]:table-cell" title={types.card ?? undefined}>{types.card ?? '—'}</td>
+                <td className="hidden truncate pl-3 text-ink-muted @[64rem]:table-cell" title={types.sub ?? undefined}>{types.sub ?? '—'}</td>
+                <td className="hidden pl-3 @[36rem]:table-cell"><ColorIdentity colors={x.facts.color_identity ?? []} /></td>
+                <td className="hidden pl-3 @[54rem]:table-cell">
+                  <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                    <ManaCost cost={x.facts.mana_cost} />
+                    {partner && <><span aria-hidden="true" className="text-ink-muted">+</span><ManaCost cost={partner.mana_cost} /></>}
+                  </span>
+                </td>
                 <td className="pl-3 text-right text-ink">{fmtMetric(scope, x)}</td>
                 <td className="hidden pl-3 text-right voice-semi font-medium text-ink @[30rem]:table-cell">{fmtUsd(x.facts.lowest_usd)}</td>
                 <td className="whitespace-nowrap pl-3 text-right">
                   {x.facts.owned ? (
                     <>
                       <span className="text-ink">{x.facts.owned}</span>
-                      <span className={x.facts.free ? 'text-accent-ink' : 'text-ink-muted'}> · {x.facts.free} free</span>
+                      <span className={`hidden @[30rem]:inline ${x.facts.free ? 'text-accent-ink' : 'text-ink-muted'}`}> · {x.facts.free} free</span>
                     </>
                   ) : (
                     <span className="text-ink-muted">—</span>

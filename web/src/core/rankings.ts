@@ -102,3 +102,28 @@ export function rankingSummary(r: RankingOut, shown: readonly RankedOut[]): stri
   const lead = shown.length === r.rows.length ? `${r.rows.length} ranked` : `${shown.length} of ${r.rows.length} shown`;
   return `${lead} · you own ${owned} · ${free} with free copies`;
 }
+
+const front = (typeLine: string | null | undefined) => (typeLine ?? '').split(' // ')[0];
+
+/** The card type without its subtypes: "Legendary Creature — Elf" → "Creature"
+ *  for commanders (they're all legendary), "Legendary Creature" otherwise. */
+export function cardType(typeLine: string | null | undefined, scope: RankScope): string | null {
+  let t = front(typeLine).split(' — ')[0].trim();
+  if (scope === 'commanders') t = t.replace(/\bLegendary\s+/, '');
+  return t || null;
+}
+
+/** The subtypes after the dash: "Legendary Creature — Elf Druid" → "Elf Druid". */
+export function creatureType(typeLine: string | null | undefined): string | null {
+  return front(typeLine).split(' — ')[1]?.trim() || null;
+}
+
+/** A ranked row's type columns; a partner pairing shows both cards' (once when they agree). */
+export function rankedTypes(scope: RankScope, r: RankedOut): { card: string | null; sub: string | null } {
+  const lines = [r.facts.type_line, r.facts.partner?.type_line];
+  const join = (xs: (string | null)[]) => [...new Set(xs.filter((x): x is string => Boolean(x)))].join(' / ') || null;
+  return {
+    card: join(lines.map((l) => cardType(l, scope))),
+    sub: join(lines.map(creatureType)),
+  };
+}
