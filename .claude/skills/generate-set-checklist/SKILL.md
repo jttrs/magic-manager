@@ -38,7 +38,7 @@ The mechanical wrapper around `mm set master-list`. The user names a release ("F
 
 **Default is `add` for safety.** Only switch to `--mode modify` when the user explicitly says they want to correct/audit their current inventory (e.g. "I sold some cards and need to update", "let me re-audit FCA"). For everything else (a new pack, a precon, "let me catalog these cards I have"), use the default `add`.
 
-**`modify` no longer auto-zeroes.** Ingesting a `modify` file applies each row as a signed change and leaves rows you didn't touch alone — it does not rewrite history. Zeroing in-partition rows that are *absent* from the file (the old "full audit, file is authoritative" behavior) is now an **opt-in choice asked at ingest time** (default No). Non-interactive / `--json` callers can pass `--zero-untouched` or `--no-zero-untouched` explicitly; unset + `--json` defaults to `--no-zero-untouched`. The generated XLSX carries a red **README** banner sheet (green for `add`) restating this; the markdown form carries the same as a blockquote under the H1.
+**`modify` no longer auto-zeroes.** Ingesting a `modify` file applies each row as a signed change and leaves rows you didn't touch alone — it does not rewrite history. Zeroing in-partition rows that are *absent* from the file (the old "full audit, file is authoritative" behavior) is now an **opt-in choice asked at ingest time** (default No). Non-interactive / `--json` callers can pass `--zero-untouched` or `--no-zero-untouched` explicitly; unset + `--json` defaults to `--no-zero-untouched`; unset with no terminal and no `--json` fails fast (exit 2) naming the flags. The generated XLSX carries a red **README** banner sheet (green for `add`) restating this; the markdown form carries the same as a blockquote under the H1.
 
 The filename convention means both flavors can coexist — `final-fantasy-add-checklist.xlsx` and `final-fantasy-modify-checklist.xlsx` are independent files in `checklists/`. Each ingests with the right semantics automatically.
 
@@ -81,7 +81,7 @@ The user picks the surface that fits the moment. All three converge on the same 
 |---|---|---|
 | XLSX (default) | First-pass cataloging of a whole set / sit-down session in a spreadsheet app | `mm set master-list "<name>"` |
 | Markdown | Phone-editable, plain-text-editor, or wanting to diff against an old version in git | `mm set master-list "<name>" --format md` |
-| Scan loop (REPL) | Rapid manual entry — fastest for "I have a stack of cards in my hand right now" | `mm intake "<name>"` |
+| Scan loop (REPL) | Rapid manual entry — fastest for "I have a stack of cards in my hand right now". Human-only: needs a terminal (agents get exit 2 → use `mm inventory add-card`) | `mm intake "<name>"` |
 
 The scan loop's grammar:
 

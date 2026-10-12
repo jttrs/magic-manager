@@ -211,7 +211,7 @@ def main() -> int:
                     default="all", help="Which check(s) to run. Default all.")
     ap.add_argument("--file", default=None, help="Cart JSON path, or '-' for stdin.")
     ap.add_argument("--method", choices=["headless", "bookmarklet"], default=None,
-                    help="Force cart fetch path. Default: try headless, else stdin.")
+                    help="Force cart fetch path. Default: headless (stdin only via --file - or --method bookmarklet).")
     ap.add_argument("--over-market-pct", type=float, default=10.0,
                     help="Flag overpay lines this %% or more over market. Default 10.")
     ap.add_argument("--treatment-class", default="preferred",

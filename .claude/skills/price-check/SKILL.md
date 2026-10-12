@@ -56,6 +56,7 @@ table. Relay the table + the footer verbatim.
   `manapool.com/cart`, then:
   `pbpaste | uv run python scripts/manapool_cart.py --file -`.
 
+Only an explicit `--file -` reads stdin (so an agent's run never waits on it).
 Force one path with `--method headless|bookmarklet`. The script prints which
 path succeeded on stderr.
 

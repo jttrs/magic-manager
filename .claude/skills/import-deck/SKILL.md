@@ -44,7 +44,10 @@ cards to the deck) stays a separate, explicit `mm deck compose <slug>`.
   expected. **PUBLIC decks need no login at all.** For a PRIVATE deck the script
   escalates to a login cascade: persisted session (`.deck-sessions/`, gitignored) →
   `MOXFIELD_EMAIL`/`MOXFIELD_PASSWORD` auto-login → a visible window for manual login
-  (needs an interactive terminal). `--fresh` forces re-login.
+  (needs a person at a terminal). `--fresh` forces re-login. **Agents and the web app
+  can't do the manual login:** without a terminal the script refuses before opening
+  the window (exit 2) — ask the owner to log in once from their terminal (the session
+  is saved), or read the deck with the browser companion / the bookmarklet below.
 
 The importer is **additive** (create-or-append, summing counts) and maps all boards
 (main/side/commander/companion/maybe/token). Relay the `added/updated`, any
@@ -82,7 +85,10 @@ uv run mm deck push-moxfield <slug> [--name "Deck Name"]
 
 This renders the deck via the existing exporter and hands it to
 `scripts/moxfield_push.py`, which pastes it into Moxfield's bulk-import box and saves.
-v1 creates a NEW deck (no update-in-place). Relay the printed deck URL.
+v1 creates a NEW deck (no update-in-place). Relay the printed deck URL. It opens a
+visible browser and may need a manual Moxfield login or a manual Save, both of which
+wait on a person at the terminal — an agent run without a terminal fails fast (exit 2)
+and prints the block to paste by hand instead.
 
 ## Setup
 

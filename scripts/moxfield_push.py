@@ -96,11 +96,14 @@ def main() -> int:
         if not saved:
             print("moxfield_push: filled the import box but couldn't find a Save button — "
                   "finish the save in the open browser window.", file=sys.stderr)
-            # Give the human a chance to finish manually.
-            try:
-                input("Press Enter after saving in the browser…")
-            except EOFError:
-                pass
+            # Give the human a chance to finish manually (stdin carries the
+            # block, so this reads the terminal; no terminal → fail fast).
+            sys.path.insert(0, str(ROOT / "src"))
+            from magic_manager import interactive
+            interactive.wait_for_enter(
+                "Press Enter after saving in the browser…",
+                alternative="Paste manually:\n----\n" + block + "\n----",
+            )
 
         page.wait_for_load_state("networkidle")
         url = page.url

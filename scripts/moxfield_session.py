@@ -197,7 +197,22 @@ class MoxfieldSession:
         return self._headed_login()
 
     def _headed_login(self):
-        """Relaunch a VISIBLE browser and wait for the user to log in by hand."""
+        """Relaunch a VISIBLE browser and wait for the user to log in by hand.
+
+        Inherently human: refused up front (before any window opens) when no
+        one can press Enter — agents, the web app's jobs (``MM_NONINTERACTIVE``)."""
+        if str(ROOT / "src") not in sys.path:
+            sys.path.insert(0, str(ROOT / "src"))
+        from magic_manager import interactive
+        if not interactive.can_wait_for_enter():
+            print(
+                "moxfield: this needs a manual login in a browser window, and there's no "
+                "terminal to confirm it on. Log in once from a terminal (the session is "
+                "saved), or read the deck in your own browser with the browser companion "
+                "(web app → Add cards).",
+                file=sys.stderr,
+            )
+            raise SystemExit(interactive.EXIT_NEEDS_FLAG)
         if self.headless:
             # We were headless; relaunch the browser visibly.
             self._browser.close()
@@ -206,16 +221,11 @@ class MoxfieldSession:
         ctx = self._new_context(with_state=False)
         page = ctx.new_page()
         page.goto(LOGIN_URL, wait_until="domcontentloaded")
-        print(
+        interactive.wait_for_enter(
             "\nmoxfield: a browser window has opened. Log in to Moxfield (solve any "
             "captcha), then return here and press Enter to continue…",
-            file=sys.stderr,
+            alternative="Log in once from a terminal, or use the browser companion.",
         )
-        try:
-            input()
-        except EOFError:
-            print("moxfield: no interactive stdin for manual login — aborting", file=sys.stderr)
-            raise SystemExit(2)
         page.close()
         return ctx
 
