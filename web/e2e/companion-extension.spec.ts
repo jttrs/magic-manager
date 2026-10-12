@@ -121,6 +121,7 @@ test('a TCGplayer cart: the real extension reads your cart tab, you approve, the
   await expect(approve.locator('#title')).toHaveText('Send your TCGplayer cart?');
   await expect(approve.locator('#summary')).toHaveText('TCGplayer cart · 8 lines · 9 items · $128.54');
   await expect(approve.locator('#table')).toContainText('Tales of Middle-earth #246');
+  await expect(approve.locator('#table')).not.toContainText('487805');   // store ids only in the raw data
   await expect(approve.locator('#table')).toContainText('LP');
   expect(bodies).toEqual([]);
   await approve.getByRole('button', { name: 'Send to magic-manager' }).click();
@@ -283,7 +284,7 @@ test('the settings page says whether the paired app has checked in', async ({ ex
   await expect(opts.locator('#pair-status')).toHaveClass('warn');
   const { page } = await appPage(ext.context);
   await expect(page.getByRole('button', { name: 'Browser companion · connected' })).toBeVisible();
-  await expect(opts.locator('#pair-status')).toContainText(`Paired with ${APP}. Connected: the app last checked in just now.`);   // live, no reload
+  await expect(opts.locator('#pair-status')).toContainText(`Paired with ${APP}. The app last checked in just now.`);   // live, no reload
   await expect(opts.getByRole('textbox', { name: 'App address' })).toHaveValue(APP);
 });
 

@@ -39,7 +39,7 @@ async function showPairing() {
   const { appOrigin, lastHello } = await chrome.storage.local.get(['appOrigin', 'lastHello']);
   $('unpair').disabled = !appOrigin;
   if (!appOrigin) return status('Not paired: no app can reach the companion.', 'muted');
-  if (lastHello?.origin === appOrigin) return status(['Paired with ', { origin: appOrigin }, `. Connected: the app last checked in ${ago(lastHello.at)}.`]);
+  if (lastHello?.origin === appOrigin) return status(['Paired with ', { origin: appOrigin }, `. The app last checked in ${ago(lastHello.at)}.`]);
   return status(['Paired with ', { origin: appOrigin }, ', but the app hasn’t checked in yet. Open the app at exactly this address and reload its tab. If the app runs at a different address, pair with that one instead.'], 'warn');
 }
 
@@ -58,8 +58,19 @@ async function refresh() {
   }
 }
 
+let pairing = false;
+
 async function pair() {
-  const parsed = parseAppOrigin($('origin').value);
+  if (pairing) return;
+  pairing = true;
+  try {
+    await pairWith(parseAppOrigin($('origin').value));
+  } finally {
+    pairing = false;
+  }
+}
+
+async function pairWith(parsed) {
   if (parsed.error) return status(parsed.error, 'error');
   // First await in the click handler, so Chrome still sees the user's click.
   const granted = await chrome.permissions.request({ origins: [parsed.pattern] });
@@ -88,15 +99,28 @@ async function unpair() {
   await refresh();
 }
 
+/** Switches with a permission change in flight: a second click waits for the first to land. */
+const busy = new Set();
+
 async function toggle(key, origins) {
+  if (busy.has(key)) return;
+  busy.add(key);
   // request() must be the first await so Chrome still sees the click.
+  try {
+    await flip(key, origins);
+    await refresh();   // still busy until `granted` is fresh
+  } finally {
+    busy.delete(key);
+  }
+}
+
+async function flip(key, origins) {
   if (granted[key]) {
     // Keep a site another switched-on feature still needs (Card Kingdom is in three).
     const shared = new Set(Object.entries(GROUPS).filter(([k]) => k !== key && granted[k]).flatMap(([, o]) => o));
     const drop = origins.filter((o) => !shared.has(o));
     if (drop.length) await chrome.permissions.remove({ origins: drop });
   } else await chrome.permissions.request({ origins });
-  await refresh();
 }
 
 $('pair').addEventListener('click', pair);
