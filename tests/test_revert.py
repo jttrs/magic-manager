@@ -225,3 +225,40 @@ def test_api_blocked_409_lists_lines(client):
     assert r.status_code == 409
     plan = r.json()["detail"]["plan"]
     assert plan["reason"] == "lines_blocked" and plan["lines"][0]["blocker"] == "removed"
+
+
+def test_restored_copies_can_be_matched_to_a_store_order(cards, monkeypatch):
+    from magic_manager import addcards, purchases
+    from magic_manager.purchases import Decision, Order, OrderLine
+    monkeypatch.setattr(addcards, "ensure_printings", lambda ids: [])
+    _import([(A, "nonfoil", 2)], method="adhoc", label="web:search")
+    with ingest.open_ingest_event("adhoc") as rec:
+        inventory.inventory_remove(A, "nonfoil", 1, conn=rec.conn, ingest_id=rec.ingest_id)
+    rid = ingest.revert_event(rec.ingest_id, dry_run=False).revert_ingest_id
+    order = Order(store="manapool", order_id="1", ordered_at="2026-09-23T11:07",
+                  lines=[OrderLine(name="Alpha", quantity=1, unit_price=1.0, scryfall_id=A)])
+    pid = purchases.save([order]).saved[0]
+    res = purchases.apply(pid, [Decision(1, match=1)])
+    assert res.matched == 1 and _reconciles()
+    with db.connect() as c:
+        held = provenance._held(c, [A])
+    assert held[(res.ingest_id, A, "nonfoil")] == 1
+    assert sum(n for (iid, *_), n in held.items()) == 2
+    assert held.get((rid, A, "nonfoil"), 0) + held.get((rec.ingest_id, A, "nonfoil"), 0) <= 1
+
+
+# ---------- CLI ----------
+
+def test_cli_dry_run_apply_and_exit_codes(cards):
+    from typer.testing import CliRunner
+    from magic_manager import cli
+    run = lambda *a: CliRunner().invoke(cli.app, ["ingest", "revert", *a])
+    iid = _import([(A, "nonfoil", 2)])
+    r = run(str(iid))
+    assert r.exit_code == 0 and "dry run" in r.output and "remove 2 × Alpha" in r.output
+    assert _owned() == {(A, "nonfoil"): 2}                       # dry run writes nothing
+    r = run(str(iid), "--apply")
+    assert r.exit_code == 0 and "reverted" in r.output and _owned() == {}
+    r = run(str(iid), "--apply")
+    assert r.exit_code == 1 and "already reverted" in r.output
+    assert run("999").exit_code == 2

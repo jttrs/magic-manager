@@ -16,7 +16,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from . import db, decks, inventory
+from . import db, decks, ingest, inventory
 
 PLAYABLE = decks.PLAYABLE_BOARDS
 
@@ -306,7 +306,7 @@ def import_payload(payload: dict, *, force: bool = False, ingest_id: int | None 
     name = (payload.get("name") or "Imported deck").strip()
     with db.connect() as conn:
         slug = _unique_slug(conn, name)
-        link = ingest_id if ingest_id is not None and _linkable(conn, ingest_id) else None
+        link = ingest_id if ingest_id is not None and ingest.deck_import_linkable(conn, ingest_id) else None
     res = decksource.import_deck(
         cards, slug=slug, name=name, author=payload.get("author"),
         source=payload.get("source"), source_deck_id=payload.get("id"), force=force,
@@ -316,16 +316,6 @@ def import_payload(payload: dict, *, force: bool = False, ingest_id: int | None 
         return {"slug": res["existing_slug"], "duplicate": True, "created": False, "not_found": 0}
     return {"slug": res["slug"], "duplicate": False, "created": bool(res.get("created")),
             "not_found": len(res.get("not_found") or [])}
-
-
-def _linkable(conn, ingest_id: int) -> bool:
-    return conn.execute(
-        """SELECT 1 FROM ingest_events e
-           WHERE e.ingest_id = ? AND e.method = 'import-block' AND e.label LIKE 'web:deck%'
-             AND NOT EXISTS (SELECT 1 FROM ingest_events r WHERE r.reverts_ingest_id = e.ingest_id)
-             AND NOT EXISTS (SELECT 1 FROM decks d WHERE d.created_by_ingest_id = e.ingest_id)""",
-        (ingest_id,),
-    ).fetchone() is not None
 
 
 # ---------- edit: preview + save ----------

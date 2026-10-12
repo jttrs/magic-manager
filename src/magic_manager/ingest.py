@@ -399,6 +399,22 @@ def rebuild_inventory_from_ledger(conn) -> dict:
 # a deck the import created (``decks.created_by_ingest_id``) must be unbuilt —
 # it is deleted with the revert. Otherwise nothing is written and the plan says why.
 
+# Label prefix of every web Add cards commit (``addcards.commit``: ``web:<source>[ · label]``).
+WEB_LABEL_PREFIX = "web:"
+
+
+def deck_import_linkable(conn, ingest_id: int) -> bool:
+    """An unreverted web deck-import event (Add cards → a deck URL) that no deck is
+    linked to yet — the only event a newly saved decklist may be linked to (V35)."""
+    return conn.execute(
+        """SELECT 1 FROM ingest_events e
+           WHERE e.ingest_id = ? AND e.method = 'import-block' AND e.label LIKE ? || 'deck%'
+             AND NOT EXISTS (SELECT 1 FROM ingest_events r WHERE r.reverts_ingest_id = e.ingest_id)
+             AND NOT EXISTS (SELECT 1 FROM decks d WHERE d.created_by_ingest_id = e.ingest_id)""",
+        (ingest_id, WEB_LABEL_PREFIX),
+    ).fetchone() is not None
+
+
 # Methods a revert may undo. Anything else is refused with the way out (_NOT_REVERTIBLE).
 REVERTIBLE_METHODS = frozenset({"adhoc", "import-block", "intake", "collection-import", "checklist"})
 

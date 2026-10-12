@@ -1306,7 +1306,7 @@ CURRENT_VERSION = len(MIGRATIONS)
 # Maps version -> the CHILD table(s) to integrity-check after the rebuild. The
 # risk when rebuilding an FK TARGET is orphaning a row in a table that REFERENCES
 # it, so we check the REFERENCING (child) table — `PRAGMA foreign_key_check(T)`
-# validates the FKs DECLARED IN T, and ingest_events (the parent) declares none.
+# validates the FKs DECLARED IN T; ingest_events declared none until V35's self-reference (reverts_ingest_id), so V35 checks it too.
 # Scoping to the child(ren) also avoids a DB-wide check flagging unrelated
 # PRE-EXISTING dangling FKs (foreign_keys=ON only enforces NEW writes, so a
 # legacy orphan can sit elsewhere) and aborting an otherwise-clean upgrade.

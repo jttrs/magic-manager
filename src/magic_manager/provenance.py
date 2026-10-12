@@ -397,7 +397,10 @@ def _held(conn, sids=None) -> dict[tuple[int, str, str], int]:
             held[iid] = held.pop(iid, 0) + delta - absorb   # re-insert: now the most recent acquisition
             continue
         need = -delta
-        src = reverts.get(iid, iid)
+        # A revert's own compensating rows (its balance never above 0 for this key)
+        # take back the reverted event's copies; once it holds restored copies, a
+        # later re-attribution draws those like any other event's.
+        src = reverts.get(iid, iid) if before <= 0 else iid
         own = min(need, held.get(src, 0))
         if own:
             held[src] -= own
@@ -455,7 +458,7 @@ def _context(conn):
 
 
 def _fill(h: HistoryEntry, rows, held: dict[tuple[int, str, str], int], prices: dict[str, dict]) -> None:
-    h.ledgered = bool(rows) or h.kind == "move"
+    h.ledgered = bool(rows) or h.kind in ("move", "revert")
     for iid, sid, fin, cin, cout, _bal in rows:
         h.copies_in += cin
         h.copies_out += cout
