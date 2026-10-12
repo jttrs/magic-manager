@@ -16,6 +16,11 @@ that must run once against your live DB after you pull them:
   V33  earmark_targets (price alerts) — schema-only
   V34  purchases / purchase_lines + the 'purchase' ingest method (ingest_events
                                     rebuilt with every row/id preserved) — schema-only
+  V35  revert one import: the 'revert' ingest method + ingest_events.reverts_ingest_id
+                                    (ingest_events rebuilt, every row/id preserved) and
+                                    decks.created_by_ingest_id — schema-only (no existing
+                                    deck is linked: an old import's deck can't be tied to
+                                    its event with certainty, so those stay NULL)
   —    'built' follows pledges     → decks.backfill_built_state()  (mm deck backfill-built)
                                     data-only: imported / hand-built decks with nothing pledged → not built;
                                     precons keep ONE built copy (extra unpledged built copies → not built)

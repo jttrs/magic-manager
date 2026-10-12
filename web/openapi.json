@@ -3236,6 +3236,88 @@
         }
       }
     },
+    "/api/history/{ingest_id}/revert": {
+      "get": {
+        "tags": [
+          "history"
+        ],
+        "summary": "History Revert Plan",
+        "operationId": "history_revert_plan",
+        "parameters": [
+          {
+            "name": "ingest_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Ingest Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevertPlanOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "history"
+        ],
+        "summary": "History Revert",
+        "operationId": "history_revert",
+        "parameters": [
+          {
+            "name": "ingest_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Ingest Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevertOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/purchases/stores": {
       "get": {
         "tags": [
@@ -8888,10 +8970,11 @@
               "checklist",
               "unknown",
               "move",
-              "purchase"
+              "purchase",
+              "revert"
             ],
             "title": "Kind",
-            "description": "deck = playable product; pool = card pool (land pack, scene box, Secret Lair\u2026); singles = cards added individually; checklist = a bulk checklist ingest (source product not recorded); unknown = reconstructed bucket with no known source; move = cards pledged to / released from a deck; purchase = a store order read with the browser companion."
+            "description": "deck = playable product; pool = card pool (land pack, scene box, Secret Lair\u2026); singles = cards added individually; checklist = a bulk checklist ingest (source product not recorded); unknown = reconstructed bucket with no known source; move = cards pledged to / released from a deck; purchase = a store order read with the browser companion; revert = undid an earlier import."
           },
           "title": {
             "type": "string",
@@ -9009,6 +9092,36 @@
             ],
             "title": "Paid Usd",
             "description": "Purchase entries: what you paid for the copies it still holds (item prices)."
+          },
+          "revertible": {
+            "type": "boolean",
+            "title": "Revertible",
+            "description": "This kind of import can be reverted and hasn't been (the copies may still block it \u2014 see the revert plan).",
+            "default": false
+          },
+          "reverted_by": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reverted By",
+            "description": "The revert entry that undid this one."
+          },
+          "reverts": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reverts",
+            "description": "Revert entries: the entry they undid."
           }
         },
         "type": "object",
@@ -9207,6 +9320,18 @@
             "title": "Force",
             "description": "Replace the cards of a deck already imported from this source.",
             "default": false
+          },
+          "ingest_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingest Id",
+            "description": "The Add cards commit that just added this deck's cards: a new deck is linked to it, so reverting that import removes the deck too."
           }
         },
         "type": "object",
@@ -12754,6 +12879,217 @@
           "users"
         ],
         "title": "RetentionCell"
+      },
+      "RevertDeckOut": {
+        "properties": {
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "built": {
+            "type": "boolean",
+            "title": "Built"
+          },
+          "pledged": {
+            "type": "integer",
+            "title": "Pledged"
+          }
+        },
+        "type": "object",
+        "required": [
+          "slug",
+          "name",
+          "built",
+          "pledged"
+        ],
+        "title": "RevertDeckOut"
+      },
+      "RevertLineOut": {
+        "properties": {
+          "printing": {
+            "$ref": "#/components/schemas/PrintingOut"
+          },
+          "finish": {
+            "type": "string",
+            "enum": [
+              "nonfoil",
+              "foil"
+            ],
+            "title": "Finish"
+          },
+          "remove": {
+            "type": "integer",
+            "title": "Remove",
+            "description": "Copies the revert removes (the import added them)."
+          },
+          "restore": {
+            "type": "integer",
+            "title": "Restore",
+            "description": "Copies the revert puts back (the import removed them)."
+          },
+          "held": {
+            "type": "integer",
+            "title": "Held",
+            "description": "Copies of this printing-finish the import still accounts for."
+          },
+          "owned": {
+            "type": "integer",
+            "title": "Owned"
+          },
+          "pledged": {
+            "type": "integer",
+            "title": "Pledged",
+            "description": "Copies pledged to built decks."
+          },
+          "blocker": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "removed",
+                  "pledged"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blocker",
+            "description": "removed = not all of them are still from this import; pledged = in a built deck."
+          },
+          "pledged_to": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Pledged To",
+            "description": "Built decks holding them (pledged lines)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "printing",
+          "finish",
+          "remove",
+          "restore",
+          "held",
+          "owned",
+          "pledged"
+        ],
+        "title": "RevertLineOut"
+      },
+      "RevertOut": {
+        "properties": {
+          "revert_ingest_id": {
+            "type": "integer",
+            "title": "Revert Ingest Id"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "plan": {
+            "$ref": "#/components/schemas/RevertPlanOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "revert_ingest_id",
+          "summary",
+          "plan"
+        ],
+        "title": "RevertOut"
+      },
+      "RevertPlanOut": {
+        "properties": {
+          "ingest_id": {
+            "type": "integer",
+            "title": "Ingest Id"
+          },
+          "ok": {
+            "type": "boolean",
+            "title": "Ok",
+            "description": "True when the revert can be applied as planned."
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "not_revertible",
+                  "already_reverted",
+                  "deck_in_use",
+                  "nothing_to_revert",
+                  "lines_blocked"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "description": "Why it can't be reverted, in plain words, with the way out."
+          },
+          "copies_removed": {
+            "type": "integer",
+            "title": "Copies Removed"
+          },
+          "copies_restored": {
+            "type": "integer",
+            "title": "Copies Restored"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/RevertLineOut"
+            },
+            "type": "array",
+            "title": "Lines"
+          },
+          "decks": {
+            "items": {
+              "$ref": "#/components/schemas/RevertDeckOut"
+            },
+            "type": "array",
+            "title": "Decks",
+            "description": "Decklists this import saved; deleted with the revert."
+          },
+          "reverted_by": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reverted By"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ingest_id",
+          "ok",
+          "copies_removed",
+          "copies_restored",
+          "lines",
+          "decks"
+        ],
+        "title": "RevertPlanOut"
       },
       "ReviewLineOut": {
         "properties": {

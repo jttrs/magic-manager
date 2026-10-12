@@ -208,7 +208,7 @@ def card_holdings(scryfall_id: str) -> Holdings:
 # (LIFO, walking the ledger rows in order): per printing-finish, the held copies
 # across all entries always sum to what is owned today.
 
-HistoryKind = Literal["deck", "pool", "singles", "checklist", "unknown", "move", "purchase"]
+HistoryKind = Literal["deck", "pool", "singles", "checklist", "unknown", "move", "purchase", "revert"]
 
 _SINGLES_TITLES = {
     "adhoc": "Added by hand", "intake": "Scan session", "import-block": "Imported list",
@@ -242,6 +242,9 @@ class HistoryEntry:
     deck_slug: str | None = None
     purchase_id: int | None = None   # purchase entries: the stored order
     paid_usd: float | None = None    # purchase entries: card prices paid (lines with a price today, like value_usd)
+    revertible: bool = False         # its kind can be reverted (ingest.not_revertible_reason) and it hasn't been
+    reverted_by: int | None = None   # the revert event that undid it (V35)
+    reverts: int | None = None       # revert entries: the event they undid
 
 
 @dataclass
@@ -277,12 +280,17 @@ def _set_label(code: str, names: dict[str, str]) -> str:
 
 def _describe(e, products: dict[str, tuple[str, str]], deck_names: dict[str, str],
               product_slugs: dict[str, str], set_names: dict[str, str]) -> HistoryEntry:
-    iid, at, method, label, path, status, rows_added, rows_updated = e
+    iid, at, method, label, path, status, rows_added, rows_updated, mode, reverts = e
     label = label or ""
     base = os.path.basename(path) if path and "/" in path else None
     h = HistoryEntry(ingest_id=iid, at=at, method=method, kind="singles", title="", lines=(rows_added or 0) + (rows_updated or 0))
     if status == "backfill":
         h.dated = "reconstructed"
+    if method == "revert":
+        h.kind, h.title, h.reverts = "revert", "Reverted an import", reverts
+        return h
+    from .ingest import not_revertible_reason
+    h.revertible = not_revertible_reason(method, mode, label or None, status) is None
     if method in ("deck-assign", "deck-unassign"):
         slug = label.split(":", 1)[1] if ":" in label else (path or "").removeprefix("deck:")
         h.kind, h.deck_slug = "move", slug or None
@@ -368,6 +376,10 @@ def _held(conn, sids=None) -> dict[tuple[int, str, str], int]:
             part = ids[i:i + 500]
             rows += conn.execute(q.format(f"WHERE scryfall_id IN ({','.join('?' * len(part))})"), part).fetchall()
     rows.sort(key=lambda r: r[0])
+    # A revert (V35) takes its copies back from the event it reverts, not from
+    # whichever acquisition happens to be newest.
+    reverts = dict(conn.execute(
+        "SELECT ingest_id, reverts_ingest_id FROM ingest_events WHERE reverts_ingest_id IS NOT NULL"))
     by_key: dict[tuple[str, str], dict[int, int]] = {}
     raw: dict[tuple[int, str, str], int] = {}
     total: dict[tuple[str, str], int] = {}
@@ -385,9 +397,13 @@ def _held(conn, sids=None) -> dict[tuple[int, str, str], int]:
             held[iid] = held.pop(iid, 0) + delta - absorb   # re-insert: now the most recent acquisition
             continue
         need = -delta
-        own = min(need, held.get(iid, 0))
+        # A revert's own compensating rows (its balance never above 0 for this key)
+        # take back the reverted event's copies; once it holds restored copies, a
+        # later re-attribution draws those like any other event's.
+        src = reverts.get(iid, iid) if before <= 0 else iid
+        own = min(need, held.get(src, 0))
         if own:
-            held[iid] -= own
+            held[src] -= own
             need -= own
         # Only the part that takes the event below zero is a removal of someone else's copies;
         # the rest moved copies already removed elsewhere (owed to the next acquisition).
@@ -424,8 +440,8 @@ def _priced(conn, sids) -> tuple[dict[str, dict], list[str]]:
 def _event_rows(conn, ingest_id: int | None = None):
     where, args = ("AND ingest_id = ?", (ingest_id,)) if ingest_id is not None else ("", ())
     return conn.execute(
-        f"SELECT ingest_id, at, method, label, source_path, status, rows_added, rows_updated "
-        f"FROM ingest_events WHERE status <> 'failed' {where} ORDER BY at DESC, ingest_id DESC", args,
+        f"SELECT ingest_id, at, method, label, source_path, status, rows_added, rows_updated, "
+        f"mode, reverts_ingest_id FROM ingest_events WHERE status <> 'failed' {where} ORDER BY at DESC, ingest_id DESC", args,
     ).fetchall()
 
 
@@ -442,7 +458,7 @@ def _context(conn):
 
 
 def _fill(h: HistoryEntry, rows, held: dict[tuple[int, str, str], int], prices: dict[str, dict]) -> None:
-    h.ledgered = bool(rows) or h.kind == "move"
+    h.ledgered = bool(rows) or h.kind in ("move", "revert")
     for iid, sid, fin, cin, cout, _bal in rows:
         h.copies_in += cin
         h.copies_out += cout
@@ -484,6 +500,29 @@ def _attach_purchases(conn, entries: list[HistoryEntry]) -> None:
         h.paid_usd = round(sum(c * held.get(k, 0) for k, c in unit.items() if k[0] == h.ingest_id) / 100, 2)
 
 
+def _link_reverts(conn, entries: list[HistoryEntry]) -> None:
+    """Mark reverted entries (and drop their Revert offer); a revert entry's detail
+    names what it undid."""
+    by = {r[0]: r[1] for r in conn.execute(
+        "SELECT reverts_ingest_id, ingest_id FROM ingest_events WHERE reverts_ingest_id IS NOT NULL")}
+    titles: dict[int, str] = {}
+    want = [h.reverts for h in entries if h.reverts is not None]
+    if want:
+        ctx = _context(conn)
+        for e in conn.execute(
+            f"SELECT ingest_id, at, method, label, source_path, status, rows_added, rows_updated, mode, "
+            f"reverts_ingest_id FROM ingest_events WHERE ingest_id IN ({','.join('?' * len(want))})", want,
+        ):
+            o = _describe(e, *ctx)
+            titles[o.ingest_id] = o.title + (f" · {o.detail}" if o.detail else "")
+    for h in entries:
+        h.reverted_by = by.get(h.ingest_id)
+        if h.reverted_by is not None:
+            h.revertible = False
+        if h.reverts is not None:
+            h.detail = titles.get(h.reverts)
+
+
 def history(*, conn=None) -> History:
     """Every (non-failed) ingest event, newest first, with copies in/out, the copies
     it still accounts for and their value at local prices (never a network fetch
@@ -501,6 +540,7 @@ def history(*, conn=None) -> History:
             _fill(h, by_event.get(h.ingest_id, []), held, prices)
             entries.append(h)
         _attach_purchases(c, entries)
+        _link_reverts(c, entries)
         return History(entries, _as_of(prices), sorted(set(stale)))
 
     if conn is not None:
@@ -523,6 +563,7 @@ def history_event(ingest_id: int) -> tuple[HistoryEntry, list[HistoryLine]]:
         h = _describe(rows[0], *_context(c))
         _fill(h, bal, held, prices)
         _attach_purchases(c, [h])
+        _link_reverts(c, [h])
     lines = [HistoryLine(sid, fin, cin, cout, held.get((i, sid, fin), 0), _unit_usd(prices.get(sid), fin))
              for i, sid, fin, cin, cout, _b in bal]
     lines.sort(key=lambda ln: (-(max(ln.held, 0) * (ln.unit_usd or 0)), -ln.held, ln.scryfall_id))

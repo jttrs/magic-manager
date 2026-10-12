@@ -1,11 +1,12 @@
 // Purchase history view-model: the acquisition timeline over the provenance ledger.
 // Framework-free — filter, month grouping, deck-move runs, and the drill-in cards.
 import { z } from 'zod';
-import type { HistoryEntryOut, HistoryLineOut } from './api';
+import type { HistoryEntryOut, HistoryLineOut, RevertLineOut, RevertPlanOut } from './api';
 import { typeGroup, TYPE_GROUPS } from './cardFacts';
+import { fmtCount } from './format';
 import { fromPrinting, groupCards, type GuideCard, type GuideGroup } from './guideCard';
 
-const KINDS = ['deck', 'pool', 'singles', 'checklist', 'unknown', 'move', 'purchase'] as const;
+const KINDS = ['deck', 'pool', 'singles', 'checklist', 'unknown', 'move', 'purchase', 'revert'] as const;
 export type HistoryKind = (typeof KINDS)[number];
 
 export const KIND_LABEL: Record<HistoryKind, string> = {
@@ -16,6 +17,7 @@ export const KIND_LABEL: Record<HistoryKind, string> = {
   unknown: 'Unknown',
   move: 'Deck move',
   purchase: 'Order',
+  revert: 'Revert',
 };
 
 export const KIND_HELP: Record<HistoryKind, string> = {
@@ -26,6 +28,7 @@ export const KIND_HELP: Record<HistoryKind, string> = {
   unknown: 'Copies reconstructed when the ledger began, with no known source.',
   move: 'Cards pledged to a built deck or released from one. What you own does not change.',
   purchase: 'A store order read from your order history (Mana Pool, TCGplayer, Card Kingdom) with what you paid.',
+  revert: 'An import you took back out: the copies it added were removed (and any it removed put back). The original entry stays, marked reverted.',
 };
 
 const list = <T extends z.ZodTypeAny>(item: T) =>
@@ -150,4 +153,47 @@ export function historyCardGroups(lines: readonly HistoryLineOut[]): GuideGroup[
     const copies = lines.filter((l) => typeGroup(l.printing.type_line ?? null) === g.key).reduce((t, l) => t + Math.max(l.held, 0), 0);
     return { ...g, label: copies === g.items.length ? g.label : `${g.label} · ${copies}` };
   });
+}
+
+// ---------- revert one import ----------
+
+/** The confirm button: names exactly what goes. */
+export function revertActionLabel(plan: Pick<RevertPlanOut, 'copies_removed' | 'copies_restored' | 'decks'>): string {
+  if (plan.copies_removed) return `Remove ${fmtCount(plan.copies_removed, 'copy', 'copies')}`;
+  if (plan.copies_restored) return `Put back ${fmtCount(plan.copies_restored, 'copy', 'copies')}`;
+  return plan.decks.length ? 'Delete the decklist' : 'Revert';
+}
+
+/** One plain sentence: what the revert does to the collection and Decks. */
+export function revertLead(plan: RevertPlanOut): string {
+  const removed = plan.lines.filter((l) => l.remove > 0).length;
+  const restored = plan.lines.filter((l) => l.restore > 0).length;
+  const parts: string[] = [];
+  if (plan.copies_removed) parts.push(`removes ${fmtCount(plan.copies_removed, 'copy', 'copies')} (${fmtCount(removed, 'printing', 'printings')}) from your collection`);
+  if (plan.copies_restored) parts.push(`puts back ${fmtCount(plan.copies_restored, 'copy', 'copies')} (${fmtCount(restored, 'printing', 'printings')}) it took out`);
+  if (plan.decks.length) parts.push(`deletes the decklist ${plan.decks.map((d) => d.name).join(', ')} it saved`);
+  if (!parts.length) return 'Nothing to change.';
+  const s = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}` : parts[0];
+  return `This ${s}.`;
+}
+
+/** Why a line blocks the revert, and the way out. */
+export function revertBlockNote(l: RevertLineOut): string | null {
+  if (l.blocker === 'removed') {
+    return `Only ${l.held} of ${fmtCount(l.remove, 'copy', 'copies')} still came from this import — the rest were removed or moved since.`;
+  }
+  if (l.blocker === 'pledged') {
+    const to = l.pledged_to ?? [];
+    return `${fmtCount(l.pledged, 'copy is', 'copies are')} in ${to.length ? to.join(', ') : 'a built deck'} — break ${to.length > 1 ? 'those decks' : 'that deck'} down first.`;
+  }
+  return null;
+}
+
+/** The plan a refused revert answered with (409 detail), when the server sent one. */
+export function planFromError(detail: unknown): RevertPlanOut | null {
+  if (detail && typeof detail === 'object' && 'plan' in detail) {
+    const p = (detail as { plan: unknown }).plan;
+    if (p && typeof p === 'object' && 'lines' in p && 'ok' in p) return p as RevertPlanOut;
+  }
+  return null;
 }

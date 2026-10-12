@@ -361,7 +361,7 @@ def commit(items: list[tuple[str, str, int]], *, source: str, label: str | None 
         if finish not in collection_view.inventory_finishes(cards[sid].get("finishes")):
             raise LookupError(f"{cards[sid].get('name')} ({sid}) has no {finish} finish")
     method = _METHOD[source]
-    event_label = f"web:{source}" + (f" · {label}" if label else "")
+    event_label = f"{ingest.WEB_LABEL_PREFIX}{source}" + (f" · {label}" if label else "")
     with ingest.open_ingest_event(method, label=event_label) as rec:
         for (sid, finish), qty in merged.items():
             inventory.inventory_add(sid, finish, qty, conn=rec.conn, ingest_id=rec.ingest_id, method=method)

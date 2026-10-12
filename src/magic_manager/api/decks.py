@@ -124,6 +124,8 @@ class ActionOut(BaseModel):
 class ImportIn(BaseModel):
     deck: DeckSourceOut
     force: bool = Field(False, description="Replace the cards of a deck already imported from this source.")
+    ingest_id: int | None = Field(None, description="The Add cards commit that just added this deck's cards: a new deck is linked to it, "
+                                                    "so reverting that import removes the deck too.")
 
 
 class ImportOut(BaseModel):
@@ -305,7 +307,7 @@ def _draft(cards: list[DraftCardIn]) -> list[deck_edit.DraftCard]:
 
 
 def import_deck(body: ImportIn) -> ImportOut:
-    r = deck_edit.import_payload(body.deck.model_dump(), force=body.force)
+    r = deck_edit.import_payload(body.deck.model_dump(), force=body.force, ingest_id=body.ingest_id)
     if r["duplicate"]:
         return ImportOut(slug=r["slug"], duplicate=True, summary="Already in your decks")
     miss = f" · {r['not_found']} cards not found" if r["not_found"] else ""

@@ -16,7 +16,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from . import db, decks, inventory
+from . import db, decks, ingest, inventory
 
 PLAYABLE = decks.PLAYABLE_BOARDS
 
@@ -288,11 +288,16 @@ def add_recipe_to_collection(slug: str, *, label: str | None = None) -> dict:
     return addcards.commit(items, source="deck", label=label or d["name"])
 
 
-def import_payload(payload: dict, *, force: bool = False) -> dict:
+def import_payload(payload: dict, *, force: bool = False, ingest_id: int | None = None) -> dict:
     """Save a fetched deck (``scripts/import_deck.py`` JSON: source / id / name /
     author / cards) as a decklist — recipe only, never built. A deck already
     imported from the same source is not duplicated: returns its slug with
-    ``duplicate=True`` (``force`` replaces its cards instead)."""
+    ``duplicate=True`` (``force`` replaces its cards instead).
+
+    ``ingest_id``: the deck-import event that just added these cards (Add cards →
+    "Also save the decklist"). A newly created deck is linked to it so reverting
+    that import removes the deck too; ignored unless it is an unreverted web deck
+    import no other deck is linked to."""
     from . import decksource
 
     cards = payload.get("cards") or []
@@ -301,9 +306,11 @@ def import_payload(payload: dict, *, force: bool = False) -> dict:
     name = (payload.get("name") or "Imported deck").strip()
     with db.connect() as conn:
         slug = _unique_slug(conn, name)
+        link = ingest_id if ingest_id is not None and ingest.deck_import_linkable(conn, ingest_id) else None
     res = decksource.import_deck(
         cards, slug=slug, name=name, author=payload.get("author"),
         source=payload.get("source"), source_deck_id=payload.get("id"), force=force,
+        created_by_ingest_id=link,
     )
     if res.get("duplicate"):
         return {"slug": res["existing_slug"], "duplicate": True, "created": False, "not_found": 0}

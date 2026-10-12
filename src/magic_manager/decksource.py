@@ -475,7 +475,8 @@ def _resolve_cards(cards: list[dict]) -> tuple[dict, dict, dict, list[str]]:
 def import_deck(cards: list[dict], *, slug: str, name: str | None = None,
                 source_set_code: str | None = None, author: str | None = None,
                 source: str | None = None, source_deck_id: str | None = None,
-                force: bool = False, conn=None) -> dict:
+                force: bool = False, created_by_ingest_id: int | None = None,
+                conn=None) -> dict:
     """Resolve normalized cards and write them into a deck (create-or-find).
 
     Every source funnels through here. Cards are resolved (id first, set+cn
@@ -496,6 +497,9 @@ def import_deck(cards: list[dict], *, slug: str, name: str | None = None,
         sum. The ``slug`` argument is ignored in this case (the dedup match wins).
     With no source keys (e.g. a hand-fed ``--file`` import) the historical
     create-or-append behavior is unchanged.
+
+    ``created_by_ingest_id`` (V35) links a NEWLY created deck to the import event
+    that added its cards in the same add, so reverting that import deletes it.
 
     Returns ``{"slug", "created", "added", "updated", "not_found", "warnings"}``,
     plus ``"replaced": bool``; or ``{"duplicate": True, "existing_slug", "source",
@@ -523,6 +527,8 @@ def import_deck(cards: list[dict], *, slug: str, name: str | None = None,
                 conn=conn,
             )
             created = True
+            if created_by_ingest_id is not None:
+                conn.execute("UPDATE decks SET created_by_ingest_id = ? WHERE slug = ?", (created_by_ingest_id, slug))
         elif force and existing is not None:
             # Replace the matched deck's composition rather than summing onto it.
             decks_mod.deck_replace_cards(slug, conn=conn)

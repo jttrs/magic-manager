@@ -3015,9 +3015,9 @@ export type HistoryEntryOut = {
     /**
      * Kind
      *
-     * deck = playable product; pool = card pool (land pack, scene box, Secret Lair…); singles = cards added individually; checklist = a bulk checklist ingest (source product not recorded); unknown = reconstructed bucket with no known source; move = cards pledged to / released from a deck; purchase = a store order read with the browser companion.
+     * deck = playable product; pool = card pool (land pack, scene box, Secret Lair…); singles = cards added individually; checklist = a bulk checklist ingest (source product not recorded); unknown = reconstructed bucket with no known source; move = cards pledged to / released from a deck; purchase = a store order read with the browser companion; revert = undid an earlier import.
      */
-    kind: 'deck' | 'pool' | 'singles' | 'checklist' | 'unknown' | 'move' | 'purchase';
+    kind: 'deck' | 'pool' | 'singles' | 'checklist' | 'unknown' | 'move' | 'purchase' | 'revert';
     /**
      * Title
      */
@@ -3098,6 +3098,24 @@ export type HistoryEntryOut = {
      * Purchase entries: what you paid for the copies it still holds (item prices).
      */
     paid_usd?: number | null;
+    /**
+     * Revertible
+     *
+     * This kind of import can be reverted and hasn't been (the copies may still block it — see the revert plan).
+     */
+    revertible?: boolean;
+    /**
+     * Reverted By
+     *
+     * The revert entry that undid this one.
+     */
+    reverted_by?: number | null;
+    /**
+     * Reverts
+     *
+     * Revert entries: the entry they undid.
+     */
+    reverts?: number | null;
 };
 
 /**
@@ -3219,6 +3237,12 @@ export type ImportIn = {
      * Replace the cards of a deck already imported from this source.
      */
     force?: boolean;
+    /**
+     * Ingest Id
+     *
+     * The Add cards commit that just added this deck's cards: a new deck is linked to it, so reverting that import removes the deck too.
+     */
+    ingest_id?: number | null;
 };
 
 /**
@@ -5137,6 +5161,142 @@ export type RetentionCell = {
      * Users
      */
     users: number;
+};
+
+/**
+ * RevertDeckOut
+ */
+export type RevertDeckOut = {
+    /**
+     * Slug
+     */
+    slug: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Built
+     */
+    built: boolean;
+    /**
+     * Pledged
+     */
+    pledged: number;
+};
+
+/**
+ * RevertLineOut
+ */
+export type RevertLineOut = {
+    printing: PrintingOut;
+    /**
+     * Finish
+     */
+    finish: 'nonfoil' | 'foil';
+    /**
+     * Remove
+     *
+     * Copies the revert removes (the import added them).
+     */
+    remove: number;
+    /**
+     * Restore
+     *
+     * Copies the revert puts back (the import removed them).
+     */
+    restore: number;
+    /**
+     * Held
+     *
+     * Copies of this printing-finish the import still accounts for.
+     */
+    held: number;
+    /**
+     * Owned
+     */
+    owned: number;
+    /**
+     * Pledged
+     *
+     * Copies pledged to built decks.
+     */
+    pledged: number;
+    /**
+     * Blocker
+     *
+     * removed = not all of them are still from this import; pledged = in a built deck.
+     */
+    blocker?: 'removed' | 'pledged' | null;
+    /**
+     * Pledged To
+     *
+     * Built decks holding them (pledged lines).
+     */
+    pledged_to?: Array<string>;
+};
+
+/**
+ * RevertOut
+ */
+export type RevertOut = {
+    /**
+     * Revert Ingest Id
+     */
+    revert_ingest_id: number;
+    /**
+     * Summary
+     */
+    summary: string;
+    plan: RevertPlanOut;
+};
+
+/**
+ * RevertPlanOut
+ */
+export type RevertPlanOut = {
+    /**
+     * Ingest Id
+     */
+    ingest_id: number;
+    /**
+     * Ok
+     *
+     * True when the revert can be applied as planned.
+     */
+    ok: boolean;
+    /**
+     * Reason
+     */
+    reason?: 'not_revertible' | 'already_reverted' | 'deck_in_use' | 'nothing_to_revert' | 'lines_blocked' | null;
+    /**
+     * Message
+     *
+     * Why it can't be reverted, in plain words, with the way out.
+     */
+    message?: string | null;
+    /**
+     * Copies Removed
+     */
+    copies_removed: number;
+    /**
+     * Copies Restored
+     */
+    copies_restored: number;
+    /**
+     * Lines
+     */
+    lines: Array<RevertLineOut>;
+    /**
+     * Decks
+     *
+     * Decklists this import saved; deleted with the revert.
+     */
+    decks: Array<RevertDeckOut>;
+    /**
+     * Reverted By
+     */
+    reverted_by?: number | null;
 };
 
 /**
@@ -8813,6 +8973,66 @@ export type HistoryEventResponses = {
 };
 
 export type HistoryEventResponse = HistoryEventResponses[keyof HistoryEventResponses];
+
+export type HistoryRevertPlanData = {
+    body?: never;
+    path: {
+        /**
+         * Ingest Id
+         */
+        ingest_id: number;
+    };
+    query?: never;
+    url: '/api/history/{ingest_id}/revert';
+};
+
+export type HistoryRevertPlanErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type HistoryRevertPlanError = HistoryRevertPlanErrors[keyof HistoryRevertPlanErrors];
+
+export type HistoryRevertPlanResponses = {
+    /**
+     * Successful Response
+     */
+    200: RevertPlanOut;
+};
+
+export type HistoryRevertPlanResponse = HistoryRevertPlanResponses[keyof HistoryRevertPlanResponses];
+
+export type HistoryRevertData = {
+    body?: never;
+    path: {
+        /**
+         * Ingest Id
+         */
+        ingest_id: number;
+    };
+    query?: never;
+    url: '/api/history/{ingest_id}/revert';
+};
+
+export type HistoryRevertErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type HistoryRevertError = HistoryRevertErrors[keyof HistoryRevertErrors];
+
+export type HistoryRevertResponses = {
+    /**
+     * Successful Response
+     */
+    200: RevertOut;
+};
+
+export type HistoryRevertResponse = HistoryRevertResponses[keyof HistoryRevertResponses];
 
 export type PurchaseStoresData = {
     body?: never;

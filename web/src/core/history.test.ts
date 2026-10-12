@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { HistoryEntryOut, HistoryLineOut } from './api';
-import { datedNote, filterHistory, fromHistoryLine, groupTimeline, historySearch, kindCounts, movesSummary } from './history';
+import type { HistoryEntryOut, HistoryLineOut, RevertPlanOut } from './api';
+import { datedNote, filterHistory, fromHistoryLine, groupTimeline, historySearch, kindCounts, movesSummary, planFromError, revertActionLabel, revertBlockNote, revertLead } from './history';
 
 const e = (o: Partial<HistoryEntryOut>): HistoryEntryOut => ({
   ingest_id: 1, at: '2026-10-01T03:00:00+00:00', method: 'precon', kind: 'deck', title: 'Party Time', detail: null, dated: 'acquired',
@@ -51,5 +51,32 @@ describe('history view-model', () => {
     const c = fromHistoryLine(l);
     expect([c.key, c.finish, c.price, c.owned, c.missing]).toEqual(['s|foil', 'foil', 4.5, { foil: 2 }, false]);
     expect(c.tags).toEqual(['+3 in', '−1 out']);
+  });
+});
+
+describe('revert one import', () => {
+  const printing = { scryfall_id: 's1', name: 'Alpha', set_code: 'fin', collector_number: '1' } as RevertPlanOut['lines'][number]['printing'];
+  const line = (o: Partial<RevertPlanOut['lines'][number]> = {}) => ({ printing, finish: 'nonfoil' as const, remove: 2, restore: 0, held: 2, owned: 2, pledged: 0, blocker: null, pledged_to: [], ...o });
+  const plan = (o: Partial<RevertPlanOut> = {}): RevertPlanOut => ({ ingest_id: 1, ok: true, copies_removed: 2, copies_restored: 0, lines: [line()], decks: [], ...o });
+
+  it('says what leaves in one sentence and names the action', () => {
+    expect(revertLead(plan())).toBe('This removes 2 copies (1 printing) from your collection.');
+    expect(revertLead(plan({ decks: [{ slug: 'g', name: 'Goblins', built: false, pledged: 0 }] }))).toBe(
+      'This removes 2 copies (1 printing) from your collection and deletes the decklist Goblins it saved.');
+    expect(revertLead(plan({ copies_removed: 0, copies_restored: 1, lines: [line({ remove: 0, restore: 1 })] }))).toBe(
+      'This puts back 1 copy (1 printing) it took out.');
+    expect(revertActionLabel(plan())).toBe('Remove 2 copies');
+    expect(revertActionLabel(plan({ copies_removed: 0, copies_restored: 1 }))).toBe('Put back 1 copy');
+  });
+
+  it('explains each blocker with its way out', () => {
+    expect(revertBlockNote(line())).toBeNull();
+    expect(revertBlockNote(line({ blocker: 'removed', held: 1 }))).toBe('Only 1 of 2 copies still came from this import — the rest were removed or moved since.');
+    expect(revertBlockNote(line({ blocker: 'pledged', pledged: 2, pledged_to: ['A', 'B'] }))).toBe('2 copies are in A, B — break those decks down first.');
+  });
+
+  it('reads the plan a refused revert answered with', () => {
+    expect(planFromError({ message: 'x', plan: plan({ ok: false }) })?.ok).toBe(false);
+    expect(planFromError('nope')).toBeNull();
   });
 });

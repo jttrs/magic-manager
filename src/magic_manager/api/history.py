@@ -10,7 +10,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from .. import addcards, provenance
+from .. import addcards, ingest, provenance
 from .ingest import PrintingOut
 
 HistoryKind = provenance.HistoryKind
@@ -23,7 +23,7 @@ class HistoryEntryOut(BaseModel):
     kind: HistoryKind = Field(description="deck = playable product; pool = card pool (land pack, scene box, Secret Lair…); "
                                           "singles = cards added individually; checklist = a bulk checklist ingest (source product not recorded); "
                                           "unknown = reconstructed bucket with no known source; move = cards pledged to / released from a deck; "
-                                          "purchase = a store order read with the browser companion.")
+                                          "purchase = a store order read with the browser companion; revert = undid an earlier import.")
     title: str
     detail: str | None = None
     dated: Literal["acquired", "identified", "reconstructed"] = Field(
@@ -40,6 +40,9 @@ class HistoryEntryOut(BaseModel):
     deck_slug: str | None = Field(None, description="Deck to open: the moved deck, or the playable product's deck row.")
     purchase_id: int | None = Field(None, description="Purchase entries: the stored store order.")
     paid_usd: float | None = Field(None, description="Purchase entries: what you paid for the copies it still holds (item prices).")
+    revertible: bool = Field(False, description="This kind of import can be reverted and hasn't been (the copies may still block it — see the revert plan).")
+    reverted_by: int | None = Field(None, description="The revert entry that undid this one.")
+    reverts: int | None = Field(None, description="Revert entries: the entry they undid.")
 
 
 class HistoryOut(BaseModel):
@@ -79,3 +82,83 @@ def event(ingest_id: int) -> HistoryEventOut:
                        copies_out=ln.copies_out, held=ln.held, unit_usd=ln.unit_usd)
         for ln in lines if ln.scryfall_id in printings
     ])
+
+
+# ---------- revert one import (V35) ----------
+
+RevertReason = Literal["not_revertible", "already_reverted", "deck_in_use", "nothing_to_revert", "lines_blocked"]
+
+
+class RevertLineOut(BaseModel):
+    printing: PrintingOut
+    finish: Literal["nonfoil", "foil"]
+    remove: int = Field(description="Copies the revert removes (the import added them).")
+    restore: int = Field(description="Copies the revert puts back (the import removed them).")
+    held: int = Field(description="Copies of this printing-finish the import still accounts for.")
+    owned: int
+    pledged: int = Field(description="Copies pledged to built decks.")
+    blocker: Literal["removed", "pledged"] | None = Field(
+        None, description="removed = not all of them are still from this import; pledged = in a built deck.")
+    pledged_to: list[str] = Field(default_factory=list, description="Built decks holding them (pledged lines).")
+
+
+class RevertDeckOut(BaseModel):
+    slug: str
+    name: str
+    built: bool
+    pledged: int
+
+
+class RevertPlanOut(BaseModel):
+    ingest_id: int
+    ok: bool = Field(description="True when the revert can be applied as planned.")
+    reason: RevertReason | None = None
+    message: str | None = Field(None, description="Why it can't be reverted, in plain words, with the way out.")
+    copies_removed: int
+    copies_restored: int
+    lines: list[RevertLineOut]
+    decks: list[RevertDeckOut] = Field(description="Decklists this import saved; deleted with the revert.")
+    reverted_by: int | None = None
+
+
+class RevertOut(BaseModel):
+    revert_ingest_id: int
+    summary: str
+    plan: RevertPlanOut
+
+
+def plan_out(plan) -> RevertPlanOut:
+    printings = addcards.printings_for_ids(ln.scryfall_id for ln in plan.lines)
+    lines = [
+        RevertLineOut(printing=PrintingOut(**printings[ln.scryfall_id]), finish=ln.finish, remove=ln.remove,
+                      restore=ln.restore, held=ln.held, owned=ln.owned, pledged=ln.pledged,
+                      blocker=ln.blocker, pledged_to=ln.pledged_to)
+        for ln in plan.lines if ln.scryfall_id in printings
+    ]
+    lines.sort(key=lambda ln: (ln.blocker is None, ln.printing.name, ln.finish))
+    return RevertPlanOut(
+        ingest_id=plan.ingest_id, ok=plan.ok, reason=plan.refusal_code, message=plan.refusal,
+        copies_removed=plan.copies_removed, copies_restored=plan.copies_restored, lines=lines,
+        decks=[RevertDeckOut(**vars(d)) for d in plan.decks], reverted_by=plan.reverted_by,
+    )
+
+
+def revert_plan(ingest_id: int) -> RevertPlanOut:
+    return plan_out(ingest.revert_event(ingest_id, dry_run=True))
+
+
+def _n(n: int, one: str, many: str) -> str:
+    return f"{n} {one if n == 1 else many}"
+
+
+def revert(ingest_id: int) -> RevertOut:
+    """Apply; raises ``ingest.RevertRefused`` (→ 409 with the plan) when not clean."""
+    plan = ingest.revert_event(ingest_id, dry_run=False)
+    parts = []
+    if plan.copies_removed:
+        parts.append(f"removed {_n(plan.copies_removed, 'copy', 'copies')}")
+    if plan.copies_restored:
+        parts.append(f"put back {_n(plan.copies_restored, 'copy', 'copies')}")
+    if plan.decks:
+        parts.append(f"deleted {_n(len(plan.decks), 'decklist', 'decklists')}")
+    return RevertOut(revert_ingest_id=plan.revert_ingest_id, summary="Reverted: " + ", ".join(parts), plan=plan_out(plan))

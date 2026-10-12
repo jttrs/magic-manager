@@ -68,7 +68,7 @@ export function AddCardsDialog({ trigger, seed, onSeedDone }: { trigger?: ReactN
       let summary = r.summary;
       if (mode === 'deck' && saveList && deck?.source) {
         try {
-          const saved = unwrap(await deckImport({ body: { deck: deck.source } }));
+          const saved = unwrap(await deckImport({ body: { deck: deck.source, ingest_id: r.ingest_id } }));
           summary += saved.duplicate ? ' · decklist already in Decks' : ' · decklist saved to Decks';
           await qc.invalidateQueries({ queryKey: ['decks'] });
         } catch (e) {

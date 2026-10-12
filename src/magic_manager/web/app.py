@@ -25,7 +25,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
 from .. import api, companion as companion_engine, sets as sets_mod, tabs as tabs_engine, undo as undo_engine, cart as cart_engine, deck_edit, edhrec as edhrec_engine, features as features_engine, scryfall, mtgjson
-from .. import collection_sync, purchases as purchases_engine
+from .. import collection_sync, ingest as ingest_mod, purchases as purchases_engine
 from ..api import purchases as purchases_api
 from ..api import collection_import as collection_import_api, companion as companion_api, deals as deals_api, undo as undo_api, cart as cart_api, cards as cards_api, collection as collection_api, explore as explore_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api, market as market_api, trueup as trueup_api, history as history_api, combos as combos_api, art as art_api, jumpstart as jumpstart_api, surf as surf_api
 from .runtime import TERMINAL, JobManager, JobsBusy
@@ -675,6 +675,26 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     def history_event(ingest_id: int):
         try:
             return history_api.event(ingest_id)
+        except LookupError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+
+    @app.get("/api/history/{ingest_id}/revert", response_model=history_api.RevertPlanOut, tags=["history"])
+    def history_revert_plan(ingest_id: int):
+        try:
+            return history_api.revert_plan(ingest_id)
+        except LookupError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+
+    @app.post("/api/history/{ingest_id}/revert", response_model=history_api.RevertOut, tags=["history"],
+              dependencies=[write("before reverting an import")])
+    def history_revert(ingest_id: int):
+        try:
+            return history_api.revert(ingest_id)
+        except ingest_mod.RevertRefused as e:
+            # The dialog re-renders from the fresh plan (structured detail).
+            raise HTTPException(status_code=409, detail={
+                "message": str(e), "plan": history_api.plan_out(e.plan).model_dump(mode="json"),
+            }) from e
         except LookupError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
