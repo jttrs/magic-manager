@@ -1142,6 +1142,61 @@ CREATE TABLE IF NOT EXISTS purchase_lines (
 CREATE INDEX IF NOT EXISTS purchase_lines_card_idx ON purchase_lines (scryfall_id, finish);
 """
 
+# V35: revert one import. A revert never deletes history — it appends ONE
+# compensating 'revert' event (ingest.revert_event) whose deltas are the exact
+# negative of the reverted event's, and that points back at it:
+#   1. ingest_events rebuilt (the V26/V34 copy-rebuild, FK-off: every column
+#      copied verbatim, ingest_id preserved, the three indexes recreated) to
+#      widen method with 'revert' and add ``reverts_ingest_id`` (NULL for every
+#      existing row) + a partial UNIQUE index so an event is reverted at most once.
+#   2. decks.created_by_ingest_id — the import event that created this deck in
+#      the same add (the web "Also save the decklist" step). NULL for every
+#      existing deck; no FK, because an ingest event with no deltas is deleted
+#      (ingest.open_ingest_event) and the link is advisory, read only by revert.
+SCHEMA_V35 = """
+CREATE TABLE ingest_events__new (
+    ingest_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    at            TEXT NOT NULL,
+    method        TEXT NOT NULL CHECK (method IN (
+                    'checklist','precon','intake','adhoc','import-block',
+                    'deck-assign','deck-unassign','migration-backfill',
+                    'unattributed-backfill','collection-import','collection-export',
+                    'purchase','revert')),
+    label         TEXT,
+    source_path   TEXT,
+    archived_path TEXT,
+    source_sha256 TEXT,
+    mode          TEXT,
+    rows_added    INTEGER NOT NULL DEFAULT 0,
+    rows_updated  INTEGER NOT NULL DEFAULT 0,
+    rows_zeroed   INTEGER NOT NULL DEFAULT 0,
+    status        TEXT NOT NULL DEFAULT 'success'
+                    CHECK (status IN ('success','failed','backfill')),
+    error         TEXT,
+    notes         TEXT,
+    reverts_ingest_id INTEGER REFERENCES ingest_events (ingest_id)
+);
+
+INSERT INTO ingest_events__new
+    (ingest_id, at, method, label, source_path, archived_path, source_sha256,
+     mode, rows_added, rows_updated, rows_zeroed, status, error, notes)
+SELECT
+    ingest_id, at, method, label, source_path, archived_path, source_sha256,
+    mode, rows_added, rows_updated, rows_zeroed, status, error, notes
+FROM ingest_events;
+
+DROP TABLE ingest_events;
+ALTER TABLE ingest_events__new RENAME TO ingest_events;
+
+CREATE INDEX IF NOT EXISTS ingest_events_method_idx ON ingest_events (method);
+CREATE INDEX IF NOT EXISTS ingest_events_at_idx     ON ingest_events (at);
+CREATE INDEX IF NOT EXISTS ingest_events_sha_idx    ON ingest_events (source_sha256);
+CREATE UNIQUE INDEX IF NOT EXISTS ingest_events_reverts_uq
+    ON ingest_events (reverts_ingest_id) WHERE reverts_ingest_id IS NOT NULL;
+"""
+# (decks.created_by_ingest_id is added by _run_v35_python_migration — guarded, so
+# a re-run of this script can't fail on a duplicate column.)
+
 # ---------- migration-authoring convention ----------
 #
 # Always-safe ops in a migration: CREATE TABLE, ALTER TABLE ADD COLUMN,
@@ -1240,6 +1295,7 @@ MIGRATIONS: list[str] = [
     SCHEMA_V32,
     SCHEMA_V33,
     SCHEMA_V34,
+    SCHEMA_V35,
 ]
 CURRENT_VERSION = len(MIGRATIONS)
 
@@ -1254,7 +1310,11 @@ CURRENT_VERSION = len(MIGRATIONS)
 # Scoping to the child(ren) also avoids a DB-wide check flagging unrelated
 # PRE-EXISTING dangling FKs (foreign_keys=ON only enforces NEW writes, so a
 # legacy orphan can sit elsewhere) and aborting an otherwise-clean upgrade.
-_FK_OFF_MIGRATIONS: dict[int, tuple[str, ...]] = {26: ("inventory_events",), 34: ("inventory_events",)}
+_FK_OFF_MIGRATIONS: dict[int, tuple[str, ...]] = {
+    26: ("inventory_events",),
+    34: ("inventory_events",),
+    35: ("inventory_events", "purchases", "ingest_events"),
+}
 
 
 @contextmanager
@@ -1321,7 +1381,9 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
             ) from e
     for i, sql in enumerate(MIGRATIONS[have:], start=have + 1):
         if i != 1:  # MIGRATIONS[0] already ran above
-            if i in _FK_OFF_MIGRATIONS:
+            if i == 35 and "reverts_ingest_id" in {r[1] for r in conn.execute("PRAGMA table_info(ingest_events)")}:
+                pass  # already rebuilt (a re-run would drop every reverts_ingest_id link)
+            elif i in _FK_OFF_MIGRATIONS:
                 # This migration rebuilds a table that is an FK TARGET (another
                 # table references its PK), so the DROP+RENAME would trip the
                 # foreign_keys=ON enforcement connect() sets. SQLite's sanctioned
@@ -1368,9 +1430,20 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
             _run_v15_python_migration(conn)
         if i == 17 and have < 17:
             _run_v17_python_migration(conn)
+        if i == 35 and have < 35:
+            _run_v35_python_migration(conn)
     if have < CURRENT_VERSION:
         conn.execute("DELETE FROM schema_version")
         conn.execute("INSERT INTO schema_version (version) VALUES (?)", (CURRENT_VERSION,))
+
+
+def _run_v35_python_migration(conn: sqlite3.Connection) -> None:
+    """V35: ``decks.created_by_ingest_id`` (the import that created the deck).
+    Idempotent: only adds the column when it is missing."""
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(decks)")}
+    if "created_by_ingest_id" not in cols:
+        conn.execute("ALTER TABLE decks ADD COLUMN created_by_ingest_id INTEGER")
+    conn.execute("CREATE INDEX IF NOT EXISTS decks_created_by_ingest_idx ON decks (created_by_ingest_id)")
 
 
 # ---------- V4 Python post-migration ----------

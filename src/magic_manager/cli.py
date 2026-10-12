@@ -111,6 +111,53 @@ scrapers_app = typer.Typer(no_args_is_help=True,
                            help="Scraper health: is each site's scrape still reading right? (docs/scraper-health.md)")
 app.add_typer(scrapers_app, name="scrapers")
 
+ingest_app = typer.Typer(no_args_is_help=True,
+                         help="Ingest events (the provenance ledger): revert one import.")
+app.add_typer(ingest_app, name="ingest")
+
+
+@ingest_app.command("revert")
+def ingest_revert(
+    ingest_id: int = typer.Argument(..., help="The ingest event to revert (see Purchase history / mm audit provenance)."),
+    apply: bool = typer.Option(False, "--apply", help="Write the revert. Default: dry run — print the plan only."),
+):
+    """Revert one import: append a compensating event that removes exactly the copies it
+    added (and restores any it removed), and delete the unbuilt deck it saved. History is kept.
+    Refused — nothing written — when any of those copies were removed since or are in a built deck."""
+    from . import addcards
+    try:
+        plan = ingest_mod.revert_event(ingest_id, dry_run=True)
+    except LookupError as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+    names = addcards.printings_for_ids(ln.scryfall_id for ln in plan.lines)
+    typer.echo(f"Ingest {plan.ingest_id} · {plan.method} · {plan.label or '(no label)'} · {plan.at[:19]}")
+    for ln in plan.lines:
+        p = names.get(ln.scryfall_id, {})
+        what = f"{p.get('name', ln.scryfall_id)} ({str(p.get('set_code', '')).upper()} {p.get('collector_number', '')})"
+        act = f"remove {ln.remove}" if ln.remove else f"restore {ln.restore}"
+        note = ""
+        if ln.blocker == "removed":
+            note = f"  ✗ only {ln.held} still from this import"
+        elif ln.blocker == "pledged":
+            note = f"  ✗ {ln.pledged} in built decks ({', '.join(ln.pledged_to)}), {ln.owned - ln.pledged} free"
+        typer.echo(f"  {act:>10} × {what} {ln.finish}{note}")
+    for d in plan.decks:
+        typer.echo(f"  delete deck {d.name} ({d.slug})" + ("  ✗ built" if d.built or d.pledged else ""))
+    typer.echo(f"Total: −{plan.copies_removed} copies, +{plan.copies_restored} restored, {len(plan.decks)} deck(s)")
+    if not plan.ok:
+        typer.echo(f"refused: {plan.refusal}", err=True)
+        raise typer.Exit(1)
+    if not apply:
+        typer.echo("dry run — pass --apply to write it")
+        return
+    try:
+        done = ingest_mod.revert_event(ingest_id, dry_run=False)
+    except ingest_mod.RevertRefused as e:
+        typer.echo(f"refused: {e.plan.refusal}", err=True)
+        raise typer.Exit(1)
+    typer.echo(f"reverted: ingest event {done.revert_ingest_id} undoes {ingest_id}")
+
 
 @scrapers_app.command("health")
 def scrapers_health(down_only: bool = typer.Option(False, "--down", help="Only scrapers flagged down.")) -> None:

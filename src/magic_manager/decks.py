@@ -756,9 +756,9 @@ def backfill_built_state(*, conn=None) -> dict:
     return {"corrected": n, "precon_extras": len(extras)}
 
 
-def deck_delete(slug: str) -> int:
+def deck_delete(slug: str, *, conn=None) -> int:
     """Delete a deck. ON DELETE CASCADE drops its ``deck_cards``."""
-    with db.connect() as conn:
+    with db.transaction(conn) as conn:
         n = conn.execute("DELETE FROM decks WHERE slug = ?", (slug,)).rowcount
     return n
 

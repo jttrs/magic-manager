@@ -73,14 +73,25 @@ _INGEST_LOG_CARRIED_COLS = (
 )
 
 
-def _row_hashes(conn: sqlite3.Connection, table: str) -> tuple[int, str]:
+def _columns(conn: sqlite3.Connection, table: str) -> list[str]:
+    return [r[1] for r in conn.execute(f"PRAGMA table_info({table})")]
+
+
+def _row_hashes(conn: sqlite3.Connection, table: str, cols: list[str] | None = None) -> tuple[int, str]:
     """Return (count, sha256-of-canonical-row-dump) for a table.
 
     We sort rows by every column (in column order) and hash the resulting
-    text so the comparison is order-independent.
+    text so the comparison is order-independent. ``cols`` restricts the hash to
+    the columns that existed BEFORE the migration (an additive migration may add
+    a column, e.g. V35's ingest_events.reverts_ingest_id; existing data must not
+    change).
     """
-    cur = conn.execute(f"SELECT * FROM {table}")
-    cols = [d[0] for d in cur.description]
+    if cols is None:
+        cols = _columns(conn, table)
+    if not cols:
+        raise sqlite3.OperationalError(f"no such table: {table}")
+    select = ", ".join('"' + c + '"' for c in cols)
+    cur = conn.execute(f"SELECT {select} FROM {table}")
     rows = [tuple(r[c] for c in cols) for r in cur.fetchall()]
     rows.sort(key=lambda r: tuple("" if v is None else str(v) for v in r))
     h = hashlib.sha256()
@@ -373,9 +384,11 @@ def main(argv: list[str] | None = None) -> int:
     precious = _precious_tables(pre_version)
 
     pre: dict[str, tuple[int, str]] = {}
+    pre_cols: dict[str, list[str]] = {}
     for t in precious:
         try:
-            pre[t] = _row_hashes(src, t)
+            pre_cols[t] = _columns(src, t)
+            pre[t] = _row_hashes(src, t, pre_cols[t] or None)
         except sqlite3.OperationalError:
             # Table doesn't exist yet — that's fine, just record absence.
             pre[t] = (0, "<absent>")
@@ -401,7 +414,7 @@ def main(argv: list[str] | None = None) -> int:
             post: dict[str, tuple[int, str]] = {}
             for t in precious:
                 try:
-                    post[t] = _row_hashes(conn, t)
+                    post[t] = _row_hashes(conn, t, pre_cols.get(t) or None)
                 except sqlite3.OperationalError:
                     post[t] = (0, "<absent>")
 

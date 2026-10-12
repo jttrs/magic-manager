@@ -25,7 +25,7 @@ event. No write path hand-writes ledger SQL — they all route through here.
 from __future__ import annotations
 
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Iterator
 
 from . import db
@@ -46,6 +46,7 @@ METHODS = frozenset({
     "collection-import",
     "collection-export",
     "purchase",
+    "revert",
 })
 
 
@@ -73,6 +74,7 @@ def create_event(
     error: str | None = None,
     notes: str | None = None,
     at: str | None = None,
+    reverts_ingest_id: int | None = None,
 ) -> int:
     """Insert one ``ingest_events`` row; return its ``ingest_id``.
 
@@ -85,13 +87,14 @@ def create_event(
         """
         INSERT INTO ingest_events
             (at, method, label, source_path, archived_path, source_sha256,
-             mode, rows_added, rows_updated, rows_zeroed, status, error, notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             mode, rows_added, rows_updated, rows_zeroed, status, error, notes,
+             reverts_ingest_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             at or db._utcnow_iso(), method, label, source_path, archived_path,
             source_sha256, mode, rows_added, rows_updated, rows_zeroed,
-            status, error, notes,
+            status, error, notes, reverts_ingest_id,
         ),
     )
     return cur.lastrowid
@@ -206,6 +209,7 @@ def open_ingest_event(
     source_sha256: str | None = None,
     mode: str | None = None,
     notes: str | None = None,
+    reverts_ingest_id: int | None = None,
     conn=None,
 ) -> Iterator[IngestRecorder]:
     """Open an ingest event and yield an :class:`IngestRecorder`.
@@ -225,7 +229,7 @@ def open_ingest_event(
         ingest_id = create_event(
             c, method, label=label, source_path=source_path,
             archived_path=archived_path, source_sha256=source_sha256,
-            mode=mode, notes=notes,
+            mode=mode, notes=notes, reverts_ingest_id=reverts_ingest_id,
         )
         rec = IngestRecorder(ingest_id=ingest_id, conn=c)
         try:
@@ -383,3 +387,238 @@ def rebuild_inventory_from_ledger(conn) -> dict:
     )
     n = conn.execute("SELECT COUNT(*) AS n FROM inventory").fetchone()["n"]
     return {"rebuilt_rows": n, "drift_before": drift_before}
+
+
+# ---------- revert one import (V35): a compensating event, never a delete ----------
+#
+# Reverting appends ONE new ``revert`` event whose deltas are the exact negative
+# of the reverted event's net delta per (scryfall_id, finish), pointing back via
+# ``reverts_ingest_id`` (unique: an event is reverted at most once). History is
+# never rewritten. All-or-nothing: every card the event added must still be held
+# by it (not removed or moved since) AND free (not pledged to a built deck), and
+# a deck the import created (``decks.created_by_ingest_id``) must be unbuilt —
+# it is deleted with the revert. Otherwise nothing is written and the plan says why.
+
+# Methods a revert may undo. Anything else is refused with the way out (_NOT_REVERTIBLE).
+REVERTIBLE_METHODS = frozenset({"adhoc", "import-block", "intake", "collection-import", "checklist"})
+
+_NOT_REVERTIBLE = {
+    "precon": "Preconstructed products aren't reverted here — delete the deck in Decks "
+              "(mm deck delete) and adjust its cards with a checklist.",
+    "purchase": "Store orders aren't reverted here — use Undo to roll back an order you just added.",
+    "deck-assign": "This built a deck — break the deck down in Decks instead.",
+    "deck-unassign": "This broke a deck down — build the deck again in Decks instead.",
+    "migration-backfill": "Reconstructed history can't be reverted.",
+    "unattributed-backfill": "Reconstructed history can't be reverted.",
+    "collection-export": "An export didn't change your collection.",
+    "revert": "This is already a revert.",
+}
+_CHECKLIST_NOT_REVERTIBLE = (
+    "Only set checklists that added cards can be reverted — a checklist that set counts "
+    "(or a precon / Jumpstart sheet) is changed back with another checklist."
+)
+
+
+class RevertRefused(Exception):
+    """``revert_event(dry_run=False)`` on a plan that isn't clean; ``.plan`` says why."""
+
+    def __init__(self, plan: "RevertPlan"):
+        super().__init__(plan.refusal or "revert refused")
+        self.plan = plan
+
+
+@dataclass
+class RevertLine:
+    scryfall_id: str
+    finish: str
+    change: int                    # the reverted event's net delta (+ added, − removed)
+    held: int = 0                  # copies the event still accounts for
+    owned: int = 0
+    pledged: int = 0
+    blocker: str | None = None     # None | 'removed' (not all still from this import) | 'pledged'
+    pledged_to: list[str] = field(default_factory=list)   # built decks holding this printing-finish (blocked lines)
+
+    @property
+    def remove(self) -> int:
+        return max(self.change, 0)
+
+    @property
+    def restore(self) -> int:
+        return max(-self.change, 0)
+
+
+@dataclass
+class RevertDeck:
+    slug: str
+    name: str
+    built: bool
+    pledged: int
+
+
+@dataclass
+class RevertPlan:
+    ingest_id: int
+    at: str
+    method: str
+    label: str | None
+    lines: list[RevertLine]
+    decks: list[RevertDeck]
+    refusal_code: str | None = None   # not_revertible | already_reverted | deck_in_use | nothing_to_revert | lines_blocked
+    refusal: str | None = None
+    reverted_by: int | None = None
+    revert_ingest_id: int | None = None   # set once applied
+
+    @property
+    def ok(self) -> bool:
+        return self.refusal_code is None
+
+    @property
+    def copies_removed(self) -> int:
+        return sum(ln.remove for ln in self.lines)
+
+    @property
+    def copies_restored(self) -> int:
+        return sum(ln.restore for ln in self.lines)
+
+    @property
+    def blocked(self) -> list[RevertLine]:
+        return [ln for ln in self.lines if ln.blocker]
+
+
+def not_revertible_reason(method: str, mode: str | None, label: str | None, status: str) -> str | None:
+    """Why an event can never be reverted (by its kind alone), or None if it may be.
+    Cheap — no ledger reads; history uses it to decide which entries offer Revert."""
+    if status != "success":
+        return "Reconstructed history can't be reverted." if status == "backfill" else "This import failed."
+    if method == "checklist":
+        return None if mode == "additive" and (label or "").startswith("set:") else _CHECKLIST_NOT_REVERTIBLE
+    if method not in REVERTIBLE_METHODS:
+        return _NOT_REVERTIBLE.get(method, "This kind of change can't be reverted.")
+    return None
+
+
+def _plan(conn, ingest_id: int) -> RevertPlan:
+    from . import provenance
+
+    ev = conn.execute(
+        "SELECT ingest_id, at, method, label, mode, status FROM ingest_events WHERE ingest_id = ?",
+        (ingest_id,),
+    ).fetchone()
+    if ev is None:
+        raise LookupError(f"no ingest event {ingest_id}")
+    plan = RevertPlan(ingest_id, ev["at"], ev["method"], ev["label"], [], [])
+    by = conn.execute(
+        "SELECT ingest_id FROM ingest_events WHERE reverts_ingest_id = ?", (ingest_id,)
+    ).fetchone()
+    plan.reverted_by = by[0] if by else None
+    for d in conn.execute(
+        """SELECT d.slug, d.name, d.precon_state,
+                  (SELECT COALESCE(SUM(a.count), 0) FROM deck_assignments a WHERE a.deck_id = d.deck_id)
+           FROM decks d WHERE d.created_by_ingest_id = ? ORDER BY d.slug""", (ingest_id,),
+    ):
+        plan.decks.append(RevertDeck(d[0], d[1], d[2] == "built", d[3]))
+
+    why = not_revertible_reason(ev["method"], ev["mode"], ev["label"], ev["status"])
+    if why:
+        plan.refusal_code, plan.refusal = "not_revertible", why
+        return plan
+    if plan.reverted_by is not None:
+        plan.refusal_code, plan.refusal = "already_reverted", "This import was already reverted."
+        return plan
+
+    net: dict[tuple[str, str], int] = {}
+    for sid, fin, delta in conn.execute(
+        "SELECT scryfall_id, finish, delta FROM inventory_events WHERE ingest_id = ? ORDER BY event_id",
+        (ingest_id,),
+    ):
+        net[(sid, fin)] = net.get((sid, fin), 0) + delta
+    sids = sorted({sid for (sid, _), n in net.items() if n})
+    held = provenance._held(conn, sids) if sids else {}
+    owned: dict[tuple[str, str], int] = {}
+    pledged: dict[tuple[str, str], int] = {}
+    decks_by: dict[tuple[str, str], list[str]] = {}
+    for i in range(0, len(sids), 500):
+        part = sids[i:i + 500]
+        ph = ",".join("?" * len(part))
+        for sid, fin, q in conn.execute(
+            f"SELECT scryfall_id, finish, quantity FROM inventory WHERE scryfall_id IN ({ph})", part,
+        ):
+            owned[(sid, fin)] = q
+        for sid, fin, n, name in conn.execute(
+            f"""SELECT a.scryfall_id, a.finish, a.count, d.name FROM deck_assignments a
+                JOIN decks d ON d.deck_id = a.deck_id WHERE a.scryfall_id IN ({ph})
+                ORDER BY d.name""", part,
+        ):
+            pledged[(sid, fin)] = pledged.get((sid, fin), 0) + n
+            decks_by.setdefault((sid, fin), []).append(name)
+    for (sid, fin), change in sorted(net.items()):
+        if not change:
+            continue
+        k = (sid, fin)
+        ln = RevertLine(sid, fin, change, max(0, held.get((ingest_id, sid, fin), 0)),
+                        owned.get(k, 0), pledged.get(k, 0))
+        if change > 0:
+            if ln.held < change:
+                ln.blocker = "removed"
+            elif ln.owned - ln.pledged < change:
+                ln.blocker = "pledged"
+                ln.pledged_to = decks_by.get(k, [])
+        plan.lines.append(ln)
+
+    def refuse(code: str, why: str) -> RevertPlan:
+        plan.refusal_code, plan.refusal = code, why
+        return plan
+
+    busy = [d for d in plan.decks if d.built or d.pledged]
+    if busy:
+        return refuse("deck_in_use", f"The deck {busy[0].name} it saved is built — break it down in Decks first.")
+    if not plan.lines and not plan.decks:
+        return refuse("nothing_to_revert", "This import didn't change your collection.")
+    if plan.blocked:
+        n = len(plan.blocked)
+        return refuse("lines_blocked",
+                      f"{n} of its {'card' if n == 1 else 'cards'} can't be taken back out: "
+                      "copies were removed since or are in a built deck. Free them first, then revert.")
+    return plan
+
+
+def revert_event(ingest_id: int, *, dry_run: bool = True) -> RevertPlan:
+    """Plan (``dry_run``, the default) or apply the revert of one ingest event.
+
+    Applying appends ONE ``revert`` event (label ``revert:<id> · <label>``,
+    ``reverts_ingest_id`` = ``ingest_id``) with the negative of every net
+    per-printing delta, deletes the unbuilt deck the import created, and proves
+    ``inventory == SUM(delta)`` — all in one transaction. Raises ``LookupError``
+    for an unknown event and :class:`RevertRefused` when the plan isn't clean
+    (nothing is written)."""
+    from . import decks as decks_mod
+    from . import inventory as inv
+
+    with db.connect() as conn:
+        if not dry_run and not conn.in_transaction:
+            conn.execute("BEGIN IMMEDIATE")   # plan + write see one state
+        plan = _plan(conn, ingest_id)
+        if dry_run:
+            return plan
+        if not plan.ok:
+            raise RevertRefused(plan)
+        label = f"revert:{ingest_id}" + (f" · {plan.label}" if plan.label else "")
+        rid = create_event(conn, "revert", label=label, mode="revert", reverts_ingest_id=ingest_id)
+        added = updated = zeroed = 0
+        for ln in plan.lines:
+            if ln.remove:
+                r = inv.inventory_remove(ln.scryfall_id, ln.finish, ln.remove, conn=conn, ingest_id=rid, method="revert")
+                zeroed += r["action"] == "deleted"
+                updated += r["action"] == "decremented"
+            else:
+                r = inv.inventory_add(ln.scryfall_id, ln.finish, ln.restore, conn=conn, ingest_id=rid, method="revert")
+                added += r["action"] == "inserted"
+                updated += r["action"] == "updated"
+        finalize_event(conn, rid, rows_added=added, rows_updated=updated, rows_zeroed=zeroed)
+        for d in plan.decks:
+            decks_mod.deck_delete(d.slug, conn=conn)
+        drift = reconcile_inventory_ledger(conn)
+        if drift:
+            raise RuntimeError(f"revert left the ledger out of balance: {drift[:3]}")
+        plan.revert_ingest_id = rid
+        return plan

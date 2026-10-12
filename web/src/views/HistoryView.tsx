@@ -22,6 +22,7 @@ import { CollectionTabs } from './collection/CollectionTabs';
 import { OrderReview } from './history/OrderReview';
 import { OrdersList, OrdersTotals } from './history/OrdersList';
 import { ReadOrdersDialog } from './history/ReadOrdersDialog';
+import { RevertImport } from './history/RevertImport';
 
 const route = getRouteApi('/collection/history');
 const DAY = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
@@ -189,12 +190,15 @@ function EntryRow({ e, rowKey, active, tabbable, onFocus, onPick }: { e: History
         <span className="truncate text-xs text-ink-muted">
           {sub}
           {e.dated === 'identified' && ' · identified'}
+          {e.reverted_by != null && ' · reverted'}
         </span>
       </span>
       <span className="flex shrink-0 flex-col items-end gap-0.5 text-xs tabular">
-        {e.ledgered ? (
+        {e.reverted_by != null ? (
+          <span className="text-ink-muted">reverted</span>
+        ) : e.ledgered ? (
           <>
-            <span className="text-ink">{fmtUsd(e.value_usd)}</span>
+            {(e.kind !== 'revert' || e.held > 0) && <span className="text-ink">{fmtUsd(e.value_usd)}</span>}
             {e.kind === 'purchase' && e.paid_usd != null && <span className="text-ink-muted">Paid {fmtUsd(e.paid_usd)}</span>}
             <span className="text-ink-muted">{e.copies_in ? `+${fmtInt(e.copies_in)}` : ''}{e.copies_out ? ` −${fmtInt(e.copies_out)}` : ''}</span>
           </>
@@ -246,6 +250,7 @@ function EntryInspector({ ingestId, view, onView, onReview, onOpen, onBack }: { 
   const all = useQuery(historyQuery());
   const reconstructed = all.data?.entries.find((x) => x.kind === 'checklist' && x.dated === 'reconstructed')?.ingest_id;
   const { selected, toggle } = useSelection(`history:${ingestId}`);
+  const [reverted, setReverted] = useState<string | null>(null);
   const sections = useMemo(() => (q.data ? historyCardGroups(q.data.lines).map((g) => ({ ...g, level: 2 as const, noun: 'section' })) : []), [q.data]);
 
   if (q.isPending) return <GridSkeleton label="Loading entry…" />;
@@ -295,8 +300,22 @@ function EntryInspector({ ingestId, view, onView, onReview, onOpen, onBack }: { 
               </span>
             </p>
             {note && <p className="mt-0.5 text-xs text-ink-muted">{note}</p>}
+            {e.reverted_by != null && (
+              <p className="mt-0.5 text-xs text-ink-muted">
+                Reverted — its copies were taken back out.{' '}
+                <button type="button" onClick={() => onOpen(e.reverted_by!)} className="-my-1 cursor-pointer py-1 voice-semi text-accent-ink underline underline-offset-2">See the revert</button>
+              </p>
+            )}
+            {e.reverts != null && (
+              <p className="mt-0.5 text-xs text-ink-muted">
+                Undid{' '}
+                <button type="button" onClick={() => onOpen(e.reverts!)} className="-my-1 cursor-pointer py-1 voice-semi text-accent-ink underline underline-offset-2">{e.detail ?? 'an import'}</button>.
+              </p>
+            )}
+            {reverted && <p role="status" className="mt-1 text-sm"><span className="highlighter px-1 voice-semi font-medium">{reverted}</span></p>}
           </div>
           <span className="ml-auto flex items-center gap-3 text-sm">
+            {e.revertible && e.ledgered && <RevertImport ingestId={e.ingest_id} onDone={setReverted} />}
             {e.kind === 'purchase' && e.purchase_id != null && (
               <Button tone="paper" onClick={() => onReview(e.purchase_id!)}>Review order</Button>
             )}
@@ -312,7 +331,13 @@ function EntryInspector({ ingestId, view, onView, onReview, onOpen, onBack }: { 
             )}
           </span>
         </div>
-        {e.ledgered && e.kind !== 'move' && (
+        {e.kind === 'revert' && (
+          <dl className="flex flex-wrap gap-x-6 gap-y-1 text-sm tabular">
+            <Fact label="Took out" value={fmtCount(e.copies_out, 'copy', 'copies')} />
+            {e.copies_in > 0 && <Fact label="Put back" value={fmtCount(e.copies_in, 'copy', 'copies')} />}
+          </dl>
+        )}
+        {e.ledgered && e.kind !== 'move' && e.kind !== 'revert' && (
           <dl className="flex flex-wrap gap-x-6 gap-y-1 text-sm tabular">
             <Fact label="Came in" value={fmtCount(e.copies_in, 'copy', 'copies')} />
             {e.copies_out > 0 && <Fact label={e.dated === 'reconstructed' ? 'Moved to products' : 'Removed'} value={`−${fmtInt(e.copies_out)}`} />}
