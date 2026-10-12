@@ -95,7 +95,8 @@ describe('rankings', () => {
     const pair = row('Kraum, Ludevic’s Opus // Tymna the Weaver', { facts: facts({ oracle_id: null, image_uri: 'a.jpg', partner: facts({ image_uri: 'b.jpg' }) }) });
     const c = rankedCard('commanders', pair);
     expect(c.key).toBe('slug:kraum, ludevic’s opus // tymna the weaver');
-    expect(c.partner).toEqual({ name: 'Tymna the Weaver', image: 'b.jpg', href: null });
+    expect(c.partner).toEqual({ name: 'Tymna the Weaver', image: 'b.jpg', href: null, scryfallId: 's', setCode: 'M13', cn: '1' });
+    expect(c.prices).toBeUndefined();
     expect(c.lines.plain).toBe('1 Kraum, Ludevic’s Opus\n1 Tymna the Weaver');
     expect(rankedCard('commanders', row('Sol Ring')).partner).toBeNull();
   });

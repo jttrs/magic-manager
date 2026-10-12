@@ -53,6 +53,12 @@ test('partner commanders show both cards: one in front, the partner peeking from
   await page.getByRole('radio', { name: 'List' }).click();
   const row = page.getByRole('row', { name: /Frodo/ });
   await expect(row).toContainText('$0.78');
+  await row.getByRole('button', { name: /Inspect Frodo/ }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('img')).toHaveCount(2);
+  await expect(dialog.getByRole('region', { name: 'Frodo, Adventurous Hobbit' })).toBeVisible();
+  await expect(dialog.getByRole('region', { name: 'Sam, Loyal Attendant' })).toBeVisible();
+  await expect(dialog).toContainText('both cards');
 });
 
 test('a ranking never read is fetched as a job with progress, then shown', async ({ page }) => {

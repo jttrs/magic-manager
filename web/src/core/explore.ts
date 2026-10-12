@@ -67,9 +67,11 @@ export function fromFacts(name: string, slug: string, f: FactsOut): GuideCard {
       tcgplayer: names.map((n) => `1 ${n}`).join('\n'),
     },
     typeLine: f.type_line ?? null,
-    prices: { nonfoil: f.lowest_usd ?? null, foil: null },
+    prices: f.partner ? undefined : { nonfoil: f.lowest_usd ?? null, foil: null },
     manaCost: f.mana_cost ?? null,
-    partner: f.partner && pair ? { name: pair[1], image: f.partner.image_uri ?? null, href: f.partner.scryfall_url ?? null } : null,
+    partner: f.partner && pair
+      ? { name: pair[1], image: f.partner.image_uri ?? null, href: f.partner.scryfall_url ?? null, scryfallId: f.partner.scryfall_id ?? null, setCode: f.partner.set_code?.toUpperCase() ?? null, cn: f.partner.collector_number ?? null }
+      : null,
   };
 }
 

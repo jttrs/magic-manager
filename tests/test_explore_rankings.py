@@ -193,3 +193,52 @@ def test_explore_ranking_joins_partner_pairs(tmp_db, partners, monkeypatch):
     from magic_manager.api import explore as api_explore
     out = api_explore._facts(f)
     assert out.partner.scryfall_url and out.partner.mana_cost == "{1}{W}{B}"
+
+
+def test_partner_pair_edges(tmp_db, partners, seed_cards, make_card, monkeypatch):
+    monkeypatch.setattr(edhrec.scryfall, "collection", lambda *_: ([], []))
+    # (a) both "halves" are faces of one card → not a pair
+    seed_cards([make_card(id="00000000-0000-0000-0000-0000000000c1", oracle_id="oracle-mdfc",
+                          name="Front Face", collector_number="21"),
+                make_card(id="00000000-0000-0000-0000-0000000000c2", oracle_id="oracle-mdfc",
+                          name="Back Face", collector_number="22")])
+    assert "front face // back face" not in edhrec.resolve_names_to_oracle(["Front Face // Back Face"])
+    # (b) one half unknown → no pair facts
+    assert explore.facts_by_name(["Kraum, Ludevic's Opus // Nobody Here"]) == {}
+    # (c) an unpriced half → the pair has no price
+    a = explore.Facts(oracle_id="a", lowest_usd=1.0, color_identity=["R"], owned=2, free=1)
+    b = explore.Facts(oracle_id="b", lowest_usd=None, color_identity=["W"], owned=0, free=0)
+    pair = explore.pair_facts(a, b)
+    assert pair.lowest_usd is None and pair.color_identity == ["W", "R"] and (pair.owned, pair.free) == (0, 0)
+
+
+def test_partner_halves_fetched_from_scryfall_unless_local_only(tmp_db, monkeypatch, make_card):
+    sam = make_card(id="00000000-0000-0000-0000-0000000000d1", oracle_id="oracle-sam",
+                    name="Sam, Loyal Attendant", collector_number="31")
+    frodo = make_card(id="00000000-0000-0000-0000-0000000000d2", oracle_id="oracle-frodo",
+                      name="Frodo, Adventurous Hobbit", collector_number="32")
+    asked: list[list[str]] = []
+
+    def collection(ids):
+        asked.append([i["name"] for i in ids])
+        return [c for c in (sam, frodo) if c["name"] in {i["name"] for i in ids}], []
+    monkeypatch.setattr(edhrec.scryfall, "collection", collection)
+    pair = "Frodo, Adventurous Hobbit // Sam, Loyal Attendant"
+    assert edhrec.resolve_names_to_oracle([pair], local_only=True) == {} and not asked
+    got = edhrec.resolve_names_to_oracle([pair])
+    assert [p["oracle_id"] for p in got[pair.casefold()]["partners"]] == ["oracle-frodo", "oracle-sam"]
+    assert set(asked[0]) == {pair, "Frodo, Adventurous Hobbit", "Sam, Loyal Attendant"}
+    # the halves were upserted: a local-only read now finds the pair without Scryfall
+    asked.clear()
+    assert edhrec.resolve_names_to_oracle([pair], local_only=True)[pair.casefold()]["partners"]
+    assert not asked
+
+
+def test_non_local_double_faced_card_resolves_as_one_card(tmp_db, monkeypatch, make_card):
+    dfc = make_card(id="00000000-0000-0000-0000-0000000000e1", oracle_id="oracle-dfc",
+                    name="Delver of Secrets // Insectile Aberration", collector_number="41")
+    monkeypatch.setattr(edhrec.scryfall, "collection",
+                        lambda ids: ([dfc], [i for i in ids if i["name"] != dfc["name"]]))
+    got = edhrec.resolve_names_to_oracle([dfc["name"]])
+    assert got[dfc["name"].casefold()]["oracle_id"] == "oracle-dfc"
+    assert "partners" not in got[dfc["name"].casefold()]

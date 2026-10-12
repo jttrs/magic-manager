@@ -288,7 +288,7 @@ function RankingList({ r, rows, cards, selected, onToggle, onInspect }: { r: Ran
                 </th>
                 <td className="hidden truncate pl-3 text-ink-muted @[46rem]:table-cell" title={types.card ?? undefined}>{types.card ?? '—'}</td>
                 <td className="hidden truncate pl-3 text-ink-muted @[64rem]:table-cell" title={types.sub ?? undefined}>{types.sub ?? '—'}</td>
-                <td className="hidden pl-3 @[36rem]:table-cell"><ColorIdentity colors={x.facts.color_identity ?? []} /></td>
+                <td className="hidden pl-3 @[36rem]:table-cell">{x.facts.oracle_id || partner ? <ColorIdentity colors={x.facts.color_identity ?? []} /> : <span className="text-ink-muted" aria-label="Colour identity unknown">—</span>}</td>
                 <td className="hidden pl-3 @[54rem]:table-cell">
                   <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
                     <ManaCost cost={x.facts.mana_cost} />
