@@ -20,6 +20,10 @@
     "on-accent": { "$value": "{color.ink.900}" },
     "danger": { "$value": "{color.rust.400}" },
     "focus": { "$value": "{color.amber.400}" },
-    "scrim": { "$value": "#100d09cc" }
+    "scrim": { "$value": "#100d09cc" },
+    "scrollbar-chrome": { "$value": "{color.charcoal.600}" },
+    "scrollbar-chrome-hover": { "$value": "{color.taupe.500}" },
+    "scrollbar-paper": { "$value": "{color.charcoal.600}" },
+    "scrollbar-paper-hover": { "$value": "{color.taupe.500}" }
   }
 }

@@ -85,6 +85,10 @@
   --theme-danger: #9c3a22;
   --theme-focus: #f0a531;
   --theme-scrim: rgba(16, 13, 9, 0.7019607843137254);
+  --theme-scrollbar-chrome: #433c30; /** Scrollbar thumb on chrome (and -paper on guide sheets); the track stays clear. */
+  --theme-scrollbar-chrome-hover: #8a8170;
+  --theme-scrollbar-paper: #a59b87;
+  --theme-scrollbar-paper-hover: #625846;
 }
 
 [data-theme="dark"] {
@@ -108,6 +112,10 @@
   --theme-danger: #e2785e;
   --theme-focus: #f4b347;
   --theme-scrim: rgba(16, 13, 9, 0.8);
+  --theme-scrollbar-chrome: #433c30;
+  --theme-scrollbar-chrome-hover: #8a8170;
+  --theme-scrollbar-paper: #433c30;
+  --theme-scrollbar-paper-hover: #8a8170;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -132,6 +140,10 @@
     --theme-danger: #e2785e;
     --theme-focus: #f4b347;
     --theme-scrim: rgba(16, 13, 9, 0.8);
+    --theme-scrollbar-chrome: #433c30;
+    --theme-scrollbar-chrome-hover: #8a8170;
+    --theme-scrollbar-paper: #433c30;
+    --theme-scrollbar-paper-hover: #8a8170;
   }
 }
 

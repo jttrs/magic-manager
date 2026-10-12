@@ -1,10 +1,13 @@
-import { Dialog, Tooltip } from 'radix-ui';
+import { Dialog } from 'radix-ui';
 import { useState } from 'react';
 import { useCompanion, type CompanionState } from '../../app/useCompanion';
 import { Button } from '../Button';
+import { iconActionClass } from '../iconActionClass';
+import { IconTooltip } from '../IconTooltip';
 import { CopyButton } from '../CopyButton';
 
-/** Header icon (companion flag): opens setup — install, pair, what it may read. */
+/** Header status icon (companion flag): a dot for the state (amber connected,
+ *  rust update, hollow not connected); opens setup — install, pair, what it may read. */
 export function CompanionButton() {
   const c = useCompanion();
   const [open, setOpen] = useState(false);
@@ -12,42 +15,22 @@ export function CompanionButton() {
   const label = c.status === 'ready'
     ? (c.outdated ? `Browser companion · update available · v${v} → v${c.latest}` : `Browser companion · connected · v${v}`)
     : c.status === 'absent' ? 'Browser companion · set up · not connected' : 'Browser companion';
-  // A quiet word beside the icon on wider screens (phones keep the icon + dot).
-  const word = c.status === 'ready' ? (c.outdated ? 'Update' : `v${v}`) : c.status === 'absent' ? 'Not connected' : null;
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
-      <Tooltip.Provider delayDuration={200}>
-        <Tooltip.Root>
-          <Tooltip.Trigger asChild>
-            <Dialog.Trigger asChild>
-              <button
-                type="button"
-                aria-label={label}
-                className="touch-hit relative flex h-8 min-w-8 cursor-pointer items-center justify-center gap-1.5 rounded-sm px-1.5 text-on-chrome-muted transition-colors ease-guide hover:text-on-chrome"
-              >
-                <svg viewBox="0 0 16 16" aria-hidden="true" className="size-4 shrink-0">
-                  <path d="M6 2.5v3M10 2.5v3M4.5 5.5h7v2.5a3.5 3.5 0 0 1-7 0z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M8 11.5v2" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                </svg>
-                {c.status === 'ready' && (
-                  <span aria-hidden="true" className={`absolute left-[1.4rem] top-1 size-1.5 rounded-pill ${c.outdated ? 'bg-danger' : 'bg-accent'}`} />
-                )}
-                {c.status === 'absent' && (
-                  <span aria-hidden="true" className="absolute left-[1.4rem] top-1 size-1.5 rounded-pill border border-on-chrome-muted" />
-                )}
-                {word && (
-                  <span aria-hidden="true" className={`hidden whitespace-nowrap text-xs voice-semi tabular md:inline ${c.outdated ? 'text-on-chrome' : ''}`}>{word}</span>
-                )}
-              </button>
-            </Dialog.Trigger>
-          </Tooltip.Trigger>
-          <Tooltip.Portal>
-            <Tooltip.Content side="bottom" sideOffset={6} collisionPadding={12} className="z-50 rounded-sm border border-chrome-line bg-chrome-raised px-2.5 py-1.5 text-sm text-on-chrome shadow-[0_12px_28px_-12px_var(--theme-scrim)]">
-              {label}
-            </Tooltip.Content>
-          </Tooltip.Portal>
-        </Tooltip.Root>
-      </Tooltip.Provider>
+      <IconTooltip label={label}>
+        <Dialog.Trigger aria-label={label} className={iconActionClass('chrome')}>
+          <svg viewBox="0 0 16 16" aria-hidden="true" className="size-[1.125rem]">
+            <path d="M6 2.5v3M10 2.5v3M4.5 5.5h7v2.5a3.5 3.5 0 0 1-7 0z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M8 11.5v2" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+          {c.status === 'ready' && (
+            <span aria-hidden="true" className={`absolute right-1.5 top-1.5 size-2 rounded-pill ${c.outdated ? 'bg-danger' : 'bg-accent'}`} />
+          )}
+          {c.status === 'absent' && (
+            <span aria-hidden="true" className="absolute right-1.5 top-1.5 size-2 rounded-pill border border-on-chrome-muted" />
+          )}
+        </Dialog.Trigger>
+      </IconTooltip>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim backdrop-blur-[1px]" />
         <Dialog.Content className="paper-grain fixed left-1/2 top-1/2 z-50 flex max-h-[min(52rem,calc(100dvh-1.5rem))] w-[min(44rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col rounded-sm bg-paper text-ink shadow-[0_24px_60px_-24px_var(--theme-scrim)] focus:outline-none">

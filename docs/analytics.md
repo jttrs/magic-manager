@@ -90,7 +90,7 @@ lives in that user's own file.
   just in the browser.
 - `MM_ANALYTICS=off` disables all recording, for CI, demos, and the test suite
   by default.
-- The choice is in the app (the masthead's *Privacy* control) and on the CLI:
+- The choice is in the app (Settings → *Privacy*, behind the masthead gear) and on the CLI:
   `mm analytics consent --no-usage`.
 
 **Legal basis (research summary, not legal advice).**

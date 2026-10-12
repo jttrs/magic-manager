@@ -1,5 +1,16 @@
 import { COMPARE_URL, expect, test } from './support';
 
+const navFitsBeside = async (page: import('@playwright/test').Page, width: number) => {
+  const gear = await page.getByRole('button', { name: 'Settings' }).boundingBox();
+  expect(gear!.x + gear!.width).toBeLessThanOrEqual(width);
+  const icons = await page.getByRole('banner').locator('a[aria-label], button[aria-label]').evaluateAll((els) => els.filter((e) => e.getBoundingClientRect().width > 0).map((e) => e.getBoundingClientRect().left));
+  const leftmost = Math.min(...icons);
+  for (const name of ['Collection', 'Decks', 'Explore', 'Market']) {
+    const box = await page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name }).boundingBox();
+    expect(box!.x + box!.width).toBeLessThanOrEqual(leftmost);
+  }
+};
+
 test('top nav spans the full width and the sidebar starts below it (F7)', async ({ page }) => {
   await page.goto(COMPARE_URL);
   const header = await page.getByRole('banner').boundingBox();
@@ -22,10 +33,12 @@ test('nav switches views and marks the active one', async ({ page }) => {
 test('theme override: dark sets data-theme, Auto clears it and follows the OS', async ({ page }) => {
   await page.goto(COMPARE_URL);
   const html = page.locator('html');
-  await page.getByRole('radio', { name: 'Dark' }).click();
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('dialog', { name: 'Settings' }).getByRole('radio', { name: 'Dark' }).click();
   await expect(html).toHaveAttribute('data-theme', 'dark');
   await page.reload();
   await expect(html).toHaveAttribute('data-theme', 'dark');
+  await page.getByRole('button', { name: 'Settings' }).click();
   await page.getByRole('radio', { name: 'Auto' }).click();
   await expect(html).not.toHaveAttribute('data-theme', /.*/);
 });
@@ -34,9 +47,41 @@ test('light theme puts bone paper on charcoal chrome; dark is all charcoal', asy
   await page.emulateMedia({ colorScheme: 'light' });
   await page.goto(COMPARE_URL);
   const bg = (sel: string) => page.locator(sel).first().evaluate((e) => getComputedStyle(e).backgroundColor);
+  await page.getByRole('button', { name: 'Settings' }).click();
   await page.getByRole('radio', { name: 'Light' }).click();
   expect(await bg('html')).toBe('rgb(22, 19, 14)');
   expect(await bg('.bg-paper')).toBe('rgb(239, 231, 214)');
   await page.getByRole('radio', { name: 'Dark' }).click();
   expect(await bg('.bg-paper')).toBe('rgb(34, 30, 23)');
+});
+
+test('settings gear holds appearance, privacy and about; the masthead stays quiet', async ({ page }) => {
+  await page.goto(COMPARE_URL);
+  const header = page.getByRole('banner');
+  await expect(header.getByRole('radio')).toHaveCount(0);
+  await expect(header.getByRole('button', { name: /^Privacy/ })).toHaveCount(0);
+  await header.getByRole('button', { name: 'Settings' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Settings' });
+  await expect(dialog.getByRole('heading', { name: 'Appearance' })).toBeVisible();
+  await expect(dialog.getByRole('radiogroup', { name: 'Theme' })).toBeVisible();
+  await expect(dialog.getByRole('heading', { name: 'Privacy' })).toBeVisible();
+  await dialog.getByRole('link', { name: /Background jobs/ }).click();
+  await expect(page).toHaveURL(/\/jobs/);
+  await expect(dialog).toHaveCount(0);
+});
+
+test('phone masthead: every nav tab and the gear fit at 390px', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(COMPARE_URL);
+  await navFitsBeside(page, 390);
+});
+
+test('phone masthead, crowded: restore point + a running job + the gear still fit at 390px', async ({ page }) => {
+  await page.route('**/api/undo', (r) => r.fulfill({ json: { taken_at: new Date().toISOString(), reason: 'before adding cards', restorable: true, current: {}, snapshot: {}, changes: {}, details: [] } }));
+  await page.route('**/api/jobs', (r) => r.fulfill({ json: [{ id: 'j1', name: 'edhrec.sync_bulk', title: 'Warm EDHREC cache', inputs: {}, status: 'running', created_at: '2026-01-01T00:00:00+00:00', started_at: null, finished_at: null, progress: null, summary: null, artifacts: [], error: null }] }));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(COMPARE_URL);
+  await expect(page.getByRole('link', { name: 'Background jobs · 1 running' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Restore point/ })).toBeVisible();
+  await navFitsBeside(page, 390);
 });
