@@ -185,7 +185,7 @@ Depth is mostly tonal and ruled, not shadowed. The app chrome, raised chrome con
 
 The shape language is nearly square, like printed stock and clipped guide labels. Default radii are tiny: `radius-xs` 2px, `radius-sm` 3px. Pills are reserved for chips, bars, highlighter handles, jobs pulse dots, and segmented capsule details. Actual card images keep their physical card radius via `rounded-[4.5%/3.2%]`; art crops and thumbnails use `radius-xs`.
 
-**Scrollbars** are part of the stock, not the OS: a slim pill thumb on a clear track (`::-webkit-scrollbar`; Firefox gets `scrollbar-width: thin`), tinted per surface through `--sb-thumb` — `theme.scrollbar-chrome` on chrome, `theme.scrollbar-paper` on paper sheets and dialogs — darkening on hover and lighting amber while dragged.
+**Scrollbars** are part of the stock, not the OS: a slim pill thumb on a clear track (`::-webkit-scrollbar`; Firefox gets `scrollbar-width: thin`), tinted per surface through `--sb-thumb` — `theme.scrollbar-chrome` on chrome, `theme.scrollbar-paper` on paper sheets and dialogs — darkening on hover and lighting amber while dragged. Because they're always drawn, a row that scrolls sideways (`overflow-x: auto` — tab rows, the nav) must not overflow vertically, or it grows a stray vertical thumb: hang the **row** over its rule (`-mb-*` on the row), never the tabs inside it (`e2e/scroll-rows.spec.ts` guards this).
 
 Hairline borders are the main geometry. `ruled` is a 1px bottom border; column and section headings use 2px `rule-strong`; split separators use a 1px vertical rule plus a pill handle. The `highlighter` utility is a ragged linear-gradient stroke behind text/rows, not a rectangular selected background.
 

@@ -11,7 +11,9 @@ export type SectionTab = {
   active?: boolean;
 };
 
-const TAB = 'relative -mb-px py-1.5 text-sm voice-semi uppercase tracking-[0.06em] no-underline transition-colors ease-guide hover:text-ink after:absolute after:inset-x-0 after:bottom-0 after:h-[3px] after:rounded-pill';
+// No negative bottom margin: the row scrolls sideways, so a tab hanging below it
+// would give the row a vertical scrollbar. The underline sits on the rule.
+const TAB = 'relative py-1.5 text-sm voice-semi uppercase tracking-[0.06em] no-underline transition-colors ease-guide hover:text-ink after:absolute after:inset-x-0 after:bottom-0 after:h-[3px] after:rounded-pill';
 const ROUTED = 'text-ink-muted after:bg-transparent data-[status=active]:text-ink data-[status=active]:after:bg-accent';
 const ON = 'text-ink after:bg-accent';
 const OFF = 'text-ink-muted after:bg-transparent';
