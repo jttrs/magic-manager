@@ -1,6 +1,6 @@
 ---
 name: collection-sync
-description: "Import or export your whole COLLECTION (inventory) to/from an external service via CSV, with a mandatory diff-review-and-approve step. Import reads a service's exported collection CSV into local inventory under one of three modes (add / modify / overwrite); export renders your inventory back out as that service's CSV. Always relays to `mm collection import|export|diff`, which writes a review artifact (XLSX + JSON) and is DRY-RUN by default — nothing hits the DB until you approve with --apply. Supported services: manabox, moxfield, archidekt, mtggoldfish (each a declarative config block; manabox/archidekt/mtggoldfish carry a Scryfall ID for exact matching, moxfield resolves by set+collector-number, mtggoldfish is low-confidence for id-less promos). Scryfall has no collection. Triggers: \"import my manabox/moxfield/archidekt/mtggoldfish collection\", \"sync my collection from <service> CSV\", \"load my collection export into inventory\", \"export my collection to <service>\", \"diff my collection CSV against what I own\", \"bulk-add my whole collection from a CSV\"."
+description: "Import or export your whole COLLECTION (inventory) to/from an external service via CSV, with a mandatory diff-review-and-approve step. Import reads a service's exported collection CSV into local inventory under one of three modes (add / modify / overwrite); export renders your inventory back out as that service's CSV. Always relays to `mm collection import|export|diff`, which writes a review artifact (XLSX + JSON) and is DRY-RUN by default — nothing hits the DB until you approve with --apply. Supported services: manabox, moxfield, archidekt, mtggoldfish, deckbox, dragonshield, tcgplayer (app), delverlens (each a declarative config block; manabox/archidekt/mtggoldfish/deckbox carry a Scryfall ID for exact matching, moxfield/dragonshield/tcgplayer/delverlens resolve by set+collector-number, mtggoldfish is low-confidence for id-less promos). The web app's Add cards → Import a collection reads the same files (format auto-detected). Scryfall has no collection. Triggers: \"import my manabox/moxfield/archidekt/mtggoldfish collection\", \"sync my collection from <service> CSV\", \"load my collection export into inventory\", \"export my collection to <service>\", \"diff my collection CSV against what I own\", \"bulk-add my whole collection from a CSV\"."
 ---
 
 # collection-sync
@@ -100,6 +100,10 @@ reads as "added".
   | `archidekt` | Scryfall ID | high | both export variants (default / all-fields) work |
   | `moxfield` | set + collector number | high | id-less; see binder gotcha below |
   | `mtggoldfish` | Scryfall ID, else (set,cn) | **low** | some promos (`PRM-*` pseudo-sets) have no id AND a non-Scryfall set code → reported not_found |
+  | `deckbox` | Scryfall ID, else Edition Code + Card Number | high | current export only (older exports without Edition Code aren't detected) |
+  | `dragonshield` | set + collector number | high | the WEBSITE export (`"sep=,"` first line); open-ended Printing names → foil if they say foil/etched |
+  | `tcgplayer` | set + collector number | high | phone app CSV export; Card Number + Set Code columns must be switched on |
+  | `delverlens` | set + collector number | high | its own CSV preset; its other presets read as the app they copy |
   Scryfall has no collection feature (excluded).
 - **Moxfield binder gotcha:** Moxfield won't let you move an existing collection card
   into a binder — you re-add it net-new, and it then exports as a card in BOTH the main

@@ -147,8 +147,10 @@ def _dialect(body: str):
     return delim if counts[delim] else ","
 
 
-def _read_rows(text: str, fmt: dict) -> tuple[list[CollectionRow], dict[str, int]]:
-    """``text`` under ``fmt`` → rows + copies skipped as ``proxy``/``digital``."""
+def _read_rows(text: str, fmt: dict) -> list[tuple[CollectionRow, str | None]]:
+    """``text`` under ``fmt`` → each row with its skip flag (``proxy`` /
+    ``digital`` when the service marks it, else None). Header names match
+    regardless of case and surrounding spaces, as in :func:`detect_format`."""
     cols = fmt.get("columns") or {}
     # MTGGoldfish-style set-code remap (service → Scryfall code), lowercased.
     remap = {str(k).lower(): str(v).lower()
@@ -156,63 +158,65 @@ def _read_rows(text: str, fmt: dict) -> tuple[list[CollectionRow], dict[str, int
     truthy = {"true", "yes", "1", "x"}
     body = _csv_body(text)
     reader = csv.DictReader(io.StringIO(body), delimiter=_dialect(body))
-    skipped = {"proxy": 0, "digital": 0}
+    actual = {str(h).strip().lower(): h for h in (reader.fieldnames or []) if h is not None}
 
     def cell(row: dict, field_name: str) -> str | None:
         header = cols.get(field_name)
         if not header:
             return None
-        v = row.get(header)
+        v = row.get(actual.get(str(header).strip().lower(), header))
         return v.strip() if isinstance(v, str) else v
 
     def count(s: str | None) -> int:
         try:
             return int(float(s)) if s not in (None, "") else 0
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             return 0
 
-    out: list[CollectionRow] = []
+    out: list[tuple[CollectionRow, str | None]] = []
     for raw in reader:
-        sid = cell(raw, "scryfall_id") or None
-        setc = (cell(raw, "set") or None)
-        set_lc = setc.lower() if setc else None
+        qty = count(cell(raw, "quantity"))
+        if qty <= 0:
+            continue
+        set_lc = (cell(raw, "set") or "").lower() or None
         if set_lc:
             set_lc = remap.get(set_lc, set_lc)  # apply the remap, if any
-        cn = cell(raw, "collector_number") or None
-        base = dict(scryfall_id=sid, set=set_lc, collector_number=cn,
-                    name=cell(raw, "name") or None,
-                    condition=_condition_from(fmt, cell(raw, "condition")),
-                    purchase_price=cell(raw, "purchase_price") or None)
-        # One row per finish: a single count + a finish column, or (Echo MTG
-        # style) a regular count beside a separate foil count.
-        if cols.get("foil_quantity"):
-            parts = [(count(cell(raw, "quantity")), "nonfoil"), (count(cell(raw, "foil_quantity")), "foil")]
-        else:
-            parts = [(count(cell(raw, "quantity")), _finish_from(fmt, cell(raw, "finish")))]
         why = next((k for k in ("proxy", "digital") if (cell(raw, k) or "").lower() in truthy), None)
-        for qty, finish in parts:
-            if qty <= 0:
-                continue
-            if why:
-                skipped[why] += qty
-                continue
-            out.append(CollectionRow(qty=qty, finish=finish, **base))
-    return out, skipped
+        out.append((CollectionRow(
+            qty=qty,
+            finish=_finish_from(fmt, cell(raw, "finish")),
+            scryfall_id=cell(raw, "scryfall_id") or None,
+            set=set_lc,
+            collector_number=cell(raw, "collector_number") or None,
+            name=cell(raw, "name") or None,
+            condition=_condition_from(fmt, cell(raw, "condition")),
+            purchase_price=cell(raw, "purchase_price") or None,
+        ), why))
+    return out
 
 
 def read_text(text: str, service: str) -> list[CollectionRow]:
     """:func:`read_csv` over the file's text. Rows with no identity (no
-    scryfall_id, no set+cn) and proxy/digital rows are dropped here."""
-    rows, _ = _read_rows(text, service_format(service))
-    return [r for r in rows if r.scryfall_id or (r.set and r.collector_number)]
+    scryfall_id, no set+cn) are dropped; proxy/digital rows are KEPT here, as
+    the CLI always did — only the web import (:func:`read_export`) skips them."""
+    return [r for r, _ in _read_rows(text, service_format(service))
+            if r.scryfall_id or (r.set and r.collector_number)]
 
 
 # ---------------------------------------------------------------------------
 # Exported collection files — detect which app wrote it, read it as lines
 # ---------------------------------------------------------------------------
 
-class UnknownFormat(ValueError):
+class BadFile(ValueError):
+    """An uploaded collection file that can't be imported as it is."""
+
+
+class UnknownFormat(BadFile):
     """The file's header matches no configured collection export."""
+
+
+MAX_FILE_LINES = 60_000          # same caps as a companion read (api.collection_import)
+MAX_LINE_QTY = 99_999
 
 
 def _header(text: str) -> list[str]:
@@ -256,20 +260,30 @@ class ExportRead:
     service: str
     name: str
     lines: list[dict]
-    skipped: dict[str, int]
 
 
 def read_export(text: str, *, service: str | None = None) -> ExportRead:
     """A collection export file → the normalized lines :func:`preview_lines` /
     :func:`apply_lines` take — the SAME review + apply path a companion read
-    uses. ``service`` overrides detection. Lines with no usable identity are
-    kept so the preview reports them as not found (never silently dropped)."""
+    uses, which also skips and counts proxy/digital lines. ``service``
+    overrides detection. Lines with no usable identity are kept so the preview
+    reports them as not found (never silently dropped). Raises
+    :class:`BadFile` for an unreadable file or one past the companion's caps."""
     key = (service or detect_format(text)).lower()
     fmt = service_format(key)
-    rows, skipped = _read_rows(text, fmt)
+    try:
+        rows = _read_rows(text, fmt)
+    except csv.Error as e:
+        raise BadFile(f"Couldn’t read this file as CSV: {e}.") from e
+    if len(rows) > MAX_FILE_LINES:
+        raise BadFile(f"This file has {len(rows):,} card lines; import at most {MAX_FILE_LINES:,} at a time.")
+    big = next((r for r, _ in rows if r.qty > MAX_LINE_QTY), None)
+    if big:
+        raise BadFile(f"{big.name or 'A line'} has {big.qty:,} copies — more than {MAX_LINE_QTY:,}; check that line.")
     lines = [{"quantity": r.qty, "finish": r.finish, "scryfall_id": r.scryfall_id, "set": r.set,
-              "cn": r.collector_number, "name": r.name} for r in rows]
-    return ExportRead(key, str((fmt.get("app") or {}).get("name") or key), lines, skipped)
+              "cn": r.collector_number, "name": r.name, "proxy": why == "proxy", "digital": why == "digital"}
+             for r, why in rows]
+    return ExportRead(key, str((fmt.get("app") or {}).get("name") or key), lines)
 
 
 # ---------------------------------------------------------------------------
@@ -782,16 +796,34 @@ def rows_from_lines(lines: Iterable[dict]) -> LinesRead:
 
 
 def resolve_rows_local_first(rows: list[CollectionRow]) -> ResolveResult:
-    """:func:`resolve_rows`, but a row whose ``scryfall_id`` is already in the
-    local ``cards`` table is taken as resolved without a network call — a
+    """:func:`resolve_rows`, but a row whose ``scryfall_id`` (or, with no id,
+    exact set + collector number) is already in the local ``cards`` table is
+    taken as resolved without a network call — a
     whole collection is tens of thousands of lines, nearly all known. Only the
     rest go through the Scryfall resolve (and upsert)."""
     ids = list({r.scryfall_id for r in rows if r.scryfall_id})
+    setcn = list({(r.set.lower(), str(r.collector_number)) for r in rows
+                  if not r.scryfall_id and r.set and r.collector_number})
     known: set[str] = set()
+    by_setcn: dict[tuple[str, str], str] = {}
     with db.connect() as conn:
         for chunk in util.chunks(ids):
             known |= {r[0] for r in conn.execute(
                 f"SELECT scryfall_id FROM cards WHERE scryfall_id IN ({','.join('?' * len(chunk))})", chunk)}
+        # Id-less exports (Moxfield, Dragon Shield, TCGplayer, …): an exact
+        # set + collector number already in the catalog resolves locally too.
+        for chunk in util.chunks(setcn, 400):
+            q = " OR ".join("(set_code = ? AND collector_number = ?)" for _ in chunk)
+            for sid, sc, cn in conn.execute(
+                    f"SELECT scryfall_id, set_code, collector_number FROM cards WHERE {q}",
+                    [v for pair in chunk for v in pair]):
+                by_setcn[(sc.lower(), cn)] = sid
+    for r in rows:
+        if not r.scryfall_id and r.set and r.collector_number:
+            sid = by_setcn.get((r.set.lower(), str(r.collector_number)))
+            if sid:
+                r.scryfall_id = sid
+                known.add(sid)
     local = [r for r in rows if r.scryfall_id in known]
     rest = [r for r in rows if r.scryfall_id not in known]
     res = resolve_rows(rest) if rest else ResolveResult()

@@ -87,7 +87,7 @@ test.describe('Add cards → Import a collection', () => {
     expect(previewBody).toEqual({ filename: 'cards.csv', text: csv });
     await d.getByRole('radio', { name: /Add to what you own/ }).check();
     await d.getByRole('button', { name: /^Import · / }).click();
-    await expect(d.getByRole('status')).toContainText('ManaBox file · cards.csv');
+    await expect(d.getByRole('status')).toContainText('ManaBox export · cards.csv');
     expect(applyBody).toEqual({ filename: 'cards.csv', text: csv, format: 'manabox', mode: 'add', force: false });
   });
 
@@ -130,11 +130,23 @@ test.describe('Add cards → Import a collection', () => {
     await expect(table.getByRole('row').nth(1)).toContainText('−2');
     await d.getByRole('button', { name: 'Import · +1 copy · −2 copies · 1 new printing' }).click();
     await expect(d.getByRole('status')).toContainText('Imported: 1 new printing, 1 changed');
+    await expect(d.getByRole('status')).toContainText('Moxfield binder · Trade Box 1');
+    // The listed binders survive the review: read another without listing again.
+    await expect(d.getByRole('button', { name: 'Read binder Trade Box 1' })).toBeVisible();
     expect(applyBody).toMatchObject({ mode: 'replace', force: false, scope: 'binder', name: 'Trade Box 1' });
     expect(await page.evaluate(() => (window as unknown as { __companionRequests: unknown[] }).__companionRequests)).toEqual([
       { kind: 'moxfield_binders', params: {} },
       { kind: 'moxfield_collection', params: { what: 'binder', binder: 'LbwVB1hSiU2THiRQeR2QlQ' } },
     ]);
+  });
+
+  test('one read at a time: a file can’t start while Moxfield waits for approval', async ({ page }) => {
+    await flags(page);
+    await fakeCompanion(page, {});                         // never answers: the read stays pending
+    const d = await openCollectionTab(page);
+    await d.getByRole('button', { name: 'Read my collection' }).click();
+    await expect(d.getByRole('button', { name: 'Choose a file to read' })).toBeDisabled();
+    await expect(d.getByRole('button', { name: 'Read link' })).toBeDisabled();
   });
 
   test('adding an identical read again needs a confirmation', async ({ page }) => {

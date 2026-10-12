@@ -81,15 +81,6 @@ export function readTitle(scope: 'collection' | 'binder', id: string | null, nam
 /** The review's heading for an exported file: `ManaBox export · collection.csv`. */
 export const fileTitle = (formatName: string, filename: string): string => `${formatName} export · ${filename}`;
 
-/** The import's history entry, in words: `web:moxfield binder · X` → `Moxfield binder · X`,
- *  `web:file ManaBox · a.csv` → `ManaBox file · a.csv`. */
-export function importedLabel(label: string): string {
-  const s = label.replace(/^web:/, '');
-  const file = /^file (.+?) · (.+)$/.exec(s);
-  if (file) return `${file[1]} file · ${file[2]}`;
-  return s.replace(/^moxfield /, 'Moxfield ');
-}
-
 /** Exported files are read in the browser and posted whole; the server caps them (25M characters). */
 export const MAX_FILE_BYTES = 25_000_000;
 

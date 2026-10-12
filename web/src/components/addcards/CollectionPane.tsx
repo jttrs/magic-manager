@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useIsMutating, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useId, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import { unwrap } from '../../app/queries';
@@ -9,7 +9,7 @@ import {
   type CollectionApplyOut, type CollectionPreviewOut, type CollectionReadIn,
 } from '../../core/api';
 import {
-  MAX_FILE_BYTES, belowPledged, changedRows, effectLine, effectOf, fileTitle, importedLabel, previewNotes, readTitle, shareLinkKind,
+  MAX_FILE_BYTES, belowPledged, changedRows, effectLine, effectOf, fileTitle, previewNotes, readTitle, shareLinkKind,
   type ImportMode,
 } from '../../core/collectionImport';
 import { ALLOW_ACCESS_HINT, type MoxfieldBinder } from '../../core/companion';
@@ -25,6 +25,10 @@ const H3 = 'border-b-2 border-rule-strong pb-1 text-lg voice-condensed font-bold
 const READ_TIMEOUT_MS = 5 * 60_000;
 
 const DOWN_KEYS = [MOXFIELD_COLLECTION_KEY] as const;
+/** Every source's read shares this key, so only one read runs at a time across sources. */
+const READ_KEY = ['collection-import-read'] as const;
+
+const useReading = () => useIsMutating({ mutationKey: READ_KEY }) > 0;
 
 /** One read, whatever its source: what it is, what it would change, and how to import it. */
 type Read = { title: string; preview: CollectionPreviewOut; apply: (mode: ImportMode, force: boolean) => Promise<CollectionApplyOut> };
@@ -39,12 +43,12 @@ export function CollectionPane({ companion }: { companion: boolean }) {
   const [read, setRead] = useState<Read | null>(null);
   const [mode, setMode] = useState<ImportMode | null>(null);
   const [again, setAgain] = useState(false);
-  const [done, setDone] = useState<CollectionApplyOut | null>(null);
+  const [done, setDone] = useState<{ out: CollectionApplyOut; title: string } | null>(null);
 
   const onRead = (r: Read) => { setRead(r); setMode(null); setAgain(false); setDone(null); };
 
   const apply = useMutation({
-    mutationFn: async () => read!.apply(mode!, again),
+    mutationFn: async () => ({ out: await read!.apply(mode!, again), title: read!.title }),
     onSuccess: async (r) => {
       setDone(r);
       setRead(null);
@@ -54,19 +58,20 @@ export function CollectionPane({ companion }: { companion: boolean }) {
     },
   });
 
-  if (read) {
-    return <Review read={read} mode={mode} onMode={setMode} again={again} onAgain={setAgain} onBack={() => { setRead(null); apply.reset(); }}
-      onImport={() => apply.mutate()} busy={apply.isPending} error={apply.error} />;
-  }
-
+  // The sources stay mounted (hidden) during review, so a listed binder or a pasted link survives *Read something else*.
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto pr-3 [scrollbar-gutter:stable]">
+    <>
+    {read && (
+      <Review read={read} mode={mode} onMode={setMode} again={again} onAgain={setAgain} onBack={() => { setRead(null); apply.reset(); }}
+        onImport={() => apply.mutate()} busy={apply.isPending} error={apply.error} />
+    )}
+    <div hidden={read != null} className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto pr-3 [scrollbar-gutter:stable]">
       {done && (
         <p role="status" className="flex flex-wrap items-baseline gap-3 rounded-sm bg-paper-sunk px-3 py-2 text-md">
           <span className="highlighter px-1 voice-semi font-medium">
-            Imported: {fmtInt(done.added)} new {done.added === 1 ? 'printing' : 'printings'}, {fmtInt(done.updated)} changed
+            Imported: {fmtInt(done.out.added)} new {done.out.added === 1 ? 'printing' : 'printings'}, {fmtInt(done.out.updated)} changed
           </span>
-          <span className="text-sm text-ink-muted">One entry in Purchase history · {importedLabel(done.label)}</span>
+          <span className="text-sm text-ink-muted">One entry in Purchase history · {done.title}</span>
         </p>
       )}
       <p className="max-w-[62ch] text-md leading-relaxed text-ink-muted">
@@ -75,6 +80,7 @@ export function CollectionPane({ companion }: { companion: boolean }) {
       <FileSource onRead={onRead} />
       {companion && <MoxfieldSource onRead={onRead} />}
     </div>
+    </>
   );
 }
 
@@ -84,7 +90,9 @@ function FileSource({ onRead }: { onRead: (r: Read) => void }) {
   const input = useRef<HTMLInputElement | null>(null);
   const [drag, setDrag] = useState(false);
   const hintId = useId();
+  const reading = useReading();
   const readFile = useMutation({
+    mutationKey: READ_KEY,
     mutationFn: async (f: File): Promise<Read> => {
       if (f.size > MAX_FILE_BYTES) throw new Error(`${f.name} is too big to import here (over 25 MB). Export a smaller part of your collection.`);
       const body = { filename: f.name, text: await f.text() };
@@ -96,7 +104,7 @@ function FileSource({ onRead }: { onRead: (r: Read) => void }) {
     },
     onSuccess: onRead,
   });
-  const pick = (f: File | undefined) => { if (f && !readFile.isPending) readFile.mutate(f); };
+  const pick = (f: File | undefined) => { if (f && !reading) readFile.mutate(f); };
   const onDrop = (e: DragEvent) => { e.preventDefault(); setDrag(false); pick(e.dataTransfer.files[0]); };
   const names = formats.data?.map((f) => f.name) ?? [];
 
@@ -111,7 +119,7 @@ function FileSource({ onRead }: { onRead: (r: Read) => void }) {
       >
         <input ref={input} type="file" accept=".csv,.txt,text/csv,text/plain" className="sr-only" tabIndex={-1} aria-hidden
           onChange={(e) => { pick(e.target.files?.[0]); e.target.value = ''; }} />
-        <Button tone="paper" emphasis="primary" aria-describedby={hintId} disabled={readFile.isPending} onClick={() => input.current?.click()}>
+        <Button tone="paper" emphasis="primary" aria-describedby={hintId} disabled={reading} onClick={() => input.current?.click()}>
           {readFile.isPending ? `Reading ${readFile.variables?.name ?? 'file'}…` : 'Choose a file to read'}
         </Button>
         <p id={hintId} className="min-w-0 flex-1 basis-[22rem] text-md leading-relaxed text-ink">
@@ -151,13 +159,16 @@ function MoxfieldSource({ onRead }: { onRead: (r: Read) => void }) {
   const moxOn = Boolean(c.hello?.features.moxfield);
   const linkErr = useId();
 
+  const reading = useReading();
   const listBinders = useMutation({
+    mutationKey: READ_KEY,
     mutationFn: async () => (await c.read('moxfield_binders', {}, setAwaiting)).binders,
     onSuccess: setBinders,
     onSettled: () => setAwaiting(null),
   });
 
   const readMx = useMutation({
+    mutationKey: READ_KEY,
     mutationFn: async (what: MxRead): Promise<Read> => {
       const params = 'url' in what ? { url: what.url } : what.what === 'binder' ? { what: 'binder' as const, binder: what.binder.id } : { what: 'collection' as const };
       const d = await c.read('moxfield_collection', params, setAwaiting, { ackTimeoutMs: READ_TIMEOUT_MS });
@@ -174,13 +185,12 @@ function MoxfieldSource({ onRead }: { onRead: (r: Read) => void }) {
     onSettled: () => setAwaiting(null),
   });
 
-  const busy = readMx.isPending || listBinders.isPending;
-  const off = !ready || !moxOn || busy;
+  const off = !ready || !moxOn || reading;
   const linkKind = shareLinkKind(link);
   const v = readMx.variables;
-  const reading = (k: 'collection' | 'binder' | 'url', id?: string) =>
+  const readingThis = (k: 'collection' | 'binder' | 'url', id?: string) =>
     readMx.isPending && v != null && ('url' in v ? k === 'url' : v.what === k && (k !== 'binder' || (v.what === 'binder' && v.binder.id === id)));
-  const label = (k: Parameters<typeof reading>[0], idle: string, id?: string) => (reading(k, id) ? (awaiting != null ? 'Waiting for approval…' : 'Reading…') : idle);
+  const label = (k: Parameters<typeof readingThis>[0], idle: string, id?: string) => (readingThis(k, id) ? (awaiting != null ? 'Waiting for approval…' : 'Reading…') : idle);
 
   return (
     <section aria-labelledby="ci-mox" className="flex flex-col gap-1">
@@ -211,7 +221,7 @@ function MoxfieldSource({ onRead }: { onRead: (r: Read) => void }) {
                 <li key={b.id}>
                   <Button tone="paper" disabled={off} aria-label={`Read binder ${b.name ?? b.id}`} onClick={() => readMx.mutate({ what: 'binder', binder: b })}>
                     {label('binder', b.name ?? b.id, b.id)}
-                    {b.cards != null && !reading('binder', b.id) && <span className="tabular text-ink-muted">{fmtInt(b.cards)}</span>}
+                    {b.cards != null && !readingThis('binder', b.id) && <span className="tabular text-ink-muted">{fmtInt(b.cards)}</span>}
                   </Button>
                 </li>
               ))}
@@ -273,8 +283,8 @@ function Review({ read, mode, onMode, again, onAgain, onBack, onImport, busy, er
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 border-b-2 border-rule-strong pb-1">
         <h3 className="text-lg voice-condensed font-bold uppercase">{title}</h3>
         <span className="text-sm tabular text-ink-muted">{fmtInt(p.rows.length)} {p.rows.length === 1 ? 'printing' : 'printings'}</span>
-        <button type="button" onClick={onBack}
-          className="inline-flex cursor-pointer items-center gap-0.5 self-center rounded-sm px-1 text-sm voice-semi font-medium text-accent-ink underline decoration-1 underline-offset-2 hover:decoration-2">
+        <button type="button" onClick={onBack} disabled={busy}
+          className="inline-flex cursor-pointer disabled:cursor-default disabled:opacity-50 items-center gap-0.5 self-center rounded-sm px-1 text-sm voice-semi font-medium text-accent-ink underline decoration-1 underline-offset-2 hover:decoration-2">
           <Chevron dir="left" className="size-3.5" />
           Read something else
         </button>

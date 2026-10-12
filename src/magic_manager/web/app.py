@@ -419,7 +419,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     def collection_import_file_preview(req: collection_import_api.CollectionFileIn):
         try:
             return collection_import_api.preview_file(req)
-        except (collection_sync.UnknownFormat, collection_sync.NothingToImport) as e:
+        except (collection_sync.BadFile, collection_sync.NothingToImport) as e:
             raise HTTPException(422, str(e)) from e
 
     @app.post("/api/collection/import/file/apply", response_model=collection_import_api.CollectionApplyOut, tags=["collection"],
@@ -427,7 +427,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     def collection_import_file_apply(req: collection_import_api.CollectionFileApplyIn):
         try:
             return collection_import_api.apply_file(req)
-        except (collection_sync.UnknownFormat, collection_sync.NothingToImport) as e:
+        except (collection_sync.BadFile, collection_sync.NothingToImport) as e:
             raise HTTPException(422, str(e)) from e
         except collection_sync.AlreadyImported as e:
             raise HTTPException(409, str(e)) from e

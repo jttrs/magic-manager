@@ -27,7 +27,7 @@ for (const width of [1400, 380]) {
 
     test('Add cards tabs', async ({ page }) => {
       const tabs = await openAddCards(page);
-      await expect(tabs.getByRole('tab', { name: 'Moxfield collection' })).toBeVisible();
+      await expect(tabs.getByRole('tab', { name: 'Import a collection' })).toBeVisible();
       await noVerticalScroll(tabs);
       // The active tab's underline still sits on the header rule.
       await tabs.getByRole('tab', { name: 'Paste a list' }).click();
@@ -50,5 +50,5 @@ test('narrow: the Add cards tabs still scroll sideways', async ({ page }) => {
   const { scrollWidth, clientWidth } = await tabs.evaluate((el) => ({ scrollWidth: el.scrollWidth, clientWidth: el.clientWidth }));
   expect(scrollWidth).toBeGreaterThan(clientWidth);
   await tabs.evaluate((el) => { el.scrollLeft = el.scrollWidth; });
-  await expect(tabs.getByRole('tab', { name: 'Moxfield collection' })).toBeInViewport();
+  await expect(tabs.getByRole('tab', { name: 'Import a collection' })).toBeInViewport();
 });

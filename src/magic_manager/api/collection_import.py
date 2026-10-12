@@ -161,7 +161,7 @@ def formats() -> list[CollectionFormatOut]:
 
 
 def _read_file(req: CollectionFileIn) -> collection_sync.ExportRead:
-    """Raises ``ValueError`` (``UnknownFormat`` / ``LookupError`` → 422) and
+    """Raises ``BadFile`` (unknown format, unreadable, past the caps → 422) and
     ``NothingToImport`` when the file has no card lines."""
     try:
         read = collection_sync.read_export(req.text, service=req.format)
@@ -179,12 +179,11 @@ def file_label(read: collection_sync.ExportRead, filename: str) -> str:
 def preview_file(req: CollectionFileIn) -> CollectionFilePreviewOut:
     read = _read_file(req)
     p = collection_sync.preview_lines(read.lines)
-    skipped = {k: p["skipped"].get(k, 0) + read.skipped.get(k, 0) for k in ("proxy", "digital")}
     if not p["rows"] and not p["not_found"]:
-        raise collection_sync.NothingToImport("This file has no card lines to import.")
+        raise collection_sync.NothingToImport("This file has only proxies or digital copies — nothing to import.")
     return CollectionFilePreviewOut(
-        label=file_label(read, req.filename), format=read.service, format_name=read.name, skipped=skipped,
-        **{k: p[k] for k in ("rows", "not_found", "not_in_read", "already_imported_at", "warnings")})
+        label=file_label(read, req.filename), format=read.service, format_name=read.name,
+        **{k: p[k] for k in ("rows", "not_found", "skipped", "not_in_read", "already_imported_at", "warnings")})
 
 
 def apply_file(req: CollectionFileApplyIn) -> CollectionApplyOut:

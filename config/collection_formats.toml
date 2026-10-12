@@ -38,9 +38,8 @@
 #     header names that must ALL be in a file's header row for it to be read
 #     as this service's export (collection_sync.detect_format).
 #
-#   Optional columns: `proxy` / `digital` (a true/yes/1 cell → skipped and
-#     counted, never imported) and `foil_quantity` (a separate foil count
-#     beside `quantity`, which is then the nonfoil count; no finish column).
+#   Optional columns: `proxy` / `digital` — a true/yes/1 cell marks the row;
+#     the web import skips and counts it (never imported), the CLI keeps it.
 #
 #   write_header / write_order  — the exact column ORDER emitted by write_csv
 #     (a list of OUR normalized field names). Lets each service's export match
@@ -381,7 +380,7 @@ confidence = "high"
 
 [delverlens.app]
 name   = "Delver Lens"
-how    = "Export a list with the Moxfield, Archidekt, Deckbox or TCGplayer preset — any of them reads here."
+how    = "Export a list as CSV with its own CSV preset. Other presets read as the app they copy when they carry set codes and collector numbers."
 detect = ["Name", "Acquired Price", "Set Code", "TCGPlayer Product ID", "Number", "Foil", "Quantity"]
 
 [delverlens.columns]

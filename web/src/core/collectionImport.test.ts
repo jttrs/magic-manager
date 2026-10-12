@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { afterImport, belowPledged, changedRows, effectLine, effectOf, previewNotes, readTitle, shareLinkKind, fileTitle, importedLabel } from './collectionImport';
+import { afterImport, belowPledged, changedRows, effectLine, effectOf, previewNotes, readTitle, shareLinkKind, fileTitle } from './collectionImport';
 
 const row = (id: string, current: number, incoming: number) => ({
   scryfall_id: id, finish: 'nonfoil' as const, name: id, set: 'tst', collector_number: '1', current, incoming,
@@ -40,8 +40,6 @@ describe('collection import view-model', () => {
     expect(readTitle('binder', 'x', 'Trade Box 1')).toBe('Moxfield binder · Trade Box 1');
     expect(readTitle('collection', null, null)).toBe('Your Moxfield collection');
     expect(fileTitle('ManaBox', 'cards.csv')).toBe('ManaBox export · cards.csv');
-    expect(importedLabel('web:moxfield binder · Trade Box 1')).toBe('Moxfield binder · Trade Box 1');
-    expect(importedLabel('web:file Deckbox · inventory.csv')).toBe('Deckbox file · inventory.csv');
     expect(previewNotes({ skipped: { proxy: 2, digital: 1 }, not_in_read: 1, not_found: [] })).toEqual([
       'Skipped 2 proxies and 1 digital copy (Arena/MTGO).',
       '1 printing you own isn’t in this read — left as it is.',

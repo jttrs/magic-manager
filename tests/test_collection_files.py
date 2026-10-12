@@ -82,26 +82,50 @@ def test_unknown_file_names_the_supported_apps():
     assert "ManaBox" in str(e.value) and "Moxfield" in str(e.value)
 
 
-def test_preamble_bom_semicolons_proxies_and_split_foil_counts(monkeypatch):
+def test_preamble_bom_semicolons_tabs_case_and_proxies(monkeypatch):
     fmts = dict(config.collection_formats())
-    fmts["splitapp"] = {
-        "app": {"name": "Split", "detect": ["Reg Qty", "Foil Qty", "Set Code"]},
-        "columns": {"quantity": "Reg Qty", "foil_quantity": "Foil Qty", "set": "Set Code",
-                    "collector_number": "Number", "name": "Name", "proxy": "Proxy"},
+    fmts["semiapp"] = {
+        "app": {"name": "Semi", "detect": ["Qty", "Set Code", "Number"]},
+        "columns": {"quantity": "Qty", "set": "Set Code", "collector_number": "Number", "name": "Name",
+                    "finish": "Foil", "proxy": "Proxy"},
+        "finish_map": {"foil": "foil"},
     }
     monkeypatch.setattr(config, "collection_formats", lambda **k: fmts)
-    text = "\ufeffsep=;\nName;Set Code;Number;Reg Qty;Foil Qty;Proxy\nA;tst;1;2;1;\nB;tst;2;0;3;\nC;tst;3;4;0;Yes\n"
+    # Header case/spacing differs from the config: detection and reading both tolerate it.
+    text = "\ufeff\"sep=;\"\nname; SET CODE ;number;qty;foil;proxy\nA;tst;1;2;;\nB;tst;2;3;foil;\nC;tst;3;4;;Yes\n"
     read = cs.read_export(text)
-    assert read.service == "splitapp"
-    got = [(ln["name"], ln["quantity"], ln["finish"]) for ln in read.lines]
-    assert got == [("A", 2, "nonfoil"), ("A", 1, "foil"), ("B", 3, "foil")]
-    assert read.skipped == {"proxy": 4, "digital": 0}
+    assert read.service == "semiapp"
+    got = [(ln["name"], ln["set"], ln["quantity"], ln["finish"], ln["proxy"]) for ln in read.lines]
+    assert got == [("A", "tst", 2, "nonfoil", False), ("B", "tst", 3, "foil", False), ("C", "tst", 4, "nonfoil", True)]
+    tabbed = cs.read_export(text.replace(";", "\t").replace('"sep=\t"', "sep=\t"))
+    assert [ln["quantity"] for ln in tabbed.lines] == [2, 3, 4]
+    assert cs.rows_from_lines(read.lines).skipped == {"proxy": 4, "digital": 0}
+
+
+def test_cli_read_csv_still_keeps_moxfield_proxies():
+    text = (FIX / "moxfield_sample.csv").read_text().replace('"False","False",""\n', '"False","True",""\n', 1)
+    assert [r.qty for r in cs.read_text(text, "moxfield")] == [1, 1, 1]           # CLI: unchanged
+    lines = cs.read_export(text).lines                                           # web: flagged, then skipped
+    assert [ln["proxy"] for ln in lines] == [True, False, False]
+
+
+def test_files_past_the_companion_caps_or_unreadable_are_refused():
+    head = "Quantity,Name,Finish,Edition Code,Scryfall ID,Collector Number\n"
+    for qty in ("100000", "1e9"):
+        with pytest.raises(cs.BadFile, match="copies"):
+            cs.read_export(head + f"{qty},Big,Normal,tst,,1\n")
+    assert cs.read_export(head + "inf,Odd,Normal,tst,,1\n2,Ok,Normal,tst,,2\n").lines[0]["name"] == "Ok"
+    with pytest.raises(cs.BadFile, match="at most"):
+        cs.read_export(head + "1,X,Normal,tst,,1\n" * (cs.MAX_FILE_LINES + 1))
+    with pytest.raises(cs.BadFile, match="CSV"):
+        cs.read_export(head + '1,"' + "x" * 200_000 + '",Normal,tst,,1\n')
 
 
 def test_lines_without_identity_are_kept_for_the_preview_to_report():
     text = "Quantity,Name,Finish,Edition Code,Scryfall ID,Collector Number\n2,Mystery,Normal,,,\n"
     read = cs.read_export(text)
-    assert read.lines == [{"quantity": 2, "finish": "nonfoil", "scryfall_id": None, "set": None, "cn": None, "name": "Mystery"}]
+    assert read.lines == [{"quantity": 2, "finish": "nonfoil", "scryfall_id": None, "set": None, "cn": None, "name": "Mystery",
+                           "proxy": False, "digital": False}]
     # …while the CLI's read_csv path keeps dropping them, as before.
     assert cs.read_text(text, "archidekt") == []
 
@@ -175,6 +199,21 @@ def test_file_routes_preview_then_apply_one_event(client):
     assert _qty(SID[0]) == 10
 
 
+def test_an_id_less_export_resolves_locally_and_counts_proxies(client):
+    mox = ('"Count","Tradelist Count","Name","Edition","Condition","Language","Foil","Tags","Last Modified","Collector Number","Alter","Proxy","Purchase Price"\n'
+           '"2","0","Card 1","tst","Near Mint","English","","","","1","False","False",""\n'
+           '"1","0","Card 3","TST","Near Mint","English","foil","","","3","False","False",""\n'
+           '"5","0","Card 2","tst","Near Mint","English","","","","2","False","True",""\n')
+    p = client.post("/api/collection/import/file/preview", json={"filename": "moxfield.csv", "text": mox})   # no network (fixture)
+    assert p.status_code == 200, p.text
+    pj = p.json()
+    assert pj["format"] == "moxfield" and pj["skipped"] == {"proxy": 5, "digital": 0}
+    assert {(r["scryfall_id"], r["finish"]): r["incoming"] for r in pj["rows"]} == {(SID[0], "nonfoil"): 2, (SID[2], "foil"): 1}
+    only_proxies = mox.splitlines()[0] + "\n" + mox.splitlines()[3] + "\n"
+    r = client.post("/api/collection/import/file/preview", json={"filename": "p.csv", "text": only_proxies})
+    assert r.status_code == 422 and "proxies" in str(r.json()["detail"])
+
+
 def test_file_routes_refuse_unknown_empty_and_below_pledged(client):
     bad = client.post("/api/collection/import/file/preview", json={"filename": "x.csv", "text": "a,b\n1,2\n"})
     assert bad.status_code == 422 and "ManaBox" in str(bad.json()["detail"])
@@ -182,6 +221,8 @@ def test_file_routes_refuse_unknown_empty_and_below_pledged(client):
     assert empty.status_code == 422
     assert client.post("/api/collection/import/file/preview", json={"filename": "x.csv", "text": MANABOX, "format": "nope"}).status_code == 422
     assert client.post("/api/collection/import/file/preview", json={"filename": "x.csv", "text": MANABOX, "cookie": 1}).status_code == 422
+    huge = MANABOX.replace(",5,1,", ",500000,1,")
+    assert client.post("/api/collection/import/file/apply", json={"filename": "x.csv", "text": huge, "mode": "add"}).status_code == 422
 
     from magic_manager import decks
     d = decks.deck_create("built", "Built")

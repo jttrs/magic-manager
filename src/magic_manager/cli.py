@@ -5369,7 +5369,7 @@ def _run_collection_sync(sync_args: list[str]) -> None:
 
 @collection_app.command("import")
 def collection_import_cmd(
-    service: str = typer.Argument(..., help="Collection service: manabox (more in later phases)."),
+    service: str = typer.Argument(..., help="Collection service: manabox, moxfield, archidekt, mtggoldfish, deckbox, dragonshield, tcgplayer, delverlens."),
     csv: str = typer.Argument(..., help="Path to the service's exported collection CSV."),
     mode: str = typer.Option("add", "--mode", help="add (additive) | modify (replace, absent untouched) "
                              "| overwrite (replace + zero rows absent from the CSV)."),
