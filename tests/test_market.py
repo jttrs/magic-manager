@@ -338,3 +338,27 @@ def test_deck_cost_all_free_unpriced_is_known_zero(deck):
     out = market.deck_cost(deck, with_sealed=False)
     assert out["with_collection"] == 0.0 and out["with_collection_floor"] == 0.0
     assert out["scratch"] == 5.0 and out["unpriced"] == 2
+
+
+def test_product_cost_memo_follows_inventory_changes(deck, monkeypatch):
+    from magic_manager import construct
+    needs = [construct.CardNeed(A, "nonfoil", 1, "x", "Skullclamp", "fic", "1", 5.0),
+             construct.CardNeed(B, "nonfoil", 2, "x", "Sol Ring", "fic", "2", 1.0)]
+    calls = []
+
+    def value(set_code, name, **kw):
+        calls.append(1)
+        return sealed.ProductValuation(label=name, kind="sealed", sealed_market=60.0, intrinsic=37.0,
+                                       card_needs=needs)
+    monkeypatch.setattr(sealed, "identify_product", lambda set_code, name: {"name": "FIC Bundle", "category": "bundle"})
+    monkeypatch.setattr(valuation, "value_sealed_product", value)
+    market._cost_memo.clear()
+    before = market.product_cost("sealed", "fic", "bundle")
+    assert market.product_cost("sealed", "fic", "bundle") is before and len(calls) == 1
+    inventory.inventory_add(A, "nonfoil", 1)
+    after = market.product_cost("sealed", "fic", "bundle")
+    assert len(calls) == 2
+    free = lambda c: {ln["name"]: ln["free"] for ln in c["lines"]}  # noqa: E731
+    assert free(before)["Skullclamp"] == 0 and free(after)["Skullclamp"] == 1
+    assert market.product_cost("sealed", "fic", "bundle") is after and len(calls) == 2
+    market._cost_memo.clear()
