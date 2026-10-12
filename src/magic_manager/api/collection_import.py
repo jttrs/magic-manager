@@ -1,4 +1,5 @@
-"""Collection import from the browser companion (internal — ``companion`` flag).
+"""Collection import: a companion read (internal — ``companion`` flag) or another
+app's exported collection file (no flag — :func:`preview_file` / :func:`apply_file`).
 
 The companion reads your Moxfield collection or one binder in your own browser
 (``extension/src/readers/moxfield-collection.js``); the app posts only the card
@@ -123,5 +124,71 @@ def apply(req: CollectionApplyIn) -> CollectionApplyOut:
         out = collection_sync.apply_lines(_lines(req), mode=req.mode, label=label, force=req.force)
     except collection_sync.NothingToImport as e:
         raise CompanionFailure("collection.empty") from e
+    return CollectionApplyOut(mode=req.mode, ingest_id=out["ingest_id"], added=out["added"], updated=out["updated"],
+                              not_found=out["not_found"], label=label)
+
+
+# ---------- exported collection files (no companion needed) ----------
+
+MAX_FILE_CHARS = 25_000_000
+
+
+class CollectionFormatOut(BaseModel):
+    id: str
+    name: str = Field(description="The app, as the user knows it.")
+    how: str = Field("", description="Where that app's collection export lives.")
+
+
+class CollectionFileIn(_Strict):
+    """An exported collection file, read in the browser and posted as text."""
+    filename: str = Field(max_length=255)
+    text: str = Field(max_length=MAX_FILE_CHARS)
+    format: str | None = Field(None, max_length=40, pattern=r"^[a-z0-9_-]+$", description="Skip detection: the service id.")
+
+
+class CollectionFilePreviewOut(CollectionPreviewOut):
+    format: str = Field(description="The service id the file was read as.")
+    format_name: str
+
+
+class CollectionFileApplyIn(CollectionFileIn):
+    mode: Literal["add", "replace"]
+    force: bool = Field(False, description="Add an identical read again (it was imported before).")
+
+
+def formats() -> list[CollectionFormatOut]:
+    return [CollectionFormatOut(**f) for f in collection_sync.importable_formats()]
+
+
+def _read_file(req: CollectionFileIn) -> collection_sync.ExportRead:
+    """Raises ``BadFile`` (unknown format, unreadable, past the caps → 422) and
+    ``NothingToImport`` when the file has no card lines."""
+    try:
+        read = collection_sync.read_export(req.text, service=req.format)
+    except LookupError as e:
+        raise collection_sync.UnknownFormat(str(e)) from e
+    if not read.lines:
+        raise collection_sync.NothingToImport("This file has no card lines to import.")
+    return read
+
+
+def file_label(read: collection_sync.ExportRead, filename: str) -> str:
+    return f"web:file {read.name} · {filename}"[:300]
+
+
+def preview_file(req: CollectionFileIn) -> CollectionFilePreviewOut:
+    read = _read_file(req)
+    p = collection_sync.preview_lines(read.lines)
+    if not p["rows"] and not p["not_found"]:
+        raise collection_sync.NothingToImport("This file has only proxies or digital copies — nothing to import.")
+    return CollectionFilePreviewOut(
+        label=file_label(read, req.filename), format=read.service, format_name=read.name,
+        **{k: p[k] for k in ("rows", "not_found", "skipped", "not_in_read", "already_imported_at", "warnings")})
+
+
+def apply_file(req: CollectionFileApplyIn) -> CollectionApplyOut:
+    read = _read_file(req)
+    label = file_label(read, req.filename)
+    out = collection_sync.apply_lines(read.lines, mode=req.mode, label=label, force=req.force)
     return CollectionApplyOut(mode=req.mode, ingest_id=out["ingest_id"], added=out["added"], updated=out["updated"],
                               not_found=out["not_found"], label=label)

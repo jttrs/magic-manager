@@ -1564,6 +1564,113 @@
         }
       }
     },
+    "/api/collection/import/formats": {
+      "get": {
+        "tags": [
+          "collection"
+        ],
+        "summary": "Collection Import Formats",
+        "operationId": "collection_import_formats",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CollectionFormatOut"
+                  },
+                  "type": "array",
+                  "title": "Response Collection Import Formats"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collection/import/file/preview": {
+      "post": {
+        "tags": [
+          "collection"
+        ],
+        "summary": "Collection Import File Preview",
+        "operationId": "collection_import_file_preview",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionFileIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionFilePreviewOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/collection/import/file/apply": {
+      "post": {
+        "tags": [
+          "collection"
+        ],
+        "summary": "Collection Import File Apply",
+        "operationId": "collection_import_file_apply",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionFileApplyIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionApplyOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/market/products": {
       "get": {
         "tags": [
@@ -5750,6 +5857,188 @@
           "is_chase"
         ],
         "title": "CollectionCardOut"
+      },
+      "CollectionFileApplyIn": {
+        "properties": {
+          "filename": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "Filename"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 25000000,
+            "title": "Text"
+          },
+          "format": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40,
+                "pattern": "^[a-z0-9_-]+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Format",
+            "description": "Skip detection: the service id."
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "add",
+              "replace"
+            ],
+            "title": "Mode"
+          },
+          "force": {
+            "type": "boolean",
+            "title": "Force",
+            "description": "Add an identical read again (it was imported before).",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "filename",
+          "text",
+          "mode"
+        ],
+        "title": "CollectionFileApplyIn"
+      },
+      "CollectionFileIn": {
+        "properties": {
+          "filename": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "Filename"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 25000000,
+            "title": "Text"
+          },
+          "format": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40,
+                "pattern": "^[a-z0-9_-]+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Format",
+            "description": "Skip detection: the service id."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "filename",
+          "text"
+        ],
+        "title": "CollectionFileIn",
+        "description": "An exported collection file, read in the browser and posted as text."
+      },
+      "CollectionFilePreviewOut": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/ImportRowOut"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "not_found": {
+            "items": {
+              "$ref": "#/components/schemas/NotFoundOut"
+            },
+            "type": "array",
+            "title": "Not Found"
+          },
+          "skipped": {
+            "$ref": "#/components/schemas/SkippedOut"
+          },
+          "not_in_read": {
+            "type": "integer",
+            "title": "Not In Read",
+            "description": "Printings you own that the read doesn't list \u2014 always left as they are."
+          },
+          "already_imported_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Already Imported At",
+            "description": "When this exact read was imported before, if it was."
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings",
+            "default": []
+          },
+          "format": {
+            "type": "string",
+            "title": "Format",
+            "description": "The service id the file was read as."
+          },
+          "format_name": {
+            "type": "string",
+            "title": "Format Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "rows",
+          "not_found",
+          "skipped",
+          "not_in_read",
+          "already_imported_at",
+          "format",
+          "format_name"
+        ],
+        "title": "CollectionFilePreviewOut"
+      },
+      "CollectionFormatOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "The app, as the user knows it."
+          },
+          "how": {
+            "type": "string",
+            "title": "How",
+            "description": "Where that app's collection export lives.",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "CollectionFormatOut"
       },
       "CollectionLineIn": {
         "properties": {
