@@ -317,13 +317,14 @@ test('one Allow access switch covers every optional site; Mana Pool stays always
   // Chrome's prompt can't be clicked by automation: record what the click asks for, and grant it.
   const optional = await ext.worker.evaluate(() => chrome.runtime.getManifest().optional_host_permissions ?? []);
   await opts.evaluate(() => {
+    // A fake Chrome permission store: request() grants, remove() revokes, contains() reads it.
     const w = window as unknown as { asked: unknown[] };
     w.asked = [];
-    const real = chrome.permissions;
+    const granted = new Set<string>();
     Object.defineProperty(chrome, 'permissions', { configurable: true, value: {
-      contains: (p: chrome.permissions.Permissions) => (w.asked.length ? Promise.resolve(true) : real.contains(p)),
-      request: (p: chrome.permissions.Permissions) => { w.asked.push(p); return Promise.resolve(true); },
-      remove: (p: chrome.permissions.Permissions) => { w.asked.push({ removed: p }); return Promise.resolve(true); },
+      contains: (p: chrome.permissions.Permissions) => Promise.resolve((p.origins ?? []).every((o) => granted.has(o))),
+      request: (p: chrome.permissions.Permissions) => { w.asked.push(p); (p.origins ?? []).forEach((o) => granted.add(o)); return Promise.resolve(true); },
+      remove: (p: chrome.permissions.Permissions) => { w.asked.push({ removed: p }); (p.origins ?? []).forEach((o) => granted.delete(o)); return Promise.resolve(true); },
     } });
   });
   await access.click();
@@ -336,6 +337,9 @@ test('one Allow access switch covers every optional site; Mana Pool stays always
   // Every optional site except the app addresses (those are pairing), and nothing else.
   expect(new Set(origins)).toEqual(new Set(optional.filter((o: string) => !/^http:\/\/(localhost|127\.0\.0\.1)\/|\.ts\.net\//.test(o))));
   await access.click();
+  await expect(access).toHaveAttribute('aria-checked', 'false');
+  await expect(access).toContainText('Off');
+  await expect(opts.locator('#access-partial')).toBeHidden();
   const removed = await opts.evaluate(() => (window as unknown as { asked: { removed?: { origins: string[] } }[] }).asked[1]?.removed?.origins);
   expect(removed).toEqual(origins);
 });
@@ -373,12 +377,20 @@ test('an app tab already open when you pair connects without a reload, and answe
   await opts.goto(`chrome-extension://${ext.id}/src/options.html`);
   for (let i = 0; i < 2; i++) expect(await opts.evaluate(() => chrome.runtime.sendMessage({ type: 'bridge' }))).toEqual({ ok: true });
   await expect(page.getByRole('button', { name: 'Browser companion · connected' })).toBeVisible();
-  const hellos = await page.evaluate(() => new Promise<number>((resolve) => {
-    let n = 0;
-    window.addEventListener('message', (ev) => { if (ev.data?.from === 'companion' && ev.data.type === 'hello') n += 1; });
+  // A ping and a (refused) request: exactly one hello and one ack, not one per injected copy.
+  const counts = await page.evaluate(() => new Promise<{ hello: number; ack: number }>((resolve) => {
+    const n = { hello: 0, ack: 0 };
+    window.addEventListener('message', (ev) => {
+      if (ev.data?.from !== 'companion') return;
+      if (ev.data.type === 'hello') n.hello += 1;
+      if (ev.data.type === 'ack' && ev.data.id === 'x') n.ack += 1;
+    });
     window.postMessage({ channel: 'magic-manager/companion', from: 'app', type: 'ping' }, location.origin);
+    window.postMessage({ channel: 'magic-manager/companion', from: 'app', type: 'request', id: 'x', kind: 'cart', params: {} }, location.origin);
     setTimeout(() => resolve(n), 1500);
   }));
+  const hellos = counts.hello;
+  expect(counts.ack).toBe(1);   // the bad id is refused (request.invalid), once
   expect(hellos).toBe(1);   // injected twice, one live bridge
 });
 
