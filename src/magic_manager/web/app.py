@@ -507,6 +507,19 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     def deck_list():
         return decks_api.summaries()
 
+    @app.get("/api/recipes", response_model=decks_api.RecipesOut, tags=["decks"])
+    def recipe_list():
+        return decks_api.recipe_list()
+
+    @app.get("/api/recipes/{file_name}", response_model=decks_api.RecipeDetailOut, tags=["decks"])
+    def recipe_detail(file_name: str):
+        try:
+            return decks_api.recipe_detail(file_name)
+        except LookupError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+        except mtgjson.MtgJsonError as e:
+            raise HTTPException(status_code=503, detail=f"Couldn't read the MTGJSON deck list: {e}") from e
+
     @app.get("/api/decks/{slug}", response_model=decks_api.DeckDetailOut, tags=["decks"])
     def deck_detail(slug: str):
         try:
@@ -687,21 +700,10 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
 
     # ---------- jumpstart ----------
 
-    @app.get("/api/jumpstart", response_model=jumpstart_api.JumpstartSetsOut, tags=["jumpstart"])
-    def jumpstart_sets():
-        return jumpstart_api.sets()
-
     @app.get("/api/jumpstart/{code}", response_model=jumpstart_api.JumpstartOut, tags=["jumpstart"])
     def jumpstart_view(code: str):
         try:
             return jumpstart_api.view(code)
-        except LookupError as e:
-            raise HTTPException(status_code=404, detail=str(e)) from e
-
-    @app.get("/api/jumpstart/{code}/packs/{file_name}", response_model=jumpstart_api.JumpstartPackDetailOut, tags=["jumpstart"])
-    def jumpstart_pack(code: str, file_name: str):
-        try:
-            return jumpstart_api.pack(code, file_name)
         except LookupError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 

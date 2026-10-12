@@ -137,7 +137,7 @@ def _summaries(where: str = "", params: tuple = ()) -> list[dict]:
             "set_name": (sset or {}).get("name"), "released": released,
             "cards": cards, "value_usd": round(float(r["value"]), 2),
             "pledged_pct": round(100.0 * min(1, r["pledged"] / playable), 1) if playable else 0.0,
-            "image_uri": r["image_uri"],
+            "image_uri": r["image_uri"], "file_name": fn,
             "_kind": r["kind"], "_recipe": fn or r["slug"],
         })
     return out

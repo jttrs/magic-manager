@@ -1,60 +1,98 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRouteApi, useNavigate } from '@tanstack/react-router';
-import { useEffect, useMemo, useState } from 'react';
-import { deckQuery, decksQuery } from '../app/queries';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { jumpstartQuery, recipesQuery } from '../app/queries';
+import { useJob } from '../app/useJob';
 import { useMediaQuery } from '../app/useMediaQuery';
-import { useSelection } from '../app/selection';
-import { useRovingFocus } from '../app/useRovingFocus';
-import { AddCardsDialog, type AddCardsSeed } from '../components/addcards/AddCardsDialog';
 import { ViewLayout } from '../components/AppShell';
-import { Chevron } from '../components/Chevron';
-import { SplitPanes } from '../components/SplitPanes';
-import { Segmented, SelectField, SideSection, TextField } from '../components/Sidebar';
-import { InfoTip } from '../components/InfoTip';
-import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../components/States';
-import { AddCardMark, ImportDeckMark, NewDeckMark } from '../components/StoreMarks';
+import { CopyTargets } from '../components/CopyButton';
 import { IconAction } from '../components/IconAction';
-import { DeckActions } from './decks/DeckActions';
+import { InfoTip } from '../components/InfoTip';
+import { MultiSelect } from '../components/MultiSelect';
+import { ProgressRule } from '../components/ProgressRule';
+import { Segmented, SegmentedToggles, SelectField, SideSection, TextField } from '../components/Sidebar';
+import { SplitPanes } from '../components/SplitPanes';
+import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../components/States';
+import { buyListTargets } from '../components/buyTargets';
+import { ImportDeckMark, NewDeckMark, RereadMark } from '../components/StoreMarks';
+import { jumpstartBuyList } from '../core/api';
+import { COVER_LABEL, DECK_GROUP_LABEL, DECK_GROUPS, filterRecipes, groupRecipes, jumpstartSet, optionCounts, recipeFileName, recipeSummary, unreadInSet, type Cover, type DeckGroupBy, type Ownership } from '../core/decks';
+import { fmtCount, fmtInt } from '../core/format';
+import { shopLead, type Shop } from '../core/jumpstart';
+import { COVER, type DecksSearch } from '../core/search';
+import { DeckInspector } from './decks/DeckInspector';
 import { ImportDeckDialog } from './decks/ImportDeckDialog';
 import { NewDeckDialog } from './decks/NewDeckDialog';
-import { VirtualGuide } from '../components/VirtualGuide';
-import type { DeckSummaryOut } from '../core/api';
-import { DECK_GROUP_LABEL, DECK_GROUPS, deckGuideGroups, deckReviewLines, deckTypeCounts, filterDecks, groupDecks, type DeckGroupBy } from '../core/decks';
-import { MultiSelect } from '../components/MultiSelect';
-import { fmtCount, fmtInt, fmtUsd } from '../core/format';
-import type { DecksSearch } from '../core/search';
+import { RecipeInspector } from './decks/RecipeInspector';
+import { refreshRecipes } from './decks/refresh';
+import { RecipeList } from './decks/RecipeList';
 
 const route = getRouteApi('/decks');
-const crop = (url: string) => url.replace('/normal/', '/art_crop/');
 
-/** Deck Manager: every tracked deck (recipe) on the left, the chosen deck's cards on the right. */
+/** Decks: every deck recipe — catalog precons and Jumpstart packs plus your own decks —
+ *  marked by kind and by what you own, on the left; the chosen recipe's cards on the right. */
 export function DecksView() {
   const search = route.useSearch();
   const navigate = useNavigate({ from: '/decks' });
-  const set = (patch: Partial<DecksSearch>) => navigate({ search: (s) => ({ ...s, ...patch }), replace: true });
-  const decks = useQuery(decksQuery());
+  const set = useCallback((patch: Partial<DecksSearch>) => navigate({ search: (s) => ({ ...s, ...patch }), replace: true }), [navigate]);
+  const qc = useQueryClient();
+  const recipes = useQuery(recipesQuery());
   const narrow = useMediaQuery('(max-width: 47.99rem)');
 
-  const shown = useMemo(() => (decks.data ? filterDecks(decks.data, { q: search.q, builtOnly: search.built, types: search.types }) : []), [decks.data, search.q, search.built, search.types]);
-  const typeOptions = useMemo(() => (decks.data ? deckTypeCounts(decks.data) : []), [decks.data]);
-  const groups = useMemo(() => groupDecks(shown, search.group), [shown, search.group]);
-  const builtCount = useMemo(() => (decks.data ?? []).filter((d) => d.built > 0).length, [decks.data]);
+  const all = useMemo(() => recipes.data?.recipes ?? [], [recipes.data]);
+  const { q, kinds, own, cover, types, sets } = search;
+  const filters = useMemo(() => ({ q, kinds, own, cover, types, sets }), [q, kinds, own, cover, types, sets]);
+  const shown = useMemo(() => filterRecipes(all, filters), [all, filters]);
+  const counts = useMemo(() => optionCounts(all, filters), [all, filters]);
+  const groups = useMemo(() => groupRecipes(shown, search.group), [shown, search.group]);
+
+  // The open recipe: a deck's slug (any copy) or `fn:<fileName>` — a catalog recipe resolves to
+  // your deck once you own it, so adding a pack keeps it open.
+  const fn = recipeFileName(search.deck);
+  const openRow = search.deck ? all.find((r) => r.key === search.deck || r.slugs.includes(search.deck!) || (fn != null && r.file_name === fn)) : undefined;
+
+  // One set in view: read every recipe in it (Jumpstart's "Read again"), and Jumpstart's shopping lists.
+  const oneSet = search.sets.length === 1 ? search.sets[0] : null;
+  const jsSet = jumpstartSet(all, search);
+  const unread = unreadInSet(all, search);
+  const { live: readLive, start: startRead, reset: resetRead } = useJob();
+  const [startError, setStartError] = useState<string | null>(null);
+  const [readCode, setReadCode] = useState<string | null>(null);
+  const readError = startError ?? (readLive?.status === 'failed' ? (readLive.error ?? 'Reading the recipes failed.') : null);
+  const reading = readLive != null && readLive.status !== 'succeeded' && readLive.status !== 'failed';
+  const readSet = () => {
+    if (!oneSet) return;
+    setStartError(null);
+    setReadCode(oneSet);
+    resetRead();
+    void startRead('decks.read_recipes', { set: oneSet }).then((err) => err && setStartError(err));
+  };
+  useEffect(() => {
+    if (readLive?.status === 'succeeded') void refreshRecipes(qc);
+  }, [readLive?.status, qc]);
 
   const sidebar = (
     <>
       <SideSection title="Find">
-        <TextField name="q" label="Deck, set or author" value={search.q} placeholder="e.g. Counter Blitz, fic…" onChange={(q) => set({ q })} />
+        <TextField name="q" label="Deck, set or author" value={search.q} placeholder="e.g. Counter Blitz, Angels, fic…" onChange={(q) => set({ q })} />
       </SideSection>
       <SideSection title="Show">
-        <Segmented
-          label="Decks"
+        <SegmentedToggles<Ownership>
+          label="You own"
           showLabel
-          value={search.built ? 'built' : 'all'}
-          onChange={(v) => set({ built: v === 'built' })}
-          options={[
-            { value: 'all', label: 'All' },
-            { value: 'built', label: `Built · ${fmtInt(builtCount)}` },
-          ]}
+          value={search.own}
+          onChange={(own) => set({ own })}
+          options={counts.own.map((o) => ({ value: o.value, label: o.label, count: o.count }))}
+        />
+        <MultiSelect
+          label="Kind"
+          noun="kinds"
+          searchable={false}
+          keepOrder
+          summary={search.kinds.length ? undefined : 'Every kind'}
+          value={search.kinds}
+          onChange={(kinds) => set({ kinds: kinds as DecksSearch['kinds'] })}
+          options={counts.kinds}
         />
         <MultiSelect
           label="Deck type"
@@ -64,33 +102,77 @@ export function DecksView() {
           summary={search.types.length ? undefined : 'All deck types'}
           value={search.types}
           onChange={(types) => set({ types })}
-          options={typeOptions}
+          options={counts.types}
+        />
+        <MultiSelect
+          label="Set"
+          noun="sets"
+          keepOrder
+          placeholder="Find a set…"
+          summary={search.sets.length ? undefined : 'Every set'}
+          value={search.sets}
+          onChange={(sets) => set({ sets })}
+          options={counts.sets}
+        />
+        <SelectField<Cover>
+          label="Free cards"
+          value={search.cover}
+          onChange={(cover) => set({ cover })}
+          options={COVER.map((c) => ({ value: c, label: COVER_LABEL[c], count: counts.cover[c] ?? undefined }))}
         />
       </SideSection>
       <SideSection title="Arrange">
-        <SelectField<DeckGroupBy> label="Group decks by" value={search.group} onChange={(group) => set({ group })} options={DECK_GROUPS.map((g) => ({ value: g, label: DECK_GROUP_LABEL[g] }))} />
-        <Segmented label="Card view" showLabel value={search.view} onChange={(view) => set({ view })} options={[{ value: 'grid', label: 'Cards' }, { value: 'list', label: 'List' }]} />
+        <SelectField<DeckGroupBy> label="Group by" value={search.group} onChange={(group) => set({ group })} options={DECK_GROUPS.map((g) => ({ value: g, label: DECK_GROUP_LABEL[g] }))} />
+        <Segmented label="Card view" showLabel value={search.view} onChange={(view) => set({ view })} options={[{ value: 'grid', label: 'Grid' }, { value: 'list', label: 'List' }]} />
       </SideSection>
+      {jsSet && <JumpstartBuy code={jsSet} shop={search.shop} onShop={(shop) => set({ shop })} />}
     </>
   );
 
   let body;
-  if (decks.isPending) body = <GridSkeleton label="Loading your decks…" />;
-  else if (decks.isError) body = <ErrorNote error={decks.error} onRetry={() => decks.refetch()} />;
-  else if (!decks.data.length) body = <EmptyNote title="No decks yet">Add a precon or a deck URL from Collection → Add cards, or build one with <span translate="no">uv run mm deck</span>.</EmptyNote>;
+  if (recipes.isPending) body = <GridSkeleton label="Loading deck recipes…" />;
+  else if (recipes.isError) body = <ErrorNote error={recipes.error} onRetry={() => recipes.refetch()} />;
+  else if (!all.length) body = <EmptyNote title="No deck recipes">MTGJSON lists no precons yet, and you have no decks. Import one from a link or start a new deck.</EmptyNote>;
   else {
-    const list = <DeckList groups={groups} total={shown.length} active={search.deck} onPick={(deck) => set({ deck })} />;
-    const inspector = search.deck ? <DeckInspector slug={search.deck} view={search.view} autoAdd={search.add === true} onAutoAdded={() => set({ add: undefined })} onView={narrow ? (view) => set({ view }) : undefined} onBack={narrow ? () => set({ deck: undefined }) : undefined} /> : <EmptyNote title="Pick a deck">Choose a deck on the left to see its cards.</EmptyNote>;
-    body = narrow ? (search.deck ? inspector : list) : <SplitPanes id="mm.decks.split" detailId="deck" label="Resize deck list" list={list} inspector={inspector} />;
+    const list = <RecipeList groups={groups} total={shown.length} active={openRow?.key ?? search.deck} onPick={(deck) => set({ deck })} />;
+    const back = narrow ? () => set({ deck: undefined }) : undefined;
+    const onView = narrow ? (view: 'grid' | 'list') => set({ view }) : undefined;
+    const inspector = !search.deck ? (
+      <EmptyNote title="Pick a recipe">Choose a deck or pack on the left to see its cards — which you have free, and which you’d still need.</EmptyNote>
+    ) : openRow?.slug ? (
+      <DeckInspector key={openRow.slug} slug={openRow.slug} recipe={openRow} view={search.view} autoAdd={search.add === true} onAutoAdded={() => set({ add: undefined })} onView={onView} onBack={back} />
+    ) : fn ? (
+      <RecipeInspector key={fn} fileName={fn} view={search.view} closeShort={recipes.data.close_short ?? 3} onView={onView} onBack={back} />
+    ) : (
+      <DeckInspector key={search.deck} slug={search.deck} view={search.view} autoAdd={search.add === true} onAutoAdded={() => set({ add: undefined })} onView={onView} onBack={back} />
+    );
+    body = narrow ? (search.deck ? inspector : list) : <SplitPanes id="mm.decks.split" detailId="deck" label="Resize recipe list" list={list} inspector={inspector} />;
   }
 
+  const summary = reading ? (
+    <ProgressRule label={`Reading ${readCode?.toUpperCase() ?? ''} recipes`} verb="Reading" done={readLive?.done ?? 0} total={readLive?.total ?? null} message={readLive?.log.at(-1)?.msg} />
+  ) : readError ? (
+    <span role="alert" className="text-danger">{readError}</span>
+  ) : recipes.data ? (
+    recipeSummary(shown)
+  ) : undefined;
+
   return (
-    <ViewLayout label="Deck controls" summary={`${fmtInt(shown.length)} decks · grouped by ${DECK_GROUP_LABEL[search.group].toLowerCase()}`} sidebar={sidebar}>
+    <ViewLayout label="Deck controls" summary={`${fmtInt(shown.length)} recipes · grouped by ${DECK_GROUP_LABEL[search.group].toLowerCase()}`} sidebar={sidebar}>
       <GuideSheet
         title="Decks"
-        summary={decks.data ? `${fmtInt(decks.data.length)} decks · ${fmtInt(builtCount)} built` : undefined}
+        summary={<span role="status" aria-live="polite">{summary}</span>}
         actions={
           <span role="toolbar" aria-label="Deck list actions" className="flex items-center gap-0.5">
+            {oneSet && (
+              <IconAction
+                label={unread ? `Read ${fmtCount(unread, 'unread recipe')} in ${oneSet.toUpperCase()}` : `Read ${oneSet.toUpperCase()} recipes again`}
+                Icon={RereadMark}
+                onClick={readSet}
+                disabled={reading}
+                disabledReason="Reading…"
+              />
+            )}
             <NewDeckDialog trigger={<IconAction label="New deck" Icon={NewDeckMark} />} />
             <ImportDeckDialog trigger={<IconAction label="Import a deck from a link" Icon={ImportDeckMark} />} />
           </span>
@@ -102,127 +184,37 @@ export function DecksView() {
   );
 }
 
-/** One tab stop for the whole list (roving focus): ↑/↓ move between decks, Home/End jump, Enter opens. */
-function DeckList({ groups, total, active, onPick }: { groups: ReturnType<typeof groupDecks>; total: number; active?: string; onPick: (slug: string) => void }) {
-  const flat = groups.flatMap((g) => g.decks.map((d) => d.slug));
-  const activeSlug = groups.flatMap((g) => g.decks).find((d) => active && d.slugs.includes(active))?.slug;
-  const { navRef, tabKey: tabSlug, setFocusKey: setFocusSlug, onKeyDown: move } = useRovingFocus(flat, activeSlug, 'data-slug');
-  if (!total) return <EmptyNote title="No decks match">Clear the search, show all decks, or pick more deck types.</EmptyNote>;
+/** Jumpstart's two shopping lists for the one set in view. */
+function JumpstartBuy({ code, shop, onShop }: { code: string; shop: Shop; onShop: (s: Shop) => void }) {
+  const q = useQuery(jumpstartQuery(code));
+  const buyText = (target: 'manapool' | 'tcgplayer' | 'cardkingdom') => async () => {
+    const r = await jumpstartBuyList({ path: { code }, body: { shop, target } });
+    if (r.error || !r.data) throw new Error('buy-list failed');
+    return r.data.text;
+  };
   return (
-    <nav ref={navRef} aria-label="Decks" onKeyDown={move} className="h-full min-h-0 overflow-y-auto overscroll-contain px-4 pb-6 [scrollbar-gutter:stable]">
-      {groups.map((g) => (
-        <section key={g.key} aria-labelledby={`dg-${g.key}`} className="[content-visibility:auto] [contain-intrinsic-size:auto_20rem]">
-          <h2 id={`dg-${g.key}`} className="sticky top-0 z-10 flex items-baseline gap-2 border-b border-rule bg-paper pb-1 pt-3 text-sm voice-condensed font-medium uppercase tracking-[0.06em] text-ink-muted">
-            <span className="min-w-0 truncate">{g.label}</span>
-            <span className="ml-auto tabular">{g.decks.length}</span>
-          </h2>
-          <ul>
-            {g.decks.map((d) => (
-              <li key={d.slug}><DeckRow d={d} active={!!active && d.slugs.includes(active)} tabbable={d.slug === tabSlug} onFocus={() => setFocusSlug(d.slug)} onPick={() => onPick(d.slug)} /></li>
-            ))}
-          </ul>
-        </section>
-      ))}
-    </nav>
-  );
-}
-
-function DeckRow({ d, active, tabbable, onFocus, onPick }: { d: DeckSummaryOut; active: boolean; tabbable: boolean; onFocus: () => void; onPick: () => void }) {
-  return (
-    <button
-      type="button"
-      data-slug={d.slug}
-      tabIndex={tabbable ? 0 : -1}
-      onFocus={onFocus}
-      onClick={onPick}
-      aria-current={active ? 'true' : undefined}
-      className={`ruled flex w-full cursor-pointer items-center gap-3 px-1 py-2 text-left transition-colors ease-guide hover:bg-paper-sunk ${active ? 'highlighter' : ''}`}
-    >
-      {d.image_uri ? (
-        <img src={crop(d.image_uri)} alt="" loading="lazy" decoding="async" className="size-10 shrink-0 rounded-xs object-cover" />
+    <SideSection title="Buy">
+      <Segmented<Shop>
+        label="Shop for"
+        showLabel
+        labelExtra={
+          <InfoTip label="What do the two lists buy?">
+            <b>Every theme</b>: the cards you’re missing to keep one built copy of every theme at once, plus each theme’s cards from its other versions — so any version can be assembled. Copies already in built packs count as yours. <b>Packs I don’t own</b>: each pack version you have no copy of, card for card, with its front card.
+          </InfoTip>
+        }
+        value={shop}
+        onChange={onShop}
+        options={[{ value: 'buildable', label: 'Every theme' }, { value: 'packs', label: 'Packs I don’t own' }]}
+      />
+      {q.data?.ready ? (
+        <CopyTargets lead={shopLead(shop, q.data)} targets={buyListTargets(buyText)} />
+      ) : q.data ? (
+        <p className="text-sm text-on-chrome-muted">Read the set’s packs first (the read icon above the list).</p>
+      ) : q.isError ? (
+        <p role="alert" className="text-sm text-danger">Couldn’t load the shopping lists: {(q.error as Error).message}</p>
       ) : (
-        <span aria-hidden className="size-10 shrink-0 rounded-xs border border-rule bg-paper-sunk" />
+        <p role="status" className="text-sm text-on-chrome-muted">Loading the shopping lists…</p>
       )}
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-md voice-semi font-medium text-ink">{d.name}</span>
-        <span className="truncate text-xs tabular text-ink-muted">
-          {[d.deck_type, d.set_code?.toUpperCase(), d.released?.slice(0, 4)].filter(Boolean).join(' · ')}
-        </span>
-      </span>
-      <span className="flex shrink-0 flex-col items-end gap-0.5 text-xs tabular">
-        <span className="text-ink">{fmtUsd(d.value_usd)}</span>
-        {d.built > 0 && <BuiltCount built={d.built} />}
-      </span>
-    </button>
-  );
-}
-
-/** "×1 built" — copies of the recipe you keep assembled. */
-function BuiltCount({ built }: { built: number }) {
-  return <span className="voice-condensed uppercase tracking-[0.06em] text-accent-ink" aria-label={`${built} built`}>×{built} built</span>;
-}
-
-function DeckInspector({ slug, view, autoAdd = false, onAutoAdded, onView, onBack }: { slug: string; view: 'grid' | 'list'; autoAdd?: boolean; onAutoAdded?: () => void; onView?: (v: 'grid' | 'list') => void; onBack?: () => void }) {
-  const q = useQuery(deckQuery(slug));
-  const { selected, toggle, clear } = useSelection(`deck:${slug}`);
-  const [seed, setSeed] = useState<AddCardsSeed | null>(null);
-  const sections = useMemo(() => (q.data ? deckGuideGroups(q.data.cards).map((g) => ({ ...g, level: 2 as const, noun: 'section' })) : []), [q.data]);
-  useEffect(() => setSeed(null), [slug]);
-  // Arrived from "Import a deck" with "I have these cards": open the add review once.
-  useEffect(() => {
-    if (!autoAdd || !q.data) return;
-    setSeed({ name: q.data.deck.name, lines: deckReviewLines(q.data.cards) });
-    onAutoAdded?.();
-  }, [autoAdd, q.data, onAutoAdded]);
-
-  if (q.isPending) return <GridSkeleton label="Loading deck…" />;
-  if (q.isError) return <ErrorNote error={q.error} onRetry={() => q.refetch()} />;
-  const { deck, cards } = q.data;
-  const marked = selected.size;
-
-  return (
-    <section aria-labelledby="deck-h" className="flex h-full min-h-0 flex-col">
-      <header className="mx-4 flex flex-wrap items-end gap-x-4 gap-y-1 border-b-2 border-rule-strong pb-1.5 pt-1">
-        {onBack && (
-          <button type="button" onClick={onBack} className="inline-flex w-full cursor-pointer items-center gap-0.5 text-sm voice-semi text-accent-ink">
-            <Chevron dir="left" className="size-3.5" /> All decks
-          </button>
-        )}
-        <div className="min-w-0">
-          <h2 id="deck-h" className="text-2xl voice-condensed font-bold uppercase leading-none text-ink">{deck.name}</h2>
-          <p className="mt-1 text-sm tabular text-ink-muted">
-            {[deck.deck_type, deck.set_name ?? deck.set_code?.toUpperCase(), deck.released?.slice(0, 4), deck.source !== deck.deck_type && deck.source, deck.author && `by ${deck.author}`].filter(Boolean).join(' · ')}
-            {' · '}
-            {fmtCount(deck.cards, 'card')} · {fmtUsd(deck.value_usd)}
-            {deck.built > 0 && ` · ×${deck.built} built (${Math.round(deck.pledged_pct)}% pledged)`}
-            <span className="ml-1 inline-flex align-middle">
-              <InfoTip label="What do built, pledged and free mean?" tone="paper">
-                <b>Built</b>: you keep this deck assembled; its cards are <b>pledged</b> to it, so they aren’t counted as free. <b>Free to use</b>: copies you own that no built deck has pledged. Breaking a deck down returns its cards to your collection.
-              </InfoTip>
-            </span>
-          </p>
-        </div>
-        <span className="ml-auto flex flex-wrap items-center justify-end gap-x-2">
-          {marked > 0 && (
-            <span className="flex items-center gap-1 text-sm text-ink-muted">
-              <IconAction label={`Add ${fmtCount(marked, 'marked card')} to collection`} Icon={AddCardMark} onClick={() => setSeed({ name: deck.name, lines: deckReviewLines(cards, selected) })} />
-              {fmtInt(marked)} marked
-              <button type="button" onClick={clear} className="cursor-pointer px-1 underline hover:text-ink">Clear</button>
-              <span aria-hidden="true" className="mx-1 h-5 w-px bg-rule" />
-            </span>
-          )}
-          <DeckActions detail={q.data} slug={slug} onAddToCollection={() => setSeed({ name: deck.name, lines: deckReviewLines(cards) })} />
-          {onView && (
-            <button type="button" onClick={() => onView(view === 'grid' ? 'list' : 'grid')} className="cursor-pointer px-2 text-sm text-ink-muted underline hover:text-ink">
-              {view === 'grid' ? 'List view' : 'Card view'}
-            </button>
-          )}
-        </span>
-      </header>
-      <div className="min-h-0 flex-1">
-        <VirtualGuide sections={sections} density={view} selected={selected} onToggle={toggle} label={`${deck.name} cards`} minCardWidth={118} />
-      </div>
-      <AddCardsDialog seed={seed} onSeedDone={() => setSeed(null)} />
-    </section>
+    </SideSection>
   );
 }

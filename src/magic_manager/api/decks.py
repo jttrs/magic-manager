@@ -12,8 +12,9 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from .. import addcards, deck_edit, deck_view
+from .. import addcards, deck_edit, deck_view, recipes
 from .ingest import DeckSourceOut, PrintingOut
+from .jobs import Artifact, JobResult, JobSpec, ProgressEvent, ProgressFn, register
 
 
 class DeckSummaryOut(BaseModel):
@@ -34,6 +35,42 @@ class DeckSummaryOut(BaseModel):
     value_usd: float = Field(description="Sum of non-token cards at their finish's price.")
     pledged_pct: float = Field(description="Share of non-token card copies currently pledged to this deck (0–100).")
     image_uri: str | None = Field(description="Representative art: the commander, else the priciest card.")
+    file_name: str | None = Field(None, description="MTGJSON deck fileName for precon copies; None for imports / hand-built decks.")
+
+
+class RecipeOut(BaseModel):
+    """One deck recipe: a deck you track (precon copies grouped) or a catalog
+    precon / Jumpstart pack you don't own."""
+    key: str = Field(description="Your deck's slug, or `fn:<fileName>` for a catalog recipe you don't own.")
+    slug: str | None = Field(description="A deck row to open (a built copy first); None when you own no copy.")
+    slugs: list[str]
+    file_name: str | None = Field(description="MTGJSON deck fileName (precons and Jumpstart packs).")
+    name: str
+    kind: Literal["precon", "jumpstart", "import", "custom"]
+    deck_type: str = Field(description="Game format or precon product family (see DeckSummaryOut.deck_type).")
+    product_type: str | None = Field(description="MTGJSON product type (Commander Deck, Jumpstart…).")
+    source: str | None
+    author: str | None
+    set_code: str | None
+    set_name: str | None
+    released: str | None
+    built: int = Field(description="Copies kept assembled.")
+    loose: int = Field(description="Copies broken down (cards loose in your collection).")
+    ownership: Literal["built", "loose", "none"]
+    pledged_pct: float
+    read: bool = Field(description="False = a catalog recipe whose card list hasn't been read yet (run decks.read_recipes); its card facts are unknown.")
+    cards: int | None
+    value_usd: float | None
+    image_uri: str | None
+    color: str | None = Field(description="WUBRG letters of the recipe's cards; 'C' = colorless.")
+    have: int | None = Field(description="Recipe cards your free copies cover (each recipe on its own).")
+    short: int | None = Field(description="Recipe cards you have no free copy for.")
+    status: Literal["build", "close", "far"] | None
+
+
+class RecipesOut(BaseModel):
+    close_short: int = Field(recipes.CLOSE_SHORT, description="A recipe this many cards short or fewer is 'close'.")
+    recipes: list[RecipeOut]
 
 
 class DeckCardOut(BaseModel):
@@ -189,6 +226,54 @@ class SuggestionOut(BaseModel):
 class SuggestionsOut(BaseModel):
     commander: str
     cards: list[SuggestionOut]
+
+
+class RecipeDetailOut(BaseModel):
+    recipe: RecipeOut
+    ready: bool = Field(description="False = the card list hasn't been read yet; run the decks.read_recipes job.")
+    cards: list[DeckCardOut]
+    unknown: list[str] = Field(default_factory=list, description="Card names whose printing isn't in the local catalog.")
+
+
+def recipe_list() -> RecipesOut:
+    return RecipesOut(recipes=[RecipeOut(**r) for r in recipes.catalog()])
+
+
+def recipe_detail(file_name: str) -> RecipeDetailOut:
+    d = recipes.recipe(file_name)
+    return RecipeDetailOut(recipe=RecipeOut(**d["recipe"]), ready=d["ready"],
+                           cards=[DeckCardOut(**c) for c in d["cards"]], unknown=d["unknown"])
+
+
+# ---------- job: read recipes' card lists ----------
+
+class ReadRecipesInput(BaseModel):
+    file_names: list[str] = Field(default_factory=list, max_length=500, description="MTGJSON deck fileNames to read.")
+    set: str | None = Field(None, min_length=2, max_length=8, description="Read every catalog recipe in this set (code).")
+
+
+def _run_read(inp: ReadRecipesInput, progress: ProgressFn) -> JobResult:
+    names = list(dict.fromkeys(inp.file_names))
+    if inp.set:
+        names += [fn for fn in recipes.file_names_for_set(inp.set) if fn not in names]
+    if not names:
+        raise ValueError("Nothing to read: pass file_names or a set with deck recipes.")
+
+    def tick(done: int, total: int, msg: str) -> None:
+        progress(ProgressEvent(done=done, total=total, message=msg))
+
+    n = recipes.ensure_read(names, progress=tick)
+    return JobResult(summary=f"Read {n} deck recipe{'s' if n != 1 else ''}",
+                     artifacts=[Artifact(kind="json", label="recipes", data={"file_names": names})])
+
+
+READ_RECIPES = register(JobSpec(
+    name="decks.read_recipes",
+    title="Read deck recipes",
+    description="Fetch deck recipes' card lists (MTGJSON), fill card sets with no local prices, and Jumpstart front cards.",
+    input_model=ReadRecipesInput,
+    run=_run_read,
+))
 
 
 def summaries() -> list[DeckSummaryOut]:
