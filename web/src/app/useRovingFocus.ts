@@ -1,8 +1,9 @@
 import { useRef, useState, type KeyboardEvent } from 'react';
 
 /** One tab stop for a list of rows (roving focus): ↑/↓ move, Home/End jump. Rows carry
- *  `attr` = their key and `tabIndex={key === tabKey ? 0 : -1}`; keys from other elements are ignored. */
-export function useRovingFocus(keys: readonly string[], activeKey: string | undefined, attr: string) {
+ *  `attr` = their key and `tabIndex={key === tabKey ? 0 : -1}`; keys from other elements are ignored.
+ *  `reveal` brings a row that may not be rendered yet (a virtualized list) into view before focusing it. */
+export function useRovingFocus(keys: readonly string[], activeKey: string | undefined, attr: string, reveal?: (key: string) => void) {
   const navRef = useRef<HTMLElement>(null);
   const [focusKey, setFocusKey] = useState<string | undefined>(undefined);
   const tabKey = (focusKey && keys.includes(focusKey) ? focusKey : undefined) ?? activeKey ?? keys[0];
@@ -14,7 +15,10 @@ export function useRovingFocus(keys: readonly string[], activeKey: string | unde
     e.preventDefault();
     const k = keys[Math.max(0, Math.min(keys.length - 1, next))];
     setFocusKey(k);
-    navRef.current?.querySelector<HTMLElement>(`[${attr}="${CSS.escape(k)}"]`)?.focus();
+    const focus = () => navRef.current?.querySelector<HTMLElement>(`[${attr}="${CSS.escape(k)}"]`)?.focus();
+    if (!reveal) return focus();
+    reveal(k);
+    requestAnimationFrame(() => requestAnimationFrame(focus));
   };
   return { navRef, tabKey, setFocusKey, onKeyDown };
 }

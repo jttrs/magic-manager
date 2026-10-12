@@ -3,7 +3,7 @@ import { keepPreviousData, queryOptions } from '@tanstack/react-query';
 import type { DraftCardIn } from '../core/api';
 import { apiErrorFrom } from '../core/apiError';
 import type { RankingRequest } from '../core/rankings';
-import { analyticsConsent, analyticsSummary, analyticsCatalog, dealsTabs, dealsWatched, marketProductCost, marketSecretLair, undoInfo, cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, cardFloors, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs, historyList, historyEvent, exploreRanking, exploreRankingOptions, cardCombos, deckCombos, draftCombos, artTags, artSwaps, jumpstartSets, jumpstartView, jumpstartPack, surfOptions, companionInfo, scrapersHealth, purchaseStores, purchaseList, purchaseReview } from '../core/api';
+import { analyticsConsent, analyticsSummary, analyticsCatalog, dealsTabs, dealsWatched, marketProductCost, marketSecretLair, undoInfo, cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, cardFloors, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs, historyList, historyEvent, exploreRanking, exploreRankingOptions, cardCombos, deckCombos, draftCombos, artTags, artSwaps, jumpstartView, recipeList, recipeDetail, surfOptions, companionInfo, scrapersHealth, purchaseStores, purchaseList, purchaseReview } from '../core/api';
 
 export function unwrap<T>(r: { data?: T; error?: unknown; response?: Response }): T {
   if (r.error !== undefined || r.data === undefined) throw apiErrorFrom(r.error, r.response);
@@ -334,26 +334,27 @@ export const artSwapsQuery = (tag: string | null, sids: string[]) =>
     placeholderData: keepPreviousData,
   });
 
-export const jumpstartSetsQuery = () =>
+export const recipesQuery = () =>
   queryOptions({
-    queryKey: ['jumpstart', 'sets'],
-    queryFn: async ({ signal }) => unwrap(await jumpstartSets({ signal })),
-    staleTime: 5 * 60_000,
+    queryKey: ['recipes'],
+    queryFn: async ({ signal }) => unwrap(await recipeList({ signal })),
+    staleTime: 60_000,
   });
 
+export const recipeQuery = (fileName?: string) =>
+  queryOptions({
+    queryKey: ['recipes', fileName],
+    queryFn: async ({ signal }) => unwrap(await recipeDetail({ path: { file_name: fileName! }, signal })),
+    enabled: Boolean(fileName),
+    staleTime: 60_000,
+  });
+
+/** One Jumpstart set's shopping-list totals (the Buy strip in Decks). */
 export const jumpstartQuery = (code?: string) =>
   queryOptions({
     queryKey: ['jumpstart', code],
     queryFn: async ({ signal }) => unwrap(await jumpstartView({ path: { code: code! }, signal })),
     enabled: Boolean(code),
-    staleTime: 30_000,
-  });
-
-export const jumpstartPackQuery = (code?: string, fileName?: string) =>
-  queryOptions({
-    queryKey: ['jumpstart', code, 'pack', fileName],
-    queryFn: async ({ signal }) => unwrap(await jumpstartPack({ path: { code: code!, file_name: fileName! }, signal })),
-    enabled: Boolean(code && fileName),
     staleTime: 30_000,
   });
 

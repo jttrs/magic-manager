@@ -4,6 +4,7 @@ import commanders from './fixtures/commanders-tifa.json' with { type: 'json' };
 import families from './fixtures/families.json' with { type: 'json' };
 import collectionBlb from './fixtures/collection-blb.json' with { type: 'json' };
 import decks from './fixtures/decks.json' with { type: 'json' };
+import recipes from './fixtures/recipes.json' with { type: 'json' };
 import deckDetail from './fixtures/deck-detail.json' with { type: 'json' };
 import ranking from './fixtures/ranking-mono-red.json' with { type: 'json' };
 import rankingOptions from './fixtures/ranking-options.json' with { type: 'json' };
@@ -12,7 +13,7 @@ import companionErrors from '../../extension/errors.json' with { type: 'json' };
 // 1×1 transparent PNG stands in for every Scryfall image.
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
 
-export const fixtures = { compare, commanders, families, collectionBlb, decks, deckDetail, ranking, rankingOptions };
+export const fixtures = { compare, commanders, families, collectionBlb, decks, recipes, deckDetail, ranking, rankingOptions };
 
 export async function mockApi(page: Page, overrides: Record<string, (url: URL) => { status?: number; json: unknown }> = {}) {
   await page.route('https://cards.scryfall.io/**', (r) => r.fulfill({ status: 200, contentType: 'image/png', body: PNG }));
@@ -42,6 +43,7 @@ export async function mockApi(page: Page, overrides: Record<string, (url: URL) =
       return route.fulfill({ json: { text, lines: body.items.length } });
     }
     if (url.pathname === '/api/decks') return route.fulfill({ json: decks });
+    if (url.pathname === '/api/recipes') return route.fulfill({ json: recipes });
     if (url.pathname.startsWith('/api/decks/')) {
       const slug = decodeURIComponent(url.pathname.slice('/api/decks/'.length));
       return slug === deckDetail.deck.slug ? route.fulfill({ json: deckDetail }) : route.fulfill({ status: 404, json: { detail: `deck with slug '${slug}' not found` } });

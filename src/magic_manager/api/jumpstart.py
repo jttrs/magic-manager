@@ -1,9 +1,9 @@
-"""Jumpstart surface of the typed API (Collection → Jumpstart sheet).
+"""Jumpstart surface of the typed API (Decks → the Buy strip for one Jumpstart set).
 
-Adapts :mod:`magic_manager.jumpstart`: a set's pack versions (theme, colour,
-top card, value, your copies, how much your free cards cover), one pack's
-cards, the two shopping lists, and the ``jumpstart.read`` job that fetches a
-set's deck files the first time.
+Adapts :mod:`magic_manager.jumpstart`: a set's pack versions with the totals of
+the two shopping lists, and the lists themselves. The packs are listed and
+opened as deck recipes (``api.decks`` recipes); a set's card lists are read by
+the ``decks.read_recipes`` job.
 """
 from __future__ import annotations
 
@@ -12,23 +12,8 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from .. import addcards, jumpstart, scryfall
-from .ingest import PrintingOut
-from .jobs import Artifact, JobResult, JobSpec, ProgressEvent, ProgressFn, register
 
 Target = Literal["manapool", "tcgplayer", "cardkingdom"]
-
-
-class JumpstartSetOut(BaseModel):
-    code: str
-    name: str
-    released: str | None
-    packs: int = Field(description="Pack versions.")
-    themes: int
-    owned_packs: int = Field(description="Versions you own at least one copy of (built or broken down).")
-
-
-class JumpstartSetsOut(BaseModel):
-    sets: list[JumpstartSetOut]
 
 
 class JumpstartPackOut(BaseModel):
@@ -69,20 +54,6 @@ class JumpstartOut(BaseModel):
     whole_packs: int = 0
 
 
-class JumpstartPackCardOut(BaseModel):
-    printing: PrintingOut
-    count: int
-    foil: bool
-    unit_usd: float | None
-    free: int
-
-
-class JumpstartPackDetailOut(BaseModel):
-    pack: JumpstartPackOut
-    cards: list[JumpstartPackCardOut]
-    unknown: list[str] = Field(default_factory=list, description="Card names not in the local cards table.")
-
-
 class JumpstartBuyIn(BaseModel):
     shop: jumpstart.Shop
     target: Target
@@ -102,21 +73,6 @@ def _set_names() -> dict[str, dict]:
 
 def _name(code: str, names: dict[str, dict]) -> str:
     return (names.get(code) or {}).get("name") or code.upper()
-
-
-def sets() -> JumpstartSetsOut:
-    names = _set_names()
-    out: list[JumpstartSetOut] = []
-    for code in jumpstart.jumpstart_set_codes():
-        vs = jumpstart.variants(code)
-        out.append(JumpstartSetOut(
-            code=code, name=_name(code, names),
-            released=(names.get(code) or {}).get("released_at") or (vs[0].get("releaseDate") if vs else None),
-            packs=len(vs), themes=len({jumpstart.theme_of(v.get("name") or "") for v in vs}),
-            owned_packs=len(jumpstart.owned_file_names(code)),
-        ))
-    out.sort(key=lambda s: s.released or "", reverse=True)
-    return JumpstartSetsOut(sets=out)
 
 
 def _pack(p: jumpstart.Pack, images: dict[str, str | None]) -> JumpstartPackOut:
@@ -156,47 +112,6 @@ def view(code: str) -> JumpstartOut:
     )
 
 
-def pack(code: str, file_name: str) -> JumpstartPackDetailOut:
-    code = _check(code)
-    p = next((x for x in jumpstart.set_packs(code) if x.file_name == file_name), None)
-    if p is None:
-        raise LookupError(f"no pack {file_name!r} in {code.upper()}")
-    printings = addcards.printings_for_ids(c.scryfall_id for c in p.cards)
-    return JumpstartPackDetailOut(
-        pack=_pack(p, _images([p])),
-        cards=[JumpstartPackCardOut(printing=PrintingOut(**printings[c.scryfall_id]), count=c.count, foil=c.foil,
-                           unit_usd=c.unit_usd, free=c.free)
-               for c in p.cards if c.scryfall_id in printings],
-        unknown=[c.name for c in p.cards if c.scryfall_id not in printings],
-    )
-
-
 def buy_list(code: str, req: JumpstartBuyIn) -> JumpstartBuyOut:
     text, lines = jumpstart.buy_text(_check(code), req.shop, req.target)
     return JumpstartBuyOut(text=text, lines=lines)
-
-
-# ---------- job: read a set's packs the first time ----------
-
-class ReadJumpstartInput(BaseModel):
-    code: str = Field(min_length=2, max_length=8, description="Jumpstart set code, e.g. j25.")
-
-
-def _run_read(inp: ReadJumpstartInput, progress: ProgressFn) -> JobResult:
-    code = _check(inp.code)
-
-    def tick(done: int, total: int, msg: str) -> None:
-        progress(ProgressEvent(done=done, total=total, message=msg))
-
-    n = jumpstart.ensure_ready(code, progress=tick)
-    return JobResult(summary=f"{code.upper()}: read {n} packs",
-                     artifacts=[Artifact(kind="json", label="jumpstart", data={"code": code, "packs": n})])
-
-
-READ = register(JobSpec(
-    name="jumpstart.read",
-    title="Read a Jumpstart set's packs",
-    description="Fetch every pack version's card list, fill card sets with no local prices, and the packs' front cards.",
-    input_model=ReadJumpstartInput,
-    run=_run_read,
-))

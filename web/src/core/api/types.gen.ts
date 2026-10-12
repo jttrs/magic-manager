@@ -2335,6 +2335,12 @@ export type DeckSummaryOut = {
      * Representative art: the commander, else the priciest card.
      */
     image_uri: string | null;
+    /**
+     * File Name
+     *
+     * MTGJSON deck fileName for precon copies; None for imports / hand-built decks.
+     */
+    file_name?: string | null;
 };
 
 /**
@@ -3349,46 +3355,6 @@ export type JumpstartOut = {
 };
 
 /**
- * JumpstartPackCardOut
- */
-export type JumpstartPackCardOut = {
-    printing: PrintingOut;
-    /**
-     * Count
-     */
-    count: number;
-    /**
-     * Foil
-     */
-    foil: boolean;
-    /**
-     * Unit Usd
-     */
-    unit_usd: number | null;
-    /**
-     * Free
-     */
-    free: number;
-};
-
-/**
- * JumpstartPackDetailOut
- */
-export type JumpstartPackDetailOut = {
-    pack: JumpstartPackOut;
-    /**
-     * Cards
-     */
-    cards: Array<JumpstartPackCardOut>;
-    /**
-     * Unknown
-     *
-     * Card names not in the local cards table.
-     */
-    unknown?: Array<string>;
-};
-
-/**
  * JumpstartPackOut
  */
 export type JumpstartPackOut = {
@@ -3470,50 +3436,6 @@ export type JumpstartPackOut = {
      * Status
      */
     status: 'build' | 'close' | 'far';
-};
-
-/**
- * JumpstartSetOut
- */
-export type JumpstartSetOut = {
-    /**
-     * Code
-     */
-    code: string;
-    /**
-     * Name
-     */
-    name: string;
-    /**
-     * Released
-     */
-    released: string | null;
-    /**
-     * Packs
-     *
-     * Pack versions.
-     */
-    packs: number;
-    /**
-     * Themes
-     */
-    themes: number;
-    /**
-     * Owned Packs
-     *
-     * Versions you own at least one copy of (built or broken down).
-     */
-    owned_packs: number;
-};
-
-/**
- * JumpstartSetsOut
- */
-export type JumpstartSetsOut = {
-    /**
-     * Sets
-     */
-    sets: Array<JumpstartSetOut>;
 };
 
 /**
@@ -4900,6 +4822,176 @@ export type RankingOut = {
      * Rows
      */
     rows: Array<RankedOut>;
+};
+
+/**
+ * RecipeDetailOut
+ */
+export type RecipeDetailOut = {
+    recipe: RecipeOut;
+    /**
+     * Ready
+     *
+     * False = the card list hasn't been read yet; run the decks.read_recipes job.
+     */
+    ready: boolean;
+    /**
+     * Cards
+     */
+    cards: Array<DeckCardOut>;
+    /**
+     * Unknown
+     *
+     * Card names whose printing isn't in the local catalog.
+     */
+    unknown?: Array<string>;
+};
+
+/**
+ * RecipeOut
+ *
+ * One deck recipe: a deck you track (precon copies grouped) or a catalog
+ * precon / Jumpstart pack you don't own.
+ */
+export type RecipeOut = {
+    /**
+     * Key
+     *
+     * Your deck's slug, or `fn:<fileName>` for a catalog recipe you don't own.
+     */
+    key: string;
+    /**
+     * Slug
+     *
+     * A deck row to open (a built copy first); None when you own no copy.
+     */
+    slug: string | null;
+    /**
+     * Slugs
+     */
+    slugs: Array<string>;
+    /**
+     * File Name
+     *
+     * MTGJSON deck fileName (precons and Jumpstart packs).
+     */
+    file_name: string | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Kind
+     */
+    kind: 'precon' | 'jumpstart' | 'import' | 'custom';
+    /**
+     * Deck Type
+     *
+     * Game format or precon product family (see DeckSummaryOut.deck_type).
+     */
+    deck_type: string;
+    /**
+     * Product Type
+     *
+     * MTGJSON product type (Commander Deck, Jumpstart…).
+     */
+    product_type: string | null;
+    /**
+     * Source
+     */
+    source: string | null;
+    /**
+     * Author
+     */
+    author: string | null;
+    /**
+     * Set Code
+     */
+    set_code: string | null;
+    /**
+     * Set Name
+     */
+    set_name: string | null;
+    /**
+     * Released
+     */
+    released: string | null;
+    /**
+     * Built
+     *
+     * Copies kept assembled.
+     */
+    built: number;
+    /**
+     * Loose
+     *
+     * Copies broken down (cards loose in your collection).
+     */
+    loose: number;
+    /**
+     * Ownership
+     */
+    ownership: 'built' | 'loose' | 'none';
+    /**
+     * Pledged Pct
+     */
+    pledged_pct: number;
+    /**
+     * Read
+     *
+     * False = a catalog recipe whose card list hasn't been read yet (run decks.read_recipes); its card facts are unknown.
+     */
+    read: boolean;
+    /**
+     * Cards
+     */
+    cards: number | null;
+    /**
+     * Value Usd
+     */
+    value_usd: number | null;
+    /**
+     * Image Uri
+     */
+    image_uri: string | null;
+    /**
+     * Color
+     *
+     * WUBRG letters of the recipe's cards; 'C' = colorless.
+     */
+    color: string | null;
+    /**
+     * Have
+     *
+     * Recipe cards your free copies cover (each recipe on its own).
+     */
+    have: number | null;
+    /**
+     * Short
+     *
+     * Recipe cards you have no free copy for.
+     */
+    short: number | null;
+    /**
+     * Status
+     */
+    status: 'build' | 'close' | 'far' | null;
+};
+
+/**
+ * RecipesOut
+ */
+export type RecipesOut = {
+    /**
+     * Close Short
+     *
+     * A recipe this many cards short or fewer is 'close'.
+     */
+    close_short?: number;
+    /**
+     * Recipes
+     */
+    recipes: Array<RecipeOut>;
 };
 
 /**
@@ -8002,6 +8094,52 @@ export type DeckCreateResponses = {
 
 export type DeckCreateResponse = DeckCreateResponses[keyof DeckCreateResponses];
 
+export type RecipeListData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/recipes';
+};
+
+export type RecipeListResponses = {
+    /**
+     * Successful Response
+     */
+    200: RecipesOut;
+};
+
+export type RecipeListResponse = RecipeListResponses[keyof RecipeListResponses];
+
+export type RecipeDetailData = {
+    body?: never;
+    path: {
+        /**
+         * File Name
+         */
+        file_name: string;
+    };
+    query?: never;
+    url: '/api/recipes/{file_name}';
+};
+
+export type RecipeDetailErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RecipeDetailError = RecipeDetailErrors[keyof RecipeDetailErrors];
+
+export type RecipeDetailResponses = {
+    /**
+     * Successful Response
+     */
+    200: RecipeDetailOut;
+};
+
+export type RecipeDetailResponse = RecipeDetailResponses[keyof RecipeDetailResponses];
+
 export type DeckDetailData = {
     body?: never;
     path: {
@@ -8736,22 +8874,6 @@ export type PurchaseApplyResponses = {
 
 export type PurchaseApplyResponse = PurchaseApplyResponses[keyof PurchaseApplyResponses];
 
-export type JumpstartSetsData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/jumpstart';
-};
-
-export type JumpstartSetsResponses = {
-    /**
-     * Successful Response
-     */
-    200: JumpstartSetsOut;
-};
-
-export type JumpstartSetsResponse = JumpstartSetsResponses[keyof JumpstartSetsResponses];
-
 export type JumpstartViewData = {
     body?: never;
     path: {
@@ -8781,40 +8903,6 @@ export type JumpstartViewResponses = {
 };
 
 export type JumpstartViewResponse = JumpstartViewResponses[keyof JumpstartViewResponses];
-
-export type JumpstartPackData = {
-    body?: never;
-    path: {
-        /**
-         * Code
-         */
-        code: string;
-        /**
-         * File Name
-         */
-        file_name: string;
-    };
-    query?: never;
-    url: '/api/jumpstart/{code}/packs/{file_name}';
-};
-
-export type JumpstartPackErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type JumpstartPackError = JumpstartPackErrors[keyof JumpstartPackErrors];
-
-export type JumpstartPackResponses = {
-    /**
-     * Successful Response
-     */
-    200: JumpstartPackDetailOut;
-};
-
-export type JumpstartPackResponse = JumpstartPackResponses[keyof JumpstartPackResponses];
 
 export type JumpstartBuyListData = {
     body: JumpstartBuyIn;

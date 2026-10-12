@@ -2153,6 +2153,69 @@
         }
       }
     },
+    "/api/recipes": {
+      "get": {
+        "tags": [
+          "decks"
+        ],
+        "summary": "Recipe List",
+        "operationId": "recipe_list",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipesOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/recipes/{file_name}": {
+      "get": {
+        "tags": [
+          "decks"
+        ],
+        "summary": "Recipe Detail",
+        "operationId": "recipe_detail",
+        "parameters": [
+          {
+            "name": "file_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "File Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeDetailOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/decks/{slug}": {
       "get": {
         "tags": [
@@ -3280,27 +3343,6 @@
         }
       }
     },
-    "/api/jumpstart": {
-      "get": {
-        "tags": [
-          "jumpstart"
-        ],
-        "summary": "Jumpstart Sets",
-        "operationId": "jumpstart_sets",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/JumpstartSetsOut"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/jumpstart/{code}": {
       "get": {
         "tags": [
@@ -3326,57 +3368,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/JumpstartOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/jumpstart/{code}/packs/{file_name}": {
-      "get": {
-        "tags": [
-          "jumpstart"
-        ],
-        "summary": "Jumpstart Pack",
-        "operationId": "jumpstart_pack",
-        "parameters": [
-          {
-            "name": "code",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Code"
-            }
-          },
-          {
-            "name": "file_name",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "File Name"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/JumpstartPackDetailOut"
                 }
               }
             }
@@ -7678,6 +7669,18 @@
             ],
             "title": "Image Uri",
             "description": "Representative art: the commander, else the priciest card."
+          },
+          "file_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Name",
+            "description": "MTGJSON deck fileName for precon copies; None for imports / hand-built decks."
           }
         },
         "type": "object",
@@ -9326,73 +9329,6 @@
         ],
         "title": "JumpstartOut"
       },
-      "JumpstartPackCardOut": {
-        "properties": {
-          "printing": {
-            "$ref": "#/components/schemas/PrintingOut"
-          },
-          "count": {
-            "type": "integer",
-            "title": "Count"
-          },
-          "foil": {
-            "type": "boolean",
-            "title": "Foil"
-          },
-          "unit_usd": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Unit Usd"
-          },
-          "free": {
-            "type": "integer",
-            "title": "Free"
-          }
-        },
-        "type": "object",
-        "required": [
-          "printing",
-          "count",
-          "foil",
-          "unit_usd",
-          "free"
-        ],
-        "title": "JumpstartPackCardOut"
-      },
-      "JumpstartPackDetailOut": {
-        "properties": {
-          "pack": {
-            "$ref": "#/components/schemas/JumpstartPackOut"
-          },
-          "cards": {
-            "items": {
-              "$ref": "#/components/schemas/JumpstartPackCardOut"
-            },
-            "type": "array",
-            "title": "Cards"
-          },
-          "unknown": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Unknown",
-            "description": "Card names not in the local cards table."
-          }
-        },
-        "type": "object",
-        "required": [
-          "pack",
-          "cards"
-        ],
-        "title": "JumpstartPackDetailOut"
-      },
       "JumpstartPackOut": {
         "properties": {
           "file_name": {
@@ -9542,69 +9478,6 @@
           "status"
         ],
         "title": "JumpstartPackOut"
-      },
-      "JumpstartSetOut": {
-        "properties": {
-          "code": {
-            "type": "string",
-            "title": "Code"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "released": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Released"
-          },
-          "packs": {
-            "type": "integer",
-            "title": "Packs",
-            "description": "Pack versions."
-          },
-          "themes": {
-            "type": "integer",
-            "title": "Themes"
-          },
-          "owned_packs": {
-            "type": "integer",
-            "title": "Owned Packs",
-            "description": "Versions you own at least one copy of (built or broken down)."
-          }
-        },
-        "type": "object",
-        "required": [
-          "code",
-          "name",
-          "released",
-          "packs",
-          "themes",
-          "owned_packs"
-        ],
-        "title": "JumpstartSetOut"
-      },
-      "JumpstartSetsOut": {
-        "properties": {
-          "sets": {
-            "items": {
-              "$ref": "#/components/schemas/JumpstartSetOut"
-            },
-            "type": "array",
-            "title": "Sets"
-          }
-        },
-        "type": "object",
-        "required": [
-          "sets"
-        ],
-        "title": "JumpstartSetsOut"
       },
       "JumpstartShopOut": {
         "properties": {
@@ -12226,6 +12099,331 @@
           "rows"
         ],
         "title": "RankingOut"
+      },
+      "RecipeDetailOut": {
+        "properties": {
+          "recipe": {
+            "$ref": "#/components/schemas/RecipeOut"
+          },
+          "ready": {
+            "type": "boolean",
+            "title": "Ready",
+            "description": "False = the card list hasn't been read yet; run the decks.read_recipes job."
+          },
+          "cards": {
+            "items": {
+              "$ref": "#/components/schemas/DeckCardOut"
+            },
+            "type": "array",
+            "title": "Cards"
+          },
+          "unknown": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unknown",
+            "description": "Card names whose printing isn't in the local catalog."
+          }
+        },
+        "type": "object",
+        "required": [
+          "recipe",
+          "ready",
+          "cards"
+        ],
+        "title": "RecipeDetailOut"
+      },
+      "RecipeOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key",
+            "description": "Your deck's slug, or `fn:<fileName>` for a catalog recipe you don't own."
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slug",
+            "description": "A deck row to open (a built copy first); None when you own no copy."
+          },
+          "slugs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Slugs"
+          },
+          "file_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Name",
+            "description": "MTGJSON deck fileName (precons and Jumpstart packs)."
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "precon",
+              "jumpstart",
+              "import",
+              "custom"
+            ],
+            "title": "Kind"
+          },
+          "deck_type": {
+            "type": "string",
+            "title": "Deck Type",
+            "description": "Game format or precon product family (see DeckSummaryOut.deck_type)."
+          },
+          "product_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Type",
+            "description": "MTGJSON product type (Commander Deck, Jumpstart\u2026)."
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "author": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author"
+          },
+          "set_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Set Code"
+          },
+          "set_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Set Name"
+          },
+          "released": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Released"
+          },
+          "built": {
+            "type": "integer",
+            "title": "Built",
+            "description": "Copies kept assembled."
+          },
+          "loose": {
+            "type": "integer",
+            "title": "Loose",
+            "description": "Copies broken down (cards loose in your collection)."
+          },
+          "ownership": {
+            "type": "string",
+            "enum": [
+              "built",
+              "loose",
+              "none"
+            ],
+            "title": "Ownership"
+          },
+          "pledged_pct": {
+            "type": "number",
+            "title": "Pledged Pct"
+          },
+          "read": {
+            "type": "boolean",
+            "title": "Read",
+            "description": "False = a catalog recipe whose card list hasn't been read yet (run decks.read_recipes); its card facts are unknown."
+          },
+          "cards": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cards"
+          },
+          "value_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value Usd"
+          },
+          "image_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Uri"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color",
+            "description": "WUBRG letters of the recipe's cards; 'C' = colorless."
+          },
+          "have": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Have",
+            "description": "Recipe cards your free copies cover (each recipe on its own)."
+          },
+          "short": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Short",
+            "description": "Recipe cards you have no free copy for."
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "build",
+                  "close",
+                  "far"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "slug",
+          "slugs",
+          "file_name",
+          "name",
+          "kind",
+          "deck_type",
+          "product_type",
+          "source",
+          "author",
+          "set_code",
+          "set_name",
+          "released",
+          "built",
+          "loose",
+          "ownership",
+          "pledged_pct",
+          "read",
+          "cards",
+          "value_usd",
+          "image_uri",
+          "color",
+          "have",
+          "short",
+          "status"
+        ],
+        "title": "RecipeOut",
+        "description": "One deck recipe: a deck you track (precon copies grouped) or a catalog\nprecon / Jumpstart pack you don't own."
+      },
+      "RecipesOut": {
+        "properties": {
+          "close_short": {
+            "type": "integer",
+            "title": "Close Short",
+            "description": "A recipe this many cards short or fewer is 'close'.",
+            "default": 3
+          },
+          "recipes": {
+            "items": {
+              "$ref": "#/components/schemas/RecipeOut"
+            },
+            "type": "array",
+            "title": "Recipes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "recipes"
+        ],
+        "title": "RecipesOut"
       },
       "Rejection": {
         "properties": {

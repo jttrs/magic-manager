@@ -4,7 +4,7 @@ don't own).
 
 Single source of truth behind ``scripts/jumpstart_buildable.py``,
 ``scripts/jumpstart_reference.py``, ``mm query missing-jumpstart`` and the web
-Collection → Jumpstart sheet (``api.jumpstart``).
+Decks Buy strip for a Jumpstart set (``api.jumpstart``; packs list as deck recipes via ``recipes``).
 
 Vocabulary. A *variant* (version) is one MTGJSON ``type: Jumpstart`` DeckList
 entry (``Angels (1)``); its *theme* is the name minus a trailing version
@@ -28,13 +28,9 @@ from typing import Callable, Iterable, Literal
 
 from . import (
     db, decks, exports, front_cards, inventory, missing as missing_mod, mtgjson,
-    ownership, selectors, sets, util,
+    ownership, recipes, selectors, sets, util,
 )
-
-# A pack this many cards short of free copies (or fewer) is "close".
-CLOSE_SHORT = 3
-
-_BOARDS = ("commander", "mainBoard", "sideBoard")
+from .recipes import CLOSE_SHORT, Entry, counts_by_id  # noqa: F401 — the shared recipe seam
 
 # A version suffix is a trailing integer, with or without parentheses:
 #   'Angels (1)' → 'Angels' (J25/MSH naming), 'Corruption 1' → 'Corruption' (ONE).
@@ -101,34 +97,9 @@ def variants(code: str) -> list[dict]:
                   key=lambda v: v.get("name") or v.get("fileName") or "")
 
 
-@dataclass(frozen=True)
-class Entry:
-    scryfall_id: str
-    count: int
-    foil: bool
-    name: str
-    set_code: str
-
-
 def entries(file_name: str) -> list[Entry]:
     """One pack's gameplay cards in board order (commander → main → side)."""
-    data = mtgjson.deck(file_name)
-    out: list[Entry] = []
-    for board in _BOARDS:
-        for e in data.get(board) or []:
-            sid = (e.get("identifiers") or {}).get("scryfallId")
-            if sid:
-                out.append(Entry(sid, int(e.get("count", 1) or 1), bool(e.get("isFoil")),
-                                 e.get("name") or "", (e.get("setCode") or "").lower()))
-    return out
-
-
-def counts_by_id(es: Iterable[Entry]) -> dict[str, int]:
-    """Copies per scryfall_id, finishes merged (a foil copy builds a pack too)."""
-    out: dict[str, int] = defaultdict(int)
-    for e in es:
-        out[e.scryfall_id] += e.count
-    return dict(out)
+    return recipes.entries_from(mtgjson.deck(file_name))
 
 
 # ---------- readiness (the one network step) ----------
@@ -215,9 +186,7 @@ class Pack:
 
     @property
     def status(self) -> Literal["build", "close", "far"]:
-        if self.short == 0:
-            return "build"
-        return "close" if self.short <= CLOSE_SHORT else "far"
+        return recipes.status(self.short)
 
     @property
     def owned(self) -> bool:
@@ -314,9 +283,7 @@ def set_packs(code: str) -> list[Pack]:
         priced = [c for c in p.cards if c.unit_usd is not None]
         if priced:  # the priciest card, first on ties (as the summary's top_card)
             p.top_card_id = max(priced, key=lambda c: c.unit_usd).scryfall_id
-        need = counts_by_id(per[fn])
-        p.have = sum(min(n, free.get(sid, 0)) for sid, n in need.items())
-        p.short = sum(n for n in need.values()) - p.have
+        p.have, p.short = recipes.coverage(counts_by_id(per[fn]), free)
         packs.append(p)
     packs.sort(key=lambda p: (color_sort_key(p.color), p.theme.lower(), p.version or 0))
     return packs

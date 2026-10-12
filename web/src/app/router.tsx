@@ -2,7 +2,7 @@ import { createRootRoute, createRoute, createRouter, lazyRouteComponent, Outlet,
 import { AppShell } from '../components/AppShell';
 import { collectionSearch, compareSearch, decksSearch, marketSearch } from '../core/search';
 import { historySearch } from '../core/history';
-import { jumpstartSearch } from '../core/jumpstart';
+import { jumpstartToDecks, legacyJumpstartSearch } from '../core/jumpstart';
 import { analyticsSearch } from '../core/analyticsDashboard';
 
 const rootRoute = createRootRoute({
@@ -57,12 +57,13 @@ const historyRoute = createRoute({
   component: lazyRouteComponent(() => import('../views/HistoryView'), 'HistoryView'),
 });
 
-const jumpstartRoute = createRoute({
+// Jumpstart packs are deck recipes now: old Collection → Jumpstart links open them in Decks.
+const legacyJumpstartRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/collection/jumpstart',
-  validateSearch: jumpstartSearch,
-  search: { middlewares: [stripSearchParams(jumpstartSearch.parse({}))] },
-  component: lazyRouteComponent(() => import('../views/JumpstartView'), 'JumpstartView'),
+  beforeLoad: ({ search }) => {
+    throw redirect({ to: '/decks', search: jumpstartToDecks(legacyJumpstartSearch.parse(search)) as never });
+  },
 });
 
 // The old missing-set view lived at /sets; it is now a filter of Collection.
@@ -80,6 +81,10 @@ const decksRoute = createRoute({
   path: '/decks',
   validateSearch: decksSearch,
   search: { middlewares: [stripSearchParams(decksSearch.parse({}))] },
+  // Old `built=true` links: only built recipes.
+  beforeLoad: ({ search }) => {
+    if (search.built) throw redirect({ to: '/decks', search: { ...search, built: undefined, own: ['built'] } as never, replace: true });
+  },
   component: lazyRouteComponent(() => import('../views/DecksView'), 'DecksView'),
 });
 
@@ -112,7 +117,7 @@ const analyticsRoute = createRoute({
 });
 
 export const router = createRouter({
-  routeTree: rootRoute.addChildren([indexRoute, collectionRoute, historyRoute, jumpstartRoute, legacySetsRoute, decksRoute, deckEditRoute, exploreRoute, legacyCommandersRoute, marketRoute, jobsRoute, analyticsRoute]),
+  routeTree: rootRoute.addChildren([indexRoute, collectionRoute, historyRoute, legacyJumpstartRoute, legacySetsRoute, decksRoute, deckEditRoute, exploreRoute, legacyCommandersRoute, marketRoute, jobsRoute, analyticsRoute]),
   defaultPreload: 'intent',
 });
 

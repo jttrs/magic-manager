@@ -608,6 +608,30 @@ def is_cached(resource_path: str) -> bool:
     return p.is_file() and p.stat().st_size > 0
 
 
+_CACHED_DECKS: dict[str, tuple[float, dict]] = {}
+
+
+def cached_deck(file_name: str) -> dict | None:
+    """``decks/<file_name>.json``'s ``data`` block straight from the wrapper's
+    disk cache — no subprocess, never the network; ``None`` when not cached
+    (or unreadable). Memoized per file mtime, so listing hundreds of recipes
+    parses each deck file once per process."""
+    p = cache_path(f"decks/{file_name.removesuffix('.json')}.json")
+    try:
+        mtime = p.stat().st_mtime
+    except OSError:
+        return None
+    hit = _CACHED_DECKS.get(file_name)
+    if hit and hit[0] == mtime:
+        return hit[1]
+    try:
+        data = json.loads(p.read_text()).get("data") or {}
+    except (OSError, ValueError):
+        return None
+    _CACHED_DECKS[file_name] = (mtime, data)
+    return data
+
+
 def is_stale(resource_path: str) -> bool:
     """True if the cached SHA-256 for ``resource_path`` differs from MTGJSON's
     published ``.sha256`` sidecar. False if it matches. Raises if the resource

@@ -3,26 +3,48 @@ import { expect, fixtures, test } from './support';
 const detail = fixtures.deckDetail;
 const DECK_URL = `/decks?deck=${encodeURIComponent(detail.deck.slug)}`;
 
-test('deck list shows Commander decks by default, filters built and text; the nav has Decks', async ({ page }) => {
+const owned = fixtures.recipes.recipes.filter((r) => r.ownership !== 'none');
+
+test('recipe list shows what you own by default; ownership, kind, deck type and text filter it; the nav has Decks', async ({ page }) => {
   await page.goto('/decks');
   await expect(page.getByRole('link', { name: 'Decks' })).toHaveAttribute('aria-current', 'page');
-  const list = page.getByRole('navigation', { name: 'Decks' });
-  const commander = fixtures.decks.filter((d) => d.deck_type === 'Commander');
-  await expect(list.getByRole('button')).toHaveCount(commander.length);
-  await page.getByRole('radio', { name: /^Built/ }).click();
-  await expect(list.getByRole('button')).toHaveCount(commander.filter((d) => d.built > 0).length);
-  await page.getByRole('searchbox', { name: 'Deck, set or author' }).fill('avengers');
+  const list = page.getByRole('navigation', { name: 'Deck recipes' });
+  await expect(list.getByRole('button')).toHaveCount(owned.length);
+  await expect(page.getByRole('status').filter({ hasText: `${owned.length} recipes` })).toBeVisible();
+  // Search is the first field of Show.
+  const show = page.getByRole('complementary', { name: 'Deck controls' });
+  await expect(show.getByRole('heading').first()).toHaveText('Show');
+  await expect(show.getByRole('searchbox').first()).toHaveAccessibleName('Deck, set or author');
+
+  await page.getByRole('button', { name: /^None/ }).click();
+  await expect(page).toHaveURL(/own=/);
+  await expect(list.getByRole('button')).toHaveCount(fixtures.recipes.recipes.length);
+  const unowned = list.getByRole('button', { name: /Spider Society/ });
+  await expect(unowned).toContainText('Precon');
+  await expect(unowned).toContainText('not owned');
+  await expect(unowned).toContainText('not read');
+  await expect(list.getByRole('button', { name: /^Armed/ })).toContainText('All 20 free');
+  await expect(list.getByRole('button', { name: /Bounty Hunter/ })).toContainText('2 short');
+  await expect(list.getByRole('button', { name: /My Brew/ })).toContainText('Imported');
+
+  await page.getByRole('button', { name: /^Kind/ }).click();
+  await page.getByRole('checkbox', { name: /^Jumpstart/ }).check();
+  await page.keyboard.press('Escape');
+  await expect(list.getByRole('button')).toHaveCount(fixtures.recipes.recipes.filter((r) => r.kind === 'jumpstart').length);
+  await page.getByRole('searchbox', { name: 'Deck, set or author' }).fill('armed');
   await expect(list.getByRole('button')).toHaveCount(1);
   await page.getByRole('searchbox', { name: 'Deck, set or author' }).fill('');
-  await page.getByRole('button', { name: /^Group decks by/ }).click();
-  await page.getByRole('menuitemradio', { name: 'Deck type' }).click();
-  await expect(page).toHaveURL(/group=type/);
-  await expect(list.getByRole('heading', { name: /^Commander/ })).toBeVisible();
-  await page.getByRole('button', { name: /^Deck type/ }).click();
-  await page.getByRole('checkbox', { name: /^Commander/ }).uncheck();
-  await page.keyboard.press('Escape');
-  await expect(page).toHaveURL(/types=/);
-  await expect(list.getByRole('button')).toHaveCount(fixtures.decks.filter((d) => d.built > 0).length);
+  await page.getByRole('button', { name: /^Group by/ }).click();
+  await page.getByRole('menuitemradio', { name: 'Colour' }).click();
+  await expect(page).toHaveURL(/group=color/);
+  await expect(list.getByRole('heading', { name: /^Red/ })).toBeVisible();
+  await expect(page.getByRole('radiogroup', { name: 'Card view' }).getByRole('radio')).toHaveText(['Grid', 'List']);
+});
+
+test('old built-only links keep showing only built recipes', async ({ page }) => {
+  await page.goto('/decks?built=true');
+  await expect(page).toHaveURL(/own=/);
+  await expect(page.getByRole('navigation', { name: 'Deck recipes' }).getByRole('button')).toHaveCount(fixtures.recipes.recipes.filter((r) => r.ownership === 'built').length);
 });
 
 test('inspector: sections by board then type, card facts, deep link', async ({ page }) => {
@@ -78,7 +100,7 @@ test('unknown deck in the URL shows the error with a retry', async ({ page }) =>
 
 test('deck list is one tab stop with arrow-key navigation', async ({ page }) => {
   await page.goto('/decks');
-  const rows = page.getByRole('navigation', { name: 'Decks' }).getByRole('button');
+  const rows = page.getByRole('navigation', { name: 'Deck recipes' }).getByRole('button');
   await expect(rows.first()).toHaveAttribute('tabindex', '0');
   await expect(rows.nth(1)).toHaveAttribute('tabindex', '-1');
   await rows.first().focus();
@@ -88,12 +110,13 @@ test('deck list is one tab stop with arrow-key navigation', async ({ page }) => 
   await expect(page).toHaveURL(/deck=/);
 });
 
-test('one row per recipe with a built-copy counter (no loose tracking)', async ({ page }) => {
-  await page.goto('/decks?types=%5B%5D');
-  const d = fixtures.decks.find((x) => x.built > 0)!;
-  const row = page.getByRole('navigation', { name: 'Decks' }).getByRole('button', { name: new RegExp(d.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) }).first();
-  await expect(row.getByLabel(`${d.built} built`)).toBeVisible();
-  await expect(page.getByText(/loose/i)).toHaveCount(0);
+test('one row per recipe: built copies and loose copies are marked', async ({ page }) => {
+  await page.goto('/decks');
+  const list = page.getByRole('navigation', { name: 'Deck recipes' });
+  const d = fixtures.recipes.recipes.find((x) => x.name === 'Avengers Assemble')!;
+  await expect(list.getByRole('button', { name: /Avengers Assemble/ })).toContainText(`×${d.built} built`);
+  await expect(list.getByRole('button', { name: /Bounty Hunter/ })).toContainText('1 loose');
+  await expect(list.getByRole('button', { name: /My Brew/ })).toContainText('not built');
 });
 
 const editable = { ...detail, version_id: 7, editable: true, deck: { ...detail.deck, built: 1, slugs: [detail.deck.slug], pledged_pct: 100 } };

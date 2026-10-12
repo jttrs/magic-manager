@@ -112,18 +112,13 @@ def test_front_card_matches_versioned_pack_name(tmp_db):
     assert front_cards.front_card_for_theme("jt", "Dogs") is None
 
 
-def test_api_view_pack_and_buy_list(jt):
+def test_api_view_and_buy_list(jt):
     from magic_manager.api import jumpstart as api
     v = api.view(jt)
     assert v.ready and v.name == "Jump Test" and v.themes == 2
     assert v.buildable.copies == 1 and v.whole_packs == 2 and v.whole.copies == 5
-    d = api.pack(jt, "Cats2_JT")
-    assert [(c.printing.name, c.foil, c.free) for c in d.cards] == [("Alpha", True, 1), ("Charlie", False, 0)]
     out = api.buy_list(jt, api.JumpstartBuyIn(shop="buildable", target="cardkingdom"))
     assert "Charlie" in out.text
-    s = api.sets()
-    jt_row = next(x for x in s.sets if x.code == "jt")
-    assert (jt_row.packs, jt_row.themes, jt_row.owned_packs) == (3, 2, 1)
     with pytest.raises(LookupError):
         api.view("zzz")
 
@@ -135,14 +130,12 @@ def test_api_view_not_ready_until_read(jt, monkeypatch):
     assert not v.ready and v.packs == []
 
 
-def test_picker_count_matches_sheet_with_legacy_pack_row(jt):
-    from magic_manager.api import jumpstart as api
+def test_owned_count_matches_sheet_with_legacy_pack_row(jt):
     with db.connect() as conn:  # a pre-fileName pack row: no source_precon_file_name
         decks.deck_create("pack:cats-2-jt", "Cats (2)", conn=conn)
     assert jumpstart.owned_file_names(jt) == {"Dogs_JT", "Cats2_JT"}
-    row = next(x for x in api.sets().sets if x.code == "jt")
     sheet = sum(1 for p in jumpstart.set_packs(jt) if p.built + p.deconstructed)
-    assert row.owned_packs == sheet == 2
+    assert sheet == 2
     assert jumpstart.missing_packs(jt).total - len(jumpstart.missing_packs(jt).packs) == 2
 
 

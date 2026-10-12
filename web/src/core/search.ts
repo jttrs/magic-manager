@@ -81,18 +81,34 @@ export const collectionSearch = z.object({
 });
 export type CollectionSearch = z.infer<typeof collectionSearch>;
 
-const DECK_GROUPS = ['set', 'year', 'type', 'state', 'origin'] as const;
+const DECK_GROUPS = ['set', 'year', 'kind', 'type', 'color', 'state'] as const;
+export const RECIPE_KINDS = ['precon', 'jumpstart', 'import', 'custom'] as const;
+export const OWNERSHIP = ['built', 'loose', 'none'] as const;
+export const COVER = ['any', 'build', 'close'] as const;
+const SHOPS = ['buildable', 'packs'] as const;
 
 export const decksSearch = z.object({
+  /** The recipe open in the inspector: your deck's slug, or `fn:<fileName>` for a catalog recipe. */
   deck: z.string().optional().catch(undefined),
-  group: z.enum(DECK_GROUPS).catch('set').default('set'),
-  /** Only decks with a physically built copy. */
-  built: z.boolean().catch(false).default(false),
-  /** Deck types to keep (deck_view.deck_type labels); empty = all. Commander by default. */
-  types: list(z.string()).catch(['Commander']).default(['Commander']),
+  /** `origin` (old links) groups by kind now. */
+  group: z.preprocess((v) => (v === 'origin' ? 'kind' : v), z.enum(DECK_GROUPS)).catch('set').default('set'),
+  /** Recipe kinds to keep; empty = all. */
+  kinds: list(z.enum(RECIPE_KINDS)).catch([]).default([]),
+  /** Ownership to keep: built, loose (yours, not assembled) and/or not owned. Owned only by default. */
+  own: list(z.enum(OWNERSHIP)).catch(['built', 'loose']).default(['built', 'loose']),
+  /** Only recipes your free cards cover (build) or nearly cover (close = build or close). */
+  cover: z.enum(COVER).catch('any').default('any'),
+  /** Deck types to keep (deck_view.deck_type labels); empty = all. */
+  types: list(z.string()).catch([]).default([]),
+  /** Set codes to keep; empty = all. One Jumpstart set opens its shopping lists. */
+  sets: list(z.string()).catch([]).default([]),
   q: z.string().catch('').default(''),
+  /** Jumpstart shopping list for the one chosen set. */
+  shop: z.enum(SHOPS).catch('buildable').default('buildable'),
   /** Open the "add deck cards to collection" review once (after an import). */
   add: z.boolean().optional().catch(undefined),
+  /** Legacy `built=true` links; the route turns them into `own=built`. */
+  built: z.boolean().optional().catch(undefined),
   view,
 });
 export type DecksSearch = z.infer<typeof decksSearch>;
