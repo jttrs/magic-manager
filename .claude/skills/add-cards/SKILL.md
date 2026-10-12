@@ -16,7 +16,7 @@ The mechanical wrapper around `mm inventory add-card`. The user names a short, e
 **Don't** use for:
 - A contiguous collector-number RANGE or a whole product with preview/gap-checking → [[bulk-add]] (that skill previews + gap-checks CN ranges; `add-card` is for a short explicit list, no preview).
 - A whole set/family checklist → [[generate-set-checklist]] + [[ingest-new-inventory-list]].
-- Rapid physical scan-loop entry → `mm intake <set>`.
+- Rapid physical scan-loop entry → `mm intake <set>` (a human REPL — the owner runs it in their terminal; agents can't).
 - A whole precon deck → [[add-precon]].
 
 `add-card` is the fast path for "these N specific cards"; `bulk-add` is the preview-heavy path for ranges/products. Don't conflate them.

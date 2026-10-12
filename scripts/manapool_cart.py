@@ -168,7 +168,13 @@ def _normalize(enriched: list[dict], qty_by_inv: dict) -> list[dict]:
 # ---------- bookmarklet clipboard paste ----------
 
 def fetch_bookmarklet(src: str | None) -> list[dict] | None:
-    if src == "-" or src is None:
+    if src is None:
+        # Only an explicit `--file -` reads stdin, so a run with an open but
+        # silent stdin (an agent, a job) never blocks waiting on it.
+        print("bookmarklet: no input. Click the cart bookmarklet, then paste its JSON "
+              "via: pbpaste | uv run python scripts/manapool_cart.py --file -", file=sys.stderr)
+        return None
+    if src == "-":
         if sys.stdin.isatty():
             print("bookmarklet: no piped input. Click the cart bookmarklet, then paste its JSON "
                   "via: pbpaste | uv run python scripts/manapool_cart.py --file -", file=sys.stderr)

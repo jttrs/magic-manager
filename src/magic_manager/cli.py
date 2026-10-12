@@ -7,6 +7,7 @@ Run via ``uv run mm …`` from the repo root.
 from __future__ import annotations
 
 import json
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -21,6 +22,7 @@ from . import (
     front_cards as front_cards_mod,
     ingest as ingest_mod,
     intake as intake_mod,
+    interactive,
     inventory as inv_mod,
     mtgjson as mtgjson_mod,
     scryfall_urls as scryfall_urls_mod,
@@ -232,7 +234,7 @@ def analytics_consent(errors: bool = typer.Option(None, "--errors/--no-errors", 
 def analytics_forget(yes: bool = typer.Option(False, "--yes", "-y")):
     """Delete every raw event recorded for you (daily counts carry no user key and stay)."""
     from . import analytics
-    if not yes and not typer.confirm("Delete all your recorded analytics events?"):
+    if not yes and not interactive.confirm("Delete all your recorded analytics events?", flag="--yes"):
         raise typer.Exit(1)
     typer.echo(f"deleted {analytics.forget_user()} events")
 
@@ -391,6 +393,9 @@ def serve_cmd(
     if not DIST_DIR.is_dir():
         typer.echo(f"note: {DIST_DIR} not built — API only. Run `npm --prefix web run build` "
                    "for the UI, or `npm --prefix web run dev` for live development.", err=True)
+    # The app never waits on a person at the server's terminal — nor do the
+    # scripts its jobs spawn (they inherit this; see `interactive`).
+    os.environ["MM_NONINTERACTIVE"] = "1"
     uvicorn.run("magic_manager.web.app:create_app", factory=True,
                 host=host, port=port, reload=reload)
 
@@ -1286,8 +1291,9 @@ def set_ingest(
         None, "--zero-untouched/--no-zero-untouched",
         help="Replace/modify ingest ONLY. When set, in-partition rows absent "
              "from the file are also zeroed (full-audit: file is authoritative). "
-             "Default: not set — you're asked interactively, or with --json it "
-             "defaults to NOT zeroing (safe; the file is a delta, not a wipe).",
+             "Default: not set — you're asked at a terminal; with --json it "
+             "defaults to NOT zeroing (safe; the file is a delta, not a wipe); "
+             "with no terminal and no --json, pass one of the two flags.",
     ),
     force: bool = typer.Option(
         False, "--force",
@@ -1432,10 +1438,11 @@ def set_ingest(
         elif json_out:
             do_zero = False
         else:
-            do_zero = typer.confirm(
+            do_zero = interactive.confirm(
                 "This is a MODIFY (replace) ingest. Each row in the file is set "
                 "to its cell value. Also ZERO in-partition rows that are ABSENT "
                 "from the file? (only if the file is a full-inventory audit)",
+                flag="--zero-untouched or --no-zero-untouched",
                 default=False,
             )
     sha = _file_sha256(src)
@@ -4512,8 +4519,9 @@ def db_undo_cmd(
     if info["details"]:
         typer.echo("rows that differ: " + ", ".join(f"{d['label']} {d['rows']}" for d in info["details"]))
     if restore:
-        if not yes:
-            typer.confirm("Swap your data with this restore point?", abort=True)
+        if not yes and not interactive.confirm("Swap your data with this restore point?", flag="--yes"):
+            typer.echo("not restored", err=True)
+            raise typer.Exit(1)
         try:
             undo_mod.restore()
         except undo_mod.UndoError as e:
@@ -4576,8 +4584,9 @@ def db_unlock_cmd(
     typer.echo("Stale sidecars to remove:")
     for f in present:
         typer.echo(f"  {f.name}")
-    if not yes:
-        typer.confirm("Remove them?", abort=True)
+    if not yes and not interactive.confirm("Remove them?", flag="--yes"):
+        typer.echo("nothing removed", err=True)
+        raise typer.Exit(1)
     # Checkpoint first so any durable WAL content folds into the main DB, then
     # the sidecars are safe to drop.
     with db.connect() as conn:
@@ -4824,6 +4833,10 @@ def intake_cmd(
 
     Other commands: u/undo, s <code>/set <code>, ?/help, q/quit.
     """
+    interactive.require_terminal(
+        "`mm intake` (a scan-loop REPL)",
+        alternative="Use `mm inventory add-card 'SET CN [foil] [qty]' …` or pipe a block to `mm inventory import -`.",
+    )
     try:
         r, codes = _resolve_codes(
             name_or_code, include_kinds=list(include or []), only=list(only or []),

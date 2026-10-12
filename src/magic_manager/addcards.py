@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import itertools
 import json
+import os
 import subprocess
 import sys
 import threading
@@ -457,9 +458,12 @@ def fetch_deck_payload(url: str, *, progress: Callable[[str], None] | None = Non
     URL → its normalized payload (``source``/``id``/``name``/``author``/
     ``cards``). Raises ``RuntimeError`` with the fetcher's last message. Shared
     by Add cards and the scrape canary (``scrape_canary``)."""
+    # No stdin and MM_NONINTERACTIVE: a private Moxfield deck that would need a
+    # manual browser login fails fast instead of waiting on the server's terminal.
     proc = subprocess.Popen(
         [sys.executable, str(_IMPORT_DECK), url],
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        env={**os.environ, "MM_NONINTERACTIVE": "1"},
     )
     err_lines: list[str] = []
 
