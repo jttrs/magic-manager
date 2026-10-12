@@ -19,10 +19,14 @@ export function PrivacySettings() {
  *  first visit, until they close it. Afterwards they live in Settings. */
 export function PrivacyPrompt() {
   const consent = useQuery(consentQuery());
+  const [asking, setAsking] = useState(false);
   const [closed, setClosed] = useState(false);
   const c = consent.data;
   const needsAsk = Boolean(c && c.mode === 'hosted' && !c.asked && !c.disabled);
-  if (!c || !needsAsk) return null;
+  // Latch: flipping a switch saves (and marks the user asked); the prompt stays
+  // until they close it or press Save my choice.
+  if (needsAsk && !asking) setAsking(true);
+  if (!c || !asking) return null;
   return (
     <Dialog.Root open={!closed} onOpenChange={(o) => setClosed(!o)}>
       <Dialog.Portal>

@@ -29,6 +29,12 @@ test('dashboard: errors first, usage beside, trace a ref', async ({ page }) => {
   await page.getByRole('searchbox', { name: 'Ref' }).fill('nope');
   await page.getByRole('button', { name: 'Find' }).click();
   await expect(page.getByRole('alert')).toContainText('A ref is 6–32');
+  await page.goto('/collection');
+  await page.getByRole('button', { name: 'Settings' }).click();
+  const settings = page.getByRole('dialog', { name: 'Settings' });
+  await settings.getByRole('link', { name: /^Analytics/ }).click();
+  await expect(page).toHaveURL(/\/analytics/);
+  await expect(settings).toHaveCount(0);
 });
 
 test('dashboard is off without the flag', async ({ page }) => {
@@ -75,6 +81,22 @@ test('hosted: asks once before any usage is recorded', async ({ page }) => {
   await expect(dialog.getByRole('switch', { name: 'Usage analytics' })).not.toBeChecked();
   await expect(dialog.getByRole('switch', { name: 'Error reports' })).toBeChecked();
   await expect(dialog.getByRole('button', { name: 'Save my choice' })).toBeVisible();
+});
+
+test('hosted: flipping a switch saves but keeps the prompt open until closed', async ({ page }) => {
+  let asked = false;
+  await mockApi(page, { '/api/analytics/catalog': () => ({ json: catalog }) });
+  await page.route('**/api/analytics/consent', async (r) => {
+    if (r.request().method() === 'PUT') asked = true;
+    return r.fulfill({ json: { errors: true, usage: asked, asked, mode: 'hosted', disabled: false } });
+  });
+  await page.goto('/collection');
+  const dialog = page.getByRole('dialog', { name: 'Privacy' });
+  await dialog.getByRole('switch', { name: 'Usage analytics' }).click();
+  await expect(dialog.getByRole('switch', { name: 'Usage analytics' })).toBeChecked();
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: 'Close' }).click();
+  await expect(dialog).toHaveCount(0);
 });
 
 test('tracker batches page views with the session id, never paths', async ({ page }) => {

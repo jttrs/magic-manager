@@ -54,7 +54,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </ul>
         </nav>
         {/* Status first (restore point, companion, jobs), then the one Settings gear. */}
-        <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1.5">
+        <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-1.5">
           <UndoButton />
           <CompanionSlot />
           <JobsLink />
@@ -67,8 +67,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 }
 
+/** The companion is a desktop Chrome extension, so phones never show it. */
 function CompanionSlot() {
-  return useFeature('companion') ? <CompanionButton /> : null;
+  return useFeature('companion') ? <span className="contents max-sm:hidden"><CompanionButton /></span> : null;
 }
 
 /** Sidebar (starts below the nav) + main region. */

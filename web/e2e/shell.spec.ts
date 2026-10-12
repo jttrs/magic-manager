@@ -1,5 +1,16 @@
 import { COMPARE_URL, expect, test } from './support';
 
+const navFitsBeside = async (page: import('@playwright/test').Page, width: number) => {
+  const gear = await page.getByRole('button', { name: 'Settings' }).boundingBox();
+  expect(gear!.x + gear!.width).toBeLessThanOrEqual(width);
+  const icons = await page.getByRole('banner').locator('a[aria-label], button[aria-label]').evaluateAll((els) => els.filter((e) => e.getBoundingClientRect().width > 0).map((e) => e.getBoundingClientRect().left));
+  const leftmost = Math.min(...icons);
+  for (const name of ['Collection', 'Decks', 'Explore', 'Market']) {
+    const box = await page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name }).boundingBox();
+    expect(box!.x + box!.width).toBeLessThanOrEqual(leftmost);
+  }
+};
+
 test('top nav spans the full width and the sidebar starts below it (F7)', async ({ page }) => {
   await page.goto(COMPARE_URL);
   const header = await page.getByRole('banner').boundingBox();
@@ -62,10 +73,15 @@ test('settings gear holds appearance, privacy and about; the masthead stays quie
 test('phone masthead: every nav tab and the gear fit at 390px', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(COMPARE_URL);
-  const gear = await page.getByRole('button', { name: 'Settings' }).boundingBox();
-  expect(gear!.x + gear!.width).toBeLessThanOrEqual(390);
-  for (const name of ['Collection', 'Decks', 'Explore', 'Market']) {
-    const box = await page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name }).boundingBox();
-    expect(box!.x + box!.width).toBeLessThanOrEqual(gear!.x);
-  }
+  await navFitsBeside(page, 390);
+});
+
+test('phone masthead, crowded: restore point + a running job + the gear still fit at 390px', async ({ page }) => {
+  await page.route('**/api/undo', (r) => r.fulfill({ json: { taken_at: new Date().toISOString(), reason: 'before adding cards', restorable: true, current: {}, snapshot: {}, changes: {}, details: [] } }));
+  await page.route('**/api/jobs', (r) => r.fulfill({ json: [{ id: 'j1', name: 'edhrec.sync_bulk', title: 'Warm EDHREC cache', inputs: {}, status: 'running', created_at: '2026-01-01T00:00:00+00:00', started_at: null, finished_at: null, progress: null, summary: null, artifacts: [], error: null }] }));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(COMPARE_URL);
+  await expect(page.getByRole('link', { name: 'Background jobs · 1 running' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Restore point/ })).toBeVisible();
+  await navFitsBeside(page, 390);
 });

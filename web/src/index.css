@@ -217,13 +217,15 @@
   }
 }
 
-/* Small icon buttons keep their compact look but get a 44px hit area on touch. */
+/* Small icon buttons keep their compact look but get a 44px hit area on touch:
+   the layer grows each side just enough to reach 2.75rem (never shrinks), so
+   neighbours spaced by gap-2 don't steal each other's taps. */
 @media (pointer: coarse) {
   .touch-hit { position: relative; }
 
   .touch-hit::after {
     content: '';
     position: absolute;
-    inset: -0.5rem;
+    inset: min(0px, calc((100% - 2.75rem) / 2));
   }
 }
