@@ -97,6 +97,8 @@ describe('collection filters', () => {
     const lone = card({ scryfall_id: 'gap4', oracle_id: 'o-lone', card_owned: 0, price_usd: null });
     const t = collectionStats([unpriced, gap, gap2, lone], []);
     expect([t.missingCards, t.missingCardsUsd]).toEqual([2, 1]);
+    expect([t.missingUnpriced, t.missingCardsUnpriced]).toEqual([2, 1]);
+    expect([s.missingUnpriced, s.missingCardsUnpriced]).toEqual([0, 0]);
   });
 
   it('finish traits OR together and set the owned/missing basis', () => {
@@ -134,7 +136,7 @@ describe('collection filters', () => {
     expect(buyFinish(card({ finishes: ['foil'] }), [])).toBe('foil');
     expect(buyFinish(missing, [])).toBe('nonfoil');
     expect(buyFinish(missing, ['finish:nonfoil'])).toBe('foil');
-    expect(collectionStats([owned, missing], [])).toEqual({ printings: 2, owned: 1, copies: 2, missing: 1, missingUsd: 1, missingCards: 1, missingCardsUsd: 1 });
+    expect(collectionStats([owned, missing], [])).toEqual({ printings: 2, owned: 1, copies: 2, missing: 1, missingUsd: 1, missingUnpriced: 0, missingCards: 1, missingCardsUsd: 1, missingCardsUnpriced: 0 });
   });
   it('source filter keeps owned printings acquired from a picked kind or product', () => {
     const sources = [
