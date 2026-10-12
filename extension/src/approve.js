@@ -67,7 +67,7 @@ function render(p) {
       d.urls.map((u) => [u.store, u.url, u.open ? 'your open tab' : 'opens in a background tab, then closes']));
   } else if (p.kind === 'watched') {
     table([['Store'], ['Page'], ['Page reading']],
-      d.urls.map((u) => [u.store, u.url, (d.pages || {})[u.url] ? `title, price tags, ${d.pages[u.url].text.split('\n').filter(Boolean).length} price/stock lines` : 'couldn’t read — not sent']));
+      d.urls.map((u) => [u.store, u.url, (d.pages || {})[u.url] ? `title, price tags, ${d.pages[u.url].text.split('\n').filter(Boolean).length} price/stock lines` : 'couldn’t read, not sent']));
   } else if (p.kind === 'moxfield') {
     const rows = [];
     Object.entries(d.deck.boards).forEach(([board, b]) => Object.values(b.cards).forEach((c) => rows.push([
@@ -95,13 +95,13 @@ function render(p) {
   $('warnings').replaceChildren(...warnings.slice(0, 20).map((w) => {
     const div = document.createElement('div');
     div.className = 'warn';
-    div.textContent = w.code === 'cart.signed_out' ? `You are not signed in to ${CART_STORES[d.store]?.name || 'Mana Pool'} in this browser — this is the guest cart.`
+    div.textContent = w.code === 'cart.signed_out' ? `You are not signed in to ${CART_STORES[d.store]?.name || 'Mana Pool'} in this browser, so this is the guest cart.`
       : w.code === 'cart.row_unreadable' ? `Cart line ${w.row}: couldn't read ${w.missing.join(', ')}.`
-      : w.code === 'tabs.page_unreadable' ? `Couldn't read ${w.url} — reload that tab and read again.`
+      : w.code === 'tabs.page_unreadable' ? `Couldn't read ${w.url}. Reload that tab and read again.`
       : w.code === 'orders.row_unreadable' ? `Order ${w.order || ''} line ${w.row || ''}: couldn't read ${(w.missing || []).join(', ')}.`
-      : w.code === 'orders.unverified_line' ? `Order ${w.order || ''} line ${w.row}: not a recognised product line — it will be recorded but never added to your collection.`
+      : w.code === 'orders.unverified_line' ? `Order ${w.order || ''} line ${w.row}: not a recognised product line. It will be recorded but never added to your collection.`
       : w.code === 'orders.not_found' ? `Order ${w.order} wasn't on your order pages.`
-      : w.code === 'watched.load_timeout' ? `${w.url} didn't finish loading — open it yourself and read again.` : w.code;
+      : w.code === 'watched.load_timeout' ? `${w.url} didn't finish loading. Open it yourself and read again.` : w.code;
     return div;
   }));
   // Filled when opened: a whole collection is megabytes of text.

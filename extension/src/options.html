@@ -9,10 +9,10 @@
 <body>
   <main>
     <h1>magic-manager companion</h1>
-    <p class="muted">Reads things only your own browser can see and, after you approve each time, hands the card lines to your magic-manager app. Version <span id="version"></span>.</p>
+    <p class="muted">Reads what only your browser can see and, after you approve each time, hands the card lines to your magic-manager app. Version <span id="version"></span>.</p>
 
-    <h2>1 · Pair with your app</h2>
-    <p>Paste the exact address the app shows under <strong>Browser companion</strong> in its header. The companion answers only that address — no other website can talk to it.</p>
+    <h2>Pair with your app</h2>
+    <p>Paste the exact address the app shows under <strong>Browser companion</strong> in its header. Only that address can talk to the companion.</p>
     <label for="origin" class="field-label">App address</label>
     <div class="row pair">
       <div><input type="url" id="origin" placeholder="http://localhost:8766" autocomplete="off" spellcheck="false" aria-describedby="pair-status"></div>
@@ -21,44 +21,73 @@
     </div>
     <p id="pair-status" role="status"></p>
 
-    <h2>2 · Choose what it may read</h2>
+    <h2>What it may read</h2>
     <div class="row feature">
-      <div><strong id="name-cart">Mana Pool cart</strong><br><span class="muted">Reads your cart page on manapool.com (cards, finishes, quantities, prices). Never its API, your sign-in or your address.</span></div>
+      <div>
+        <strong id="name-cart">Mana Pool cart</strong>
+        <span class="muted summary" id="sum-cart">Your cart page on manapool.com.</span>
+        <details class="more"><summary>What it reads</summary><p>Cards, finishes, quantities and prices from your cart page. Never Mana Pool’s API, your sign-in or your address.</p></details>
+      </div>
       <span id="cart-state" class="switch fixed" data-on="true"><span class="track" aria-hidden="true"><span class="thumb"></span></span><span class="state">Always on</span></span>
     </div>
     <div class="row feature">
-      <div><strong id="name-cart-tcgplayer">TCGplayer cart</strong><br><span class="muted">Reads your cart page on www.tcgplayer.com when you check it in the app (cards, conditions, quantities, prices — never the sellers, your sign-in or your address). Chrome will ask to allow www.tcgplayer.com.</span></div>
-      <button type="button" role="switch" id="cart-tcgplayer" class="switch" aria-checked="false" aria-labelledby="name-cart-tcgplayer"><span class="track" aria-hidden="true"><span class="thumb"></span></span><span class="state">Off</span></button>
+      <div>
+        <strong id="name-cart-tcgplayer">TCGplayer cart</strong>
+        <span class="muted summary" id="sum-cart-tcgplayer">Your cart page on www.tcgplayer.com, when you check it in the app.</span>
+        <details class="more"><summary>What it reads</summary><p>Cards, conditions, quantities and prices. Never the sellers, your sign-in or your address. Chrome asks to allow www.tcgplayer.com.</p></details>
+      </div>
+      <button type="button" role="switch" id="cart-tcgplayer" class="switch" aria-checked="false" aria-labelledby="name-cart-tcgplayer" aria-describedby="sum-cart-tcgplayer"><span class="track" aria-hidden="true"><span class="thumb"></span></span><span class="state">Off</span></button>
     </div>
     <div class="row feature">
-      <div><strong id="name-cart-cardkingdom">Card Kingdom cart</strong><br><span class="muted">Reads your cart page on www.cardkingdom.com when you check it in the app (cards, grades, quantities, prices — never your sign-in or your address). Chrome will ask to allow www.cardkingdom.com.</span></div>
-      <button type="button" role="switch" id="cart-cardkingdom" class="switch" aria-checked="false" aria-labelledby="name-cart-cardkingdom"><span class="track" aria-hidden="true"><span class="thumb"></span></span><span class="state">Off</span></button>
+      <div>
+        <strong id="name-cart-cardkingdom">Card Kingdom cart</strong>
+        <span class="muted summary" id="sum-cart-cardkingdom">Your cart page on www.cardkingdom.com, when you check it in the app.</span>
+        <details class="more"><summary>What it reads</summary><p>Cards, grades, quantities and prices. Never your sign-in or your address. Chrome asks to allow www.cardkingdom.com.</p></details>
+      </div>
+      <button type="button" role="switch" id="cart-cardkingdom" class="switch" aria-checked="false" aria-labelledby="name-cart-cardkingdom" aria-describedby="sum-cart-cardkingdom"><span class="track" aria-hidden="true"><span class="thumb"></span></span><span class="state">Off</span></button>
     </div>
     <div class="row feature">
-      <div><strong id="name-deals">Deals — your open store tabs</strong><br><span class="muted">Lets the companion see which tabs are open on the <span id="store-count"></span> Deals stores and read the price on product pages you have open. Chrome will ask to allow those sites.</span></div>
-      <button type="button" role="switch" id="deals" class="switch" aria-checked="false" aria-labelledby="name-deals"><span class="track" aria-hidden="true"><span class="thumb"></span></span><span class="state">Off</span></button>
+      <div>
+        <strong id="name-deals">Deals</strong>
+        <span class="muted summary" id="sum-deals">Your open tabs on the <span id="store-count"></span> Deals stores.</span>
+        <details class="more"><summary>What it reads</summary><p>Which of those stores’ tabs are open, and the price on product pages you have open. Chrome asks to allow those sites.</p></details>
+      </div>
+      <button type="button" role="switch" id="deals" class="switch" aria-checked="false" aria-labelledby="name-deals" aria-describedby="sum-deals"><span class="track" aria-hidden="true"><span class="thumb"></span></span><span class="state">Off</span></button>
     </div>
     <div class="row feature">
-      <div><strong id="name-moxfield">Moxfield decks, collection and binders</strong><br><span class="muted">Reads a deck, your collection or a binder you choose from moxfield.com, as your browser sees it. Shared links are read without signing in. For your own private ones it uses Moxfield's sign-in the way moxfield.com itself does: a short-lived token, kept in memory for that one read and sent only to Moxfield — never stored or sent to the app. Chrome will ask to allow moxfield.com.</span></div>
-      <button type="button" role="switch" id="moxfield" class="switch" aria-checked="false" aria-labelledby="name-moxfield"><span class="track" aria-hidden="true"><span class="thumb"></span></span><span class="state">Off</span></button>
+      <div>
+        <strong id="name-moxfield">Moxfield</strong>
+        <span class="muted summary" id="sum-moxfield">A deck, your collection or a binder you choose.</span>
+        <details class="more"><summary>What it reads</summary><p>Read from moxfield.com as your browser sees it. Shared links need no sign-in. For your own private ones it uses Moxfield’s sign-in the way moxfield.com itself does: a short-lived token, kept in memory for that one read and sent only to Moxfield. Never stored, never sent to the app. Chrome asks to allow moxfield.com.</p></details>
+      </div>
+      <button type="button" role="switch" id="moxfield" class="switch" aria-checked="false" aria-labelledby="name-moxfield" aria-describedby="sum-moxfield"><span class="track" aria-hidden="true"><span class="thumb"></span></span><span class="state">Off</span></button>
     </div>
     <div class="row feature">
-      <div><strong id="name-archidekt">Archidekt decks</strong><br><span class="muted">Reads a deck you choose from archidekt.com, as your browser sees it (including your own private decks when you're signed in) — only its cards, never your sign-in. Chrome will ask to allow archidekt.com.</span></div>
-      <button type="button" role="switch" id="archidekt" class="switch" aria-checked="false" aria-labelledby="name-archidekt"><span class="track" aria-hidden="true"><span class="thumb"></span></span><span class="state">Off</span></button>
+      <div>
+        <strong id="name-archidekt">Archidekt</strong>
+        <span class="muted summary" id="sum-archidekt">A deck you choose.</span>
+        <details class="more"><summary>What it reads</summary><p>Read from archidekt.com as your browser sees it, including your own private decks when you’re signed in. Only its cards, never your sign-in. Chrome asks to allow archidekt.com.</p></details>
+      </div>
+      <button type="button" role="switch" id="archidekt" class="switch" aria-checked="false" aria-labelledby="name-archidekt" aria-describedby="sum-archidekt"><span class="track" aria-hidden="true"><span class="thumb"></span></span><span class="state">Off</span></button>
     </div>
     <div class="row feature">
-      <div><strong id="name-orders">Order history — TCGplayer and Card Kingdom</strong><br><span class="muted">Reads your order history pages on store.tcgplayer.com and cardkingdom.com when the app asks (orders, items, prices paid — never your address, payment or tracking). Mana Pool orders need nothing extra. Chrome will ask to allow those two sites.</span></div>
-      <button type="button" role="switch" id="orders" class="switch" aria-checked="false" aria-labelledby="name-orders"><span class="track" aria-hidden="true"><span class="thumb"></span></span><span class="state">Off</span></button>
+      <div>
+        <strong id="name-orders">Order history</strong>
+        <span class="muted summary" id="sum-orders">Your TCGplayer and Card Kingdom order pages, when the app asks.</span>
+        <details class="more"><summary>What it reads</summary><p>Orders, items and prices paid from store.tcgplayer.com and cardkingdom.com. Never your address, payment or tracking. Mana Pool orders need nothing extra. Chrome asks to allow those two sites.</p></details>
+      </div>
+      <button type="button" role="switch" id="orders" class="switch" aria-checked="false" aria-labelledby="name-orders" aria-describedby="sum-orders"><span class="track" aria-hidden="true"><span class="thumb"></span></span><span class="state">Off</span></button>
     </div>
 
     <h2>What it never does</h2>
     <ul class="plain">
-      <li>Read cookies, passwords, email or addresses, or send any sign-in token anywhere but the site it belongs to (Moxfield's own short-lived token, for your private Moxfield cards, is the one token it ever holds — in memory, for that read).</li>
-      <li>Change anything on Mana Pool, TCGplayer, Card Kingdom, Moxfield, Archidekt or a store — no cart edits, no purchases, no form submissions.</li>
+      <li>Read cookies, passwords, email or addresses.</li>
+      <li>Send a sign-in token anywhere but its own site. Moxfield’s short-lived token, for your private Moxfield cards, is the only one it ever holds: in memory, for that one read.</li>
+      <li>Change anything on Mana Pool, TCGplayer, Card Kingdom, Moxfield, Archidekt or a store: no cart edits, purchases or form submissions.</li>
       <li>Read anything unless the app asks <em>and</em> you press Send in its own window.</li>
-      <li>Collect in the background, run analytics, or load code from the internet.</li>
+      <li>Collect in the background, run analytics, or load code or fonts from the internet.</li>
     </ul>
-    <p class="muted">The source is plain JavaScript in the magic-manager repo (<span class="origin">extension/</span>) — read it before you install.</p>
+    <p class="muted">The source is plain JavaScript in the magic-manager repo, under <span class="origin">extension/</span>. Read it before you install.</p>
   </main>
   <script type="module" src="options.js"></script>
 </body>
