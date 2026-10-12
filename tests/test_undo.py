@@ -203,8 +203,11 @@ def test_restore_holds_the_write_lock_from_the_swap_copy_on(owned, monkeypatch):
     assert undo.info()["changes"]["copies"] == 1  # the swap file holds the 3
 
 
-def test_info_details_cover_every_restored_table(owned):
+def test_info_details_cover_every_restored_table(owned, monkeypatch):
     """PR99-7: edits that leave the headline counts equal still show up."""
+    # Adding a card bumps decks.updated_at (to the second); a fixed clock keeps the
+    # decks row identical, so the test can't flake across a second boundary.
+    monkeypatch.setattr(db, "_utcnow_iso", lambda: "2026-01-01T00:00:00+00:00")
     decks.deck_create("d", "D")
     undo.take("t")
     decks.deck_add_card("d", A, "main", "nonfoil", 1)
