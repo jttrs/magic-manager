@@ -1,5 +1,5 @@
 import { defaultRangeExtractor, useVirtualizer, type Range } from '@tanstack/react-virtual';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { useRovingFocus } from '../../app/useRovingFocus';
 import { EmptyNote } from '../../components/States';
 import type { RecipeOut } from '../../core/api';
@@ -39,22 +39,24 @@ export function RecipeList({ groups, total, active, onPick }: { groups: DeckGrou
     },
     [heads, tabIndex],
   );
+  const estimate = (i: number) => (items[i]?.type === 'head' ? 36 : 57);
   const virt = useVirtualizer({
     count: items.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: (i) => (items[i]?.type === 'head' ? 36 : 57),
+    estimateSize: estimate,
+    // A deep link opens with its recipe in view (a little below the top).
+    initialOffset: () => {
+      const at = activeKey ? index.get(activeKey) : undefined;
+      if (!at) return 0;
+      let y = 0;
+      for (let i = 0; i < at; i++) y += estimate(i);
+      return Math.max(0, y - 120);
+    },
     overscan: 12,
     rangeExtractor,
     getItemKey: (i) => (items[i].type === 'head' ? `h:${(items[i] as { g: DeckGroup }).g.key}` : (items[i] as { r: RecipeOut }).r.key),
   });
   virtRef.current = virt;
-  // A deep link opens with its recipe in view.
-  const revealed = useRef(false);
-  useEffect(() => {
-    if (revealed.current || !activeKey) return;
-    revealed.current = true;
-    reveal(activeKey);
-  }, [activeKey, reveal]);
   const setRefs = useCallback((el: HTMLElement | null) => {
     scrollRef.current = el;
     (navRef as { current: HTMLElement | null }).current = el;
