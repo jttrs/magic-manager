@@ -208,3 +208,24 @@ test('"Acquired from" narrows to owned printings from a card pool; the inspector
   await expect(copies.getByText('Camp Comrades')).toBeVisible();
   await expect(copies.getByText(/also own 3 copies in other printings/)).toBeVisible();
 });
+
+test('the rail reads Find → Show → Arrange → Buy, with the card-name search first', async ({ page }) => {
+  await page.goto(COLLECTION_URL);
+  const rail = page.getByRole('complementary').or(page.locator('aside')).first();
+  await expect(rail.getByRole('heading', { level: 2 })).toHaveText(['Find', 'Show', 'Arrange', 'Buy']);
+  await expect(page.getByRole('heading', { level: 1, name: 'Collection' })).toHaveClass(/sr-only/);
+});
+
+test('“Missing means” is a Settings preference, not a rail filter, and it sticks', async ({ page }) => {
+  await page.goto(COLLECTION_URL);
+  await expect(page.getByText('Missing means')).toHaveCount(0);
+  await expect(page.getByText(/missing · \$/)).toBeVisible();
+  await page.getByRole('button', { name: 'Settings' }).click();
+  const settings = page.getByRole('dialog', { name: 'Settings' });
+  await settings.getByRole('radiogroup', { name: 'Missing means' }).getByRole('radio', { name: 'The card' }).click();
+  await page.keyboard.press('Escape');
+  await expect(page.getByText(/cards you own in no printing/)).toBeVisible();
+  await expect(page).not.toHaveURL(/gaps/);
+  await page.reload();
+  await expect(page.getByText(/cards you own in no printing/)).toBeVisible();
+});

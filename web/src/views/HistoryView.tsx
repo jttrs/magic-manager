@@ -49,6 +49,7 @@ export function HistoryView() {
 
   const sidebar = (
     <>
+      {!showOrders && (<>
       <SideSection title="Find">
         <TextField name="q" label="Product, set or file" value={search.q} placeholder="e.g. Jumpstart, FIN…" onChange={(qv) => set({ q: qv })} />
       </SideSection>
@@ -73,16 +74,14 @@ export function HistoryView() {
           </button>
         )}
       </SideSection>
+      </>)}
       {purchasesOn && (
         <SideSection title="Store orders">
           {orders.data && orders.data.purchases.length > 0 && <OrdersTotals totals={orders.data} tone="chrome" />}
-          <ReadOrdersDialog trigger={<Button>Read my orders</Button>} onReview={(order) => set({ orders: true, order })} />
-          <button type="button" onClick={() => set({ orders: !search.orders, order: undefined })} className="self-start cursor-pointer text-sm text-on-chrome-muted underline hover:text-on-chrome">
-            {search.orders ? 'Show timeline' : 'Show orders'}
-          </button>
+          <ReadOrdersDialog trigger={<Button>Read my orders</Button>} onReview={(order) => set({ orders: true, order, entry: undefined })} />
         </SideSection>
       )}
-      <SideSection title="What the kinds mean">
+      {!showOrders && <SideSection title="What the kinds mean">
         <dl className="flex flex-col gap-1.5 text-xs leading-snug text-on-chrome-muted">
           {kinds.map((k) => (
             <div key={k.value}>
@@ -91,7 +90,7 @@ export function HistoryView() {
             </div>
           ))}
         </dl>
-      </SideSection>
+      </SideSection>}
     </>
   );
 
@@ -123,12 +122,13 @@ export function HistoryView() {
 
   const held = useMemo(() => shown.filter((e) => e.kind !== 'move').reduce((t, e) => t + e.value_usd, 0), [shown]);
   return (
-    <ViewLayout label="History controls" summary={filtered ? `${fmtCount(shown.length, 'entry', 'entries')} shown` : 'Every entry'} sidebar={sidebar}>
+    <ViewLayout label="History controls" summary={showOrders ? 'Store orders' : filtered ? `${fmtCount(shown.length, 'entry', 'entries')} shown` : 'Every entry'} sidebar={sidebar}>
       <GuideSheet
-        nav={<CollectionTabs />}
-        title="Purchase history"
+        nav={<CollectionTabs orders={showOrders} />}
+        title={showOrders ? 'Store orders' : 'Purchase history'}
+        hideTitle
         summary={
-          q.data
+          !showOrders && q.data
             ? <>
                 {fmtCount(shown.length, 'entry', 'entries')} · {fmtUsd(held)} held at today’s prices
                 {q.data.prices_as_of && ` · prices ${q.data.prices_as_of}`}

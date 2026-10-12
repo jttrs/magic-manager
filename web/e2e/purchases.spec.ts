@@ -78,7 +78,12 @@ async function fakeCompanion(page: Page, answers: Record<string, unknown>) {
 test('Orders list: totals for every order, and Paid / Worth / gain on each row', async ({ page }) => {
   await flags(page, { purchases: true });
   await purchasesApi(page);
-  await page.goto('/collection/history?orders=true');
+  await page.goto('/collection/history');
+  const tabs = page.getByRole('navigation', { name: 'Collection views' });
+  await tabs.getByRole('link', { name: 'Store orders' }).click();
+  await expect(page).toHaveURL(/orders=true/);
+  await expect(tabs.getByRole('link', { name: 'Store orders' })).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('heading', { level: 2, name: 'Find' })).toHaveCount(0);
   const list = page.getByRole('navigation', { name: 'Store orders' });
   const totals = list.getByLabel('All orders');
   await expect(totals).toContainText('$30.00');

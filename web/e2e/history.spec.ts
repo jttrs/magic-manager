@@ -56,3 +56,12 @@ test('a pre-ledger checklist explains where its cards are counted and links ther
   await page.getByRole('button', { name: 'Checklists before the ledger', exact: true }).click();
   await expect(page).toHaveURL(/entry=249/);
 });
+
+test('Purchase history: the tab is the title, the rail reads Find → Show, no Store orders tab without the flag', async ({ page }) => {
+  await page.goto('/collection/history');
+  const tabs = page.getByRole('navigation', { name: 'Collection views' });
+  await expect(tabs.getByRole('link', { name: 'Purchase history' })).toHaveAttribute('aria-current', 'page');
+  await expect(tabs.getByRole('link', { name: 'Store orders' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { level: 1, name: 'Purchase history' })).toHaveClass(/sr-only/);
+  await expect(page.getByRole('heading', { level: 2 }).first()).toHaveText('Find');
+});

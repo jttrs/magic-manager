@@ -37,7 +37,11 @@ function useCopy() {
   return { status, busy, done, copy };
 }
 
-const Status = ({ text }: { text: string }) => <span aria-live="polite" className="min-h-4 text-xs text-on-chrome-muted">{text}</span>;
+/** The copy result. Always mounted (a live region must exist before it
+ *  changes) but takes no space while empty, so buttons sit close together. */
+const Status = ({ text, className = 'text-xs text-on-chrome-muted' }: { text: string; className?: string }) => (
+  <span aria-live="polite" className={text ? className : 'sr-only'}>{text}</span>
+);
 
 /** Copies text to the clipboard and announces the result politely. */
 export function CopyButton({ label, getText, emphasis = 'quiet', tone = 'chrome' }: { label: string; getText: GetText; emphasis?: 'primary' | 'quiet'; tone?: 'chrome' | 'paper' }) {
@@ -53,12 +57,18 @@ export function CopyButton({ label, getText, emphasis = 'quiet', tone = 'chrome'
 export type CopyTarget = { id: string; name: string; Mark: ComponentType<SVGProps<SVGSVGElement>>; getText: GetText; note?: string };
 
 /** A label line (what will be copied) over a compact row of icon-only store
- *  marks; each copies that store's list and shows a check when done. */
+ *  marks; each copies that store's list and shows a check when done. The
+ *  copy result briefly takes the label line's place, so nothing below moves. */
 export function CopyTargets({ targets, lead }: { targets: readonly CopyTarget[]; lead?: ReactNode }) {
   const { status, busy, done, copy } = useCopy();
   return (
     <div className="flex flex-col gap-1.5">
-      {lead && <span className="text-sm voice-semi tabular text-on-chrome-muted">{lead}</span>}
+      {lead != null && (
+        <>
+          {!status && <span className="text-sm voice-semi tabular text-on-chrome-muted">{lead}</span>}
+          <Status text={status} className="text-sm voice-semi text-on-chrome" />
+        </>
+      )}
       {/* Names ride beside the marks only when the strip is wide enough for all of them. */}
       <div className="@container">
         <div className="flex w-full divide-x divide-chrome-line overflow-hidden rounded-sm border border-chrome-line">
@@ -88,7 +98,7 @@ export function CopyTargets({ targets, lead }: { targets: readonly CopyTarget[];
           })}
         </div>
       </div>
-      <Status text={status} />
+      {lead == null && <Status text={status} />}
     </div>
   );
 }
