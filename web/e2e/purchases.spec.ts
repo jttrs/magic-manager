@@ -110,7 +110,7 @@ test('reading orders: list, already-read marked, the chosen ones are read and sa
   await page.getByRole('button', { name: 'Read my orders' }).click();
   const d = page.getByRole('dialog', { name: 'Read my orders' });
   await expect(d).toContainText('Verified');
-  await expect(d).toContainText('Switch on Order history in the companion’s settings to read TCGplayer orders.');
+  await expect(d).toContainText('To read TCGplayer orders: Switch on Allow access in the companion’s settings');
   await d.getByRole('button', { name: 'Read order list' }).click();
   await expect(d.getByText('Order #MP-333')).toBeVisible();
   await expect(d.getByText('Read · Partly added')).toBeVisible();

@@ -42,7 +42,8 @@ details summary { cursor: pointer; color: var(--theme-ink-muted); }
 .switch[aria-checked="false"] .state, .switch.fixed[data-on="false"] .state { color: var(--theme-ink-muted); }
 .switch.fixed { cursor: default; }
 .switch.fixed[data-on="false"] .state { color: var(--theme-danger); }
-.row.feature { align-items: center; }
+.row.feature { align-items: start; }
+.row.feature > .switch { margin-top: 2px; }
 @media (prefers-reduced-motion: reduce) { .switch .track, .switch .thumb { transition: none; } }
 button.switch:hover .track { border-color: var(--theme-accent); }
 td .meta { display: block; color: var(--theme-ink-muted); font-size: 12px; line-height: 1.4; }
@@ -56,3 +57,8 @@ details.more p { margin: 4px 0 2px; color: var(--theme-ink-muted); max-width: 62
 input::placeholder { color: var(--theme-ink-muted); opacity: 1; }
 .switch .state { white-space: nowrap; }
 .switch.fixed[data-on="false"] .state { white-space: normal; }
+details.more ul.covers { margin: 4px 0 2px; color: var(--theme-ink-muted); max-width: 62ch; }
+details.more ul.covers li { margin: 2px 0; }
+details.more ul.covers strong { display: inline; color: var(--theme-ink); }
+.feature .warn-text { color: var(--theme-ink); }
+.feature [hidden] { display: none; }

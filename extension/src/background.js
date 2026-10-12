@@ -13,9 +13,9 @@
 
 import { STORES } from './stores.js';
 import {
-  APPROVAL_TTL_MS, ARCHIDEKT_DECK, ARCHIDEKT_ORIGINS, CART_STORES, KINDS, MANAPOOL_ORIGINS, MAX_PAYLOAD_BYTES,
-  MOXFIELD_BINDER, MOXFIELD_COLLECTION, MOXFIELD_DECK, MOXFIELD_ORIGINS, MOXFIELD_TABS, STORE_ORIGINS, maxPayload,
-  storeOf, summarize,
+  APPROVAL_TTL_MS, ARCHIDEKT_DECK, ARCHIDEKT_ORIGINS, BRIDGE_ID, CART_STORES, KINDS, MANAPOOL_ORIGINS, MAX_PAYLOAD_BYTES,
+  MOXFIELD_BINDER, MOXFIELD_COLLECTION, MOXFIELD_DECK, MOXFIELD_ORIGINS, MOXFIELD_TABS, STORE_ORIGINS, bridgeScript, maxPayload,
+  parseAppOrigin, storeOf, summarize,
 } from './protocol.js';
 import { readOrderList, readOrders, ORDER_FEATURES } from './orders.js';
 import { planWatched, readWatched } from './watched.js';
@@ -46,6 +46,48 @@ async function features() {
 }
 
 chrome.action.onClicked.addListener(() => chrome.runtime.openOptionsPage());
+
+// ---------- the bridge on the paired app address ----------
+
+/**
+ * Keep the bridge registered for the paired address. Chrome drops dynamically registered
+ * content scripts when the extension is reloaded or updated (persistAcrossSessions or not),
+ * which left a paired app with no bridge — "Not connected" until you paired again. So every
+ * worker start re-checks it; after an install/update/reload it also puts a fresh bridge into
+ * app tabs already open (their old one died with the old extension), so they reconnect without
+ * a reload. The bridge still answers only the exact paired origin.
+ */
+async function ensureBridge({ injectOpenTabs = false } = {}) {
+  const origin = await appOrigin();
+  const p = origin ? parseAppOrigin(origin) : null;
+  const [have] = await chrome.scripting.getRegisteredContentScripts({ ids: [BRIDGE_ID] });
+  if (!p?.pattern || p.origin !== origin || !await chrome.permissions.contains({ origins: [p.pattern] }).catch(() => false)) {
+    if (have) await chrome.scripting.unregisterContentScripts({ ids: [BRIDGE_ID] }).catch(() => {});
+    return false;
+  }
+  if (!have || have.matches?.length !== 1 || have.matches[0] !== p.pattern) {
+    if (have) await chrome.scripting.unregisterContentScripts({ ids: [BRIDGE_ID] }).catch(() => {});
+    await chrome.scripting.registerContentScripts([bridgeScript(p.pattern)]);
+  }
+  if (injectOpenTabs) {
+    for (const t of await chrome.tabs.query({ url: p.pattern })) {
+      if (!sameOrigin(t.url, origin) || t.discarded) continue;
+      await chrome.scripting.executeScript({ target: { tabId: t.id, frameIds: [0] }, files: ['src/bridge.js'] }).catch(() => {});
+    }
+  }
+  return true;
+}
+
+/** One check at a time (a worker start and onInstalled can overlap). */
+let bridgeCheck = Promise.resolve();
+function checkBridge(opts) {
+  bridgeCheck = bridgeCheck.then(() => ensureBridge(opts)).catch(() => false);
+  return bridgeCheck;
+}
+
+chrome.runtime.onInstalled.addListener(() => { checkBridge({ injectOpenTabs: true }); });
+chrome.runtime.onStartup.addListener(() => { checkBridge(); });
+checkBridge();
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   route(msg, sender).then(sendResponse, async (e) => sendResponse(await fail('request.invalid', { detail: String(e?.message || e).slice(0, 200) })));
@@ -172,6 +214,8 @@ async function fromOwnPage(msg) {
     return { ok: true };
   }
   if (msg.type === 'features') return { ok: true, features: await features() };
+  // Settings page after Pair / Unpair: (un)register the bridge, and reach app tabs already open.
+  if (msg.type === 'bridge') return { ok: await checkBridge({ injectOpenTabs: true }) };
   return undefined;
 }
 

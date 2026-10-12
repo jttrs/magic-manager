@@ -52,6 +52,7 @@ sequenceDiagram
 | A page posts our message format | The bridge is registered only for the **paired origin**. It re-checks `location.origin` against the stored pairing and ignores everything else. On other sites (or another port on localhost) nothing answers and no window opens. | `companion-extension.spec.ts` (other site, other port) |
 | A forged message reaches the worker | The worker checks `sender.id`, `sender.frameId === 0`, `sender.origin === paired origin` **and** the tab's current URL. Extension-page messages are accepted only from the extension's own origin. | same + code review |
 | An iframe on the app page | The bridge runs top-frame only (`allFrames: false`, `window.top === window`), and the worker requires `frameId 0`. | code |
+| Bridge re-registered after a reload/update (0.4.3) | The worker re-registers it only for the stored `appOrigin` while that address's permission is granted (unregisters when unpaired), with the same `bridgeScript(pattern)` Pair uses; injection into already-open tabs is top-frame only and only into tabs whose origin is exactly the paired one. A stale bridge from the old extension goes silent; a duplicate steps aside, so one request gets one answer. | `companion-extension.spec.ts` (reload, open tab) |
 | Approval-window spam | One pending request at a time (`request.busy`), focus goes to the open window, 5-minute expiry, closing counts as no. | `companion-extension.spec.ts` (busy, close) |
 | Clickjacking / keystroke-jacking the approval | The window is the extension's own page and can't be framed (no `web_accessible_resources`, CSP `frame-ancestors 'none'`). "Don't send" has focus and "Send" is disabled for the first second, like Chrome's permission prompts. | `companion-extension.spec.ts` (focus) |
 | Cross-site writes to the app's API (CSRF) | **App-wide:** every non-GET `/api/` request whose browser `Sec-Fetch-Site` is not `same-origin`/`none` is refused with `request.cross_site`. That covers other sites and other localhost ports. JSON bodies need a CORS preflight the server never grants. | `test_writes_only_from_the_apps_own_pages` |
@@ -119,18 +120,24 @@ sequenceDiagram
 
 - **Minimal permissions**: `scripting` + `storage` only. Install-time host access is
   `https://manapool.com/*` only: the cart page, **not** its `sb-api` host. Everything else is
-  **optional** and asked for when the user switches a feature on:
-  - the paired app address,
+  **optional**, asked for when the user switches on **Allow access** — ONE grant for all of them
+  since 0.4.3 (owner-approved trade, 2026-10-11: per-feature least privilege → one switch, because six
+  switches was too many to manage). What did NOT change: the exact-origin pairing (a separate
+  grant for the one app address; the bridge answers only that origin), the approve-every-read window,
+  click-to-read, and no cookies/credentials. Holding a site's permission still reads nothing on its own —
+  every read needs the app to ask *and* the user to press Send. The sites:
+  - the paired app address (asked by **Pair**, not by Allow access),
   - **Deals**: the 21 store sites from `config/vendors.toml` (generated into the manifest; CI fails
     when stale). Amazon, Walmart and GameStop were added 2026-10-10 (extension 0.1.1): Chrome asks
-    for the whole store set, so a user who had Deals on switches it on again once to grant them,
+    for the whole store set, so a user who had Deals on switched it on again once to grant them
+    (with Allow access the same holds: a store added later shows the switch as partly allowed → Off),
   - **Moxfield**: `moxfield.com` + subdomains (decks, collection and binders).
   - **Archidekt** (0.4.0): `archidekt.com` + `www.archidekt.com`.
   - **Order history**: `store.tcgplayer.com` + `www.cardkingdom.com` (Mana Pool order pages are on
     the install-time `manapool.com`).
-  - **TCGplayer cart**: `www.tcgplayer.com`; **Card Kingdom cart**: `www.cardkingdom.com` — one switch
-    per store (owner, 2026-10-10). Switching one off keeps a site another switched-on feature still
-    needs (Card Kingdom's host is shared with Order history and Deals).
+  - **TCGplayer cart**: `www.tcgplayer.com`; **Card Kingdom cart**: `www.cardkingdom.com` (one switch
+    per store 2026-10-10 → folded into Allow access 2026-10-11). Switching Allow access off removes
+    every one of these sites at once (`ALL_ACCESS_ORIGINS`), never the app address or Mana Pool.
   No `<all_urls>`, `tabs`, `cookies`, `webRequest`, `history`, `debugger`, `nativeMessaging`
   (all asserted absent).
 - **No remote code**: no `eval`/`new Function`/`importScripts`/`innerHTML`, no remote URLs beyond the

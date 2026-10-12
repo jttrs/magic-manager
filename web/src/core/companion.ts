@@ -9,7 +9,10 @@ import { z } from 'zod';
 export const CHANNEL = 'magic-manager/companion';
 export type CompanionKind = 'cart' | 'tabs' | 'moxfield' | 'order_list' | 'orders' | 'watched' | 'archidekt' | 'moxfield_collection' | 'moxfield_binders';
 export type OrderStore = 'manapool' | 'tcgplayer' | 'cardkingdom';
-/** The carts the companion reads (Mana Pool always; the other two are opt-in switches). */
+/** What to do when a read needs a site the companion isn't allowed yet: everything past Mana Pool
+ *  is behind the companion's ONE "Allow access" switch (extension/src/options.html). */
+export const ALLOW_ACCESS_HINT = 'Switch on Allow access in the companion’s settings (Chrome asks once for all the sites it reads).';
+/** The carts the companion reads (Mana Pool always; the other two need Allow access). */
 export type CartStore = OrderStore;
 export const CART_STORE_NAME: Record<CartStore, string> = { manapool: 'Mana Pool', tcgplayer: 'TCGplayer', cardkingdom: 'Card Kingdom' };
 /** `what` + `binder`: the Moxfield collection read (whole collection, one of your binders by id, or a share `url`). */

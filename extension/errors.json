@@ -49,12 +49,12 @@
     "permission.deals_off": {
       "where": "extension",
       "message": "The companion isn’t allowed to see your store tabs yet.",
-      "fix": "Open the companion’s settings and switch on Deals (Chrome will ask to allow the store sites)."
+      "fix": "Open the companion’s settings and switch on Allow access (Chrome asks once for all the sites the companion reads)."
     },
     "permission.moxfield_off": {
       "where": "extension",
       "message": "The companion isn’t allowed to read Moxfield yet.",
-      "fix": "Open the companion’s settings and switch on Moxfield (Chrome will ask to allow moxfield.com)."
+      "fix": "Open the companion’s settings and switch on Allow access (Chrome asks once for all the sites the companion reads)."
     },
     "permission.manapool_missing": {
       "where": "extension",
@@ -64,12 +64,12 @@
     "permission.tcgplayer_cart_off": {
       "where": "extension",
       "message": "The companion isn’t allowed to read your TCGplayer cart yet.",
-      "fix": "Open the companion’s settings and switch on TCGplayer cart (Chrome will ask to allow www.tcgplayer.com)."
+      "fix": "Open the companion’s settings and switch on Allow access (Chrome asks once for all the sites the companion reads)."
     },
     "permission.cardkingdom_cart_off": {
       "where": "extension",
       "message": "The companion isn’t allowed to read your Card Kingdom cart yet.",
-      "fix": "Open the companion’s settings and switch on Card Kingdom cart (Chrome will ask to allow www.cardkingdom.com)."
+      "fix": "Open the companion’s settings and switch on Allow access (Chrome asks once for all the sites the companion reads)."
     },
     "cart.load_timeout": {
       "where": "extension",
@@ -184,7 +184,7 @@
     "permission.orders_off": {
       "where": "extension",
       "message": "The companion isn’t allowed to read your TCGplayer or Card Kingdom orders yet.",
-      "fix": "Open the companion’s settings and switch on Order history (Chrome will ask to allow store.tcgplayer.com and cardkingdom.com)."
+      "fix": "Open the companion’s settings and switch on Allow access (Chrome asks once for all the sites the companion reads)."
     },
     "orders.sign_in": {
       "where": "extension",
@@ -239,7 +239,7 @@
     "permission.archidekt_off": {
       "where": "extension",
       "message": "The companion isn’t allowed to read Archidekt yet.",
-      "fix": "Open the companion’s settings and switch on Archidekt decks (Chrome will ask to allow archidekt.com)."
+      "fix": "Open the companion’s settings and switch on Allow access (Chrome asks once for all the sites the companion reads)."
     },
     "archidekt.bad_url": {
       "where": "extension",

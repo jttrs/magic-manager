@@ -10,7 +10,8 @@ describe('cart check view-model', () => {
     expect(cartAllowed('tcgplayer', hello({ cart_tcgplayer: true }))).toBe(true);
     expect(cartAllowed('cardkingdom', hello({ cart_tcgplayer: true }))).toBe(false);
     expect(cartAllowed('manapool', null)).toBe(false);
-    expect(cartSwitchHint('cardkingdom')).toContain('Card Kingdom cart');
+    expect(cartSwitchHint('cardkingdom')).toContain('Switch on Allow access');
+    expect(cartSwitchHint('manapool')).toContain('manapool.com');
   });
 
   it('names only what differs from Near Mint English', () => {

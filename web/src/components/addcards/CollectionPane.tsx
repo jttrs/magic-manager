@@ -6,7 +6,7 @@ import { useDownScrapers } from '../../app/scraperHealth';
 import { useCompanion } from '../../app/useCompanion';
 import { collectionImportApply, collectionImportPreview, type CollectionApplyOut, type CollectionPreviewOut, type CollectionReadIn } from '../../core/api';
 import { belowPledged, changedRows, effectLine, effectOf, previewNotes, readTitle, shareLinkKind, type ImportMode, type ImportScope } from '../../core/collectionImport';
-import type { MoxfieldBinder } from '../../core/companion';
+import { ALLOW_ACCESS_HINT, type MoxfieldBinder } from '../../core/companion';
 import { fmtInt } from '../../core/format';
 import { MOXFIELD_COLLECTION_KEY } from '../../core/scraperHealth';
 import { Button } from '../Button';
@@ -130,7 +130,7 @@ export function CollectionPane() {
           {!ready
             ? c.status === 'checking' ? 'Looking for the browser companion…' : 'Set up the browser companion first — the plug icon at the top of the app.'
             : !moxOn
-              ? 'Switch on Moxfield in the companion’s settings first (Chrome will ask to allow moxfield.com).'
+              ? ALLOW_ACCESS_HINT
               : 'The companion reads it in this browser — every page of it — and shows you exactly what it would send before anything leaves. Nothing changes in your collection until you review and import.'}
         </p>
         <Button tone="paper" emphasis="primary" className="self-start" disabled={!canRead} onClick={() => readColl.mutate()}>

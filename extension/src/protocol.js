@@ -15,7 +15,7 @@ export const MAX_WATCHED = 50;
 
 export const MANAPOOL_CART_URL = 'https://manapool.com/cart';
 export const MANAPOOL_ORIGINS = ['https://manapool.com/*'];
-// Other carts (opt-in, one switch per store): the cart page's own host only.
+// Other carts (opt-in via Allow access): the cart page’s own host only.
 export const TCGPLAYER_CART_ORIGINS = ['https://www.tcgplayer.com/*'];
 export const CARDKINGDOM_CART_ORIGINS = ['https://www.cardkingdom.com/*'];
 export const CART_STORES = {
@@ -41,7 +41,7 @@ export const ARCHIDEKT_DECK = /^https:\/\/(?:www\.)?archidekt\.com\/decks\/(\d{1
 export const MOXFIELD_COLLECTION = /^https:\/\/(?:www\.)?moxfield\.com\/collection\/([A-Za-z0-9_-]{4,64})(?:[/?#]|$)/;
 export const MOXFIELD_BINDER = /^https:\/\/(?:www\.)?moxfield\.com\/binders\/([A-Za-z0-9_-]{4,64})(?:[/?#]|$)/;
 // Order history (purchases). Mana Pool needs no extra permission (install-time);
-// TCGplayer + Card Kingdom are the optional "Order history" feature.
+// TCGplayer + Card Kingdom are part of the optional Allow access grant.
 export const TCGPLAYER_ORDER_ORIGINS = ['https://store.tcgplayer.com/*'];
 export const CARDKINGDOM_ORDER_ORIGINS = ['https://www.cardkingdom.com/*'];
 export const ORDER_ORIGINS = [...TCGPLAYER_ORDER_ORIGINS, ...CARDKINGDOM_ORDER_ORIGINS];
@@ -65,6 +65,22 @@ export const MOXFIELD_DECK = /^https:\/\/(?:www\.)?moxfield\.com\/decks\/([A-Za-
 
 /** Chrome match patterns for every Deals store (bare host + subdomains). */
 export const STORE_ORIGINS = STORES.flatMap((s) => s.hosts.flatMap((h) => [`https://${h}/*`, `https://*.${h}/*`]));
+
+/** Every optional site the readers use — what the one "Allow access" switch asks Chrome for
+ *  (owner, 2026-10-11: one grant instead of a switch per feature). The paired app address is
+ *  separate (pairing), and Mana Pool is install-time. */
+export const ALL_ACCESS_ORIGINS = [...new Set([
+  ...TCGPLAYER_CART_ORIGINS, ...CARDKINGDOM_CART_ORIGINS, ...STORE_ORIGINS, ...MOXFIELD_ORIGINS,
+  ...ARCHIDEKT_ORIGINS, ...ORDER_ORIGINS,
+])];
+
+/** The bridge content script, registered for the paired app address only (bridge.js re-checks the
+ *  exact origin). Chrome drops dynamically registered scripts when the extension is reloaded or
+ *  updated, so the worker re-registers it (background.js ensureBridge). */
+export const BRIDGE_ID = 'mm-bridge';
+export function bridgeScript(pattern) {
+  return { id: BRIDGE_ID, matches: [pattern], js: ['src/bridge.js'], runAt: 'document_start', allFrames: false, persistAcrossSessions: true };
+}
 
 /** The store a hostname belongs to, if any. */
 export function storeOf(hostname) {

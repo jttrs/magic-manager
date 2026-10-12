@@ -1,16 +1,11 @@
-// The companion's settings: pair with ONE app address and switch features on
-// (each asks Chrome for just its sites, at that moment).
+// The companion's settings: pair with ONE app address, and ONE "Allow access" switch that
+// asks Chrome for every site the readers use at once (owner, 2026-10-11).
 
 import { STORES } from './stores.js';
-import { ARCHIDEKT_ORIGINS, CART_STORES, MOXFIELD_ORIGINS, ORDER_ORIGINS, STORE_ORIGINS, MANAPOOL_ORIGINS, parseAppOrigin } from './protocol.js';
+import { ALL_ACCESS_ORIGINS, MANAPOOL_ORIGINS, parseAppOrigin } from './protocol.js';
 
 const $ = (id) => document.getElementById(id);
-const BRIDGE = 'mm-bridge';
-const granted = { deals: false, moxfield: false, archidekt: false, orders: false, 'cart-tcgplayer': false, 'cart-cardkingdom': false };
-const GROUPS = {
-  deals: STORE_ORIGINS, moxfield: MOXFIELD_ORIGINS, archidekt: ARCHIDEKT_ORIGINS, orders: ORDER_ORIGINS,
-  'cart-tcgplayer': CART_STORES.tcgplayer.origins, 'cart-cardkingdom': CART_STORES.cardkingdom.origins,
-};
+let access = false;
 
 /** The pairing line: text pieces, the origin set in its own span (never parsed as HTML). */
 function status(parts, cls = 'ok') {
@@ -51,12 +46,17 @@ async function refresh() {
   const cart = await has(MANAPOOL_ORIGINS);
   $('cart-state').dataset.on = String(cart);
   $('cart-state').querySelector('.state').textContent = cart ? 'Always on' : 'Blocked in Chrome’s site access';
-  for (const [key, origins] of Object.entries(GROUPS)) {
-    granted[key] = await has(origins);
-    $(key).setAttribute('aria-checked', String(granted[key]));
-    $(key).querySelector('.state').textContent = granted[key] ? 'On' : 'Off';
-  }
+  access = await has(ALL_ACCESS_ORIGINS);
+  // Some sites allowed but not all (an older version's per-feature switches, or a store added
+  // since): Off, and switching on asks for the rest.
+  const some = !access && (await Promise.all(ALL_ACCESS_ORIGINS.map((o) => has([o])))).some(Boolean);
+  $('access').setAttribute('aria-checked', String(access));
+  $('access').querySelector('.state').textContent = access ? 'On' : 'Off';
+  $('access-partial').hidden = !some;
 }
+
+/** Ask the worker to (un)register the bridge for the paired address and reach open app tabs. */
+const syncBridge = () => chrome.runtime.sendMessage({ type: 'bridge' }).catch(() => null);
 
 let pairing = false;
 
@@ -76,56 +76,46 @@ async function pairWith(parsed) {
   const granted = await chrome.permissions.request({ origins: [parsed.pattern] });
   const { appOrigin: before } = await chrome.storage.local.get('appOrigin');
   if (!granted) return status('Chrome permission was not given, so the companion is not paired.', 'error');
-  await chrome.scripting.unregisterContentScripts({ ids: [BRIDGE] }).catch(() => {});
-  await chrome.scripting.registerContentScripts([{
-    id: BRIDGE, matches: [parsed.pattern], js: ['src/bridge.js'], runAt: 'document_start', allFrames: false, persistAcrossSessions: true,
-  }]);
   await chrome.storage.local.remove('lastHello');
   await chrome.storage.local.set({ appOrigin: parsed.origin });
   if (before && before !== parsed.origin) {
     const old = parseAppOrigin(before);
     if (old.pattern && old.pattern !== parsed.pattern) await chrome.permissions.remove({ origins: [old.pattern] }).catch(() => {});
   }
+  const bridged = await syncBridge();
+  if (!bridged?.ok) return status('Paired, but the companion couldn’t reach the app address. Reload the extension in chrome://extensions and press Pair again.', 'error');
   $('origin').value = parsed.origin;
   await refresh();
 }
 
 async function unpair() {
   const { appOrigin } = await chrome.storage.local.get('appOrigin');
-  await chrome.scripting.unregisterContentScripts({ ids: [BRIDGE] }).catch(() => {});
   await chrome.storage.local.remove(['appOrigin', 'lastHello']);
+  await syncBridge();   // no paired address: the worker unregisters the bridge
   const p = appOrigin && parseAppOrigin(appOrigin);
   if (p?.pattern) await chrome.permissions.remove({ origins: [p.pattern] }).catch(() => {});
   await refresh();
 }
 
-/** Switches with a permission change in flight: a second click waits for the first to land. */
-const busy = new Set();
+/** A permission change in flight: a second click waits for the first to land. */
+let busy = false;
 
-async function toggle(key, origins) {
-  if (busy.has(key)) return;
-  busy.add(key);
-  // request() must be the first await so Chrome still sees the click.
+async function toggleAccess() {
+  if (busy) return;
+  busy = true;
   try {
-    await flip(key, origins);
-    await refresh();   // still busy until `granted` is fresh
+    // request() must be the first await so Chrome still sees the click.
+    if (access) await chrome.permissions.remove({ origins: ALL_ACCESS_ORIGINS }).catch(() => false);
+    else await chrome.permissions.request({ origins: ALL_ACCESS_ORIGINS }).catch(() => false);
+    await refresh();   // still busy until `access` is fresh
   } finally {
-    busy.delete(key);
+    busy = false;
   }
-}
-
-async function flip(key, origins) {
-  if (granted[key]) {
-    // Keep a site another switched-on feature still needs (Card Kingdom is in three).
-    const shared = new Set(Object.entries(GROUPS).filter(([k]) => k !== key && granted[k]).flatMap(([, o]) => o));
-    const drop = origins.filter((o) => !shared.has(o));
-    if (drop.length) await chrome.permissions.remove({ origins: drop });
-  } else await chrome.permissions.request({ origins });
 }
 
 $('pair').addEventListener('click', pair);
 $('unpair').addEventListener('click', unpair);
-for (const [key, origins] of Object.entries(GROUPS)) $(key).addEventListener('click', () => toggle(key, origins));
+$('access').addEventListener('click', toggleAccess);
 // The app checking in (or a pairing change) updates the line while this page is open.
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && ('lastHello' in changes || 'appOrigin' in changes)) showPairing();
