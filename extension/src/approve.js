@@ -11,6 +11,8 @@ const MAX_ROWS = 500;
 /** A collection read is listed in full (scrollable): rows are added in batches so a 60,000-line
  *  read doesn't freeze the window. */
 const ROW_BATCH = 2000;
+/** The table being drawn (see table()). */
+let drawing = Promise.resolve();
 
 /** A cell: plain text, or {text, meta} — the name with a muted detail line under it. */
 function cell(tr, value, cls) {
@@ -26,8 +28,12 @@ function cell(tr, value, cls) {
   tr.appendChild(td);
 }
 
-/** The table of what is sent. max = Infinity lists every row, ROW_BATCH at a time. */
+/** The table of what is sent. max = Infinity lists every row, ROW_BATCH at a time; the promise
+ *  settles once every row is on screen (Send stays off until then). */
 function table(headers, rows, max = MAX_ROWS) {
+  let drawn;
+  const done = new Promise((r) => { drawn = r; });
+  drawing = done;
   const t = $('table');
   t.replaceChildren();
   const head = t.createTHead().insertRow();
@@ -35,12 +41,16 @@ function table(headers, rows, max = MAX_ROWS) {
   const body = t.createTBody();
   const shown = Math.min(rows.length, max);
   const add = (from) => {
-    if (t.tBodies[0] !== body) return;   // re-rendered meanwhile
+    if (t.tBodies[0] !== body) { drawn(); return; }   // re-rendered meanwhile
     rows.slice(from, Math.min(from + ROW_BATCH, shown)).forEach((r) => { const tr = body.insertRow(); r.forEach((v, i) => cell(tr, v, headers[i][1])); });
     if (from + ROW_BATCH < shown) setTimeout(() => add(from + ROW_BATCH), 0);
-    else if (rows.length > max) { const tr = body.insertRow(); cell(tr, `…and ${rows.length - max} more (see the raw data)`); }
+    else {
+      if (rows.length > max) { const tr = body.insertRow(); cell(tr, `…and ${rows.length - max} more (see the raw data)`); }
+      drawn();
+    }
   };
   add(0);
+  return done;
 }
 
 const money = (n) => (n == null ? '—' : `$${Number(n).toFixed(2)}`);
@@ -170,7 +180,9 @@ async function ready(p) {
   $('approve').disabled = true;
   $('deny').disabled = false;
   $('deny').focus();
-  setTimeout(() => { $('approve').disabled = false; }, 1000);
+  // …and until every row of what is sent is on screen.
+  const shown = drawing;
+  Promise.all([shown, new Promise((r) => setTimeout(r, 1000))]).then(() => { if (drawing === shown) $('approve').disabled = false; });
 }
 
 async function main() {

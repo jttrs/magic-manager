@@ -183,24 +183,30 @@ async function handleRequest(msg, sender, pinned, params) {
     throw e;
   }
   if (!await ours()) return fail('request.expired');   // the slot expired while reading
-  const pack = read.ok ? await packed(msg.kind, read.data) : null;
-  if (!read.ok || pack.fail) {
-    await chrome.storage.session.remove('pending');
-    return read.ok ? pack.fail : read;
-  }
+  try {
+    const pack = read.ok ? await packed(msg.kind, read.data) : null;
+    if (!read.ok || pack.fail) {
+      await chrome.storage.session.remove('pending');
+      return read.ok ? pack.fail : read;
+    }
 
-  const pending = { id: msg.id, kind: msg.kind, tabId: sender.tab.id, origin: pinned, packed: pack.z,
-    summary: summarize(msg.kind, read.data), created: Date.now(), windowId: null,
-    stage: msg.kind === 'watched' ? 'confirm' : 'send' };
-  const refused = await hold(pending);
-  if (refused) {
-    await chrome.storage.session.remove('pending');
-    return refused;
+    const pending = { id: msg.id, kind: msg.kind, tabId: sender.tab.id, origin: pinned, packed: pack.z,
+      summary: summarize(msg.kind, read.data), created: Date.now(), windowId: null,
+      stage: msg.kind === 'watched' ? 'confirm' : 'send' };
+    const refused = await hold(pending);
+    if (refused) {
+      await chrome.storage.session.remove('pending');
+      return refused;
+    }
+    const win = await chrome.windows.create({ url: chrome.runtime.getURL(`src/approve.html?id=${msg.id}`), type: 'popup', width: 620, height: 720, focused: true });
+    pending.windowId = win.id;
+    await chrome.storage.session.set({ pending });
+    return { ok: true, status: 'awaiting_approval', summary: pending.summary };
+  } catch (e) {
+    // Never leave a half-made request behind: "Try again" must not be told request.busy.
+    if (await ours()) await chrome.storage.session.remove('pending');
+    throw e;
   }
-  const win = await chrome.windows.create({ url: chrome.runtime.getURL(`src/approve.html?id=${msg.id}`), type: 'popup', width: 620, height: 720, focused: true });
-  pending.windowId = win.id;
-  await chrome.storage.session.set({ pending });
-  return { ok: true, status: 'awaiting_approval', summary: pending.summary };
 }
 
 /** When the paired app last said hello (the settings page shows it, so a pairing
@@ -256,13 +262,20 @@ async function fromOwnPage(msg) {
 async function readApproved(pending) {
   await chrome.storage.session.set({ pending: { ...pending, stage: 'reading', created: Date.now() } });
   const alive = async () => { const p = await pendingRequest(); return p?.id === pending.id && p.stage === 'reading'; };
-  const data = await readWatched(await unpackData(pending.packed), { inject, loaded, alive });
-  const now = await pendingRequest();
-  if (!now || now.id !== pending.id || now.stage !== 'reading') return { ok: false };
-  const pack = await packed(pending.kind, data);
-  const refused = pack.fail || await hold({ ...now, stage: 'send', packed: pack.z, summary: summarize(pending.kind, data), created: Date.now() });
-  if (refused) { await finish(now, refused); return { ok: false }; }
-  return { ok: true };
+  try {
+    const data = await readWatched(await unpackData(pending.packed), { inject, loaded, alive });
+    const now = await pendingRequest();
+    if (!now || now.id !== pending.id || now.stage !== 'reading') return { ok: false };
+    const pack = await packed(pending.kind, data);
+    const refused = pack.fail || await hold({ ...now, stage: 'send', packed: pack.z, summary: summarize(pending.kind, data), created: Date.now() });
+    if (refused) { await finish(now, refused); return { ok: false }; }
+    return { ok: true };
+  } catch (e) {
+    // Tell the app tab that asked (not just this window), and free the slot.
+    const now = await pendingRequest();
+    if (now?.id === pending.id) await finish(now, await fail('reader.crashed', { detail: shortDetail(e) }));
+    return { ok: false };
+  }
 }
 
 chrome.windows.onRemoved.addListener(async (windowId) => {
