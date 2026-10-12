@@ -90,3 +90,9 @@ def test_deals_route_is_gated(tmp_db, tmp_path, monkeypatch, copy_real_config):
     r = client.get("/api/deals/tabs")
     assert r.status_code == 200 and len(r.json()["stores"]) == 4
     config._cached_toml.cache_clear()
+
+
+def test_rendered_page_drops_oversized_ld_blocks_instead_of_rejecting():
+    from magic_manager.api.deals import RenderedPageIn
+    page = RenderedPageIn(ld=["x" * 150_000, '{"@type":"Product"}'])
+    assert page.ld == ['{"@type":"Product"}']
