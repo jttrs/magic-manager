@@ -9,12 +9,20 @@
 (() => {
   'use strict';
   const CHANNEL = 'magic-manager/companion';
+  // One live bridge per page. The worker also injects one into app tabs already open after an
+  // update or a pairing; a bridge left over from a reloaded extension is dead (its runtime has no
+  // id) and steps aside — and goes silent itself, so the app never gets an answer from it.
+  const rt = chrome.runtime;
+  const alive = () => { try { return Boolean(rt && rt.id); } catch { return false; } };
+  const prev = globalThis.__mmCompanionBridge;
+  if (prev && prev.alive()) return;
+  globalThis.__mmCompanionBridge = { alive };
   let paired = null;
 
   const post = (m) => window.postMessage(Object.assign({}, m, { channel: CHANNEL, from: 'companion' }), location.origin);
   const ask = (m) => new Promise((resolve) => {
     try {
-      chrome.runtime.sendMessage(m, (r) => { void chrome.runtime.lastError; resolve(r || null); });
+      rt.sendMessage(m, (r) => { void rt.lastError; resolve(r || null); });
     } catch {
       resolve(null);
     }
@@ -29,13 +37,13 @@
   }
 
   async function hello() {
-    if (!await isPaired()) return;
+    if (!alive() || !await isPaired()) return;
     const r = await ask({ type: 'hello' });
     if (r && r.ok) post({ type: 'hello', version: String(r.version), features: r.features });
   }
 
   window.addEventListener('message', async (ev) => {
-    if (ev.source !== window || ev.origin !== location.origin) return;
+    if (ev.source !== window || ev.origin !== location.origin || !alive()) return;
     const d = ev.data;
     if (!d || typeof d !== 'object' || d.channel !== CHANNEL || d.from !== 'app') return;
     if (!await isPaired()) return;

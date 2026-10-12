@@ -1,7 +1,7 @@
 // Cart check view-model: which carts the companion may read, and how a cart line's
 // condition / language reads beside it. Framework-free (see dependency-cruiser).
 
-import { CART_STORE_NAME, type CartStore, type CompanionHello } from './companion';
+import { ALLOW_ACCESS_HINT, type CartStore, type CompanionHello } from './companion';
 
 export const CART_STORES: CartStore[] = ['manapool', 'tcgplayer', 'cardkingdom'];
 
@@ -12,11 +12,9 @@ export function cartAllowed(store: CartStore, hello: CompanionHello | null): boo
   return store === 'manapool' ? f.cart : store === 'tcgplayer' ? f.cart_tcgplayer === true : f.cart_cardkingdom === true;
 }
 
-/** The companion-settings switch that lets it read a store's cart. */
+/** What lets the companion read a store's cart. */
 export function cartSwitchHint(store: CartStore): string {
-  return store === 'manapool'
-    ? 'Allow manapool.com in the companion’s Chrome site access.'
-    : `Switch on ${CART_STORE_NAME[store]} cart in the companion’s settings (Chrome asks to allow that one site).`;
+  return store === 'manapool' ? 'Allow manapool.com in the companion’s Chrome site access.' : ALLOW_ACCESS_HINT;
 }
 
 /** "LP · Japanese" for a played or non-English line; '' for Near Mint English (what market prices mean). */

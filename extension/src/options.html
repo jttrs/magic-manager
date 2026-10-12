@@ -32,51 +32,22 @@
     </div>
     <div class="row feature">
       <div>
-        <strong id="name-cart-tcgplayer">TCGplayer cart</strong>
-        <span class="muted summary" id="sum-cart-tcgplayer">Your cart page on www.tcgplayer.com, when you check it in the app.</span>
-        <details class="more"><summary>What it reads</summary><p>Cards, conditions, quantities and prices. Never the sellers, your sign-in or your address. Chrome asks to allow www.tcgplayer.com.</p></details>
+        <strong id="name-access">Allow access</strong>
+        <span class="muted summary" id="sum-access">Everything else it can read, when the app asks: other carts, store tabs, Moxfield, Archidekt and order history. Chrome asks once for all of these sites.</span>
+        <span class="muted summary warn-text" id="access-partial" hidden>Some of these sites are allowed and some aren’t. Switch on to allow the rest.</span>
+        <details class="more"><summary>What it covers</summary>
+          <ul class="plain covers">
+            <li><strong>TCGplayer cart</strong> on www.tcgplayer.com: cards, conditions, quantities and prices. Never the sellers, your sign-in or your address.</li>
+            <li><strong>Card Kingdom cart</strong> on www.cardkingdom.com: cards, grades, quantities and prices. Never your sign-in or your address.</li>
+            <li><strong>Deals</strong> on the <span id="store-count"></span> Deals stores: which of their tabs are open, and the price on product pages you have open.</li>
+            <li><strong>Moxfield</strong> on moxfield.com: a deck, your collection or a binder you choose. Shared links need no sign-in. For your own private ones it uses Moxfield’s sign-in the way moxfield.com itself does: a short-lived token, kept in memory for that one read and sent only to Moxfield. Never stored, never sent to the app.</li>
+            <li><strong>Archidekt</strong> on archidekt.com: a deck you choose, including your own private decks when you’re signed in. Only its cards, never your sign-in.</li>
+            <li><strong>Order history</strong> on store.tcgplayer.com and cardkingdom.com: orders, items and prices paid. Never your address, payment or tracking. Mana Pool orders need nothing extra.</li>
+          </ul>
+          <p>Switching it off removes all of these sites at once. Chrome’s own site-access page still lists each site separately.</p>
+        </details>
       </div>
-      <button type="button" role="switch" id="cart-tcgplayer" class="switch" aria-checked="false" aria-labelledby="name-cart-tcgplayer" aria-describedby="sum-cart-tcgplayer"><span class="track" aria-hidden="true"><span class="thumb"></span></span><span class="state">Off</span></button>
-    </div>
-    <div class="row feature">
-      <div>
-        <strong id="name-cart-cardkingdom">Card Kingdom cart</strong>
-        <span class="muted summary" id="sum-cart-cardkingdom">Your cart page on www.cardkingdom.com, when you check it in the app.</span>
-        <details class="more"><summary>What it reads</summary><p>Cards, grades, quantities and prices. Never your sign-in or your address. Chrome asks to allow www.cardkingdom.com.</p></details>
-      </div>
-      <button type="button" role="switch" id="cart-cardkingdom" class="switch" aria-checked="false" aria-labelledby="name-cart-cardkingdom" aria-describedby="sum-cart-cardkingdom"><span class="track" aria-hidden="true"><span class="thumb"></span></span><span class="state">Off</span></button>
-    </div>
-    <div class="row feature">
-      <div>
-        <strong id="name-deals">Deals</strong>
-        <span class="muted summary" id="sum-deals">Your open tabs on the <span id="store-count"></span> Deals stores.</span>
-        <details class="more"><summary>What it reads</summary><p>Which of those stores’ tabs are open, and the price on product pages you have open. Chrome asks to allow those sites.</p></details>
-      </div>
-      <button type="button" role="switch" id="deals" class="switch" aria-checked="false" aria-labelledby="name-deals" aria-describedby="sum-deals"><span class="track" aria-hidden="true"><span class="thumb"></span></span><span class="state">Off</span></button>
-    </div>
-    <div class="row feature">
-      <div>
-        <strong id="name-moxfield">Moxfield</strong>
-        <span class="muted summary" id="sum-moxfield">A deck, your collection or a binder you choose.</span>
-        <details class="more"><summary>What it reads</summary><p>Read from moxfield.com as your browser sees it. Shared links need no sign-in. For your own private ones it uses Moxfield’s sign-in the way moxfield.com itself does: a short-lived token, kept in memory for that one read and sent only to Moxfield. Never stored, never sent to the app. Chrome asks to allow moxfield.com.</p></details>
-      </div>
-      <button type="button" role="switch" id="moxfield" class="switch" aria-checked="false" aria-labelledby="name-moxfield" aria-describedby="sum-moxfield"><span class="track" aria-hidden="true"><span class="thumb"></span></span><span class="state">Off</span></button>
-    </div>
-    <div class="row feature">
-      <div>
-        <strong id="name-archidekt">Archidekt</strong>
-        <span class="muted summary" id="sum-archidekt">A deck you choose.</span>
-        <details class="more"><summary>What it reads</summary><p>Read from archidekt.com as your browser sees it, including your own private decks when you’re signed in. Only its cards, never your sign-in. Chrome asks to allow archidekt.com.</p></details>
-      </div>
-      <button type="button" role="switch" id="archidekt" class="switch" aria-checked="false" aria-labelledby="name-archidekt" aria-describedby="sum-archidekt"><span class="track" aria-hidden="true"><span class="thumb"></span></span><span class="state">Off</span></button>
-    </div>
-    <div class="row feature">
-      <div>
-        <strong id="name-orders">Order history</strong>
-        <span class="muted summary" id="sum-orders">Your TCGplayer and Card Kingdom order pages, when the app asks.</span>
-        <details class="more"><summary>What it reads</summary><p>Orders, items and prices paid from store.tcgplayer.com and cardkingdom.com. Never your address, payment or tracking. Mana Pool orders need nothing extra. Chrome asks to allow those two sites.</p></details>
-      </div>
-      <button type="button" role="switch" id="orders" class="switch" aria-checked="false" aria-labelledby="name-orders" aria-describedby="sum-orders"><span class="track" aria-hidden="true"><span class="thumb"></span></span><span class="state">Off</span></button>
+      <button type="button" role="switch" id="access" class="switch" aria-checked="false" aria-labelledby="name-access" aria-describedby="sum-access"><span class="track" aria-hidden="true"><span class="thumb"></span></span><span class="state">Off</span></button>
     </div>
 
     <h2>What it never does</h2>

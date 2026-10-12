@@ -94,6 +94,7 @@ function Setup({ c }: { c: CompanionState }) {
               <CopyButton getText={() => origin} label="Copy address" tone="paper" />
             </span>
           </li>
+          <li>For more than your Mana Pool cart, switch on <strong>Allow access</strong> on the same page. Chrome asks once for all the sites it reads.</li>
           <li>Reload this page.</li>
         </ol>
         <p className="text-sm text-ink-muted">To update: download again, replace the folder, then press the reload arrow on the companion in <code className="tabular">chrome://extensions</code>.</p>
@@ -102,9 +103,9 @@ function Setup({ c }: { c: CompanionState }) {
       <section aria-labelledby="cmp-reads" className="flex flex-col gap-1">
         <h3 id="cmp-reads" className={H3}>What it can read</h3>
         <Feature on={c.hello?.features.cart} name="Mana Pool cart" detail="Your cart page: each card’s printing, finish, condition, quantity and price. Always on." />
-        <Feature on={c.hello?.features.deals} name="Deals — your open store tabs" detail="Which product pages you have open on the Deals stores, and the price on open-tab stores. Switch it on in the companion’s settings." />
-        <Feature on={c.hello?.features.moxfield} name="Moxfield decks, collection and binders" detail="A deck, your collection or a binder you choose. Shared links are read without signing in; for your own private ones it uses Moxfield’s short-lived sign-in in that tab. Switch it on in the companion’s settings." />
-        <Feature on={c.hello?.features.archidekt} name="Archidekt decks" detail="A deck you choose, as your browser sees it — including your own private decks when you’re signed in. Switch it on in the companion’s settings." />
+        <Feature on={c.hello?.features.deals} name="Deals — your open store tabs" detail="Which product pages you have open on the Deals stores, and the price on open-tab stores. Needs Allow access in the companion’s settings." />
+        <Feature on={c.hello?.features.moxfield} name="Moxfield decks, collection and binders" detail="A deck, your collection or a binder you choose. Shared links are read without signing in; for your own private ones it uses Moxfield’s short-lived sign-in in that tab. Needs Allow access in the companion’s settings." />
+        <Feature on={c.hello?.features.archidekt} name="Archidekt decks" detail="A deck you choose, as your browser sees it — including your own private decks when you’re signed in. Needs Allow access in the companion’s settings." />
       </section>
 
       <section aria-labelledby="cmp-never" className="flex flex-col gap-1">

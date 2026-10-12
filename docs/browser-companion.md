@@ -14,17 +14,38 @@ connected. Security design: [`browser-companion-security.md`](browser-companion-
 2. App header → plug icon → **Download the companion**, unzip, `chrome://extensions` → Developer mode
    → **Load unpacked**.
 3. Companion icon → paste the app's exact address (the app's header → **Browser companion** shows it with a copy button; the field starts empty, no default port) → **Pair** (Chrome asks to allow it) → reload the app tab. The settings page then says whether that address has checked in (the worker records the paired app's last hello, `storage.local` `lastHello`); "hasn't checked in yet" means the app isn't open at exactly that address.
-4. Optional: turn on the switches for **TCGplayer cart**, **Card Kingdom cart**, **Deals**, **Moxfield**, **Archidekt** and/or **Order history**
-   (TCGplayer + Card Kingdom; Mana Pool needs nothing extra) on the companion's settings page (each asks
-   Chrome for just its sites).
+4. Optional: switch on **Allow access** on the companion's settings page (0.4.3: ONE switch, owner
+   2026-10-11, replacing the six per-feature switches). It asks Chrome once for every site the readers
+   use (`ALL_ACCESS_ORIGINS` in `protocol.js`: TCGplayer + Card Kingdom carts, the Deals stores,
+   Moxfield, Archidekt, TCGplayer + Card Kingdom order history) and switching it off removes them all.
+   Mana Pool is install-time (always on). Partly allowed (an older version's switches, or a store
+   added since) reads Off with a note; switching on asks for the rest. Chrome's own *Site access* page
+   still lists each site separately — that's Chrome's UI. The hello `features` map is still derived
+   per reader from what's granted, and the `permission.*` error codes are unchanged (their fix now
+   points at Allow access).
 
 Where it shows up: Collection → Purchase history → *Read my orders* (flag `purchases`; Mana Pool,
 TCGplayer, Card Kingdom order history — see [`purchases.md`](purchases.md), incl. what is and isn't
 verified per store), Collection → *Check my cart* (pick Mana Pool, TCGplayer or Card Kingdom, then **Read my cart**;
 the bookmarklet paste and .env login are Mana Pool only — see *Other carts* below), Market → Deals → **Read my open tabs** (tabs + open-tab store prices), Market → Deals →
 Watching → **Read watched prices** (the watched open-tab store pages), Add cards → Deck and
-Decks → Import (Moxfield links; Archidekt links once Archidekt is switched on — private decks too),
+Decks → Import (Moxfield links; Archidekt links once Allow access is on — private decks too),
 Add cards → **Moxfield collection** (your collection, one binder, or a shared link). Without a connected companion each falls back to the existing path.
+
+## The bridge survives a reload or update (0.4.3)
+
+Chrome drops dynamically registered content scripts (`chrome.scripting.registerContentScripts`) when
+the extension is reloaded (↻ in `chrome://extensions`) or updated — `persistAcrossSessions` or not —
+while `storage.local` (the pairing) stays. Before 0.4.3 the bridge was registered only by Pair, so a
+reload left a paired app "Not connected". Now the worker owns it: `ensureBridge` (background.js) runs
+at every worker start and on `runtime.onStartup` / `onInstalled`, (re)registers `bridgeScript(pattern)`
+for the stored `appOrigin` (only while that address's permission is granted; unregisters when
+unpaired), and after an install/update — or a Pair/Unpair from the settings page (`{type:'bridge'}`)
+— injects a fresh bridge into app tabs already open on the exact paired origin, so they reconnect
+without a reload. `bridge.js` keeps one live bridge per page: a bridge left from a reloaded extension
+(its runtime has no id) goes silent, a second injection into a live page steps aside. A 0.4.2 bridge
+still in an app tab from before this update can't be silenced; reload that tab once. Pinned by
+`companion-extension.spec.ts` (pair → relaunch → connected; open tab connects on Pair, answers once).
 
 ## How it fits
 
@@ -56,7 +77,7 @@ two-step request: the approval window first shows the list (stage `confirm`, *Re
 
 Same seam as Mana Pool: the companion reads the cart page in your browser (your open cart tab, or a
 background tab it closes), you approve the lines, the app posts them to `POST /api/cart/lines` with
-`store`, and `cart.audit` runs the four checks. Each store is its own opt-in switch (`www.tcgplayer.com`,
+`store`, and `cart.audit` runs the four checks. Both stores are covered by the Allow access switch (`www.tcgplayer.com`,
 `www.cardkingdom.com`); the bookmarklet stays Mana Pool only.
 
 - **Identifying printings.** TCGplayer lines carry the TCGplayer product id (from the product link) →
@@ -81,7 +102,7 @@ background tab it closes), you approve the lines, the app posts them to `POST /a
 
 ## Private Archidekt decks; Moxfield collection and binders (extension 0.4.0)
 
-- **Archidekt decks** (opt-in switch, `archidekt.com`): the reader fetches the deck's own page in an
+- **Archidekt decks** (Allow access, `archidekt.com`): the reader fetches the deck's own page in an
   archidekt.com tab, the way your browser loads it. Archidekt server-renders the deck into the page
   (`__NEXT_DATA__` → `props.pageProps.redux.deck.cardMap`) with your session, so your private decks
   come through; no token is touched. Lines keep Archidekt's own deck-API shape, so
@@ -89,7 +110,7 @@ background tab it closes), you approve the lines, the app posts them to `POST /a
   `scripts/import_deck.py`). The app sends an Archidekt link to the companion only once Archidekt is
   switched on; otherwise the server reads the public deck as before. Verified on a public deck
   (live canary); a signed-in private deck uses the same page, so the owner confirms it live.
-- **Moxfield collection / binders** (the existing Moxfield switch): Add cards → *Moxfield collection*
+- **Moxfield collection / binders** (Allow access): Add cards → *Moxfield collection*
   → whole collection, one of your binders (*List my binders*), or a share link
   (`moxfield.com/collection/<id>`, `moxfield.com/binders/<id>`). The reader pages through Moxfield's
   own API (`/v1/collections/search[/<id>]`, `/v1/trade-binders[/<id>/search]`, 5,000 a page, ≤ 60,000

@@ -8,7 +8,7 @@ import { AwaitingNote, FailureNote } from '../../components/companion/CompanionN
 import { reportScraperFailure, useDownScrapers } from '../../app/scraperHealth';
 import { ordersKey } from '../../core/scraperHealth';
 import { purchaseSave, type MagicManagerApiPurchasesSaveOut as SaveOut } from '../../core/api';
-import { CompanionError, warningLines, type OrderListData, type OrdersData } from '../../core/companion';
+import { ALLOW_ACCESS_HINT, CompanionError, warningLines, type OrderListData, type OrdersData } from '../../core/companion';
 import { fmtCount, fmtInt, fmtUsd } from '../../core/format';
 import { chunk, listStatus, STATUS_LABEL, type Store } from '../../core/purchases';
 import { VerificationMark } from './StoreVerification';
@@ -156,7 +156,7 @@ function ReadOrders({ onClose, onReview }: { onClose: () => void; onReview: (pur
                         <VerificationMark store={info(s)} />
                       </span>
                       {info(s) && <span className="max-w-[62ch] text-xs leading-snug text-ink-muted">{info(s)!.note}</span>}
-                      {!ok && c.status === 'ready' && <span className="text-xs text-ink">Switch on Order history in the companion’s settings to read {STORE_NAME[s]} orders.</span>}
+                      {!ok && c.status === 'ready' && <span className="text-xs text-ink">To read {STORE_NAME[s]} orders: {ALLOW_ACCESS_HINT}</span>}
                     </span>
                   </label>
                 );

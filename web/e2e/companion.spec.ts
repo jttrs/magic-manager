@@ -104,14 +104,14 @@ const TCG_AUDIT = {
 };
 
 test.describe('TCGplayer and Card Kingdom carts', () => {
-  test('each store needs its own companion switch; the bookmarklet is Mana Pool only', async ({ page }) => {
+  test('other carts need the companion’s Allow access switch; the bookmarklet is Mana Pool only', async ({ page }) => {
     await flags(page, { companion: true, cart_check: true });
     await fakeCompanion(page, { version: '0.3.0' });
     const d = await openCart(page);
     await expect(d.getByRole('heading', { name: 'With the bookmarklet' })).toBeVisible();
     await d.getByRole('radio', { name: 'Card Kingdom' }).click();
     await expect(d.getByRole('heading', { name: 'With the bookmarklet' })).toHaveCount(0);
-    await expect(d).toContainText('Switch on Card Kingdom cart in the companion’s settings');
+    await expect(d).toContainText('Switch on Allow access in the companion’s settings');
     await expect(d.getByRole('button', { name: 'Read my cart' })).toBeDisabled();
   });
 
@@ -287,12 +287,12 @@ test.describe('Deals', () => {
     await expect.poll(() => jobBody).toEqual({ refresh: true });
   });
 
-  test('Deals switched off in the companion: says how to switch it on', async ({ page }) => {
+  test('Deals not allowed in the companion: points to its one Allow access switch', async ({ page }) => {
     await flags(page, { companion: true, deals: true });
     await fakeCompanion(page, { answers: { tabs: { ok: false, code: 'permission.deals_off' } } });
     await page.goto('/market?subject=deals');
     await page.getByRole('button', { name: 'Read my open tabs' }).click();
-    await expect(page.getByRole('alert')).toContainText('switch on Deals');
+    await expect(page.getByRole('alert')).toContainText('switch on Allow access');
   });
 });
 

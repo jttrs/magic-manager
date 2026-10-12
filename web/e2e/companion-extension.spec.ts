@@ -24,21 +24,33 @@ const TCG_EXPECTED = JSON.parse(readFileSync(resolve(ROOT, 'tests/fixtures/compa
 
 type Fixtures = { ext: { context: BrowserContext; worker: Worker; id: string } };
 
+/** A copy of the shipped extension with the harness grants (see the header). */
+function extensionCopy(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'mm-companion-'));
+  cpSync(resolve(ROOT, 'extension'), dir, { recursive: true });
+  const manifest = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8'));
+  manifest.host_permissions.push('http://localhost/*', 'https://www.tcgplayer.com/*', 'https://moxfield.com/*', 'https://*.moxfield.com/*');
+  writeFileSync(join(dir, 'manifest.json'), JSON.stringify(manifest));
+  return dir;
+}
+
+/** Chromium with the unpacked extension. Launching again with the same profile reinstalls it from
+ *  disk, like pressing ↻ in chrome://extensions: storage stays, dynamically registered scripts go. */
+async function launch(dir: string, profile = '') {
+  const context = await chromium.launchPersistentContext(profile, {
+    channel: 'chromium',
+    headless: true,
+    args: [`--disable-extensions-except=${dir}`, `--load-extension=${dir}`],
+  });
+  const worker = context.serviceWorkers()[0] ?? await context.waitForEvent('serviceworker');
+  return { context, worker, id: new URL(worker.url()).host };
+}
+
 const test = base.extend<Fixtures>({
   // eslint-disable-next-line no-empty-pattern
   ext: async ({}, use) => {
-    const dir = mkdtempSync(join(tmpdir(), 'mm-companion-'));
-    cpSync(resolve(ROOT, 'extension'), dir, { recursive: true });
-    const manifest = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8'));
-    manifest.host_permissions.push('http://localhost/*', 'https://www.tcgplayer.com/*', 'https://moxfield.com/*', 'https://*.moxfield.com/*');
-    writeFileSync(join(dir, 'manifest.json'), JSON.stringify(manifest));
-    const context = await chromium.launchPersistentContext('', {
-      channel: 'chromium',
-      headless: true,
-      args: [`--disable-extensions-except=${dir}`, `--load-extension=${dir}`],
-    });
-    const worker = context.serviceWorkers()[0] ?? await context.waitForEvent('serviceworker');
-    const id = new URL(worker.url()).host;
+    const dir = extensionCopy();
+    const { context, worker, id } = await launch(dir);
     // What pressing Pair does after Chrome's prompt (see src/options.js).
     await worker.evaluate(async (origin) => {
       await chrome.storage.local.set({ appOrigin: origin });
@@ -288,17 +300,86 @@ test('the settings page says whether the paired app has checked in', async ({ ex
   await expect(opts.getByRole('textbox', { name: 'App address' })).toHaveValue(APP);
 });
 
-test('each optional feature is a real switch that shows its state', async ({ ext }) => {
+test('one Allow access switch covers every optional site; Mana Pool stays always on', async ({ ext }) => {
   const opts = await ext.context.newPage();
   await opts.goto(`chrome-extension://${ext.id}/src/options.html`);
-  // The harness grants www.tcgplayer.com and moxfield.com up front (see the fixture).
-  await expect(opts.getByRole('switch', { name: 'TCGplayer cart' })).toHaveAttribute('aria-checked', 'true');
-  await expect(opts.getByRole('switch', { name: 'TCGplayer cart' })).toContainText('On');
-  await expect(opts.getByRole('switch', { name: 'Card Kingdom cart' })).toHaveAttribute('aria-checked', 'false');
-  await expect(opts.getByRole('switch', { name: 'Card Kingdom cart' })).toContainText('Off');
-  await expect(opts.getByRole('switch', { name: /Moxfield/ })).toHaveAttribute('aria-checked', 'true');
+  const access = opts.getByRole('switch', { name: 'Allow access' });
+  expect(await opts.getByRole('switch').count()).toBe(1);
   await expect(opts.locator('#cart-state')).toHaveText('Always on');
-  expect(await opts.getByRole('switch').count()).toBe(6);
+  // The harness grants www.tcgplayer.com and moxfield.com only: partly allowed reads Off, with a note.
+  await expect(access).toHaveAttribute('aria-checked', 'false');
+  await expect(access).toContainText('Off');
+  await expect(opts.locator('#access-partial')).toBeVisible();
+  await opts.getByText('What it covers').click();
+  for (const name of ['TCGplayer cart', 'Card Kingdom cart', 'Deals', 'Moxfield', 'Archidekt', 'Order history']) {
+    await expect(opts.locator('ul.covers')).toContainText(name);
+  }
+  // Chrome's prompt can't be clicked by automation: record what the click asks for, and grant it.
+  const optional = await ext.worker.evaluate(() => chrome.runtime.getManifest().optional_host_permissions ?? []);
+  await opts.evaluate(() => {
+    const w = window as unknown as { asked: unknown[] };
+    w.asked = [];
+    const real = chrome.permissions;
+    Object.defineProperty(chrome, 'permissions', { configurable: true, value: {
+      contains: (p: chrome.permissions.Permissions) => (w.asked.length ? Promise.resolve(true) : real.contains(p)),
+      request: (p: chrome.permissions.Permissions) => { w.asked.push(p); return Promise.resolve(true); },
+      remove: (p: chrome.permissions.Permissions) => { w.asked.push({ removed: p }); return Promise.resolve(true); },
+    } });
+  });
+  await access.click();
+  await expect(access).toHaveAttribute('aria-checked', 'true');
+  await expect(access).toContainText('On');
+  await expect(opts.locator('#access-partial')).toBeHidden();
+  const asked = await opts.evaluate(() => (window as unknown as { asked: { origins: string[] }[] }).asked);
+  expect(asked).toHaveLength(1);
+  const origins = asked[0].origins;
+  // Every optional site except the app addresses (those are pairing), and nothing else.
+  expect(new Set(origins)).toEqual(new Set(optional.filter((o: string) => !/^http:\/\/(localhost|127\.0\.0\.1)\/|\.ts\.net\//.test(o))));
+  await access.click();
+  const removed = await opts.evaluate(() => (window as unknown as { asked: { removed?: { origins: string[] } }[] }).asked[1]?.removed?.origins);
+  expect(removed).toEqual(origins);
+});
+
+test('pair, then the extension is reloaded: the app still connects (the worker re-registers its bridge)', async () => {
+  const dir = extensionCopy();
+  const profile = mkdtempSync(join(tmpdir(), 'mm-profile-'));
+  try {
+    let ext = await launch(dir, profile);
+    await ext.worker.evaluate((origin) => chrome.storage.local.set({ appOrigin: origin }), APP);
+    const opts = await ext.context.newPage();
+    await opts.goto(`chrome-extension://${ext.id}/src/options.html`);
+    expect(await opts.evaluate(() => chrome.runtime.sendMessage({ type: 'bridge' }))).toEqual({ ok: true });   // what Pair does
+    let { page } = await appPage(ext.context);
+    await expect(page.getByRole('button', { name: 'Browser companion · connected' })).toBeVisible();
+    await ext.context.close();
+
+    ext = await launch(dir, profile);   // ↻: Chrome drops dynamically registered scripts
+    const w = ext.worker;
+    await expect.poll(() => w.evaluate(() => chrome.scripting.getRegisteredContentScripts())).toMatchObject([{ id: 'mm-bridge', matches: ['http://localhost/*'] }]);
+    ({ page } = await appPage(ext.context));
+    await expect(page.getByRole('button', { name: 'Browser companion · connected' })).toBeVisible();
+    await ext.context.close();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(profile, { recursive: true, force: true });
+  }
+});
+
+test('an app tab already open when you pair connects without a reload, and answers once', async ({ ext }) => {
+  await ext.worker.evaluate(() => chrome.scripting.unregisterContentScripts({ ids: ['mm-bridge'] }));
+  const { page } = await appPage(ext.context);
+  await page.getByRole('button', { name: 'Browser companion · set up' }).waitFor();
+  const opts = await ext.context.newPage();
+  await opts.goto(`chrome-extension://${ext.id}/src/options.html`);
+  for (let i = 0; i < 2; i++) expect(await opts.evaluate(() => chrome.runtime.sendMessage({ type: 'bridge' }))).toEqual({ ok: true });
+  await expect(page.getByRole('button', { name: 'Browser companion · connected' })).toBeVisible();
+  const hellos = await page.evaluate(() => new Promise<number>((resolve) => {
+    let n = 0;
+    window.addEventListener('message', (ev) => { if (ev.data?.from === 'companion' && ev.data.type === 'hello') n += 1; });
+    window.postMessage({ channel: 'magic-manager/companion', from: 'app', type: 'ping' }, location.origin);
+    setTimeout(() => resolve(n), 1500);
+  }));
+  expect(hellos).toBe(1);   // injected twice, one live bridge
 });
 
 test('paired with the wrong address: the app never checks in, and the settings page says so', async ({ ext }) => {
