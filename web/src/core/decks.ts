@@ -25,8 +25,12 @@ export const COVER_LABEL: Record<Cover, string> = { any: 'Any', build: 'Ready to
 
 export type RecipeFilters = Pick<DecksSearch, 'q' | 'kinds' | 'own' | 'cover' | 'types' | 'sets'>;
 
+/** Free-card status when it applies: a built recipe's cards are pledged, so it has none. */
+const coverStatus = (r: Pick<RecipeOut, 'built' | 'status'>) => (r.built === 0 ? r.status : null);
+const readyFromFree = (r: Pick<RecipeOut, 'built' | 'status'>) => coverStatus(r) === 'build';
+
 const coverKeep = (r: RecipeOut, cover: Cover) =>
-  cover === 'any' || (r.built === 0 && (r.status === 'build' || (cover === 'close' && r.status === 'close')));
+  cover === 'any' || readyFromFree(r) || (cover === 'close' && coverStatus(r) === 'close');
 
 /** Every filter except `skip` (so a control can count what each of its options would show). */
 function keep(r: RecipeOut, f: RecipeFilters, skip?: keyof RecipeFilters): boolean {
@@ -61,7 +65,7 @@ export function optionCounts(rs: readonly RecipeOut[], f: RecipeFilters) {
   const own = by('own', (r) => r.ownership);
   const types = by('types', (r) => r.deck_type);
   const sets = by('sets', (r) => r.set_code);
-  const cover = by('cover', (r) => (r.built === 0 ? r.status : null));
+  const cover = by('cover', coverStatus);
   const names = new Map<string, { name: string; released: string }>();
   for (const r of rs) if (r.set_code && !names.has(r.set_code)) names.set(r.set_code, { name: r.set_name ?? r.set_code.toUpperCase(), released: r.released ?? '' });
   const sorted = (m: Map<string, number>, keepKeys: readonly string[] = []): [string, number][] =>
@@ -117,7 +121,7 @@ export function groupRecipes(rs: readonly RecipeOut[], by: DeckGroupBy): DeckGro
     const g = m.get(key) ?? { key, label, decks: [], rank, ready: 0 };
     if (rank > g.rank) g.rank = rank;
     g.decks.push(r);
-    if (r.built === 0 && r.status === 'build') g.ready += 1;
+    if (readyFromFree(r)) g.ready += 1;
     m.set(key, g);
   }
   const groups = [...m.values()];
@@ -145,7 +149,7 @@ export function coverage(r: Pick<RecipeOut, 'have' | 'short' | 'status' | 'built
 /** The sheet summary: what's listed and what you own of it. */
 export function recipeSummary(shown: readonly RecipeOut[]): string {
   const built = shown.filter((r) => r.ownership === 'built').length;
-  const ready = shown.filter((r) => r.built === 0 && r.status === 'build').length;
+  const ready = shown.filter(readyFromFree).length;
   return [fmtCount(shown.length, 'recipe'), built ? `${fmtInt(built)} built` : '', ready ? `${fmtInt(ready)} ready from free cards` : ''].filter(Boolean).join(' · ');
 }
 

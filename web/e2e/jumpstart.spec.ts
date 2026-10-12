@@ -70,6 +70,7 @@ test('one Jumpstart set in view: the Buy strip copies either shopping list', asy
   expect(buys).toEqual([{ shop: 'buildable', target: 'manapool' }, { shop: 'packs', target: 'tcgplayer' }]);
   // A set without Jumpstart packs has no Buy strip.
   await page.goto('/decks?sets=%5B%22msc%22%5D');
+  await expect(page.getByRole('navigation', { name: 'Deck recipes' }).getByRole('button').first()).toBeVisible();
   await expect(page.getByRole('heading', { name: /Buy/ })).toHaveCount(0);
 });
 
@@ -84,6 +85,22 @@ test('a recipe never read reads its card list once, then shows it', async ({ pag
   await page.goto('/decks?own=%5B%22none%22%5D&deck=fn%3ASpiderSociety_MSC&view=list');
   await expect(page.getByRole('button', { name: 'Inspect Iron Fist' })).toBeVisible();
   expect(submitted).toEqual([{ file_names: ['SpiderSociety_MSC'] }]);
+});
+
+test('a failed read says why and Try again starts it once more', async ({ page }) => {
+  const submitted: unknown[] = [];
+  const spider = { recipe: row('fn:SpiderSociety_MSC'), unknown: [], ready: false, cards: [] };
+  await mockApi(page, { '/api/recipes/SpiderSociety_MSC': () => ({ json: spider }) });
+  await page.route('**/api/jobs/decks.read_recipes', (r) => {
+    submitted.push(r.request().postDataJSON());
+    return r.fulfill({ status: 202, json: { id: `rf${submitted.length}`, name: 'decks.read_recipes', title: 'Read deck recipes', inputs: {}, status: 'queued', created_at: '2026-01-01T00:00:00+00:00', started_at: null, finished_at: null, progress: null, summary: null, artifacts: [], error: null } });
+  });
+  const FAILED = sse([['status', { status: 'running' }], ['error', { error: 'Couldn’t sync prices for card set(s): MSC.' }], ['status', { status: 'failed' }]]);
+  await page.route('**/api/jobs/rf*/events', (r) => r.fulfill({ status: 200, contentType: 'text/event-stream', body: FAILED }));
+  await page.goto('/decks?own=%5B%22none%22%5D&deck=fn%3ASpiderSociety_MSC');
+  await expect(page.getByRole('alert')).toContainText('MSC');
+  await page.getByRole('button', { name: 'Try again' }).click();
+  await expect.poll(() => submitted.length).toBe(2);
 });
 
 test('one set in view: read every unread recipe in it', async ({ page }) => {

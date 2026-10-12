@@ -1,5 +1,5 @@
 import { defaultRangeExtractor, useVirtualizer, type Range } from '@tanstack/react-virtual';
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useRovingFocus } from '../../app/useRovingFocus';
 import { EmptyNote } from '../../components/States';
 import type { RecipeOut } from '../../core/api';
@@ -21,12 +21,23 @@ export function RecipeList({ groups, total, active, onPick }: { groups: DeckGrou
 
   const scrollRef = useRef<HTMLElement | null>(null);
   const stickyRef = useRef(0);
+  const virtRef = useRef<{ scrollToIndex: (i: number, o: { align: 'auto' }) => void } | null>(null);
+  const reveal = useCallback((key: string) => {
+    const i = index.get(key);
+    if (i != null) virtRef.current?.scrollToIndex(i, { align: 'auto' });
+  }, [index]);
+  const { navRef, tabKey, setFocusKey, onKeyDown } = useRovingFocus(keys, activeKey, 'data-recipe', reveal);
+  // The roving tab stop is always rendered, so Tab can enter the list and a focused row
+  // never unmounts while scrolled away.
+  const tabIndex = tabKey ? index.get(tabKey) : undefined;
   const rangeExtractor = useCallback(
     (range: Range) => {
       stickyRef.current = [...heads].reverse().find((i) => range.startIndex >= i) ?? 0;
-      return [...new Set([stickyRef.current, ...defaultRangeExtractor(range)])].sort((a, b) => a - b);
+      const keep = [stickyRef.current, ...defaultRangeExtractor(range)];
+      if (tabIndex != null) keep.push(tabIndex);
+      return [...new Set(keep)].sort((a, b) => a - b);
     },
-    [heads],
+    [heads, tabIndex],
   );
   const virt = useVirtualizer({
     count: items.length,
@@ -36,11 +47,14 @@ export function RecipeList({ groups, total, active, onPick }: { groups: DeckGrou
     rangeExtractor,
     getItemKey: (i) => (items[i].type === 'head' ? `h:${(items[i] as { g: DeckGroup }).g.key}` : (items[i] as { r: RecipeOut }).r.key),
   });
-  const reveal = useCallback((key: string) => {
-    const i = index.get(key);
-    if (i != null) virt.scrollToIndex(i, { align: 'auto' });
-  }, [index, virt]);
-  const { navRef, tabKey, setFocusKey, onKeyDown } = useRovingFocus(keys, activeKey, 'data-recipe', reveal);
+  virtRef.current = virt;
+  // A deep link opens with its recipe in view.
+  const revealed = useRef(false);
+  useEffect(() => {
+    if (revealed.current || !activeKey) return;
+    revealed.current = true;
+    reveal(activeKey);
+  }, [activeKey, reveal]);
   const setRefs = useCallback((el: HTMLElement | null) => {
     scrollRef.current = el;
     (navRef as { current: HTMLElement | null }).current = el;

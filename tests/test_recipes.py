@@ -31,7 +31,7 @@ def world(tmp_db, seed_cards, make_card, make_precon_deck, monkeypatch):
         make_card(id="b", set="jt", collector_number="2", name="Bravo", color_identity=["W"], prices={"usd": "2.00"}),
         make_card(id="d", set="jt", collector_number="4", name="Delta", color_identity=["R"], prices={"usd": "0.50"}),
         make_card(id="k", set="tst", collector_number="1", name="King", type_line="Legendary Creature",
-                  color_identity=["G"], prices={"usd": "4.00"}),
+                  color_identity=["G"], prices={"usd": "0.10"}, image_uris={"normal": "https://example.test/king.jpg"}),
     ])
     files = {
         "Cats1_JT": make_precon_deck("Cats (1)", "Jumpstart", [
@@ -39,12 +39,14 @@ def world(tmp_db, seed_cards, make_card, make_precon_deck, monkeypatch):
         "Dogs_JT": make_precon_deck("Dogs", "Jumpstart", [
             {"sid": "a", "name": "Alpha", "set": "JT"}, {"sid": "d", "name": "Delta", "count": 19, "set": "JT"}]),
         "Boss_TST": make_precon_deck("Boss Deck", "Commander Deck", [
-            {"sid": "k", "name": "King", "set": "TST"}, {"sid": "a", "name": "Alpha", "count": 98, "set": "JT"},
+            {"sid": "k", "name": "King", "set": "TST", "board": "commander"}, {"sid": "a", "name": "Alpha", "count": 98, "set": "JT"},
             {"sid": "zz", "name": "Mystery", "set": "TST"}]),
         "Tiny_TST": make_precon_deck("Tiny Box", "Box Set", [{"sid": "a", "name": "Alpha", "count": 10, "set": "JT"}]),
     }
     monkeypatch.setattr(mtgjson, "_decklist_by_filename", lambda: CATALOG)
     monkeypatch.setattr(mtgjson, "cached_deck", lambda fn: files.get(fn))
+    monkeypatch.setattr(mtgjson, "cached_deck_mtime", lambda fn: 1.0 if fn in files else None)
+    monkeypatch.setattr(recipes, "_ENTRIES", {})
     monkeypatch.setattr(mtgjson, "deck", lambda fn: files[fn])
     import magic_manager.scryfall as scry
     monkeypatch.setattr(scry, "all_sets", lambda: [
@@ -106,11 +108,13 @@ def test_recipe_detail_and_unknown_cards(world):
     d = recipes.recipe("Boss_TST")
     assert d["ready"] and d["recipe"]["ownership"] == "none"
     assert [(c["printing"]["name"], c["board"], c["count"], c["free"]) for c in d["cards"]] == [
-        ("King", "main", 1, 0), ("Alpha", "main", 98, 2)]
+        ("King", "commander", 1, 0), ("Alpha", "main", 98, 2)]
+    assert d["recipe"]["image_uri"] == "https://example.test/king.jpg"  # the commander's art, not the priciest card
     assert d["unknown"] == ["Mystery"]
     assert recipes.recipe("Later_TST") == {"recipe": recipes.recipe("Later_TST")["recipe"], "ready": False, "cards": [], "unknown": []}
-    with pytest.raises(LookupError):
-        recipes.recipe("Lands_TST2")
+    for bad in ("Nope_TST", "Draft_TST"):  # unknown, and a product type that isn't a deck recipe
+        with pytest.raises(LookupError):
+            recipes.recipe(bad)
     owned = recipes.recipe("Dogs_JT")["recipe"]
     assert (owned["ownership"], owned["slug"], owned["slugs"]) == ("built", "pack:dogs-jt", ["pack:dogs-jt"])
 
@@ -151,3 +155,21 @@ def test_read_job_takes_names_or_a_set(world, monkeypatch):
     assert seen == [["Cats1_JT", "Boss_TST", "Later_TST", "Tiny_TST"]] and res.summary == "Read 4 deck recipes"
     with pytest.raises(ValueError):
         api._run_read(api.ReadRecipesInput(set="zzz"), lambda e: None)
+
+
+def test_legacy_pack_slug_row_is_the_owned_recipe(world):
+    with db.connect() as conn:  # a pre-fileName Jumpstart deck row: no source_precon_file_name
+        decks.deck_create("pack:cats-1-jt", "Cats (1)", precon_state="built", conn=conn)
+    rows = [r for r in recipes.catalog() if r["file_name"] == "Cats1_JT"]
+    assert [(r["key"], r["kind"], r["ownership"]) for r in rows] == [("pack:cats-1-jt", "jumpstart", "built")]
+
+
+def test_owned_decks_still_list_when_the_decklist_cannot_be_read(world, monkeypatch):
+    def boom():
+        raise mtgjson.MtgJsonError("offline")
+    monkeypatch.setattr(mtgjson, "_decklist_by_filename", boom)
+    keys = {r["key"] for r in recipes.catalog()}
+    assert keys == {"pack:dogs-jt", "imp"}
+    client = TestClient(create_app())
+    assert client.get("/api/recipes").status_code == 200
+    assert client.get("/api/recipes/Cats1_JT").status_code == 503

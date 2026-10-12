@@ -115,7 +115,7 @@ def test_front_card_matches_versioned_pack_name(tmp_db):
 def test_api_view_and_buy_list(jt):
     from magic_manager.api import jumpstart as api
     v = api.view(jt)
-    assert v.ready and v.name == "Jump Test" and v.themes == 2
+    assert v.ready and v.name == "Jump Test"
     assert v.buildable.copies == 1 and v.whole_packs == 2 and v.whole.copies == 5
     out = api.buy_list(jt, api.JumpstartBuyIn(shop="buildable", target="cardkingdom"))
     assert "Charlie" in out.text
@@ -127,7 +127,7 @@ def test_api_view_not_ready_until_read(jt, monkeypatch):
     from magic_manager.api import jumpstart as api
     monkeypatch.setattr(jumpstart, "deck_cached", lambda fn: False)
     v = api.view(jt)
-    assert not v.ready and v.packs == []
+    assert not v.ready and v.buildable is None
 
 
 def test_owned_count_matches_sheet_with_legacy_pack_row(jt):

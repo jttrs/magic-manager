@@ -3323,23 +3323,9 @@ export type JumpstartOut = {
     /**
      * Ready
      *
-     * False = deck files not read yet; run the jumpstart.read job.
+     * False = the set's pack card lists aren't read yet; run the decks.read_recipes job with {set: <code>}.
      */
     ready: boolean;
-    /**
-     * Close Short
-     *
-     * A pack this many cards short or fewer is 'close'.
-     */
-    close_short?: number;
-    /**
-     * Packs
-     */
-    packs?: Array<JumpstartPackOut>;
-    /**
-     * Themes
-     */
-    themes?: number;
     /**
      * Cards to make every theme buildable (one built copy of each + other versions' extras).
      */
@@ -3352,90 +3338,6 @@ export type JumpstartOut = {
      * Whole Packs
      */
     whole_packs?: number;
-};
-
-/**
- * JumpstartPackOut
- */
-export type JumpstartPackOut = {
-    /**
-     * File Name
-     */
-    file_name: string;
-    /**
-     * Name
-     */
-    name: string;
-    /**
-     * Theme
-     */
-    theme: string;
-    /**
-     * Version
-     */
-    version: number | null;
-    /**
-     * Color
-     *
-     * WUBRG letters of the pack's cards; 'C' = colorless.
-     */
-    color: string;
-    /**
-     * Card Count
-     */
-    card_count: number;
-    /**
-     * Usd Total
-     *
-     * Cards at their shipped finish plus the front card.
-     */
-    usd_total: number | null;
-    /**
-     * Top Card
-     */
-    top_card: string | null;
-    /**
-     * Top Card Usd
-     */
-    top_card_usd: number | null;
-    /**
-     * Front Card
-     */
-    front_card: string | null;
-    /**
-     * Top Card Image
-     */
-    top_card_image?: string | null;
-    /**
-     * Built
-     */
-    built: number;
-    /**
-     * Deconstructed
-     */
-    deconstructed: number;
-    /**
-     * Deck Slug
-     *
-     * A deck row for this version you own (built first).
-     */
-    deck_slug?: string | null;
-    /**
-     * Have
-     *
-     * Pack cards your free copies cover (each pack on its own).
-     */
-    have: number;
-    /**
-     * Short
-     *
-     * Pack cards you have no free copy for.
-     */
-    short: number;
-    /**
-     * Status
-     */
-    status: 'build' | 'close' | 'far';
 };
 
 /**

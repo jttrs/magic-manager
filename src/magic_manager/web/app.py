@@ -517,6 +517,8 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             return decks_api.recipe_detail(file_name)
         except LookupError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
+        except mtgjson.MtgJsonError as e:
+            raise HTTPException(status_code=503, detail=f"Couldn't read the MTGJSON deck list: {e}") from e
 
     @app.get("/api/decks/{slug}", response_model=decks_api.DeckDetailOut, tags=["decks"])
     def deck_detail(slug: str):

@@ -336,14 +336,15 @@ export const artSwapsQuery = (tag: string | null, sids: string[]) =>
 
 export const recipesQuery = () =>
   queryOptions({
-    queryKey: ['recipes'],
+    // Under the decks root, so every deck write's invalidateQueries(['decks']) refreshes the list.
+    queryKey: ['decks', { recipes: 'list' }],
     queryFn: async ({ signal }) => unwrap(await recipeList({ signal })),
     staleTime: 60_000,
   });
 
 export const recipeQuery = (fileName?: string) =>
   queryOptions({
-    queryKey: ['recipes', fileName],
+    queryKey: ['decks', { recipe: fileName }],
     queryFn: async ({ signal }) => unwrap(await recipeDetail({ path: { file_name: fileName! }, signal })),
     enabled: Boolean(fileName),
     staleTime: 60_000,

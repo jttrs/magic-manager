@@ -6,9 +6,9 @@ Single source of truth behind the web Decks list (``api.decks`` recipes).
 Kinds. ``precon`` = a catalog product in ``mtgjson.PRECON_MODERN_TYPES``;
 ``jumpstart`` = a DeckList ``type: Jumpstart`` entry (one pack version);
 ``import`` / ``custom`` = decks you imported from a builder or built by hand.
-Card pools (land packs, scene boxes, > ``POOL_CARD_COUNT_THRESHOLD`` cards, fewer
-than ``MIN_PLAYABLE_CARDS`` playable cards) are not recipes; a catalog product
-you own only as a pool row stays out too.
+Card pools (``mtgjson.precon_kind`` == 'pool', run offline: product type and
+name tests before a recipe is read, card-count tests after) are not recipes; a
+catalog product you own only as a pool row stays out too.
 
 Ownership. ``built`` (a copy kept assembled), ``loose`` (copies broken down,
 cards in the free pool) or ``none``. Counts come from the ``decks`` table — the
@@ -67,6 +67,27 @@ def entries_from(data: dict) -> list[Entry]:
     return out
 
 
+_ENTRIES: dict[str, tuple[float, list[Entry]]] = {}
+
+
+def cached_entries(file_name: str) -> list[Entry] | None:
+    """A recipe's cards from the MTGJSON disk cache (offline), ``None`` when its
+    deck file isn't cached. Memoized per file mtime — only the small entry list
+    is kept, never the parsed deck file."""
+    mtime = mtgjson.cached_deck_mtime(file_name)
+    if mtime is None:
+        return None
+    hit = _ENTRIES.get(file_name)
+    if hit and hit[0] == mtime:
+        return hit[1]
+    data = mtgjson.cached_deck(file_name)
+    if data is None:
+        return None
+    es = entries_from(data)
+    _ENTRIES[file_name] = (mtime, es)
+    return es
+
+
 def counts_by_id(es: Iterable[Entry]) -> dict[str, int]:
     """Copies per scryfall_id, finishes merged (a foil copy builds the deck too)."""
     out: dict[str, int] = defaultdict(int)
@@ -93,27 +114,30 @@ def kind_of(product_type: str | None) -> Kind:
     return "jumpstart" if product_type == JUMPSTART_TYPE else "precon"
 
 
-def _quick_pool(entry: dict) -> bool:
-    """Pool tests that need no deck file: product type and name patterns."""
-    if entry.get("type") in mtgjson.POOL_PRODUCT_TYPES:
-        return True
-    return mtgjson._pool_shaped(entry["fileName"], (entry.get("name") or "").lower(), quick=True)
+def _is_pool(entry: dict, es: list[Entry] | None = None) -> bool:
+    """``mtgjson.precon_kind`` — the one deck/pool classifier — run offline: the
+    product-type and name tests always, the card-count tests once ``es`` is read."""
+    return mtgjson.precon_kind(entry["fileName"], name=entry.get("name") or entry["fileName"],
+                               product_type=entry.get("type"),
+                               playable_cards=sum(e.count for e in es) if es is not None else None,
+                               offline=True) == "pool"
 
 
-def _read_pool(entry: dict, es: list[Entry]) -> bool:
-    """Pool tests that need the deck's cards (mirrors ``mtgjson.precon_kind``)."""
-    total = sum(e.count for e in es)
-    if total > mtgjson.POOL_CARD_COUNT_THRESHOLD:
-        return True
-    return entry.get("type") not in mtgjson.ARCHENEMY_PRODUCT_TYPES and total < mtgjson.MIN_PLAYABLE_CARDS
+def _decklist() -> dict[str, dict]:
+    """The MTGJSON DeckList by fileName; ``{}`` when it can't be read, so your own
+    decks still list without the catalog (as ``deck_view._precon_index``)."""
+    try:
+        return mtgjson._decklist_by_filename()
+    except Exception:  # noqa: BLE001 — catalog is additive; never block your decks
+        return {}
 
 
 def catalog_entries() -> list[dict]:
     """DeckList entries that are playable recipes by their catalog facts alone."""
     types = mtgjson.PRECON_MODERN_TYPES | {JUMPSTART_TYPE}
-    return [d for d in mtgjson._decklist_by_filename().values()
+    return [d for d in _decklist().values()
             if d.get("type") in types and not mtgjson._is_collector_edition(d.get("name") or "")
-            and not _quick_pool(d)]
+            and not _is_pool(d)]
 
 
 def _legacy_pack_slugs(entries: list[dict]) -> dict[str, str]:
@@ -196,6 +220,13 @@ def _rollup(es: list[Entry], facts: dict[str, dict]) -> dict:
     return {"cards": sum(e.count for e in es), "value_usd": round(value, 2), "image_uri": best[2] if best else None}
 
 
+def _fill_read(row: dict, es: list[Entry], facts: dict[str, dict], free: dict[str, int]) -> None:
+    """A read recipe's card facts and free-card coverage onto its row."""
+    row.update(_rollup(es, facts), read=True, color=_color((e.scryfall_id for e in es), facts))
+    row["have"], row["short"] = coverage(counts_by_id(es), free)
+    row["status"] = status(row["short"])
+
+
 def _base(entry: dict, set_names: dict[str, dict]) -> dict:
     code = (entry.get("code") or "").lower() or None
     sset = set_names.get(code) if code else None
@@ -221,7 +252,7 @@ def catalog() -> list[dict]:
     plus every catalog precon / Jumpstart pack you don't own. Newest first."""
     entries = catalog_entries()
     by_fn = {e["fileName"]: e for e in entries}
-    all_fns = mtgjson._decklist_by_filename()
+    all_fns = _decklist()
     legacy = _legacy_pack_slugs(entries)
     owned_kind = _owned_file_names()
     set_names = deck_view._sets_index()
@@ -247,9 +278,9 @@ def catalog() -> list[dict]:
     unowned = [_base(e, set_names) for fn, e in by_fn.items() if fn not in owned_kind]
     contents: dict[str, list[Entry]] = {}
     for r in unowned:
-        data = mtgjson.cached_deck(r["file_name"])
-        if data is not None:
-            contents[r["file_name"]] = entries_from(data)
+        es = cached_entries(r["file_name"])
+        if es is not None:
+            contents[r["file_name"]] = es
     unsynced = set(sets.unsynced_set_codes({e.set_code for es in contents.values() for e in es if e.set_code}))
 
     needs = _deck_needs(list(owned_slugs))
@@ -266,12 +297,10 @@ def catalog() -> list[dict]:
 
     for r in unowned:
         es = contents.get(r["file_name"])
-        if es is not None and _read_pool(by_fn[r["file_name"]], es):
+        if es is not None and _is_pool(by_fn[r["file_name"]], es):
             continue
         if es is not None and not ({e.set_code for e in es if e.set_code} & unsynced):
-            r.update(_rollup(es, facts), read=True, color=_color((e.scryfall_id for e in es), facts))
-            r["have"], r["short"] = coverage(counts_by_id(es), free)
-            r["status"] = status(r["short"])
+            _fill_read(r, es, facts, free)
         out.append(r)
 
     out.sort(key=lambda d: d["name"])
@@ -288,7 +317,7 @@ def recipe(file_name: str) -> dict:
     ``ready`` is False until :func:`ensure_read` has run for it; ``unknown`` names
     cards whose printing isn't in the local catalog. Raises ``LookupError`` for a
     fileName that isn't a catalog recipe."""
-    entry = mtgjson._decklist_by_filename().get(file_name)
+    entry = mtgjson._decklist_by_filename().get(file_name)  # a failure surfaces (the route maps it)
     types = mtgjson.PRECON_MODERN_TYPES | {JUMPSTART_TYPE}
     if entry is None or entry.get("type") not in types:
         raise LookupError(f"no deck recipe {file_name!r}")
@@ -300,18 +329,15 @@ def recipe(file_name: str) -> dict:
             "SELECT slug FROM decks WHERE source_precon_file_name = ? ORDER BY precon_state = 'built' DESC, slug",
             (file_name,))]
     row.update(slugs=slugs, slug=slugs[0] if slugs else None)
-    data = mtgjson.cached_deck(file_name)
-    if data is None:
+    es = cached_entries(file_name)
+    if es is None:
         return {"recipe": row, "ready": False, "cards": [], "unknown": []}
-    es = entries_from(data)
     ready = not sets.unsynced_set_codes({e.set_code for e in es if e.set_code})
     facts = _card_facts(e.scryfall_id for e in es)
     free = inventory.free_quantities([e.scryfall_id for e in es])
     printings = addcards.printings_for_ids(e.scryfall_id for e in es)
     if ready:
-        row.update(_rollup(es, facts), read=True, color=_color((e.scryfall_id for e in es), facts))
-        row["have"], row["short"] = coverage(counts_by_id(es), free)
-        row["status"] = status(row["short"])
+        _fill_read(row, es, facts, free)
     cards, unknown = [], []
     for e in es:
         p = printings.get(e.scryfall_id)

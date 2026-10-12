@@ -128,23 +128,8 @@ def ensure_ready(code: str, *, progress: Callable[[int, int, str], None] | None 
     Raises ``RuntimeError`` naming any card set still unsynced afterwards —
     ``sets.ensure_priced`` swallows sync errors, and a read that leaves the set
     not ready must fail rather than look successful."""
-    code = code.lower()
-    vs = variants(code)
-    tick = progress or (lambda *_: None)
-    set_codes: set[str] = set()
-    for i, v in enumerate(vs):
-        tick(i, len(vs) + 1, v.get("name") or v["fileName"])
-        set_codes.update(e.set_code for e in entries(v["fileName"]) if e.set_code)
-    tick(len(vs), len(vs) + 1, "Matching cards to your collection")
-    sets.ensure_priced(set_codes, refresh_stale=refresh_stale, log=log)
-    missing = sets.unsynced_set_codes(set_codes)
-    if missing:
-        raise RuntimeError(f"Couldn't sync prices for card set(s): {', '.join(c.upper() for c in missing)}. Check the connection and read again.")
-    try:
-        front_cards.sync_front_cards(code)
-    except Exception:  # noqa: BLE001 — front cards only add value; never block
-        pass
-    return len(vs)
+    return recipes.ensure_read([v["fileName"] for v in variants(code.lower())], progress=progress,
+                               refresh_stale=refresh_stale, log=log)
 
 
 # ---------- the set view ----------

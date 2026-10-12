@@ -57,11 +57,13 @@ export function DecksView() {
   const unread = unreadInSet(all, search);
   const { live: readLive, start: startRead, reset: resetRead } = useJob();
   const [startError, setStartError] = useState<string | null>(null);
+  const [readCode, setReadCode] = useState<string | null>(null);
   const readError = startError ?? (readLive?.status === 'failed' ? (readLive.error ?? 'Reading the recipes failed.') : null);
   const reading = readLive != null && readLive.status !== 'succeeded' && readLive.status !== 'failed';
   const readSet = () => {
     if (!oneSet) return;
     setStartError(null);
+    setReadCode(oneSet);
     resetRead();
     void startRead('decks.read_recipes', { set: oneSet }).then((err) => err && setStartError(err));
   };
@@ -146,7 +148,7 @@ export function DecksView() {
   }
 
   const summary = reading ? (
-    <ProgressRule label={`Reading ${oneSet?.toUpperCase()} recipes`} verb="Reading" done={readLive?.done ?? 0} total={readLive?.total ?? null} message={readLive?.log.at(-1)?.msg} />
+    <ProgressRule label={`Reading ${readCode?.toUpperCase() ?? ''} recipes`} verb="Reading" done={readLive?.done ?? 0} total={readLive?.total ?? null} message={readLive?.log.at(-1)?.msg} />
   ) : readError ? (
     <span role="alert" className="text-danger">{readError}</span>
   ) : recipes.data ? (
@@ -189,7 +191,7 @@ function JumpstartBuy({ code, shop, onShop }: { code: string; shop: Shop; onShop
     return r.data.text;
   };
   return (
-    <SideSection title="Buy · Jumpstart">
+    <SideSection title="Buy">
       <Segmented<Shop>
         label="Shop for"
         showLabel

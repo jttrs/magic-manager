@@ -411,20 +411,24 @@ def _scene_box_component(file_name: str, display: str, *, entry_code: str | None
 
 
 def _pool_shaped(file_name: str, display: str, *, quick: bool = False,
-                 total_cards: int | None = None) -> bool:
+                 total_cards: int | None = None, offline: bool = False) -> bool:
     """The shared pool tests behind ``default_precon_state`` and ``precon_kind``.
 
     ``display`` is the lowercased deck name. Tests, in order: name matches
     ``POOL_NAME_PATTERNS``; (unless ``quick``) Scene-Box component; card count
     > ``POOL_CARD_COUNT_THRESHOLD`` (``total_cards`` if given, else read from the
     deck file). Network-tolerant: lookup failures skip that test.
+    ``offline`` skips every test that would fetch (the Scene-Box lookup, and the
+    card count when ``total_cards`` isn't given) — for listing many recipes.
     """
     if display and any(pat in display for pat in POOL_NAME_PATTERNS):
         return True
     if quick:
         return False
-    if _scene_box_component(file_name, display):
+    if not offline and _scene_box_component(file_name, display):
         return True
+    if offline and total_cards is None:
+        return False
     try:
         total = total_cards if total_cards is not None else _deck_total_cards(deck(file_name))
         if total > POOL_CARD_COUNT_THRESHOLD:
@@ -470,7 +474,7 @@ def default_precon_state(file_name: str, *, name: str | None = None, quick: bool
 
 def precon_kind(file_name: str, *, name: str | None = None,
                 product_type: str | None = None,
-                playable_cards: int | None = None) -> str:
+                playable_cards: int | None = None, offline: bool = False) -> str:
     """Classify a precon as a playable ``'deck'`` or a card ``'pool'``.
 
     POOL when ANY of: product type in ``POOL_PRODUCT_TYPES`` (land packs); the
@@ -481,7 +485,9 @@ def precon_kind(file_name: str, *, name: str | None = None,
 
     ``playable_cards`` = commander + main + side count; read from MTGJSON when
     omitted, as is ``product_type`` (DeckList entry). Network-tolerant: unknown
-    facts skip their rules, defaulting to ``'deck'``.
+    facts skip their rules, defaulting to ``'deck'``. ``offline=True`` never
+    fetches: no deck file (rules needing ``playable_cards`` are skipped when it's
+    not given) and no Scene-Box lookup.
     """
     if product_type is None:
         try:
@@ -491,12 +497,12 @@ def precon_kind(file_name: str, *, name: str | None = None,
     if product_type in POOL_PRODUCT_TYPES:
         return "pool"
     display = _display_name(file_name, name)
-    if playable_cards is None:
+    if playable_cards is None and not offline:
         try:
             playable_cards = _deck_total_cards(deck(file_name))
         except Exception:
             playable_cards = None
-    if _pool_shaped(file_name, display, total_cards=playable_cards):
+    if _pool_shaped(file_name, display, total_cards=playable_cards, offline=offline):
         return "pool"
     if playable_cards is not None and product_type not in ARCHENEMY_PRODUCT_TYPES:
         if product_type == "Secret Lair Drop" and playable_cards < SLD_MIN_PLAYABLE_CARDS:
@@ -608,28 +614,23 @@ def is_cached(resource_path: str) -> bool:
     return p.is_file() and p.stat().st_size > 0
 
 
-_CACHED_DECKS: dict[str, tuple[float, dict]] = {}
-
-
 def cached_deck(file_name: str) -> dict | None:
     """``decks/<file_name>.json``'s ``data`` block straight from the wrapper's
     disk cache — no subprocess, never the network; ``None`` when not cached
-    (or unreadable). Memoized per file mtime, so listing hundreds of recipes
-    parses each deck file once per process."""
+    (or unreadable)."""
     p = cache_path(f"decks/{file_name.removesuffix('.json')}.json")
     try:
-        mtime = p.stat().st_mtime
-    except OSError:
-        return None
-    hit = _CACHED_DECKS.get(file_name)
-    if hit and hit[0] == mtime:
-        return hit[1]
-    try:
-        data = json.loads(p.read_text()).get("data") or {}
+        return json.loads(p.read_text()).get("data") or {}
     except (OSError, ValueError):
         return None
-    _CACHED_DECKS[file_name] = (mtime, data)
-    return data
+
+
+def cached_deck_mtime(file_name: str) -> float | None:
+    """The cached deck file's mtime (a memo key for callers), ``None`` when absent."""
+    try:
+        return cache_path(f"decks/{file_name.removesuffix('.json')}.json").stat().st_mtime
+    except OSError:
+        return None
 
 
 def is_stale(resource_path: str) -> bool:
