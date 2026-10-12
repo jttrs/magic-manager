@@ -8,6 +8,7 @@
 // (and www.tcgplayer.com + moxfield.com, the TCGplayer cart and Moxfield switches) up front, because Chrome's
 // permission prompts (what users see when pairing / switching a feature on)
 // can't be clicked by automation. Everything else is the shipped extension.
+import { randomBytes } from 'node:crypto';
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -176,6 +177,92 @@ test('a Moxfield collection: the real extension reads every page in your Moxfiel
   await expect(d.getByRole('heading', { name: 'Moxfield collection (shared link)' })).toBeVisible();
   expect(previews).toEqual([{ source: 'moxfield', scope: 'collection', id: 'hgsItGBwRUybHyN0WZR41w', name: null, lines: GOLD.lines }]);
   expect(await ext.worker.evaluate(() => chrome.tabs.query({ url: 'https://moxfield.com/*' }))).toHaveLength(1);   // your tab, nothing extra left open
+});
+
+/** Moxfield answering for a signed-in user with a collection of `n` distinct printings (5,000 a page),
+ *  and your Moxfield tab open. `name(i)` makes each card's name. */
+async function bigMoxfieldCollection(ext: Fixtures['ext'], n: number, name: (i: number) => string) {
+  const COLL = JSON.parse(readFileSync(resolve(ROOT, 'tests/fixtures/companion/moxfield-collection.json'), 'utf8'));
+  const tmpl = COLL.page1.data[0];
+  const cors = { 'access-control-allow-origin': 'https://moxfield.com', 'access-control-allow-credentials': 'true' };
+  const asked: string[] = [];
+  await ext.context.route('https://api2.moxfield.com/**', (r) => {
+    const u = new URL(r.request().url());
+    asked.push(u.pathname);
+    if (u.pathname === '/v1/account/token/refresh') return r.fulfill({ status: 200, headers: cors, contentType: 'application/json', body: '{"access_token":"short-lived"}' });
+    if (u.pathname !== '/v1/collections/search') return r.fulfill({ status: 404, headers: cors, contentType: 'application/json', body: '{}' });
+    const p = Number(u.searchParams.get('pageNumber'));
+    const data = [];
+    for (let i = (p - 1) * 5000; i < Math.min(n, p * 5000); i++) {
+      data.push({ ...tmpl, id: `e${i}`, quantity: 1 + (i % 3), card: { ...tmpl.card, scryfall_id: `${i.toString(16).padStart(8, '0')}-4a1b-4c2d-8e3f-0123456789ab`, cn: String(i % 400), name: name(i) } });
+    }
+    return r.fulfill({ status: 200, headers: cors, contentType: 'application/json', body: JSON.stringify({ ...COLL.page1, pageNumber: p, totalResults: n, totalPages: Math.ceil(n / 5000), data }) });
+  });
+  const tab = await ext.context.newPage();
+  await tab.route('https://moxfield.com/', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>Moxfield</title>' }));
+  await tab.goto('https://moxfield.com/');
+  return asked;
+}
+
+async function openImport(page: Page) {
+  await page.getByRole('button', { name: 'Add cards' }).click();
+  const d = page.getByRole('dialog', { name: 'Add cards' });
+  await d.getByRole('tab', { name: 'Import a collection' }).click();
+  return d;
+}
+
+test('Read my collection: a real-sized collection (40,000 printings) is read, listed in full for approval, and previewed', async ({ ext }) => {
+  test.setTimeout(180_000);
+  const N = 40_000;
+  const asked = await bigMoxfieldCollection(ext, N, (i) => `Collected Card Number ${i}`);
+  const { page } = await appPage(ext.context);
+  const previews: { scope: string; id: unknown; lines: unknown[] }[] = [];
+  await page.route('**/api/collection/import/preview', (r) => {
+    previews.push(r.request().postDataJSON());
+    return r.fulfill({ json: { label: 'web:moxfield collection', rows: [], not_found: [], skipped: { proxy: 0, digital: 0 }, not_in_read: 0, already_imported_at: null, warnings: [] } });
+  });
+  const d = await openImport(page);
+  const approval = ext.context.waitForEvent('page', { predicate: (p) => p.url().includes('/src/approve.html'), timeout: 120_000 });
+  await d.getByRole('button', { name: 'Read my collection' }).click();
+  const approve = await approval;
+  await expect(approve.locator('#summary')).toHaveText(`Your Moxfield collection · ${N} printings · 79999 cards`);
+  // Every line is listed (rows are added in batches), not cut off.
+  await expect(approve.locator('#table tbody tr')).toHaveCount(N, { timeout: 60_000 });
+  await expect(approve.locator('#table')).toContainText(`Collected Card Number ${N - 1}`);
+  expect(previews).toEqual([]);
+  await approve.getByRole('button', { name: 'Send to magic-manager' }).click();
+  await expect(d.getByRole('heading', { name: 'Your Moxfield collection' })).toBeVisible({ timeout: 60_000 });
+  expect(previews).toHaveLength(1);
+  expect(previews[0]).toMatchObject({ scope: 'collection', id: null });
+  expect(previews[0].lines).toHaveLength(N);
+  expect(previews[0].lines[N - 1]).toMatchObject({ quantity: 1 + ((N - 1) % 3), scryfall_id: `${(N - 1).toString(16).padStart(8, '0')}-4a1b-4c2d-8e3f-0123456789ab`, cn: String((N - 1) % 400), name: `Collected Card Number ${N - 1}` });
+  expect(asked.filter((p) => p === '/v1/collections/search')).toHaveLength(N / 5000);
+});
+
+test('a read too big to hand over says so (request.too_large, with its size) — never “a request it doesn’t understand”', async ({ ext }) => {
+  test.setTimeout(180_000);
+  // Names that don't compress: 60,000 of them are more than the companion can hold while you decide.
+  await bigMoxfieldCollection(ext, 60_000, () => randomBytes(150).toString('base64').slice(0, 190));
+  const { page } = await appPage(ext.context);
+  const d = await openImport(page);
+  await d.getByRole('button', { name: 'Read my collection' }).click();
+  const alert = d.getByRole('alert');
+  await expect(alert).toContainText('That read is too big for the companion to hand over in one go.', { timeout: 120_000 });
+  await expect(alert).toContainText(/MB of card data · Code request\.too_large/);
+  expect(await ext.worker.evaluate(async () => (await chrome.storage.session.get('pending')).pending ?? null)).toBeNull();
+  expect(ext.context.pages().filter((p) => p.url().includes('/src/approve.html'))).toHaveLength(0);
+});
+
+test('the bridge passes which collection read to the worker: one of your binders, by id', async ({ ext }) => {
+  const asked = await bigMoxfieldCollection(ext, 10, (i) => `Card ${i}`);
+  const { page } = await appPage(ext.context);
+  await expect(page.getByRole('button', { name: 'Browser companion · connected' })).toBeVisible();
+  const ack = await page.evaluate(() => new Promise((resolve) => {
+    window.addEventListener('message', (ev) => { if (ev.data?.from === 'companion' && ev.data.id === 'binder-read-01' && ev.data.type === 'ack') resolve(ev.data); });
+    window.postMessage({ channel: 'magic-manager/companion', from: 'app', type: 'request', id: 'binder-read-01', kind: 'moxfield_collection', params: { what: 'binder', binder: 'Bnd3r_id' } }, location.origin);
+  }));
+  expect(asked).toContain('/v1/trade-binders/Bnd3r_id/search');   // not refused as request.invalid before reading
+  expect(ack).toMatchObject({ ok: false, code: 'moxfield.not_found' });   // this stub has no binders
 });
 
 test('a request while a long read is still reading (no window yet) is refused as busy, and the read still completes', async ({ ext }) => {

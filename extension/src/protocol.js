@@ -7,9 +7,34 @@ export const CHANNEL = 'magic-manager/companion';
 export const KINDS = ['cart', 'tabs', 'moxfield', 'order_list', 'orders', 'watched', 'archidekt', 'moxfield_collection', 'moxfield_binders'];
 export const APPROVAL_TTL_MS = 5 * 60 * 1000;
 export const MAX_PAYLOAD_BYTES = 2_000_000;
-/** A whole Moxfield collection can run to tens of thousands of lines (session storage holds 10 MB). */
-export const MAX_COLLECTION_BYTES = 8_000_000;
+/** A whole Moxfield collection runs to tens of thousands of lines (≤ 60,000 printings, ~120 bytes
+ *  each; long names make it more) — what is sent, as JSON. */
+export const MAX_COLLECTION_BYTES = 24_000_000;
 export const maxPayload = (kind) => (kind === 'moxfield_collection' ? MAX_COLLECTION_BYTES : MAX_PAYLOAD_BYTES);
+/** Chrome's session storage holds 10 MB and counts objects at their in-memory size (a 40,000-line
+ *  collection as objects is over the limit at ~5 MB of JSON). So a waiting read is held packed —
+ *  gzipped JSON in one string — and must fit in this. */
+export const SESSION_BUDGET_BYTES = 8_000_000;
+
+/** A read's data → one gzipped, base64 string (what the pending request holds until you decide). */
+export async function packData(data) {
+  const gz = await new Response(new Blob([JSON.stringify(data)]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer();
+  const bytes = new Uint8Array(gz);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+/** The data a packed string holds (see packData). */
+export async function unpackData(packed) {
+  const bin = atob(packed);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return JSON.parse(await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).text());
+}
+
+/** UTF-8 size of a value as JSON (what the cap measures). */
+export const jsonBytes = (data) => new TextEncoder().encode(JSON.stringify(data)).length;
 /** Most watched store pages one Watching read may open + read. */
 export const MAX_WATCHED = 50;
 

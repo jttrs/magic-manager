@@ -13,9 +13,9 @@
 
 import { STORES } from './stores.js';
 import {
-  APPROVAL_TTL_MS, ARCHIDEKT_DECK, ARCHIDEKT_ORIGINS, BRIDGE_ID, CART_STORES, KINDS, MANAPOOL_ORIGINS, MAX_PAYLOAD_BYTES,
-  MOXFIELD_BINDER, MOXFIELD_COLLECTION, MOXFIELD_DECK, MOXFIELD_ORIGINS, MOXFIELD_TABS, STORE_ORIGINS, bridgeScript, maxPayload,
-  parseAppOrigin, storeOf, summarize,
+  APPROVAL_TTL_MS, ARCHIDEKT_DECK, ARCHIDEKT_ORIGINS, BRIDGE_ID, CART_STORES, KINDS, MANAPOOL_ORIGINS,
+  MOXFIELD_BINDER, MOXFIELD_COLLECTION, MOXFIELD_DECK, MOXFIELD_ORIGINS, MOXFIELD_TABS, SESSION_BUDGET_BYTES, STORE_ORIGINS, bridgeScript,
+  jsonBytes, maxPayload, packData, parseAppOrigin, storeOf, summarize, unpackData,
 } from './protocol.js';
 import { readOrderList, readOrders, ORDER_FEATURES } from './orders.js';
 import { planWatched, readWatched } from './watched.js';
@@ -29,6 +29,33 @@ async function fail(code, extra = {}) {
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/** A short, plain detail for a failure (the app shows it under the message). */
+const shortDetail = (e) => String(e?.message || e || '').slice(0, 120);
+const megabytes = (n) => `${(n / 1e6).toFixed(1)} MB`;
+
+/**
+ * A read's data, packed for the pending request (see protocol.js packData) — or the failure
+ * when it is too large to hand over: over the kind's cap as JSON, or over what Chrome's session
+ * storage can hold while it waits for you.
+ */
+async function packed(kind, data) {
+  const bytes = jsonBytes(data);
+  if (bytes > maxPayload(kind)) return { fail: await fail('request.too_large', { detail: `${megabytes(bytes)} of card data` }) };
+  const z = await packData(data);
+  if (z.length > SESSION_BUDGET_BYTES) return { fail: await fail('request.too_large', { detail: `${megabytes(bytes)} of card data` }) };
+  return { z };
+}
+
+/** Save the pending request; Chrome refusing it for size is "too large", not a crash. */
+async function hold(pending) {
+  try {
+    await chrome.storage.session.set({ pending });
+    return null;
+  } catch (e) {
+    if (/quota/i.test(String(e?.message || e))) return fail('request.too_large', { detail: 'over the companion’s storage limit' });
+    throw e;
+  }
+}
 
 async function appOrigin() {
   const { appOrigin: o } = await chrome.storage.local.get('appOrigin');
@@ -90,7 +117,8 @@ chrome.runtime.onStartup.addListener(() => { checkBridge(); });
 checkBridge();
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  route(msg, sender).then(sendResponse, async (e) => sendResponse(await fail('request.invalid', { detail: String(e?.message || e).slice(0, 200) })));
+  // An unexpected exception is the companion's own failure, never "the app sent a bad request".
+  route(msg, sender).then(sendResponse, async (e) => sendResponse(await fail('reader.crashed', { detail: shortDetail(e) })));
   return true;
 });
 
@@ -155,15 +183,20 @@ async function handleRequest(msg, sender, pinned, params) {
     throw e;
   }
   if (!await ours()) return fail('request.expired');   // the slot expired while reading
-  if (!read.ok || JSON.stringify(read.data).length > maxPayload(msg.kind)) {
+  const pack = read.ok ? await packed(msg.kind, read.data) : null;
+  if (!read.ok || pack.fail) {
     await chrome.storage.session.remove('pending');
-    return read.ok ? fail('request.invalid', { detail: 'too large' }) : read;
+    return read.ok ? pack.fail : read;
   }
 
-  const pending = { id: msg.id, kind: msg.kind, tabId: sender.tab.id, origin: pinned, data: read.data,
+  const pending = { id: msg.id, kind: msg.kind, tabId: sender.tab.id, origin: pinned, packed: pack.z,
     summary: summarize(msg.kind, read.data), created: Date.now(), windowId: null,
     stage: msg.kind === 'watched' ? 'confirm' : 'send' };
-  await chrome.storage.session.set({ pending });
+  const refused = await hold(pending);
+  if (refused) {
+    await chrome.storage.session.remove('pending');
+    return refused;
+  }
   const win = await chrome.windows.create({ url: chrome.runtime.getURL(`src/approve.html?id=${msg.id}`), type: 'popup', width: 620, height: 720, focused: true });
   pending.windowId = win.id;
   await chrome.storage.session.set({ pending });
@@ -207,7 +240,7 @@ async function fromOwnPage(msg) {
     if (msg.approve === 'read' && pending.stage === 'confirm') return readApproved(pending);
     if (msg.approve === true && (pending.stage || 'send') !== 'send') return fail('request.invalid');
     if (msg.approve === true && Date.now() - pending.created < APPROVAL_TTL_MS) {
-      const sent = await finish(pending, { ok: true, data: pending.data });
+      const sent = await finish(pending, { ok: true, data: await unpackData(pending.packed) });
       return sent ? { ok: true } : fail('request.tab_moved');
     }
     await finish(pending, await fail(msg.approve === false ? 'request.denied' : 'request.expired'));
@@ -223,11 +256,12 @@ async function fromOwnPage(msg) {
 async function readApproved(pending) {
   await chrome.storage.session.set({ pending: { ...pending, stage: 'reading', created: Date.now() } });
   const alive = async () => { const p = await pendingRequest(); return p?.id === pending.id && p.stage === 'reading'; };
-  const data = await readWatched(pending.data, { inject, loaded, alive });
+  const data = await readWatched(await unpackData(pending.packed), { inject, loaded, alive });
   const now = await pendingRequest();
   if (!now || now.id !== pending.id || now.stage !== 'reading') return { ok: false };
-  if (JSON.stringify(data).length > MAX_PAYLOAD_BYTES) { await finish(now, await fail('request.invalid', { detail: 'too large' })); return { ok: false }; }
-  await chrome.storage.session.set({ pending: { ...now, stage: 'send', data, summary: summarize('watched', data), created: Date.now() } });
+  const pack = await packed(pending.kind, data);
+  const refused = pack.fail || await hold({ ...now, stage: 'send', packed: pack.z, summary: summarize(pending.kind, data), created: Date.now() });
+  if (refused) { await finish(now, refused); return { ok: false }; }
   return { ok: true };
 }
 

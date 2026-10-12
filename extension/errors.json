@@ -16,10 +16,25 @@
       "message": "Your browser companion is older than this app.",
       "fix": "Download it again from Browser companion → Set up, replace the folder, and press Reload on chrome://extensions."
     },
+    "companion.data_invalid": {
+      "where": "app",
+      "message": "The companion sent data this app doesn’t recognise, so nothing was used.",
+      "fix": "Update the companion (Browser companion → Set up) and reload this page, then read again."
+    },
     "request.invalid": {
       "where": "extension",
       "message": "The app sent the companion a request it doesn’t understand.",
       "fix": "Update the companion and reload this page."
+    },
+    "request.too_large": {
+      "where": "extension",
+      "message": "That read is too big for the companion to hand over in one go. Nothing was sent.",
+      "fix": "Import one binder at a time, or export your collection from Moxfield as a file and use From an exported file."
+    },
+    "reader.crashed": {
+      "where": "extension",
+      "message": "The companion ran into an unexpected problem and stopped. Nothing was sent.",
+      "fix": "Try again. If it keeps happening, reload the companion in chrome://extensions and report the code below."
     },
     "request.busy": {
       "where": "extension",

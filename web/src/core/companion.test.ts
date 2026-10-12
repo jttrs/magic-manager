@@ -80,7 +80,15 @@ describe('request', () => {
     const p = request(win, 'cart', {}, { catalog });
     const id = sent[0].data.id;
     deliver({ channel: CHANNEL, from: 'companion', type: 'result', id, ok: true, data: { items: [{ quantity: 'lots' }], warnings: [] } });
-    await expect(p).rejects.toMatchObject({ code: 'request.invalid' });
+    await expect(p).rejects.toMatchObject({ code: 'companion.data_invalid' });
+  });
+
+  it('carries a short detail with a failure (shown under the message)', async () => {
+    const { win, sent, deliver } = fakeWindow();
+    const p = request(win, 'moxfield_collection', { what: 'collection' }, { catalog });
+    deliver({ channel: CHANNEL, from: 'companion', type: 'ack', id: sent[0].data.id, ok: false, code: 'request.too_large', message: 'Too big.', detail: `  ${'x'.repeat(400)} ` });
+    await expect(p).rejects.toBeInstanceOf(CompanionError);
+    await expect(p).rejects.toMatchObject({ code: 'request.too_large', detail: 'x'.repeat(160) });
   });
 
   it('asks for watched pages by URL and validates the readings', async () => {
@@ -95,7 +103,7 @@ describe('request', () => {
     await expect(p).resolves.toEqual(data);
     const q = request(win, 'watched', { urls }, { catalog });
     deliver({ channel: CHANNEL, from: 'companion', type: 'result', id: sent[1].data.id, ok: true, data: { ...data, urls: [{ url: 'http://x', store: 'a', open: true }] } });
-    await expect(q).rejects.toMatchObject({ code: 'request.invalid' });   // only https pages
+    await expect(q).rejects.toMatchObject({ code: 'companion.data_invalid' });   // only https pages
   });
 
   it('times out as not installed when nothing answers', async () => {

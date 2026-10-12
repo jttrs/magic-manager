@@ -61,12 +61,12 @@ export function useCompanion(): CompanionState {
 }
 
 /** A failure's message, its fix, its code and (server errors) the request ref to quote. */
-export function errorText(e: unknown): { message: string; fix: string | null; code: string | null; ref: string | null } {
-  if (e instanceof CompanionError) return { message: e.message, fix: e.fix, code: e.code, ref: null };
+export function errorText(e: unknown): { message: string; fix: string | null; code: string | null; ref: string | null; detail: string | null } {
+  if (e instanceof CompanionError) return { message: e.message, fix: e.fix, code: e.code, ref: null, detail: e.detail };
   if (e instanceof ApiError) {
     const d = e.detail as { fix?: unknown } | null | undefined;
     const fix = d && typeof d === 'object' && typeof d.fix === 'string' ? d.fix : null;
-    return { message: e.message, fix, code: e.code, ref: e.ref };
+    return { message: e.message, fix, code: e.code, ref: e.ref, detail: null };
   }
-  return { message: (e as Error)?.message || 'Something went wrong.', fix: null, code: null, ref: null };
+  return { message: (e as Error)?.message || 'Something went wrong.', fix: null, code: null, ref: null, detail: null };
 }

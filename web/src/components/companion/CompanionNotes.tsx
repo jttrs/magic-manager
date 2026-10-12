@@ -3,14 +3,14 @@ import { errorText } from '../../app/useCompanion';
 
 /** A companion / cart failure: what happened, what to do next, and the code to quote when reporting it. */
 export function FailureNote({ error }: { error: unknown }) {
-  const { message, fix, code, ref } = errorText(error);
+  const { message, fix, code, ref, detail } = errorText(error);
   // Your own "Don't send" is a choice, not a failure.
   const chose = code === 'request.denied';
   return (
     <div role={chose ? 'status' : 'alert'} className="flex flex-col gap-0.5 text-md leading-relaxed">
       <p className={chose ? 'text-ink' : 'text-danger'}>{message}</p>
       {fix && <p className="text-ink">{fix}</p>}
-      {(code || ref) && <p className="text-xs tabular text-ink-muted">{[code && `Code ${code}`, ref && `ref ${ref}`].filter(Boolean).join(' · ')}</p>}
+      {(code || ref || detail) && <p className="text-xs tabular text-ink-muted">{[detail, code && `Code ${code}`, ref && `ref ${ref}`].filter(Boolean).join(' · ')}</p>}
     </div>
   );
 }
