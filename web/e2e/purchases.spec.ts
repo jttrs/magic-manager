@@ -95,6 +95,14 @@ test('Orders list: totals for every order, and Paid / Worth / gain on each row',
   await expect(row).toContainText('$12.50');
   await expect(row).toContainText('+$2.50');
   await expect(list.getByRole('button', { name: /MP-222/ })).toContainText('−$5.00');
+
+  // The Purchase history tab is the way back to the timeline: it drops the orders mode and the open order.
+  await list.getByRole('button', { name: /Mana Pool order #MP-111/ }).click();
+  await expect(page).toHaveURL(/order=/);
+  await tabs.getByRole('link', { name: 'Purchase history' }).click();
+  await expect(page).not.toHaveURL(/orders=|order=/);
+  await expect(tabs.getByRole('link', { name: 'Purchase history' })).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('heading', { level: 2, name: 'Find' })).toBeVisible();
 });
 
 test('reading orders: list, already-read marked, the chosen ones are read and saved', async ({ page }) => {

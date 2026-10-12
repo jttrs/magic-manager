@@ -8,10 +8,12 @@ import { useSyncExternalStore } from 'react';
 export type MissingMeans = 'printing' | 'card';
 const KEY = 'mm.collection.missingMeans';
 const listeners = new Set<() => void>();
-/** Fallback when storage is blocked: the choice lasts until reload. */
+/** Fallback when storage can't be written (blocked or full): the choice lasts until reload. */
 let memory: MissingMeans = 'printing';
+let persisted = true;
 
-function read(): MissingMeans {
+export function readMissingMeans(): MissingMeans {
+  if (!persisted) return memory;
   try {
     return localStorage.getItem(KEY) === 'card' ? 'card' : 'printing';
   } catch {
@@ -31,10 +33,13 @@ export function setMissingMeans(v: MissingMeans): void {
   try {
     if (v === 'card') localStorage.setItem(KEY, v);
     else localStorage.removeItem(KEY);
-  } catch { /* storage blocked: `memory` holds it */ }
+    persisted = true;
+  } catch {
+    persisted = false; // `memory` holds it
+  }
   for (const l of listeners) l();
 }
 
 export function useMissingMeans(): MissingMeans {
-  return useSyncExternalStore(subscribe, read, () => 'printing');
+  return useSyncExternalStore(subscribe, readMissingMeans, () => 'printing');
 }
