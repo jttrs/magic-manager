@@ -3,6 +3,7 @@ import { Dialog } from 'radix-ui';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useJob, type JobLive } from '../../app/useJob';
 import { Button } from '../../components/Button';
+import { ProgressRule } from '../../components/ProgressRule';
 import { fmtCount, fmtInt, fmtUsd } from '../../core/format';
 import { confirmed, coveragePhase, productMeta, readNotMine, rememberNotMine, scanFrom, withPick, type CoverageScan } from '../../core/trueup';
 
@@ -99,8 +100,8 @@ function Review({ onClose, onBusy }: { onClose: () => void; onBusy: (busy: boole
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-        {phase === 'scan' && !failure && <Progress live={scanJob.live} label="Checking products" />}
-        {phase === 'record' && !failure && <Progress live={recordJob.live} label="Recording products" />}
+        {phase === 'scan' && !failure && <Progress live={scanJob.live} label="Checking products" verb="Checking" />}
+        {phase === 'record' && !failure && <Progress live={recordJob.live} label="Recording products" verb="Recording" />}
         {failure && (
           <p role="alert" className="text-md text-danger">
             {failure}{' '}
@@ -197,24 +198,10 @@ function Review({ onClose, onBusy }: { onClose: () => void; onBusy: (busy: boole
   );
 }
 
-function Progress({ live, label }: { live: JobLive | null; label: string }) {
-  const done = live?.done ?? 0;
-  const total = live?.total ?? null;
+function Progress({ live, label, verb }: { live: JobLive | null; label: string; verb: string }) {
   return (
-    <div role="status" aria-live="polite" className="flex flex-col gap-1.5">
-      <p className="flex items-baseline gap-2 text-sm text-ink-muted">
-        {total ? (
-          <>
-            <span className="tabular">{label} · {fmtInt(done)} of {fmtInt(total)}</span>
-            {live?.log.at(-1)?.msg && <span className="min-w-0 truncate">· {live.log.at(-1)!.msg}</span>}
-          </>
-        ) : (
-          <span>{live?.log.at(-1)?.msg ?? `${label}…`}</span>
-        )}
-      </p>
-      <div className="h-[3px] overflow-hidden rounded-pill bg-paper-sunk" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={total ?? 0} aria-valuenow={done}>
-        <div className="h-full rounded-pill bg-accent transition-[width] duration-300 ease-guide" style={{ width: total ? `${(done / total) * 100}%` : '4%' }} />
-      </div>
+    <div className="flex flex-col gap-1.5">
+      <ProgressRule label={label} verb={verb} done={live?.done ?? 0} total={live?.total ?? null} message={live?.log.at(-1)?.msg} />
       <p className="text-xs text-ink-muted">The first scan reads every product’s list and can take a few minutes; later scans take under a minute.</p>
     </div>
   );

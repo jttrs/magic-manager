@@ -51,7 +51,7 @@ export function Segmented<T extends string>({ value, options, onChange, label, s
 
 /** Segmented look, toggle behavior: each segment switches on/off independently
  *  (e.g. Show: Owned | Missing — both, either, or neither). Optional counts. */
-export function SegmentedToggles<T extends string>({ value, options, onChange, label, showLabel = false }: { value: T[]; options: (Opt<T> & { count?: number })[]; onChange: (v: T[]) => void; label: string; showLabel?: boolean }) {
+export function SegmentedToggles<T extends string>({ value, options, onChange, label, showLabel = false, labelExtra }: { value: T[]; options: (Opt<T> & { count?: number })[]; onChange: (v: T[]) => void; label: string; showLabel?: boolean; labelExtra?: ReactNode }) {
   const id = useId();
   const group = (
     <ToggleGroup.Root
@@ -76,7 +76,10 @@ export function SegmentedToggles<T extends string>({ value, options, onChange, l
   if (!showLabel) return group;
   return (
     <div className="flex flex-col gap-1.5">
-      <span id={id} className="text-sm voice-semi text-on-chrome-muted">{label}</span>
+      <span className="flex items-center gap-1.5">
+        <span id={id} className="text-sm voice-semi text-on-chrome-muted">{label}</span>
+        {labelExtra}
+      </span>
       {group}
     </div>
   );

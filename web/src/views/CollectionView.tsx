@@ -16,6 +16,9 @@ import { ChecklistActions, ChecklistLeaveGuard, ChecklistNotes, ChecklistTable }
 import { useChecklist } from './collection/useChecklist';
 import { SceneDetail, SceneMeta } from './collection/SceneHead';
 import { useFeature } from '../app/features';
+import { useSettingsSection } from '../app/settings';
+import { SettingsChoice, SettingsRow } from '../components/settings/SettingsControls';
+import { setMissingMeans, useMissingMeans, type MissingMeans } from './collection/missingMeans';
 import { Button } from '../components/Button';
 import { MultiSelect } from '../components/MultiSelect';
 import { Segmented, SegmentedToggles, SideSection, TextField } from '../components/Sidebar';
@@ -35,6 +38,10 @@ import { decodeSort, encodeSort, leadSection, sortBy, type SortRule } from '../c
 const route = getRouteApi('/collection');
 
 const LAST_FAMILIES = 'mm.collection.families';
+/** "Reset filters" clears what narrows the cards — the card-name search and every
+ *  Show filter except the set families you chose. How cards are arranged (sort,
+ *  view type) and what "missing" means (a Settings preference) are not filters,
+ *  so they stay put. */
 const RESET: Partial<CollectionSearch> = { show: [...SHOW], exclude: [], q: '', fn: [], src: [] };
 
 export function CollectionView() {
@@ -46,6 +53,28 @@ export function CollectionView() {
   const { selected, toggle, clear } = useSelection('collection');
   const hasScenes = (q.data?.scenes?.length ?? 0) > 0;
   const rules = useMemo(() => activeRules(decodeSort(search.sort, COLLECTION_SORT), hasScenes), [search.sort, hasScenes]);
+  const missingMeans = useMissingMeans();
+  const gaps = missingMeans === 'card';
+  const filtered = search.exclude.length > 0 || search.show.length < 2 || Boolean(search.q) || search.fn.length > 0 || search.src.length > 0;
+  const settings = useMemo(() => ({
+    id: 'collection',
+    title: 'Collection',
+    content: (
+      <SettingsRow
+        label="Missing means"
+        description={<><b>This printing</b>: each exact printing you don’t have — what a collector is missing. <b>The card</b>: only cards you own in no printing from any set — the gaps for deck building.</>}
+        control={(ids) => (
+          <SettingsChoice<MissingMeans>
+            {...ids}
+            value={missingMeans}
+            onChange={setMissingMeans}
+            options={[{ value: 'printing', label: 'This printing' }, { value: 'card', label: 'The card' }]}
+          />
+        )}
+      />
+    ),
+  }), [missingMeans]);
+  useSettingsSection(settings);
 
   // Default scope: the families you last looked at (first visit opens the picker).
   useEffect(() => {
@@ -56,7 +85,7 @@ export function CollectionView() {
     }
   }, [search.families, navigate]);
 
-  const view = useMemo(() => (q.data ? buildView(q.data, search, rules) : null), [q.data, search, rules]);
+  const view = useMemo(() => (q.data ? buildView(q.data, { ...search, gaps }, rules) : null), [q.data, search, gaps, rules]);
   const counts = useMemo(() => (q.data ? traitCounts(q.data.cards) : null), [q.data]);
   const included = (g: TraitGroup) => traitsIn(g).map((t) => t.key).filter((k) => !search.exclude.includes(k));
   /** A group's options present in the data (or currently excluded), with counts. */
@@ -93,11 +122,14 @@ export function CollectionView() {
 
   const sidebar = (
     <>
-      <SideSection title="Scope">
+      <SideSection title="Find">
+        <TextField name="q" label="Card name" value={search.q} placeholder="e.g. Cloud…" onChange={(qv) => set({ q: qv })} />
+      </SideSection>
+      <SideSection title="Show">
         {fams.isPending ? (
           <p role="status" className="text-sm text-on-chrome-muted">Loading your set families…</p>
         ) : fams.isError ? (
-          <p className="text-sm text-danger">Couldn’t load families: {(fams.error as Error).message}</p>
+          <p role="alert" className="text-sm text-danger">Couldn’t load families: {(fams.error as Error).message}</p>
         ) : (
           <MultiSelect
             label="Set families"
@@ -107,11 +139,17 @@ export function CollectionView() {
             options={fams.data.map((f) => ({ value: f.code, label: f.name }))}
           />
         )}
-      </SideSection>
-      <SideSection title="Show">
         <SegmentedToggles
           label="Cards"
           showLabel
+          labelExtra={
+            <InfoTip label="What does missing mean?">
+              {gaps
+                ? <>Missing shows only cards you own in <b>no printing</b> from any set — the gaps for deck building.</>
+                : <>Missing shows each exact <b>printing</b> you don’t have — what a collector is missing.</>}{' '}
+              Change this in Settings → Collection.
+            </InfoTip>
+          }
           value={search.show}
           onChange={(show) => set({ show: SHOW.filter((s) => show.includes(s)) })}
           options={[
@@ -119,20 +157,6 @@ export function CollectionView() {
             { value: 'missing', label: 'Missing', count: view?.stats.missing },
           ]}
         />
-        {search.show.includes('missing') && (
-          <Segmented
-            label="Missing means"
-            showLabel
-            labelExtra={
-              <InfoTip label="What does missing mean?">
-                <b>This printing</b> (default): each exact printing you don’t have — what a collector is missing. <b>The card</b>: only cards you have in no printing from any set — the gaps for deck building.
-              </InfoTip>
-            }
-            value={search.gaps ? 'card' : 'printing'}
-            onChange={(v) => set({ gaps: v === 'card' })}
-            options={[{ value: 'printing', label: 'This printing' }, { value: 'card', label: 'The card' }]}
-          />
-        )}
         {srcOptions && (
           <MultiSelect
             label="Acquired from"
@@ -201,14 +225,13 @@ export function CollectionView() {
             options={fnOptions}
           />
         )}
-        {(search.exclude.length > 0 || search.show.length < 2 || search.q || search.fn.length > 0 || search.src.length > 0) && (
+        {filtered && (
           <button type="button" onClick={() => set(RESET)} className="self-start cursor-pointer text-sm text-on-chrome-muted underline hover:text-on-chrome">Reset filters</button>
         )}
       </SideSection>
       <SideSection title="Arrange">
         <SortBuilder keys={collectionSortKeys(hasScenes)} rules={rules} presets={collectionPresets(hasScenes)} onChange={(r) => set({ sort: encodeSort(r, COLLECTION_SORT) })} />
         <Segmented label="View type" showLabel value={search.view} onChange={(view) => set({ view })} options={[{ value: 'grid', label: 'Grid' }, { value: 'list', label: 'List' }]} />
-        <TextField name="q" label="Card name" value={search.q} placeholder="e.g. Cloud…" onChange={(qv) => set({ q: qv })} />
       </SideSection>
       <SideSection title="Buy">
         <CopyTargets
@@ -257,6 +280,7 @@ export function CollectionView() {
       <GuideSheet
         nav={<CollectionTabs />}
         title="Collection"
+        hideTitle
         actions={
           <span role="toolbar" aria-label="Collection actions" className="flex items-center gap-0.5">
             {counting && <ChecklistActions checklist={checklist} />}
@@ -276,7 +300,7 @@ export function CollectionView() {
           counting
             ? summaryLine(checklist.summary, checklist.saved)
             : s
-            ? `${famN} set ${famN === 1 ? 'family' : 'families'} · showing ${fmtInt(s.printings)} printings: ${fmtInt(s.owned)} owned (${fmtInt(s.copies)} copies), ${search.gaps && search.show.includes('missing') ? `${fmtInt(s.missingCards)} cards you own in no printing · ${fmtUsd(s.missingCardsUsd)}${s.missingCardsUnpriced ? '+' : ''} at the cheapest printing of each` : `${fmtInt(s.missing)} missing · ${fmtUsd(s.missingUsd)}${s.missingUnpriced ? '+' : ''} to complete`}${q.data?.skipped?.length ? ` · skipped ${q.data.skipped.join(', ')}` : ''}`
+            ? `${famN} set ${famN === 1 ? 'family' : 'families'} · showing ${fmtInt(s.printings)} printings: ${fmtInt(s.owned)} owned (${fmtInt(s.copies)} copies), ${gaps && search.show.includes('missing') ? `${fmtInt(s.missingCards)} cards you own in no printing · ${fmtUsd(s.missingCardsUsd)}${s.missingCardsUnpriced ? '+' : ''} at the cheapest printing of each` : `${fmtInt(s.missing)} missing · ${fmtUsd(s.missingUsd)}${s.missingUnpriced ? '+' : ''} to complete`}${q.data?.skipped?.length ? ` · skipped ${q.data.skipped.join(', ')}` : ''}`
             : undefined
         }
       >
@@ -297,7 +321,7 @@ function typesSummary(exclude: readonly string[]): string {
 type Built = { cards: GuideCard[]; shown: CollectionCardOut[]; sections: GuideSection[]; byId: Map<string, CollectionCardOut>; stats: ReturnType<typeof collectionStats> };
 
 /** Filter → map → sort → section (set-family head, then the lead sort key's groups). */
-function buildView(data: CollectionOut, search: CollectionSearch, rules: SortRule<CollectionSortKey>[]): Built {
+function buildView(data: CollectionOut, search: CollectionSearch & { gaps: boolean }, rules: SortRule<CollectionSortKey>[]): Built {
   const shown = filterCollection(data.cards, search, sourceKinds(data.sources));
   const fnLabels = Object.fromEntries((data.functions ?? []).map((r) => [r.key, r.label]));
   const ranks = sceneRanks(data.scenes ?? []);

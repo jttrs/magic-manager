@@ -220,7 +220,8 @@ function ReadOrders({ onClose, onReview }: { onClose: () => void; onReview: (pur
               </>
             )}
             {awaiting != null && <AwaitingNote summary={awaiting} />}
-            {progress && <p role="status" className="text-sm text-ink-muted">{progress}</p>}
+            {/* Always mounted so screen readers announce each batch as it changes. */}
+            <p role="status" aria-live="polite" className={progress ? 'text-sm text-ink-muted' : 'sr-only'}>{progress}</p>
             {readOrders.isError && <FailureNote error={readOrders.error} />}
           </div>
         )}

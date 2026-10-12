@@ -1,26 +1,29 @@
-import { Link } from '@tanstack/react-router';
+import { useFeature } from '../../app/features';
+import { SectionTabs, type SectionTab } from '../../components/SectionTabs';
+import type { HistorySearch } from '../../core/history';
 
-const TABS = [
-  { to: '/collection', label: 'Cards', exact: true },
-  { to: '/collection/history', label: 'Purchase history', exact: false },
-] as const;
-
-/** Collection's sheets: the cards you own and how they came in. */
-export function CollectionTabs() {
-  return (
-    <nav aria-label="Collection views" className="flex gap-5 border-b border-rule px-5 pt-2">
-      {TABS.map((t) => (
-        <Link
-          key={t.to}
-          to={t.to}
-          activeOptions={{ exact: t.exact, includeSearch: false }}
-          className="relative -mb-px py-1.5 text-sm voice-semi uppercase tracking-[0.06em] text-ink-muted no-underline transition-colors ease-guide hover:text-ink
-                     after:absolute after:inset-x-0 after:bottom-0 after:h-[3px] after:rounded-pill after:bg-transparent
-                     data-[status=active]:text-ink data-[status=active]:after:bg-accent"
-        >
-          {t.label}
-        </Link>
-      ))}
-    </nav>
-  );
+/** Collection's modes: the cards you own, how they came in, and (with the
+ *  `purchases` feature) the store orders behind them. Purchase history and
+ *  Store orders share one route, so the history view says which is current. */
+export function CollectionTabs({ orders }: { orders?: boolean }) {
+  const purchases = useFeature('purchases');
+  const onHistory = orders !== undefined;
+  const tabs: SectionTab[] = [
+    { id: 'cards', label: 'Cards', link: { to: '/collection', activeOptions: { exact: true, includeSearch: false } } },
+    {
+      id: 'history',
+      label: 'Purchase history',
+      link: { to: '/collection/history', search: onHistory ? (s: HistorySearch) => ({ ...s, orders: false, order: undefined }) : {} } as SectionTab['link'],
+      active: onHistory && !orders,
+    },
+  ];
+  if (purchases) {
+    tabs.push({
+      id: 'orders',
+      label: 'Store orders',
+      link: { to: '/collection/history', search: onHistory ? (s: HistorySearch) => ({ ...s, orders: true, entry: undefined }) : { orders: true } } as SectionTab['link'],
+      active: onHistory && orders,
+    });
+  }
+  return <SectionTabs label="Collection views" tabs={tabs} />;
 }

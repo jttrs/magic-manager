@@ -161,6 +161,7 @@ export function DecksView() {
     <ViewLayout label="Deck controls" summary={`${fmtInt(shown.length)} recipes · grouped by ${DECK_GROUP_LABEL[search.group].toLowerCase()}`} sidebar={sidebar}>
       <GuideSheet
         title="Decks"
+        hideTitle
         summary={<span role="status" aria-live="polite">{summary}</span>}
         actions={
           <span role="toolbar" aria-label="Deck list actions" className="flex items-center gap-0.5">
