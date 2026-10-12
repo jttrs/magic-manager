@@ -43,7 +43,7 @@ export const compareSearch = z.object({
   tf: z.enum(RANK_TIMEFRAMES).catch('week').default('week'),
   own: z.enum(RANK_OWN).catch('all').default('all'),
   rq: z.string().catch('').default(''),
-  rview: z.enum(['list', 'grid']).catch('list').default('list'),
+  rview: z.enum(['grid', 'list']).catch('grid').default('grid'),
   a: z.string().optional().catch(undefined),
   b: z.string().optional().catch(undefined),
   /** Explore role; unset = commander when A can lead, else card. */

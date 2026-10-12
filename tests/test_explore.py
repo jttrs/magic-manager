@@ -44,7 +44,7 @@ def seeded(seed_cards, make_card, monkeypatch):
                          (edhrec.slugify(name), json.dumps(page)))
         conn.commit()
     monkeypatch.setattr(edhrec, "resolve_names_to_oracle",
-                        lambda names: {n.casefold(): {"oracle_id": OID.get(n)} for n in names if n in OID})
+                        lambda names, **_: {n.casefold(): {"oracle_id": OID.get(n)} for n in names if n in OID})
     inventory.inventory_add(BIRD, "nonfoil", 2)
 
 

@@ -45,6 +45,11 @@ export type GuideCard = {
   /** Scene/poster run this printing belongs to (collection) and its order; see core/scenes.ts. */
   scene?: string | null;
   sceneRank?: number | null;
+  /** Partner pairing ("Kraum // Tymna"): the second card, drawn behind the first.
+   *  The pair's own `scryfallId`/`setCode`/`cn` are the FIRST card's printing. */
+  partner?: { name: string; image: string | null; href: string | null; scryfallId: string | null; setCode: string | null; cn: string | null } | null;
+  /** Mana cost (Scryfall `{2}{U}{R}`); the first card's for a pair. */
+  manaCost?: string | null;
   /** Inspector facts. */
   typeLine?: string | null;
   prices?: { nonfoil: number | null; foil: number | null };

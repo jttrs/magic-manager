@@ -6,7 +6,7 @@ import type { HoldingsOut } from '../core/api';
 import { fmtInt, fmtUsd } from '../core/format';
 import { tcgplayerSearch } from '../core/surf';
 import { rarityLetter, type GuideCard } from '../core/guideCard';
-import type { ComponentType, SVGProps } from 'react';
+import { useId, type ComponentType, type SVGProps } from 'react';
 import { Holdings, Tags } from './CardFace';
 import { CheapestPrinting } from './CheapestPrinting';
 import { ExploreMark, ScryfallMark, TcgplayerMark } from './StoreMarks';
@@ -16,6 +16,7 @@ const RARITY_NAME: Record<string, string> = { common: 'Common', uncommon: 'Uncom
 const large = (url: string) => url.replace('/normal/', '/large/');
 /** Inspect one card: large art, then its facts and outbound links — never over the art. */
 export function CardInspector({ card, onClose }: { card: GuideCard | null; onClose: () => void }) {
+  const parts = card ? pairParts(card) : null;
   return (
     <Dialog.Root open={card != null} onOpenChange={(o) => !o && onClose()}>
       <Dialog.Portal>
@@ -23,8 +24,12 @@ export function CardInspector({ card, onClose }: { card: GuideCard | null; onClo
         {card && (
           <Dialog.Content className="paper-grain fixed left-1/2 top-1/2 z-50 flex max-h-[94dvh] w-[min(52rem,calc(100vw-1rem))] -translate-x-1/2 -translate-y-1/2 flex-col gap-5 overflow-y-auto rounded-sm bg-paper p-5 text-ink shadow-[0_24px_60px_-24px_var(--theme-scrim)] focus:outline-none sm:flex-row">
             <div className="mx-auto w-full max-w-[22rem] shrink-0 sm:mx-0 sm:w-[min(22rem,45%)]">
-              {card.image ? (
-                <img src={large(card.image)} alt={card.name} width={672} height={936} className="aspect-[488/680] h-auto w-full rounded-[4.5%/3.2%] bg-paper-sunk shadow-[0_10px_28px_-14px_var(--theme-scrim)]" />
+              {parts ? (
+                <div className="grid grid-cols-2 gap-2">
+                  {parts.map((p) => <BigArt key={p.name} image={p.image} name={p.name} />)}
+                </div>
+              ) : card.image ? (
+                <BigArt image={card.image} name={card.name} />
               ) : (
                 <div className="grid aspect-[488/680] w-full place-items-center rounded-sm border border-rule bg-paper-sunk p-4 text-center text-sm text-ink-muted">{card.name}</div>
               )}
@@ -39,13 +44,13 @@ export function CardInspector({ card, onClose }: { card: GuideCard | null; onClo
               </div>
 
               <dl className="grid grid-cols-[auto_1fr] gap-x-5 gap-y-1.5 text-sm">
-                {card.setCode && (
+                {card.setCode && !parts && (
                   <>
                     <dt className="text-ink-muted">Printing</dt>
                     <dd className="tabular">{[card.setCode, card.cn && `#${card.cn}`, card.rarity && (RARITY_NAME[card.rarity] ?? rarityLetter(card.rarity))].filter(Boolean).join(' · ')}</dd>
                   </>
                 )}
-                {card.cmc != null && (
+                {card.cmc != null && !parts && (
                   <>
                     <dt className="text-ink-muted">Mana value</dt>
                     <dd className="tabular">{card.cmc}</dd>
@@ -53,7 +58,9 @@ export function CardInspector({ card, onClose }: { card: GuideCard | null; onClo
                 )}
                 <dt className="text-ink-muted">Price</dt>
                 <dd className="flex gap-4 tabular">
-                  {card.prices ? (
+                  {parts ? (
+                    <span>{fmtUsd(card.price)} <span className="text-ink-muted">both cards · cheapest printing of each</span></span>
+                  ) : card.prices ? (
                     <>
                       {card.prices.nonfoil != null && <span>{fmtUsd(card.prices.nonfoil)} <span className="text-ink-muted">nonfoil</span></span>}
                       {card.prices.foil != null && <span>{fmtUsd(card.prices.foil)} <span className="text-ink-muted">✦ foil</span></span>}
@@ -63,7 +70,7 @@ export function CardInspector({ card, onClose }: { card: GuideCard | null; onClo
                     fmtUsd(card.price)
                   )}
                 </dd>
-                {card.scryfallId && <CheapestPrinting key={card.scryfallId} scryfallId={card.scryfallId} setCode={card.setCode} cn={card.cn} />}
+                {card.scryfallId && !parts && <CheapestPrinting key={card.scryfallId} scryfallId={card.scryfallId} setCode={card.setCode} cn={card.cn} />}
                 {card.owned && !card.scryfallId && (
                   <>
                     <dt className="text-ink-muted">Owned</dt>
@@ -87,13 +94,17 @@ export function CardInspector({ card, onClose }: { card: GuideCard | null; onClo
                 </ul>
               )}
 
-              {card.scryfallId && <YourCopies scryfallId={card.scryfallId} onLeave={onClose} />}
+              {parts
+                ? parts.map((p) => <PairPart key={p.name} part={p} onLeave={onClose} />)
+                : card.scryfallId && <YourCopies scryfallId={card.scryfallId} onLeave={onClose} />}
 
               <nav aria-labelledby="inspect-view-on" className="mt-auto flex flex-col gap-1 pt-2">
                 <span id="inspect-view-on" className="text-xs voice-semi text-ink-muted">View on</span>
                 <div className="flex flex-wrap gap-x-4 gap-y-1">
                   {card.href && <OutLink href={card.href} label="Scryfall" Mark={ScryfallMark} />}
-                  <OutLink href={tcgplayerSearch(card.name)} label="TCGplayer" Mark={TcgplayerMark} />
+                  {parts
+                    ? parts.map((p) => <OutLink key={p.name} href={tcgplayerSearch(p.name)} label={`TCGplayer · ${p.name.split(',')[0]}`} Mark={TcgplayerMark} />)
+                    : <OutLink href={tcgplayerSearch(card.name)} label="TCGplayer" Mark={TcgplayerMark} />}
                 </div>
                 <Link
                   to="/explore"
@@ -110,6 +121,40 @@ export function CardInspector({ card, onClose }: { card: GuideCard | null; onClo
         )}
       </Dialog.Portal>
     </Dialog.Root>
+  );
+}
+
+type Part = { name: string; image: string | null; scryfallId: string | null; setCode: string | null; cn: string | null };
+
+/** A partner pairing's two cards, each with its own printing (the pair's own
+ *  printing fields are the first card's); null for a single card. */
+function pairParts(card: GuideCard): Part[] | null {
+  if (!card.partner) return null;
+  const lead = card.name.split(' // ')[0];
+  return [{ name: lead, image: card.image, scryfallId: card.scryfallId ?? null, setCode: card.setCode, cn: card.cn }, card.partner];
+}
+
+function BigArt({ image, name }: { image: string | null; name: string }) {
+  if (!image) return <div className="grid aspect-[488/680] w-full place-items-center rounded-sm border border-rule bg-paper-sunk p-4 text-center text-sm text-ink-muted">{name}</div>;
+  return <img src={large(image)} alt={name} width={672} height={936} className="aspect-[488/680] h-auto w-full rounded-[4.5%/3.2%] bg-paper-sunk shadow-[0_10px_28px_-14px_var(--theme-scrim)]" />;
+}
+
+/** One card of a partner pairing: its printing, cheapest printing and your copies. */
+function PairPart({ part, onLeave }: { part: Part; onLeave: () => void }) {
+  return (
+    <section aria-label={part.name} className="flex flex-col gap-2">
+      <h3 className="text-md voice-semi font-medium text-ink">{part.name}</h3>
+      <dl className="grid grid-cols-[auto_1fr] gap-x-5 gap-y-1.5 text-sm">
+        {part.setCode && (
+          <>
+            <dt className="text-ink-muted">Printing</dt>
+            <dd className="tabular">{[part.setCode, part.cn && `#${part.cn}`].filter(Boolean).join(' · ')}</dd>
+          </>
+        )}
+        {part.scryfallId && <CheapestPrinting scryfallId={part.scryfallId} setCode={part.setCode} cn={part.cn} />}
+      </dl>
+      {part.scryfallId && <YourCopies scryfallId={part.scryfallId} onLeave={onLeave} />}
+    </section>
   );
 }
 
@@ -140,9 +185,10 @@ const KIND_NOTE: Record<string, string> = { pool: 'card pool', deck: 'precon dec
  *  decks holding it, where the copies came from, and other printings you own. */
 function YourCopies({ scryfallId, onLeave }: { scryfallId: string; onLeave: () => void }) {
   const q = useQuery(holdingsQuery(scryfallId));
+  const id = useId();
   return (
-    <section aria-labelledby="inspect-copies" className="flex flex-col gap-2">
-      <h3 id="inspect-copies" className="border-b border-rule pb-1 text-sm voice-semi font-medium text-ink">Your copies</h3>
+    <section aria-labelledby={id} className="flex flex-col gap-2">
+      <h3 id={id} className="border-b border-rule pb-1 text-sm voice-semi font-medium text-ink">Your copies</h3>
       {q.isPending ? (
         <p role="status" className="text-sm text-ink-muted">Checking your collection…</p>
       ) : q.isError ? (

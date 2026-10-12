@@ -30,8 +30,16 @@ export const roleTags = (tags: readonly string[], offered: readonly string[]): s
 
 const fmtLift = (l: number | null | undefined) => (l == null ? null : `${l.toFixed(l >= 10 ? 0 : 2)}× lift`);
 
+/** EDHREC names a partner pairing "A // B"; the engine says when it is one (`facts.partner`). */
+const partnerNames = (name: string): [string, string] | null => {
+  const parts = name.split(' // ');
+  return parts.length === 2 ? [parts[0], parts[1]] : null;
+};
+
 /** Local card facts (display printing, cheapest price, owned/free) → the guide view-model. */
 export function fromFacts(name: string, slug: string, f: FactsOut): GuideCard {
+  const pair = f.partner ? partnerNames(name) : null;
+  const names = pair ?? [name];
   return {
     key: f.oracle_id ?? `slug:${slug}`,
     scryfallId: f.scryfall_id ?? null,
@@ -53,9 +61,17 @@ export function fromFacts(name: string, slug: string, f: FactsOut): GuideCard {
     owned: null,
     missing: false,
     tags: f.owned ? [`${f.owned} owned · ${f.free} free`] : [],
-    lines: { plain: `1 ${name}`, manapool: `1 ${name}`, tcgplayer: `1 ${name}` },
+    lines: {
+      plain: names.map((n) => `1 ${n}`).join('\n'),
+      manapool: names.map((n) => `1 ${n}`).join('\n'),
+      tcgplayer: names.map((n) => `1 ${n}`).join('\n'),
+    },
     typeLine: f.type_line ?? null,
-    prices: { nonfoil: f.lowest_usd ?? null, foil: null },
+    prices: f.partner ? undefined : { nonfoil: f.lowest_usd ?? null, foil: null },
+    manaCost: f.mana_cost ?? null,
+    partner: f.partner && pair
+      ? { name: pair[1], image: f.partner.image_uri ?? null, href: f.partner.scryfall_url ?? null, scryfallId: f.partner.scryfall_id ?? null, setCode: f.partner.set_code?.toUpperCase() ?? null, cn: f.partner.collector_number ?? null }
+      : null,
   };
 }
 

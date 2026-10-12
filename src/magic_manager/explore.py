@@ -11,7 +11,7 @@ Reads the cached ``edhrec_pages`` card page (synced once on demand).
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from . import db, edhrec, inventory, legality, scryfall_tags, sets, util
 
@@ -31,6 +31,7 @@ class Facts:
     oracle_id: str | None = None
     type_line: str | None = None
     cmc: float | None = None
+    mana_cost: str | None = None
     color_identity: list[str] = field(default_factory=list)
     lowest_usd: float | None = None
     scryfall_id: str | None = None
@@ -39,6 +40,10 @@ class Facts:
     collector_number: str | None = None
     owned: int = 0
     free: int = 0
+    # A partner pairing ("Kraum // Tymna"): these facts are the FIRST card's
+    # printing and type; ``partner`` is the second card's own facts. Price,
+    # colour identity and copies describe the PAIR (see :func:`pair_facts`).
+    partner: Facts | None = None
 
 
 @dataclass
@@ -125,13 +130,47 @@ def facts_for(oracle_ids: list[str]) -> dict[str, Facts]:
         ci = m.get("color_identity")
         mine = owned.get(oid, [])
         out[oid] = Facts(
-            oracle_id=oid, type_line=m.get("type_line"), cmc=m.get("cmc"),
+            oracle_id=oid, type_line=m.get("type_line"), cmc=m.get("cmc"), mana_cost=m.get("mana_cost") or None,
             color_identity=json.loads(ci) if isinstance(ci, str) and ci else (ci or []),
             lowest_usd=m.get("lowest_usd"), scryfall_id=p.get("scryfall_id"),
             image_uri=p.get("image_uri"), set_code=p.get("set_code"),
             collector_number=p.get("collector_number"),
             owned=sum(q for _, q in mine), free=sum(free.get(s, 0) for s, _ in mine),
         )
+    return out
+
+
+_WUBRG = "WUBRG"
+
+
+def pair_facts(a: Facts, b: Facts) -> Facts:
+    """Facts for a partner pairing: the first card's printing and type with the
+    second as ``partner``; colour identity is the union, the price is both
+    cheapest printings together (None unless both are priced), and copies
+    owned / free are the pairs you could put together (the fewer of the two).
+    ``oracle_id`` is None — the pair is two cards, not one."""
+    ci = sorted(set(a.color_identity) | set(b.color_identity), key=lambda c: (_WUBRG.find(c) % 6, c))
+    price = round(a.lowest_usd + b.lowest_usd, 2) if a.lowest_usd is not None and b.lowest_usd is not None else None
+    return replace(a, oracle_id=None, color_identity=ci, lowest_usd=price,
+                   owned=min(a.owned, b.owned), free=min(a.free, b.free), partner=b)
+
+
+def facts_by_name(names: list[str], *, local_only: bool = False) -> dict[str, Facts]:
+    """Local facts per CASEFOLDED card name, partner pairings included (EDHREC
+    names a pair "A // B"; both halves resolve and join via :func:`pair_facts`).
+    Unresolved names are absent. ``local_only`` never asks Scryfall."""
+    resolved = edhrec.resolve_names_to_oracle(names, local_only=local_only)
+    oids = [o for r in resolved.values() for o in [r.get("oracle_id"), *(p.get("oracle_id") for p in r.get("partners") or [])] if o]
+    facts = facts_for(oids)
+    out: dict[str, Facts] = {}
+    for n in dict.fromkeys(names):
+        r = resolved.get(n.casefold()) or {}
+        if r.get("oracle_id") and r["oracle_id"] in facts:
+            out[n.casefold()] = facts[r["oracle_id"]]
+        elif r.get("partners"):
+            a, b = (facts.get(p["oracle_id"]) for p in r["partners"])
+            if a and b:
+                out[n.casefold()] = pair_facts(a, b)
     return out
 
 
@@ -161,16 +200,18 @@ def card_profile(ref: str) -> CardProfile:
     similar_names = [n for n in (page.get("similar") or []) if isinstance(n, str)]
 
     names = [cv["name"] for cv, _ in raw_cmd + raw_co if cv.get("name")] + similar_names + [name]
-    resolved = edhrec.resolve_names_to_oracle(names)
-    oid_of = lambda n: (resolved.get(n.casefold()) or {}).get("oracle_id")  # noqa: E731
-    my_oid = oid_of(name) or (card or {}).get("oracle_id")
-    facts = facts_for([oid_of(n) for n in names if oid_of(n)] + ([my_oid] if my_oid else []))
+    by_name = facts_by_name(names)
+    mine = by_name.get(name.casefold())
+    my_oid = (mine.oracle_id if mine else None) or (card or {}).get("oracle_id")
+    if my_oid and not mine:
+        mine = facts_for([my_oid]).get(my_oid)
     blank = Facts()
+    fact = lambda n: by_name.get(n.casefold(), blank)  # noqa: E731
 
     def entry(cv: dict, group: str | None) -> Entry:
         n = cv["name"]
         num, pot = cv.get("num_decks"), cv.get("potential_decks")
-        return Entry(name=n, slug=cv.get("slug") or edhrec.slugify(n), facts=facts.get(oid_of(n) or "", blank),
+        return Entry(name=n, slug=cv.get("slug") or edhrec.slugify(n), facts=fact(n),
                      num_decks=num, potential_decks=pot, share=_pct(num, pot), lift=cv.get("lift"), group=group)
 
     summ = scryfall_tags.card_summaries([my_oid], limit=TAG_LIMIT).get(my_oid or "") if my_oid else None
@@ -178,7 +219,7 @@ def card_profile(ref: str) -> CardProfile:
     return CardProfile(
         name=page.get("header", name).removesuffix(" (Card)") or name,
         slug=edhrec.slugify(name),
-        facts=facts.get(my_oid or "", Facts(oracle_id=my_oid)),
+        facts=mine or Facts(oracle_id=my_oid),
         commander_eligible=bool(card) and legality.is_commander_eligible(card),
         num_decks=head.get("num_decks"), potential_decks=head.get("potential_decks"),
         salt=head.get("salt"),
@@ -186,7 +227,7 @@ def card_profile(ref: str) -> CardProfile:
         tags=[{"id": t.id, "slug": t.slug, "label": t.label} for t in summ.tags] if summ else [],
         commanders=[entry(cv, g) for cv, g in raw_cmd if cv.get("name")],
         coplayed=[entry(cv, g) for cv, g in raw_co if cv.get("name")],
-        similar=[Entry(name=n, slug=edhrec.slugify(n), facts=facts.get(oid_of(n) or "", blank)) for n in similar_names],
+        similar=[Entry(name=n, slug=edhrec.slugify(n), facts=fact(n)) for n in similar_names],
         deck_mix=[{"label": p.get("label"), "value": p.get("value")} for p in pie if p.get("value")],
     )
 
@@ -320,10 +361,13 @@ def ranking(scope: str = "commanders", timeframe: str = "week", *,
     if res is None:
         return Ranking(key=key, title=edhrec.ranking_title(key), cached=False, fetched_at=None, rows=[])
     facts = facts_for([r.oracle_id for r in res.rows if r.oracle_id])
+    # Partner pairings are stored with no oracle id; join both halves locally.
+    pair_names = [r.name for r in res.rows if not r.oracle_id and edhrec.partner_halves(r.name)]
+    pairs = facts_by_name(pair_names, local_only=True) if pair_names else {}
     return Ranking(
         key=key, title=res.name, cached=True, fetched_at=res.fetched_at,
         rows=[Ranked(rank=r.rank, name=r.name, slug=r.slug,
-                     facts=facts.get(r.oracle_id or "") or Facts(oracle_id=r.oracle_id),
+                     facts=facts.get(r.oracle_id or "") or pairs.get(r.name.casefold()) or Facts(oracle_id=r.oracle_id),
                      num_decks=r.num_decks, salt=r.salt, trend=r.trend_zscore)
               for r in res.rows],
     )

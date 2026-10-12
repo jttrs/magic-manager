@@ -15,6 +15,7 @@ const artCrop = (url: string) => url.replace('/normal/', '/art_crop/');
 const seen = new Set<string>();
 
 export function CardArt({ card, className = '', eager = false, crop = false }: { card: GuideCard; className?: string; eager?: boolean; crop?: boolean }) {
+  if (card.partner) return <PairArt card={card} partner={card.partner} className={className} eager={eager} crop={crop} />;
   if (!card.image) {
     return (
       <div className={`grid aspect-[488/680] place-items-center rounded-sm border border-rule bg-paper-sunk p-2 text-center text-xs text-ink-muted ${className}`}>
@@ -40,6 +41,32 @@ export function CardArt({ card, className = '', eager = false, crop = false }: {
       draggable={false}
       className={`aspect-[488/680] h-auto w-full rounded-[4.5%/3.2%] bg-paper-sunk ${className}`}
     />
+  );
+}
+
+/** A partner pairing: the first card in front, the second behind it, offset up
+ *  and to the right so its top and edge peek out — how the pair sits on a
+ *  table. Keeps the single card's footprint, so grids and thumbnails line up. */
+function PairArt({ card, partner, className, eager, crop }: { card: GuideCard; partner: NonNullable<GuideCard['partner']>; className: string; eager: boolean; crop: boolean }) {
+  const lead = { ...card, partner: null };
+  const back = { ...card, key: `${card.key}:partner`, name: partner.name, image: partner.image, partner: null };
+  if (crop) {
+    return (
+      <span role="img" aria-label={`${card.name}`} className={`relative block aspect-square w-full ${className}`}>
+        <span className="absolute right-0 top-0 w-[72%] overflow-hidden rounded-xs brightness-[0.82]"><CardArt card={back} crop /></span>
+        <span className="absolute bottom-0 left-0 w-[72%] overflow-hidden rounded-xs ring-1 ring-paper"><CardArt card={lead} crop /></span>
+      </span>
+    );
+  }
+  return (
+    <span role="img" aria-label={`${card.name}: two partner commanders`} className={`relative block aspect-[488/680] w-full rounded-[4.5%/3.2%] ${className}`}>
+      <span className="absolute right-0 top-0 w-[86%] brightness-[0.86] transition-[filter] duration-150 ease-guide group-hover/pair:brightness-100">
+        <CardArt card={back} eager={eager} />
+      </span>
+      <span className="absolute bottom-0 left-0 w-[86%] rounded-[4.5%/3.2%] shadow-[-2px_8px_18px_-8px_var(--theme-scrim)]">
+        <CardArt card={lead} eager={eager} />
+      </span>
+    </span>
   );
 }
 

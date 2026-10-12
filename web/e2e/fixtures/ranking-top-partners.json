@@ -1,0 +1,162 @@
+{
+ "scope": "commanders",
+ "timeframe": "week",
+ "filter": "",
+ "title": "Top commanders \u00b7 past week",
+ "cached": true,
+ "fetched_at": "2026-10-07T20:38:00+00:00",
+ "rows": [
+  {
+   "rank": 1,
+   "name": "Jace, Multiverse Architect",
+   "slug": "jace-multiverse-architect",
+   "facts": {
+    "oracle_id": "3321c134-bf5b-4f63-8035-fca0bbdfa86b",
+    "type_line": "Legendary Planeswalker \u2014 Jace",
+    "cmc": 5.0,
+    "mana_cost": "{1}{W}{U}{B}{R}",
+    "color_identity": [
+     "B",
+     "R",
+     "U",
+     "W"
+    ],
+    "lowest_usd": null,
+    "scryfall_id": "55cd03d9-2535-4cf3-a8b2-1418e1190f4a",
+    "image_uri": "https://cards.scryfall.io/normal/front/5/5/55cd03d9-2535-4cf3-a8b2-1418e1190f4a.jpg?1789644316",
+    "set_code": "frc",
+    "collector_number": "1",
+    "scryfall_url": "https://scryfall.com/card/frc/1",
+    "owned": 0,
+    "free": 0,
+    "partner": null
+   },
+   "num_decks": 4686,
+   "salt": null,
+   "trend": 51.77894429492696
+  },
+  {
+   "rank": 2,
+   "name": "Tam, the Possibility",
+   "slug": "tam-the-possibility",
+   "facts": {
+    "oracle_id": "c92c7744-0c92-4a36-9ada-4ffca812009e",
+    "type_line": "Legendary Creature \u2014 Gorgon Wizard",
+    "cmc": 3.0,
+    "mana_cost": "{1}{G}{U}",
+    "color_identity": [
+     "B",
+     "G",
+     "R",
+     "U",
+     "W"
+    ],
+    "lowest_usd": 5.33,
+    "scryfall_id": "6529d399-677e-45a6-ac3e-12a0b10f6c37",
+    "image_uri": "https://cards.scryfall.io/normal/front/6/5/6529d399-677e-45a6-ac3e-12a0b10f6c37.jpg?1789644886",
+    "set_code": "fra",
+    "collector_number": "276",
+    "scryfall_url": "https://scryfall.com/card/fra/276",
+    "owned": 0,
+    "free": 0,
+    "partner": null
+   },
+   "num_decks": 2504,
+   "salt": null,
+   "trend": 9.567421518386597
+  },
+  {
+   "rank": 23,
+   "name": "Frodo, Adventurous Hobbit // Sam, Loyal Attendant",
+   "slug": "frodo-adventurous-hobbit-sam-loyal-attendant",
+   "facts": {
+    "oracle_id": null,
+    "type_line": "Legendary Creature \u2014 Halfling Scout",
+    "cmc": 2.0,
+    "mana_cost": "{W}{B}",
+    "color_identity": [
+     "W",
+     "B",
+     "G"
+    ],
+    "lowest_usd": 0.78,
+    "scryfall_id": "328df403-7428-4b17-bdd1-9759fc0f32d8",
+    "image_uri": "https://cards.scryfall.io/normal/front/3/2/328df403-7428-4b17-bdd1-9759fc0f32d8.jpg?1783916041",
+    "set_code": "ltc",
+    "collector_number": "2",
+    "scryfall_url": "https://scryfall.com/card/ltc/2",
+    "owned": 1,
+    "free": 1,
+    "partner": {
+     "oracle_id": "2837be10-23ad-49d2-943e-b1e00edbbbd9",
+     "type_line": "Legendary Creature \u2014 Halfling Peasant",
+     "cmc": 3.0,
+     "mana_cost": "{1}{G}{W}",
+     "color_identity": [
+      "G",
+      "W"
+     ],
+     "lowest_usd": 0.48,
+     "scryfall_id": "687a2b76-3f05-4732-bd9b-513d06d16300",
+     "image_uri": "https://cards.scryfall.io/normal/front/6/8/687a2b76-3f05-4732-bd9b-513d06d16300.jpg?1783916039",
+     "set_code": "ltc",
+     "collector_number": "7",
+     "scryfall_url": "https://scryfall.com/card/ltc/7",
+     "owned": 1,
+     "free": 1,
+     "partner": null
+    }
+   },
+   "num_decks": 1137,
+   "salt": null,
+   "trend": 1.0812963298659173
+  },
+  {
+   "rank": 100,
+   "name": "Kraum, Ludevic's Opus // Tymna the Weaver",
+   "slug": "kraum-ludevics-opus-tymna-the-weaver",
+   "facts": {
+    "oracle_id": null,
+    "type_line": "Legendary Creature \u2014 Zombie Horror",
+    "cmc": 5.0,
+    "mana_cost": "{3}{U}{R}",
+    "color_identity": [
+     "W",
+     "U",
+     "B",
+     "R"
+    ],
+    "lowest_usd": 14.29,
+    "scryfall_id": "557fcd17-6cb3-414a-b2b1-ea9ae32e5aec",
+    "image_uri": "https://cards.scryfall.io/normal/front/5/5/557fcd17-6cb3-414a-b2b1-ea9ae32e5aec.jpg?1783937084",
+    "set_code": "c16",
+    "collector_number": "34",
+    "scryfall_url": "https://scryfall.com/card/c16/34",
+    "owned": 0,
+    "free": 0,
+    "partner": {
+     "oracle_id": "d15642e4-e61c-4d29-af48-de837991245e",
+     "type_line": "Legendary Creature \u2014 Human Cleric",
+     "cmc": 3.0,
+     "mana_cost": "{1}{W}{B}",
+     "color_identity": [
+      "B",
+      "W"
+     ],
+     "lowest_usd": 11.1,
+     "scryfall_id": "bc7cbe9b-324e-42b8-94e2-36e91cb32163",
+     "image_uri": "https://cards.scryfall.io/normal/front/b/c/bc7cbe9b-324e-42b8-94e2-36e91cb32163.jpg?1783937081",
+     "set_code": "c16",
+     "collector_number": "48",
+     "scryfall_url": "https://scryfall.com/card/c16/48",
+     "owned": 1,
+     "free": 1,
+     "partner": null
+    }
+   },
+   "num_decks": 556,
+   "salt": null,
+   "trend": -0.9040596537170043
+  }
+ ]
+}

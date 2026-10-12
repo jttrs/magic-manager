@@ -22,7 +22,7 @@ export const CardTile = memo(function CardTile({ card, selected, onToggle, onIns
         aria-label={onInspect ? `Inspect ${card.name}` : `${selected ? 'Unmark' : 'Mark'} ${card.name}`}
         aria-pressed={onInspect ? undefined : selected}
         onClick={() => (onInspect ? onInspect(card) : onToggle(card.key))}
-        className="block w-full cursor-pointer rounded-[4.5%/3.2%] transition-transform ease-guide hover:-translate-y-0.5 focus-visible:-translate-y-0.5"
+        className="group/pair block w-full cursor-pointer rounded-[4.5%/3.2%] transition-transform ease-guide hover:-translate-y-0.5 focus-visible:-translate-y-0.5"
       >
         <CardArt
           card={card}
