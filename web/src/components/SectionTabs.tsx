@@ -17,7 +17,7 @@ const ON = 'text-ink after:bg-accent';
 const OFF = 'text-ink-muted after:bg-transparent';
 
 /** A section's modes as tabs across the top of its sheet (Collection: Cards ·
- *  Purchase history · Jumpstart; Explore: Rankings · Specific cards). One look
+ *  Purchase history · Store orders; Explore: Rankings · Specific cards). One look
  *  for every section that has modes. */
 export function SectionTabs({ label, tabs }: { label: string; tabs: readonly SectionTab[] }) {
   return (
