@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ProductCostOut } from './api';
-import { browserReadUrls, MAX_BROWSER_READS, basisValue, deltaLabel, filterSortProducts, gapOf, pricesFrom, productsFromTabs, productsFromWatched, productType, readAge, sharedErrors, stockLabel, trendLabel, watchlistErrors, type DealFilters, type DealProduct, type PriceRow } from './deals';
+import { browserReadUrls, MAX_BROWSER_READS, basisValue, deltaLabel, filterSortProducts, gapOf, pagesFresh, pricesFrom, productsFromTabs, productsFromWatched, productType, readAge, sharedErrors, stockLabel, trendLabel, watchlistErrors, type DealFilters, type DealProduct, type PriceRow } from './deals';
 
 type WatchStore = Parameters<typeof trendLabel>[0];
 
@@ -133,5 +133,17 @@ describe('deal products', () => {
     expect(run('exact')).toEqual(['A', 'B', 'C', 'D']);
     expect(run('floor')).toEqual(['C', 'B', 'A', 'D']);
     expect(run('name')).toEqual(['A', 'B', 'C', 'D']);
+  });
+});
+
+describe('pagesFresh', () => {
+  it('trusts a reading for two minutes, never a missing or future one', () => {
+    const now = 1_000_000;
+    expect(pagesFresh(now - 119_000, now)).toBe(true);
+    expect(pagesFresh(now - 120_000, now)).toBe(true);
+    expect(pagesFresh(now - 121_000, now)).toBe(false);
+    expect(pagesFresh(null, now)).toBe(false);
+    expect(pagesFresh(undefined, now)).toBe(false);
+    expect(pagesFresh(now + 5_000, now)).toBe(false);
   });
 });

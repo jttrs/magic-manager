@@ -145,12 +145,16 @@ export function buyFinish(c: CollectionCardOut, exclude: readonly string[]): Inv
 
 export type CollectionStats = {
   printings: number; owned: number; copies: number; missing: number; missingUsd: number;
+  /** Missing printings with no price (counted as $0 in missingUsd, so it's a lower bound). */
+  missingUnpriced: number;
   /** Distinct missing cards (by oracle) and Σ each one's cheapest missing printing shown. */
   missingCards: number; missingCardsUsd: number;
+  /** Missing cards with no priced printing (counted as $0 in missingCardsUsd). */
+  missingCardsUnpriced: number;
 };
 
 export function collectionStats(cards: readonly CollectionCardOut[], exclude: readonly string[]): CollectionStats {
-  let owned = 0, copies = 0, missing = 0, missingUsd = 0;
+  let owned = 0, copies = 0, missing = 0, missingUsd = 0, missingUnpriced = 0;
   // Per card: its cheapest PRICED missing printing (null while all are unpriced).
   const cheapest = new Map<string, number | null>();
   for (const c of cards) {
@@ -160,13 +164,15 @@ export function collectionStats(cards: readonly CollectionCardOut[], exclude: re
       missing++;
       const p = (buyFinish(c, exclude) === 'foil' ? c.price_usd_foil : c.price_usd) ?? null;
       missingUsd += p ?? 0;
+      if (p == null) missingUnpriced++;
       const k = c.oracle_id ?? c.scryfall_id;
       const prev = cheapest.get(k) ?? null;
       cheapest.set(k, p == null ? prev : Math.min(prev ?? Infinity, p));
     }
   }
   const missingCardsUsd = [...cheapest.values()].reduce<number>((s, p) => s + (p ?? 0), 0);
-  return { printings: cards.length, owned, copies, missing, missingUsd, missingCards: cheapest.size, missingCardsUsd };
+  const missingCardsUnpriced = [...cheapest.values()].filter((p) => p == null).length;
+  return { printings: cards.length, owned, copies, missing, missingUsd, missingUnpriced, missingCards: cheapest.size, missingCardsUsd, missingCardsUnpriced };
 }
 
 /** Trait keys of one group. */

@@ -36,6 +36,10 @@
   --theme-danger: #9c3a22;
   --theme-focus: #f0a531;
   --theme-scrim: #100d09b3;
+  --theme-scrollbar-chrome: #433c30;
+  --theme-scrollbar-chrome-hover: #8a8170;
+  --theme-scrollbar-paper: #a59b87;
+  --theme-scrollbar-paper-hover: #625846;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -59,5 +63,9 @@
     --theme-danger: #e2785e;
     --theme-focus: #f4b347;
     --theme-scrim: #100d09cc;
+    --theme-scrollbar-chrome: #433c30;
+    --theme-scrollbar-chrome-hover: #8a8170;
+    --theme-scrollbar-paper: #433c30;
+    --theme-scrollbar-paper-hover: #8a8170;
   }
 }

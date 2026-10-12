@@ -3,7 +3,7 @@ import { useStoreHealth } from '../../app/scraperHealth';
 import { ScraperDownMark } from '../../components/ScraperNotice';
 import { useEffect, useMemo, useState } from 'react';
 import { useJob } from '../../app/useJob';
-import { deltaLabel, pricesFrom, sharedErrors, stockLabel, type PriceRow } from '../../core/deals';
+import { deltaLabel, pagesFresh, pricesFrom, sharedErrors, stockLabel, type PriceRow } from '../../core/deals';
 import { dealsTabsQuery, unwrap } from '../../app/queries';
 import { Button } from '../../components/Button';
 import { EmptyNote } from '../../components/States';
@@ -38,7 +38,8 @@ export function DealsPanel({ search, set }: { search: MarketSearch; set: (patch:
   const inBrowser = useFeature('companion') && c.status === 'ready';
   const [awaiting, setAwaiting] = useState<string | null>(null);
   const [readNotes, setReadNotes] = useState<string[]>([]);
-  const pages = useQuery(dealsPagesQuery()).data;
+  const stored = useQuery(dealsPagesQuery()).data;
+  const pages = stored?.pages;
   const viaCompanion = useMutation({
     mutationFn: async () => {
       const d = await c.read('tabs', {}, (summary) => setAwaiting(summary));
@@ -47,7 +48,7 @@ export function DealsPanel({ search, set }: { search: MarketSearch; set: (patch:
       setDealsPages(qc, d.pages);
       qc.setQueryData(dealsTabsQuery().queryKey, out);
       setReadNotes(warningLines(d.warnings, c.catalog));
-      return out;
+      return { out, pages: d.pages };
     },
     onSettled: () => setAwaiting(null),
   });
@@ -60,8 +61,23 @@ export function DealsPanel({ search, set }: { search: MarketSearch; set: (patch:
     }
   };
   const readingTabs = read.isFetching || viaCompanion.isPending;
-  const pagesFor = (list: string[]) => Object.fromEntries(list.filter((u) => pages?.[u]).map((u) => [u, pages![u]]));
-  const urls = r ? r.stores.flatMap((s) => s.tabs.map((t) => t.url)) : [];
+  const pagesFor = (list: string[], from = pages) => Object.fromEntries(list.filter((u) => from?.[u]).map((u) => [u, from![u]]));
+  const urlsOf = (o: OpenTabsOut) => o.stores.flatMap((s) => s.tabs.map((t) => t.url));
+  const urls = r ? urlsOf(r) : [];
+  // Page snapshots older than 2 minutes would record an old price as current: re-read the tabs
+  // first (same approval flow as "Read tabs"); if that fails, send nothing stale.
+  const readPrices = async () => {
+    if (inBrowser && !pagesFresh(stored?.readAt, Date.now())) {
+      try {
+        const fresh = await viaCompanion.mutateAsync();
+        job.reset();
+        void job.start('deals.read_prices', { urls: urlsOf(fresh.out), pages: pagesFor(urlsOf(fresh.out), fresh.pages) });
+      } catch { /* the failure shows through viaCompanion.error */ }
+      return;
+    }
+    job.reset();
+    void job.start('deals.read_prices', { urls, pages: pagesFor(urls) });
+  };
   const live = job.live;
   const reading = live != null && live.status !== 'succeeded' && live.status !== 'failed';
   const prices = useQuery(dealsPricesQuery()).data ?? NO_PRICES;
@@ -82,7 +98,7 @@ export function DealsPanel({ search, set }: { search: MarketSearch; set: (patch:
           {awaiting != null ? 'Waiting for approval…' : readingTabs ? 'Reading your tabs…' : r ? 'Read again' : 'Read my open tabs'}
         </Button>
         {r && urls.length > 0 && (
-          <Button tone="paper" emphasis={prices.size ? 'quiet' : 'primary'} disabled={reading} onClick={() => { job.reset(); void job.start('deals.read_prices', { urls, pages: pagesFor(urls) }); }}>
+          <Button tone="paper" emphasis={prices.size ? 'quiet' : 'primary'} disabled={reading || readingTabs} onClick={() => void readPrices()}>
             {reading ? 'Reading prices…' : prices.size ? 'Read prices again' : `Read ${fmtCount(urls.length, 'price')}`}
           </Button>
         )}

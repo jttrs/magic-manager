@@ -91,9 +91,9 @@ class RenderedPageIn(BaseModel):
     @field_validator("ld")
     @classmethod
     def _ld_size(cls, v: list[str]) -> list[str]:
-        if any(len(x) > 100_000 for x in v):
-            raise ValueError("a JSON-LD block is too large")
-        return v
+        # Drop oversized blocks rather than rejecting the whole read: the page
+        # can still be read from its head/meta/text.
+        return [x for x in v if len(x) <= 100_000]
 
 
 class ReadPricesInput(BaseModel):

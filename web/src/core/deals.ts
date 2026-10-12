@@ -309,3 +309,10 @@ export function browserReadUrls(rows: readonly WatchedOut[]): { urls: string[]; 
   const all = [...new Set(rows.flatMap((r) => r.stores.filter((s) => s.read_in_browser).map((s) => s.url)))];
   return { urls: all.slice(0, MAX_BROWSER_READS), skipped: Math.max(0, all.length - MAX_BROWSER_READS) };
 }
+
+/** How long a companion tab reading still counts as current for "Read prices". */
+const PAGES_FRESH_MS = 2 * 60_000;
+
+/** Are page snapshots read at `readAt` (ms epoch) recent enough to record as current prices? */
+export const pagesFresh = (readAt: number | null | undefined, now: number): boolean =>
+  readAt != null && now - readAt >= 0 && now - readAt <= PAGES_FRESH_MS;

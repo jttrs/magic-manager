@@ -208,7 +208,19 @@ def card_lines(rows: list[construct.NetRow], *, live: bool = False) -> tuple[lis
 
 
 _COST_TTL = 30 * 60
-_cost_memo: dict[tuple, tuple[float, dict]] = {}
+_cost_memo: dict[tuple, tuple[float, tuple, dict]] = {}
+
+
+def _inventory_fingerprint() -> tuple:
+    """Cheap stamp of what a cost's owned/free/to-buy counts depend on: the
+    inventory ledger tip and the deck pledges. Changes on any inventory write
+    or pledge change."""
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT (SELECT COALESCE(MAX(rowid), 0) FROM inventory_events),"
+            " (SELECT COUNT(*) FROM deck_assignments),"
+            " (SELECT COALESCE(SUM(count), 0) FROM deck_assignments)").fetchone()
+    return tuple(row)
 
 
 def product_cost(kind: str, set_code: str, name: str, finish: str | None = None) -> dict:
@@ -216,13 +228,15 @@ def product_cost(kind: str, set_code: str, name: str, finish: str | None = None)
     market price; what's inside at exact printings and at each card's cheapest
     printing, split into KNOWN cards and random-booster EV; and every known card
     as a line (exact + floor + your free copies). Memoized 30 min per product —
-    market prices don't move faster, and valuing is slow."""
+    market prices don't move faster, and valuing is slow. The memo is also keyed
+    on the inventory/pledge fingerprint so owned/free counts never go stale."""
     key = (kind, set_code.lower(), name, finish)
+    fp = _inventory_fingerprint()
     hit = _cost_memo.get(key)
-    if hit and time.monotonic() - hit[0] < _COST_TTL:
-        return hit[1]
+    if hit and hit[1] == fp and time.monotonic() - hit[0] < _COST_TTL:
+        return hit[2]
     out = _sld_cost(name, finish) if kind == "sld" else _sealed_cost(set_code, name)
-    _cost_memo[key] = (time.monotonic(), out)
+    _cost_memo[key] = (time.monotonic(), fp, out)
     return out
 
 

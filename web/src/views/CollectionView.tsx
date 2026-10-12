@@ -276,7 +276,7 @@ export function CollectionView() {
           counting
             ? summaryLine(checklist.summary, checklist.saved)
             : s
-            ? `${famN} set ${famN === 1 ? 'family' : 'families'} · showing ${fmtInt(s.printings)} printings: ${fmtInt(s.owned)} owned (${fmtInt(s.copies)} copies), ${search.gaps && search.show.includes('missing') ? `${fmtInt(s.missingCards)} cards you own in no printing · ${fmtUsd(s.missingCardsUsd)} at the cheapest printing of each` : `${fmtInt(s.missing)} missing · ${fmtUsd(s.missingUsd)} to complete`}${q.data?.skipped?.length ? ` · skipped ${q.data.skipped.join(', ')}` : ''}`
+            ? `${famN} set ${famN === 1 ? 'family' : 'families'} · showing ${fmtInt(s.printings)} printings: ${fmtInt(s.owned)} owned (${fmtInt(s.copies)} copies), ${search.gaps && search.show.includes('missing') ? `${fmtInt(s.missingCards)} cards you own in no printing · ${fmtUsd(s.missingCardsUsd)}${s.missingCardsUnpriced ? '+' : ''} at the cheapest printing of each` : `${fmtInt(s.missing)} missing · ${fmtUsd(s.missingUsd)}${s.missingUnpriced ? '+' : ''} to complete`}${q.data?.skipped?.length ? ` · skipped ${q.data.skipped.join(', ')}` : ''}`
             : undefined
         }
       >
