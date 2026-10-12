@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PrintingOut, ResolvedLineOut } from './api';
-import { commitItems, fitFinish, fromResolved, reviewStats, stagePrinting, updateLine } from './ingest';
+import { commitItems, fitFinish, fromResolved, reviewStats, sourceLine, stagePrinting, updateLine } from './ingest';
 
 const p = (o: Partial<PrintingOut>): PrintingOut => ({
   scryfall_id: 'p1', oracle_id: 'o', name: 'Sol Ring', set_code: 'cmm', set_name: 'Commander Masters',
@@ -37,5 +37,23 @@ describe('add-cards review model', () => {
     expect(ls.map((l) => [l.finish, l.qty])).toEqual([['nonfoil', 2], ['foil', 1]]);
     const dup = [...fromResolved([line({ qty: 2 })]), ...fromResolved([line({ qty: 3 })], 'b')];
     expect(commitItems(dup)).toEqual([{ scryfall_id: 'p1', finish: 'nonfoil', qty: 5 }]);
+  });
+});
+
+describe('sourceLine', () => {
+  const l = (raw: string, name: string, note: string | null = null, status: 'exact' | 'ambiguous' | 'unresolved' = 'exact') => ({ raw, name, note, status });
+  it('drops a source line that only repeats count, name, set and number', () => {
+    expect(sourceLine(l('1 Insist', 'Insist'))).toBeNull();
+    expect(sourceLine(l('4x Lightning Bolt (M10) 146', 'Lightning Bolt'))).toBeNull();
+    expect(sourceLine(l('1 Sol Ring [CMM] 410 *F*', 'Sol Ring'))).toBeNull();
+    expect(sourceLine(l('1 Fable of the Mirror-Breaker', 'Fable of the Mirror-Breaker // Reflection of Kiki-Jiki'))).toBeNull();
+    expect(sourceLine(l('1 insist', 'Insist'))).toBeNull();
+  });
+  it('keeps what adds information: notes, misspellings, flavor names, search set names', () => {
+    expect(sourceLine(l('1 Notacard', 'Notacard', "No card named 'Notacard'"))).toBe("No card named 'Notacard'");
+    expect(sourceLine(l('1 Lightnig Bolt', 'Lightning Bolt'))).toBe('1 Lightnig Bolt');
+    expect(sourceLine(l('Commander Masters', 'Sol Ring'))).toBe('Commander Masters');
+    expect(sourceLine(l('1 Sol Ring (XYZ) 999', 'Sol Ring', null, 'ambiguous'))).toBe('1 Sol Ring (XYZ) 999');
+    expect(sourceLine(l('1 Sol Ring', 'Sol Ring', null, 'ambiguous'))).toBeNull();
   });
 });

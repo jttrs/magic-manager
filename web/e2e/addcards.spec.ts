@@ -143,3 +143,43 @@ test('adding cards refreshes the inspector’s Your copies (PR87-2)', async ({ p
   await inspect.click();
   await expect.poll(() => holdings).toBe(2);              // refetched, not the 30 s cache
 });
+
+test('review list: every row shares the same column tracks, toggle or one-finish note', async ({ page }) => {
+  const one = (id: string, name: string, finishes: string[], raw = `1 ${name}`) => ({
+    line: 1, raw, qty: 1, name, finish: finishes[0], section: 'mainboard', status: 'exact', note: null, chosen: id,
+    candidates: [printing(id, { name, set_code: 'tla', collector_number: id.replace(/\D/g, ''), finishes, rarity: 'common' })],
+  });
+  await page.route('**/api/ingest/resolve', (r) => r.fulfill({ json: { format: 'moxfield', deck_name: null, warnings: [], lines: [
+    one('ins1', 'Insist', ['nonfoil', 'foil']),
+    one('ap22', 'Appa, Steadfast Guardian', ['nonfoil']),
+    one('kt303', 'Katara', ['foil']),
+    one('zk4', 'Zuko', ['nonfoil', 'foil'], '1 Zukko'),
+  ] } }));
+  await page.goto(COLLECTION_URL);
+  await page.getByRole('button', { name: 'Add cards' }).click();
+  await page.getByRole('tab', { name: 'Paste a list' }).click();
+  await page.getByRole('textbox', { name: 'Card list' }).fill('1 Insist');
+  await page.getByRole('button', { name: 'Read list' }).click();
+  const list = page.getByRole('list', { name: 'Pasted cards' });
+  await expect(list.getByRole('listitem')).toHaveCount(4);
+
+  const x = async (loc: ReturnType<Page['locator']>) => (await loc.boundingBox())!.x;
+  const labels = ['TLA · 1 · C', 'TLA · 22 · C', 'TLA · 303 · C', 'TLA · 4 · C'];
+  const setX = await Promise.all(labels.map((t) => x(list.getByText(t, { exact: true }))));
+  expect(new Set(setX.map(Math.round)).size).toBe(1);
+  const qtyX = await Promise.all(['Insist', 'Appa, Steadfast Guardian', 'Katara', 'Zuko'].map((n) => x(page.getByRole('spinbutton', { name: `Copies of ${n}` }))));
+  expect(new Set(qtyX.map(Math.round)).size).toBe(1);
+  // The one-finish note's text starts where the toggle's first label does.
+  const toggleText = await x(page.getByLabel('Finish of Insist').getByText('Nonfoil', { exact: true }));
+  expect(Math.round(await x(list.getByText('Nonfoil only')))).toBe(Math.round(toggleText));
+
+  // The source line shows only when it adds something (a misspelling), not "1 Insist" under Insist.
+  await expect(list.getByText('1 Insist', { exact: true })).toHaveCount(0);
+  await expect(list.getByText('1 Zukko', { exact: true })).toBeVisible();
+
+  // Phone width: rows stack, nothing spills past the sheet.
+  await page.setViewportSize({ width: 380, height: 800 });
+  const overflow = await list.evaluate((el) => el.scrollWidth - el.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+  for (const n of ['Insist', 'Katara']) await expect(page.getByRole('spinbutton', { name: `Copies of ${n}` })).toBeInViewport();
+});

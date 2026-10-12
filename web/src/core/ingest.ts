@@ -90,3 +90,22 @@ export function reviewStats(lines: readonly ReviewLine[]): ReviewStats {
   }
   return { copies, lines: lines.length, picked, unresolved, skipped };
 }
+
+const norm = (s: string) => s.toLowerCase().replace(/[’']/g, "'").replace(/\s+/g, ' ').trim();
+
+/** The muted line under a row's name: the engine's note, else the source line only
+ *  when it says something the row doesn't — a misspelling, a flavor name, a set name
+ *  from search, or a printing asked for on a line that only matched a best guess.
+ *  `1 Insist` under *Insist* (count, set and number already shown) is noise. */
+export function sourceLine(l: Pick<ReviewLine, 'raw' | 'name' | 'note' | 'status'>): string | null {
+  if (l.note) return l.note;
+  const named = l.raw.replace(/^\s*\d+\s*x?\s+/i, '');
+  const bare = named
+    .replace(/(\s+\*[a-z]+\*)+\s*$/i, '')
+    .replace(/\s+[([][a-z0-9]{2,6}[)\]](\s+\S+)?\s*$/i, '');
+  if (bare !== named && l.status !== 'exact') return l.raw;
+  const want = norm(bare);
+  if (!want) return null;
+  const names = [l.name, ...l.name.split(' // ')].map(norm);
+  return names.includes(want) ? null : l.raw;
+}
