@@ -34,7 +34,8 @@ test('dashboard: errors first, usage beside, trace a ref', async ({ page }) => {
 test('dashboard is off without the flag', async ({ page }) => {
   await page.goto('/analytics');
   await expect(page.getByText('Analytics is off on this machine')).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Analytics' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await expect(page.getByRole('dialog', { name: 'Settings' }).getByRole('link', { name: /^Analytics/ })).toHaveCount(0);
 });
 
 test('privacy: switches save, delete my data, catalog listed', async ({ page }) => {
@@ -51,8 +52,8 @@ test('privacy: switches save, delete my data, catalog listed', async ({ page }) 
     return r.fulfill({ json: { errors: true, usage: true, asked: true, mode: 'local', disabled: false } });
   });
   await page.goto('/collection');
-  await page.getByRole('button', { name: /^Privacy/ }).click();
-  const dialog = page.getByRole('dialog', { name: 'Privacy' });
+  await page.getByRole('button', { name: 'Settings' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Settings' });
   await expect(dialog.getByRole('switch', { name: 'Usage analytics' })).toBeChecked();
   await dialog.getByRole('switch', { name: 'Usage analytics' }).click();
   await expect(dialog.getByRole('switch', { name: 'Usage analytics' })).not.toBeChecked();

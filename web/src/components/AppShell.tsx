@@ -2,16 +2,19 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { jobsQuery } from '../app/queries';
 import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
-import { ToggleGroup } from 'radix-ui';
+import { useEffect, useMemo, useState } from 'react';
 import { IconTooltip } from './IconTooltip';
+import { iconActionClass } from './iconActionClass';
 import { applyTheme, readTheme, type ThemePref } from '../app/theme';
 import { useMediaQuery } from '../app/useMediaQuery';
+import { useSettingsSection } from '../app/settings';
 import { UndoButton } from './UndoButton';
-import { AnalyticsLink, PrivacyButton } from './Telemetry';
+import { PrivacyPrompt } from './Telemetry';
 import { useAnalytics } from '../app/analytics';
 import { CompanionButton } from './companion/CompanionSetup';
 import { useFeature } from '../app/features';
+import { SettingsButton } from './settings/SettingsDialog';
+import { SettingsChoice, SettingsRow } from './settings/SettingsControls';
 
 const NAV = [
   { to: '/collection', label: 'Collection' },
@@ -23,7 +26,7 @@ const NAV = [
 /** Global frame: masthead + full-width top nav; views supply sidebar + main below it. */
 export function AppShell({ children }: { children: ReactNode }) {
   useAnalytics();
-  const analytics = useFeature('analytics');
+  useAppearanceSettings();
   return (
     <div className="grid min-h-dvh grid-rows-[var(--size-topbar)_1fr] overflow-x-clip bg-chrome text-on-chrome">
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-3 focus:z-50 bg-accent text-on-accent px-3 py-1 rounded-sm">
@@ -50,15 +53,15 @@ export function AppShell({ children }: { children: ReactNode }) {
             ))}
           </ul>
         </nav>
-        <div className="ml-auto flex items-center gap-2 sm:gap-3">
+        {/* Status first (restore point, companion, jobs), then the one Settings gear. */}
+        <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1.5">
           <UndoButton />
           <CompanionSlot />
           <JobsLink />
-          {analytics && <AnalyticsLink />}
-          <PrivacyButton />
-          <ThemeSwitch />
+          <SettingsButton />
         </div>
       </header>
+      <PrivacyPrompt />
       {children}
     </div>
   );
@@ -100,44 +103,34 @@ export function ViewLayout({ sidebar, children, label, summary, startOpen = fals
   );
 }
 
-function ThemeSwitch() {
+const THEMES: { value: ThemePref; label: string }[] = [
+  { value: 'system', label: 'Auto' },
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+];
+
+/** Settings → Appearance: the colour theme (Auto follows the OS). */
+function useAppearanceSettings() {
   const [pref, setPref] = useState<ThemePref>(() => readTheme());
   useEffect(() => applyTheme(pref), [pref]);
-  const order: ThemePref[] = ['system', 'light', 'dark'];
-  const label = { system: 'Auto', light: 'Light', dark: 'Dark' } as const;
-  return (
-    <>
-    <button
-      type="button"
-      onClick={() => setPref(order[(order.indexOf(pref) + 1) % order.length])}
-      aria-label={`Color theme: ${label[pref]}. Change theme`}
-      className="min-h-8 cursor-pointer rounded-sm border border-chrome-line px-2 text-xs voice-semi text-on-chrome sm:hidden"
-    >
-      {label[pref]}
-    </button>
-    <ToggleGroup.Root
-      type="single"
-      value={pref}
-      onValueChange={(v) => v && setPref(v as ThemePref)}
-      aria-label="Color theme"
-      className="hidden rounded-sm border border-chrome-line p-0.5 sm:flex"
-    >
-      {(['system', 'light', 'dark'] as const).map((t) => (
-        <ToggleGroup.Item
-          key={t}
-          value={t}
-          className="px-2 py-1 text-xs voice-semi capitalize text-on-chrome-muted rounded-xs cursor-pointer transition-colors ease-guide hover:text-on-chrome data-[state=on]:bg-chrome-raised data-[state=on]:text-on-chrome"
-        >
-          {t === 'system' ? 'Auto' : t}
-        </ToggleGroup.Item>
-      ))}
-    </ToggleGroup.Root>
-    </>
-  );
+  const section = useMemo(() => ({
+    id: 'appearance',
+    title: 'Appearance',
+    order: 0,
+    content: (
+      <SettingsRow
+        label="Theme"
+        description="Auto follows your device’s light or dark setting."
+        control={(ids) => <SettingsChoice value={pref} options={THEMES} onChange={setPref} {...ids} />}
+      />
+    ),
+  }), [pref]);
+  useSettingsSection(section);
 }
 
 /** Background jobs: housekeeping, not a destination — a quiet icon that pulses
- *  while something runs; the tooltip names it. */
+ *  while something runs; the tooltip names it. Phones show it only while a job
+ *  runs (Settings → About links to the list). */
 function JobsLink() {
   const jobs = useQuery(jobsQuery());
   const running = jobs.data?.filter((j) => j.status === 'queued' || j.status === 'running').length ?? 0;
@@ -147,12 +140,12 @@ function JobsLink() {
       <Link
         to="/jobs"
         aria-label={label}
-        className="touch-hit relative grid size-8 place-items-center rounded-sm text-on-chrome-muted no-underline transition-colors ease-guide hover:text-on-chrome data-[status=active]:text-on-chrome"
+        className={`${iconActionClass('chrome')} ${running ? '' : 'max-sm:hidden'}`}
       >
-        <svg viewBox="0 0 16 16" aria-hidden="true" className="size-4">
+        <svg viewBox="0 0 16 16" aria-hidden="true" className="size-[1.125rem]">
           <path d="M3 4.5h10M3 8h10M3 11.5h6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
         </svg>
-        {running > 0 && <span aria-hidden="true" className="absolute right-1 top-1 size-2 animate-pulse rounded-pill bg-accent" />}
+        {running > 0 && <span aria-hidden="true" className="absolute right-1.5 top-1.5 size-2 animate-pulse rounded-pill bg-accent" />}
       </Link>
     </IconTooltip>
   );

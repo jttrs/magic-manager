@@ -30,7 +30,7 @@ export function Segmented<T extends string>({ value, options, onChange, label, s
           value={o.value}
           disabled={o.disabled}
           title={o.title}
-          className="min-h-8 min-w-0 truncate px-1.5 text-sm voice-semi text-on-chrome-muted rounded-xs cursor-pointer transition-colors ease-guide hover:text-on-chrome disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:text-on-chrome-muted data-[state=on]:bg-accent data-[state=on]:text-on-accent data-[state=on]:hover:text-on-accent"
+          className="min-h-8 pointer-coarse:min-h-11 min-w-0 truncate px-1.5 text-sm voice-semi text-on-chrome-muted rounded-xs cursor-pointer transition-colors ease-guide hover:text-on-chrome disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:text-on-chrome-muted data-[state=on]:bg-accent data-[state=on]:text-on-accent data-[state=on]:hover:text-on-accent"
         >
           {o.label}
         </ToggleGroup.Item>
@@ -65,7 +65,7 @@ export function SegmentedToggles<T extends string>({ value, options, onChange, l
         <ToggleGroup.Item
           key={o.value}
           value={o.value}
-          className="flex min-h-8 min-w-0 cursor-pointer items-center justify-center gap-1.5 rounded-xs px-1.5 text-sm voice-semi text-on-chrome-muted transition-colors ease-guide hover:text-on-chrome data-[state=on]:bg-accent data-[state=on]:text-on-accent data-[state=on]:hover:text-on-accent"
+          className="flex min-h-8 pointer-coarse:min-h-11 min-w-0 cursor-pointer items-center justify-center gap-1.5 rounded-xs px-1.5 text-sm voice-semi text-on-chrome-muted transition-colors ease-guide hover:text-on-chrome data-[state=on]:bg-accent data-[state=on]:text-on-accent data-[state=on]:hover:text-on-accent"
         >
           <span className="truncate">{o.label}</span>
           {o.count != null && <span className="tabular text-xs opacity-75">{o.count}</span>}
@@ -91,7 +91,7 @@ export function ChipToggles<T extends string>({ value, options, onChange, label,
         <ToggleGroup.Item
           key={o.value}
           value={o.value}
-          className="inline-flex items-center gap-1.5 min-h-7 px-2.5 rounded-pill border border-chrome-line text-xs voice-semi text-on-chrome-muted cursor-pointer
+          className="inline-flex items-center gap-1.5 min-h-7 pointer-coarse:min-h-11 px-2.5 rounded-pill border border-chrome-line text-xs voice-semi text-on-chrome-muted cursor-pointer
                      transition-[color,background-color,border-color] ease-guide hover:text-on-chrome hover:border-on-chrome-muted
                      data-[state=on]:bg-accent data-[state=on]:border-accent data-[state=on]:text-on-accent"
         >
@@ -122,7 +122,7 @@ export function TextField({ label, value, onChange, placeholder, name }: { label
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="min-h-9 rounded-sm border border-chrome-line bg-chrome-raised px-2.5 text-md text-on-chrome placeholder:text-on-chrome-muted focus-visible:border-accent"
+        className="min-h-9 pointer-coarse:min-h-11 rounded-sm border border-chrome-line bg-chrome-raised px-2.5 text-md text-on-chrome placeholder:text-on-chrome-muted focus-visible:border-accent"
       />
     </label>
   );
@@ -139,7 +139,7 @@ export function SelectField<T extends string>({ label, value, options, onChange 
       <DropdownMenu.Root>
         <DropdownMenu.Trigger
           aria-labelledby={`${id}-l ${id}-s`}
-          className="flex min-h-9 w-full cursor-pointer items-center gap-2 rounded-sm border border-chrome-line bg-chrome-raised px-2.5 text-left text-md text-on-chrome transition-colors ease-guide hover:border-on-chrome-muted data-[state=open]:border-accent"
+          className="flex min-h-9 pointer-coarse:min-h-11 w-full cursor-pointer items-center gap-2 rounded-sm border border-chrome-line bg-chrome-raised px-2.5 text-left text-md text-on-chrome transition-colors ease-guide hover:border-on-chrome-muted data-[state=open]:border-accent"
         >
           <span id={`${id}-s`} className="min-w-0 flex-1 truncate">{current?.label ?? value}</span>
           <span aria-hidden="true" className="text-on-chrome-muted">▾</span>
@@ -185,7 +185,7 @@ export function DateField({ label, value, onChange, name, min, max }: { label: s
         min={min}
         max={max}
         onChange={(e) => onChange(e.target.value || undefined)}
-        className="min-h-9 min-w-0 rounded-sm border border-chrome-line bg-chrome-raised px-2.5 text-md tabular text-on-chrome [color-scheme:dark] focus-visible:border-accent"
+        className="min-h-9 pointer-coarse:min-h-11 min-w-0 rounded-sm border border-chrome-line bg-chrome-raised px-2.5 text-md tabular text-on-chrome [color-scheme:dark] focus-visible:border-accent"
       />
     </label>
   );

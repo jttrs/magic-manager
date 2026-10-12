@@ -93,6 +93,67 @@
     appearance: none;
   }
 
+  /* Scrollbars: a slim pill on a clear track, in the stock's own tone. The
+     thumb colour follows the surface (chrome vs paper) through --sb-* custom
+     properties, so a list inside a guide sheet or dialog reads on paper and the
+     sidebar reads on chrome. Hover darkens; dragging lights it amber. */
+  :root,
+  .bg-chrome,
+  .bg-chrome-raised {
+    --sb-thumb: var(--theme-scrollbar-chrome);
+    --sb-thumb-hover: var(--theme-scrollbar-chrome-hover);
+  }
+
+  .bg-paper,
+  .bg-paper-raised,
+  .bg-paper-sunk,
+  .paper-grain {
+    --sb-thumb: var(--theme-scrollbar-paper);
+    --sb-thumb-hover: var(--theme-scrollbar-paper-hover);
+  }
+
+  /* Firefox has no ::-webkit-scrollbar; it gets the standard thin bar. (Chrome
+     ignores the pseudo-elements below once scrollbar-color is set, so the
+     standard properties are scoped to browsers without them.) */
+  @supports not selector(::-webkit-scrollbar) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: var(--sb-thumb) transparent;
+    }
+  }
+
+  ::-webkit-scrollbar {
+    width: 0.75rem;
+    height: 0.75rem;
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    min-height: 2.5rem;
+    border: 0.1875rem solid transparent;
+    border-radius: var(--radius-pill);
+    background-color: var(--sb-thumb);
+    background-clip: padding-box;
+  }
+
+  ::-webkit-scrollbar-thumb:horizontal {
+    min-width: 2.5rem;
+    min-height: 0;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--sb-thumb-hover);
+  }
+
+  ::-webkit-scrollbar-thumb:active {
+    background-color: var(--theme-accent);
+  }
+
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,

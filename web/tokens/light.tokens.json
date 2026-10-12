@@ -20,6 +20,10 @@
     "on-accent": { "$value": "{color.ink.900}" },
     "danger": { "$value": "{color.rust.700}" },
     "focus": { "$value": "{color.amber.500}" },
-    "scrim": { "$value": "#100d09b3" }
+    "scrim": { "$value": "#100d09b3" },
+    "scrollbar-chrome": { "$value": "{color.charcoal.600}", "$description": "Scrollbar thumb on chrome (and -paper on guide sheets); the track stays clear." },
+    "scrollbar-chrome-hover": { "$value": "{color.taupe.500}" },
+    "scrollbar-paper": { "$value": "{color.taupe.400}" },
+    "scrollbar-paper-hover": { "$value": "{color.ink.600}" }
   }
 }
