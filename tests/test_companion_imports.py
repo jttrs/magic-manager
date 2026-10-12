@@ -18,7 +18,8 @@ from magic_manager import collection_sync, config, db, decksource, ingest, scrap
 from magic_manager.api import collection_import as ci
 from magic_manager.api import companion as companion_api
 
-FIX = Path(__file__).resolve().parent / "fixtures" / "companion"
+ROOT = Path(__file__).resolve().parent.parent
+FIX = ROOT / "tests" / "fixtures" / "companion"
 
 
 def _golden(name: str) -> dict:
@@ -71,6 +72,29 @@ def test_collection_reader_output_is_exactly_what_the_server_accepts():
     b = _golden("moxfield-binder.expected.json")["collection"]
     breq = ci.CollectionReadIn(source="moxfield", scope="binder", id=b["id"], name=b["name"], lines=b["lines"])
     assert ci.label_for(breq) == "web:moxfield binder · Trade Box 1"
+
+
+def test_a_whole_real_sized_collection_fits_every_layer():
+    """The read is capped at the same 60,000 printings in the reader, the app and the server, and
+    the bridge forwards which collection read was asked for (it once dropped ``what``/``binder``,
+    so "Read my collection" failed as request.invalid for everyone)."""
+    reader = (ROOT / "extension/src/readers/moxfield-collection.js").read_text()
+    app = (ROOT / "web/src/core/companion.ts").read_text()
+    bridge = (ROOT / "extension/src/bridge.js").read_text()
+    assert ci.MAX_LINES == 60_000 and "MAX_LINES = 60000" in reader and "lines: z.array(collectionLine).max(60_000)" in app
+    assert "what: typeof p.what === 'string'" in bridge and "binder: typeof p.binder === 'string'" in bridge
+    line = {"quantity": 1, "finish": "nonfoil", "scryfall_id": "0000579f-7b35-4ed3-b44c-db2a538066fe", "set": "fin", "cn": "1", "name": "X"}
+    assert len(ci.CollectionReadIn(source="moxfield", scope="collection", lines=[line] * ci.MAX_LINES).lines) == ci.MAX_LINES
+    with pytest.raises(ValueError):
+        ci.CollectionReadIn(source="moxfield", scope="collection", lines=[line] * (ci.MAX_LINES + 1))
+
+
+def test_worker_never_reports_size_or_a_crash_as_a_bad_request():
+    bg = (ROOT / "extension/src/background.js").read_text()
+    assert "fail('reader.crashed'" in bg and "fail('request.too_large'" in bg
+    assert "detail: 'too large'" not in bg and "MAX_PAYLOAD_BYTES" not in bg   # every size check is maxPayload(kind)
+    assert "packed(pending.kind, data)" in bg                                    # the watched second read too
+    assert "storage.session.set({ pending: { ...now, stage: 'send', data" not in bg   # held packed, not as objects
 
 
 def test_rows_from_lines_merges_etched_and_skips_proxies_and_digital():

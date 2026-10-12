@@ -191,19 +191,25 @@ export type ErrorCatalog = Record<string, { message: string; fix?: string | null
 export class CompanionError extends Error {
   code: string;
   fix: string | null;
-  constructor(code: string, message: string, fix: string | null = null) {
+  /** A short specific detail from the companion (e.g. how large a read was), shown under the message. */
+  detail: string | null;
+  constructor(code: string, message: string, fix: string | null = null, detail: string | null = null) {
     super(message);
     this.code = code;
     this.fix = fix;
+    this.detail = detail;
   }
 }
 
-function companionError(code: string, catalog: ErrorCatalog = {}, fallback?: { message?: string; fix?: string | null }): CompanionError {
+/** The longest companion detail the app shows (the extension sends ≤ 120 characters). */
+const MAX_DETAIL = 160;
+
+function companionError(code: string, catalog: ErrorCatalog = {}, fallback?: { message?: string; fix?: string | null; detail?: string | null }): CompanionError {
   const c = catalog[code];
-  return new CompanionError(code, c?.message ?? fallback?.message ?? code, c?.fix ?? fallback?.fix ?? null);
+  return new CompanionError(code, c?.message ?? fallback?.message ?? code, c?.fix ?? fallback?.fix ?? null, fallback?.detail ?? null);
 }
 
-type Envelope = { channel?: unknown; from?: unknown; type?: unknown; id?: unknown; ok?: unknown; code?: unknown; message?: unknown; fix?: unknown; data?: unknown; kind?: unknown };
+type Envelope = { channel?: unknown; from?: unknown; type?: unknown; id?: unknown; ok?: unknown; code?: unknown; message?: unknown; fix?: unknown; detail?: unknown; data?: unknown; kind?: unknown };
 
 /** Only messages this page posted to itself from the companion bridge. */
 function fromCompanion(ev: MessageEvent, win: Window): Envelope | null {
@@ -258,6 +264,7 @@ export function request<K extends CompanionKind>(win: Window, kind: K, params: R
     };
     const failWith = (d: Envelope) => done(companionError(typeof d.code === 'string' ? d.code : 'companion.timeout', catalog, {
       message: typeof d.message === 'string' ? d.message : undefined, fix: typeof d.fix === 'string' ? d.fix : null,
+      detail: typeof d.detail === 'string' && d.detail.trim() ? d.detail.trim().slice(0, MAX_DETAIL) : null,
     }));
     const fn = (ev: MessageEvent) => {
       const d = fromCompanion(ev, win);
@@ -270,7 +277,7 @@ export function request<K extends CompanionKind>(win: Window, kind: K, params: R
       } else if (d.type === 'result') {
         if (d.ok !== true) return failWith(d);
         const parsed = SCHEMAS[kind].safeParse(d.data);
-        if (!parsed.success) return done(companionError('request.invalid', catalog, { message: 'The companion sent data the app doesn’t recognise.' }));
+        if (!parsed.success) return done(companionError('companion.data_invalid', catalog, { message: 'The companion sent data this app doesn’t recognise, so nothing was used.' }));
         done(null, parsed.data as DataOf<K>);
       }
     };

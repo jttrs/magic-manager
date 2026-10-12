@@ -156,7 +156,9 @@ sequenceDiagram
   catalogued code as `companion.error {code}` (`config/analytics_events.toml`, the enum is exactly
   `extension/errors.json`), under the user's analytics consent. Never any cart, tab or deck content.
 - Storage: the paired origin and when that origin last said hello (`storage.local` `appOrigin`, `lastHello` — an origin and a time, nothing else; cleared on re-pair/unpair), plus the one pending request in `storage.session`
-  (memory only, not readable by content scripts, cleared on decision).
+  (memory only, not readable by content scripts, cleared on decision; since 0.4.4 its data is held
+  gzipped in one string so a whole collection fits — the same data, unpacked for the approval window
+  and for Send).
 - Tabs the companion opens itself (a cart, deck, order-history or watched store page, in the background) are closed
   afterwards. Order reads always open their own tab (never navigate one of yours), follow only the
   store's own same-origin page links, press only Mana Pool's "Item List" view tab, and never submit

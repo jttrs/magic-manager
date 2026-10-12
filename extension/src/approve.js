@@ -2,14 +2,17 @@
 // exactly the data that would be sent; nothing leaves until "Send". Built with
 // textContent only — page data is never parsed as HTML.
 
-import { APPROVAL_TTL_MS, CART_STORES } from './protocol.js';
+import { APPROVAL_TTL_MS, CART_STORES, unpackData } from './protocol.js';
 
 const $ = (id) => document.getElementById(id);
 const KIND_TITLE = { tabs: 'Send your open store tabs?', moxfield: 'Send this Moxfield deck?', archidekt: 'Send this Archidekt deck?',
   moxfield_collection: 'Send your Moxfield cards?', moxfield_binders: 'Send your list of Moxfield binders?', order_list: 'Send your list of orders?', orders: 'Send these orders?', watched: 'Send your watched store prices?' };
 const MAX_ROWS = 500;
-/** A collection read is listed in full (scrollable) up to this many lines; the raw data has the rest. */
-const MAX_COLLECTION_ROWS = 20000;
+/** A collection read is listed in full (scrollable): rows are added in batches so a 60,000-line
+ *  read doesn't freeze the window. */
+const ROW_BATCH = 2000;
+/** The table being drawn (see table()). */
+let drawing = Promise.resolve();
 
 /** A cell: plain text, or {text, meta} — the name with a muted detail line under it. */
 function cell(tr, value, cls) {
@@ -25,19 +28,39 @@ function cell(tr, value, cls) {
   tr.appendChild(td);
 }
 
+/** The table of what is sent. max = Infinity lists every row, ROW_BATCH at a time; the promise
+ *  settles once every row is on screen (Send stays off until then). */
 function table(headers, rows, max = MAX_ROWS) {
+  let drawn;
+  const done = new Promise((r) => { drawn = r; });
+  drawing = done;
   const t = $('table');
   t.replaceChildren();
   const head = t.createTHead().insertRow();
   headers.forEach(([h, cls]) => { const th = document.createElement('th'); th.textContent = h; if (cls) th.className = cls; head.appendChild(th); });
   const body = t.createTBody();
-  rows.slice(0, max).forEach((r) => { const tr = body.insertRow(); r.forEach((v, i) => cell(tr, v, headers[i][1])); });
-  if (rows.length > max) { const tr = body.insertRow(); cell(tr, `…and ${rows.length - max} more (see the raw data)`); }
+  const shown = Math.min(rows.length, max);
+  const add = (from) => {
+    if (t.tBodies[0] !== body) { drawn(); return; }   // re-rendered meanwhile
+    rows.slice(from, Math.min(from + ROW_BATCH, shown)).forEach((r) => { const tr = body.insertRow(); r.forEach((v, i) => cell(tr, v, headers[i][1])); });
+    if (from + ROW_BATCH < shown) setTimeout(() => add(from + ROW_BATCH), 0);
+    else {
+      if (rows.length > max) { const tr = body.insertRow(); cell(tr, `…and ${rows.length - max} more (see the raw data)`); }
+      drawn();
+    }
+  };
+  add(0);
+  return done;
 }
 
 const money = (n) => (n == null ? '—' : `$${Number(n).toFixed(2)}`);
 /** A printing as people read it: set code or name + collector number. Store/Scryfall ids stay in the raw data. */
 const printing = (set, number) => [set, number ? `#${number}` : null].filter(Boolean).join(' ');
+
+/** A pending request with its data unpacked (the worker holds it packed — see protocol.js). */
+async function withData(p) {
+  return p && p.packed != null ? { ...p, data: await unpackData(p.packed) } : p;
+}
 
 function render(p) {
   const confirm = p.stage === 'confirm';
@@ -83,7 +106,7 @@ function render(p) {
     const c = d.collection;
     table([['Card'], ['Qty', 'num']],
       c.lines.map((l) => [{ text: l.name, meta: [printing(l.set?.toUpperCase(), l.cn), l.finish,
-        l.proxy ? 'proxy, skipped' : null, l.digital ? 'digital, skipped' : null] }, l.quantity]), MAX_COLLECTION_ROWS);
+        l.proxy ? 'proxy, skipped' : null, l.digital ? 'digital, skipped' : null] }, l.quantity]), Infinity);
   } else if (p.kind === 'order_list') {
     table([['Order'], ['Placed'], ['Total', 'num']], d.orders.map((o) => [o.order_id, o.ordered_at, money(o.total)]));
   } else if (p.kind === 'orders') {
@@ -129,7 +152,7 @@ async function readPages(p) {
   created = 0;   // no expiry while reading
   $('ttl').textContent = '';
   $('deny').disabled = false;
-  $('status').textContent = `Reading ${p.data.urls.length} pages… tabs opened for this close afterwards.`;
+  $('status').textContent = `Reading ${(await withData(p)).data.urls.length} pages… tabs opened for this close afterwards.`;
   const r = await chrome.runtime.sendMessage({ type: 'decision', id: p.id, approve: 'read' });
   const now = (await chrome.storage.session.get('pending')).pending;
   if (!r?.ok || !now || now.id !== p.id || now.stage !== 'send') { window.close(); return; }
@@ -138,7 +161,7 @@ async function readPages(p) {
 }
 
 /** Show a pending request and arm its buttons. */
-function ready(p) {
+async function ready(p) {
   if (p.stage === 'reading') {   // this window was reloaded mid-read: wait for it
     $('approve').disabled = true;
     $('deny').disabled = false;
@@ -150,14 +173,16 @@ function ready(p) {
     }, 1000);
     return;
   }
-  render(p);
+  render(await withData(p));
   created = p.created;
   // Like Chrome's own permission prompts: focus the safe choice, and keep Send
   // disabled briefly so a keypress meant for another window can't approve.
   $('approve').disabled = true;
   $('deny').disabled = false;
   $('deny').focus();
-  setTimeout(() => { $('approve').disabled = false; }, 1000);
+  // …and until every row of what is sent is on screen.
+  const shown = drawing;
+  Promise.all([shown, new Promise((r) => setTimeout(r, 1000))]).then(() => { if (drawing === shown) $('approve').disabled = false; });
 }
 
 async function main() {

@@ -128,8 +128,21 @@ background tab it closes), you approve the lines, the app posts them to `POST /a
   condition and language merge, **etched counts as foil**, and **proxies and digital (Arena/MTGO)
   copies are skipped** and counted. *Replace* never goes below copies pledged to built decks: the
   whole import is refused (409, all-or-nothing like the web checklist) and the review says so first. An identical read already imported needs explicit confirmation
-  to add again (replace is idempotent). Large reads: the approval window lists every line in a
-  scrollable table (20,000 lines, then the raw data); the app shows the full change list, virtualized.
+  to add again (replace is idempotent). Large reads: the approval window lists **every** line in a
+  scrollable table (added 2,000 rows at a time so a 60,000-line read doesn't freeze it); the app shows
+  the full change list, virtualized.
+- **Real-sized collections (0.4.4).** Two bugs made *Read my collection* fail with the misleading
+  `request.invalid` ("the app sent a request it doesn't understand"): (1) the bridge's parameter
+  allowlist dropped `what`/`binder`, so *Read my collection* and *read a binder* never reached the
+  reader intact (only *Read link* worked); (2) Chrome's `storage.session` (10 MB) counts a stored
+  object at its in-memory size, so a ~40,000-printing collection (~5 MB as JSON) overflowed it. The
+  pending request now holds the read **packed** (gzipped JSON in one base64 string, `packData` /
+  `unpackData` in `protocol.js`; 60,000 printings ≈ 3 MB) and unpacks it for the approval window and
+  for Send — what is sent is unchanged. Caps: 60,000 printings (reader, app schema, server
+  `MAX_LINES`), 24 MB as JSON (`MAX_COLLECTION_BYTES`), 8 MB packed (`SESSION_BUDGET_BYTES`). Over a
+  cap is `request.too_large` (with its size as the detail); an unexpected exception in the worker is
+  `reader.crashed`; app-side data that fails its schema is `companion.data_invalid`. `request.invalid`
+  now means only what it says. The app shows a failure's short `detail` beside its code.
 - **Unverified:** a signed-in Moxfield read (your collection, binder list, private link/deck) was
   pinned against a fake API built from the bundle's own request shapes. The binder-list response shape
   is assumed (array or `{data}`; `publicId`, `name`, a card count). The owner confirms both live.

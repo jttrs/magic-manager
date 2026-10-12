@@ -51,10 +51,13 @@
     if (d.type !== 'request' || typeof d.id !== 'string' || d.id.length > 64) return;
     const p = d.params && typeof d.params === 'object' ? d.params : {};
     // Only these, typed and capped: a deck url; an order-history store + order numbers;
-    // watched store pages (the worker re-checks each one and caps the count).
+    // watched store pages (the worker re-checks each one and caps the count); which Moxfield
+    // collection read (your whole collection / one of your binders by id).
     const params = {
       url: typeof p.url === 'string' ? p.url.slice(0, 500) : undefined,
       store: typeof p.store === 'string' ? p.store.slice(0, 20) : undefined,
+      what: typeof p.what === 'string' ? p.what.slice(0, 20) : undefined,
+      binder: typeof p.binder === 'string' ? p.binder.slice(0, 64) : undefined,
       urls: Array.isArray(p.urls) ? p.urls.slice(0, 51).filter((u) => typeof u === 'string').map((u) => u.slice(0, 2000)) : undefined,
       ids: Array.isArray(p.ids) ? p.ids.slice(0, 100).filter((x) => typeof x === 'string').map((x) => x.slice(0, 64)) : undefined,
     };

@@ -16,8 +16,11 @@ async function readMoxfieldCollection(opts) {
   var what = opts && opts.what;
   var id = opts && opts.id != null ? String(opts.id) : null;
   var PAGE_SIZE = 5000;
-  var MAX_PAGES = 40;
+  // Bounded by what was read, not by page count: Moxfield may answer with smaller pages than asked.
+  var MAX_ENTRIES = 200000;
+  var MAX_PAGES = 2000;
   var MAX_LINES = 60000;
+  var MAX_QTY = 99999;
   if (what !== 'collection' && what !== 'binder' && what !== 'binders') return { ok: false, code: 'moxfield.bad_url' };
   if (id != null && !/^[A-Za-z0-9_-]{4,64}$/.test(id)) return { ok: false, code: 'moxfield.bad_url' };
   if (what === 'binder' && id == null) return { ok: false, code: 'moxfield.bad_url' };
@@ -74,7 +77,7 @@ async function readMoxfieldCollection(opts) {
       if (e.isProxy) line.proxy = true;
       if (e.game && String(e.game).toLowerCase() !== 'paper') line.digital = true;
       var key = [line.scryfall_id || (line.set + '#' + line.cn), line.finish, line.proxy ? 1 : 0, line.digital ? 1 : 0].join('|');
-      if (byKey[key]) byKey[key].quantity += line.quantity;
+      if (byKey[key]) byKey[key].quantity = Math.min(MAX_QTY, byKey[key].quantity + line.quantity);
       else {
         if (order.length >= MAX_LINES) return { ok: false, code: 'moxfield.too_large' };
         byKey[key] = line;
@@ -84,7 +87,7 @@ async function readMoxfieldCollection(opts) {
     }
     var pages = Number(d.totalPages) || 1;
     if (page >= pages || !d.data.length) break;
-    if (page === MAX_PAGES) return { ok: false, code: 'moxfield.too_large' };
+    if (page === MAX_PAGES || items >= MAX_ENTRIES) return { ok: false, code: 'moxfield.too_large' };
   }
   if (!order.length) return { ok: false, code: 'moxfield.collection_empty' };
   return {
