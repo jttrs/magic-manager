@@ -162,3 +162,17 @@ def test_no_prompt_bypasses_the_helper():
                 if _PROMPT.search(code):
                     offenders.append(f"{rel}:{i}: {line.strip()}")
     assert offenders == [], "route prompts through magic_manager.interactive:\n" + "\n".join(offenders)
+
+
+def test_cart_loader_never_reads_stdin_unasked(monkeypatch, capsys):
+    """Headless failed + no --file: stop with the bookmarklet instruction, don't read stdin."""
+    import sys
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import manapool_cart
+    import manapool_common
+    monkeypatch.setattr(manapool_cart, "_load_env", lambda: {})
+    monkeypatch.setattr(manapool_cart, "fetch_headless", lambda env: None)
+    monkeypatch.setattr(sys, "stdin", type("S", (), {"read": lambda self: pytest.fail("read stdin")})())
+    with pytest.raises(SystemExit) as e:
+        manapool_common.load_cart(None)
+    assert e.value.code == 2 and "--file -" in capsys.readouterr().err

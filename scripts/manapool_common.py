@@ -59,8 +59,10 @@ def load_cart(file: str | None, method: str | None = None) -> list[dict]:
       ``manapool_price_check.py`` invokes it, preserving its
       ``manapool_cart.py | manapool_price_check.py`` pipe contract.)
     - otherwise (``method`` None or "headless") → live headless fetch via
-      ``manapool_cart.fetch_headless``; if that fails and headless wasn't
-      forced, fall back to reading stdin.
+      ``manapool_cart.fetch_headless``; if that fails, stop with the
+      bookmarklet instruction (exit 2). Stdin is read only on an explicit
+      ``file='-'`` / ``method='bookmarklet'``, so a run with an open but
+      silent stdin (an agent, a job) never blocks on it.
     """
     if file is not None:
         return _read_json_cart(file)
@@ -74,7 +76,9 @@ def load_cart(file: str | None, method: str | None = None) -> list[dict]:
         return items
     if method == "headless":
         raise SystemExit("headless cart fetch failed (and no fallback requested).")
-    return _read_json_cart("-")
+    print("headless cart fetch failed. Click the cart bookmarklet on manapool.com/cart, then "
+          "pipe its JSON: pbpaste | uv run python scripts/<this script> --file -", file=sys.stderr)
+    raise SystemExit(2)
 
 
 # ---------- mapping + pricing: the engine (magic_manager.cart) ----------

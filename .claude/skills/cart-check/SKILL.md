@@ -31,7 +31,7 @@ uv run python scripts/manapool_cart_check.py --set <CODE> --check all   # all fo
 uv run python scripts/manapool_cart_check.py                            # no set: dupes + overpay + impute family
 ```
 
-That's the whole happy path: it fetches the live cart (headless, else stdin), does ONE cart→card mapping pass, runs the requested checks, prints the concise chat report to stdout, and writes the full report to `output/cart-check/reports/cart-check-<anchor>-<ts>.md`.
+That's the whole happy path: it fetches the live cart (headless; if that fails it stops with exit 2 and the bookmarklet instruction — stdin is read only with `--file -`), does ONE cart→card mapping pass, runs the requested checks, prints the concise chat report to stdout, and writes the full report to `output/cart-check/reports/cart-check-<anchor>-<ts>.md`.
 
 **When no `--set` is given**, the script skips the anchor-only checks (`owned`/`missing`) and instead prints an `imputed set famil…: <anchor>` line on **stderr**. Surface that anchor to the user and offer to re-run with `--set <anchor>` to add the owned + missing checks. If it imputes *several* families (a cart spanning e.g. FIN + TLA), list them and ask which to scope to — never silently pick.
 
@@ -44,7 +44,7 @@ That's the whole happy path: it fetches the live cart (headless, else stdin), do
 | `--set CODE` | Set-family anchor (e.g. `tla`). **Required** for the `missing` check and to include `owned`/`missing` in `--check all`. Scopes `owned`/`overpay` to `set:CODE+related`; out-of-family cart lines are counted + reported on stderr, never misclassified. When omitted, the script imputes the family from the cart's own set codes (stderr) instead of erroring. |
 | `--check dupes\|owned\|missing\|overpay\|all` | Which check(s) to run. Default `all` — **context-sensitive**: with `--set` it runs all four; without, only the anchor-free `dupes` + `overpay`. Each is atomic — run just one when that's all the user asked. |
 | `--file PATH` / `--file -` | Read cart JSON from a file / stdin (bookmarklet output) instead of the live headless fetch. |
-| `--method headless\|bookmarklet` | Force the cart fetch path. Default: try headless, else read stdin. |
+| `--method headless\|bookmarklet` | Force the cart fetch path. Default: headless (`bookmarklet` reads stdin). |
 | `--over-market-pct N` | ⚠️ flag threshold for the overpay check: % over Scryfall market. Default 10. |
 | `--treatment-class CLASS` | Treatment class for the `missing` check (forwarded to `missing.missing_printings`). Default `preferred`. |
 
