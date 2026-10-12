@@ -5,16 +5,16 @@ const DECK_URL = `/decks?deck=${encodeURIComponent(detail.deck.slug)}`;
 
 const owned = fixtures.recipes.recipes.filter((r) => r.ownership !== 'none');
 
-test('recipe list shows what you own by default; ownership, kind, deck type and text filter it; the nav has Decks', async ({ page }) => {
+test('recipe list shows what you own by default; ownership, kind, deck type and text filter it; the rail is Find → Show → Arrange', async ({ page }) => {
   await page.goto('/decks');
   await expect(page.getByRole('link', { name: 'Decks' })).toHaveAttribute('aria-current', 'page');
   const list = page.getByRole('navigation', { name: 'Deck recipes' });
   await expect(list.getByRole('button')).toHaveCount(owned.length);
   await expect(page.getByRole('status').filter({ hasText: `${owned.length} recipes` })).toBeVisible();
-  // Search is the first field of Show.
-  const show = page.getByRole('complementary', { name: 'Deck controls' });
-  await expect(show.getByRole('heading').first()).toHaveText('Show');
-  await expect(show.getByRole('searchbox').first()).toHaveAccessibleName('Deck, set or author');
+  // The rail reads Find (the search field alone) → Show → Arrange.
+  const rail = page.getByRole('complementary', { name: 'Deck controls' });
+  await expect(rail.getByRole('heading', { level: 2 })).toHaveText(['Find', 'Show', 'Arrange']);
+  await expect(rail.getByRole('searchbox').first()).toHaveAccessibleName('Deck, set or author');
 
   await page.getByRole('button', { name: /^None/ }).click();
   await expect(page).toHaveURL(/own=/);

@@ -73,8 +73,10 @@ export function DecksView() {
 
   const sidebar = (
     <>
-      <SideSection title="Show">
+      <SideSection title="Find">
         <TextField name="q" label="Deck, set or author" value={search.q} placeholder="e.g. Counter Blitz, Angels, fic…" onChange={(q) => set({ q })} />
+      </SideSection>
+      <SideSection title="Show">
         <SegmentedToggles<Ownership>
           label="You own"
           showLabel
