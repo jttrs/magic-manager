@@ -24,7 +24,7 @@ import subprocess
 import sys
 
 MARK = "<!-- mm-review"
-GENERATED = ("web/openapi.json", "web/src/core/api/", "extension/src/stores.js")
+GENERATED = ("web/openapi.json", "web/src/core/api/", "extension/src/stores.js", "extension/src/tokens.css")
 # Markdown that steers agents or CI is code for this rule, never "docs-only".
 NOT_DOCS = ("CLAUDE.md", ".claude/", ".github/")
 STAMP_RE = re.compile(
