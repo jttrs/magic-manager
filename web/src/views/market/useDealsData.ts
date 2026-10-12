@@ -19,10 +19,13 @@ export const dealsPricesQuery = () =>
 
 /** Open-tab store pages the browser companion read with the tabs (url → reading),
  *  handed to the read-prices job so those stores aren't read on this Mac. */
+export type DealsPages = { pages: Record<string, RenderedPage>; readAt: number | null };
 const dealsPagesKey = ['deals', 'pages'] as const;
 export const dealsPagesQuery = () =>
-  queryOptions({ queryKey: dealsPagesKey, queryFn: async () => ({}) as Record<string, RenderedPage>, enabled: false, staleTime: Infinity, gcTime: 30 * 60_000 });
-export const setDealsPages = (qc: QueryClient, pages: Record<string, RenderedPage>) => qc.setQueryData(dealsPagesKey, pages);
+  queryOptions({ queryKey: dealsPagesKey, queryFn: async () => ({ pages: {}, readAt: null }) as DealsPages, enabled: false, staleTime: Infinity, gcTime: 30 * 60_000 });
+/** Stamps the pages with when they were read, so a later "Read prices" can tell they've gone stale. */
+export const setDealsPages = (qc: QueryClient, pages: Record<string, RenderedPage>, readAt: number = Date.now()) =>
+  qc.setQueryData<DealsPages>(dealsPagesKey, { pages, readAt });
 
 export const setPrices = (qc: QueryClient, prices: Map<string, PriceRow>) => qc.setQueryData(dealsPricesKey, prices);
 

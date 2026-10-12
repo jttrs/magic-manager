@@ -229,6 +229,26 @@ test.describe('Deals', () => {
     expect(jobBody!.pages).toEqual(TABS.pages);
   });
 
+  test('Read prices after the tab reading went stale re-reads the tabs first', async ({ page }) => {
+    await flags(page, { companion: true, deals: true });
+    const t0 = new Date('2026-06-01T12:00:00Z');
+    await page.clock.setFixedTime(t0);
+    await fakeCompanion(page, { answers: { tabs: { ok: true, data: TABS } } });
+    await page.route('**/api/deals/tabs', (r) => r.fulfill({ json: SORTED }));
+    let jobBody: { pages: Record<string, unknown> } | null = null;
+    await page.route('**/api/jobs/deals.read_prices', (r) => { jobBody = r.request().postDataJSON(); return r.fulfill({ status: 500, json: { detail: 'stop here' } }); });
+    const tabReads = () => page.evaluate(() => (window as unknown as { __companionRequests: { kind: string }[] }).__companionRequests.filter((q) => q.kind === 'tabs').length);
+    await page.goto('/market?subject=deals');
+    await page.getByRole('button', { name: 'Read my open tabs' }).click();
+    await expect(page.getByText('Read in this browser by the companion')).toBeVisible();
+    expect(await tabReads()).toBe(1);
+    await page.clock.setFixedTime(new Date(t0.getTime() + 3 * 60_000));
+    await page.getByRole('button', { name: 'Read 2 prices' }).click();
+    await expect.poll(() => jobBody).not.toBeNull();
+    expect(await tabReads()).toBe(2);
+    expect(jobBody!.pages).toEqual(TABS.pages);
+  });
+
   const BESTBUY = 'https://www.bestbuy.com/site/x/123.p';
   const TARGET = 'https://www.target.com/p/x/-/A-1';
   const watchStore = (url: string, store: string, read_in_browser: boolean) => ({
