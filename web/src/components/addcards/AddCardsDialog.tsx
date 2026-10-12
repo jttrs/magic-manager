@@ -104,7 +104,9 @@ export function AddCardsDialog({ trigger, seed, onSeedDone }: { trigger?: ReactN
             <header className="flex flex-wrap items-end gap-x-6 gap-y-2 border-b-2 border-rule-strong px-5 pt-4">
               <Dialog.Title className="pb-2 text-3xl voice-condensed font-bold leading-none">Add cards</Dialog.Title>
               <Dialog.Description className="sr-only">Search for a printing, paste a card list, or bring a deck or precon. Review every line, then add the copies to your collection.</Dialog.Description>
-              <Tabs.List aria-label="How to add" className="flex max-w-full gap-5 overflow-x-auto">
+              {/* The row (not each tab) hangs over the header rule, so the active underline
+                  sits on it without overflowing the sideways-scrolling row. */}
+              <Tabs.List aria-label="How to add" className="-mb-0.5 flex max-w-full gap-5 overflow-x-auto">
                 {(
                   [
                     ['search', 'Search'],
@@ -116,7 +118,7 @@ export function AddCardsDialog({ trigger, seed, onSeedDone }: { trigger?: ReactN
                   <Tabs.Trigger
                     key={v}
                     value={v}
-                    className="-mb-0.5 shrink-0 cursor-pointer whitespace-nowrap border-b-2 border-transparent pb-2 text-md voice-semi text-ink-muted transition-colors ease-guide hover:text-ink data-[state=active]:border-accent data-[state=active]:text-ink"
+                    className="shrink-0 cursor-pointer whitespace-nowrap border-b-2 border-transparent pb-2 text-md voice-semi text-ink-muted transition-colors ease-guide hover:text-ink data-[state=active]:border-accent data-[state=active]:text-ink"
                   >
                     {label}
                   </Tabs.Trigger>
