@@ -120,7 +120,8 @@ test('a TCGplayer cart: the real extension reads your cart tab, you approve, the
   const approve = await approval;
   await expect(approve.locator('#title')).toHaveText('Send your TCGplayer cart?');
   await expect(approve.locator('#summary')).toHaveText('TCGplayer cart · 8 lines · 9 items · $128.54');
-  await expect(approve.locator('#table')).toContainText('TCGplayer #487805');
+  await expect(approve.locator('#table')).toContainText('Tales of Middle-earth #246');
+  await expect(approve.locator('#table')).not.toContainText('487805');   // store ids only in the raw data
   await expect(approve.locator('#table')).toContainText('LP');
   expect(bodies).toEqual([]);
   await approve.getByRole('button', { name: 'Send to magic-manager' }).click();
@@ -158,7 +159,7 @@ test('a Moxfield collection: the real extension reads every page in your Moxfiel
   await expect(approve.locator('#title')).toHaveText('Send your Moxfield cards?');
   const copies = GOLD.lines.reduce((t: number, l: { quantity: number }) => t + l.quantity, 0);
   await expect(approve.locator('#summary')).toHaveText(`Moxfield collection (shared link) · 20 printings · ${copies} cards`);
-  await expect(approve.locator('#table')).toContainText('proxy — skipped');
+  await expect(approve.locator('#table')).toContainText('proxy, skipped');
   expect(previews).toEqual([]);
   await approve.getByRole('button', { name: 'Send to magic-manager' }).click();
   await expect(d.getByRole('heading', { name: 'Moxfield collection (shared link)' })).toBeVisible();
@@ -274,6 +275,41 @@ test('another app on this computer (a different port) gets no answer either', as
   await other.route('http://localhost:5999/', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<title>other</title>' }));
   await other.goto('http://localhost:5999/');
   expect(await forgedRequest(other)).toBe('no answer');
+});
+
+test('the settings page says whether the paired app has checked in', async ({ ext }) => {
+  const opts = await ext.context.newPage();
+  await opts.goto(`chrome-extension://${ext.id}/src/options.html`);
+  await expect(opts.locator('#pair-status')).toContainText('hasn’t checked in yet');
+  await expect(opts.locator('#pair-status')).toHaveClass('warn');
+  const { page } = await appPage(ext.context);
+  await expect(page.getByRole('button', { name: 'Browser companion · connected' })).toBeVisible();
+  await expect(opts.locator('#pair-status')).toContainText(`Paired with ${APP}. The app last checked in just now.`);   // live, no reload
+  await expect(opts.getByRole('textbox', { name: 'App address' })).toHaveValue(APP);
+});
+
+test('each optional feature is a real switch that shows its state', async ({ ext }) => {
+  const opts = await ext.context.newPage();
+  await opts.goto(`chrome-extension://${ext.id}/src/options.html`);
+  // The harness grants www.tcgplayer.com and moxfield.com up front (see the fixture).
+  await expect(opts.getByRole('switch', { name: 'TCGplayer cart' })).toHaveAttribute('aria-checked', 'true');
+  await expect(opts.getByRole('switch', { name: 'TCGplayer cart' })).toContainText('On');
+  await expect(opts.getByRole('switch', { name: 'Card Kingdom cart' })).toHaveAttribute('aria-checked', 'false');
+  await expect(opts.getByRole('switch', { name: 'Card Kingdom cart' })).toContainText('Off');
+  await expect(opts.getByRole('switch', { name: /Moxfield/ })).toHaveAttribute('aria-checked', 'true');
+  await expect(opts.locator('#cart-state')).toHaveText('Always on');
+  expect(await opts.getByRole('switch').count()).toBe(6);
+});
+
+test('paired with the wrong address: the app never checks in, and the settings page says so', async ({ ext }) => {
+  await ext.worker.evaluate(() => chrome.storage.local.set({ appOrigin: 'http://localhost:5999' }));
+  const { page } = await appPage(ext.context);
+  await page.getByRole('button', { name: 'Browser companion · set up' }).click();
+  await expect(page.getByRole('dialog').getByRole('status')).toContainText('Not connected');
+  await expect(page.getByRole('dialog').getByRole('status')).toContainText(APP);
+  const opts = await ext.context.newPage();
+  await opts.goto(`chrome-extension://${ext.id}/src/options.html`);
+  await expect(opts.locator('#pair-status')).toContainText('Paired with http://localhost:5999, but the app hasn’t checked in yet');
 });
 
 test('the settings page refuses addresses it may not pair with', async ({ ext }) => {

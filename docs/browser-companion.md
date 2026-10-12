@@ -13,8 +13,8 @@ connected. Security design: [`browser-companion-security.md`](browser-companion-
    `config/features.local.toml`. Restart `mm serve`.
 2. App header → plug icon → **Download the companion**, unzip, `chrome://extensions` → Developer mode
    → **Load unpacked**.
-3. Companion icon → enter the app address → **Pair** (Chrome asks to allow it) → reload the app tab.
-4. Optional: switch on **TCGplayer cart**, **Card Kingdom cart**, **Deals**, **Moxfield**, **Archidekt** and/or **Order history**
+3. Companion icon → paste the app's exact address (the app's header → **Browser companion** shows it with a copy button; the field starts empty, no default port) → **Pair** (Chrome asks to allow it) → reload the app tab. The settings page then says whether that address has checked in (the worker records the paired app's last hello, `storage.local` `lastHello`); "hasn't checked in yet" means the app isn't open at exactly that address.
+4. Optional: turn on the switches for **TCGplayer cart**, **Card Kingdom cart**, **Deals**, **Moxfield**, **Archidekt** and/or **Order history**
    (TCGplayer + Card Kingdom; Mana Pool needs nothing extra) on the companion's settings page (each asks
    Chrome for just its sites).
 
@@ -36,7 +36,7 @@ Add cards → **Moxfield collection** (your collection, one binder, or a shared 
 | Worker | `extension/src/background.js` | Validates the asker, runs a reader, opens the approval window, delivers the result. |
 | Bridge | `extension/src/bridge.js` | Content script on the paired app origin only; relays postMessage ↔ worker. |
 | Approval / settings | `extension/src/approve.*`, `options.*` | The extension's own pages. |
-| Generated | `extension/src/stores.js`, manifest permissions | From `config/vendors.toml` via `scripts/build_extension.py` (`--check` in tests). |
+| Generated | `extension/src/stores.js`, manifest permissions, `extension/src/tokens.css` | Stores/permissions from `config/vendors.toml`, colour + type tokens from `web/tokens/*.tokens.json`, via `scripts/build_extension.py` (`--check` in tests). The Archivo face is bundled in `extension/src/fonts/` (OFL). |
 | Error catalog | `extension/errors.json` | Every `<area>.<reason>` code → message + fix, used by extension, app and server. |
 | App protocol | `web/src/core/companion.ts` | Request/response over postMessage, zod-validated, coded errors. |
 | App hooks | `web/src/app/useCompanion.ts`, `useBrowserDeck.ts` | Detection (hello/ping), version check, reads. |

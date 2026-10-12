@@ -71,6 +71,20 @@ def test_no_remote_code_eval_or_html_injection():
         assert not re.search(r"""(?:src|href)=["']https?://""", src), f"{html.name}: remote resource"
 
 
+def test_pages_use_generated_tokens_and_a_bundled_font_only():
+    css = {p.name: p.read_text() for p in EXT.rglob("*.css")}
+    assert "@font-face" in css["tokens.css"] and companion.FONT_FILE in css["tokens.css"]
+    font = EXT / "src" / companion.FONT_FILE
+    assert font.read_bytes()[:4] == b"wOF2" and (font.parent / "OFL.txt").exists()   # the face + its licence ship
+    for name, src in css.items():
+        assert not re.search(r"url\(\s*['\"]?(?:https?:)?//", src), f"{name}: remote resource"
+        assert "@import" not in src, f"{name}: @import"
+    # page.css never hand-copies colours: every colour comes from the generated tokens.
+    assert not re.search(r"#[0-9a-fA-F]{3,8}\b|rgba?\(", css["page.css"]), "page.css: raw colour, use var(--theme-*)"
+    for html in EXT.rglob("*.html"):
+        assert html.read_text().index('href="tokens.css"') < html.read_text().index('href="page.css"')
+
+
 def test_no_dependencies_or_build_step():
     assert not (EXT / "package.json").exists() and not (EXT / "node_modules").exists()
 

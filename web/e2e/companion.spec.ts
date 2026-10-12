@@ -57,6 +57,7 @@ test.describe('setup', () => {
     await expect(page.getByRole('button', { name: /Browser companion/ })).toHaveCount(0);
     await flags(page, { companion: true });
     await page.goto(COLLECTION_URL);
+    await expect(page.getByRole('button', { name: 'Browser companion · set up · not connected' })).toContainText('Not connected');
     await page.getByRole('button', { name: 'Browser companion · set up' }).click();
     const d = page.getByRole('dialog', { name: 'Browser companion' });
     await expect(d.getByRole('status')).toContainText('Not connected');
@@ -70,6 +71,7 @@ test.describe('setup', () => {
     await flags(page, { companion: true });
     await fakeCompanion(page, { features: { cart: true, deals: false, moxfield: true } });
     await page.goto(COLLECTION_URL);
+    await expect(page.getByRole('button', { name: 'Browser companion · connected · v0.1.0' })).toContainText('v0.1.0');
     await page.getByRole('button', { name: 'Browser companion · connected' }).click();
     const d = page.getByRole('dialog', { name: 'Browser companion' });
     await expect(d.getByRole('status')).toContainText('Connected · version 0.1.0');
@@ -80,6 +82,7 @@ test.describe('setup', () => {
     await flags(page, { companion: true });
     await fakeCompanion(page, { version: '0.0.9' });
     await page.goto(COLLECTION_URL);
+    await expect(page.getByRole('button', { name: 'Browser companion · update available · v0.0.9 → v0.1.0' })).toContainText('Update');
     await page.getByRole('button', { name: 'Browser companion · update available' }).click();
     await expect(page.getByRole('dialog', { name: 'Browser companion' })).toContainText('Version 0.1.0 is available');
   });

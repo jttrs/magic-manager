@@ -8,7 +8,12 @@ import { CopyButton } from '../CopyButton';
 export function CompanionButton() {
   const c = useCompanion();
   const [open, setOpen] = useState(false);
-  const label = c.status === 'ready' ? (c.outdated ? 'Browser companion · update available' : 'Browser companion · connected') : 'Browser companion · set up';
+  const v = c.hello?.version;
+  const label = c.status === 'ready'
+    ? (c.outdated ? `Browser companion · update available · v${v} → v${c.latest}` : `Browser companion · connected · v${v}`)
+    : c.status === 'absent' ? 'Browser companion · set up · not connected' : 'Browser companion';
+  // A quiet word beside the icon on wider screens (phones keep the icon + dot).
+  const word = c.status === 'ready' ? (c.outdated ? 'Update' : `v${v}`) : c.status === 'absent' ? 'Not connected' : null;
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Tooltip.Provider delayDuration={200}>
@@ -18,14 +23,20 @@ export function CompanionButton() {
               <button
                 type="button"
                 aria-label={label}
-                className="relative grid size-8 cursor-pointer place-items-center rounded-sm text-on-chrome-muted transition-colors ease-guide hover:text-on-chrome"
+                className="touch-hit relative flex h-8 min-w-8 cursor-pointer items-center justify-center gap-1.5 rounded-sm px-1.5 text-on-chrome-muted transition-colors ease-guide hover:text-on-chrome"
               >
-                <svg viewBox="0 0 16 16" aria-hidden="true" className="size-4">
+                <svg viewBox="0 0 16 16" aria-hidden="true" className="size-4 shrink-0">
                   <path d="M6 2.5v3M10 2.5v3M4.5 5.5h7v2.5a3.5 3.5 0 0 1-7 0z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                   <path d="M8 11.5v2" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                 </svg>
-                {(c.status === 'ready' || c.outdated) && (
-                  <span aria-hidden="true" className={`absolute right-1 top-1 size-1.5 rounded-pill ${c.outdated ? 'bg-danger' : 'bg-accent'}`} />
+                {c.status === 'ready' && (
+                  <span aria-hidden="true" className={`absolute left-[1.4rem] top-1 size-1.5 rounded-pill ${c.outdated ? 'bg-danger' : 'bg-accent'}`} />
+                )}
+                {c.status === 'absent' && (
+                  <span aria-hidden="true" className="absolute left-[1.4rem] top-1 size-1.5 rounded-pill border border-on-chrome-muted" />
+                )}
+                {word && (
+                  <span aria-hidden="true" className={`hidden whitespace-nowrap text-xs voice-semi tabular md:inline ${c.outdated ? 'text-on-chrome' : ''}`}>{word}</span>
                 )}
               </button>
             </Dialog.Trigger>
@@ -114,10 +125,18 @@ function Setup({ c }: { c: CompanionState }) {
 function Status({ c }: { c: CompanionState }) {
   if (c.status === 'checking') return <p role="status" className="text-md text-ink-muted">Looking for the companion on this page…</p>;
   if (c.status === 'absent') {
+    const origin = window.location.origin;
     return (
-      <p role="status" className="text-md leading-relaxed">
-        <span className="font-medium">Not connected.</span> <span className="text-ink-muted">Either it isn’t installed, it isn’t paired with {window.location.origin}, or this page was open before you paired — reload it.</span>
-      </p>
+      <div role="status" className="flex flex-col gap-2 text-md leading-relaxed">
+        <p>
+          <span className="font-medium">Not connected.</span>{' '}
+          <span className="text-ink-muted">The companion must be paired with exactly this address. Paste it into the companion’s settings, press Pair, then reload this page.</span>
+        </p>
+        <span className="flex flex-wrap items-center gap-2">
+          <code className="rounded-xs bg-paper-sunk px-2 py-1 tabular text-sm">{origin}</code>
+          <CopyButton getText={() => origin} label="Copy this app’s address" tone="paper" />
+        </span>
+      </div>
     );
   }
   return (
