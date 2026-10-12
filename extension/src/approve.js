@@ -11,9 +11,16 @@ const MAX_ROWS = 500;
 /** A collection read is listed in full (scrollable) up to this many lines; the raw data has the rest. */
 const MAX_COLLECTION_ROWS = 20000;
 
-function cell(tr, text, cls) {
+/** A cell: plain text, or {text, meta} — the name with a muted detail line under it. */
+function cell(tr, value, cls) {
   const td = document.createElement(tr.parentElement?.tagName === 'THEAD' ? 'th' : 'td');
-  td.textContent = text == null ? '' : String(text);
+  if (value && typeof value === 'object') {
+    const main = document.createElement('span');
+    main.textContent = value.text == null ? '' : String(value.text);
+    td.appendChild(main);
+    const meta = (value.meta || []).filter(Boolean).join(' · ');
+    if (meta) { const m = document.createElement('span'); m.className = 'meta'; m.textContent = meta; td.appendChild(m); }
+  } else td.textContent = value == null ? '' : String(value);
   if (cls) td.className = cls;
   tr.appendChild(td);
 }
@@ -29,6 +36,8 @@ function table(headers, rows, max = MAX_ROWS) {
 }
 
 const money = (n) => (n == null ? '—' : `$${Number(n).toFixed(2)}`);
+/** A printing as people read it: set code or name + collector number. Store/Scryfall ids stay in the raw data. */
+const printing = (set, number) => [set, number ? `#${number}` : null].filter(Boolean).join(' ');
 
 function render(p) {
   const confirm = p.stage === 'confirm';
@@ -44,13 +53,12 @@ function render(p) {
   $('summary').textContent = p.summary;
   const d = p.data;
   if (p.kind === 'cart') {
-    const printing = (i) => i.scryfall_id ? i.scryfall_id.slice(0, 8) + '…'
-      : i.tcgplayer_product_id ? `TCGplayer #${i.tcgplayer_product_id}${i.number ? ` · ${i.set_name || ''} ${i.number}` : ''}`
-        : i.cardkingdom_product_id ? `Card Kingdom #${i.cardkingdom_product_id} · ${i.set_name || ''}`
-          : i.kind && i.kind !== 'single' ? `${i.kind} — not a card` : 'unknown';
-    table([['Card'], ['Printing'], ['Finish'], ['Cond.'], ['Qty', 'num'], ['Price each', 'num']],
-      d.items.map((i) => [i.name, printing(i), [i.finish, ...(i.treatments || [])].join(' · '),
-        [i.condition, i.language && i.language !== 'English' ? i.language : null].filter(Boolean).join(' · '), i.quantity, money(i.price)]));
+    table([['Card'], ['Qty', 'num'], ['Each', 'num']],
+      d.items.map((i) => [{ text: i.name, meta: [
+        printing(i.set_name, i.number),
+        i.kind && i.kind !== 'single' ? `${i.kind}, not a card` : i.finish,
+        ...(i.treatments || []), i.condition, i.language && i.language !== 'English' ? i.language : null,
+      ] }, i.quantity, money(i.price)]));
   } else if (p.kind === 'tabs') {
     table([['Store page'], ['Page reading']],
       d.tabs.map((t) => [t.title || t.url, d.pages[t.url] ? `title, price tags, ${d.pages[t.url].text.split('\n').filter(Boolean).length} price/stock lines` : 'link and title only']));
@@ -62,24 +70,26 @@ function render(p) {
       d.urls.map((u) => [u.store, u.url, (d.pages || {})[u.url] ? `title, price tags, ${d.pages[u.url].text.split('\n').filter(Boolean).length} price/stock lines` : 'couldn’t read — not sent']));
   } else if (p.kind === 'moxfield') {
     const rows = [];
-    Object.entries(d.deck.boards).forEach(([board, b]) => Object.values(b.cards).forEach((c) => rows.push([c.card.name, board, c.card.set ? `${c.card.set.toUpperCase()} ${c.card.cn || ''}` : '', c.isFoil ? 'foil' : (c.finish || ''), c.quantity])));
-    table([['Card'], ['Board'], ['Printing'], ['Finish'], ['Qty', 'num']], rows);
+    Object.entries(d.deck.boards).forEach(([board, b]) => Object.values(b.cards).forEach((c) => rows.push([
+      { text: c.card.name, meta: [board, printing(c.card.set?.toUpperCase(), c.card.cn), c.isFoil ? 'foil' : c.finish] }, c.quantity])));
+    table([['Card'], ['Qty', 'num']], rows);
   } else if (p.kind === 'archidekt') {
-    table([['Card'], ['Category'], ['Printing'], ['Finish'], ['Qty', 'num']],
-      d.deck.cards.map((c) => [c.card.oracleCard.name, (c.categories || []).join(', '), c.card.edition.editioncode ? `${c.card.edition.editioncode.toUpperCase()} ${c.card.collectorNumber || ''}` : '', c.modifier || '', c.quantity]));
+    table([['Card'], ['Qty', 'num']],
+      d.deck.cards.map((c) => [{ text: c.card.oracleCard.name, meta: [(c.categories || []).join(', '),
+        printing(c.card.edition.editioncode?.toUpperCase(), c.card.collectorNumber), c.modifier] }, c.quantity]));
   } else if (p.kind === 'moxfield_binders') {
     table([['Binder'], ['Cards', 'num']], d.binders.map((b) => [b.name, b.cards ?? '']));
   } else if (p.kind === 'moxfield_collection') {
     const c = d.collection;
-    table([['Card'], ['Printing'], ['Finish'], ['Qty', 'num'], ['Note']],
-      c.lines.map((l) => [l.name, l.set ? `${l.set.toUpperCase()} ${l.cn || ''}` : (l.scryfall_id || '').slice(0, 8), l.finish, l.quantity,
-        [l.proxy ? 'proxy — skipped' : '', l.digital ? 'digital — skipped' : ''].filter(Boolean).join(', ')]), MAX_COLLECTION_ROWS);
+    table([['Card'], ['Qty', 'num']],
+      c.lines.map((l) => [{ text: l.name, meta: [printing(l.set?.toUpperCase(), l.cn), l.finish,
+        l.proxy ? 'proxy, skipped' : null, l.digital ? 'digital, skipped' : null] }, l.quantity]), MAX_COLLECTION_ROWS);
   } else if (p.kind === 'order_list') {
     table([['Order'], ['Placed'], ['Total', 'num']], d.orders.map((o) => [o.order_id, o.ordered_at, money(o.total)]));
   } else if (p.kind === 'orders') {
     const rows = [];
-    d.orders.forEach((o) => o.lines.forEach((l) => rows.push([o.order_id, l.name, l.set_name || l.detail || '', l.kind === 'single' ? l.finish : l.kind, l.quantity, money(l.price)])));
-    table([['Order'], ['Item'], ['Set'], ['Finish'], ['Qty', 'num'], ['Price each', 'num']], rows);
+    d.orders.forEach((o) => o.lines.forEach((l) => rows.push([{ text: l.name, meta: [`Order ${o.order_id}`, l.set_name || l.detail, l.kind === 'single' ? l.finish : l.kind] }, l.quantity, money(l.price)])));
+    table([['Item'], ['Qty', 'num'], ['Each', 'num']], rows);
   }
   const warnings = d.warnings || [];
   $('warnings').replaceChildren(...warnings.slice(0, 20).map((w) => {

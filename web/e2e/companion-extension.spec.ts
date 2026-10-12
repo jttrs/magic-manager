@@ -120,7 +120,7 @@ test('a TCGplayer cart: the real extension reads your cart tab, you approve, the
   const approve = await approval;
   await expect(approve.locator('#title')).toHaveText('Send your TCGplayer cart?');
   await expect(approve.locator('#summary')).toHaveText('TCGplayer cart · 8 lines · 9 items · $128.54');
-  await expect(approve.locator('#table')).toContainText('TCGplayer #487805');
+  await expect(approve.locator('#table')).toContainText('Tales of Middle-earth #246');
   await expect(approve.locator('#table')).toContainText('LP');
   expect(bodies).toEqual([]);
   await approve.getByRole('button', { name: 'Send to magic-manager' }).click();
@@ -158,7 +158,7 @@ test('a Moxfield collection: the real extension reads every page in your Moxfiel
   await expect(approve.locator('#title')).toHaveText('Send your Moxfield cards?');
   const copies = GOLD.lines.reduce((t: number, l: { quantity: number }) => t + l.quantity, 0);
   await expect(approve.locator('#summary')).toHaveText(`Moxfield collection (shared link) · 20 printings · ${copies} cards`);
-  await expect(approve.locator('#table')).toContainText('proxy — skipped');
+  await expect(approve.locator('#table')).toContainText('proxy, skipped');
   expect(previews).toEqual([]);
   await approve.getByRole('button', { name: 'Send to magic-manager' }).click();
   await expect(d.getByRole('heading', { name: 'Moxfield collection (shared link)' })).toBeVisible();
