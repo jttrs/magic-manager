@@ -264,6 +264,14 @@ def _isolated_scraper_health(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _single_layout(monkeypatch):
+    """Tests run in the single-file layout unless one opts into split
+    (tests/test_layout.py), whatever the developer's shell exports."""
+    for var in ("MM_LAYOUT", "MM_DATA_DIR", "MM_USER"):
+        monkeypatch.delenv(var, raising=False)
+
+
+@pytest.fixture(autouse=True)
 def _isolated_analytics(tmp_path, monkeypatch):
     """Analytics never touches a real store or secret: each test gets its own
     analytics file and a fixed HMAC secret, the consent cache starts empty, and

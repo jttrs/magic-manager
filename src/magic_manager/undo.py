@@ -30,17 +30,12 @@ from pathlib import Path
 
 from . import db
 from .analytics import consent
+# Your data, parents before children — the one registry is ``layout``. Card/price/
+# EDHREC/tag tables are caches and are never touched (cards only ever grow, so
+# restored rows' FKs hold).
+from .layout import USER_TABLES
 from .sets import PARTIAL_SETS_KEY
 
-# Your data, parents before children. Card/price/EDHREC/tag tables are caches
-# and are never touched (cards only ever grow, so restored rows' FKs hold).
-USER_TABLES = (
-    "settings", "set_targets", "imports",
-    "ingest_events", "inventory", "inventory_events",
-    "decks", "deck_cards", "deck_versions", "deck_assignments",
-    "wishlist_entries", "earmarked_products", "earmark_links", "earmark_prices", "earmark_targets",
-    "purchases", "purchase_lines",
-)
 
 # ``settings`` keys a restore must NOT roll back: they reflect the latest choice
 # (opting out of tracking, then pressing Undo, must not opt you back in), or
