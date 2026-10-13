@@ -18,6 +18,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterable, Iterator
 
+from . import layout as _layout
 from . import util as _util
 
 DB_DIR_NAME = "db"
@@ -1317,16 +1318,70 @@ _FK_OFF_MIGRATIONS: dict[int, tuple[str, ...]] = {
 }
 
 
+def layout() -> _layout.Layout:
+    """The layout this process uses (``MM_LAYOUT``; see :mod:`magic_manager.layout`)."""
+    return _layout.resolve(os.environ, single_path=db_path(), default_dir=db_dir())
+
+
+def _open_split(lay: _layout.Layout) -> sqlite3.Connection:
+    """User file as ``main`` + the catalog ATTACHed as ``catalog``.
+
+    Unqualified table names resolve across both (SQLite searches main, then
+    attached files). Nothing is created or migrated here: the files must exist
+    at :data:`CURRENT_VERSION` (per-target migrations are a later step).
+    """
+    for f, what in ((lay.path, "user"), (lay.catalog, "catalog")):
+        if not f.is_file():
+            raise _layout.LayoutError(f"split layout: {what} DB {f} does not exist")
+    conn = sqlite3.connect(str(lay.path))
+    try:
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute(f"ATTACH DATABASE ? AS {_layout.CATALOG_SCHEMA}", (str(lay.catalog),))
+        for schema in ("main", _layout.CATALOG_SCHEMA):
+            row = conn.execute(f"SELECT version FROM {schema}.schema_version").fetchone()
+            have = row[0] if row else 0
+            if have != CURRENT_VERSION:
+                raise _layout.LayoutError(
+                    f"split layout: {schema} DB is at schema v{have}, this code needs v{CURRENT_VERSION}"
+                )
+        # A table in the wrong file would silently shadow (or be shadowed by) the right one.
+        for schema, foreign in (
+            ("main", _layout.CATALOG_TABLES | _layout.LEGACY_TABLES),
+            (_layout.CATALOG_SCHEMA, set(_layout.USER_TABLES) | _layout.LEGACY_TABLES),
+        ):
+            stray = sorted(
+                r[0] for r in conn.execute(f"SELECT name FROM {schema}.sqlite_master WHERE type='table'")
+                if r[0] in foreign
+            )
+            if stray:
+                raise _layout.LayoutError(f"split layout: {schema} DB holds tables of the other file: {stray}")
+    except Exception:
+        conn.close()
+        raise
+    return conn
+
+
 @contextmanager
 def connect(path: Path | None = None) -> Iterator[sqlite3.Connection]:
-    """Open a connection with foreign keys + Row factory + ensured schema."""
-    p = path or db_path()
-    p.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(p))
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
+    """Open a connection with foreign keys + Row factory + ensured schema.
+
+    An explicit ``path`` always opens that one file. Otherwise the layout
+    decides: ``single`` opens :func:`db_path`; ``split`` opens the user file
+    with the catalog attached (no schema changes are made in split).
+    """
+    lay = None if path is not None else layout()
+    if lay is not None and lay.kind == "split":
+        conn = _open_split(lay)
+    else:
+        p = path or db_path()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(str(p))
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
     try:
-        _ensure_schema(conn)
+        if lay is None or lay.kind == "single":
+            _ensure_schema(conn)
         yield conn
         conn.commit()
     except Exception:
