@@ -15,7 +15,7 @@
 function readStorePage(doc) {
   'use strict';
   var META = /^(og:title|og:price:amount|og:price:currency|product:price:amount|product:price:currency|product:availability|og:availability|twitter:title)$/i;
-  var LINE = /\$\s?\d|sold out|out of stock|in stock|coming soon|not available|pre-?order|add to cart|listing (?:was |has )?ended|unavailable/i;
+  var LINE = /\$\s?\d|sold out|out of stock|in stock|in[- ]store only|coming soon|not available|pre-?order|add to cart|listing (?:was |has )?ended|unavailable|temporary issue/i;
   var CURRENCY = /\bUSD?\s?\$|\bUSD\b/; // case-sensitive: "US $12.00", not "Contact Us"
   var OFFER = /^(?:sold (?:and shipped )?by|ships from(?: and sold by)?|shipper \/ seller|fulfilled by|condition)\b/i;
   var LABEL = /^(?:sold (?:and shipped )?by|ships from|shipper \/ seller|fulfilled by|condition):?$/i;

@@ -163,10 +163,18 @@ name = "Best Buy"
 hosts = ["bestbuy.com"]
 mode = "rendered"
 product_path = "^/(site|product)/.+"
-# The first $ amount is the price; the second is the ÷4 installment.
-price_pattern = '\$\s?(\d[\d,]*\.\d{2})'
-# Whole-line buy-box wording only: "pickup not available" etc. elsewhere on the page must not flip it.
-sold_out_pattern = '^(?:Sold Out|Coming Soon)$'
+# Real tabs pinned 2026-10-12 (tests/fixtures/vendors/rendered/bestbuy-*). JSON-LD
+# carries the price and seller but says InStock even when the buy box is sold out,
+# so the buy box decides: the FIRST buy-box state on the page (carousels below
+# have their own "Add to cart" / "Sold Out" buttons; a pre-order button also ends
+# the buy box). "Unavailable Nearby" is
+# Best Buy's sold-out state shown by location; "In Store Only" can't be ordered.
+price_pattern = '^\$\s?(\d[\d,]*\.\d{2})$'
+sold_out_pattern = '\A(?:(?!^(?:add to cart|pre-?order)$)[\s\S])*?^(?:Sold Out|Coming Soon|Unavailable Nearby|In[- ]Store Only)$'
+# Best Buy Marketplace: count only Best Buy's own new offer (JSON-LD seller first).
+seller_pattern = '^Sold by[ \t]*\n[ \t]*(\S.*?)[ \t]*$'
+sellers = ["Best Buy"]
+new_only = true
 
 [[vendor]]
 key = "target"
@@ -174,8 +182,15 @@ name = "Target"
 hosts = ["target.com"]
 mode = "rendered"
 product_path = "^/p/.+/-/A-\\d+"
-price_pattern = '\$\s?(\d[\d,]*\.\d{2})'
-sold_out_pattern = '^(?:Out of stock|Sold out)\b'
+# Real tabs pinned 2026-10-12 (tests/fixtures/vendors/rendered/target-*). No page
+# tags: the price is the first line that STARTS with $ ("$39.99 was $43.99"; the
+# "Pay in 4 … $10.00" line doesn't). Stock: only a buy-box "Out of stock" before
+# the first "Add to cart" (an in-stock page doesn't say so — read as unknown).
+price_pattern = '^\$\s?(\d[\d,]*\.\d{2})\b'
+sold_out_pattern = '\A(?:(?!^(?:add to cart|pre-?order)$)[\s\S])*?^(?:Out of stock|Sold out)\b'
+# Target's price module failed (in the buy box, before the first button): no
+# price to trust on the page.
+no_offer_pattern = '\A(?:(?!^(?:add to cart|pre-?order)$)[\s\S])*?^There was a temporary issue\b'
 
 [[vendor]]
 key = "ebay"

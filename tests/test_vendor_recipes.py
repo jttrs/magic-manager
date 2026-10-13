@@ -8,7 +8,9 @@ the nightly canary (scripts/vendor_canary.py) flags it live first.
 Open-tab (``rendered``) marketplaces keep real tab reads under
 ``rendered/<key>-<case>.json.gz`` (scripts/capture_store_tab.py, 2026-10-10):
 each holds BOTH read paths — the browser companion's extract and the AppleScript
-tab read — and every recipe expectation is checked against each.
+tab read — and every recipe expectation is checked against each. Best Buy and
+Target tabs (2026-10-12) were read in a throwaway browser profile (guest, no
+account), location text redacted.
 """
 from __future__ import annotations
 
@@ -55,6 +57,15 @@ RENDERED = {
     "walmart-third-party": (109.99, True, "Magic: The Gathering Lorwyn Eclipsed Play Booster Box", "CardsHQ", "third-party seller (CardsHQ)"),
     "gamestop-in-stock": (139.99, True, "Magic: The Gathering Marvel", "GameStop", None),
     "gamestop-sold-out": (159.99, False, "Magic: The Gathering Edge of Eternities", "GameStop", None),
+    # Best Buy: JSON-LD says InStock on every page; the buy box decides.
+    "bestbuy-in-stock": (174.99, True, "Wizards of The Coast - Magic: The Gathering Foundations Play Booster Box", "Best Buy", None),
+    "bestbuy-sold-out": (39.99, False, "Wizards of The Coast - Magic: The Gathering Duskmourn", "Best Buy", None),
+    "bestbuy-in-store-only": (41.99, False, "Wizards of The Coast - Magic: The Gathering  - The Hobbit Collector Booster", "Best Buy", None),
+    "bestbuy-pickup-only": (29.99, True, "Wizards of The Coast - Magic: The Gathering Foundations Commander Deck", "Best Buy", None),
+    # Target: no page tags; an in-stock page doesn't say so (unknown), a failed price module isn't counted.
+    "target-in-stock": (39.99, None, "Magic The Gathering: FINAL FANTASY VI Commander Deck", None, None),
+    "target-out-of-stock": (44.99, False, "Magic:The Gathering | Avatar:The Last Airbender Collector Booster", None, None),
+    "target-no-offer": (None, None, "Magic The Gathering | Reality Fracture Play Booster Display", None, "no offer"),
 }
 
 
@@ -70,9 +81,10 @@ def test_open_tab_recipe_reads_both_read_paths(name, path):
     v = vendors.by_key(name.split("-")[0])
     html, text = storefetch.page_from_extract(fixture[path])
     listing = vendors.read_listing(v, html, text=text)
-    assert (listing.price, listing.available, listing.seller) == (pytest.approx(price), available, seller)
+    assert (listing.price, listing.available, listing.seller) == (
+        pytest.approx(price) if price is not None else None, available, seller)
     assert (listing.title or "").startswith(title)
-    assert not re.search(r"Amazon\.com:|Walmart\.com|\| GameStop", listing.title)    # store noise stripped
+    assert not re.search(r"Amazon\.com:|Walmart\.com|\| GameStop|: Target$|- Best Buy$", listing.title)    # store noise stripped
     if skipped is None:
         assert listing.skipped is None
         assert storefetch.read(fixture["url"], rendered=fixture[path])[1].price == pytest.approx(price)
@@ -85,7 +97,7 @@ def test_open_tab_recipe_reads_both_read_paths(name, path):
 def test_every_rendered_fixture_has_an_expectation():
     assert {p.name.removesuffix(".json.gz") for p in (FIX / "rendered").glob("*.json.gz")} == set(RENDERED)
     marketplaces = {v.key for v in vendors.catalog() if v.mode == "rendered" and v.sellers}
-    assert marketplaces == {"amazon", "walmart", "gamestop"}
+    assert marketplaces == {"amazon", "walmart", "gamestop", "bestbuy"}
     assert marketplaces <= {n.split("-")[0] for n in RENDERED}, "every marketplace recipe needs a captured tab"
 
 
@@ -101,6 +113,14 @@ def test_every_rendered_fixture_has_an_expectation():
     # Walmart: a used / restored main offer.
     ("walmart", "Condition\nRestored: Like New\nCurrent price is Now $89.00\nSold and shipped by Walmart.com", "used / pre-owned offer (Restored: Like New)"),
     ("walmart", "$0.00\nCondition\nNew\nCurrent price is $45.99\nOut of stock\nSold and shipped by Walmart.com", None),
+    # Best Buy Marketplace: the buy box's "Sold by" names the seller (JSON-LD wins when present).
+    ("bestbuy", "Sold by\nBest Buy\n$29.99\nAdd to cart\nSold by\nReturn & Exchange Policy", None),
+    ("bestbuy", "Sold by\nCardShop Direct\n$129.99\nAdd to cart\nSold by\nReturn & Exchange Policy", "third-party seller (CardShop Direct)"),
+    ("bestbuy", "$29.99\nAdd to cart", "No seller shown"),
+    # Target's price module failed: whatever $ is left on the page isn't this offer.
+    ("target", "There was a temporary issue\nChoose delivery method in cart\nAdd to cart\n$19.99", "no offer"),
+    # ...but the same words further down (another module) don't refuse a real offer.
+    ("target", "$39.99\nAdd to cart\nReviews\nThere was a temporary issue", None),
 ])
 def test_marketplace_rules_on_page_text(key, text, skipped):
     listing = vendors.read_listing(vendors.by_key(key), "<html><head><title>x</title></head></html>", text=text)
@@ -209,13 +229,14 @@ def test_every_vendor_is_catalogued_tested_and_its_sample_is_a_product_page():
 
 
 @pytest.mark.parametrize("key,text,price,available", [
-    # Best Buy: the first $ amount is the price; the second is the ÷4 installment.
+    # Best Buy: the first whole-line $ amount is the price; installments come later.
     ("bestbuy", "Magic Foundations Play Booster Box\n$159.99\nor $39.99/mo. for 4 months\nAdd to Cart", 159.99, None),
     ("bestbuy", "Commander Deck\n$44.99\nSold Out", 44.99, False),
     # eBay: the first US $ amount; installments and shipping come later.
     ("ebay", "Final Fantasy Collector Box\nUS $529.99\nor 4 interest-free payments of US $132.50\nShipping: US $20.00", 529.99, None),
     ("ebay", "This listing was ended by the seller.\nUS $99.00", 99.0, False),
     ("target", "MTG Foundations Bundle\n$59.99\nOut of stock at your store", 59.99, False),
+    ("target", "Pay in 4 interest-free payments of $10.00\n$39.99 was $43.99", 39.99, None),
 ])
 def test_rendered_recipes_pick_the_right_price(key, text, price, available):
     listing = vendors.read_listing(vendors.by_key(key), "<html><head><title>x</title></head></html>", text=text)
@@ -355,6 +376,13 @@ def test_server_errors_say_the_site_is_unavailable():
 @pytest.mark.parametrize("key,text", [
     ("bestbuy", "Box\n$159.99\nAdd to Cart\nPickup not available at Springfield\nShipping: sold out of express"),
     ("target", "Box\n$59.99\nAdd to cart\nShip it\nPickup not available\nNot available at your store"),
+    # Carousels below the buy box carry their own buttons: the main offer's state comes first.
+    ("bestbuy", "Sold by\nBest Buy\n$174.99\nAdd to cart\nSold by\nReturn & Exchange Policy\n$29.99\nSold Out\n$59.99\nIn Store Only"),
+    ("bestbuy", "$29.99\nShipping not available for this item\nAdd to cart"),
+    ("target", "$39.99 was $43.99\nAdd to cart\nFrequently bought together\n$24.99\nOut of stock"),
+    # A pre-order button ends the buy box too.
+    ("bestbuy", "$49.99\nPre-Order\nSold by\nReturn & Exchange Policy\n$29.99\nSold Out"),
+    ("target", "$49.99\nPreorder\nFrequently bought together\n$24.99\nOut of stock"),
 ])
 def test_buy_box_sold_out_patterns_ignore_stray_wording(key, text):
     listing = vendors.read_listing(vendors.by_key(key), "<html><head><title>x</title></head></html>", text=text)
@@ -389,6 +417,9 @@ def test_content_values_never_run_across_tags():
 @pytest.mark.parametrize("key,text", [
     ("bestbuy", "Box\n$159.99\nSold Out\nPickup not available"),
     ("bestbuy", "Box\n$159.99\ncoming soon"),
+    ("bestbuy", "$29.99\nUnavailable Nearby\nSold by\nReturn & Exchange Policy\n$19.99\nAdd to cart"),
+    ("bestbuy", "$41.99\nIn Store Only\nSold by\nReturn & Exchange Policy\nMost likely in store only\nAdd to cart"),
+    ("target", "$44.99\nPickup\nNot available\nShipping\nNot available\nOut of stock\nNotify me when available\nAdd to cart"),
     ("target", "Box\n$59.99\nOut of stock at your store\nShip it"),
     ("target", "Box\n$59.99\nSold out"),
 ])
