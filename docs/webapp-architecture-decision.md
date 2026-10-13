@@ -539,19 +539,24 @@ The browser companion (H12) applies the same principle with its own threat model
 
 ### 25.2 Pinned / open
 
-- **External access (partly decided, rest pinned):** the owner reaches the server over
-  **Tailscale** (admin access, no open ports). Friends' access is pinned until the first outside
-  user needs it — leaning **Cloudflare Tunnel + own domain** (~$10/yr, most polished) or
-  **Tailscale Funnel** (free public HTTPS on a `ts.net` name). Either way invite-only OAuth (H4/H5)
-  is the gate. Rejected: Tailscale node sharing for friends (every friend installs Tailscale),
-  ngrok + basic auth (free-tier browser interstitial, bandwidth caps; demos only), router port
-  forwarding (exposes the home IP). Until then the beta is LAN + owner's tailnet.
-- **Home server hardware:** not decided. A Mac mini (native) keeps every H9 admin feature; an
-  old PC/laptop (Linux, native or the Docker image, e.g. Proxmox + one container) works for
-  everything except the macOS-only H9 features.
+- **External access (decided 2026-10-12):** the owner reaches the server over **Tailscale**
+  (admin access, no open ports). Friends and later general users come in through **Cloudflare
+  Tunnel + the owner's own domain** (~$10/yr). It was chosen because it scales to general users:
+  Cloudflare puts its CDN, WAF and rate limiting in front of the app with no open ports, and the
+  owned domain stays put through the vendor move (only DNS changes), so OAuth redirect URLs and
+  the Chrome Web Store companion's pairing origin stay the same. Invite-only OAuth (H4/H5) is the
+  gate. Rejected: Tailscale Funnel (bandwidth limits, `ts.net` name tied to the tailnet, no
+  WAF/CDN; fine for sharing, not production), Tailscale node sharing for friends (every friend
+  installs Tailscale), ngrok + basic auth (free-tier browser interstitial, bandwidth caps; demos
+  only), router port forwarding (exposes the home IP). Until the first outside user, the beta is
+  LAN + the owner's tailnet. The domain name itself is picked at §25.4 step 11.
+- **Home server hardware (decided 2026-10-12):** a **Mac mini running natively** (launchd), so
+  every H9 admin feature keeps working until the Chrome extension replaces them. The Docker
+  image is still built in CI for the vendor move (H7).
 - **Analytics host (resolved 2026-10-07):** a separate SQLite analytics file on the home server
   until the vendor move (H14).
-- **Budget:** not set; expected beta cost ≈ a domain (~$10/yr) + free-tier object storage.
+- **Budget (decided 2026-10-12):** minimal: a domain (~$10/yr) + free-tier object storage
+  (Cloudflare R2) for Litestream backups. Anything beyond that comes back to the owner first.
 
 ### 25.3 Consequences for the build
 
@@ -581,7 +586,8 @@ The browser companion (H12) applies the same principle with its own threat model
 9. Chrome extension (H12): API token endpoint → tabs → rendered store reads → Mana Pool cart →
    Moxfield import; then drop the macOS-only paths' admin pinning (H9 interim).
 10. Security review of the hosted build (§25.0) — gate before any outside user.
-11. Owner admin access over Tailscale; friends' external access when the pinned item resolves.
+11. Owner admin access over Tailscale; friends' external access via Cloudflare Tunnel + own
+    domain (§25.2).
 
 Phase 5 (shared server-side Scryfall/MTGJSON/EDHREC cache + rate limiter; the browser-driven
 Moxfield import is retired by H12) is re-evaluated **after** this lands.
