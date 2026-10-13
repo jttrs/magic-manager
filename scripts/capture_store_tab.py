@@ -41,7 +41,7 @@ from magic_manager import storefetch
 ROOT = Path(__file__).resolve().parents[1]
 READER = ROOT / "extension/src/readers/store-page.js"
 OUT_DIR = ROOT / "tests/fixtures/vendors/rendered"
-_REVIEWS = re.compile(r"^(?:Customer reviews|Top reviews from|Reviews with images|Ratings and reviews|Customer ratings? (?:&|and) reviews)\b", re.M | re.I)
+_REVIEWS = re.compile(r"^(?:Customer reviews|Top reviews from|Reviews with images|Ratings and reviews|Customer ratings? (?:&|and) reviews|Guest ratings (?:&|and) reviews|Reviews\n+Rating [\d.]+ out of 5 stars)\b", re.M | re.I)
 _KEEP_HEAD = re.compile(r"<title[^>]*>.*?</title>|<meta\b[^>]*>|<script[^>]+application/ld\+json[^>]*>.*?</script>", re.S | re.I)
 
 

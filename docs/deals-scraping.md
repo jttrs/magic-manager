@@ -61,7 +61,8 @@ closed sockets) and their prices are JS-rendered, absent from raw HTML anyway.
    free-shipping thresholds, banners, shipping. Per recipe:
    - Shopify → `og:price:amount` / `product:price:amount` (or the `.json` variant price).
    - eBay → the **first** `US $NN.NN` (primary price element); ignore installment/shipping lines.
-   - Best Buy → the **first** `$NN.NN` (the second is the ÷ 4 installment).
+   - Best Buy → JSON-LD price; text fallback = the first line that is exactly `$NN.NN`.
+   - Target → the first line that **starts** with `$NN.NN` (`$39.99 was $43.99`; "Pay in 4 … $10.00" doesn't).
    - Always capture **sold out** (`/sold out|out of stock/i`).
 6. **Tabs move and close.** Indices shift between reads; tabs close mid-session. Key by URL; a URL
    missing from a fresh read is reported as *closed*, not guessed.
@@ -77,7 +78,8 @@ closed sockets) and their prices are JS-rendered, absent from raw HTML anyway.
    disambiguate by price (and image) — same-name variants (base / borderless / stamped / extended
    art) differ wildly (e.g. PFDN 11p stamped $21 vs FDN 11 $2.53). Flag for confirmation, never
    silently pick.
-10. **Marketplace sellers, used offers, no offer** (Amazon, Walmart, GameStop — owner, 2026-10-10).
+10. **Marketplace sellers, used offers, no offer** (Amazon, Walmart, GameStop — owner, 2026-10-10;
+    Best Buy Marketplace added 2026-10-12).
     Count only an offer the store itself sells, new. Recipe keys: `sellers` (the store's own seller
     names), `new_only`, `seller_pattern` / `condition_pattern` (visible text) — JSON-LD
     `offers.seller` / `itemCondition` win when the page has them — and `no_offer_pattern`. A seller-gated
@@ -100,6 +102,20 @@ closed sockets) and their prices are JS-rendered, absent from raw HTML anyway.
       even a headed throwaway Chrome — its fixtures are pages the owner saved from their own Chrome.
     - **GameStop** — Product JSON-LD has price, stock, `seller` (GameStop) and `itemCondition`; the
       visible "$NN.NN for Pros" is a member price (never read). Cloudflare walls headless browsers.
+    - **Best Buy** (real tabs 2026-10-12) — JSON-LD has price + `seller` (Best Buy) but says
+      **`InStock` on every page, sold out or not**, so the buy box decides: the FIRST buy-box state
+      before any `Add to cart` line — `Sold Out`, `Coming Soon`, `Unavailable Nearby` (Best Buy's
+      sold-out state shown by location) and `In Store Only` (can't be ordered) read sold out;
+      carousels below carry their own `Add to cart` / `Sold Out` buttons, so a later one never flips
+      the main offer. "Shipping not available" + `Add to cart` (pickup only) reads in stock. Seller =
+      JSON-LD, else the `Sold by` line's next line (Best Buy Marketplace). A Chrome *Save Page As →
+      HTML Only* page has none of the rendered buy box (only JSON-LD), so its fixtures are live reads
+      in a headed throwaway browser (headless gets an HTTP/2 error).
+    - **Target** (real tabs 2026-10-12) — no page tags. Sold out = `Out of stock` before the first
+      `Add to cart`; an in-stock page says nothing reliable in the lines the reader keeps → stock
+      **unknown** (not "in stock"). `There was a temporary issue` = Target's price module failed (it
+      shows this to automated browsers most of the time) → **not counted** (`no_offer_pattern`), never
+      a carousel price. A saved *HTML Only* page has no price at all (`isProductDetailServerSideRenderPriceEnabled: false`).
 11. **Pack counts in titles.** "Play Booster Box | 30 Packs" tied *Box* with *Pack*;
     `listing_match` drops a pack count from box/display titles before scoring.
 12. **Tax.** Deltas are **face price vs pre-tax market** — never pre-discount a no-tax store's price.
