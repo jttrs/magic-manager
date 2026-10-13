@@ -501,15 +501,6 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def _backup(src_path: Path, dst_path: Path) -> None:
-    src, dst = sqlite3.connect(str(src_path)), sqlite3.connect(str(dst_path))
-    try:
-        src.backup(dst)  # consistent copy even with -wal pending
-    finally:
-        src.close()
-        dst.close()
-
-
 def _user_version(path: Path) -> int:
     conn = sqlite3.connect(str(path))
     try:
@@ -527,14 +518,14 @@ def rehearse_split(data_dir: Path, user: str = "owner") -> int:
     user_db = layout.user_db_path(data_dir, user)
     missing = [str(f) for f in (catalog, user_db) if not f.is_file()]
     if missing:
-        print(f"(no split DB at {', '.join(missing)} — nothing to rehearse against)", file=sys.stderr)
-        return 0
+        print(f"FAIL: no split DB at {', '.join(missing)} — check --data-dir / --user", file=sys.stderr)
+        return 1
     with tempfile.TemporaryDirectory(prefix="mm-rehearsal-split-") as tmp:
         c_copy = Path(tmp) / layout.CATALOG_FILENAME
         u_copy = layout.user_db_path(Path(tmp), user)
         u_copy.parent.mkdir(parents=True)
-        _backup(catalog, c_copy)
-        _backup(user_db, u_copy)
+        db.backup_file(catalog, c_copy)
+        db.backup_file(user_db, u_copy)
 
         pre_versions = {"catalog": _user_version(c_copy), "user": _user_version(u_copy)}
         # Legacy lists/list_rows aren't carried into the split layout.

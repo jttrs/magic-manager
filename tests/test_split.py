@@ -19,6 +19,14 @@ A = "00000000-0000-0000-0000-00000000000a"
 B = "00000000-0000-0000-0000-00000000000b"
 
 
+@pytest.fixture(autouse=True)
+def _restore_layout_env(monkeypatch):
+    """The upgrade script points the process at its files via os.environ; undo that after each test."""
+    for k in ("MM_LAYOUT", "MM_DATA_DIR", "MM_USER", "MAGIC_MANAGER_DB"):
+        monkeypatch.setenv(k, "__probe__")
+        monkeypatch.delenv(k)
+
+
 def _sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -181,6 +189,21 @@ def test_cli_db_split(source, tmp_path):
     assert res.exit_code == 1 and "SPLIT FAILED" in res.output
 
 
+def test_cli_db_split_errors_are_exit_codes(source, tmp_path, monkeypatch):
+    runner = CliRunner()
+    not_a_dir = tmp_path / "file"
+    not_a_dir.write_text("x")
+    res = runner.invoke(app, ["db", "split", "--to", str(not_a_dir)])
+    assert res.exit_code == 2 and "not a directory" in res.output
+
+    def boom(*_a, **_k):
+        raise OSError(28, "No space left on device")
+    monkeypatch.setattr(split, "split", boom)
+    res = runner.invoke(app, ["db", "split", "--to", str(tmp_path / "d"), "--json"])
+    assert res.exit_code == 1
+    assert json.loads(res.stdout) == {"ok": False, "error": "OSError: [Errno 28] No space left on device"}
+
+
 # ---------- split-aware snapshot / restore ----------
 
 @pytest.fixture
@@ -287,6 +310,11 @@ def test_rehearse_split_runs_each_target_on_copies(split_data, post_v36, capsys)
     assert f"user schema_version: {post_v36} → {post_v36 + 2}  (applied: V{post_v36 + 2})" in out
     assert "ingest_events" in out and "DIVERGED" not in out and "OK: user precious" in out
     assert {f: _sha(f) for f in split_data.rglob("*.db")} == before  # live pair untouched
+
+
+def test_rehearse_split_fails_on_a_missing_pair(tmp_path, capsys):
+    assert _load("rehearse_migration").main(["--layout", "split", "--data-dir", str(tmp_path / "nope")]) == 1
+    assert "no split DB" in capsys.readouterr().err
 
 
 def test_rehearse_split_catches_a_precious_change(split_data, post_v36, monkeypatch, capsys):

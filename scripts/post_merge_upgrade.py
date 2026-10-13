@@ -317,11 +317,8 @@ def _main_split(data_dir: Path, user: str, *, apply: bool) -> int:
         c_copy = Path(d) / layout.CATALOG_FILENAME
         u_copy = layout.user_db_path(Path(d), user)
         u_copy.parent.mkdir(parents=True)
-        for src_path, dst_path in ((catalog, c_copy), (user_db, u_copy)):
-            src, dst = sqlite3.connect(src_path), sqlite3.connect(dst_path)
-            src.backup(dst)  # consistent copy even with -wal pending
-            src.close()
-            dst.close()
+        db.backup_file(catalog, c_copy)
+        db.backup_file(user_db, u_copy)
         print(f"REHEARSAL on copies of {catalog} + {user_db} (live files untouched; --apply to upgrade them)")
         code = run(u_copy, c_copy, user)
         shutil.rmtree(d, ignore_errors=True)

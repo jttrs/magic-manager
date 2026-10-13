@@ -168,6 +168,8 @@ def split(source: Path, data_dir: Path, user: str = _layout.DEFAULT_USER, *, for
         raise SplitRefused(str(e)) from e
     if not source.is_file():
         raise SplitRefused(f"no DB to split at {source}")
+    if data_dir.exists() and not data_dir.is_dir():
+        raise SplitRefused(f"{data_dir} is not a directory")
     for target in (catalog, user_db):
         if target.resolve() == source.resolve():
             raise SplitRefused(f"target {target} is the source")

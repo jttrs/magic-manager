@@ -2216,6 +2216,16 @@ def prune_snapshots(*, keep: int = 3, apply: bool = False) -> tuple[list[Path], 
     return doomed, freed
 
 
+def backup_file(src: Path, dst: Path) -> None:
+    """Copy one SQLite file with the backup API (consistent even with a pending -wal)."""
+    s, d = sqlite3.connect(str(src)), sqlite3.connect(str(dst))
+    try:
+        s.backup(d)
+    finally:
+        s.close()
+        d.close()
+
+
 def snapshot_size(path: Path) -> int:
     """Bytes in a snapshot (a file, or a split pair directory)."""
     path = Path(path)
@@ -2268,12 +2278,7 @@ def _snapshot_split(lay: _layout.Layout, *, label: str | None, dest: Path | None
         for what, f in live.items():
             out = partial / rel[what]
             out.parent.mkdir(parents=True, exist_ok=True)
-            s, d = sqlite3.connect(str(f)), sqlite3.connect(str(out))
-            try:
-                s.backup(d)
-            finally:
-                s.close()
-                d.close()
+            backup_file(f, out)
             if (result := _check_integrity(out)) != "ok":
                 raise RuntimeError(f"snapshot integrity check failed ({what}): {result}")
         hold.execute("ROLLBACK")

@@ -4612,9 +4612,10 @@ def db_split_cmd(
     """Split the single DB into catalog.db + users/<user>.db (verified; the source is never changed).
 
     Source = the configured single file (MAGIC_MANAGER_DB, else db/magic_manager.db).
-    Exit 0 = written and verified; 1 = the copy didn't verify (nothing written);
-    2 = refused (wrong version, targets exist, …; nothing written).
+    Exit 0 = written and verified; 1 = failed (the copy didn't verify, or an error such as a
+    full disk; temp files removed); 2 = refused (wrong version, targets exist, …; nothing written).
     """
+    import sqlite3
     from . import split as split_mod
     say = None if as_json else (lambda m: typer.echo(m, err=True))
     try:
@@ -4625,6 +4626,10 @@ def db_split_cmd(
         raise typer.Exit(2)
     except split_mod.SplitFailed as e:
         report, code = e.report, 1
+    except (OSError, sqlite3.Error) as e:
+        msg = f"{type(e).__name__}: {e}"
+        typer.echo(json.dumps({"ok": False, "error": msg}) if as_json else f"error: {msg}", err=not as_json)
+        raise typer.Exit(1)
     if as_json:
         typer.echo(json.dumps(report.to_dict(), indent=2))
     else:
