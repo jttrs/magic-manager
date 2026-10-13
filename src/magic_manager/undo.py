@@ -32,7 +32,7 @@ from . import db
 from .analytics import consent
 # Your data, parents before children — the one registry is ``layout``. Card/price/
 # EDHREC/tag tables are caches and are never touched (cards only ever grow, so
-# restored rows' FKs hold).
+# restored rows' printings still resolve; ``mm audit catalog-refs`` checks).
 from .layout import USER_TABLES
 
 

@@ -377,7 +377,8 @@ def rebuild_inventory_from_ledger(conn) -> dict:
     """
     drift_before = len(reconcile_inventory_ledger(conn))
     db.require_cards(conn, [r[0] for r in conn.execute(
-        "SELECT scryfall_id FROM inventory_events GROUP BY scryfall_id HAVING SUM(delta) > 0")])
+        "SELECT DISTINCT scryfall_id FROM (SELECT scryfall_id FROM inventory_events "
+        "GROUP BY scryfall_id, finish HAVING SUM(delta) > 0)")])
     conn.execute("DELETE FROM inventory")
     conn.execute(
         """

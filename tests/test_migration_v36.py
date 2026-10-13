@@ -4,6 +4,7 @@ post-V36 migrations declare a target (``catalog`` | ``user``) that
 ``db.migrate_split_file`` runs per file."""
 from __future__ import annotations
 
+import inspect
 import re
 import shutil
 import sqlite3
@@ -180,7 +181,11 @@ def _check_targets(migrations, targets) -> list[str]:
         if target not in db.SPLIT_TARGETS:
             problems.append(f"V{v} has no target (catalog | user) in db.MIGRATION_TARGETS")
             continue
-        for t in sorted(migration_tables(migrations[v - 1])):
+        sources = [migrations[v - 1]]
+        for hooks in (db._PYTHON_HOOKS, db._FK_OFF_HOOKS):    # migrate_split_file runs these too
+            if v in hooks:
+                sources.append(inspect.getsource(hooks[v]))
+        for t in sorted(set().union(*(migration_tables(src) for src in sources))):
             if t in layout.INFRA_TABLES:
                 continue
             try:
@@ -216,6 +221,17 @@ def test_target_check_catches_mistakes():
     ]
     with pytest.raises(KeyError):
         db.migration_target(10_000)
+
+
+def test_target_check_reads_python_hooks(monkeypatch):
+    v = db.SPLIT_BASE_VERSION + 1
+
+    def hook(conn):
+        conn.execute("UPDATE inventory SET notes = NULL")
+
+    monkeypatch.setitem(db._PYTHON_HOOKS, v, hook)
+    assert _check_targets(db.MIGRATIONS + ["ALTER TABLE cards ADD COLUMN x TEXT;"], {v: "catalog"}) == [
+        f"V{v} (catalog) touches user table inventory"]
 
 
 # ---------- per-target migrate on a split fixture ----------
@@ -389,3 +405,54 @@ def test_deck_write_refuses_unknown_printing(tmp_db):
     decks.deck_create("d", "D")
     with pytest.raises(sqlite3.IntegrityError):
         decks.deck_add_card("d", "ghost", "main", "nonfoil", 1)
+
+
+
+def test_migrate_split_file_surfaces_a_snapshot_failure(split_files, monkeypatch):
+    catalog, _user = split_files
+    v = db.CURRENT_VERSION
+    monkeypatch.setattr(db, "MIGRATIONS", db.MIGRATIONS + ["ALTER TABLE cards ADD COLUMN y TEXT;"])
+    monkeypatch.setattr(db, "CURRENT_VERSION", v + 1)
+    monkeypatch.setattr(db, "MIGRATION_TARGETS", {**db.MIGRATION_TARGETS, v + 1: "catalog"})
+
+    def boom(**_k):
+        raise RuntimeError("snapshot integrity check failed: nope")
+
+    monkeypatch.setattr(db, "snapshot", boom)
+    with pytest.raises(RuntimeError, match="snapshot integrity"):
+        db.migrate_split_file(catalog, "catalog")
+    assert _version(catalog) == v
+
+
+def test_v36_tolerates_a_preexisting_user_fk_orphan(v35):
+    raw = sqlite3.connect(v35)  # FKs off: a deck_cards row whose version is gone (legacy damage)
+    raw.execute("INSERT INTO deck_cards (deck_version_id, scryfall_id, board, finish, count) "
+                "VALUES (404, 'c1', 'main', 'foil', 1)")
+    raw.commit()
+    raw.close()
+    with db.connect() as conn:
+        assert conn.execute("SELECT version FROM schema_version").fetchone()[0] == db.CURRENT_VERSION
+        assert all(fk[2] != "cards" for fk in conn.execute("PRAGMA foreign_key_list(deck_cards)"))
+
+
+def test_upsert_card_warms_the_guard(tmp_db, make_card):
+    with db.connect() as conn:
+        db.upsert_card(conn, make_card(id="w1"))
+        queries = []
+        conn.set_trace_callback(queries.append)
+        db.require_cards(conn, ["w1"])
+        conn.set_trace_callback(None)
+        assert not [q for q in queries if "FROM cards" in q]
+
+
+def test_bulk_import_with_one_unknown_printing_writes_nothing(tmp_db, seed_cards, make_card):
+    from magic_manager import collection_sync
+    from magic_manager.collection_sync import CollectionRow
+    seed_cards([make_card(id="b1")])
+    with pytest.raises(sqlite3.IntegrityError, match="ghost"):
+        collection_sync.apply_import(
+            [CollectionRow(qty=2, finish="nonfoil", scryfall_id="b1"),
+             CollectionRow(qty=1, finish="foil", scryfall_id="ghost")], mode="add")
+    with db.connect() as conn:
+        for t in ("inventory", "inventory_events", "ingest_events"):
+            assert conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] == 0, t

@@ -42,7 +42,7 @@ class Kind:
     tag_type: str          # scryfall_tags.type
     table: str             # tagging table
     key_col: str           # grain column in ``table`` / key inside ``taggings[]``
-    settings_key: str
+    catalog_key: str
 
 
 KINDS: dict[str, Kind] = {
@@ -152,7 +152,7 @@ def ingest(rows: Iterable[dict], *, source: str, updated_at: str | None,
         c.executemany(
             f"INSERT INTO {k.table} ({k.key_col}, tag_id, weight) VALUES (?, ?, ?)",
             [(o, t, w) for (o, t), w in tagging_rows.items()])
-        db.set_catalog_setting(c, k.settings_key, source)
+        db.set_catalog_setting(c, k.catalog_key, source)
     return len(tag_rows), len(tagging_rows)
 
 
@@ -174,7 +174,7 @@ def sync(*, refresh: bool = False, kind: str = "oracle",
     path = scryfall.bulk_file(k.bulk_type, refresh=refresh)
     updated_at = _bulk_timestamp(path)
     with db.connect() as conn:
-        loaded = db.catalog_setting(conn, k.settings_key)
+        loaded = db.catalog_setting(conn, k.catalog_key)
         if not refresh and loaded == path.name:
             n_tags, n_taggings = _counts(conn, kind)
             if n_tags:
@@ -353,6 +353,6 @@ def card_summaries(oracle_ids: Iterable[str], *,
 def status(*, kind: str = "oracle", conn: sqlite3.Connection | None = None) -> dict:
     """``{source, tags, taggings}`` for the local cache (source None = never synced)."""
     with db.transaction(conn) as c:
-        source = db.catalog_setting(c, kind_of(kind).settings_key)
+        source = db.catalog_setting(c, kind_of(kind).catalog_key)
         n_tags, n_taggings = _counts(c, kind)
     return {"source": source, "tags": n_tags, "taggings": n_taggings}

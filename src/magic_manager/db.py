@@ -1522,7 +1522,17 @@ def _apply_migration(conn: sqlite3.Connection, i: int) -> None:
     child_tables = _FK_OFF_MIGRATIONS[i]
     conn.commit()
     conn.execute("PRAGMA foreign_keys = OFF")
+
+    def _violations() -> set[tuple]:
+        out: set[tuple] = set()
+        for child in child_tables:
+            if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (child,)).fetchone():
+                # (table, rowid, parent) — not fkid, which shifts when a rebuild drops an FK
+                out |= {tuple(r)[:3] for r in conn.execute(f"PRAGMA foreign_key_check({child})")}
+        return out
+
     try:
+        before = _violations()  # pre-existing dangling FKs aren't this migration's doing
         conn.executescript(sql)
         conn.commit()
         hook = _FK_OFF_HOOKS.get(i)
@@ -1535,9 +1545,7 @@ def _apply_migration(conn: sqlite3.Connection, i: int) -> None:
         # only enforces new writes), aborting an upgrade whose own rebuild
         # is clean. `foreign_key_check(T)` checks the FKs declared in T, so
         # we pass the child that points at the rebuilt parent.
-        violations: list = []
-        for child in child_tables:
-            violations += conn.execute(f"PRAGMA foreign_key_check({child})").fetchall()
+        violations = sorted(_violations() - before)
     finally:
         conn.execute("PRAGMA foreign_keys = ON")
     if violations:
@@ -1571,22 +1579,22 @@ def migrate_split_file(path: Path, target: str) -> list[int]:
     path = Path(path)
     if not path.is_file():
         raise _layout.LayoutError(f"split layout: {target} DB {path} does not exist")
+    probe = sqlite3.connect(str(path))
+    try:
+        row = probe.execute("SELECT version FROM schema_version").fetchone()
+    finally:
+        probe.close()
+    have = row[0] if row else 0
+    if have < SPLIT_BASE_VERSION or have > CURRENT_VERSION:
+        raise _layout.LayoutError(
+            f"split layout: {path} is at schema v{have}; split files start at "
+            f"v{SPLIT_BASE_VERSION} and this code is at v{CURRENT_VERSION}"
+        )
+    if have == CURRENT_VERSION:
+        return []
+    snapshot(src=path, label=f"pre-v{CURRENT_VERSION}")  # no connection open: its errors surface as-is
     conn = sqlite3.connect(str(path), factory=Connection)
     try:
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON")
-        row = conn.execute("SELECT version FROM schema_version").fetchone()
-        have = row[0] if row else 0
-        if have < SPLIT_BASE_VERSION or have > CURRENT_VERSION:
-            raise _layout.LayoutError(
-                f"split layout: {path} is at schema v{have}; split files start at "
-                f"v{SPLIT_BASE_VERSION} and this code is at v{CURRENT_VERSION}"
-            )
-        if have == CURRENT_VERSION:
-            return []
-        conn.close()
-        snapshot(src=path, label=f"pre-v{CURRENT_VERSION}")
-        conn = sqlite3.connect(str(path), factory=Connection)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
         applied = []
