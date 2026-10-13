@@ -180,6 +180,7 @@ def wishlist_add(
         ).fetchone()
 
         if existing is None:
+            db.require_cards(conn, (scryfall_id,))
             now = db._utcnow_iso()
             conn.execute(
                 """
@@ -304,6 +305,7 @@ def wishlist_set(
             }
 
         if existing is None:
+            db.require_cards(conn, (scryfall_id,))
             now = db._utcnow_iso()
             conn.execute(
                 """
@@ -321,6 +323,7 @@ def wishlist_set(
         old_qty = existing["qty_wanted"]
         new_priority = priority if priority is not None else existing["priority"]
         new_notes = notes if notes is not None else existing["notes"]
+        db.require_cards(conn, (scryfall_id,))
         conn.execute(
             """
             INSERT INTO wishlist_entries

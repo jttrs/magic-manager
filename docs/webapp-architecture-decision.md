@@ -570,6 +570,13 @@ The browser companion (H12) applies the same principle with its own threat model
 - **Request scoping:** the web layer resolves session → user → that user's connection; the
   engine stays unaware of users (no `user_id` parameters threaded through it).
 - **Jobs** carry the user id; a user's job gets that user's connection.
+- **Cross-file writes aren't atomic under WAL (Litestream).** A commit spanning the catalog and a
+  user file is only atomic with a rollback journal, so catalog writes (card upserts,
+  `catalog_settings`) commit BEFORE the user write that depends on them. A crash then leaves at
+  most a harmless cached card, never a user row pointing at a missing card. V36 dropped the user
+  tables' FKs into `cards`: `db.require_cards` refuses such rows at every write seam, and
+  `mm audit catalog-refs` is the backstop. Paths that still upsert cards and write user rows in
+  one transaction are listed for step 5 (PR for step 2).
 
 ### 25.4 Build order (small PRs, after sign-off)
 

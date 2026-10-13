@@ -247,6 +247,7 @@ def inventory_add(
         ).fetchone()
 
         if existing is None:
+            db.require_cards(conn, (scryfall_id,))
             now = db._utcnow_iso()
             conn.execute(
                 """
@@ -404,6 +405,7 @@ def inventory_set(
             return {"action": "deleted", "old_qty": old_qty, "new_qty": 0}
 
         if existing is None:
+            db.require_cards(conn, (scryfall_id,))
             now = db._utcnow_iso()
             conn.execute(
                 """

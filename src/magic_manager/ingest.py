@@ -116,6 +116,7 @@ def record_delta(
     """
     if delta == 0:
         raise ValueError("record_delta: delta must be non-zero")
+    db.require_cards(conn, (scryfall_id,))
     conn.execute(
         """
         INSERT INTO inventory_events (ingest_id, scryfall_id, finish, delta, at)
@@ -375,6 +376,8 @@ def rebuild_inventory_from_ledger(conn) -> dict:
     a no-op (drift_before == 0 and the row set is unchanged).
     """
     drift_before = len(reconcile_inventory_ledger(conn))
+    db.require_cards(conn, [r[0] for r in conn.execute(
+        "SELECT scryfall_id FROM inventory_events GROUP BY scryfall_id HAVING SUM(delta) > 0")])
     conn.execute("DELETE FROM inventory")
     conn.execute(
         """

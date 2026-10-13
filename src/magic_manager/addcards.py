@@ -363,6 +363,7 @@ def commit(items: list[tuple[str, str, int]], *, source: str, label: str | None 
     method = _METHOD[source]
     event_label = f"{ingest.WEB_LABEL_PREFIX}{source}" + (f" · {label}" if label else "")
     with ingest.open_ingest_event(method, label=event_label) as rec:
+        db.require_cards(rec.conn, [sid for sid, _ in merged])
         for (sid, finish), qty in merged.items():
             inventory.inventory_add(sid, finish, qty, conn=rec.conn, ingest_id=rec.ingest_id, method=method)
     copies = sum(merged.values())

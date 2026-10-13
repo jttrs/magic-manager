@@ -41,6 +41,7 @@ CATALOG_TABLES: frozenset[str] = frozenset({
     "scryfall_tags", "card_oracle_tags", "illustration_art_tags",
     "edhrec_pages", "edhrec_commander_cards", "edhrec_card_commanders", "edhrec_rankings",
     "front_cards",
+    "catalog_settings",
 })
 
 # SQLite/bookkeeping tables every file carries for itself. Unqualified names

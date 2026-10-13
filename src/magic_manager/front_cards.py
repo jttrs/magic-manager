@@ -50,18 +50,16 @@ def front_set_code_for(anchor: str) -> str | None:
     """Return the memorabilia set code holding ``anchor``'s Jumpstart front
     cards (e.g. ``fmsc`` for ``msh``), or ``None`` if the family has none.
 
-    Cached in ``settings`` under ``front_set:<anchor>`` — an empty cached
+    Cached in ``catalog_settings`` under ``front_set:<anchor>`` — an empty cached
     value means "known-none". Best-effort: a Scryfall lookup/network failure
     returns ``None`` rather than raising.
     """
     anchor = anchor.lower()
     cache_key = f"front_set:{anchor}"
     with db.connect() as conn:
-        row = conn.execute(
-            "SELECT value FROM settings WHERE key = ?", (cache_key,)
-        ).fetchone()
-        if row is not None:
-            return row["value"] or None
+        cached = db.catalog_setting(conn, cache_key)
+        if cached is not None:
+            return cached or None
 
     from . import sets as sets_mod
 
@@ -77,13 +75,7 @@ def front_set_code_for(anchor: str) -> str | None:
             break
 
     with db.connect() as conn:
-        conn.execute(
-            """
-            INSERT INTO settings (key, value) VALUES (?, ?)
-            ON CONFLICT(key) DO UPDATE SET value = excluded.value
-            """,
-            (cache_key, code or ""),
-        )
+        db.set_catalog_setting(conn, cache_key, code or "")
     return code
 
 

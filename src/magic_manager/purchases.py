@@ -493,6 +493,7 @@ def apply(purchase_id: int, decisions: Iterable[Decision]) -> ApplyResult:
         if moved != sum(needs.values()):
             raise RuntimeError("could not match every requested copy; nothing was changed")
         added = 0
+        db.require_cards(conn, [lines[d.line_no]["scryfall_id"] for d in decisions if d.add])
         for d in decisions:
             ln = lines[d.line_no]
             if d.add:

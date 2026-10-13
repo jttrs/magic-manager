@@ -109,12 +109,8 @@ def _keep_only(path: Path, keep: set[str]) -> None:
 
 @pytest.fixture
 def split_env(fresh_db, tmp_path, monkeypatch, make_card):
-    """A split data dir built from a fresh DB.
-
-    Step-2 workaround: user tables still declare FOREIGN KEYs to ``cards``,
-    which lives in the other file, so rows referencing a card are seeded on a
-    raw connection with foreign keys off.
-    """
+    """A split data dir built from a fresh DB (V36: user tables carry no
+    FOREIGN KEY into ``cards``, which lives in the other file)."""
     data = tmp_path / "data"
     (data / "users").mkdir(parents=True)
     catalog, user = data / "catalog.db", data / "users" / "owner.db"
@@ -207,10 +203,36 @@ def test_split_refuses_a_table_in_the_wrong_file(split_env, fresh_db, which):
             pass
 
 
-@pytest.mark.xfail(strict=True, reason="step 2: user schema without FKs into the catalog file")
 def test_split_inventory_write_through_engine(split_env):
-    from magic_manager import inventory
+    from magic_manager import audit, inventory
+    catalog, user = split_env
     inventory.inventory_add("c-1", "nonfoil", 1)
+    with sqlite3.connect(user) as u:
+        assert u.execute("SELECT quantity FROM inventory WHERE scryfall_id='c-1'").fetchone() == (4,)
+        assert u.execute("SELECT delta FROM inventory_events WHERE scryfall_id='c-1'").fetchone() == (1,)
+    assert all(f.rows == 0 for f in audit.catalog_refs())
+
+
+def test_split_catalog_settings_land_in_the_catalog(split_env):
+    from magic_manager import sets
+    catalog, user = split_env
+    with db.connect() as conn:
+        sets._save_partial_codes(conn, {"tst"})
+    with sqlite3.connect(catalog) as c:
+        assert c.execute("SELECT value FROM catalog_settings WHERE key='sets.partial'").fetchone() == ('["tst"]',)
+    with sqlite3.connect(user) as u:
+        assert u.execute("SELECT COUNT(*) FROM settings").fetchone() == (0,)
+
+
+def test_split_catalog_refs_finds_orphans(split_env):
+    from magic_manager import audit
+    catalog, user = split_env
+    with sqlite3.connect(user) as u:
+        u.execute("INSERT INTO wishlist_entries (scryfall_id, finish, qty_wanted, added_at) "
+                  "VALUES ('gone', 'foil', 1, 'now')")
+    found = {f.table: f for f in audit.catalog_refs()}
+    assert found["wishlist_entries"].rows == 1 and found["wishlist_entries"].scryfall_ids == ["gone"]
+    assert found["inventory"].rows == 0
 
 
 # ---------- single layout unchanged ----------
