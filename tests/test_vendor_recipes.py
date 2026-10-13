@@ -119,6 +119,8 @@ def test_every_rendered_fixture_has_an_expectation():
     ("bestbuy", "$29.99\nAdd to cart", "No seller shown"),
     # Target's price module failed: whatever $ is left on the page isn't this offer.
     ("target", "There was a temporary issue\nChoose delivery method in cart\nAdd to cart\n$19.99", "no offer"),
+    # ...but the same words further down (another module) don't refuse a real offer.
+    ("target", "$39.99\nAdd to cart\nReviews\nThere was a temporary issue", None),
 ])
 def test_marketplace_rules_on_page_text(key, text, skipped):
     listing = vendors.read_listing(vendors.by_key(key), "<html><head><title>x</title></head></html>", text=text)
@@ -378,6 +380,9 @@ def test_server_errors_say_the_site_is_unavailable():
     ("bestbuy", "Sold by\nBest Buy\n$174.99\nAdd to cart\nSold by\nReturn & Exchange Policy\n$29.99\nSold Out\n$59.99\nIn Store Only"),
     ("bestbuy", "$29.99\nShipping not available for this item\nAdd to cart"),
     ("target", "$39.99 was $43.99\nAdd to cart\nFrequently bought together\n$24.99\nOut of stock"),
+    # A pre-order button ends the buy box too.
+    ("bestbuy", "$49.99\nPre-Order\nSold by\nReturn & Exchange Policy\n$29.99\nSold Out"),
+    ("target", "$49.99\nPreorder\nFrequently bought together\n$24.99\nOut of stock"),
 ])
 def test_buy_box_sold_out_patterns_ignore_stray_wording(key, text):
     listing = vendors.read_listing(vendors.by_key(key), "<html><head><title>x</title></head></html>", text=text)

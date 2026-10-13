@@ -128,6 +128,14 @@ test.describe('open-tab store page reader', () => {
     }
     golden('store-extracts.expected.json', out);
   });
+
+  test('keeps the buy-box states the Best Buy and Target recipes decide on', async ({ page }) => {
+    const lines = ['$41.99', 'In Store Only', 'In-Store Only', 'There was a temporary issue', 'Unavailable Nearby', 'Shipping not available for this item', 'Pickup at your store today', 'About this item'];
+    await servePage(page, 'https://www.target.com/p/x/-/A-1', `<!doctype html><title>x</title><main>${lines.map((l) => `<div>${l}</div>`).join('')}</main>`);
+    await page.addScriptTag({ content: reader('store-page.js') });
+    const out = await page.evaluate(() => (window as unknown as { readStorePage: (d: Document) => { text: string } }).readStorePage(document));
+    expect(out.text.split('\n')).toEqual(['$41.99', 'In Store Only', 'In-Store Only', 'There was a temporary issue', 'Unavailable Nearby', 'Shipping not available for this item']);
+  });
 });
 
 test.describe('Moxfield deck reader', () => {

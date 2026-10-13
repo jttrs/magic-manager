@@ -104,7 +104,7 @@ closed sockets) and their prices are JS-rendered, absent from raw HTML anyway.
       visible "$NN.NN for Pros" is a member price (never read). Cloudflare walls headless browsers.
     - **Best Buy** (real tabs 2026-10-12) — JSON-LD has price + `seller` (Best Buy) but says
       **`InStock` on every page, sold out or not**, so the buy box decides: the FIRST buy-box state
-      before any `Add to cart` line — `Sold Out`, `Coming Soon`, `Unavailable Nearby` (Best Buy's
+      before any `Add to cart` / `Pre-order` line — `Sold Out`, `Coming Soon`, `Unavailable Nearby` (Best Buy's
       sold-out state shown by location) and `In Store Only` (can't be ordered) read sold out;
       carousels below carry their own `Add to cart` / `Sold Out` buttons, so a later one never flips
       the main offer. "Shipping not available" + `Add to cart` (pickup only) reads in stock. Seller =
@@ -112,9 +112,9 @@ closed sockets) and their prices are JS-rendered, absent from raw HTML anyway.
       HTML Only* page has none of the rendered buy box (only JSON-LD), so its fixtures are live reads
       in a headed throwaway browser (headless gets an HTTP/2 error).
     - **Target** (real tabs 2026-10-12) — no page tags. Sold out = `Out of stock` before the first
-      `Add to cart`; an in-stock page says nothing reliable in the lines the reader keeps → stock
+      `Add to cart` / `Pre-order`; an in-stock page says nothing reliable in the lines the reader keeps → stock
       **unknown** (not "in stock"). `There was a temporary issue` = Target's price module failed (it
-      shows this to automated browsers most of the time) → **not counted** (`no_offer_pattern`), never
+      shows this to automated browsers most of the time), when it sits in the buy box → **not counted** (`no_offer_pattern`), never
       a carousel price. A saved *HTML Only* page has no price at all (`isProductDetailServerSideRenderPriceEnabled: false`).
 11. **Pack counts in titles.** "Play Booster Box | 30 Packs" tied *Box* with *Pack*;
     `listing_match` drops a pack count from box/display titles before scoring.
