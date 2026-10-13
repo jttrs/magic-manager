@@ -1345,6 +1345,17 @@ def _open_split(lay: _layout.Layout) -> sqlite3.Connection:
                 raise _layout.LayoutError(
                     f"split layout: {schema} DB is at schema v{have}, this code needs v{CURRENT_VERSION}"
                 )
+        # A table in the wrong file would silently shadow (or be shadowed by) the right one.
+        for schema, foreign in (
+            ("main", _layout.CATALOG_TABLES | _layout.LEGACY_TABLES),
+            (_layout.CATALOG_SCHEMA, set(_layout.USER_TABLES) | _layout.LEGACY_TABLES),
+        ):
+            stray = sorted(
+                r[0] for r in conn.execute(f"SELECT name FROM {schema}.sqlite_master WHERE type='table'")
+                if r[0] in foreign
+            )
+            if stray:
+                raise _layout.LayoutError(f"split layout: {schema} DB holds tables of the other file: {stray}")
     except Exception:
         conn.close()
         raise

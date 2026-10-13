@@ -198,6 +198,15 @@ def test_split_never_creates_or_migrates(split_env, tmp_path, monkeypatch):
     assert not (catalog.parent / "users" / "nobody.db").exists()
 
 
+@pytest.mark.parametrize("which", ["user", "catalog"])
+def test_split_refuses_a_table_in_the_wrong_file(split_env, fresh_db, which):
+    catalog, user = split_env
+    shutil.copy(fresh_db, user if which == "user" else catalog)  # un-pruned: holds every table
+    with pytest.raises(layout.LayoutError, match="holds tables of the other file"):
+        with db.connect():
+            pass
+
+
 @pytest.mark.xfail(strict=True, reason="step 2: user schema without FKs into the catalog file")
 def test_split_inventory_write_through_engine(split_env):
     from magic_manager import inventory
