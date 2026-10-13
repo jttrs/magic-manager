@@ -46,6 +46,15 @@ Usage
     uv run python scripts/post_merge_upgrade.py --apply    # snapshot to db/bak/, then upgrade the live DB in place
     uv run python scripts/post_merge_upgrade.py --db db/bak/<old>.bak   # rehearse on a copy of an older DB
 
+Split layout (Phase 3: ``catalog.db`` + ``users/<user>.db``, see ``mm db split``):
+
+    uv run python scripts/post_merge_upgrade.py --layout split --data-dir <dir> [--user owner]          # rehearse on copies
+    uv run python scripts/post_merge_upgrade.py --layout split --data-dir <dir> [--user owner] --apply  # pair snapshot, then in place
+
+Each file runs only its own migrations (``db.migrate_split_file``: catalog, then
+the user file); the backfills and every check below run through the split
+connection.
+
 Exit 0 = upgraded (or rehearsed) and every ownership table is identical.
 Exit 1 = something differed; with --apply the pre-upgrade snapshot path is printed for `mm db restore`.
 Network: steps 2b–2e read Scryfall / MTGJSON through the sanctioned cached wrappers.
@@ -146,10 +155,42 @@ def _step(label: str, fn) -> None:
     print(f"    {result}  ({time.time() - t:.1f}s)", flush=True)
 
 
-def run(path: Path) -> int:
-    os.environ["MAGIC_MANAGER_DB"] = str(path)
+def _use(path: Path, catalog: Path | None, user: str | None) -> None:
+    """Point this process's ``db.connect()`` at the files being upgraded."""
+    if catalog is None:
+        os.environ["MAGIC_MANAGER_DB"] = str(path)
+        return
+    os.environ.pop("MAGIC_MANAGER_DB", None)
+    os.environ.update(MM_LAYOUT="split", MM_DATA_DIR=str(catalog.parent), MM_USER=user or "owner")
+
+
+def _raw(path: Path, catalog: Path | None) -> sqlite3.Connection:
+    """A plain connection (no migrations): the file, or the user file with the catalog attached."""
+    conn = sqlite3.connect(path)
+    if catalog is not None:
+        conn.execute("ATTACH DATABASE ? AS catalog", (str(catalog),))
+    return conn
+
+
+def _migrate(catalog: Path | None) -> object:
+    """Apply pending migrations; returns the schema version reached."""
+    if catalog is None:
+        with db.connect() as conn:  # applies pending migrations, snapshotting first
+            return conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] if _columns(conn, "schema_version") else "?"
+    lay = db.layout()
+    for target, f in (("catalog", lay.catalog), ("user", lay.path)):  # catalog first (§25.3)
+        applied = db.migrate_split_file(f, target)
+        print(f"  · {target} {f.name}: {'applied V' + ', V'.join(map(str, applied)) if applied else 'already current'}")
+    with db.connect() as conn:  # split connect refuses unless both files are current
+        return conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0]
+
+
+def run(path: Path, catalog: Path | None = None, user: str | None = None) -> int:
+    """Upgrade + verify ``path`` (single file), or — with ``catalog`` — the split
+    pair ``path`` (users/<user>.db) + ``catalog``."""
+    _use(path, catalog, user)
     from magic_manager import decks
-    raw = sqlite3.connect(path)
+    raw = _raw(path, catalog)
     before = _fingerprint(raw)
     states_before = _deck_states(raw)
     allowed = decks.built_state_correction_ids(conn=raw) if states_before else None
@@ -157,8 +198,7 @@ def run(path: Path) -> int:
     print(f"before: {', '.join(f'{t}={n}' for t, (n, _, _) in before.items())}")
 
     print("upgrading:")
-    with db.connect() as conn:  # applies pending migrations (V27–V31), snapshotting first
-        version = conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] if _columns(conn, "schema_version") else "?"
+    version = _migrate(catalog)
     print(f"  · schema at V{version}")
     if allowed is None:  # pre-V11 DB: predict after the migrations, before any backfill
         allowed = decks.built_state_correction_ids()
@@ -173,7 +213,7 @@ def run(path: Path) -> int:
     _step("built follows pledges (unpledged imports → not built)",
           lambda: decks.backfill_built_state() if (decks.unpledged_built_count() or decks.extra_built_precon_count()) else "nothing to correct — skipped")
 
-    raw = sqlite3.connect(path)
+    raw = _raw(path, catalog)
     after = _fingerprint(raw, {t: cols for t, (_, _, cols) in before.items()})
     from magic_manager import ingest
     drift = ingest.reconcile_inventory_ledger(raw)
@@ -216,9 +256,21 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--apply", action="store_true", help="upgrade the LIVE DB in place (after a db/bak snapshot)")
     ap.add_argument("--db", type=Path, help="rehearse against this DB file instead of the live one (always a copy)")
+    ap.add_argument("--layout", choices=("single", "split"), default="single",
+                    help="split = upgrade <data-dir>/catalog.db + <data-dir>/users/<user>.db")
+    ap.add_argument("--data-dir", type=Path, help="split layout: the data dir (required with --layout split)")
+    ap.add_argument("--user", default="owner", help="split layout: the user file to upgrade (default owner)")
     args = ap.parse_args(argv)
     if args.db and args.apply:
         ap.error("--db is rehearsal-only; --apply always targets the live DB")
+    if args.layout == "split":
+        if args.db:
+            ap.error("--db is single-layout only; use --data-dir with --layout split")
+        if not args.data_dir:
+            ap.error("--layout split needs --data-dir")
+        return _main_split(args.data_dir, args.user, apply=args.apply)
+    if args.data_dir:
+        ap.error("--data-dir needs --layout split")
     os.environ.pop("MAGIC_MANAGER_DB", None)
     live = args.db or db.db_path()
     if not live.exists():
@@ -240,6 +292,38 @@ def main(argv: list[str] | None = None) -> int:
         dst.close()
         print(f"REHEARSAL on a copy of {live} (live DB untouched; --apply to upgrade it)")
         code = run(copy)
+        shutil.rmtree(d, ignore_errors=True)
+        return code
+
+
+def _main_split(data_dir: Path, user: str, *, apply: bool) -> int:
+    from magic_manager import layout
+    catalog = data_dir / layout.CATALOG_FILENAME
+    user_db = layout.user_db_path(data_dir, user)
+    missing = [str(f) for f in (catalog, user_db) if not f.is_file()]
+    if missing:
+        print(f"no split DB at {', '.join(missing)}")
+        return 1
+    if apply:
+        _use(user_db, catalog, user)
+        snap = db.snapshot(label="pre-post-merge-upgrade")
+        hint = f"MM_LAYOUT=split MM_DATA_DIR={data_dir} MM_USER={user} uv run mm db restore {snap}"
+        print(f"split DBs: {catalog} + {user_db}\nsnapshot: {snap}  (restore with: {hint})")
+        code = run(user_db, catalog, user)
+        if code:
+            print(f"\nFAILED — restore the snapshot: {hint}")
+        return code
+    with tempfile.TemporaryDirectory() as d:
+        c_copy = Path(d) / layout.CATALOG_FILENAME
+        u_copy = layout.user_db_path(Path(d), user)
+        u_copy.parent.mkdir(parents=True)
+        for src_path, dst_path in ((catalog, c_copy), (user_db, u_copy)):
+            src, dst = sqlite3.connect(src_path), sqlite3.connect(dst_path)
+            src.backup(dst)  # consistent copy even with -wal pending
+            src.close()
+            dst.close()
+        print(f"REHEARSAL on copies of {catalog} + {user_db} (live files untouched; --apply to upgrade them)")
+        code = run(u_copy, c_copy, user)
         shutil.rmtree(d, ignore_errors=True)
         return code
 

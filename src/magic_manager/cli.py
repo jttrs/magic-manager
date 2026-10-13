@@ -4528,7 +4528,7 @@ def db_snapshots_cmd():
         raise typer.Exit(0)
     for p in snaps:
         st = p.stat()
-        size_mb = st.st_size / (1024 * 1024)
+        size_mb = db.snapshot_size(p) / (1024 * 1024)
         when = datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
         typer.echo(f"{when}  {size_mb:>6.2f} MB  {p}")
 
@@ -4590,11 +4590,46 @@ def db_restore_cmd(
 
 @db_app.command("integrity")
 def db_integrity_cmd():
-    """Run PRAGMA integrity_check on the live DB. Exits non-zero if not 'ok'."""
-    result = db._check_integrity(db.db_path())
-    typer.echo(result)
-    if result != "ok":
+    """Run PRAGMA integrity_check on the live DB (both files in the split layout). Exits non-zero if not 'ok'."""
+    lay = db.layout()
+    files = [db.db_path()] if lay.kind == "single" else [lay.catalog, lay.path]
+    bad = False
+    for f in files:
+        result = db._check_integrity(f)
+        typer.echo(result if lay.kind == "single" else f"{f}: {result}")
+        bad = bad or result != "ok"
+    if bad:
         raise typer.Exit(1)
+
+
+@db_app.command("split")
+def db_split_cmd(
+    to: Path = typer.Option(..., "--to", help="Data dir to write catalog.db + users/<user>.db into."),
+    user: str = typer.Option("owner", "--user", help="Name of the user file (users/<user>.db)."),
+    force: bool = typer.Option(False, "--force", help="Replace existing target files."),
+    as_json: bool = typer.Option(False, "--json", help="Print the report as JSON."),
+):
+    """Split the single DB into catalog.db + users/<user>.db (verified; the source is never changed).
+
+    Source = the configured single file (MAGIC_MANAGER_DB, else db/magic_manager.db).
+    Exit 0 = written and verified; 1 = the copy didn't verify (nothing written);
+    2 = refused (wrong version, targets exist, …; nothing written).
+    """
+    from . import split as split_mod
+    say = None if as_json else (lambda m: typer.echo(m, err=True))
+    try:
+        report = split_mod.split(db.db_path(), to, user, force=force, progress=say)
+        code = 0
+    except split_mod.SplitRefused as e:
+        typer.echo(f"refused: {e}", err=True)
+        raise typer.Exit(2)
+    except split_mod.SplitFailed as e:
+        report, code = e.report, 1
+    if as_json:
+        typer.echo(json.dumps(report.to_dict(), indent=2))
+    else:
+        typer.echo(split_mod.format_report(report))
+    raise typer.Exit(code)
 
 
 @db_app.command("unlock")

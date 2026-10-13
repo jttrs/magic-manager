@@ -2127,7 +2127,12 @@ def snapshot(*, label: str | None = None, dest: Path | None = None,
     IMPORTANT: call this OUTSIDE any active ``connect()`` context. Taking a
     snapshot while a writer is mid-transaction can capture an inconsistent
     state.
+
+    In the split layout (no ``src``) both files are copied as ONE pair — see
+    :func:`_snapshot_split` — and the pair's directory is returned.
     """
+    if src is None and (lay := layout()).kind == "split":
+        return _snapshot_split(lay, label=label, dest=dest)
     bdir = bak_dir() if src is None else Path(src).parent / BAK_SUBDIR
     src = db_path() if src is None else Path(src)
     if not src.exists():
@@ -2160,6 +2165,8 @@ def restore(backup_path: Path) -> Path:
     backup_path = Path(backup_path)
     if not backup_path.exists():
         raise FileNotFoundError(f"backup not found: {backup_path}")
+    if (lay := layout()).kind == "split":
+        return _restore_split(lay, backup_path)
     result = _check_integrity(backup_path)
     if result != "ok":
         raise RuntimeError(f"refusing to restore: backup failed integrity check: {result}")
@@ -2177,7 +2184,15 @@ def restore(backup_path: Path) -> Path:
 
 
 def list_snapshots() -> list[Path]:
-    """Return snapshot files in ``db/bak/``, newest first."""
+    """Return snapshot files in ``db/bak/``, newest first (split layout: the
+    pair directories holding this user's file)."""
+    if (lay := layout()).kind == "split":
+        bdir = _split_data_dir(lay) / BAK_SUBDIR
+        rel = _split_rel(lay)
+        pairs = [p for p in bdir.glob(f"{SPLIT_SNAPSHOT_PREFIX}*")
+                 if p.is_dir() and not p.name.endswith(".partial") and (p / rel["user"]).is_file()]
+        pairs.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+        return pairs
     live = db_path()
     bdir = bak_dir()
     if not bdir.exists():
@@ -2194,11 +2209,115 @@ def prune_snapshots(*, keep: int = 3, apply: bool = False) -> tuple[list[Path], 
     if keep < 1:
         raise ValueError("keep at least one snapshot")
     doomed = list_snapshots()[keep:]
-    freed = sum(p.stat().st_size for p in doomed)
+    freed = sum(snapshot_size(p) for p in doomed)
     if apply:
         for p in doomed:
-            p.unlink()
+            shutil.rmtree(p) if p.is_dir() else p.unlink()
     return doomed, freed
+
+
+def snapshot_size(path: Path) -> int:
+    """Bytes in a snapshot (a file, or a split pair directory)."""
+    path = Path(path)
+    if path.is_dir():
+        return sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
+    return path.stat().st_size
+
+
+# ---------- split-layout snapshots (Phase 3 §25.4 step 3) ----------
+
+SPLIT_SNAPSHOT_PREFIX = "split.bak-"
+_SIDECAR_SUFFIXES = ("-journal", "-wal", "-shm")
+
+
+def _split_data_dir(lay: _layout.Layout) -> Path:
+    return lay.catalog.parent
+
+
+def _split_rel(lay: _layout.Layout) -> dict[str, str]:
+    """Each file's path inside a pair directory (mirrors the data dir)."""
+    return {"catalog": _layout.CATALOG_FILENAME, "user": f"{_layout.USERS_SUBDIR}/{lay.path.name}"}
+
+
+def _snapshot_split(lay: _layout.Layout, *, label: str | None, dest: Path | None) -> Path:
+    """Copy the catalog + this user's file into ONE timestamped pair directory,
+    ``<data dir>/bak/split.bak-<ts>[-label]/{catalog.db, users/<user>.db}``.
+
+    Both copies are taken while a write lock (``BEGIN IMMEDIATE`` across both
+    files) keeps other writers out, so the pair is consistent; each copy uses
+    SQLite's backup API (WAL-safe) and must pass ``integrity_check``. Built
+    under ``<name>.partial`` and renamed when complete.
+    """
+    live = {"catalog": lay.catalog, "user": lay.path}
+    for what, f in live.items():
+        if not f.is_file():
+            raise FileNotFoundError(f"no {what} DB to snapshot at {f}")
+    if dest is None:
+        ts = datetime.now().strftime("%Y-%m-%d-%H%M%S")
+        dest = _split_data_dir(lay) / BAK_SUBDIR / f"{SPLIT_SNAPSHOT_PREFIX}{ts}{f'-{label}' if label else ''}"
+    dest = Path(dest)
+    if dest.exists():
+        raise FileExistsError(f"snapshot already exists: {dest}")
+    partial = dest.with_name(dest.name + ".partial")
+    shutil.rmtree(partial, ignore_errors=True)
+    rel = _split_rel(lay)
+    hold = sqlite3.connect(str(lay.path), isolation_level=None)
+    try:
+        hold.execute(f"ATTACH DATABASE ? AS {_layout.CATALOG_SCHEMA}", (str(lay.catalog),))
+        hold.execute("BEGIN IMMEDIATE")  # writers wait; readers (the backups below) don't
+        for what, f in live.items():
+            out = partial / rel[what]
+            out.parent.mkdir(parents=True, exist_ok=True)
+            s, d = sqlite3.connect(str(f)), sqlite3.connect(str(out))
+            try:
+                s.backup(d)
+            finally:
+                s.close()
+                d.close()
+            if (result := _check_integrity(out)) != "ok":
+                raise RuntimeError(f"snapshot integrity check failed ({what}): {result}")
+        hold.execute("ROLLBACK")
+        partial.rename(dest)
+    except BaseException:
+        shutil.rmtree(partial, ignore_errors=True)
+        raise
+    finally:
+        hold.close()
+    return dest
+
+
+def _restore_split(lay: _layout.Layout, pair: Path) -> Path | None:
+    """Replace the live catalog + user file with a pair snapshot.
+
+    The live files (and any journal/WAL sidecars) move to
+    ``<data dir>/replaced/split.replaced-<ts>/`` first, so a mistaken restore
+    is itself recoverable. Returns that directory (``None`` if nothing was live).
+    """
+    if not pair.is_dir():
+        raise ValueError(f"split layout: restore takes a pair snapshot directory "
+                         f"(see `mm db snapshots`), not {pair}")
+    rel = _split_rel(lay)
+    for what, r in rel.items():
+        f = pair / r
+        if not f.is_file():
+            raise FileNotFoundError(f"pair snapshot {pair} has no {what} DB at {r}")
+        if (result := _check_integrity(f)) != "ok":
+            raise RuntimeError(f"refusing to restore: {what} backup failed integrity check: {result}")
+    live = {"catalog": lay.catalog, "user": lay.path}
+    ts = datetime.now().strftime("%Y-%m-%d-%H%M%S")
+    replaced = _split_data_dir(lay) / REPLACED_SUBDIR / f"split.replaced-{ts}"
+    moved = False
+    for what, f in live.items():
+        for p in (f, *(f.with_name(f.name + s) for s in _SIDECAR_SUFFIXES)):
+            if p.exists():
+                target = replaced / rel[what]
+                target.parent.mkdir(parents=True, exist_ok=True)
+                p.rename(target.with_name(p.name))
+                moved = True
+    for what, f in live.items():
+        f.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(pair / rel[what], f)
+    return replaced if moved else None
 
 
 # ---------- card upserts ----------
