@@ -21,6 +21,11 @@ that must run once against your live DB after you pull them:
                                     decks.created_by_ingest_id — schema-only (no existing
                                     deck is linked: an old import's deck can't be tied to
                                     its event with certainty, so those stay NULL)
+  V36  splittable schema: user tables drop their FOREIGN KEY into cards (rebuilt with every
+                                    row/rowid/index/sequence preserved) and the catalog keys
+                                    (sets.partial, scryfall_tags.*source, front_set:*) move from
+                                    settings to catalog_settings — schema-only; verified below by
+                                    the catalog-refs audit (mm audit catalog-refs) + the key move
   —    'built' follows pledges     → decks.backfill_built_state()  (mm deck backfill-built)
                                     data-only: imported / hand-built decks with nothing pledged → not built;
                                     precons keep ONE built copy (extra unpledged built copies → not built)
@@ -178,6 +183,13 @@ def run(path: Path) -> int:
         states_before, allowed, _deck_states(raw), _pledged_deconstructed(raw),
         decks.unpledged_built_count(conn=raw) + decks.extra_built_precon_count(conn=raw))
     changed_states = sum(1 for d, s in _deck_states(raw).items() if states_before.get(d, s) != s)
+    from magic_manager import audit, layout
+    orphans = [f for f in audit.catalog_refs(raw) if f.rows]
+    card_fks = [t for t in layout.USER_TABLES
+                if any(fk[2] == "cards" for fk in raw.execute(f"PRAGMA foreign_key_list({t})"))]
+    stray_keys = [k for (k,) in raw.execute("SELECT key FROM settings")
+                  if k in db.CATALOG_SETTING_KEYS or k.startswith(db.CATALOG_SETTING_PREFIXES)]
+    n_catalog_keys = raw.execute("SELECT COUNT(*) FROM catalog_settings").fetchone()[0]
     raw.close()
 
     bad = [t for t in before if before[t][:2] != after.get(t, (None, None))[:2]]
@@ -189,10 +201,15 @@ def run(path: Path) -> int:
           f"{len(allowed)} predicted built → not built; {len(built_problems)} problem(s)")
     for p in built_problems[:20]:
         print(f"      ✗ {p}")
+    print(f"  {'✓' if not orphans else '✗'} catalog-refs: {sum(f.rows for f in orphans)} user row(s) point at printings missing from cards"
+          + "".join(f"\n      ✗ {f.table}: {f.rows} row(s), e.g. {f.scryfall_ids[0]}" for f in orphans))
+    print(f"  {'✓' if not card_fks else '✗'} no user table keeps a FOREIGN KEY into cards{f': {card_fks}' if card_fks else ''}")
+    print(f"  {'✓' if not stray_keys else '✗'} catalog keys moved to catalog_settings ({n_catalog_keys} key(s)); "
+          f"left in settings: {stray_keys or 'none'}")
     print(f"  decks by kind: {dict(kinds)}")
     if price_rows is not None:
         print(f"  earmark price history: {price_rows} rows (V32 seeds one per priced earmark link)")
-    return 1 if bad or drift or built_problems else 0
+    return 1 if bad or drift or built_problems or orphans or card_fks or stray_keys else 0
 
 
 def main(argv: list[str] | None = None) -> int:

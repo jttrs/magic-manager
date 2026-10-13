@@ -1178,6 +1178,7 @@ def deck_add_card(
             old_count = existing["count"]
             new_count = old_count + count
             action = "updated"
+        db.require_cards(conn, (scryfall_id,))
         conn.execute(
             """
             INSERT INTO deck_cards (deck_version_id, scryfall_id, board, finish, count)
@@ -1294,6 +1295,7 @@ def deck_set_card(
             return {"action": "deleted", "old_count": old_count, "new_count": 0}
 
         action = "updated" if existing else "inserted"
+        db.require_cards(conn, (scryfall_id,))
         conn.execute(
             """
             INSERT INTO deck_cards (deck_version_id, scryfall_id, board, finish, count)
@@ -1451,6 +1453,7 @@ def deck_assign_batch(
 
         now = db._utcnow_iso()
         assigned_rows = assigned_qty = 0
+        db.require_cards(conn, [sid for sid, _f, _q in writable])
         for sid, finish, qty in writable:
             conn.execute(
                 """
@@ -2153,6 +2156,7 @@ def import_precon(
             row_kind = mtgjson_mod.precon_kind(
                 file_name, name=deck_name, product_type=deck_data.get("type"),
                 playable_cards=playable)
+        db.require_cards(conn, [e[0] for e in parsed_entries])  # one batch, before any deck row
         for s in effective_slugs:
             deck_create(s, deck_name, format=fmt, source_set_code=src_set,
                         source_precon_file_name=file_name,

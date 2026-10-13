@@ -259,6 +259,7 @@ def copy_recipe(slug: str, *, name: str | None = None) -> str:
         new_slug = _unique_slug(conn, new_name)
     decks.deck_create(new_slug, new_name, format=d["format"], precon_state="deconstructed")
     with db.transaction() as conn:
+        db.require_cards(conn, [c.scryfall_id for c in cards])
         for c in cards:
             decks.deck_add_card(new_slug, c.scryfall_id, c.board, c.finish, c.count, conn=conn)
     return new_slug
@@ -386,6 +387,7 @@ def save(slug: str, cards: list[DraftCard], *, expected_version_id: int,
         v = None
         if pv["changes"]:
             v = decks.create_version(slug, status=status, change_reason="web edit", conn=conn)
+            db.require_cards(conn, [c.scryfall_id for c in cards if c.count > 0])
             for c in cards:
                 if c.count > 0:
                     decks.deck_add_card(slug, c.scryfall_id, c.board, c.finish, c.count, conn=conn)

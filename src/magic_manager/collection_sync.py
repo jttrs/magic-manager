@@ -636,6 +636,7 @@ def apply_import(
             mode=("additive" if mode == "add" else "replace"),
             conn=c,
         ) as rec:
+            db.require_cards(c, [sid for (sid, _f), qty in agg.items() if qty > 0])
             for (sid, finish), qty in agg.items():
                 if mode == "add":
                     r = inv_mod.inventory_add(sid, finish, qty, conn=c,

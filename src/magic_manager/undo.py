@@ -32,15 +32,15 @@ from . import db
 from .analytics import consent
 # Your data, parents before children — the one registry is ``layout``. Card/price/
 # EDHREC/tag tables are caches and are never touched (cards only ever grow, so
-# restored rows' FKs hold).
+# restored rows' printings still resolve; ``mm audit catalog-refs`` checks).
 from .layout import USER_TABLES
-from .sets import PARTIAL_SETS_KEY
 
 
 # ``settings`` keys a restore must NOT roll back: they reflect the latest choice
-# (opting out of tracking, then pressing Undo, must not opt you back in), or
-# describe the card catalog, which a restore never touches.
-KEEP_SETTINGS = (consent.SETTING_KEY, PARTIAL_SETS_KEY)
+# (opting out of tracking, then pressing Undo, must not opt you back in). Keys
+# that describe the card catalog live in ``catalog_settings`` (V36), which a
+# restore never touches.
+KEEP_SETTINGS = (consent.SETTING_KEY,)
 
 SESSION_GAP_SECONDS = 30 * 60
 SNAPSHOT_FILE = "undo.db"

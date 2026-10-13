@@ -914,6 +914,7 @@ def apply_counts(changes: Iterable[CountChange], *, label: str, conn=None) -> di
         unknown = [ch.scryfall_id for ch in items if ch.scryfall_id not in names]
         if unknown:
             raise LookupError(f"unknown printing(s): {', '.join(unknown[:5])}")
+        db.require_cards(c, names)  # all present (checked above); one batch, warms the per-row seams
         stale = [ch for ch in items
                  if ch.expected is not None and owned.get((ch.scryfall_id, ch.finish), 0) != ch.expected]
         if stale:
@@ -1855,21 +1856,17 @@ _PRECON_TYPES_DEFAULT = object()
 # Printings added by a LOOKUP (search fallback, art look-up, live floor, cart)
 # instead of a full ``sync``. A set whose first rows came that way holds only a
 # few of its printings, so it stays "unsynced" until ``sync`` pulls it whole.
-# A ``settings`` key (no schema): JSON list of lowercased set codes.
+# A ``catalog_settings`` key (V36): JSON list of lowercased set codes.
 PARTIAL_SETS_KEY = "sets.partial"
 
 
 def _partial_codes(conn) -> set[str]:
-    row = conn.execute("SELECT value FROM settings WHERE key = ?", (PARTIAL_SETS_KEY,)).fetchone()
-    return set(json.loads(row[0])) if row and row[0] else set()
+    value = db.catalog_setting(conn, PARTIAL_SETS_KEY)
+    return set(json.loads(value)) if value else set()
 
 
 def _save_partial_codes(conn, codes: set[str]) -> None:
-    if codes:
-        conn.execute("INSERT INTO settings (key, value) VALUES (?, ?) "
-                     "ON CONFLICT(key) DO UPDATE SET value = excluded.value", (PARTIAL_SETS_KEY, json.dumps(sorted(codes))))
-    else:
-        conn.execute("DELETE FROM settings WHERE key = ?", (PARTIAL_SETS_KEY,))
+    db.set_catalog_setting(conn, PARTIAL_SETS_KEY, json.dumps(sorted(codes)) if codes else None)
 
 
 def upsert_lookup_cards(conn, cards: Iterable[dict]) -> int:

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import sqlite3
 from contextlib import contextmanager
@@ -1198,6 +1199,36 @@ CREATE UNIQUE INDEX IF NOT EXISTS ingest_events_reverts_uq
 # (decks.created_by_ingest_id is added by _run_v35_python_migration — guarded, so
 # a re-run of this script can't fail on a duplicate column.)
 
+
+# V36: make the schema splittable (Phase 3 §25.4 step 2). (1) ``catalog_settings``
+# holds the keys that DESCRIBE THE CARD CATALOG (which sets are only partly
+# synced, which Tagger bulk files are loaded, each family's Jumpstart front-card
+# set) — moved out of ``settings``, which keeps only the user's own keys. Read
+# and write them only through :func:`catalog_setting` / :func:`set_catalog_setting`.
+# (2) ``_run_v36_python_migration`` drops every user table's FOREIGN KEY into
+# ``cards`` (SQLite can't enforce one across files); ``mm audit catalog-refs``
+# is the orphan check that replaces it. Idempotent: the move deletes what it
+# copied, and the rebuild skips tables with no ``cards`` FK left.
+CATALOG_SETTING_KEYS: tuple[str, ...] = ("sets.partial", "scryfall_tags.source", "scryfall_tags.art_source")
+CATALOG_SETTING_PREFIXES: tuple[str, ...] = ("front_set:",)
+
+_V36_CATALOG_KEY_WHERE = (
+    "key IN (" + ", ".join(f"'{k}'" for k in CATALOG_SETTING_KEYS) + ")"
+    + "".join(f" OR substr(key, 1, {len(p)}) = '{p}'" for p in CATALOG_SETTING_PREFIXES)
+)
+
+SCHEMA_V36 = f"""
+CREATE TABLE IF NOT EXISTS catalog_settings (
+    key    TEXT PRIMARY KEY,
+    value  TEXT
+);
+
+INSERT INTO catalog_settings (key, value)
+    SELECT key, value FROM settings WHERE {_V36_CATALOG_KEY_WHERE}
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+DELETE FROM settings WHERE {_V36_CATALOG_KEY_WHERE};
+"""
+
 # ---------- migration-authoring convention ----------
 #
 # Always-safe ops in a migration: CREATE TABLE, ALTER TABLE ADD COLUMN,
@@ -1236,7 +1267,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS ingest_events_reverts_uq
 # Re-derivable tables (recovery = re-run a sync):
 #   - cards             every column is rebuilt by `mm set sync <name>`
 #   - schema_version    bookkeeping
-#   - settings          flags; nothing irreplaceable
+#   - settings          the user's flags/choices; nothing irreplaceable
+#   - catalog_settings  (V36) what the catalog holds (partial sets, Tagger bulk
+#                       file loaded, front-card sets) — rebuilt with the catalog
 #   - front_cards       rebuilt by `front_cards.sync_front_cards()` (a Scryfall fetch)
 #   - edhrec_pages / edhrec_commander_cards / edhrec_card_commanders /
 #                       edhrec_rankings   (V23) rebuilt by `mm edhrec sync` — a
@@ -1297,8 +1330,26 @@ MIGRATIONS: list[str] = [
     SCHEMA_V33,
     SCHEMA_V34,
     SCHEMA_V35,
+    SCHEMA_V36,
 ]
 CURRENT_VERSION = len(MIGRATIONS)
+
+# Migration targets (Phase 3 §25.3). V1–V36 built the one file the splitter
+# starts from (target ``single``). Every later entry runs on ONE kind of file —
+# ``catalog`` (once, on catalog.db) or ``user`` (on every users/<id>.db) — and
+# touches only tables of that kind (``layout.classify``; a test enforces both).
+# The single layout runs every entry. Add ``<version>: 'catalog'|'user'`` here
+# with each new MIGRATIONS entry.
+SPLIT_BASE_VERSION = 36
+MIGRATION_TARGETS: dict[int, str] = {}
+SPLIT_TARGETS = ("catalog", "user")
+
+
+def migration_target(version: int) -> str:
+    """``single`` (V1–V36) | ``catalog`` | ``user``; KeyError if a later entry has none."""
+    if version <= SPLIT_BASE_VERSION:
+        return "single"
+    return MIGRATION_TARGETS[version]
 
 # Migrations that rebuild a table which is an FK TARGET (something references its
 # PK), so their DROP+RENAME must run with foreign_keys temporarily OFF. Unlike
@@ -1315,6 +1366,9 @@ _FK_OFF_MIGRATIONS: dict[int, tuple[str, ...]] = {
     26: ("inventory_events",),
     34: ("inventory_events",),
     35: ("inventory_events", "purchases", "ingest_events"),
+    # V36 rebuilds these to drop their FK into cards; checks their remaining
+    # (user→user) FKs afterwards.
+    36: ("inventory", "inventory_events", "deck_cards", "deck_assignments", "wishlist_entries"),
 }
 
 
@@ -1333,7 +1387,7 @@ def _open_split(lay: _layout.Layout) -> sqlite3.Connection:
     for f, what in ((lay.path, "user"), (lay.catalog, "catalog")):
         if not f.is_file():
             raise _layout.LayoutError(f"split layout: {what} DB {f} does not exist")
-    conn = sqlite3.connect(str(lay.path))
+    conn = sqlite3.connect(str(lay.path), factory=Connection)
     try:
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
@@ -1376,7 +1430,7 @@ def connect(path: Path | None = None) -> Iterator[sqlite3.Connection]:
     else:
         p = path or db_path()
         p.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(str(p))
+        conn = sqlite3.connect(str(p), factory=Connection)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
     try:
@@ -1434,62 +1488,249 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
                 f"refusing to apply migrations: pre-migration snapshot failed ({e}). "
                 f"Fix the underlying issue or back up {db_path()} manually before retrying."
             ) from e
-    for i, sql in enumerate(MIGRATIONS[have:], start=have + 1):
+    for i in range(have + 1, CURRENT_VERSION + 1):
         if i != 1:  # MIGRATIONS[0] already ran above
-            if i == 35 and "reverts_ingest_id" in {r[1] for r in conn.execute("PRAGMA table_info(ingest_events)")}:
-                pass  # already rebuilt (a re-run would drop every reverts_ingest_id link)
-            elif i in _FK_OFF_MIGRATIONS:
-                # This migration rebuilds a table that is an FK TARGET (another
-                # table references its PK), so the DROP+RENAME would trip the
-                # foreign_keys=ON enforcement connect() sets. SQLite's sanctioned
-                # recipe is to disable FK enforcement around the rebuild; the
-                # PRAGMA is a no-op inside a transaction, so we must be in
-                # autocommit first (executescript issues its own COMMIT, but we
-                # commit here to be certain no write txn is open). The rebuild
-                # preserves every PK value, so no FK is actually orphaned — we
-                # verify with foreign_key_check and re-enable before continuing.
-                child_tables = _FK_OFF_MIGRATIONS[i]
-                conn.commit()
-                conn.execute("PRAGMA foreign_keys = OFF")
-                conn.executescript(sql)
-                conn.commit()
-                # Scope the check to the REFERENCING (child) table(s): a bare
-                # foreign_key_check is DB-wide and would also flag unrelated
-                # pre-existing dangling FKs (tolerated because foreign_keys=ON
-                # only enforces new writes), aborting an upgrade whose own rebuild
-                # is clean. `foreign_key_check(T)` checks the FKs declared in T, so
-                # we pass the child that points at the rebuilt parent.
-                violations: list = []
-                for child in child_tables:
-                    violations += conn.execute(
-                        f"PRAGMA foreign_key_check({child})"
-                    ).fetchall()
-                conn.execute("PRAGMA foreign_keys = ON")
-                if violations:
-                    raise RuntimeError(
-                        f"migration v{i} left dangling foreign keys "
-                        f"(child tables {child_tables}): {violations}"
-                    )
-            else:
-                conn.executescript(sql)
-        # Per-version Python post-migration hooks. SQL alone can't handle
-        # operations needing INSERT...RETURNING, JSON building, or external
-        # API calls; we run those in Python after the SQL ran.
-        if i == 4 and have < 4:
-            _run_v4_python_migration(conn)
-        if i == 10 and have < 10:
-            _run_v10_python_migration(conn)
-        if i == 11 and have < 11:
-            _run_v11_python_migration(conn)
-        if i == 15 and have < 15:
-            _run_v15_python_migration(conn)
-        if i == 17 and have < 17:
-            _run_v17_python_migration(conn)
-        if i == 35 and have < 35:
-            _run_v35_python_migration(conn)
+            _apply_migration(conn, i)
+        _run_python_hook(conn, i)
     if have < CURRENT_VERSION:
-        conn.execute("DELETE FROM schema_version")
-        conn.execute("INSERT INTO schema_version (version) VALUES (?)", (CURRENT_VERSION,))
+        _set_version(conn)
+
+
+def _set_version(conn: sqlite3.Connection) -> None:
+    conn.execute("DELETE FROM schema_version")
+    conn.execute("INSERT INTO schema_version (version) VALUES (?)", (CURRENT_VERSION,))
+
+
+def _apply_migration(conn: sqlite3.Connection, i: int) -> None:
+    """Run ``MIGRATIONS[i-1]``'s SQL (and, for an FK-off migration, its
+    Python hook inside the same FK-off window)."""
+    sql = MIGRATIONS[i - 1]
+    if i == 35 and "reverts_ingest_id" in {r[1] for r in conn.execute("PRAGMA table_info(ingest_events)")}:
+        return  # already rebuilt (a re-run would drop every reverts_ingest_id link)
+    if i not in _FK_OFF_MIGRATIONS:
+        conn.executescript(sql)
+        return
+    # This migration rebuilds a table that is an FK TARGET (another
+    # table references its PK), so the DROP+RENAME would trip the
+    # foreign_keys=ON enforcement connect() sets. SQLite's sanctioned
+    # recipe is to disable FK enforcement around the rebuild; the
+    # PRAGMA is a no-op inside a transaction, so we must be in
+    # autocommit first (executescript issues its own COMMIT, but we
+    # commit here to be certain no write txn is open). The rebuild
+    # preserves every PK value, so no FK is actually orphaned — we
+    # verify with foreign_key_check and re-enable before continuing.
+    child_tables = _FK_OFF_MIGRATIONS[i]
+    conn.commit()
+    conn.execute("PRAGMA foreign_keys = OFF")
+
+    def _violations() -> set[tuple]:
+        out: set[tuple] = set()
+        for child in child_tables:
+            if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (child,)).fetchone():
+                # (table, rowid, parent) — not fkid, which shifts when a rebuild drops an FK
+                out |= {tuple(r)[:3] for r in conn.execute(f"PRAGMA foreign_key_check({child})")}
+        return out
+
+    try:
+        before = _violations()  # pre-existing dangling FKs aren't this migration's doing
+        conn.executescript(sql)
+        conn.commit()
+        hook = _FK_OFF_HOOKS.get(i)
+        if hook is not None:
+            hook(conn)
+            conn.commit()
+        # Scope the check to the REFERENCING (child) table(s): a bare
+        # foreign_key_check is DB-wide and would also flag unrelated
+        # pre-existing dangling FKs (tolerated because foreign_keys=ON
+        # only enforces new writes), aborting an upgrade whose own rebuild
+        # is clean. `foreign_key_check(T)` checks the FKs declared in T, so
+        # we pass the child that points at the rebuilt parent.
+        violations = sorted(_violations() - before)
+    finally:
+        conn.execute("PRAGMA foreign_keys = ON")
+    if violations:
+        raise RuntimeError(
+            f"migration v{i} left dangling foreign keys "
+            f"(child tables {child_tables}): {violations}"
+        )
+
+
+def _run_python_hook(conn: sqlite3.Connection, i: int) -> None:
+    # Per-version Python post-migration hooks. SQL alone can't handle
+    # operations needing INSERT...RETURNING, JSON building, or external
+    # API calls; we run those in Python after the SQL ran.
+    hook = _PYTHON_HOOKS.get(i)
+    if hook is not None:
+        hook(conn)
+
+
+def migrate_split_file(path: Path, target: str) -> list[int]:
+    """Bring ONE split-layout file to :data:`CURRENT_VERSION`, running only the
+    migrations whose target is ``target`` (``catalog`` | ``user``); the file's
+    own ``schema_version`` then records ``CURRENT_VERSION`` (entries of the
+    other target don't apply to it). Returns the versions applied.
+
+    Never creates a file (split ``connect`` doesn't either): the step-3
+    splitter makes the files at V36 and calls this, as does the upgrader for
+    each user file. Snapshots the file to ``<dir>/bak/`` before changing it.
+    """
+    if target not in SPLIT_TARGETS:
+        raise ValueError(f"target must be one of {SPLIT_TARGETS} (got {target!r})")
+    path = Path(path)
+    if not path.is_file():
+        raise _layout.LayoutError(f"split layout: {target} DB {path} does not exist")
+    probe = sqlite3.connect(str(path))
+    try:
+        row = probe.execute("SELECT version FROM schema_version").fetchone()
+    finally:
+        probe.close()
+    have = row[0] if row else 0
+    if have < SPLIT_BASE_VERSION or have > CURRENT_VERSION:
+        raise _layout.LayoutError(
+            f"split layout: {path} is at schema v{have}; split files start at "
+            f"v{SPLIT_BASE_VERSION} and this code is at v{CURRENT_VERSION}"
+        )
+    if have == CURRENT_VERSION:
+        return []
+    snapshot(src=path, label=f"pre-v{CURRENT_VERSION}")  # no connection open: its errors surface as-is
+    conn = sqlite3.connect(str(path), factory=Connection)
+    try:
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
+        applied = []
+        for i in range(have + 1, CURRENT_VERSION + 1):
+            if migration_target(i) == target:
+                _apply_migration(conn, i)
+                _run_python_hook(conn, i)
+                applied.append(i)
+        _set_version(conn)
+        conn.commit()
+        return applied
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+_V36_CARD_FK = re.compile(
+    r",\s*FOREIGN\s+KEY\s*\(\s*scryfall_id\s*\)\s*REFERENCES\s+\"?cards\"?\s*\(\s*scryfall_id\s*\)",
+    re.IGNORECASE,
+)
+
+
+def _run_v36_python_migration(conn: sqlite3.Connection) -> None:
+    """V36: drop every user table's FOREIGN KEY into ``cards`` (runs with
+    foreign_keys OFF, inside one transaction).
+
+    Each table is rebuilt from its OWN stored ``CREATE TABLE`` text minus the
+    ``cards`` clause, so columns, order, CHECKs, defaults, comments and the
+    other FKs stay exactly as they were; rows are copied with their rowids,
+    indexes are recreated from their stored text, and an AUTOINCREMENT
+    sequence keeps its value. Idempotent: a table without a ``cards`` FK is
+    left alone. Legacy ``list_rows`` is never touched.
+    """
+    todo = []
+    for t in _layout.USER_TABLES:
+        row = conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (t,)).fetchone()
+        if row is None:
+            continue
+        if not any(fk[2] == "cards" for fk in conn.execute(f'PRAGMA foreign_key_list("{t}")')):
+            continue
+        new_sql, n = _V36_CARD_FK.subn("", row[0])
+        if n != 1:
+            raise RuntimeError(f"v36: can't find {t}'s FOREIGN KEY into cards in its schema")
+        todo.append((t, new_sql))
+    if not todo:
+        return
+    has_seq = conn.execute("SELECT 1 FROM sqlite_master WHERE name='sqlite_sequence'").fetchone()
+    conn.execute("BEGIN")
+    for t, new_sql in todo:
+        old = f"{t}__v36_old"
+        seq = conn.execute("SELECT seq FROM sqlite_sequence WHERE name=?", (t,)).fetchone() if has_seq else None
+        indexes = [r[0] for r in conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name=? AND sql IS NOT NULL ORDER BY rowid",
+            (t,))]
+        info = conn.execute(f'PRAGMA table_info("{t}")').fetchall()
+        cols = ", ".join(f'"{r[1]}"' for r in info)
+        pks = [r for r in info if r[5]]
+        if not (len(pks) == 1 and pks[0][2].upper() == "INTEGER"):
+            cols = f"rowid, {cols}"  # keep rowids too (no INTEGER PRIMARY KEY aliases them)
+        n_rows = conn.execute(f'SELECT COUNT(*) FROM "{t}"').fetchone()[0]
+        conn.execute(f'ALTER TABLE "{t}" RENAME TO "{old}"')
+        conn.execute(new_sql)
+        conn.execute(f'INSERT INTO "{t}" ({cols}) SELECT {cols} FROM "{old}"')
+        conn.execute(f'DROP TABLE "{old}"')  # drops its indexes (recreated below)
+        for sql in indexes:
+            conn.execute(sql)
+        if seq is not None:
+            conn.execute("DELETE FROM sqlite_sequence WHERE name=?", (t,))
+            conn.execute("INSERT INTO sqlite_sequence (name, seq) VALUES (?, ?)", (t, seq[0]))
+        if conn.execute(f'SELECT COUNT(*) FROM "{t}"').fetchone()[0] != n_rows:
+            raise RuntimeError(f"v36: {t} row count changed during the rebuild")
+        if any(fk[2] == "cards" for fk in conn.execute(f'PRAGMA foreign_key_list("{t}")')):
+            raise RuntimeError(f"v36: {t} still references cards")
+
+
+# ---------- card references (V36) ----------
+
+_REQUIRE_CHUNK = 500
+
+
+class Connection(sqlite3.Connection):
+    """``connect()``'s connection class. Carries ``known_cards``: printings
+    already confirmed present, so a bulk write that pre-checks its batch costs
+    one query per chunk and its per-row seams then hit memory. Safe because
+    cards are never deleted and a connection that rolls back is closed by
+    ``connect()`` (the memo goes with it)."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.known_cards: set[str] = set()
+
+
+def require_cards(conn: sqlite3.Connection, scryfall_ids: Iterable[str]) -> None:
+    """Refuse user rows that would point at a printing missing from ``cards``.
+
+    V36 dropped the user tables' FOREIGN KEYs into ``cards`` (the catalog can
+    live in another file); every user write seam that stores a ``scryfall_id``
+    calls this instead, so the old behavior holds in both layouts. Raises
+    ``sqlite3.IntegrityError`` — the exception the FK raised. Checks with one
+    ``IN (…)`` query per ≤500 unseen ids; call it once per batch in bulk paths.
+    """
+    known = getattr(conn, "known_cards", None)
+    if known is None:  # a raw sqlite3 connection: no memo
+        known = set()
+    todo = list(dict.fromkeys(i for i in scryfall_ids if i is not None and i not in known))
+    missing: list[str] = []
+    for n in range(0, len(todo), _REQUIRE_CHUNK):
+        chunk = todo[n:n + _REQUIRE_CHUNK]
+        found = {r[0] for r in conn.execute(
+            f"SELECT scryfall_id FROM cards WHERE scryfall_id IN ({', '.join('?' * len(chunk))})", chunk)}
+        known |= found
+        missing += [i for i in chunk if i not in found]
+    if missing:
+        shown = ", ".join(missing[:5]) + (f" … +{len(missing) - 5} more" if len(missing) > 5 else "")
+        raise sqlite3.IntegrityError(
+            f"FOREIGN KEY constraint failed: {len(missing)} printing(s) not in the card catalog: {shown}")
+
+
+# ---------- catalog settings (V36) ----------
+
+def catalog_setting(conn: sqlite3.Connection, key: str) -> str | None:
+    """A ``catalog_settings`` value (None if unset). The one reader of the keys
+    that describe the card catalog (``CATALOG_SETTING_KEYS``/``_PREFIXES``)."""
+    row = conn.execute("SELECT value FROM catalog_settings WHERE key = ?", (key,)).fetchone()
+    return row[0] if row else None
+
+
+def set_catalog_setting(conn: sqlite3.Connection, key: str, value: str | None) -> None:
+    """Upsert a ``catalog_settings`` value; ``None`` deletes the key."""
+    if value is None:
+        conn.execute("DELETE FROM catalog_settings WHERE key = ?", (key,))
+    else:
+        conn.execute("INSERT INTO catalog_settings (key, value) VALUES (?, ?) "
+                     "ON CONFLICT(key) DO UPDATE SET value = excluded.value", (key, value))
 
 
 def _run_v35_python_migration(conn: sqlite3.Connection) -> None:
@@ -1838,6 +2079,20 @@ def _run_v17_python_migration(conn: sqlite3.Connection) -> None:
         )
 
 
+_PYTHON_HOOKS = {
+    4: _run_v4_python_migration,
+    10: _run_v10_python_migration,
+    11: _run_v11_python_migration,
+    15: _run_v15_python_migration,
+    17: _run_v17_python_migration,
+    35: _run_v35_python_migration,
+}
+# Hooks that must run inside their migration's foreign_keys=OFF window.
+_FK_OFF_HOOKS = {
+    36: _run_v36_python_migration,
+}
+
+
 def _utcnow_iso() -> str:
     from datetime import datetime, timezone
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -1857,8 +2112,10 @@ def _check_integrity(path: Path) -> str:
         conn.close()
 
 
-def snapshot(*, label: str | None = None, dest: Path | None = None) -> Path:
-    """Copy the active DB to a timestamped backup in ``db/bak/``.
+def snapshot(*, label: str | None = None, dest: Path | None = None,
+             src: Path | None = None) -> Path:
+    """Copy the active DB (or ``src``) to a timestamped backup in ``db/bak/``
+    (``<src dir>/bak/`` for an explicit ``src``).
 
     Default destination: ``db/bak/<live>.bak-<YYYY-MM-DD-HHMMSS>[-<label>]``.
     ``label`` is a short slug recorded in the filename so future-you can tell
@@ -1871,13 +2128,14 @@ def snapshot(*, label: str | None = None, dest: Path | None = None) -> Path:
     snapshot while a writer is mid-transaction can capture an inconsistent
     state.
     """
-    src = db_path()
+    bdir = bak_dir() if src is None else Path(src).parent / BAK_SUBDIR
+    src = db_path() if src is None else Path(src)
     if not src.exists():
         raise FileNotFoundError(f"no DB to snapshot at {src}")
     if dest is None:
         ts = datetime.now().strftime("%Y-%m-%d-%H%M%S")
         suffix = f"-{label}" if label else ""
-        dest = bak_dir() / f"{src.name}.bak-{ts}{suffix}"
+        dest = bdir / f"{src.name}.bak-{ts}{suffix}"
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(src, dest)
     result = _check_integrity(dest)
@@ -2009,6 +2267,9 @@ def upsert_card(conn: sqlite3.Connection, card: dict,
         """,
         _card_row(card, priced_at=priced_at),
     )
+    known = getattr(conn, "known_cards", None)
+    if known is not None:
+        known.add(card["id"])  # this connection now holds it (see require_cards)
 
 
 def upsert_cards(conn: sqlite3.Connection, cards: Iterable[dict],

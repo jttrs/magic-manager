@@ -58,14 +58,28 @@ def test_restore_does_not_roll_back_consent(owned):
 
 
 def test_restore_does_not_resurrect_kept_setting_absent_live(owned):
+    from magic_manager.analytics import consent
     with db.connect() as conn:
-        conn.execute("INSERT INTO settings (key, value) VALUES ('sets.partial', '[\"tst\"]')")
-    undo.take("before sync")
+        conn.execute("INSERT INTO settings (key, value) VALUES (?, '{}')", (consent.SETTING_KEY,))
+    undo.take("before forget")
     with db.connect() as conn:
-        conn.execute("DELETE FROM settings WHERE key = 'sets.partial'")
+        conn.execute("DELETE FROM settings WHERE key = ?", (consent.SETTING_KEY,))
     undo.restore()
     with db.connect() as conn:
-        assert conn.execute("SELECT 1 FROM settings WHERE key = 'sets.partial'").fetchone() is None
+        assert conn.execute("SELECT 1 FROM settings WHERE key = ?", (consent.SETTING_KEY,)).fetchone() is None
+
+
+def test_restore_never_touches_catalog_settings(owned):
+    with db.connect() as conn:
+        db.set_catalog_setting(conn, "sets.partial", '["tst"]')
+    undo.take("before sync")
+    with db.connect() as conn:
+        db.set_catalog_setting(conn, "sets.partial", None)
+        db.set_catalog_setting(conn, "front_set:tst", "ftst")
+    undo.restore()
+    with db.connect() as conn:
+        assert db.catalog_setting(conn, "sets.partial") is None
+        assert db.catalog_setting(conn, "front_set:tst") == "ftst"
 
 
 def test_restore_refuses_without_a_snapshot_or_across_schema_change(owned):

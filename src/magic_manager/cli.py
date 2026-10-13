@@ -4800,6 +4800,36 @@ def audit_ingest_ledger_cmd(
         raise typer.Exit(1)
 
 
+@audit_app.command("catalog-refs")
+def audit_catalog_refs_cmd(
+    json_out: bool = typer.Option(False, "--json", help="Emit result as JSON."),
+):
+    """List your rows (inventory, ledger, decks, wishlist, earmarks, purchases)
+    whose printing is missing from the card catalog; exits 1 when any exist.
+
+    Replaces the foreign keys into ``cards`` that V36 dropped so the catalog
+    can live in its own file. Fix: re-sync the printings' sets (``mm set sync``).
+    """
+    from . import audit as _audit
+    found = _audit.catalog_refs()
+    bad = [f for f in found if f.rows]
+    if json_out:
+        json.dump({"ok": not bad, "tables": [
+            {"table": f.table, "rows": f.rows, "scryfall_ids": f.scryfall_ids} for f in found
+        ]}, sys.stdout, indent=2)
+        sys.stdout.write("\n")
+    elif not bad:
+        typer.echo(f"catalog-refs: OK — every printing in {len(found)} table(s) is in the catalog.")
+    else:
+        typer.echo(f"catalog-refs: {sum(f.rows for f in bad)} row(s) point at printings missing from the catalog:")
+        for f in bad:
+            ids = ", ".join(f.scryfall_ids[:5]) + (f" … +{len(f.scryfall_ids) - 5} more" if len(f.scryfall_ids) > 5 else "")
+            typer.echo(f"  {f.table}: {f.rows} row(s), {len(f.scryfall_ids)} printing(s): {ids}")
+        typer.echo("  Re-sync those printings' sets (uv run mm set sync <code>) to put them back in the catalog.")
+    if bad:
+        raise typer.Exit(1)
+
+
 @audit_app.command("provenance")
 def audit_provenance_cmd(
     json_out: bool = typer.Option(False, "--json", help="Emit result as JSON."),
