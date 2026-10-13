@@ -25,6 +25,11 @@ Relay the scripts' output verbatim. Never hand-edit a DB, never compute counts y
    uv run python scripts/post_merge_upgrade.py --db db/bak/<the …-pre-v<N> snapshot>
    ```
    (`uv run mm` auto-migrates the worktree DB on connect and leaves `db/bak/…-pre-v<N>` — rehearse against that, so the N-1 → N step is actually exercised.) Exit 0 and every line `✓` is the bar.
+   **Post-V36 entries** also need `db.MIGRATION_TARGETS[N]` (`catalog` | `user`) and a split rehearsal against a pair at V<N-1> — the real pair once hosting runs split, else one made by `main`'s code (the splitter only takes a DB at its own `CURRENT_VERSION`): `MAGIC_MANAGER_DB=<copy> uv run mm db split --to <tmp dir>` from the main checkout, then on your branch
+   ```bash
+   uv run python -m scripts.rehearse_migration --layout split --data-dir <tmp dir>
+   uv run python scripts/post_merge_upgrade.py --layout split --data-dir <tmp dir>
+   ```
 7. **PR body** gets an **After merge** section: `uv run python scripts/post_merge_upgrade.py` (rehearsal) then `--apply`, plus expected runtime.
 
 ## B. After merge — upgrade the owner's real DB (main checkout)

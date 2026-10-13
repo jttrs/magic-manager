@@ -18,9 +18,19 @@ Usage
 
     uv run python -m scripts.rehearse_migration [-h | --help]
 
-This script takes no behavioral options — it always rehearses against the
-current live DB at ``db/magic_manager.db`` and reports a per-table summary.
-``--help`` prints this docstring and exits without touching anything.
+By default it rehearses against the current live DB at ``db/magic_manager.db``
+and reports a per-table summary. ``--help`` prints this docstring and exits
+without touching anything.
+
+Split layout (Phase 3, ``catalog.db`` + ``users/<user>.db`` — see ``mm db split``)::
+
+    uv run python -m scripts.rehearse_migration --layout split --data-dir <dir> [--user owner]
+
+copies both files, runs ``db.migrate_split_file`` per target (catalog, then
+user), requires the precious tables of the USER file to be byte-equivalent,
+checks the catalog file (integrity, ``cards`` never loses rows, nothing of the
+user's in it) and, through the real split connection, the ledger
+(``inventory == SUM(delta)``), catalog-refs and foreign keys.
 
 Exit codes
 ----------
@@ -365,7 +375,17 @@ def main(argv: list[str] | None = None) -> int:
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.parse_args(argv)
+    parser.add_argument("--layout", choices=("single", "split"), default="single",
+                        help="split = rehearse <data-dir>/catalog.db + <data-dir>/users/<user>.db")
+    parser.add_argument("--data-dir", type=Path, help="split layout: the data dir")
+    parser.add_argument("--user", default="owner", help="split layout: the user file (default owner)")
+    args = parser.parse_args(argv)
+    if args.layout == "split":
+        if not args.data_dir:
+            parser.error("--layout split needs --data-dir")
+        return rehearse_split(args.data_dir, args.user)
+    if args.data_dir:
+        parser.error("--data-dir needs --layout split")
 
     live = db.db_path()
     if not live.exists():
@@ -478,6 +498,105 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     print("\nOK: every precious table is byte-equivalent before and after migration.")
+    return 0
+
+
+def _user_version(path: Path) -> int:
+    conn = sqlite3.connect(str(path))
+    try:
+        row = conn.execute("SELECT version FROM schema_version").fetchone()
+        return row[0] if row else 0
+    finally:
+        conn.close()
+
+
+def rehearse_split(data_dir: Path, user: str = "owner") -> int:
+    """Rehearse the pending per-target migrations on COPIES of a split pair."""
+    from magic_manager import layout, split as split_mod
+
+    catalog = data_dir / layout.CATALOG_FILENAME
+    user_db = layout.user_db_path(data_dir, user)
+    missing = [str(f) for f in (catalog, user_db) if not f.is_file()]
+    if missing:
+        print(f"FAIL: no split DB at {', '.join(missing)} — check --data-dir / --user", file=sys.stderr)
+        return 1
+    with tempfile.TemporaryDirectory(prefix="mm-rehearsal-split-") as tmp:
+        c_copy = Path(tmp) / layout.CATALOG_FILENAME
+        u_copy = layout.user_db_path(Path(tmp), user)
+        u_copy.parent.mkdir(parents=True)
+        db.backup_file(catalog, c_copy)
+        db.backup_file(user_db, u_copy)
+
+        pre_versions = {"catalog": _user_version(c_copy), "user": _user_version(u_copy)}
+        # Legacy lists/list_rows aren't carried into the split layout.
+        precious = [t for t in _precious_tables(pre_versions["user"]) if t not in layout.LEGACY_TABLES]
+        conn = sqlite3.connect(str(u_copy))
+        conn.row_factory = sqlite3.Row
+        pre, pre_cols = {}, {}
+        for t in precious:
+            try:
+                pre_cols[t] = _columns(conn, t)
+                pre[t] = _row_hashes(conn, t, pre_cols[t] or None)
+            except sqlite3.OperationalError:
+                pre[t] = (0, "<absent>")
+        conn.close()
+        cat = sqlite3.connect(str(c_copy))
+        cards_pre = cat.execute("SELECT COUNT(*) FROM cards").fetchone()[0]
+        cat.close()
+
+        applied = {
+            "catalog": db.migrate_split_file(c_copy, "catalog"),  # catalog first (§25.3)
+            "user": db.migrate_split_file(u_copy, "user"),
+        }
+        post_versions = {"catalog": _user_version(c_copy), "user": _user_version(u_copy)}
+
+        conn = sqlite3.connect(str(u_copy))
+        conn.row_factory = sqlite3.Row
+        post = {}
+        for t in precious:
+            try:
+                post[t] = _row_hashes(conn, t, pre_cols.get(t) or None)
+            except sqlite3.OperationalError:
+                post[t] = (0, "<absent>")
+        conn.close()
+        cat = sqlite3.connect(str(c_copy))
+        cards_post = cat.execute("SELECT COUNT(*) FROM cards").fetchone()[0]
+        cat.close()
+
+        report = split_mod.SplitReport(str(data_dir), str(catalog), str(user_db), user,
+                                       post_versions["user"], "")
+        split_mod.verify_pair(u_copy, c_copy, user, report)
+
+    fail = False
+    for kind in ("catalog", "user"):
+        steps = ", ".join(f"V{v}" for v in applied[kind]) or "none pending"
+        print(f"{kind} schema_version: {pre_versions[kind]} → {post_versions[kind]}  (applied: {steps})")
+    print("user file precious tables:")
+    for t in precious:
+        n_pre, h_pre = pre[t]
+        n_post, h_post = post[t]
+        status = _table_status(n_pre, h_pre, n_post, h_post)
+        fail = fail or status == "DIVERGED"
+        print(f"  {t:16}  {n_pre:>6} rows → {n_post:>6} rows  {status}")
+        if status == "DIVERGED":
+            print(f"     pre  hash: {h_pre}")
+            print(f"     post hash: {h_post}")
+    ok_cards = cards_post >= cards_pre
+    fail = fail or not ok_cards
+    print("catalog file:")
+    print(f"  cards            {cards_pre:>6} rows → {cards_post:>6} rows  {'OK' if ok_cards else 'LOST ROWS'}")
+    print("split connection:")
+    for kind, res in sorted(report.integrity.items()):
+        print(f"  integrity_check {kind}: {res}")
+    print(f"  ledger drift (inventory != SUM(delta)): {report.ledger_drift}")
+    print(f"  catalog-refs orphans: {report.catalog_ref_orphans}")
+    print(f"  foreign_key_check violations: {report.fk_violations}")
+    for p in report.problems:
+        print(f"  FAIL {p}")
+    if fail or report.problems:
+        print("\nFAIL: the split rehearsal diverged.", file=sys.stderr)
+        return 1
+    print("\nOK: user precious tables byte-equivalent; catalog + split checks clean.")
     return 0
 
 
