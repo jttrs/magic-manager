@@ -89,6 +89,8 @@ class TelemetryMiddleware:
         finally:
             analytics.reset(token)
         status = sent["status"]
+        if state.get("user_id"):  # set by the hosted auth gate
+            ctx = analytics.Context(request_id=rid, session_id=sid, user_id=state["user_id"])
         route = getattr(scope.get("route"), "name", None)
         code = state.get("error_code")
         if 400 <= status < 500:
