@@ -286,6 +286,9 @@ def create_session(user_id: str, *, replaces: str | None = None) -> NewSession:
     now = _now()
     expires = now + SESSION_ABSOLUTE
     with connect() as conn, _tx(conn):
+        # Sign-ins are rare: sweep every expired session here, so abandoned ones don't pile up.
+        conn.execute("DELETE FROM sessions WHERE expires_at <= ? OR last_seen_at <= ?",
+                     (_iso(now), _iso(now - SESSION_IDLE)))
         if replaces:
             conn.execute("DELETE FROM sessions WHERE token_hash = ?", (hash_secret(replaces),))
         conn.execute("INSERT INTO sessions (token_hash, user_id, csrf_token, created_at, last_seen_at, expires_at) "

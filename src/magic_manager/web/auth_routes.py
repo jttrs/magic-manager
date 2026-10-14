@@ -74,7 +74,7 @@ def allowed(session: store.Session | None) -> store.Session | None:
     """The session if its user may use this server right now (step-5 rail: admins only)."""
     if session is None or session.user.disabled:
         return None
-    if not auth.PROFILES_OPEN and not session.user.is_admin:
+    if not auth.may_sign_in(session.user.is_admin):
         return None
     return session
 
@@ -140,7 +140,7 @@ def auth_login(request: Request, provider: str,
             is_admin = store.invite_is_admin(invite)
         except store.InviteInvalid:
             return _fail("invite_invalid")
-        if not is_admin and not auth.PROFILES_OPEN:
+        if not auth.may_sign_in(is_admin):
             return _fail("profiles_soon")
     try:
         state, url = oauth.begin(provider, request.app.state.public_origin, invite=invite or None, next_path=next)
@@ -189,7 +189,7 @@ def _finish(request: Request, profile: oauth.Profile, pending: oauth.Pending) ->
         if not pending.invite:
             return _fail("not_invited")
         try:
-            if not store.invite_is_admin(pending.invite) and not auth.PROFILES_OPEN:
+            if not auth.may_sign_in(store.invite_is_admin(pending.invite)):
                 return _fail("profiles_soon")
             user = store.redeem_invite(pending.invite, profile.provider, profile.subject,
                                        profile.display_name, profile.email)
@@ -197,7 +197,7 @@ def _finish(request: Request, profile: oauth.Profile, pending: oauth.Pending) ->
             return _fail("invite_invalid")
     if user.disabled:
         return _fail("disabled")
-    if not auth.PROFILES_OPEN and not user.is_admin:
+    if not auth.may_sign_in(user.is_admin):
         return _fail("profiles_soon")
     store.update_profile(user.id, profile.display_name, profile.email)
     new = store.create_session(user.id, replaces=request.cookies.get(cookie_name()))

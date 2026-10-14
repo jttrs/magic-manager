@@ -168,7 +168,12 @@ async def _discord_profile(tokens: dict, http: httpx.AsyncClient) -> Profile:
         raise OAuthFailed("provider_error", f"Couldn't read your Discord profile ({type(e).__name__}).") from e
     if r.status_code != 200:
         raise OAuthFailed("provider_error", f"Couldn't read your Discord profile (HTTP {r.status_code}).")
-    me = r.json()
+    try:
+        me = r.json()
+    except ValueError as e:
+        raise OAuthFailed("provider_error", "Discord sent an unreadable profile.") from e
+    if not isinstance(me, dict):
+        raise OAuthFailed("provider_error", "Discord sent an unreadable profile.")
     subject = _clip(me.get("id"), 64)
     if not subject:
         raise OAuthFailed("provider_error", "Discord sent a profile without an id.")

@@ -131,7 +131,7 @@ def auth_invite(
     Until profiles open (per-user collections), only --admin invites can be minted."""
     from . import auth
     from .auth import store as auth_store
-    if not admin and not auth.PROFILES_OPEN:
+    if not auth.may_sign_in(admin):
         typer.echo(f"error: {auth.PROFILES_SOON} Pass --admin to invite an admin.", err=True)
         raise typer.Exit(2)
     inv = auth_store.create_invite(is_admin=admin, expires_in=_parse_duration(expires))

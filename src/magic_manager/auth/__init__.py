@@ -31,6 +31,11 @@ SECRET_NAMES = {
 SECRETS = tuple(n for pair in SECRET_NAMES.values() for n in pair)
 
 
+def may_sign_in(is_admin: bool) -> bool:
+    """The step-5 rail in one place: until profiles open, only admins sign in."""
+    return PROFILES_OPEN or is_admin
+
+
 class HostedConfigError(RuntimeError):
     """Hosted mode can't start: a required setting is missing or malformed."""
 
@@ -50,7 +55,13 @@ def public_origin() -> str | None:
         raise HostedConfigError(f"MM_PUBLIC_ORIGIN must be an origin like https://example.com (got {raw!r})")
     if u.scheme == "http" and u.hostname not in ("localhost", "127.0.0.1"):
         raise HostedConfigError("MM_PUBLIC_ORIGIN must use https (plain http is only allowed for localhost)")
-    return f"{u.scheme}://{u.netloc.lower()}"
+    # Browsers serialize Origin without a default port, so the stored origin must too.
+    port = u.port
+    host = u.hostname.lower()
+    if ":" in host:  # IPv6 literal
+        host = f"[{host}]"
+    default = 443 if u.scheme == "https" else 80
+    return f"{u.scheme}://{host}" + (f":{port}" if port and port != default else "")
 
 
 def secure_cookies() -> bool:
