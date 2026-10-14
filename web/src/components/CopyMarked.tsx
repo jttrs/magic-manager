@@ -2,7 +2,7 @@ import { IconTooltip } from './IconTooltip';
 import { iconActionClass } from './iconActionClass';
 import { useCopy, type GetText } from './useCopy';
 import { CopyListMark } from './StoreMarks';
-import { copyMarkedLabel, markBadge } from '../core/marks';
+import { copyMarkedLabel, copyMarkedTip, markBadge } from '../core/marks';
 
 export type MarkedCopy = { count: number; getText: GetText; onClear?: () => void; noun?: string };
 
@@ -23,11 +23,11 @@ export type MarkedCopy = { count: number; getText: GetText; onClear?: () => void
  * - `onClear` adds a small "Clear marks" × beside it while anything is marked.
  */
 export function CopyMarked({ count, getText, onClear, noun = 'card' }: MarkedCopy) {
-  const { status, busy, done, copy } = useCopy();
+  const { status, failed, busy, done, copy } = useCopy();
   const none = count === 0;
   const label = copyMarkedLabel(count, noun);
   const copied = done === 'marked';
-  const tip = copied ? 'Copied' : busy ? 'Building list…' : status && !status.startsWith('Copied') ? status : label;
+  const tip = copyMarkedTip({ copied, busy: busy != null, failure: failed ? status : null, label });
   return (
     <span className="flex items-center">
       <IconTooltip label={tip}>

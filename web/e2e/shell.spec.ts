@@ -86,7 +86,7 @@ test('phone masthead, crowded: restore point + a running job + the gear still fi
   await navFitsBeside(page, 390);
 });
 
-test('sheet header is compact: no printed title, the meta line stays; no sub-nav strip for a one-mode section', async ({ page }) => {
+test('sheet header is compact: no printed title, the meta line stays; no sub-nav strip without modes', async ({ page }) => {
   await page.goto('/jobs');
   await expect(page.getByRole('heading', { level: 1, name: 'Jobs' })).toHaveClass(/sr-only/);
   await expect(page.getByText('Long-running work runs in the background; progress streams live.')).toBeVisible();

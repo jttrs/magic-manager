@@ -10,19 +10,18 @@ const clock = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: 'numer
 
 /** Inspector row: the cheapest nonfoil and foil printing of this card. First
  *  among the sets synced here; the refresh icon (*Recheck for cheapest*) checks
- *  every printing, and the row then says so with the time. Renders a dt/dd pair
+ *  every printing once, and the row then says so with the time (a second check
+ *  would only re-serve the same day's cached answer, so the icon goes away). Renders a dt/dd pair
  *  for the inspector's fact grid. (The source is never named: users who know
  *  where prices come from don't need it, and the rest don't care.) */
 export function CheapestPrinting({ scryfallId, setCode, cn }: { scryfallId: string; setCode: string | null; cn: string | null }) {
   const [live, setLive] = useState(false);
   const q = useQuery(cardFloorsQuery([scryfallId], live));
   const f = q.data?.floors[0];
-  const checking = q.isFetching;
   const where = (fl: FloorOut) => {
     const same = fl.set_code?.toLowerCase() === setCode?.toLowerCase() && fl.collector_number === cn;
     return same ? 'this printing' : `${(fl.set_code ?? '').toUpperCase()} #${fl.collector_number}`;
   };
-  const recheck = () => (live ? void q.refetch() : setLive(true));
   return (
     <>
       <dt className="text-ink-muted">Cheapest</dt>
@@ -48,15 +47,17 @@ export function CheapestPrinting({ scryfallId, setCode, cn }: { scryfallId: stri
             )}
           </>
         )}
-        {!q.isPending && !q.isError && (
+        {!q.isPending && !q.isError && f && (f.nonfoil || f.foil) && (
           <span className="text-xs text-ink-muted">
             {live ? `checked all printings · ${clock(q.dataUpdatedAt)}` : 'among synced sets'}
           </span>
         )}
         </span>
-        <span className="-my-2 shrink-0">
-          <IconAction label="Recheck for cheapest" Icon={RefreshMark} disabled={checking} disabledReason={live ? 'Checking all printings…' : 'Checking…'} onClick={recheck} />
-        </span>
+        {!live && (
+          <span className="-my-2 shrink-0">
+            <IconAction label="Recheck for cheapest" Icon={RefreshMark} disabled={q.isPending} disabledReason="Checking…" onClick={() => setLive(true)} />
+          </span>
+        )}
       </dd>
     </>
   );
