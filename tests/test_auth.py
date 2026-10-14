@@ -486,3 +486,51 @@ def test_analytics_key_is_the_signed_in_user(admin, monkeypatch):
     r = c.delete("/api/analytics/my-data", headers={"Origin": ORIGIN, "X-CSRF-Token": csrf})
     assert r.status_code == 200 and seen["uid"] == uid
     assert identity.user_key(uid) != identity.user_key()
+
+
+# ---------- review follow-ups ----------
+
+@pytest.mark.parametrize("value,expected", [
+    ("https://Cards.example.com:443", "https://cards.example.com"),
+    ("http://localhost:80", "http://localhost"),
+    ("http://localhost:8784/", "http://localhost:8784"),
+])
+def test_public_origin_drops_default_ports(monkeypatch, value, expected):
+    monkeypatch.setenv("MM_PUBLIC_ORIGIN", value)
+    assert auth.public_origin() == expected
+
+
+def test_malformed_discord_profile_redirects_not_500(hosted, provider):
+    orig = provider.handler
+
+    def handler(request):
+        if str(request.url) == oauth.DISCORD_ME:
+            return httpx.Response(200, text="<html>")
+        return orig(request)
+    provider.handler = handler
+    c = _client(hosted)
+    assert _error(sign_in(c, provider, "discord", invite=store.create_invite(is_admin=True).code)) == "provider_error"
+
+
+def test_sign_in_sweeps_expired_sessions(monkeypatch):
+    user = store.redeem_invite(store.create_invite(is_admin=True).code, "discord", "1", "A", None)
+    old = store.create_session(user.id)
+    now = store._now()
+    monkeypatch.setattr(store, "_now", lambda: now + store.SESSION_ABSOLUTE + timedelta(days=1))
+    store.create_session(user.id)
+    n = sqlite3.connect(store.path()).execute("SELECT count(*) FROM sessions WHERE token_hash = ?",
+                                              (store.hash_secret(old.token),)).fetchone()[0]
+    assert n == 0
+
+
+def test_cli_users_and_revoke():
+    user = store.redeem_invite(store.create_invite(is_admin=True).code, "google", "g", "Owner", "o@example.com")
+    store.create_session(user.id)
+    r = CliRunner().invoke(cli_app, ["auth", "users", "--json"])
+    assert r.exit_code == 0 and json.loads(r.output)[0]["providers"] == ["google"]
+    r = CliRunner().invoke(cli_app, ["auth", "revoke", "--user", user.id, "--disable"])
+    assert r.exit_code == 0 and "ended 1 session" in r.output and "disabled" in r.output
+    assert CliRunner().invoke(cli_app, ["auth", "revoke", "--user", "nope"]).exit_code == 2
+    r = CliRunner().invoke(cli_app, ["auth", "invite", "--admin", "--expires", "12h", "--json"])
+    assert r.exit_code == 0 and json.loads(r.output)["admin"] is True
+    assert CliRunner().invoke(cli_app, ["auth", "invite", "--admin", "--expires", "soon"]).exit_code == 2

@@ -20,7 +20,10 @@ function HostedGate({ children }: { children: ReactNode }) {
   const me = useQuery(meQuery());
   useEffect(() => onSignedOut(() => void qc.invalidateQueries({ queryKey: meQuery().queryKey })), [qc]);
   if (me.isPending) return <Stock />;
-  if (me.data?.user) return <>{children}</>;
+  if (me.data?.user) {
+    forgetInvite();
+    return <>{children}</>;
+  }
   return <SignInScreen me={me.data ?? null} failed={me.isError} onRetry={() => void me.refetch()} />;
 }
 
@@ -29,12 +32,37 @@ function Stock() {
   return <div className="min-h-dvh bg-chrome" aria-busy="true" />;
 }
 
+// The invite survives a cancelled or failed sign-in in this tab (the server's error
+// redirect doesn't carry it back), and is forgotten once someone is signed in.
+const INVITE_KEY = 'mm.invite';
+
+function rememberInvite(invite: string | null): string | null {
+  try {
+    if (invite) window.sessionStorage.setItem(INVITE_KEY, invite);
+    return invite ?? window.sessionStorage.getItem(INVITE_KEY);
+  } catch {
+    return invite;
+  }
+}
+
+function forgetInvite() {
+  try {
+    window.sessionStorage.removeItem(INVITE_KEY);
+  } catch {
+    // storage unavailable: nothing was kept
+  }
+}
+
 // Read the invite / error once and take them out of the address bar (the invite
 // shouldn't linger in history or be copied along with the URL).
 function useSignInParams() {
-  const [params] = useState(() => readSignInParams(window.location.search));
+  const [params] = useState(() => {
+    const p = readSignInParams(window.location.search);
+    if (p.error === 'invite_invalid' && !p.invite) forgetInvite(); // a spent/expired invite: don't retry it
+    return { ...p, invite: rememberInvite(p.invite) };
+  });
   useEffect(() => {
-    if (params.invite || params.error) {
+    if (window.location.search.includes('invite=') || params.error) {
       window.history.replaceState(window.history.state, '', `${window.location.pathname}${params.rest}${window.location.hash}`);
     }
   }, [params]);

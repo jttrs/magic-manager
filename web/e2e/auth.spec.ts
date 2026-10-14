@@ -53,6 +53,17 @@ test('hosted, signed in: account mark, CSRF on writes, sign out', async ({ page 
   expect(writes[0]['x-csrf-token']).toBe('csrf-1');
 });
 
+test('hosted, a cancelled invite sign-in keeps the invite for the retry', async ({ page }) => {
+  await hosted(page, false);
+  await page.goto(`/?invite=${INVITE}`);
+  await expect(page.getByText('You’re invited.')).toBeVisible();
+  await page.goto('/?auth_error=denied'); // back from the provider without the invite
+  await expect(page.getByRole('alert')).toContainText('cancelled');
+  await expect(page.getByRole('link', { name: 'Continue with Discord' })).toHaveAttribute('href', `/api/auth/login/discord?invite=${INVITE}`);
+  await page.goto('/?auth_error=invite_invalid'); // a spent invite is not retried
+  await expect(page.getByRole('link', { name: 'Continue with Discord' })).toHaveAttribute('href', '/api/auth/login/discord');
+});
+
 test('local mode: no account mark, no sign-in', async ({ page }) => {
   await page.goto(COLLECTION_URL);
   await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible();
