@@ -91,7 +91,7 @@ def test_cart_route_is_gated_by_the_flag(client, monkeypatch):
         _load_env = staticmethod(lambda: {})
         fetch_headless = staticmethod(lambda env: fetched["items"])
     monkeypatch.setattr(cart_api, "_cart_script", lambda: FakeScript)
-    assert client.get("/api/features").json() == {"flags": {"cart_check": False}}
+    assert client.get("/api/features").json() == {"flags": {"cart_check": False}, "mode": "local"}
     assert client.post("/api/cart/check", json={}).status_code == 403
     monkeypatch.setenv("MM_FEATURES", "cart_check")
     r = client.post("/api/cart/check", json={})
