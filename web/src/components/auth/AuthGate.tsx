@@ -4,7 +4,7 @@ import { meQuery, onSignedOut } from '../../app/auth';
 import { serverModeQuery } from '../../app/queries';
 import type { MeOut } from '../../core/api';
 import { authErrorMessage, loginHref, readSignInParams } from '../../core/auth';
-import { buttonClass } from '../Button';
+import { buttonClass } from '../buttonClass';
 
 /** Hosted mode: nothing of the app renders until someone is signed in. Local mode: a pass-through. */
 export function AuthGate({ children }: { children: ReactNode }) {
@@ -41,7 +41,7 @@ function useSignInParams() {
   return params;
 }
 
-export function SignInScreen({ me, failed, onRetry }: { me: MeOut | null; failed: boolean; onRetry: () => void }) {
+function SignInScreen({ me, failed, onRetry }: { me: MeOut | null; failed: boolean; onRetry: () => void }) {
   const { invite, error, rest } = useSignInParams();
   const message = failed ? 'The server didn’t answer. Try again in a moment.' : authErrorMessage(error);
   const next = `${window.location.pathname}${rest}`;

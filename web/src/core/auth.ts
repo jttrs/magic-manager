@@ -2,7 +2,7 @@
 // and reading the invite / error the server put in the URL. Local mode never uses it.
 
 /** `?auth_error=<code>` from the sign-in routes → a plain sentence (problem + way out). */
-export const AUTH_ERRORS: Record<string, string> = {
+const AUTH_ERRORS: Record<string, string> = {
   not_invited: 'That account isn’t on the invite list yet. Ask for an invite link, then sign in from it.',
   invite_invalid: 'That invite link can’t be used — it may have been used already or expired. Ask for a new one.',
   profiles_soon: 'Profiles open soon — for now only the admin can sign in.',
