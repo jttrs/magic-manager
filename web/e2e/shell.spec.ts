@@ -85,3 +85,33 @@ test('phone masthead, crowded: restore point + a running job + the gear still fi
   await expect(page.getByRole('button', { name: /^Restore point/ })).toBeVisible();
   await navFitsBeside(page, 390);
 });
+
+test('sheet header is compact: no printed title, the meta line stays; no sub-nav strip without modes', async ({ page }) => {
+  await page.goto('/jobs');
+  await expect(page.getByRole('heading', { level: 1, name: 'Jobs' })).toHaveClass(/sr-only/);
+  await expect(page.getByText('Long-running work runs in the background; progress streams live.')).toBeVisible();
+  await expect(page.locator('[data-subnav]')).toHaveCount(0);
+});
+
+test('card inspector: Value + Cheapest rows, recheck without naming a vendor, one View on row', async ({ page }) => {
+  await page.route('**/api/cards/floors', (r) => {
+    const body = r.request().postDataJSON() as { scryfall_ids: string[]; live: boolean };
+    return r.fulfill({ json: { live: body.live, floors: [{ scryfall_id: body.scryfall_ids[0], oracle_id: 'o', name: 'X', nonfoil: { usd: 0.5, set_code: 'm21', collector_number: '3', scryfall_id: 'loc' }, foil: null }] } });
+  });
+  await page.goto('/collection?families=%5B%22blb%22%5D');
+  await page.getByRole('button', { name: /^Inspect / }).first().click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('term').filter({ hasText: /^Value$/ })).toBeVisible();
+  await expect(dialog.getByRole('term').filter({ hasText: /^Price$/ })).toHaveCount(0);
+  await expect(dialog).toContainText('among synced sets');
+  await expect(dialog.getByRole('button', { name: /Scryfall/ })).toHaveCount(0);
+  await expect(dialog.getByRole('button', { name: 'Recheck for cheapest' })).toBeVisible();
+
+  const viewOn = dialog.getByRole('navigation', { name: 'View on' });
+  const scryfall = await viewOn.getByRole('link', { name: /^Scryfall/ }).boundingBox();
+  const tcg = await viewOn.getByRole('link', { name: /^TCGplayer/ }).boundingBox();
+  const explorer = await viewOn.getByRole('link', { name: 'Explorer' }).boundingBox();
+  expect(Math.abs(scryfall!.y - explorer!.y)).toBeLessThan(2);               // one row
+  expect(explorer!.x - (tcg!.x + tcg!.width)).toBeGreaterThan(40);           // Explorer pushed to the right
+  await expect(viewOn.getByRole('link', { name: 'Explorer' })).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+});

@@ -1,5 +1,6 @@
 // Highlighter selection: the user's marked cards (to buy, or to pull for a deck).
 // Kept per view in sessionStorage so it survives reloads but not new sessions.
+// The marked cards are copied from the sheet header: `GuideSheet marked={{ count, getText, onClear: clear }}` (CopyMarked).
 import { useCallback, useEffect, useState } from 'react';
 
 export function useSelection(scope: string) {

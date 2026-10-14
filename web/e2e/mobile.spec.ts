@@ -20,3 +20,13 @@ test('phones: controls collapse into a disclosure once inputs are set', async ({
   await expect(page.getByRole('button', { name: 'Copy ManaPool list' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
 });
+
+test('phones: the card inspector keeps View on to one row', async ({ page }) => {
+  await page.goto(COLLECTION_URL);
+  await page.getByRole('button', { name: /^Inspect / }).first().click();
+  const viewOn = page.getByRole('dialog').getByRole('navigation', { name: 'View on' });
+  const first = await viewOn.getByRole('link').first().boundingBox();
+  const explorer = await viewOn.getByRole('link', { name: 'Explorer' }).boundingBox();
+  expect(Math.abs(first!.y - explorer!.y)).toBeLessThan(2);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
+});

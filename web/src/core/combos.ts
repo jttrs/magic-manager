@@ -9,8 +9,8 @@ export type OwnNote = { text: string; free: boolean };
 export function ownNote(p: PieceOut): OwnNote {
   const owned = p.facts.owned ?? 0;
   const free = p.facts.free ?? 0;
-  if (free > 0) return { text: `${fmtInt(free)} free`, free: true };
-  if (owned > 0) return { text: 'owned, all pledged', free: false };
+  if (free > 0) return { text: `${fmtInt(free)} unused`, free: true };
+  if (owned > 0) return { text: 'owned, all in built decks', free: false };
   return { text: 'not in your collection', free: false };
 }
 

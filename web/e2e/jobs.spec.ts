@@ -23,3 +23,10 @@ test('job form validates before submitting', async ({ page }) => {
   await page.getByRole('button', { name: 'Start warm-up' }).click();
   await expect(page.getByRole('alert')).toContainText('Enter at least one set-family code');
 });
+
+test('jobs sheet: compact header, title kept only for screen readers', async ({ page }) => {
+  await page.goto('/jobs');
+  const h1 = page.getByRole('heading', { level: 1, name: 'Jobs' });
+  await expect(h1).toHaveClass(/sr-only/);
+  await expect(page.getByRole('heading', { level: 2, name: 'Current run' })).toBeVisible();
+});

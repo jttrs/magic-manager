@@ -15,6 +15,7 @@ import { CompanionButton } from './companion/CompanionSetup';
 import { useFeature } from '../app/features';
 import { SettingsButton } from './settings/SettingsDialog';
 import { SettingsChoice, SettingsRow } from './settings/SettingsControls';
+import { SubnavSlot } from './subnavSlot';
 
 const NAV = [
   { to: '/collection', label: 'Collection' },
@@ -72,34 +73,50 @@ function CompanionSlot() {
   return useFeature('companion') ? <span className="contents max-sm:hidden"><CompanionButton /></span> : null;
 }
 
-/** Sidebar (starts below the nav) + main region. */
-export function ViewLayout({ sidebar, children, label, summary, startOpen = false }: { sidebar: ReactNode; children: ReactNode; label: string; summary?: string; startOpen?: boolean }) {
+/** Sidebar (starts below the nav) + main region, with an optional sub-nav strip.
+ *
+ *  `subnav` — the section's modes (Collection: Cards · Purchase history; Explore:
+ *  Rankings · Specific cards). Pass `<SectionTabs label=… tabs=… />`: inside the
+ *  slot it takes the strip's chrome look (quieter than the top nav, amber
+ *  underline on the active mode). The strip spans the full width under the top
+ *  nav — above BOTH the rail and the sheet, since a mode scopes both — and stays
+ *  visible on phones while the rail is collapsed. A section with one mode shows
+ *  no strip: `SectionTabs` renders nothing for fewer than two tabs and the empty
+ *  strip collapses (`empty:hidden`), so views needn't special-case it. */
+export function ViewLayout({ sidebar, children, label, summary, startOpen = false, subnav }: { sidebar: ReactNode; children: ReactNode; label: string; summary?: string; startOpen?: boolean; subnav?: ReactNode }) {
   const wide = useMediaQuery('(min-width: 64rem)');
   const [open, setOpen] = useState(startOpen);
   const shown = wide || open;
   return (
-    <div className="grid min-h-0 min-w-0 grid-cols-1 lg:grid-cols-[var(--size-sidebar)_minmax(0,1fr)]">
-      <aside aria-label={label} className="min-w-0 border-b border-chrome-line px-4 py-3 lg:max-h-[calc(100dvh-var(--size-topbar))] lg:overflow-y-auto lg:border-b-0 lg:border-r lg:px-5 lg:py-5">
-        {!wide && (
-          <button
-            type="button"
-            aria-expanded={open}
-            aria-controls="view-controls"
-            onClick={() => setOpen((o) => !o)}
-            className="flex w-full cursor-pointer items-center gap-3 py-1 text-left"
-          >
-            <span className="flex min-w-0 flex-1 flex-col">
-              <span className="text-md voice-condensed uppercase tracking-[0.06em] text-on-chrome">{label}</span>
-              {summary && !open && <span className="truncate text-xs text-on-chrome-muted">{summary}</span>}
-            </span>
-            <span aria-hidden="true" className={`text-on-chrome transition-transform ease-guide ${open ? 'rotate-180' : ''}`}>▾</span>
-          </button>
-        )}
-        <div id="view-controls" hidden={!shown} className={`flex-col gap-6 ${shown ? 'flex' : ''} ${wide ? '' : 'pt-3'}`}>{sidebar}</div>
-      </aside>
-      <main id="main" tabIndex={-1} className="min-h-0 min-w-0 p-2 sm:p-3 lg:h-[calc(100dvh-var(--size-topbar))] lg:p-4">
-        {children}
-      </main>
+    <div className="flex min-h-0 min-w-0 flex-col lg:h-[calc(100dvh-var(--size-topbar))]">
+      {subnav != null && (
+        <SubnavSlot.Provider value>
+          <div data-subnav="" className="shrink-0 border-b border-chrome-line empty:hidden">{subnav}</div>
+        </SubnavSlot.Provider>
+      )}
+      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-1 lg:grid-cols-[var(--size-sidebar)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
+        <aside aria-label={label} className="min-w-0 border-b border-chrome-line px-4 py-3 lg:overflow-y-auto lg:border-b-0 lg:border-r lg:px-5 lg:py-5">
+          {!wide && (
+            <button
+              type="button"
+              aria-expanded={open}
+              aria-controls="view-controls"
+              onClick={() => setOpen((o) => !o)}
+              className="flex w-full cursor-pointer items-center gap-3 py-1 text-left"
+            >
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="text-md voice-condensed uppercase tracking-[0.06em] text-on-chrome">{label}</span>
+                {summary && !open && <span className="truncate text-xs text-on-chrome-muted">{summary}</span>}
+              </span>
+              <span aria-hidden="true" className={`text-on-chrome transition-transform ease-guide ${open ? 'rotate-180' : ''}`}>▾</span>
+            </button>
+          )}
+          <div id="view-controls" hidden={!shown} className={`flex-col gap-6 ${shown ? 'flex' : ''} ${wide ? '' : 'pt-3'}`}>{sidebar}</div>
+        </aside>
+        <main id="main" tabIndex={-1} className="min-h-0 min-w-0 p-2 sm:p-3 lg:h-full lg:p-4">
+          {children}
+        </main>
+      </div>
     </div>
   );
 }
