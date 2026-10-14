@@ -2886,6 +2886,12 @@ export type FeaturesOut = {
     flags: {
         [key: string]: boolean;
     };
+    /**
+     * Mode
+     *
+     * hosted = sign-in required (MM_MODE=hosted); local = no login.
+     */
+    mode?: 'local' | 'hosted';
 };
 
 /**
@@ -3553,6 +3559,32 @@ export type MatchOut = {
      * Singles: the printing's market at that finish.
      */
     price?: number | null;
+};
+
+/**
+ * MeOut
+ */
+export type MeOut = {
+    /**
+     * Who is signed in; null when nobody is.
+     */
+    user: UserOut | null;
+    /**
+     * Csrf Token
+     *
+     * Send as X-CSRF-Token on every write while signed in.
+     */
+    csrf_token: string | null;
+    /**
+     * Providers
+     */
+    providers: Array<ProviderOut>;
+    /**
+     * Profiles Open
+     *
+     * False until per-user collections land: only the admin can sign in.
+     */
+    profiles_open: boolean;
 };
 
 /**
@@ -4633,6 +4665,26 @@ export type ProductValueOut = {
      * Error
      */
     error?: string | null;
+};
+
+/**
+ * ProviderOut
+ */
+export type ProviderOut = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Login Url
+     *
+     * Start sign-in here (append ?invite=<code> for a first sign-in).
+     */
+    login_url: string;
 };
 
 /**
@@ -6511,6 +6563,28 @@ export type UnidentifiedOut = {
      * Num
      */
     num: string | null;
+};
+
+/**
+ * UserOut
+ */
+export type UserOut = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Display Name
+     */
+    display_name: string;
+    /**
+     * Email
+     */
+    email: string | null;
+    /**
+     * Is Admin
+     */
+    is_admin: boolean;
 };
 
 /**
@@ -9362,3 +9436,35 @@ export type IngestPreconsResponses = {
 };
 
 export type IngestPreconsResponse = IngestPreconsResponses[keyof IngestPreconsResponses];
+
+export type AuthMeData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/auth/me';
+};
+
+export type AuthMeResponses = {
+    /**
+     * Successful Response
+     */
+    200: MeOut;
+};
+
+export type AuthMeResponse = AuthMeResponses[keyof AuthMeResponses];
+
+export type AuthLogoutData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/auth/logout';
+};
+
+export type AuthLogoutResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type AuthLogoutResponse = AuthLogoutResponses[keyof AuthLogoutResponses];

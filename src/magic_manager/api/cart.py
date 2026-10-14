@@ -13,6 +13,8 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from .. import cart, features, secrets
@@ -23,6 +25,7 @@ _ACCOUNT_KEYS = secrets.PERSONAL
 
 class FeaturesOut(BaseModel):
     flags: dict[str, bool]
+    mode: Literal["local", "hosted"] = Field("local", description="hosted = sign-in required (MM_MODE=hosted); local = no login.")
 
 
 class CartSetupOut(BaseModel):
@@ -101,7 +104,8 @@ class CartAuditOut(BaseModel):
 
 
 def flags() -> FeaturesOut:
-    return FeaturesOut(flags=features.flags())
+    from ..analytics import consent
+    return FeaturesOut(flags=features.flags(), mode=consent.mode())
 
 
 def _cart_script():
