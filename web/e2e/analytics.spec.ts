@@ -13,7 +13,7 @@ test('dashboard: errors first, usage beside, trace a ref', async ({ page }) => {
     '/api/analytics/trace/': () => ({ json: [{ event_id: 'e1', name: 'job.failed', ts: '2026-10-07T18:02:00.000+00:00', request_id: '3f9a12c0aa11bb22cc33dd44ee55ff66', session_id: null, category: 'error', props: { job: 'edhrec.sync_bulk', code: 'edhrec_error' } }] }),
   });
   await page.goto('/analytics?days=7');
-  await expect(page.getByRole('heading', { name: 'Analytics', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Analytics', level: 1 })).toHaveClass(/sr-only/);
   await expect(page.getByLabel('Totals').getByRole('definition').first()).toHaveText('9');
   await expect(page.getByRole('list', { name: 'Errors per day' }).getByRole('listitem')).toHaveCount(7);
   const top = page.getByRole('region', { name: /Top errors/ });

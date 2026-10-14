@@ -56,7 +56,7 @@ export function CardInspector({ card, onClose }: { card: GuideCard | null; onClo
                     <dd className="tabular">{card.cmc}</dd>
                   </>
                 )}
-                <dt className="text-ink-muted">Price</dt>
+                <dt className="text-ink-muted">Value</dt>
                 <dd className="flex gap-4 tabular">
                   {parts ? (
                     <span>{fmtUsd(card.price)} <span className="text-ink-muted">both cards · cheapest printing of each</span></span>
@@ -100,21 +100,23 @@ export function CardInspector({ card, onClose }: { card: GuideCard | null; onClo
 
               <nav aria-labelledby="inspect-view-on" className="mt-auto flex flex-col gap-1 pt-2">
                 <span id="inspect-view-on" className="text-xs voice-semi text-ink-muted">View on</span>
-                <div className="flex flex-wrap gap-x-4 gap-y-1">
+                {/* Every link here is a "view on": the other sites left, this app's Explorer right. */}
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
                   {card.href && <OutLink href={card.href} label="Scryfall" Mark={ScryfallMark} />}
                   {parts
                     ? parts.map((p) => <OutLink key={p.name} href={tcgplayerSearch(p.name)} label={`TCGplayer · ${p.name.split(',')[0]}`} Mark={TcgplayerMark} />)
                     : <OutLink href={tcgplayerSearch(card.name)} label="TCGplayer" Mark={TcgplayerMark} />}
+                  <Link
+                    to="/explore"
+                    search={{ a: card.name.split(' // ')[0] } as never}
+                    onClick={onClose}
+                    title="Open in Explorer"
+                    className={`${VIEW_ON} ml-auto -mr-2`}
+                  >
+                    <ExploreMark className="size-[1.15rem]" />
+                    Explorer
+                  </Link>
                 </div>
-                <Link
-                  to="/explore"
-                  search={{ a: card.name.split(' // ')[0] } as never}
-                  onClick={onClose}
-                  className="-ml-2 inline-flex min-h-9 items-center gap-1.5 self-start rounded-sm px-2 text-md voice-semi font-medium text-accent-ink transition-colors duration-150 ease-guide hover:bg-paper-sunk focus-visible:bg-paper-sunk"
-                >
-                  <ExploreMark className="size-[1.15rem]" />
-                  Explore this card
-                </Link>
               </nav>
             </div>
           </Dialog.Content>
@@ -158,6 +160,10 @@ function PairPart({ part, onLeave }: { part: Part; onLeave: () => void }) {
   );
 }
 
+/** One "View on" link: amber ink, no fill until hover/focus — the same for the
+ *  other sites and for this app's Explorer. */
+const VIEW_ON = 'inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-sm px-2 text-md voice-semi font-medium text-accent-ink no-underline transition-colors duration-150 ease-guide hover:bg-paper-sunk focus-visible:bg-paper-sunk';
+
 /** A link to another site: that site's monochrome mark + its name (the mark replaces a generic ↗). */
 export function OutLink({ href, label, Mark }: { href: string; label: string; Mark: ComponentType<SVGProps<SVGSVGElement>> }) {
   return (
@@ -166,7 +172,7 @@ export function OutLink({ href, label, Mark }: { href: string; label: string; Ma
       target="_blank"
       rel="noreferrer"
       title={`Open on ${label}`}
-      className="-ml-2 inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-sm px-2 text-md voice-semi font-medium text-accent-ink no-underline transition-colors duration-150 ease-guide hover:bg-paper-sunk focus-visible:bg-paper-sunk"
+      className={`${VIEW_ON} -ml-2`}
     >
       <Mark className="size-[1.15rem]" />
       {label}
@@ -181,7 +187,7 @@ const FINISHES = [
 ] as const;
 const KIND_NOTE: Record<string, string> = { pool: 'card pool', deck: 'precon deck' };
 
-/** This printing in your collection: per-finish owned / pledged / free, the built
+/** This printing in your collection: per-finish owned / in built decks / unused, the built
  *  decks holding it, where the copies came from, and other printings you own. */
 function YourCopies({ scryfallId, onLeave }: { scryfallId: string; onLeave: () => void }) {
   const q = useQuery(holdingsQuery(scryfallId));
@@ -225,15 +231,15 @@ function CopiesBody({ h, onLeave }: { h: HoldingsOut; onLeave: () => void }) {
               <dt className="text-ink-muted">{f.label}</dt>
               <dd className="tabular">
                 <b className="font-bold">{fmtInt(owned)}</b> owned
-                {pledged > 0 && <> · {fmtInt(pledged)} pledged</>}
-                {' · '}<span className={h.free[f.key] ? 'text-accent-ink' : 'text-ink-muted'}>{fmtInt(h.free[f.key] ?? 0)} free</span>
+                {pledged > 0 && <> · {fmtInt(pledged)} in built decks</>}
+                {' · '}<span title="Unused = copies you own that aren’t in a built deck" className={h.free[f.key] ? 'text-accent-ink' : 'text-ink-muted'}>{fmtInt(h.free[f.key] ?? 0)} unused</span>
               </dd>
             </div>
           );
         })}
         {h.decks.length > 0 && (
           <>
-            <dt className="text-ink-muted">Pledged to</dt>
+            <dt className="text-ink-muted">In built decks</dt>
             <dd>
               <ul className="flex flex-col gap-0.5">
                 {h.decks.map((d) => (

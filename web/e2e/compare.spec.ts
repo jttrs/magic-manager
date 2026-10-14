@@ -137,7 +137,7 @@ test('old /commanders links land on Explore as commander; the inspector offers E
   const tile = page.getByRole('article').first();
   const name = (await tile.getByRole('button', { name: /^Mark / }).getAttribute('aria-label'))!.replace(/^Mark /, '');
   await tile.getByRole('button', { name: `Inspect ${name}` }).click();
-  await page.getByRole('dialog').getByRole('link', { name: 'Explore this card' }).click();
+  await page.getByRole('dialog').getByRole('link', { name: 'Explorer' }).click();
   await expect(page).toHaveURL(/\/explore\?a=/);
   await expect(page.getByRole('combobox', { name: 'Card' })).toHaveValue(name.split(' // ')[0]);
 });

@@ -274,3 +274,26 @@ export function ShuffleMark(p: MarkProps) {
     </svg>
   );
 }
+
+/** A circling arrow (check again — e.g. recheck for the cheapest printing). */
+export function RefreshMark(p: MarkProps) {
+  return (
+    <svg {...base} {...p}>
+      <path d="M19.4 13.2a7.4 7.4 0 1 1-2.2-6.3" />
+      <path d="M18.2 3.4v4.2H14" />
+    </svg>
+  );
+}
+
+/** Copy a list: two offset sheets, the front one ruled with three dotted list
+ *  lines (copy the marked cards as a list). Drawn at the app's 24px grid. */
+export function CopyListMark(p: MarkProps) {
+  return (
+    <svg {...base} {...p}>
+      <path d="M8.5 6.5V4.4A1.4 1.4 0 0 1 9.9 3h8.7A1.4 1.4 0 0 1 20 4.4v11.2a1.4 1.4 0 0 1-1.4 1.4h-2.1" />
+      <rect x="4" y="6.5" width="12.5" height="14.5" rx="1.4" />
+      <path d="M7.2 10.8h0M7.2 13.8h0M7.2 16.8h0" strokeWidth={2} />
+      <path d="M9.8 10.8h3.8M9.8 13.8h3.8M9.8 16.8h2.6" />
+    </svg>
+  );
+}

@@ -27,7 +27,7 @@ test('editor: the Combos tab lists what one card would complete and adds it', as
   await page.getByRole('tab', { name: 'Combos' }).click();
   await expect(page.getByText('1 in this deck · 1 one card away · 2 more need another colour')).toBeVisible();
   await expect(page.getByRole('heading', { name: /One card away/ })).toContainText('1 card');
-  await expect(page.getByText('1 free', { exact: true })).toBeVisible();
+  await expect(page.getByText('1 unused', { exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: 'Completes 1 combo' }).click();
   const how = page.getByRole('button', { name: new RegExp(`${inDeck} \\+ Mycosynth Lattice — how it works`) });

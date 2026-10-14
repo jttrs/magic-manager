@@ -93,7 +93,7 @@ test('cards show the foil premium, filter under a cap and sort smallest first', 
   await expect(page.getByRole('radio', { name: 'Under 25%' })).toBeChecked();
 });
 
-test('the inspector shows the cheapest printing and can check every set live', async ({ page }) => {
+test('the inspector shows the cheapest printing among synced sets and can recheck all printings', async ({ page }) => {
   const bodies: unknown[] = [];
   await page.route('**/api/cards/floors', (r) => {
     const body = r.request().postDataJSON() as { scryfall_ids: string[]; live: boolean };
@@ -105,9 +105,10 @@ test('the inspector shows the cheapest printing and can check every set live', a
   await page.getByRole('button', { name: /^Inspect / }).first().click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toContainText('$0.50 nonfoil · M21 #3');
-  await dialog.getByRole('button', { name: 'Check every set on Scryfall' }).click();
+  await expect(dialog).toContainText('among synced sets');
+  await dialog.getByRole('button', { name: 'Recheck for cheapest' }).click();
   await expect(dialog).toContainText('$0.10 nonfoil · SLD #7');
-  await expect(dialog).toContainText('checked every set');
+  await expect(dialog).toContainText(/checked all printings · \d{1,2}:\d{2}/);
   expect(bodies.map((b) => (b as { live: boolean }).live)).toEqual([false, true]);
 });
 

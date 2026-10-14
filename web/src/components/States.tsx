@@ -1,25 +1,49 @@
 import type { ReactNode } from 'react';
 import { ApiError } from '../core/apiError';
+import { CopyMarked, type MarkedCopy } from './CopyMarked';
 
-/** Paper sheet that hosts a view's content: title, summary line, then the body.
- *  `hideTitle` keeps the title as the page's accessible h1 but doesn't print it —
- *  for views whose title would only repeat the active nav tab or sheet tab
- *  (Collection, Decks, …). The summary and actions then share one compact line;
- *  with neither, the header takes no space at all. */
-export function GuideSheet({ title, summary, actions, nav, hideTitle = false, children }: { title: ReactNode; summary?: ReactNode; actions?: ReactNode; nav?: ReactNode; hideTitle?: boolean; children: ReactNode }) {
-  const bare = hideTitle && !summary && !actions;
+/**
+ * Paper sheet that hosts a view's content: a compact header line, then the body.
+ *
+ * Header contract (every view, every variant):
+ * - `title` is NEVER printed. It stays the page's accessible `h1` (sr-only): the
+ *   active nav tab, the sub-nav strip and the body's own group heads already say
+ *   where you are, so a big title only repeated them. Where the body has a single
+ *   group, that group's head is the visible title.
+ * - `summary` — the meta line (counts, freshness, what's shown), left.
+ * - `actions` — the view's header action icons (`IconAction`s: refresh, open in
+ *   a vendor, surf…), right-aligned on the same line. Main-view actions live
+ *   here, never in the filter rail. `actionsLabel` names the group: the sheet
+ *   then renders it as a labelled toolbar (pass bare icons, no wrapper).
+ * - `marked` — the view has markable cards: the sheet adds `CopyMarked` (copy
+ *   the marked cards as a list, count badge, Clear marks) last in the actions.
+ * - With neither summary nor actions the header takes no space at all.
+ *
+ * `nav` (tabs at the sheet's top edge) and `hideTitle` are legacy: section modes
+ * now go in `ViewLayout`'s `subnav` slot, and every title is hidden. Both stay
+ * accepted until each view adopts the strip.
+ */
+export function GuideSheet({ title, summary, actions, actionsLabel, marked, nav, children }: { title: ReactNode; summary?: ReactNode; actions?: ReactNode; actionsLabel?: string; marked?: MarkedCopy; nav?: ReactNode; /** @deprecated titles are never printed now */ hideTitle?: boolean; children: ReactNode }) {
+  const hasActions = Boolean(actions) || marked != null;
+  const bare = !summary && !hasActions;
+  const toolbar = actionsLabel != null || marked != null;
   return (
     <div className="paper-grain flex h-full min-h-[70dvh] flex-col rounded-sm bg-paper text-ink shadow-[0_1px_0_var(--theme-chrome-line),0_18px_40px_-28px_var(--theme-scrim)]">
       {nav}
       {bare ? (
         <h1 className="sr-only">{title}</h1>
       ) : (
-        <div className={`flex flex-wrap gap-x-6 gap-y-2 px-5 ${hideTitle ? 'min-h-12 items-center pt-2 pb-1' : 'items-end pt-4 pb-2'}`}>
+        <div className="flex min-h-12 flex-wrap items-center gap-x-6 gap-y-2 px-5 pt-2 pb-1">
           <div className="min-w-0">
-            <h1 className={hideTitle ? 'sr-only' : 'text-3xl voice-condensed font-bold leading-none tracking-[-0.01em] text-ink'}>{title}</h1>
-            {summary && <p className={`text-sm tabular text-ink-muted ${hideTitle ? '' : 'mt-1.5'}`}>{summary}</p>}
+            <h1 className="sr-only">{title}</h1>
+            {summary && <p className="text-sm tabular text-ink-muted">{summary}</p>}
           </div>
-          {actions && <div className="ml-auto flex items-center gap-2">{actions}</div>}
+          {hasActions && (
+            <div role={toolbar ? 'toolbar' : undefined} aria-label={toolbar ? (actionsLabel ?? 'Sheet actions') : undefined} className={`ml-auto flex items-center ${toolbar ? 'gap-1' : 'gap-2'}`}>
+              {actions}
+              {marked && <CopyMarked {...marked} />}
+            </div>
+          )}
         </div>
       )}
       <div className="min-h-0 flex-1">{children}</div>

@@ -4,30 +4,36 @@ import { cardFloorsQuery } from '../app/queries';
 import type { FloorOut } from '../core/api';
 import { fmtUsd } from '../core/format';
 import { IconAction } from './IconAction';
-import { ScryfallMark } from './StoreMarks';
+import { RefreshMark } from './StoreMarks';
 
-/** Inspector row: the cheapest nonfoil and foil printing of this card — from
- *  your synced sets, or every set on Scryfall on request. Renders a dt/dd pair
- *  for the inspector's fact grid. */
+const clock = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+/** Inspector row: the cheapest nonfoil and foil printing of this card. First
+ *  among the sets synced here; the refresh icon (*Recheck for cheapest*) checks
+ *  every printing, and the row then says so with the time. Renders a dt/dd pair
+ *  for the inspector's fact grid. (The source is never named: users who know
+ *  where prices come from don't need it, and the rest don't care.) */
 export function CheapestPrinting({ scryfallId, setCode, cn }: { scryfallId: string; setCode: string | null; cn: string | null }) {
   const [live, setLive] = useState(false);
   const q = useQuery(cardFloorsQuery([scryfallId], live));
   const f = q.data?.floors[0];
+  const checking = q.isFetching;
   const where = (fl: FloorOut) => {
     const same = fl.set_code?.toLowerCase() === setCode?.toLowerCase() && fl.collector_number === cn;
     return same ? 'this printing' : `${(fl.set_code ?? '').toUpperCase()} #${fl.collector_number}`;
   };
+  const recheck = () => (live ? void q.refetch() : setLive(true));
   return (
     <>
       <dt className="text-ink-muted">Cheapest</dt>
       <dd className="flex items-start gap-2 tabular">
         <span className="flex min-w-0 flex-wrap gap-x-4 gap-y-0.5">
         {q.isPending ? (
-          <span role="status" className="text-ink-muted">{live ? 'Checking every set…' : 'Checking…'}</span>
+          <span role="status" className="text-ink-muted">{live ? 'Checking all printings…' : 'Checking…'}</span>
         ) : q.isError ? (
           <span className="text-danger">Couldn’t check: {(q.error as Error).message}</span>
         ) : !f || (!f.nonfoil && !f.foil) ? (
-          <span className="text-ink-muted">No price {live ? 'anywhere' : 'in your synced sets'}</span>
+          <span className="text-ink-muted">No price {live ? 'in any printing' : 'among synced sets'}</span>
         ) : (
           <>
             {f.nonfoil && (
@@ -42,13 +48,15 @@ export function CheapestPrinting({ scryfallId, setCode, cn }: { scryfallId: stri
             )}
           </>
         )}
-        {live && !q.isPending && <span className="text-xs text-ink-muted">checked every set</span>}
-        </span>
-        {!live && (
-          <span className="-my-2 shrink-0">
-            <IconAction label="Check every set on Scryfall" Icon={ScryfallMark} disabled={q.isPending} disabledReason="Checking…" onClick={() => setLive(true)} />
+        {!q.isPending && !q.isError && (
+          <span className="text-xs text-ink-muted">
+            {live ? `checked all printings · ${clock(q.dataUpdatedAt)}` : 'among synced sets'}
           </span>
         )}
+        </span>
+        <span className="-my-2 shrink-0">
+          <IconAction label="Recheck for cheapest" Icon={RefreshMark} disabled={checking} disabledReason={live ? 'Checking all printings…' : 'Checking…'} onClick={recheck} />
+        </span>
       </dd>
     </>
   );

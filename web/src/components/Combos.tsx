@@ -160,7 +160,7 @@ export function DeckCombosBody({ data, pending, error, onAdd, onInspect }: { dat
       {data.included.length ? (
         <ul>{data.included.map((c) => <ComboLine key={c.id} combo={c} tone={() => 'ink'} />)}</ul>
       ) : <p className="py-2 text-sm text-ink-muted">No known combos yet.</p>}
-      <p className="mt-3 text-xs text-ink-muted">Combos from Commander Spellbook, in the deck’s colours. Prices are the cheapest printing; free = copies no built deck has pledged.</p>
+      <p className="mt-3 text-xs text-ink-muted">Combos from Commander Spellbook, in the deck’s colours. Prices are the cheapest printing; unused = copies you own that aren’t in a built deck.</p>
     </div>
   );
 }

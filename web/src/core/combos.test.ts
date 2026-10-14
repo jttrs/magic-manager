@@ -10,8 +10,8 @@ const combo = (id: string, pieces: PieceOut[], o: Partial<ComboOut> = {}): Combo
 
 describe('combos view-model', () => {
   it('describes what you own of a piece', () => {
-    expect(ownNote(piece('A', false, 2, 1))).toEqual({ text: '1 free', free: true });
-    expect(ownNote(piece('A', false, 2, 0))).toEqual({ text: 'owned, all pledged', free: false });
+    expect(ownNote(piece('A', false, 2, 1))).toEqual({ text: '1 unused', free: true });
+    expect(ownNote(piece('A', false, 2, 0))).toEqual({ text: 'owned, all in built decks', free: false });
     expect(ownNote(piece('A', false))).toEqual({ text: 'not in your collection', free: false });
   });
 
