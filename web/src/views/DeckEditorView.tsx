@@ -14,13 +14,13 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { EmptyNote, ErrorNote, GridSkeleton } from '../components/States';
 import { deckPreview, deckSave, type ArtTagRefOut, type CheckOut, type DeckDetailOut, type PreviewOut, type PrintingOut, type SuggestionOut, type SwapLineOut } from '../core/api';
 import {
-  addCard, canCommand, collectionFirst, commanderName, draftCards, draftFromDeck, draftOracles, draftSections, draftStats,
-  moveCard, restorePrinting, setCount, setFinish, type Board, type Draft, type DraftFinish, type DraftRow,
+  addCard, BOARD_LABEL, BULK_EMPTY, canCommand, collectionFirst, commanderName, draftCards, draftFromDeck, draftOracles, draftSections, draftStats,
+  moveCard, restorePrinting, setCount, setFinish, type Board, type BulkState, type Draft, type DraftFinish, type DraftRow,
 } from '../core/deckDraft';
 import { fmtInt, fmtUsd } from '../core/format';
 import { fromPrinting, type GuideCard } from '../core/guideCard';
 import { ArtSwapTab } from './decks/ArtSwapTab';
-import { BULK_EMPTY, BulkAddTab, type BulkState } from './decks/BulkAddTab';
+import { BulkAddTab } from './decks/BulkAddTab';
 
 const route = getRouteApi('/decks/$slug/edit');
 const crop = (url: string) => url.replace('/normal/', '/art_crop/');
@@ -60,6 +60,7 @@ function Editor({ slug, detail }: { slug: string; detail: DeckDetailOut }) {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [inspecting, setInspecting] = useState<GuideCard | null>(null);
+  const [bulk, setBulk] = useState<BulkState>(BULK_EMPTY);
   const inspect = (p: PrintingOut) => setInspecting(fromPrinting(p));
   const stats = draftStats(draft, detail.deck.format);
   const renamed = name.trim() !== detail.deck.name && name.trim().length > 0;
@@ -97,7 +98,7 @@ function Editor({ slug, detail }: { slug: string; detail: DeckDetailOut }) {
 
   const edit = (fn: (d: Draft) => Draft) => setDraft((d) => fn(d));
   const deckPane = <DraftList draft={draft} onEdit={edit} onInspect={inspect} />;
-  const findPane = <FindCards draft={draft} format={detail.deck.format} onAdd={(p, board) => edit((d) => addCard(d, p, board))} onEdit={edit} onInspect={inspect} />;
+  const findPane = <FindCards draft={draft} format={detail.deck.format} onAdd={(p, board) => edit((d) => addCard(d, p, board))} onEdit={edit} onInspect={inspect} bulk={bulk} onBulk={setBulk} />;
 
   return (
     <main id="main" tabIndex={-1} className="min-h-0 min-w-0 p-2 sm:p-3 lg:h-[calc(100dvh-var(--size-topbar))] lg:p-4">
@@ -198,7 +199,6 @@ function EditorSplit({ left, right }: { left: ReactNode; right: ReactNode }) {
 
 // ---------- left: the draft decklist ----------
 
-const BOARD_LABEL: Record<Board, string> = { commander: 'Commander', main: 'Main deck', companion: 'Companion', side: 'Sideboard', maybe: 'Maybe', token: 'Tokens' };
 const FINISH_LABEL: Record<DraftFinish, string> = { either: 'Any finish', nonfoil: 'Nonfoil', foil: 'Foil' };
 
 type Inspect = (p: PrintingOut) => void;
@@ -306,11 +306,10 @@ function RowMenu({ row, onEdit }: { row: DraftRow; onEdit: (fn: (d: Draft) => Dr
 
 // ---------- right: find cards ----------
 
-function FindCards({ draft, format, onAdd, onEdit, onInspect }: { draft: Draft; format: string | null; onAdd: (p: PrintingOut, board: Board) => void; onEdit: (fn: (d: Draft) => Draft) => void; onInspect: Inspect }) {
+function FindCards({ draft, format, onAdd, onEdit, onInspect, bulk, onBulk }: { draft: Draft; format: string | null; onAdd: (p: PrintingOut, board: Board) => void; onEdit: (fn: (d: Draft) => Draft) => void; onInspect: Inspect; bulk: BulkState; onBulk: (fn: (s: BulkState) => BulkState) => void }) {
   const commander = commanderName(draft);
   const [tab, setTab] = useState<FindTab>(commander ? 'suggest' : 'search');
   const [artTag, setArtTag] = useState<ArtTagRefOut | null>(null);
-  const [bulk, setBulk] = useState<BulkState>(BULK_EMPTY);
   const inDeck = useMemo(() => draftOracles(draft), [draft]);
   const wantsCommander = !commander && ['commander', 'brawl', 'paupercommander', 'oathbreaker', 'edh'].includes((format ?? '').toLowerCase());
   return (
@@ -326,7 +325,7 @@ function FindCards({ draft, format, onAdd, onEdit, onInspect }: { draft: Draft; 
         <SearchTab inDeck={inDeck} wantsCommander={wantsCommander} onAdd={onAdd} onInspect={onInspect} />
       </Tabs.Content>
       <Tabs.Content value="bulk" className="flex min-h-0 flex-1 flex-col">
-        <BulkAddTab state={bulk} onState={setBulk} onEdit={onEdit} />
+        <BulkAddTab state={bulk} onState={onBulk} onEdit={onEdit} />
       </Tabs.Content>
       <Tabs.Content value="suggest" className="flex min-h-0 flex-1 flex-col">
         <SuggestTab commander={commander} inDeck={inDeck} onAdd={onAdd} onInspect={onInspect} />

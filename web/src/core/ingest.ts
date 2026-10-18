@@ -2,6 +2,7 @@
 // the user fixes printing / finish / qty per line, then one commit adds them.
 // Framework-free.
 import type { CommitItem, PrintingOut, ResolvedLineOut } from './api';
+import { fmtInt } from './format';
 
 export type Finish = 'nonfoil' | 'foil';
 type LineStatus = ResolvedLineOut['status'];
@@ -16,8 +17,8 @@ export type ReviewLine = {
   candidates: PrintingOut[];
   chosen: string | null;
   note: string | null;
-  /** The list section the line sat under (mainboard, commander, sideboard…); decks map it to a board. */
-  section?: string;
+  /** The deck board the line's section maps to (decks use it; the collection ignores it). */
+  board?: ResolvedLineOut['board'];
   /** The user can drop a line without deleting it from the paste. */
   include: boolean;
 };
@@ -37,7 +38,7 @@ export function fromResolved(lines: readonly ResolvedLineOut[], prefix = 'r'): R
     const finish = fitFinish(l.candidates.find((c) => c.scryfall_id === chosen), l.finish);
     return {
       key: `${prefix}${i}`, raw: l.raw, name: l.name, qty: l.qty, finish, status: l.status,
-      candidates: l.candidates, chosen, note: l.note ?? null, section: l.section, include: l.status !== 'unresolved',
+      candidates: l.candidates, chosen, note: l.note ?? null, board: l.board, include: l.status !== 'unresolved',
     };
   });
 }
@@ -76,6 +77,12 @@ export function commitItems(lines: readonly ReviewLine[]): CommitItem[] {
     else m.set(k, { scryfall_id: l.chosen, finish: l.finish, qty: l.qty });
   }
   return [...m.values()];
+}
+
+/** "4 of 5 lines matched" — the outcome, not the parse count. */
+export function readTitle(lines: readonly ReviewLine[]): string {
+  const ok = lines.filter((l) => l.status !== 'unresolved').length;
+  return ok === lines.length ? `${fmtInt(ok)} ${ok === 1 ? 'line' : 'lines'} matched` : `${fmtInt(ok)} of ${fmtInt(lines.length)} lines matched`;
 }
 
 export type ReviewStats = { copies: number; lines: number; picked: number; unresolved: number; skipped: number };

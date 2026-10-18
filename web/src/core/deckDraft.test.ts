@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { DeckCardOut, PrintingOut } from './api';
 import type { ReviewLine } from './ingest';
-import { addCard, addLines, addsFromReview, boardOfSection, canCommand, collectionFirst, draftCards, draftFromDeck, draftSections, draftStats, moveCard, setCount, setFinish } from './deckDraft';
+import { addCard, addLines, addsFromReview, canCommand, collectionFirst, draftCards, draftFromDeck, draftSections, draftStats, moveCard, setCount, setFinish } from './deckDraft';
 
 const pr = (id: string, o: Partial<PrintingOut> = {}): PrintingOut => ({
   scryfall_id: id, oracle_id: `o-${id}`, name: id, set_code: 'tst', set_name: null, collector_number: '1', rarity: 'rare',
@@ -41,10 +41,11 @@ describe('deck draft', () => {
       key: id, raw: id, name: id, qty: 1, finish: 'nonfoil', status: 'exact', candidates: [pr(id)], chosen: id, note: null, include: true, ...o,
     });
     const adds = addsFromReview([
-      rl('Elf', { qty: 2, section: 'mainboard', finish: 'nonfoil' }),
-      rl('Squall', { section: 'commander' }),
-      rl('Opt', { section: 'sideboard', finish: 'foil' }),
+      rl('Elf', { qty: 2, board: 'main', finish: 'nonfoil' }),
+      rl('Squall', { board: 'commander' }),
+      rl('Opt', { board: 'side', finish: 'foil' }),
       rl('Skip', { include: false }),
+      rl('Unpicked', { status: 'ambiguous', chosen: null }),
       rl('Gone', { status: 'unresolved', candidates: [], chosen: null }),
     ]);
     expect(adds.map((a) => [a.printing.scryfall_id, a.board, a.finish, a.count])).toEqual([
@@ -56,7 +57,8 @@ describe('deck draft', () => {
     expect(d.rows.find((r) => r.key === 'Elf|main|nonfoil')?.count).toBe(2);   // the saved row is untouched
     expect(draftStats(d, 'commander')).toMatchObject({ added: 5, dirty: true });
     expect(addLines(saved, [])).toBe(saved);
-    expect([boardOfSection('maybeboard'), boardOfSection('companion'), boardOfSection(undefined)]).toEqual(['maybe', 'companion', 'main']);
+    expect(addLines(saved, [{ printing: pr('Big'), board: 'main', finish: 'either', count: 5000 }, { printing: pr('None'), board: 'main', finish: 'either', count: 0 }]).rows
+      .filter((r) => r.saved === 0).map((r) => [r.key, r.count])).toEqual([['Big|main|either', 999]]);
   });
 
   it('carries the saved token board unchanged through every edit into the save payload', () => {

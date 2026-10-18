@@ -1,13 +1,7 @@
 import type { ReactNode } from 'react';
 import { fmtInt } from '../../core/format';
-import type { ReviewLine, ReviewStats } from '../../core/ingest';
+import type { ReviewStats } from '../../core/ingest';
 import { Chevron } from '../Chevron';
-
-/** "4 of 5 lines matched" — the outcome, not the parse count. */
-export function readTitle(lines: ReviewLine[]): string {
-  const ok = lines.filter((l) => l.status !== 'unresolved').length;
-  return ok === lines.length ? `${fmtInt(ok)} ${ok === 1 ? 'line' : 'lines'} matched` : `${fmtInt(ok)} of ${fmtInt(lines.length)} lines matched`;
-}
 
 /** A read list under review: title, a way back, the reader's warnings, then the checklist. */
 export function Review({ title, warnings, back, children }: { title: string; warnings: string[]; back: { label: string; onClick: () => void }; children: ReactNode }) {

@@ -66,6 +66,10 @@ def test_parse_commander_marker_and_sections():
     assert (e[0].name, e[0].set, e[0].collector_number, e[0].section) == ("Squall, SeeD Mercenary", "fin", "243", "commander")
     assert (e[1].section, e[2].section, e[2].foil) == ("mainboard", "sideboard", True)
     assert not r.warnings
+    for line in ("1 Opt *F* *CMDR*", "1 Opt *CMDR* *F*", "1 Opt *cmdr* ★"):
+        (x,) = parsers.parse_text(line).entries
+        assert (x.name, x.foil, x.section) == ("Opt", True, "commander"), line
+    assert [parsers.board_for(s) for s in ("sideboard", "Maybeboard", "side", None, "weird")] == ["side", "maybe", "side", "main", "main"]
 
 
 # ---------- search ----------
@@ -123,6 +127,12 @@ def test_resolve_exact_and_finish_switch(cards, monkeypatch):
     assert a["status"] == "exact" and a["chosen"] == "bolt-old" and a["finish"] == "nonfoil"
     assert "No foil printing" in a["note"]
     assert b["finish"] == "nonfoil" and b["qty"] == 2 and b["line"] == 2 and b["note"] is None
+
+
+def test_resolve_lines_carry_their_board(cards, monkeypatch):
+    _no_net(monkeypatch)
+    out = addcards.resolve_text("1 Lightning Bolt (OLD) 5 *CMDR*\n1 Lightning Bolt (TST) 10\nSideboard\n1 Lightning Bolt (TST) 10")
+    assert [(l["section"], l["board"]) for l in out["lines"]] == [("commander", "commander"), ("mainboard", "main"), ("sideboard", "side")]
 
 
 def test_resolve_ambiguous_owned_first_and_unresolved(cards, monkeypatch):

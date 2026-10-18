@@ -266,14 +266,10 @@ def parse_mtggoldfish(text: str) -> list[dict]:
     from . import parsers as _parsers
 
     result = _parsers.parse_text(text)
-    section_to_board = {
-        "mainboard": "main", "sideboard": "side", "commander": "commander",
-        "companion": "companion", "maybeboard": "maybe",
-    }
     out: list[dict] = []
     for e in result.entries:
         out.append(_norm(
-            e.qty, section_to_board.get(e.section, "main"),
+            e.qty, _parsers.board_for(e.section),
             "foil" if e.foil else "nonfoil",
             set_code=e.set, collector_number=e.collector_number, name=e.name,
         ))

@@ -4,13 +4,13 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { unwrap } from '../../app/queries';
 import { deckImport, ingestCommit, type DeckSourceOut, type PrintingOut, type ResolvedLineOut, type ResolveOut } from '../../core/api';
 import { fmtInt } from '../../core/format';
-import { commitItems, fromResolved, reviewStats, stagePrinting, updateLine, type Finish, type ReviewLine } from '../../core/ingest';
+import { commitItems, fromResolved, readTitle, reviewStats, stagePrinting, updateLine, type Finish, type ReviewLine } from '../../core/ingest';
 import { Button } from '../Button';
 import { useFeature } from '../../app/features';
 import { CollectionPane } from './CollectionPane';
 import { DeckPane } from './DeckPane';
 import { PastePane } from './PastePane';
-import { Review, ReviewTally, readTitle } from './Review';
+import { Review, ReviewTally } from './Review';
 import { ReviewTable } from './ReviewTable';
 import { SearchPane } from './SearchPane';
 

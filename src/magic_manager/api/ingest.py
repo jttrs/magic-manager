@@ -59,6 +59,8 @@ class ResolvedLineOut(BaseModel):
     name: str
     finish: Finish
     section: str
+    board: Literal["main", "side", "commander", "companion", "maybe", "token"] = Field(
+        "main", description="The deck board the line's section maps to (parsers.board_for).")
     status: Literal["exact", "ambiguous", "unresolved"]
     candidates: list[PrintingOut] = Field(description="Exact: one. Ambiguous: every printing of the name, best guess first. Unresolved: empty.")
     chosen: str | None = Field(description="scryfall_id of the default pick (None when unresolved).")

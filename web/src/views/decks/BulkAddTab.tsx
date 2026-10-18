@@ -1,16 +1,12 @@
 import { Button } from '../../components/Button';
 import { PastePane } from '../../components/addcards/PastePane';
-import { Review, ReviewTally, readTitle } from '../../components/addcards/Review';
+import { Review, ReviewTally } from '../../components/addcards/Review';
 import { ReviewTable } from '../../components/addcards/ReviewTable';
-import { addLines, addsFromReview, boardOfSection, type Board, type Draft } from '../../core/deckDraft';
+import { addLines, addsFromReview, BOARD_LABEL, BULK_EMPTY, type Board, type BulkState, type Draft } from '../../core/deckDraft';
 import { fmtInt } from '../../core/format';
-import { fromResolved, reviewStats, updateLine, type ReviewLine } from '../../core/ingest';
+import { fromResolved, readTitle, reviewStats, updateLine, type ReviewLine } from '../../core/ingest';
 
-/** The tab's state lives with the editor so switching tabs keeps a half-reviewed list. */
-export type BulkState = { text: string; read: { lines: ReviewLine[]; warnings: string[] } | null; done: string | null };
-export const BULK_EMPTY: BulkState = { text: '', read: null, done: null };
 
-const BOARD_LABEL: Record<Board, string> = { commander: 'Commander', main: 'Main deck', companion: 'Companion', side: 'Sideboard', maybe: 'Maybe', token: 'Tokens' };
 const BOARD_ORDER: Board[] = ['commander', 'companion', 'main', 'side', 'maybe'];
 
 /** Bulk add: paste a list, check every line's printing, then add it all to the draft
@@ -29,7 +25,7 @@ export function BulkAddTab({ state, onState, onEdit }: { state: BulkState; onSta
   }
 
   const setLines = (fn: (ls: ReviewLine[]) => ReviewLine[]) => onState((s) => (s.read ? { ...s, read: { ...s.read, lines: fn(s.read.lines) } } : s));
-  const groups = read ? BOARD_ORDER.map((b) => [b, read.lines.filter((l) => boardOfSection(l.section) === b)] as const).filter(([, ls]) => ls.length) : [];
+  const groups = read ? BOARD_ORDER.map((b) => [b, read.lines.filter((l) => (l.board ?? 'main') === b)] as const).filter(([, ls]) => ls.length) : [];
 
   return (
     <div className="mt-3 flex min-h-0 flex-1 flex-col px-4 pb-4">
@@ -59,7 +55,8 @@ export function BulkAddTab({ state, onState, onEdit }: { state: BulkState; onSta
           <PastePane
             text={state.text}
             onText={(text) => onState((s) => ({ ...s, text, done: null }))}
-            onResolved={(r) => onState((s) => ({ ...s, done: null, read: { lines: fromResolved(r.lines, 'b'), warnings: r.warnings ?? [] } }))}
+            // A reply for text that has since changed (a re-read raced an earlier one) is dropped.
+            onResolved={(r, readText) => onState((s) => (s.text !== readText || s.read ? s : { ...s, done: null, read: { lines: fromResolved(r.lines, 'b'), warnings: r.warnings ?? [] } }))}
           />
         </>
       )}
