@@ -31,6 +31,19 @@ SECTION_ALIASES = {
     "maybe": "maybeboard",
 }
 
+# Parser section → deck board. Deck-fetched lines already carry board names, so
+# those map to themselves; anything unknown is the main deck.
+SECTION_BOARD = {
+    "mainboard": "main", "sideboard": "side", "commander": "commander",
+    "companion": "companion", "maybeboard": "maybe",
+    "main": "main", "side": "side", "maybe": "maybe", "token": "token",
+}
+
+
+def board_for(section: str | None) -> str:
+    return SECTION_BOARD.get((section or "").lower(), "main")
+
+
 SECTION_RE = re.compile(
     r"^\s*(?://\s*)?(" + "|".join(re.escape(k) for k in SECTION_ALIASES) + r")\s*:?\s*$",
     re.IGNORECASE,
@@ -47,11 +60,17 @@ CARD_RE = re.compile(
         \((?P<set>[A-Za-z0-9]{2,6})\)\s+(?P<cn>[^\s★*]+)
       | \[(?P<tset>[A-Za-z0-9]{2,6})\](?:\s+(?P<tcn>[^\s★*]+))?   # TCGplayer Mass Entry
     ))?
-    (?:\s*(?P<foil>★|\*F\*|\*E\*))?
+    (?P<marks>(?:\s*(?:★|\*[A-Za-z]+\*))*)         # *F* / ★ foil, *E* etched, *CMDR* commander — any order
     \s*$
     """,
     re.VERBOSE,
 )
+_MARK_RE = re.compile(r"★|\*([A-Za-z]+)\*")
+
+
+def _marks(text: str | None) -> set[str]:
+    """Trailing line markers, normalized: ``★``/``*F*`` → ``F``, ``*cmdr*`` → ``CMDR``."""
+    return {"F" if m.group(0) == "★" else m.group(1).upper() for m in _MARK_RE.finditer(text or "")}
 
 IGNORE_RE = re.compile(
     r"""^\s*(?:
@@ -121,8 +140,8 @@ def parse_text(text: str) -> ParseResult:
             name=m.group("name").strip(),
             set=(m.group("set") or m.group("tset") or "").lower() or None,
             collector_number=m.group("cn") or m.group("tcn") or None,
-            foil=bool(m.group("foil")),
-            section=current,
+            foil=bool(_marks(m.group("marks")) & {"F", "E"}),
+            section="commander" if "CMDR" in _marks(m.group("marks")) else current,
             line_no=line_no,
         ))
     return res

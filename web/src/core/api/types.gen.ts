@@ -5124,6 +5124,12 @@ export type ResolvedLineOut = {
      */
     section: string;
     /**
+     * Board
+     *
+     * The deck board the line's section maps to (parsers.board_for).
+     */
+    board?: 'main' | 'side' | 'commander' | 'companion' | 'maybe' | 'token';
+    /**
      * Status
      */
     status: 'exact' | 'ambiguous' | 'unresolved';

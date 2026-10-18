@@ -294,7 +294,8 @@ def _resolve_wants(wants: list[dict]) -> tuple[list[dict], list[str]]:
     for w in wants:
         line = {
             "line": w.get("line", 0), "raw": w["raw"], "qty": w["qty"], "name": w["name"],
-            "finish": w["finish"], "section": w["section"], "status": "unresolved",
+            "finish": w["finish"], "section": w["section"], "board": parsers.board_for(w["section"]),
+            "status": "unresolved",
             "candidates": [], "chosen": None, "note": None,
         }
         card = exact_card(w)

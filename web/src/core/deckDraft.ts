@@ -3,6 +3,7 @@
 // diff against the saved version (and Save's payload) is always derivable.
 import type { DeckCardOut, DraftCardIn, PrintingOut } from './api';
 import { DECK_SECTIONS, deckSection } from './decks';
+import { chosenPrinting, type ReviewLine } from './ingest';
 
 export type Board = DraftCardIn['board'];
 export type DraftFinish = DraftCardIn['finish'];
@@ -50,16 +51,47 @@ export function draftFromDeck(cards: readonly DeckCardOut[]): Draft {
 
 /** Add one copy of a printing to a board (sums into an existing row). Defaults
  *  to 'either' finish so building picks whichever copy is free. */
-export function addCard(d: Draft, p: PrintingOut, board: Board = 'main', finish: DraftFinish = 'either'): Draft {
-  const key = rowKey(p.scryfall_id, board, finish);
-  const hit = d.rows.find((r) => r.key === key);
-  if (hit) return setCount(d, key, hit.count + 1);
-  return { ...d, rows: [...d.rows, { key, printing: p, board, finish, count: 1, saved: 0 }] };
+export const addCard = (d: Draft, p: PrintingOut, board: Board = 'main', finish: DraftFinish = 'either'): Draft =>
+  addLines(d, [{ printing: p, board, finish, count: 1 }]);
+
+export const BOARD_LABEL: Record<Board, string> = { commander: 'Commander', main: 'Main deck', companion: 'Companion', side: 'Sideboard', maybe: 'Maybe', token: 'Tokens' };
+
+const MAX_COUNT = 999;
+
+/** The editor's Bulk Add tab: the pasted text, its reviewed read, and the last add's note.
+ *  Held by the editor so switching tabs or panes keeps a half-reviewed list. */
+export type BulkState = { text: string; read: { lines: ReviewLine[]; warnings: string[] } | null; done: string | null };
+export const BULK_EMPTY: BulkState = { text: '', read: null, done: null };
+
+export type DraftAdd = { printing: PrintingOut; board: Board; finish: DraftFinish; count: number };
+
+/** Bulk add: each line sums into the row already on that printing/board/finish, or starts one. */
+export function addLines(d: Draft, adds: readonly DraftAdd[]): Draft {
+  let rows = d.rows;
+  for (const a of adds) {
+    if (a.count <= 0) continue;
+    const key = rowKey(a.printing.scryfall_id, a.board, a.finish);
+    rows = rows.some((r) => r.key === key)
+      ? rows.map((r) => (r.key === key ? { ...r, count: Math.min(MAX_COUNT, r.count + a.count) } : r))
+      : [...rows, { key, printing: a.printing, board: a.board, finish: a.finish, count: Math.min(MAX_COUNT, a.count), saved: 0 }];
+  }
+  return rows === d.rows ? d : { ...d, rows };
+}
+
+/** Reviewed paste lines → draft adds: included, resolved lines only; the server's
+ *  board for the line's section picks the board; a foil line stays foil, the rest take 'either' (Build uses
+ *  whichever copy is free, like a card added from Search). */
+export function addsFromReview(lines: readonly ReviewLine[]): DraftAdd[] {
+  return lines.flatMap((l) => {
+    const p = chosenPrinting(l);
+    if (!l.include || !p) return [];
+    return [{ printing: p, board: l.board ?? 'main', finish: l.finish === 'foil' ? 'foil' : 'either', count: l.qty }];
+  });
 }
 
 /** Set a row's count. A new row dropped to 0 disappears; a saved row stays (count 0 = removed, undoable). */
 export function setCount(d: Draft, key: string, count: number): Draft {
-  const n = Math.max(0, Math.min(999, Math.floor(count)));
+  const n = Math.max(0, Math.min(MAX_COUNT, Math.floor(count)));
   return {
     ...d,
     rows: d.rows

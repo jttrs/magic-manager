@@ -12,8 +12,9 @@ const FORMATS = [
 
 const EXAMPLE = '4 Lightning Bolt (M10) 146\n1 Sol Ring [CMM] 410\n2 Cloud, Ex-SOLDIER *F*\n1 Counterspell';
 
-/** Paste any list; the server reads every line and resolves it to printings. */
-export function PastePane({ text, onText, onResolved }: { text: string; onText: (t: string) => void; onResolved: (r: ResolveOut) => void }) {
+/** Paste any list; the server reads every line and resolves it to printings.
+ *  `onResolved` also gets the text that was read, so a caller can drop a stale reply. */
+export function PastePane({ text, onText, onResolved }: { text: string; onText: (t: string) => void; onResolved: (r: ResolveOut, read: string) => void }) {
   const [format, setFormat] = useState<(typeof FORMATS)[number]['value']>('auto');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -31,7 +32,7 @@ export function PastePane({ text, onText, onResolved }: { text: string; onText: 
         setError(r.warnings?.length ? `No card lines found. ${r.warnings[0]}` : 'No card lines found. Each line needs a count and a name, like “4 Lightning Bolt”.');
         return;
       }
-      onResolved(r);
+      onResolved(r, text);
     } catch (e) {
       setError(`Couldn’t read the list: ${(e as Error).message}`);
     } finally {

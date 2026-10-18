@@ -12802,6 +12802,20 @@
             "type": "string",
             "title": "Section"
           },
+          "board": {
+            "type": "string",
+            "enum": [
+              "main",
+              "side",
+              "commander",
+              "companion",
+              "maybe",
+              "token"
+            ],
+            "title": "Board",
+            "description": "The deck board the line's section maps to (parsers.board_for).",
+            "default": "main"
+          },
           "status": {
             "type": "string",
             "enum": [
