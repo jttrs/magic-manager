@@ -20,6 +20,7 @@ import {
 import { fmtInt, fmtUsd } from '../core/format';
 import { fromPrinting, type GuideCard } from '../core/guideCard';
 import { ArtSwapTab } from './decks/ArtSwapTab';
+import { BULK_EMPTY, BulkAddTab, type BulkState } from './decks/BulkAddTab';
 
 const route = getRouteApi('/decks/$slug/edit');
 const crop = (url: string) => url.replace('/normal/', '/art_crop/');
@@ -176,7 +177,7 @@ function Editor({ slug, detail }: { slug: string; detail: DeckDetailOut }) {
 
 function PaneTab({ value, children }: { value: string; children: ReactNode }) {
   return (
-    <Tabs.Trigger value={value} className="min-h-9 flex-1 cursor-pointer bg-paper-raised px-3 text-sm voice-semi text-ink data-[state=active]:bg-accent data-[state=active]:text-on-accent">
+    <Tabs.Trigger value={value} className="min-h-9 flex-1 cursor-pointer whitespace-nowrap bg-paper-raised px-3 text-sm voice-semi text-ink data-[state=active]:bg-accent data-[state=active]:text-on-accent">
       {children}
     </Tabs.Trigger>
   );
@@ -309,18 +310,23 @@ function FindCards({ draft, format, onAdd, onEdit, onInspect }: { draft: Draft; 
   const commander = commanderName(draft);
   const [tab, setTab] = useState<FindTab>(commander ? 'suggest' : 'search');
   const [artTag, setArtTag] = useState<ArtTagRefOut | null>(null);
+  const [bulk, setBulk] = useState<BulkState>(BULK_EMPTY);
   const inDeck = useMemo(() => draftOracles(draft), [draft]);
   const wantsCommander = !commander && ['commander', 'brawl', 'paupercommander', 'oathbreaker', 'edh'].includes((format ?? '').toLowerCase());
   return (
     <Tabs.Root value={tab} onValueChange={(v) => setTab(v as FindTab)} className="flex h-full min-h-0 flex-col">
-      <Tabs.List aria-label="Find cards" className="mx-4 mt-3 flex gap-px self-start overflow-hidden rounded-sm border border-rule-strong bg-rule">
+      <Tabs.List aria-label="Find cards" className="mx-4 mt-3 flex max-w-[calc(100%-2rem)] gap-px self-start overflow-x-auto rounded-sm border border-rule-strong bg-rule">
         <PaneTab value="search">Search</PaneTab>
+        <PaneTab value="bulk">Bulk Add</PaneTab>
         <PaneTab value="suggest">Suggestions</PaneTab>
         <PaneTab value="combos">Combos</PaneTab>
         <PaneTab value="art">Art</PaneTab>
       </Tabs.List>
       <Tabs.Content value="search" className="flex min-h-0 flex-1 flex-col">
         <SearchTab inDeck={inDeck} wantsCommander={wantsCommander} onAdd={onAdd} onInspect={onInspect} />
+      </Tabs.Content>
+      <Tabs.Content value="bulk" className="flex min-h-0 flex-1 flex-col">
+        <BulkAddTab state={bulk} onState={setBulk} onEdit={onEdit} />
       </Tabs.Content>
       <Tabs.Content value="suggest" className="flex min-h-0 flex-1 flex-col">
         <SuggestTab commander={commander} inDeck={inDeck} onAdd={onAdd} onInspect={onInspect} />
@@ -335,7 +341,7 @@ function FindCards({ draft, format, onAdd, onEdit, onInspect }: { draft: Draft; 
   );
 }
 
-type FindTab = 'search' | 'suggest' | 'combos' | 'art';
+type FindTab = 'search' | 'bulk' | 'suggest' | 'combos' | 'art';
 
 /** Commander Spellbook over the unsaved draft: what one more card would complete, then what's in. */
 function CombosTab({ draft, onAdd, onInspect }: { draft: Draft; onAdd: (p: PrintingOut, board: Board) => void; onInspect: Inspect }) {

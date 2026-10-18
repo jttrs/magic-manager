@@ -60,6 +60,14 @@ def test_parse_formats_and_detection():
     assert parsers.detect_paste_format("1 A") == "names"
 
 
+def test_parse_commander_marker_and_sections():
+    r = parsers.parse_text("1 Squall, SeeD Mercenary (FIN) 243 *CMDR*\n1 Sol Ring\nSideboard\n1 Opt *F*")
+    e = r.entries
+    assert (e[0].name, e[0].set, e[0].collector_number, e[0].section) == ("Squall, SeeD Mercenary", "fin", "243", "commander")
+    assert (e[1].section, e[2].section, e[2].foil) == ("mainboard", "sideboard", True)
+    assert not r.warnings
+
+
 # ---------- search ----------
 
 def test_search_local_ranking(cards):

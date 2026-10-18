@@ -48,6 +48,7 @@ CARD_RE = re.compile(
       | \[(?P<tset>[A-Za-z0-9]{2,6})\](?:\s+(?P<tcn>[^\s★*]+))?   # TCGplayer Mass Entry
     ))?
     (?:\s*(?P<foil>★|\*F\*|\*E\*))?
+    (?:\s*(?P<cmdr>\*CMDR\*))?                       # Moxfield's commander marker
     \s*$
     """,
     re.VERBOSE,
@@ -122,7 +123,7 @@ def parse_text(text: str) -> ParseResult:
             set=(m.group("set") or m.group("tset") or "").lower() or None,
             collector_number=m.group("cn") or m.group("tcn") or None,
             foil=bool(m.group("foil")),
-            section=current,
+            section="commander" if m.group("cmdr") else current,
             line_no=line_no,
         ))
     return res

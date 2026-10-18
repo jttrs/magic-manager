@@ -3,6 +3,7 @@
 // diff against the saved version (and Save's payload) is always derivable.
 import type { DeckCardOut, DraftCardIn, PrintingOut } from './api';
 import { DECK_SECTIONS, deckSection } from './decks';
+import { chosenPrinting, type ReviewLine } from './ingest';
 
 export type Board = DraftCardIn['board'];
 export type DraftFinish = DraftCardIn['finish'];
@@ -55,6 +56,39 @@ export function addCard(d: Draft, p: PrintingOut, board: Board = 'main', finish:
   const hit = d.rows.find((r) => r.key === key);
   if (hit) return setCount(d, key, hit.count + 1);
   return { ...d, rows: [...d.rows, { key, printing: p, board, finish, count: 1, saved: 0 }] };
+}
+
+const SECTION_BOARD: Record<string, Board> = {
+  commander: 'commander', sideboard: 'side', companion: 'companion', maybeboard: 'maybe',
+};
+
+/** The board a pasted list's section header lands on (unknown → main). */
+export const boardOfSection = (section: string | null | undefined): Board => SECTION_BOARD[section ?? ''] ?? 'main';
+
+export type DraftAdd = { printing: PrintingOut; board: Board; finish: DraftFinish; count: number };
+
+/** Bulk add: each line sums into the row already on that printing/board/finish, or starts one. */
+export function addLines(d: Draft, adds: readonly DraftAdd[]): Draft {
+  let rows = d.rows;
+  for (const a of adds) {
+    if (a.count <= 0) continue;
+    const key = rowKey(a.printing.scryfall_id, a.board, a.finish);
+    rows = rows.some((r) => r.key === key)
+      ? rows.map((r) => (r.key === key ? { ...r, count: Math.min(999, r.count + a.count) } : r))
+      : [...rows, { key, printing: a.printing, board: a.board, finish: a.finish, count: Math.min(999, a.count), saved: 0 }];
+  }
+  return rows === d.rows ? d : { ...d, rows };
+}
+
+/** Reviewed paste lines → draft adds: included, resolved lines only; the section
+ *  picks the board; a foil line stays foil, the rest take 'either' (Build uses
+ *  whichever copy is free, like a card added from Search). */
+export function addsFromReview(lines: readonly ReviewLine[]): DraftAdd[] {
+  return lines.flatMap((l) => {
+    const p = chosenPrinting(l);
+    if (!l.include || !p) return [];
+    return [{ printing: p, board: boardOfSection(l.section), finish: l.finish === 'foil' ? 'foil' : 'either', count: l.qty }];
+  });
 }
 
 /** Set a row's count. A new row dropped to 0 disappears; a saved row stays (count 0 = removed, undoable). */

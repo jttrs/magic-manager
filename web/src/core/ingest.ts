@@ -16,6 +16,8 @@ export type ReviewLine = {
   candidates: PrintingOut[];
   chosen: string | null;
   note: string | null;
+  /** The list section the line sat under (mainboard, commander, sideboard…); decks map it to a board. */
+  section?: string;
   /** The user can drop a line without deleting it from the paste. */
   include: boolean;
 };
@@ -35,7 +37,7 @@ export function fromResolved(lines: readonly ResolvedLineOut[], prefix = 'r'): R
     const finish = fitFinish(l.candidates.find((c) => c.scryfall_id === chosen), l.finish);
     return {
       key: `${prefix}${i}`, raw: l.raw, name: l.name, qty: l.qty, finish, status: l.status,
-      candidates: l.candidates, chosen, note: l.note ?? null, include: l.status !== 'unresolved',
+      candidates: l.candidates, chosen, note: l.note ?? null, section: l.section, include: l.status !== 'unresolved',
     };
   });
 }
