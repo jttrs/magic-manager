@@ -12,6 +12,8 @@ import { activeFilters, decodeSurf, drawRequest, encodeSurf, EMPTY_FILTERS, feed
 import { SurfCardEntry } from './SurfCardEntry';
 import { SurfFilterRail } from './SurfFilterRail';
 
+/** How long a j/k smooth scroll is treated as still on its way. */
+const STEP_MS = 700;
 const newSeed = () => Math.floor(Math.random() * 2 ** 31);
 
 /** Explore → Surfer: an endless feed of random cards — art first, then flavor
@@ -70,13 +72,21 @@ export function CardSurfer({ raw, onChange, tabs }: { raw: string | undefined; o
     return () => io.disconnect();
   }, [cards.length, hasNextPage, isFetchingNextPage, isError, fetchNextPage]);
 
+  // The card a j/k scroll is heading to, so a key pressed mid-scroll steps on from there.
+  const heading = useRef<{ at: number; when: number } | null>(null);
   const step = (dir: 1 | -1) => {
     const root = scroller.current;
     if (!root) return;
     const items = [...root.querySelectorAll<HTMLElement>('[data-surf-card]')];
     const top = root.getBoundingClientRect().top;
-    const at = items.findIndex((el) => el.getBoundingClientRect().bottom > top + 8);
-    items[Math.max(0, Math.min(items.length - 1, (at < 0 ? 0 : at) + dir))]?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    const pending = heading.current && performance.now() - heading.current.when < STEP_MS ? heading.current.at : null;
+    const at = pending ?? Math.max(0, items.findIndex((el) => el.getBoundingClientRect().bottom > top + 8));
+    const next = Math.max(0, Math.min(items.length - 1, at + dir));
+    const el = items[next];
+    if (!el) return;
+    heading.current = { at: next, when: performance.now() };
+    // Scroll the feed only: scrollIntoView would also scroll the page, pushing the tabs away.
+    root.scrollTo({ top: root.scrollTop + el.getBoundingClientRect().top - top, behavior: 'smooth' });
   };
   const onKey = (e: KeyboardEvent) => {
     if (e.target !== e.currentTarget) return;
