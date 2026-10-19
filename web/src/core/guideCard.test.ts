@@ -138,6 +138,11 @@ describe('collection filters', () => {
     expect(buyFinish(missing, ['finish:nonfoil'])).toBe('foil');
     expect(collectionStats([owned, missing], [])).toEqual({ printings: 2, owned: 1, copies: 2, missing: 1, missingUsd: 1, missingUnpriced: 0, missingCards: 1, missingCardsUsd: 1, missingCardsUnpriced: 0 });
   });
+  it('earmarked filter keeps printings of earmarked cards, owned or missing', () => {
+    const pool = [card({ scryfall_id: 'e', owned: { nonfoil: 1 }, earmarked: true }), card({ scryfall_id: 'n', owned: { nonfoil: 1 } }), { ...missing, earmarked: true }];
+    expect(filterCollection(pool, { ...ALL, em: true }).map((c) => c.scryfall_id)).toEqual(['e', 'miss']);
+    expect(filterCollection(pool, ALL)).toHaveLength(3);
+  });
   it('source filter keeps owned printings acquired from a picked kind or product', () => {
     const sources = [
       { key: 'product:Camp_FIN', kind: 'pool' as const, label: 'Camp', set_code: 'fin', printings: 1 },
@@ -167,6 +172,7 @@ describe('collection filters', () => {
     expect(g.missing).toBe(true);
     expect(g.tags).toEqual(['Chase', 'Showcase']);
     expect(g.setCode).toBe('FIN');
+    expect(fromCollection(card({ earmarked: true, is_chase: true }), false).tags).toEqual(['Earmarked', 'Chase']);
   });
 });
 

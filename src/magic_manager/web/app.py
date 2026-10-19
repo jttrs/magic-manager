@@ -27,7 +27,7 @@ from pydantic import BaseModel, ValidationError
 from .. import api, companion as companion_engine, sets as sets_mod, tabs as tabs_engine, undo as undo_engine, cart as cart_engine, deck_edit, edhrec as edhrec_engine, features as features_engine, scryfall, mtgjson
 from .. import collection_sync, ingest as ingest_mod, purchases as purchases_engine
 from ..api import purchases as purchases_api
-from ..api import collection_import as collection_import_api, companion as companion_api, deals as deals_api, undo as undo_api, cart as cart_api, cards as cards_api, collection as collection_api, explore as explore_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api, market as market_api, trueup as trueup_api, history as history_api, combos as combos_api, art as art_api, jumpstart as jumpstart_api, surf as surf_api
+from ..api import collection_import as collection_import_api, companion as companion_api, deals as deals_api, undo as undo_api, cart as cart_api, cards as cards_api, collection as collection_api, explore as explore_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api, market as market_api, trueup as trueup_api, history as history_api, combos as combos_api, card_earmarks as card_earmarks_api, art as art_api, jumpstart as jumpstart_api, surf as surf_api
 from .runtime import TERMINAL, JobManager, JobsBusy
 from . import analytics_routes, scraper_routes, telemetry
 from ..analytics import store as analytics_store
@@ -606,6 +606,27 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             return decks_api.suggestions(commander)
         except edhrec_engine.EdhrecError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
+
+    # ---------- earmarked cards (singles of interest) ----------
+
+    @app.get("/api/earmarks/cards", response_model=list[card_earmarks_api.EarmarkEntryOut], tags=["earmarks"])
+    def card_earmarks_list(reason: Literal["collect", "deck"] | None = None,
+                           deck: Annotated[str | None, Query(max_length=200)] = None):
+        return card_earmarks_api.listing(reason, deck)
+
+    @app.put("/api/earmarks/cards", response_model=card_earmarks_api.CardEarmarkOut, tags=["earmarks"],
+             dependencies=[write("before earmarking a card")])
+    def card_earmark_save(body: card_earmarks_api.CardEarmarkIn):
+        return _deck_call(card_earmarks_api.save, body)
+
+    @app.delete("/api/earmarks/cards/{oracle_id}", response_model=dict[str, bool], tags=["earmarks"],
+                dependencies=[write("before removing an earmark")])
+    def card_earmark_remove(oracle_id: str):
+        return {"removed": card_earmarks_api.remove(oracle_id)}
+
+    @app.post("/api/decks/{slug}/earmarked", response_model=card_earmarks_api.DeckEarmarksOut, tags=["earmarks"])
+    def deck_earmarks(slug: str, body: card_earmarks_api.DeckEarmarksIn):
+        return _deck_call(card_earmarks_api.for_deck, slug, body)
 
     # ---------- combos (Commander Spellbook) ----------
 

@@ -26,6 +26,7 @@ that must run once against your live DB after you pull them:
                                     (sets.partial, scryfall_tags.*source, front_set:*) move from
                                     settings to catalog_settings — schema-only; verified below by
                                     the catalog-refs audit (mm audit catalog-refs) + the key move
+  V37  card_earmarks (earmarked singles; user table) — schema-only, starts empty
   —    'built' follows pledges     → decks.backfill_built_state()  (mm deck backfill-built)
                                     data-only: imported / hand-built decks with nothing pledged → not built;
                                     precons keep ONE built copy (extra unpledged built copies → not built)
@@ -89,6 +90,7 @@ OWNERSHIP: tuple[tuple[str, tuple[str, ...] | None], ...] = (
     ("earmark_prices", None),  # V32 price history (absent before V32 → not compared)
     ("purchases", None),
     ("purchase_lines", None),
+    ("card_earmarks", None),  # V37 (absent before V37 → not compared)
 )
 
 

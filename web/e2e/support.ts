@@ -48,6 +48,7 @@ export async function mockApi(page: Page, overrides: Record<string, (url: URL) =
       const slug = decodeURIComponent(url.pathname.slice('/api/decks/'.length));
       return slug === deckDetail.deck.slug ? route.fulfill({ json: deckDetail }) : route.fulfill({ status: 404, json: { detail: `deck with slug '${slug}' not found` } });
     }
+    if (url.pathname === '/api/earmarks/cards') return route.fulfill({ json: [] });
     if (url.pathname === '/api/cards/floors') return route.fulfill({ json: { live: false, floors: [] } });
     if (url.pathname === '/api/jobs') return route.fulfill({ json: [] });
     if (url.pathname === '/api/undo') return route.fulfill({ contentType: 'application/json', body: 'null' });

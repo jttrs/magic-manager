@@ -3,7 +3,7 @@ import { getRouteApi, Link, useBlocker, useNavigate } from '@tanstack/react-rout
 import { DropdownMenu, Popover, Tabs } from 'radix-ui';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panels';
-import { deckCheckQuery, deckQuery, draftCombosQuery, printingSearchQuery, suggestionsQuery, unwrap } from '../app/queries';
+import { deckCheckQuery, deckEarmarksQuery, deckQuery, draftCombosQuery, printingSearchQuery, suggestionsQuery, unwrap } from '../app/queries';
 import { useDebounced } from '../app/useDebounced';
 import { useMediaQuery } from '../app/useMediaQuery';
 import { Button } from '../components/Button';
@@ -17,6 +17,7 @@ import {
   addCard, BOARD_LABEL, BULK_EMPTY, canCommand, collectionFirst, commanderName, draftCards, draftFromDeck, draftOracles, draftSections, draftStats,
   moveCard, restorePrinting, setCount, setFinish, type Board, type BulkState, type Draft, type DraftFinish, type DraftRow,
 } from '../core/deckDraft';
+import { earmarkLine, hiddenSummary } from '../core/cardEarmarks';
 import { fmtInt, fmtUsd } from '../core/format';
 import { fromPrinting, type GuideCard } from '../core/guideCard';
 import { ArtSwapTab } from './decks/ArtSwapTab';
@@ -98,7 +99,7 @@ function Editor({ slug, detail }: { slug: string; detail: DeckDetailOut }) {
 
   const edit = (fn: (d: Draft) => Draft) => setDraft((d) => fn(d));
   const deckPane = <DraftList draft={draft} onEdit={edit} onInspect={inspect} />;
-  const findPane = <FindCards draft={draft} format={detail.deck.format} onAdd={(p, board) => edit((d) => addCard(d, p, board))} onEdit={edit} onInspect={inspect} bulk={bulk} onBulk={setBulk} />;
+  const findPane = <FindCards slug={slug} draft={draft} format={detail.deck.format} onAdd={(p, board) => edit((d) => addCard(d, p, board))} onEdit={edit} onInspect={inspect} bulk={bulk} onBulk={setBulk} />;
 
   return (
     <main id="main" tabIndex={-1} className="min-h-0 min-w-0 p-2 sm:p-3 lg:h-[calc(100dvh-var(--size-topbar))] lg:p-4">
@@ -306,7 +307,7 @@ function RowMenu({ row, onEdit }: { row: DraftRow; onEdit: (fn: (d: Draft) => Dr
 
 // ---------- right: find cards ----------
 
-function FindCards({ draft, format, onAdd, onEdit, onInspect, bulk, onBulk }: { draft: Draft; format: string | null; onAdd: (p: PrintingOut, board: Board) => void; onEdit: (fn: (d: Draft) => Draft) => void; onInspect: Inspect; bulk: BulkState; onBulk: (fn: (s: BulkState) => BulkState) => void }) {
+function FindCards({ slug, draft, format, onAdd, onEdit, onInspect, bulk, onBulk }: { slug: string; draft: Draft; format: string | null; onAdd: (p: PrintingOut, board: Board) => void; onEdit: (fn: (d: Draft) => Draft) => void; onInspect: Inspect; bulk: BulkState; onBulk: (fn: (s: BulkState) => BulkState) => void }) {
   const commander = commanderName(draft);
   const [tab, setTab] = useState<FindTab>(commander ? 'suggest' : 'search');
   const [artTag, setArtTag] = useState<ArtTagRefOut | null>(null);
@@ -318,6 +319,7 @@ function FindCards({ draft, format, onAdd, onEdit, onInspect, bulk, onBulk }: { 
         <PaneTab value="search">Search</PaneTab>
         <PaneTab value="bulk">Bulk Add</PaneTab>
         <PaneTab value="suggest">Suggestions</PaneTab>
+        <PaneTab value="earmarked">Earmarked</PaneTab>
         <PaneTab value="combos">Combos</PaneTab>
         <PaneTab value="art">Art</PaneTab>
       </Tabs.List>
@@ -330,6 +332,9 @@ function FindCards({ draft, format, onAdd, onEdit, onInspect, bulk, onBulk }: { 
       <Tabs.Content value="suggest" className="flex min-h-0 flex-1 flex-col">
         <SuggestTab commander={commander} inDeck={inDeck} onAdd={onAdd} onInspect={onInspect} />
       </Tabs.Content>
+      <Tabs.Content value="earmarked" className="flex min-h-0 flex-1 flex-col">
+        <EarmarkTab slug={slug} draft={draft} onAdd={onAdd} onInspect={onInspect} />
+      </Tabs.Content>
       <Tabs.Content value="combos" className="flex min-h-0 flex-1 flex-col">
         <CombosTab draft={draft} onAdd={onAdd} onInspect={onInspect} />
       </Tabs.Content>
@@ -340,7 +345,7 @@ function FindCards({ draft, format, onAdd, onEdit, onInspect, bulk, onBulk }: { 
   );
 }
 
-type FindTab = 'search' | 'bulk' | 'suggest' | 'combos' | 'art';
+type FindTab = 'search' | 'bulk' | 'suggest' | 'earmarked' | 'combos' | 'art';
 
 /** Commander Spellbook over the unsaved draft: what one more card would complete, then what's in. */
 function CombosTab({ draft, onAdd, onInspect }: { draft: Draft; onAdd: (p: PrintingOut, board: Board) => void; onInspect: Inspect }) {
@@ -426,6 +431,67 @@ function SuggestTab({ commander, inDeck, onAdd, onInspect }: { commander: string
   );
 }
 
+const COLOUR_NAME: Record<string, string> = { W: 'white', U: 'blue', B: 'black', R: 'red', G: 'green' };
+
+/** Your earmarked cards that fit this deck — legal in its format and, for Commander, within the
+ *  commander's colours (judged on the unsaved draft). Cards earmarked for this deck come first,
+ *  always; the rest that don't fit are summarised, with each card's reason on request. */
+function EarmarkTab({ slug, draft, onAdd, onInspect }: { slug: string; draft: Draft; onAdd: (p: PrintingOut, board: Board) => void; onInspect: Inspect }) {
+  const cards = useDebounced(draftCards(draft), 400);
+  const q = useQuery(deckEarmarksQuery(slug, cards));
+  if (q.isError) return <p role="alert" className="mx-4 mt-4 text-sm text-danger">{(q.error as Error).message}</p>;
+  if (q.isPending) return <p role="status" className="mx-4 mt-4 text-sm text-ink-muted">Looking…</p>;
+  const d = q.data;
+  if (!d.for_deck.length && !d.legal.length && !d.hidden.length) {
+    return <EmptyNote title="No earmarked cards yet">Open any card and press Earmark{'\u00a0'}— mark it as a deck idea for this deck and it’s listed here first.</EmptyNote>;
+  }
+  const rule = [
+    d.format ? `Legal in ${formatName(d.format)}` : 'No format set, so nothing is filtered',
+    d.commander_colors
+      ? `within ${d.commander_colors.map((c) => COLOUR_NAME[c] ?? c).join(', ') || 'colourless'}`
+      : d.format && ['commander', 'brawl', 'paupercommander'].includes(d.format) ? 'no commander yet, so colours aren’t checked' : null,
+  ].filter(Boolean).join(' · ');
+  const line = (e: (typeof d.legal)[number]) => e.printing && (
+    <ResultLine
+      key={e.earmark.oracle_id}
+      p={e.printing}
+      inDeck={e.in_deck}
+      note={[earmarkLine(e.earmark), freeNote(e.free, e.owned)].filter(Boolean).join(' · ') || null}
+      warn={e.reasons.join(' · ') || null}
+      onAdd={onAdd}
+      onInspect={onInspect}
+    />
+  );
+  return (
+    <div className="mt-2 min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-8 [scrollbar-gutter:stable]">
+      <p className="text-sm text-ink-muted">{rule}</p>
+      {d.for_deck.length > 0 && (
+        <section aria-label="For this deck" className="mt-3">
+          <h4 className="text-sm voice-condensed font-bold uppercase tracking-[0.04em] text-ink-muted">For this deck · {d.for_deck.length}</h4>
+          <ul>{d.for_deck.map(line)}</ul>
+        </section>
+      )}
+      <section aria-label="Earmarked cards that fit" className="mt-3">
+        <h4 className="text-sm voice-condensed font-bold uppercase tracking-[0.04em] text-ink-muted">Fits this deck · {d.legal.length}</h4>
+        {d.legal.length ? <ul>{d.legal.map(line)}</ul> : <p className="py-2 text-sm text-ink-muted">None of your other earmarked cards fit this deck.</p>}
+      </section>
+      {d.hidden.length > 0 && (
+        <details className="mt-3 border-t border-rule pt-2 text-sm">
+          <summary className="cursor-pointer text-ink-muted">{hiddenSummary(d.hidden)}</summary>
+          <ul aria-label="Hidden earmarked cards" className="mt-1">
+            {d.hidden.map((e) => (
+              <li key={e.earmark.oracle_id} className="ruled flex items-baseline gap-3 py-1.5">
+                {e.printing ? <CardName p={e.printing} onInspect={onInspect} /> : <span className="voice-semi text-ink">{e.earmark.name}</span>}
+                <span className="ml-auto text-right text-xs text-ink-muted">{e.reasons.join(' · ')}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
+  );
+}
+
 function ResultList({ children, empty, loading, error }: { children: ReactNode[]; empty: string | null; loading: boolean; error: string | null }) {
   if (error) return <p role="alert" className="mx-4 mt-4 text-sm text-danger">{error}</p>;
   if (loading) return <p role="status" className="mx-4 mt-4 text-sm text-ink-muted">Looking…</p>;
@@ -433,7 +499,7 @@ function ResultList({ children, empty, loading, error }: { children: ReactNode[]
   return <ul className="mt-2 min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-8 [scrollbar-gutter:stable]">{children}</ul>;
 }
 
-function ResultLine({ p, inDeck, lead, note, onAdd, onInspect, offerCommander = false }: { p: PrintingOut; inDeck: boolean; lead?: string; note: string | null; onAdd: (p: PrintingOut, board: Board) => void; onInspect: Inspect; offerCommander?: boolean }) {
+function ResultLine({ p, inDeck, lead, note, warn, onAdd, onInspect, offerCommander = false }: { p: PrintingOut; inDeck: boolean; lead?: string; note: string | null; warn?: string | null; onAdd: (p: PrintingOut, board: Board) => void; onInspect: Inspect; offerCommander?: boolean }) {
   return (
     <li className="ruled flex items-center gap-3 py-1.5">
       {p.image_uri ? <img src={crop(p.image_uri)} alt="" loading="lazy" decoding="async" className="size-10 shrink-0 rounded-xs object-cover" /> : <span aria-hidden="true" className="size-10 shrink-0 rounded-xs border border-rule bg-paper-sunk" />}
@@ -445,6 +511,7 @@ function ResultLine({ p, inDeck, lead, note, onAdd, onInspect, offerCommander = 
           {note && <> · <span className={note.endsWith('free') ? 'text-accent-ink' : ''}>{note}</span></>}
           {inDeck && <> · <span className="voice-semi text-ink">in deck</span></>}
         </span>
+        {warn && <span className="truncate text-xs text-danger">{warn}</span>}
       </span>
       {offerCommander && (
         <button type="button" onClick={() => onAdd(p, 'commander')} className="shrink-0 cursor-pointer rounded-sm px-2 py-1 text-sm voice-semi text-accent-ink hover:bg-paper-sunk">

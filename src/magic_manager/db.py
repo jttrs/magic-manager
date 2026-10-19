@@ -1229,6 +1229,27 @@ INSERT INTO catalog_settings (key, value)
 DELETE FROM settings WHERE {_V36_CATALOG_KEY_WHERE};
 """
 
+# V37 — earmarked cards: singles the user is interested in (to collect, or a deck
+# idea), whether owned or not. Card-grain (``oracle_id``), with an optional
+# preferred printing + finish, an optional reason, an optional pointer to a deck
+# (shown in that deck's Earmarked tab; the decklist is never touched) and a note.
+# Store-independent — distinct from the V12/V31 store-link watchlist. User table.
+SCHEMA_V37 = """
+CREATE TABLE IF NOT EXISTS card_earmarks (
+    earmark_id    INTEGER PRIMARY KEY AUTOINCREMENT,
+    oracle_id     TEXT NOT NULL UNIQUE,
+    name          TEXT NOT NULL,
+    scryfall_id   TEXT,
+    finish        TEXT CHECK (finish IS NULL OR finish IN ('nonfoil','foil')),
+    reason        TEXT CHECK (reason IS NULL OR reason IN ('collect','deck')),
+    deck_id       INTEGER REFERENCES decks (deck_id) ON DELETE SET NULL,
+    note          TEXT,
+    earmarked_at  TEXT NOT NULL,
+    updated_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS card_earmarks_deck_idx ON card_earmarks (deck_id);
+"""
+
 # ---------- migration-authoring convention ----------
 #
 # Always-safe ops in a migration: CREATE TABLE, ALTER TABLE ADD COLUMN,
@@ -1259,6 +1280,7 @@ DELETE FROM settings WHERE {_V36_CATALOG_KEY_WHERE};
 #                         targets (V12, V33) — typed in by the user
 #   - earmark_prices    (V32) price history of watched links — past reads can't
 #                         be re-fetched
+#   - card_earmarks     (V37) cards the user earmarked + reasons/notes — typed in
 #   - purchases / purchase_lines   store orders + price paid (V34) — read from
 #                         the user's own order history; the price paid lives
 #                         nowhere else
@@ -1331,6 +1353,7 @@ MIGRATIONS: list[str] = [
     SCHEMA_V34,
     SCHEMA_V35,
     SCHEMA_V36,
+    SCHEMA_V37,
 ]
 CURRENT_VERSION = len(MIGRATIONS)
 
@@ -1341,7 +1364,7 @@ CURRENT_VERSION = len(MIGRATIONS)
 # The single layout runs every entry. Add ``<version>: 'catalog'|'user'`` here
 # with each new MIGRATIONS entry.
 SPLIT_BASE_VERSION = 36
-MIGRATION_TARGETS: dict[int, str] = {}
+MIGRATION_TARGETS: dict[int, str] = {37: "user"}
 SPLIT_TARGETS = ("catalog", "user")
 
 

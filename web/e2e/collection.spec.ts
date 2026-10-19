@@ -229,3 +229,17 @@ test('“Missing means” is a Settings preference, not a rail filter, and it st
   await page.reload();
   await expect(page.getByText(/cards you own in no printing/)).toBeVisible();
 });
+
+test('earmarked cards carry a mark, and a filter shows only them', async ({ page }) => {
+  const ids = new Set(cards.slice(0, 2).map((c) => c.oracle_id));
+  const marked = cards.filter((c) => ids.has(c.oracle_id));
+  await page.route((u) => u.pathname === '/api/collection', (r) => r.fulfill({ json: { ...fixtures.collectionBlb, cards: cards.map((c) => ({ ...c, earmarked: ids.has(c.oracle_id) })) } }));
+  await page.goto(COLLECTION_URL);
+  await expect(page.getByRole('article')).toHaveCount(cards.length);
+  await page.getByRole('radio', { name: 'Only earmarked' }).click();
+  await expect(page).toHaveURL(/em=true/);
+  await expect(page.getByRole('article')).toHaveCount(marked.length);
+  await expect(page.getByRole('article').first()).toContainText('Earmarked');
+  await page.getByRole('button', { name: 'Reset filters' }).click();
+  await expect(page.getByRole('article')).toHaveCount(cards.length);
+});

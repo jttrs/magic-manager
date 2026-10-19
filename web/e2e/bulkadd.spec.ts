@@ -33,7 +33,7 @@ test('editor: Bulk Add reads a pasted list, groups it by board, keeps it across 
   await page.goto(`/decks/${encodeURIComponent(detail.deck.slug)}/edit`);
 
   const tabs = page.getByRole('tablist', { name: 'Find cards' });
-  await expect(tabs.getByRole('tab')).toHaveText(['Search', 'Bulk Add', 'Suggestions', 'Combos', 'Art']);
+  await expect(tabs.getByRole('tab')).toHaveText(['Search', 'Bulk Add', 'Suggestions', 'Earmarked', 'Combos', 'Art']);
   await tabs.getByRole('tab', { name: 'Bulk Add' }).click();
   await page.getByLabel('Card list').fill('1 Bulk Leader (TST) 1 *CMDR*\n1 Bulk Runes (TST) 2 *F*\nSideboard\n1 Bulk Bridge (TST) 3\n1 Nonesuch');
   await page.getByRole('button', { name: 'Read list' }).click();

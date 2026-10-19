@@ -11,7 +11,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from .. import collection_view, family_status, gallery, provenance, scenes, scryfall_tags, sets
+from .. import card_earmarks, collection_view, family_status, gallery, provenance, scenes, scryfall_tags, sets
 from .edhrec import FunctionRootOut, function_roots
 
 BuyTarget = Literal["manapool", "tcgplayer", "cardkingdom", "moxfield", "plain"]
@@ -79,6 +79,7 @@ class CollectionCardOut(BaseModel):
     sources: list[str] = Field(default_factory=list,
                                description="Source keys this owned printing's copies were acquired from (see CollectionOut.sources).")
     scene: str | None = Field(None, description="Key of the scene/poster this printing belongs to (see CollectionOut.scenes).")
+    earmarked: bool = Field(False, description="The card (any printing) is earmarked.")
 
 
 class SceneFinishOut(BaseModel):
@@ -211,6 +212,9 @@ def family_view(codes: list[str]) -> CollectionOut:
         s = summ.get(c.oracle_id or "")
         if s:
             c.functions = list(s.functions)
+    marked = card_earmarks.marks(c.oracle_id for c in cards)
+    for c in cards:
+        c.earmarked = c.oracle_id in marked
     # Where owned copies came from (V19 ledger), ONE batched lookup.
     by_card = provenance.card_sources([c.scryfall_id for c in cards if any(c.owned.values())])
     catalog: dict[str, SourceOut] = {}

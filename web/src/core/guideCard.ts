@@ -98,6 +98,9 @@ const TREATMENT_LABEL: Record<string, string> = {
 export const treatmentLabels = (codes: string): string[] =>
   codes ? codes.split('|').map((c) => TREATMENT_LABEL[c] ?? c) : [];
 
+/** The tag a Collection printing of an earmarked card carries (shown like Chase). */
+export const EARMARKED_TAG = 'Earmarked';
+
 /** Collection mapper. `missing` is decided by the caller's missing basis. */
 export function fromCollection(c: CollectionCardOut, missing: boolean, fnLabels: Readonly<Record<string, string>> = {}): GuideCard {
   return {
@@ -120,7 +123,7 @@ export function fromCollection(c: CollectionCardOut, missing: boolean, fnLabels:
     released: c.released_at,
     owned: c.owned as GuideCard['owned'],
     missing,
-    tags: [...(c.is_chase ? ['Chase'] : []), ...treatmentLabels(c.treatment)],
+    tags: [...(c.earmarked ? [EARMARKED_TAG] : []), ...(c.is_chase ? ['Chase'] : []), ...treatmentLabels(c.treatment)],
     lines: { plain: `1 ${c.name}`, manapool: '', tcgplayer: '' },
     functions: (c.functions ?? []).map((k) => fnLabels[k] ?? k),
     scene: c.scene ?? null,

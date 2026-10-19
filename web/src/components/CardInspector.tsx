@@ -9,6 +9,7 @@ import { rarityLetter, type GuideCard } from '../core/guideCard';
 import { useId, type ComponentType, type SVGProps } from 'react';
 import { Holdings, Tags } from './CardFace';
 import { CheapestPrinting } from './CheapestPrinting';
+import { EarmarkSection } from './EarmarkSection';
 import { ExploreMark, ScryfallMark, TcgplayerMark } from './StoreMarks';
 
 const RARITY_NAME: Record<string, string> = { common: 'Common', uncommon: 'Uncommon', rare: 'Rare', mythic: 'Mythic', special: 'Special', bonus: 'Bonus' };
@@ -93,6 +94,8 @@ export function CardInspector({ card, onClose }: { card: GuideCard | null; onClo
                   ))}
                 </ul>
               )}
+
+              {!parts && <EarmarkSection key={card.name} card={card} />}
 
               {parts
                 ? parts.map((p) => <PairPart key={p.name} part={p} onLeave={onClose} />)

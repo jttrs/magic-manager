@@ -441,6 +441,92 @@ export type CardCombosOut = {
 };
 
 /**
+ * CardEarmarkIn
+ */
+export type CardEarmarkIn = {
+    /**
+     * Card
+     *
+     * Any printing's scryfall_id, or the card's name.
+     */
+    card: string;
+    /**
+     * Printing
+     *
+     * Preferred printing (scryfall_id of the same card).
+     */
+    printing?: string | null;
+    /**
+     * Finish
+     */
+    finish?: 'nonfoil' | 'foil' | null;
+    /**
+     * Reason
+     */
+    reason?: 'collect' | 'deck' | null;
+    /**
+     * Deck
+     *
+     * Slug of the deck it's earmarked for.
+     */
+    deck?: string | null;
+    /**
+     * Note
+     */
+    note?: string | null;
+};
+
+/**
+ * CardEarmarkOut
+ */
+export type CardEarmarkOut = {
+    /**
+     * Oracle Id
+     */
+    oracle_id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Scryfall Id
+     *
+     * The preferred printing, when one was chosen.
+     */
+    scryfall_id: string | null;
+    /**
+     * Finish
+     */
+    finish: 'nonfoil' | 'foil' | null;
+    /**
+     * Reason
+     */
+    reason: 'collect' | 'deck' | null;
+    /**
+     * Deck Slug
+     *
+     * The deck this card is earmarked for.
+     */
+    deck_slug: string | null;
+    /**
+     * Deck Name
+     */
+    deck_name: string | null;
+    /**
+     * Note
+     */
+    note: string | null;
+    /**
+     * Earmarked At
+     */
+    earmarked_at: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+};
+
+/**
  * CardExploreOut
  */
 export type CardExploreOut = {
@@ -1232,6 +1318,12 @@ export type CollectionCardOut = {
      * Key of the scene/poster this printing belongs to (see CollectionOut.scenes).
      */
     scene?: string | null;
+    /**
+     * Earmarked
+     *
+     * The card (any printing) is earmarked.
+     */
+    earmarked?: boolean;
 };
 
 /**
@@ -2223,6 +2315,85 @@ export type DeckDetailOut = {
 };
 
 /**
+ * DeckEarmarkOut
+ */
+export type DeckEarmarkOut = {
+    earmark: CardEarmarkOut;
+    /**
+     * The preferred printing, else your copy with the most free, else the first standard printing.
+     */
+    printing: PrintingOut | null;
+    /**
+     * Owned
+     *
+     * Copies owned across every printing of the card.
+     */
+    owned: number;
+    /**
+     * Free
+     *
+     * Owned copies no built deck has pledged, across printings.
+     */
+    free: number;
+    /**
+     * In Deck
+     *
+     * The card is already in the draft (any board).
+     */
+    in_deck: boolean;
+    /**
+     * Reasons
+     *
+     * Why it can't go in this deck, plain words ([] = it can).
+     */
+    reasons: Array<string>;
+};
+
+/**
+ * DeckEarmarksIn
+ */
+export type DeckEarmarksIn = {
+    /**
+     * Cards
+     */
+    cards: Array<DraftCardIn>;
+};
+
+/**
+ * DeckEarmarksOut
+ */
+export type DeckEarmarksOut = {
+    /**
+     * Format
+     *
+     * The format filtered on (None = the deck has no format: nothing filtered).
+     */
+    format: string | null;
+    /**
+     * Commander Colors
+     *
+     * The commander's colour identity (None = no commander yet, or not a commander format).
+     */
+    commander_colors: Array<string> | null;
+    /**
+     * For Deck
+     *
+     * Earmarked for this deck — always listed.
+     */
+    for_deck: Array<DeckEarmarkOut>;
+    /**
+     * Legal
+     */
+    legal: Array<DeckEarmarkOut>;
+    /**
+     * Hidden
+     *
+     * Earmarks that don't fit this deck, each with its reasons.
+     */
+    hidden: Array<DeckEarmarkOut>;
+};
+
+/**
  * DeckFromBrowserIn
  */
 export type DeckFromBrowserIn = {
@@ -2552,6 +2723,29 @@ export type DupeOut = {
      * Note
      */
     note: string;
+};
+
+/**
+ * EarmarkEntryOut
+ */
+export type EarmarkEntryOut = {
+    earmark: CardEarmarkOut;
+    /**
+     * The preferred printing, else your copy with the most free, else the first standard printing.
+     */
+    printing: PrintingOut | null;
+    /**
+     * Owned
+     *
+     * Copies owned across every printing of the card.
+     */
+    owned: number;
+    /**
+     * Free
+     *
+     * Owned copies no built deck has pledged, across printings.
+     */
+    free: number;
 };
 
 /**
@@ -8689,6 +8883,131 @@ export type DeckSuggestionsResponses = {
 };
 
 export type DeckSuggestionsResponse = DeckSuggestionsResponses[keyof DeckSuggestionsResponses];
+
+export type CardEarmarksListData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Reason
+         */
+        reason?: 'collect' | 'deck' | null;
+        /**
+         * Deck
+         */
+        deck?: string | null;
+    };
+    url: '/api/earmarks/cards';
+};
+
+export type CardEarmarksListErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CardEarmarksListError = CardEarmarksListErrors[keyof CardEarmarksListErrors];
+
+export type CardEarmarksListResponses = {
+    /**
+     * Response Card Earmarks List
+     *
+     * Successful Response
+     */
+    200: Array<EarmarkEntryOut>;
+};
+
+export type CardEarmarksListResponse = CardEarmarksListResponses[keyof CardEarmarksListResponses];
+
+export type CardEarmarkSaveData = {
+    body: CardEarmarkIn;
+    path?: never;
+    query?: never;
+    url: '/api/earmarks/cards';
+};
+
+export type CardEarmarkSaveErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CardEarmarkSaveError = CardEarmarkSaveErrors[keyof CardEarmarkSaveErrors];
+
+export type CardEarmarkSaveResponses = {
+    /**
+     * Successful Response
+     */
+    200: CardEarmarkOut;
+};
+
+export type CardEarmarkSaveResponse = CardEarmarkSaveResponses[keyof CardEarmarkSaveResponses];
+
+export type CardEarmarkRemoveData = {
+    body?: never;
+    path: {
+        /**
+         * Oracle Id
+         */
+        oracle_id: string;
+    };
+    query?: never;
+    url: '/api/earmarks/cards/{oracle_id}';
+};
+
+export type CardEarmarkRemoveErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CardEarmarkRemoveError = CardEarmarkRemoveErrors[keyof CardEarmarkRemoveErrors];
+
+export type CardEarmarkRemoveResponses = {
+    /**
+     * Response Card Earmark Remove
+     *
+     * Successful Response
+     */
+    200: {
+        [key: string]: boolean;
+    };
+};
+
+export type CardEarmarkRemoveResponse = CardEarmarkRemoveResponses[keyof CardEarmarkRemoveResponses];
+
+export type DeckEarmarksData = {
+    body: DeckEarmarksIn;
+    path: {
+        /**
+         * Slug
+         */
+        slug: string;
+    };
+    query?: never;
+    url: '/api/decks/{slug}/earmarked';
+};
+
+export type DeckEarmarksErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeckEarmarksError = DeckEarmarksErrors[keyof DeckEarmarksErrors];
+
+export type DeckEarmarksResponses = {
+    /**
+     * Successful Response
+     */
+    200: DeckEarmarksOut;
+};
+
+export type DeckEarmarksResponse = DeckEarmarksResponses[keyof DeckEarmarksResponses];
 
 export type DeckCombosData = {
     body?: never;

@@ -385,6 +385,7 @@ Hairline borders are the main geometry. `ruled` is a 1px bottom border; column a
 - **Unused** — copies you own that aren't in a built deck (replaces *free*, *loose* and *available* for unpledged copies). Counts read `12 owned · 8 unused`; a built deck holds `in built decks` copies. A broken-down precon copy is a different idea — say *broken down* / *not built*, never *loose*.
 - **Value vs Price** — *Value* is what cards or a product's contents are worth (market value; the cheapest printing is a value). *Price* is a specific SKU at a specific store you would buy.
 - **Find → Show → Arrange** — the filter rail's order: *Find* (the text search, alone), *Show* (what's included; every control has a field label; no section that swaps which filters appear, no grids of mode buttons), *Arrange* (sort, view type). Modes go in the sub-nav strip; actions go in the sheet header.
+- **Earmark vs Watching** — *Earmark* marks a card you're interested in, owned or not (to collect, or a deck idea); it shows in Explore → Earmarked and the deck editor's Earmarked tab. *Watching* is a store listing whose price you follow (Deals). Don't say *considering* — deckbuilders mean the Maybe board by it.
 - **Vendors in labels** — don't name a data source (Scryfall, EDHREC) in an action label unless the action opens that site: `Refresh`, `Recheck for cheapest`, not `Check every set on Scryfall`.
 
 ## Do's and Don'ts

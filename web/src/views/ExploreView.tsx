@@ -31,6 +31,7 @@ import { EdhrecHealth } from '../components/EdhrecHealth';
 const COMMANDER_HEALTH = ['edhrec-commander/edhrec'];
 const CARD_HEALTH = ['edhrec-card/edhrec'];
 import { RankingsExplore } from './explore/RankingsExplore';
+import { EarmarkedExplore } from './explore/EarmarkedExplore';
 
 const route = getRouteApi('/explore');
 const cleanName = (n: string) => n.replace(/\s*\((?:Commander|Partner|Card)\)\s*$/i, '');
@@ -210,6 +211,7 @@ export function ExploreView() {
   }
 
   if (mode === 'rankings') return <RankingsExplore search={search} set={set} tabs={tabs} />;
+  if (mode === 'earmarked') return <EarmarkedExplore search={search} set={set} tabs={tabs} />;
 
   return (
     <ViewLayout label="Explore controls" summary={search.a ? `${search.a}${search.b ? ` vs ${search.b}` : ''}${role ? ` · ${role === 'commander' ? 'as commander' : 'as a card'}` : ''}` : undefined} sidebar={sidebar} startOpen={!search.a}>

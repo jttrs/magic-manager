@@ -11,9 +11,10 @@ const route = getRouteApi('/explore');
 const MODES: { mode: ExploreMode; label: string }[] = [
   { mode: 'rankings', label: 'Rankings' },
   { mode: 'card', label: 'Specific cards' },
+  { mode: 'earmarked', label: 'Earmarked' },
 ];
 
-/** Explore's modes, as tabs across the top of the sheet: EDHREC's rankings, or specific cards. */
+/** Explore's modes, as tabs across the top of the sheet: EDHREC's rankings, specific cards, or the cards you earmarked. */
 export function ExploreTabs({ mode }: { mode: ExploreMode }) {
   return (
     <SectionTabs
