@@ -65,7 +65,8 @@ browser (web/src/core/analytics.ts)        server (FastAPI)                     
     random per-install `analytics.secret` (mode 0600) beside the *collection* DB,
     never beside `analytics.db`. Rotating the secret makes older keys
     unlinkable, which anonymizes them (`key_version` records which secret made
-    each key). Local mode has one user, `local`.
+    each key). Local mode has one user, `local`; hosted mode keys on the signed-in
+    auth user's id (`auth.db`), bound per request by the sign-in gate.
 - **Delete-my-data:** the app computes the user's key and deletes their raw
   events (`DELETE /api/analytics/my-data`, `mm analytics forget`). Daily
   aggregates carry no user key and stay.

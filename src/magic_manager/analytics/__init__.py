@@ -30,6 +30,7 @@ CLIENT_MAX_SKEW = timedelta(minutes=5)
 class Context:
     request_id: str | None = None
     session_id: str | None = None
+    user_id: str | None = None  # hosted: the signed-in auth user; None = the local user
 
 
 _ctx: contextvars.ContextVar[Context] = contextvars.ContextVar("mm_analytics_ctx", default=Context())
@@ -79,7 +80,7 @@ _bucket = _Bucket()
 
 def _row(checked: catalog.Checked, ctx: Context, at: datetime | None = None) -> store.Row:
     row = store.Row(checked=checked, session_id=ctx.session_id, request_id=ctx.request_id,
-                    user_key=identity.user_key(), key_version=identity.key_version())
+                    user_key=identity.user_key(ctx.user_id or identity.LOCAL_USER), key_version=identity.key_version())
     if at is not None:
         row.at = at
     return row
@@ -132,7 +133,7 @@ def ingest_client(events: list[dict], *, session_id: str | None) -> IngestResult
         out.skipped_by_consent = len(events)
         return out
     c = consent.get()
-    ctx = Context(session_id=session_id_or_none(session_id), request_id=current().request_id)
+    ctx = Context(session_id=session_id_or_none(session_id), request_id=current().request_id, user_id=current().user_id)
     now = datetime.now(UTC)
     rows: list[store.Row] = []
     for i, raw in enumerate(events[:MAX_BATCH]):
@@ -169,9 +170,10 @@ def ingest_client(events: list[dict], *, session_id: str | None) -> IngestResult
     return out
 
 
-def forget_user(user_id: str = identity.LOCAL_USER) -> int:
-    """Delete-my-data: remove every raw event under this user's current key."""
-    return store.forget(identity.user_key(user_id))
+def forget_user(user_id: str | None = None) -> int:
+    """Delete-my-data: remove every raw event under this user's current key
+    (default: the request's signed-in user, else the local user)."""
+    return store.forget(identity.user_key(user_id or current().user_id or identity.LOCAL_USER))
 
 
 __all__ = ["Context", "bind", "catalog", "consent", "current", "forget_user", "identity",

@@ -3822,6 +3822,41 @@
           }
         }
       }
+    },
+    "/api/auth/me": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Auth Me",
+        "operationId": "auth_me",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Auth Logout",
+        "operationId": "auth_logout",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -8782,6 +8817,16 @@
             },
             "type": "object",
             "title": "Flags"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "local",
+              "hosted"
+            ],
+            "title": "Mode",
+            "description": "hosted = sign-in required (MM_MODE=hosted); local = no login.",
+            "default": "local"
           }
         },
         "type": "object",
@@ -9840,6 +9885,53 @@
           "name"
         ],
         "title": "MatchOut"
+      },
+      "MeOut": {
+        "properties": {
+          "user": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UserOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who is signed in; null when nobody is."
+          },
+          "csrf_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Csrf Token",
+            "description": "Send as X-CSRF-Token on every write while signed in."
+          },
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderOut"
+            },
+            "type": "array",
+            "title": "Providers"
+          },
+          "profiles_open": {
+            "type": "boolean",
+            "title": "Profiles Open",
+            "description": "False until per-user collections land: only the admin can sign in."
+          }
+        },
+        "type": "object",
+        "required": [
+          "user",
+          "csrf_token",
+          "providers",
+          "profiles_open"
+        ],
+        "title": "MeOut"
       },
       "MissingCardOut": {
         "properties": {
@@ -11963,6 +12055,30 @@
           "name"
         ],
         "title": "ProductValueOut"
+      },
+      "ProviderOut": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "login_url": {
+            "type": "string",
+            "title": "Login Url",
+            "description": "Start sign-in here (append ?invite=<code> for a first sign-in)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "title",
+          "login_url"
+        ],
+        "title": "ProviderOut"
       },
       "PurchaseOut": {
         "properties": {
@@ -15127,6 +15243,41 @@
           "num"
         ],
         "title": "UnidentifiedOut"
+      },
+      "UserOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "is_admin": {
+            "type": "boolean",
+            "title": "Is Admin"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "display_name",
+          "email",
+          "is_admin"
+        ],
+        "title": "UserOut"
       },
       "ValidationError": {
         "properties": {

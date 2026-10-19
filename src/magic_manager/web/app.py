@@ -29,7 +29,7 @@ from .. import collection_sync, ingest as ingest_mod, purchases as purchases_eng
 from ..api import purchases as purchases_api
 from ..api import collection_import as collection_import_api, companion as companion_api, deals as deals_api, undo as undo_api, cart as cart_api, cards as cards_api, collection as collection_api, explore as explore_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api, market as market_api, trueup as trueup_api, history as history_api, combos as combos_api, art as art_api, jumpstart as jumpstart_api, surf as surf_api
 from .runtime import TERMINAL, JobManager, JobsBusy
-from . import analytics_routes, scraper_routes, telemetry
+from . import analytics_routes, auth_routes, scraper_routes, telemetry
 from ..analytics import store as analytics_store
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -109,6 +109,9 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
                     "request_id": getattr(request.state, "request_id", None)})
         return await call_next(request)
 
+    # Hosted mode only (MM_MODE=hosted): sign-in routes + the session/CSRF gate,
+    # inside telemetry so refusals carry a request id. Local mode: nothing.
+    auth_routes.install(app)
     telemetry.install(app)
 
     # Settle the session restore point by the request's outcome: a refused
