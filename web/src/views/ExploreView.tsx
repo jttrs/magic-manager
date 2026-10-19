@@ -25,7 +25,8 @@ import { compareSections, hasFunctionData } from '../core/groupBy';
 import { BUCKETS, type Bucket, type CompareSearch, type GroupBy, type Role } from '../core/search';
 import { decodeSort, encodeSort, sortBy } from '../core/sort';
 import { exploreMode } from '../core/rankings';
-import { ExploreTabs, SurfSection } from './explore/ExploreTabs';
+import { ExploreTabs } from './explore/ExploreTabs';
+import { CardSurfer } from './explore/surf/CardSurfer';
 import { EdhrecHealth } from '../components/EdhrecHealth';
 
 const COMMANDER_HEALTH = ['edhrec-commander/edhrec'];
@@ -50,7 +51,7 @@ export function ExploreView() {
   // request can start alongside the card profile instead of after it.
   const [picked, setPicked] = useState<PickedCard | null>(null);
 
-  const mode = exploreMode(search.mode, search.a);
+  const mode = exploreMode(search.mode, search.a, search.surf);
   const tabs = <ExploreTabs mode={mode} />;
   const cards = useQuery({ ...exploreCardQuery(search.a, search.b), enabled: Boolean(search.a) && mode === 'card' });
   const prof = cards.data;
@@ -183,7 +184,6 @@ export function ExploreView() {
           <button type="button" onClick={clear} className="self-start cursor-pointer text-sm text-on-chrome-muted underline hover:text-on-chrome">Clear marks</button>
         )}
       </SideSection>
-      <SurfSection />
     </>
   );
 
@@ -212,6 +212,7 @@ export function ExploreView() {
 
   if (mode === 'rankings') return <RankingsExplore search={search} set={set} tabs={tabs} />;
   if (mode === 'earmarked') return <EarmarkedExplore search={search} set={set} tabs={tabs} />;
+  if (mode === 'surf') return <CardSurfer raw={search.surf} onChange={(surf) => set({ mode: 'surf', surf })} tabs={tabs} />;
 
   return (
     <ViewLayout label="Explore controls" summary={search.a ? `${search.a}${search.b ? ` vs ${search.b}` : ''}${role ? ` · ${role === 'commander' ? 'as commander' : 'as a card'}` : ''}` : undefined} sidebar={sidebar} startOpen={!search.a}>

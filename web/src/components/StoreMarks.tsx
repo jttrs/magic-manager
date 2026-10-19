@@ -253,17 +253,6 @@ export function BuyListMark(p: MarkProps) {
   );
 }
 
-/** Card surfer: a card riding a wave (endless random cards). */
-export function SurfMark(p: MarkProps) {
-  return (
-    <svg {...base} {...p}>
-      <rect x="8.4" y="2.4" width="9" height="12.4" rx="1.3" transform="rotate(12 12.9 8.6)" />
-      <path d="M2.6 17.6c1.6 0 1.6-1.4 3.2-1.4s1.6 1.4 3.2 1.4 1.6-1.4 3.2-1.4 1.6 1.4 3.2 1.4 1.6-1.4 3.2-1.4 1.6 1.4 2.8 1.4" />
-      <path d="M2.6 21c1.6 0 1.6-1.4 3.2-1.4s1.6 1.4 3.2 1.4 1.6-1.4 3.2-1.4 1.6 1.4 3.2 1.4 1.6-1.4 3.2-1.4 1.6 1.4 2.8 1.4" />
-    </svg>
-  );
-}
-
 /** Two crossing arrows (shuffle: deal a fresh order). */
 export function ShuffleMark(p: MarkProps) {
   return (

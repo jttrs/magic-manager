@@ -20,7 +20,6 @@ import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../../components
 import { EdhrecMark, RereadMark } from '../../components/StoreMarks';
 import { VirtualGuide } from '../../components/VirtualGuide';
 import { EdhrecHealth } from '../../components/EdhrecHealth';
-import { SurfSection } from './ExploreTabs';
 import type { RankedOut, RankingOut } from '../../core/api';
 import { fmtUsd } from '../../core/format';
 import { exportLines, type GuideCard } from '../../core/guideCard';
@@ -125,7 +124,6 @@ export function RankingsExplore({ search, set, tabs }: Props) {
           <button type="button" onClick={clear} className="self-start cursor-pointer text-sm text-on-chrome-muted underline hover:text-on-chrome">Clear marks</button>
         )}
       </SideSection>
-      <SurfSection />
     </>
   );
 

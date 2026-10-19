@@ -76,7 +76,7 @@ function CompanionSlot() {
 /** Sidebar (starts below the nav) + main region, with an optional sub-nav strip.
  *
  *  `subnav` — the section's modes (Collection: Cards · Purchase history; Explore:
- *  Rankings · Specific cards). Pass `<SectionTabs label=… tabs=… />`: inside the
+ *  Rankings · Cards · Surfer). Pass `<SectionTabs label=… tabs=… />`: inside the
  *  slot it takes the strip's chrome look (quieter than the top nav, amber
  *  underline on the active mode). The strip spans the full width under the top
  *  nav — above BOTH the rail and the sheet, since a mode scopes both — and stays

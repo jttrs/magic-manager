@@ -15,7 +15,6 @@ import { fmtInt } from '../../core/format';
 import { exportLines, type GuideCard } from '../../core/guideCard';
 import { OWN_LABEL } from '../../core/rankings';
 import { EARMARK_REASONS, RANK_OWN, type CompareSearch, type EarmarkReasonFilter, type RankOwn } from '../../core/search';
-import { SurfSection } from './ExploreTabs';
 
 type Props = { search: CompareSearch; set: (p: Partial<CompareSearch>) => void; tabs: ReactNode };
 
@@ -64,7 +63,6 @@ export function EarmarkedExplore({ search, set, tabs }: Props) {
           <button type="button" onClick={clear} className="self-start cursor-pointer text-sm text-on-chrome-muted underline hover:text-on-chrome">Clear marks</button>
         )}
       </SideSection>
-      <SurfSection />
     </>
   );
 

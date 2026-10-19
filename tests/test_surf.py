@@ -1,4 +1,4 @@
-"""Card surfer (Explore → Surf random cards): the surf engine's filter → Scryfall
+"""Card surfer (Explore → Surfer tab): the surf engine's filter → Scryfall
 query compiler, its Python twin (``matches``), the two draw sources, and the
 /api/surf routes. Offline: scryfall.random_card / search_total / collection are
 faked."""
