@@ -11,6 +11,8 @@ export type GuideCard = {
   key: string;
   /** The exact printing shown (inspector fetches its holdings); null when unknown. */
   scryfallId?: string | null;
+  /** That printing's own finishes, when known (the inspector's preferred-finish choice). */
+  finishes?: readonly string[];
   name: string;
   image: string | null;
   href: string | null;
@@ -128,6 +130,7 @@ export function fromCollection(c: CollectionCardOut, missing: boolean, fnLabels:
     functions: (c.functions ?? []).map((k) => fnLabels[k] ?? k),
     scene: c.scene ?? null,
     typeLine: c.type_line,
+    finishes: c.finishes,
     prices: { nonfoil: c.finishes.includes('nonfoil') ? c.price_usd : null, foil: c.finishes.includes('foil') ? c.price_usd_foil : null },
   };
 }
@@ -157,6 +160,7 @@ export function fromPrinting(p: PrintingOut): GuideCard {
     tags: treatmentLabels(p.treatment),
     lines: { plain: `1 ${p.name}`, manapool: '', tcgplayer: '' },
     typeLine: p.type_line ?? null,
+    finishes: p.finishes,
     prices: { nonfoil: p.finishes.includes('nonfoil') ? p.price_usd : null, foil: p.finishes.includes('foil') ? p.price_usd_foil : null },
   };
 }

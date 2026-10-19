@@ -136,7 +136,7 @@ function EarmarkList({ rows, onInspect }: { rows: EarmarkEntryOut[]; onInspect: 
                   {e.owned ? (
                     <>
                       <span className="text-ink">{e.owned}</span>
-                      <span className={e.free ? 'text-accent-ink' : 'text-ink-muted'}> · {e.free} free</span>
+                      <span className={e.free ? 'text-accent-ink' : 'text-ink-muted'}> owned · {e.free} unused</span>
                     </>
                   ) : <span className="text-ink-muted">—</span>}
                 </td>

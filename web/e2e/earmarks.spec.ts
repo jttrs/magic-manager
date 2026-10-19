@@ -57,6 +57,40 @@ test('Explore → Earmarked lists your earmarks, filters them, and the inspector
   await expect(dlg.getByRole('button', { name: 'Earmark', exact: true })).toHaveAttribute('aria-pressed', 'false');
 });
 
+test('the inspector earmarks a card it shows, preferring that printing and its foil', async ({ page }) => {
+  let list: ReturnType<typeof entry>[] = [];
+  const puts: Record<string, unknown>[] = [];
+  const card = detail.cards.find((c) => c.board === 'main')!;
+  const p = { ...card.printing, finishes: ['nonfoil', 'foil'] };
+  await page.route((u) => u.pathname === `/api/decks/${detail.deck.slug}`, (r) => r.fulfill({ json: { ...editable, cards: detail.cards.map((c) => (c === card ? { ...c, printing: p } : c)) } }));
+  await page.route('**/api/decks/*/check', (r) => r.fulfill({ json: { format: 'commander', legality: { format: 'commander', legal: true, checked_count: 1, violations: [] }, bracket: null } }));
+  await page.route('**/api/earmarks/cards**', (r) => {
+    if (r.request().method() === 'PUT') {
+      const body = r.request().postDataJSON() as Record<string, unknown>;
+      puts.push(body);
+      const m = mark('x', p.name, { scryfall_id: (body.printing as string) ?? null, finish: (body.finish as string) ?? null, note: (body.note as string) ?? null, updated_at: `t${puts.length}` });
+      list = [{ earmark: m, printing: p, owned: 0, free: 0 }];
+      return r.fulfill({ json: m });
+    }
+    return r.fulfill({ json: list });
+  });
+  await page.goto(`/decks/${encodeURIComponent(detail.deck.slug)}/edit`);
+  await page.getByRole('button', { name: p.name, exact: true }).first().click();
+  const dlg = page.getByRole('dialog');
+  await dlg.getByRole('button', { name: 'Earmark', exact: true }).click();
+  await expect.poll(() => puts[0]).toEqual({ card: p.scryfall_id });
+  await expect(dlg.getByRole('button', { name: 'Earmarked' })).toHaveAttribute('aria-pressed', 'true');
+  await dlg.getByLabel(/Prefer this printing/).click();
+  await expect.poll(() => puts.at(-1)).toMatchObject({ printing: p.scryfall_id, finish: null });
+  await expect(dlg.getByLabel(/Prefer this printing/)).toBeChecked();
+  await dlg.getByLabel('Foil').click();
+  await expect.poll(() => puts.at(-1)).toMatchObject({ printing: p.scryfall_id, finish: 'foil' });
+  await expect(dlg.getByLabel('Foil')).toBeChecked();
+  await dlg.getByLabel('Note').fill('the alt art');
+  await page.keyboard.press('Escape');                                        // closing still saves the note
+  await expect.poll(() => puts.at(-1)?.note).toBe('the alt art');
+});
+
 test('Explore → Earmarked says how to start when nothing is earmarked', async ({ page }) => {
   await page.goto('/explore?mode=earmarked');
   await expect(page.getByText('No earmarked cards yet')).toBeVisible();
@@ -71,12 +105,12 @@ test('editor: the Earmarked tab lists cards for this deck first, then those that
     asked.push(r.request().postDataJSON());
     return r.fulfill({
       json: {
-        format: 'commander', commander_colors: ['W', 'B'],
+        format: 'commander', commander_colors: ['W', 'B'], rule: 'Legal in Commander · within white, black',
         for_deck: [{ ...entry('pinned', 'Pinned Card', { reason: 'deck', deck_slug: detail.deck.slug, deck_name: detail.deck.name }), in_deck: false, reasons: [] }],
         legal: [{ earmark: mark('fits', 'Fitting Card', { reason: 'collect' }), printing: fits, owned: 1, free: 1, in_deck: false, reasons: [] }],
         hidden: [
-          { ...entry('bolt', 'Lightning Bolt'), in_deck: false, reasons: ['Outside the commander’s colours (white, black)'] },
-          { ...entry('bad', 'Bad Card'), in_deck: false, reasons: ['Banned in Commander'] },
+          { ...entry('bolt', 'Lightning Bolt'), in_deck: false, reasons: [{ code: 'colour_identity', message: 'Outside the commander’s colours (white, black)' }] },
+          { ...entry('bad', 'Bad Card'), in_deck: false, reasons: [{ code: 'banned', message: 'Banned in Commander' }] },
         ],
       },
     });
@@ -89,7 +123,7 @@ test('editor: the Earmarked tab lists cards for this deck first, then those that
   await expect(page.getByText('Legal in Commander · within white, black')).toBeVisible();
   await expect(page.getByRole('region', { name: 'For this deck' })).toContainText('Pinned Card');
   await expect(page.getByRole('region', { name: 'Earmarked cards that fit' })).toContainText('Fitting Card');
-  const summary = page.getByText('2 hidden · 1 banned in Commander · 1 outside the commander’s colours');
+  const summary = page.getByText('2 hidden · 1 banned · 1 outside the commander’s colours');
   await expect(summary).toBeVisible();
   await expect(page.getByRole('list', { name: 'Hidden earmarked cards' })).toBeHidden();
   await summary.click();

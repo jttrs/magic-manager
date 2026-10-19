@@ -17,7 +17,7 @@ import {
   addCard, BOARD_LABEL, BULK_EMPTY, canCommand, collectionFirst, commanderName, draftCards, draftFromDeck, draftOracles, draftSections, draftStats,
   moveCard, restorePrinting, setCount, setFinish, type Board, type BulkState, type Draft, type DraftFinish, type DraftRow,
 } from '../core/deckDraft';
-import { earmarkLine, hiddenSummary } from '../core/cardEarmarks';
+import { earmarkLine, hiddenSummary, reasonsText } from '../core/cardEarmarks';
 import { fmtInt, fmtUsd } from '../core/format';
 import { fromPrinting, type GuideCard } from '../core/guideCard';
 import { ArtSwapTab } from './decks/ArtSwapTab';
@@ -431,8 +431,6 @@ function SuggestTab({ commander, inDeck, onAdd, onInspect }: { commander: string
   );
 }
 
-const COLOUR_NAME: Record<string, string> = { W: 'white', U: 'blue', B: 'black', R: 'red', G: 'green' };
-
 /** Your earmarked cards that fit this deck — legal in its format and, for Commander, within the
  *  commander's colours (judged on the unsaved draft). Cards earmarked for this deck come first,
  *  always; the rest that don't fit are summarised, with each card's reason on request. */
@@ -445,26 +443,25 @@ function EarmarkTab({ slug, draft, onAdd, onInspect }: { slug: string; draft: Dr
   if (!d.for_deck.length && !d.legal.length && !d.hidden.length) {
     return <EmptyNote title="No earmarked cards yet">Open any card and press Earmark{'\u00a0'}— mark it as a deck idea for this deck and it’s listed here first.</EmptyNote>;
   }
-  const rule = [
-    d.format ? `Legal in ${formatName(d.format)}` : 'No format set, so nothing is filtered',
-    d.commander_colors
-      ? `within ${d.commander_colors.map((c) => COLOUR_NAME[c] ?? c).join(', ') || 'colourless'}`
-      : d.format && ['commander', 'brawl', 'paupercommander'].includes(d.format) ? 'no commander yet, so colours aren’t checked' : null,
-  ].filter(Boolean).join(' · ');
-  const line = (e: (typeof d.legal)[number]) => e.printing && (
+  const line = (e: (typeof d.legal)[number]) => !e.printing ? (
+    <li key={e.earmark.oracle_id} className="ruled flex items-baseline gap-3 py-1.5">
+      <span className="voice-semi text-ink">{e.earmark.name}</span>
+      <span className="ml-auto text-right text-xs text-danger">{reasonsText(e)}</span>
+    </li>
+  ) : (
     <ResultLine
       key={e.earmark.oracle_id}
       p={e.printing}
       inDeck={e.in_deck}
       note={[earmarkLine(e.earmark), freeNote(e.free, e.owned)].filter(Boolean).join(' · ') || null}
-      warn={e.reasons.join(' · ') || null}
+      warn={reasonsText(e) || null}
       onAdd={onAdd}
       onInspect={onInspect}
     />
   );
   return (
     <div className="mt-2 min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-8 [scrollbar-gutter:stable]">
-      <p className="text-sm text-ink-muted">{rule}</p>
+      <p className="text-sm text-ink-muted">{d.rule}</p>
       {d.for_deck.length > 0 && (
         <section aria-label="For this deck" className="mt-3">
           <h4 className="text-sm voice-condensed font-bold uppercase tracking-[0.04em] text-ink-muted">For this deck · {d.for_deck.length}</h4>
@@ -482,7 +479,7 @@ function EarmarkTab({ slug, draft, onAdd, onInspect }: { slug: string; draft: Dr
             {d.hidden.map((e) => (
               <li key={e.earmark.oracle_id} className="ruled flex items-baseline gap-3 py-1.5">
                 {e.printing ? <CardName p={e.printing} onInspect={onInspect} /> : <span className="voice-semi text-ink">{e.earmark.name}</span>}
-                <span className="ml-auto text-right text-xs text-ink-muted">{e.reasons.join(' · ')}</span>
+                <span className="ml-auto text-right text-xs text-ink-muted">{reasonsText(e)}</span>
               </li>
             ))}
           </ul>

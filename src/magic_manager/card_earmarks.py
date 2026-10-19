@@ -82,21 +82,12 @@ def resolve_card(ref: str) -> dict:
 
 def printing_ref(set_code: str, collector_number: str) -> str:
     """``SET`` + ``CN`` → the printing's scryfall_id (local, else Scryfall). Raises ``LookupError``."""
-    from . import scryfall, sets
+    from . import earmarks
 
-    sql = "SELECT scryfall_id FROM cards WHERE set_code = ? AND lower(collector_number) = lower(?)"
-    args = (set_code.lower(), str(collector_number).strip())
-    with db.connect() as conn:
-        r = conn.execute(sql, args).fetchone()
-        if r is None:
-            found, _ = scryfall.collection([{"set": args[0], "collector_number": args[1]}])
-            if found:
-                sets.upsert_lookup_cards(conn, found[:1])
-                conn.commit()
-            r = conn.execute(sql, args).fetchone()
-    if r is None:
+    row = earmarks.printing_row(set_code, collector_number)
+    if row is None:
         raise LookupError(f"no printing {set_code.upper()} #{collector_number}")
-    return r["scryfall_id"]
+    return row["scryfall_id"]
 
 
 # ---------- CRUD ----------
@@ -206,12 +197,7 @@ def entries(earmarks: list[CardEarmark]) -> list[dict]:
 
 # ---------- the deck filter ----------
 
-_FORMAT_LABEL = {"commander": "Commander", "paupercommander": "Pauper Commander", "brawl": "Brawl"}
 _COLOR = {"W": "white", "U": "blue", "B": "black", "R": "red", "G": "green"}
-
-
-def _format_label(fmt: str) -> str:
-    return _FORMAT_LABEL.get(fmt, fmt.replace("_", " ").title())
 
 
 def _colours(ci) -> str:
@@ -237,45 +223,60 @@ def _oracle_facts(conn, oids: list[str]) -> dict[str, dict]:
     return out
 
 
-def blockers(fmt: str | None, commander_ci: set[str] | None, facts: dict | None) -> list[str]:
+def _blocker(code: str, message: str) -> dict:
+    return {"code": code, "message": message}
+
+
+def blockers(fmt: str | None, commander_ci: set[str] | None, facts: dict | None) -> list[dict]:
     """Why a card can't go in a deck of ``fmt`` led by ``commander_ci`` (None = no
-    commander yet), plain words; [] when it can. The one rule the tab and tests share."""
+    commander yet): ``[{code, message}]`` with ``code`` ∈ not_in_catalog |
+    no_legality | banned | not_legal | colour_identity; [] when it can. The one
+    rule the tab and tests share."""
+    from . import deck_view
+
     if facts is None:
-        return ["Not in your card catalog yet — open it once to load it"]
+        return [_blocker("not_in_catalog", "Not in your card catalog yet — open it once to load it")]
     out = []
     if fmt:
         legal = facts["legalities"]
+        label = deck_view.deck_type(fmt, None)
         if not legal:
-            out.append("No legality data — sync its set")
+            out.append(_blocker("no_legality", "No legality data — sync its set"))
         elif fmt in legal:
             status = legal[fmt]
             if status == "banned":
-                out.append(f"Banned in {_format_label(fmt)}")
+                out.append(_blocker("banned", f"Banned in {label}"))
             elif status not in ("legal", "restricted"):
-                out.append(f"Not legal in {_format_label(fmt)}")
+                out.append(_blocker("not_legal", f"Not legal in {label}"))
     if commander_ci is not None and not set(facts["ci"]) <= commander_ci:
-        out.append(f"Outside the commander’s colours ({_colours(commander_ci)})")
+        out.append(_blocker("colour_identity", f"Outside the commander’s colours ({_colours(commander_ci)})"))
     return out
+
+
+def _rule(fmt: str, commander_ci: set[str] | None) -> str:
+    """The filter in words, for the tab's header."""
+    from . import deck_view
+
+    if not fmt:
+        return "No format set, so nothing is filtered"
+    parts = [f"Legal in {deck_view.deck_type(fmt, None)}"]
+    if fmt in legality._COMMANDER_LIKE_FORMATS:
+        parts.append(f"within {_colours(commander_ci)}" if commander_ci is not None
+                     else "no commander yet, so colours aren’t checked")
+    return " · ".join(parts)
 
 
 def for_deck(slug: str, draft) -> dict:
     """Earmarked cards for a deck being edited. ``draft`` = the editor's unsaved
-    ``deck_edit.DraftCard`` rows (so a commander just added counts). Format = the
-    deck's, or Commander when the draft has a commander (``deck_edit.check``'s
-    rule); none → no format filter. Returns ``{format, commander_colors,
-    for_deck, legal, hidden}``: ``for_deck`` = earmarks pointed at this deck (always
-    shown, any blockers attached as ``reasons``), ``legal`` = the rest that fit,
-    ``hidden`` = the rest that don't, each with ``reasons``. Every entry carries
-    ``in_deck`` (the card is already in the draft, any board)."""
-    live = [c for c in draft if c.count > 0]
-    with db.connect() as conn:
-        row = decks._fetch_deck(conn, slug)
-        if row is None:
-            raise LookupError(f"deck with slug {slug!r} not found")
-        fmt = (row["format"] or "").lower()
-        rows = decks.materialize_rows_for_checks(conn, [(c.scryfall_id, c.board, c.finish, c.count) for c in live])
-    if not fmt and any(c.board == "commander" for c in live):
-        fmt = "commander"
+    ``deck_edit.DraftCard`` rows (so a commander just added counts); the format
+    rule is ``deck_edit.draft_rows``'s. Returns ``{format, commander_colors, rule,
+    for_deck, legal, hidden}``: ``for_deck`` = earmarks pointed at this deck
+    (always shown, any blockers attached as ``reasons``), ``legal`` = the rest
+    that fit, ``hidden`` = the rest that don't, each with ``reasons``. Every entry
+    carries ``in_deck`` (the card is already in the draft, any board)."""
+    from . import deck_edit
+
+    fmt, rows = deck_edit.draft_rows(slug, draft)
     commander_ci: set[str] | None = None
     if fmt in legality._COMMANDER_LIKE_FORMATS:
         leaders = [r for r in rows if r["board"] == "commander"]
@@ -285,8 +286,9 @@ def for_deck(slug: str, draft) -> dict:
     marks_ = listing()
     with db.connect() as conn:
         facts = _oracle_facts(conn, [e.oracle_id for e in marks_])
-    out: dict = {"format": fmt or None, "commander_colors": sorted(commander_ci, key="WUBRG".index) if commander_ci is not None else None,
-                 "for_deck": [], "legal": [], "hidden": []}
+    out: dict = {"format": fmt or None,
+                 "commander_colors": sorted(commander_ci, key="WUBRG".index) if commander_ci is not None else None,
+                 "rule": _rule(fmt, commander_ci), "for_deck": [], "legal": [], "hidden": []}
     for e, entry in zip(marks_, entries(marks_)):
         entry["in_deck"] = e.oracle_id in in_draft
         entry["reasons"] = blockers(fmt or None, commander_ci, facts.get(e.oracle_id))
@@ -297,4 +299,3 @@ def for_deck(slug: str, draft) -> dict:
         else:
             out["legal"].append(entry)
     return out
-

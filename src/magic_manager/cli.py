@@ -5246,7 +5246,7 @@ def earmark_card_add_cmd(
             raise ValueError("a preferred printing needs both --set and --cn")
         if set_code:
             sid = card_earmarks.printing_ref(set_code, cn)
-        e = card_earmarks.save(card, printing=sid, finish=("foil" if foil else "nonfoil") if sid else ("foil" if foil else None),
+        e = card_earmarks.save(card, printing=sid, finish="foil" if foil else None,
                                reason=reason, deck=deck, note=note)
     except (LookupError, ValueError) as err:
         typer.echo(f"error: {err}", err=True)

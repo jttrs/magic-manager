@@ -36,20 +36,27 @@ class EarmarkEntryOut(BaseModel):
     free: int = Field(description="Owned copies no built deck has pledged, across printings.")
 
 
+class BlockerOut(BaseModel):
+    code: Literal["not_in_catalog", "no_legality", "banned", "not_legal", "colour_identity"]
+    message: str = Field(description="Plain words, e.g. 'Banned in Commander'.")
+
+
 class DeckEarmarkOut(EarmarkEntryOut):
     in_deck: bool = Field(description="The card is already in the draft (any board).")
-    reasons: list[str] = Field(description="Why it can't go in this deck, plain words ([] = it can).")
+    reasons: list[BlockerOut] = Field(description="Why it can't go in this deck ([] = it can).")
 
 
 class DeckEarmarksOut(BaseModel):
     format: str | None = Field(description="The format filtered on (None = the deck has no format: nothing filtered).")
     commander_colors: list[str] | None = Field(description="The commander's colour identity (None = no commander yet, or not a commander format).")
+    rule: str = Field(description="The filter in words, e.g. 'Legal in Commander · within white, black'.")
     for_deck: list[DeckEarmarkOut] = Field(description="Earmarked for this deck — always listed.")
     legal: list[DeckEarmarkOut]
     hidden: list[DeckEarmarkOut] = Field(description="Earmarks that don't fit this deck, each with its reasons.")
 
 
 class CardEarmarkIn(BaseModel):
+    """Earmark a card, or REPLACE its earmark's details — a field left out is cleared."""
     model_config = ConfigDict(extra="forbid")
     card: str = Field(min_length=1, max_length=200, description="Any printing's scryfall_id, or the card's name.")
     printing: str | None = Field(None, max_length=64, description="Preferred printing (scryfall_id of the same card).")

@@ -45,18 +45,28 @@ export function earmarkDecks(entries: readonly EarmarkEntryOut[]): { slug: strin
   return [...m].map(([slug, name]) => ({ slug, name })).sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** "3 hidden · 2 outside the commander’s colours · 1 banned in Commander" — why
- *  earmarked cards are missing from a deck's tab, most common reason first. */
+type BlockerCode = DeckEarmarkOut['reasons'][number]['code'];
+
+const BLOCKER_SHORT: Record<BlockerCode, string> = {
+  colour_identity: 'outside the commander’s colours',
+  banned: 'banned',
+  not_legal: 'not legal in this format',
+  no_legality: 'no legality data',
+  not_in_catalog: 'not in your card catalog',
+};
+
+/** "3 hidden · 2 outside the commander’s colours · 1 banned" — why earmarked
+ *  cards are missing from a deck's tab, counted by reason, most common first. */
 export function hiddenSummary(hidden: readonly DeckEarmarkOut[]): string {
   if (!hidden.length) return '';
-  const counts = new Map<string, number>();
-  for (const e of hidden) for (const r of e.reasons) {
-    const k = r.replace(/\s*\(.*\)$/, '').replace(/^\w/, (c) => c.toLowerCase());
-    counts.set(k, (counts.get(k) ?? 0) + 1);
-  }
-  const parts = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([k, n]) => `${n} ${k}`);
+  const counts = new Map<BlockerCode, number>();
+  for (const e of hidden) for (const r of e.reasons) counts.set(r.code, (counts.get(r.code) ?? 0) + 1);
+  const parts = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([k, n]) => `${n} ${BLOCKER_SHORT[k]}`);
   return [`${hidden.length} hidden`, ...parts].join(' · ');
 }
+
+/** A card's blockers in plain words. */
+export const reasonsText = (e: Pick<DeckEarmarkOut, 'reasons'>): string => e.reasons.map((r) => r.message).join(' · ');
 
 /** An earmark as a guide card (its printing to show), keyed on the card. */
 export function earmarkCard(e: EarmarkEntryOut): GuideCard | null {

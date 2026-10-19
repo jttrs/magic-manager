@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ToggleGroup } from 'radix-ui';
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { cardEarmarksQuery, decksQuery, unwrap } from '../app/queries';
 import { cardEarmarkRemove, cardEarmarkSave, type CardEarmarkIn, type CardEarmarkOut } from '../core/api';
 import { findEarmark, REASON_LABEL, type EarmarkReason } from '../core/cardEarmarks';
@@ -85,7 +85,7 @@ export function EarmarkSection({ card }: { card: GuideCard }) {
             </label>
           )}
           {mark.scryfall_id && !prefersHere && <p className="text-xs text-ink-muted">Prefers another printing.</p>}
-          {prefersHere && card.prices?.foil != null && card.prices?.nonfoil != null && (
+          {prefersHere && card.finishes?.includes('foil') && card.finishes.includes('nonfoil') && (
             <label className="inline-flex cursor-pointer items-center gap-1.5">
               <input type="checkbox" checked={mark.finish === 'foil'} disabled={busy} onChange={(e) => change({ finish: e.target.checked ? 'foil' : 'nonfoil' })} className="accent-[var(--theme-accent)]" />
               Foil
@@ -121,6 +121,15 @@ function DeckPick({ value, disabled, onChange }: { value: string | null; disable
 function NoteField({ value, disabled, onSave }: { value: string; disabled: boolean; onSave: (v: string) => void }) {
   const [text, setText] = useState(value);
   const commit = () => text.trim() !== value && onSave(text.trim());
+  // Closing the inspector (Escape) unmounts the field without a blur: save what was typed then.
+  const latest = useRef({ text, value, onSave });
+  useEffect(() => {
+    latest.current = { text, value, onSave };
+  });
+  useEffect(() => () => {
+    const l = latest.current;
+    if (l.text.trim() !== l.value) l.onSave(l.text.trim());
+  }, []);
   return (
     <label className="flex flex-col gap-1 text-ink-muted">
       Note

@@ -91,6 +91,26 @@ def store_name_from_url(url: str) -> str | None:
     return host[4:] if host.startswith("www.") else host
 
 
+_PRINTING_SQL = ("SELECT scryfall_id, name, flavor_name, collector_number, finishes, rarity, "
+                 "released_at FROM cards WHERE set_code = ? AND lower(collector_number) = lower(?)")
+
+
+def printing_row(set_code: str, collector_number: str):
+    """The local ``cards`` row for SET + CN, filled once from Scryfall
+    ``/cards/collection`` (upserted) on a miss; None when it doesn't exist.
+    Shared by :func:`resolve_single` and ``card_earmarks.printing_ref``."""
+    args = (set_code.lower(), str(collector_number).strip())
+    with db.connect() as conn:
+        row = conn.execute(_PRINTING_SQL, args).fetchone()
+        if row is None:
+            found, _ = scryfall.collection([{"set": args[0], "collector_number": args[1]}])
+            if found:
+                sets.upsert_lookup_cards(conn, [found[0]])
+                conn.commit()
+            row = conn.execute(_PRINTING_SQL, args).fetchone()
+    return row
+
+
 def resolve_single(set_code: str, collector_number: str, finish: str = "nonfoil",
                    *, name: str | None = None) -> dict:
     """Validate a proposed single-card printing → canonical identity dict.
@@ -103,16 +123,7 @@ def resolve_single(set_code: str, collector_number: str, finish: str = "nonfoil"
     ``/cards/collection`` fill (upserted) on a miss. Raises ``LookupError``."""
     set_code = set_code.lower()
     cn = str(collector_number).strip()
-    sql = ("SELECT scryfall_id, name, flavor_name, collector_number, finishes, rarity, "
-           "released_at FROM cards WHERE set_code = ? AND lower(collector_number) = lower(?)")
-    with db.connect() as conn:
-        row = conn.execute(sql, (set_code, cn)).fetchone()
-        if row is None:
-            found, _ = scryfall.collection([{"set": set_code, "collector_number": cn}])
-            if found:
-                sets.upsert_lookup_cards(conn, [found[0]])
-                conn.commit()
-            row = conn.execute(sql, (set_code, cn)).fetchone()
+    row = printing_row(set_code, cn)
     tag = f"{set_code.upper()} #{cn}"
     if finish not in ("nonfoil", "foil"):
         raise LookupError("single earmarks track nonfoil or foil")

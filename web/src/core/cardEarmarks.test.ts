@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CardEarmarkOut, DeckEarmarkOut, EarmarkEntryOut, PrintingOut } from './api';
-import { earmarkDecks, earmarkLine, earmarkSections, filterEarmarks, findEarmark, hiddenSummary } from './cardEarmarks';
+import { earmarkDecks, earmarkLine, earmarkSections, reasonsText, filterEarmarks, findEarmark, hiddenSummary } from './cardEarmarks';
 
 const mark = (name: string, o: Partial<CardEarmarkOut> = {}): CardEarmarkOut => ({
   oracle_id: `o-${name}`, name, scryfall_id: null, finish: null, reason: null, deck_slug: null, deck_name: null, note: null,
@@ -46,12 +46,11 @@ describe('card earmarks', () => {
   });
 
   it('summarises why cards are hidden from a deck, most common reason first', () => {
-    const h = (reasons: string[]): DeckEarmarkOut => ({ ...entry('x'), in_deck: false, reasons });
+    type Code = DeckEarmarkOut['reasons'][number]['code'];
+    const h = (...codes: Code[]): DeckEarmarkOut => ({ ...entry('x'), in_deck: false, reasons: codes.map((code) => ({ code, message: code })) });
     expect(hiddenSummary([])).toBe('');
-    expect(hiddenSummary([
-      h(['Banned in Commander']),
-      h(['Outside the commander’s colours (white, black)']),
-      h(['Outside the commander’s colours (white, black)']),
-    ])).toBe('3 hidden · 2 outside the commander’s colours · 1 banned in Commander');
+    expect(hiddenSummary([h('banned'), h('colour_identity'), h('colour_identity', 'not_legal')]))
+      .toBe('3 hidden · 2 outside the commander’s colours · 1 banned · 1 not legal in this format');
+    expect(reasonsText(h('banned', 'not_legal'))).toBe('banned · not_legal');
   });
 });

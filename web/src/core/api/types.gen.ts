@@ -271,6 +271,22 @@ export type ArtTagsOut = {
 };
 
 /**
+ * BlockerOut
+ */
+export type BlockerOut = {
+    /**
+     * Code
+     */
+    code: 'not_in_catalog' | 'no_legality' | 'banned' | 'not_legal' | 'colour_identity';
+    /**
+     * Message
+     *
+     * Plain words, e.g. 'Banned in Commander'.
+     */
+    message: string;
+};
+
+/**
  * BookmarkletOut
  */
 export type BookmarkletOut = {
@@ -442,6 +458,8 @@ export type CardCombosOut = {
 
 /**
  * CardEarmarkIn
+ *
+ * Earmark a card, or REPLACE its earmark's details — a field left out is cleared.
  */
 export type CardEarmarkIn = {
     /**
@@ -2344,9 +2362,9 @@ export type DeckEarmarkOut = {
     /**
      * Reasons
      *
-     * Why it can't go in this deck, plain words ([] = it can).
+     * Why it can't go in this deck ([] = it can).
      */
-    reasons: Array<string>;
+    reasons: Array<BlockerOut>;
 };
 
 /**
@@ -2375,6 +2393,12 @@ export type DeckEarmarksOut = {
      * The commander's colour identity (None = no commander yet, or not a commander format).
      */
     commander_colors: Array<string> | null;
+    /**
+     * Rule
+     *
+     * The filter in words, e.g. 'Legal in Commander · within white, black'.
+     */
+    rule: string;
     /**
      * For Deck
      *

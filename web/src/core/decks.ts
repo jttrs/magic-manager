@@ -211,6 +211,7 @@ export function fromDeckCard(c: DeckCardOut, recipe = false): GuideCard {
     lines: { plain: `${c.count} ${p.name}`, manapool: '', tcgplayer: '' },
     note: recipe ? (c.free >= c.count ? `${fmtInt(c.free)} free` : c.free ? `${fmtInt(c.free)} of ${fmtInt(c.count)} free` : 'None free') : c.free ? `${c.free} free to use` : null,
     typeLine: c.type_line,
+    finishes: p.finishes,
     prices: { nonfoil: p.finishes.includes('nonfoil') ? p.price_usd : null, foil: p.finishes.includes('foil') ? p.price_usd_foil : null },
   };
 }

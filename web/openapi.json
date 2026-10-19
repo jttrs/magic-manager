@@ -4468,6 +4468,32 @@
         ],
         "title": "ArtTagsOut"
       },
+      "BlockerOut": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "not_in_catalog",
+              "no_legality",
+              "banned",
+              "not_legal",
+              "colour_identity"
+            ],
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "Plain words, e.g. 'Banned in Commander'."
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "BlockerOut"
+      },
       "BookmarkletOut": {
         "properties": {
           "href": {
@@ -4811,7 +4837,8 @@
         "required": [
           "card"
         ],
-        "title": "CardEarmarkIn"
+        "title": "CardEarmarkIn",
+        "description": "Earmark a card, or REPLACE its earmark's details \u2014 a field left out is cleared."
       },
       "CardEarmarkOut": {
         "properties": {
@@ -8107,11 +8134,11 @@
           },
           "reasons": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/BlockerOut"
             },
             "type": "array",
             "title": "Reasons",
-            "description": "Why it can't go in this deck, plain words ([] = it can)."
+            "description": "Why it can't go in this deck ([] = it can)."
           }
         },
         "type": "object",
@@ -8170,6 +8197,11 @@
             "title": "Commander Colors",
             "description": "The commander's colour identity (None = no commander yet, or not a commander format)."
           },
+          "rule": {
+            "type": "string",
+            "title": "Rule",
+            "description": "The filter in words, e.g. 'Legal in Commander \u00b7 within white, black'."
+          },
           "for_deck": {
             "items": {
               "$ref": "#/components/schemas/DeckEarmarkOut"
@@ -8198,6 +8230,7 @@
         "required": [
           "format",
           "commander_colors",
+          "rule",
           "for_deck",
           "legal",
           "hidden"

@@ -406,6 +406,22 @@ def save(slug: str, cards: list[DraftCard], *, expected_version_id: int,
 
 # ---------- editor: legality + bracket floor ----------
 
+def draft_rows(slug: str, cards: list[DraftCard]) -> tuple[str, list[dict]]:
+    """An (unsaved) decklist's format and its legality-shaped rows (zero counts
+    dropped). Format = the deck's, else Commander when the draft has a commander
+    (imports record no format; a commander makes it Commander-shaped), else ''.
+    Shared by :func:`check` and the Earmarked tab (``card_earmarks.for_deck``).
+    Raises ``LookupError`` for an unknown deck."""
+    live = [c for c in cards if c.count > 0]
+    with db.connect() as conn:
+        fmt = (_deck(conn, slug)["format"] or "").lower()
+        rows = decks.materialize_rows_for_checks(
+            conn, [(c.scryfall_id, c.board, c.finish, c.count) for c in live])
+    if not fmt and any(c.board == "commander" for c in live):
+        fmt = "commander"
+    return fmt, rows
+
+
 def check(slug: str, cards: list[DraftCard], *, combos: bool = False) -> dict:
     """Check an (unsaved) decklist against its deck's format — the same engines
     :func:`decks.finalize` stores on a version, nothing written. Legality reads
@@ -417,13 +433,7 @@ def check(slug: str, cards: list[DraftCard], *, combos: bool = False) -> dict:
     else not checked at all (``format`` None, one ``no_format`` note)."""
     from . import brackets, legality
 
-    live = [c for c in cards if c.count > 0]
-    with db.connect() as conn:
-        fmt = (_deck(conn, slug)["format"] or "").lower()
-        rows = decks.materialize_rows_for_checks(
-            conn, [(c.scryfall_id, c.board, c.finish, c.count) for c in live])
-    if not fmt and any(c.board == "commander" for c in live):
-        fmt = "commander"           # imports record no format; a commander makes it Commander-shaped
+    fmt, rows = draft_rows(slug, cards)
     if not fmt:
         report = legality.LegalityReport(
             format="", legal=True, checked_count=len(legality._non_token_cards(rows)),

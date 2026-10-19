@@ -74,24 +74,47 @@ def test_for_deck_filters_on_format_and_commander_colours(cards):
     assert (r["format"], r["commander_colors"]) == ("commander", ["W", "B"])
     assert [e["earmark"]["name"] for e in r["for_deck"]] == ["Angel"]
     assert [(e["earmark"]["name"], e["in_deck"]) for e in r["legal"]] == [("Sol", True)]
-    hidden = {e["earmark"]["name"]: e["reasons"] for e in r["hidden"]}
-    assert hidden == {"Bolt": ["Outside the commander’s colours (white, black)"], "Bad Card": ["Banned in Commander"]}
+    hidden = {e["earmark"]["name"]: [b["code"] for b in e["reasons"]] for e in r["hidden"]}
+    assert hidden == {"Bolt": ["colour_identity"], "Bad Card": ["banned"]}
+    assert r["rule"] == "Legal in Commander · within white, black"
+    assert r["hidden"][0]["reasons"][0]["message"] in {"Outside the commander’s colours (white, black)", "Banned in Commander"}
+
+    # A card pointed at this deck stays listed there, with its blockers attached.
+    ce.save(BOLT, reason="deck", deck="squall")
+    r = ce.for_deck("squall", draft)
+    (pinned,) = [e for e in r["for_deck"] if e["earmark"]["name"] == "Bolt"]
+    assert [b["code"] for b in pinned["reasons"]] == ["colour_identity"]
+    assert "Bolt" not in {e["earmark"]["name"] for e in r["hidden"]}
 
     # No commander yet → colours aren't filtered; a deck with no format and no commander isn't filtered at all.
-    assert {e["earmark"]["name"] for e in ce.for_deck("squall", [])["hidden"]} == {"Bad Card"}
+    open_ = ce.for_deck("squall", [])
+    assert {e["earmark"]["name"] for e in open_["hidden"]} == {"Bad Card"}
+    assert open_["rule"] == "Legal in Commander · no commander yet, so colours aren’t checked"
     free = ce.for_deck("other", [])
-    assert free["format"] is None and not free["hidden"]
+    assert free["format"] is None and not free["hidden"] and free["rule"] == "No format set, so nothing is filtered"
     with pytest.raises(LookupError):
         ce.for_deck("nope", [])
 
 
+def test_partner_commanders_union_their_colours(cards, seed_cards, make_card):
+    seed_cards([make_card(id="00000000-0000-0000-0000-000000000009", oracle_id=_oid(9), name="Partner",
+                          collector_number="99", color_identity=["R"], type_line="Legendary Creature — Elf",
+                          legalities={"commander": "legal"})])
+    ce.save(BOLT)
+    draft = [DraftCard(LEADER, "commander", "nonfoil", 1), DraftCard("00000000-0000-0000-0000-000000000009", "commander", "nonfoil", 1)]
+    r = ce.for_deck("squall", draft)
+    assert r["commander_colors"] == ["W", "B", "R"]
+    assert [e["earmark"]["name"] for e in r["legal"]] == ["Bolt"]
+
+
 def test_blockers_rule():
+    codes = lambda *a: [b["code"] for b in ce.blockers(*a)]
     f = {"ci": ["R"], "legalities": {"modern": "not_legal", "commander": "restricted"}}
-    assert ce.blockers("modern", None, f) == ["Not legal in Modern"]
-    assert ce.blockers("commander", {"R", "G"}, f) == []
-    assert ce.blockers("cube", None, f) == []                     # a format Scryfall doesn't rule on
-    assert ce.blockers("commander", set(), {"ci": [], "legalities": None}) == ["No legality data — sync its set"]
-    assert ce.blockers(None, None, None)[0].startswith("Not in your card catalog")
+    assert ce.blockers("modern", None, f) == [{"code": "not_legal", "message": "Not legal in Modern"}]
+    assert codes("commander", {"R", "G"}, f) == []
+    assert codes("cube", None, f) == []                           # a format Scryfall doesn't rule on
+    assert codes("commander", set(), {"ci": [], "legalities": None}) == ["no_legality"]
+    assert codes(None, None, None) == ["not_in_catalog"]
 
 
 def test_earmarks_are_in_undo(cards):
@@ -152,6 +175,10 @@ def test_cli_add_ls_rm(cards):
     from magic_manager.cli import app
 
     run = CliRunner().invoke
+    r = run(app, ["earmark", "card", "add", "Bad Card", "--set", "tst", "--cn", "4"])      # no finish preference
+    assert r.exit_code == 0, r.output
+    assert run(app, ["earmark", "card", "add", "Sol", "--set", "tst", "--cn", "5"]).exit_code == 0   # nonfoil-only printing
+    assert run(app, ["earmark", "card", "add", "Sol", "--foil"]).exit_code == 2                     # a finish needs a printing
     r = run(app, ["earmark", "card", "add", "Sol", "--set", "alt", "--cn", "9", "--foil", "--reason", "collect", "--note", "shiny"])
     assert r.exit_code == 0 and "Earmarked Sol (collect)" in r.output
     assert run(app, ["earmark", "card", "add", "Sol", "--set", "alt"]).exit_code == 2
@@ -159,7 +186,55 @@ def test_cli_add_ls_rm(cards):
     out = run(app, ["earmark", "card", "ls"]).output
     assert "Sol" in out and "ALT #9" in out and "shiny" in out
     import json
-    (e,) = json.loads(run(app, ["earmark", "card", "ls", "--json"]).output)
-    assert e["earmark"]["finish"] == "foil"
+    rows = json.loads(run(app, ["earmark", "card", "ls", "--json"]).output)
+    assert {e["earmark"]["name"]: e["earmark"]["finish"] for e in rows} == {"Sol": "foil", "Bad Card": None}
     assert "Removed." in run(app, ["earmark", "card", "rm", "Sol"]).output
+    run(app, ["earmark", "card", "rm", "Bad Card"])
     assert "(no earmarked cards)" in run(app, ["earmark", "card", "ls"]).output
+
+
+def _at_v36(path):
+    import sqlite3
+    con = sqlite3.connect(path)
+    con.execute("DROP TABLE IF EXISTS card_earmarks")
+    con.execute("UPDATE schema_version SET version = 36")
+    con.commit()
+    con.close()
+
+
+def test_v37_migration_single_and_split(tmp_path, monkeypatch):
+    import shutil
+    import sqlite3
+
+    from magic_manager import layout
+
+    fresh = tmp_path / "fresh.db"
+    with db.connect(fresh):
+        pass
+    single = tmp_path / "single" / "magic_manager.db"
+    single.parent.mkdir()
+    shutil.copy(fresh, single)
+    _at_v36(single)
+    with db.connect(single) as conn:                       # the single layout runs V37 on connect
+        assert conn.execute("SELECT version FROM schema_version").fetchone()[0] == db.CURRENT_VERSION
+        assert conn.execute("SELECT COUNT(*) FROM card_earmarks").fetchone()[0] == 0
+
+    data = tmp_path / "data"
+    (data / "users").mkdir(parents=True)
+    catalog, user = data / "catalog.db", data / "users" / "owner.db"
+    for dst, keep in ((catalog, layout.CATALOG_TABLES), (user, set(layout.USER_TABLES) - {"card_earmarks"})):
+        shutil.copy(fresh, dst)
+        con = sqlite3.connect(dst)
+        for (t,) in con.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall():
+            if t not in keep and t not in layout.INFRA_TABLES:
+                con.execute(f"DROP TABLE {t}")
+        con.commit()
+        con.close()
+        _at_v36(dst)
+    assert db.MIGRATION_TARGETS[37] == "user"
+    assert db.migrate_split_file(catalog, "catalog") == []           # nothing for the catalog
+    assert db.migrate_split_file(user, "user") == [37]
+    with sqlite3.connect(user) as u:
+        assert u.execute("SELECT COUNT(*) FROM card_earmarks").fetchone()[0] == 0
+    with sqlite3.connect(catalog) as c:
+        assert not c.execute("SELECT 1 FROM sqlite_master WHERE name = 'card_earmarks'").fetchone()
