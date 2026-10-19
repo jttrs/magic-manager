@@ -77,6 +77,8 @@ _EARMARK_TABLES = ("earmarked_products", "earmark_links", "earmark_targets")
 _PRICE_HISTORY_TABLES = ("earmark_prices",)
 # V34+ store orders read from the user's own order history, with the price paid.
 _PURCHASE_TABLES = ("purchases", "purchase_lines")
+# V37 earmarked cards — typed in by the user.
+_CARD_EARMARK_TABLES = ("card_earmarks",)
 _INGEST_LOG_CARRIED_COLS = (
     "at", "label", "source_path", "archived_path", "mode",
     "rows_added", "rows_updated", "rows_zeroed", "status", "error",
@@ -351,6 +353,8 @@ def _precious_tables(pre_version: int) -> list[str]:
         precious += list(_PRICE_HISTORY_TABLES)
     if pre_version >= 34:
         precious += list(_PURCHASE_TABLES)
+    if pre_version >= 37:
+        precious += list(_CARD_EARMARK_TABLES)
     return precious
 
 

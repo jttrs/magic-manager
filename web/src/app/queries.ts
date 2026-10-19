@@ -3,7 +3,7 @@ import { keepPreviousData, queryOptions } from '@tanstack/react-query';
 import type { DraftCardIn } from '../core/api';
 import { apiErrorFrom } from '../core/apiError';
 import type { RankingRequest } from '../core/rankings';
-import { analyticsConsent, analyticsSummary, analyticsCatalog, dealsTabs, dealsWatched, marketProductCost, marketSecretLair, undoInfo, cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, cardFloors, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs, historyList, historyEvent, historyRevertPlan, exploreRanking, exploreRankingOptions, cardCombos, deckCombos, draftCombos, artTags, artSwaps, jumpstartView, recipeList, recipeDetail, surfOptions, companionInfo, scrapersHealth, purchaseStores, purchaseList, purchaseReview } from '../core/api';
+import { analyticsConsent, analyticsSummary, analyticsCatalog, dealsTabs, dealsWatched, marketProductCost, marketSecretLair, undoInfo, cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, cardFloors, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs, historyList, historyEvent, historyRevertPlan, exploreRanking, exploreRankingOptions, cardCombos, deckCombos, draftCombos, artTags, artSwaps, jumpstartView, recipeList, recipeDetail, surfOptions, companionInfo, scrapersHealth, purchaseStores, purchaseList, purchaseReview, cardEarmarksList, deckEarmarks } from '../core/api';
 
 export function unwrap<T>(r: { data?: T; error?: unknown; response?: Response }): T {
   if (r.error !== undefined || r.data === undefined) throw apiErrorFrom(r.error, r.response);
@@ -404,4 +404,21 @@ export const scraperHealthQuery = () =>
     queryKey: ['scrapers', 'health'],
     queryFn: async ({ signal }) => unwrap(await scrapersHealth({ signal })),
     staleTime: 5 * 60_000,
+  });
+
+/** Every earmarked card (small; the inspector, Explore and marks all share it). */
+export const cardEarmarksQuery = () =>
+  queryOptions({
+    queryKey: ['cardEarmarks'],
+    queryFn: async ({ signal }) => unwrap(await cardEarmarksList({ signal })),
+    staleTime: 60_000,
+  });
+
+/** Earmarked cards for a deck being edited, filtered on the draft's format + commander. */
+export const deckEarmarksQuery = (slug: string, cards: DraftCardIn[]) =>
+  queryOptions({
+    queryKey: ['cardEarmarks', 'deck', slug, cards],
+    queryFn: async ({ signal }) => unwrap(await deckEarmarks({ path: { slug }, body: { cards }, signal })),
+    staleTime: 60_000,
+    placeholderData: keepPreviousData,
   });

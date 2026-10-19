@@ -6,7 +6,7 @@ const ranking = fixtures.ranking;
 test('Explore opens on rankings, as a grid; Rankings is the first tab', async ({ page }) => {
   await page.goto('/explore');
   const tabs = page.getByRole('navigation', { name: 'Explore views' }).getByRole('link');
-  await expect(tabs).toHaveText(['Rankings', 'Cards', 'Surfer']);
+  await expect(tabs).toHaveText(['Rankings', 'Cards', 'Earmarked', 'Surfer']);
   await expect(tabs.first()).toHaveAttribute('aria-current', 'page');
   await expect(page.getByRole('radio', { name: 'Grid' })).toHaveAttribute('aria-checked', 'true');
   await expect(page.getByRole('table')).toHaveCount(0);

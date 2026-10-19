@@ -1,5 +1,5 @@
 import type { GuideCard } from '../core/guideCard';
-import { rarityLetter } from '../core/guideCard';
+import { EARMARKED_TAG, rarityLetter } from '../core/guideCard';
 import { fmtPct, fmtUsd } from '../core/format';
 
 const IMG_W = 488;
@@ -128,7 +128,7 @@ export function Tags({ tags }: { tags: string[] }) {
   return (
     <span className="block min-w-0 truncate text-2xs voice-semi uppercase tracking-[0.04em] text-ink-muted" title={tags.join(' · ')}>
       {tags.map((t, i) => (
-        <span key={t} className={t === 'Chase' ? 'font-bold text-accent-ink' : ''}>{i ? ' · ' : ''}{t}</span>
+        <span key={t} className={t === 'Chase' || t === EARMARKED_TAG ? 'font-bold text-accent-ink' : ''}>{i ? ' · ' : ''}{t}</span>
       ))}
     </span>
   );

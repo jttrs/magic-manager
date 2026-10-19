@@ -82,7 +82,8 @@ def test_v36_drops_only_card_fks_and_keeps_everything_else(v35):
         assert after["fks"][t] == [f for f in before["fks"][t] if f[0] != "cards"]
         stripped = re.sub(r",\s*FOREIGN KEY \(scryfall_id\) REFERENCES cards\(scryfall_id\)", "", before["sql"][t])
         assert after["sql"][t] == stripped                    # columns, CHECKs, comments intact
-    assert [i for i in after["indexes"] if i[1] != "catalog_settings"] == before["indexes"]
+    # catalog_settings is V36's own; tables added by later migrations aren't V36's concern.
+    assert [i for i in after["indexes"] if i[1] not in {"catalog_settings", "card_earmarks"}] == before["indexes"]
     assert after["seq"]["inventory_events"] == before["seq"]["inventory_events"] == 3
     assert after["sql"]["list_rows"] == before["sql"]["list_rows"]  # legacy left alone
 
@@ -212,8 +213,8 @@ def test_target_check_catches_mistakes():
         "CREATE TABLE IF NOT EXISTS settings_extra (k TEXT);",
         "UPDATE inventory SET notes = (SELECT name FROM cards LIMIT 1);",
     ]
-    v = db.SPLIT_BASE_VERSION
-    problems = _check_targets(fake, {v + 1: "user", v + 3: "user"})
+    v = db.CURRENT_VERSION
+    problems = _check_targets(fake, {**db.MIGRATION_TARGETS, v + 1: "user", v + 3: "user"})
     assert problems == [
         f"V{v + 1} (user) touches catalog table cards",
         f"V{v + 2} has no target (catalog | user) in db.MIGRATION_TARGETS",
@@ -224,13 +225,13 @@ def test_target_check_catches_mistakes():
 
 
 def test_target_check_reads_python_hooks(monkeypatch):
-    v = db.SPLIT_BASE_VERSION + 1
+    v = db.CURRENT_VERSION + 1
 
     def hook(conn):
         conn.execute("UPDATE inventory SET notes = NULL")
 
     monkeypatch.setitem(db._PYTHON_HOOKS, v, hook)
-    assert _check_targets(db.MIGRATIONS + ["ALTER TABLE cards ADD COLUMN x TEXT;"], {v: "catalog"}) == [
+    assert _check_targets(db.MIGRATIONS + ["ALTER TABLE cards ADD COLUMN x TEXT;"], {**db.MIGRATION_TARGETS, v: "catalog"}) == [
         f"V{v} (catalog) touches user table inventory"]
 
 

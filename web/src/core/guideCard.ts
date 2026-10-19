@@ -11,6 +11,8 @@ export type GuideCard = {
   key: string;
   /** The exact printing shown (inspector fetches its holdings); null when unknown. */
   scryfallId?: string | null;
+  /** That printing's own finishes, when known (the inspector's preferred-finish choice). */
+  finishes?: readonly string[];
   name: string;
   image: string | null;
   href: string | null;
@@ -98,6 +100,9 @@ const TREATMENT_LABEL: Record<string, string> = {
 export const treatmentLabels = (codes: string): string[] =>
   codes ? codes.split('|').map((c) => TREATMENT_LABEL[c] ?? c) : [];
 
+/** The tag a Collection printing of an earmarked card carries (shown like Chase). */
+export const EARMARKED_TAG = 'Earmarked';
+
 /** Collection mapper. `missing` is decided by the caller's missing basis. */
 export function fromCollection(c: CollectionCardOut, missing: boolean, fnLabels: Readonly<Record<string, string>> = {}): GuideCard {
   return {
@@ -120,11 +125,12 @@ export function fromCollection(c: CollectionCardOut, missing: boolean, fnLabels:
     released: c.released_at,
     owned: c.owned as GuideCard['owned'],
     missing,
-    tags: [...(c.is_chase ? ['Chase'] : []), ...treatmentLabels(c.treatment)],
+    tags: [...(c.earmarked ? [EARMARKED_TAG] : []), ...(c.is_chase ? ['Chase'] : []), ...treatmentLabels(c.treatment)],
     lines: { plain: `1 ${c.name}`, manapool: '', tcgplayer: '' },
     functions: (c.functions ?? []).map((k) => fnLabels[k] ?? k),
     scene: c.scene ?? null,
     typeLine: c.type_line,
+    finishes: c.finishes,
     prices: { nonfoil: c.finishes.includes('nonfoil') ? c.price_usd : null, foil: c.finishes.includes('foil') ? c.price_usd_foil : null },
   };
 }
@@ -154,6 +160,7 @@ export function fromPrinting(p: PrintingOut): GuideCard {
     tags: treatmentLabels(p.treatment),
     lines: { plain: `1 ${p.name}`, manapool: '', tcgplayer: '' },
     typeLine: p.type_line ?? null,
+    finishes: p.finishes,
     prices: { nonfoil: p.finishes.includes('nonfoil') ? p.price_usd : null, foil: p.finishes.includes('foil') ? p.price_usd_foil : null },
   };
 }

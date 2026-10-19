@@ -92,6 +92,7 @@ DETAIL_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("watched products", ("earmarked_products", "earmark_links", "earmark_targets")),
     ("price history", ("earmark_prices",)),
     ("store orders", ("purchases", "purchase_lines")),
+    ("earmarked cards", ("card_earmarks",)),
     ("set targets", ("set_targets",)),
     ("settings", ("settings",)),
 )

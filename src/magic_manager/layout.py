@@ -32,7 +32,7 @@ USER_TABLES: tuple[str, ...] = (
     "ingest_events", "inventory", "inventory_events",
     "decks", "deck_cards", "deck_versions", "deck_assignments",
     "wishlist_entries", "earmarked_products", "earmark_links", "earmark_prices", "earmark_targets",
-    "purchases", "purchase_lines",
+    "purchases", "purchase_lines", "card_earmarks",
 )
 
 # Shared, rebuildable caches — the same for every user.

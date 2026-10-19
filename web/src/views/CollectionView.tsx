@@ -42,7 +42,7 @@ const LAST_FAMILIES = 'mm.collection.families';
  *  Show filter except the set families you chose. How cards are arranged (sort,
  *  view type) and what "missing" means (a Settings preference) are not filters,
  *  so they stay put. */
-const RESET: Partial<CollectionSearch> = { show: [...SHOW], exclude: [], q: '', fn: [], src: [] };
+const RESET: Partial<CollectionSearch> = { show: [...SHOW], exclude: [], q: '', fn: [], src: [], em: false };
 
 export function CollectionView() {
   const search = route.useSearch();
@@ -55,7 +55,7 @@ export function CollectionView() {
   const rules = useMemo(() => activeRules(decodeSort(search.sort, COLLECTION_SORT), hasScenes), [search.sort, hasScenes]);
   const missingMeans = useMissingMeans();
   const gaps = missingMeans === 'card';
-  const filtered = search.exclude.length > 0 || search.show.length < 2 || Boolean(search.q) || search.fn.length > 0 || search.src.length > 0;
+  const filtered = search.exclude.length > 0 || search.show.length < 2 || Boolean(search.q) || search.fn.length > 0 || search.src.length > 0 || search.em;
   const settings = useMemo(() => ({
     id: 'collection',
     title: 'Collection',
@@ -225,6 +225,14 @@ export function CollectionView() {
             options={fnOptions}
           />
         )}
+        <Segmented
+          label="Earmarked"
+          showLabel
+          labelExtra={<InfoTip label="What is earmarked?">Cards you earmarked to collect or as a deck idea — any printing of the card. Earmark one from its inspector.</InfoTip>}
+          value={search.em ? 'only' : 'all'}
+          onChange={(v) => set({ em: v === 'only' })}
+          options={[{ value: 'all', label: 'All cards' }, { value: 'only', label: 'Only earmarked' }]}
+        />
         {filtered && (
           <button type="button" onClick={() => set(RESET)} className="self-start cursor-pointer text-sm text-on-chrome-muted underline hover:text-on-chrome">Reset filters</button>
         )}

@@ -86,6 +86,9 @@ app.add_typer(mtgjson_app, name="mtgjson")
 app.add_typer(db_app, name="db")
 app.add_typer(audit_app, name="audit")
 app.add_typer(earmark_app, name="earmark")
+earmark_card_app = typer.Typer(no_args_is_help=True,
+                               help="Earmarked cards: singles you're interested in (to collect, or a deck idea).")
+earmark_app.add_typer(earmark_card_app, name="card")
 app.add_typer(edhrec_app, name="edhrec")
 app.add_typer(collection_app, name="collection")
 
@@ -5221,6 +5224,75 @@ def earmark_add_cmd(
     px = f" @ {price:.2f} {currency}" if price is not None else ""
     typer.echo(f"{result['product_action']} product / {result['link_action']} link: "
                f"{canonical_name} ({identity['set_code']}){px}")
+
+
+@earmark_card_app.command("add")
+def earmark_card_add_cmd(
+    card: str = typer.Argument(..., help="Card name, or any printing's scryfall_id."),
+    set_code: str = typer.Option(None, "--set", help="Preferred printing's set code (with --cn)."),
+    cn: str = typer.Option(None, "--cn", help="Preferred printing's collector number (with --set)."),
+    foil: bool = typer.Option(False, "--foil", help="Prefer the foil finish (needs --set/--cn)."),
+    reason: str = typer.Option(None, "--reason", help="collect | deck"),
+    deck: str = typer.Option(None, "--deck", help="Slug of the deck it's earmarked for."),
+    note: str = typer.Option(None, "--note", help="A short note."),
+    json_out: bool = typer.Option(False, "--json", help="Emit as JSON."),
+):
+    """Earmark a card, or replace its earmark's details (re-adding sets every field)."""
+    from . import card_earmarks
+
+    try:
+        sid = None
+        if bool(set_code) != bool(cn):
+            raise ValueError("a preferred printing needs both --set and --cn")
+        if set_code:
+            sid = card_earmarks.printing_ref(set_code, cn)
+        e = card_earmarks.save(card, printing=sid, finish="foil" if foil else None,
+                               reason=reason, deck=deck, note=note)
+    except (LookupError, ValueError) as err:
+        typer.echo(f"error: {err}", err=True)
+        raise typer.Exit(2)
+    if json_out:
+        json.dump(e.to_json(), sys.stdout, indent=2)
+        sys.stdout.write("\n")
+        return
+    typer.echo(f"Earmarked {e.name}" + (f" ({e.reason})" if e.reason else "") + (f" for {e.deck_slug}" if e.deck_slug else ""))
+
+
+@earmark_card_app.command("ls")
+def earmark_card_ls_cmd(
+    reason: str = typer.Option(None, "--reason", help="Only collect | deck."),
+    deck: str = typer.Option(None, "--deck", help="Only the cards earmarked for this deck slug."),
+    json_out: bool = typer.Option(False, "--json", help="Emit as JSON."),
+):
+    """List earmarked cards, newest first, with copies owned / free."""
+    from . import card_earmarks
+
+    rows = card_earmarks.entries(card_earmarks.listing(reason=reason, deck=deck))
+    if json_out:
+        json.dump(rows, sys.stdout, indent=2, default=str)
+        sys.stdout.write("\n")
+        return
+    if not rows:
+        typer.echo("(no earmarked cards)")
+        return
+    for r in rows:
+        e, p = r["earmark"], r["printing"]
+        where = f"{p['set_code'].upper()} #{p['collector_number']}" if p else "—"
+        extra = " · ".join(x for x in (e["reason"], e["deck_slug"] and f"deck {e['deck_slug']}", e["note"]) if x)
+        typer.echo(f"{e['name']:<36} {where:<12} own {r['owned']} (free {r['free']})" + (f"  {extra}" if extra else ""))
+
+
+@earmark_card_app.command("rm")
+def earmark_card_rm_cmd(card: str = typer.Argument(..., help="Card name, or any printing's scryfall_id.")):
+    """Remove a card's earmark."""
+    from . import card_earmarks
+
+    try:
+        oid = card_earmarks.resolve_card(card)["oracle_id"]
+    except LookupError as err:
+        typer.echo(f"error: {err}", err=True)
+        raise typer.Exit(2)
+    typer.echo("Removed." if card_earmarks.remove(oid) else "It wasn't earmarked.")
 
 
 @earmark_app.command("list")

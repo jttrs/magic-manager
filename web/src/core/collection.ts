@@ -16,6 +16,8 @@ export type CollectionFilters = {
   /** Acquisition sources to keep (OR): `kind:<deck|pool|singles|unknown>` or a
    *  SourceOut key. Only owned printings have sources, so any value hides missing. */
   src?: readonly string[];
+  /** Only printings of cards you earmarked. */
+  em?: boolean;
 };
 
 /** Kind of each source key, from the payload's source catalog. */
@@ -121,6 +123,7 @@ export function filterCollection(cards: readonly CollectionCardOut[], f: Collect
   const fn = new Set(f.fn ?? []);
   const src = new Set(f.src ?? []);
   return cards.filter((c) => {
+    if (f.em && !c.earmarked) return false;
     if (src.size && !sourceMatch(c, src, kinds)) return false;
     if (q && !c.name.toLowerCase().includes(q)) return false;
     if (fn.size && !fnKeys(c).some((k) => fn.has(k))) return false;

@@ -2791,6 +2791,217 @@
         }
       }
     },
+    "/api/earmarks/cards": {
+      "get": {
+        "tags": [
+          "earmarks"
+        ],
+        "summary": "Card Earmarks List",
+        "operationId": "card_earmarks_list",
+        "parameters": [
+          {
+            "name": "reason",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "collect",
+                    "deck"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reason"
+            }
+          },
+          {
+            "name": "deck",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Deck"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EarmarkEntryOut"
+                  },
+                  "title": "Response Card Earmarks List"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "earmarks"
+        ],
+        "summary": "Card Earmark Save",
+        "operationId": "card_earmark_save",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CardEarmarkIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CardEarmarkOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/earmarks/cards/{oracle_id}": {
+      "delete": {
+        "tags": [
+          "earmarks"
+        ],
+        "summary": "Card Earmark Remove",
+        "operationId": "card_earmark_remove",
+        "parameters": [
+          {
+            "name": "oracle_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Oracle Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "title": "Response Card Earmark Remove"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/decks/{slug}/earmarked": {
+      "post": {
+        "tags": [
+          "earmarks"
+        ],
+        "summary": "Deck Earmarks",
+        "operationId": "deck_earmarks",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Slug"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeckEarmarksIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeckEarmarksOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/decks/{slug}/combos": {
       "get": {
         "tags": [
@@ -4257,6 +4468,32 @@
         ],
         "title": "ArtTagsOut"
       },
+      "BlockerOut": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "not_in_catalog",
+              "no_legality",
+              "banned",
+              "not_legal",
+              "colour_identity"
+            ],
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "Plain words, e.g. 'Banned in Commander'."
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "BlockerOut"
+      },
       "BookmarkletOut": {
         "properties": {
           "href": {
@@ -4516,6 +4753,202 @@
           "combos"
         ],
         "title": "CardCombosOut"
+      },
+      "CardEarmarkIn": {
+        "properties": {
+          "card": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Card",
+            "description": "Any printing's scryfall_id, or the card's name."
+          },
+          "printing": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Printing",
+            "description": "Preferred printing (scryfall_id of the same card)."
+          },
+          "finish": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "nonfoil",
+                  "foil"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finish"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "collect",
+                  "deck"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "deck": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deck",
+            "description": "Slug of the deck it's earmarked for."
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "card"
+        ],
+        "title": "CardEarmarkIn",
+        "description": "Earmark a card, or REPLACE its earmark's details \u2014 a field left out is cleared."
+      },
+      "CardEarmarkOut": {
+        "properties": {
+          "oracle_id": {
+            "type": "string",
+            "title": "Oracle Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "scryfall_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scryfall Id",
+            "description": "The preferred printing, when one was chosen."
+          },
+          "finish": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "nonfoil",
+                  "foil"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finish"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "collect",
+                  "deck"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "deck_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deck Slug",
+            "description": "The deck this card is earmarked for."
+          },
+          "deck_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deck Name"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "earmarked_at": {
+            "type": "string",
+            "title": "Earmarked At"
+          },
+          "updated_at": {
+            "type": "string",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "oracle_id",
+          "name",
+          "scryfall_id",
+          "finish",
+          "reason",
+          "deck_slug",
+          "deck_name",
+          "note",
+          "earmarked_at",
+          "updated_at"
+        ],
+        "title": "CardEarmarkOut"
       },
       "CardExploreOut": {
         "properties": {
@@ -5911,6 +6344,12 @@
             ],
             "title": "Scene",
             "description": "Key of the scene/poster this printing belongs to (see CollectionOut.scenes)."
+          },
+          "earmarked": {
+            "type": "boolean",
+            "title": "Earmarked",
+            "description": "The card (any printing) is earmarked.",
+            "default": false
           }
         },
         "type": "object",
@@ -7662,6 +8101,142 @@
         ],
         "title": "DeckDetailOut"
       },
+      "DeckEarmarkOut": {
+        "properties": {
+          "earmark": {
+            "$ref": "#/components/schemas/CardEarmarkOut"
+          },
+          "printing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PrintingOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The preferred printing, else your copy with the most free, else the first standard printing."
+          },
+          "owned": {
+            "type": "integer",
+            "title": "Owned",
+            "description": "Copies owned across every printing of the card."
+          },
+          "free": {
+            "type": "integer",
+            "title": "Free",
+            "description": "Owned copies no built deck has pledged, across printings."
+          },
+          "in_deck": {
+            "type": "boolean",
+            "title": "In Deck",
+            "description": "The card is already in the draft (any board)."
+          },
+          "reasons": {
+            "items": {
+              "$ref": "#/components/schemas/BlockerOut"
+            },
+            "type": "array",
+            "title": "Reasons",
+            "description": "Why it can't go in this deck ([] = it can)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "earmark",
+          "printing",
+          "owned",
+          "free",
+          "in_deck",
+          "reasons"
+        ],
+        "title": "DeckEarmarkOut"
+      },
+      "DeckEarmarksIn": {
+        "properties": {
+          "cards": {
+            "items": {
+              "$ref": "#/components/schemas/DraftCardIn"
+            },
+            "type": "array",
+            "title": "Cards"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cards"
+        ],
+        "title": "DeckEarmarksIn"
+      },
+      "DeckEarmarksOut": {
+        "properties": {
+          "format": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Format",
+            "description": "The format filtered on (None = the deck has no format: nothing filtered)."
+          },
+          "commander_colors": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commander Colors",
+            "description": "The commander's colour identity (None = no commander yet, or not a commander format)."
+          },
+          "rule": {
+            "type": "string",
+            "title": "Rule",
+            "description": "The filter in words, e.g. 'Legal in Commander \u00b7 within white, black'."
+          },
+          "for_deck": {
+            "items": {
+              "$ref": "#/components/schemas/DeckEarmarkOut"
+            },
+            "type": "array",
+            "title": "For Deck",
+            "description": "Earmarked for this deck \u2014 always listed."
+          },
+          "legal": {
+            "items": {
+              "$ref": "#/components/schemas/DeckEarmarkOut"
+            },
+            "type": "array",
+            "title": "Legal"
+          },
+          "hidden": {
+            "items": {
+              "$ref": "#/components/schemas/DeckEarmarkOut"
+            },
+            "type": "array",
+            "title": "Hidden",
+            "description": "Earmarks that don't fit this deck, each with its reasons."
+          }
+        },
+        "type": "object",
+        "required": [
+          "format",
+          "commander_colors",
+          "rule",
+          "for_deck",
+          "legal",
+          "hidden"
+        ],
+        "title": "DeckEarmarksOut"
+      },
       "DeckFromBrowserIn": {
         "properties": {
           "source": {
@@ -8240,6 +8815,42 @@
           "note"
         ],
         "title": "DupeOut"
+      },
+      "EarmarkEntryOut": {
+        "properties": {
+          "earmark": {
+            "$ref": "#/components/schemas/CardEarmarkOut"
+          },
+          "printing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PrintingOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The preferred printing, else your copy with the most free, else the first standard printing."
+          },
+          "owned": {
+            "type": "integer",
+            "title": "Owned",
+            "description": "Copies owned across every printing of the card."
+          },
+          "free": {
+            "type": "integer",
+            "title": "Free",
+            "description": "Owned copies no built deck has pledged, across printings."
+          }
+        },
+        "type": "object",
+        "required": [
+          "earmark",
+          "printing",
+          "owned",
+          "free"
+        ],
+        "title": "EarmarkEntryOut"
       },
       "EntryOut": {
         "properties": {
