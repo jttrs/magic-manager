@@ -11,7 +11,8 @@ export type RankingsState = Pick<CompareSearch, 'rank' | 'by' | 'color' | 'tag' 
 export type RankingRequest = { scope: RankScope; timeframe: RankTimeframe; color?: string; tag?: string; set_family?: string };
 
 /** Mode when none is chosen: a picked card wins, otherwise rankings. */
-export const exploreMode = (mode: ExploreMode | undefined, a: string | undefined): ExploreMode => mode ?? (a ? 'card' : 'rankings');
+/** The Explore tab: explicit `mode`, else a picked card, else a surfer link (`surf`), else rankings. */
+export const exploreMode = (mode: ExploreMode | undefined, a: string | undefined, surf?: string): ExploreMode => mode ?? (a ? 'card' : surf != null ? 'surf' : 'rankings');
 
 export const SCOPE_LABEL: Record<RankScope, string> = { commanders: 'Top commanders', cards: 'Top cards', salt: 'Saltiest cards' };
 export const BY_LABEL: Record<RankBy, string> = { any: 'Every commander', color: 'Colour identity', tag: 'Tag or creature type', set: 'Set family' };

@@ -38,7 +38,7 @@ const TONE = {
 
 /**
  * A section's modes (Collection: Cards · Purchase history; Explore: Rankings ·
- * Specific cards). One look for every section that has modes.
+ * Cards · Surfer). One look for every section that has modes.
  *
  * Put it in `ViewLayout`'s `subnav` slot — `<ViewLayout subnav={<SectionTabs
  * label="Explore modes" tabs={tabs} />} …>` — where it renders as the full-width

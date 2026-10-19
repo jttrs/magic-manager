@@ -11,6 +11,8 @@ describe('rankings', () => {
     expect(exploreMode(undefined, undefined)).toBe('rankings');
     expect(exploreMode(undefined, 'Sol Ring')).toBe('card');
     expect(exploreMode('rankings', 'Sol Ring')).toBe('rankings');
+    expect(exploreMode(undefined, undefined, 'art=moon')).toBe('surf');
+    expect(exploreMode('surf', 'Sol Ring')).toBe('surf');
   });
 
   it('builds one request per axis and waits for a value', () => {

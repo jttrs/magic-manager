@@ -22,17 +22,16 @@ test('surf random cards: an endless feed with filters, art tags that narrow it, 
   });
 
   await page.goto('/explore');
-  await page.getByRole('button', { name: 'Surf random cards' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Card surfer' });
-  await expect(dialog).toBeVisible();
-  await expect(page).toHaveURL(/surf=on/);
-  const feed = dialog.getByRole('feed', { name: 'Random cards' });
+  await page.getByRole('navigation', { name: 'Explore views' }).getByRole('link', { name: 'Surfer' }).click();
+  await expect(page).toHaveURL(/mode=surf/);
+  const view = page;
+  const feed = view.getByRole('feed', { name: 'Random cards' });
   const first = feed.getByRole('article', { name: 'Dragon 1' });
   await expect(first).toContainText('The flavor of Dragon 1.');
   await expect(first).toContainText('Jane Doe');
   await expect(first).toContainText('Dragons of Tarkir · DTK #161 · Rare · 2015');
   await expect(first).toContainText('You own 2 of this printing · 3 in every printing');
-  await expect(dialog.getByText('120 match')).toBeVisible();
+  await expect(view.getByText('120 match')).toBeVisible();
   expect(bodies[0]).toMatchObject({ with_total: true, filters: { art: [], flavor: 'any' } });
 
   // Endless: scrolling to the end draws more.
@@ -42,26 +41,27 @@ test('surf random cards: an endless feed with filters, art tags that narrow it, 
   // An art tag under a card narrows the feed and is shown in the rail.
   await first.getByRole('button', { name: 'moon' }).click();
   await expect(page).toHaveURL(/surf=art%3Dmoon/);
-  await expect(dialog.getByRole('button', { name: 'Remove art tag moon' })).toBeVisible();
+  await expect(view.getByRole('button', { name: 'Remove art tag moon' })).toBeVisible();
   await expect.poll(() => bodies.at(-1)?.filters.art).toEqual(['moon']);
 
-  await dialog.getByRole('radio', { name: 'Has it' }).click();
+  await view.getByRole('radio', { name: 'Has it' }).click();
   await expect.poll(() => bodies.at(-1)?.filters.flavor).toBe('has');
-  await expect(dialog.getByRole('button', { name: 'Reset filters · 2' })).toBeVisible();
+  await expect(view.getByRole('button', { name: 'Reset filters · 2' })).toBeVisible();
 
-  await page.keyboard.press('Escape');
-  await expect(dialog).toHaveCount(0);
-  await expect(page).not.toHaveURL(/surf=/);
+  await page.getByRole('link', { name: 'Rankings' }).click();
+  await expect(page.getByRole('feed', { name: 'Random cards' })).toHaveCount(0);
+  await page.getByRole('link', { name: 'Surfer' }).click();
+  await expect(page).toHaveURL(/surf=art%3Dmoon/);
 });
 
 test('surf: nothing matches offers a reset', async ({ page }) => {
   await page.route('**/api/surf/options', (r) => r.fulfill({ json: { families: [], treatments: [], types: [], rarities: [] } }));
   await page.route('**/api/surf/draw', (r) => r.fulfill({ json: { source: 'scryfall', query: 'q', cards: [], total: 0, next_offset: null, exhausted: true } }));
   await page.goto('/explore?surf=' + encodeURIComponent('ar=Nobody'));
-  const dialog = page.getByRole('dialog', { name: 'Card surfer' });
-  await expect(dialog.getByRole('heading', { name: 'No cards match' })).toBeVisible();
-  await dialog.getByRole('button', { name: 'Reset filters', exact: true }).click();
-  await expect(page).toHaveURL(/surf=on/);
+  const view = page;
+  await expect(view.getByRole('heading', { name: 'No cards match' })).toBeVisible();
+  await view.getByRole('button', { name: 'Reset filters', exact: true }).click();
+  await expect(page).not.toHaveURL(/surf=/);
 });
 
 test('surf: your cards keeps searching through empty pages before giving up', async ({ page }) => {
@@ -74,7 +74,7 @@ test('surf: your cards keeps searching through empty pages before giving up', as
     return r.fulfill({ json: { source: 'owned', query: 'q', cards: last ? [card('o1', 'Owned Dragon', { owned: 1, owned_any: 1 })] : [], total: 300, next_offset: offset + 120, exhausted: false } });
   });
   await page.goto('/explore?surf=' + encodeURIComponent('src=owned'));
-  const dialog = page.getByRole('dialog', { name: 'Card surfer' });
-  await expect(dialog.getByRole('article', { name: 'Owned Dragon' })).toBeAttached();
+  const view = page;
+  await expect(view.getByRole('article', { name: 'Owned Dragon' })).toBeAttached();
   expect(offsets.slice(0, 3)).toEqual([0, 120, 240]);
 });
