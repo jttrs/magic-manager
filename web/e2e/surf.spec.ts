@@ -78,3 +78,60 @@ test('surf: your cards keeps searching through empty pages before giving up', as
   await expect(view.getByRole('article', { name: 'Owned Dragon' })).toBeAttached();
   expect(offsets.slice(0, 3)).toEqual([0, 120, 240]);
 });
+
+/** A finished feed of `n` cards (no more pages). */
+async function feedOf(page: import('@playwright/test').Page, n: number) {
+  await page.route('**/api/surf/options', (r) => r.fulfill({ json: { families: [], treatments: [], types: [{ value: 'creature', label: 'Creature' }], rarities: [] } }));
+  await page.route('**/api/surf/draw', (r) => r.fulfill({ json: {
+    source: 'scryfall', query: 'q', cards: Array.from({ length: n }, (_, i) => card(`k${i + 1}`, `Dragon ${i + 1}`)), total: n, next_offset: null, exhausted: true,
+  } }));
+}
+
+test('surf: j and k step through the feed, which has focus when the tab opens', async ({ page }) => {
+  await feedOf(page, 3);
+  await page.goto('/explore?mode=surf');
+  const feed = page.getByRole('feed', { name: 'Random cards' });
+  const second = feed.getByRole('article', { name: 'Dragon 2' });
+  await expect(feed.getByRole('article', { name: 'Dragon 1' })).toBeInViewport();
+  await expect(feed).toBeFocused();
+  await expect(second).not.toBeInViewport();
+
+  await page.keyboard.press('j');
+  await expect(second).toBeInViewport({ ratio: 0.9 });
+  // Only the feed scrolls: the Explore tabs stay on screen.
+  await expect(page.getByRole('navigation', { name: 'Explore views' })).toBeInViewport();
+  await page.keyboard.press('j');
+  await expect(feed.getByRole('article', { name: 'Dragon 3' })).toBeInViewport({ ratio: 0.9 });
+  await page.keyboard.press('k');
+  await expect(second).toBeInViewport({ ratio: 0.9 });
+});
+
+test('surf: Explore this card leaves the surfer for the card, in the Cards tab', async ({ page }) => {
+  await feedOf(page, 1);
+  await page.goto('/explore?surf=' + encodeURIComponent('art=moon'));
+  await page.getByRole('article', { name: 'Dragon 1' }).getByRole('link', { name: 'Explore this card' }).click();
+  await expect(page).toHaveURL(/mode=card/);
+  await expect(page).toHaveURL(/a=Dragon(\+|%20)1/);
+  await expect(page).not.toHaveURL(/surf=/);
+  await expect(page.getByRole('navigation', { name: 'Explore views' }).getByRole('link', { name: 'Cards', exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('feed', { name: 'Random cards' })).toHaveCount(0);
+});
+
+test('surf on a phone: filters fold behind the rail disclosure, the feed stays first', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await feedOf(page, 1);
+  await page.goto('/explore?mode=surf');
+  await expect(page.getByRole('article', { name: 'Dragon 1' })).toBeVisible();
+  const toggle = page.getByRole('button', { name: /Card surfer filters/ });
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByRole('radio', { name: 'Has it' })).toBeHidden();
+
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await page.getByRole('radio', { name: 'Has it' }).click();
+  await expect(page).toHaveURL(/surf=fl%3Dhas/);
+
+  // Collapsed again, the rail summarises the active filters.
+  await toggle.click();
+  await expect(toggle).toContainText('1 filter');
+});
