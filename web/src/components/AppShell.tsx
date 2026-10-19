@@ -95,7 +95,7 @@ export function ViewLayout({ sidebar, children, label, summary, startOpen = fals
         </SubnavSlot.Provider>
       )}
       <div className="grid min-h-0 min-w-0 flex-1 grid-cols-1 lg:grid-cols-[var(--size-sidebar)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
-        <aside aria-label={label} className="min-w-0 border-b border-chrome-line px-4 py-3 lg:overflow-y-auto lg:border-b-0 lg:border-r lg:px-5 lg:py-5">
+        <aside aria-label={label} className="relative min-w-0 border-b border-chrome-line px-4 py-3 lg:overflow-y-auto lg:border-b-0 lg:border-r lg:px-5 lg:py-5">
           {!wide && (
             <button
               type="button"
