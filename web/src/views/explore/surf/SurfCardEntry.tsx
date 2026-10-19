@@ -9,7 +9,7 @@ import { artists, ownedLine, tcgplayerSearch, printingLine, textFaces } from '..
 /** One card in the feed: the card large, then its words — name, type, the
  *  flavor text set to be read, the artist, where it was printed. The art tags
  *  under it narrow the feed to more art like it. */
-export function SurfCardEntry({ card, onTag, onLeave, eager = false }: { card: SurfCardOut; onTag: (slug: string) => void; onLeave: () => void; eager?: boolean }) {
+export function SurfCardEntry({ card, onTag, eager = false }: { card: SurfCardOut; onTag: (slug: string) => void; eager?: boolean }) {
   const faced = card.faces.filter((f) => f.image);
   const [face, setFace] = useState(0);
   const image = faced.length > 1 ? faced[face]?.image : card.image;
@@ -33,7 +33,7 @@ export function SurfCardEntry({ card, onTag, onLeave, eager = false }: { card: S
             height={936}
             loading={eager ? 'eager' : 'lazy'}
             decoding="async"
-            className="aspect-[488/680] h-auto w-[min(100%,calc((100dvh-10rem)*0.7176),30rem)] lg:w-[min(calc((100dvh-10rem)*0.7176),30rem,calc(100vw-var(--size-sidebar)-26rem))] rounded-[4.5%/3.2%] bg-paper-sunk shadow-[0_18px_40px_-22px_var(--theme-scrim)]"
+            className="aspect-[488/680] h-auto w-[min(100%,calc((100dvh-19rem)*0.7176),30rem)] lg:w-[min(calc((100dvh-19rem)*0.7176),30rem,calc(100vw-var(--size-sidebar)-26rem))] rounded-[4.5%/3.2%] bg-paper-sunk shadow-[0_18px_40px_-22px_var(--theme-scrim)]"
           />
         ) : (
           <div className="grid aspect-[488/680] w-[min(100%,20rem)] place-items-center rounded-sm border border-rule bg-paper-sunk p-4 text-center text-sm text-ink-muted">{card.name}</div>
@@ -124,9 +124,6 @@ export function SurfCardEntry({ card, onTag, onLeave, eager = false }: { card: S
           <Link
             to="/explore"
             search={{ a: card.name.split(' // ')[0], mode: 'card' } as never}
-            onClick={(e) => {
-              if (e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) onLeave();
-            }}
             className="-ml-2 inline-flex min-h-9 items-center gap-1.5 rounded-sm px-2 text-md voice-semi font-medium text-accent-ink transition-colors duration-150 ease-guide hover:bg-paper-sunk focus-visible:bg-paper-sunk"
           >
             <ExploreMark className="size-[1.15rem]" />

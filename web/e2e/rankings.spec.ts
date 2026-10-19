@@ -6,15 +6,12 @@ const ranking = fixtures.ranking;
 test('Explore opens on rankings, as a grid; Rankings is the first tab', async ({ page }) => {
   await page.goto('/explore');
   const tabs = page.getByRole('navigation', { name: 'Explore views' }).getByRole('link');
-  await expect(tabs).toHaveText(['Rankings', 'Specific cards']);
+  await expect(tabs).toHaveText(['Rankings', 'Cards', 'Surfer']);
   await expect(tabs.first()).toHaveAttribute('aria-current', 'page');
   await expect(page.getByRole('radio', { name: 'Grid' })).toHaveAttribute('aria-checked', 'true');
   await expect(page.getByRole('table')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Inspect Krenko, Mob Boss' })).toBeVisible();
-  // the rail: find first, the card surfer last
-  const rail = page.getByRole('heading', { level: 2 });
-  await expect(rail.first()).toHaveText('Find');
-  await expect(rail.last()).toHaveText('Random cards');
+  await expect(page.getByRole('heading', { level: 2 }).first()).toHaveText('Find');
 });
 
 test('the rankings list joins what you own, with type, colour and cost columns; names open the profile in the right role', async ({ page }) => {
@@ -41,7 +38,7 @@ test('the rankings list joins what you own, with type, colour and cost columns; 
   await expect(page).toHaveURL(/mode=card/);
   await expect(page).toHaveURL(/a=Krenko/);
   await expect(page).toHaveURL(/role=commander/);
-  await expect(page.getByRole('link', { name: 'Specific cards' })).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('link', { name: 'Cards', exact: true })).toHaveAttribute('aria-current', 'page');
 });
 
 test('partner commanders show both cards: one in front, the partner peeking from behind', async ({ page }) => {
@@ -111,10 +108,10 @@ test('narrowing commanders takes one axis and waits for its value', async ({ pag
 
 test('the mode tabs move between specific cards and rankings, keeping both', async ({ page }) => {
   await page.goto('/explore?a=Tifa%20Lockhart&role=card');
-  await expect(page.getByRole('link', { name: 'Specific cards' })).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('link', { name: 'Cards', exact: true })).toHaveAttribute('aria-current', 'page');
   await page.getByRole('link', { name: 'Rankings' }).click();
   await expect(page.getByRole('heading', { level: 1, name: ranking.title })).toBeVisible();
-  await page.getByRole('link', { name: 'Specific cards' }).click();
+  await page.getByRole('link', { name: 'Cards', exact: true }).click();
   await expect(page).toHaveURL(/a=Tifa/);
   await expect(page.getByRole('region', { name: /Tifa Lockhart on EDHREC/ }).or(page.getByText('Nothing matches'))).toBeVisible();
 });

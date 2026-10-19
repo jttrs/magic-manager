@@ -20,7 +20,7 @@ export type GroupBy = (typeof GROUP_BYS)[number];
 const ROLES = ['commander', 'card'] as const;
 export type Role = (typeof ROLES)[number];
 
-const EXPLORE_MODES = ['card', 'rankings'] as const;
+const EXPLORE_MODES = ['card', 'rankings', 'surf'] as const;
 export type ExploreMode = (typeof EXPLORE_MODES)[number];
 export const RANK_SCOPES = ['commanders', 'cards', 'salt'] as const;
 export type RankScope = (typeof RANK_SCOPES)[number];
@@ -55,7 +55,7 @@ export const compareSearch = z.object({
   sort: z.string().catch('inclusion,name').default('inclusion,name'),
   groupBy: z.enum(GROUP_BYS).catch('lists').default('lists'),
   view,
-  /** Card surfer: open when set; its source + filters (core/surf.ts codec). */
+  /** Card surfer (the Surfer tab): its source + filters (core/surf.ts codec). */
   surf: z.string().optional().catch(undefined),
 });
 export type CompareSearch = z.infer<typeof compareSearch>;
