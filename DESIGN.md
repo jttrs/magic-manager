@@ -397,6 +397,7 @@ Hairline borders are the main geometry. `ruled` is a 1px bottom border; column a
 - **Do** prefer `GuideCard` mapping in `web/src/core/guideCard.ts` so tile, row, grid, and preview stay shared across domains.
 - **Do** preserve URL-backed controls from `web/src/core/search.ts`; filters, visibility, sort, density, and commander/set choices are shareable state.
 - **Do** use `voice-condensed`, `voice-semi`, `tabular`, `highlighter`, `ruled`, `ease-guide`, and `paper-grain` instead of inventing one-off visual classes.
+- **Do** keep the chassis static: on a desktop window the page never scrolls or rubber-bands (`overscroll-behavior: none` on html/body); only panes that overflow scroll. Make every scroll pane its own containing block (`relative`) so an absolutely positioned child — an `sr-only` label — can't reach past the window and scroll the page. `web/e2e/chassis.spec.ts` checks every view.
 - **Do** keep mobile behavior as controls disclosure plus column tabs, not a squeezed desktop splitter; the collapsed disclosure shows a one-line summary of the active scope.
 - **Do** put every card fact (owned counts, missing, pools, treatments, chase) in the caption under the card.
 - **Do** keep the heading outline unbroken: sheet `h1`, family/column `h2`, groups `h3`.

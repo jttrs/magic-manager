@@ -85,7 +85,7 @@ export function EarmarkedExplore({ search, set, tabs }: Props) {
   return (
     <ViewLayout label="Explore controls" summary="Earmarked" sidebar={sidebar}>
       <GuideSheet nav={tabs} title="Earmarked" summary={q.data ? `${fmtInt(shown.length)} of ${fmtInt(all.length)} cards` : undefined}>
-        <div className="h-full min-h-0">{body}</div>
+        <div className="flex h-full min-h-0 flex-col">{body}</div>
       </GuideSheet>
       <CardInspector card={inspecting} onClose={() => setInspecting(null)} />
     </ViewLayout>
