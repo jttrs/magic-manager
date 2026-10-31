@@ -137,6 +137,7 @@ Physical CN often doesn't match Scryfall CN (leading zeros stripped, or `Ns` suf
 - **FCA `flavor_name` mixed** — some FCA cards have `flavor_name` populated (renamed to a FF-themed name), others don't (kept oracle name because it fit the theme). Both kinds are still part of the reskin sheet — discriminator is `sourcematerial` in `promo_types`, not `flavor_name`. See `docs/scryfall-printing-treatments.md` §4a.
 - **`wfin` FIN Asia WPN Promo Tokens** — 3 tokens with `w`-prefix set code (unusual). Token set, excluded by default from checklists.
 - **`rfin` Japan-only** — the 2 regional promo prints only exist in Japanese; English collectors treat as unobtainable. `sets.py:180-188` filters these correctly via language check.
+- **Starter Kit foil heroes** — each Starter Kit deck ships ONE **foil** showcase hero: `BlueBlack_FIN` → FIN 553 Sephiroth, `RedWhite_FIN` → FIN 552 Cloud (MTGJSON recipe finish `foil`). Easy to hand-enter as nonfoil; a kit counted into a checklist must put them in the foil column.
 
 ---
 
