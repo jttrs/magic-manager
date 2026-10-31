@@ -196,8 +196,10 @@ def precon_summary(family_codes: list[str]) -> dict[str, int]:
                 SELECT
                   SUM(CASE WHEN LOWER(c.set_code) IN ({placeholders}) THEN dc.count ELSE 0 END) AS in_fam,
                   SUM(dc.count) AS total
-                FROM deck_cards dc JOIN cards c ON c.scryfall_id = dc.scryfall_id
-                WHERE dc.deck_id = ?
+                FROM decks d
+                JOIN deck_cards dc ON dc.deck_version_id = d.current_version_id
+                JOIN cards c ON c.scryfall_id = dc.scryfall_id
+                WHERE d.deck_id = ?
                 """,
                 list(fam) + [d["deck_id"]],
             ).fetchone()
