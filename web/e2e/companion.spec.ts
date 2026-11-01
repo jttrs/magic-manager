@@ -82,6 +82,16 @@ test.describe('setup', () => {
     await expect(d.getByRole('link', { name: 'Download the companion' })).toBeHidden();
     await d.getByText('Developer install').click();
     await expect(d.getByRole('link', { name: 'Download the companion' })).toBeVisible();
+    await expect(d.getByRole('link', { name: 'Privacy policy' })).toHaveAttribute('href', COMPANION_INFO.privacy_url);
+  });
+
+  test('published + an older install: the store copy updates once that version is published', async ({ page }) => {
+    await flags(page, { companion: true });
+    await fakeCompanion(page, { version: '0.0.9' });
+    await page.route('**/api/companion', (r) => r.fulfill({ json: { ...COMPANION_INFO, store_url: 'https://chromewebstore.google.com/detail/x/abcdefghijklmnopabcdefghijklmnop' } }));
+    await page.goto(COLLECTION_URL);
+    await page.getByRole('button', { name: 'Browser companion · update available' }).click();
+    await expect(page.getByRole('dialog', { name: 'Browser companion' })).toContainText('updates itself once that version is published on the Chrome Web Store');
   });
 
   test('connected: version and what each feature may read', async ({ page }) => {

@@ -48,7 +48,7 @@ def main() -> int:
     shots.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
         ext = Path(tmp) / "ext"
-        shutil.copytree(companion.EXT_DIR, ext, ignore=shutil.ignore_patterns("store"))
+        shutil.copytree(companion.EXT_DIR, ext, ignore=shutil.ignore_patterns(*companion.EXCLUDE_DIRS))
         (ext / "promo.html").write_text(PROMO_HTML)
         with sync_playwright() as pw:
             ctx = pw.chromium.launch_persistent_context(

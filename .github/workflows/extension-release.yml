@@ -62,21 +62,28 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" "$ZIP" "$STORE_ZIP" SHA256SUMS \
-            --title "Browser companion ${{ steps.version.outputs.version }}" \
-            --notes "Reproducible builds of extension/ (scripts/build_extension.py --zip / --store-zip). Compare SHA256SUMS with a local build of the same commit."
+          # Re-runnable: the zips are reproducible, so a re-run of the same tag replaces identical files.
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$ZIP" "$STORE_ZIP" SHA256SUMS --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "$ZIP" "$STORE_ZIP" SHA256SUMS \
+              --title "Browser companion ${{ steps.version.outputs.version }}" \
+              --notes "Reproducible builds of extension/ (scripts/build_extension.py --zip / --store-zip). Compare SHA256SUMS with a local build of the same commit."
+          fi
 
-      # Optional: needs the store item (first upload is manual) and four repo secrets — see
-      # docs/browser-companion.md § Chrome Web Store. Uploads only; never publishes.
+      # Optional: needs the store item (first upload is manual) and five repo secrets — see
+      # docs/browser-companion.md § Chrome Web Store. Chrome Web Store API v2 (v1.1 was shut down
+      # 2026-10-15). Uploads only; never publishes.
       - name: Upload to the Chrome Web Store (draft)
         if: github.ref_type == 'tag'
         env:
           CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
           CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
           CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+          CWS_PUBLISHER_ID: ${{ secrets.CWS_PUBLISHER_ID }}
           CWS_EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
         run: |
-          if [ -z "$CWS_CLIENT_ID" ] || [ -z "$CWS_CLIENT_SECRET" ] || [ -z "$CWS_REFRESH_TOKEN" ] || [ -z "$CWS_EXTENSION_ID" ]; then
+          if [ -z "$CWS_CLIENT_ID" ] || [ -z "$CWS_CLIENT_SECRET" ] || [ -z "$CWS_REFRESH_TOKEN" ] || [ -z "$CWS_PUBLISHER_ID" ] || [ -z "$CWS_EXTENSION_ID" ]; then
             echo "Chrome Web Store secrets not set — skipping the upload (upload $STORE_ZIP in the dashboard)."
             exit 0
           fi
@@ -84,7 +91,15 @@ jobs:
             -d client_id="$CWS_CLIENT_ID" -d client_secret="$CWS_CLIENT_SECRET" \
             -d refresh_token="$CWS_REFRESH_TOKEN" -d grant_type=refresh_token | jq -r .access_token)
           echo "::add-mask::$token"
-          curl -fsS -X PUT -H "Authorization: Bearer $token" -H "x-goog-api-version: 2" \
-            -T "$STORE_ZIP" "https://www.googleapis.com/upload/chromewebstore/v1.1/items/$CWS_EXTENSION_ID" | tee upload.json
-          jq -e '.uploadState == "SUCCESS"' upload.json > /dev/null || { echo "::error::upload failed"; exit 1; }
+          item="publishers/$CWS_PUBLISHER_ID/items/$CWS_EXTENSION_ID"
+          curl -fsS -X POST -H "Authorization: Bearer $token" -T "$STORE_ZIP" \
+            "https://chromewebstore.googleapis.com/upload/v2/$item:upload" | tee upload.json
+          state=$(jq -r .uploadState upload.json)
+          for _ in $(seq 1 20); do
+            [ "$state" = "IN_PROGRESS" ] || break
+            sleep 15
+            state=$(curl -fsS -H "Authorization: Bearer $token" \
+              "https://chromewebstore.googleapis.com/v2/$item:fetchStatus" | jq -r .lastAsyncUploadState)
+          done
+          if [ "$state" != "SUCCEEDED" ]; then echo "::error::Chrome Web Store upload ended $state"; exit 1; fi
           echo "Uploaded as a draft — submit it for review in the developer dashboard."

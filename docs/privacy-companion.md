@@ -21,11 +21,11 @@ Only when you ask for a read in your magic-manager app, and only on these sites:
 | Read | Site | What is read |
 | --- | --- | --- |
 | Cart | Mana Pool (always), TCGplayer, Card Kingdom | Each cart line: card, printing, finish, condition, language, quantity, price |
-| Open store tabs (Deals) | The card stores listed in the extension's settings | Which product pages you have open, and their title, price and stock |
+| Open store tabs (Deals) | The card stores listed in the extension's settings | The address and title of each tab you have open on those stores (never other sites, never private windows), and on product pages their price and stock |
 | Watched prices | The same stores | The price and stock on store pages you chose to watch |
 | Decks | Moxfield, Archidekt | The deck you choose: card names, printings, quantities, boards |
 | Collection and binders | Moxfield | Your collection or one binder you choose: printings, quantities, finishes |
-| Order history | Mana Pool, TCGplayer, Card Kingdom | The orders you choose: order number, date, card lines, prices paid |
+| Order history | Mana Pool, TCGplayer, Card Kingdom | The orders you choose: order number, date, card lines, prices paid, shipping, tax and total |
 
 Sites other than Mana Pool are read only after you switch on **Allow access** in the extension's
 settings (Chrome asks you to confirm), and you can switch it off at any time.

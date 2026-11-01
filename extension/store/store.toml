@@ -9,5 +9,5 @@
 # MM_COMPANION_STORE_URL overrides it on a host.
 url = ""
 # The item id the dashboard assigns on first upload (used by the release workflow's
-# optional upload step via the CWS_EXTENSION_ID secret; recorded here for reference).
+# optional upload step via the CWS_EXTENSION_ID secret, with CWS_PUBLISHER_ID; recorded here for reference).
 extension_id = ""

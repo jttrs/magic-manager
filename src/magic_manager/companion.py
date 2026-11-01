@@ -47,7 +47,7 @@ CART_READER = EXT_DIR / "src" / "readers" / "manapool-cart.js"
 TOKENS_CSS = EXT_DIR / "src" / "tokens.css"
 ICONS_DIR = EXT_DIR / "icons"
 ICON_SIZES = (16, 32, 48, 128)
-# Store listing assets + metadata — kept beside the extension, never shipped in the zip.
+# Store listing assets + metadata — kept beside the extension, never shipped in the zip (EXCLUDE_DIRS).
 STORE_DIR = EXT_DIR / "store"
 STORE_TOML = STORE_DIR / "store.toml"
 STORE_URL_ENV = "MM_COMPANION_STORE_URL"
@@ -76,7 +76,7 @@ CART_HOSTS = ["https://www.tcgplayer.com/*", "https://www.cardkingdom.com/*"]
 
 # Files that ship in the zip (everything under extension/ except these names and folders).
 _EXCLUDE = {"README.md"}
-_EXCLUDE_DIRS = {"store"}
+EXCLUDE_DIRS = frozenset({"store"})
 _ZIP_DATE = (2024, 1, 1, 0, 0, 0)
 
 
@@ -242,10 +242,33 @@ def generated_files() -> dict[Path, str | bytes]:
     return out
 
 
+def png_pixels(data: bytes) -> tuple[bytes, bytes] | None:
+    """A PNG's header + decompressed image data — what it looks like, independent of
+    how this platform's zlib happened to compress it. ``None`` if it isn't a PNG."""
+    if data[:8] != b"\x89PNG\r\n\x1a\n":
+        return None
+    i, ihdr, idat = 8, b"", b""
+    while i + 8 <= len(data):
+        n = struct.unpack(">I", data[i:i + 4])[0]
+        tag, body = data[i + 4:i + 8], data[i + 8:i + 8 + n]
+        if tag == b"IHDR":
+            ihdr = body
+        elif tag == b"IDAT":
+            idat += body
+        i += 12 + n
+    try:
+        return ihdr, zlib.decompress(idat)
+    except zlib.error:
+        return None
+
+
 def _current(p: Path, want: str | bytes) -> bool:
     if not p.exists():
         return False
-    return (p.read_bytes() if isinstance(want, bytes) else p.read_text()) == want
+    if isinstance(want, bytes):
+        have = p.read_bytes()
+        return have == want or (png_pixels(have) is not None and png_pixels(have) == png_pixels(want))
+    return p.read_text() == want
 
 
 def stale_files() -> list[Path]:
@@ -308,14 +331,19 @@ def store_url() -> str | None:
     ignored, so a typo can't send users to another site."""
     url = (os.environ.get(STORE_URL_ENV) or "").strip()
     if not url and STORE_TOML.exists():
-        url = str(tomllib.loads(STORE_TOML.read_text()).get("chrome_web_store", {}).get("url") or "").strip()
+        try:
+            section = tomllib.loads(STORE_TOML.read_text()).get("chrome_web_store")
+        except tomllib.TOMLDecodeError:
+            section = None   # a hand-edit typo must not take down GET /api/companion
+        raw = section.get("url") if isinstance(section, dict) else None
+        url = raw.strip() if isinstance(raw, str) else ""
     return url if url.startswith(STORE_URL_PREFIX) else None
 
 
 def _files() -> list[Path]:
     return sorted(p for p in EXT_DIR.rglob("*")
                   if p.is_file() and p.name not in _EXCLUDE and not p.name.startswith(".")
-                  and p.relative_to(EXT_DIR).parts[0] not in _EXCLUDE_DIRS)
+                  and p.relative_to(EXT_DIR).parts[0] not in EXCLUDE_DIRS)
 
 
 ZIP_FOLDER = "magic-manager-companion/"

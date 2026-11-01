@@ -53,13 +53,13 @@ searchable); the unpacked zip stays as the setup dialog's collapsed *Developer i
   a version that isn't higher) — merge, then tag `companion-v<version>`. The `extension-release`
   workflow checks the tag matches the manifest, runs `tests/test_companion.py`, builds both
   reproducible zips (`--zip` folder zip for Load unpacked, `--store-zip` with the manifest at the root
-  for the store) + `SHA256SUMS`, attaches them to a GitHub release and, when the four secrets
-  `CWS_CLIENT_ID` / `CWS_CLIENT_SECRET` / `CWS_REFRESH_TOKEN` / `CWS_EXTENSION_ID` exist, uploads the
-  store zip as a **draft** (never publishes).
+  for the store) + `SHA256SUMS`, attaches them to a GitHub release (a re-run replaces them) and, when the five secrets
+  `CWS_CLIENT_ID` / `CWS_CLIENT_SECRET` / `CWS_REFRESH_TOKEN` / `CWS_PUBLISHER_ID` / `CWS_EXTENSION_ID` exist, uploads the
+  store zip as a **draft** through Chrome Web Store API v2 (never publishes; v1.1 was shut down 2026-10-15).
 - **Owner actions (one-time):** register a Chrome Web Store developer account ($5); create the item by
   uploading the first `--store-zip`; paste `listing.md` into the Store listing / Privacy practices tabs;
   set visibility *Unlisted*; submit for review. After approval put the item's URL in `store.toml`
-  (and its id in `extension_id`); optionally add the four secrets for automatic draft uploads. Store
+  (and its id in `extension_id`); optionally add the five secrets (publisher id from the dashboard's Account page) for automatic draft uploads. Store
   installs auto-update; an existing developer install keeps working (a store install gets a new
   extension id, so pair it again and remove the unpacked copy).
 

@@ -1,7 +1,7 @@
 # Chrome Web Store listing — magic-manager companion
 
 Everything the Chrome Web Store developer dashboard asks for, ready to paste. Kept beside the
-extension but **never shipped in the zip** (`companion._EXCLUDE_DIRS`). Release steps:
+extension but **never shipped in the zip** (`companion.EXCLUDE_DIRS`). Release steps:
 [`docs/browser-companion.md` § Chrome Web Store](../../docs/browser-companion.md#chrome-web-store).
 
 ## Store listing tab
@@ -70,14 +70,18 @@ Screenshots + tile are captured from the real extension pages by
 **Remote code:** No, I am not using remote code. (All JavaScript is in the package; the extension-page
 CSP is `script-src 'self'`.)
 
-**Data usage** — what the item collects (tick only this one):
+**Data usage** — what the item collects (tick these three):
 
 - **Website content** — the card lines read from the pages above (card, printing, finish, quantity,
-  and the item prices shown on cart, store and order pages). Item prices are not payment information.
+  item prices shown on cart, store and order pages).
+- **Web history** — the address and title of each open tab on the listed card stores (Deals; only
+  those store sites, never private windows).
+- **Financial and payment information** — store order history the user chooses to send: order number,
+  date, prices paid and the order's shipping, tax and total (no card numbers or payment details are read).
 
-Not collected: personally identifiable information, health, financial and payment information, authentication information (Moxfield's
+Not collected: personally identifiable information, health, authentication information (Moxfield's
 token is used in-tab for one read and never collected — see the privacy policy), personal
-communications, location, web history, user activity.
+communications, location, user activity.
 
 **Certifications** (all three are true — tick them):
 

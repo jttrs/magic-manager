@@ -155,7 +155,7 @@ function Status({ c }: { c: CompanionState }) {
       {c.outdated && (
         <p className="text-danger">
           {c.storeUrl
-            ? <>Version {c.latest} is available. Chrome updates store installs on its own, usually within a few hours; a developer install needs the download below.</>
+            ? <>Version {c.latest} is in this app. A store install updates itself once that version is published on the Chrome Web Store; a developer install needs the download below.</>
             : <>Version {c.latest} is available — download it below and replace the folder.</>}
         </p>
       )}
