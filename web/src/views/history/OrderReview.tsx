@@ -10,7 +10,7 @@ import { GridSkeleton, ErrorNote } from '../../components/States';
 import { purchaseApply, purchaseForget, type ReviewLineOut } from '../../core/api';
 import { fmtCount, fmtInt, fmtUsd } from '../../core/format';
 import { clampDecision, decisionsBody, decisionTotals, defaultDecisions, isAssignable, STATUS_LABEL, subtotalGap, type Decision, type Decisions } from '../../core/purchases';
-import { Valued } from './OrdersList';
+import { Valued } from './OrderRow';
 import { VerificationMark } from './StoreVerification';
 
 const FULL = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeZone: 'UTC' });
@@ -21,7 +21,7 @@ const orderDate = (at: string) => {
 
 /** One store order: what you paid, what it is worth, and — line by line — which copies you already own
  *  (match) and which are new (add). Nothing changes until "Save to collection". */
-export function OrderReview({ purchaseId, onBack, onForgotten }: { purchaseId: number; onBack?: () => void; onForgotten: () => void }) {
+export function OrderReview({ purchaseId, onBack, onForgotten, onOpenEntry }: { purchaseId: number; onBack?: () => void; onForgotten: () => void; /** Opens the order's ledger entry (the cards it added so far). */ onOpenEntry?: (ingestId: number) => void }) {
   const on = useFeature('purchases');
   const q = useQuery(purchaseReviewQuery(purchaseId, on));
   const stores = useQuery(purchaseStoresQuery(on));
@@ -57,7 +57,7 @@ export function OrderReview({ purchaseId, onBack, onForgotten }: { purchaseId: n
       <header className="mx-4 flex flex-col gap-2 border-b-2 border-rule-strong pb-2 pt-1">
         {onBack && (
           <button type="button" onClick={onBack} className="inline-flex w-full cursor-pointer items-center gap-0.5 text-sm voice-semi text-accent-ink">
-            <Chevron dir="left" className="size-3.5" /> All orders
+            <Chevron dir="left" className="size-3.5" /> Purchase history
           </button>
         )}
         <div className="flex flex-wrap items-end gap-x-4 gap-y-1">
@@ -66,6 +66,11 @@ export function OrderReview({ purchaseId, onBack, onForgotten }: { purchaseId: n
             <p className="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-ink-muted">
               <span>{orderDate(p.ordered_at)} · {STATUS_LABEL[p.status]} · {fmtCount(p.copies, 'copy', 'copies')}</span>
               <VerificationMark store={store} />
+              {onOpenEntry && p.ingest_id != null && (
+                <button type="button" onClick={() => onOpenEntry(p.ingest_id!)} className="-my-1 cursor-pointer py-1 voice-semi text-accent-ink underline underline-offset-2">
+                  See the cards it added
+                </button>
+              )}
             </p>
           </div>
         </div>

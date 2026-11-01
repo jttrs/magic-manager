@@ -49,6 +49,24 @@ test('drill into an entry: what came in, worth today, exact printings, open deck
   await expect(page.getByRole('dialog', { name: first })).toBeVisible();
 });
 
+test('marks belong to the open entry; the sheet header copies them; an order has none', async ({ page }) => {
+  await mockHistory(page);
+  const other = history.entries.find((x) => x.ingest_id === 538)!;
+  await page.route('**/api/history/538', (r) => r.fulfill({ json: { entry: { ...other, ledgered: true }, lines: event.lines } }));
+  await page.goto(`/collection/history?entry=${event.entry.ingest_id}`);
+  const first = event.lines[0].printing.name;
+  await expect(page.getByRole('button', { name: 'Mark cards to copy them as a list' })).toBeVisible();
+  await page.getByRole('button', { name: `Mark ${first}` }).first().click();
+  await expect(page.getByRole('button', { name: 'Copy 1 marked card as a list' })).toBeVisible();
+  await page.goto('/collection/history?entry=538');
+  await expect(page.getByRole('button', { name: 'Mark cards to copy them as a list' })).toBeVisible();
+  await page.goto(`/collection/history?entry=${event.entry.ingest_id}`);
+  await expect(page.getByRole('button', { name: 'Copy 1 marked card as a list' })).toBeVisible();
+  await page.goto('/collection/history?entry=247');
+  await expect(page.getByText('Recorded before the ledger')).toBeVisible();
+  await expect(page.getByRole('button', { name: /marked card|Mark cards to copy/ })).toHaveCount(0);
+});
+
 test('a pre-ledger checklist explains where its cards are counted and links there', async ({ page }) => {
   await mockHistory(page);
   await page.goto('/collection/history?entry=247');

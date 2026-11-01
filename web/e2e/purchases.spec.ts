@@ -1,4 +1,4 @@
-// Store orders (purchases flag): the Orders list with totals, reading orders through the
+// Store orders (purchases flag), merged into Purchase history: Needs review, totals, reading orders through the
 // companion (stood in for here), and matching an order's lines to cards you own.
 import type { Page } from '@playwright/test';
 import history from './fixtures/history.json' with { type: 'json' };
@@ -75,34 +75,41 @@ async function fakeCompanion(page: Page, answers: Record<string, unknown>) {
   }, answers);
 }
 
-test('Orders list: totals for every order, and Paid / Worth / gain on each row', async ({ page }) => {
+test('one Purchase history: undecided orders pinned under Needs review, totals in the summary, no Store orders tab', async ({ page }) => {
   await flags(page, { purchases: true });
   await purchasesApi(page);
   await page.goto('/collection/history');
   const tabs = page.getByRole('navigation', { name: 'Collection views' });
-  await tabs.getByRole('link', { name: 'Store orders' }).click();
-  await expect(page).toHaveURL(/orders=true/);
-  await expect(tabs.getByRole('link', { name: 'Store orders' })).toHaveAttribute('aria-current', 'page');
-  await expect(page.getByRole('heading', { level: 2, name: 'Find' })).toHaveCount(0);
-  const list = page.getByRole('navigation', { name: 'Store orders' });
-  const totals = list.getByLabel('All orders');
-  await expect(totals).toContainText('$30.00');
-  await expect(totals).toContainText('$27.50');
-  await expect(totals).toContainText('−$2.50');
-  const row = list.getByRole('button', { name: /Mana Pool order #MP-111/ });
+  await expect(tabs.getByRole('link')).toHaveText(['Cards', 'Purchase history']);
+  await expect(page.getByRole('heading', { level: 2, name: 'Find' })).toBeVisible();
+  await expect(page.getByText(/store orders paid \$30\.00 · worth \$27\.50 \(−\$2\.50\)/)).toBeVisible();
+  const list = page.getByRole('navigation', { name: 'Purchase history' });
+  await expect(list.getByRole('heading', { level: 2 }).first()).toContainText('Needs review');
+  const review = list.getByRole('region', { name: /Needs review/ });
+  const row = review.getByRole('button', { name: /Mana Pool order #MP-111/ });
   await expect(row).toContainText('Not added yet');
   await expect(row).toContainText('$10.00');
   await expect(row).toContainText('$12.50');
   await expect(row).toContainText('+$2.50');
-  await expect(list.getByRole('button', { name: /MP-222/ })).toContainText('−$5.00');
+  await expect(review.getByRole('button', { name: /MP-222/ })).toContainText('−$5.00');
 
-  // The Purchase history tab is the way back to the timeline: it drops the orders mode and the open order.
-  await list.getByRole('button', { name: /Mana Pool order #MP-111/ }).click();
-  await expect(page).toHaveURL(/order=/);
-  await tabs.getByRole('link', { name: 'Purchase history' }).click();
-  await expect(page).not.toHaveURL(/orders=|order=/);
-  await expect(tabs.getByRole('link', { name: 'Purchase history' })).toHaveAttribute('aria-current', 'page');
-  await expect(page.getByRole('heading', { level: 2, name: 'Find' })).toBeVisible();
+  // Kind filter: Store order narrows to the orders; another kind hides Needs review.
+  await page.getByRole('button', { name: /^Kind of entry/ }).click();
+  await page.getByRole('checkbox', { name: /^Store order/ }).check();
+  await page.keyboard.press('Escape');
+  await expect(review.getByRole('button')).toHaveCount(2);
+  await page.getByRole('button', { name: 'Clear filters' }).click();
+  await page.getByRole('button', { name: /^Kind of entry/ }).click();
+  await page.getByRole('checkbox', { name: /^Card pool/ }).check();
+  await page.keyboard.press('Escape');
+  await expect(list.getByRole('region', { name: /Needs review/ })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Clear filters' }).click();
+
+  // An order opens its review in the same inspector.
+  await review.getByRole('button', { name: /Mana Pool order #MP-111/ }).click();
+  await expect(page).toHaveURL(/order=1/);
+  await expect(page.getByRole('heading', { level: 2, name: /Mana Pool order #MP-111/ })).toBeVisible();
+  await expect(row).toHaveAttribute('aria-current', 'true');
 });
 
 test('reading orders: list, already-read marked, the chosen ones are read and saved', async ({ page }) => {
@@ -142,7 +149,7 @@ test('reading orders: list, already-read marked, the chosen ones are read and sa
 test('reviewing an order: match to cards I own fills the boxes, Save posts them', async ({ page }) => {
   await flags(page, { purchases: true });
   const posted = await purchasesApi(page);
-  await page.goto('/collection/history?orders=true&order=1');
+  await page.goto('/collection/history?order=1');
   await expect(page.getByRole('heading', { level: 2, name: /Mana Pool order #MP-111/ })).toBeVisible();
   await expect(page.getByText('Store subtotal')).toBeVisible();
   await expect(page.getByText(/subtotal is \$9\.50/)).toBeVisible();
@@ -154,4 +161,26 @@ test('reviewing an order: match to cards I own fills the boxes, Save posts them'
   await page.getByRole('button', { name: 'Save to collection' }).click();
   await expect(page.getByText('Saved: matched 2 copies, added 0 new.')).toBeVisible();
   expect(posted.apply).toEqual({ lines: [{ line_no: 1, match: 2, add: 0 }] });
+});
+
+test('an applied order shows once: its ledger entry carries the order, and Review order opens it in place', async ({ page }) => {
+  await flags(page, { purchases: true });
+  await purchasesApi(page);
+  const applied = ORDER({ purchase_id: 1, order_id: 'MP-111', status: 'done', assigned: 3, ingest_id: 9 });
+  const entry = { ...history.entries[1], ingest_id: 9, method: 'purchase', kind: 'purchase', title: 'Mana Pool order #MP-111', detail: null, product: null, set_code: null, deck_slug: null, purchase_id: 1, paid_usd: 10, dated: 'acquired', ledgered: true };
+  await page.route('**/api/purchases', (r) => r.fulfill({ json: { ...PURCHASES, purchases: [applied] } }));
+  await page.route('**/api/history', (r) => r.fulfill({ json: { ...history, entries: [entry, ...history.entries] } }));
+  await page.route('**/api/history/9', (r) => r.fulfill({ json: { entry, lines: [] } }));
+  await page.goto('/collection/history');
+  const list = page.getByRole('navigation', { name: 'Purchase history' });
+  await expect(list.getByRole('region', { name: /Needs review/ })).toHaveCount(0);
+  const rows = list.getByRole('button', { name: /MP-111/ });
+  await expect(rows).toHaveCount(1);
+  await expect(rows).toContainText('Store order · In your collection');
+  await rows.click();
+  await page.getByRole('button', { name: 'Review order' }).click();
+  await expect(page).toHaveURL(/order=1/);
+  await expect(page).not.toHaveURL(/entry=/);
+  await expect(page.getByRole('heading', { level: 2, name: /Mana Pool order #MP-111/ })).toBeVisible();
+  await expect(rows).toHaveAttribute('aria-current', 'true');
 });

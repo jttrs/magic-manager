@@ -13,9 +13,9 @@ test('checklist mode: type counts, keyboard walks the column, Save sends one bat
     await r.fallback();
   });
   await page.goto(COLLECTION_URL);
-  await page.getByRole('button', { name: 'Count cards' }).click();
+  await page.getByRole('button', { name: 'Bulk modify counts' }).click();
   await expect(page).toHaveURL(/count=true/);
-  await expect(page.getByText(/^Counting · type how many/)).toBeVisible();
+  await expect(page.getByText(/^Modifying counts · type how many/)).toBeVisible();
 
   await page.getByLabel('Azure Beastbinder BLB 41 nonfoil').click();
   await page.keyboard.type('4');
@@ -30,7 +30,7 @@ test('checklist mode: type counts, keyboard walks the column, Save sends one bat
   await expect(page.locator('input:focus')).toHaveAttribute('aria-invalid', 'true');
   await page.keyboard.press('Escape');
 
-  await expect(page.getByText(/^Counting · 1 change · \+2 copies/)).toBeVisible();
+  await expect(page.getByText(/^Modifying counts · 1 change · \+2 copies/)).toBeVisible();
   await page.getByRole('button', { name: 'Save 1 change' }).click();
   await expect(page.getByText('Saved 1 count · +2 copies')).toBeVisible();
   expect(body!.changes).toEqual([expect.objectContaining({ finish: 'nonfoil', qty: 4, expected: 2 })]);
@@ -64,7 +64,7 @@ test('checklist refuses counting below copies in built decks', async ({ page }) 
   await page.goto(COUNT_URL);
   await page.getByLabel('Alania, Divergent Storm BLB 204 nonfoil').click();
   await page.keyboard.type('0');
-  await expect(page.getByText(/in built decks — break it down before counting fewer/)).toBeVisible();
+  await expect(page.getByText(/in built decks — break it down before setting fewer/)).toBeVisible();
   await expect(page.getByRole('button', { name: /Save 1 change/ })).toBeDisabled();
 });
 
@@ -85,7 +85,7 @@ test('checklist: a stale save flags the moved cells; Enter keeps your count and 
   await cell.click();
   await page.keyboard.type('4');
   await page.getByRole('button', { name: 'Save 1 change' }).click();
-  await expect(page.getByText(/1 count changed in your collection since you started counting/)).toBeVisible();
+  await expect(page.getByText(/1 count changed in your collection since you started editing counts/)).toBeVisible();
   await expect(cell).toHaveValue('4');
   await expect(page.getByText('now 3')).toBeVisible();
   await expect(page.getByRole('button', { name: /^Save/ })).toBeDisabled();
@@ -113,7 +113,7 @@ test('checklist: counts typed while a save is in flight are kept', async ({ page
   await page.getByLabel('Agate-Blade Assassin BLB 82 nonfoil').click();
   await page.keyboard.type('9');
   release();
-  await expect(page.getByText(/^Counting · 1 change/)).toBeVisible();
+  await expect(page.getByText(/^Modifying counts · 1 change/)).toBeVisible();
   await expect(page.getByLabel('Agate-Blade Assassin BLB 82 nonfoil')).toHaveValue('9');
 });
 

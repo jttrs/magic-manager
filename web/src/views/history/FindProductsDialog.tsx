@@ -7,7 +7,7 @@ import { ProgressRule } from '../../components/ProgressRule';
 import { fmtCount, fmtInt, fmtUsd } from '../../core/format';
 import { confirmed, coveragePhase, productMeta, readNotMine, rememberNotMine, scanFrom, withPick, type CoverageScan } from '../../core/trueup';
 
-/** Find which products your loose cards came from — scene boxes, precon and
+/** Find which products your unused cards came from — scene boxes, precon and
  *  jumpstart decks, land packs, complete Secret Lair drops — review the matches,
  *  and record the ones you bought, so Acquired from can trace their cards. */
 export function FindProductsDialog({ trigger }: { trigger: ReactNode }) {

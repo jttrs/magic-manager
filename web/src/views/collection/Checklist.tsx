@@ -104,7 +104,7 @@ export function ChecklistTable({ sections, byId, familyNames, checklist }: {
         <span className="text-right">Nonfoil</span>
         <span className="text-right">Foil ✦</span>
       </div>
-      <div ref={scrollRef} role="region" aria-label="Count your copies" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-6">
+      <div ref={scrollRef} role="region" aria-label="Your counts" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-6">
         <div className="relative w-full" style={{ height: virt.getTotalSize() }}>
           {virt.getVirtualItems().map((vi) => {
             const row = rows[vi.index];
@@ -227,7 +227,7 @@ function CountCell({ label, was, value, pledged, moved, focused, grabFocus, onFo
         autoComplete="off"
         aria-label={label}
         aria-invalid={bad || low || undefined}
-        aria-description={moved ? `Changed to ${was} since you started counting` : undefined}
+        aria-description={moved ? `Changed to ${was} since you started editing counts` : undefined}
         title={moved ? `Your collection now has ${was} — retype the count, or press Enter to keep ${value}` : pledged ? `${pledged} in built decks — break those down to count fewer` : undefined}
         value={text}
         onFocus={(e) => {
@@ -291,14 +291,14 @@ export function ChecklistNotes({ checklist: c }: { checklist: Checklist }) {
       {moved > 0 && (
         <p role="status" className="flex flex-wrap items-center gap-x-3 gap-y-1 text-ink">
           <span>
-            {fmtInt(moved)} {moved === 1 ? 'count changed' : 'counts changed'} in your collection since you started counting. Each flagged cell shows the new number — retype it, or press Enter to keep yours.
+            {fmtInt(moved)} {moved === 1 ? 'count changed' : 'counts changed'} in your collection since you started editing counts. Each flagged cell shows the new number — retype it, or press Enter to keep yours.
           </span>
           <button type="button" onClick={() => c.confirm()} className="cursor-pointer text-accent-ink underline hover:text-ink">Keep all my counts</button>
         </p>
       )}
       {low.length > 0 && (
         <p className="text-danger">
-          {low[0].name} has {low[0].min} {low[0].min === 1 ? 'copy' : 'copies'} in built decks — break {low[0].min === 1 ? 'it' : 'them'} down before counting fewer{low.length > 1 ? ` (and ${low.length - 1} more)` : ''}.
+          {low[0].name} has {low[0].min} {low[0].min === 1 ? 'copy' : 'copies'} in built decks — break {low[0].min === 1 ? 'it' : 'them'} down before setting fewer{low.length > 1 ? ` (and ${low.length - 1} more)` : ''}.
         </p>
       )}
     </div>
