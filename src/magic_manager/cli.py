@@ -272,6 +272,89 @@ def auth_bind(
     typer.echo(f"bound {r.source} → {r.target}" + (f"; the empty profile moved to {r.replaced}" if r.replaced else ""))
 
 
+@auth_app.command("delete-user")
+def auth_delete_user(
+    user: str = typer.Argument(..., help="The user id (see mm auth users)."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Confirm: delete this account and every file of their collection."),
+    force: bool = typer.Option(False, "--force", help="Delete even if their collection file looks open (a job may be running; e.g. after a crash)."),
+    as_json: bool = typer.Option(False, "--json", help="Print the result as JSON."),
+):
+    """Delete an account (hosted, split layout): sign-in off and sessions ended, then
+    their collection file, its restore point and snapshots, their analytics, and their
+    auth rows (unused invites they made are deleted; used ones are unlinked). Refused
+    for the last admin. Re-running finishes a half-done delete. Admins can delete an
+    account but never read it."""
+    import json as _json
+    from . import account, layout as layout_mod, userfiles
+    if db.layout_kind() != "split":
+        typer.echo("error: needs the split layout (MM_LAYOUT=split, MM_DATA_DIR=<dir>)", err=True)
+        raise typer.Exit(2)
+    if not layout_mod.AUTH_ID_RE.fullmatch(user):
+        typer.echo(f"error: {user!r} is not a user id (see `mm auth users`)", err=True)
+        raise typer.Exit(2)
+    if not force:
+        f = userfiles.path_for(db.data_dir(), user)
+        if f.exists() and (side := db.sidecars(f)):
+            typer.echo(f"error: {f.name} looks open ({', '.join(p.name for p in side)}) — a job may be running. "
+                       "Stop the server (or wait), or pass --force after a crash.", err=True)
+            raise typer.Exit(2)
+    try:
+        account.check_not_last_admin(user)
+    except account.LastAdmin as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+    if not yes and not interactive.confirm(f"Delete account {user} and every file of their collection?", flag="--yes"):
+        typer.echo("nothing deleted")
+        raise typer.Exit(1)
+    try:
+        out = account.delete_account(user)
+    except account.LastAdmin as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+    if as_json:
+        typer.echo(_json.dumps(vars(out)))
+        return
+    ended = "already signed out" if out.sessions_ended is None else f"ended {out.sessions_ended} session(s)"
+    typer.echo(f"deleted {user}: {ended}; removed {len(out.files)} file(s), {out.analytics_events} analytics event(s)"
+               f"; auth row {'removed' if out.user_row else 'already gone'}"
+               f"; invites deleted {out.invites_deleted}, unlinked {out.invites_unlinked}")
+
+
+account_app = typer.Typer(no_args_is_help=True,
+                          help="Your account's data: download a copy (the web's Settings → Account → Download my data).")
+app.add_typer(account_app, name="account")
+
+
+@account_app.command("export")
+def account_export(
+    to: Path = typer.Option(..., "--to", help="Zip file to write (a directory gets magic-manager-export-<date>.zip)."),
+    force: bool = typer.Option(False, "--force", help="Replace an existing file."),
+    as_json: bool = typer.Option(False, "--json", help="Print what was written as JSON."),
+):
+    """Write your data as one zip: my-collection.db (your tables only — never the card
+    catalog), readable CSVs and a README. Single layout: this DB's user tables; split:
+    the users/<MM_USER>.db file."""
+    import json as _json
+    from . import account
+    from . import layout as layout_mod
+    try:
+        out = account.write_export(to, force=force)
+    except FileExistsError as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+    except (account.ExportFailed, layout_mod.LayoutError) as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(1)
+    dest = to / out.filename if to.is_dir() else to
+    if as_json:
+        typer.echo(_json.dumps({"path": str(dest), "bytes": len(out.data), "layout": out.layout,
+                                "tables": out.tables, "csv_rows": out.sheets}))
+        return
+    typer.echo(f"wrote {dest} ({len(out.data) / 1024:,.0f} KB, {out.layout} layout)")
+    for t, n in out.tables.items():
+        typer.echo(f"  {t:24} {n:>9,}")
+
+
 analytics_app = typer.Typer(no_args_is_help=True,
                             help="Self-hosted product analytics: dashboards, saved SQL, consent, retention (docs/analytics.md).")
 app.add_typer(analytics_app, name="analytics")

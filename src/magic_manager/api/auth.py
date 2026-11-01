@@ -12,6 +12,7 @@ class UserOut(BaseModel):
     display_name: str
     email: str | None
     is_admin: bool
+    providers: list[str] = Field(default_factory=list, description="Sign-in providers linked to this user.")
 
 
 class ProviderOut(BaseModel):
@@ -25,6 +26,11 @@ class MeOut(BaseModel):
     csrf_token: str | None = Field(description="Send as X-CSRF-Token on every write while signed in.")
     providers: list[ProviderOut]
     profiles_open: bool = Field(description="False while profiles are closed (the kill switch): only admins can sign in.")
+    signed_in_at: str | None = Field(None, description="When this session's sign-in happened (UTC ISO).")
+    reauth_minutes: int = Field(int(store.REAUTH_WINDOW.total_seconds() // 60),
+                                description="Deleting the account needs a sign-in at most this many minutes old.")
+    reauth_seconds_left: int = Field(0, description="Seconds (server clock, at this response) until this sign-in is too old "
+                                                    "to delete the account; 0 = sign in again first.")
 
 
 def providers() -> list[ProviderOut]:
@@ -36,6 +42,9 @@ def me(session: store.Session | None) -> MeOut:
     user = None
     if session is not None:
         u = session.user
-        user = UserOut(id=u.id, display_name=u.display_name, email=u.email, is_admin=u.is_admin)
+        user = UserOut(id=u.id, display_name=u.display_name, email=u.email, is_admin=u.is_admin,
+                       providers=store.providers_of(u.id))
     return MeOut(user=user, csrf_token=session.csrf_token if session else None,
-                 providers=providers(), profiles_open=auth.PROFILES_OPEN)
+                 providers=providers(), profiles_open=auth.PROFILES_OPEN,
+                 signed_in_at=(session.created_at or None) if session else None,
+                 reauth_seconds_left=session.fresh_seconds_left() if session else 0)

@@ -33,7 +33,7 @@ from .. import analytics, auth, db, userfiles
 from .. import layout as _layout
 from ..api import auth as auth_api
 from ..auth import oauth, ratelimit, store
-from . import admin_routes
+from . import account_routes, admin_routes
 
 log = logging.getLogger("magic_manager.web.auth")
 
@@ -223,6 +223,7 @@ def install(app: FastAPI) -> None:
     app.state.public_origin = auth.check_hosted()
     app.include_router(router)
     app.include_router(admin_routes.router)
+    app.include_router(account_routes.delete_router)
     logging.getLogger("uvicorn.access").addFilter(_redactor)
 
     @app.middleware("http")

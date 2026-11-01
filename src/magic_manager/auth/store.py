@@ -34,6 +34,8 @@ SESSION_IDLE = timedelta(days=14)
 SESSION_ABSOLUTE = timedelta(days=30)
 # last_seen_at is refreshed at most this often (one write per minute, not per request).
 TOUCH_EVERY = timedelta(minutes=1)
+# Account deletion needs a session made by a sign-in at most this long ago (re-auth).
+REAUTH_WINDOW = timedelta(minutes=10)
 INVITE_DEFAULT = timedelta(days=7)
 PROVIDERS = ("discord", "google")
 
@@ -208,6 +210,13 @@ def users() -> list[tuple[User, list[str]]]:
     return [(_user(r), links.get(r["id"], [])) for r in rows]
 
 
+def providers_of(user_id: str) -> list[str]:
+    """The sign-in providers linked to one user."""
+    with connect() as conn:
+        return [r["provider"] for r in conn.execute(
+            "SELECT provider FROM identities WHERE user_id = ? ORDER BY provider", (user_id,))]
+
+
 def user_for_identity(provider: str, subject: str) -> User | None:
     with connect() as conn:
         row = conn.execute(
@@ -246,6 +255,66 @@ def session_counts() -> dict[str, int]:
         rows = conn.execute("SELECT user_id, COUNT(*) AS n FROM sessions WHERE expires_at > ? AND last_seen_at > ? "
                             "GROUP BY user_id", (_iso(now), _iso(now - SESSION_IDLE))).fetchall()
     return {r["user_id"]: r["n"] for r in rows}
+
+
+# ---------- account deletion (§25.1 H10; ordered by ``magic_manager.account``) ----------
+
+class LastAdmin(Exception):
+    """Deleting this account would leave the server without an enabled admin."""
+
+    error_code = "auth.last_admin"
+
+
+def _refuse_last_admin(conn: sqlite3.Connection, user_id: str) -> None:
+    row = conn.execute("SELECT is_admin FROM users WHERE id = ?", (user_id,)).fetchone()
+    if row is not None and row["is_admin"] and conn.execute(
+            "SELECT COUNT(*) FROM users WHERE is_admin = 1 AND disabled_at IS NULL AND id <> ?", (user_id,)).fetchone()[0] == 0:
+        raise LastAdmin("You're the only admin — make someone else an admin before deleting this account.")
+
+
+def check_not_last_admin(user_id: str) -> None:
+    """:class:`LastAdmin` if ``user_id`` is an admin and no other enabled admin exists."""
+    with connect() as conn:
+        _refuse_last_admin(conn, user_id)
+
+
+def close_account(user_id: str) -> int | None:
+    """Deletion step 1: turn sign-in off and end every session, in one transaction, so
+    nothing new can reach the user's file while it is deleted. The last-admin rule is
+    checked inside the same write transaction (two admins deleting themselves at once
+    can't both pass). Returns the sessions ended, or None when the user row is already
+    gone (a finished delete)."""
+    with connect() as conn, _tx(conn):
+        if conn.execute("SELECT 1 FROM users WHERE id = ?", (user_id,)).fetchone() is None:
+            return None
+        _refuse_last_admin(conn, user_id)
+        conn.execute("UPDATE users SET disabled_at = COALESCE(disabled_at, ?) WHERE id = ?", (_iso(_now()), user_id))
+        return conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,)).rowcount
+
+
+@dataclass(frozen=True)
+class RemovedAuth:
+    user: bool                  # the users row (identities, sessions, overrides cascade)
+    identities: int
+    invites_deleted: int        # unused invites they made + the record of their own redemption
+    invites_unlinked: int       # used invites they made: kept for the invitee, creator cleared
+    overrides_unlinked: int     # flag overrides they set on others: kept, setter cleared
+
+
+def remove_user_rows(user_id: str) -> RemovedAuth:
+    """Deletion's last step: every auth.db row about the user, in one transaction.
+    Idempotent (a second call removes nothing)."""
+    with connect() as conn, _tx(conn):
+        identities = conn.execute("DELETE FROM identities WHERE user_id = ?", (user_id,)).rowcount
+        deleted = conn.execute("DELETE FROM invites WHERE (created_by = ? AND used_at IS NULL) OR used_by = ?",
+                               (user_id, user_id)).rowcount
+        unlinked = conn.execute("UPDATE invites SET created_by = NULL WHERE created_by = ?", (user_id,)).rowcount
+        overrides = conn.execute("UPDATE feature_overrides SET set_by = NULL WHERE set_by = ? AND user_id <> ?",
+                                 (user_id, user_id)).rowcount
+        conn.execute("DELETE FROM feature_overrides WHERE user_id = ?", (user_id,))
+        conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+        user = conn.execute("DELETE FROM users WHERE id = ?", (user_id,)).rowcount > 0
+    return RemovedAuth(user, identities, deleted, unlinked, overrides)
 
 
 # ---------- per-user feature-flag overrides (v2) ----------
@@ -336,6 +405,21 @@ class Session:
     user: User
     csrf_token: str
     token_hash: str
+    created_at: str = ""   # when its sign-in happened (sessions are made only by a sign-in)
+
+    def fresh_seconds_left(self, within: timedelta = REAUTH_WINDOW) -> int:
+        """Seconds until this session's sign-in is older than ``within`` (0 = not fresh).
+        Server clock only — the browser's clock never decides it."""
+        if not self.created_at:
+            return 0
+        made, now = _parse(self.created_at), _now()
+        if made > now + timedelta(seconds=5):
+            return 0
+        return max(0, int((made + within - now).total_seconds()))
+
+    def fresh(self, within: timedelta = REAUTH_WINDOW) -> bool:
+        """Was this session created by a sign-in at most ``within`` ago?"""
+        return self.fresh_seconds_left(within) > 0
 
 
 @dataclass(frozen=True)
@@ -370,7 +454,8 @@ def session_for(token: str | None) -> Session | None:
     th = hash_secret(token)
     now = _now()
     with connect() as conn:
-        row = conn.execute("SELECT s.token_hash, s.csrf_token, s.last_seen_at AS s_seen, s.expires_at, u.* "
+        row = conn.execute("SELECT s.token_hash, s.csrf_token, s.created_at AS s_made, s.last_seen_at AS s_seen, "
+                           "s.expires_at, u.* "
                            "FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?", (th,)).fetchone()
         if row is None:
             return None
@@ -381,7 +466,7 @@ def session_for(token: str | None) -> Session | None:
         if _parse(row["s_seen"]) + TOUCH_EVERY <= now:
             conn.execute("UPDATE sessions SET last_seen_at = ? WHERE token_hash = ?", (_iso(now), th))
             conn.execute("UPDATE users SET last_seen_at = ? WHERE id = ?", (_iso(now), row["id"]))
-        return Session(_user(row), row["csrf_token"], th)
+        return Session(_user(row), row["csrf_token"], th, row["s_made"])
 
 
 def end_session(token: str | None) -> bool:

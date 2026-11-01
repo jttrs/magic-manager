@@ -2,6 +2,7 @@ import { Link } from '@tanstack/react-router';
 import { Dialog } from 'radix-ui';
 import { useState, type SVGProps } from 'react';
 import { useFeature, useOwnerPath } from '../../app/features';
+import { peekAccountReturn } from '../../app/accountReturn';
 import { useSettingsSections } from '../../app/settings';
 import { IconAction } from '../IconAction';
 import { PrivacySettings } from '../Telemetry';
@@ -22,9 +23,10 @@ function GearIcon(props: SVGProps<SVGSVGElement>) {
 }
 
 /** The masthead gear: ONE surface for preferences — Appearance, any section a
- *  view registers (`useSettingsSection`), Privacy, and About. */
+ *  view registers (`useSettingsSection`; the shell registers Account), Privacy, and About. */
 export function SettingsButton() {
-  const [open, setOpen] = useState(false);
+  // Back from re-auth for Delete account: open where the person left off.
+  const [open, setOpen] = useState(peekAccountReturn);
   const sections = useSettingsSections();
   const analyticsOn = useFeature('analytics');
   const dashboardAllowed = useOwnerPath('analytics.dashboard');

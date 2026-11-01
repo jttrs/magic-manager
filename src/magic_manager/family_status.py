@@ -78,6 +78,11 @@ def resolve_family(anchor: str) -> tuple[str, str, list[dict]]:
 _ST_INDEX: dict[str, tuple[dict[str, str], dict[str, set[str]]]] = {}
 
 
+def forget_scope(scope: str) -> None:
+    """Drop one user's cached set_targets index (account deletion)."""
+    _ST_INDEX.pop(scope, None)
+
+
 def _set_targets_index() -> tuple[dict[str, str], dict[str, set[str]]]:
     """(member_to_anchor, anchor_to_codes), cached. member_to_anchor maps every
     code in every anchor's related_codes (plus the anchor itself) to that anchor;

@@ -261,6 +261,23 @@
         }
       }
     },
+    "/api/account/export": {
+      "get": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Account Export",
+        "operationId": "account_export",
+        "responses": {
+          "200": {
+            "description": "Your data as a zip.",
+            "content": {
+              "application/zip": {}
+            }
+          }
+        }
+      }
+    },
     "/api/scrapers/health": {
       "get": {
         "tags": [
@@ -4367,6 +4384,47 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AdminUserOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/account/delete": {
+      "post": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Account Delete",
+        "operationId": "account_delete",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteOut"
                 }
               }
             }
@@ -9141,6 +9199,41 @@
         ],
         "title": "DeckSummaryOut"
       },
+      "DeleteIn": {
+        "properties": {
+          "confirm": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Confirm",
+            "description": "Type \u201cdelete my account\u201d to confirm."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "confirm"
+        ],
+        "title": "DeleteIn"
+      },
+      "DeleteOut": {
+        "properties": {
+          "deleted": {
+            "type": "boolean",
+            "title": "Deleted"
+          },
+          "files_removed": {
+            "type": "integer",
+            "title": "Files Removed",
+            "description": "Collection files removed (the file, its restore point and snapshots)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "deleted",
+          "files_removed"
+        ],
+        "title": "DeleteOut"
+      },
       "DraftCardIn": {
         "properties": {
           "scryfall_id": {
@@ -11161,6 +11254,30 @@
             "type": "boolean",
             "title": "Profiles Open",
             "description": "False while profiles are closed (the kill switch): only admins can sign in."
+          },
+          "signed_in_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signed In At",
+            "description": "When this session's sign-in happened (UTC ISO)."
+          },
+          "reauth_minutes": {
+            "type": "integer",
+            "title": "Reauth Minutes",
+            "description": "Deleting the account needs a sign-in at most this many minutes old.",
+            "default": 10
+          },
+          "reauth_seconds_left": {
+            "type": "integer",
+            "title": "Reauth Seconds Left",
+            "description": "Seconds (server clock, at this response) until this sign-in is too old to delete the account; 0 = sign in again first.",
+            "default": 0
           }
         },
         "type": "object",
@@ -16655,6 +16772,14 @@
           "is_admin": {
             "type": "boolean",
             "title": "Is Admin"
+          },
+          "providers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Providers",
+            "description": "Sign-in providers linked to this user."
           }
         },
         "type": "object",

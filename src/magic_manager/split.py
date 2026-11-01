@@ -226,36 +226,7 @@ def split(source: Path, data_dir: Path, user: str = _layout.DEFAULT_USER, *, for
 
         say(f"copying {len(dest)} tables from {source.name} (v{version}) …")
         conn.execute("BEGIN")
-        carried: list[tuple[str, str]] = [("schema_version", "catalog"), ("schema_version", "user")]
-        sv_sql = next(sql for typ, name, _t, sql in objects if typ == "table" and name == "schema_version")
-        for s in (_CAT, _USR):
-            conn.execute(_qualify(sv_sql, s))
-            conn.execute(f"INSERT INTO {s}.schema_version SELECT * FROM {_SRC}.schema_version")
-        for typ, name, _tbl, sql in objects:
-            if typ != "table" or name not in dest:
-                continue
-            s = to_schema[dest[name]]
-            conn.execute(_qualify(sql, s))
-            cols, has_rowid, alias = _layout_of(conn, _SRC, name)
-            sel = ", ".join(_q(c) for c in cols)
-            if has_rowid and not alias:
-                sel = f"rowid, {sel}"
-            conn.execute(f"INSERT INTO {s}.{_q(name)} ({sel}) SELECT {sel} FROM {_SRC}.{_q(name)}")
-            carried.append((name, dest[name]))
-        for typ, name, tbl, sql in objects:  # indexes + triggers after the rows
-            if typ in ("index", "trigger") and sql and tbl in dest:
-                conn.execute(_qualify(sql, to_schema[dest[tbl]]))
-        # The inserts above touched each file's sqlite_sequence; make it the source's, row for row.
-        for s in to_schema.values():
-            if conn.execute(f"SELECT 1 FROM {s}.sqlite_master WHERE name='sqlite_sequence'").fetchone():
-                conn.execute(f"DELETE FROM {s}.sqlite_sequence")
-        has_seq = conn.execute(f"SELECT 1 FROM {_SRC}.sqlite_master WHERE name='sqlite_sequence'").fetchone()
-        for name, seq in (conn.execute(f"SELECT name, seq FROM {_SRC}.sqlite_sequence").fetchall() if has_seq else []):
-            if name not in dest:
-                continue
-            s = to_schema[dest[name]]
-            conn.execute(f"INSERT INTO {s}.sqlite_sequence (name, seq) VALUES (?, ?)", (name, seq))
-            report.sequences[name] = seq
+        carried, report.sequences = copy_tables(conn, objects, dest, to_schema)
 
         # Verify against the SAME source snapshot (still inside the read transaction).
         say("verifying row counts + content hashes …")
@@ -302,6 +273,80 @@ def split(source: Path, data_dir: Path, user: str = _layout.DEFAULT_USER, *, for
         for p in tmp.values():
             _unlink(p)
         raise
+
+
+def copy_tables(conn: sqlite3.Connection, objects: list[tuple[str, str, str, str | None]],
+                dest: dict[str, str], to_schema: dict[str, str], src: str = _SRC
+                ) -> tuple[list[tuple[str, str]], dict[str, int]]:
+    """Copy ``schema_version`` (into every target) and each table in ``dest``
+    (table → kind) from the ``src`` schema into ``to_schema[kind]``, exactly: the
+    same stored CREATE text, every row with its rowid, then indexes/triggers, then
+    the AUTOINCREMENT sequence values. Runs inside the caller's transaction.
+    Returns ``(carried (table, kind) pairs, sequences kept)``. The ONE copy rule —
+    the splitter and the account export (:func:`user_tables_db`) both use it."""
+    carried: list[tuple[str, str]] = [("schema_version", k) for k in to_schema]
+    sv_sql = next(sql for typ, name, _t, sql in objects if typ == "table" and name == "schema_version")
+    for s in to_schema.values():
+        conn.execute(_qualify(sv_sql, s))
+        conn.execute(f"INSERT INTO {s}.schema_version SELECT * FROM {src}.schema_version")
+    for typ, name, _tbl, sql in objects:
+        if typ != "table" or name not in dest:
+            continue
+        s = to_schema[dest[name]]
+        conn.execute(_qualify(sql, s))
+        cols, has_rowid, alias = _layout_of(conn, src, name)
+        sel = ", ".join(_q(c) for c in cols)
+        if has_rowid and not alias:
+            sel = f"rowid, {sel}"
+        conn.execute(f"INSERT INTO {s}.{_q(name)} ({sel}) SELECT {sel} FROM {src}.{_q(name)}")
+        carried.append((name, dest[name]))
+    for typ, name, tbl, sql in objects:  # indexes + triggers after the rows
+        if typ in ("index", "trigger") and sql and tbl in dest:
+            conn.execute(_qualify(sql, to_schema[dest[tbl]]))
+    # The inserts above touched each file's sqlite_sequence; make it the source's, row for row.
+    for s in to_schema.values():
+        if conn.execute(f"SELECT 1 FROM {s}.sqlite_master WHERE name='sqlite_sequence'").fetchone():
+            conn.execute(f"DELETE FROM {s}.sqlite_sequence")
+    sequences: dict[str, int] = {}
+    has_seq = conn.execute(f"SELECT 1 FROM {src}.sqlite_master WHERE name='sqlite_sequence'").fetchone()
+    for name, seq in (conn.execute(f"SELECT name, seq FROM {src}.sqlite_sequence").fetchall() if has_seq else []):
+        if name not in dest:
+            continue
+        s = to_schema[dest[name]]
+        conn.execute(f"INSERT INTO {s}.sqlite_sequence (name, seq) VALUES (?, ?)", (name, seq))
+        sequences[name] = seq
+    return carried, sequences
+
+
+def user_tables_db(source: Path) -> bytes:
+    """A single-layout DB's USER tables only (+ ``schema_version``), as the bytes of
+    a SQLite file — the same content ``split`` writes to ``users/<user>.db``, built
+    in memory by :func:`copy_tables` (never the catalog). ``source`` is opened
+    read-only and read in ONE transaction, so the copy is consistent; each table's
+    rows + content hash are checked against that same snapshot (``SplitFailed``
+    otherwise). For the account export in the single layout."""
+    source = Path(source)
+    if not source.is_file():
+        raise SplitRefused(f"no DB at {source}")
+    conn = sqlite3.connect("file::memory:", uri=True, isolation_level=None)
+    try:
+        conn.execute(f"ATTACH DATABASE ? AS {_SRC}", (source.resolve().as_uri() + "?mode=ro",))
+        conn.execute(f"ATTACH DATABASE ':memory:' AS {_USR}")
+        conn.execute("BEGIN")
+        objects = _objects(conn, _SRC)
+        names = {name for typ, name, _t, _s in objects if typ == "table"}
+        if "schema_version" not in names:
+            raise SplitRefused(f"{source} has no schema_version table")
+        dest = {t: "user" for t in _layout.USER_TABLES if t in names}
+        carried, _seq = copy_tables(conn, objects, dest, {"user": _USR})
+        bad = [name for name, _k in carried if _table_hash(conn, _SRC, name) != _table_hash(conn, _USR, name)]
+        conn.execute("COMMIT")
+        if bad:
+            raise SplitFailed(f"the user-table copy didn't verify: {', '.join(bad)}",
+                              SplitReport(str(source), "", ":memory:", "", 0, ""))
+        return conn.serialize(name=_USR)
+    finally:
+        conn.close()
 
 
 def verify_pair(user_db: Path, catalog: Path, user: str, report: SplitReport) -> None:

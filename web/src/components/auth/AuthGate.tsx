@@ -94,7 +94,11 @@ function SignInScreen({ me, failed, onRetry }: { me: MeOut | null; failed: boole
               ? 'You’re invited. Choose the account you’ll sign in with from now on.'
               : 'Invite-only. Sign in with the account you joined with.'}
           </p>
-          {message && <p role="alert" className="text-md leading-snug text-danger">{message}</p>}
+          {message && (
+            <p role={error === 'account_deleted' ? 'status' : 'alert'} className={`text-md leading-snug ${error === 'account_deleted' ? 'text-ink' : 'text-danger'}`}>
+              {message}
+            </p>
+          )}
           {failed ? (
             <button type="button" onClick={onRetry} className={`${buttonClass('paper')} min-h-11 w-full`}>Try again</button>
           ) : providers.length ? (

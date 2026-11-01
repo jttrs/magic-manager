@@ -17,6 +17,7 @@ import { SettingsButton } from './settings/SettingsDialog';
 import { SettingsChoice, SettingsRow } from './settings/SettingsControls';
 import { SubnavSlot } from './subnavSlot';
 import { AccountButton } from './auth/AccountButton';
+import { AccountSettings } from './account/AccountSettings';
 
 const NAV = [
   { to: '/collection', label: 'Collection' },
@@ -65,6 +66,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </header>
       <PrivacyPrompt />
+      <AccountSettings />
       {children}
     </div>
   );

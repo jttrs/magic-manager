@@ -52,7 +52,7 @@ def _mutates(name: str) -> bool:
 
 
 class JobsBusy(RuntimeError):
-    """A mutating job is queued or running."""
+    """A (mutating) job is queued or running, or the user's account is being deleted."""
 
     def __init__(self, title: str) -> None:
         super().__init__(title)
@@ -112,6 +112,7 @@ class JobManager:
         # restores — a job must never write on top of (or underneath) a restore.
         self._user_locks: dict[str | None, threading.Lock] = {}
         self._user_locks_guard = threading.Lock()
+        self._closing: set[str | None] = set()   # users whose account is being deleted
         self._events_lock = threading.Lock()  # orders event seqs across threads
         self._max_history = max_history
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -137,7 +138,10 @@ class JobManager:
         inputs = spec.input_model.model_validate(raw_inputs)  # ValidationError → 422
         rec = JobRecord(id=uuid.uuid4().hex, name=spec.name, title=spec.title,
                         inputs=inputs.model_dump(), ctx=analytics.current(), user=_layout.bound_user())
-        self._jobs[rec.id] = rec
+        with self._user_locks_guard:  # atomic with closing_user's mark + scan
+            if rec.user in self._closing:
+                raise JobsBusy("deleting your account")
+            self._jobs[rec.id] = rec
         self._trim()
         self._emit(rec, "status", {"status": rec.status})
         await self._task.kiq(rec.id)
@@ -164,9 +168,29 @@ class JobManager:
         finally:
             lock.release()
 
-    def _busy_title(self, user: str | None) -> str:
+    @contextmanager
+    def closing_user(self, user: str) -> Iterator[None]:
+        """Account deletion: :class:`JobsBusy` if ANY job of ``user`` is queued or
+        running; for the body, that user can't submit a job (and their mutating
+        jobs can't start)."""
+        lock = self._user_lock(user)
+        if not lock.acquire(blocking=False):
+            raise JobsBusy(self._busy_title(user, any_job=True) or "a job")
+        try:
+            with self._user_locks_guard:
+                self._closing.add(user)
+                title = self._busy_title(user, any_job=True)
+            if title:
+                raise JobsBusy(title)
+            yield
+        finally:
+            with self._user_locks_guard:
+                self._closing.discard(user)
+            lock.release()
+
+    def _busy_title(self, user: str | None, *, any_job: bool = False) -> str:
         for r in list(self._jobs.values()):  # snapshot: the loop thread may add jobs
-            if r.user == user and r.status in ("queued", "running") and _mutates(r.name):
+            if r.user == user and r.status in ("queued", "running") and (any_job or _mutates(r.name)):
                 return r.title
         return ""
 
