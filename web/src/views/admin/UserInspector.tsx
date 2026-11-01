@@ -24,7 +24,7 @@ export function UserInspector({ user, paths, self, onClose }: { user: AdminUserO
     mutationFn: async ({ name, choice }: { name: string; choice: FlagChoice }) =>
       unwrap(await adminSetFlag({ path: { ...path, flag: name }, body: { value: choiceValue(choice) } })),
     onMutate: begin,
-    onSuccess: (row, v) => { put(row); setNote(`${flagTitle(v.name)}: ${v.choice === 'default' ? 'back to the default' : `turned ${v.choice}`} for ${user.display_name}.`); },
+    onSuccess: (row, v) => { put(row); if (self) void qc.invalidateQueries({ queryKey: ['features'] }); setNote(`${flagTitle(v.name)}: ${v.choice === 'default' ? 'back to the default' : `turned ${v.choice}`} for ${user.display_name}.`); },
     onError: (e) => setError(e.message),
   });
   const signOut = useMutation({
