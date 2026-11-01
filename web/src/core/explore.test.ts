@@ -34,7 +34,7 @@ describe('explore (card role)', () => {
 
   it('maps entries: share is the guide %, lift the note, ownership a tag', () => {
     const c = fromEntry(entry('Birds', { share: 30.8, lift: 1.09, facts: facts({ oracle_id: 'o-b', owned: 3, free: 1 }) }));
-    expect([c.key, c.pct, c.note, c.tags]).toEqual(['o-b', 30.8, '1.09× lift', ['3 owned · 1 free']]);
+    expect([c.key, c.pct, c.note, c.tags]).toEqual(['o-b', 30.8, '1.09× lift', ['3 owned · 1 unused']]);
     const p: PairedOut = { name: 'X', slug: 'x', facts: facts({ oracle_id: 'o-x' }), bucket: 'both', a: entry('X', { share: 40, lift: 2 }), b: entry('X', { share: 10, lift: 1.5 }), gap: 30 };
     expect(fromPaired(p)).toMatchObject({ bars: { a: 40, b: 10 }, note: 'lift 2.00× / 1.50×' });
   });

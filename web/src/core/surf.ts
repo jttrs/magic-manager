@@ -10,7 +10,7 @@ export const EMPTY_FILTERS: SurfFilters = {
   art: [], families: [], colors: '', color_match: 'exact', flavor: 'any', types: [], legendary: 'any', rarity: [], artist: '', treatments: [],
 };
 export const COLORS = ['w', 'u', 'b', 'r', 'g', 'c'] as const;
-export const COLOR_NAME: Record<(typeof COLORS)[number], string> = { w: 'White', u: 'Blue', b: 'Black', r: 'Red', g: 'Green', c: 'Colourless' };
+export const COLOR_NAME: Record<(typeof COLORS)[number], string> = { w: 'White', u: 'Blue', b: 'Black', r: 'Red', g: 'Green', c: 'Colorless' };
 const BATCH = 3;
 
 const csv = (v: string | null) => (v ? v.split(',').map((s) => s.trim()).filter(Boolean) : []);
@@ -60,7 +60,7 @@ export function activeFilters(f: SurfFilters): number {
     .filter(Boolean).length;
 }
 
-/** Toggle one colour letter; colourless and colours exclude each other. */
+/** Toggle one color letter; colorless and colors exclude each other. */
 export function toggleColor(colors: string, letter: string): string {
   const has = colors.includes(letter);
   if (letter === 'c') return has ? '' : 'c';

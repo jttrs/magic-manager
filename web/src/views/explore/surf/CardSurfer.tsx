@@ -4,6 +4,8 @@ import { unwrap } from '../../../app/queries';
 import { ViewLayout } from '../../../components/AppShell';
 import { Button } from '../../../components/Button';
 import { IconAction } from '../../../components/IconAction';
+import { IconTooltip } from '../../../components/IconTooltip';
+import { iconActionClass } from '../../../components/iconActionClass';
 import { GuideSheet } from '../../../components/States';
 import { ScryfallMark, ShuffleMark } from '../../../components/StoreMarks';
 import { surfDraw, type SurfDrawOut } from '../../../core/api';
@@ -19,7 +21,7 @@ const newSeed = () => Math.floor(Math.random() * 2 ** 31);
 /** Explore → Surfer: an endless feed of random cards — art first, then flavor
  *  text, artist and printing — with the filters in the rail. Filters live in
  *  the URL (`surf`). */
-export function CardSurfer({ raw, onChange, tabs }: { raw: string | undefined; onChange: (raw: string | undefined) => void; tabs: ReactNode }) {
+export function CardSurfer({ raw, onChange, subnav }: { raw: string | undefined; onChange: (raw: string | undefined) => void; subnav: ReactNode }) {
   const state = useMemo(() => decodeSurf(raw), [raw]);
   const key = encodeSurf(state);
   const set = (s: SurfState) => {
@@ -102,23 +104,18 @@ export function CardSurfer({ raw, onChange, tabs }: { raw: string | undefined; o
     <>
       <IconAction label="Shuffle — start a fresh feed" Icon={ShuffleMark} onClick={() => setSeed(newSeed())} />
       {query && state.source === 'scryfall' && (
-        <a
-          href={scryfallSearchUrl(query)}
-          target="_blank"
-          rel="noreferrer"
-          aria-label="Open this search on Scryfall"
-          title="Open this search on Scryfall"
-          className="touch-hit grid size-9 place-items-center rounded-sm text-accent-ink transition-colors duration-150 ease-guide hover:bg-paper-sunk focus-visible:bg-paper-sunk"
-        >
-          <ScryfallMark className="size-[1.35rem]" />
-        </a>
+        <IconTooltip label="Open results in Scryfall">
+          <a href={scryfallSearchUrl(query)} target="_blank" rel="noreferrer" aria-label="Open results in Scryfall (opens in a new tab)" className={iconActionClass('paper')}>
+            <ScryfallMark className="size-[1.35rem]" />
+          </a>
+        </IconTooltip>
       )}
     </>
   );
 
   return (
-    <ViewLayout label="Card surfer filters" summary={active > 0 ? `${fmtInt(active)} ${active === 1 ? 'filter' : 'filters'}` : undefined} sidebar={<SurfFilterRail state={state} onChange={set} />}>
-      <GuideSheet title="Card surfer" nav={tabs} summary={<span role="status">{summary}</span>} actions={actions} actionsLabel="Card surfer actions">
+    <ViewLayout label="Card surfer filters" summary={active > 0 ? `${fmtInt(active)} ${active === 1 ? 'filter' : 'filters'}` : undefined} sidebar={<SurfFilterRail state={state} onChange={set} />} subnav={subnav}>
+      <GuideSheet title="Card surfer" summary={<span role="status">{summary}</span>} actions={actions} actionsLabel="Card surfer actions">
         <div
           ref={scroller}
           tabIndex={0}

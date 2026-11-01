@@ -2983,7 +2983,7 @@ export type FactsOut = {
      */
     free?: number;
     /**
-     * Partner pairing: the second card's own facts. The pair's price, colour identity and copies (pairs you could put together) are on the outer facts; its printing/type are the first card's.
+     * Partner pairing: the second card's own facts. The pair's price, color identity and copies (pairs you could put together) are on the outer facts; its printing/type are the first card's.
      */
     partner?: FactsOut | null;
 };
@@ -5070,13 +5070,13 @@ export type RankingOut = {
     /**
      * Timeframe
      *
-     * Stored timeframe: week|month|year, 'all' (salt, tag) or '' (set).
+     * The base list's stored timeframe: week|month|year, 'all' (salt, tag) or '' (set).
      */
     timeframe: string;
     /**
      * Filter
      *
-     * '' | color:<slug> | tag:<slug> | set:<anchor>.
+     * The base list read from EDHREC: '' | color:<slug> | tag:<slug> | set:<anchor>.
      */
     filter: string;
     /**
@@ -5086,17 +5086,55 @@ export type RankingOut = {
     /**
      * Cached
      *
-     * False = never fetched; run the edhrec.rankings job.
+     * False = a list it needs was never fetched; run the edhrec.rankings job.
      */
     cached: boolean;
     /**
      * Fetched At
+     *
+     * The oldest read among the lists combined.
      */
     fetched_at: string | null;
     /**
      * Rows
+     *
+     * The requested page of matches.
      */
     rows: Array<RankedOut>;
+    /**
+     * Total
+     *
+     * Matches after every filter (name and ownership included).
+     */
+    total: number;
+    /**
+     * Pool
+     *
+     * Entries after the color / tag / set filters.
+     */
+    pool: number;
+    /**
+     * Owned
+     *
+     * Of the pool: entries you own a copy of.
+     */
+    owned: number;
+    /**
+     * Unused
+     *
+     * Of the pool: entries with a copy not in a built deck.
+     */
+    unused: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Local Filters
+     *
+     * Axes applied locally to the base list (EDHREC's filters don't combine).
+     */
+    local_filters: Array<'color' | 'tag'>;
 };
 
 /**
@@ -7632,7 +7670,7 @@ export type ExploreRankingData = {
         /**
          * Timeframe
          *
-         * Ignored by salt, tag and set rankings.
+         * Applies to top commanders/cards and a color identity on its own or with a tag; ignored by salt, tag-only and set rankings.
          */
         timeframe?: 'week' | 'month' | 'year';
         /**
@@ -7653,6 +7691,28 @@ export type ExploreRankingData = {
          * Set family anchor or name, e.g. fin.
          */
         set_family?: string | null;
+        /**
+         * Q
+         *
+         * Card name contains (case-insensitive).
+         */
+        q?: string;
+        /**
+         * Own
+         *
+         * unused = a copy not in a built deck.
+         */
+        own?: 'all' | 'owned' | 'unused';
+        /**
+         * Offset
+         */
+        offset?: number;
+        /**
+         * Limit
+         *
+         * Rows per page; total counts every match.
+         */
+        limit?: number | null;
     };
     url: '/api/explore/ranking';
 };

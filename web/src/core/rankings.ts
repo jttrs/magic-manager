@@ -1,56 +1,63 @@
 // Explore rankings (EDHREC top commanders / top cards / salt) — URL state → the
-// API request, the ownership filter, and the guide view-model. Framework-free.
+// API request and page, and the guide view-model. Framework-free.
 import type { RankedOut, RankingOut } from './api';
 import { fromFacts } from './explore';
 import type { GuideCard } from './guideCard';
-import type { CompareSearch, ExploreMode, RankBy, RankOwn, RankScope, RankTimeframe, Role } from './search';
+import type { CompareSearch, ExploreMode, RankOwn, RankScope, RankTimeframe, Role } from './search';
 
-export type RankingsState = Pick<CompareSearch, 'rank' | 'by' | 'color' | 'tag' | 'fam' | 'tf' | 'own' | 'rq'>;
+export type RankingsState = Pick<CompareSearch, 'rank' | 'color' | 'tag' | 'fam' | 'tf' | 'own' | 'rq'>;
 
-/** What the engine's `RankingQuery` takes. */
+/** What the engine's `RankingQuery` takes (the job input): color, tag and set combine. */
 export type RankingRequest = { scope: RankScope; timeframe: RankTimeframe; color?: string; tag?: string; set_family?: string };
+
+/** A page of the ranking: the request plus name / ownership and how many rows. */
+export type RankingPageRequest = RankingRequest & { q: string; own: RankOwn; offset: number; limit: number };
+
+/** Rows shown at first, and how many more each "Load more" adds. */
+export const FIRST_PAGE = 100;
+const MORE_PAGE = 50;
 
 /** The Explore tab: explicit `mode`, else a surfer link (`surf` — legacy links opened the surfer over any view), else a picked card, else rankings. */
 export const exploreMode = (mode: ExploreMode | undefined, a: string | undefined, surf?: string): ExploreMode => mode ?? (surf != null ? 'surf' : a ? 'card' : 'rankings');
 
 export const SCOPE_LABEL: Record<RankScope, string> = { commanders: 'Top commanders', cards: 'Top cards', salt: 'Saltiest cards' };
-export const BY_LABEL: Record<RankBy, string> = { any: 'Every commander', color: 'Colour identity', tag: 'Tag or creature type', set: 'Set family' };
 export const TIMEFRAME_LABEL: Record<RankTimeframe, string> = { week: 'Week', month: 'Month', year: '2 years' };
-export const OWN_LABEL: Record<RankOwn, string> = { all: 'All', owned: 'You own', free: 'Free' };
+export const OWN_LABEL: Record<RankOwn, string> = { all: 'All', owned: 'You own', unused: 'Unused' };
 
-/** Narrowing applies only to commander rankings; one axis at a time. */
-export const narrowBy = (s: Pick<RankingsState, 'rank' | 'by'>): RankBy => (s.rank === 'commanders' ? s.by : 'any');
+/** Color, tag and set narrow commander rankings only. */
+export const filtersApply = (s: Pick<RankingsState, 'rank'>): boolean => s.rank === 'commanders';
 
-/** EDHREC serves a timeframe for top commanders/cards and colour pages; salt, tags and sets are all-time. */
-export const timeframeApplies = (s: Pick<RankingsState, 'rank' | 'by'>): boolean => s.rank !== 'salt' && ['any', 'color'].includes(narrowBy(s));
+const value = (v?: string) => (v?.trim() ? v.trim() : undefined);
 
-/** The API request, or null while the chosen axis still needs a value. */
-export function rankingRequest(s: RankingsState): RankingRequest | null {
-  const base = { scope: s.rank, timeframe: s.tf };
-  const value = (v?: string) => (v?.trim() ? v.trim() : null);
-  switch (narrowBy(s)) {
-    case 'color': {
-      const color = value(s.color);
-      return color ? { ...base, color } : null;
-    }
-    case 'tag': {
-      const tag = value(s.tag);
-      return tag ? { ...base, tag } : null;
-    }
-    case 'set': {
-      const fam = value(s.fam);
-      return fam ? { ...base, set_family: fam } : null;
-    }
-    default:
-      return base;
-  }
+/** EDHREC serves a timeframe for top commanders/cards and color pages; salt, tags and sets are all-time.
+ *  With a set family the set's list is read (no timeframe); a tag on its own is all-time. */
+export function timeframeApplies(s: Pick<RankingsState, 'rank' | 'color' | 'tag' | 'fam'>): boolean {
+  if (s.rank === 'salt') return false;
+  if (!filtersApply(s)) return true;
+  if (value(s.fam)) return false;
+  return !(value(s.tag) && !value(s.color));
 }
 
-/** Rows kept by the ownership filter and the name search. */
-export function shownRows(rows: readonly RankedOut[], own: RankOwn, q: string): RankedOut[] {
-  const ql = q.trim().toLowerCase();
-  return rows.filter((r) => (own === 'owned' ? (r.facts.owned ?? 0) > 0 : own === 'free' ? (r.facts.free ?? 0) > 0 : true) && (!ql || r.name.toLowerCase().includes(ql)));
+/** The API request (the job input): every filter set, for commander lists. */
+export function rankingRequest(s: RankingsState): RankingRequest {
+  const base: RankingRequest = { scope: s.rank, timeframe: s.tf };
+  if (!filtersApply(s)) return base;
+  const color = value(s.color);
+  const tag = value(s.tag);
+  const fam = value(s.fam);
+  return { ...base, ...(color && { color }), ...(tag && { tag }), ...(fam && { set_family: fam }) };
 }
+
+/** The page read: the request plus the name / ownership filters and the first `limit` rows. */
+export const rankingPage = (req: RankingRequest, s: Pick<RankingsState, 'own' | 'rq'>, limit: number): RankingPageRequest =>
+  ({ ...req, q: s.rq.trim(), own: s.own, offset: 0, limit });
+
+/** How many rows "Load more" adds next (never past the total). */
+export const nextPage = (shown: number, total: number): number => Math.max(0, Math.min(MORE_PAGE, total - shown));
+
+/** A failed job's message without the engine's exception name ("EdhrecError: …"). */
+export const failureText = (error: string | null | undefined): string =>
+  (error ?? '').replace(/^[A-Z][A-Za-z]*(Error|Exception|Refused|Failed):\s*/, '').trim() || 'EDHREC didn’t answer.';
 
 /** The role a ranked card opens in: commander rankings lead decks; top cards and salt are cards in the 99. */
 export const roleFor = (scope: RankScope): Role => (scope === 'commanders' ? 'commander' : 'card');
@@ -96,11 +103,15 @@ export function edhrecUrl(r: Pick<RankingOut, 'scope' | 'timeframe' | 'filter'>)
 }
 
 /** Sheet summary: what the list shows and how much of it you own. */
-export function rankingSummary(r: RankingOut, shown: readonly RankedOut[]): string {
-  const owned = r.rows.filter((x) => (x.facts.owned ?? 0) > 0).length;
-  const free = r.rows.filter((x) => (x.facts.free ?? 0) > 0).length;
-  const lead = shown.length === r.rows.length ? `${r.rows.length} ranked` : `${shown.length} of ${r.rows.length} shown`;
-  return `${lead} · you own ${owned} · ${free} with free copies`;
+export function rankingSummary(r: Pick<RankingOut, 'total' | 'pool' | 'owned' | 'unused'>): string {
+  const lead = r.total === r.pool ? `${r.pool} ranked` : `${r.total} of ${r.pool} match`;
+  return `${lead} · you own ${r.owned} · ${r.unused} unused`;
+}
+
+/** A calm note for a list EDHREC left empty (a set family with no commanders yet). */
+export function emptyRankingNote(s: Pick<RankingsState, 'rank' | 'fam'>, famName?: string): string {
+  if (filtersApply(s) && value(s.fam)) return `EDHREC lists no commanders from ${famName ?? s.fam?.toUpperCase()} yet.`;
+  return 'EDHREC lists nothing here yet.';
 }
 
 const front = (typeLine: string | null | undefined) => (typeLine ?? '').split(' // ')[0];

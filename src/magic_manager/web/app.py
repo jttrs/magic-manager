@@ -224,7 +224,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             raise HTTPException(502, f"Scryfall lookup failed: {e}") from e
 
     @app.get("/api/explore/ranking", response_model=explore_api.RankingOut, tags=["explore"])
-    def explore_ranking(q: Annotated[explore_api.RankingQuery, Query()]):
+    def explore_ranking(q: Annotated[explore_api.RankingPageQuery, Query()]):
         """A cached EDHREC ranking joined to your collection (never fetches —
         ``cached: false`` means run the ``edhrec.rankings`` job)."""
         try:

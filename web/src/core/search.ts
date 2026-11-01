@@ -26,24 +26,22 @@ export type EarmarkReasonFilter = (typeof EARMARK_REASONS)[number];
 export type ExploreMode = (typeof EXPLORE_MODES)[number];
 export const RANK_SCOPES = ['commanders', 'cards', 'salt'] as const;
 export type RankScope = (typeof RANK_SCOPES)[number];
-export const RANK_BYS = ['any', 'color', 'tag', 'set'] as const;
-export type RankBy = (typeof RANK_BYS)[number];
 export const RANK_TIMEFRAMES = ['week', 'month', 'year'] as const;
 export type RankTimeframe = (typeof RANK_TIMEFRAMES)[number];
-export const RANK_OWN = ['all', 'owned', 'free'] as const;
+/** Ownership filter; `unused` = a copy not in a built deck (old links said `free`). */
+export const RANK_OWN = ['all', 'owned', 'unused'] as const;
 export type RankOwn = (typeof RANK_OWN)[number];
 
 export const compareSearch = z.object({
   /** Explore mode; unset = a card when one is picked, else rankings. */
   mode: z.enum(EXPLORE_MODES).optional().catch(undefined),
-  /** Rankings: which list, one narrowing axis (filters don't stack), its value, timeframe. */
+  /** Rankings: which list; color / tag / set narrow commander lists and combine; timeframe. */
   rank: z.enum(RANK_SCOPES).catch('commanders').default('commanders'),
-  by: z.enum(RANK_BYS).catch('any').default('any'),
   color: z.string().optional().catch(undefined),
   tag: z.string().optional().catch(undefined),
   fam: z.string().optional().catch(undefined),
   tf: z.enum(RANK_TIMEFRAMES).catch('week').default('week'),
-  own: z.enum(RANK_OWN).catch('all').default('all'),
+  own: z.preprocess((v) => (v === 'free' ? 'unused' : v), z.enum(RANK_OWN)).catch('all').default('all'),
   rq: z.string().catch('').default(''),
   rview: z.enum(['grid', 'list']).catch('grid').default('grid'),
   /** Earmarked: reason and deck filters. */

@@ -60,7 +60,7 @@ export function fromFacts(name: string, slug: string, f: FactsOut): GuideCard {
     released: null,
     owned: null,
     missing: false,
-    tags: f.owned ? [`${f.owned} owned · ${f.free} free`] : [],
+    tags: f.owned ? [`${f.owned} owned · ${f.free} unused`] : [],
     lines: {
       plain: names.map((n) => `1 ${n}`).join('\n'),
       manapool: names.map((n) => `1 ${n}`).join('\n'),

@@ -5,7 +5,6 @@ import { useSelection } from '../../app/selection';
 import { ViewLayout } from '../../components/AppShell';
 import { CardArt } from '../../components/CardFace';
 import { CardInspector } from '../../components/CardInspector';
-import { CopyButton } from '../../components/CopyButton';
 import { Segmented, SelectField, SideSection, TextField } from '../../components/Sidebar';
 import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../../components/States';
 import { VirtualGuide } from '../../components/VirtualGuide';
@@ -16,21 +15,21 @@ import { exportLines, type GuideCard } from '../../core/guideCard';
 import { OWN_LABEL } from '../../core/rankings';
 import { EARMARK_REASONS, RANK_OWN, type CompareSearch, type EarmarkReasonFilter, type RankOwn } from '../../core/search';
 
-type Props = { search: CompareSearch; set: (p: Partial<CompareSearch>) => void; tabs: ReactNode };
+type Props = { search: CompareSearch; set: (p: Partial<CompareSearch>) => void; subnav: ReactNode };
 
 const REASON_FILTER_LABEL: Record<EarmarkReasonFilter, string> = { all: 'Any', collect: 'To collect', deck: 'Deck idea', none: 'No reason' };
 
 /** Explore → Earmarked: the cards you earmarked (owned or not) — to collect or as
  *  deck ideas — grouped by why, narrowed by reason, deck, ownership and name.
  *  Earmark or change one from any card's inspector. */
-export function EarmarkedExplore({ search, set, tabs }: Props) {
+export function EarmarkedExplore({ search, set, subnav }: Props) {
   const q = useQuery(cardEarmarksQuery());
   const { selected, toggle, clear } = useSelection('explore-earmarked');
   const [inspecting, setInspecting] = useState<GuideCard | null>(null);
   const all = useMemo(() => q.data ?? [], [q.data]);
   const decks = useMemo(() => earmarkDecks(all), [all]);
   const shown = useMemo(
-    () => filterEarmarks(all, { reason: search.er === 'all' ? undefined : search.er, deck: search.ed, own: search.own, q: search.rq }),
+    () => filterEarmarks(all, { reason: search.er === 'all' ? undefined : search.er, deck: search.ed, own: search.own === 'unused' ? 'free' : search.own, q: search.rq }),
     [all, search.er, search.ed, search.own, search.rq],
   );
   const sections = useMemo(() => earmarkSections(shown), [shown]);
@@ -57,12 +56,6 @@ export function EarmarkedExplore({ search, set, tabs }: Props) {
       <SideSection title="Arrange">
         <Segmented label="View type" showLabel value={search.rview} onChange={(rview) => set({ rview })} options={[{ value: 'grid', label: 'Grid' }, { value: 'list', label: 'List' }]} />
       </SideSection>
-      <SideSection title={`Marked · ${marked.length}`}>
-        <CopyButton label="Copy marked as list" emphasis="primary" getText={() => exportLines(marked, 'plain')} />
-        {selected.size > 0 && (
-          <button type="button" onClick={clear} className="self-start cursor-pointer text-sm text-on-chrome-muted underline hover:text-on-chrome">Clear marks</button>
-        )}
-      </SideSection>
     </>
   );
 
@@ -83,8 +76,8 @@ export function EarmarkedExplore({ search, set, tabs }: Props) {
   }
 
   return (
-    <ViewLayout label="Explore controls" summary="Earmarked" sidebar={sidebar}>
-      <GuideSheet nav={tabs} title="Earmarked" summary={q.data ? `${fmtInt(shown.length)} of ${fmtInt(all.length)} cards` : undefined}>
+    <ViewLayout label="Explore controls" summary="Earmarked" sidebar={sidebar} subnav={subnav}>
+      <GuideSheet title="Earmarked" summary={q.data ? `${fmtInt(shown.length)} of ${fmtInt(all.length)} cards` : undefined} marked={{ count: marked.length, getText: () => exportLines(marked, 'plain'), onClear: clear }}>
         <div className="flex h-full min-h-0 flex-col">{body}</div>
       </GuideSheet>
       <CardInspector card={inspecting} onClose={() => setInspecting(null)} />
