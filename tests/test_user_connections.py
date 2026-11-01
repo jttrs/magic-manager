@@ -1,10 +1,11 @@
 """Phase 3 step 5: per-request user connection, user file lifecycle, per-user undo,
 jobs carry the user, user-scoped caches, catalog-first writes (§25.3, §25.4).
 
-The two-user isolation proof signs in two users on a hosted app (the
-``PROFILES_OPEN`` rail lifted inside the test only) and drives EVERY ``/api`` route
-as user B, recording which collection file each connection opens: only B's — and
-A's file and restore point are byte-identical afterwards."""
+The two-user isolation proof signs in two users on a hosted app (owner/admin A and
+member B, whose every flag an admin turned on) and drives EVERY ``/api`` route as
+B, recording which collection file each connection opens: only B's — and A's file
+and restore point are byte-identical afterwards. Step 6: B is also refused every
+owner-machine path (``owner_machine.PATHS``) whatever the flags say."""
 from __future__ import annotations
 
 import hashlib
@@ -17,7 +18,8 @@ from pydantic import BaseModel
 from fastapi.testclient import TestClient
 from typer.testing import CliRunner
 
-from magic_manager import analytics, auth, db, decks, inventory, layout, market, undo, userfiles
+from magic_manager import analytics, auth, db, decks, features, inventory, layout, market, undo, userfiles
+from magic_manager.auth import admin as admin_engine
 from magic_manager.analytics import consent
 from magic_manager.api import jobs as jobs_api
 from magic_manager.auth import store
@@ -398,7 +400,7 @@ def test_collection_resolve_commits_cards_first(owner_split, monkeypatch, make_c
 @pytest.fixture
 def two_users(owner_split, hosted, provider, monkeypatch):
     """Owner A (bound to users/owner.db) and member B, both signed in on one hosted app."""
-    monkeypatch.setattr(auth, "PROFILES_OPEN", True)  # the step-6 rail, lifted for this proof only
+    assert auth.PROFILES_OPEN  # step 6: profiles are open
     c = TestClient(hosted, base_url=ORIGIN)
     sign_in(c, provider, "discord", invite=store.create_invite(is_admin=True).code)
     a = me(c)["user"]["id"]
@@ -456,6 +458,10 @@ def test_no_api_route_opens_another_users_file(two_users, monkeypatch):
         monkeypatch.setattr(subprocess, name, offline)
     monkeypatch.setattr(auth_routes, "write_limiter", auth_routes.ratelimit.Limiter(100_000))
 
+    # B gets every flag turned on by an admin override: still only B's file, and
+    # every owner-machine path refused (test_member_is_refused_every_pinned_path).
+    for flag in features.base_flags():
+        admin_engine.set_flag(b, flag, True, actor=a)
     h = _as(c, tb)
     calls = 0
     for route in api_routes(c.app):
@@ -524,3 +530,78 @@ def test_a_session_without_a_file_gets_an_empty_one(owner_split, hosted):
     c.cookies.set("mm_session", s.token)
     assert c.get("/api/decks").json() == []
     assert (owner_split / "users" / f"{u.id}.db").exists()
+
+
+# ---------- step 6: owner-machine paths are admin-only, whatever the flags say ----------
+
+def test_member_is_refused_every_pinned_path(two_users, monkeypatch):
+    from magic_manager import addcards, owner_machine, storefetch, tabs
+    from magic_manager.api import deals as deals_api
+    c, data, (a, ta), (b, tb) = two_users
+    for flag in features.base_flags():  # an admin turned EVERYTHING on for B: the pin still wins
+        admin_engine.set_flag(b, flag, True, actor=a)
+
+    def never(*_a, **_k):
+        raise AssertionError("an owner-machine subprocess ran for a member")
+    monkeypatch.setattr(subprocess, "run", never)
+
+    h = _as(c, tb)
+    feats = c.get("/api/features").json()
+    assert all(feats["flags"].values()) and set(feats["owner_paths"]) == set(owner_machine.PATHS)
+    assert not any(feats["owner_paths"].values())
+    refused = [("GET", "/api/cart/setup", None), ("POST", "/api/cart/check", {}),
+               ("GET", "/api/deals/tabs", None), ("GET", "/api/analytics/summary", None),
+               ("GET", "/api/analytics/trace/0123456789abcdef", None)]
+    for method, path, body in refused:
+        r = c.request(method, path, headers=h, json=body)
+        assert r.status_code == 403 and r.json()["code"] == "auth.admin_only", (path, r.status_code, r.text)
+    # the companion paths (the member's own browser) are theirs to use
+    r = c.post("/api/deals/tabs", headers=h, json={"tabs": []})
+    assert r.status_code == 200, r.text
+
+    with layout.as_user(b):
+        # deals: never the server Mac's tabs, in the job and at the AppleScript seam
+        seen = {}
+        monkeypatch.setattr(deals_api.deals, "read_and_compare", lambda urls, **k: seen.update(k) or [])
+        deals_api._run_read_prices(deals_api.ReadPricesInput(urls=["https://x.example/p"]), lambda e: None)
+        assert seen["tabs_on_mac"] is False
+        for seam in (storefetch._osascript, tabs._osascript):
+            with pytest.raises(owner_machine.OwnerOnly):
+                seam("return 1")
+        # the deck fetch: public decks only, never this machine's Moxfield session
+        args = _fetch_args(monkeypatch)
+        assert "--public-only" in args["argv"] and args["env"]["MM_PUBLIC_DECKS_ONLY"] == "1"
+    with layout.as_user(a):  # the admin keeps the owner-machine paths
+        assert owner_machine.access() == {k: True for k in owner_machine.PATHS}
+        args = _fetch_args(monkeypatch)
+        assert "--public-only" not in args["argv"] and "MM_PUBLIC_DECKS_ONLY" not in args["env"]
+    _as(c, ta)
+    assert all(c.get("/api/features").json()["owner_paths"].values())
+
+
+def _fetch_args(monkeypatch) -> dict:
+    from magic_manager import addcards
+    got: dict = {}
+
+    class FakeProc:
+        def __init__(self, argv, **kw):
+            got.update(argv=argv, env=kw["env"])
+            import io
+            self.stdout, self.stderr, self.returncode = io.StringIO('{"cards": []}'), io.StringIO(""), 0
+
+        def wait(self):
+            return 0
+    monkeypatch.setattr(addcards.subprocess, "Popen", FakeProc)
+    addcards.fetch_deck_payload("https://moxfield.com/decks/abc")
+    return got
+
+
+def test_a_disabled_admin_is_not_an_admin(owner_split, monkeypatch):
+    from magic_manager import owner_machine
+    monkeypatch.setenv("MM_MODE", "hosted")
+    u = store.redeem_invite(store.create_invite(is_admin=True).code, "google", "z", "Z", None)
+    assert not owner_machine.is_admin()  # nobody bound: fail closed
+    with layout.as_user(u.id):
+        assert owner_machine.is_admin()
+        store.revoke(u.id, disable=True)
+        assert not owner_machine.is_admin()

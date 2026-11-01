@@ -27,7 +27,7 @@ from pathlib import Path
 
 from .. import db
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 FILE_NAME = "auth.db"
 
 SESSION_IDLE = timedelta(days=14)
@@ -71,7 +71,19 @@ _SCHEMA = [
         used_by    TEXT REFERENCES users(id) ON DELETE SET NULL,
         used_at    TEXT
     )""",
+    # v2: per-user feature-flag overrides set by an admin (§25.1 H6) — the top flag layer.
+    """CREATE TABLE IF NOT EXISTS feature_overrides (
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        flag    TEXT NOT NULL CHECK (length(flag) BETWEEN 1 AND 64),
+        enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+        set_by  TEXT,
+        set_at  TEXT NOT NULL,
+        PRIMARY KEY (user_id, flag)
+    )""",
 ]
+
+# Columns added after v1 (ALTER TABLE ADD COLUMN when an older file lacks them).
+_ADDED_COLUMNS = {"users": [("last_seen_at", "TEXT")]}
 
 _lock = threading.Lock()
 _ready: set[str] = set()
@@ -133,6 +145,11 @@ def connect(p: Path | None = None) -> Iterator[sqlite3.Connection]:
                 conn.execute("PRAGMA journal_mode = WAL")
                 for stmt in _SCHEMA:
                     conn.execute(stmt)
+                for table, cols in _ADDED_COLUMNS.items():
+                    have = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+                    for col, decl in cols:
+                        if col not in have:
+                            conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
                 conn.execute("INSERT INTO meta (key, value) VALUES ('schema_version', ?) "
                              "ON CONFLICT (key) DO UPDATE SET value = excluded.value", (str(SCHEMA_VERSION),))
                 _ready.add(key)
@@ -162,6 +179,7 @@ class User:
     is_admin: bool
     created_at: str
     disabled_at: str | None
+    last_seen_at: str | None = None
 
     @property
     def disabled(self) -> bool:
@@ -170,7 +188,8 @@ class User:
 
 def _user(row: sqlite3.Row) -> User:
     return User(row["id"], row["display_name"], row["email"], bool(row["is_admin"]),
-                row["created_at"], row["disabled_at"])
+                row["created_at"], row["disabled_at"],
+                row["last_seen_at"] if "last_seen_at" in row.keys() else None)
 
 
 def get_user(user_id: str) -> User | None:
@@ -211,6 +230,53 @@ def revoke(user_id: str, *, disable: bool = False) -> int:
         if disable:
             conn.execute("UPDATE users SET disabled_at = COALESCE(disabled_at, ?) WHERE id = ?", (_iso(_now()), user_id))
         return conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,)).rowcount
+
+
+def enable(user_id: str) -> None:
+    """Let a disabled user sign in again (they start signed out)."""
+    with connect() as conn:
+        if conn.execute("UPDATE users SET disabled_at = NULL WHERE id = ?", (user_id,)).rowcount == 0:
+            raise LookupError(f"no user {user_id!r}")
+
+
+def session_counts() -> dict[str, int]:
+    """Live (unexpired) sessions per user."""
+    now = _now()
+    with connect() as conn:
+        rows = conn.execute("SELECT user_id, COUNT(*) AS n FROM sessions WHERE expires_at > ? AND last_seen_at > ? "
+                            "GROUP BY user_id", (_iso(now), _iso(now - SESSION_IDLE))).fetchall()
+    return {r["user_id"]: r["n"] for r in rows}
+
+
+# ---------- per-user feature-flag overrides (v2) ----------
+
+def overrides(user_id: str) -> dict[str, bool]:
+    """The admin-set flag overrides of one user (flag → on/off); absent = the default."""
+    with connect() as conn:
+        rows = conn.execute("SELECT flag, enabled FROM feature_overrides WHERE user_id = ?", (user_id,)).fetchall()
+    return {r["flag"]: bool(r["enabled"]) for r in rows}
+
+
+def all_overrides() -> dict[str, dict[str, bool]]:
+    with connect() as conn:
+        rows = conn.execute("SELECT user_id, flag, enabled FROM feature_overrides ORDER BY flag").fetchall()
+    out: dict[str, dict[str, bool]] = {}
+    for r in rows:
+        out.setdefault(r["user_id"], {})[r["flag"]] = bool(r["enabled"])
+    return out
+
+
+def set_override(user_id: str, flag: str, enabled: bool | None, *, set_by: str | None = None) -> None:
+    """Turn ``flag`` on/off for one user, or back to the default (``None``)."""
+    with connect() as conn, _tx(conn):
+        if conn.execute("SELECT 1 FROM users WHERE id = ?", (user_id,)).fetchone() is None:
+            raise LookupError(f"no user {user_id!r}")
+        if enabled is None:
+            conn.execute("DELETE FROM feature_overrides WHERE user_id = ? AND flag = ?", (user_id, flag))
+            return
+        conn.execute("INSERT INTO feature_overrides (user_id, flag, enabled, set_by, set_at) VALUES (?, ?, ?, ?, ?) "
+                     "ON CONFLICT (user_id, flag) DO UPDATE SET enabled = excluded.enabled, set_by = excluded.set_by, "
+                     "set_at = excluded.set_at", (user_id, flag, int(enabled), set_by, _iso(_now())))
 
 
 # ---------- invites ----------
@@ -292,6 +358,7 @@ def create_session(user_id: str, *, replaces: str | None = None) -> NewSession:
             conn.execute("DELETE FROM sessions WHERE token_hash = ?", (hash_secret(replaces),))
         conn.execute("INSERT INTO sessions (token_hash, user_id, csrf_token, created_at, last_seen_at, expires_at) "
                      "VALUES (?, ?, ?, ?, ?, ?)", (hash_secret(token), user_id, csrf, _iso(now), _iso(now), _iso(expires)))
+        conn.execute("UPDATE users SET last_seen_at = ? WHERE id = ?", (_iso(now), user_id))
     return NewSession(token, csrf, expires)
 
 
@@ -303,16 +370,17 @@ def session_for(token: str | None) -> Session | None:
     th = hash_secret(token)
     now = _now()
     with connect() as conn:
-        row = conn.execute("SELECT s.token_hash, s.csrf_token, s.last_seen_at, s.expires_at, u.* "
+        row = conn.execute("SELECT s.token_hash, s.csrf_token, s.last_seen_at AS s_seen, s.expires_at, u.* "
                            "FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?", (th,)).fetchone()
         if row is None:
             return None
         if (row["disabled_at"] is not None or _parse(row["expires_at"]) <= now
-                or _parse(row["last_seen_at"]) + SESSION_IDLE <= now):
+                or _parse(row["s_seen"]) + SESSION_IDLE <= now):
             conn.execute("DELETE FROM sessions WHERE token_hash = ?", (th,))
             return None
-        if _parse(row["last_seen_at"]) + TOUCH_EVERY <= now:
+        if _parse(row["s_seen"]) + TOUCH_EVERY <= now:
             conn.execute("UPDATE sessions SET last_seen_at = ? WHERE token_hash = ?", (_iso(now), th))
+            conn.execute("UPDATE users SET last_seen_at = ? WHERE id = ?", (_iso(now), row["id"]))
         return Session(_user(row), row["csrf_token"], th)
 
 

@@ -7,7 +7,8 @@ The gate (deny by default):
 * Every non-GET ``/api/`` request must carry ``Origin`` == ``MM_PUBLIC_ORIGIN``
   (on top of the app-wide ``Sec-Fetch-Site`` guard) → else 403 ``auth.origin``.
 * Every ``/api/`` route outside :data:`PUBLIC_ROUTES` needs a live session of a user
-  allowed in (admins only until profiles open) → else 401 ``auth.required``.
+  allowed in (admins only while profiles are closed) → else 401 ``auth.required``.
+* ``/api/admin/*`` (the Admin page) additionally needs an admin → else 403 ``auth.admin_only``.
 * A write with a session needs ``X-CSRF-Token`` == the session's token (from
   ``GET /api/auth/me``; constant-time compare) → else 403 ``auth.csrf``; writes are
   limited per session → 429 ``auth.rate_limited``.
@@ -32,6 +33,7 @@ from .. import analytics, auth, db, userfiles
 from .. import layout as _layout
 from ..api import auth as auth_api
 from ..auth import oauth, ratelimit, store
+from . import admin_routes
 
 log = logging.getLogger("magic_manager.web.auth")
 
@@ -72,7 +74,7 @@ def _refuse(request: Request, status: int, code: str, detail: str) -> JSONRespon
 
 
 def allowed(session: store.Session | None) -> store.Session | None:
-    """The session if its user may use this server right now (step-5 rail: admins only)."""
+    """The session if its user may use this server right now (profiles rail: admins only while closed)."""
     if session is None or session.user.disabled:
         return None
     if not auth.may_sign_in(session.user.is_admin):
@@ -220,6 +222,7 @@ def install(app: FastAPI) -> None:
         return
     app.state.public_origin = auth.check_hosted()
     app.include_router(router)
+    app.include_router(admin_routes.router)
     logging.getLogger("uvicorn.access").addFilter(_redactor)
 
     @app.middleware("http")

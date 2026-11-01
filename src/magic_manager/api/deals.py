@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from .. import deals, earmarks, features
+from .. import deals, earmarks, features, owner_machine
 from .jobs import Artifact, JobResult, JobSpec, ProgressEvent, ProgressFn, register
 
 
@@ -44,6 +44,7 @@ class OpenTabsOut(BaseModel):
 
 def open_tabs(browser: str = "chrome") -> OpenTabsOut:
     features.require("deals")
+    owner_machine.require("deals.mac_tabs")  # AppleScript on the server Mac: admins only when hosted
     return OpenTabsOut(**deals.open_tabs(browser))
 
 
@@ -108,6 +109,7 @@ def _run_read_prices(inp: ReadPricesInput, progress: ProgressFn) -> JobResult:
     features.require("deals")
     rows = deals.read_and_compare(inp.urls, fresh=inp.fresh,
                                   pages={u: p.model_dump() for u, p in inp.pages.items()},
+                                  tabs_on_mac=owner_machine.allowed("deals.mac_tabs"),
                                   progress=lambda i, n, msg: progress(ProgressEvent(i - 1, n, msg)))
     out = [PriceOut(**r).model_dump() for r in rows]
     priced = sum(1 for r in out if r["price"] is not None)
@@ -272,7 +274,7 @@ def _run_watchlist(inp: WatchlistInput, progress: ProgressFn) -> JobResult:
     read, newly = [], []
     if inp.refresh:
         res = deals.read_watched(progress=lambda i, n, msg: progress(ProgressEvent(i - 1, n, f"reading {msg}")),
-                                 pages={u: p.model_dump() for u, p in inp.pages.items()}, tabs_on_mac=not inp.in_browser)
+                                 pages={u: p.model_dump() for u, p in inp.pages.items()}, tabs_on_mac=not inp.in_browser and owner_machine.allowed("deals.mac_tabs"))
         rows, read, newly = res["rows"], res["read"], res["newly_met"]
     else:
         rows = deals.watchlist(values=False)

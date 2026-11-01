@@ -4129,6 +4129,260 @@
           }
         }
       }
+    },
+    "/api/admin/users": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Admin Users",
+        "operationId": "admin_users",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUsersOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/invites": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Admin Invite",
+        "operationId": "admin_invite",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/users/{user_id}/sign-out": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Admin Sign Out",
+        "operationId": "admin_sign_out",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9]{16}$",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignOutOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/users/{user_id}/disable": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Admin Disable",
+        "operationId": "admin_disable",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9]{16}$",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/users/{user_id}/enable": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Admin Enable",
+        "operationId": "admin_enable",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9]{16}$",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/users/{user_id}/flags/{flag}": {
+      "put": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Admin Set Flag",
+        "operationId": "admin_set_flag",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9]{16}$",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "flag",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,63}$",
+              "title": "Flag"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FlagIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -4150,6 +4404,116 @@
           "summary"
         ],
         "title": "ActionOut"
+      },
+      "AdminUserOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "providers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Providers"
+          },
+          "is_admin": {
+            "type": "boolean",
+            "title": "Is Admin"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "last_seen_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen At"
+          },
+          "disabled_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disabled At"
+          },
+          "sessions": {
+            "type": "integer",
+            "title": "Sessions",
+            "description": "Live sessions (signed-in browsers)."
+          },
+          "flags": {
+            "items": {
+              "$ref": "#/components/schemas/FlagStateOut"
+            },
+            "type": "array",
+            "title": "Flags"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "display_name",
+          "email",
+          "providers",
+          "is_admin",
+          "created_at",
+          "last_seen_at",
+          "disabled_at",
+          "sessions",
+          "flags"
+        ],
+        "title": "AdminUserOut"
+      },
+      "AdminUsersOut": {
+        "properties": {
+          "users": {
+            "items": {
+              "$ref": "#/components/schemas/AdminUserOut"
+            },
+            "type": "array",
+            "title": "Users"
+          },
+          "owner_paths": {
+            "items": {
+              "$ref": "#/components/schemas/OwnerPathOut"
+            },
+            "type": "array",
+            "title": "Owner Paths"
+          }
+        },
+        "type": "object",
+        "required": [
+          "users",
+          "owner_paths"
+        ],
+        "title": "AdminUsersOut"
       },
       "ApplyIn": {
         "properties": {
@@ -9554,7 +9918,16 @@
               "type": "boolean"
             },
             "type": "object",
-            "title": "Flags"
+            "title": "Flags",
+            "description": "Every flag's value for you (hosted: with your admin-set overrides)."
+          },
+          "owner_paths": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "type": "object",
+            "title": "Owner Paths",
+            "description": "Paths that run on the owner's machine or logins (owner_machine.PATHS) \u2192 may you use them here. All true locally; admins only when hosted, whatever the flags say."
           },
           "mode": {
             "type": "string",
@@ -9572,6 +9945,79 @@
           "flags"
         ],
         "title": "FeaturesOut"
+      },
+      "FlagIn": {
+        "properties": {
+          "value": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value",
+            "description": "true / false, or null for the default."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "title": "FlagIn"
+      },
+      "FlagStateOut": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "about": {
+            "type": "string",
+            "title": "About"
+          },
+          "default": {
+            "type": "boolean",
+            "title": "Default",
+            "description": "The server's value (config files + MM_FEATURES)."
+          },
+          "override": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Override",
+            "description": "This user's override; null = the default."
+          },
+          "effective": {
+            "type": "boolean",
+            "title": "Effective"
+          },
+          "owner_paths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Owner Paths",
+            "description": "Owner-machine paths in this flag's surface: admins only, whatever the flag says."
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "about",
+          "default",
+          "override",
+          "effective",
+          "owner_paths"
+        ],
+        "title": "FlagStateOut"
       },
       "FloorOut": {
         "properties": {
@@ -10223,6 +10669,61 @@
         ],
         "title": "ImportRowOut"
       },
+      "InviteIn": {
+        "properties": {
+          "admin": {
+            "type": "boolean",
+            "title": "Admin",
+            "default": false
+          },
+          "expires_days": {
+            "type": "integer",
+            "maximum": 30.0,
+            "minimum": 1.0,
+            "title": "Expires Days",
+            "default": 7
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "InviteIn"
+      },
+      "InviteOut": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code",
+            "description": "Shown ONCE \u2014 only its hash is stored."
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "admin": {
+            "type": "boolean",
+            "title": "Admin"
+          },
+          "expires_at": {
+            "type": "string",
+            "title": "Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "url",
+          "admin",
+          "expires_at"
+        ],
+        "title": "InviteOut"
+      },
       "JobOut": {
         "properties": {
           "id": {
@@ -10659,7 +11160,7 @@
           "profiles_open": {
             "type": "boolean",
             "title": "Profiles Open",
-            "description": "False until per-user collections land: only the admin can sign in."
+            "description": "False while profiles are closed (the kill switch): only admins can sign in."
           }
         },
         "type": "object",
@@ -11724,6 +12225,36 @@
           "your"
         ],
         "title": "OwnedOut"
+      },
+      "OwnerPathOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "feature": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "feature",
+          "title"
+        ],
+        "title": "OwnerPathOut"
       },
       "PairedOut": {
         "properties": {
@@ -14670,6 +15201,19 @@
           "name"
         ],
         "title": "SetRefOut"
+      },
+      "SignOutOut": {
+        "properties": {
+          "ended": {
+            "type": "integer",
+            "title": "Ended"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ended"
+        ],
+        "title": "SignOutOut"
       },
       "SkippedOut": {
         "properties": {

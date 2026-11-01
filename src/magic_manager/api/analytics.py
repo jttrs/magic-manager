@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from .. import analytics, features
+from .. import analytics, features, owner_machine
 from ..analytics import catalog, consent, dashboard
 
 PropValue = str | int | float | bool
@@ -194,9 +194,11 @@ def catalog_events() -> list[CatalogEventOut]:
 
 def summary(days: int) -> SummaryOut:
     features.require("analytics")
+    owner_machine.require("analytics.dashboard")
     return SummaryOut(**dashboard.summary(days))
 
 
 def trace(ref: str) -> list[EventOut]:
     features.require("analytics")
+    owner_machine.require("analytics.dashboard")
     return [EventOut(**e) for e in dashboard.trace(ref)]

@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router';
 import { Dialog } from 'radix-ui';
 import { useState, type SVGProps } from 'react';
-import { useFeature } from '../../app/features';
+import { useFeature, useOwnerPath } from '../../app/features';
 import { useSettingsSections } from '../../app/settings';
 import { IconAction } from '../IconAction';
 import { PrivacySettings } from '../Telemetry';
@@ -26,7 +26,9 @@ function GearIcon(props: SVGProps<SVGSVGElement>) {
 export function SettingsButton() {
   const [open, setOpen] = useState(false);
   const sections = useSettingsSections();
-  const analytics = useFeature('analytics');
+  const analyticsOn = useFeature('analytics');
+  const dashboardAllowed = useOwnerPath('analytics.dashboard');
+  const analytics = analyticsOn && dashboardAllowed;
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Trigger asChild>

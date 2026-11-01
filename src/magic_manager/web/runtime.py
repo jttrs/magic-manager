@@ -218,14 +218,17 @@ class JobManager:
         except Exception as e:  # noqa: BLE001 — surface any job failure to the client
             rec.status, rec.finished_at = "failed", _now()
             log.exception("job %s (%s) failed", rec.id, rec.name)
-            if analytics_consent.mode() == "hosted":
+            coded = getattr(type(e), "error_code", None)  # e.g. owner_machine.OwnerOnly: a plain, safe message
+            if isinstance(coded, str):
+                rec.error, trace = str(e), None
+            elif analytics_consent.mode() == "hosted":
                 # str(e)/traceback can carry SQL or paths: type only, detail stays in the log.
                 rec.error = f"{type(e).__name__}: job failed (see server log)"
                 trace = None
             else:
                 rec.error = f"{type(e).__name__}: {e}"
                 trace = traceback.format_exc(limit=5)
-            rec.error_code = analytics_catalog.to_code(type(e).__name__)
+            rec.error_code = coded if isinstance(coded, str) else analytics_catalog.to_code(type(e).__name__)
             self._emit(rec, "error", {"error": rec.error, "code": rec.error_code, "trace": trace})
             self._emit(rec, "status", {"status": rec.status})
             await asyncio.to_thread(analytics.record, "job.failed", {

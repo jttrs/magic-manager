@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Dialog, ToggleGroup } from 'radix-ui';
 import { useState, type ReactNode } from 'react';
-import { useFeature } from '../../app/features';
+import { useFeature, useOwnerPath } from '../../app/features';
 import { cartSetupQuery, unwrap } from '../../app/queries';
 import { useCompanion } from '../../app/useCompanion';
 import { Button } from '../../components/Button';
@@ -50,7 +50,9 @@ const H3 = 'border-b border-rule-strong pb-1 text-md voice-condensed font-bold u
 function CartCheck({ family }: { family?: string }) {
   const companionOn = useFeature('companion');
   const c = useCompanion();
-  const setup = useQuery(cartSetupQuery(true));
+  // The server's own Mana Pool login: the owner's machine — admins only when hosted.
+  const serverLogin = useOwnerPath('manapool.server_login');
+  const setup = useQuery(cartSetupQuery(serverLogin));
   const bookmarklet = useQuery({ queryKey: ['companion', 'bookmarklet'], queryFn: async () => unwrap(await companionBookmarklet()), staleTime: Infinity });
   const [awaiting, setAwaiting] = useState<string | null>(null);
   const [paste, setPaste] = useState('');
@@ -151,7 +153,7 @@ function CartCheck({ family }: { family?: string }) {
               </Button>
               {viaPaste.isError && <FailureNote error={viaPaste.error} />}
             </section>}
-            {store === 'manapool' && setup.data?.account && (
+            {store === 'manapool' && serverLogin && setup.data?.account && (
               <section aria-labelledby="cart-account" className="flex flex-col gap-2">
                 <h3 id="cart-account" className={H3}>With your login on this computer</h3>
                 <p className="max-w-[62ch] text-md leading-relaxed text-ink-muted">Uses the Mana Pool login in this computer’s .env file. Only works where the app runs on your own computer.</p>

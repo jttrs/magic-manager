@@ -19,6 +19,68 @@ export type ActionOut = {
 };
 
 /**
+ * AdminUserOut
+ */
+export type AdminUserOut = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Display Name
+     */
+    display_name: string;
+    /**
+     * Email
+     */
+    email: string | null;
+    /**
+     * Providers
+     */
+    providers: Array<string>;
+    /**
+     * Is Admin
+     */
+    is_admin: boolean;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Last Seen At
+     */
+    last_seen_at: string | null;
+    /**
+     * Disabled At
+     */
+    disabled_at: string | null;
+    /**
+     * Sessions
+     *
+     * Live sessions (signed-in browsers).
+     */
+    sessions: number;
+    /**
+     * Flags
+     */
+    flags: Array<FlagStateOut>;
+};
+
+/**
+ * AdminUsersOut
+ */
+export type AdminUsersOut = {
+    /**
+     * Users
+     */
+    users: Array<AdminUserOut>;
+    /**
+     * Owner Paths
+     */
+    owner_paths: Array<OwnerPathOut>;
+};
+
+/**
  * ApplyIn
  */
 export type ApplyIn = {
@@ -3144,8 +3206,18 @@ export type FeatureUsage = {
 export type FeaturesOut = {
     /**
      * Flags
+     *
+     * Every flag's value for you (hosted: with your admin-set overrides).
      */
     flags: {
+        [key: string]: boolean;
+    };
+    /**
+     * Owner Paths
+     *
+     * Paths that run on the owner's machine or logins (owner_machine.PATHS) → may you use them here. All true locally; admins only when hosted, whatever the flags say.
+     */
+    owner_paths?: {
         [key: string]: boolean;
     };
     /**
@@ -3154,6 +3226,54 @@ export type FeaturesOut = {
      * hosted = sign-in required (MM_MODE=hosted); local = no login.
      */
     mode?: 'local' | 'hosted';
+};
+
+/**
+ * FlagIn
+ */
+export type FlagIn = {
+    /**
+     * Value
+     *
+     * true / false, or null for the default.
+     */
+    value: boolean | null;
+};
+
+/**
+ * FlagStateOut
+ */
+export type FlagStateOut = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * About
+     */
+    about: string;
+    /**
+     * Default
+     *
+     * The server's value (config files + MM_FEATURES).
+     */
+    default: boolean;
+    /**
+     * Override
+     *
+     * This user's override; null = the default.
+     */
+    override: boolean | null;
+    /**
+     * Effective
+     */
+    effective: boolean;
+    /**
+     * Owner Paths
+     *
+     * Owner-machine paths in this flag's surface: admins only, whatever the flag says.
+     */
+    owner_paths: Array<string>;
 };
 
 /**
@@ -3578,6 +3698,44 @@ export type ImportRowOut = {
 };
 
 /**
+ * InviteIn
+ */
+export type InviteIn = {
+    /**
+     * Admin
+     */
+    admin?: boolean;
+    /**
+     * Expires Days
+     */
+    expires_days?: number;
+};
+
+/**
+ * InviteOut
+ */
+export type InviteOut = {
+    /**
+     * Code
+     *
+     * Shown ONCE — only its hash is stored.
+     */
+    code: string;
+    /**
+     * Url
+     */
+    url: string | null;
+    /**
+     * Admin
+     */
+    admin: boolean;
+    /**
+     * Expires At
+     */
+    expires_at: string;
+};
+
+/**
  * JobOut
  */
 export type JobOut = {
@@ -3844,7 +4002,7 @@ export type MeOut = {
     /**
      * Profiles Open
      *
-     * False until per-user collections land: only the admin can sign in.
+     * False while profiles are closed (the kill switch): only admins can sign in.
      */
     profiles_open: boolean;
 };
@@ -4376,6 +4534,24 @@ export type OwnedOut = {
      * Language
      */
     language?: string | null;
+};
+
+/**
+ * OwnerPathOut
+ */
+export type OwnerPathOut = {
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Feature
+     */
+    feature: string | null;
+    /**
+     * Title
+     */
+    title: string;
 };
 
 /**
@@ -6041,6 +6217,16 @@ export type SetRefOut = {
      * Name
      */
     name: string;
+};
+
+/**
+ * SignOutOut
+ */
+export type SignOutOut = {
+    /**
+     * Ended
+     */
+    ended: number;
 };
 
 /**
@@ -9957,3 +10143,168 @@ export type AuthLogoutResponses = {
 };
 
 export type AuthLogoutResponse = AuthLogoutResponses[keyof AuthLogoutResponses];
+
+export type AdminUsersData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/admin/users';
+};
+
+export type AdminUsersResponses = {
+    /**
+     * Successful Response
+     */
+    200: AdminUsersOut;
+};
+
+export type AdminUsersResponse = AdminUsersResponses[keyof AdminUsersResponses];
+
+export type AdminInviteData = {
+    body: InviteIn;
+    path?: never;
+    query?: never;
+    url: '/api/admin/invites';
+};
+
+export type AdminInviteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AdminInviteError = AdminInviteErrors[keyof AdminInviteErrors];
+
+export type AdminInviteResponses = {
+    /**
+     * Successful Response
+     */
+    201: InviteOut;
+};
+
+export type AdminInviteResponse = AdminInviteResponses[keyof AdminInviteResponses];
+
+export type AdminSignOutData = {
+    body?: never;
+    path: {
+        /**
+         * User Id
+         */
+        user_id: string;
+    };
+    query?: never;
+    url: '/api/admin/users/{user_id}/sign-out';
+};
+
+export type AdminSignOutErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AdminSignOutError = AdminSignOutErrors[keyof AdminSignOutErrors];
+
+export type AdminSignOutResponses = {
+    /**
+     * Successful Response
+     */
+    200: SignOutOut;
+};
+
+export type AdminSignOutResponse = AdminSignOutResponses[keyof AdminSignOutResponses];
+
+export type AdminDisableData = {
+    body?: never;
+    path: {
+        /**
+         * User Id
+         */
+        user_id: string;
+    };
+    query?: never;
+    url: '/api/admin/users/{user_id}/disable';
+};
+
+export type AdminDisableErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AdminDisableError = AdminDisableErrors[keyof AdminDisableErrors];
+
+export type AdminDisableResponses = {
+    /**
+     * Successful Response
+     */
+    200: AdminUserOut;
+};
+
+export type AdminDisableResponse = AdminDisableResponses[keyof AdminDisableResponses];
+
+export type AdminEnableData = {
+    body?: never;
+    path: {
+        /**
+         * User Id
+         */
+        user_id: string;
+    };
+    query?: never;
+    url: '/api/admin/users/{user_id}/enable';
+};
+
+export type AdminEnableErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AdminEnableError = AdminEnableErrors[keyof AdminEnableErrors];
+
+export type AdminEnableResponses = {
+    /**
+     * Successful Response
+     */
+    200: AdminUserOut;
+};
+
+export type AdminEnableResponse = AdminEnableResponses[keyof AdminEnableResponses];
+
+export type AdminSetFlagData = {
+    body: FlagIn;
+    path: {
+        /**
+         * User Id
+         */
+        user_id: string;
+        /**
+         * Flag
+         */
+        flag: string;
+    };
+    query?: never;
+    url: '/api/admin/users/{user_id}/flags/{flag}';
+};
+
+export type AdminSetFlagErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AdminSetFlagError = AdminSetFlagErrors[keyof AdminSetFlagErrors];
+
+export type AdminSetFlagResponses = {
+    /**
+     * Successful Response
+     */
+    200: AdminUserOut;
+};
+
+export type AdminSetFlagResponse = AdminSetFlagResponses[keyof AdminSetFlagResponses];

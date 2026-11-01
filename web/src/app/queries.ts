@@ -3,7 +3,7 @@ import { keepPreviousData, queryOptions } from '@tanstack/react-query';
 import type { DraftCardIn } from '../core/api';
 import { apiErrorFrom } from '../core/apiError';
 import type { RankingPageRequest } from '../core/rankings';
-import { analyticsConsent, analyticsSummary, analyticsCatalog, dealsTabs, dealsWatched, marketProductCost, marketSecretLair, undoInfo, cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, cardFloors, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs, historyList, historyEvent, historyRevertPlan, exploreRanking, exploreRankingOptions, cardCombos, deckCombos, draftCombos, artTags, artSwaps, jumpstartView, recipeList, recipeDetail, surfOptions, companionInfo, scrapersHealth, purchaseStores, purchaseList, purchaseReview, cardEarmarksList, deckEarmarks } from '../core/api';
+import { adminUsers, analyticsConsent, analyticsSummary, analyticsCatalog, dealsTabs, dealsWatched, marketProductCost, marketSecretLair, undoInfo, cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, cardFloors, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs, historyList, historyEvent, historyRevertPlan, exploreRanking, exploreRankingOptions, cardCombos, deckCombos, draftCombos, artTags, artSwaps, jumpstartView, recipeList, recipeDetail, surfOptions, companionInfo, scrapersHealth, purchaseStores, purchaseList, purchaseReview, cardEarmarksList, deckEarmarks } from '../core/api';
 
 export function unwrap<T>(r: { data?: T; error?: unknown; response?: Response }): T {
   if (r.error !== undefined || r.data === undefined) throw apiErrorFrom(r.error, r.response);
@@ -153,6 +153,24 @@ export const featuresQuery = () =>
     queryFn: async ({ signal }) => unwrap(await featuresRoute({ signal })),
     select: (d) => d.flags,
     staleTime: Infinity,
+  });
+
+/** Owner-machine paths (`owner_machine.PATHS`) → may you use them here (the same /api/features call).
+ *  Locally always yes; hosted, admins only — whatever the flags say. */
+export const ownerPathsQuery = () =>
+  queryOptions({
+    queryKey: ['features'],
+    queryFn: async ({ signal }) => unwrap(await featuresRoute({ signal })),
+    select: (d) => ({ paths: d.owner_paths ?? {}, hosted: d.mode === 'hosted' }),
+    staleTime: Infinity,
+  });
+
+/** Hosted, admins only: everyone who can sign in, with their flags (the Admin page). */
+export const adminUsersQuery = () =>
+  queryOptions({
+    queryKey: ['admin', 'users'],
+    queryFn: async ({ signal }) => unwrap(await adminUsers({ signal })),
+    staleTime: 30_000,
   });
 
 /** `hosted` = sign-in required; `local` = no login (the same one /api/features call). */

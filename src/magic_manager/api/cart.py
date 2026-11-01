@@ -17,14 +17,15 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from .. import cart, features, secrets
+from .. import cart, features, owner_machine, secrets
 
 _CART_SCRIPT = Path(__file__).resolve().parents[3] / "scripts" / "manapool_cart.py"
 _ACCOUNT_KEYS = secrets.PERSONAL
 
 
 class FeaturesOut(BaseModel):
-    flags: dict[str, bool]
+    flags: dict[str, bool] = Field(description="Every flag's value for you (hosted: with your admin-set overrides).")
+    owner_paths: dict[str, bool] = Field(default_factory=dict, description="Paths that run on the owner's machine or logins (owner_machine.PATHS) → may you use them here. All true locally; admins only when hosted, whatever the flags say.")
     mode: Literal["local", "hosted"] = Field("local", description="hosted = sign-in required (MM_MODE=hosted); local = no login.")
 
 
@@ -105,10 +106,11 @@ class CartAuditOut(BaseModel):
 
 def flags() -> FeaturesOut:
     from ..analytics import consent
-    return FeaturesOut(flags=features.flags(), mode=consent.mode())
+    return FeaturesOut(flags=features.flags(), owner_paths=owner_machine.access(), mode=consent.mode())
 
 
 def _cart_script():
+    owner_machine.require("manapool.server_login")  # the server's .env login: admins only when hosted
     spec = importlib.util.spec_from_file_location("manapool_cart", _CART_SCRIPT)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -117,12 +119,14 @@ def _cart_script():
 
 def setup() -> CartSetupOut:
     features.require("cart_check")
+    owner_machine.require("manapool.server_login")
     env = _cart_script()._load_env()
     return CartSetupOut(account=all(env.get(k) for k in _ACCOUNT_KEYS))
 
 
 def check(req: CartIn) -> CartAuditOut:
     features.require("cart_check")
+    owner_machine.require("manapool.server_login")
     mod = _cart_script()
     items = mod.fetch_headless(mod._load_env())
     if items is None:

@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getRouteApi, Link } from '@tanstack/react-router';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { analyticsSummaryQuery, unwrap } from '../app/queries';
-import { useFeature } from '../app/features';
+import { useFeature, useOwnerPath } from '../app/features';
 import { ViewLayout } from '../components/AppShell';
 import { Button } from '../components/Button';
 import { CopyButton } from '../components/CopyButton';
@@ -17,7 +17,10 @@ const route = getRouteApi('/analytics');
 
 /** Internal (flag `analytics`): error trends first, then how the app is used. */
 export function AnalyticsView() {
-  const on = useFeature('analytics');
+  const flagOn = useFeature('analytics');
+  // Everyone's activity: owner-only when hosted, whatever the flag says.
+  const allowed = useOwnerPath('analytics.dashboard');
+  const on = flagOn && allowed;
   const { days, ref } = route.useSearch();
   const navigate = route.useNavigate();
   const q = useQuery({ ...analyticsSummaryQuery(days), enabled: on });
@@ -44,7 +47,9 @@ export function AnalyticsView() {
         title="Analytics"
         summary={s ? `${s.since} → ${s.until} · errors first, then how the app is used` : 'Errors and usage, from this server’s own event store'}
       >
-        {!on ? (
+        {flagOn && !allowed ? (
+          <EmptyNote title="Analytics is for admins here">It shows everyone’s activity on this server, so only an admin can open it.</EmptyNote>
+        ) : !on ? (
           <EmptyNote title="Analytics is off on this machine">
             Turn on the internal <code>analytics</code> flag (<code>MM_FEATURES=analytics</code> or <code>config/features.local.toml</code>) and restart <code>mm serve</code>.
           </EmptyNote>

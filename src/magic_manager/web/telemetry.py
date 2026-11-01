@@ -25,7 +25,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from .. import analytics
+from .. import analytics, owner_machine
 from ..analytics import catalog, consent
 
 log = logging.getLogger("magic_manager.web")
@@ -114,6 +114,13 @@ def install(app: FastAPI) -> None:
         return JSONResponse({"detail": exc.detail, "code": code,
                              "request_id": getattr(request.state, "request_id", None)},
                             status_code=exc.status_code, headers=exc.headers)
+
+    @app.exception_handler(owner_machine.AdminOnly)
+    async def admin_only(request: Request, exc: owner_machine.AdminOnly):
+        # A path on the owner's machine/logins, asked for by a non-admin (hosted): fail closed.
+        request.state.error_code = owner_machine.CODE
+        return JSONResponse({"detail": str(exc), "code": owner_machine.CODE,
+                             "request_id": getattr(request.state, "request_id", None)}, status_code=403)
 
     @app.exception_handler(RequestValidationError)
     async def coded_validation_error(request: Request, exc: RequestValidationError):

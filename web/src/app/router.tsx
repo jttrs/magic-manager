@@ -4,6 +4,7 @@ import { collectionSearch, compareSearch, decksSearch, marketSearch } from '../c
 import { historySearch } from '../core/history';
 import { jumpstartToDecks, legacyJumpstartSearch } from '../core/jumpstart';
 import { analyticsSearch } from '../core/analyticsDashboard';
+import { adminSearch } from '../core/admin';
 
 const rootRoute = createRootRoute({
   component: () => (
@@ -116,8 +117,17 @@ const analyticsRoute = createRoute({
   component: lazyRouteComponent(() => import('../views/AnalyticsView'), 'AnalyticsView'),
 });
 
+// Hosted, admins only (the server refuses everyone else): people, invites, per-person flags.
+const adminRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/admin',
+  validateSearch: adminSearch,
+  search: { middlewares: [stripSearchParams(adminSearch.parse({}))] },
+  component: lazyRouteComponent(() => import('../views/AdminView'), 'AdminView'),
+});
+
 export const router = createRouter({
-  routeTree: rootRoute.addChildren([indexRoute, collectionRoute, historyRoute, legacyJumpstartRoute, legacySetsRoute, decksRoute, deckEditRoute, exploreRoute, legacyCommandersRoute, marketRoute, jobsRoute, analyticsRoute]),
+  routeTree: rootRoute.addChildren([indexRoute, collectionRoute, historyRoute, legacyJumpstartRoute, legacySetsRoute, decksRoute, deckEditRoute, exploreRoute, legacyCommandersRoute, marketRoute, jobsRoute, analyticsRoute, adminRoute]),
   defaultPreload: 'intent',
 });
 
