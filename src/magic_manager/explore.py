@@ -348,6 +348,7 @@ class Ranking:
     fetched_at: str | None        # the oldest read among the lists it combines
     rows: list[Ranked]            # the requested page (``offset``/``limit``) of the matches
     total: int = 0                # matches after every filter (name and ownership included)
+    base: int = 0                 # entries in the base list read from EDHREC, before local filters
     pool: int = 0                 # entries after the color / tag / set filters only
     owned: int = 0                # of ``pool``: entries you own a copy of
     unused: int = 0               # of ``pool``: entries with a copy not in a built deck
@@ -472,6 +473,7 @@ def ranking(scope: str = "commanders", timeframe: str = "week", *,
                    facts=facts.get(r.oracle_id or "") or pairs.get(r.name.casefold()) or Facts(oracle_id=r.oracle_id),
                    num_decks=r.num_decks, salt=r.salt, trend=r.trend_zscore)
             for r in res.rows]
+    base = len(pool)
 
     applied: list[str] = []
     if scope == "commanders" and color and not keys[0].filter.startswith("color:"):
@@ -496,7 +498,7 @@ def ranking(scope: str = "commanders", timeframe: str = "week", *,
     return Ranking(
         key=keys[0], title=title, cached=True,
         fetched_at=min((r.fetched_at for r in reads if r.fetched_at), default=None),
-        rows=page, total=len(hits), pool=len(pool),
+        rows=page, total=len(hits), base=base, pool=len(pool),
         owned=sum(1 for x in pool if x.facts.owned > 0),
         unused=sum(1 for x in pool if x.facts.free > 0),
         local_filters=applied,

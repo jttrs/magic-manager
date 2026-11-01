@@ -164,7 +164,7 @@ export function RankingsExplore({ search, set, subnav }: Props) {
   } else if (r && r.pool === 0) {
     body = (
       <EmptyNote title="Nothing ranked">
-        {r.local_filters.length ? 'No commander in this list matches all your filters. Set one of them to Any.' : emptyRankingNote(search, famName)}
+        {r.base > 0 ? 'No commander in this list matches all your filters. Set one of them to Any.' : emptyRankingNote(search, famName)}
       </EmptyNote>
     );
   } else if (r && r.total === 0) {

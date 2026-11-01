@@ -320,6 +320,7 @@
   }
  ],
  "total": 12,
+ "base": 12,
  "pool": 12,
  "owned": 5,
  "unused": 4,

@@ -160,6 +160,7 @@
   }
  ],
  "total": 4,
+ "base": 4,
  "pool": 4,
  "owned": 1,
  "unused": 1,

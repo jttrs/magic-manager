@@ -13030,6 +13030,11 @@
             "title": "Total",
             "description": "Matches after every filter (name and ownership included)."
           },
+          "base": {
+            "type": "integer",
+            "title": "Base",
+            "description": "Entries in the base list read from EDHREC, before local filters (0 = EDHREC lists none)."
+          },
           "pool": {
             "type": "integer",
             "title": "Pool",
@@ -13072,6 +13077,7 @@
           "fetched_at",
           "rows",
           "total",
+          "base",
           "pool",
           "owned",
           "unused",

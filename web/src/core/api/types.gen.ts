@@ -5108,6 +5108,12 @@ export type RankingOut = {
      */
     total: number;
     /**
+     * Base
+     *
+     * Entries in the base list read from EDHREC, before local filters (0 = EDHREC lists none).
+     */
+    base: number;
+    /**
      * Pool
      *
      * Entries after the color / tag / set filters.

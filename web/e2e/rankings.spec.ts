@@ -65,7 +65,7 @@ test('a ranking never read is fetched as a job with progress, then shown', async
   let submitted: unknown = null;
   const salt = {
     scope: 'salt', timeframe: 'all', filter: '', title: 'Saltiest cards', fetched_at: '2026-10-06T10:00:00+00:00',
-    total: 1, pool: 1, owned: 0, unused: 0, offset: 0, local_filters: [],
+    total: 1, base: 1, pool: 1, owned: 0, unused: 0, offset: 0, local_filters: [],
     rows: [{ rank: 1, name: 'Stasis', slug: 'stasis', num_decks: 18038, salt: 3.0572, trend: null, facts: { ...ranking.rows[1].facts, owned: 0, free: 0 } }],
   };
   await page.route('**/api/explore/ranking?*', (r) => r.fulfill({ json: cached ? { ...salt, cached: true } : { ...salt, cached: false, fetched_at: null, rows: [] } }));
@@ -138,7 +138,7 @@ test('color, tag and set are laid out together, each Any, and combine', async ({
 test('the first 100 show; Load more adds 50 at a time', async ({ page }) => {
   const template = ranking.rows[1];
   const big = { ...ranking, rows: Array.from({ length: 160 }, (_, i) => ({ ...template, rank: i + 1, name: `Commander ${i + 1}`, slug: `commander-${i + 1}`, facts: { ...template.facts, oracle_id: `o-${i + 1}` } })) };
-  await page.route('**/api/explore/ranking?*', (r) => r.fulfill({ json: { ...rankingPage(big, new URL(r.request().url())), pool: 160 } }));
+  await page.route('**/api/explore/ranking?*', (r) => r.fulfill({ json: { ...rankingPage(big, new URL(r.request().url())), base: 160, pool: 160 } }));
   await page.goto('/explore?rview=list');
   const ledger = page.getByRole('table');
   await expect(ledger.getByRole('row')).toHaveCount(101);
@@ -151,8 +151,8 @@ test('the first 100 show; Load more adds 50 at a time', async ({ page }) => {
 });
 
 test('a set EDHREC lists nothing for is a calm empty state; a failed read never names an exception', async ({ page }) => {
-  await page.route('**/api/explore/ranking?*', (r) => r.fulfill({ json: { ...ranking, filter: 'set:acr', timeframe: '', rows: [], total: 0, pool: 0, owned: 0, unused: 0 } }));
-  await page.goto('/explore?fam=acr');
+  await page.route('**/api/explore/ranking?*', (r) => r.fulfill({ json: { ...ranking, filter: 'set:acr', timeframe: '', rows: [], total: 0, base: 0, pool: 0, owned: 0, unused: 0, local_filters: ['color'] } }));
+  await page.goto('/explore?fam=acr&color=mono-red');
   await expect(page.getByText(/EDHREC lists no commanders from .+ yet\./)).toBeVisible();
   await expect(page.getByRole('alert')).toHaveCount(0);
 

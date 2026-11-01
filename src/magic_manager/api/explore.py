@@ -185,6 +185,7 @@ class RankingOut(BaseModel):
     fetched_at: str | None = Field(description="The oldest read among the lists combined.")
     rows: list[RankedOut] = Field(description="The requested page of matches.")
     total: int = Field(description="Matches after every filter (name and ownership included).")
+    base: int = Field(description="Entries in the base list read from EDHREC, before local filters (0 = EDHREC lists none).")
     pool: int = Field(description="Entries after the color / tag / set filters.")
     owned: int = Field(description="Of the pool: entries you own a copy of.")
     unused: int = Field(description="Of the pool: entries with a copy not in a built deck.")
@@ -212,7 +213,7 @@ def ranking(q: RankingPageQuery) -> RankingOut:
         cached=r.cached, fetched_at=r.fetched_at,
         rows=[RankedOut(rank=x.rank, name=x.name, slug=x.slug, facts=_facts(x.facts),
                         num_decks=x.num_decks, salt=x.salt, trend=x.trend) for x in r.rows],
-        total=r.total, pool=r.pool, owned=r.owned, unused=r.unused, offset=q.offset,
+        total=r.total, base=r.base, pool=r.pool, owned=r.owned, unused=r.unused, offset=q.offset,
         local_filters=r.local_filters,
     )
 

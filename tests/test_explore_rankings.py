@@ -149,7 +149,7 @@ def test_empty_ranking_reads_as_empty_not_never_read(tmp_db, monkeypatch):
     hit = edhrec.cached_rankings(edhrec.ranking_key(set_family="acr"))
     assert hit is not None and hit.rows == []
     r = explore.ranking(set_family="acr")
-    assert r.cached and r.rows == [] and r.total == 0
+    assert r.cached and r.rows == [] and r.total == 0 and r.base == 0
     with db.connect() as conn:
         assert conn.execute("SELECT COUNT(*) FROM edhrec_pages").fetchone()[0] == 0
 
@@ -281,6 +281,14 @@ def test_filters_stack_on_the_most_selective_base(tmp_db, pages, seed_cards, mak
     # Goblin by creature type, Krenko too (Goblin Warrior), Pirate by the tag's own list
     assert [x.name for x in gob.rows] == ["Set Goblin", "Set Pirate", "Krenko, Mob Boss"]
     assert gob.local_filters == ["color", "tag"]
+    # tag alone on the set base: Elf is neither a goblin nor on the tag's list
+    tag_only = explore.ranking(tag="goblins", set_family="tst")
+    assert [x.name for x in tag_only.rows] == ["Set Goblin", "Set Pirate", "Krenko, Mob Boss"]
+    assert (tag_only.base, tag_only.pool, tag_only.local_filters) == (4, 3, ["tag"])
+    monkeypatch.setattr(edhrec, "tag_ranking", lambda slug: _page("topcommanders", [("Nobody Here", 1, None)]))
+    explore.sync_ranking(tag="angels", set_family="tst", refresh=True)
+    nothing = explore.ranking(tag="angels", set_family="tst")
+    assert nothing.rows == [] and (nothing.base, nothing.pool) == (4, 0)
     owned = explore.ranking(set_family="tst", own="owned")
     assert [x.name for x in owned.rows] == ["Krenko, Mob Boss"] and (owned.total, owned.pool, owned.owned, owned.unused) == (1, 4, 1, 1)
     assert [x.name for x in explore.ranking(set_family="tst", q="ELF").rows] == ["Set Elf"]
