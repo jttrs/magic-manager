@@ -32,7 +32,7 @@ test('editor: the Art tab swaps a card onto an on-theme printing you have unused
   });
   await page.route('**/api/jobs/art.lookup', (r) => {
     looked += 1;
-    return r.fulfill({ status: 202, json: { id: 'al1', name: 'art.lookup', title: 'Look on Scryfall for on-theme art', inputs: {}, status: 'queued', created_at: '2026-01-01T00:00:00+00:00', started_at: null, finished_at: null, progress: null, summary: null, artifacts: [], error: null } });
+    return r.fulfill({ status: 202, json: { id: 'al1', name: 'art.lookup', title: 'Look for more on-theme art', inputs: {}, status: 'queued', created_at: '2026-01-01T00:00:00+00:00', started_at: null, finished_at: null, progress: null, summary: null, artifacts: [], error: null } });
   });
   await page.route('**/api/jobs/al1/events', (r) => r.fulfill({
     status: 200, contentType: 'text/event-stream',

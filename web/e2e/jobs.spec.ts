@@ -8,7 +8,7 @@ test('job runner: submit → live progress over SSE → result', async ({ page }
     ['result', { summary: '2 cards · 0 already cached · 2 synced (1 commanders) · 0 failed', artifacts: [] }],
     ['status', { status: 'succeeded' }],
   ].map(([e, d], i) => `event: ${e}\ndata: ${JSON.stringify(d)}\nid: ${i + 1}\n\n`).join('');
-  await page.route('**/api/jobs/edhrec.sync_bulk', (r) => r.fulfill({ status: 202, json: { id: 'job1', name: 'edhrec.sync_bulk', title: 'Warm EDHREC cache', inputs: {}, status: 'queued', created_at: '2026-01-01T00:00:00+00:00', started_at: null, finished_at: null, progress: null, summary: null, artifacts: [], error: null } }));
+  await page.route('**/api/jobs/edhrec.sync_bulk', (r) => r.fulfill({ status: 202, json: { id: 'job1', name: 'edhrec.sync_bulk', title: 'Warm the Explore cache', inputs: {}, status: 'queued', created_at: '2026-01-01T00:00:00+00:00', started_at: null, finished_at: null, progress: null, summary: null, artifacts: [], error: null } }));
   await page.route('**/api/jobs/job1/events', (r) => r.fulfill({ status: 200, contentType: 'text/event-stream', body: sse }));
   await page.goto('/jobs');
   await page.getByRole('searchbox', { name: 'Set families' }).fill('fin');

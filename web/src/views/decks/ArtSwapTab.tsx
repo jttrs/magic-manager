@@ -275,7 +275,7 @@ function SyncTags() {
         <Button tone="paper" emphasis="primary" disabled={running} onClick={async () => setErr(await start('scryfall.sync_tags', { refresh: false }))}>
           {running ? 'Loading art themes…' : 'Load art themes'}
         </Button>
-        {live && running && <ProgressRule label="Loading Scryfall tags" done={live.done} total={live.total} message={live.log.at(-1)?.msg} verb="Loading" />}
+        {live && running && <ProgressRule label="Loading art tags" done={live.done} total={live.total} message={live.log.at(-1)?.msg} verb="Loading" />}
         {(err || live?.error) && <span role="alert" className="text-danger">{err ?? live?.error}</span>}
       </span>
     </EmptyNote>

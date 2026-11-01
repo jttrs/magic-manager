@@ -2128,7 +2128,7 @@ def deck_combos_cmd(
     for c in r.included:
         typer.echo(f"  {' + '.join(p.name for p in c.pieces)} → {', '.join(c.produces[:2])}")
     typer.echo(f"One card away: {len(r.almost)} combos via {len(r.missing_cards)} cards"
-               + (f" ({r.off_color} more need another colour)" if r.off_color else ""))
+               + (f" ({r.off_color} more need another color)" if r.off_color else ""))
     for m in r.missing_cards:
         f = m.piece.facts
         price = f"${f.lowest_usd:.2f}" if f.lowest_usd is not None else "—"

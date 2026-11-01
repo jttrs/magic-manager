@@ -54,7 +54,7 @@ def _run_sync_bulk(inp: SyncBulkInput, progress: ProgressFn) -> JobResult:
 
 SYNC_BULK = register(JobSpec(
     name="edhrec.sync_bulk",
-    title="Warm EDHREC cache",
+    title="Warm the Explore cache",
     description="Fetch EDHREC commander + card pages for every card in a selector or set family.",
     input_model=SyncBulkInput,
     run=_run_sync_bulk,

@@ -45,7 +45,7 @@ test('without synced tags, Function grouping explains how to sync', async ({ pag
   await mockApi(page, { '/api/edhrec/compare': () => ({ json: untagged }) });
   await page.goto(`${COMPARE_URL}&groupBy=function`);
   await expect(page.getByRole('note')).toContainText('No Scryfall function tags yet');
-  await expect(page.getByRole('link', { name: 'Sync Scryfall tags' })).toHaveAttribute('href', '/jobs');
+  await expect(page.getByRole('link', { name: 'Sync card and art tags' })).toHaveAttribute('href', '/jobs');
   await expect(page.locator('section[aria-labelledby="col-a_only"]').getByRole('heading', { name: /^No tagged function/, level: 3 })).toBeVisible();
 });
 
@@ -59,7 +59,7 @@ test('Jobs can sync the Scryfall tag cache', async ({ page }) => {
   let body: unknown = null;
   await page.route('**/api/jobs/scryfall.sync_tags', (r) => {
     body = r.request().postDataJSON();
-    return r.fulfill({ status: 202, json: { id: 'tags1', name: 'scryfall.sync_tags', title: 'Sync Scryfall tags', inputs: {}, status: 'queued', created_at: '2026-01-01T00:00:00+00:00', started_at: null, finished_at: null, progress: null, summary: null, artifacts: [], error: null } });
+    return r.fulfill({ status: 202, json: { id: 'tags1', name: 'scryfall.sync_tags', title: 'Sync card and art tags', inputs: {}, status: 'queued', created_at: '2026-01-01T00:00:00+00:00', started_at: null, finished_at: null, progress: null, summary: null, artifacts: [], error: null } });
   });
   await page.route('**/api/jobs/tags1/events', (r) => r.fulfill({ status: 200, contentType: 'text/event-stream', body: sse }));
   await page.goto('/jobs');

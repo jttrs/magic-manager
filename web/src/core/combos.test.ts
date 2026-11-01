@@ -37,6 +37,6 @@ describe('combos view-model', () => {
     };
     const nm = nearMisses(d);
     expect(nm.map((m) => [m.card.piece.name, m.combos.map((c) => c.id)])).toEqual([['Lattice', ['n2', 'n1']], ['C', ['n3']]]);
-    expect(deckCombosSummary(d)).toBe('1 in this deck · 3 one card away · 3 more need another colour');
+    expect(deckCombosSummary(d)).toBe('1 in this deck · 3 one card away · 3 more need another color');
   });
 });

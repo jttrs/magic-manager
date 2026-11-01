@@ -109,7 +109,7 @@ test('editor: the Earmarked tab lists cards for this deck first, then those that
         for_deck: [{ ...entry('pinned', 'Pinned Card', { reason: 'deck', deck_slug: detail.deck.slug, deck_name: detail.deck.name }), in_deck: false, reasons: [] }],
         legal: [{ earmark: mark('fits', 'Fitting Card', { reason: 'collect' }), printing: fits, owned: 1, free: 1, in_deck: false, reasons: [] }],
         hidden: [
-          { ...entry('bolt', 'Lightning Bolt'), in_deck: false, reasons: [{ code: 'colour_identity', message: 'Outside the commander’s colours (white, black)' }] },
+          { ...entry('bolt', 'Lightning Bolt'), in_deck: false, reasons: [{ code: 'colour_identity', message: 'Outside the commander’s colors (white, black)' }] },
           { ...entry('bad', 'Bad Card'), in_deck: false, reasons: [{ code: 'banned', message: 'Banned in Commander' }] },
         ],
       },
@@ -123,7 +123,7 @@ test('editor: the Earmarked tab lists cards for this deck first, then those that
   await expect(page.getByText('Legal in Commander · within white, black')).toBeVisible();
   await expect(page.getByRole('region', { name: 'For this deck' })).toContainText('Pinned Card');
   await expect(page.getByRole('region', { name: 'Earmarked cards that fit' })).toContainText('Fitting Card');
-  const summary = page.getByText('2 hidden · 1 banned · 1 outside the commander’s colours');
+  const summary = page.getByText('2 hidden · 1 banned · 1 outside the commander’s colors');
   await expect(summary).toBeVisible();
   await expect(page.getByRole('list', { name: 'Hidden earmarked cards' })).toBeHidden();
   await summary.click();

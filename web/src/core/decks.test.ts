@@ -55,7 +55,7 @@ describe('recipe list', () => {
     expect(groupRecipes(rs, 'year').map((g) => g.label)).toEqual(['2025', '2024', 'Undated']);
     expect(groupRecipes(rs, 'kind').map((g) => g.label)).toEqual(['Precon', 'Jumpstart', 'Custom']);
     expect(groupRecipes(rs, 'state').map((g) => g.label)).toEqual(['Built', 'Broken down', 'Not owned']);
-    expect(groupRecipes(rs, 'color').map((g) => [g.label, g.ready])).toEqual([['White', 1], ['Blue', 0], ['Black', 0], ['Multicolour', 0], ['Not read yet', 0]]);
+    expect(groupRecipes(rs, 'color').map((g) => [g.label, g.ready])).toEqual([['White', 1], ['Blue', 0], ['Black', 0], ['Multicolor', 0], ['Not read yet', 0]]);
   });
   it('marks ownership and unused-card cover', () => {
     expect(rs.map(ownershipLabel)).toEqual(['×1 built', 'not owned', 'not owned', '2 broken down', 'not built']);

@@ -46,7 +46,7 @@ export function JobsView() {
   const sidebar = (
     <div className="flex flex-col gap-6">
     <form onSubmit={onSubmit} className="flex flex-col gap-6" aria-describedby="job-form-error">
-      <SideSection title="Warm EDHREC cache">
+      <SideSection title="Warm the Explore cache">
         <p className="text-sm leading-relaxed text-on-chrome-muted">Fetch EDHREC pages for every card in the given set families so compares load instantly.</p>
         <TextField name="families" label="Set families" value={families} placeholder="fin, msh, tla…" onChange={setFamilies} />
         <TextField name="card_type" label="Type filter" value={cardType} placeholder="legendary creature…" onChange={setCardType} />
@@ -58,7 +58,7 @@ export function JobsView() {
         <p id="job-form-error" role="alert" className="min-h-4 text-sm text-danger">{formError}</p>
       </SideSection>
     </form>
-    <SideSection title="Sync Scryfall tags">
+    <SideSection title="Sync card and art tags">
       <p className="text-sm leading-relaxed text-on-chrome-muted">Download Scryfall’s daily oracle-tag file so Commanders can group cards by function.</p>
       <Button type="button" disabled={submitting} onClick={onSyncTags}>Sync tags</Button>
       {tagError && <p role="alert" className="text-sm text-danger">{tagError}</p>}

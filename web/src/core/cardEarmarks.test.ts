@@ -50,7 +50,7 @@ describe('card earmarks', () => {
     const h = (...codes: Code[]): DeckEarmarkOut => ({ ...entry('x'), in_deck: false, reasons: codes.map((code) => ({ code, message: code })) });
     expect(hiddenSummary([])).toBe('');
     expect(hiddenSummary([h('banned'), h('colour_identity'), h('colour_identity', 'not_legal')]))
-      .toBe('3 hidden · 2 outside the commander’s colours · 1 banned · 1 not legal in this format');
+      .toBe('3 hidden · 2 outside the commander’s colors · 1 banned · 1 not legal in this format');
     expect(reasonsText(h('banned', 'not_legal'))).toBe('banned · not_legal');
   });
 });

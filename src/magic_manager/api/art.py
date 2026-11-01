@@ -82,7 +82,7 @@ def _run_lookup(inputs: ArtSwapsIn, progress: ProgressFn) -> JobResult:
 
 LOOKUP = register(JobSpec(
     name="art.lookup",
-    title="Look on Scryfall for on-theme art",
+    title="Look for more on-theme art",
     description="Ask Scryfall for printings of the draft's cards whose art carries the tag, and add any missing to the local catalog.",
     input_model=ArtSwapsIn,
     run=_run_lookup,

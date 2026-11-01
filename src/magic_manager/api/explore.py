@@ -243,7 +243,7 @@ def _run_sync_ranking(inp: SyncRankingInput, progress: ProgressFn) -> JobResult:
 
 SYNC_RANKING = register(JobSpec(
     name="edhrec.rankings",
-    title="Fetch an EDHREC ranking",
+    title="Fetch a ranking",
     description="Top commanders (optionally by color, tag and set), top cards, or the saltiest cards.",
     input_model=SyncRankingInput,
     run=_run_sync_ranking,

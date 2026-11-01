@@ -12,7 +12,7 @@ import { COVER, OWNERSHIP, RECIPE_KINDS, type DecksSearch } from './search';
 
 export const DECK_GROUPS = ['set', 'year', 'kind', 'type', 'color', 'state'] as const;
 export type DeckGroupBy = (typeof DECK_GROUPS)[number];
-export const DECK_GROUP_LABEL: Record<DeckGroupBy, string> = { set: 'Set', year: 'Year', kind: 'Kind', type: 'Deck type', color: 'Colour', state: 'Ownership' };
+export const DECK_GROUP_LABEL: Record<DeckGroupBy, string> = { set: 'Set', year: 'Year', kind: 'Kind', type: 'Deck type', color: 'Color', state: 'Ownership' };
 
 export type RecipeKind = (typeof RECIPE_KINDS)[number];
 export type Ownership = (typeof OWNERSHIP)[number];
@@ -84,9 +84,9 @@ export function optionCounts(rs: readonly RecipeOut[], f: RecipeFilters) {
 }
 
 const COLOR_NAME: Record<string, string> = { C: 'Colorless', W: 'White', U: 'Blue', B: 'Black', R: 'Red', G: 'Green' };
-const MULTI = 'Multicolour';
+const MULTI = 'Multicolor';
 const COLOR_ORDER = ['Colorless', 'White', 'Blue', 'Black', 'Red', 'Green', MULTI];
-/** "White" for mono, the letters ("WU") for multicolour recipes. */
+/** "White" for mono, the letters ("WU") for multicolor recipes. */
 export const colorLabel = (code: string): string => COLOR_NAME[code] ?? code;
 
 export type DeckGroup = { key: string; label: string; decks: RecipeOut[]; ready: number };

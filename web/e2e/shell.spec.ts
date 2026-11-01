@@ -78,7 +78,7 @@ test('phone masthead: every nav tab and the gear fit at 390px', async ({ page })
 
 test('phone masthead, crowded: restore point + a running job + the gear still fit at 390px', async ({ page }) => {
   await page.route('**/api/undo', (r) => r.fulfill({ json: { taken_at: new Date().toISOString(), reason: 'before adding cards', restorable: true, current: {}, snapshot: {}, changes: {}, details: [] } }));
-  await page.route('**/api/jobs', (r) => r.fulfill({ json: [{ id: 'j1', name: 'edhrec.sync_bulk', title: 'Warm EDHREC cache', inputs: {}, status: 'running', created_at: '2026-01-01T00:00:00+00:00', started_at: null, finished_at: null, progress: null, summary: null, artifacts: [], error: null }] }));
+  await page.route('**/api/jobs', (r) => r.fulfill({ json: [{ id: 'j1', name: 'edhrec.sync_bulk', title: 'Warm the Explore cache', inputs: {}, status: 'running', created_at: '2026-01-01T00:00:00+00:00', started_at: null, finished_at: null, progress: null, summary: null, artifacts: [], error: null }] }));
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(COMPARE_URL);
   await expect(page.getByRole('link', { name: 'Background jobs · 1 running' })).toBeVisible();

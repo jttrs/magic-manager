@@ -37,7 +37,7 @@ def _run_sync_tags(inp: SyncTagsInput, progress: ProgressFn) -> JobResult:
 
 SYNC_TAGS = register(JobSpec(
     name="scryfall.sync_tags",
-    title="Sync Scryfall tags",
+    title="Sync card and art tags",
     description="Download Scryfall's official oracle_tags + art_tags bulk files and rebuild the local Tagger cache.",
     input_model=SyncTagsInput,
     run=_run_sync_tags,

@@ -48,14 +48,14 @@ export function earmarkDecks(entries: readonly EarmarkEntryOut[]): { slug: strin
 type BlockerCode = DeckEarmarkOut['reasons'][number]['code'];
 
 const BLOCKER_SHORT: Record<BlockerCode, string> = {
-  colour_identity: 'outside the commander’s colours',
+  colour_identity: 'outside the commander’s colors',
   banned: 'banned',
   not_legal: 'not legal in this format',
   no_legality: 'no legality data',
   not_in_catalog: 'not in your card catalog',
 };
 
-/** "3 hidden · 2 outside the commander’s colours · 1 banned" — why earmarked
+/** "3 hidden · 2 outside the commander’s colors · 1 banned" — why earmarked
  *  cards are missing from a deck's tab, counted by reason, most common first. */
 export function hiddenSummary(hidden: readonly DeckEarmarkOut[]): string {
   if (!hidden.length) return '';
