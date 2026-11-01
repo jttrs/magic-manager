@@ -150,7 +150,17 @@ export const undoQuery = () =>
 export const featuresQuery = () =>
   queryOptions({
     queryKey: ['features'],
-    queryFn: async ({ signal }) => unwrap(await featuresRoute({ signal })).flags,
+    queryFn: async ({ signal }) => unwrap(await featuresRoute({ signal })),
+    select: (d) => d.flags,
+    staleTime: Infinity,
+  });
+
+/** `hosted` = sign-in required; `local` = no login (the same one /api/features call). */
+export const serverModeQuery = () =>
+  queryOptions({
+    queryKey: ['features'],
+    queryFn: async ({ signal }) => unwrap(await featuresRoute({ signal })),
+    select: (d) => d.mode ?? 'local',
     staleTime: Infinity,
   });
 

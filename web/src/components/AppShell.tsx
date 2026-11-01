@@ -16,6 +16,7 @@ import { useFeature } from '../app/features';
 import { SettingsButton } from './settings/SettingsDialog';
 import { SettingsChoice, SettingsRow } from './settings/SettingsControls';
 import { SubnavSlot } from './subnavSlot';
+import { AccountButton } from './auth/AccountButton';
 
 const NAV = [
   { to: '/collection', label: 'Collection' },
@@ -54,12 +55,13 @@ export function AppShell({ children }: { children: ReactNode }) {
             ))}
           </ul>
         </nav>
-        {/* Status first (restore point, companion, jobs), then the one Settings gear. */}
+        {/* Status first (restore point, companion, jobs), then the one Settings gear; hosted adds your account last. */}
         <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-1.5">
           <UndoButton />
           <CompanionSlot />
           <JobsLink />
           <SettingsButton />
+          <AccountButton />
         </div>
       </header>
       <PrivacyPrompt />

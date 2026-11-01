@@ -584,7 +584,7 @@ The browser companion (H12) applies the same principle with its own threat model
    local mode).
 2. Migration targets (catalog vs user) + `db-upgrade` rehearsal support for the split layout.
 3. Splitter: today's DB → `catalog.db` + `users/<owner>.db` (rehearsed; owner OK before apply).
-4. `auth.db` + Discord/Google OAuth + sessions + CSRF + invite codes + admin role.
+4. `auth.db` + Discord/Google OAuth + sessions + CSRF + invite codes + admin role. *(Built: `magic_manager.auth` + `web/auth_routes.py`; Authlib's PKCE helpers + its `joserfc` for the Google ID token over plain `httpx`. Until step 5 only admins may sign in — `auth.PROFILES_OPEN`.)*
 5. Per-request user connection, per-user undo, jobs carry the user.
 6. Per-user feature flags + admin page; pin H9 features to the owner's machine.
 7. Export / delete-my-account.

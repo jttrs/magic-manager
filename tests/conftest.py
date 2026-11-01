@@ -304,3 +304,14 @@ def _isolated_analytics(tmp_path, monkeypatch):
     consent.clear_cache()
     yield
     consent.clear_cache()
+
+
+@pytest.fixture(autouse=True)
+def _isolated_auth(tmp_path, monkeypatch):
+    """Sign-in never touches a real auth.db, public origin or OAuth secret: each test
+    gets its own auth file; hosted tests set their own origin and providers."""
+    monkeypatch.setenv("MM_AUTH_DB", str(tmp_path / "auth-test.db"))
+    monkeypatch.delenv("MM_PUBLIC_ORIGIN", raising=False)
+    for var in ("MM_OAUTH_DISCORD_CLIENT_ID", "MM_OAUTH_DISCORD_CLIENT_SECRET",
+                "MM_OAUTH_GOOGLE_CLIENT_ID", "MM_OAUTH_GOOGLE_CLIENT_SECRET"):
+        monkeypatch.delenv(var, raising=False)

@@ -10,6 +10,7 @@ import json
 import os
 import shlex
 import sys
+from urllib.parse import urlencode
 from datetime import datetime
 from pathlib import Path
 
@@ -98,7 +99,7 @@ app.add_typer(collection_app, name="collection")
 
 
 secret_app = typer.Typer(no_args_is_help=True,
-                         help="Check your personal Mana Pool login (for reading your cart). It lives in the gitignored .env at the repo root.")
+                         help="Where secrets come from: your personal Mana Pool login (for reading your cart) and the hosted sign-in OAuth apps. They live in the gitignored .env at the repo root.")
 app.add_typer(secret_app, name="secret")
 
 
@@ -106,8 +107,87 @@ app.add_typer(secret_app, name="secret")
 def secret_status():
     """Where each personal secret comes from: environment, .env or not set (names only — values are never shown)."""
     from . import secrets as secrets_mod
-    for name in secrets_mod.PERSONAL:
+    from . import auth
+    for name in (*secrets_mod.PERSONAL, *auth.SECRETS):
         typer.echo(f"{name}: {secrets_mod.source(name) or 'not set'}")
+
+
+auth_app = typer.Typer(no_args_is_help=True,
+                       help="Hosted sign-in (MM_MODE=hosted): invite codes, users, revoking sessions. Writes auth.db.")
+app.add_typer(auth_app, name="auth")
+
+
+def _parse_duration(text: str):
+    from datetime import timedelta
+    import re as _re
+    m = _re.fullmatch(r"\s*(\d+)\s*([dhm])\s*", text.lower())
+    if not m or int(m.group(1)) <= 0:
+        raise typer.BadParameter("use a number and d, h or m — e.g. 7d, 12h, 30m")
+    n, unit = int(m.group(1)), m.group(2)
+    return {"d": timedelta(days=n), "h": timedelta(hours=n), "m": timedelta(minutes=n)}[unit]
+
+
+@auth_app.command("invite")
+def auth_invite(
+    admin: bool = typer.Option(False, "--admin", help="The invited person becomes an admin."),
+    expires: str = typer.Option("7d", "--expires", help="How long the invite stays usable (e.g. 7d, 12h, 30m)."),
+    as_json: bool = typer.Option(False, "--json", help="Print JSON."),
+):
+    """Mint a single-use invite code. It is printed ONCE (only its hash is stored).
+
+    Until profiles open (per-user collections), only --admin invites can be minted."""
+    from . import auth
+    from .auth import store as auth_store
+    if not auth.may_sign_in(admin):
+        typer.echo(f"error: {auth.PROFILES_SOON} Pass --admin to invite an admin.", err=True)
+        raise typer.Exit(2)
+    inv = auth_store.create_invite(is_admin=admin, expires_in=_parse_duration(expires))
+    try:
+        origin = auth.public_origin()
+    except auth.HostedConfigError:
+        origin = None
+    url = f"{origin}/?{urlencode({'invite': inv.code})}" if origin else None
+    if as_json:
+        typer.echo(json.dumps({"code": inv.code, "admin": inv.is_admin, "expires_at": inv.expires_at, "url": url}))
+        return
+    typer.echo(f"invite ({'admin' if inv.is_admin else 'member'}, single use, expires {inv.expires_at}):")
+    typer.echo(f"  {url or inv.code}")
+    if not url:
+        typer.echo("  (set MM_PUBLIC_ORIGIN to print a sign-in link; the person opens /?invite=<code>)")
+
+
+@auth_app.command("users")
+def auth_users(as_json: bool = typer.Option(False, "--json", help="Print JSON.")):
+    """Everyone who can sign in: id, name, email, admin, linked providers, disabled."""
+    from .auth import store as auth_store
+    rows = [{"id": u.id, "display_name": u.display_name, "email": u.email, "admin": u.is_admin,
+             "providers": provs, "created_at": u.created_at, "disabled_at": u.disabled_at}
+            for u, provs in auth_store.users()]
+    if as_json:
+        typer.echo(json.dumps(rows, indent=2))
+        return
+    if not rows:
+        typer.echo("no users yet — mint an invite: mm auth invite --admin")
+        return
+    for r in rows:
+        flags = ", ".join(x for x in ("admin" if r["admin"] else "", "DISABLED" if r["disabled_at"] else "") if x)
+        typer.echo(f"{r['id']}  {r['display_name']}  {r['email'] or '-'}  [{', '.join(r['providers'])}]"
+                   + (f"  ({flags})" if flags else ""))
+
+
+@auth_app.command("revoke")
+def auth_revoke(
+    user: str = typer.Option(..., "--user", help="The user id (see mm auth users)."),
+    disable: bool = typer.Option(False, "--disable", help="Also disable the user: they can't sign in again."),
+):
+    """Sign a user out everywhere (ends every session); --disable also blocks future sign-ins."""
+    from .auth import store as auth_store
+    try:
+        n = auth_store.revoke(user, disable=disable)
+    except LookupError as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+    typer.echo(f"ended {n} session(s)" + ("; user disabled" if disable else ""))
 
 
 analytics_app = typer.Typer(no_args_is_help=True,
@@ -450,6 +530,14 @@ def serve_cmd(
     # The app never waits on a person at the server's terminal — nor do the
     # scripts its jobs spawn (they inherit this; see `interactive`).
     os.environ["MM_NONINTERACTIVE"] = "1"
+    from . import auth
+    if auth.hosted():
+        try:
+            origin = auth.check_hosted()
+        except auth.HostedConfigError as e:
+            typer.echo(f"error: {e}", err=True)
+            raise typer.Exit(2)
+        typer.echo(f"hosted mode: sign-in on {origin} via {', '.join(auth.configured_providers())}", err=True)
     uvicorn.run("magic_manager.web.app:create_app", factory=True,
                 host=host, port=port, reload=reload)
 
