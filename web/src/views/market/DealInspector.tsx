@@ -13,7 +13,7 @@ import { H3 } from './inspectorStyles';
 import { PriceHistory } from './PriceHistory';
 import { PriceTarget } from './PriceTarget';
 import { ProductContents } from './ProductContents';
-import { dealsPricesQuery, patchPrices, useWatch, type CostState } from './useDealsData';
+import { dealsPricesQuery, patchPrices, undismiss, useWatch, type CostState } from './useDealsData';
 
 const tone = (t: 'good' | 'bad' | 'even' | undefined) => (t === 'good' ? 'text-accent-ink' : t === 'bad' ? 'text-danger' : 'text-ink-muted');
 
@@ -118,7 +118,11 @@ function MatchControl({ p, onPick }: { p: PriceRow; onPick: (key: string) => voi
     onSuccess: (row) => {
       patchPrices(qc, [row.url], () => row);
       setChanging(false);
-      if (row.match && row.kind && (row.status === 'matched' || row.status === 'confirmed')) onPick(tabProductKey(row.kind, row.match));
+      if (row.match && row.kind && (row.status === 'matched' || row.status === 'confirmed')) {
+        const key = tabProductKey(row.kind, row.match);
+        undismiss(qc, key);   // matched to a product dismissed earlier in this read: bring it back
+        onPick(key);
+      }
     },
   });
   const error = save.isError && <span role="alert" className="text-xs text-danger">{(save.error as Error).message}</span>;

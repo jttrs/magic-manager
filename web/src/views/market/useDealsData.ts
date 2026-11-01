@@ -38,6 +38,13 @@ const dismissedQuery = () =>
   queryOptions({ queryKey: dismissedKey, queryFn: async () => NO_KEYS, enabled: false, staleTime: Infinity, gcTime: 30 * 60_000 });
 export const dismiss = (qc: QueryClient, keys: string[]) =>
   qc.setQueryData<ReadonlySet<string>>(dismissedKey, (old) => new Set([...(old ?? []), ...keys]));
+export const undismiss = (qc: QueryClient, key: string) =>
+  qc.setQueryData<ReadonlySet<string>>(dismissedKey, (old) => {
+    if (!old?.has(key)) return old;
+    const next = new Set(old);
+    next.delete(key);
+    return next;
+  });
 export const clearDismissed = (qc: QueryClient) => qc.setQueryData(dismissedKey, NO_KEYS);
 
 const NO_ROWS: PriceRow[] = [];

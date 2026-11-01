@@ -44,7 +44,9 @@ export function DealsPanel({ data, costs, reads, search, set }: { data: DealsDat
       )}
       {live?.status === 'failed' && <p role="alert" className="text-md text-danger">{live.error ?? 'Couldn’t read prices.'}</p>}
       {wl?.status === 'succeeded' && wl.summary && <p role="status" className="text-sm tabular text-ink-muted">{wl.summary}</p>}
-      {pl?.status === 'succeeded' && reads.tabs && <TabsSummary r={reads.tabs} pinned={data.pinned.length + data.listings.length} />}
+      {reads.lastRead === 'tabs' && !reads.busy && !reads.failure && pl?.status !== 'failed' && reads.tabs && (
+        <TabsSummary r={reads.tabs} pinned={data.pinned.length + data.listings.length} />
+      )}
       {met.length > 0 && (
         <TargetsMet met={met} products={data.products} onPick={(item) => set({ item })} onDismiss={() => setDismissedMet(reads.newlyMet)} />
       )}

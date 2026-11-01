@@ -30,6 +30,8 @@ export function useDealsReads(enabled: boolean) {
   const [notes, setNotes] = useState<string[]>([]);
   const [failure, setFailure] = useState<{ error: unknown; companion: boolean } | null>(null);
   const [reading, setReading] = useState<'tabs' | 'watched' | null>(null);
+  /** The last read that ran (set as it starts): tells the status line which result to explain. */
+  const [lastRead, setLastRead] = useState<'tabs' | 'watched' | null>(null);
   const watchedRows = useQuery({ ...watchedQuery(), enabled }).data;
   const browser = useMemo(() => browserReadUrls(watchedRows ?? []), [watchedRows]);
 
@@ -37,6 +39,7 @@ export function useDealsReads(enabled: boolean) {
 
   const begin = (what: 'tabs' | 'watched') => {
     setReading(what);
+    setLastRead(what);
     setNotes([]);
     setFailure(null);
     prices.reset();
@@ -130,6 +133,7 @@ export function useDealsReads(enabled: boolean) {
     readWatched: () => void readWatched(),
     busy,
     reading,
+    lastRead,
     awaiting,
     notes,
     failure,

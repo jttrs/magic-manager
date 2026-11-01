@@ -49,6 +49,19 @@ test('Deals is the watchlist: no mode switch; old ?deals=tabs links land on it',
   const actions = page.getByRole('toolbar', { name: 'Deals actions' });
   await expect(actions.getByRole('button', { name: 'Read my open tabs' })).toBeVisible();
   await expect(actions.getByRole('button', { name: 'Read watched prices' })).toHaveAttribute('aria-disabled', 'true');
+  await page.goto('/market?subject=deals&deals=watching');
+  await expect(page.getByText('Nothing watched yet')).toBeVisible();
+});
+
+test('a read with no store product pages says so', async ({ page }) => {
+  let started = false;
+  await tabsRoutes(page, [], { onJob: () => { started = true; }, tabsJson: { ...tabs, stores: [], store_pages: 2, other: 5 } });
+  await page.goto('/market?subject=deals');
+  await page.getByRole('button', { name: 'Read my open tabs' }).click();
+  const summary = page.getByRole('status').filter({ hasText: 'No store product pages open' });
+  await expect(summary).toContainText('1 page at stores without a recipe yet (shop.example)');
+  await expect(summary).toContainText('2 other store pages');
+  expect(started).toBe(false);
 });
 
 test('Read my open tabs: one action reads the tabs, then their prices', async ({ page }) => {
@@ -90,6 +103,9 @@ test('pages that aren\'t a known product are pinned to look at; a setup error sh
   await pinned.getByRole('button', { name: 'Dismiss all' }).click();
   await expect(pinned).toHaveCount(0);
   await expect(page.getByText('Nothing watched yet')).toBeVisible();
+  // The next read brings everything back.
+  await page.getByRole('button', { name: 'Read my open tabs' }).click();
+  await expect(pinned.getByRole('row', { name: /Foundations Commander Set of 5/ })).toBeVisible();
 });
 
 const sealedCost = (over: Record<string, unknown> = {}) => ({

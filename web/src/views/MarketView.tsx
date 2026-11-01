@@ -67,7 +67,7 @@ export function MarketView() {
     const next = dealFilters({ ...search, ...patch });
     const stillShown = filterSortProducts(dealProducts, dealCosts.data, next).some((p) => p.key === search.item)
       || filterListings(dealsData.listings, next).some((l) => l.key === search.item);
-    set(search.item && !stillShown ? { ...patch, item: undefined } : patch);
+    set(search.item && !dealsData.loading && !stillShown ? { ...patch, item: undefined } : patch);
   };
   const counts = typeCounts(dealProducts, dealCosts.data);
   const toBuy = cost.data?.lines.reduce((n, l) => n + l.buy, 0) ?? 0;
