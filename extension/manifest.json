@@ -2,7 +2,8 @@
   "manifest_version": 3,
   "name": "magic-manager companion",
   "version": "0.4.5",
-  "description": "Reads your Mana Pool, TCGplayer or Card Kingdom cart, open store tabs, Moxfield decks, collection and binders, Archidekt decks, watched store pages and store order history in your own browser and, only after you approve, hands the card lines to your magic-manager app.",
+  "description": "Reads your card carts, store tabs and decks in your browser and, after you approve, hands the card lines to your magic-manager app.",
+  "homepage_url": "https://github.com/jttrs/magic-manager/tree/main/extension",
   "minimum_chrome_version": "116",
   "permissions": [
     "scripting",
@@ -72,7 +73,12 @@
     "type": "module"
   },
   "action": {
-    "default_title": "magic-manager companion settings"
+    "default_title": "magic-manager companion settings",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png"
+    }
   },
   "options_ui": {
     "page": "src/options.html",
@@ -80,5 +86,11 @@
   },
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
   }
 }

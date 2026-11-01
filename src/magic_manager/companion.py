@@ -18,13 +18,22 @@ artifacts the app serves:
   file the extension injects (``extension/src/readers/manapool-cart.js``).
 * :func:`error_catalog` — every ``<area>.<reason>`` error code the companion
   path can produce, with a plain message + fix (``extension/errors.json``).
+* :func:`icon_png` — the toolbar/store icons (``extension/icons/``), rasterized
+  here from the app's favicon shapes, so they're generated and checked too.
+* :func:`store_url` / :func:`bump_version` — Chrome Web Store distribution
+  (listing + release: ``extension/store/``, ``docs/browser-companion.md``).
 """
 from __future__ import annotations
 
 import io
 import json
+import os
+import re
+import struct
+import tomllib
 import urllib.parse
 import zipfile
+import zlib
 from functools import lru_cache
 from pathlib import Path
 
@@ -36,6 +45,15 @@ STORES_JS = EXT_DIR / "src" / "stores.js"
 ERRORS = EXT_DIR / "errors.json"
 CART_READER = EXT_DIR / "src" / "readers" / "manapool-cart.js"
 TOKENS_CSS = EXT_DIR / "src" / "tokens.css"
+ICONS_DIR = EXT_DIR / "icons"
+ICON_SIZES = (16, 32, 48, 128)
+# Store listing assets + metadata — kept beside the extension, never shipped in the zip (EXCLUDE_DIRS).
+STORE_DIR = EXT_DIR / "store"
+STORE_TOML = STORE_DIR / "store.toml"
+STORE_URL_ENV = "MM_COMPANION_STORE_URL"
+STORE_URL_PREFIX = "https://chromewebstore.google.com/detail/"
+# The public privacy policy the store listing (and the setup dialog) links to.
+PRIVACY_URL = "https://github.com/jttrs/magic-manager/blob/main/docs/privacy-companion.md"
 WEB_TOKENS = EXT_DIR.parent / "web" / "tokens"
 # Archivo Variable (wdth axis, latin), bundled from the web app's @fontsource-variable/archivo:
 # extension pages can't load the app's CSS or anything from the internet.
@@ -56,8 +74,9 @@ ORDER_HOSTS = ["https://store.tcgplayer.com/*", "https://www.cardkingdom.com/*"]
 # Other carts (one opt-in switch per store): each cart page's own host.
 CART_HOSTS = ["https://www.tcgplayer.com/*", "https://www.cardkingdom.com/*"]
 
-# Files that ship in the zip (everything under extension/ except these).
+# Files that ship in the zip (everything under extension/ except these names and folders).
 _EXCLUDE = {"README.md"}
+EXCLUDE_DIRS = frozenset({"store"})
 _ZIP_DATE = (2024, 1, 1, 0, 0, 0)
 
 
@@ -141,24 +160,131 @@ def _tokens_css() -> str:
     )
 
 
-def generated_files() -> dict[Path, str]:
-    """What the generated files must contain, keyed by path."""
+# ---------- icons ----------
+
+# The app's favicon (web/public/favicon.svg) on a 32-unit grid: a dark tile, a bone
+# card, an amber band. (x, y, w, h, radius, rgba)
+_ICON_SHAPES = (
+    (0, 0, 32, 32, 4, (0x16, 0x13, 0x0E, 255)),
+    (9, 6, 14, 20, 1.5, (0xEF, 0xE7, 0xD6, 255)),
+    (7, 17, 18, 4, 1, (0xF0, 0xA5, 0x31, 217)),
+)
+_SUPERSAMPLE = 4
+
+
+def _inside(x: float, y: float, rx: float, ry: float, w: float, h: float, r: float) -> bool:
+    if not (rx <= x < rx + w and ry <= y < ry + h):
+        return False
+    cx = min(max(x, rx + r), rx + w - r)
+    cy = min(max(y, ry + r), ry + h - r)
+    return (x - cx) ** 2 + (y - cy) ** 2 <= r * r
+
+
+def _png(size: int, rows: list[bytes]) -> bytes:
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
+    raw = b"".join(b"\x00" + r for r in rows)
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", size, size, 8, 6, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b""))
+
+
+@lru_cache(maxsize=None)
+def icon_png(size: int) -> bytes:
+    """The companion icon as an RGBA PNG, ``size`` px square, deterministic bytes.
+    At 128 px the art is 96 px with 16 px of transparent padding (Chrome Web Store's
+    icon guideline); smaller sizes fill the square."""
+    pad = 16 if size >= 128 else 0
+    scale = (size - 2 * pad) / 32
+    n = _SUPERSAMPLE
+    rows: list[bytes] = []
+    for py in range(size):
+        row = bytearray()
+        for px in range(size):
+            acc = [0.0, 0.0, 0.0, 0.0]  # premultiplied rgb + alpha
+            for sy in range(n):
+                for sx in range(n):
+                    x = (px + (sx + 0.5) / n - pad) / scale
+                    y = (py + (sy + 0.5) / n - pad) / scale
+                    r = g = b = a = 0.0
+                    for (rx, ry, w, h, rad, (cr, cg, cb, ca)) in _ICON_SHAPES:
+                        if _inside(x, y, rx, ry, w, h, rad):
+                            al = ca / 255
+                            r, g, b = cr * al + r * (1 - al), cg * al + g * (1 - al), cb * al + b * (1 - al)
+                            a = al + a * (1 - al)
+                    acc[0] += r; acc[1] += g; acc[2] += b; acc[3] += a
+            k = n * n
+            a = acc[3] / k
+            if a <= 0:
+                row += b"\x00\x00\x00\x00"
+            else:
+                row += bytes(min(255, round(c / k / a)) for c in acc[:3]) + bytes([round(a * 255)])
+        rows.append(bytes(row))
+    return _png(size, rows)
+
+
+def _icon_paths() -> dict[int, str]:
+    return {s: f"icons/icon-{s}.png" for s in ICON_SIZES}
+
+
+# ---------- generated files ----------
+
+def generated_files() -> dict[Path, str | bytes]:
+    """What the generated files must contain, keyed by path (text, or bytes for icons)."""
     manifest = json.loads(MANIFEST.read_text())
     manifest["host_permissions"] = MANAPOOL_HOSTS
     manifest["optional_host_permissions"] = list(dict.fromkeys(APP_HOSTS + MOXFIELD_HOSTS + ARCHIDEKT_HOSTS + ORDER_HOSTS + CART_HOSTS + store_host_permissions()))
-    return {MANIFEST: json.dumps(manifest, indent=2) + "\n", STORES_JS: _stores_js(), TOKENS_CSS: _tokens_css()}
+    icons = {str(s): p for s, p in _icon_paths().items()}
+    manifest["icons"] = icons
+    manifest.setdefault("action", {})["default_icon"] = {k: v for k, v in icons.items() if int(k) <= 48}
+    out: dict[Path, str | bytes] = {MANIFEST: json.dumps(manifest, indent=2) + "\n", STORES_JS: _stores_js(), TOKENS_CSS: _tokens_css()}
+    for s, rel in _icon_paths().items():
+        out[EXT_DIR / rel] = icon_png(s)
+    return out
+
+
+def png_pixels(data: bytes) -> tuple[bytes, bytes] | None:
+    """A PNG's header + decompressed image data — what it looks like, independent of
+    how this platform's zlib happened to compress it. ``None`` if it isn't a PNG."""
+    if data[:8] != b"\x89PNG\r\n\x1a\n":
+        return None
+    i, ihdr, idat = 8, b"", b""
+    while i + 8 <= len(data):
+        n = struct.unpack(">I", data[i:i + 4])[0]
+        tag, body = data[i + 4:i + 8], data[i + 8:i + 8 + n]
+        if tag == b"IHDR":
+            ihdr = body
+        elif tag == b"IDAT":
+            idat += body
+        i += 12 + n
+    try:
+        return ihdr, zlib.decompress(idat)
+    except zlib.error:
+        return None
+
+
+def _current(p: Path, want: str | bytes) -> bool:
+    if not p.exists():
+        return False
+    if isinstance(want, bytes):
+        have = p.read_bytes()
+        return have == want or (png_pixels(have) is not None and png_pixels(have) == png_pixels(want))
+    return p.read_text() == want
 
 
 def stale_files() -> list[Path]:
     """Generated files whose committed content differs from :func:`generated_files`."""
-    return [p for p, text in generated_files().items() if not p.exists() or p.read_text() != text]
+    return [p for p, want in generated_files().items() if not _current(p, want)]
 
 
 def write_generated() -> list[Path]:
     changed = stale_files()
-    for p, text in generated_files().items():
+    for p, want in generated_files().items():
         if p in changed:
-            p.write_text(text)
+            p.parent.mkdir(parents=True, exist_ok=True)
+            if isinstance(want, bytes):
+                p.write_bytes(want)
+            else:
+                p.write_text(want)
     return changed
 
 
@@ -172,19 +298,68 @@ def version() -> str:
     return str(manifest().get("version") or "0")
 
 
+_VERSION = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
+
+
+def bump_version(part: str) -> str:
+    """Bump the manifest version (``major`` | ``minor`` | ``patch``) and return it.
+    The Chrome Web Store refuses an upload whose version isn't higher than the last."""
+    m = _VERSION.match(version())
+    if not m:
+        raise CompanionError(f"The manifest version {version()!r} isn't MAJOR.MINOR.PATCH.")
+    major, minor, patch = (int(x) for x in m.groups())
+    if part == "major":
+        new = f"{major + 1}.0.0"
+    elif part == "minor":
+        new = f"{major}.{minor + 1}.0"
+    elif part == "patch":
+        new = f"{major}.{minor}.{patch + 1}"
+    else:
+        raise ValueError(f"part must be major, minor or patch, not {part!r}")
+    data = manifest()
+    data["version"] = new
+    MANIFEST.write_text(json.dumps(data, indent=2) + "\n")
+    return new
+
+
+def store_url() -> str | None:
+    """The companion's Chrome Web Store page, once it's published — ``None`` until then.
+
+    ``MM_COMPANION_STORE_URL`` wins (set it on a host before the repo catches up);
+    else ``url`` in ``extension/store/store.toml`` (empty until the owner publishes).
+    Only a ``chromewebstore.google.com/detail/…`` address counts — anything else is
+    ignored, so a typo can't send users to another site."""
+    url = (os.environ.get(STORE_URL_ENV) or "").strip()
+    if not url and STORE_TOML.exists():
+        try:
+            section = tomllib.loads(STORE_TOML.read_text()).get("chrome_web_store")
+        except tomllib.TOMLDecodeError:
+            section = None   # a hand-edit typo must not take down GET /api/companion
+        raw = section.get("url") if isinstance(section, dict) else None
+        url = raw.strip() if isinstance(raw, str) else ""
+    return url if url.startswith(STORE_URL_PREFIX) else None
+
+
 def _files() -> list[Path]:
     return sorted(p for p in EXT_DIR.rglob("*")
-                  if p.is_file() and p.name not in _EXCLUDE and not p.name.startswith("."))
+                  if p.is_file() and p.name not in _EXCLUDE and not p.name.startswith(".")
+                  and p.relative_to(EXT_DIR).parts[0] not in EXCLUDE_DIRS)
 
 
-def build_zip() -> bytes:
+ZIP_FOLDER = "magic-manager-companion/"
+
+
+def build_zip(*, store: bool = False) -> bytes:
     """A reproducible zip of the extension: sorted entries, fixed timestamps and
     permissions, so the same source always yields the same bytes (users and
-    reviewers can compare a download to the repo)."""
+    reviewers can compare a download to the repo). The download unzips to a
+    ``magic-manager-companion/`` folder (for Load unpacked); ``store=True`` puts
+    ``manifest.json`` at the zip root, as the Chrome Web Store requires."""
+    prefix = "" if store else ZIP_FOLDER
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as z:
         for p in _files():
-            info = zipfile.ZipInfo(f"magic-manager-companion/{p.relative_to(EXT_DIR).as_posix()}", _ZIP_DATE)
+            info = zipfile.ZipInfo(f"{prefix}{p.relative_to(EXT_DIR).as_posix()}", _ZIP_DATE)
             info.external_attr = 0o644 << 16
             info.compress_type = zipfile.ZIP_DEFLATED
             z.writestr(info, p.read_bytes())

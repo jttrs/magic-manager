@@ -1793,9 +1793,21 @@ export type CompanionOut = {
      */
     zip_url: string;
     /**
+     * Store Url
+     *
+     * The Chrome Web Store page — the primary install — once published; null until then (extension/store/store.toml or MM_COMPANION_STORE_URL).
+     */
+    store_url?: string | null;
+    /**
      * Bookmarklet Url
      */
     bookmarklet_url: string;
+    /**
+     * Privacy Url
+     *
+     * The companion's privacy policy (also linked from its store listing).
+     */
+    privacy_url?: string;
     /**
      * Errors
      *

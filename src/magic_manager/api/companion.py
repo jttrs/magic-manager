@@ -41,14 +41,16 @@ class _Strict(BaseModel):
 class CompanionOut(BaseModel):
     version: str = Field(description="The extension version in this app's repo — older installs should update.")
     zip_url: str
+    store_url: str | None = Field(None, description="The Chrome Web Store page — the primary install — once published; null until then (extension/store/store.toml or MM_COMPANION_STORE_URL).")
     bookmarklet_url: str
+    privacy_url: str = Field(companion.PRIVACY_URL, description="The companion's privacy policy (also linked from its store listing).")
     errors: dict[str, dict] = Field(description="Every companion error code → {message, fix}.")
 
 
 def info() -> CompanionOut:
     """Unflagged: the error catalog also serves the cart bookmarklet paste."""
     return CompanionOut(version=companion.version(), zip_url="/api/companion/extension.zip",
-                        bookmarklet_url="/api/companion/bookmarklet",
+                        store_url=companion.store_url(), privacy_url=companion.PRIVACY_URL, bookmarklet_url="/api/companion/bookmarklet",
                         errors={k: {"message": v["message"], "fix": v.get("fix")} for k, v in companion.error_catalog().items()})
 
 

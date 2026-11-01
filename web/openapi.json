@@ -7108,9 +7108,27 @@
             "type": "string",
             "title": "Zip Url"
           },
+          "store_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Store Url",
+            "description": "The Chrome Web Store page \u2014 the primary install \u2014 once published; null until then (extension/store/store.toml or MM_COMPANION_STORE_URL)."
+          },
           "bookmarklet_url": {
             "type": "string",
             "title": "Bookmarklet Url"
+          },
+          "privacy_url": {
+            "type": "string",
+            "title": "Privacy Url",
+            "description": "The companion's privacy policy (also linked from its store listing).",
+            "default": "https://github.com/jttrs/magic-manager/blob/main/docs/privacy-companion.md"
           },
           "errors": {
             "additionalProperties": {

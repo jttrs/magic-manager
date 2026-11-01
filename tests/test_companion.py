@@ -335,3 +335,144 @@ def test_writes_only_from_the_apps_own_pages(client, monkeypatch, site, ok):
     else:
         assert r.status_code == 403 and r.json()["detail"]["code"] == "request.cross_site"
     assert client.get("/api/companion", headers=headers).status_code == 200      # reads aren't blocked
+
+
+# ---------- Chrome Web Store distribution ----------
+
+def test_zips_ship_icons_never_the_store_kit():
+    folder = zipfile.ZipFile(io.BytesIO(companion.build_zip())).namelist()
+    store = zipfile.ZipFile(io.BytesIO(companion.build_zip(store=True))).namelist()
+    assert "magic-manager-companion/icons/icon-128.png" in folder
+    assert "manifest.json" in store and "icons/icon-128.png" in store            # the store wants the manifest at the root
+    assert all(not n.startswith("magic-manager-companion/") for n in store)
+    assert [f"magic-manager-companion/{n}" for n in store] == folder              # same files, same order
+    assert not any("/store/" in f"/{n}" for n in folder + store)                 # listing kit + screenshots stay out
+    assert companion.build_zip(store=True) == companion.build_zip(store=True)
+
+
+def test_icons_are_generated_pngs_the_manifest_points_at():
+    m = companion.manifest()
+    for size in companion.ICON_SIZES:
+        png = (EXT / m["icons"][str(size)]).read_bytes()
+        assert png[:8] == b"\x89PNG\r\n\x1a\n"
+        assert int.from_bytes(png[16:20], "big") == int.from_bytes(png[20:24], "big") == size
+        assert png == companion.icon_png(size)
+    assert set(m["action"]["default_icon"].values()) <= set(m["icons"].values())
+
+
+def _rgba(png: bytes, x: int, y: int) -> tuple[int, ...]:
+    ihdr, raw = companion.png_pixels(png)
+    size = int.from_bytes(ihdr[:4], "big")
+    row = 1 + size * 4                                                         # filter byte + RGBA
+    assert raw[y * row] == 0                                                   # unfiltered rows
+    off = y * row + 1 + x * 4
+    return tuple(raw[off:off + 4])
+
+
+def test_icons_draw_the_favicon():
+    dark, bone = (0x16, 0x13, 0x0E, 255), (0xEF, 0xE7, 0xD6, 255)
+    for size in (16, 32, 48):
+        png = companion.icon_png(size)
+        assert _rgba(png, size // 2, size // 4) == bone                       # the card
+        assert _rgba(png, size // 2, size // 32 or 1)[:3] == dark[:3]         # the tile's top edge
+        band = _rgba(png, size // 2, round(size * 19 / 32))
+        assert band[0] > band[2] and band != bone                              # the amber band over the card
+    big = companion.icon_png(128)
+    assert _rgba(big, 0, 0)[3] == 0 and _rgba(big, 8, 64)[3] == 0             # 16 px transparent padding
+    assert _rgba(big, 64, 40) == bone and _rgba(big, 20, 64)[:3] == dark[:3]
+
+
+def test_icon_check_ignores_how_zlib_compressed_it(tmp_path):
+    """--check compares pixels, so a platform whose zlib deflates differently still passes."""
+    import struct
+    import zlib
+
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
+
+    want = companion.icon_png(32)
+    ihdr, raw = companion.png_pixels(want)
+    alt = want[:8] + chunk(b"IHDR", ihdr) + chunk(b"IDAT", zlib.compress(raw, 1)) + chunk(b"IEND", b"")
+    assert alt != want and companion.png_pixels(alt) == companion.png_pixels(want)
+    p = tmp_path / "icon.png"
+    p.write_bytes(alt)
+    assert companion._current(p, want)
+    p.write_bytes(companion.icon_png(16))
+    assert not companion._current(p, want)
+
+
+def test_manifest_fits_the_store():
+    m = companion.manifest()
+    assert len(m["description"]) <= 132                                       # the store's summary limit
+    assert len(m["name"]) <= 75
+    assert re.fullmatch(r"\d+\.\d+\.\d+", m["version"])
+
+
+def test_store_url_is_configurable_and_only_a_store_page(monkeypatch, tmp_path):
+    monkeypatch.delenv(companion.STORE_URL_ENV, raising=False)
+    toml = tmp_path / "store.toml"
+    monkeypatch.setattr(companion, "STORE_TOML", toml)
+    assert companion.store_url() is None                                      # no file
+    toml.write_text('[chrome_web_store]\nurl = ""\n')
+    assert companion.store_url() is None                                      # not published yet
+    page = "https://chromewebstore.google.com/detail/magic-manager-companion/abcdefghijklmnopabcdefghijklmnop"
+    toml.write_text(f'[chrome_web_store]\nurl = "{page}"\n')
+    assert companion.store_url() == page
+    monkeypatch.setenv(companion.STORE_URL_ENV, page + "x")
+    assert companion.store_url() == page + "x"                                # env wins
+    monkeypatch.setenv(companion.STORE_URL_ENV, "https://evil.example/detail/x")
+    assert companion.store_url() is None                                      # never another site
+    monkeypatch.delenv(companion.STORE_URL_ENV)
+    for broken in ('[chrome_web_store\nurl = "', 'chrome_web_store = 3\n', '[chrome_web_store]\nurl = 7\n'):
+        toml.write_text(broken)
+        assert companion.store_url() is None                                  # a typo never 500s /api/companion
+
+
+def test_committed_store_toml_is_unpublished_or_a_store_page():
+    raw = companion.tomllib.loads(companion.STORE_TOML.read_text())["chrome_web_store"]["url"]
+    assert raw == "" or raw.startswith(companion.STORE_URL_PREFIX)
+
+
+def test_info_carries_store_and_privacy_urls(monkeypatch):
+    page = "https://chromewebstore.google.com/detail/x/abcdefghijklmnopabcdefghijklmnop"
+    monkeypatch.setenv(companion.STORE_URL_ENV, page)
+    out = companion_api.info()
+    assert out.store_url == page and out.privacy_url == companion.PRIVACY_URL
+    monkeypatch.delenv(companion.STORE_URL_ENV)
+    monkeypatch.setattr(companion, "STORE_TOML", Path("/nonexistent/store.toml"))
+    assert companion_api.info().store_url is None
+
+
+def test_bump_version(monkeypatch, tmp_path):
+    m = tmp_path / "manifest.json"
+    m.write_text(json.dumps({"name": "x", "version": "0.4.5"}))
+    monkeypatch.setattr(companion, "MANIFEST", m)
+    assert companion.bump_version("patch") == "0.4.6"
+    assert companion.bump_version("minor") == "0.5.0"
+    assert companion.bump_version("major") == "1.0.0"
+    assert json.loads(m.read_text()) == {"name": "x", "version": "1.0.0"}
+    with pytest.raises(ValueError):
+        companion.bump_version("tiny")
+
+
+def test_privacy_policy_and_listing_cover_every_permission():
+    policy = ROOT / "docs" / "privacy-companion.md"
+    assert companion.PRIVACY_URL.endswith("/blob/main/docs/privacy-companion.md") and policy.exists()
+    listing = (companion.STORE_DIR / "listing.md").read_text()
+    m = companion.manifest()
+    for p in m["permissions"] + m["host_permissions"]:
+        assert f"`{p}`" in listing, f"listing.md has no justification for {p}"
+    assert companion.PRIVACY_URL in listing
+    assert m["description"] in listing
+
+
+def test_build_script_release_flags(tmp_path):
+    import subprocess
+    import sys as _sys
+    script = ROOT / "scripts" / "build_extension.py"
+    out = subprocess.run([_sys.executable, str(script), "--print-version"], capture_output=True, text=True, check=True)
+    assert out.stdout.strip() == companion.version()
+    z = tmp_path / "s.zip"
+    subprocess.run([_sys.executable, str(script), "--check"], check=True)
+    subprocess.run([_sys.executable, str(script), "--store-zip", str(z)], capture_output=True, check=True)
+    assert z.read_bytes() == companion.build_zip(store=True)

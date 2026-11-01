@@ -60,16 +60,40 @@ function Setup({ c }: { c: CompanionState }) {
     <div className="flex flex-col gap-6">
       <Status c={c} />
 
-      <section aria-labelledby="cmp-install" className="flex flex-col gap-2">
+      <section aria-labelledby="cmp-install" className="flex flex-col gap-3">
         <h3 id="cmp-install" className={H3}>{c.status === 'ready' ? 'Install on another browser' : 'Install'}</h3>
+        {c.storeUrl ? (
+          <div className="flex flex-col items-start gap-1.5">
+            <a
+              href={c.storeUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-10 items-center gap-2 rounded-sm border border-accent bg-accent px-4 text-md voice-semi font-medium text-on-accent transition-[background-color] ease-guide hover:bg-highlight-solid"
+            >
+              Add to Chrome<span className="sr-only"> (opens the Chrome Web Store)</span>
+            </a>
+            <p className="text-sm text-ink-muted">From the Chrome Web Store. Chrome keeps it up to date.</p>
+          </div>
+        ) : (
+          <p className="max-w-[62ch] text-md leading-relaxed text-ink-muted">The companion isn’t on the Chrome Web Store yet — install it with the developer install below.</p>
+        )}
+        <details open={!c.storeUrl} className="border-y border-rule py-2 text-md">
+          <summary className="cursor-pointer voice-semi font-medium text-ink">Developer install</summary>
+          <div className="mt-2 flex flex-col gap-2">
+            {c.storeUrl && <p className="text-sm text-ink-muted">Only if you can’t use the store: the same extension, loaded by hand. It doesn’t update itself.</p>}
+            <ol className="flex list-decimal flex-col gap-3 pl-5 leading-relaxed marker:text-ink-muted">
+              <li>
+                <a href="/api/companion/extension.zip" download className="font-medium text-ink underline decoration-accent underline-offset-2">Download the companion</a> (v{c.latest ?? '…'}) and unzip it.
+              </li>
+              <li>
+                In Chrome, open <code className="tabular text-sm">chrome://extensions</code>, switch on <strong>Developer mode</strong>, press <strong>Load unpacked</strong> and choose the <code className="tabular text-sm">magic-manager-companion</code> folder. Then pair it as below.
+                <span className="mt-1 flex"><CopyButton getText={() => 'chrome://extensions'} label="Copy chrome://extensions" tone="paper" /></span>
+              </li>
+            </ol>
+            <p className="text-sm text-ink-muted">To update: download again, replace the folder, then press the reload arrow on the companion in <code className="tabular">chrome://extensions</code>.</p>
+          </div>
+        </details>
         <ol className="flex list-decimal flex-col gap-3 pl-5 text-md leading-relaxed marker:text-ink-muted">
-          <li>
-            <a href="/api/companion/extension.zip" download className="font-medium text-ink underline decoration-accent underline-offset-2">Download the companion</a> (v{c.latest ?? '…'}) and unzip it.
-          </li>
-          <li>
-            In Chrome, open <code className="tabular text-sm">chrome://extensions</code>, switch on <strong>Developer mode</strong>, press <strong>Load unpacked</strong> and choose the <code className="tabular text-sm">magic-manager-companion</code> folder.
-            <span className="mt-1 flex"><CopyButton getText={() => 'chrome://extensions'} label="Copy chrome://extensions" tone="paper" /></span>
-          </li>
           <li>
             Click the companion’s icon (pin it from Chrome’s puzzle-piece menu), enter this app’s address and press <strong>Pair</strong>:
             <span className="mt-1 flex flex-wrap items-center gap-2">
@@ -80,7 +104,6 @@ function Setup({ c }: { c: CompanionState }) {
           <li>For more than your Mana Pool cart, switch on <strong>Allow access</strong> on the same page. Chrome asks once for all the sites it reads.</li>
           <li>Reload this page.</li>
         </ol>
-        <p className="text-sm text-ink-muted">To update: download again, replace the folder, then press the reload arrow on the companion in <code className="tabular">chrome://extensions</code>.</p>
       </section>
 
       <section aria-labelledby="cmp-reads" className="flex flex-col gap-1">
@@ -100,7 +123,10 @@ function Setup({ c }: { c: CompanionState }) {
           <li>Answer any website but this app, or send anything you haven’t approved.</li>
           <li>Collect in the background, run analytics, or load code from the internet.</li>
         </ul>
-        <p className="text-sm text-ink-muted">The source is plain, readable JavaScript in the app’s repo under <code className="tabular">extension/</code>.</p>
+        <p className="text-sm text-ink-muted">
+          The source is plain, readable JavaScript in the app’s repo under <code className="tabular">extension/</code>.
+          {c.privacyUrl && <>{' '}<a href={c.privacyUrl} target="_blank" rel="noopener noreferrer" className="text-ink underline decoration-accent underline-offset-2">Privacy policy</a></>}
+        </p>
       </section>
     </div>
   );
@@ -126,7 +152,13 @@ function Status({ c }: { c: CompanionState }) {
   return (
     <div role="status" className="flex flex-col gap-1 text-md leading-relaxed">
       <p><span className="highlighter px-1 font-medium">Connected</span> <span className="tabular text-ink-muted">· version {c.hello!.version}</span></p>
-      {c.outdated && <p className="text-danger">Version {c.latest} is available — download it below and replace the folder.</p>}
+      {c.outdated && (
+        <p className="text-danger">
+          {c.storeUrl
+            ? <>Version {c.latest} is in this app. A store install updates itself once that version is published on the Chrome Web Store; a developer install needs the download below.</>
+            : <>Version {c.latest} is available — download it below and replace the folder.</>}
+        </p>
+      )}
     </div>
   );
 }

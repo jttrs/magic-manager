@@ -62,8 +62,9 @@ export async function mockApi(page: Page, overrides: Record<string, (url: URL) =
   });
 }
 
-const COMPANION_INFO = {
-  version: '0.1.0', zip_url: '/api/companion/extension.zip', bookmarklet_url: '/api/companion/bookmarklet',
+export const COMPANION_INFO = {
+  version: '0.1.0', zip_url: '/api/companion/extension.zip', bookmarklet_url: '/api/companion/bookmarklet', store_url: null,
+  privacy_url: 'https://github.com/jttrs/magic-manager/blob/main/docs/privacy-companion.md',
   errors: Object.fromEntries(Object.entries(companionErrors.codes).map(([k, v]) => [k, { message: v.message, fix: v.fix }])),
 };
 
