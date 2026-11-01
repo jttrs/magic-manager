@@ -3,6 +3,8 @@
 Everything the Chrome Web Store developer dashboard asks for, ready to paste. Kept beside the
 extension but **never shipped in the zip** (`companion.EXCLUDE_DIRS`). Release steps:
 [`docs/browser-companion.md` § Chrome Web Store](../../docs/browser-companion.md#chrome-web-store).
+The same copy serves the optional Microsoft Edge Add-ons listing — field mapping and steps in
+[`README.md` § Microsoft Edge Add-ons](README.md#microsoft-edge-add-ons-optional).
 
 ## Store listing tab
 

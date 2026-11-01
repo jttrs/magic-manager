@@ -443,6 +443,104 @@ def test_info_carries_store_and_privacy_urls(monkeypatch):
     assert companion_api.info().store_url is None
 
 
+@pytest.mark.parametrize("fn,env,section,prefix", [
+    (companion.store_url, companion.STORE_URL_ENV, "chrome_web_store", companion.STORE_URL_PREFIX),
+    (companion.edge_store_url, companion.EDGE_STORE_URL_ENV, "edge_add_ons", companion.EDGE_STORE_URL_PREFIX),
+])
+def test_store_urls_are_a_strict_allowlist(monkeypatch, tmp_path, fn, env, section, prefix):
+    monkeypatch.delenv(companion.STORE_URL_ENV, raising=False)
+    monkeypatch.delenv(companion.EDGE_STORE_URL_ENV, raising=False)
+    toml = tmp_path / "store.toml"
+    monkeypatch.setattr(companion, "STORE_TOML", toml)
+    assert fn() is None                                                       # no file
+    toml.write_text(f'[{section}]\nurl = ""\n')
+    assert fn() is None                                                       # not listed
+    ok = [prefix + "magic-manager-companion/abcdefghijklmnopabcdefghijklmnop",
+          prefix + "magic-manager-companion/abcdefghijklmnopabcdefghijklmnop?hl=en-US"]
+    for url in ok:
+        toml.write_text(f'[{section}]\nurl = "{url}"\n')
+        assert fn() == url
+        monkeypatch.setenv(env, "  " + url + "  ")
+        assert fn() == url                                                    # env wins, trimmed
+        monkeypatch.delenv(env)
+    other = companion.EDGE_STORE_URL_PREFIX if prefix == companion.STORE_URL_PREFIX else companion.STORE_URL_PREFIX
+    bad = [prefix, prefix.replace("https://", "http://"), "https://evil.example/addons/detail/x",
+           prefix.rstrip("/") + ".evil.example/x", prefix.replace("/detail/", "/detailx/") + "x",
+           other + "x/abc", "javascript:alert(1)//" + prefix + "x",
+           prefix + "x/../../../evil", prefix + "x/%2e%2e/evil", prefix + "x#frag", prefix + "x y",
+           prefix + 'x" onclick="a', prefix + "x\nhttps://evil.example", prefix + "//evil.example/x",
+           prefix + "x?a=<b>"]
+    for url in bad:
+        monkeypatch.setenv(env, url)
+        assert fn() is None, url                                              # never another site, never a trick
+    monkeypatch.delenv(env)
+    for broken in (f'[{section}\nurl = "', f'{section} = 3\n', f'[{section}]\nurl = 7\n'):
+        toml.write_text(broken)
+        assert fn() is None                                                   # a typo never 500s /api/companion
+
+
+def test_edge_and_chrome_urls_are_independent(monkeypatch, tmp_path):
+    monkeypatch.delenv(companion.STORE_URL_ENV, raising=False)
+    monkeypatch.delenv(companion.EDGE_STORE_URL_ENV, raising=False)
+    toml = tmp_path / "store.toml"
+    monkeypatch.setattr(companion, "STORE_TOML", toml)
+    edge = companion.EDGE_STORE_URL_PREFIX + "magic-manager-companion/abcdefghijklmnopabcdefghijklmnop"
+    toml.write_text(f'[chrome_web_store]\nurl = ""\n[edge_add_ons]\nurl = "{edge}"\n')
+    assert companion.edge_store_url() == edge and companion.store_url() is None
+    toml.write_text(f'[chrome_web_store]\nurl = "{edge}"\n')                # an Edge page in the Chrome slot
+    assert companion.store_url() is None and companion.edge_store_url() is None
+
+
+def test_committed_edge_listing_is_unlisted_or_an_edge_page():
+    raw = companion.tomllib.loads(companion.STORE_TOML.read_text())["edge_add_ons"]["url"]
+    assert raw == "" or raw.startswith(companion.EDGE_STORE_URL_PREFIX)
+
+
+def test_info_carries_the_edge_url_only_when_configured(monkeypatch):
+    monkeypatch.delenv(companion.EDGE_STORE_URL_ENV, raising=False)
+    monkeypatch.setattr(companion, "STORE_TOML", Path("/nonexistent/store.toml"))
+    assert companion_api.info().edge_store_url is None
+    page = companion.EDGE_STORE_URL_PREFIX + "x/abcdefghijklmnopabcdefghijklmnop"
+    monkeypatch.setenv(companion.EDGE_STORE_URL_ENV, page)
+    assert companion_api.info().edge_store_url == page
+
+
+def test_shipped_extension_names_no_single_store():
+    """One store zip serves Chrome Web Store and Edge Add-ons: nothing shipped may pin an
+    install/update source (update_url, key) or link a store page."""
+    m = companion.manifest()
+    assert "update_url" not in m and "key" not in m
+    with zipfile.ZipFile(io.BytesIO(companion.build_zip(store=True))) as z:
+        for name in z.namelist():
+            text = z.read(name).decode("utf-8", "ignore")
+            for host in ("chromewebstore.google.com", "chrome.google.com/webstore", "microsoftedge.microsoft.com"):
+                assert host not in text, f"{name} links {host}"
+
+
+def test_extension_icon_matches_the_app_favicon():
+    """companion._ICON_SHAPES is web/public/favicon.svg, shape for shape — so the
+    extension icon can't silently drift from the app's favicon."""
+    import xml.etree.ElementTree as ET
+    svg = ET.parse(Path(companion.EXT_DIR.parent / "web" / "public" / "favicon.svg")).getroot()
+    assert svg.get("viewBox") == "0 0 32 32"                                  # the icon's 32-unit grid
+    kids = list(svg)
+    assert all(k.tag.rsplit("}", 1)[-1] == "rect" for k in kids)              # only rects are rasterized
+    for k in kids:                                                            # ...with only these attributes
+        assert set(k.attrib) <= {"x", "y", "width", "height", "rx", "fill", "opacity"}, k.attrib
+
+    def num(el, attr):
+        v = float(el.get(attr, 0))
+        return int(v) if v.is_integer() else v
+
+    def rgba(el):
+        h = el.get("fill").lstrip("#")
+        assert len(h) == 6, h
+        return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16), round(float(el.get("opacity", 1)) * 255))
+
+    from_svg = tuple((num(k, "x"), num(k, "y"), num(k, "width"), num(k, "height"), num(k, "rx"), rgba(k)) for k in kids)
+    assert from_svg == companion._ICON_SHAPES
+
+
 def test_bump_version(monkeypatch, tmp_path):
     m = tmp_path / "manifest.json"
     m.write_text(json.dumps({"name": "x", "version": "0.4.5"}))
