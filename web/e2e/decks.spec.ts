@@ -59,7 +59,7 @@ test('inspector: sections by board then type, card facts, deep link', async ({ p
   await page.keyboard.press('Escape');
   await page.getByRole('radio', { name: 'List' }).click();
   await expect(page.getByRole('article')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: /^Mark / }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Mark (?!cards to copy)/ }).first()).toBeVisible();
 });
 
 test('add the whole deck, or only marked cards, through the add-cards review', async ({ page }) => {
