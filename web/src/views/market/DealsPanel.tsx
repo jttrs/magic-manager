@@ -1,293 +1,115 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useStoreHealth } from '../../app/scraperHealth';
-import { ScraperDownMark } from '../../components/ScraperNotice';
-import { useEffect, useMemo, useState } from 'react';
-import { useJob } from '../../app/useJob';
-import { deltaLabel, pagesFresh, pricesFrom, sharedErrors, stockLabel, type PriceRow } from '../../core/deals';
-import { dealsTabsQuery, unwrap } from '../../app/queries';
+import { useQuery } from '@tanstack/react-query';
+import { useMemo, useState } from 'react';
 import { Button } from '../../components/Button';
-import { EmptyNote } from '../../components/States';
-import { dealsMatch, dealsSuppliedTabs, type MatchOut, type OpenTabsOut, type StoreTabsOut } from '../../core/api';
-import { useFeature } from '../../app/features';
-import { useCompanion } from '../../app/useCompanion';
 import { AwaitingNote, FailureNote } from '../../components/companion/CompanionNotes';
-import { warningLines } from '../../core/companion';
+import { EmptyNote, ErrorNote } from '../../components/States';
+import { sharedErrors, type DealProduct, type NewlyMet, type PriceRow } from '../../core/deals';
 import { fmtCount, fmtInt, fmtUsd } from '../../core/format';
 import type { MarketSearch } from '../../core/search';
+import type { OpenTabsOut } from '../../core/api';
 import { DealsWorkspace } from './DealsWorkspace';
-import { dealsPagesQuery, dealsPricesQuery, patchPrices, setDealsPages, setPrices, useDealCosts, useDealsData } from './useDealsData';
-
-const MODE_NOTE: Record<StoreTabsOut['mode'], string> = {
-  shopify: 'price read from the store',
-  meta: 'price read from the store',
-  rendered: 'price read from your open tab',
-};
+import { dealsPricesQuery, type DealCosts, type DealsData } from './useDealsData';
+import type { DealsReads } from './useDealsReads';
 
 const NO_PRICES = new Map<string, PriceRow>();
-const H2 = 'flex items-baseline gap-2 border-b-2 border-rule-strong pb-1 text-lg voice-condensed font-bold text-ink';
+const hostOf = (url: string) => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; } };
 
-/** Internal (deals flag): the product pages open in your browser. Read on demand only —
- *  the open-tab set changes under us. Before prices: the pages by store; after: the product table. */
-export function DealsPanel({ search, set }: { search: MarketSearch; set: (patch: Partial<MarketSearch>) => void }) {
-  const qc = useQueryClient();
-  const read = useQuery(dealsTabsQuery());
-  const r = read.data;
-  const job = useJob();
-  // In this browser via the companion when it's connected; else Chrome on this Mac (AppleScript).
-  const c = useCompanion();
-  const inBrowser = useFeature('companion') && c.status === 'ready';
-  const [awaiting, setAwaiting] = useState<string | null>(null);
-  const [readNotes, setReadNotes] = useState<string[]>([]);
-  const stored = useQuery(dealsPagesQuery()).data;
-  const pages = stored?.pages;
-  const viaCompanion = useMutation({
-    mutationFn: async () => {
-      const d = await c.read('tabs', {}, (summary) => setAwaiting(summary));
-      setAwaiting(null);
-      const out = unwrap(await dealsSuppliedTabs({ body: { tabs: d.tabs } }));
-      setDealsPages(qc, d.pages);
-      qc.setQueryData(dealsTabsQuery().queryKey, out);
-      setReadNotes(warningLines(d.warnings, c.catalog));
-      return { out, pages: d.pages };
-    },
-    onSettled: () => setAwaiting(null),
-  });
-  const readTabs = () => {
-    if (inBrowser) viaCompanion.mutate();
-    else {
-      setDealsPages(qc, {});
-      setReadNotes([]);
-      void read.refetch();
-    }
-  };
-  const readingTabs = read.isFetching || viaCompanion.isPending;
-  const pagesFor = (list: string[], from = pages) => Object.fromEntries(list.filter((u) => from?.[u]).map((u) => [u, from![u]]));
-  const urlsOf = (o: OpenTabsOut) => o.stores.flatMap((s) => s.tabs.map((t) => t.url));
-  const urls = r ? urlsOf(r) : [];
-  // Page snapshots older than 2 minutes would record an old price as current: re-read the tabs
-  // first (same approval flow as "Read tabs"); if that fails, send nothing stale.
-  const readPrices = async () => {
-    if (inBrowser && !pagesFresh(stored?.readAt, Date.now())) {
-      try {
-        const fresh = await viaCompanion.mutateAsync();
-        job.reset();
-        void job.start('deals.read_prices', { urls: urlsOf(fresh.out), pages: pagesFor(urlsOf(fresh.out), fresh.pages) });
-      } catch { /* the failure shows through viaCompanion.error */ }
-      return;
-    }
-    job.reset();
-    void job.start('deals.read_prices', { urls, pages: pagesFor(urls) });
-  };
-  const live = job.live;
-  const reading = live != null && live.status !== 'succeeded' && live.status !== 'failed';
+/** Internal (deals flag): the products you watch — best price now, what each is worth and what's inside.
+ *  A read of your open tabs (a header action) pins what it found above the table until you Watch or
+ *  Dismiss it. Reads happen only on demand. */
+export function DealsPanel({ data, costs, reads, search, set }: { data: DealsData; costs: DealCosts; reads: DealsReads; search: MarketSearch; set: (patch: Partial<MarketSearch>) => void }) {
   const prices = useQuery(dealsPricesQuery()).data ?? NO_PRICES;
-  useEffect(() => {
-    if (live?.status !== 'succeeded') return;
-    setPrices(qc, pricesFrom(live.artifacts));
-    void qc.invalidateQueries({ queryKey: ['scrapers', 'health'] });   // reads set/clear store flags
-  }, [live?.status, live?.artifacts, qc]);
-  const data = useDealsData('tabs', true);
-  const costs = useDealCosts(data.products);
-  const onConfirmed = (row: PriceRow) => patchPrices(qc, [row.url], () => row);
-  const shared = sharedErrors(prices.values());
+  const shared = useMemo(() => sharedErrors([...prices.values(), ...reads.watchErrors]), [prices, reads.watchErrors]);
+  const [dismissedMet, setDismissedMet] = useState<NewlyMet[] | null>(null);
+  const met = reads.newlyMet.length && dismissedMet !== reads.newlyMet ? reads.newlyMet : [];
+  const pl = reads.pricesLive, wl = reads.watchLive;
+  const live = pl ?? wl;
+  const running = live != null && live.status !== 'succeeded' && live.status !== 'failed';
 
-  const controls = (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <Button tone="paper" emphasis={r ? 'quiet' : 'primary'} onClick={readTabs} disabled={readingTabs}>
-          {awaiting != null ? 'Waiting for approval…' : readingTabs ? 'Reading your tabs…' : r ? 'Read again' : 'Read my open tabs'}
-        </Button>
-        {r && urls.length > 0 && (
-          <Button tone="paper" emphasis={prices.size ? 'quiet' : 'primary'} disabled={reading || readingTabs} onClick={() => void readPrices()}>
-            {reading ? 'Reading prices…' : prices.size ? 'Read prices again' : `Read ${fmtCount(urls.length, 'price')}`}
-          </Button>
-        )}
-        {r && (r.browser === 'extension'
-          ? <span className="text-sm text-ink-muted">Read in this browser by the companion</span>
-          : <span className="text-sm tabular text-ink-muted">{fmtInt(r.windows_read)} of {fmtCount(r.windows, 'window')} read</span>)}
-      </div>
-      {awaiting != null && <AwaitingNote summary={awaiting} />}
-      {viaCompanion.isError && <FailureNote error={viaCompanion.error} />}
-      {readNotes.map((w) => <p key={w} role="status" className="text-md leading-relaxed text-ink">{w}</p>)}
-      {read.isError && <p role="alert" className="text-md text-danger">{(read.error as Error).message}</p>}
-      {r?.warnings.map((w) => <p key={w} role="status" className="text-md leading-relaxed text-ink">{w}</p>)}
-      {!r && !readingTabs && !read.isError && (
-        <p className="max-w-[60ch] text-md leading-relaxed text-ink-muted">
-          {inBrowser
-            ? 'Asks the browser companion for the store product pages you have open in this browser. You see and approve what it sends; nothing is opened, closed or changed.'
-            : 'Reads the tabs open in Chrome on this computer and keeps the store product pages. Nothing is opened, closed or changed.'}
-        </p>
-      )}
-      {reading && (
+  const header = (
+    <div className="flex flex-col gap-2 empty:hidden">
+      {reads.awaiting != null && <AwaitingNote summary={reads.awaiting} />}
+      {reads.reading === 'tabs' && reads.awaiting == null && !running && <p role="status" className="text-sm text-ink-muted">Reading your open tabs…</p>}
+      {reads.failure && (reads.failure.companion
+        ? <FailureNote error={reads.failure.error} />
+        : <p role="alert" className="text-md text-danger">{(reads.failure.error as Error).message}</p>)}
+      {reads.notes.map((w) => <p key={w} role="status" className="text-md leading-relaxed text-ink">{w}</p>)}
+      {reads.tabs?.warnings.map((w) => <p key={w} role="status" className="text-md leading-relaxed text-ink">{w}</p>)}
+      {running && (
         <p role="status" className="text-sm tabular text-ink-muted">
-          {live?.total ? `Reading ${fmtInt(Math.min(live.done + 1, live.total))} of ${fmtInt(live.total)}` : 'Starting…'}
-          {live?.log.at(-1)?.msg ? ` · ${new URL(live.log.at(-1)!.msg, 'https://x').hostname.replace(/^www\./, '')}` : ''}
+          {pl ? 'Reading prices from your open tabs' : 'Reading watched prices'}
+          {live.total ? ` · ${fmtInt(Math.min(live.done + 1, live.total))} of ${fmtInt(live.total)}` : ' · starting…'}
+          {live.log.at(-1)?.msg ? ` · ${pl ? hostOf(live.log.at(-1)!.msg) : live.log.at(-1)!.msg}` : ''}
         </p>
       )}
       {live?.status === 'failed' && <p role="alert" className="text-md text-danger">{live.error ?? 'Couldn’t read prices.'}</p>}
+      {wl?.status === 'succeeded' && wl.summary && <p role="status" className="text-sm tabular text-ink-muted">{wl.summary}</p>}
+      {pl?.status === 'succeeded' && reads.tabs && <TabsSummary r={reads.tabs} pinned={data.pinned.length + data.listings.length} />}
+      {met.length > 0 && (
+        <TargetsMet met={met} products={data.products} onPick={(item) => set({ item })} onDismiss={() => setDismissedMet(reads.newlyMet)} />
+      )}
       {shared.map((e) => <p key={e} role="alert" className="max-w-[70ch] text-md leading-relaxed text-ink">{e}</p>)}
+      {!reads.busy && reads.inBrowser && reads.browserReads > 0 && (
+        <p className="text-sm text-ink-muted">Open-tab stores are read in this browser by the companion</p>
+      )}
     </div>
   );
-
-  if (prices.size > 0) {
-    return (
-      <DealsWorkspace
-        products={data.products}
-        costs={costs}
-        search={search}
-        set={set}
-        header={controls}
-        footer={r && <TabsFooter r={r} needsLook={data.needsLook} shared={shared} onConfirmed={onConfirmed} />}
-        emptyNote={<EmptyNote title="Nothing matched yet">Choose a product for the listings below, or read again.</EmptyNote>}
-      />
-    );
-  }
-  return (
-    <div className="flex h-full flex-col gap-4 overflow-y-auto px-5 pb-8 pt-2">
-      {controls}
-      {r && <Results r={r} />}
-    </div>
-  );
+  const emptyNote = data.loading
+    ? <p role="status" className="text-md text-ink-muted">Loading what you watch…</p>
+    : data.error
+      ? <ErrorNote error={data.error} />
+      : <EmptyNote title="Nothing watched yet">Read your open tabs, then choose Watch on a product you want to follow.</EmptyNote>;
+  return <DealsWorkspace data={data} costs={costs} search={search} set={set} header={header} emptyNote={emptyNote} />;
 }
 
-function Results({ r }: { r: OpenTabsOut }) {
-  const storeHealth = useStoreHealth();
-  const products = r.stores.reduce((n, s) => n + s.tabs.length, 0);
-  if (!products && !r.uncatalogued.length) {
-    return r.warnings.length
-      ? <EmptyNote title="Couldn’t see your store tabs">Follow the note above, then read again.</EmptyNote>
-      : <EmptyNote title="No store pages open">Open product pages from a store, then read again.</EmptyNote>;
-  }
+/** After a read of your tabs: where they came from, what was pinned, and what was left out. */
+function TabsSummary({ r, pinned }: { r: OpenTabsOut; pinned: number }) {
+  const pages = r.stores.reduce((n, s) => n + s.tabs.length, 0);
+  const uncatalogued = r.uncatalogued.reduce((n, u) => n + u.tabs.length, 0);
+  const parts = [
+    r.browser === 'extension' ? 'Read in this browser' : `${fmtInt(r.windows_read)} of ${fmtCount(r.windows, 'window')} read`,
+    fmtCount(pages, 'product page'),
+    pages ? `${fmtInt(pinned)} new to review` : null,
+    uncatalogued ? `${fmtCount(uncatalogued, 'page')} at stores without a recipe yet (${r.uncatalogued.map((u) => u.host).join(', ')})` : null,
+    r.store_pages ? fmtCount(r.store_pages, 'other store page') : null,
+    r.other ? fmtCount(r.other, 'other tab') : null,
+  ].filter(Boolean);
   return (
-    <div className="flex flex-col gap-5">
-      {r.stores.map((s) => (
-        <section key={s.key} aria-label={s.name} className="flex flex-col">
-          <h2 className={H2}>
-            {s.name}
-            <span className="text-sm font-normal tabular text-ink-muted">{fmtInt(s.tabs.length)}</span>
-            <ScraperDownMark health={storeHealth(s.key)} />
-            <span className="ml-auto text-xs font-normal text-ink-muted">{MODE_NOTE[s.mode]}{s.no_sales_tax ? ' · no sales tax' : ''}</span>
-          </h2>
-          <ul>
-            {s.tabs.map((t) => <Listing key={t.url} url={t.url} title={t.title} p={undefined} shared={[]} onConfirmed={() => {}} />)}
-          </ul>
-        </section>
-      ))}
-      <Uncatalogued r={r} />
-      <OtherTabs r={r} />
-    </div>
-  );
-}
-
-function Uncatalogued({ r }: { r: OpenTabsOut }) {
-  if (!r.uncatalogued.length) return null;
-  return (
-    <section aria-label="Stores without a recipe yet" className="flex flex-col gap-1">
-      <h2 className="text-sm voice-condensed font-medium uppercase tracking-[0.06em] text-ink-muted">Stores without a recipe yet</h2>
-      <ul className="text-sm text-ink">
-        {r.uncatalogued.map((u) => <li key={u.host} className="border-b border-rule py-1.5">{u.host} <span className="tabular text-ink-muted">· {fmtCount(u.tabs.length, 'product page')}</span></li>)}
-      </ul>
-    </section>
-  );
-}
-
-function OtherTabs({ r }: { r: OpenTabsOut }) {
-  return (
-    <p className="text-xs text-ink-muted">
-      Also open: {fmtCount(r.store_pages, 'other store page')} (carts, collections) · {fmtCount(r.other, 'other tab')}
-      {r.dropped_local ? ` · ${fmtCount(r.dropped_local, 'local tab')} skipped` : ''}
-      {r.duplicates ? ` · ${fmtCount(r.duplicates, 'duplicate')}` : ''}
+    <p role="status" className="text-sm tabular text-ink-muted">
+      {!pages && <span className="text-ink">No store product pages open — open product pages from a store, then read again. </span>}
+      {parts.join(' · ')}
     </p>
   );
 }
 
-/** Under the table: listings that aren't a known product yet (pick one, or see why), then the rest. */
-function TabsFooter({ r, needsLook, shared, onConfirmed }: { r: OpenTabsOut; needsLook: PriceRow[]; shared: string[]; onConfirmed: (row: PriceRow) => void }) {
-  const titleOf = useMemo(() => new Map(r.stores.flatMap((s) => s.tabs.map((t) => [t.url, t.title] as const))), [r]);
+/** After a read: the products whose target this read met, each a link into the inspector. */
+function TargetsMet({ met, products, onPick, onDismiss }: { met: NewlyMet[]; products: DealProduct[]; onPick: (key: string) => void; onDismiss: () => void }) {
+  const keyOf = new Map(products.map((p) => [p.productId, p.key]));
   return (
-    <div className="flex flex-col gap-5">
-      {needsLook.length > 0 && (
-        <section aria-label="Needs a look" className="flex flex-col">
-          <h2 className={H2}>Needs a look <span className="text-sm font-normal tabular text-ink-muted">{fmtInt(needsLook.length)}</span></h2>
-          <ul>
-            {needsLook.map((p) => <Listing key={p.url} url={p.url} title={titleOf.get(p.url) ?? ''} p={p} shared={shared} onConfirmed={onConfirmed} />)}
-          </ul>
-        </section>
-      )}
-      <Uncatalogued r={r} />
-      <OtherTabs r={r} />
-    </div>
-  );
-}
-
-function Listing({ url, title, p, shared, onConfirmed }: { url: string; title: string; p?: PriceRow; shared: string[]; onConfirmed: (row: PriceRow) => void }) {
-  const stock = stockLabel(p);
-  const delta = p ? deltaLabel(p) : null;
-  return (
-    <li className="flex flex-col gap-0.5 border-b border-rule py-1.5 text-sm">
-      <div className="flex items-baseline gap-3">
-        <a href={url} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate text-ink no-underline hover:text-accent-ink">
-          {p?.title || title || url}<span className="sr-only"> (opens in a new tab)</span>
-        </a>
-        {stock && <span className={`shrink-0 text-xs ${p?.available ? 'text-ink-muted' : 'text-danger'}`}>{stock}</span>}
-        <span className="w-20 shrink-0 text-right tabular text-ink">{p?.price != null ? fmtUsd(p.price) : <span className="text-ink-muted">—</span>}</span>
+    <section role="status" aria-labelledby="targets-met-h" className="flex flex-col gap-1.5 border-y-2 border-rule-strong py-2">
+      <div className="flex flex-wrap items-baseline gap-x-3">
+        <h3 id="targets-met-h" className="flex-1 text-lg voice-condensed font-bold text-ink">
+          <span className="highlighter">{met.length === 1 ? '1 product hit its target' : `${fmtInt(met.length)} products hit their target`}</span>
+        </h3>
+        <Button tone="paper" emphasis="quiet" onClick={onDismiss}>Dismiss</Button>
       </div>
-      {p?.error && !shared.includes(p.error) && <span className="text-xs text-danger">{p.error}</span>}
-      {p && !p.error && <Identity p={p} delta={delta} onConfirmed={onConfirmed} />}
-    </li>
+      <ul className="flex flex-col">
+        {met.map((m) => {
+          const key = keyOf.get(m.product_id);
+          return (
+            <li key={m.product_id} className="flex flex-wrap items-baseline gap-x-2 border-b border-rule/60 py-1.5 text-sm tabular last:border-b-0">
+              {key ? (
+                <button type="button" onClick={() => onPick(key)} className="touch-hit cursor-pointer text-left voice-semi font-medium text-accent-ink underline">{m.name}</button>
+              ) : <span className="voice-semi font-medium text-ink">{m.name}</span>}
+              <span className="text-ink">{fmtUsd(m.price)}</span>
+              <a href={m.url} target="_blank" rel="noreferrer" className="touch-hit text-ink-muted hover:text-accent-ink">
+                at {m.store ?? 'a store'}<span aria-hidden="true"> ↗</span><span className="sr-only"> (opens in a new tab)</span>
+              </a>
+              <span className="text-ink-muted">· target {fmtUsd(m.target_price)}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
-}
-
-const sameChoice = (a: MatchOut, b: MatchOut | null | undefined) =>
-  !!b && a.set_code === b.set_code && a.name === b.name && a.scryfall_id === b.scryfall_id && a.finish === b.finish;
-
-/** What the listing is and how it compares: a matched/confirmed product line, a
- *  picker when it's ambiguous, or the reason it isn't valued. */
-function Identity({ p, delta, onConfirmed }: { p: PriceRow; delta: ReturnType<typeof deltaLabel>; onConfirmed: (row: PriceRow) => void }) {
-  const [pick, setPick] = useState(0);
-  const [changing, setChanging] = useState(false);
-  const candidates = p.candidates ?? [];
-  const save = useMutation({
-    mutationFn: async (choice: MatchOut | null) =>
-      unwrap(await dealsMatch({ body: { url: p.url, title: p.title, price: p.price, currency: p.currency, available: p.available, choice } })),
-    onSuccess: onConfirmed,
-  });
-  if (p.match && !changing) {
-    return (
-      <p className="flex flex-wrap items-baseline gap-x-2 text-xs text-ink-muted">
-        <span className="text-ink">{p.match.name}</span>
-        {p.kind === 'single' && p.match.finish === 'foil' && <span>foil</span>}
-        {p.market != null && <span className="tabular">· market {fmtUsd(p.market)}</span>}
-        {p.contents != null && <span className="tabular">· cards inside {fmtUsd(p.contents)}{p.partial ? '+' : ''}</span>}
-        {delta && <span className={`font-medium ${delta.tone === 'good' ? 'text-accent-ink' : delta.tone === 'bad' ? 'text-danger' : ''}`}>· {delta.text}</span>}
-        {p.status === 'confirmed' ? (
-          <button type="button" onClick={() => save.mutate(null)} className="cursor-pointer underline hover:text-ink">you confirmed this · change</button>
-        ) : p.status === 'matched' && candidates.some((c) => !sameChoice(c, p.match)) ? (
-          <button type="button" onClick={() => setChanging(true)} className="cursor-pointer underline hover:text-ink">not this?</button>
-        ) : null}
-      </p>
-    );
-  }
-  if ((p.status === 'ambiguous' || changing) && candidates.length) {
-    return (
-      <div className="flex flex-col gap-1 text-xs">
-        <span className="text-ink-muted">{changing ? 'Which product is this?' : p.note || 'Which product is this?'}</span>
-        <span className="flex flex-wrap items-center gap-2">
-          <select
-            aria-label={`Which product is ${p.title ?? 'this'}?`}
-            value={pick}
-            onChange={(e) => setPick(Number(e.target.value))}
-            className="max-w-full rounded-sm border border-rule-strong bg-paper-raised px-2 py-1 text-sm text-ink"
-          >
-            {candidates.map((c, i) => <option key={`${c.set_code}|${c.name}|${c.scryfall_id}|${c.finish}`} value={i}>{c.name}{p.kind === 'sld' && c.finish ? ` · ${c.finish}` : ''}{c.price != null ? ` — ${fmtUsd(c.price)}` : ''}</option>)}
-          </select>
-          <Button tone="paper" onClick={() => save.mutate(candidates[pick], { onSuccess: () => setChanging(false) })} disabled={save.isPending}>{save.isPending ? 'Saving…' : 'This one'}</Button>
-          {changing && <button type="button" onClick={() => setChanging(false)} className="cursor-pointer text-ink-muted underline hover:text-ink">cancel</button>}
-        </span>
-        {save.isError && <span role="alert" className="text-danger">{(save.error as Error).message}</span>}
-      </div>
-    );
-  }
-  if (p.status === 'unmatched' || p.status === 'skipped') return <span className="text-xs text-ink-muted">{p.note}</span>;
-  return p.note ? <span className="text-xs text-ink-muted">{p.note}</span> : null;
 }

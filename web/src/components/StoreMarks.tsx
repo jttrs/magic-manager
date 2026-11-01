@@ -199,6 +199,17 @@ export function FindProductsMark(p: MarkProps) {
   );
 }
 
+/** A browser window with tabs, an arrow coming in (read the product pages open in your tabs). */
+export function ReadTabsMark(p: MarkProps) {
+  return (
+    <svg {...base} {...p}>
+      <path d="M3 7.6V5.2A1.4 1.4 0 0 1 4.4 3.8h4.4l1.4 2.4h9.4a1.4 1.4 0 0 1 1.4 1.4v10.6a1.4 1.4 0 0 1-1.4 1.4H11" />
+      <path d="M3 7.6h18" />
+      <path d="M3 14.8h6.4M6.6 12l2.8 2.8-2.8 2.8" />
+    </svg>
+  );
+}
+
 /** A store receipt with an arrow coming in (read your store orders). */
 export function ReadOrdersMark(p: MarkProps) {
   return (
