@@ -146,8 +146,13 @@ sequenceDiagram
 - **No dependencies, no build step.** The source in `extension/` *is* the extension. The zip the app
   serves is **byte-for-byte reproducible** (sorted entries, fixed timestamps), so a download can be
   compared to the repo (`test_zip_is_reproducible_and_ships_only_the_extension`).
-- **No auto-update channel.** Beta installs are unpacked. Updating is a deliberate re-download (the
-  app shows "update available" by comparing versions). Store distribution is a later decision.
+- **Update channel: the Chrome Web Store (unlisted), once published.** Store installs auto-update to
+  versions that passed Google's review; each release is the reproducible `--store-zip` of a tagged
+  commit, built in CI (`extension-release` workflow, `SHA256SUMS` on the GitHub release), and uploaded
+  as a draft — submitting is the owner's decision. The developer install (unpacked zip) remains, with
+  no auto-update: a deliberate re-download (the app shows "update available" by comparing versions).
+  The store URL the app links to must be a `chromewebstore.google.com/detail/` address
+  (`companion.store_url`). Privacy policy: [`privacy-companion.md`](privacy-companion.md).
 
 ### 4. Data misuse / overreach
 

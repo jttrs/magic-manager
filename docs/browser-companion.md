@@ -11,8 +11,9 @@ connected. Security design: [`browser-companion-security.md`](browser-companion-
 
 1. Turn on the flag: `MM_FEATURES=companion` (plus `cart_check` / `deals` for those features) or
    `config/features.local.toml`. Restart `mm serve`.
-2. App header → plug icon → **Download the companion**, unzip, `chrome://extensions` → Developer mode
-   → **Load unpacked**.
+2. App header → plug icon → **Add to Chrome** (the Chrome Web Store listing — shown once published,
+   see *Chrome Web Store* below). Until then, or as a fallback, the dialog's **Developer install**:
+   **Download the companion**, unzip, `chrome://extensions` → Developer mode → **Load unpacked**.
 3. Companion icon → paste the app's exact address (the app's header → **Browser companion** shows it with a copy button; the field starts empty, no default port) → **Pair** (Chrome asks to allow it) → reload the app tab. The settings page then says whether that address has checked in (the worker records the paired app's last hello, `storage.local` `lastHello`); "hasn't checked in yet" means the app isn't open at exactly that address.
 4. Optional: switch on **Allow access** on the companion's settings page (0.4.3: ONE switch, owner
    2026-10-11, replacing the six per-feature switches). It asks Chrome once for every site the readers
@@ -31,6 +32,36 @@ the bookmarklet paste and .env login are Mana Pool only — see *Other carts* be
 Watching → **Read watched prices** (the watched open-tab store pages), Add cards → Deck and
 Decks → Import (Moxfield links; Archidekt links once Allow access is on — private decks too),
 Add cards → **Import a collection** → *Live from Moxfield* (your collection, one binder, or a shared link — each one button that reads). Without a connected companion each falls back to the existing path.
+
+## Chrome Web Store
+
+The trusted install is an **unlisted** Chrome Web Store item (anyone with the link can install; not
+searchable); the unpacked zip stays as the setup dialog's collapsed *Developer install*.
+
+- **Store URL (configurable until published):** `[chrome_web_store] url` in `extension/store/store.toml`,
+  overridden by `MM_COMPANION_STORE_URL`. `companion.store_url()` accepts only
+  `https://chromewebstore.google.com/detail/…`; anything else is ignored. `GET /api/companion` returns it
+  as `store_url` (null = not published → the dialog leads with the developer install, open).
+  `privacy_url` links the policy.
+- **Listing kit** (`extension/store/`, never in the zip): `listing.md` — summary, description, single
+  purpose, per-permission justifications, data-use answers, reviewer test instructions;
+  `screenshots/*.png` (1280×800) + `promo-small.png` (440×280), captured from the real extension pages
+  by `uv run python scripts/capture_store_assets.py`. Icons `extension/icons/icon-{16,32,48,128}.png`
+  are generated from the favicon shapes by `scripts/build_extension.py` (`companion.icon_png`; `--check`
+  keeps them current). Privacy policy: [`privacy-companion.md`](privacy-companion.md).
+- **Release:** bump in a PR — `uv run python scripts/build_extension.py --bump patch` (the store refuses
+  a version that isn't higher) — merge, then tag `companion-v<version>`. The `extension-release`
+  workflow checks the tag matches the manifest, runs `tests/test_companion.py`, builds both
+  reproducible zips (`--zip` folder zip for Load unpacked, `--store-zip` with the manifest at the root
+  for the store) + `SHA256SUMS`, attaches them to a GitHub release and, when the four secrets
+  `CWS_CLIENT_ID` / `CWS_CLIENT_SECRET` / `CWS_REFRESH_TOKEN` / `CWS_EXTENSION_ID` exist, uploads the
+  store zip as a **draft** (never publishes).
+- **Owner actions (one-time):** register a Chrome Web Store developer account ($5); create the item by
+  uploading the first `--store-zip`; paste `listing.md` into the Store listing / Privacy practices tabs;
+  set visibility *Unlisted*; submit for review. After approval put the item's URL in `store.toml`
+  (and its id in `extension_id`); optionally add the four secrets for automatic draft uploads. Store
+  installs auto-update; an existing developer install keeps working (a store install gets a new
+  extension id, so pair it again and remove the unpacked copy).
 
 ## The bridge survives a reload or update (0.4.3)
 

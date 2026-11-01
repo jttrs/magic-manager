@@ -14,6 +14,9 @@ export type CompanionState = {
   hello: CompanionHello | null;
   /** The version in this app's repo (an older install should update). */
   latest: string | null;
+  /** The Chrome Web Store page (the primary install), once published; null until then. */
+  storeUrl: string | null;
+  privacyUrl: string | null;
   outdated: boolean;
   catalog: ErrorCatalog;
   /** Ask the companion to read; resolves after you approve in its window. */
@@ -54,6 +57,8 @@ export function useCompanion(): CompanionState {
     status: hello ? 'ready' : checked ? 'absent' : 'checking',
     hello,
     latest,
+    storeUrl: info.data?.store_url ?? null,
+    privacyUrl: info.data?.privacy_url ?? null,
     outdated: Boolean(hello && latest && isOlder(hello.version, latest)),
     catalog,
     read,

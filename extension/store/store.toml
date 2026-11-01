@@ -1,0 +1,13 @@
+# Chrome Web Store distribution of the companion (never shipped in the extension zip).
+# Listing copy + permission justifications: listing.md · privacy policy: docs/privacy-companion.md
+# Release: docs/browser-companion.md § Chrome Web Store.
+
+[chrome_web_store]
+# The listing's page, once published (unlisted works — anyone with the link can install).
+# Empty = not published yet: the app's setup dialog shows the developer install instead.
+# Must start with https://chromewebstore.google.com/detail/ — anything else is ignored.
+# MM_COMPANION_STORE_URL overrides it on a host.
+url = ""
+# The item id the dashboard assigns on first upload (used by the release workflow's
+# optional upload step via the CWS_EXTENSION_ID secret; recorded here for reference).
+extension_id = ""

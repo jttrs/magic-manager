@@ -1,0 +1,90 @@
+# Release the browser companion: the reproducible zips from scripts/build_extension.py (--zip for
+# the developer install, --store-zip with the manifest at the root for the store),
+# attached to a GitHub release and — once the store item exists and its secrets are set —
+# uploaded to the Chrome Web Store as a new draft. Submitting for review stays a person's
+# decision in the dashboard (docs/browser-companion.md § Chrome Web Store).
+#
+# Release: bump the version in a PR (uv run python scripts/build_extension.py --bump patch),
+# merge, then push a tag that matches it:  git tag companion-v0.4.6 && git push origin companion-v0.4.6
+name: Extension release
+
+on:
+  push:
+    tags: ["companion-v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+
+      - name: Generated files are current
+        run: uv run python scripts/build_extension.py --check
+
+      - name: Version matches the tag
+        id: version
+        run: |
+          v=$(uv run python scripts/build_extension.py --print-version)
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "$GITHUB_REF_NAME" != "companion-v$v" ]; then
+            echo "::error::tag $GITHUB_REF_NAME doesn't match manifest version $v — bump with scripts/build_extension.py --bump, or tag companion-v$v"
+            exit 1
+          fi
+
+      - name: Companion tests
+        run: uv run pytest -q -p no:warnings tests/test_companion.py
+
+      - name: Build the zips
+        run: |
+          zip="magic-manager-companion-${{ steps.version.outputs.version }}.zip"
+          store="magic-manager-companion-${{ steps.version.outputs.version }}-store.zip"
+          uv run python scripts/build_extension.py --zip "$zip" --store-zip "$store"
+          sha256sum "$zip" "$store" > SHA256SUMS
+          echo "ZIP=$zip" >> "$GITHUB_ENV"
+          echo "STORE_ZIP=$store" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: magic-manager-companion-${{ steps.version.outputs.version }}
+          path: |
+            ${{ env.ZIP }}
+            ${{ env.STORE_ZIP }}
+            SHA256SUMS
+
+      - name: GitHub release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "$ZIP" "$STORE_ZIP" SHA256SUMS \
+            --title "Browser companion ${{ steps.version.outputs.version }}" \
+            --notes "Reproducible builds of extension/ (scripts/build_extension.py --zip / --store-zip). Compare SHA256SUMS with a local build of the same commit."
+
+      # Optional: needs the store item (first upload is manual) and four repo secrets — see
+      # docs/browser-companion.md § Chrome Web Store. Uploads only; never publishes.
+      - name: Upload to the Chrome Web Store (draft)
+        if: github.ref_type == 'tag'
+        env:
+          CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+          CWS_EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
+        run: |
+          if [ -z "$CWS_CLIENT_ID" ] || [ -z "$CWS_CLIENT_SECRET" ] || [ -z "$CWS_REFRESH_TOKEN" ] || [ -z "$CWS_EXTENSION_ID" ]; then
+            echo "Chrome Web Store secrets not set — skipping the upload (upload $STORE_ZIP in the dashboard)."
+            exit 0
+          fi
+          token=$(curl -fsS https://oauth2.googleapis.com/token \
+            -d client_id="$CWS_CLIENT_ID" -d client_secret="$CWS_CLIENT_SECRET" \
+            -d refresh_token="$CWS_REFRESH_TOKEN" -d grant_type=refresh_token | jq -r .access_token)
+          echo "::add-mask::$token"
+          curl -fsS -X PUT -H "Authorization: Bearer $token" -H "x-goog-api-version: 2" \
+            -T "$STORE_ZIP" "https://www.googleapis.com/upload/chromewebstore/v1.1/items/$CWS_EXTENSION_ID" | tee upload.json
+          jq -e '.uploadState == "SUCCESS"' upload.json > /dev/null || { echo "::error::upload failed"; exit 1; }
+          echo "Uploaded as a draft — submit it for review in the developer dashboard."
