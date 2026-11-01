@@ -105,8 +105,8 @@ def printing_row(set_code: str, collector_number: str):
         if row is None:
             found, _ = scryfall.collection([{"set": args[0], "collector_number": args[1]}])
             if found:
-                sets.upsert_lookup_cards(conn, [found[0]])
-                conn.commit()
+                with db.catalog_first(conn):
+                    sets.upsert_lookup_cards(conn, [found[0]])
             row = conn.execute(_PRINTING_SQL, args).fetchone()
     return row
 

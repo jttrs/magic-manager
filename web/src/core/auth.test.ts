@@ -18,6 +18,7 @@ describe('readSignInParams', () => {
 describe('authErrorMessage', () => {
   it('names the problem and the way out', () => {
     expect(authErrorMessage('profiles_soon')).toMatch(/Profiles open soon/);
+    expect(authErrorMessage('profile_unavailable')).toMatch(/collection couldn’t be opened/);
     expect(authErrorMessage('unknown')).toMatch(/Start again/);
     expect(authErrorMessage(null)).toBeNull();
   });

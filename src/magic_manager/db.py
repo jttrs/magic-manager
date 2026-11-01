@@ -1400,6 +1400,39 @@ def layout() -> _layout.Layout:
     return _layout.resolve(os.environ, single_path=db_path(), default_dir=db_dir())
 
 
+def layout_kind() -> str:
+    """``single`` | ``split`` for this process (no user resolution)."""
+    return _layout.kind_of(os.environ)
+
+
+def data_dir() -> Path:
+    """Where this process's data lives, without resolving a user: the split data
+    dir (``catalog.db``, ``users/``, ``auth.db``) or the single file's directory."""
+    if layout_kind() == "split":
+        return _layout.data_dir_of(os.environ, db_dir())
+    return db_dir()
+
+
+def user_scope() -> str:
+    """Whose data :func:`connect` opens in this context (the user file in split,
+    the one file in single). Key every process-wide cache of USER data on it."""
+    return str(layout().path)
+
+
+@contextmanager
+def catalog_first(conn: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
+    """Catalog writes (card upserts, ``catalog_settings``) that a user write in the
+    same connection depends on: run them in the body, which is COMMITTED on exit —
+    before the user write (§25.3: a commit across the catalog and a user file isn't
+    atomic under WAL, so a crash may leave a harmless cached card, never a user row
+    pointing at a missing one). Refuses to start when ``conn`` already holds
+    uncommitted writes (they would be committed early)."""
+    if conn.in_transaction:
+        raise RuntimeError("catalog writes must be committed before the transaction's first user write (§25.3)")
+    yield conn
+    conn.commit()
+
+
 def _open_split(lay: _layout.Layout) -> sqlite3.Connection:
     """User file as ``main`` + the catalog ATTACHed as ``catalog``.
 

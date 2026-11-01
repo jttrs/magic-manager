@@ -344,7 +344,7 @@ def resolve_rows(rows: list[CollectionRow], *, conn=None) -> ResolveResult:
     res.warnings.extend(warnings)
 
     # Upsert every matched card so the ledger FK target exists.
-    with db.transaction(conn) as c:
+    with db.transaction(conn) as c, db.catalog_first(c):  # §25.3: committed before any user write
         for card in list(by_id.values()):
             db.upsert_card(c, card)
 

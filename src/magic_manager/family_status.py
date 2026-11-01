@@ -74,16 +74,17 @@ def resolve_family(anchor: str) -> tuple[str, str, list[dict]]:
 # Scryfall roots it elsewhere. Codes not in any set_targets grouping fall back to
 # the Scryfall graph.
 
-_ST_INDEX: tuple[dict[str, str], dict[str, set[str]]] | None = None
+# Keyed on db.user_scope(): set_targets is a user table, so each user has their own index.
+_ST_INDEX: dict[str, tuple[dict[str, str], dict[str, set[str]]]] = {}
 
 
 def _set_targets_index() -> tuple[dict[str, str], dict[str, set[str]]]:
     """(member_to_anchor, anchor_to_codes), cached. member_to_anchor maps every
     code in every anchor's related_codes (plus the anchor itself) to that anchor;
     anchor_to_codes maps anchor → the full member set. First-wins on overlap."""
-    global _ST_INDEX
-    if _ST_INDEX is not None:
-        return _ST_INDEX
+    scope = db.user_scope()
+    if scope in _ST_INDEX:
+        return _ST_INDEX[scope]
     member_to_anchor: dict[str, str] = {}
     anchor_to_codes: dict[str, set[str]] = {}
     with db.connect() as conn:
@@ -107,8 +108,8 @@ def _set_targets_index() -> tuple[dict[str, str], dict[str, set[str]]]:
                       file=sys.stderr)
                 continue
             member_to_anchor[c] = anchor
-    _ST_INDEX = (member_to_anchor, anchor_to_codes)
-    return _ST_INDEX
+    _ST_INDEX[scope] = (member_to_anchor, anchor_to_codes)
+    return _ST_INDEX[scope]
 
 
 def _family_parent(code: str) -> tuple[str, str]:

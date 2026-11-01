@@ -25,7 +25,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
 from .. import api, companion as companion_engine, sets as sets_mod, tabs as tabs_engine, undo as undo_engine, cart as cart_engine, deck_edit, edhrec as edhrec_engine, features as features_engine, scryfall, mtgjson
-from .. import collection_sync, ingest as ingest_mod, purchases as purchases_engine
+from .. import auth, collection_sync, db, ingest as ingest_mod, layout as layout_mod, purchases as purchases_engine, userfiles
 from ..api import purchases as purchases_api
 from ..api import collection_import as collection_import_api, companion as companion_api, deals as deals_api, undo as undo_api, cart as cart_api, cards as cards_api, collection as collection_api, explore as explore_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api, market as market_api, trueup as trueup_api, history as history_api, combos as combos_api, card_earmarks as card_earmarks_api, art as art_api, jumpstart as jumpstart_api, surf as surf_api
 from .runtime import TERMINAL, JobManager, JobsBusy
@@ -70,19 +70,35 @@ async def _prune_analytics_daily() -> None:
         await asyncio.sleep(24 * 60 * 60)
 
 
+def _migrate_split_files() -> None:
+    """Split layout: bring the catalog and every user file to this code's schema
+    before serving (each file is snapshotted before it changes)."""
+    if db.layout_kind() != "split":
+        return
+    report = userfiles.migrate_all(db.data_dir())
+    applied = {k: v for k, v in report.users.items() if v}
+    if report.catalog or applied:
+        logging.getLogger("magic_manager.web").info(
+            "migrated catalog %s and %d user file(s)", report.catalog, len(applied))
+
+
 def create_app(*, serve_frontend: bool = True) -> FastAPI:
+    # Hosted: every connection must belong to a bound (signed-in) user — fail closed.
+    layout_mod.set_strict(auth.hosted())
     manager = JobManager()
-    # One restore point, taken before the first write of each session.
-    guard = undo_engine.SessionGuard()
+    # One restore point per user, taken before the first write of each of their sessions.
+    guards = undo_engine.SessionGuards()
 
     def write(label: str):
         def begin(request: Request) -> None:
+            guard = guards.current()
             if guard.begin(label):
-                request.state.undo_session = True
+                request.state.undo_session = guard
         return Depends(begin)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
+        await asyncio.to_thread(_migrate_split_files)
         await manager.startup()
         pruning = asyncio.create_task(_prune_analytics_daily())
         yield
@@ -129,8 +145,9 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     def _settle(request: Request, *, wrote: bool) -> None:
         # Synchronous (a rename or unlink): an await could be cancelled with a
         # disconnected request and leave the guard's in-flight count stuck.
-        if getattr(request.state, "undo_session", False):
-            request.state.undo_session = False
+        guard = getattr(request.state, "undo_session", None)
+        if guard is not None:
+            request.state.undo_session = None
             guard.end(wrote)
     app.include_router(analytics_routes.router)
     app.include_router(scraper_routes.router)
@@ -150,6 +167,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         try:
             spec = jobs_api.get(name)
             spec.input_model.model_validate(body)  # refuse bad input before touching the restore point
+            guard = guards.current()
             begun = spec.mutates and await asyncio.to_thread(guard.begin, f"before {spec.title.lower()}")
             rec = None
             try:
@@ -174,12 +192,17 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         except KeyError as e:
             raise HTTPException(404, f"unknown job {job_id!r}") from e
 
-    @app.get("/api/jobs/{job_id}/events", response_class=EventSourceResponse, tags=["jobs"])
-    async def job_events(job_id: str, request: Request) -> AsyncIterable[ServerSentEvent]:
+    def visible_job(job_id: str) -> str:
+        # A dependency, so the 404 is sent before the stream starts (raising inside
+        # the generator became a 500). Another user's job is "unknown" too.
         try:
             manager.get(job_id)
         except KeyError as e:
             raise HTTPException(404, f"unknown job {job_id!r}") from e
+        return job_id
+
+    @app.get("/api/jobs/{job_id}/events", response_class=EventSourceResponse, tags=["jobs"])
+    async def job_events(request: Request, job_id: str = Depends(visible_job)) -> AsyncIterable[ServerSentEvent]:
         seen = int(request.headers.get("last-event-id") or 0)
         q = manager.subscribe(job_id)  # subscribe BEFORE reading history: no missed wake-ups
         try:
@@ -309,7 +332,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     @app.post("/api/undo/restore", response_model=undo_api.UndoOut, tags=["undo"])
     def undo_restore():
         try:
-            with manager.no_mutating_jobs(), guard.restoring():
+            with manager.no_mutating_jobs(), guards.current().restoring():
                 return undo_api.restore()
         except JobsBusy as e:
             raise HTTPException(409, f"Wait for “{e.title}” to finish, then restore.") from e

@@ -5,6 +5,13 @@ single-process app; swap for a Redis broker + a shared store in the multi-user
 phase without touching job code). The engine is synchronous and SQLite-backed,
 so each job body runs in a worker thread and jobs are serialized (one writer).
 
+Users (§25.3): a job records the user bound when it was submitted (the signed-in
+user in hosted mode; ``None`` locally) and its worker binds that user, so its
+connection opens that user's file. A job is visible (get / list / events) only
+in a context bound to the same user. All jobs share ONE run lock, which
+serializes writes per user file AND catalog syncs globally (H8) — strictly more
+than required, and simple. The user-data lock (mutating jobs vs. Undo) is per user.
+
 Progress fan-out: the job's ``events`` history is the single source of truth.
 Every event is appended under a lock at the moment it is produced (from any
 thread), which fixes its ``seq`` in true order. Subscriber queues carry only
@@ -29,6 +36,7 @@ from typing import Any, Literal
 from taskiq import InMemoryBroker
 
 from .. import analytics
+from .. import layout as _layout
 from ..analytics import catalog as analytics_catalog
 from ..analytics import consent as analytics_consent
 from ..api import jobs as jobs_api
@@ -83,11 +91,14 @@ class JobRecord:
     events: list[JobEvent] = field(default_factory=list, repr=False)
     # The submitting request's analytics context (request/session ids); never public.
     ctx: analytics.Context = field(default_factory=analytics.Context, repr=False)
+    # Whose data the job reads and writes (the bound user at submit); never public.
+    user: str | None = field(default=None, repr=False)
 
     def public(self) -> dict:
         d = asdict(self)
         d.pop("events")
         d.pop("ctx")
+        d.pop("user")
         return d
 
 
@@ -96,10 +107,11 @@ class JobManager:
         self.broker = InMemoryBroker()
         self._jobs: dict[str, JobRecord] = {}
         self._subs: dict[str, list[asyncio.Queue]] = {}
-        self._run_lock = threading.Lock()     # SQLite: one writer at a time
-        # Held while a mutating job runs and while Undo restores: a job must
-        # never write on top of (or underneath) a restore.
-        self._user_data_lock = threading.Lock()
+        self._run_lock = threading.Lock()     # SQLite: one writer at a time (every user + the catalog)
+        # Per user: held while that user's mutating job runs and while their Undo
+        # restores — a job must never write on top of (or underneath) a restore.
+        self._user_locks: dict[str | None, threading.Lock] = {}
+        self._user_locks_guard = threading.Lock()
         self._events_lock = threading.Lock()  # orders event seqs across threads
         self._max_history = max_history
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -124,7 +136,7 @@ class JobManager:
         spec = jobs_api.get(name)                       # KeyError → 404
         inputs = spec.input_model.model_validate(raw_inputs)  # ValidationError → 422
         rec = JobRecord(id=uuid.uuid4().hex, name=spec.name, title=spec.title,
-                        inputs=inputs.model_dump(), ctx=analytics.current())
+                        inputs=inputs.model_dump(), ctx=analytics.current(), user=_layout.bound_user())
         self._jobs[rec.id] = rec
         self._trim()
         self._emit(rec, "status", {"status": rec.status})
@@ -132,31 +144,45 @@ class JobManager:
         await asyncio.to_thread(analytics.record, "job.started", {"job": rec.name, "job_id": rec.id}, ctx=rec.ctx)
         return rec
 
+    def _user_lock(self, user: str | None) -> threading.Lock:
+        with self._user_locks_guard:
+            return self._user_locks.setdefault(user, threading.Lock())
+
     @contextmanager
     def no_mutating_jobs(self) -> Iterator[None]:
-        """Hold off mutating jobs for the body; :class:`JobsBusy` if one is
-        queued or running (so its writes can't land on top of the body's)."""
-        if not self._user_data_lock.acquire(blocking=False):
-            raise JobsBusy(self._busy_title() or "a job")
+        """Hold off the bound user's mutating jobs for the body; :class:`JobsBusy`
+        if one is queued or running (so its writes can't land on top of the body's)."""
+        user = _layout.bound_user()
+        lock = self._user_lock(user)
+        if not lock.acquire(blocking=False):
+            raise JobsBusy(self._busy_title(user) or "a job")
         try:
-            title = self._busy_title()
+            title = self._busy_title(user)
             if title:
                 raise JobsBusy(title)
             yield
         finally:
-            self._user_data_lock.release()
+            lock.release()
 
-    def _busy_title(self) -> str:
+    def _busy_title(self, user: str | None) -> str:
         for r in list(self._jobs.values()):  # snapshot: the loop thread may add jobs
-            if r.status in ("queued", "running") and _mutates(r.name):
+            if r.user == user and r.status in ("queued", "running") and _mutates(r.name):
                 return r.title
         return ""
 
     def get(self, job_id: str) -> JobRecord:
-        return self._jobs[job_id]
+        """The job, if the user bound to this context started it (KeyError otherwise,
+        so another user's job is indistinguishable from an unknown one)."""
+        rec = self._jobs[job_id]
+        if rec.user != _layout.bound_user():
+            raise KeyError(job_id)
+        return rec
 
     def list(self) -> list[JobRecord]:
-        return sorted(self._jobs.values(), key=lambda r: r.created_at, reverse=True)
+        """The bound user's jobs, newest first."""
+        user = _layout.bound_user()
+        return sorted((r for r in list(self._jobs.values()) if r.user == user),
+                      key=lambda r: r.created_at, reverse=True)
 
     def subscribe(self, job_id: str) -> asyncio.Queue:
         q: asyncio.Queue = asyncio.Queue()
@@ -180,7 +206,8 @@ class JobManager:
             self._emit(rec, "progress", rec.progress)
 
         def body() -> jobs_api.JobResult:
-            with self._run_lock, (self._user_data_lock if getattr(spec, "mutates", False) else nullcontext()):
+            mutating = getattr(spec, "mutates", False)
+            with self._run_lock, (self._user_lock(rec.user) if mutating else nullcontext()), _layout.as_user(rec.user):
                 rec.status, rec.started_at = "running", _now()
                 self._emit(rec, "status", {"status": rec.status})
                 return spec.run(inputs, progress)
@@ -232,12 +259,18 @@ class JobManager:
             self._loop.call_soon_threadsafe(q.put_nowait, None)
 
     def events_after(self, job_id: str, seq: int) -> list[JobEvent]:
-        rec = self._jobs[job_id]
+        rec = self.get(job_id)
         with self._events_lock:
             return rec.events[seq:]
 
     def _trim(self) -> None:
-        done = [r for r in self.list() if r.status in TERMINAL]
-        for r in done[self._max_history:]:
+        # Per user: one user's many jobs never push another's out of history.
+        kept: dict[str | None, int] = {}
+        done = sorted((r for r in list(self._jobs.values()) if r.status in TERMINAL),
+                      key=lambda r: r.created_at, reverse=True)
+        for r in done:
+            kept[r.user] = kept.get(r.user, 0) + 1
+            if kept[r.user] <= self._max_history:
+                continue
             self._jobs.pop(r.id, None)
             self._subs.pop(r.id, None)

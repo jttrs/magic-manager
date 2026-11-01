@@ -13,6 +13,7 @@ const AUTH_ERRORS: Record<string, string> = {
   provider_unavailable: 'That sign-in option isn’t set up on this server. Try the other one.',
   provider_error: 'The provider didn’t complete the sign-in. Try again in a moment.',
   id_token: 'The provider’s sign-in couldn’t be verified. Start again.',
+  profile_unavailable: 'Your collection couldn’t be opened on this server. Try again in a moment, or ask the admin.',
 };
 
 export function authErrorMessage(code: string | null | undefined): string | null {

@@ -17,6 +17,7 @@ import time
 from dataclasses import asdict, dataclass
 
 from .. import db
+from .. import layout as _layout
 
 SETTING_KEY = "analytics.consent"
 CACHE_SECONDS = 30.0
@@ -55,8 +56,14 @@ def _defaults(m: str) -> dict:
 
 
 def get(*, fresh: bool = False) -> Consent:
+    """The consent of the user this context's connection opens (cached per user
+    file). A hosted request with no signed-in user gets the hosted defaults."""
     m = mode()
-    key = f"{db.db_path()}|{m}"
+    try:
+        scope = db.user_scope()
+    except _layout.NoUserBound:
+        return Consent(mode=m, disabled=disabled(), **_defaults(m))
+    key = f"{scope}|{m}"
     now = time.monotonic()
     with _lock:
         hit = _cache.get(key)

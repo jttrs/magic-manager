@@ -117,12 +117,18 @@ def test_public_origin_validation(monkeypatch, value, ok):
             auth.public_origin()
 
 
-def test_hosted_refuses_to_start_without_origin_or_provider(monkeypatch, tmp_db):
+def test_hosted_refuses_to_start_without_origin_split_or_provider(monkeypatch, tmp_db, tmp_path):
     monkeypatch.setattr(secrets_mod, "_dotenv_get", lambda name: None)
     monkeypatch.setenv("MM_MODE", "hosted")
     with pytest.raises(auth.HostedConfigError, match="MM_PUBLIC_ORIGIN"):
         create_app(serve_frontend=False)
     monkeypatch.setenv("MM_PUBLIC_ORIGIN", ORIGIN)
+    # one file can't hold several users: hosted refuses the single layout
+    with pytest.raises(auth.HostedConfigError, match="split layout"):
+        create_app(serve_frontend=False)
+    monkeypatch.delenv("MAGIC_MANAGER_DB")
+    monkeypatch.setenv("MM_LAYOUT", "split")
+    monkeypatch.setenv("MM_DATA_DIR", str(tmp_path / "data"))
     with pytest.raises(auth.HostedConfigError, match="provider"):
         create_app(serve_frontend=False)
     result = CliRunner().invoke(cli_app, ["serve", "--port", "1"])
@@ -142,7 +148,7 @@ def test_local_mode_has_no_login(tmp_db):
 # ---------- hosted ----------
 
 @pytest.fixture
-def hosted(monkeypatch, tmp_db):
+def hosted(monkeypatch, split_dir):
     monkeypatch.setattr(secrets_mod, "_dotenv_get", lambda name: None)
     monkeypatch.setenv("MM_MODE", "hosted")
     monkeypatch.setenv("MM_PUBLIC_ORIGIN", ORIGIN)

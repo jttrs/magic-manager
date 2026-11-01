@@ -4,10 +4,12 @@ Only ``MM_MODE=hosted`` turns any of it on; local mode has no login (H11). This 
 holds the hosted configuration; ``store`` is ``auth.db``, ``oauth`` the provider flows,
 ``ratelimit`` the in-memory limits, and ``magic_manager.web.auth_routes`` the web gate.
 
-**Step-5 safety rail.** Until per-user collections land (§25.4 step 5) a hosted server
-serves ONE collection, so only admins may hold a session: :data:`PROFILES_OPEN` is
-False, ``mm auth invite`` mints only ``--admin`` invites, and a non-admin sign-in is
-refused ("Profiles open soon"). Step 5 flips the constant.
+**Profiles rail.** Each signed-in user has their own collection file (step 5:
+``users/<id>.db``, bound per request), but until step 6 pins the features that use
+the owner's machine or logins (cart check, store tabs, the analytics dashboard, the
+deck fetch's Moxfield session) only admins may hold a session: :data:`PROFILES_OPEN`
+is False, ``mm auth invite`` mints only ``--admin`` invites, and a non-admin sign-in
+is refused ("Profiles open soon"). Step 6 flips the constant.
 """
 from __future__ import annotations
 
@@ -15,6 +17,7 @@ import os
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
+from .. import db
 from .. import secrets as secrets_mod
 from ..analytics import consent as _consent
 
@@ -93,6 +96,10 @@ def check_hosted() -> str:
     origin = public_origin()
     if not origin:
         raise HostedConfigError("MM_MODE=hosted needs MM_PUBLIC_ORIGIN (e.g. https://cards.example.com).")
+    if db.layout_kind() != "split":
+        raise HostedConfigError(
+            "MM_MODE=hosted needs the split layout: MM_LAYOUT=split and MM_DATA_DIR=<dir> holding catalog.db "
+            "+ users/ (`mm db split --to <dir>`), and no MAGIC_MANAGER_DB — each user gets their own file.")
     if not configured_providers():
         raise HostedConfigError(
             "MM_MODE=hosted needs at least one sign-in provider: set MM_OAUTH_DISCORD_CLIENT_ID + "

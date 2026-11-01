@@ -809,10 +809,13 @@ def ingest_inventory_from_xlsx(path: Path, *, mode: str = "replace",
         # (the same card listed twice) accumulating like sequential writes.
         writes: list[tuple[str, str, int, int]] = []
         projected: dict[tuple[str, str], int] = {}
+        with db.catalog_first(conn):  # §25.3: cards commit before the user writes below
+            for entry in result.entries:
+                if entry.card is not None:
+                    db.upsert_card(conn, entry.card)
         for entry in result.entries:
             if entry.card is None:
                 continue
-            db.upsert_card(conn, entry.card)
             scry_id = entry.card["id"]
             finish = "foil" if entry.foil else "nonfoil"
             card_set = (entry.card.get("set") or "").lower()

@@ -190,6 +190,35 @@ def auth_revoke(
     typer.echo(f"ended {n} session(s)" + ("; user disabled" if disable else ""))
 
 
+@auth_app.command("bind")
+def auth_bind(
+    user: str = typer.Option(..., "--user", help="The auth user id (see mm auth users) — usually the owner, after their first sign-in."),
+    file: str = typer.Option("owner", "--file", help="The split user file to hand over: users/<file>.db (mm db split writes users/owner.db)."),
+    as_json: bool = typer.Option(False, "--json", help="Print the result as JSON."),
+):
+    """Make an existing split collection file (default users/owner.db) that user's
+    collection: it becomes users/<user>.db. The user's own file from their first
+    sign-in must still be empty; it is moved to <data dir>/replaced/. Stop the server first."""
+    import json
+    from . import layout as layout_mod, userfiles
+    from .auth import store as auth_store
+    if db.layout_kind() != "split":
+        typer.echo("error: needs the split layout (MM_LAYOUT=split, MM_DATA_DIR=<dir>)", err=True)
+        raise typer.Exit(2)
+    if auth_store.get_user(user) is None:
+        typer.echo(f"error: no user {user!r} (see `mm auth users`)", err=True)
+        raise typer.Exit(2)
+    try:
+        r = userfiles.bind_file(db.data_dir(), user, file)
+    except (userfiles.UserFileError, layout_mod.LayoutError) as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+    if as_json:
+        typer.echo(json.dumps(vars(r)))
+        return
+    typer.echo(f"bound {r.source} → {r.target}" + (f"; the empty profile moved to {r.replaced}" if r.replaced else ""))
+
+
 analytics_app = typer.Typer(no_args_is_help=True,
                             help="Self-hosted product analytics: dashboards, saved SQL, consent, retention (docs/analytics.md).")
 app.add_typer(analytics_app, name="analytics")
@@ -1925,10 +1954,10 @@ def inventory_add_card_cmd(
     # One `adhoc` ingest event for the whole add-card batch, and one transaction
     # so every card's insert + its ledger delta commit together.
     with db.connect() as conn:
-        for entry in result.entries:
-            if entry.card is None:
-                continue
-            db.upsert_card(conn, entry.card)
+        with db.catalog_first(conn):  # §25.3: cards commit before the ledger writes
+            for entry in result.entries:
+                if entry.card is not None:
+                    db.upsert_card(conn, entry.card)
         with ingest_mod.open_ingest_event(
             "adhoc", label="inventory add-card", conn=conn,
         ) as rec:
@@ -1993,10 +2022,10 @@ def inventory_import_cmd(
     added = updated = 0
     # One `import-block` ingest event for the pasted block, in one transaction.
     with db.connect() as conn:
-        for entry in result.entries:
-            if entry.card is None:
-                continue
-            db.upsert_card(conn, entry.card)
+        with db.catalog_first(conn):  # §25.3: cards commit before the ledger writes
+            for entry in result.entries:
+                if entry.card is not None:
+                    db.upsert_card(conn, entry.card)
         with ingest_mod.open_ingest_event(
             "import-block",
             label="inventory import",

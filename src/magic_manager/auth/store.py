@@ -85,8 +85,7 @@ def path() -> Path:
     override = os.environ.get("MM_AUTH_DB")
     if override:
         return Path(override)
-    lay = db.layout()
-    return (lay.catalog.parent if lay.kind == "split" and lay.catalog else db.db_dir()) / FILE_NAME
+    return db.data_dir() / FILE_NAME
 
 
 def _now() -> datetime:
