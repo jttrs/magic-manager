@@ -11756,6 +11756,18 @@
           "owned_deconstructed": {
             "type": "integer",
             "title": "Owned Deconstructed"
+          },
+          "image_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Uri",
+            "description": "The product's art (commander, else priciest card) when its deck file is read; never fetched for this list."
           }
         },
         "type": "object",
@@ -13502,6 +13514,18 @@
               }
             ],
             "description": "Deck URL fetches only: the source deck, to save its decklist."
+          },
+          "deck_image_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deck Image Uri",
+            "description": "Deck URL fetches only: the deck's art (commander, else priciest card)."
           }
         },
         "type": "object",

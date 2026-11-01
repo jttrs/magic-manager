@@ -150,6 +150,17 @@ def front_face(name: str | None) -> str:
     return (name or "").split(" // ")[0].strip()
 
 
+def pick_art(cards: Iterable[tuple[bool, float, str | None]]) -> str | None:
+    """A deck's representative art from ``(is_commander, unit_price, image_uri)``
+    per card: the commander's, else the priciest card's. ``None`` when no card
+    has an image. The one rule behind deck-recipe and Add-cards thumbnails."""
+    best: tuple[bool, float, str] | None = None
+    for is_commander, unit, uri in cards:
+        if uri and (best is None or (is_commander, unit) > best[:2]):
+            best = (is_commander, unit, uri)
+    return best[2] if best else None
+
+
 def fmt_usd(v: float | None) -> str:
     """Render a USD amount as ``$X.XX``, or ``—`` when ``None``."""
     return f"${v:.2f}" if v is not None else "—"

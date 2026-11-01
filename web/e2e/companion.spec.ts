@@ -358,10 +358,11 @@ test.describe('Moxfield', () => {
     });
     await page.goto(COLLECTION_URL);
     await page.getByRole('button', { name: 'Add cards' }).click();
-    await page.getByRole('tab', { name: 'Deck or precon' }).click();
-    await page.getByRole('textbox', { name: /Archidekt/ }).fill(DECK.url);
+    await page.getByRole('tab', { name: 'Add decklist or product' }).click();
+    await page.getByRole('searchbox', { name: 'Deck link or product' }).fill(DECK.url);
     await expect(page.getByText('Read in this browser by the companion, so your private decks work too. You approve what it sends.')).toBeVisible();
-    await page.getByRole('button', { name: 'Fetch deck' }).click();
+    await page.getByRole('button', { name: 'Read deck' }).click();
+    await page.getByRole('button', { name: 'Add…' }).click();
     await expect(page.getByRole('heading', { name: 'Goblin Party' })).toBeVisible();
     expect(body).toEqual({ source: 'moxfield', deck: DECK.deck });
     expect(await page.evaluate(() => (window as unknown as { __companionRequests: unknown[] }).__companionRequests)).toEqual([{ kind: 'moxfield', params: { url: DECK.url } }]);
@@ -372,9 +373,9 @@ test.describe('Moxfield', () => {
     await fakeCompanion(page, { answers: { moxfield: { ok: false, code: 'moxfield.private' } } });
     await page.goto(COLLECTION_URL);
     await page.getByRole('button', { name: 'Add cards' }).click();
-    await page.getByRole('tab', { name: 'Deck or precon' }).click();
-    await page.getByRole('textbox', { name: /Archidekt/ }).fill(DECK.url);
-    await page.getByRole('button', { name: 'Fetch deck' }).click();
+    await page.getByRole('tab', { name: 'Add decklist or product' }).click();
+    await page.getByRole('searchbox', { name: 'Deck link or product' }).fill(DECK.url);
+    await page.getByRole('button', { name: 'Read deck' }).click();
     await expect(page.getByRole('alert')).toContainText('Moxfield says this is private to its owner');
   });
 });

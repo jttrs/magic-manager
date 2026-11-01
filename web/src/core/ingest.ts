@@ -1,8 +1,9 @@
 // Add-cards review model: every mode (search, paste, deck) stages ReviewLines;
 // the user fixes printing / finish / qty per line, then one commit adds them.
 // Framework-free.
-import type { CommitItem, PrintingOut, ResolvedLineOut } from './api';
+import type { CommitItem, PrintingOut, ResolvedLineOut, ResolveOut } from './api';
 import { fmtInt } from './format';
+import { deckSourceOf } from './scraperHealth';
 
 export type Finish = 'nonfoil' | 'foil';
 type LineStatus = ResolvedLineOut['status'];
@@ -117,4 +118,41 @@ export function sourceLine(l: Pick<ReviewLine, 'raw' | 'name' | 'note' | 'status
   if (!want) return null;
   const names = [l.name, ...l.name.split(' // ')].map(norm);
   return names.includes(want) ? null : l.raw;
+}
+
+// ---------- "Add decklist or product": one field, two meanings ----------
+
+const SITE_NAMES: Record<string, string> = {
+  archidekt: 'Archidekt', moxfield: 'Moxfield', mtggoldfish: 'MTGGoldfish', manabox: 'ManaBox', scryfall: 'Scryfall',
+};
+/** The deck builders a link can come from, in prose. */
+export const DECK_SITES = 'Archidekt, Moxfield, MTGGoldfish, ManaBox or Scryfall';
+
+export type DeckQuery =
+  | { kind: 'search'; q: string }
+  | { kind: 'deck'; url: string; site: string }
+  | { kind: 'link' };
+
+/** What the one field holds: a deck link from a supported builder (a missing
+ *  `https://` is assumed), some other link, or text that searches products. */
+export function readDeckQuery(text: string): DeckQuery {
+  const t = text.trim();
+  const schemed = /^https?:\/\//i.test(t);
+  const looksLink = schemed || /^(www\.)?[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}\/\S*$/i.test(t);
+  if (!looksLink) return { kind: 'search', q: t };
+  const url = schemed ? t : `https://${t}`;
+  const source = deckSourceOf(url);
+  return source ? { kind: 'deck', url, site: SITE_NAMES[source] ?? source } : { kind: 'link' };
+}
+
+/** A product row's ownership hint, zeros dropped: `you own 1 built · 2 broken down`. */
+export function productOwned(built: number, brokenDown: number): string | null {
+  const parts = [built > 0 && `${fmtInt(built)} built`, brokenDown > 0 && `${fmtInt(brokenDown)} broken down`].filter(Boolean);
+  return parts.length ? `you own ${parts.join(' · ')}` : null;
+}
+
+/** A read deck's fact line: `100 cards · by goblinfan · Moxfield`. */
+export function deckFacts(r: Pick<ResolveOut, 'lines' | 'deck'>, site: string): string {
+  const n = r.lines.reduce((s, l) => s + l.qty, 0);
+  return [`${fmtInt(n)} ${n === 1 ? 'card' : 'cards'}`, r.deck?.author && `by ${r.deck.author}`, site].filter(Boolean).join(' · ');
 }

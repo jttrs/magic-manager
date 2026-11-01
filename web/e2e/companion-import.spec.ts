@@ -194,10 +194,11 @@ test.describe('Archidekt deck links through the companion', () => {
     });
     await page.goto(COLLECTION_URL);
     await page.getByRole('button', { name: 'Add cards' }).click();
-    await page.getByRole('tab', { name: 'Deck or precon' }).click();
-    await page.getByRole('textbox', { name: /Archidekt/ }).fill(DECK.url);
+    await page.getByRole('tab', { name: 'Add decklist or product' }).click();
+    await page.getByRole('searchbox', { name: 'Deck link or product' }).fill(DECK.url);
     await expect(page.getByText('Read in this browser by the companion, so your private decks work too.', { exact: false })).toBeVisible();
-    await page.getByRole('button', { name: 'Fetch deck' }).click();
+    await page.getByRole('button', { name: 'Read deck' }).click();
+    await page.getByRole('button', { name: 'Add…' }).click();
     await expect(page.getByRole('heading', { name: 'Revival Trance' })).toBeVisible();
     expect(body).toEqual({ source: 'archidekt', deck: DECK.deck });
   });
@@ -207,8 +208,8 @@ test.describe('Archidekt deck links through the companion', () => {
     await fakeCompanion(page, {}, { cart: true, deals: false, moxfield: true, archidekt: false });
     await page.goto(COLLECTION_URL);
     await page.getByRole('button', { name: 'Add cards' }).click();
-    await page.getByRole('tab', { name: 'Deck or precon' }).click();
-    await page.getByRole('textbox', { name: /Archidekt/ }).fill(DECK.url);
+    await page.getByRole('tab', { name: 'Add decklist or product' }).click();
+    await page.getByRole('searchbox', { name: 'Deck link or product' }).fill(DECK.url);
     await expect(page.getByText('Read in this browser by the companion', { exact: false })).toHaveCount(0);
   });
 });
