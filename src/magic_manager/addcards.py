@@ -392,6 +392,8 @@ def precon_catalog(q: str = "", *, limit: int = 50) -> list[dict]:
     rows.sort(key=lambda d: d.get("releaseDate") or "", reverse=True)
     rows = rows[:limit]
     counts = decks.precon_unit_counts()
+    from . import recipes  # local import: recipes imports this module
+    art = recipes.art_for(d["fileName"] for d in rows)
     out = []
     for d in rows:
         built, decon = counts.get(d["fileName"], (0, 0))
@@ -401,6 +403,7 @@ def precon_catalog(q: str = "", *, limit: int = 50) -> list[dict]:
             "release_date": d.get("releaseDate"),
             "default_state": mtgjson.default_precon_state(d["fileName"], name=d.get("name"), quick=True),
             "owned_built": built, "owned_deconstructed": decon,
+            "image_uri": art.get(d["fileName"]),
         })
     return out
 
@@ -504,4 +507,19 @@ def deck_lines_from_payload(payload: dict) -> dict:
         })
     lines, warnings = _resolve_wants(wants)
     source = {k: payload.get(k) for k in ("source", "id", "name", "author")} | {"cards": payload.get("cards", [])}
-    return {"format": "deck", "lines": lines, "warnings": warnings, "deck_name": payload.get("name"), "deck": source}
+    return {"format": "deck", "lines": lines, "warnings": warnings, "deck_name": payload.get("name"), "deck": source,
+            "deck_image_uri": _deck_art(lines)}
+
+
+def _deck_art(lines: list[dict]) -> str | None:
+    """A fetched deck's art by the recipe rule (commander, else priciest) over
+    each line's chosen printing."""
+    picks = []
+    for ln in lines:
+        p = next((c for c in ln["candidates"] if c["scryfall_id"] == ln.get("chosen")), None)
+        if p is None:
+            continue
+        unit = p.get("price_usd_foil") if ln["finish"] == "foil" else None
+        unit = unit if unit is not None else p.get("price_usd")
+        picks.append((ln.get("board") == "commander", float(unit or 0.0), p.get("image_uri")))
+    return util.pick_art(picks)

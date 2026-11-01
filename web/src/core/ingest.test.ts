@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PrintingOut, ResolvedLineOut } from './api';
-import { commitItems, fitFinish, fromResolved, reviewStats, sourceLine, stagePrinting, updateLine } from './ingest';
+import { commitItems, deckFacts, fitFinish, fromResolved, productOwned, readDeckQuery, reviewStats, sourceLine, stagePrinting, updateLine } from './ingest';
 
 const p = (o: Partial<PrintingOut>): PrintingOut => ({
   scryfall_id: 'p1', oracle_id: 'o', name: 'Sol Ring', set_code: 'cmm', set_name: 'Commander Masters',
@@ -55,5 +55,27 @@ describe('sourceLine', () => {
     expect(sourceLine(l('Commander Masters', 'Sol Ring'))).toBe('Commander Masters');
     expect(sourceLine(l('1 Sol Ring (XYZ) 999', 'Sol Ring', null, 'ambiguous'))).toBe('1 Sol Ring (XYZ) 999');
     expect(sourceLine(l('1 Sol Ring', 'Sol Ring', null, 'ambiguous'))).toBeNull();
+  });
+});
+
+describe('add decklist or product: one field', () => {
+  it('a supported deck link is a deck; other links are not; text searches', () => {
+    expect(readDeckQuery(' https://archidekt.com/decks/123 ')).toEqual({ kind: 'deck', url: 'https://archidekt.com/decks/123', site: 'Archidekt' });
+    expect(readDeckQuery('www.moxfield.com/decks/AbCd1234')).toEqual({ kind: 'deck', url: 'https://www.moxfield.com/decks/AbCd1234', site: 'Moxfield' });
+    expect(readDeckQuery('https://example.com/decks/1')).toEqual({ kind: 'link' });
+    expect(readDeckQuery('Final Fantasy')).toEqual({ kind: 'search', q: 'Final Fantasy' });
+    expect(readDeckQuery('fic')).toEqual({ kind: 'search', q: 'fic' });
+    expect(readDeckQuery('')).toEqual({ kind: 'search', q: '' });
+  });
+  it('ownership hint drops zeros and says broken down, never loose', () => {
+    expect(productOwned(0, 0)).toBeNull();
+    expect(productOwned(1, 0)).toBe('you own 1 built');
+    expect(productOwned(1, 2)).toBe('you own 1 built · 2 broken down');
+    expect(productOwned(0, 3)).toBe('you own 3 broken down');
+  });
+  it('a read deck says how many cards, whose, and where from', () => {
+    const r = { lines: [line({ qty: 99 }), line({ qty: 1 })], deck: { source: 'moxfield', id: 'x', name: 'G', author: 'goblinfan', cards: [] } };
+    expect(deckFacts(r, 'Moxfield')).toBe('100 cards · by goblinfan · Moxfield');
+    expect(deckFacts({ lines: [line({})], deck: null }, 'Scryfall')).toBe('1 card · Scryfall');
   });
 });

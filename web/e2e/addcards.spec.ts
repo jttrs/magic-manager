@@ -53,7 +53,7 @@ test('paste: resolve → review (pick printing, finish refits, unresolved left o
   const bodies = await captureCommit(page);
   await page.goto(COLLECTION_URL);
   await page.getByRole('button', { name: 'Add cards' }).click();
-  await page.getByRole('tab', { name: 'Paste a list' }).click();
+  await page.getByRole('tab', { name: 'Bulk add a list' }).click();
   await page.getByRole('button', { name: 'Read list' }).click();
   await expect(page.getByRole('alert')).toContainText('Paste at least one line');
   await page.getByRole('textbox', { name: 'Card list' }).fill('4 Lightning Bolt (M10) 146\n1 Sol Ring\n1 Notacard');
@@ -76,7 +76,7 @@ test('paste: a list with no card lines stays on the paste box and says why', asy
   await page.route('**/api/ingest/resolve', (r) => r.fulfill({ json: { format: 'names', deck_name: null, lines: [], warnings: ["unparseable line: 'hello'"] } }));
   await page.goto(COLLECTION_URL);
   await page.getByRole('button', { name: 'Add cards' }).click();
-  await page.getByRole('tab', { name: 'Paste a list' }).click();
+  await page.getByRole('tab', { name: 'Bulk add a list' }).click();
   await page.getByRole('textbox', { name: 'Card list' }).fill('hello');
   await page.getByRole('button', { name: 'Read list' }).click();
   await expect(page.getByRole('alert')).toContainText("No card lines found. unparseable line: 'hello'");
@@ -92,11 +92,20 @@ test('deck URL: fetch job streams, then the deck lands in review and commits wit
   const bodies = await captureCommit(page);
   await page.goto(COLLECTION_URL);
   await page.getByRole('button', { name: 'Add cards' }).click();
-  await page.getByRole('tab', { name: 'Deck or precon' }).click();
-  await page.getByRole('button', { name: 'Fetch deck' }).click();
-  await expect(page.getByRole('alert')).toContainText('Paste a deck link from Archidekt');
-  await page.getByRole('textbox', { name: /Archidekt/ }).fill('https://archidekt.com/decks/123');
-  await page.getByRole('button', { name: 'Fetch deck' }).click();
+  await page.getByRole('tab', { name: 'Add decklist or product' }).click();
+  const field = page.getByRole('searchbox', { name: 'Deck link or product' });
+  await field.fill('https://example.com/decks/1');
+  await expect(field).toHaveAttribute('aria-invalid', 'true');
+  await expect(page.getByText('That link isn’t a deck from Archidekt')).toBeVisible();
+  // A supported link is ONE result row; reading it shows the deck, Add… opens the review.
+  await field.fill('archidekt.com/decks/123');
+  const results = page.getByRole('list', { name: 'Results' });
+  await expect(results.getByText('Deck on Archidekt')).toBeVisible();
+  await field.press('Enter');
+  await expect(results.getByText('Goblins')).toBeVisible();
+  await expect(results.getByText('6 cards · Archidekt')).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Deck cards' })).toHaveCount(0);
+  await results.getByRole('button', { name: 'Add…' }).click();
   await expect(page.getByRole('heading', { name: 'Goblins' })).toBeVisible();
   await page.getByRole('button', { name: 'Add 5 copies' }).click();
   await expect(page.getByRole('status')).toContainText('Added 5 copies');
@@ -105,14 +114,16 @@ test('deck URL: fetch job streams, then the deck lands in review and commits wit
 
 test('precon: search the catalog, add a copy via a job', async ({ page }) => {
   let submitted: unknown;
-  await page.route('**/api/ingest/precons**', (r) => r.fulfill({ json: [{ file_name: 'CounterBlitz_FIC', name: 'Counter Blitz', set_code: 'fic', type: 'Commander Deck', release_date: '2025-06-13', default_state: 'built', owned_built: 1, owned_deconstructed: 0 }] }));
+  await page.route('**/api/ingest/precons**', (r) => r.fulfill({ json: [{ file_name: 'CounterBlitz_FIC', name: 'Counter Blitz', set_code: 'fic', type: 'Commander Deck', release_date: '2025-06-13', default_state: 'built', owned_built: 1, owned_deconstructed: 0, image_uri: IMG }] }));
   await page.route('**/api/jobs/ingest.precon', (r) => { submitted = r.request().postDataJSON(); return r.fulfill({ status: 202, json: job('jp', 'ingest.precon') }); });
   await page.route('**/api/jobs/jp/events', (r) => r.fulfill({ status: 200, contentType: 'text/event-stream', body: sse([['result', { summary: 'Added Counter Blitz ×1 · 100 cards · built', artifacts: [] }], ['status', { status: 'succeeded' }]]) }));
   await page.goto(COLLECTION_URL);
   await page.getByRole('button', { name: 'Add cards' }).click();
-  await page.getByRole('tab', { name: 'Deck or precon' }).click();
-  await expect(page.getByText('own 1 built, 0 loose')).toBeVisible();
-  await page.getByRole('button', { name: 'Add…' }).click();
+  await page.getByRole('tab', { name: 'Add decklist or product' }).click();
+  const row = page.getByRole('list', { name: 'Results' }).getByRole('listitem').filter({ hasText: 'Counter Blitz' });
+  await expect(row.getByText('you own 1 built')).toBeVisible();
+  await expect(row.locator('img')).toHaveAttribute('src', /art_crop/);
+  await row.getByRole('button', { name: 'Add…' }).click();
   await page.getByRole('combobox', { name: 'Keep it' }).selectOption('deconstructed');
   await page.getByRole('button', { name: 'Add to collection' }).click();
   await expect(page.getByText('Added Counter Blitz ×1 · 100 cards · built')).toBeVisible();
@@ -157,7 +168,7 @@ test('review list: every row shares the same column tracks, toggle or one-finish
   ] } }));
   await page.goto(COLLECTION_URL);
   await page.getByRole('button', { name: 'Add cards' }).click();
-  await page.getByRole('tab', { name: 'Paste a list' }).click();
+  await page.getByRole('tab', { name: 'Bulk add a list' }).click();
   await page.getByRole('textbox', { name: 'Card list' }).fill('1 Insist');
   await page.getByRole('button', { name: 'Read list' }).click();
   const list = page.getByRole('list', { name: 'Pasted cards' });

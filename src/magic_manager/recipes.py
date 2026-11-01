@@ -207,17 +207,32 @@ def _color(ids: Iterable[str], facts: dict[str, dict]) -> str | None:
 def _rollup(es: list[Entry], facts: dict[str, dict]) -> dict:
     """Card count, value at shipped finish, and the art (commander, else priciest)."""
     value = 0.0
-    best: tuple[int, float, str] | None = None
+    art: list[tuple[bool, float, str | None]] = []
     for e in es:
         f = facts.get(e.scryfall_id) or {}
-        unit = f.get("prices_usd_foil" if e.foil else "prices_usd")
-        unit = float(unit) if unit is not None else (float(f["prices_usd"]) if f.get("prices_usd") is not None else 0.0)
+        unit = _unit(e, f)
         value += unit * e.count
-        if f.get("image_uri"):
-            rank = (e.board == "commander", unit)
-            if best is None or rank > best[:2]:
-                best = (rank[0], rank[1], f["image_uri"])
-    return {"cards": sum(e.count for e in es), "value_usd": round(value, 2), "image_uri": best[2] if best else None}
+        art.append((e.board == "commander", unit, f.get("image_uri")))
+    return {"cards": sum(e.count for e in es), "value_usd": round(value, 2), "image_uri": util.pick_art(art)}
+
+
+def _unit(e: Entry, f: dict) -> float:
+    """A recipe card's unit price at its shipped finish (nonfoil fallback, else 0)."""
+    unit = f.get("prices_usd_foil" if e.foil else "prices_usd")
+    return float(unit) if unit is not None else (float(f["prices_usd"]) if f.get("prices_usd") is not None else 0.0)
+
+
+def art_for(file_names: Iterable[str]) -> dict[str, str | None]:
+    """Each recipe's art (offline): the same pick as a read recipe row, from the
+    cached deck file and the local catalog. ``None`` when the deck file isn't
+    cached or no card of it is local — never fetches."""
+    contents = {fn: cached_entries(fn) for fn in dict.fromkeys(file_names)}
+    facts = _card_facts(e.scryfall_id for es in contents.values() if es for e in es)
+    return {
+        fn: util.pick_art((e.board == "commander", _unit(e, facts.get(e.scryfall_id) or {}),
+                           (facts.get(e.scryfall_id) or {}).get("image_uri")) for e in es) if es else None
+        for fn, es in contents.items()
+    }
 
 
 def _fill_read(row: dict, es: list[Entry], facts: dict[str, dict], free: dict[str, int]) -> None:

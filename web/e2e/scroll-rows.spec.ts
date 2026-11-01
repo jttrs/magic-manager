@@ -30,7 +30,7 @@ for (const width of [1400, 380]) {
       await expect(tabs.getByRole('tab', { name: 'Import a collection' })).toBeVisible();
       await noVerticalScroll(tabs);
       // The active tab's underline still sits on the header rule.
-      await tabs.getByRole('tab', { name: 'Paste a list' }).click();
+      await tabs.getByRole('tab', { name: 'Bulk add a list' }).click();
       await noVerticalScroll(tabs);
     });
 

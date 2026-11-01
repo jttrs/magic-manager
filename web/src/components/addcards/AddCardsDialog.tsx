@@ -19,7 +19,7 @@ type Done = { summary: string; mode: Mode };
 
 export type AddCardsSeed = { name: string; lines: ResolvedLineOut[] };
 
-/** "Add cards": search one printing, paste a list, or bring a deck/precon —
+/** "Add cards": search one printing, bulk add a list, or bring a deck/product —
  *  every path ends in the same review checklist and one commit. A `seed`
  *  (e.g. from the Deck Manager) opens straight into that review. */
 export function AddCardsDialog({ trigger, seed, onSeedDone }: { trigger?: ReactNode; seed?: AddCardsSeed | null; onSeedDone?: () => void }) {
@@ -32,6 +32,7 @@ export function AddCardsDialog({ trigger, seed, onSeedDone }: { trigger?: ReactN
   const [pasted, setPasted] = useState<{ lines: ReviewLine[]; warnings: string[] } | null>(null);
   const [deck, setDeck] = useState<{ lines: ReviewLine[]; warnings: string[]; name: string | null; source?: DeckSourceOut | null } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [deckEpoch, setDeckEpoch] = useState(0);
   const [error, setError] = useState('');
   const [done, setDone] = useState<Done | null>(null);
 
@@ -78,7 +79,7 @@ export function AddCardsDialog({ trigger, seed, onSeedDone }: { trigger?: ReactN
       setDone({ summary, mode });
       if (mode === 'search') setStaged([]);
       else if (mode === 'paste') { setPasted(null); setPasteText(''); }
-      else setDeck(null);
+      else { setDeck(null); setDeckEpoch((n) => n + 1); }
       await qc.invalidateQueries({ queryKey: ['collection'] });
       await qc.invalidateQueries({ queryKey: ['holdings'] });
       await qc.invalidateQueries({ queryKey: ['history'] });
@@ -103,15 +104,15 @@ export function AddCardsDialog({ trigger, seed, onSeedDone }: { trigger?: ReactN
           <Tabs.Root value={mode} onValueChange={(m) => { setMode(m as Mode); setDone(null); setError(''); }} className="flex min-h-0 flex-1 flex-col">
             <header className="flex flex-wrap items-end gap-x-6 gap-y-2 border-b-2 border-rule-strong px-5 pt-4">
               <Dialog.Title className="pb-2 text-3xl voice-condensed font-bold leading-none">Add cards</Dialog.Title>
-              <Dialog.Description className="sr-only">Search for a printing, paste a card list, bring a deck or precon, or import a collection you keep in another app. Review every change, then add it to your collection.</Dialog.Description>
+              <Dialog.Description className="sr-only">Search for a printing, bulk add a card list, bring a decklist or product, or import a collection you keep in another app. Review every change, then add it to your collection.</Dialog.Description>
               {/* The row (not each tab) hangs over the header rule, so the active underline
                   sits on it without overflowing the sideways-scrolling row. */}
               <Tabs.List aria-label="How to add" className="-mb-0.5 flex max-w-full gap-5 overflow-x-auto">
                 {(
                   [
                     ['search', 'Search'],
-                    ['paste', 'Paste a list'],
-                    ['deck', 'Deck or precon'],
+                    ['paste', 'Bulk add a list'],
+                    ['deck', 'Add decklist or product'],
                     ['collection', 'Import a collection'],
                   ] as const
                 ).map(([v, label]) => (
@@ -168,13 +169,16 @@ export function AddCardsDialog({ trigger, seed, onSeedDone }: { trigger?: ReactN
               </Tabs.Content>
 
               <Tabs.Content value="deck" className="flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden">
-                {deck ? (
+                {deck && (
                   <Review title={deck.name ?? 'Fetched deck'} warnings={deck.warnings} back={{ label: 'Choose another', onClick: () => setDeck(null) }}>
                     <ReviewTable label="Deck cards" lines={deck.lines} onChange={(k, p) => setLines((ls) => updateLine(ls, k, p))} />
                   </Review>
-                ) : (
-                  <DeckPane onFetched={onFetched} />
                 )}
+                {/* Kept mounted under the review so "Choose another" returns to what you typed;
+                    a fresh pane after a deck is added, so the same read can't be added twice. */}
+                <div className={deck ? 'hidden' : 'flex min-h-0 flex-1 flex-col'}>
+                  <DeckPane key={deckEpoch} onFetched={onFetched} />
+                </div>
               </Tabs.Content>
             </div>
 

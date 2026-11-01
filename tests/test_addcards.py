@@ -253,6 +253,58 @@ def test_fetch_deck_lines(cards, monkeypatch):
     assert [(l["chosen"], l["finish"], l["section"], l["line"]) for l in out["lines"]] == [
         ("bolt-new", "foil", "main", 0), ("fbolt", "nonfoil", "commander", 0), ("bolt2", "nonfoil", "main", 0)]
     assert out["lines"][0]["raw"] == "2 Lightning Bolt"
+    assert out["deck_image_uri"] == "https://example.test/x.jpg"
+
+
+def test_deck_art_commander_else_priciest():
+    def ln(sid, board, price, img, finish="nonfoil"):
+        return {"chosen": sid, "board": board, "finish": finish,
+                "candidates": [{"scryfall_id": sid, "price_usd": price, "price_usd_foil": price * 3, "image_uri": img}]}
+    cheap_cmd = ln("c", "commander", 0.1, "cmd.jpg")
+    pricey = ln("p", "main", 50.0, "pricey.jpg")
+    foil = ln("f", "main", 20.0, "foil.jpg", finish="foil")  # 60 as foil
+    assert addcards._deck_art([pricey, cheap_cmd, foil]) == "cmd.jpg"
+    assert addcards._deck_art([pricey, foil]) == "foil.jpg"
+    assert addcards._deck_art([{"chosen": None, "board": "main", "finish": "nonfoil", "candidates": []}]) is None
+
+
+def test_pick_art_rule():
+    from magic_manager import util
+    assert util.pick_art([]) is None
+    assert util.pick_art([(False, 9.0, None), (False, 1.0, "a")]) == "a"           # no image never wins
+    assert util.pick_art([(False, 9.0, "pricey"), (True, 0.1, "cmd")]) == "cmd"    # commander beats price
+    assert util.pick_art([(False, 2.0, "first"), (False, 2.0, "second")]) == "first"  # ties keep the first
+
+
+def test_art_for_matches_read_recipe_art(cards, monkeypatch):
+    from magic_manager import recipes
+    es = [recipes.Entry("bolt2", 1, False, "Bolt Strike", "tst"),
+          recipes.Entry("fbolt", 2, True, "Firebolt", "tst")]
+    with db.connect() as conn:
+        conn.execute("UPDATE cards SET image_uri = 'a.jpg', prices_usd = '5.00' WHERE scryfall_id = 'bolt2'")
+        conn.execute("UPDATE cards SET image_uri = 'b.jpg', prices_usd = '1.00', prices_usd_foil = '9.00' WHERE scryfall_id = 'fbolt'")
+    monkeypatch.setattr(recipes, "cached_entries", lambda fn: es)
+    facts = recipes._card_facts(e.scryfall_id for e in es)
+    rolled = recipes._rollup(es, facts)
+    assert rolled["image_uri"] == recipes.art_for(["X"])["X"] == "b.jpg"   # the foil copy is priced as foil
+    assert rolled["value_usd"] == 5.0 + 2 * 9.0
+
+
+def test_precon_catalog_art_offline(cards, monkeypatch):
+    from magic_manager import recipes
+    rows = [
+        {"code": "TST", "fileName": "READ_TST", "name": "Read Deck", "releaseDate": "2025-01-01", "type": "Commander Deck"},
+        {"code": "TST", "fileName": "UNREAD_TST", "name": "Unread Deck", "releaseDate": "2024-01-01", "type": "Commander Deck"},
+    ]
+    monkeypatch.setattr(mtgjson, "deck_list", lambda **k: list(rows))
+    monkeypatch.setattr(mtgjson, "default_precon_state", lambda fn, name=None, quick=False: "built")
+    es = [recipes.Entry("bolt2", 1, False, "Bolt Strike", "tst"),
+          recipes.Entry("fbolt", 1, False, "Firebolt", "tst", board="commander")]
+    monkeypatch.setattr(recipes, "cached_entries", lambda fn: es if fn == "READ_TST" else None)
+    with db.connect() as conn:
+        conn.execute("UPDATE cards SET image_uri = 'cmd.jpg' WHERE scryfall_id = 'fbolt'")
+    got = {p["file_name"]: p["image_uri"] for p in addcards.precon_catalog()}
+    assert got == {"READ_TST": "cmd.jpg", "UNREAD_TST": None}
 
 
 def test_fetch_deck_failure(monkeypatch):

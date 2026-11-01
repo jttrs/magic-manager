@@ -4400,6 +4400,12 @@ export type PreconOptionOut = {
      * Owned Deconstructed
      */
     owned_deconstructed: number;
+    /**
+     * Image Uri
+     *
+     * The product's art (commander, else priciest card) when its deck file is read; never fetched for this list.
+     */
+    image_uri?: string | null;
 };
 
 /**
@@ -5309,6 +5315,12 @@ export type ResolveOut = {
      * Deck URL fetches only: the source deck, to save its decklist.
      */
     deck?: DeckSourceOut | null;
+    /**
+     * Deck Image Uri
+     *
+     * Deck URL fetches only: the deck's art (commander, else priciest card).
+     */
+    deck_image_uri?: string | null;
 };
 
 /**

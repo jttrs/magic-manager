@@ -82,6 +82,7 @@ class ResolveOut(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     deck_name: str | None = None
     deck: DeckSourceOut | None = Field(None, description="Deck URL fetches only: the source deck, to save its decklist.")
+    deck_image_uri: str | None = Field(None, description="Deck URL fetches only: the deck's art (commander, else priciest card).")
 
 
 class CommitItem(BaseModel):
@@ -112,6 +113,7 @@ class PreconOptionOut(BaseModel):
     default_state: Literal["built", "deconstructed"]
     owned_built: int
     owned_deconstructed: int
+    image_uri: str | None = Field(None, description="The product's art (commander, else priciest card) when its deck file is read; never fetched for this list.")
 
 
 def search(q: str, limit: int = 60) -> SearchOut:
