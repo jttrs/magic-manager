@@ -40,10 +40,10 @@ export function nearMisses(d: DeckCombosOut): NearMiss[] {
   return d.missing_cards.map((card) => ({ card, combos: card.combos.map((id) => byId.get(id)).filter((c): c is ComboOut => Boolean(c)) }));
 }
 
-/** "2 in this deck · 6 one card away" (+ off-colour count). */
+/** "2 in this deck · 6 one card away" (+ off-color count). */
 export function deckCombosSummary(d: DeckCombosOut): string {
   const parts = [`${fmtInt(d.included.length)} in this deck`, `${fmtInt(d.almost.length)} one card away`];
-  if (d.off_color > 0) parts.push(`${fmtInt(d.off_color)} more need another colour`);
+  if (d.off_color > 0) parts.push(`${fmtInt(d.off_color)} more need another color`);
   return parts.join(' · ');
 }
 

@@ -25,7 +25,7 @@ test('editor: the Combos tab lists what one card would complete and adds it', as
   await page.route('**/api/combos/draft', (r) => { bodies.push(r.request().postDataJSON()); return r.fulfill({ json: COMBOS }); });
   await page.goto(`/decks/${encodeURIComponent(detail.deck.slug)}/edit`);
   await page.getByRole('tab', { name: 'Combos' }).click();
-  await expect(page.getByText('1 in this deck · 1 one card away · 2 more need another colour')).toBeVisible();
+  await expect(page.getByText('1 in this deck · 1 one card away · 2 more need another color')).toBeVisible();
   await expect(page.getByRole('heading', { name: /One card away/ })).toContainText('1 card');
   await expect(page.getByText('1 unused', { exact: true })).toBeVisible();
 

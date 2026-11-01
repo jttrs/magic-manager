@@ -201,7 +201,7 @@ _COLOR = {"W": "white", "U": "blue", "B": "black", "R": "red", "G": "green"}
 
 
 def _colours(ci) -> str:
-    return ", ".join(_COLOR.get(c, c) for c in "WUBRG" if c in set(ci)) or "colourless"
+    return ", ".join(_COLOR.get(c, c) for c in "WUBRG" if c in set(ci)) or "colorless"
 
 
 def _oracle_facts(conn, oids: list[str]) -> dict[str, dict]:
@@ -249,7 +249,7 @@ def blockers(fmt: str | None, commander_ci: set[str] | None, facts: dict | None)
             elif status not in ("legal", "restricted"):
                 out.append(_blocker("not_legal", f"Not legal in {label}"))
     if commander_ci is not None and not set(facts["ci"]) <= commander_ci:
-        out.append(_blocker("colour_identity", f"Outside the commander’s colours ({_colours(commander_ci)})"))
+        out.append(_blocker("colour_identity", f"Outside the commander’s colors ({_colours(commander_ci)})"))
     return out
 
 
@@ -262,7 +262,7 @@ def _rule(fmt: str, commander_ci: set[str] | None) -> str:
     parts = [f"Legal in {deck_view.deck_type(fmt, None)}"]
     if fmt in legality._COMMANDER_LIKE_FORMATS:
         parts.append(f"within {_colours(commander_ci)}" if commander_ci is not None
-                     else "no commander yet, so colours aren’t checked")
+                     else "no commander yet, so colors aren’t checked")
     return " · ".join(parts)
 
 

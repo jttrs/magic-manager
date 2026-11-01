@@ -228,7 +228,7 @@ Hairline borders are the main geometry. `ruled` is a 1px bottom border; column a
 - **Purpose:** re-section every compare column without changing ranking: `Card type` (EDHREC's type-based lists, the default) or `Function` (Scryfall Tagger function roots in config order — Ramp, Card draw, Removal, …; untagged cards last under "No tagged function").
 - **Style:** a two-option `Segmented` in the Display section (two options → segmented, never chips). Group heads reuse VirtualGuide's level-2 ruled subheads; no per-function colors (one-accent rule).
 - **Multi-membership:** a card serving several functions is listed under each, with a muted `GuideNote` ("also: Removal, Tutor") under its caption (inline after the set metadata in List); a one-line helper under the control says so and that column totals count each card once. Marking is per card, so every appearance highlights together.
-- **Empty state:** when the tag cache was never synced, a chrome-muted note links to Jobs → Sync Scryfall tags.
+- **Empty state:** when the tag cache was never synced, a chrome-muted note links to Jobs → Sync card and art tags.
 
 ### Collection sidebar
 - *Find* — `Card name` alone. *Show* — `Set families` first, then `Cards: Owned | Missing`, `Acquired from`, `Rarity`, `Finish`, `Treatment`, `Chase`, `Function`, and *Reset filters* (clears the name and every Show filter except the families; sort, view type and Missing means are not filters and stay). *Arrange* — `Sort`, `View type: Grid | List`. *Buy* — the `CopyTargets` strip with *Check my cart* right under it: a copy result briefly takes the strip's label line, so no blank status line is reserved.

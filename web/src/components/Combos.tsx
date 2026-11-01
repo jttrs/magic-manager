@@ -155,12 +155,12 @@ export function DeckCombosBody({ data, pending, error, onAdd, onInspect }: { dat
       <Head count={fmtCount(misses.length, 'card')}>One card away</Head>
       {misses.length ? (
         <ul>{misses.map((nm) => <NearMissLine key={nm.card.piece.oracle_id ?? nm.card.piece.name} nm={nm} onAdd={onAdd} onInspect={onInspect} />)}</ul>
-      ) : <p className="py-2 text-sm text-ink-muted">No combo in this deck’s colours is one card away.</p>}
+      ) : <p className="py-2 text-sm text-ink-muted">No combo in this deck’s colors is one card away.</p>}
       <Head count={fmtCount(data.included.length, 'combo')}>In this deck</Head>
       {data.included.length ? (
         <ul>{data.included.map((c) => <ComboLine key={c.id} combo={c} tone={() => 'ink'} />)}</ul>
       ) : <p className="py-2 text-sm text-ink-muted">No known combos yet.</p>}
-      <p className="mt-3 text-xs text-ink-muted">Combos from Commander Spellbook, in the deck’s colours. Prices are the cheapest printing; unused = copies you own that aren’t in a built deck.</p>
+      <p className="mt-3 text-xs text-ink-muted">Combos from Commander Spellbook, in the deck’s colors. Prices are the cheapest printing; unused = copies you own that aren’t in a built deck.</p>
     </div>
   );
 }

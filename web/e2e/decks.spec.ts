@@ -35,7 +35,7 @@ test('recipe list shows what you own by default; ownership, kind, deck type and 
   await expect(list.getByRole('button')).toHaveCount(1);
   await page.getByRole('searchbox', { name: 'Deck, set or author' }).fill('');
   await page.getByRole('button', { name: /^Group by/ }).click();
-  await page.getByRole('menuitemradio', { name: 'Colour' }).click();
+  await page.getByRole('menuitemradio', { name: 'Color' }).click();
   await expect(page).toHaveURL(/group=color/);
   await expect(list.getByRole('heading', { name: /^Red/ })).toBeVisible();
   await expect(page.getByRole('radiogroup', { name: 'Card view' }).getByRole('radio')).toHaveText(['Grid', 'List']);

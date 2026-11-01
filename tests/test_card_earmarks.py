@@ -77,7 +77,7 @@ def test_for_deck_filters_on_format_and_commander_colours(cards):
     hidden = {e["earmark"]["name"]: [b["code"] for b in e["reasons"]] for e in r["hidden"]}
     assert hidden == {"Bolt": ["colour_identity"], "Bad Card": ["banned"]}
     assert r["rule"] == "Legal in Commander · within white, black"
-    assert r["hidden"][0]["reasons"][0]["message"] in {"Outside the commander’s colours (white, black)", "Banned in Commander"}
+    assert r["hidden"][0]["reasons"][0]["message"] in {"Outside the commander’s colors (white, black)", "Banned in Commander"}
 
     # A card pointed at this deck stays listed there, with its blockers attached.
     ce.save(BOLT, reason="deck", deck="squall")
@@ -89,7 +89,7 @@ def test_for_deck_filters_on_format_and_commander_colours(cards):
     # No commander yet → colours aren't filtered; a deck with no format and no commander isn't filtered at all.
     open_ = ce.for_deck("squall", [])
     assert {e["earmark"]["name"] for e in open_["hidden"]} == {"Bad Card"}
-    assert open_["rule"] == "Legal in Commander · no commander yet, so colours aren’t checked"
+    assert open_["rule"] == "Legal in Commander · no commander yet, so colors aren’t checked"
     free = ce.for_deck("other", [])
     assert free["format"] is None and not free["hidden"] and free["rule"] == "No format set, so nothing is filtered"
     with pytest.raises(LookupError):

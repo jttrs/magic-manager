@@ -15,4 +15,4 @@ function ManaSymbols({ symbols, label, size = 'size-[1.1em]' }: { symbols: reado
 
 export const ManaCost = ({ cost, size }: { cost: string | null | undefined; size?: string }) => <ManaSymbols symbols={parseMana(cost)} label="Mana cost" size={size} />;
 
-export const ColorIdentity = ({ colors, size }: { colors: readonly string[]; size?: string }) => <ManaSymbols symbols={identitySymbols(colors)} label="Colour identity" size={size} />;
+export const ColorIdentity = ({ colors, size }: { colors: readonly string[]; size?: string }) => <ManaSymbols symbols={identitySymbols(colors)} label="Color identity" size={size} />;

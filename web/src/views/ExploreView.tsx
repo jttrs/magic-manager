@@ -169,7 +169,7 @@ export function ExploreView() {
                 </p>
               ) : (
                 <p role="note" className="text-sm leading-relaxed text-on-chrome-muted">
-                  No Scryfall function tags yet — run <Link to="/jobs" className="text-on-chrome underline">Sync Scryfall tags</Link>, then reload.
+                  No Scryfall function tags yet — run <Link to="/jobs" className="text-on-chrome underline">Sync card and art tags</Link>, then reload.
                 </p>
               )
             )}

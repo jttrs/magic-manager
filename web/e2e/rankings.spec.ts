@@ -24,7 +24,7 @@ test('the rankings list joins what you own, with type, color and cost columns; n
   await expect(krenko).toContainText('2 · 1 unused');
   await expect(krenko.getByRole('cell', { name: 'Creature', exact: true })).toBeVisible();
   await expect(krenko.getByRole('cell', { name: 'Goblin Warrior' })).toBeVisible();
-  await expect(krenko.getByRole('img', { name: 'Colour identity: red' })).toBeVisible();
+  await expect(krenko.getByRole('img', { name: 'Color identity: red' })).toBeVisible();
   await expect(krenko.getByRole('img', { name: 'Mana cost: 2, red, red' })).toBeVisible();
   await expect(page.getByText(/ranked · you own \d+ · \d+ unused · read /)).toBeVisible();
   const actions = page.getByRole('toolbar', { name: 'Ranking actions' });
@@ -77,7 +77,7 @@ test('a ranking never read is fetched as a job with progress, then shown', async
   ].map(([e, d], i) => `event: ${e}\ndata: ${JSON.stringify(d)}\nid: ${i + 1}\n\n`).join('');
   await page.route('**/api/jobs/edhrec.rankings', (r) => {
     submitted = r.request().postDataJSON();
-    return r.fulfill({ status: 202, json: { id: 'rk1', name: 'edhrec.rankings', title: 'Fetch an EDHREC ranking', inputs: {}, status: 'queued', created_at: '2026-01-01T00:00:00+00:00', started_at: null, finished_at: null, progress: null, summary: null, artifacts: [], error: null } });
+    return r.fulfill({ status: 202, json: { id: 'rk1', name: 'edhrec.rankings', title: 'Fetch a ranking', inputs: {}, status: 'queued', created_at: '2026-01-01T00:00:00+00:00', started_at: null, finished_at: null, progress: null, summary: null, artifacts: [], error: null } });
   });
   await page.route('**/api/jobs/rk1/events', async (r) => {
     cached = true;
