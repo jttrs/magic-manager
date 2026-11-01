@@ -139,8 +139,9 @@ export const marketSearch = z.object({
   live: z.boolean().catch(false).default(false),
   /** Deck buy list: the cheapest printing of each card, or the deck's exact printing. */
   buyAt: z.enum(PRICE_BASES).catch('floor').default('floor'),
-  /** Deals: the product pages open in your browser, or the products you watch. */
-  deals: z.enum(['tabs', 'watching']).catch('tabs').default('tabs'),
+  /** Legacy Deals mode (`tabs` | `watching`): Deals is one watchlist now, with your open tabs pinned
+   *  on top, so old links land there either way. Accepted and ignored. */
+  deals: z.string().optional().catch(undefined),
   /** Deals: name or set code. */
   dq: z.string().catch('').default(''),
   /** Deals: only products offered by these stores; empty = all. */
@@ -153,7 +154,7 @@ export const marketSearch = z.object({
   basis: z.enum(BASES).catch('market').default('market'),
   dsort: z.enum(DEAL_SORTS).catch('gap_pct').default('gap_pct'),
   inStock: z.boolean().catch(false).default(false),
-  /** Deals → Watching: only products whose best in-stock price meets their target. */
+  /** Deals: only products whose best in-stock price meets their target. */
   atTarget: z.boolean().catch(false).default(false),
   /** Secret Lair: the edition each drop is valued at. */
   edition: z.enum(SLD_EDITIONS).catch('nonfoil').default('nonfoil'),

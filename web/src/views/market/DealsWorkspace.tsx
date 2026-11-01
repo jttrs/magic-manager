@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { useMemo, useRef, type KeyboardEvent, type ReactNode } from 'react';
 import { useStoreHealth } from '../../app/scraperHealth';
 import { ScraperDownMark } from '../../components/ScraperNotice';
@@ -7,51 +8,65 @@ import { Button } from '../../components/Button';
 import { Chevron } from '../../components/Chevron';
 import { EmptyNote } from '../../components/States';
 import type { ProductCostOut } from '../../core/api';
-import { BASIS_LABEL, deltaLabel, effectiveType, filterSortProducts, gapOf, PRODUCT_TYPE_LABEL, stockLabel, targetMet, targetPriceOf, type DealProduct } from '../../core/deals';
-import { fmtInt, fmtUsd } from '../../core/format';
+import { BASIS_LABEL, deltaLabel, effectiveType, filterListings, filterSortProducts, gapOf, listingStatus, PRODUCT_TYPE_LABEL, stockLabel, targetMet, targetPriceOf, type DealProduct, type TabListing } from '../../core/deals';
+import { fmtCount, fmtInt, fmtUsd } from '../../core/format';
 import type { MarketSearch } from '../../core/search';
-import { DealInspector } from './DealInspector';
-import { dealFilters, type CostState, type DealCosts } from './useDealsData';
+import { DealInspector, ListingInspector } from './DealInspector';
+import { dealFilters, dismiss, useWatch, type CostState, type DealCosts, type DealsData } from './useDealsData';
 
 type Props = {
-  products: DealProduct[];
+  data: DealsData;
   costs: DealCosts;
   search: MarketSearch;
   set: (patch: Partial<MarketSearch>) => void;
-  /** Above the table: the view's action row, progress and shared errors. */
+  /** Above the table: progress, notes and shared errors of the reads. */
   header?: ReactNode;
-  /** Under the table. */
-  footer?: ReactNode;
-  /** Shown when there are no products at all. */
+  /** Shown when there is nothing watched and nothing pinned. */
   emptyNote: ReactNode;
 };
 
-/** One product table + inspector, shared by Watching and Open tabs. */
-export function DealsWorkspace({ products, costs, search, set, header, footer, emptyNote }: Props) {
-  const shown = useMemo(() => filterSortProducts(products, costs.data, dealFilters(search)), [products, costs.data, search]);
-  const selected = products.find((p) => p.key === search.item);
+/** The watchlist table + inspector; what a read of your open tabs found is pinned on top. */
+export function DealsWorkspace({ data, costs, search, set, header, emptyNote }: Props) {
+  const qc = useQueryClient();
+  const filters = useMemo(() => dealFilters(search), [search]);
+  const shown = useMemo(() => filterSortProducts(data.products, costs.data, filters), [data.products, costs.data, filters]);
+  const pinned = useMemo(() => filterSortProducts(data.pinned, costs.data, filters), [data.pinned, costs.data, filters]);
+  const listings = useMemo(() => filterListings(data.listings, filters), [data.listings, filters]);
+  const selected = data.products.find((p) => p.key === search.item) ?? data.pinned.find((p) => p.key === search.item);
+  const listing = selected ? undefined : data.listings.find((l) => l.key === search.item);
+  const pinnedTotal = data.pinned.length + data.listings.length;
+  const onDismiss = (keys: string[]) => {
+    dismiss(qc, keys);
+    if (search.item && keys.includes(search.item)) set({ item: undefined });
+  };
+  const anything = data.products.length + pinnedTotal > 0;
+  const anyShown = shown.length + pinned.length + listings.length > 0;
   const list = (
     <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto overscroll-contain px-4 pb-8 pt-2 [scrollbar-gutter:stable]">
       {header}
-      {products.length === 0 ? (
+      {!anything ? (
         emptyNote
-      ) : shown.length === 0 ? (
+      ) : !anyShown ? (
         <EmptyNote title="Nothing matches these filters">
           <Button tone="paper" onClick={() => set({ dq: '', stores: [], types: [], minOff: 0, inStock: false, atTarget: false })}>Clear filters</Button>
         </EmptyNote>
       ) : (
         <>
-          <p role="status" className="text-sm tabular text-ink-muted">{fmtInt(shown.length)} of {fmtInt(products.length)} products · compared to {BASIS_LABEL[search.basis]}</p>
-          <ProductTable shown={shown} costs={costs} basis={search.basis} item={selected?.key} onPick={(item) => set({ item })} />
+          <p role="status" className="text-sm tabular text-ink-muted">
+            {fmtInt(shown.length)} of {fmtCount(data.products.length, 'watched product')}
+            {pinnedTotal > 0 && ` · ${fmtInt(pinned.length + listings.length)} from your open tabs`} · compared to {BASIS_LABEL[search.basis]}
+          </p>
+          <ProductTable shown={shown} pinned={pinned} listings={listings} costs={costs} basis={search.basis} item={search.item} onPick={(item) => set({ item })} onDismiss={onDismiss} />
         </>
       )}
-      {footer}
     </div>
   );
   const inspector = selected
-    ? <DealInspector key={selected.key} product={selected} cost={costs.data.get(selected.key)} costState={costs.state.get(selected.key)} />
-    : <EmptyNote title="Pick a product">Choose a row to see its stores, what it’s worth and what’s inside.</EmptyNote>;
-  return <MasterDetail list={list} inspector={inspector} open={selected != null} onBack={() => set({ item: undefined })} backLabel="All products" splitId="mm.deals.split" />;
+    ? <DealInspector key={selected.key} product={selected} cost={costs.data.get(selected.key)} costState={costs.state.get(selected.key)} onPick={(item) => set({ item })} />
+    : listing
+      ? <ListingInspector key={listing.key} listing={listing} onPick={(item) => set({ item })} onDismiss={() => onDismiss([listing.key])} />
+      : <EmptyNote title="Pick a product">Choose a row to see its stores, what it’s worth and what’s inside.</EmptyNote>;
+  return <MasterDetail list={list} inspector={inspector} open={selected != null || listing != null} onBack={() => set({ item: undefined })} backLabel="All products" splitId="mm.deals.split" />;
 }
 
 /** A list beside its inspector (resizable split, list 60 / inspector 40); phones show one at a time with a back link. */
@@ -85,10 +100,16 @@ function Split({ id, list, inspector }: { id: string; list: ReactNode; inspector
 }
 
 const TH = 'py-1.5 pl-3 text-right font-medium';
+const GROUP_H = 'pb-1 pt-3 text-left text-sm voice-condensed font-medium uppercase tracking-[0.06em]';
 
-function ProductTable({ shown, costs, basis, item, onPick }: { shown: DealProduct[]; costs: DealCosts; basis: MarketSearch['basis']; item?: string; onPick: (key: string) => void }) {
-  const ref = useRef<HTMLTableSectionElement>(null);
-  // ↑/↓ move between the product buttons.
+type TableProps = {
+  shown: DealProduct[]; pinned: DealProduct[]; listings: TabListing[]; costs: DealCosts; basis: MarketSearch['basis'];
+  item?: string; onPick: (key: string) => void; onDismiss: (keys: string[]) => void;
+};
+
+function ProductTable({ shown, pinned, listings, costs, basis, item, onPick, onDismiss }: TableProps) {
+  const ref = useRef<HTMLTableElement>(null);
+  // ↑/↓ move between the product buttons, across both groups.
   const move = (e: KeyboardEvent<HTMLElement>) => {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
     const btns = [...(ref.current?.querySelectorAll<HTMLButtonElement>('button[data-product]') ?? [])];
@@ -97,9 +118,10 @@ function ProductTable({ shown, costs, basis, item, onPick }: { shown: DealProduc
     e.preventDefault();
     btns[Math.max(0, Math.min(btns.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))]?.focus();
   };
+  const fromTabs = pinned.length + listings.length;
   return (
     <div className="@container">
-      <table className="w-full border-collapse text-sm tabular">
+      <table ref={ref} onKeyDown={move} className="w-full border-collapse text-sm tabular">
         <caption className="sr-only">Products</caption>
         <thead>
           <tr className="border-b-2 border-rule-strong text-left text-xs voice-semi text-ink-muted">
@@ -110,17 +132,94 @@ function ProductTable({ shown, costs, basis, item, onPick }: { shown: DealProduc
             <th scope="col" className={`${TH} hidden @md:table-cell`}>Cards inside</th>
           </tr>
         </thead>
-        <tbody ref={ref} onKeyDown={move}>
-          {shown.map((p) => (
-            <ProductRow key={p.key} p={p} cost={costs.data.get(p.key)} state={costs.state.get(p.key)} basis={basis} selected={p.key === item} onPick={() => onPick(p.key)} />
-          ))}
-        </tbody>
+        {fromTabs > 0 && (
+          <tbody aria-label="From your open tabs">
+            <tr className="border-b border-rule-strong">
+              <th scope="colgroup" colSpan={5} className={`${GROUP_H} text-accent-ink`}>
+                <span className="flex items-baseline gap-2">
+                  <span className="min-w-0 truncate">From your open tabs</span>
+                  <span className="tabular normal-case tracking-normal text-ink-muted">{fmtInt(fromTabs)}</span>
+                  <button
+                    type="button"
+                    onClick={() => onDismiss([...pinned.map((p) => p.key), ...listings.map((l) => l.key)])}
+                    className="touch-hit ml-auto cursor-pointer text-xs normal-case tracking-normal text-ink-muted underline hover:text-ink"
+                  >
+                    Dismiss all
+                  </button>
+                </span>
+              </th>
+            </tr>
+            {pinned.map((p) => (
+              <ProductRow key={p.key} p={p} cost={costs.data.get(p.key)} state={costs.state.get(p.key)} basis={basis} selected={p.key === item} onPick={() => onPick(p.key)} onDismiss={() => onDismiss([p.key])} />
+            ))}
+            {listings.map((l) => <ListingRow key={l.key} l={l} selected={l.key === item} onPick={() => onPick(l.key)} onDismiss={() => onDismiss([l.key])} />)}
+          </tbody>
+        )}
+        {shown.length > 0 && (
+          <tbody aria-label="Watching">
+            {fromTabs > 0 && (
+              <tr className="border-b border-rule-strong">
+                <th scope="colgroup" colSpan={5} className={`${GROUP_H} text-ink-muted`}>Watching <span className="tabular normal-case tracking-normal">{fmtInt(shown.length)}</span></th>
+              </tr>
+            )}
+            {shown.map((p) => (
+              <ProductRow key={p.key} p={p} cost={costs.data.get(p.key)} state={costs.state.get(p.key)} basis={basis} selected={p.key === item} onPick={() => onPick(p.key)} />
+            ))}
+          </tbody>
+        )}
       </table>
     </div>
   );
 }
 
-function ProductRow({ p, cost, state, basis, selected, onPick }: { p: DealProduct; cost?: ProductCostOut; state?: CostState; basis: MarketSearch['basis']; selected: boolean; onPick: () => void }) {
+const ROW = 'cursor-pointer border-b border-rule/60 align-top transition-colors ease-guide hover:bg-paper-sunk';
+const ROW_ACTION = 'touch-hit cursor-pointer text-xs underline';
+
+/** Watch / Dismiss under a pinned product's name. */
+function PinnedActions({ p, onDismiss }: { p: DealProduct; onDismiss: () => void }) {
+  const watch = useWatch(p);
+  return (
+    <span className="mt-0.5 flex flex-wrap items-baseline gap-x-3">
+      {p.best && p.match && (
+        <button type="button" disabled={watch.isPending} onClick={() => watch.mutate()} className={`${ROW_ACTION} voice-semi font-medium text-accent-ink disabled:cursor-default disabled:opacity-60`}>
+          {watch.isPending ? 'Saving…' : 'Watch'}<span className="sr-only"> {p.name}</span>
+        </button>
+      )}
+      <button type="button" onClick={onDismiss} className={`${ROW_ACTION} text-ink-muted hover:text-ink`}>Dismiss<span className="sr-only"> {p.name}</span></button>
+      {watch.isError && <span role="alert" className="text-xs text-danger">{(watch.error as Error).message}</span>}
+    </span>
+  );
+}
+
+/** A pinned listing that isn't a known product yet: what it needs, its price, and Dismiss. */
+function ListingRow({ l, selected, onPick, onDismiss }: { l: TabListing; selected: boolean; onPick: () => void; onDismiss: () => void }) {
+  const storeHealth = useStoreHealth();
+  const r = l.row;
+  const dash = <span className="text-ink-muted">—</span>;
+  return (
+    <tr onClick={(e) => { if (!(e.target as HTMLElement).closest('a,button')) onPick(); }} className={ROW}>
+      <th scope="row" className="py-2 pr-3 text-left font-normal">
+        <button type="button" data-product onClick={onPick} aria-current={selected ? 'true' : undefined} className="touch-hit min-h-11 cursor-pointer text-left text-md voice-semi font-medium text-ink md:min-h-0">
+          <span className={selected ? 'highlighter' : ''}>{l.title}</span>
+        </button>
+        <span className={`block text-xs ${r.error ? 'text-danger' : 'text-ink-muted'}`}>{listingStatus(l)}</span>
+        <span className="mt-0.5 flex flex-wrap items-baseline gap-x-3">
+          <button type="button" onClick={onDismiss} className={`${ROW_ACTION} text-ink-muted hover:text-ink`}>Dismiss<span className="sr-only"> {l.title}</span></button>
+        </span>
+      </th>
+      <td className="py-2 pl-3 text-right">
+        {r.price != null ? <span className="text-ink">{fmtUsd(r.price)}</span> : dash}
+        {l.store && <span className="flex items-baseline justify-end gap-1.5 text-xs text-ink-muted">{l.store}<ScraperDownMark health={storeHealth(l.store)} /></span>}
+        {r.available === false && <span className="block text-xs text-danger">{stockLabel(r)}</span>}
+      </td>
+      <td className="py-2 pl-3 text-right">{dash}</td>
+      <td className="hidden py-2 pl-3 text-right @lg:table-cell">{dash}</td>
+      <td className="hidden py-2 pl-3 text-right @md:table-cell">{dash}</td>
+    </tr>
+  );
+}
+
+function ProductRow({ p, cost, state, basis, selected, onPick, onDismiss }: { p: DealProduct; cost?: ProductCostOut; state?: CostState; basis: MarketSearch['basis']; selected: boolean; onPick: () => void; onDismiss?: () => void }) {
   const loading = p.kind !== 'single' && state?.loading === true;
   const failed = p.kind !== 'single' ? state?.error : undefined;
   const type = effectiveType(p, cost);
@@ -140,8 +239,8 @@ function ProductRow({ p, cost, state, basis, selected, onPick }: { p: DealProduc
   return (
     <tr
       aria-busy={loading || undefined}
-      onClick={(e) => { if (!(e.target as HTMLElement).closest('a')) onPick(); }}
-      className="cursor-pointer border-b border-rule/60 align-top transition-colors ease-guide hover:bg-paper-sunk"
+      onClick={(e) => { if (!(e.target as HTMLElement).closest('a,button')) onPick(); }}
+      className={ROW}
     >
       <th scope="row" className="py-2 pr-3 text-left font-normal">
         <button type="button" data-product onClick={onPick} aria-current={selected ? 'true' : undefined} className="touch-hit min-h-11 cursor-pointer text-left text-md voice-semi font-medium text-ink md:min-h-0">
@@ -149,8 +248,8 @@ function ProductRow({ p, cost, state, basis, selected, onPick }: { p: DealProduc
         </button>
         <span className="block text-xs text-ink-muted">
           {[p.set_code.toUpperCase(), PRODUCT_TYPE_LABEL[type], p.finish === 'foil' && 'foil'].filter(Boolean).join(' · ')}
-          {p.watching && p.match && <span className="ml-1.5 text-accent-ink">· watching</span>}
         </span>
+        {onDismiss && <PinnedActions p={p} onDismiss={onDismiss} />}
       </th>
       <td className="py-2 pl-3 text-right">
         {best?.price != null ? (

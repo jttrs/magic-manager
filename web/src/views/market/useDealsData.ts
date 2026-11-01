@@ -1,12 +1,11 @@
-import { queryOptions, useQueries, useQuery, type QueryClient } from '@tanstack/react-query';
+import { queryOptions, useMutation, useQueries, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
-import { dealsTabsQuery, productCostQuery, watchedQuery } from '../../app/queries';
-import type { ProductCostOut } from '../../core/api';
-import type { RenderedPage } from '../../core/companion';
-import { productsFromTabs, productsFromWatched, storeNames, type DealFilters, type DealProduct, type PriceRow } from '../../core/deals';
+import { dealsTabsQuery, productCostQuery, unwrap, watchedQuery } from '../../app/queries';
+import { dealsWatch, type ProductCostOut } from '../../core/api';
+import { mergeTabs, productsFromWatched, storeNames, type DealFilters, type DealProduct, type PriceRow, type TabListing } from '../../core/deals';
 import type { MarketSearch } from '../../core/search';
 
-/** The read-prices result (plus confirms), kept in the query cache so the sidebar can see it. */
+/** The read-prices result of your open tabs (plus confirms), kept in the query cache so the rail sees it. */
 const dealsPricesKey = ['deals', 'prices'] as const;
 export const dealsPricesQuery = () =>
   queryOptions({
@@ -16,16 +15,6 @@ export const dealsPricesQuery = () =>
     staleTime: Infinity,
     gcTime: 30 * 60_000,
   });
-
-/** Open-tab store pages the browser companion read with the tabs (url → reading),
- *  handed to the read-prices job so those stores aren't read on this Mac. */
-export type DealsPages = { pages: Record<string, RenderedPage>; readAt: number | null };
-const dealsPagesKey = ['deals', 'pages'] as const;
-export const dealsPagesQuery = () =>
-  queryOptions({ queryKey: dealsPagesKey, queryFn: async () => ({ pages: {}, readAt: null }) as DealsPages, enabled: false, staleTime: Infinity, gcTime: 30 * 60_000 });
-/** Stamps the pages with when they were read, so a later "Read prices" can tell they've gone stale. */
-export const setDealsPages = (qc: QueryClient, pages: Record<string, RenderedPage>, readAt: number = Date.now()) =>
-  qc.setQueryData<DealsPages>(dealsPagesKey, { pages, readAt });
 
 export const setPrices = (qc: QueryClient, prices: Map<string, PriceRow>) => qc.setQueryData(dealsPricesKey, prices);
 
@@ -42,26 +31,62 @@ export function patchPrices(qc: QueryClient, urls: string[], patch: (r: PriceRow
   });
 }
 
-const NONE: DealProduct[] = [];
+/** Pinned rows you dismissed (product or listing keys) — hidden until the next read of your tabs. */
+const dismissedKey = ['deals', 'dismissed'] as const;
+const NO_KEYS: ReadonlySet<string> = new Set();
+const dismissedQuery = () =>
+  queryOptions({ queryKey: dismissedKey, queryFn: async () => NO_KEYS, enabled: false, staleTime: Infinity, gcTime: 30 * 60_000 });
+export const dismiss = (qc: QueryClient, keys: string[]) =>
+  qc.setQueryData<ReadonlySet<string>>(dismissedKey, (old) => new Set([...(old ?? []), ...keys]));
+export const undismiss = (qc: QueryClient, key: string) =>
+  qc.setQueryData<ReadonlySet<string>>(dismissedKey, (old) => {
+    if (!old?.has(key)) return old;
+    const next = new Set(old);
+    next.delete(key);
+    return next;
+  });
+export const clearDismissed = (qc: QueryClient) => qc.setQueryData(dismissedKey, NO_KEYS);
+
 const NO_ROWS: PriceRow[] = [];
+const NO_PRICES = new Map<string, PriceRow>();
 
-export type DealsData = { products: DealProduct[]; needsLook: PriceRow[]; storeOptions: string[]; loading: boolean; error: unknown };
+export type DealsData = {
+  /** The watchlist (with fresh offers from your open tabs merged in). */
+  products: DealProduct[];
+  /** From your open tabs, not watched yet: matched products, then listings needing a look. */
+  pinned: DealProduct[];
+  listings: TabListing[];
+  storeOptions: string[];
+  loading: boolean;
+  error: unknown;
+};
 
-/** The current Deals product set: watched products, or the open tabs' read prices. */
-export function useDealsData(mode: MarketSearch['deals'], enabled: boolean, watchErrors: PriceRow[] = NO_ROWS): DealsData {
-  const watched = useQuery({ ...watchedQuery(), enabled: enabled && mode === 'watching' });
+/** Deals: the products you watch, with the last read of your open tabs pinned above them. */
+export function useDealsData(enabled: boolean, watchErrors: PriceRow[] = NO_ROWS): DealsData {
+  const watched = useQuery({ ...watchedQuery(), enabled });
   const tabs = useQuery(dealsTabsQuery());
-  const prices = useQuery(dealsPricesQuery());
+  const prices = useQuery(dealsPricesQuery()).data ?? NO_PRICES;
+  const dismissed = useQuery(dismissedQuery()).data ?? NO_KEYS;
   return useMemo(() => {
-    if (mode === 'watching') {
-      const products = watched.data ? productsFromWatched(watched.data, watchErrors) : NONE;
-      return { products, needsLook: NO_ROWS, storeOptions: storeNames(products), loading: watched.isPending, error: watched.error };
-    }
+    const list = watched.data ? productsFromWatched(watched.data, watchErrors) : [];
     const storeOf = new Map(tabs.data?.stores.flatMap((s) => s.tabs.map((t) => [t.url, s.name] as const)) ?? []);
-    const { products, needsLook } = prices.data?.size ? productsFromTabs(prices.data, storeOf) : { products: NONE, needsLook: NO_ROWS };
-    const storeOptions = products.length ? storeNames(products) : (tabs.data?.stores.map((s) => s.name) ?? []);
-    return { products, needsLook, storeOptions, loading: false, error: null };
-  }, [mode, watched.data, watched.isPending, watched.error, watchErrors, tabs.data, prices.data]);
+    const titleOf = new Map(tabs.data?.stores.flatMap((s) => s.tabs.map((t) => [t.url, t.title] as const)) ?? []);
+    const { watched: products, pinned, listings } = mergeTabs(list, prices, storeOf, titleOf, dismissed);
+    const storeOptions = [...new Set([...storeNames([...products, ...pinned]), ...listings.flatMap((l) => (l.store ? [l.store] : []))])].sort((a, b) => a.localeCompare(b));
+    return { products, pinned, listings, storeOptions, loading: watched.isPending && enabled, error: watched.error };
+  }, [watched.data, watched.isPending, watched.error, enabled, watchErrors, tabs.data, prices, dismissed]);
+}
+
+/** Watch a product read from your open tabs at its best store: it moves into the watchlist. */
+export function useWatch(p: DealProduct) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => unwrap(await dealsWatch({ body: { url: p.best!.url, choice: p.match!, price: p.best!.price, currency: 'USD' } })),
+    onSuccess: () => {
+      patchPrices(qc, [p.best!.url], (r) => ({ ...r, watching: true }));
+      return qc.invalidateQueries({ queryKey: ['deals', 'watched'] });
+    },
+  });
 }
 
 export type CostState = { loading: boolean; error?: string };
@@ -82,6 +107,5 @@ export function useDealCosts(products: DealProduct[]): DealCosts {
 }
 
 export const dealFilters = (s: MarketSearch): DealFilters => ({
-  q: s.dq, stores: s.stores, types: s.types, minOff: s.minOff, basis: s.basis, sort: s.dsort, inStock: s.inStock,
-  atTarget: s.deals === 'watching' && s.atTarget,
+  q: s.dq, stores: s.stores, types: s.types, minOff: s.minOff, basis: s.basis, sort: s.dsort, inStock: s.inStock, atTarget: s.atTarget,
 });

@@ -94,6 +94,8 @@ export type Offer = {
   readFailed?: boolean;
   /** Watched links: every price seen there, oldest first, and its first / low / high. */
   history?: PricePointOut[]; first?: number | null; low?: number | null; high?: number | null;
+  /** A watched product's price at a store you don't watch it at yet, read from your open tabs. */
+  fromTab?: boolean;
 };
 
 export type DealProduct = {
@@ -147,6 +149,10 @@ export function productsFromWatched(rows: WatchedOut[], errors: PriceRow[] = [])
   });
 }
 
+/** The product key a matched listing groups under (the same key its watched row has). */
+export const tabProductKey = (kind: string, m: MatchOut): string =>
+  kind === 'single' ? `single|${m.scryfall_id}|${m.finish ?? ''}` : productKey(kind, m.set_code, m.name, m.finish);
+
 const GROUPABLE = new Set<string>(['sealed', 'sld', 'single']);
 
 export function productsFromTabs(prices: Map<string, PriceRow>, storeOf: Map<string, string>): { products: DealProduct[]; needsLook: PriceRow[] } {
@@ -157,7 +163,7 @@ export function productsFromTabs(prices: Map<string, PriceRow>, storeOf: Map<str
     const ok = m != null && !r.error && (r.status === 'matched' || r.status === 'confirmed') && GROUPABLE.has(r.kind ?? '');
     if (!ok || !m) { needsLook.push(r); continue; }
     const kind = r.kind as 'sealed' | 'sld' | 'single';
-    const key = kind === 'single' ? `single|${m.scryfall_id}|${m.finish ?? ''}` : productKey(kind, m.set_code, m.name, m.finish);
+    const key = tabProductKey(kind, m);
     const offer: Offer = { url: r.url, store: storeOf.get(r.url) ?? r.vendor ?? null, price: r.price ?? null, available: r.available ?? null, title: r.title };
     let p = byKey.get(key);
     if (!p) {
@@ -310,9 +316,74 @@ export function browserReadUrls(rows: readonly WatchedOut[]): { urls: string[]; 
   return { urls: all.slice(0, MAX_BROWSER_READS), skipped: Math.max(0, all.length - MAX_BROWSER_READS) };
 }
 
-/** How long a companion tab reading still counts as current for "Read prices". */
-const PAGES_FRESH_MS = 2 * 60_000;
+// ---------- open tabs, pinned above the watchlist ----------
 
-/** Are page snapshots read at `readAt` (ms epoch) recent enough to record as current prices? */
-export const pagesFresh = (readAt: number | null | undefined, now: number): boolean =>
-  readAt != null && now - readAt >= 0 && now - readAt <= PAGES_FRESH_MS;
+/** A listing read from your open tabs that isn't a known product yet: ambiguous, unmatched or unreadable. */
+export type TabListing = { key: string; url: string; title: string; store: string | null; row: PriceRow };
+
+const listingKey = (url: string) => `tab|${url}`;
+
+export type TabsMerge = {
+  /** The watchlist; a watched product also read at a store you don't watch it at gets that offer too. */
+  watched: DealProduct[];
+  /** Matched products from your open tabs you don't watch yet, pinned above the watchlist. */
+  pinned: DealProduct[];
+  /** Listings from your open tabs that need a look before they can be watched. */
+  listings: TabListing[];
+};
+
+/** Recomposes a read of your open tabs around the watchlist: products you already watch merge into
+ *  their row (the read of a watched link is recorded server-side, so only new stores are added here),
+ *  the rest are pinned until you Watch or Dismiss them. `dismissed` holds product / listing keys. */
+export function mergeTabs(
+  watched: DealProduct[], prices: Map<string, PriceRow>, storeOf: Map<string, string>,
+  titleOf: Map<string, string> = new Map(), dismissed: ReadonlySet<string> = new Set(),
+): TabsMerge {
+  if (!prices.size) return { watched, pinned: [], listings: [] };
+  const { products, needsLook } = productsFromTabs(prices, storeOf);
+  const byKey = new Map(watched.map((p) => [p.key, p]));
+  const extra = new Map<string, Offer[]>();
+  const pinned: DealProduct[] = [];
+  for (const p of products) {
+    const w = byKey.get(p.key);
+    if (w) {
+      const known = new Set(w.offers.map((o) => o.url));
+      const fresh = p.offers.filter((o) => !known.has(o.url)).map((o) => ({ ...o, fromTab: true }));
+      if (fresh.length) extra.set(p.key, fresh);
+    } else if (!p.watching && !dismissed.has(p.key)) {
+      pinned.push(p);
+    }
+  }
+  const merged = extra.size
+    ? watched.map((w) => {
+        const add = extra.get(w.key);
+        if (!add) return w;
+        const offers = sortOffers([...w.offers, ...add]);
+        return { ...w, offers, best: bestOf(offers) };
+      })
+    : watched;
+  const listings = needsLook
+    .filter((r) => !r.watching && !dismissed.has(listingKey(r.url)))
+    .map((r) => ({ key: listingKey(r.url), url: r.url, title: r.title || titleOf.get(r.url) || r.url, store: storeOf.get(r.url) ?? r.vendor ?? null, row: r }));
+  return { watched: merged, pinned, listings };
+}
+
+/** What a pinned listing needs, in a few words. */
+export function listingStatus(l: TabListing): string {
+  const r = l.row;
+  if (r.error) return 'Couldn’t read this page';
+  if (r.status === 'ambiguous') return 'Which product is this? Pick it in the detail';
+  if (r.status === 'skipped') return 'Not counted';
+  return 'Not a product we know';
+}
+
+/** Listings kept by the filters: name/set search and stores; filters that need a value or target
+ *  (discount, at target) hide them, since a listing has neither yet. */
+export function filterListings(listings: TabListing[], o: DealFilters): TabListing[] {
+  const q = o.q.trim().toLowerCase();
+  if (o.atTarget || o.minOff > 0 || o.types.length) return [];
+  return listings.filter((l) =>
+    (!q || l.title.toLowerCase().includes(q))
+    && (!o.stores.length || (l.store != null && o.stores.includes(l.store)))
+    && (!o.inStock || l.row.available !== false));
+}

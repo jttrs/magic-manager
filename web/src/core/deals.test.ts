@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ProductCostOut } from './api';
-import { browserReadUrls, MAX_BROWSER_READS, basisValue, deltaLabel, filterSortProducts, gapOf, pagesFresh, pricesFrom, productsFromTabs, productsFromWatched, productType, readAge, sharedErrors, stockLabel, trendLabel, watchlistErrors, type DealFilters, type DealProduct, type PriceRow } from './deals';
+import { browserReadUrls, MAX_BROWSER_READS, basisValue, deltaLabel, filterSortProducts, filterListings, gapOf, listingStatus, mergeTabs, pricesFrom, productsFromTabs, productsFromWatched, productType, readAge, sharedErrors, stockLabel, trendLabel, watchlistErrors, type DealFilters, type DealProduct, type PriceRow } from './deals';
 
 type WatchStore = Parameters<typeof trendLabel>[0];
 
@@ -136,14 +136,46 @@ describe('deal products', () => {
   });
 });
 
-describe('pagesFresh', () => {
-  it('trusts a reading for two minutes, never a missing or future one', () => {
-    const now = 1_000_000;
-    expect(pagesFresh(now - 119_000, now)).toBe(true);
-    expect(pagesFresh(now - 120_000, now)).toBe(true);
-    expect(pagesFresh(now - 121_000, now)).toBe(false);
-    expect(pagesFresh(null, now)).toBe(false);
-    expect(pagesFresh(undefined, now)).toBe(false);
-    expect(pagesFresh(now + 5_000, now)).toBe(false);
+describe('mergeTabs', () => {
+  const watchedBox = prod('Box', 130, { key: 'sealed|hob|Box|', watching: true, productId: 7, offers: [{ url: 'w', store: 'W', price: 130, available: true }], best: { url: 'w', store: 'W', price: 130, available: true } });
+  const read = (rows: PriceRow[]) => new Map(rows.map((r) => [r.url, r]));
+  const stores = new Map([['a', 'Alpha'], ['b', 'Beta'], ['d', 'Delta']]);
+  it('pins products you don\'t watch and listings that need a look; watched ones merge into their row', () => {
+    const rows = [
+      row({ url: 'a', price: 120, kind: 'sealed', status: 'matched', match: m('Box') }),
+      row({ url: 'w', price: 125, kind: 'sealed', status: 'matched', match: m('Box'), watching: true }),
+      row({ url: 'b', price: 40, kind: 'sealed', status: 'matched', match: m('Deck') }),
+      row({ url: 'd', price: 9, kind: 'single', status: 'ambiguous', match: null }),
+      row({ url: 'e', kind: 'sealed', status: 'matched', match: m('Other'), error: 'boom' }),
+    ];
+    const { watched, pinned, listings } = mergeTabs([watchedBox], read(rows), stores, new Map([['d', 'Tab title D']]));
+    expect(pinned.map((p) => p.name)).toEqual(['Deck']);
+    expect(watched).toHaveLength(1);
+    expect(watched[0].offers.map((o) => [o.url, o.fromTab ?? false])).toEqual([['a', true], ['w', false]]);
+    expect(watched[0].best?.price).toBe(120);
+    expect(listings.map((l) => [l.key, l.store])).toEqual([['tab|d', 'Delta'], ['tab|e', 'v']]);
+    expect(listings.map(listingStatus)).toEqual(['Which product is this? Pick it in the detail', 'Couldn’t read this page']);
+  });
+  it('a product read only at a watched link isn\'t pinned, even if its key differs', () => {
+    const { pinned } = mergeTabs([], read([row({ url: 'w', price: 1, kind: 'sealed', status: 'matched', match: m('Box v2'), watching: true })]), stores);
+    expect(pinned).toEqual([]);
+  });
+  it('dismissed products and listings stay hidden; no read leaves the watchlist as is', () => {
+    const rows = [row({ url: 'b', price: 40, kind: 'sealed', status: 'matched', match: m('Deck') }), row({ url: 'd', kind: 'single', status: 'unmatched', match: null })];
+    const out = mergeTabs([watchedBox], read(rows), stores, new Map(), new Set(['sealed|hob|Deck|', 'tab|d']));
+    expect([out.pinned, out.listings]).toEqual([[], []]);
+    expect(mergeTabs([watchedBox], new Map(), stores).watched[0]).toBe(watchedBox);
+  });
+  it('filters listings by name and store; value and target filters hide them', () => {
+    const l = (url: string, title: string, store: string, available: boolean | null = true) => ({ key: `tab|${url}`, url, title, store, row: row({ url, available }) });
+    const ls = [l('a', 'Hobbit display', 'X'), l('b', 'Exemplar', 'Y', false)];
+    const run = (o: Partial<DealFilters>) => filterListings(ls, { ...F, ...o }).map((x) => x.url);
+    expect(run({})).toEqual(['a', 'b']);
+    expect(run({ q: 'hob' })).toEqual(['a']);
+    expect(run({ stores: ['Y'] })).toEqual(['b']);
+    expect(run({ inStock: true })).toEqual(['a']);
+    expect(run({ minOff: 10 })).toEqual([]);
+    expect(run({ atTarget: true })).toEqual([]);
+    expect(run({ types: ['deck'] })).toEqual([]);
   });
 });

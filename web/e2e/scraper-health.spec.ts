@@ -58,11 +58,18 @@ test('deals: a down store carries a DOWN mark whose tooltip explains it', async 
     ],
   } }));
   await health(page, [row('store-price/manyrealms', 'Many Realms prices', 'Many Realms', { code: 'scrape.no_price', message: 'The page no longer shows a price where the recipe looks.' })]);
+  const read = (url: string, vendor: string) => ({ url, vendor, price: 10, currency: 'USD', available: true, title: null, signal: 'shopify', error: null });
+  const sse = [['status', { status: 'running' }], ['result', { summary: 'read', artifacts: [{ kind: 'json', label: 'prices', data: [read('https://manyrealms.com/products/a', 'manyrealms'), read('https://www.bestbuy.com/product/x/1', 'bestbuy')] }] }], ['status', { status: 'succeeded' }]]
+    .map(([e, d], i) => `event: ${e}\ndata: ${JSON.stringify(d)}\nid: ${i + 1}\n\n`).join('');
+  await page.route('**/api/deals/watched', (r) => r.fulfill({ json: [] }));
+  await page.route('**/api/jobs/deals.read_prices', (r) => r.fulfill({ status: 202, json: { id: 'p1', name: 'deals.read_prices', title: 'x', inputs: {}, status: 'queued', created_at: '2026-01-01T00:00:00+00:00', started_at: null, finished_at: null, progress: null, summary: null, artifacts: [], error: null } }));
+  await page.route('**/api/jobs/p1/events', (r) => r.fulfill({ status: 200, contentType: 'text/event-stream', body: sse }));
   await page.goto('/market?subject=deals');
   await page.getByRole('button', { name: 'Read my open tabs' }).click();
-  const mark = page.getByRole('region', { name: 'Many Realms' }).getByLabel(/Many Realms is temporarily down/);
+  const pinned = page.getByRole('rowgroup', { name: 'From your open tabs' });
+  const mark = pinned.getByRole('row', { name: /^A/ }).getByLabel(/Many Realms is temporarily down/);
   await expect(mark).toHaveText('Down');
-  await expect(page.getByRole('region', { name: 'Best Buy' }).getByText('Down', { exact: true })).toHaveCount(0);
+  await expect(pinned.getByRole('row', { name: /^B/ }).getByText('Down', { exact: true })).toHaveCount(0);
   await mark.focus();
   await expect(page.getByRole('tooltip')).toContainText('Code scrape.no_price');
 });

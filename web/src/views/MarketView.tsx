@@ -5,7 +5,7 @@ import { decksQuery, deckCostQuery, familiesQuery, marketCardsQuery, marketProdu
 import { ViewLayout } from '../components/AppShell';
 import { useFeature } from '../app/features';
 import { DealsPanel } from './market/DealsPanel';
-import { WatchingPanel } from './market/WatchingPanel';
+import { useDealsReads } from './market/useDealsReads';
 import { SecretLairFind, SecretLairPanel } from './market/SecretLairPanel';
 import { dealFilters, useDealCosts, useDealsData } from './market/useDealsData';
 import { CardLines } from './market/CardLines';
@@ -22,12 +22,12 @@ import { Segmented, SelectField, SideSection, TextField } from '../components/Si
 import { MultiSelect } from '../components/MultiSelect';
 import { EmptyNote, ErrorNote, GuideSheet } from '../components/States';
 import { buyListTargets } from '../components/buyTargets';
-import { RefreshMark, TcgplayerMark } from '../components/StoreMarks';
+import { ReadTabsMark, RefreshMark, TcgplayerMark } from '../components/StoreMarks';
 import { IconAction } from '../components/IconAction';
 import { MarketTabs } from './market/MarketTabs';
 import { collectionBuyList, type CardPriceOut, type DeckCostOut } from '../core/api';
 import { fmtCount, fmtInt, fmtUsd } from '../core/format';
-import { filterSortProducts, PRODUCT_TYPE_LABEL, PRODUCT_TYPES, typeCounts, type Basis, type DealSort } from '../core/deals';
+import { filterListings, filterSortProducts, PRODUCT_TYPE_LABEL, PRODUCT_TYPES, typeCounts, type Basis, type DealSort } from '../core/deals';
 import { contentsGap, deckBuyItems, deckLedger, filterCardPrices, partialNote, premium, productGroups, type ProductRow } from '../core/market';
 import type { MarketSearch } from '../core/search';
 
@@ -58,15 +58,18 @@ export function MarketView() {
     return r.data.text;
   };
   const inDeals = subject === 'deals';
-  const dealsData = useDealsData(search.deals, inDeals);
-  const dealCosts = useDealCosts(dealsData.products);
+  const dealReads = useDealsReads(inDeals);
+  const dealsData = useDealsData(inDeals, dealReads.watchErrors);
+  const dealProducts = useMemo(() => [...dealsData.products, ...dealsData.pinned], [dealsData.products, dealsData.pinned]);
+  const dealCosts = useDealCosts(dealProducts);
   // Changing a filter keeps the open product only while it's still in the list.
   const setFilter = (patch: Partial<MarketSearch>) => {
-    const next = { ...search, ...patch };
-    const stillShown = filterSortProducts(dealsData.products, dealCosts.data, dealFilters(next)).some((p) => p.key === search.item);
-    set(search.item && dealsData.products.length && !stillShown ? { ...patch, item: undefined } : patch);
+    const next = dealFilters({ ...search, ...patch });
+    const stillShown = filterSortProducts(dealProducts, dealCosts.data, next).some((p) => p.key === search.item)
+      || filterListings(dealsData.listings, next).some((l) => l.key === search.item);
+    set(search.item && !dealsData.loading && !stillShown ? { ...patch, item: undefined } : patch);
   };
-  const counts = typeCounts(dealsData.products, dealCosts.data);
+  const counts = typeCounts(dealProducts, dealCosts.data);
   const toBuy = cost.data?.lines.reduce((n, l) => n + l.buy, 0) ?? 0;
   const toBuyUsd = cost.data?.lines.reduce((s, l) => s + l.buy * ((search.buyAt === 'floor' ? l.floor_usd : l.unit_usd) ?? 0), 0) ?? 0;
 
@@ -129,14 +132,6 @@ export function MarketView() {
             <TextField name="dq" label="Product name or set" value={search.dq} placeholder="e.g. Bundle, fin…" onChange={(dq) => setFilter({ dq })} />
           </SideSection>
           <SideSection title="Show">
-            <Segmented<MarketSearch['deals']>
-              label="Products"
-              showLabel
-              labelExtra={<InfoTip label="Which products?"><b>Open tabs</b> are the product pages open in your browser. <b>Watching</b> is the products you watch, with their price history.</InfoTip>}
-              value={search.deals}
-              onChange={(deals) => set({ deals, item: undefined })}
-              options={[{ value: 'tabs', label: 'Open tabs' }, { value: 'watching', label: 'Watching' }]}
-            />
             <MultiSelect
               label="Stores"
               noun="stores"
@@ -173,9 +168,7 @@ export function MarketView() {
               options={[{ value: '0', label: 'Any' }, { value: '10', label: '10%+' }, { value: '20', label: '20%+' }, { value: '30', label: '30%+' }]}
             />
             <Segmented<'all' | 'in'> label="Availability" showLabel value={search.inStock ? 'in' : 'all'} onChange={(v) => setFilter({ inStock: v === 'in' })} options={[{ value: 'all', label: 'Any' }, { value: 'in', label: 'In stock' }]} />
-            {search.deals === 'watching' && (
-              <Segmented<'all' | 'met'> label="Target" showLabel value={search.atTarget ? 'met' : 'all'} onChange={(v) => setFilter({ atTarget: v === 'met' })} options={[{ value: 'all', label: 'Any' }, { value: 'met', label: 'At or under' }]} />
-            )}
+            <Segmented<'all' | 'met'> label="Target" showLabel value={search.atTarget ? 'met' : 'all'} onChange={(v) => setFilter({ atTarget: v === 'met' })} options={[{ value: 'all', label: 'Any' }, { value: 'met', label: 'At or under' }]} />
           </SideSection>
           <SideSection title="Arrange">
             <SelectField<DealSort>
@@ -220,9 +213,16 @@ export function MarketView() {
     summary = 'The newest drops: sealed value beside the cards inside, bonus card included';
     body = <SecretLairPanel search={search} set={set} />;
   } else if (inDeals) {
-    title = search.deals === 'watching' ? 'Watching' : 'Deals';
-    summary = search.deals === 'watching' ? 'Products you watch: best price now, what it’s worth, and what’s inside' : 'Product pages open in your browser, compared to what they’re worth';
-    body = search.deals === 'watching' ? <WatchingPanel search={search} set={set} /> : <DealsPanel search={search} set={set} />;
+    title = 'Deals';
+    summary = 'Products you watch: best price now, what it’s worth, and what’s inside';
+    body = <DealsPanel data={dealsData} costs={dealCosts} reads={dealReads} search={search} set={set} />;
+    const busy = dealReads.busy ? 'Reading…' : undefined;
+    actions = (
+      <>
+        <IconAction label="Read my open tabs" Icon={ReadTabsMark} disabled={dealReads.busy} disabledReason={busy} onClick={dealReads.readTabs} />
+        <IconAction label="Read watched prices" Icon={RefreshMark} disabled={dealReads.busy || !dealsData.products.length} disabledReason={busy ?? 'Nothing watched yet'} onClick={dealReads.readWatched} />
+      </>
+    );
   } else if (subject === 'family') {
     if (!search.code) {
       body = (
@@ -252,7 +252,7 @@ export function MarketView() {
   const sideSummary = subject === 'family' ? famName : subject === 'sld' ? 'Secret Lair' : subject === 'deals' ? 'Deals' : deckName;
   return (
     <ViewLayout label="Market controls" summary={sideSummary} sidebar={sidebar} subnav={<MarketTabs subject={subject} />} startOpen={!(search.code || search.deck || search.subject === 'deals' || subject === 'sld')}>
-      <GuideSheet title={title} summary={summary} actions={actions}>
+      <GuideSheet title={title} summary={summary} actions={actions} actionsLabel={inDeals ? 'Deals actions' : undefined}>
         {inDeals || subject === 'sld' ? <div className="h-full min-h-0">{body}</div> : <div className="h-full overflow-y-auto pb-8">{body}</div>}
       </GuideSheet>
     </ViewLayout>
