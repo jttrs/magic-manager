@@ -24,12 +24,12 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
-from .. import api, companion as companion_engine, sets as sets_mod, tabs as tabs_engine, undo as undo_engine, cart as cart_engine, deck_edit, edhrec as edhrec_engine, features as features_engine, scryfall, mtgjson
+from .. import api, sets as sets_mod, tabs as tabs_engine, undo as undo_engine, cart as cart_engine, deck_edit, edhrec as edhrec_engine, features as features_engine, scryfall, mtgjson
 from .. import auth, collection_sync, db, ingest as ingest_mod, layout as layout_mod, purchases as purchases_engine, userfiles
 from ..api import purchases as purchases_api
 from ..api import collection_import as collection_import_api, companion as companion_api, deals as deals_api, undo as undo_api, cart as cart_api, cards as cards_api, collection as collection_api, explore as explore_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api, market as market_api, trueup as trueup_api, history as history_api, combos as combos_api, card_earmarks as card_earmarks_api, art as art_api, jumpstart as jumpstart_api, surf as surf_api
 from .runtime import TERMINAL, JobManager, JobsBusy
-from . import analytics_routes, auth_routes, scraper_routes, telemetry
+from . import account_routes, analytics_routes, auth_routes, scraper_routes, sitecheck, telemetry
 from ..analytics import store as analytics_store
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -110,6 +110,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     app = FastAPI(title="magic-manager", version="0.1.0", lifespan=lifespan,
                   generate_unique_id_function=lambda route: route.name)
     app.state.jobs = manager
+    app.state.undo_guards = guards
     assert api  # registers jobs
     # Writes only from this app's own pages: a browser marks every request with
     # Sec-Fetch-Site, so a POST from another website (or another localhost
@@ -119,11 +120,10 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     @app.middleware("http")
     async def same_origin_writes(request: Request, call_next):
         if request.method not in ("GET", "HEAD", "OPTIONS") and request.url.path.startswith("/api/"):
-            site = request.headers.get("sec-fetch-site")
-            if site is not None and site not in ("same-origin", "none"):
-                request.state.error_code = "request.cross_site"
+            if (site := sitecheck.cross_site(request)) is not None:
+                request.state.error_code = sitecheck.CODE
                 return JSONResponse(status_code=403, content={
-                    "detail": companion_engine.error("request.cross_site", site=site), "code": "request.cross_site",
+                    "detail": sitecheck.message(site), "code": sitecheck.CODE,
                     "request_id": getattr(request.state, "request_id", None)})
         return await call_next(request)
 
@@ -152,6 +152,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             request.state.undo_session = None
             guard.end(wrote)
     app.include_router(analytics_routes.router)
+    app.include_router(account_routes.router)
     app.include_router(scraper_routes.router)
 
     # ---------- jobs chassis ----------
@@ -181,6 +182,8 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             raise HTTPException(404, str(e)) from e
         except ValidationError as e:
             raise HTTPException(422, e.errors(include_url=False, include_context=False)) from e
+        except JobsBusy as e:  # the account is being deleted
+            raise HTTPException(409, f"Can't start a job while {e.title}.") from e
         return rec.public()
 
     @app.get("/api/jobs", response_model=list[JobOut], tags=["jobs"])

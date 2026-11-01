@@ -101,3 +101,10 @@ def update(*, errors: bool | None = None, usage: bool | None = None) -> Consent:
 def clear_cache() -> None:
     with _lock:
         _cache.clear()
+
+
+def forget_scope(scope: str) -> None:
+    """Drop one user's cached consent (``db.user_scope()``; account deletion)."""
+    with _lock:
+        for k in [k for k in _cache if k.startswith(f"{scope}|")]:
+            del _cache[k]

@@ -2738,6 +2738,34 @@ export type DeckSummaryOut = {
 };
 
 /**
+ * DeleteIn
+ */
+export type DeleteIn = {
+    /**
+     * Confirm
+     *
+     * Type “delete my account” to confirm.
+     */
+    confirm: string;
+};
+
+/**
+ * DeleteOut
+ */
+export type DeleteOut = {
+    /**
+     * Deleted
+     */
+    deleted: boolean;
+    /**
+     * Files Removed
+     *
+     * Collection files removed (the file, its restore point and snapshots).
+     */
+    files_removed: number;
+};
+
+/**
  * DraftCardIn
  */
 export type DraftCardIn = {
@@ -4005,6 +4033,24 @@ export type MeOut = {
      * False while profiles are closed (the kill switch): only admins can sign in.
      */
     profiles_open: boolean;
+    /**
+     * Signed In At
+     *
+     * When this session's sign-in happened (UTC ISO).
+     */
+    signed_in_at?: string | null;
+    /**
+     * Reauth Minutes
+     *
+     * Deleting the account needs a sign-in at most this many minutes old.
+     */
+    reauth_minutes?: number;
+    /**
+     * Reauth Seconds Left
+     *
+     * Seconds (server clock, at this response) until this sign-in is too old to delete the account; 0 = sign in again first.
+     */
+    reauth_seconds_left?: number;
 };
 
 /**
@@ -7113,6 +7159,12 @@ export type UserOut = {
      * Is Admin
      */
     is_admin: boolean;
+    /**
+     * Providers
+     *
+     * Sign-in providers linked to this user.
+     */
+    providers?: Array<string>;
 };
 
 /**
@@ -7676,6 +7728,22 @@ export type AnalyticsTraceResponses = {
 };
 
 export type AnalyticsTraceResponse = AnalyticsTraceResponses[keyof AnalyticsTraceResponses];
+
+export type AccountExportData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/account/export';
+};
+
+export type AccountExportResponses = {
+    /**
+     * Your data as a zip.
+     */
+    200: Blob | File;
+};
+
+export type AccountExportResponse = AccountExportResponses[keyof AccountExportResponses];
 
 export type ScrapersHealthData = {
     body?: never;
@@ -10308,3 +10376,28 @@ export type AdminSetFlagResponses = {
 };
 
 export type AdminSetFlagResponse = AdminSetFlagResponses[keyof AdminSetFlagResponses];
+
+export type AccountDeleteData = {
+    body: DeleteIn;
+    path?: never;
+    query?: never;
+    url: '/api/account/delete';
+};
+
+export type AccountDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type AccountDeleteError = AccountDeleteErrors[keyof AccountDeleteErrors];
+
+export type AccountDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    200: DeleteOut;
+};
+
+export type AccountDeleteResponse = AccountDeleteResponses[keyof AccountDeleteResponses];

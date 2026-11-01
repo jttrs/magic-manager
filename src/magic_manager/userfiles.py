@@ -8,6 +8,8 @@
 * :func:`ensure` = create on first sign-in, else bring the file to the current
   version (``db.migrate_split_file(…, 'user')``, which snapshots it first).
 * :func:`migrate_all` = server start: the catalog once, then every user file.
+* :func:`user_artifacts` / :func:`remove_user_files` find and delete every file that
+  holds one user's collection (account deletion, §25.1 H10).
 * :func:`bind_file` maps the owner's split file (``users/owner.db`` from
   ``mm db split``) to their auth id after their first sign-in (``mm auth bind``).
 
@@ -17,6 +19,7 @@ from raw input.
 from __future__ import annotations
 
 import os
+import re
 import sqlite3
 import threading
 from dataclasses import dataclass, field
@@ -219,3 +222,54 @@ def bind_file(data_dir: Path, user_id: str, source: str = _layout.DEFAULT_USER) 
             if old.exists():
                 os.replace(old, new)
     return report
+
+
+def _artifact_dirs(data_dir: Path) -> list[Path]:
+    """Every directory a user's collection file (or a copy of it) can live in: ``users/``,
+    its migration snapshots ``users/bak/``, split pair snapshots ``bak/split.bak-*/users/``,
+    and what restores / binds set aside under ``replaced/``."""
+    users = data_dir / _layout.USERS_SUBDIR
+    dirs = [users, users / db.BAK_SUBDIR]
+    dirs += sorted(p / _layout.USERS_SUBDIR for p in (data_dir / db.BAK_SUBDIR).glob(f"{db.SPLIT_SNAPSHOT_PREFIX}*"))
+    replaced = data_dir / db.REPLACED_SUBDIR
+    dirs += sorted(replaced.glob("*"))
+    dirs += sorted(p / _layout.USERS_SUBDIR for p in replaced.glob("*"))
+    return dirs
+
+
+def user_artifacts(data_dir: Path, user: str) -> list[Path]:
+    """Every file holding ``user``'s collection data under ``data_dir``: ``users/<id>.db``
+    and its journal/WAL sidecars, the undo restore point (+ pending/temp), migration
+    snapshots, the user's half of split pair snapshots, and set-aside copies under
+    ``replaced/``. Matched by exact name (``<id>.db…`` / ``<id>.undo.db…`` /
+    ``.<id>.db.…`` temp files) inside known directories only — never another user's
+    file, never the catalog; directories that resolve outside ``data_dir`` (a symlink)
+    are skipped. Files from before ``mm auth bind`` (named ``owner``) are not this id's."""
+    _layout.check_user(user)
+    data_dir = Path(data_dir)
+    root = data_dir.resolve()
+    name = re.compile(rf"\.?{re.escape(user)}(?:\.undo)?\.db(?:[.-].*)?")
+    out: list[Path] = []
+    for d in _artifact_dirs(data_dir):
+        if not d.is_dir() or d.is_symlink():
+            continue
+        try:
+            d.resolve().relative_to(root)
+        except ValueError:
+            continue
+        out += sorted(p for p in d.iterdir() if name.fullmatch(p.name) and (p.is_file() or p.is_symlink()))
+    return out
+
+
+def remove_user_files(data_dir: Path, user: str) -> list[Path]:
+    """Delete every :func:`user_artifacts` file (the collection file before its sidecars).
+    Idempotent: a missing file is skipped. Returns what was removed."""
+    removed: list[Path] = []
+    with _lock:
+        for p in user_artifacts(data_dir, user):
+            try:
+                p.unlink()
+            except FileNotFoundError:
+                continue
+            removed.append(p)
+    return removed
