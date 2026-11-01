@@ -12,8 +12,9 @@ const tabs = {
 
 test('Deals is hidden unless its flag is on', async ({ page }) => {
   await page.goto('/market');
-  await expect(page.getByRole('radio', { name: 'Set family' })).toBeVisible();
-  await expect(page.getByRole('radio', { name: 'Deals' })).toHaveCount(0);
+  const modes = page.getByRole('navigation', { name: 'Market views' });
+  await expect(modes.getByRole('link', { name: 'Set family' })).toBeVisible();
+  await expect(modes.getByRole('link', { name: 'Deals' })).toHaveCount(0);
 });
 
 test('with the flag on: read open tabs, grouped by store', async ({ page }) => {
@@ -181,28 +182,34 @@ test('Watching: a filterable table with an inspector; read prices again', async 
   await expect(row).toContainText('$90.00+');
   await expect(row).toContainText('cheapest $70.00');
   await expect(row).toContainText('$80.00 cards + $10.00 boosters');
-  await expect(page.getByText('2 of 2 products · compared to sealed price')).toBeVisible();
+  await expect(page.getByText('2 of 2 products · compared to sealed value')).toBeVisible();
 
   // Search and type filters.
-  await page.getByLabel('Search', { exact: true }).fill('frogs');
+  await page.getByLabel('Product name or set', { exact: true }).fill('frogs');
   await expect(table.getByRole('row')).toHaveCount(2);
   await expect(row).toHaveCount(0);
-  await page.getByLabel('Search', { exact: true }).fill('');
-  await page.getByRole('button', { name: /^Decks/ }).click();
+  await page.getByLabel('Product name or set', { exact: true }).fill('');
+  const types = page.getByRole('button', { name: /^Product type/ });
+  await expect(types).toContainText('All types');
+  await types.click();
+  await page.getByRole('checkbox', { name: /^Decks/ }).check();
+  await page.keyboard.press('Escape');
   await expect(table.getByRole('row', { name: /Frogs/ })).toHaveCount(0);
   await expect(row).toBeVisible();
-  await page.getByRole('button', { name: /^Decks/ }).click();
+  await types.click();
+  await page.getByRole('checkbox', { name: /^Decks/ }).uncheck();
+  await page.keyboard.press('Escape');
 
   // Inspector.
   await row.getByRole('button', { name: 'Commander 2013 Deck: Nature of the Beast' }).click();
   const inspector = page.getByRole('region', { name: 'Commander 2013 Deck: Nature of the Beast' });
   await expect(inspector.getByRole('link', { name: /Cash Cards Unlimited/ })).toHaveAttribute('href', store.url);
   await expect(inspector).toContainText('↓ $5.00 since Sep 5');
-  await expect(inspector.getByText('Sealed price')).toBeVisible();
+  await expect(inspector.getByText('Sealed value')).toBeVisible();
   await expect(inspector.getByText('Cards inside, exact printings')).toBeVisible();
   await expect(inspector).toContainText('$80.00');
   await expect(inspector).toContainText('Total, cheapest');
-  await expect(inspector).toContainText('2 of 100 cards have no price at their exact printing');
+  await expect(inspector).toContainText('2 of 100 cards have no value at their exact printing');
   await expect(inspector.getByRole('row', { name: /Rhystic Study/ })).toBeVisible();
   await expect(inspector.getByRole('button', { name: 'Stop watching' })).toBeVisible();
 

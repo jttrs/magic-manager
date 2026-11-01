@@ -123,7 +123,7 @@ function Worth({ p, cost, state }: { p: DealProduct; cost?: ProductCostOut; stat
   return (
     <>
       <dl className="flex flex-col">
-        <Row label="Sealed price" value={cost.market} best={best} note={cost.market_source} />
+        <Row label="Sealed value" value={cost.market} best={best} note={cost.market_source} />
         {hasCards && <Row label="Cards inside, exact printings" value={cost.known_exact} best={hasBoosters ? null : best} />}
         {hasCards && <Row label="Cards inside, cheapest printings" value={cost.known_floor} best={hasBoosters ? null : best} />}
         {hasBoosters && <Row label="Boosters, expected value" value={cost.booster_ev} best={hasCards ? null : best} />}
@@ -131,7 +131,7 @@ function Worth({ p, cost, state }: { p: DealProduct; cost?: ProductCostOut; stat
         {hasCards && hasBoosters && <Row strong label="Total, cheapest" value={cost.floor} best={best} />}
       </dl>
       {(cost.unpriced ?? 0) > 0 && (
-        <p className="text-sm text-ink-muted">{cost.unpriced} of {cost.total_cards} cards have no price at their exact printing — totals count only the rest.</p>
+        <p className="text-sm text-ink-muted">{cost.unpriced} of {cost.total_cards} cards have no value at their exact printing — totals count only the rest.</p>
       )}
       {cost.notes?.map((n) => <p key={n} className="text-sm text-ink-muted">{n}</p>)}
     </>

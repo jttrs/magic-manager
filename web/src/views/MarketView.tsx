@@ -18,11 +18,13 @@ import { CopyTargets } from '../components/CopyButton';
 import { InfoTip } from '../components/InfoTip';
 import { ProgressRule } from '../components/ProgressRule';
 import { SearchSelect } from '../components/SearchSelect';
-import { ChipToggles, Segmented, SelectField, SideSection, TextField } from '../components/Sidebar';
+import { Segmented, SelectField, SideSection, TextField } from '../components/Sidebar';
 import { MultiSelect } from '../components/MultiSelect';
 import { EmptyNote, ErrorNote, GuideSheet } from '../components/States';
 import { buyListTargets } from '../components/buyTargets';
-import { TcgplayerMark } from '../components/StoreMarks';
+import { RefreshMark, TcgplayerMark } from '../components/StoreMarks';
+import { IconAction } from '../components/IconAction';
+import { MarketTabs } from './market/MarketTabs';
 import { collectionBuyList, type CardPriceOut, type DeckCostOut } from '../core/api';
 import { fmtCount, fmtInt, fmtUsd } from '../core/format';
 import { filterSortProducts, PRODUCT_TYPE_LABEL, PRODUCT_TYPES, typeCounts, type Basis, type DealSort } from '../core/deals';
@@ -31,15 +33,19 @@ import type { MarketSearch } from '../core/search';
 
 const route = getRouteApi('/market');
 
-/** Market: what a set family's sealed products, its cards, or a deck costs —
- *  each priced at the exact printing beside the cheapest printing anywhere. */
+/** Market: what a set family's sealed products and singles are worth, what a
+ *  deck costs, Secret Lair drops and store deals — each valued at the exact
+ *  printing beside the cheapest printing anywhere. Modes are the sub-nav strip. */
 export function MarketView() {
   const search = route.useSearch();
   const navigate = useNavigate({ from: '/market' });
   const set = (patch: Partial<MarketSearch>) => navigate({ search: (s) => ({ ...s, ...patch }), replace: true });
+  const dealsOn = useFeature('deals');
+  // Deals without the feature reads as the default mode.
+  const subject = search.subject === 'deals' && !dealsOn ? 'family' : search.subject;
   const fams = useQuery(familiesQuery());
-  const decks = useQuery({ ...decksQuery(), enabled: search.subject === 'deck' });
-  const cost = useQuery({ ...deckCostQuery(search.deck, search.live), enabled: search.subject === 'deck' && Boolean(search.deck) });
+  const decks = useQuery({ ...decksQuery(), enabled: subject === 'deck' });
+  const cost = useQuery({ ...deckCostQuery(search.deck, search.live), enabled: subject === 'deck' && Boolean(search.deck) });
 
   const famName = fams.data?.find((f) => f.code === search.code)?.name ?? search.code;
   const deckName = decks.data?.find((d) => d.slug === search.deck)?.name ?? search.deck;
@@ -51,8 +57,7 @@ export function MarketView() {
     if (r.error || !r.data) throw new Error('buy-list failed');
     return r.data.text;
   };
-  const dealsOn = useFeature('deals');
-  const inDeals = dealsOn && search.subject === 'deals';
+  const inDeals = subject === 'deals';
   const dealsData = useDealsData(search.deals, inDeals);
   const dealCosts = useDealCosts(dealsData.products);
   // Changing a filter keeps the open product only while it's still in the list.
@@ -65,106 +70,127 @@ export function MarketView() {
   const toBuy = cost.data?.lines.reduce((n, l) => n + l.buy, 0) ?? 0;
   const toBuyUsd = cost.data?.lines.reduce((s, l) => s + l.buy * ((search.buyAt === 'floor' ? l.floor_usd : l.unit_usd) ?? 0), 0) ?? 0;
 
+  const famPicker = fams.isError ? (
+    <p role="alert" className="text-sm text-danger">Couldn’t load families: {(fams.error as Error).message}</p>
+  ) : (
+    <SearchSelect label="Set family" noun="family" value={search.code} onChange={(code) => set({ code })} options={(fams.data ?? []).map((f) => ({ value: f.code, label: f.name, hint: f.code.toUpperCase() }))} />
+  );
+  const singles = search.tab === 'cards';
+
+  // Every mode's rail follows Find (text search alone) → Show → Arrange.
   const sidebar = (
     <>
-      <SideSection title="Price">
-        <Segmented<MarketSearch['subject']>
-          label="Subject"
-          wrap={dealsOn}
-          value={search.subject}
-          onChange={(subject) => set({ subject })}
-          options={[{ value: 'family', label: 'Set family' }, { value: 'deck', label: 'Deck' }, { value: 'sld', label: 'Secret Lair' }, ...(dealsOn ? [{ value: 'deals' as const, label: 'Deals' }] : [])]}
-        />
-        {search.subject === 'sld' ? null : search.subject === 'deals' ? (
-          <Segmented<MarketSearch['deals']> label="Show" value={search.deals} onChange={(deals) => set({ deals, item: undefined })} options={[{ value: 'tabs', label: 'Open tabs' }, { value: 'watching', label: 'Watching' }]} />
-        ) : search.subject === 'family' ? (
-          fams.isError ? (
-            <p className="text-sm text-danger">Couldn’t load families: {(fams.error as Error).message}</p>
-          ) : (
-            <SearchSelect label="Set family" noun="family" value={search.code} onChange={(code) => set({ code })} options={(fams.data ?? []).map((f) => ({ value: f.code, label: f.name, hint: f.code.toUpperCase() }))} />
-          )
-        ) : decks.isError ? (
-          <p className="text-sm text-danger">Couldn’t load decks: {(decks.error as Error).message}</p>
-        ) : (
-          <SearchSelect label="Deck" noun="deck" value={search.deck} onChange={(deck) => set({ deck, live: false })} options={(decks.data ?? []).map((d) => ({ value: d.slug, label: d.name, hint: d.deck_type }))} />
-        )}
-      </SideSection>
-      {search.subject === 'sld' && <SecretLairFind search={search} set={set} />}
-      {inDeals && (
-        <SideSection title="Find">
-          <TextField name="dq" label="Search" value={search.dq} placeholder="Name or set code" onChange={(dq) => setFilter({ dq })} />
-          <MultiSelect
-            label="Stores"
-            noun="stores"
-            searchable={false}
-            summary={search.stores.length ? undefined : 'All stores'}
-            value={search.stores}
-            onChange={(stores) => setFilter({ stores })}
-            options={dealsData.storeOptions.map((s) => ({ value: s, label: s }))}
-          />
-          <ChipToggles<(typeof PRODUCT_TYPES)[number]>
-            label="Type"
-            showLabel
-            value={search.types}
-            onChange={(types) => setFilter({ types })}
-            options={PRODUCT_TYPES.map((t) => ({ value: t, label: PRODUCT_TYPE_LABEL[t], count: counts[t] }))}
-          />
-          <Segmented<'0' | '10' | '20' | '30'>
-            label="Discount"
-            showLabel
-            labelExtra={<InfoTip label="Under what?">Under the price chosen in <b>Compare to</b>.</InfoTip>}
-            value={String(search.minOff) as '0'}
-            onChange={(v) => setFilter({ minOff: Number(v) as 0 })}
-            options={[{ value: '0', label: 'Any' }, { value: '10', label: '10%+' }, { value: '20', label: '20%+' }, { value: '30', label: '30%+' }]}
-          />
-          <Segmented<Basis>
-            label="Compare to"
-            showLabel
-            labelExtra={<InfoTip label="What is each price compared to?"><b>Sealed</b> is the sealed product’s market price. <b>Exact</b> is the cards inside at their exact printings plus the boosters’ expected value. <b>Cheapest</b> is each card inside at its cheapest printing anywhere plus the boosters’ expected value.</InfoTip>}
-            value={search.basis}
-            onChange={(basis) => setFilter({ basis })}
-            options={[{ value: 'market', label: 'Sealed' }, { value: 'exact', label: 'Exact' }, { value: 'floor', label: 'Cheapest' }]}
-          />
-          <SelectField<DealSort>
-            label="Sort"
-            value={search.dsort}
-            onChange={(dsort) => setFilter({ dsort })}
-            options={[
-              { value: 'gap_pct', label: 'Biggest discount %' }, { value: 'gap_usd', label: 'Biggest discount $' }, { value: 'price', label: 'Lowest price' },
-              { value: 'market', label: 'Sealed price' }, { value: 'exact', label: 'Cards, exact' }, { value: 'floor', label: 'Cards, cheapest' }, { value: 'name', label: 'Name' },
-            ]}
-          />
-          <ChipToggles<'in'> label="Availability" value={search.inStock ? ['in'] : []} onChange={(v) => setFilter({ inStock: v.length > 0 })} options={[{ value: 'in', label: 'In stock only' }]} />
-          {search.deals === 'watching' && (
-            <ChipToggles<'met'> label="Target" value={search.atTarget ? ['met'] : []} onChange={(v) => setFilter({ atTarget: v.length > 0 })} options={[{ value: 'met', label: 'At or under target' }]} />
-          )}
-        </SideSection>
-      )}
-      {search.subject === 'family' && (
-        <SideSection title="Show">
-          <Segmented<MarketSearch['tab']> label="Prices of" value={search.tab} onChange={(tab) => set({ tab })} options={[{ value: 'products', label: 'Sealed' }, { value: 'cards', label: 'Cards' }]} />
-          <TextField name="q" label={search.tab === 'products' ? 'Product name' : 'Card name'} value={search.q} placeholder={search.tab === 'products' ? 'e.g. Bundle…' : 'e.g. Cloud…'} onChange={(q) => set({ q })} />
-          {search.tab === 'cards' && (
-            <>
-              <Segmented
-                label="Printings"
-                showLabel
-                value={search.cheaper ? 'cheaper' : 'all'}
-                onChange={(v) => set({ cheaper: v === 'cheaper' })}
-                options={[{ value: 'all', label: 'All' }, { value: 'cheaper', label: 'Not cheapest' }]}
-              />
-              <FoilPremiumFilter value={search.foilMax} onChange={(foilMax) => set({ foilMax })} />
+      {subject === 'family' && (
+        <>
+          <SideSection title="Find">
+            <TextField name="q" label={singles ? 'Card name' : 'Product name'} value={search.q} placeholder={singles ? 'e.g. Cloud…' : 'e.g. Bundle…'} onChange={(q) => set({ q })} />
+          </SideSection>
+          <SideSection title="Show">
+            {famPicker}
+            <Segmented<MarketSearch['tab']> label="Product type" showLabel value={search.tab} onChange={(tab) => set({ tab })} options={[{ value: 'products', label: 'Sealed' }, { value: 'cards', label: 'Singles' }]} />
+            {singles && (
+              <>
+                <Segmented
+                  label="Printings"
+                  showLabel
+                  value={search.cheaper ? 'cheaper' : 'all'}
+                  onChange={(v) => set({ cheaper: v === 'cheaper' })}
+                  options={[{ value: 'all', label: 'All' }, { value: 'cheaper', label: 'Not cheapest' }]}
+                />
+                <FoilPremiumFilter value={search.foilMax} onChange={(foilMax) => set({ foilMax })} />
+              </>
+            )}
+          </SideSection>
+          {singles && (
+            <SideSection title="Arrange">
               <SelectField<MarketSearch['sort']>
                 label="Sort"
                 value={search.sort}
                 onChange={(sort) => set({ sort })}
-                options={[{ value: 'savings', label: 'Biggest premium' }, { value: 'price', label: 'Highest price' }, { value: 'foil', label: 'Smallest foil premium' }, { value: 'set', label: 'Set and number' }]}
+                options={[{ value: 'savings', label: 'Biggest premium' }, { value: 'price', label: 'Highest value' }, { value: 'foil', label: 'Smallest foil premium' }, { value: 'set', label: 'Set and number' }]}
               />
-            </>
+            </SideSection>
+          )}
+        </>
+      )}
+      {subject === 'deck' && (
+        <SideSection title="Show">
+          {decks.isError ? (
+            <p role="alert" className="text-sm text-danger">Couldn’t load decks: {(decks.error as Error).message}</p>
+          ) : (
+            <SearchSelect label="Deck" noun="deck" value={search.deck} onChange={(deck) => set({ deck, live: false })} options={(decks.data ?? []).map((d) => ({ value: d.slug, label: d.name, hint: d.deck_type }))} />
           )}
         </SideSection>
       )}
-      {search.subject === 'deck' && search.deck && (
+      {subject === 'sld' && <SecretLairFind search={search} set={set} />}
+      {inDeals && (
+        <>
+          <SideSection title="Find">
+            <TextField name="dq" label="Product name or set" value={search.dq} placeholder="e.g. Bundle, fin…" onChange={(dq) => setFilter({ dq })} />
+          </SideSection>
+          <SideSection title="Show">
+            <Segmented<MarketSearch['deals']>
+              label="Products"
+              showLabel
+              labelExtra={<InfoTip label="Which products?"><b>Open tabs</b> are the product pages open in your browser. <b>Watching</b> is the products you watch, with their price history.</InfoTip>}
+              value={search.deals}
+              onChange={(deals) => set({ deals, item: undefined })}
+              options={[{ value: 'tabs', label: 'Open tabs' }, { value: 'watching', label: 'Watching' }]}
+            />
+            <MultiSelect
+              label="Stores"
+              noun="stores"
+              searchable={false}
+              summary={search.stores.length ? undefined : 'All stores'}
+              value={search.stores}
+              onChange={(stores) => setFilter({ stores })}
+              options={dealsData.storeOptions.map((s) => ({ value: s, label: s }))}
+            />
+            <MultiSelect
+              label="Product type"
+              noun="types"
+              searchable={false}
+              keepOrder
+              summary={search.types.length ? undefined : 'All types'}
+              value={search.types}
+              onChange={(types) => setFilter({ types: types as MarketSearch['types'] })}
+              options={PRODUCT_TYPES.map((t) => ({ value: t, label: PRODUCT_TYPE_LABEL[t], count: counts[t] }))}
+            />
+            <Segmented<Basis>
+              label="Compare to"
+              showLabel
+              labelExtra={<InfoTip label="What is each price compared to?"><b>Sealed</b> is the sealed product’s market value. <b>Exact</b> is the cards inside at their exact printings plus the boosters’ expected value. <b>Cheapest</b> is each card inside at its cheapest printing anywhere plus the boosters’ expected value.</InfoTip>}
+              value={search.basis}
+              onChange={(basis) => setFilter({ basis })}
+              options={[{ value: 'market', label: 'Sealed' }, { value: 'exact', label: 'Exact' }, { value: 'floor', label: 'Cheapest' }]}
+            />
+            <Segmented<'0' | '10' | '20' | '30'>
+              label="Discount"
+              showLabel
+              labelExtra={<InfoTip label="Under what?">How far the best price sits under the value chosen in <b>Compare to</b>.</InfoTip>}
+              value={String(search.minOff) as '0'}
+              onChange={(v) => setFilter({ minOff: Number(v) as 0 })}
+              options={[{ value: '0', label: 'Any' }, { value: '10', label: '10%+' }, { value: '20', label: '20%+' }, { value: '30', label: '30%+' }]}
+            />
+            <Segmented<'all' | 'in'> label="Availability" showLabel value={search.inStock ? 'in' : 'all'} onChange={(v) => setFilter({ inStock: v === 'in' })} options={[{ value: 'all', label: 'Any' }, { value: 'in', label: 'In stock' }]} />
+            {search.deals === 'watching' && (
+              <Segmented<'all' | 'met'> label="Target" showLabel value={search.atTarget ? 'met' : 'all'} onChange={(v) => setFilter({ atTarget: v === 'met' })} options={[{ value: 'all', label: 'Any' }, { value: 'met', label: 'At or under' }]} />
+            )}
+          </SideSection>
+          <SideSection title="Arrange">
+            <SelectField<DealSort>
+              label="Sort"
+              value={search.dsort}
+              onChange={(dsort) => setFilter({ dsort })}
+              options={[
+                { value: 'gap_pct', label: 'Biggest discount %' }, { value: 'gap_usd', label: 'Biggest discount $' }, { value: 'price', label: 'Lowest price' },
+                { value: 'market', label: 'Sealed value' }, { value: 'exact', label: 'Cards value, exact' }, { value: 'floor', label: 'Cards value, cheapest' }, { value: 'name', label: 'Name' },
+              ]}
+            />
+          </SideSection>
+        </>
+      )}
+      {subject === 'deck' && search.deck && (
         <SideSection title="Buy">
           <Segmented<MarketSearch['buyAt']>
             label="Printing"
@@ -183,46 +209,51 @@ export function MarketView() {
     </>
   );
 
+  // The title is the sheet's accessible h1 only (never printed): the strip and
+  // the summary already say where you are.
   let title = 'Market';
   let summary: ReactNode;
+  let actions: ReactNode;
   let body: ReactNode;
-  if (search.subject === 'sld') {
+  if (subject === 'sld') {
     title = 'Secret Lair';
-    summary = 'The newest drops: sealed price beside the cards inside, bonus card included';
+    summary = 'The newest drops: sealed value beside the cards inside, bonus card included';
     body = <SecretLairPanel search={search} set={set} />;
-  } else if (search.subject === 'deals' && dealsOn) {
+  } else if (inDeals) {
     title = search.deals === 'watching' ? 'Watching' : 'Deals';
     summary = search.deals === 'watching' ? 'Products you watch: best price now, what it’s worth, and what’s inside' : 'Product pages open in your browser, compared to what they’re worth';
     body = search.deals === 'watching' ? <WatchingPanel search={search} set={set} /> : <DealsPanel search={search} set={set} />;
-  } else if (search.subject === 'family' || search.subject === 'deals') {
+  } else if (subject === 'family') {
     if (!search.code) {
       body = (
-        <EmptyNote title="What does it cost?">
-          Choose a set family to price its sealed products against the cards inside, or its cards against the cheapest printing of each. Or choose a deck to cost it out.
+        <EmptyNote title="Choose a set family">
+          Value its sealed products against the cards inside, or its singles against the cheapest printing of each.
         </EmptyNote>
       );
     } else {
       title = famName ?? 'Market';
-      body = search.tab === 'products' ? <ProductsPanel code={search.code} q={search.q} /> : <CardsPanel code={search.code} search={search} />;
-      summary = search.tab === 'products' ? 'Sealed market price beside what the cards inside are worth' : 'Each printing’s price beside the cheapest printing of the same card';
+      body = singles ? <CardsPanel code={search.code} search={search} /> : <ProductsPanel code={search.code} q={search.q} />;
+      summary = `${famName} · ${singles ? 'each printing’s value beside the cheapest printing of the same card' : 'sealed value beside what the cards inside are worth'}`;
     }
   } else if (!search.deck) {
-    body = <EmptyNote title="Cost out a deck">Choose a deck to see what it costs sealed, bought card by card, or built from your free cards first.</EmptyNote>;
+    body = <EmptyNote title="Choose a deck">See what it costs sealed, bought card by card, or built from your unused cards first.</EmptyNote>;
   } else {
     title = deckName ?? 'Deck';
-    if (cost.isPending) body = <Loading label={search.live ? 'Checking every set for the cheapest printings…' : 'Pricing the deck…'} />;
+    if (cost.isPending) body = <Loading label={search.live ? 'Rechecking every printing for the cheapest…' : 'Working out the deck’s cost…'} />;
     else if (cost.isError) body = <ErrorNote error={cost.error} onRetry={() => cost.refetch()} />;
     else {
-      body = <DeckPanel d={cost.data} buyAt={search.buyAt} onCheckLive={() => set({ live: true })} />;
-      summary = `${fmtCount(cost.data.total_need, 'card')} · ${fmtInt(cost.data.total_need - toBuy)} from your free cards · ${fmtInt(toBuy)} to buy`;
+      body = <DeckPanel d={cost.data} buyAt={search.buyAt} checkedAt={search.live ? cost.dataUpdatedAt : undefined} />;
+      summary = `${deckName} · ${fmtCount(cost.data.total_need, 'card')} · ${fmtInt(cost.data.total_need - toBuy)} from your unused cards · ${fmtInt(toBuy)} to buy`;
     }
+    // A12: one recheck across every printing; afterwards the note says so with the time.
+    if (!search.live) actions = <IconAction label="Recheck for cheapest" Icon={RefreshMark} disabled={cost.isPending} disabledReason="Working out the cost…" onClick={() => set({ live: true })} />;
   }
 
-  const sideSummary = search.subject === 'family' ? famName : search.subject === 'sld' ? 'Secret Lair' : search.subject === 'deals' ? 'Deals' : deckName;
+  const sideSummary = subject === 'family' ? famName : subject === 'sld' ? 'Secret Lair' : subject === 'deals' ? 'Deals' : deckName;
   return (
-    <ViewLayout label="Market controls" summary={sideSummary} sidebar={sidebar} startOpen={!(search.code || search.deck || search.subject === 'deals' || search.subject === 'sld')}>
-      <GuideSheet title={title} summary={summary}>
-        {inDeals || search.subject === 'sld' ? <div className="h-full min-h-0">{body}</div> : <div className="h-full overflow-y-auto pb-8">{body}</div>}
+    <ViewLayout label="Market controls" summary={sideSummary} sidebar={sidebar} subnav={<MarketTabs subject={subject} />} startOpen={!(search.code || search.deck || subject === 'deals' || subject === 'sld')}>
+      <GuideSheet title={title} summary={summary} actions={actions}>
+        {inDeals || subject === 'sld' ? <div className="h-full min-h-0">{body}</div> : <div className="h-full overflow-y-auto pb-8">{body}</div>}
       </GuideSheet>
     </ViewLayout>
   );
@@ -248,24 +279,24 @@ function ProductsPanel({ code, q }: { code: string; q: string }) {
   const unpriced = values?.filter((v) => v.error).length ?? 0;
   return (
     <div className="flex flex-col gap-2">
-      {running && live && <div className="mx-5"><ProgressRule label="Pricing products" verb="Pricing" done={live.done} total={live.total} message={live.log.at(-1)?.msg} /></div>}
+      {running && live && <div className="mx-5"><ProgressRule label="Valuing products" verb="Valuing" done={live.done} total={live.total} message={live.log.at(-1)?.msg} /></div>}
       {failure && (
         <p role="alert" className="mx-5 text-sm text-danger">
-          Couldn’t price these products: {failure}.{' '}
+          Couldn’t value these products: {failure}.{' '}
           <button type="button" className="cursor-pointer underline" onClick={reprice}>Try again</button>
         </p>
       )}
       {unpriced > 0 && (
         <p className="mx-5 text-sm text-ink-muted">
-          {fmtCount(unpriced, 'product')} couldn’t be priced.{' '}
-          <button type="button" className="cursor-pointer text-ink underline" onClick={reprice}>Price again</button>
+          {fmtCount(unpriced, 'product')} couldn’t be valued.{' '}
+          <button type="button" className="cursor-pointer text-ink underline" onClick={reprice}>Value again</button>
         </p>
       )}
       {groups.length === 0 ? (
         <EmptyNote title="Nothing matches">Clear the product name filter.</EmptyNote>
       ) : (
         <table className="mx-5 w-[calc(100%-2.5rem)] border-collapse text-sm tabular">
-          <caption className="sr-only">Sealed products: market price and contents value</caption>
+          <caption className="sr-only">Sealed products: sealed value and contents value</caption>
           <thead>
             <tr className="border-b-2 border-rule-strong text-left text-xs voice-semi text-ink-muted">
               <th scope="col" className="py-1.5 pr-3 font-medium">Product</th>
@@ -306,7 +337,7 @@ function ProductLine({ p, open, onToggle, pricing }: { p: ProductRow; open: bool
             <Chevron dir={open ? 'down' : 'right'} className="size-3 shrink-0 self-center text-ink-muted transition-transform group-hover:text-ink" />
             <span>{p.name}</span>
           </button>
-          {v?.error && <span className="ml-4.5 block text-xs text-danger">Couldn’t price: {v.error}</span>}
+          {v?.error && <span className="ml-4.5 block text-xs text-danger">Couldn’t value: {v.error}</span>}
         </th>
         <Money v={v?.sealed_market} pending={pending} />
         <Money v={v?.contents_value} pending={pending} partial={partialNote(v)} />
@@ -378,7 +409,7 @@ function ProductDetail({ p }: { p: ProductRow }) {
   );
 }
 
-// ---------- cards ----------
+// ---------- singles ----------
 
 const CARD_PAGE = 200;
 
@@ -397,7 +428,7 @@ function CardsPanel({ code, search }: { code: string; search: MarketSearch }) {
   return (
     <div className="flex flex-col">
       <table className="mx-5 w-[calc(100%-2.5rem)] border-collapse text-sm tabular">
-        <caption className="sr-only">Card printings: price beside the cheapest printing of the same card</caption>
+        <caption className="sr-only">Singles: each printing’s value beside the cheapest printing of the same card</caption>
         <thead className="sticky top-0 z-10 bg-paper">
           <tr className="border-b-2 border-rule-strong text-left text-xs voice-semi text-ink-muted">
             <th scope="col" className="py-1.5 pr-3 font-medium">Card</th>
@@ -444,7 +475,7 @@ function CardLine({ c, foilFocus }: { c: CardPriceOut; foilFocus: boolean }) {
 
 // ---------- deck ----------
 
-function DeckPanel({ d, buyAt, onCheckLive }: { d: DeckCostOut; buyAt: MarketSearch['buyAt']; onCheckLive: () => void }) {
+function DeckPanel({ d, buyAt, checkedAt }: { d: DeckCostOut; buyAt: MarketSearch['buyAt']; checkedAt?: number }) {
   const ledger = deckLedger(d);
   const toBuy = d.lines.filter((l) => l.buy > 0);
   const covered = d.lines.filter((l) => l.buy === 0);
@@ -478,7 +509,7 @@ function DeckPanel({ d, buyAt, onCheckLive }: { d: DeckCostOut; buyAt: MarketSea
           ))}
         </tbody>
       </table>
-      <FloorBasis live={d.live ?? false} liveError={d.live_error} onCheckLive={onCheckLive} />
+      <FloorBasis live={d.live ?? false} liveError={d.live_error} checkedAt={checkedAt} />
       {(d.unpriced > 0 || (d.floor_unpriced ?? 0) > 0) && (
         <p className="-mt-3 text-sm text-ink-muted">
           {d.unpriced > 0 && `${fmtCount(d.unpriced, 'card')} without a price at the deck’s printing`}
@@ -489,7 +520,7 @@ function DeckPanel({ d, buyAt, onCheckLive }: { d: DeckCostOut; buyAt: MarketSea
       )}
 
       <CardLines title="To buy" lines={toBuy} unitBasis={buyAt} />
-      <CardLines title="Covered by your free cards" worth lines={covered} unitBasis={buyAt} />
+      <CardLines title="Covered by your unused cards" worth lines={covered} unitBasis={buyAt} />
     </div>
   );
 }

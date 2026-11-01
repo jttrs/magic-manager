@@ -55,18 +55,18 @@ test('Watching: set a target, see rows that meet it, filter to them, and read th
   await inspector.getByText('All 5 readings').click();
   await expect(inspector.getByRole('table', { name: 'Every price read, newest first' }).getByRole('row')).toHaveCount(6);
 
-  // A % target is worked out from the sealed price: 20% under $75.50 = $60.40 → met by $59.99.
-  await inspector.getByLabel('% under sealed price').check();
+  // A % target is worked out from the sealed value: 20% under $75.50 = $60.40 → met by $59.99.
+  await inspector.getByLabel('% under sealed value').check();
   await inspector.getByLabel('Percent under').fill('20');
   await inspector.getByRole('button', { name: 'Set target' }).click();
   await expect.poll(() => puts).toEqual([{ product_id: 7, mode: 'pct_under', value: 20 }]);
   await expect(inspector.getByText('Target met')).toBeVisible();
-  await expect(inspector).toContainText('Cash Cards Unlimited has it at $59.99. Your target is $60.40 (20% under the sealed price).');
+  await expect(inspector).toContainText('Cash Cards Unlimited has it at $59.99. Your target is $60.40 (20% under the sealed value).');
   await expect(inspector.getByText('target $60.40')).toBeVisible();
 
   const table = page.getByRole('table', { name: 'Products' });
   await expect(table.getByRole('row', { name: /Nature of the Beast/ })).toContainText('at target $60.40');
-  await page.getByRole('button', { name: 'At or under target' }).click();
+  await page.getByRole('radio', { name: 'At or under' }).click();
   await expect(table.getByRole('row', { name: /Frogs/ })).toHaveCount(0);
   await expect(table.getByRole('row', { name: /Nature of the Beast/ })).toBeVisible();
 });
