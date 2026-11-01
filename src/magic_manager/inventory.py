@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from . import db
+from . import db, util
 from . import ingest as ingest_mod
 
 
@@ -195,6 +195,32 @@ def free_quantities(scryfall_ids, *, conn=None) -> dict[str, int]:
         return _q(conn)
     with db.connect() as c:
         return _q(c)
+
+
+def pledged_by_finish(conn, ids: list[str]) -> dict[tuple[str, str], int]:
+    """Copies pledged to built decks per (scryfall_id, finish)."""
+    out: dict[tuple[str, str], int] = {}
+    for chunk in util.chunks(ids):
+        ph = ",".join("?" * len(chunk))
+        for sid, fin, q in conn.execute(
+                f"SELECT scryfall_id, finish, SUM(count) FROM deck_assignments "
+                f"WHERE scryfall_id IN ({ph}) GROUP BY scryfall_id, finish", chunk):
+            out[(sid, fin)] = int(q or 0)
+    return out
+
+
+def pledged_by_deck(conn, ids: list[str]) -> dict[int, dict[tuple[str, str], int]]:
+    """Pledged copies per deck: ``{deck_id: {(scryfall_id, finish): count}}`` over
+    the given printings (only decks that pledge at least one of them appear)."""
+    out: dict[int, dict[tuple[str, str], int]] = {}
+    for chunk in util.chunks(ids):
+        ph = ",".join("?" * len(chunk))
+        for deck_id, sid, fin, q in conn.execute(
+                f"SELECT deck_id, scryfall_id, finish, SUM(count) FROM deck_assignments "
+                f"WHERE scryfall_id IN ({ph}) GROUP BY deck_id, scryfall_id, finish", chunk):
+            if q:
+                out.setdefault(deck_id, {})[(sid, fin)] = int(q)
+    return out
 
 
 def inventory_add(

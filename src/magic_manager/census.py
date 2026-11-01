@@ -3,9 +3,9 @@
 The user counts ALL their loose cards for a set family into an add-mode
 master-list XLSX (sheet ``checklist``; only filled ``qty_normal`` / ``qty_foil``
 cells count). Products kept OFF the sheet (built decks, set-aside decks, scene
-boxes) are named by MTGJSON fileName. ``target = census + Σ product recipes``;
-the plan is the difference between that target and OWNED inventory over the
-sheet's printings:
+boxes) are named by MTGJSON fileName. ``target = census + Σ product recipes + copies pledged to unnamed built decks``
+(those are off the sheet too); the plan is the difference between that target
+and OWNED inventory over the sheet's printings:
 
 * **adds** — target above owned (written as one ``import-block`` event);
 * **removals** — owned above target (written as one ``adhoc`` event), never
@@ -17,18 +17,17 @@ Driven by ``scripts/census_reconcile.py`` (skill ``census-reconcile``).
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from . import db, decks, ingest, inventory, mtgjson, sets, util
+from . import db, decks, ingest, inventory, mtgjson, parsers, util
 
 Key = tuple[str, str]  # (scryfall_id, finish)
 
 _SHEET = "checklist"
 _FINISH_COLS = (("qty_normal", "nonfoil"), ("qty_foil", "foil"))
-_REQUIRED = ("set", "collector_number", "name") + tuple(c for c, _ in _FINISH_COLS)
-_CHUNK = 500
 
 
 class CensusError(ValueError):
@@ -52,6 +51,7 @@ class CensusSheet:
     universe: set[Key]
     census: Counter
     labels: dict[Key, tuple[str, str, str]]  # key -> (set, cn, name)
+    include_tokens: bool = False  # the sheet's _meta says tokens are on it
 
 
 @dataclass
@@ -66,6 +66,7 @@ class CensusLine:
     name: str
     census: int
     products: int
+    in_decks: int  # copies pledged to built decks that were not named as products
     owned: int
     pledged: int
     target: int
@@ -78,6 +79,7 @@ class CensusPlan:
     products: list[str]
     census_copies: int
     product_copies: int
+    deck_copies: int
     target_copies: int
     owned_copies: int
     adds: list[CensusLine] = field(default_factory=list)
@@ -91,6 +93,7 @@ class CensusPlan:
             "totals": {
                 "census_copies": self.census_copies,
                 "product_copies": self.product_copies,
+                "deck_copies": self.deck_copies,
                 "target_copies": self.target_copies,
                 "owned_copies": self.owned_copies,
                 "add_rows": len(self.adds),
@@ -128,39 +131,33 @@ def read_census(path: str | Path, *, conn=None) -> CensusSheet:
         raise CensusError("census needs the XLSX checklist")
     if not path.exists():
         raise CensusError(f"file not found: {path}")
-    from openpyxl import load_workbook
 
     try:
-        wb = load_workbook(str(path), data_only=True, read_only=True)
+        sheet = parsers.read_master_list_rows(path)
     except Exception as e:  # corrupt / not a workbook
         raise CensusError(f"cannot read {path.name}: {e}") from e
-    try:
-        if _SHEET not in wb.sheetnames:
-            raise CensusError(f"{path.name}: no '{_SHEET}' sheet — is this a master-list checklist?")
-        rows = list(wb[_SHEET].iter_rows(values_only=True))
-    finally:
-        wb.close()
-    if not rows:
-        raise CensusError(f"{path.name}: the '{_SHEET}' sheet is empty")
-    header = [str(h).strip() if h is not None else "" for h in rows[0]]
-    missing = [c for c in _REQUIRED if c not in header]
-    if missing:
-        raise CensusError(f"{path.name}: missing column(s) {', '.join(missing)}")
+    if sheet.missing_columns:
+        raise CensusError(f"{path.name}: missing column(s) {', '.join(sheet.missing_columns)}")
+    meta = sheet.meta or {}
+    kind = (meta.get("kind") or "inventory").lower()
+    mode = (meta.get("mode") or "add").lower()
+    if kind != "inventory" or mode != "add":
+        raise CensusError(
+            f"{path.name}: census needs an add-mode inventory checklist (this one is "
+            f"kind={kind}, mode={mode}) — generate a fresh sheet with "
+            "`uv run mm set master-list <set>`"
+        )
 
     parsed: list[tuple[int, str, str, str, dict[str, object]]] = []
-    for n, raw in enumerate(rows[1:], start=2):
-        d = dict(zip(header, raw))
-        set_code = d.get("set")
-        cn = d.get("collector_number")
-        if set_code in (None, "") and cn in (None, ""):
+    for r in sheet.rows:
+        cells = {"qty_normal": r.qty_normal_raw, "qty_foil": r.qty_foil_raw}
+        if not r.set and not r.collector_number and all(v in (None, "") for v in cells.values()):
             continue  # blank spacer row
-        cn_s = str(int(cn)) if isinstance(cn, float) and cn.is_integer() else str(cn).strip()
-        parsed.append((n, str(set_code).strip().lower(), cn_s, str(d.get("name") or ""),
-                       {c: d.get(c) for c, _ in _FINISH_COLS}))
+        cn = re.sub(r"^(\d+)\.0+$", r"\1", r.collector_number)  # Excel floats: 1.0 -> 1
+        parsed.append((r.row_num, r.set, cn, r.name, cells))
     if not parsed:
         raise CensusError(f"{path.name}: no card rows")
 
-    meta = sets.read_master_list_meta(path) or {}
     anchor = str(meta.get("anchor_code") or parsed[0][1]).lower()
 
     universe: set[Key] = set()
@@ -192,47 +189,53 @@ def read_census(path: str | Path, *, conn=None) -> CensusSheet:
             f"{len(unresolved)} row(s) not in the local catalog:\n  " + "\n  ".join(shown) + more
             + "\nsync the set(s) first: " + "; ".join(f"uv run mm set sync {c}" for c in codes)
         )
-    return CensusSheet(anchor=anchor, universe=universe, census=census, labels=labels)
+    return CensusSheet(anchor=anchor, universe=universe, census=census, labels=labels,
+                       include_tokens=str(meta.get("include_tokens") or "0").strip() == "1")
 
 
 # ---------- planning ----------
 
 
-def _product_needs(products: list[str]) -> Counter:
-    off: Counter = Counter()
+def _product_needs(products: list[str], *, include_tokens: bool = False) -> list[dict[Key, int]]:
+    """One recipe per ``products`` occurrence, in order. ``include_tokens`` follows
+    the sheet (a token-inclusive sheet counts the products' token board too)."""
+    out: list[dict[Key, int]] = []
     for file_name in products:
         try:
-            needs = decks.precon_recipe_needs(file_name)
+            needs = decks.precon_recipe_needs(file_name, include_tokens=include_tokens)
         except mtgjson.MtgJsonError as e:
             raise CensusError(f"unknown or unreadable product {file_name!r}: {e}") from e
         if not needs:
             raise CensusError(f"product {file_name!r} has no recipe cards")
-        off.update(needs)
-    return off
+        out.append(needs)
+    return out
 
 
-def _read_counts(conn, sids: list[str]) -> tuple[Counter, Counter]:
+def _read_owned(conn, sids: list[str]) -> Counter:
     owned: Counter = Counter()
-    pledged: Counter = Counter()
-    for i in range(0, len(sids), _CHUNK):
-        part = sids[i:i + _CHUNK]
+    for part in util.chunks(sids):
         marks = ",".join("?" * len(part))
         for r in conn.execute(
             f"SELECT scryfall_id, finish, quantity FROM inventory WHERE scryfall_id IN ({marks})",
             part,
         ):
             owned[(r["scryfall_id"], r["finish"])] = r["quantity"]
+    return owned
+
+
+def _deck_products(conn, deck_ids: list[int]) -> dict[int, str | None]:
+    out: dict[int, str | None] = {}
+    for part in util.chunks(deck_ids):
+        marks = ",".join("?" * len(part))
         for r in conn.execute(
-            f"SELECT scryfall_id, finish, SUM(count) AS n FROM deck_assignments "
-            f"WHERE scryfall_id IN ({marks}) GROUP BY scryfall_id, finish",
-            part,
+            f"SELECT deck_id, source_precon_file_name FROM decks WHERE deck_id IN ({marks})", part
         ):
-            pledged[(r["scryfall_id"], r["finish"])] = r["n"]
-    return owned, pledged
+            out[r["deck_id"]] = r["source_precon_file_name"]
+    return out
 
 
-def _build(sheet: CensusSheet, products: list[str], off: Counter, conn) -> CensusPlan:
-    outside = sorted(k for k in off if k not in sheet.universe)
+def _build(sheet: CensusSheet, products: list[str], needs: list[dict[Key, int]], conn) -> CensusPlan:
+    outside = sorted({k for n in needs for k in n if k not in sheet.universe})
     if outside:
         raise CensusError(
             f"{len(outside)} product card(s) are not on the sheet (the products must "
@@ -240,13 +243,40 @@ def _build(sheet: CensusSheet, products: list[str], off: Counter, conn) -> Censu
             + ", ".join(f"{sid} {fin}" for sid, fin in outside[:10])
             + (" …" if len(outside) > 10 else "")
         )
-    owned, pledged = _read_counts(conn, sorted({sid for sid, _ in sheet.universe}))
+    sids = sorted({sid for sid, _ in sheet.universe})
+    owned = _read_owned(conn, sids)
+    by_deck = inventory.pledged_by_deck(conn, sids)
+    pledged: Counter = Counter()
+    for pl in by_deck.values():
+        pledged.update(pl)
+    deck_file = _deck_products(conn, list(by_deck))
+
+    # Each named product occurrence claims one unclaimed deck of that product (the
+    # one with the most pledges on the sheet, then the lowest id); it counts for
+    # max(recipe, that deck's pledges). Everything else pledged is an unnamed deck.
+    claimed: set[int] = set()
+    off: Counter = Counter()
+    for file_name, recipe in zip(products, needs):
+        cands = [d for d, f in deck_file.items() if f == file_name and d not in claimed]
+        if not cands:
+            off.update(recipe)
+            continue
+        d = min(cands, key=lambda x: (-sum(by_deck[x].values()), x))
+        claimed.add(d)
+        for k in set(recipe) | {k for k in by_deck[d] if k in sheet.universe}:
+            off[k] += max(recipe.get(k, 0), by_deck[d].get(k, 0))
+    in_decks: Counter = Counter()
+    for d, pl in by_deck.items():
+        if d not in claimed:
+            for k, n in pl.items():
+                if k in sheet.universe:
+                    in_decks[k] += n
 
     adds: list[CensusLine] = []
     removals: list[CensusLine] = []
     target_total = 0
     for key in sheet.universe:
-        tgt = sheet.census[key] + off[key]
+        tgt = sheet.census[key] + off[key] + in_decks[key]
         inv = owned[key]
         target_total += tgt
         if tgt == inv:
@@ -254,7 +284,7 @@ def _build(sheet: CensusSheet, products: list[str], off: Counter, conn) -> Censu
         set_code, cn, name = sheet.labels[key]
         line = CensusLine(
             scryfall_id=key[0], finish=key[1], set=set_code, cn=cn, name=name,
-            census=sheet.census[key], products=off[key], owned=inv,
+            census=sheet.census[key], products=off[key], in_decks=in_decks[key], owned=inv,
             pledged=pledged[key], target=tgt, change=abs(tgt - inv),
         )
         (adds if tgt > inv else removals).append(line)
@@ -268,7 +298,8 @@ def _build(sheet: CensusSheet, products: list[str], off: Counter, conn) -> Censu
         anchor=sheet.anchor,
         products=list(products),
         census_copies=sum(sheet.census.values()),
-        product_copies=sum(off.values()),
+        product_copies=sum(off[k] for k in sheet.universe),
+        deck_copies=sum(in_decks.values()),
         target_copies=target_total,
         owned_copies=sum(owned[k] for k in sheet.universe),
         adds=adds,
@@ -283,10 +314,10 @@ def plan(path: str | Path, products: list[str] | None = None, *, conn=None) -> C
     ``products`` are MTGJSON fileNames and may repeat (two copies = listed twice).
     """
     products = list(products or [])
-    off = _product_needs(products)
+    sheet = read_census(path, conn=conn)
+    needs = _product_needs(products, include_tokens=sheet.include_tokens)
     with db.transaction(conn) as c:
-        sheet = read_census(path, conn=c)
-        return _build(sheet, products, off, c)
+        return _build(sheet, products, needs, c)
 
 
 # ---------- applying ----------
@@ -297,10 +328,11 @@ def apply(path: str | Path, products: list[str] | None = None) -> dict:
     removals as an ``adhoc`` event. Refuses (nothing written) if any removal would
     drop below the copies pledged to built decks."""
     products = list(products or [])
-    off = _product_needs(products)  # network/disk reads stay outside the write transaction
+    sheet = read_census(path)
+    # network/disk reads stay outside the write transaction
+    needs = _product_needs(products, include_tokens=sheet.include_tokens)
     with db.transaction() as c:
-        sheet = read_census(path, conn=c)
-        p = _build(sheet, products, off, c)
+        p = _build(sheet, products, needs, c)
         if p.below_pledged:
             raise CensusRefused(p)
 
@@ -332,7 +364,7 @@ def apply(path: str | Path, products: list[str] | None = None) -> dict:
                         rec.rows_updated += 1
                     touched.add((ln.scryfall_id, ln.finish))
 
-        after = _build(sheet, products, off, c)
+        after = _build(sheet, products, needs, c)
         if after.adds or after.removals:
             raise RuntimeError(
                 f"census apply did not converge: {len(after.adds)} add(s) and "

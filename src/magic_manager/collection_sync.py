@@ -864,7 +864,7 @@ def preview_lines(lines: Iterable[dict]) -> dict:
     owned: dict[tuple[str, str], int] = {}
     with db.connect() as conn:
         ids = list({k[0] for k in keys})
-        pledged = _pledged(conn, ids)
+        pledged = inv_mod.pledged_by_finish(conn, ids)
         for chunk in util.chunks(ids):
             ph = ",".join("?" * len(chunk))
             for row in conn.execute(f"SELECT scryfall_id, name, set_code, collector_number FROM cards WHERE scryfall_id IN ({ph})", chunk):
@@ -903,18 +903,6 @@ class BelowPledged(ValueError):
         self.rows = rows
 
 
-def _pledged(conn, ids: list[str]) -> dict[tuple[str, str], int]:
-    """Copies pledged to built decks per (scryfall_id, finish)."""
-    out: dict[tuple[str, str], int] = {}
-    for chunk in util.chunks(ids):
-        ph = ",".join("?" * len(chunk))
-        for sid, fin, q in conn.execute(
-                f"SELECT scryfall_id, finish, SUM(count) FROM deck_assignments "
-                f"WHERE scryfall_id IN ({ph}) GROUP BY scryfall_id, finish", chunk):
-            out[(sid, fin)] = int(q or 0)
-    return out
-
-
 def apply_lines(lines: Iterable[dict], *, mode: Literal["add", "replace"], label: str,
                 force: bool = False) -> dict:
     """Import ``lines`` as ONE ``collection-import`` ingest event (via
@@ -935,7 +923,7 @@ def apply_lines(lines: Iterable[dict], *, mode: Literal["add", "replace"], label
         for r in res.resolved:
             agg[(r.scryfall_id, r.finish)] = agg.get((r.scryfall_id, r.finish), 0) + r.qty
         with db.connect() as conn:
-            pledged = _pledged(conn, list({k[0] for k in agg}))
+            pledged = inv_mod.pledged_by_finish(conn, list({k[0] for k in agg}))
         low = [{"scryfall_id": s, "finish": f, "incoming": q, "pledged": pledged[(s, f)]}
                for (s, f), q in agg.items() if q < pledged.get((s, f), 0)]
         if low:

@@ -6,7 +6,8 @@
 PATH is a filled add-mode master-list XLSX of ALL loose cards; ``--product``
 (repeatable; list a fileName twice for two copies) names products kept OFF the
 sheet. Dry run by default. Exit codes: 0 ok, 1 refused (removals would drop
-below pledged), 2 bad input.
+below pledged — dry run and ``--apply`` alike), 2 bad input. ``--json`` output
+carries ``status``: ``ok`` | ``refused`` | ``applied``.
 """
 
 from __future__ import annotations
@@ -30,11 +31,11 @@ def _table(title: str, lines: list[census.CensusLine], cap: int | None = TABLE_C
     out = [f"### {title} ({len(lines)} rows)", ""]
     if not lines:
         return out + ["(none)", ""]
-    out += ["| set | cn | name | finish | census | products | owned | → target |",
-            "|---|---|---|---|---:|---:|---:|---:|"]
+    out += ["| set | cn | name | finish | census | products | in decks | owned | pledged | → target |",
+            "|---|---|---|---|---:|---:|---:|---:|---:|---:|"]
     for ln in lines[:cap]:
         out.append(f"| {ln.set} | {ln.cn} | {ln.name} | {ln.finish} | {ln.census} | "
-                   f"{ln.products} | {ln.owned} | → {ln.target} |")
+                   f"{ln.products} | {ln.in_decks} | {ln.owned} | {ln.pledged} | → {ln.target} |")
     if cap is not None and len(lines) > cap:
         out.append(f"\n…and {len(lines) - cap} more")
     return out + [""]
@@ -46,6 +47,7 @@ def _summary(p: census.CensusPlan) -> list[str]:
         f"## Census reconciliation — {p.anchor}", "",
         f"- census copies:  {d['census_copies']}",
         f"- product copies: {d['product_copies']} ({len(p.products)} product(s))",
+        f"- unnamed built-deck copies: {d['deck_copies']}",
         f"- target copies:  {d['target_copies']}",
         f"- owned copies:   {d['owned_copies']} (over the sheet's printings)",
         f"- adds:           {d['add_rows']} rows / {d['add_copies']} copies",
@@ -107,46 +109,45 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 2
 
+    refused = bool(p.below_pledged)
     extra: dict = {}
-    if args.apply:
-        if p.below_pledged:
-            print("Refused: these removals would drop below the copies pledged to built decks.",
-                  file=sys.stderr)
-            print("\n".join(_table("Below pledged", p.below_pledged)), file=sys.stderr)
-            print("nothing written", file=sys.stderr)
-            return 1
+    if args.apply and not refused:
         snap = db.snapshot(label=f"pre-census-{p.anchor}")
         try:
             result = census.apply(path, args.product)
-        except census.CensusRefused as e:
-            print(f"Refused: {e}", file=sys.stderr)
-            return 1
+        except census.CensusRefused:
+            refused = True  # the DB changed between plan and apply; nothing was written
         except census.CensusError as e:
             print(f"error: {e}", file=sys.stderr)
             return 2
-        extra = {"applied": result, "snapshot": str(snap)}
-        if not args.no_archive:
-            moved = _archive(path)
-            if moved:
-                extra["archived"] = str(moved)
+        else:
+            extra = {"applied": result, "snapshot": str(snap)}
+            if not args.no_archive:
+                moved = _archive(path)
+                if moved:
+                    extra["archived"] = str(moved)
+    applied = "applied" in extra
+    status = "refused" if refused else "applied" if applied else "ok"
+    extra["status"] = status
 
     md, js = _write_report(p, extra)
     if args.json:
         print(json.dumps({**p.to_dict(), **extra}, indent=2))
-        return 0
+        return 1 if refused else 0
     print(_report(p, False))
     print(f"report: {md}\n        {js}")
-    if args.apply:
+    if refused:
+        print("Refused: the removals marked 'Below pledged' would drop below the copies "
+              "pledged to built decks — nothing written. Fix the census, or break the "
+              "deck(s) down first.", file=sys.stderr)
+        return 1
+    if applied:
         r = extra["applied"]
         print(f"applied: adds event {r['adds_event']} ({r['added_copies']} copies), "
               f"removals event {r['removals_event']} ({r['removed_copies']} copies)")
         print(f"snapshot: {extra['snapshot']}")
         print(f"archived: {extra.get('archived', '(not archived)')}")
         print("undo either event with: uv run mm ingest revert <id> --apply")
-    elif p.below_pledged:
-        print("Refused: the removals above marked 'Below pledged' would drop below the "
-              "copies pledged to built decks — --apply would refuse; nothing written", file=sys.stderr)
-        return 1
     else:
         print("dry run — rerun with --apply to write")
     return 0
