@@ -6,7 +6,6 @@ import { useSelection } from '../app/selection';
 import { ViewLayout } from '../components/AppShell';
 import { CardInspector } from '../components/CardInspector';
 import { CommanderPicker, type PickedCard } from '../components/CommanderPicker';
-import { CopyButton } from '../components/CopyButton';
 import { GuideColumns, type Column } from '../components/GuideColumns';
 import { InfoTip } from '../components/InfoTip';
 import { MultiSelect } from '../components/MultiSelect';
@@ -178,12 +177,6 @@ export function ExploreView() {
         )}
         {role === 'commander' && <SortBuilder keys={COMPARE_SORT} rules={rules} presets={COMPARE_SORT_PRESETS} onChange={(r) => set({ sort: encodeSort(r, COMPARE_SORT) })} />}
       </SideSection>
-      <SideSection title={`Marked · ${marked.length}`}>
-        <CopyButton label="Copy marked as list" emphasis="primary" getText={() => exportLines(marked, 'plain')} />
-        {selected.size > 0 && (
-          <button type="button" onClick={clear} className="self-start cursor-pointer text-sm text-on-chrome-muted underline hover:text-on-chrome">Clear marks</button>
-        )}
-      </SideSection>
     </>
   );
 
@@ -210,13 +203,17 @@ export function ExploreView() {
     body = <GuideColumns columns={columns((b) => cols[b], (b) => cols[b].reduce((n, s) => n + s.items.length, 0), 'share of decks')} visible={search.show} onHide={(id) => set({ show: search.show.filter((s) => s !== id) })} storageKey="explore-card" />;
   }
 
-  if (mode === 'rankings') return <RankingsExplore search={search} set={set} tabs={tabs} />;
-  if (mode === 'earmarked') return <EarmarkedExplore search={search} set={set} tabs={tabs} />;
-  if (mode === 'surf') return <CardSurfer raw={search.surf} onChange={(surf) => set({ mode: 'surf', surf })} tabs={tabs} />;
+  if (mode === 'rankings') return <RankingsExplore search={search} set={set} subnav={tabs} />;
+  if (mode === 'earmarked') return <EarmarkedExplore search={search} set={set} subnav={tabs} />;
+  if (mode === 'surf') return <CardSurfer raw={search.surf} onChange={(surf) => set({ mode: 'surf', surf })} subnav={tabs} />;
 
   return (
-    <ViewLayout label="Explore controls" summary={search.a ? `${search.a}${search.b ? ` vs ${search.b}` : ''}${role ? ` · ${role === 'commander' ? 'as commander' : 'as a card'}` : ''}` : undefined} sidebar={sidebar} startOpen={!search.a}>
-      <GuideSheet title="Explore" nav={tabs} summary={role ? summaryLine(role, prof, cmd.data) : undefined}>
+    <ViewLayout label="Explore controls" summary={search.a ? `${search.a}${search.b ? ` vs ${search.b}` : ''}${role ? ` · ${role === 'commander' ? 'as commander' : 'as a card'}` : ''}` : undefined} sidebar={sidebar} startOpen={!search.a} subnav={tabs}>
+      <GuideSheet
+        title={search.a ? `Explore ${search.a}${search.b ? ` and ${search.b}` : ''}` : 'Explore'}
+        summary={role ? summaryLine(role, prof, cmd.data) : undefined}
+        marked={{ count: marked.length, getText: () => exportLines(marked, 'plain'), onClear: clear }}
+      >
         <div className="flex h-full min-h-0 flex-col">
           <EdhrecHealth keys={role === 'commander' ? COMMANDER_HEALTH : CARD_HEALTH} />
           {prof && role && <Plates r={prof} role={role} onInspect={(p) => setInspecting(profileCard(p))} />}
@@ -316,7 +313,7 @@ function Plate({ p, role, side, compact = false, onInspect, combosOpen, onCombos
             <Fact k="Salt" tip="EDHREC players’ average rating (0–4) of how unfun this card is to play against.">{p.salt.toFixed(2)}</Fact>
           )}
           <Fact k="From">{fmtUsd(f.lowest_usd)}</Fact>
-          <Fact k="You own">{f.owned ? <>{fmtInt(f.owned)} <span className={f.free ? 'text-accent-ink' : 'text-ink-muted'}>· {fmtInt(f.free)} free</span></> : <span className="text-ink-muted">none</span>}</Fact>
+          <Fact k="You own">{f.owned ? <>{fmtInt(f.owned)} <span className={f.free ? 'text-accent-ink' : 'text-ink-muted'}>· {fmtInt(f.free)} unused</span></> : <span className="text-ink-muted">none</span>}</Fact>
         </dl>
         {!(compact && role === 'card') && (p.functions.length > 0 || p.tags.length > 0) && (
           <ul aria-label="Scryfall tags" className="flex flex-wrap gap-1">

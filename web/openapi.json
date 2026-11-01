@@ -797,11 +797,11 @@
                 "year"
               ],
               "type": "string",
-              "description": "Ignored by salt, tag and set rankings.",
+              "description": "Applies to top commanders/cards and a color identity on its own or with a tag; ignored by salt, tag-only and set rankings.",
               "default": "week",
               "title": "Timeframe"
             },
-            "description": "Ignored by salt, tag and set rankings."
+            "description": "Applies to top commanders/cards and a color identity on its own or with a tag; ignored by salt, tag-only and set rankings."
           },
           {
             "name": "color",
@@ -856,6 +856,67 @@
               "title": "Set Family"
             },
             "description": "Set family anchor or name, e.g. fin."
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Card name contains (case-insensitive).",
+              "default": "",
+              "title": "Q"
+            },
+            "description": "Card name contains (case-insensitive)."
+          },
+          {
+            "name": "own",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "all",
+                "owned",
+                "unused"
+              ],
+              "type": "string",
+              "description": "unused = a copy not in a built deck.",
+              "default": "all",
+              "title": "Own"
+            },
+            "description": "unused = a copy not in a built deck."
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 1000,
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Rows per page; total counts every match.",
+              "default": 100,
+              "title": "Limit"
+            },
+            "description": "Rows per page; total counts every match."
           }
         ],
         "responses": {
@@ -9240,7 +9301,7 @@
                 "type": "null"
               }
             ],
-            "description": "Partner pairing: the second card's own facts. The pair's price, colour identity and copies (pairs you could put together) are on the outer facts; its printing/type are the first card's."
+            "description": "Partner pairing: the second card's own facts. The pair's price, color identity and copies (pairs you could put together) are on the outer facts; its printing/type are the first card's."
           }
         },
         "type": "object",
@@ -12928,12 +12989,12 @@
           "timeframe": {
             "type": "string",
             "title": "Timeframe",
-            "description": "Stored timeframe: week|month|year, 'all' (salt, tag) or '' (set)."
+            "description": "The base list's stored timeframe: week|month|year, 'all' (salt, tag) or '' (set)."
           },
           "filter": {
             "type": "string",
             "title": "Filter",
-            "description": "'' | color:<slug> | tag:<slug> | set:<anchor>."
+            "description": "The base list read from EDHREC: '' | color:<slug> | tag:<slug> | set:<anchor>."
           },
           "title": {
             "type": "string",
@@ -12942,7 +13003,7 @@
           "cached": {
             "type": "boolean",
             "title": "Cached",
-            "description": "False = never fetched; run the edhrec.rankings job."
+            "description": "False = a list it needs was never fetched; run the edhrec.rankings job."
           },
           "fetched_at": {
             "anyOf": [
@@ -12953,14 +13014,57 @@
                 "type": "null"
               }
             ],
-            "title": "Fetched At"
+            "title": "Fetched At",
+            "description": "The oldest read among the lists combined."
           },
           "rows": {
             "items": {
               "$ref": "#/components/schemas/RankedOut"
             },
             "type": "array",
-            "title": "Rows"
+            "title": "Rows",
+            "description": "The requested page of matches."
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "description": "Matches after every filter (name and ownership included)."
+          },
+          "base": {
+            "type": "integer",
+            "title": "Base",
+            "description": "Entries in the base list read from EDHREC, before local filters (0 = EDHREC lists none)."
+          },
+          "pool": {
+            "type": "integer",
+            "title": "Pool",
+            "description": "Entries after the color / tag / set filters."
+          },
+          "owned": {
+            "type": "integer",
+            "title": "Owned",
+            "description": "Of the pool: entries you own a copy of."
+          },
+          "unused": {
+            "type": "integer",
+            "title": "Unused",
+            "description": "Of the pool: entries with a copy not in a built deck."
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          },
+          "local_filters": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "color",
+                "tag"
+              ]
+            },
+            "type": "array",
+            "title": "Local Filters",
+            "description": "Axes applied locally to the base list (EDHREC's filters don't combine)."
           }
         },
         "type": "object",
@@ -12971,7 +13075,14 @@
           "title",
           "cached",
           "fetched_at",
-          "rows"
+          "rows",
+          "total",
+          "base",
+          "pool",
+          "owned",
+          "unused",
+          "offset",
+          "local_filters"
         ],
         "title": "RankingOut"
       },

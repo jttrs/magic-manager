@@ -103,9 +103,32 @@ def tag_ranking(tag_slug: str) -> dict:
 
 
 def set_page(set_code: str) -> dict:
-    """GET /pages/sets/<code>.json — a set's page; carries per-set-code
-    ``commanders(<code>)`` ranking lists."""
+    """GET /pages/sets/<code>.json — a set's page; carries ``commanders`` (a
+    one-code set like ACR) or per-code ``commanders(<code>)`` ranking lists. A
+    code EDHREC folds into another set answers ``{"redirect": "/sets/<code>"}``."""
     return _run(["raw", f"sets/{set_code.lower()}"])
+
+
+def more_page(path: str) -> dict:
+    """GET /pages/<path> — the next 100 of a paginated ranking list, from the
+    list's ``more`` link (``commanders/week-pastweek-1.json``). The body is a
+    bare ``{cardviews, more, total_pages, is_paginated}``."""
+    return _run(["raw", path])
+
+
+def redirect_target(page: dict) -> str | None:
+    """The last path segment of an EDHREC redirect stub (``{"redirect":
+    "/sets/fin"}`` → ``fin``), or None for a real page."""
+    target = (page or {}).get("redirect")
+    if not isinstance(target, str) or (page or {}).get("container"):
+        return None
+    return target.rstrip("/").rsplit("/", 1)[-1].lower() or None
+
+
+def is_real_page(page: dict) -> bool:
+    """A page worth keeping: it carries cardlists, or is a ``more`` page with
+    cardviews. Redirect stubs and empty bodies are never stored as pages."""
+    return bool(cardlists(page)) or bool((page or {}).get("cardviews"))
 
 
 # ---------- slug + parse helpers ----------
@@ -663,14 +686,26 @@ def ranking_key(scope: str = "commanders", timeframe: str = "week", *,
     return RankingKey(scope, timeframe, "")
 
 
+def _empty_key(key: RankingKey) -> str:
+    """``catalog_settings`` key recording when ``key`` was read and EDHREC
+    listed nothing for it (a set with no commanders) — so an empty ranking reads
+    as "read, empty", never as "never read" (which would re-fetch forever)."""
+    return f"edhrec.empty:{key.scope}|{key.timeframe}|{key.filter}"
+
+
 def cached_rankings(key: RankingKey) -> SyncResult | None:
     """The latest stored sync of ``key`` (rows of its newest batch, rank order),
-    or ``None`` when it was never fetched. Pure local read."""
+    or ``None`` when it was never fetched. A read that found nothing returns a
+    result with no rows. Pure local read."""
     with db.connect() as conn:
         latest = conn.execute(
             "SELECT MAX(fetched_at) FROM edhrec_rankings WHERE scope=? AND timeframe=? AND filter=?",
             (key.scope, key.timeframe, key.filter),
         ).fetchone()[0]
+        empty_at = db.catalog_setting(conn, _empty_key(key))
+        if empty_at is not None and (latest is None or empty_at > latest):
+            return SyncResult(kind="rankings", slug=key.filter or key.scope, name=ranking_title(key),
+                              scope=key.scope, timeframe=key.timeframe, fetched_at=empty_at, rows=[])
         if latest is None:
             return None
         rows = conn.execute(
@@ -733,17 +768,66 @@ class _RankingPlan:
     timeframe: str                         # effective timeframe stored on rows
     snapshots: list[tuple[str, str, dict]] # (page_type, slug, page) to _store_page
     primary_page: dict                     # SyncResult.raw
+    stubs: list[tuple[str, str]] = field(default_factory=list)  # (page_type, slug) answered by a redirect stub
 
 
-def _dedupe_cardviews(cardviews: list[dict]) -> list[dict]:
-    """Merge cardviews by slug, first-wins, then sort by num_decks desc so a
-    unioned/merged list ranks meaningfully."""
+# How deep a paginated ranking (top commanders/cards/salt, a color's commanders)
+# is read: EDHREC serves 100 per page and links the next page as ``more``, so 5
+# pages = the top 500 — enough to narrow locally by set, color or creature type.
+RANKING_POOL_PAGES = 5
+
+
+def _dedupe_cardviews(cardviews: list[dict], *, resort: bool = True) -> list[dict]:
+    """Merge cardviews by slug, first-wins. ``resort`` re-sorts by num_decks
+    desc so a unioned/merged list ranks meaningfully; a paginated list keeps
+    EDHREC's own order."""
     by_slug: dict[str, dict] = {}
     for cv in cardviews:
         key = cv.get("slug") or slugify(cv.get("name") or "")
         if key and key not in by_slug:
             by_slug[key] = cv
-    return sorted(by_slug.values(), key=lambda c: -(c.get("num_decks") or 0))
+    out = list(by_slug.values())
+    return sorted(out, key=lambda c: -(c.get("num_decks") or 0)) if resort else out
+
+
+def _raw_cardlist(page: dict, tag: str | None = None) -> dict:
+    """The ``{tag, cardviews, more, total_pages}`` group named ``tag`` (else the
+    first non-empty one) — unlike :func:`cardlists`, keeps the ``more`` link."""
+    groups = ((page or {}).get("container") or {}).get("json_dict", {}).get("cardlists") or []
+    if tag is not None:
+        hit = next((g for g in groups if g.get("tag") == tag and g.get("cardviews")), None)
+        if hit:
+            return hit
+    return next((g for g in groups if g.get("cardviews")), {})
+
+
+def _deep_cardviews(group: dict, label: str, progress=None) -> tuple[list[dict], list[tuple[str, dict]]]:
+    """A paginated list's cardviews, following ``more`` up to
+    :data:`RANKING_POOL_PAGES` pages. Returns ``(cardviews, [(slug, page)])`` —
+    the extra pages for the raw snapshot. A later page that fails to read ends
+    the walk with what was read (the first 100 are still a ranking)."""
+    cardviews = list(group.get("cardviews") or [])
+    pages = max(1, min(RANKING_POOL_PAGES, int(group.get("total_pages") or 1)))
+    more, n, extra = group.get("more"), 1, []
+    while more and n < pages:
+        if progress:
+            progress(n, pages, f"Reading {label}: page {n + 1} of {pages}")
+        try:
+            page = more_page(more)
+        except EdhrecError:
+            break
+        if not page.get("cardviews"):
+            break
+        extra.append((more.removesuffix(".json"), page))
+        cardviews.extend(page["cardviews"])
+        more, n = page.get("more"), n + 1
+    return _dedupe_cardviews(cardviews, resort=False), extra
+
+
+def _is_set_commander_list(tag: str) -> bool:
+    """A set page's commander lists: ``commanders`` (a one-code set such as
+    ACR) or ``commanders(<code>)`` per code (``commanders(fin)``, …)."""
+    return tag == "commanders" or tag.startswith("commanders(")
 
 
 def _plan_rankings(scope: str, timeframe: str, *,
@@ -753,56 +837,78 @@ def _plan_rankings(scope: str, timeframe: str, *,
     the correct ranking cardlist. Filters are commander-only and mutually
     exclusive (enforced by the caller). List selection is EXPLICIT per filter —
     a tags page's first non-empty list is ``newcommanders`` (5), not the
-    ``topcommanders`` (24) we want."""
+    ``topcommanders`` (24) we want. Paginated lists (unfiltered, color) are read
+    :data:`RANKING_POOL_PAGES` deep; redirect stubs are followed, never stored."""
     if color is not None:
         slug = color_filter_slug(color)
         page = color_ranking(slug, timeframe)
-        lists = cardlists(page)
         # color pages carry a single '<slug>commanders' list.
-        cardviews = lists.get(f"{slug}commanders") or next((cv for cv in lists.values() if cv), [])
+        cardviews, extra = _deep_cardviews(_raw_cardlist(page, f"{slug}commanders"), "the ranking", progress)
         return _RankingPlan(
             cardviews=cardviews, filter_key=f"color:{slug}", result_slug=slug,
-            timeframe=timeframe, snapshots=[("commanders", slug, page)],
+            timeframe=timeframe,
+            snapshots=[("commanders", slug, page)] + [("commanders", s, p) for s, p in extra],
             primary_page=page,
         )
 
     if tag is not None:
         tslug = slugify(tag)
         # tag pages are all-time only (no timeframe segment — a tf 403s).
-        page = tag_ranking(tslug)
+        try:
+            page = tag_ranking(tslug)
+            if (target := redirect_target(page)) and target != tslug:
+                tslug_read, page = target, tag_ranking(target)   # e.g. goblin → goblins
+            else:
+                tslug_read = tslug
+        except EdhrecError as e:
+            if "HTTP 403" in str(e) or "HTTP 404" in str(e):
+                raise EdhrecError(f"EDHREC has no “{tag}” tag. Tags are creature types or themes, "
+                                  f"usually plural — goblins, treasure.") from e
+            raise
         lists = cardlists(page)
         # EXPLICIT: topcommanders (24) then newcommanders (5), deduped.
         cardviews = _dedupe_cardviews(list(lists.get("topcommanders") or [])
                                       + list(lists.get("newcommanders") or []))
         return _RankingPlan(
             cardviews=cardviews, filter_key=f"tag:{tslug}", result_slug=f"tag-{tslug}",
-            timeframe="all", snapshots=[("commanders", f"tags/{tslug}", page)],
+            timeframe="all", snapshots=[("commanders", f"tags/{tslug_read}", page)],
             primary_page=page,
         )
 
     if set_family is not None:
         resolved_set = sets.resolve(set_family)
         anchor = resolved_set.code
-        codes = resolved_set.all_codes
+        queue = [c.lower() for c in resolved_set.all_codes]
+        seen: set[str] = set()
+        stubs: list[tuple[str, str]] = []
         snapshots: list[tuple[str, str, dict]] = []
         merged: list[dict] = []
         primary: dict = {}
-        for i, code in enumerate(codes):
+        while queue:
+            code = queue.pop(0)
+            if code in seen:
+                continue
+            seen.add(code)
             if progress:
-                progress(i, len(codes), f"Reading {code.upper()}")
+                progress(len(seen) - 1, len(seen) + len(queue), f"Reading {code.upper()}")
             page = set_page(code)
+            # A code EDHREC folds into another set (afic → fic → fin) answers a
+            # redirect stub: read the target instead (once), never store the stub.
+            if (target := redirect_target(page)) is not None:
+                stubs.append(("commanders", f"sets/{code}"))
+                if target not in seen and len(seen) < 3 * len(resolved_set.all_codes) + 3:
+                    queue.append(target)
+                continue
             if not primary:
                 primary = page
             snapshots.append(("commanders", f"sets/{code}", page))
-            lists = cardlists(page)
-            # a set page carries per-code 'commanders(<code>)' lists — take them all.
-            for tagname, cvs in lists.items():
-                if tagname.startswith("commanders(") and cvs:
+            for tagname, cvs in cardlists(page).items():
+                if _is_set_commander_list(tagname) and cvs:
                     merged.extend(cvs)
         return _RankingPlan(
             cardviews=_dedupe_cardviews(merged), filter_key=f"set:{anchor}",
             result_slug=f"set-{anchor}",
-            timeframe="", snapshots=snapshots, primary_page=primary,
+            timeframe="", snapshots=snapshots, primary_page=primary, stubs=stubs,
         )
 
     # unfiltered: the original three global scopes.
@@ -815,12 +921,12 @@ def _plan_rankings(scope: str, timeframe: str, *,
     else:  # cards
         page = top_ranking(timeframe)
         tf = timeframe
-    lists = cardlists(page)
-    cardviews = next((cv for cv in lists.values() if cv), [])
+    cardviews, extra = _deep_cardviews(_raw_cardlist(page), "the ranking", progress)
+    page_type = "commanders" if scope == "commanders" else "top"
     return _RankingPlan(
         cardviews=cardviews, filter_key="", result_slug=scope,
         timeframe=tf,
-        snapshots=[(("commanders" if scope == "commanders" else "top"), scope, page)],
+        snapshots=[(page_type, scope, page)] + [(page_type, s, p) for s, p in extra],
         primary_page=page,
     )
 
@@ -850,18 +956,28 @@ def sync_rankings(scope: str = "commanders", timeframe: str = "week", *,
 
     names = [cv["name"] for cv in plan.cardviews if cv.get("name")]
     if not names:
-        # An empty page (no lists, or a redirect for a mistyped tag) would store
-        # nothing and leave the ranking looking never-read; fail loudly instead.
-        raise EdhrecError(f"EDHREC lists nothing for {ranking_title(key)} — check the spelling or try another filter")
+        # EDHREC lists nothing (a set with no commanders yet): record the read
+        # so the ranking is "read, empty" — not "never read", which re-fetches
+        # forever — and store no page (an empty body is not a page).
+        with db.transaction() as conn:
+            db.set_catalog_setting(conn, _empty_key(key), at)
+        return SyncResult(kind="rankings", slug=plan.result_slug, name=ranking_title(key),
+                          scope=row_scope, timeframe=plan.timeframe, rows=[],
+                          raw=plan.primary_page, fetched_at=at)
     if progress:
         progress(1, 1, f"Matching {len(names)} cards to your collection")
     resolved = resolve_names_to_oracle(names)
 
     rows: list[EnrichedCardRow] = []
     with db.transaction() as conn:
+        db.set_catalog_setting(conn, _empty_key(key), None)
+        # Older syncs stored redirect stubs as pages; drop the ones this read walked past.
+        for page_type, slug in plan.stubs:
+            conn.execute("DELETE FROM edhrec_pages WHERE page_type = ? AND slug = ?", (page_type, slug))
         for page_type, slug, page in plan.snapshots:
-            _store_page(conn, page_type=page_type, slug=slug,
-                        timeframe=plan.timeframe, page=page, at=at)
+            if is_real_page(page):
+                _store_page(conn, page_type=page_type, slug=slug,
+                            timeframe=plan.timeframe, page=page, at=at)
         for i, cv in enumerate(plan.cardviews, start=1):
             name = cv.get("name")
             if not name:

@@ -158,5 +158,12 @@
    "salt": null,
    "trend": -0.9040596537170043
   }
- ]
+ ],
+ "total": 4,
+ "base": 4,
+ "pool": 4,
+ "owned": 1,
+ "unused": 1,
+ "offset": 0,
+ "local_filters": []
 }

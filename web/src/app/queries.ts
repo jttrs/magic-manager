@@ -2,7 +2,7 @@
 import { keepPreviousData, queryOptions } from '@tanstack/react-query';
 import type { DraftCardIn } from '../core/api';
 import { apiErrorFrom } from '../core/apiError';
-import type { RankingRequest } from '../core/rankings';
+import type { RankingPageRequest } from '../core/rankings';
 import { analyticsConsent, analyticsSummary, analyticsCatalog, dealsTabs, dealsWatched, marketProductCost, marketSecretLair, undoInfo, cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, cardFloors, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs, historyList, historyEvent, historyRevertPlan, exploreRanking, exploreRankingOptions, cardCombos, deckCombos, draftCombos, artTags, artSwaps, jumpstartView, recipeList, recipeDetail, surfOptions, companionInfo, scrapersHealth, purchaseStores, purchaseList, purchaseReview, cardEarmarksList, deckEarmarks } from '../core/api';
 
 export function unwrap<T>(r: { data?: T; error?: unknown; response?: Response }): T {
@@ -36,7 +36,7 @@ export const exploreCardQuery = (a?: string, b?: string) =>
   });
 
 /** A cached EDHREC ranking (never fetches; `cached: false` → run the `edhrec.rankings` job). */
-export const rankingQuery = (req: RankingRequest | null) =>
+export const rankingQuery = (req: RankingPageRequest | null) =>
   queryOptions({
     queryKey: ['explore', 'ranking', req],
     queryFn: async ({ signal }) => unwrap(await exploreRanking({ query: req!, signal })),

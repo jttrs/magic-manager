@@ -65,19 +65,18 @@ test('list view shows a dense checklist and persists in the URL', async ({ page 
 
 test('marking cards highlights them and copies a plain list', async ({ page }) => {
   await page.goto(COMPARE_URL);
-  const first = page.getByRole('button', { name: /^Mark / }).first();
+  const first = page.getByRole('button', { name: /^Mark (?!cards to copy)/ }).first();
   const name = (await first.getAttribute('aria-label'))!.replace(/^Mark /, '');
   await first.click();
   await expect(page.getByRole('button', { name: `Unmark ${name}` })).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByRole('heading', { name: 'Marked · 1' })).toBeVisible();
-  await page.getByRole('button', { name: 'Copy marked as list' }).click();
-  await expect(page.getByText('Copied 1 line')).toBeVisible();
+  await page.getByRole('toolbar', { name: 'Sheet actions' }).getByRole('button', { name: 'Copy 1 marked card as a list' }).click();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`1 ${name}`);
 });
 
-test('sheet is titled Commanders; EDHREC lists live in a multi-select, not a chip wall', async ({ page }) => {
+test('no big section title; EDHREC lists live in a multi-select, not a chip wall', async ({ page }) => {
   await page.goto(COMPARE_URL);
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Explore');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveClass(/sr-only/);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^Explore /);
   await page.getByRole('button', { name: /EDHREC lists/ }).click();
   await expect(page.getByRole('searchbox', { name: 'Filter lists' })).toBeVisible();
 });

@@ -7,7 +7,7 @@ import { Segmented, SideSection } from '../../../components/Sidebar';
 import { activeFilters, COLOR_NAME, COLORS, EMPTY_FILTERS, toggleColor, type SurfFilters, type SurfSource, type SurfState } from '../../../core/surf';
 import { ArtTagField } from './ArtTagField';
 
-/** The surfer's filter rail (chrome): source, then art, set, colour identity,
+/** The surfer's filter rail (chrome): source, then art, set, color identity,
  *  flavor text, card type, legendary, rarity, treatment and artist. */
 export function SurfFilterRail({ state, onChange }: { state: SurfState; onChange: (s: SurfState) => void }) {
   const f = state.filters;
@@ -52,7 +52,7 @@ export function SurfFilterRail({ state, onChange }: { state: SurfState; onChange
         <ColorPips value={f.colors} onChange={(colors) => setF({ colors })} />
         {f.colors && f.colors !== 'c' && (
           <Segmented
-            label="Colour match"
+            label="Color match"
             value={f.color_match}
             onChange={(color_match) => setF({ color_match })}
             options={[{ value: 'exact', label: 'Exactly these' }, { value: 'within', label: 'Within these' }]}
@@ -103,12 +103,12 @@ export function SurfFilterRail({ state, onChange }: { state: SurfState; onChange
   );
 }
 
-/** Colour identity as WUBRG + C pips: letters on the chips, full names for
- *  assistive tech. Colourless and colours exclude each other. */
+/** Color identity as WUBRG + C pips: letters on the chips, full names for
+ *  assistive tech. Colorless and colors exclude each other. */
 function ColorPips({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span id="surf-ci" className="text-sm voice-semi text-on-chrome-muted">Colour identity</span>
+      <span id="surf-ci" className="text-sm voice-semi text-on-chrome-muted">Color identity</span>
       <ToggleGroup.Root
         type="multiple"
         aria-labelledby="surf-ci"

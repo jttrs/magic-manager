@@ -40,7 +40,7 @@ class FactsOut(BaseModel):
     owned: int = 0
     free: int = 0
     partner: FactsOut | None = Field(
-        None, description="Partner pairing: the second card's own facts. The pair's price, colour identity and "
+        None, description="Partner pairing: the second card's own facts. The pair's price, color identity and "
         "copies (pairs you could put together) are on the outer facts; its printing/type are the first card's.")
 
 
@@ -137,25 +137,33 @@ RankingScope = Literal["commanders", "cards", "salt"]
 
 
 class RankingQuery(BaseModel):
-    """One EDHREC ranking. Filters narrow COMMANDER rankings and don't stack:
-    at most one of ``color`` / ``tag`` / ``set_family``."""
+    """One EDHREC ranking. Color, tag and set narrow COMMANDER rankings and stack:
+    EDHREC serves one axis per page, so the most selective one (set, else color,
+    else tag) is read from EDHREC and the others filter it locally."""
     scope: RankingScope = "commanders"
-    timeframe: Literal["week", "month", "year"] = Field("week", description="Ignored by salt, tag and set rankings.")
+    timeframe: Literal["week", "month", "year"] = Field(
+        "week", description="Applies to top commanders/cards and a color identity on its own or with a tag; "
+        "ignored by salt, tag-only and set rankings.")
     color: str | None = Field(None, description="Color identity: WUBRG letters or an EDHREC name (azorius, mono-red…).")
     tag: str | None = Field(None, description="Creature type or theme, e.g. goblins, treasure.")
     set_family: str | None = Field(None, description="Set family anchor or name, e.g. fin.")
 
     @model_validator(mode="after")
-    def _one_filter(self):
-        n = sum(bool(x) for x in (self.color, self.tag, self.set_family))
-        if n > 1:
-            raise ValueError("color, tag and set filters don't stack — pick one")
-        if n and self.scope != "commanders":
-            raise ValueError("filters apply only to commander rankings")
+    def _commander_filters(self):
+        if any((self.color, self.tag, self.set_family)) and self.scope != "commanders":
+            raise ValueError("color, tag and set filters apply only to commander rankings")
         return self
 
     def args(self) -> dict:
         return dict(color=self.color or None, tag=self.tag or None, set_family=self.set_family or None)
+
+
+class RankingPageQuery(RankingQuery):
+    """A ranking read: the filters, plus name / ownership and the page wanted."""
+    q: str = Field("", description="Card name contains (case-insensitive).")
+    own: Literal["all", "owned", "unused"] = Field("all", description="unused = a copy not in a built deck.")
+    offset: int = Field(0, ge=0)
+    limit: int | None = Field(100, ge=1, le=1000, description="Rows per page; total counts every match.")
 
 
 class RankedOut(BaseModel):
@@ -170,12 +178,20 @@ class RankedOut(BaseModel):
 
 class RankingOut(BaseModel):
     scope: RankingScope
-    timeframe: str = Field(description="Stored timeframe: week|month|year, 'all' (salt, tag) or '' (set).")
-    filter: str = Field(description="'' | color:<slug> | tag:<slug> | set:<anchor>.")
+    timeframe: str = Field(description="The base list's stored timeframe: week|month|year, 'all' (salt, tag) or '' (set).")
+    filter: str = Field(description="The base list read from EDHREC: '' | color:<slug> | tag:<slug> | set:<anchor>.")
     title: str
-    cached: bool = Field(description="False = never fetched; run the edhrec.rankings job.")
-    fetched_at: str | None
-    rows: list[RankedOut]
+    cached: bool = Field(description="False = a list it needs was never fetched; run the edhrec.rankings job.")
+    fetched_at: str | None = Field(description="The oldest read among the lists combined.")
+    rows: list[RankedOut] = Field(description="The requested page of matches.")
+    total: int = Field(description="Matches after every filter (name and ownership included).")
+    base: int = Field(description="Entries in the base list read from EDHREC, before local filters (0 = EDHREC lists none).")
+    pool: int = Field(description="Entries after the color / tag / set filters.")
+    owned: int = Field(description="Of the pool: entries you own a copy of.")
+    unused: int = Field(description="Of the pool: entries with a copy not in a built deck.")
+    offset: int
+    local_filters: list[Literal["color", "tag"]] = Field(
+        description="Axes applied locally to the base list (EDHREC's filters don't combine).")
 
 
 class ColorOptionOut(BaseModel):
@@ -190,13 +206,15 @@ class RankingOptionsOut(BaseModel):
     tags: list[str] = Field(description="Tags already fetched (suggestions).")
 
 
-def ranking(q: RankingQuery) -> RankingOut:
-    r = explore.ranking(q.scope, q.timeframe, **q.args())
+def ranking(q: RankingPageQuery) -> RankingOut:
+    r = explore.ranking(q.scope, q.timeframe, **q.args(), q=q.q, own=q.own, offset=q.offset, limit=q.limit)
     return RankingOut(
         scope=r.key.scope, timeframe=r.key.timeframe, filter=r.key.filter, title=r.title,
         cached=r.cached, fetched_at=r.fetched_at,
         rows=[RankedOut(rank=x.rank, name=x.name, slug=x.slug, facts=_facts(x.facts),
                         num_decks=x.num_decks, salt=x.salt, trend=x.trend) for x in r.rows],
+        total=r.total, base=r.base, pool=r.pool, owned=r.owned, unused=r.unused, offset=q.offset,
+        local_filters=r.local_filters,
     )
 
 
@@ -215,16 +233,18 @@ def _run_sync_ranking(inp: SyncRankingInput, progress: ProgressFn) -> JobResult:
     def tick(done: int, total: int, msg: str) -> None:
         progress(ProgressEvent(done, total, msg))
 
-    res = edhrec.rankings(inp.scope, inp.timeframe, refresh=inp.refresh, progress=tick, **inp.args())
-    return JobResult(summary=f"{res.name}: {len(res.rows)} entries", artifacts=[
-        Artifact(kind="json", label="ranking", data={"title": res.name, "rows": len(res.rows), "fetched_at": res.fetched_at}),
+    reads = explore.sync_ranking(inp.scope, inp.timeframe, refresh=inp.refresh, progress=tick, **inp.args())
+    title = explore.ranking_title(inp.scope, inp.timeframe, **inp.args())
+    base = reads[0]
+    return JobResult(summary=f"{title}: {len(base.rows)} entries read", artifacts=[
+        Artifact(kind="json", label="ranking", data={"title": title, "rows": len(base.rows), "fetched_at": base.fetched_at}),
     ])
 
 
 SYNC_RANKING = register(JobSpec(
     name="edhrec.rankings",
     title="Fetch an EDHREC ranking",
-    description="Top commanders (optionally by colour, tag or set), top cards, or the saltiest cards.",
+    description="Top commanders (optionally by color, tag and set), top cards, or the saltiest cards.",
     input_model=SyncRankingInput,
     run=_run_sync_ranking,
 ))

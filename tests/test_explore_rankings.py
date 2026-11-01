@@ -22,7 +22,8 @@ def _page(tag, rows):
 def pages(monkeypatch, seed_cards, make_card):
     seed_cards([
         make_card(id=KRENKO, oracle_id=OID["Krenko, Mob Boss"], name="Krenko, Mob Boss",
-                  type_line="Legendary Creature — Goblin Warrior", collector_number="1", prices={"usd": "2.13"}),
+                  type_line="Legendary Creature — Goblin Warrior", collector_number="1", prices={"usd": "2.13"},
+                  color_identity=["R"]),
         make_card(id=MAGDA, oracle_id=OID["Magda, Brazen Outlaw"], name="Magda, Brazen Outlaw",
                   type_line="Legendary Creature — Dwarf Berserker", collector_number="2"),
     ])
@@ -116,7 +117,8 @@ def client(tmp_db):
 def test_ranking_endpoint_and_job(client, pages):
     r = client.get("/api/explore/ranking", params={"scope": "commanders", "color": "r"})
     assert r.status_code == 200 and r.json()["cached"] is False
-    assert client.get("/api/explore/ranking", params={"color": "r", "tag": "goblins"}).status_code == 422
+    stacked = client.get("/api/explore/ranking", params={"color": "r", "tag": "goblins"})
+    assert stacked.status_code == 200 and stacked.json()["cached"] is False   # filters stack now
     assert client.get("/api/explore/ranking", params={"scope": "salt", "color": "r"}).status_code == 422
 
     job = client.post("/api/jobs/edhrec.rankings", json={"scope": "commanders", "color": "r"})
@@ -135,13 +137,185 @@ def test_ranking_endpoint_and_job(client, pages):
     assert len(opts["colors"]) == 32 and opts["colors"][0] == {"slug": "colorless", "label": "Colorless", "colors": ""}
 
 
-def test_empty_ranking_fails_instead_of_storing_nothing(tmp_db, monkeypatch):
-    """A page with no lists (e.g. a redirect for a mistyped tag) must fail the
-    sync, or the ranking stays 'never read' and the web view waits forever."""
-    monkeypatch.setattr(edhrec, "tag_ranking", lambda slug: {"redirect": "/tags/goblins"})
-    with pytest.raises(edhrec.EdhrecError, match="lists nothing"):
-        edhrec.rankings(tag="goblin")
-    assert edhrec.cached_rankings(edhrec.ranking_key(tag="goblin")) is None
+def test_empty_ranking_reads_as_empty_not_never_read(tmp_db, monkeypatch):
+    """A list EDHREC leaves empty is a calm empty result, recorded so the web
+    doesn't re-fetch forever — and no empty body is stored as a page."""
+    class _RS:
+        code, all_codes = "acr", ["acr"]
+    monkeypatch.setattr(sets, "resolve", lambda s: _RS())
+    monkeypatch.setattr(edhrec, "set_page", lambda code: {"header": "x", "container": {"json_dict": {"cardlists": []}}})
+    res = edhrec.rankings(set_family="acr")
+    assert res.rows == [] and res.fetched_at
+    hit = edhrec.cached_rankings(edhrec.ranking_key(set_family="acr"))
+    assert hit is not None and hit.rows == []
+    r = explore.ranking(set_family="acr")
+    assert r.cached and r.rows == [] and r.total == 0 and r.base == 0
+    with db.connect() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM edhrec_pages").fetchone()[0] == 0
+
+
+def test_tag_redirect_is_followed_and_a_missing_tag_reads_plainly(tmp_db, pages, monkeypatch):
+    seen: list[str] = []
+
+    def tag_ranking(slug):
+        seen.append(slug)
+        if slug == "goblin":
+            return {"redirect": "/tags/goblins"}
+        if slug == "goblins":
+            return _page("topcommanders", [("Krenko, Mob Boss", 900, None)])
+        raise edhrec.EdhrecError("edhrec.sh raw tags/x exited 6: <Error>AccessDenied</Error> HTTP 403 from …")
+    monkeypatch.setattr(edhrec, "tag_ranking", tag_ranking)
+    res = edhrec.rankings(tag="goblin")
+    assert seen == ["goblin", "goblins"] and [r.name for r in res.rows] == ["Krenko, Mob Boss"]
+    with db.connect() as conn:
+        assert [r[0] for r in conn.execute("SELECT slug FROM edhrec_pages")] == ["tags/goblins"]
+    with pytest.raises(edhrec.EdhrecError, match="EDHREC has no “gobblinz” tag") as e:
+        edhrec.rankings(tag="gobblinz")
+    assert "AccessDenied" not in str(e.value)
+
+
+def test_set_page_reads_a_bare_commanders_list_and_follows_redirects(tmp_db, monkeypatch):
+    """ACR's page lists ``commanders`` (no per-code suffix); afic redirects to
+    fic, which redirects to fin. Stubs are followed once and never stored."""
+    class _RS:
+        code, all_codes = "acr", ["acr", "afic"]
+    monkeypatch.setattr(sets, "resolve", lambda s: _RS())
+    monkeypatch.setattr(edhrec, "resolve_names_to_oracle", lambda names, **_: {})
+    pages = {
+        "acr": {"header": "ACR", "container": {"json_dict": {"cardlists": [
+            {"tag": "commanders", "cardviews": [{"name": "Ezio Auditore da Firenze", "slug": "ezio", "num_decks": 900}]},
+            {"tag": "partnerswith", "cardviews": [{"name": "Not A Commander List", "slug": "nope", "num_decks": 9999}]},
+            {"tag": "cards", "cardviews": [{"name": "Some Card", "slug": "some", "num_decks": 5000}]},
+        ]}}},
+        "afic": {"redirect": "/sets/fic"},
+        "fic": {"redirect": "/sets/fin"},
+        "fin": {"header": "FIN", "container": {"json_dict": {"cardlists": [
+            {"tag": "commanders(fin)", "cardviews": [{"name": "Cloud", "slug": "cloud", "num_decks": 1000}]}]}}},
+    }
+    asked: list[str] = []
+    monkeypatch.setattr(edhrec, "set_page", lambda code: (asked.append(code), pages[code])[1])
+    with db.connect() as conn:   # an older sync stored the stub as a page
+        edhrec._store_page(conn, page_type="commanders", slug="sets/afic", timeframe="", page=pages["afic"], at="2026-01-01")
+        conn.commit()
+    res = edhrec.sync_rankings(set_family="acr")
+    assert [r.name for r in res.rows] == ["Cloud", "Ezio Auditore da Firenze"]
+    assert asked == ["acr", "afic", "fic", "fin"]
+    with db.connect() as conn:
+        assert sorted(r[0] for r in conn.execute("SELECT slug FROM edhrec_pages")) == ["sets/acr", "sets/fin"]
+
+
+def _paged(tag, start, n, more, total=9):
+    cvs = [{"name": f"Card {i}", "slug": f"card-{i}", "num_decks": 10_000 - i, "rank": i} for i in range(start, start + n)]
+    return cvs, {"tag": tag, "cardviews": cvs, "more": more, "total_pages": total}
+
+
+def test_paginated_rankings_read_the_pool_deep(tmp_db, monkeypatch):
+    monkeypatch.setattr(edhrec, "resolve_names_to_oracle", lambda names, **_: {})
+    _, first = _paged("pastweek", 1, 100, "commanders/week-pastweek-1.json")
+    monkeypatch.setattr(edhrec, "commanders_ranking", lambda tf="week": {"container": {"json_dict": {"cardlists": [first]}}})
+    asked: list[str] = []
+
+    def more_page(path):
+        asked.append(path)
+        n = int(path.rsplit("-", 1)[1].removesuffix(".json"))
+        if n == 3:
+            raise edhrec.EdhrecError("HTTP 429")          # a failed later page ends the walk
+        cvs, _ = _paged("", n * 100 + 1, 100, None)
+        return {"cardviews": cvs, "more": f"commanders/week-pastweek-{n + 1}.json", "total_pages": 9}
+    monkeypatch.setattr(edhrec, "more_page", more_page)
+    res = edhrec.sync_rankings("commanders", "week")
+    assert asked == ["commanders/week-pastweek-1.json", "commanders/week-pastweek-2.json", "commanders/week-pastweek-3.json"]
+    assert len(res.rows) == 300 and res.rows[-1].rank == 300
+    r = explore.ranking("commanders", "week", limit=100)
+    assert (len(r.rows), r.total, r.pool) == (100, 300, 300)
+    page2 = explore.ranking("commanders", "week", offset=100, limit=50)
+    assert [x.rank for x in page2.rows] == list(range(101, 151))
+
+
+def test_pool_depth_is_capped(tmp_db, monkeypatch):
+    monkeypatch.setattr(edhrec, "resolve_names_to_oracle", lambda names, **_: {})
+    monkeypatch.setattr(edhrec, "RANKING_POOL_PAGES", 2)
+    _, first = _paged("x", 1, 100, "top/week-pastweek-1.json", total=300)
+    monkeypatch.setattr(edhrec, "top_ranking", lambda seg="week": {"container": {"json_dict": {"cardlists": [first]}}})
+    asked: list[str] = []
+    monkeypatch.setattr(edhrec, "more_page", lambda p: (asked.append(p), {"cardviews": _paged("", 101, 100, None)[0], "more": "top/week-pastweek-2.json"})[1])
+    assert len(edhrec.sync_rankings("cards", "week").rows) == 200 and len(asked) == 1
+
+
+GOB, ELF, TREASURE = "00000000-0000-0000-0000-0000000000e1", "00000000-0000-0000-0000-0000000000e2", "00000000-0000-0000-0000-0000000000e3"
+
+
+def test_filters_stack_on_the_most_selective_base(tmp_db, pages, seed_cards, make_card, monkeypatch):
+    """Set family is the base read; color and tag narrow it locally (tag by its
+    EDHREC list OR a matching creature type)."""
+    seed_cards([
+        make_card(id=GOB, oracle_id="oracle-gob", name="Set Goblin", collector_number="3",
+                  type_line="Legendary Creature — Goblin Shaman", color_identity=["R"]),
+        make_card(id=ELF, oracle_id="oracle-elf", name="Set Elf", collector_number="4",
+                  type_line="Legendary Creature — Elf Druid", color_identity=["G"]),
+        make_card(id=TREASURE, oracle_id="oracle-tre", name="Set Pirate", collector_number="5",
+                  type_line="Legendary Creature — Human Pirate", color_identity=["R"]),
+    ])
+    oid = {**OID, "Set Goblin": "oracle-gob", "Set Elf": "oracle-elf", "Set Pirate": "oracle-tre"}
+    monkeypatch.setattr(edhrec, "resolve_names_to_oracle",
+                        lambda names, **_: {n.casefold(): {"oracle_id": oid.get(n)} for n in names if n in oid})
+
+    class _RS:
+        code, all_codes = "tst", ["tst"]
+    monkeypatch.setattr(sets, "resolve", lambda s: _RS())
+    monkeypatch.setattr(edhrec, "set_page", lambda code: _page("commanders", [
+        ("Set Goblin", 300, None), ("Set Elf", 200, None), ("Set Pirate", 100, None), ("Krenko, Mob Boss", 50, None)]))
+    monkeypatch.setattr(edhrec, "tag_ranking", lambda slug: _page("topcommanders", [("Set Pirate", 10, None)]))
+
+    assert explore.ranking_bases(color="r", tag="goblins", set_family="tst") == [
+        dict(scope="commanders", timeframe="week", set_family="tst"),
+        dict(scope="commanders", timeframe="week", tag="goblins")]
+    assert not explore.ranking(color="r", set_family="tst").cached
+    explore.sync_ranking(color="r", tag="goblins", set_family="tst")
+    assert not pages                                          # never read the color page: set is the base
+
+    red = explore.ranking(color="r", set_family="tst")
+    assert [x.name for x in red.rows] == ["Set Goblin", "Set Pirate", "Krenko, Mob Boss"]
+    assert red.local_filters == ["color"] and red.title == "Top commanders · TST family · Mono-Red"
+    gob = explore.ranking(color="r", tag="goblins", set_family="tst")
+    # Goblin by creature type, Krenko too (Goblin Warrior), Pirate by the tag's own list
+    assert [x.name for x in gob.rows] == ["Set Goblin", "Set Pirate", "Krenko, Mob Boss"]
+    assert gob.local_filters == ["color", "tag"]
+    # tag alone on the set base: Elf is neither a goblin nor on the tag's list
+    tag_only = explore.ranking(tag="goblins", set_family="tst")
+    assert [x.name for x in tag_only.rows] == ["Set Goblin", "Set Pirate", "Krenko, Mob Boss"]
+    assert (tag_only.base, tag_only.pool, tag_only.local_filters) == (4, 3, ["tag"])
+    monkeypatch.setattr(edhrec, "tag_ranking", lambda slug: _page("topcommanders", [("Nobody Here", 1, None)]))
+    explore.sync_ranking(tag="angels", set_family="tst", refresh=True)
+    nothing = explore.ranking(tag="angels", set_family="tst")
+    assert nothing.rows == [] and (nothing.base, nothing.pool) == (4, 0)
+    owned = explore.ranking(set_family="tst", own="owned")
+    assert [x.name for x in owned.rows] == ["Krenko, Mob Boss"] and (owned.total, owned.pool, owned.owned, owned.unused) == (1, 4, 1, 1)
+    assert [x.name for x in explore.ranking(set_family="tst", q="ELF").rows] == ["Set Elf"]
+
+
+@pytest.mark.parametrize("tag, line, hit", [
+    ("goblins", "Legendary Creature — Goblin Warrior", True),
+    ("elves", "Legendary Creature — Elf Druid", True),
+    ("dwarves", "Legendary Creature — Dwarf Berserker", True),
+    ("faeries", "Legendary Creature — Faerie Rogue", True),
+    ("allies", "Legendary Creature — Kor Ally", True),
+    ("goblins", "Legendary Creature — Human Wizard", False),
+    ("treasure", "Legendary Creature — Human Pirate", False),
+    ("wizards", "Legendary Enchantment Creature — Human // Legendary Creature — Human Wizard", True),
+])
+def test_typal_match(tag, line, hit):
+    assert explore.typal_match(tag, line) is hit
+
+
+def test_stacked_ranking_endpoint_pages(client, pages):
+    edhrec.sync_rankings("commanders", color="r")
+    got = client.get("/api/explore/ranking", params={"color": "r", "limit": 1}).json()
+    assert got["cached"] and got["total"] == 2 and got["pool"] == 2 and [x["name"] for x in got["rows"]] == ["Krenko, Mob Boss"]
+    assert (got["owned"], got["unused"]) == (1, 1)
+    more = client.get("/api/explore/ranking", params={"color": "r", "offset": 1, "limit": 50}).json()
+    assert [x["name"] for x in more["rows"]] == ["Magda, Brazen Outlaw"] and more["offset"] == 1
+    assert client.get("/api/explore/ranking", params={"own": "free"}).status_code == 422
 
 
 def test_sync_rankings_names_with_the_shared_title(tmp_db, pages):

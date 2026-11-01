@@ -30,12 +30,14 @@ type Props = {
   /** Accessible name for the scroll region. */
   label: string;
   minCardWidth?: number;
+  /** Rendered after the last row, inside the scroll region (e.g. a "Load more" button). */
+  footer?: ReactNode;
 };
 
 const GAP = 12;
 
 /** One virtualized scroll region for any grouped card list, in grid or list view. */
-export function VirtualGuide({ sections, density, selected, onToggle, barLabels, label, minCardWidth = 120 }: Props) {
+export function VirtualGuide({ sections, density, selected, onToggle, barLabels, label, minCardWidth = 120, footer }: Props) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   // Track the element in state too, so the width observer re-attaches whenever
   // the scroll region remounts (otherwise the grid can stick at one column).
@@ -153,6 +155,7 @@ export function VirtualGuide({ sections, density, selected, onToggle, barLabels,
           );
         })}
       </div>
+      {footer}
     </div>
     </>
   );

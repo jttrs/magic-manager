@@ -342,40 +342,172 @@ class Ranked:
 
 @dataclass
 class Ranking:
-    key: edhrec.RankingKey
+    key: edhrec.RankingKey        # the base ranking read from EDHREC
     title: str
-    cached: bool                  # False = never fetched (run the sync job)
-    fetched_at: str | None
-    rows: list[Ranked]
+    cached: bool                  # False = not every list it needs was fetched (run the sync job)
+    fetched_at: str | None        # the oldest read among the lists it combines
+    rows: list[Ranked]            # the requested page (``offset``/``limit``) of the matches
+    total: int = 0                # matches after every filter (name and ownership included)
+    base: int = 0                 # entries in the base list read from EDHREC, before local filters
+    pool: int = 0                 # entries after the color / tag / set filters only
+    owned: int = 0                # of ``pool``: entries you own a copy of
+    unused: int = 0               # of ``pool``: entries with a copy not in a built deck
+    local_filters: list[str] = field(default_factory=list)  # axes applied locally: color | tag
+
+
+RANKING_OWN = ("all", "owned", "unused")
+
+
+def ranking_bases(scope: str = "commanders", timeframe: str = "week", *,
+                  color: str | None = None, tag: str | None = None,
+                  set_family: str | None = None) -> list[dict]:
+    """The EDHREC rankings a request reads. EDHREC's filtered pages don't stack
+    (one axis per page; combinations 403), so the MOST SELECTIVE axis is the
+    base fetch — a set family (its full commander list), else a color identity
+    (read :data:`edhrec.RANKING_POOL_PAGES` deep), else a tag — and the other
+    axes narrow it locally (see :func:`ranking`). A tag that narrows another
+    base also needs the tag's own list. First entry = the base."""
+    if scope != "commanders" or not (color or tag or set_family):
+        return [dict(scope=scope, timeframe=timeframe)]
+    if set_family:
+        base = dict(set_family=set_family)
+    elif color:
+        base = dict(color=color)
+    else:
+        base = dict(tag=tag)
+    bases = [dict(scope="commanders", timeframe=timeframe, **base)]
+    if tag and "tag" not in base:
+        bases.append(dict(scope="commanders", timeframe=timeframe, tag=tag))
+    return bases
+
+
+def sync_ranking(scope: str = "commanders", timeframe: str = "week", *,
+                 color: str | None = None, tag: str | None = None,
+                 set_family: str | None = None, refresh: bool = False,
+                 progress=None) -> list[edhrec.SyncResult]:
+    """Read-or-sync every list :func:`ranking` needs (``refresh`` re-reads all)."""
+    return [edhrec.rankings(**b, refresh=refresh, progress=progress)
+            for b in ranking_bases(scope, timeframe, color=color, tag=tag, set_family=set_family)]
+
+
+_IRREGULAR_PLURALS = {"mouse": "mice", "ox": "oxen", "fungus": "fungi", "octopus": "octopi",
+                      "man": "men", "goose": "geese", "child": "children"}
+
+
+def typal_match(tag_slug: str, type_line: str | None) -> bool:
+    """True when a creature subtype on ``type_line`` is the EDHREC typal tag
+    (plural slugs: goblins, elves, dwarves, faeries, allies). Themes (treasure,
+    spellslinger) never match — they narrow by the tag's own list instead."""
+    for face in (type_line or "").split(" // "):
+        _, _, subs = face.partition(" — ")
+        for sub in subs.split():
+            s = edhrec.slugify(sub)
+            if not s:
+                continue
+            forms = {s, s + "s", s + "es"}
+            if s.endswith("f"):
+                forms.add(s[:-1] + "ves")
+            if s.endswith("fe"):
+                forms.add(s[:-2] + "ves")
+            if s.endswith("y"):
+                forms.add(s[:-1] + "ies")
+            if s in _IRREGULAR_PLURALS:
+                forms.add(_IRREGULAR_PLURALS[s])
+            if tag_slug in forms:
+                return True
+    return False
+
+
+def _color_letters(color: str) -> set[str]:
+    slug = edhrec.color_filter_slug(color)
+    return set(next(c["colors"] for c in edhrec.color_options() if c["slug"] == slug))
+
+
+def ranking_title(scope: str = "commanders", timeframe: str = "week", *,
+                  color: str | None = None, tag: str | None = None,
+                  set_family: str | None = None) -> str:
+    """A stacked ranking's title: the base's (``edhrec.ranking_title``) plus each
+    locally applied axis — ``Top commanders · FIN family · Mono-Red · Goblins``."""
+    bases = ranking_bases(scope, timeframe, color=color, tag=tag, set_family=set_family)
+    key = edhrec.ranking_key(**bases[0])
+    title = edhrec.ranking_title(key)
+    extra = []
+    if color and not key.filter.startswith("color:"):
+        extra.append("-".join(p.capitalize() for p in edhrec.color_filter_slug(color).split("-")))
+    if tag and not key.filter.startswith("tag:"):
+        extra.append(f"{edhrec.slugify(tag).replace('-', ' ').capitalize()} tag")
+    if not extra:
+        return title
+    head, sep, when = title.rpartition(" · past ")
+    noun, tail = (head, f"{sep}{when}") if sep else (title, "")
+    return " · ".join([noun, *extra]) + tail
 
 
 def ranking(scope: str = "commanders", timeframe: str = "week", *,
             color: str | None = None, tag: str | None = None,
-            set_family: str | None = None) -> Ranking:
+            set_family: str | None = None, q: str = "", own: str = "all",
+            offset: int = 0, limit: int | None = None) -> Ranking:
     """A CACHED EDHREC ranking (never fetches) with each entry joined to local
-    facts: display printing, cheapest price, copies owned / free. ``cached`` is
-    False when the ranking was never synced — the caller runs
-    :func:`edhrec.rankings` (as a job) and reads again."""
-    key = edhrec.ranking_key(scope, timeframe, color=color, tag=tag, set_family=set_family)
-    res = edhrec.cached_rankings(key)
-    if res is None:
-        return Ranking(key=key, title=edhrec.ranking_title(key), cached=False, fetched_at=None, rows=[])
+    facts: display printing, cheapest price, copies owned / unused.
+
+    Filters stack: the base list (:func:`ranking_bases`) is narrowed locally by
+    the other axes — color identity exactly (EDHREC's color pages are exact
+    identities), a tag by its EDHREC list or a matching creature type — then by
+    name (``q``) and ownership (``own`` ∈ all | owned | unused). ``offset`` /
+    ``limit`` page the matches; ``total`` counts them all. ``cached`` is False
+    until every list is read — the caller runs :func:`sync_ranking` (a job)."""
+    if own not in RANKING_OWN:
+        raise ValueError(f"own must be one of {RANKING_OWN}")
+    bases = ranking_bases(scope, timeframe, color=color, tag=tag, set_family=set_family)
+    keys = [edhrec.ranking_key(**b) for b in bases]
+    title = ranking_title(scope, timeframe, color=color, tag=tag, set_family=set_family)
+    reads = [edhrec.cached_rankings(k) for k in keys]
+    if any(r is None for r in reads):
+        return Ranking(key=keys[0], title=title, cached=False, fetched_at=None, rows=[])
+    res = reads[0]
     facts = facts_for([r.oracle_id for r in res.rows if r.oracle_id])
     # Partner pairings are stored with no oracle id; join both halves locally.
     pair_names = [r.name for r in res.rows if not r.oracle_id and edhrec.partner_halves(r.name)]
     pairs = facts_by_name(pair_names, local_only=True) if pair_names else {}
+    pool = [Ranked(rank=r.rank, name=r.name, slug=r.slug,
+                   facts=facts.get(r.oracle_id or "") or pairs.get(r.name.casefold()) or Facts(oracle_id=r.oracle_id),
+                   num_decks=r.num_decks, salt=r.salt, trend=r.trend_zscore)
+            for r in res.rows]
+    base = len(pool)
+
+    applied: list[str] = []
+    if scope == "commanders" and color and not keys[0].filter.startswith("color:"):
+        letters = _color_letters(color)
+        pool = [x for x in pool if (x.facts.oracle_id or x.facts.partner) and set(x.facts.color_identity) == letters]
+        applied.append("color")
+    if scope == "commanders" and tag and not keys[0].filter.startswith("tag:"):
+        tslug = edhrec.slugify(tag)
+        listed = reads[-1].rows
+        in_list = {r.slug for r in listed} | {r.oracle_id for r in listed if r.oracle_id}
+        pool = [x for x in pool if x.slug in in_list or (x.facts.oracle_id and x.facts.oracle_id in in_list)
+                or typal_match(tslug, x.facts.type_line)
+                or (x.facts.partner is not None and typal_match(tslug, x.facts.partner.type_line))]
+        applied.append("tag")
+
+    ql = (q or "").strip().casefold()
+    hits = [x for x in pool
+            if (own == "all" or (own == "owned" and x.facts.owned > 0) or (own == "unused" and x.facts.free > 0))
+            and (not ql or ql in x.name.casefold())]
+    start = max(0, offset)
+    page = hits[start:] if limit is None else hits[start:start + max(0, limit)]
     return Ranking(
-        key=key, title=res.name, cached=True, fetched_at=res.fetched_at,
-        rows=[Ranked(rank=r.rank, name=r.name, slug=r.slug,
-                     facts=facts.get(r.oracle_id or "") or pairs.get(r.name.casefold()) or Facts(oracle_id=r.oracle_id),
-                     num_decks=r.num_decks, salt=r.salt, trend=r.trend_zscore)
-              for r in res.rows],
+        key=keys[0], title=title, cached=True,
+        fetched_at=min((r.fetched_at for r in reads if r.fetched_at), default=None),
+        rows=page, total=len(hits), base=base, pool=len(pool),
+        owned=sum(1 for x in pool if x.facts.owned > 0),
+        unused=sum(1 for x in pool if x.facts.free > 0),
+        local_filters=applied,
     )
 
 
 def ranking_options() -> dict:
     """Filter choices for the rankings controls: timeframes, every color
-    identity, and the tags / set families already fetched (for suggestions)."""
+    identity, and the tags already fetched (for suggestions)."""
     with db.connect() as conn:
         tags = [r[0].removeprefix("tag:") for r in conn.execute(
             "SELECT DISTINCT filter FROM edhrec_rankings WHERE filter LIKE 'tag:%' ORDER BY filter")]

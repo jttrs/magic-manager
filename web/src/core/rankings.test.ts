@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { FactsOut, RankedOut, RankingOut } from './api';
-import { cardType, creatureType, edhrecUrl, exploreMode, rankedTypes, fetchedAgo, fmtMetric, rankedCard, rankingRequest, rankingSummary, roleFor, shownRows, timeframeApplies, type RankingsState } from './rankings';
+import { cardType, creatureType, edhrecUrl, emptyRankingNote, exploreMode, failureText, rankedTypes, fetchedAgo, fmtMetric, nextPage, rankedCard, rankingPage, rankingRequest, rankingSummary, roleFor, timeframeApplies, type RankingsState } from './rankings';
 
-const state = (o: Partial<RankingsState> = {}): RankingsState => ({ rank: 'commanders', by: 'any', tf: 'week', own: 'all', rq: '', ...o });
+const state = (o: Partial<RankingsState> = {}): RankingsState => ({ rank: 'commanders', tf: 'week', own: 'all', rq: '', ...o });
 const facts = (o: Partial<FactsOut> = {}): FactsOut => ({ oracle_id: 'o', type_line: 'Legendary Creature', cmc: 3, color_identity: ['R'], lowest_usd: 2, scryfall_id: 's', image_uri: null, set_code: 'm13', collector_number: '1', scryfall_url: null, owned: 0, free: 0, ...o });
 const row = (name: string, o: Partial<RankedOut> = {}): RankedOut => ({ rank: 1, name, slug: name.toLowerCase(), facts: facts({ oracle_id: `o-${name}` }), num_decks: 1234, salt: null, trend: null, ...o });
 
@@ -17,31 +17,36 @@ describe('rankings', () => {
     expect(exploreMode('card', 'Sol Ring', 'on')).toBe('card');
   });
 
-  it('builds one request per axis and waits for a value', () => {
+  it('builds one request with every filter set (they combine)', () => {
     expect(rankingRequest(state())).toEqual({ scope: 'commanders', timeframe: 'week' });
-    expect(rankingRequest(state({ by: 'color' }))).toBeNull();
-    expect(rankingRequest(state({ by: 'color', color: 'azorius', tag: 'goblins' }))).toEqual({ scope: 'commanders', timeframe: 'week', color: 'azorius' });
-    expect(rankingRequest(state({ by: 'tag', tag: '  goblins ' }))).toEqual({ scope: 'commanders', timeframe: 'week', tag: 'goblins' });
-    expect(rankingRequest(state({ by: 'set', fam: 'fin' }))).toEqual({ scope: 'commanders', timeframe: 'week', set_family: 'fin' });
-    // filters only narrow commanders: a stale axis is ignored for cards / salt
-    expect(rankingRequest(state({ rank: 'salt', by: 'color', color: 'azorius' }))).toEqual({ scope: 'salt', timeframe: 'week' });
+    expect(rankingRequest(state({ color: 'azorius', tag: '  goblins ', fam: 'fin' }))).toEqual({ scope: 'commanders', timeframe: 'week', color: 'azorius', tag: 'goblins', set_family: 'fin' });
+    expect(rankingRequest(state({ color: '', tag: ' ' }))).toEqual({ scope: 'commanders', timeframe: 'week' });
+    // filters only narrow commanders: stale ones are ignored for cards / salt
+    expect(rankingRequest(state({ rank: 'salt', color: 'azorius' }))).toEqual({ scope: 'salt', timeframe: 'week' });
   });
 
   it('offers a timeframe only where EDHREC has one', () => {
     expect(timeframeApplies(state())).toBe(true);
-    expect(timeframeApplies(state({ by: 'color' }))).toBe(true);
-    expect(timeframeApplies(state({ by: 'tag' }))).toBe(false);
-    expect(timeframeApplies(state({ by: 'set' }))).toBe(false);
+    expect(timeframeApplies(state({ color: 'azorius' }))).toBe(true);
+    expect(timeframeApplies(state({ color: 'azorius', tag: 'goblins' }))).toBe(true);
+    expect(timeframeApplies(state({ tag: 'goblins' }))).toBe(false);
+    expect(timeframeApplies(state({ fam: 'fin', color: 'azorius' }))).toBe(false);
     expect(timeframeApplies(state({ rank: 'salt' }))).toBe(false);
-    expect(timeframeApplies(state({ rank: 'cards', by: 'tag' }))).toBe(true);
+    expect(timeframeApplies(state({ rank: 'cards', tag: 'goblins' }))).toBe(true);
   });
 
-  it('filters by ownership and name', () => {
-    const rows = [row('Krenko', { facts: facts({ owned: 2, free: 0 }) }), row('Magda', { facts: facts({ owned: 1, free: 1 }) }), row('Jace')];
-    expect(shownRows(rows, 'all', '').map((r) => r.name)).toEqual(['Krenko', 'Magda', 'Jace']);
-    expect(shownRows(rows, 'owned', '').map((r) => r.name)).toEqual(['Krenko', 'Magda']);
-    expect(shownRows(rows, 'free', '').map((r) => r.name)).toEqual(['Magda']);
-    expect(shownRows(rows, 'all', 'kren').map((r) => r.name)).toEqual(['Krenko']);
+  it('pages the ranking: 100 first, then 50 at a time', () => {
+    const req = rankingRequest(state({ color: 'azorius' }));
+    expect(rankingPage(req, { own: 'unused', rq: ' kren ' }, 150)).toEqual({ ...req, q: 'kren', own: 'unused', offset: 0, limit: 150 });
+    expect(nextPage(100, 312)).toBe(50);
+    expect(nextPage(300, 312)).toBe(12);
+    expect(nextPage(312, 312)).toBe(0);
+  });
+
+  it('never shows an exception name, and an empty set reads calmly', () => {
+    expect(failureText('EdhrecError: EDHREC has no “gobblinz” tag.')).toBe('EDHREC has no “gobblinz” tag.');
+    expect(failureText(null)).toBe('EDHREC didn’t answer.');
+    expect(emptyRankingNote(state({ fam: 'acr' }), 'Assassin’s Creed')).toBe('EDHREC lists no commanders from Assassin’s Creed yet.');
   });
 
   it('opens commanders as commanders and cards / salt as cards', () => {
@@ -54,7 +59,7 @@ describe('rankings', () => {
     const c = rankedCard('commanders', row('Krenko', { rank: 3, num_decks: 5084, facts: facts({ oracle_id: 'o-k', owned: 2, free: 1 }) }));
     expect(c.key).toBe('o-k');
     expect(c.note).toMatch(/^#3 · 5\.1K decks$/);
-    expect(c.tags).toEqual(['2 owned · 1 free']);
+    expect(c.tags).toEqual(['2 owned · 1 unused']);
     expect(fmtMetric('salt', row('Stasis', { salt: 3.0572 }))).toBe('3.06');
   });
 
@@ -74,10 +79,8 @@ describe('rankings', () => {
     expect(fetchedAgo('2026-10-05T23:00:00', now)).toBe('yesterday');
     expect(fetchedAgo('2026-10-01T12:00:00', now)).toBe('5 days ago');
     expect(fetchedAgo(null, now)).toBeNull();
-    const rows = [row('A', { facts: facts({ owned: 1, free: 1 }) }), row('B')];
-    const r = { rows } as RankingOut;
-    expect(rankingSummary(r, rows)).toBe('2 ranked · you own 1 · 1 with free copies');
-    expect(rankingSummary(r, rows.slice(0, 1))).toBe('1 of 2 shown · you own 1 · 1 with free copies');
+    expect(rankingSummary({ total: 2, pool: 2, owned: 1, unused: 1 })).toBe('2 ranked · you own 1 · 1 unused');
+    expect(rankingSummary({ total: 1, pool: 480, owned: 9, unused: 4 })).toBe('1 of 480 match · you own 9 · 4 unused');
   });
 
   it('splits the type line into card type and creature type', () => {
