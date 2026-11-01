@@ -102,7 +102,7 @@ export function KindMark({ kind }: { kind: RecipeOut['kind'] }) {
   );
 }
 
-/** What you own of it: built copies in accent ink, loose / not built in ink, not owned muted. */
+/** What you own of it: built copies in accent ink, broken down / not built in ink, not owned muted. */
 function OwnMark({ r }: { r: Pick<RecipeOut, 'ownership' | 'built' | 'loose' | 'kind'> }) {
   const tone = r.ownership === 'built' ? 'text-accent-ink' : r.ownership === 'loose' ? 'text-ink' : 'text-ink-muted';
   return <span className={`shrink-0 text-xs voice-condensed uppercase tracking-[0.06em] ${tone}`}>{ownershipLabel(r)}</span>;

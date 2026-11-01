@@ -1,6 +1,6 @@
 // Deck Manager derivations: the recipe list (every precon / Jumpstart pack in the
 // catalog plus your own decks) — filters, groups, kind + ownership markers and
-// free-card coverage copy — a deck's cards as guide sections (Commander ·
+// unused-card coverage copy — a deck's cards as guide sections (Commander ·
 // Creatures · … · Sideboard · Tokens), and the add-cards review lines for "add
 // this deck / these cards to my collection". Framework-free; every number comes
 // from the engine (magic_manager.recipes).
@@ -18,19 +18,21 @@ export type RecipeKind = (typeof RECIPE_KINDS)[number];
 export type Ownership = (typeof OWNERSHIP)[number];
 export type Cover = (typeof COVER)[number];
 export const KIND_LABEL: Record<RecipeKind, string> = { precon: 'Precon', jumpstart: 'Jumpstart', import: 'Imported', custom: 'Custom' };
-const OWNERSHIP_LABEL: Record<Ownership, string> = { built: 'Built', loose: 'Loose', none: 'Not owned' };
-/** The sidebar's "You own" toggles: Built · Loose · None. */
-const OWN_TOGGLE_LABEL: Record<Ownership, string> = { built: 'Built', loose: 'Loose', none: 'None' };
+// `loose` (the engine's word) is a product copy you own but keep broken down — not the
+// same thing as Unused cards (owned copies no built deck holds), so it never says "loose".
+const OWNERSHIP_LABEL: Record<Ownership, string> = { built: 'Built', loose: 'Broken down', none: 'Not owned' };
+/** The sidebar's "You own" toggles: Built · Broken down · None. */
+const OWN_TOGGLE_LABEL: Record<Ownership, string> = { built: 'Built', loose: 'Broken down', none: 'None' };
 export const COVER_LABEL: Record<Cover, string> = { any: 'Any', build: 'Ready to build', close: 'Ready or close' };
 
 export type RecipeFilters = Pick<DecksSearch, 'q' | 'kinds' | 'own' | 'cover' | 'types' | 'sets'>;
 
-/** Free-card status when it applies: a built recipe's cards are pledged, so it has none. */
+/** Unused-card status when it applies: a built recipe's cards are pledged, so it has none. */
 const coverStatus = (r: Pick<RecipeOut, 'built' | 'status'>) => (r.built === 0 ? r.status : null);
-const readyFromFree = (r: Pick<RecipeOut, 'built' | 'status'>) => coverStatus(r) === 'build';
+const readyFromUnused = (r: Pick<RecipeOut, 'built' | 'status'>) => coverStatus(r) === 'build';
 
 const coverKeep = (r: RecipeOut, cover: Cover) =>
-  cover === 'any' || readyFromFree(r) || (cover === 'close' && coverStatus(r) === 'close');
+  cover === 'any' || readyFromUnused(r) || (cover === 'close' && coverStatus(r) === 'close');
 
 /** Every filter except `skip` (so a control can count what each of its options would show). */
 function keep(r: RecipeOut, f: RecipeFilters, skip?: keyof RecipeFilters): boolean {
@@ -121,7 +123,7 @@ export function groupRecipes(rs: readonly RecipeOut[], by: DeckGroupBy): DeckGro
     const g = m.get(key) ?? { key, label, decks: [], rank, ready: 0 };
     if (rank > g.rank) g.rank = rank;
     g.decks.push(r);
-    if (readyFromFree(r)) g.ready += 1;
+    if (readyFromUnused(r)) g.ready += 1;
     m.set(key, g);
   }
   const groups = [...m.values()];
@@ -130,27 +132,27 @@ export function groupRecipes(rs: readonly RecipeOut[], by: DeckGroupBy): DeckGro
   return groups.map(({ key, label, decks, ready }) => ({ key, label, decks, ready }));
 }
 
-/** What you own of a recipe: "×2 built" · "1 loose" (precons/packs) · "not built" (your decks) · "not owned". */
+/** What you own of a recipe: "×2 built" · "1 broken down" (precons/packs) · "not built" (your decks) · "not owned". */
 export function ownershipLabel(r: Pick<RecipeOut, 'ownership' | 'built' | 'loose' | 'kind'>): string {
   if (r.ownership === 'built') return `×${fmtInt(r.built)} built`;
-  if (r.ownership === 'loose') return r.kind === 'import' || r.kind === 'custom' ? 'not built' : `${fmtInt(r.loose)} loose`;
+  if (r.ownership === 'loose') return r.kind === 'import' || r.kind === 'custom' ? 'not built' : `${fmtInt(r.loose)} broken down`;
   return 'not owned';
 }
 
-/** How far free cards get you: "All 20 free" · "2 short" · "13 of 20 free"; '' when unknown or built. */
+/** How far unused cards get you: "All 20 unused" · "2 short" · "13 of 20 unused"; '' when unknown or built. */
 export function coverage(r: Pick<RecipeOut, 'have' | 'short' | 'status' | 'built'>): string {
   if (r.have == null || r.short == null || r.built > 0) return '';
   const total = r.have + r.short;
-  if (r.status === 'build') return `All ${fmtInt(total)} free`;
+  if (r.status === 'build') return `All ${fmtInt(total)} unused`;
   if (r.status === 'close') return `${fmtInt(r.short)} short`;
-  return `${fmtInt(r.have)} of ${fmtInt(total)} free`;
+  return `${fmtInt(r.have)} of ${fmtInt(total)} unused`;
 }
 
 /** The sheet summary: what's listed and what you own of it. */
 export function recipeSummary(shown: readonly RecipeOut[]): string {
   const built = shown.filter((r) => r.ownership === 'built').length;
-  const ready = shown.filter(readyFromFree).length;
-  return [fmtCount(shown.length, 'recipe'), built ? `${fmtInt(built)} built` : '', ready ? `${fmtInt(ready)} ready from free cards` : ''].filter(Boolean).join(' · ');
+  const ready = shown.filter(readyFromUnused).length;
+  return [fmtCount(shown.length, 'recipe'), built ? `${fmtInt(built)} built` : '', ready ? `${fmtInt(ready)} ready from unused cards` : ''].filter(Boolean).join(' · ');
 }
 
 /** The one Jumpstart set the list is narrowed to (its shopping lists apply), else null. */
@@ -182,7 +184,7 @@ export function deckSection(c: Pick<DeckCardOut, 'board' | 'type_line'>): string
 export const DECK_SECTIONS = ['Commander', 'Companion', ...TYPE_GROUPS, 'Sideboard', 'Maybe', 'Tokens'] as const;
 
 /** A deck card → the shared guide view-model. Key is per row (a printing can sit on two boards).
- *  `recipe`: a catalog recipe you don't own — missing when your free copies don't cover it. */
+ *  `recipe`: a catalog recipe you don't own — missing when your unused copies don't cover it. */
 export function fromDeckCard(c: DeckCardOut, recipe = false): GuideCard {
   const p = c.printing;
   const owned = Object.values(p.owned ?? {}).reduce((s, n) => s + n, 0);
@@ -209,7 +211,7 @@ export function fromDeckCard(c: DeckCardOut, recipe = false): GuideCard {
     missing: recipe ? c.free < c.count : owned === 0,
     tags: [`×${c.count} in deck`, ...(c.pledged_here ? [`${c.pledged_here} pledged`] : []), ...treatmentLabels(p.treatment)],
     lines: { plain: `${c.count} ${p.name}`, manapool: '', tcgplayer: '' },
-    note: recipe ? (c.free >= c.count ? `${fmtInt(c.free)} free` : c.free ? `${fmtInt(c.free)} of ${fmtInt(c.count)} free` : 'None free') : c.free ? `${c.free} free to use` : null,
+    note: recipe ? (c.free >= c.count ? `${fmtInt(c.free)} unused` : c.free ? `${fmtInt(c.free)} of ${fmtInt(c.count)} unused` : 'None unused') : c.free ? `${fmtInt(c.free)} unused` : null,
     typeLine: c.type_line,
     finishes: p.finishes,
     prices: { nonfoil: p.finishes.includes('nonfoil') ? p.price_usd : null, foil: p.finishes.includes('foil') ? p.price_usd_foil : null },

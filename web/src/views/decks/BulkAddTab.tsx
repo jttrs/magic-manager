@@ -10,7 +10,7 @@ import { fromResolved, readTitle, reviewStats, updateLine, type ReviewLine } fro
 const BOARD_ORDER: Board[] = ['commander', 'companion', 'main', 'side', 'maybe'];
 
 /** Bulk add: paste a list, check every line's printing, then add it all to the draft
- *  (same reader and checklist as Add cards → Paste a list; nothing touches your collection). */
+ *  (same reader and checklist as Add cards → Bulk add a list; nothing touches your collection). */
 export function BulkAddTab({ state, onState, onEdit }: { state: BulkState; onState: (fn: (s: BulkState) => BulkState) => void; onEdit: (fn: (d: Draft) => Draft) => void }) {
   const { read } = state;
   const stats = read ? reviewStats(read.lines) : null;

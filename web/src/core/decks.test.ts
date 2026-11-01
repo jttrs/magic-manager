@@ -33,7 +33,7 @@ describe('recipe list', () => {
     expect(decksSearch.parse({ group: 'origin' }).group).toBe('kind');
     expect(f({ own: ['built', 'loose'] })).toEqual(['a', 'p2', 'mine']);
   });
-  it('filters by kind, ownership, free-card cover, type, set and text', () => {
+  it('filters by kind, ownership, unused-card cover, type, set and text', () => {
     expect(f({ kinds: ['jumpstart'] })).toEqual(['fn:Angels1_J25', 'fn:Angels2_J25', 'p2']);
     expect(f({ own: ['none'] })).toEqual(['fn:Angels1_J25', 'fn:Angels2_J25']);
     expect(f({ cover: 'build' })).toEqual(['fn:Angels1_J25']);
@@ -45,7 +45,7 @@ describe('recipe list', () => {
   });
   it('counts each option under the other filters', () => {
     const c = optionCounts(rs, { q: '', kinds: ['jumpstart'], own: ['built', 'loose'], cover: 'any', types: [], sets: [] });
-    expect(c.own).toEqual([{ value: 'built', label: 'Built', count: 0 }, { value: 'loose', label: 'Loose', count: 1 }, { value: 'none', label: 'None', count: 2 }]);
+    expect(c.own).toEqual([{ value: 'built', label: 'Built', count: 0 }, { value: 'loose', label: 'Broken down', count: 1 }, { value: 'none', label: 'None', count: 2 }]);
     expect(c.kinds.map((k) => k.count)).toEqual([1, 1, 0, 1]);
     expect(c.sets.map((s) => s.label)).toEqual(['Foundations Jumpstart · J25']);
     expect(c.cover).toEqual({ any: null, build: 0, close: 1 });
@@ -54,14 +54,14 @@ describe('recipe list', () => {
     expect(groupRecipes(rs, 'set').map((g) => g.label)).toEqual(['Final Fantasy Commander', 'Foundations Jumpstart', 'No set']);
     expect(groupRecipes(rs, 'year').map((g) => g.label)).toEqual(['2025', '2024', 'Undated']);
     expect(groupRecipes(rs, 'kind').map((g) => g.label)).toEqual(['Precon', 'Jumpstart', 'Custom']);
-    expect(groupRecipes(rs, 'state').map((g) => g.label)).toEqual(['Built', 'Loose', 'Not owned']);
+    expect(groupRecipes(rs, 'state').map((g) => g.label)).toEqual(['Built', 'Broken down', 'Not owned']);
     expect(groupRecipes(rs, 'color').map((g) => [g.label, g.ready])).toEqual([['White', 1], ['Blue', 0], ['Black', 0], ['Multicolour', 0], ['Not read yet', 0]]);
   });
-  it('marks ownership and free-card cover', () => {
-    expect(rs.map(ownershipLabel)).toEqual(['×1 built', 'not owned', 'not owned', '2 loose', 'not built']);
-    expect(rs.map(coverage)).toEqual(['', 'All 20 free', '', '2 short', '90 of 100 free']);
-    expect(coverage(recipe({ built: 0, have: 9, short: 11, status: 'far' }))).toBe('9 of 20 free');
-    expect(recipeSummary(rs)).toBe('5 recipes · 1 built · 1 ready from free cards');
+  it('marks ownership and unused-card cover', () => {
+    expect(rs.map(ownershipLabel)).toEqual(['×1 built', 'not owned', 'not owned', '2 broken down', 'not built']);
+    expect(rs.map(coverage)).toEqual(['', 'All 20 unused', '', '2 short', '90 of 100 unused']);
+    expect(coverage(recipe({ built: 0, have: 9, short: 11, status: 'far' }))).toBe('9 of 20 unused');
+    expect(recipeSummary(rs)).toBe('5 recipes · 1 built · 1 ready from unused cards');
   });
   it('knows the one Jumpstart set in view and what is unread in it', () => {
     expect(jumpstartSet(rs, { sets: ['j25'] })).toBe('j25');
@@ -82,18 +82,18 @@ describe('deck inspector', () => {
     expect(groups.map((g) => g.label)).toEqual(['Commander', 'Lands · 8', 'Tokens']);
     expect(DECK_SECTIONS.indexOf('Commander')).toBe(0);
   });
-  it('card facts: in-deck count, pledged, free, missing when unowned', () => {
+  it('card facts: in-deck count, pledged, unused, missing when unowned', () => {
     const g = fromDeckCard(card({ count: 2, pledged_here: 1, free: 3, finish: 'foil', p: { owned: { foil: 4 } } }));
     expect(g.tags.slice(0, 2)).toEqual(['×2 in deck', '1 pledged']);
-    expect(g.note).toBe('3 free to use');
+    expect(g.note).toBe('3 unused');
     expect(g.price).toBe(2);
     expect(g.missing).toBe(false);
     expect(fromDeckCard(card()).missing).toBe(true);
   });
-  it('catalog recipe cards: missing and noted by free copies', () => {
-    expect([fromDeckCard(card({ count: 2, free: 2 }), true).missing, fromDeckCard(card({ count: 2, free: 2 }), true).note]).toEqual([false, '2 free']);
-    expect(fromDeckCard(card({ count: 2, free: 1 }), true).note).toBe('1 of 2 free');
-    expect(fromDeckCard(card({ count: 1, free: 0 }), true)).toMatchObject({ missing: true, note: 'None free' });
+  it('catalog recipe cards: missing and noted by unused copies', () => {
+    expect([fromDeckCard(card({ count: 2, free: 2 }), true).missing, fromDeckCard(card({ count: 2, free: 2 }), true).note]).toEqual([false, '2 unused']);
+    expect(fromDeckCard(card({ count: 2, free: 1 }), true).note).toBe('1 of 2 unused');
+    expect(fromDeckCard(card({ count: 1, free: 0 }), true)).toMatchObject({ missing: true, note: 'None unused' });
   });
   it('review lines: exact printings, tokens out, marked subset, either → nonfoil', () => {
     const cs = [card({ count: 3, finish: 'either' }), card({ board: 'token', p: { scryfall_id: 't' } }), card({ p: { scryfall_id: 'q' } })];

@@ -14,15 +14,19 @@ import { VirtualGuide } from '../../components/VirtualGuide';
 import { colorLabel, deckGuideGroups, ownershipLabel } from '../../core/decks';
 import { fmtCount, fmtInt, fmtUsd } from '../../core/format';
 import { KindMark } from './RecipeList';
+import type { MarkedCopy } from '../../components/CopyMarked';
+import { useReportMarked } from './marked';
 import { refreshRecipes } from './refresh';
 
 /** A catalog recipe you don't own (precon or Jumpstart pack): reads its card list
- *  the first time (a short job), then its cards against your free copies. */
-export function RecipeInspector({ fileName, view, closeShort, onView, onBack }: { fileName: string; view: 'grid' | 'list'; closeShort: number; onView?: (v: 'grid' | 'list') => void; onBack?: () => void }) {
+ *  the first time (a short job), then its cards against your unused copies. */
+export function RecipeInspector({ fileName, view, closeShort, onView, onBack, onMarked }: { fileName: string; view: 'grid' | 'list'; closeShort: number; onView?: (v: 'grid' | 'list') => void; onBack?: () => void; onMarked?: (m: MarkedCopy | null) => void }) {
   const q = useQuery(recipeQuery(fileName));
   const qc = useQueryClient();
-  const { selected, toggle } = useSelection(`recipe:${fileName}`);
+  const { selected, toggle, clear } = useSelection(`recipe:${fileName}`);
   const sections = useMemo(() => (q.data?.ready ? deckGuideGroups(q.data.cards, true).map((g) => ({ ...g, level: 2 as const, noun: 'section' })) : []), [q.data]);
+
+  useReportMarked(sections, selected, clear, onMarked);
 
   // Never read: fetch its card list once. The parent keys this component by fileName.
   const read = useJob();
@@ -102,12 +106,12 @@ export function RecipeInspector({ fileName, view, closeShort, onView, onBack }: 
         </div>
         {ready && r.have != null && r.short != null && (
           <dl className="flex flex-wrap gap-x-6 gap-y-1 text-sm tabular">
-            <Fact label="Free cards cover" value={`${fmtInt(r.have)} of ${fmtInt(r.have + r.short)}`} strong={r.status === 'build'} />
+            <Fact label="Unused cards cover" value={`${fmtInt(r.have)} of ${fmtInt(r.have + r.short)}`} strong={r.status === 'build'} />
             {r.short > 0 && <Fact label="Short" value={fmtCount(r.short, 'card')} />}
             <Fact label="You own" value={r.ownership === 'none' ? 'No copy' : ownershipLabel(r)} />
             <span className="inline-flex self-center">
-              <InfoTip label="What do free, ready and close mean?" tone="paper">
-                <b>Free</b> cards are copies you own that no built deck has pledged. A recipe is <b>ready</b> when your free cards cover all of it and <b>close</b> when it’s {fmtCount(closeShort, 'card')} or fewer short. Each recipe is checked on its own, so two can count the same free copy.
+              <InfoTip label="What do unused, ready and close mean?" tone="paper">
+                <b>Unused</b> cards are copies you own that aren’t in a built deck. A recipe is <b>ready</b> when your unused cards cover all of it and <b>close</b> when it’s {fmtCount(closeShort, 'card')} or fewer short. Each recipe is checked on its own, so two can count the same unused copy.
               </InfoTip>
             </span>
           </dl>
@@ -144,10 +148,10 @@ export function RecipeInspector({ fileName, view, closeShort, onView, onBack }: 
         title={`Add ${r.name} to your collection?`}
         confirmLabel="Add and keep it built"
         onConfirm={addAs('built')}
-        alternate={{ label: 'Add the cards loose', onConfirm: addAs('deconstructed') }}
+        alternate={{ label: 'Add it broken down', onConfirm: addAs('deconstructed') }}
       >
         <p>
-          Adds its {fmtCount(r.cards ?? 0, 'card')} to your collection and tracks one copy as a deck. <b>Built</b> pledges the cards to it; <b>loose</b> keeps them free for other decks.
+          Adds its {fmtCount(r.cards ?? 0, 'card')} to your collection and tracks one copy as a deck. <b>Built</b> pledges the cards to it; <b>broken down</b> keeps them unused, for other decks.
         </p>
       </ConfirmDialog>
     </section>
