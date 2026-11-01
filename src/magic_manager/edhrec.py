@@ -446,6 +446,9 @@ class SyncResult:
     rows: list[EnrichedCardRow] = field(default_factory=list)
     raw: dict = field(default_factory=dict)
     fetched_at: str | None = None  # rankings: when this batch was fetched
+    # rankings: why the deep read stopped early (None = every page was read) —
+    # 'rate_limited' (EDHREC's 429 / its backoff window) or 'read_failed'.
+    partial_reason: str | None = None
 
 
 @dataclass
@@ -693,6 +696,18 @@ def _empty_key(key: RankingKey) -> str:
     return f"edhrec.empty:{key.scope}|{key.timeframe}|{key.filter}"
 
 
+def _partial_key(key: RankingKey) -> str:
+    """``catalog_settings`` key recording that the newest batch of ``key`` is
+    SHORT — a later page of the deep read failed — as ``<fetched_at>|<reason>``.
+    Matched against the batch's ``fetched_at``, so a later full read clears it."""
+    return f"edhrec.partial:{key.scope}|{key.timeframe}|{key.filter}"
+
+
+def _partial_reason(conn, key: RankingKey, fetched_at: str) -> str | None:
+    at, _, reason = (db.catalog_setting(conn, _partial_key(key)) or "").partition("|")
+    return (reason or "read_failed") if at and at == fetched_at else None
+
+
 def cached_rankings(key: RankingKey) -> SyncResult | None:
     """The latest stored sync of ``key`` (rows of its newest batch, rank order),
     or ``None`` when it was never fetched. A read that found nothing returns a
@@ -714,9 +729,10 @@ def cached_rankings(key: RankingKey) -> SyncResult | None:
                ORDER BY rank, entity_name""",
             (key.scope, key.timeframe, key.filter, latest),
         ).fetchall()
+        partial = _partial_reason(conn, key, latest)
     return SyncResult(
         kind="rankings", slug=key.filter or key.scope, name=ranking_title(key),
-        scope=key.scope, timeframe=key.timeframe, fetched_at=latest,
+        scope=key.scope, timeframe=key.timeframe, fetched_at=latest, partial_reason=partial,
         rows=[EnrichedCardRow(
             name=r["entity_name"], slug=r["entity_slug"], oracle_id=r["entity_oracle_id"],
             list_tag=key.scope, num_decks=r["num_decks"], salt=r["salt"],
@@ -769,6 +785,7 @@ class _RankingPlan:
     snapshots: list[tuple[str, str, dict]] # (page_type, slug, page) to _store_page
     primary_page: dict                     # SyncResult.raw
     stubs: list[tuple[str, str]] = field(default_factory=list)  # (page_type, slug) answered by a redirect stub
+    partial_reason: str | None = None      # the deep read stopped early (see SyncResult)
 
 
 # How deep a paginated ranking (top commanders/cards/salt, a color's commanders)
@@ -801,27 +818,30 @@ def _raw_cardlist(page: dict, tag: str | None = None) -> dict:
     return next((g for g in groups if g.get("cardviews")), {})
 
 
-def _deep_cardviews(group: dict, label: str, progress=None) -> tuple[list[dict], list[tuple[str, dict]]]:
+def _deep_cardviews(group: dict, label: str, progress=None) -> tuple[list[dict], list[tuple[str, dict]], str | None]:
     """A paginated list's cardviews, following ``more`` up to
-    :data:`RANKING_POOL_PAGES` pages. Returns ``(cardviews, [(slug, page)])`` —
-    the extra pages for the raw snapshot. A later page that fails to read ends
-    the walk with what was read (the first 100 are still a ranking)."""
+    :data:`RANKING_POOL_PAGES` pages. Returns ``(cardviews, [(slug, page)],
+    partial_reason)`` — the extra pages for the raw snapshot, and why the walk
+    stopped early (``rate_limited`` | ``read_failed``; None when complete). A
+    later page that fails to read ends the walk with what was read (the first
+    100 are still a ranking) — reported, never silent."""
     cardviews = list(group.get("cardviews") or [])
     pages = max(1, min(RANKING_POOL_PAGES, int(group.get("total_pages") or 1)))
-    more, n, extra = group.get("more"), 1, []
+    more, n, extra, partial = group.get("more"), 1, [], None
     while more and n < pages:
         if progress:
             progress(n, pages, f"Reading {label}: page {n + 1} of {pages}")
         try:
             page = more_page(more)
-        except EdhrecError:
+        except EdhrecError as e:
+            partial = "rate_limited" if "429" in str(e) else "read_failed"
             break
         if not page.get("cardviews"):
             break
         extra.append((more.removesuffix(".json"), page))
         cardviews.extend(page["cardviews"])
         more, n = page.get("more"), n + 1
-    return _dedupe_cardviews(cardviews, resort=False), extra
+    return _dedupe_cardviews(cardviews, resort=False), extra, partial
 
 
 def _is_set_commander_list(tag: str) -> bool:
@@ -843,12 +863,12 @@ def _plan_rankings(scope: str, timeframe: str, *,
         slug = color_filter_slug(color)
         page = color_ranking(slug, timeframe)
         # color pages carry a single '<slug>commanders' list.
-        cardviews, extra = _deep_cardviews(_raw_cardlist(page, f"{slug}commanders"), "the ranking", progress)
+        cardviews, extra, partial = _deep_cardviews(_raw_cardlist(page, f"{slug}commanders"), "the ranking", progress)
         return _RankingPlan(
             cardviews=cardviews, filter_key=f"color:{slug}", result_slug=slug,
             timeframe=timeframe,
             snapshots=[("commanders", slug, page)] + [("commanders", s, p) for s, p in extra],
-            primary_page=page,
+            primary_page=page, partial_reason=partial,
         )
 
     if tag is not None:
@@ -921,13 +941,13 @@ def _plan_rankings(scope: str, timeframe: str, *,
     else:  # cards
         page = top_ranking(timeframe)
         tf = timeframe
-    cardviews, extra = _deep_cardviews(_raw_cardlist(page), "the ranking", progress)
+    cardviews, extra, partial = _deep_cardviews(_raw_cardlist(page), "the ranking", progress)
     page_type = "commanders" if scope == "commanders" else "top"
     return _RankingPlan(
         cardviews=cardviews, filter_key="", result_slug=scope,
         timeframe=tf,
         snapshots=[(page_type, scope, page)] + [(page_type, s, p) for s, p in extra],
-        primary_page=page,
+        primary_page=page, partial_reason=partial,
     )
 
 
@@ -971,6 +991,8 @@ def sync_rankings(scope: str = "commanders", timeframe: str = "week", *,
     rows: list[EnrichedCardRow] = []
     with db.transaction() as conn:
         db.set_catalog_setting(conn, _empty_key(key), None)
+        db.set_catalog_setting(conn, _partial_key(key),
+                               f"{at}|{plan.partial_reason}" if plan.partial_reason else None)
         # Older syncs stored redirect stubs as pages; drop the ones this read walked past.
         for page_type, slug in plan.stubs:
             conn.execute("DELETE FROM edhrec_pages WHERE page_type = ? AND slug = ?", (page_type, slug))
@@ -1011,7 +1033,7 @@ def sync_rankings(scope: str = "commanders", timeframe: str = "week", *,
     _healthy("edhrec-rankings/edhrec", rows)
     return SyncResult(kind="rankings", slug=plan.result_slug, name=ranking_title(key),
                       scope=row_scope, timeframe=plan.timeframe, rows=rows,
-                      raw=plan.primary_page, fetched_at=at)
+                      raw=plan.primary_page, fetched_at=at, partial_reason=plan.partial_reason)
 
 
 def sync_both(ref: str, *, resolved: tuple[str, dict | None] | None = None) -> DualSyncResult:

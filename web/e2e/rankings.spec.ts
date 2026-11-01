@@ -175,3 +175,23 @@ test('the mode tabs move between specific cards and rankings, keeping both', asy
   await expect(page).toHaveURL(/a=Tifa/);
   await expect(page.getByRole('region', { name: /Tifa Lockhart on EDHREC/ }).or(page.getByText('Nothing matches'))).toBeVisible();
 });
+
+test('the set family picker offers families you own nothing from, owned ones first and marked', async ({ page }) => {
+  await page.goto('/explore');
+  await page.getByRole('button', { name: /^Set family/ }).click();
+  const options = page.getByRole('option');
+  await expect(options.nth(1)).toContainText('Avatar: The Last Airbender');
+  await expect(options.nth(1)).toContainText('owned');
+  await page.getByRole('combobox', { name: 'Filter families' }).fill('edge');
+  await expect(options).toHaveCount(1);
+  await expect(options.first()).not.toContainText('owned');
+  await options.first().click();
+  await expect(page).toHaveURL(/fam=eoe/);
+});
+
+test('a ranking EDHREC cut short says so calmly, with the way out', async ({ page }) => {
+  await page.route('**/api/explore/ranking?*', (r) => r.fulfill({ json: { ...rankingPage(ranking, new URL(r.request().url())), pool_complete: false, pool_partial_reason: 'rate_limited', base: 200 } }));
+  await page.goto('/explore');
+  await expect(page.getByRole('status').filter({ hasText: 'Showing the first 200 — EDHREC limited the read. Refresh to fetch the rest.' })).toBeVisible();
+  await expect(page.getByText(/429|EdhrecError/)).toHaveCount(0);
+});

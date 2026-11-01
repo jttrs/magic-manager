@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field, replace
 
-from . import db, edhrec, inventory, legality, scryfall_tags, sets, util
+from . import db, edhrec, inventory, legality, scryfall, scryfall_tags, sets, util
 
 # Card-page cardlists that are co-played cards, grouped by type (EDHREC's tags).
 COPLAY_TAGS: dict[str, str] = {
@@ -353,6 +353,9 @@ class Ranking:
     owned: int = 0                # of ``pool``: entries you own a copy of
     unused: int = 0               # of ``pool``: entries with a copy not in a built deck
     local_filters: list[str] = field(default_factory=list)  # axes applied locally: color | tag
+    # A list it combines was read short (a later EDHREC page failed): why —
+    # 'rate_limited' | 'read_failed'; None = every list was read in full.
+    partial_reason: str | None = None
 
 
 RANKING_OWN = ("all", "owned", "unused")
@@ -502,13 +505,28 @@ def ranking(scope: str = "commanders", timeframe: str = "week", *,
         owned=sum(1 for x in pool if x.facts.owned > 0),
         unused=sum(1 for x in pool if x.facts.free > 0),
         local_filters=applied,
+        partial_reason=next((r.partial_reason for r in reads if r.partial_reason), None),
     )
+
+
+def ranking_families() -> list[dict]:
+    """Every paper set family a ranking can narrow to (``sets.paper_families``),
+    families you own cards from first, each newest first, marked ``owned``.
+    Empty when Scryfall's set list can't be read — the picker then offers Any."""
+    try:
+        fams = sets.paper_families()
+        owned = sets.owned_family_roots()
+    except scryfall.ScryfallError:
+        return []
+    out = [{**f, "owned": f["value"] in owned} for f in fams]
+    return [f for f in out if f["owned"]] + [f for f in out if not f["owned"]]
 
 
 def ranking_options() -> dict:
     """Filter choices for the rankings controls: timeframes, every color
-    identity, and the tags already fetched (for suggestions)."""
+    identity, the tags already fetched (for suggestions) and every set family."""
     with db.connect() as conn:
         tags = [r[0].removeprefix("tag:") for r in conn.execute(
             "SELECT DISTINCT filter FROM edhrec_rankings WHERE filter LIKE 'tag:%' ORDER BY filter")]
-    return {"timeframes": list(edhrec.RANKING_TIMEFRAMES), "colors": edhrec.color_options(), "tags": tags}
+    return {"timeframes": list(edhrec.RANKING_TIMEFRAMES), "colors": edhrec.color_options(), "tags": tags,
+            "families": ranking_families()}

@@ -192,6 +192,11 @@ class RankingOut(BaseModel):
     offset: int
     local_filters: list[Literal["color", "tag"]] = Field(
         description="Axes applied locally to the base list (EDHREC's filters don't combine).")
+    pool_complete: bool = Field(
+        True, description="False when EDHREC stopped answering partway through the list: "
+                          "the pool holds only the pages read until a Refresh reads the rest.")
+    pool_partial_reason: Literal["rate_limited", "read_failed"] | None = Field(
+        None, description="Why the pool is short: EDHREC limited the read (rate_limited) or a page failed.")
 
 
 class ColorOptionOut(BaseModel):
@@ -200,10 +205,19 @@ class ColorOptionOut(BaseModel):
     colors: str = Field(description="WUBRG identity letters ('' = colorless).")
 
 
+class FamilyChoiceOut(BaseModel):
+    value: str = Field(description="Family code (lowercase), the ranking's `set_family`.")
+    label: str
+    year: str | None = None
+    owned: bool = Field(description="You own a card from this family.")
+
+
 class RankingOptionsOut(BaseModel):
     timeframes: list[str]
     colors: list[ColorOptionOut]
     tags: list[str] = Field(description="Tags already fetched (suggestions).")
+    families: list[FamilyChoiceOut] = Field(
+        description="Every top-level paper set family; families you own cards from first, each newest first.")
 
 
 def ranking(q: RankingPageQuery) -> RankingOut:
@@ -215,12 +229,14 @@ def ranking(q: RankingPageQuery) -> RankingOut:
                         num_decks=x.num_decks, salt=x.salt, trend=x.trend) for x in r.rows],
         total=r.total, base=r.base, pool=r.pool, owned=r.owned, unused=r.unused, offset=q.offset,
         local_filters=r.local_filters,
+        pool_complete=r.partial_reason is None, pool_partial_reason=r.partial_reason,
     )
 
 
 def ranking_options() -> RankingOptionsOut:
     o = explore.ranking_options()
-    return RankingOptionsOut(timeframes=o["timeframes"], colors=[ColorOptionOut(**c) for c in o["colors"]], tags=o["tags"])
+    return RankingOptionsOut(timeframes=o["timeframes"], colors=[ColorOptionOut(**c) for c in o["colors"]], tags=o["tags"],
+                             families=[FamilyChoiceOut(**f) for f in o["families"]])
 
 
 class SyncRankingInput(RankingQuery):

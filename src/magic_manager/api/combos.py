@@ -49,9 +49,9 @@ class DeckCombosOut(BaseModel):
     error: str | None = None
     identity: str | None = None
     included: list[ComboOut]
-    almost: list[ComboOut] = Field(description="Combos one card away, in the deck's colours.")
+    almost: list[ComboOut] = Field(description="Combos one card away, in the deck's colors.")
     missing_cards: list[MissingCardOut] = Field(description="The near-misses rolled up per missing card, most combos first.")
-    off_color: int = Field(description="Near-misses that would need another colour (not listed).")
+    off_color: int = Field(description="Near-misses that would need another color (not listed).")
 
 
 class DraftCombosIn(BaseModel):

@@ -114,7 +114,7 @@ def client(tmp_db):
         yield c
 
 
-def test_ranking_endpoint_and_job(client, pages):
+def test_ranking_endpoint_and_job(client, pages, fake_scryfall):
     r = client.get("/api/explore/ranking", params={"scope": "commanders", "color": "r"})
     assert r.status_code == 200 and r.json()["cached"] is False
     stacked = client.get("/api/explore/ranking", params={"color": "r", "tag": "goblins"})
@@ -230,6 +230,48 @@ def test_paginated_rankings_read_the_pool_deep(tmp_db, monkeypatch):
     assert (len(r.rows), r.total, r.pool) == (100, 300, 300)
     page2 = explore.ranking("commanders", "week", offset=100, limit=50)
     assert [x.rank for x in page2.rows] == list(range(101, 151))
+    # The short read is recorded, not silent: the rows read are kept, marked partial.
+    assert res.partial_reason == "rate_limited" and r.partial_reason == "rate_limited"
+    assert edhrec.cached_rankings(edhrec.ranking_key("commanders", "week")).partial_reason == "rate_limited"
+
+
+def test_partial_marker_clears_on_a_full_read_and_reaches_the_api(client, monkeypatch):
+    monkeypatch.setattr(edhrec, "resolve_names_to_oracle", lambda names, **_: {})
+    _, first = _paged("pastweek", 1, 100, "commanders/week-pastweek-1.json", total=3)
+    monkeypatch.setattr(edhrec, "commanders_ranking", lambda tf="week": {"container": {"json_dict": {"cardlists": [first]}}})
+    fail = {"on": True}
+
+    def more_page(path):
+        n = int(path.rsplit("-", 1)[1].removesuffix(".json"))
+        if fail["on"]:
+            raise edhrec.EdhrecError("edhrec.sh: HTTP 429 from EDHREC. Backing off for 35s.")
+        cvs, _ = _paged("", n * 100 + 1, 100, None)
+        return {"cardviews": cvs, "more": f"commanders/week-pastweek-{n + 1}.json", "total_pages": 3}
+    monkeypatch.setattr(edhrec, "more_page", more_page)
+
+    edhrec.sync_rankings("commanders", "week")
+    got = client.get("/api/explore/ranking", params={"scope": "commanders", "timeframe": "week"}).json()
+    assert (got["base"], got["pool_complete"], got["pool_partial_reason"]) == (100, False, "rate_limited")
+
+    fail["on"] = False
+    assert edhrec.rankings("commanders", "week", refresh=True).partial_reason is None
+    got = client.get("/api/explore/ranking", params={"scope": "commanders", "timeframe": "week"}).json()
+    assert (got["base"], got["pool_complete"], got["pool_partial_reason"]) == (300, True, None)
+
+
+def test_ranking_options_offer_every_paper_family_owned_first(client, fake_scryfall, seed_cards, make_card):
+    fake_scryfall(all_sets=[
+        {"code": "blb", "name": "Bloomburrow", "set_type": "expansion", "released_at": "2024-08-02"},
+        {"code": "pblb", "name": "Bloomburrow Promos", "set_type": "promo", "parent_set_code": "blb"},
+        {"code": "fin", "name": "Final Fantasy", "set_type": "expansion", "released_at": "2025-06-13"},
+        {"code": "ltr", "name": "The Lord of the Rings", "set_type": "expansion", "released_at": "2023-06-23"},
+        {"code": "ydmu", "name": "Alchemy: Dominaria", "set_type": "alchemy", "digital": True},
+    ])
+    seed_cards([make_card(id="00000000-0000-0000-0000-0000000000f1", set="pblb", collector_number="1")])
+    inventory.inventory_add("00000000-0000-0000-0000-0000000000f1", "nonfoil", 1)
+    fams = client.get("/api/explore/ranking/options").json()["families"]
+    assert [(f["value"], f["owned"]) for f in fams] == [("blb", True), ("fin", False), ("ltr", False)]
+    assert fams[1] == {"value": "fin", "label": "Final Fantasy", "year": "2025", "owned": False}
 
 
 def test_pool_depth_is_capped(tmp_db, monkeypatch):

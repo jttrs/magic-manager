@@ -76,7 +76,7 @@ export function MarketView() {
   const famPicker = fams.isError ? (
     <p role="alert" className="text-sm text-danger">Couldn’t load families: {(fams.error as Error).message}</p>
   ) : (
-    <SearchSelect label="Set family" noun="family" value={search.code} onChange={(code) => set({ code })} options={(fams.data ?? []).map((f) => ({ value: f.code, label: f.name, hint: f.code.toUpperCase() }))} />
+    <SearchSelect label="Set family" noun="family" nouns="families" value={search.code} onChange={(code) => set({ code })} options={(fams.data ?? []).map((f) => ({ value: f.code, label: f.name, hint: f.code.toUpperCase() }))} />
   );
   const singles = search.tab === 'cards';
 

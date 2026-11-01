@@ -340,21 +340,12 @@ def draw(f: Filters, *, source: Source = "scryfall", n: int = 4, seed: int = 0,
     return out
 
 
-FAMILY_SET_TYPES = frozenset({"expansion", "core", "masters", "commander", "draft_innovation",
-                              "funny", "starter", "duel_deck", "from_the_vault", "spellbook",
-                              "premium_deck", "box", "masterpiece", "arsenal"})
+FAMILY_SET_TYPES = sets.PAPER_FAMILY_SET_TYPES
 
 
 def family_options() -> list[dict]:
-    """Every paper set family a surfer can narrow to: top-level sets (no parent)
-    of the playable set types, newest first."""
-    out = [
-        {"value": s["code"].lower(), "label": s["name"], "year": (s.get("released_at") or "")[:4] or None}
-        for s in scryfall.all_sets()
-        if not s.get("parent_set_code") and not s.get("digital") and s.get("set_type") in FAMILY_SET_TYPES
-    ]
-    out.sort(key=lambda o: (o["year"] or "", o["label"]), reverse=True)
-    return out
+    """Every paper set family a surfer can narrow to (``sets.paper_families``)."""
+    return sets.paper_families()
 
 
 def options() -> dict:

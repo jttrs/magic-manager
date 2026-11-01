@@ -111,6 +111,9 @@ def _md_rankings(res, top: int, prices_note: str) -> str:
         "",
         f"Ranking (workflow C). {prices_note}",
         "",
+        *([f"Partial list: only the first {len(res.rows)} were read — "
+           f"{'EDHREC limited the read' if res.partial_reason == 'rate_limited' else 'a later EDHREC page failed'}; "
+           "re-run later to fetch the rest.", ""] if getattr(res, "partial_reason", None) else []),
         f"| Rank | {entity_hdr} | {metric_hdr} | Type | MV | Lowest $ |",
         "|-----:|------------|------:|------|---:|---------:|",
     ]

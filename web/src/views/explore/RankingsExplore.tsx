@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
-import { familiesQuery, rankingOptionsQuery, rankingQuery } from '../../app/queries';
+import { rankingOptionsQuery, rankingQuery } from '../../app/queries';
 import { useJob } from '../../app/useJob';
 import { useSelection } from '../../app/selection';
 import { ViewLayout } from '../../components/AppShell';
@@ -26,7 +26,7 @@ import type { RankedOut, RankingOut } from '../../core/api';
 import { fmtInt, fmtUsd } from '../../core/format';
 import { exportLines, type GuideCard } from '../../core/guideCard';
 import {
-  edhrecUrl, emptyRankingNote, failureText, fetchedAgo, filtersApply, FIRST_PAGE, fmtMetric, metricLabel, nextPage, OWN_LABEL, rankedCard, rankedTypes,
+  edhrecUrl, emptyRankingNote, failureText, fetchedAgo, filtersApply, FIRST_PAGE, fmtMetric, metricLabel, nextPage, OWN_LABEL, partialRankingNote, rankedCard, rankedTypes,
   rankingPage, rankingRequest, rankingSummary, roleFor, SCOPE_LABEL, TIMEFRAME_LABEL, timeframeApplies,
 } from '../../core/rankings';
 import { RANK_OWN, RANK_SCOPES, RANK_TIMEFRAMES, type CompareSearch, type RankOwn, type RankScope, type RankTimeframe } from '../../core/search';
@@ -53,7 +53,6 @@ export function RankingsExplore({ search, set, subnav }: Props) {
   const dim = ranking.isPlaceholderData && limit === FIRST_PAGE;
   const opts = useQuery(rankingOptionsQuery());
   const commanders = filtersApply(search);
-  const fams = useQuery({ ...familiesQuery(), enabled: commanders });
   const { selected, toggle, clear } = useSelection('explore');
   const [inspecting, setInspecting] = useState<GuideCard | null>(null);
 
@@ -91,7 +90,8 @@ export function RankingsExplore({ search, set, subnav }: Props) {
     for (const c of cards) seen.set(c.key, c);
     return [...selected].map((k) => seen.get(k)).filter((c): c is GuideCard => Boolean(c));
   }, [cards, seen, selected]);
-  const famName = fams.data?.find((f) => f.code === search.fam)?.name;
+  const fams = opts.data?.families;
+  const famName = fams?.find((f) => f.value === search.fam)?.label;
   const tfOn = timeframeApplies(search);
 
   const sidebar = (
@@ -106,6 +106,7 @@ export function RankingsExplore({ search, set, subnav }: Props) {
           <SearchSelect
             label="Color identity"
             noun="color identity"
+            nouns="color identities"
             value={search.color ?? ''}
             onChange={(color) => set({ color: color || undefined })}
             options={[{ value: '', label: 'Any' }, ...(opts.data?.colors ?? []).map((c) => ({ value: c.slug, label: c.label, hint: c.colors || 'C' }))]}
@@ -114,13 +115,14 @@ export function RankingsExplore({ search, set, subnav }: Props) {
           <SearchSelect
             label="Set family"
             noun="family"
+            nouns="families"
             value={search.fam ?? ''}
             onChange={(fam) => set({ fam: fam || undefined })}
             options={[
               { value: '', label: 'Any' },
               // a family from the URL that isn't in the list (yet) still reads as itself
-              ...(search.fam && !fams.data?.some((f) => f.code === search.fam) ? [{ value: search.fam, label: search.fam.toUpperCase() }] : []),
-              ...(fams.data ?? []).map((f) => ({ value: f.code, label: f.name, hint: f.code.toUpperCase() })),
+              ...(search.fam && !fams?.some((f) => f.value === search.fam) ? [{ value: search.fam, label: search.fam.toUpperCase() }] : []),
+              ...(fams ?? []).map((f) => ({ value: f.value, label: f.label, hint: f.owned ? `${f.value.toUpperCase()} · owned` : f.value.toUpperCase() })),
             ]}
           />
           {!commanders && <p id="rank-filters-note" className="text-sm text-on-chrome-muted">Color, tag and set narrow top commanders.</p>}
@@ -206,6 +208,9 @@ export function RankingsExplore({ search, set, subnav }: Props) {
             <div className="mx-5 mb-2">
               <ProgressRule label="Refreshing the ranking" verb="Reading" done={live?.done ?? 0} total={live?.total ?? null} message={live?.log.at(-1)?.msg} />
             </div>
+          )}
+          {r && !running && partialRankingNote(r) && (
+            <p role="status" className="mx-5 mb-2 text-sm text-ink-muted">{partialRankingNote(r)}</p>
           )}
           {r && live?.status === 'failed' && (
             <p role="alert" className="mx-5 mb-2 text-sm text-danger">Couldn’t refresh: {failureText(live.error)} Showing the copy from {ago}.</p>

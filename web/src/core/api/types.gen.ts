@@ -2224,7 +2224,7 @@ export type DeckCombosOut = {
     /**
      * Almost
      *
-     * Combos one card away, in the deck's colours.
+     * Combos one card away, in the deck's colors.
      */
     almost: Array<ComboOut>;
     /**
@@ -2236,7 +2236,7 @@ export type DeckCombosOut = {
     /**
      * Off Color
      *
-     * Near-misses that would need another colour (not listed).
+     * Near-misses that would need another color (not listed).
      */
     off_color: number;
 };
@@ -2402,7 +2402,7 @@ export type DeckEarmarksOut = {
     /**
      * Commander Colors
      *
-     * The commander's colour identity (None = no commander yet, or not a commander format).
+     * The commander's color identity (None = no commander yet, or not a commander format).
      */
     commander_colors: Array<string> | null;
     /**
@@ -3004,6 +3004,32 @@ export type FamilyCardsOut = {
      * Cards
      */
     cards: Array<CardPriceOut>;
+};
+
+/**
+ * FamilyChoiceOut
+ */
+export type FamilyChoiceOut = {
+    /**
+     * Value
+     *
+     * Family code (lowercase), the ranking's `set_family`.
+     */
+    value: string;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Year
+     */
+    year?: string | null;
+    /**
+     * Owned
+     *
+     * You own a card from this family.
+     */
+    owned: boolean;
 };
 
 /**
@@ -5063,6 +5089,12 @@ export type RankingOptionsOut = {
      * Tags already fetched (suggestions).
      */
     tags: Array<string>;
+    /**
+     * Families
+     *
+     * Every top-level paper set family; families you own cards from first, each newest first.
+     */
+    families: Array<FamilyChoiceOut>;
 };
 
 /**
@@ -5147,6 +5179,18 @@ export type RankingOut = {
      * Axes applied locally to the base list (EDHREC's filters don't combine).
      */
     local_filters: Array<'color' | 'tag'>;
+    /**
+     * Pool Complete
+     *
+     * False when EDHREC stopped answering partway through the list: the pool holds only the pages read until a Refresh reads the rest.
+     */
+    pool_complete?: boolean;
+    /**
+     * Pool Partial Reason
+     *
+     * Why the pool is short: EDHREC limited the read (rate_limited) or a page failed.
+     */
+    pool_partial_reason?: 'rate_limited' | 'read_failed' | null;
 };
 
 /**
@@ -6405,7 +6449,7 @@ export type SurfFiltersIn = {
     /**
      * Colors
      *
-     * Colour identity letters WUBRG, or C for colourless.
+     * Color identity letters WUBRG, or C for colorless.
      */
     colors?: string;
     /**

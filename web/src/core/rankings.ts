@@ -108,6 +108,14 @@ export function rankingSummary(r: Pick<RankingOut, 'total' | 'pool' | 'owned' | 
   return `${lead} · you own ${r.owned} · ${r.unused} unused`;
 }
 
+/** When EDHREC stopped answering partway through the list, the pool holds only
+ *  the pages read: say so plainly, with the way out (Refresh). */
+export function partialRankingNote(r: Pick<RankingOut, 'base' | 'pool_complete' | 'pool_partial_reason'>): string | null {
+  if (r.pool_complete !== false) return null;
+  const why = r.pool_partial_reason === 'rate_limited' ? 'EDHREC limited the read' : 'EDHREC stopped answering partway through';
+  return `Showing the first ${r.base.toLocaleString('en-US')} — ${why}. Refresh to fetch the rest.`;
+}
+
 /** A calm note for a list EDHREC left empty (a set family with no commanders yet). */
 export function emptyRankingNote(s: Pick<RankingsState, 'rank' | 'fam'>, famName?: string): string {
   if (filtersApply(s) && value(s.fam)) return `EDHREC lists no commanders from ${famName ?? s.fam?.toUpperCase()} yet.`;

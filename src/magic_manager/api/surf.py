@@ -14,7 +14,7 @@ from .. import surf
 class SurfFiltersIn(BaseModel):
     art: list[str] = Field(default_factory=list, description="Art tag slugs (any of).")
     families: list[str] = Field(default_factory=list, description="Set family anchors (any of).")
-    colors: str = Field("", description="Colour identity letters WUBRG, or C for colourless.")
+    colors: str = Field("", description="Color identity letters WUBRG, or C for colorless.")
     color_match: Literal["exact", "within"] = "exact"
     flavor: Literal["any", "has", "none"] = "any"
     types: list[str] = Field(default_factory=list, description="Card types (any of).")
