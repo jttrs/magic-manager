@@ -24,7 +24,7 @@ class MeOut(BaseModel):
     user: UserOut | None = Field(description="Who is signed in; null when nobody is.")
     csrf_token: str | None = Field(description="Send as X-CSRF-Token on every write while signed in.")
     providers: list[ProviderOut]
-    profiles_open: bool = Field(description="False until per-user collections land: only the admin can sign in.")
+    profiles_open: bool = Field(description="False while profiles are closed (the kill switch): only admins can sign in.")
 
 
 def providers() -> list[ProviderOut]:

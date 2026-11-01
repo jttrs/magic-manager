@@ -586,7 +586,7 @@ The browser companion (H12) applies the same principle with its own threat model
 3. Splitter: today's DB → `catalog.db` + `users/<owner>.db` (rehearsed; owner OK before apply).
 4. `auth.db` + Discord/Google OAuth + sessions + CSRF + invite codes + admin role. *(Built: `magic_manager.auth` + `web/auth_routes.py`; Authlib's PKCE helpers + its `joserfc` for the Google ID token over plain `httpx`. Until step 5 only admins may sign in — `auth.PROFILES_OPEN`.)*
 5. Per-request user connection, per-user undo, jobs carry the user. *(Built: a context-local bound user read by `db.connect` — fail closed when hosted; `userfiles` creates/migrates `users/<id>.db`, `mm auth bind` hands the owner's split file to their auth id; per-user undo + job visibility; catalog writes committed first via `db.catalog_first`. `PROFILES_OPEN` stays False until step 6.)*
-6. Per-user feature flags + admin page; pin H9 features to the owner's machine.
+6. Per-user feature flags + admin page; pin H9 features to the owner's machine. *(Built: auth.db v2 `feature_overrides` + `users.last_seen_at`; `features.flags()` adds the bound user's overrides on top of the file/env layers; `owner_machine` pins four capability paths — the cart read with the server's Mana Pool login, AppleScript tab/rendered-store reads, the Analytics dashboard, the deck fetch's Moxfield session/login (non-admins: public decks only) — to admins when hosted, checked apart from the flags so an override can't unlock them (403 `auth.admin_only`); the Admin page `/admin` + `mm auth flag|flags|enable`; `PROFILES_OPEN = True`.)*
 7. Export / delete-my-account.
 8. Litestream + native home deploy runbook (launchd/systemd). The Dockerfile + CI build land
    first, alongside this doc.

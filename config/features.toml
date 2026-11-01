@@ -3,7 +3,10 @@
 # Turn a flag on for this machine without committing it:
 #   config/features.local.toml (git-ignored), e.g.  [features]\n cart_check = true
 #   or the environment:  MM_FEATURES=cart_check  (comma list; "-name" forces off)
-# Precedence: environment > features.local.toml > this file.
+# Precedence: environment > features.local.toml > this file. Hosted (MM_MODE=hosted),
+# an admin's per-user override (Admin page / `mm auth flag`, stored in auth.db) sits on top.
+# Paths that run on the owner's machine or logins (owner_machine.PATHS) stay admin-only
+# when hosted, whatever these flags say.
 
 [features]
 # Read your Mana Pool cart and audit it against your collection. Internal: read
@@ -25,3 +28,11 @@ companion = false
 # with the browser companion and record what you paid. Internal: not every store
 # path is verified yet (see docs/purchases.md § Verification).
 purchases = false
+
+# One plain sentence per flag, shown on the Admin page next to each switch.
+[about]
+cart_check = "Check a store cart against the collection (in the user's own browser; the server's Mana Pool login stays owner-only)."
+deals = "Deals: watch store prices and read store tabs (in the user's own browser; this server's Chrome stays owner-only)."
+analytics = "The Analytics dashboard (owner-only when hosted: it shows everyone's activity)."
+companion = "The browser companion: read carts, store tabs, decks and collections in the user's own browser."
+purchases = "Store orders → purchases: record what was paid, read with the browser companion."

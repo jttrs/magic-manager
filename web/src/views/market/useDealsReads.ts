@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
-import { useFeature } from '../../app/features';
+import { useFeature, useOwnerPath } from '../../app/features';
 import { dealsTabsQuery, unwrap, watchedQuery } from '../../app/queries';
 import { useCompanion } from '../../app/useCompanion';
 import { useJob, type JobLive } from '../../app/useJob';
@@ -11,6 +11,7 @@ import { fmtInt } from '../../core/format';
 import { clearDismissed, setPrices } from './useDealsData';
 
 const NO_ROWS: PriceRow[] = [];
+const NO_SERVER_TABS = 'Connect the browser companion to read your open tabs — it reads them in this browser. This server can’t read your tabs for you.';
 const done = (l: JobLive | null) => l == null || l.status === 'succeeded' || l.status === 'failed';
 const urlsOf = (o: OpenTabsOut) => o.stores.flatMap((s) => s.tabs.map((t) => t.url));
 
@@ -23,6 +24,8 @@ export function useDealsReads(enabled: boolean) {
   const qc = useQueryClient();
   const c = useCompanion();
   const inBrowser = useFeature('companion') && c.status === 'ready';
+  // Reading tabs in this server's Chrome (AppleScript) is the owner's machine: admins only when hosted.
+  const serverTabs = useOwnerPath('deals.mac_tabs');
   const tabsQuery = useQuery(dealsTabsQuery());
   const prices = useJob();
   const watch = useJob();
@@ -63,8 +66,11 @@ export function useDealsReads(enabled: boolean) {
           setFailure({ error, companion: true });
           return;
         }
-      } else {
+      } else if (serverTabs) {
         out = (await tabsQuery.refetch({ throwOnError: true })).data!;
+      } else {
+        setFailure({ error: new Error(NO_SERVER_TABS), companion: false });
+        return;
       }
       // A new read replaces the pinned group, dismissals included.
       setPrices(qc, new Map());

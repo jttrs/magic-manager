@@ -465,10 +465,17 @@ def fetch_deck_payload(url: str, *, progress: Callable[[str], None] | None = Non
     by Add cards and the scrape canary (``scrape_canary``)."""
     # No stdin and MM_NONINTERACTIVE: a private Moxfield deck that would need a
     # manual browser login fails fast instead of waiting on the server's terminal.
+    # Hosted, only an admin may use this machine's Moxfield session/login
+    # (owner_machine "decks.moxfield_login"); everyone else reads public decks only.
+    from . import owner_machine
+    env = {**os.environ, "MM_NONINTERACTIVE": "1"}
+    env.pop("MM_PUBLIC_DECKS_ONLY", None)
+    args = [sys.executable, str(_IMPORT_DECK), url]
+    if not owner_machine.allowed("decks.moxfield_login"):
+        args.append("--public-only")
+        env["MM_PUBLIC_DECKS_ONLY"] = "1"
     proc = subprocess.Popen(
-        [sys.executable, str(_IMPORT_DECK), url],
-        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-        env={**os.environ, "MM_NONINTERACTIVE": "1"},
+        args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env,
     )
     err_lines: list[str] = []
 

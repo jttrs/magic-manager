@@ -26,7 +26,7 @@ from urllib.parse import parse_qs, urlsplit
 
 import httpx
 
-from . import storepage, vendors
+from . import owner_machine, storepage, vendors
 
 PACE_SECONDS = 1.0
 CACHE_SECONDS = 30 * 60
@@ -113,6 +113,7 @@ end tell
 
 
 def _osascript(script: str) -> str:
+    owner_machine.require("deals.mac_tabs")  # the server Mac's Chrome: admins only when hosted
     try:
         res = subprocess.run(["osascript", "-e", script], text=True, capture_output=True, check=False,
                              timeout=OSASCRIPT_TIMEOUT)

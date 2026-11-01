@@ -10,7 +10,6 @@ import json
 import os
 import shlex
 import sys
-from urllib.parse import urlencode
 from datetime import datetime
 from pathlib import Path
 
@@ -113,7 +112,7 @@ def secret_status():
 
 
 auth_app = typer.Typer(no_args_is_help=True,
-                       help="Hosted sign-in (MM_MODE=hosted): invite codes, users, revoking sessions. Writes auth.db.")
+                       help="Hosted sign-in (MM_MODE=hosted): invites, users, sign-outs, disable/enable, per-user flags. Writes auth.db (the Admin page's CLI twin).")
 app.add_typer(auth_app, name="auth")
 
 
@@ -134,35 +133,32 @@ def auth_invite(
     as_json: bool = typer.Option(False, "--json", help="Print JSON."),
 ):
     """Mint a single-use invite code. It is printed ONCE (only its hash is stored).
-
-    Until profiles open (per-user collections), only --admin invites can be minted."""
-    from . import auth
-    from .auth import store as auth_store
-    if not auth.may_sign_in(admin):
-        typer.echo(f"error: {auth.PROFILES_SOON} Pass --admin to invite an admin.", err=True)
-        raise typer.Exit(2)
-    inv = auth_store.create_invite(is_admin=admin, expires_in=_parse_duration(expires))
+    The Admin page's *Invite someone* does the same."""
+    from .auth import admin as auth_admin
     try:
-        origin = auth.public_origin()
-    except auth.HostedConfigError:
-        origin = None
-    url = f"{origin}/?{urlencode({'invite': inv.code})}" if origin else None
+        inv = auth_admin.mint_invite(is_admin=admin, expires_in=_parse_duration(expires))
+    except PermissionError as e:  # profiles closed (the kill switch): admins only
+        typer.echo(f"error: {e} Pass --admin to invite an admin.", err=True)
+        raise typer.Exit(2)
     if as_json:
-        typer.echo(json.dumps({"code": inv.code, "admin": inv.is_admin, "expires_at": inv.expires_at, "url": url}))
+        typer.echo(json.dumps({"code": inv.code, "admin": inv.is_admin, "expires_at": inv.expires_at, "url": inv.url}))
         return
     typer.echo(f"invite ({'admin' if inv.is_admin else 'member'}, single use, expires {inv.expires_at}):")
-    typer.echo(f"  {url or inv.code}")
-    if not url:
+    typer.echo(f"  {inv.url or inv.code}")
+    if not inv.url:
         typer.echo("  (set MM_PUBLIC_ORIGIN to print a sign-in link; the person opens /?invite=<code>)")
 
 
 @auth_app.command("users")
 def auth_users(as_json: bool = typer.Option(False, "--json", help="Print JSON.")):
-    """Everyone who can sign in: id, name, email, admin, linked providers, disabled."""
-    from .auth import store as auth_store
+    """Everyone who can sign in: id, name, email, admin, linked providers, last seen,
+    live sessions, disabled, and their flag overrides."""
+    from .auth import admin as auth_admin
     rows = [{"id": u.id, "display_name": u.display_name, "email": u.email, "admin": u.is_admin,
-             "providers": provs, "created_at": u.created_at, "disabled_at": u.disabled_at}
-            for u, provs in auth_store.users()]
+             "providers": u.providers, "created_at": u.created_at, "last_seen_at": u.last_seen_at,
+             "sessions": u.sessions, "disabled_at": u.disabled_at,
+             "overrides": {f.name: f.override for f in u.flags if f.override is not None}}
+            for u in auth_admin.users()]
     if as_json:
         typer.echo(json.dumps(rows, indent=2))
         return
@@ -171,8 +167,10 @@ def auth_users(as_json: bool = typer.Option(False, "--json", help="Print JSON.")
         return
     for r in rows:
         flags = ", ".join(x for x in ("admin" if r["admin"] else "", "DISABLED" if r["disabled_at"] else "") if x)
+        over = " ".join(f"{k}={'on' if v else 'off'}" for k, v in r["overrides"].items())
         typer.echo(f"{r['id']}  {r['display_name']}  {r['email'] or '-'}  [{', '.join(r['providers'])}]"
-                   + (f"  ({flags})" if flags else ""))
+                   f"  seen {r['last_seen_at'] or 'never'}" + (f"  ({flags})" if flags else "")
+                   + (f"  flags: {over}" if over else ""))
 
 
 @auth_app.command("revoke")
@@ -181,13 +179,67 @@ def auth_revoke(
     disable: bool = typer.Option(False, "--disable", help="Also disable the user: they can't sign in again."),
 ):
     """Sign a user out everywhere (ends every session); --disable also blocks future sign-ins."""
-    from .auth import store as auth_store
+    from .auth import admin as auth_admin
     try:
-        n = auth_store.revoke(user, disable=disable)
+        n = auth_admin.disable(user) if disable else auth_admin.sign_out(user)
     except LookupError as e:
         typer.echo(f"error: {e}", err=True)
         raise typer.Exit(2)
     typer.echo(f"ended {n} session(s)" + ("; user disabled" if disable else ""))
+
+
+@auth_app.command("enable")
+def auth_enable(user: str = typer.Option(..., "--user", help="The user id (see mm auth users).")):
+    """Let a disabled user sign in again."""
+    from .auth import admin as auth_admin
+    try:
+        auth_admin.enable(user)
+    except LookupError as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+    typer.echo("user enabled — they can sign in again")
+
+
+@auth_app.command("flag")
+def auth_flag(
+    user: str = typer.Option(..., "--user", help="The user id (see mm auth users)."),
+    flag: str = typer.Option(..., "--flag", help="A flag declared in config/features.toml."),
+    value: str = typer.Option(..., "--set", help="on | off | default (removes the override)."),
+):
+    """Override one feature flag for one user (hosted). Paths that run on the owner's
+    machine or logins stay admin-only whatever the flag says."""
+    from .auth import admin as auth_admin
+    choice = {"on": True, "off": False, "default": None}.get(value.strip().lower(), "bad")
+    if choice == "bad":
+        typer.echo("error: --set must be on, off or default", err=True)
+        raise typer.Exit(2)
+    try:
+        auth_admin.set_flag(user, flag, choice)
+    except (LookupError, ValueError) as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+    typer.echo(f"{flag} for {user}: {value.strip().lower()}")
+
+
+@auth_app.command("flags")
+def auth_flags(
+    user: str = typer.Option(..., "--user", help="The user id (see mm auth users)."),
+    as_json: bool = typer.Option(False, "--json", help="Print JSON."),
+):
+    """Every flag for one user: the default, their override and the effective value."""
+    from .auth import admin as auth_admin
+    try:
+        row = auth_admin.user(user)
+    except LookupError as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+    if as_json:
+        typer.echo(json.dumps([vars(f) for f in row.flags], indent=2))
+        return
+    for f in row.flags:
+        over = "default" if f.override is None else ("on" if f.override else "off")
+        pinned = f"  (owner-only here: {', '.join(f.owner_paths)})" if f.owner_paths else ""
+        typer.echo(f"{f.name}: {'on' if f.effective else 'off'}  [override: {over}; default {'on' if f.default else 'off'}]{pinned}")
 
 
 @auth_app.command("bind")

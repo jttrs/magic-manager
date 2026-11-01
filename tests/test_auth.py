@@ -336,14 +336,23 @@ def test_google_bad_signature_refused(hosted, provider):
     assert _error(sign_in(c, provider, "google", invite=inv.code)) == "id_token"
 
 
-# ---------- step-5 rail: admins only ----------
+# ---------- the profiles rail (kill switch): admins only while closed ----------
 
-def test_non_admin_invites_cannot_be_minted():
+def test_profiles_are_open_members_sign_in(hosted, provider):
+    assert auth.PROFILES_OPEN
+    r = CliRunner().invoke(cli_app, ["auth", "invite", "--json"])
+    assert r.exit_code == 0 and json.loads(r.output)["admin"] is False
+    c = _client(hosted)
+    r = sign_in(c, provider, "discord", invite=json.loads(r.output)["code"])
+    assert r.headers["location"] == "/" and me(c)["user"]["is_admin"] is False
+    assert me(c)["profiles_open"] is True
+    assert c.get("/api/undo").status_code == 200
+
+
+def test_closed_profiles_refuse_members(hosted, provider, monkeypatch):
+    monkeypatch.setattr(auth, "PROFILES_OPEN", False)
     r = CliRunner().invoke(cli_app, ["auth", "invite"])
     assert r.exit_code == 2 and "Profiles open soon" in r.output
-
-
-def test_non_admin_can_never_reach_a_collection(hosted, provider):
     member = store.create_invite(is_admin=False)  # minted below the CLI (it refuses)
     c = _client(hosted)
     r = sign_in(c, provider, "discord", invite=member.code)
@@ -467,7 +476,7 @@ def test_me_lists_configured_providers_without_secrets(hosted, monkeypatch):
     monkeypatch.delenv("MM_OAUTH_GOOGLE_CLIENT_ID")
     body = me(_client(hosted))
     assert [p["name"] for p in body["providers"]] == ["discord"]
-    assert body["profiles_open"] is False
+    assert body["profiles_open"] is True
     assert "secret" not in json.dumps(body)
 
 

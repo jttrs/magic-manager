@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
 import { Popover } from 'radix-ui';
 import { useState, type SVGProps } from 'react';
 import { meQuery, signOut } from '../../app/auth';
 import { serverModeQuery } from '../../app/queries';
 import { Button } from '../Button';
+import { buttonClass } from '../buttonClass';
 import { IconAction } from '../IconAction';
 
 function PersonIcon(props: SVGProps<SVGSVGElement>) {
@@ -43,6 +45,11 @@ export function AccountButton() {
             {user.is_admin && <span className="text-on-chrome-muted">Admin</span>}
           </p>
           {error && <p role="alert" className="m-0 text-danger">{error}</p>}
+          {user.is_admin && (
+            <Popover.Close asChild>
+              <Link to="/admin" className={`${buttonClass('chrome', 'quiet')} w-full`}>People and features</Link>
+            </Popover.Close>
+          )}
           <Button
             className="w-full"
             disabled={busy}

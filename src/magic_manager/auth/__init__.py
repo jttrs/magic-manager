@@ -2,14 +2,15 @@
 
 Only ``MM_MODE=hosted`` turns any of it on; local mode has no login (H11). This module
 holds the hosted configuration; ``store`` is ``auth.db``, ``oauth`` the provider flows,
-``ratelimit`` the in-memory limits, and ``magic_manager.web.auth_routes`` the web gate.
+``ratelimit`` the in-memory limits, ``admin`` the Admin page's operations, and
+``magic_manager.web.auth_routes`` the web gate.
 
-**Profiles rail.** Each signed-in user has their own collection file (step 5:
-``users/<id>.db``, bound per request), but until step 6 pins the features that use
-the owner's machine or logins (cart check, store tabs, the analytics dashboard, the
-deck fetch's Moxfield session) only admins may hold a session: :data:`PROFILES_OPEN`
-is False, ``mm auth invite`` mints only ``--admin`` invites, and a non-admin sign-in
-is refused ("Profiles open soon"). Step 6 flips the constant.
+**Profiles rail.** Each signed-in user has their own collection file
+(``users/<id>.db``, bound per request), and the paths that use the owner's machine
+or logins are pinned to admins (:mod:`magic_manager.owner_machine`), so profiles are
+open (:data:`PROFILES_OPEN`, step 6): member invites mint and sign in. Setting it
+back to False is the kill switch — only admins can sign in or be invited
+("Profiles open soon").
 """
 from __future__ import annotations
 
@@ -21,7 +22,7 @@ from .. import db
 from .. import secrets as secrets_mod
 from ..analytics import consent as _consent
 
-PROFILES_OPEN = False
+PROFILES_OPEN = True
 PROFILES_SOON = "Profiles open soon — for now only the admin can sign in."
 
 PROVIDER_TITLES = {"discord": "Discord", "google": "Google"}
@@ -35,7 +36,7 @@ SECRETS = tuple(n for pair in SECRET_NAMES.values() for n in pair)
 
 
 def may_sign_in(is_admin: bool) -> bool:
-    """The step-5 rail in one place: until profiles open, only admins sign in."""
+    """The profiles rail in one place: while profiles are closed, only admins sign in."""
     return PROFILES_OPEN or is_admin
 
 

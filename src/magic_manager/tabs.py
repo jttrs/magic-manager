@@ -77,6 +77,8 @@ class TabRead:
 
 
 def _osascript(script: str) -> str:
+    from . import owner_machine
+    owner_machine.require("deals.mac_tabs")  # the server Mac's browser: admins only when hosted
     res = subprocess.run(["osascript", "-e", script], text=True, capture_output=True, check=False)
     if res.returncode != 0:
         raise TabsUnavailable(_explain(res.stderr.strip()))

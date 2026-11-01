@@ -27,6 +27,7 @@ Moxfield network guard by path.
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -36,6 +37,10 @@ SESSION_FILE = SESSION_DIR / "moxfield.json"
 
 LOGIN_URL = "https://www.moxfield.com/account/signin"
 HOME_URL = "https://www.moxfield.com/"
+# Set by the web app for a non-admin's deck fetch (hosted): public decks only.
+PUBLIC_ONLY_ENV = "MM_PUBLIC_DECKS_ONLY"
+PUBLIC_ONLY_MESSAGE = ("This Moxfield deck is private. Read it with the browser companion (it reads the deck "
+                       "in your own browser, signed in as you), or make the deck public and fetch it again.")
 
 
 def _load_env() -> dict:
@@ -104,6 +109,10 @@ class MoxfieldSession:
         # logged-OUT context — enough to clear Cloudflare and read a PUBLIC deck.
         # This is the default first attempt for reads; callers escalate to a
         # full (authenticated) session only when the anonymous fetch 401/403s.
+        if not anonymous and os.environ.get(PUBLIC_ONLY_ENV) == "1":
+            # The web app's non-admin deck fetch (owner_machine "decks.moxfield_login"):
+            # never this machine's persisted session, login or a headed login window.
+            raise RuntimeError(PUBLIC_ONLY_MESSAGE)
         self.fresh = fresh
         self.headless = headless
         self.anonymous = anonymous
