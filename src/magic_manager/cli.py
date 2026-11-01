@@ -46,6 +46,8 @@ INPUT_DIR = CHECKLISTS_DIR
 EXIT_UNPROCESSED_INTAKE = 3
 # Ingest collision: file SHA matches a prior successful ingest_log row.
 EXIT_DUPLICATE_INGEST = 4
+# Modify checklist refused: rows it would change moved since it was generated.
+EXIT_STALE_CHECKLIST = 5
 
 VALID_RARITIES = ("mythic", "rare", "uncommon", "common", "bonus", "special")
 
@@ -1349,6 +1351,11 @@ def set_ingest(
         False, "--force",
         help="Re-ingest even if this exact file (by SHA-256) succeeded previously.",
     ),
+    allow_stale: bool = typer.Option(
+        False, "--allow-stale",
+        help="Ingest a modify checklist even if the collection changed since it "
+             "was generated — those rows are set back to the sheet's values.",
+    ),
     json_out: bool = typer.Option(
         False, "--json",
         help="Emit a single JSON document on stdout summarizing the run "
@@ -1367,6 +1374,11 @@ def set_ingest(
     (``modify`` checklists → replace semantics, ``add`` checklists → additive
     semantics). Pass ``--mode`` explicitly to override; the override is honored
     with a stderr warning when it disagrees with the file's declared mode.
+
+    A modify ingest is refused (exit 5, nothing written) when the ledger shows
+    a row it would change moved since the file's ``_meta.generated_at`` — the
+    stale sheet would set it back. Regenerate the checklist, or pass
+    ``--allow-stale``.
     """
     if mode is not None and mode not in ("replace", "additive"):
         typer.echo(f"error: --mode must be 'replace' or 'additive', got {mode!r}", err=True)
@@ -1531,8 +1543,35 @@ def set_ingest(
     try:
         result = sets_mod.ingest_inventory_from_xlsx(
             src, mode=mode, zero_untouched=do_zero,
-            label=log_label, source_sha256=sha,
+            label=log_label, source_sha256=sha, allow_stale=allow_stale,
         )
+    except sets_mod.StaleCounts as e:
+        # Nothing was written or archived; the file stays in place.
+        if json_out:
+            json.dump({"status": "stale", "file": str(src), "message": str(e),
+                       "rows": e.rows}, sys.stdout, indent=2)
+            sys.stdout.write("\n")
+        else:
+            typer.echo(f"error: {e}", err=True)
+            names = {}
+            if e.rows:
+                ids = [r["scryfall_id"] for r in e.rows]
+                with db.connect() as conn:
+                    for c in conn.execute(
+                        "SELECT scryfall_id, set_code, collector_number, name FROM cards "
+                        f"WHERE scryfall_id IN ({','.join('?' for _ in ids)})", ids):
+                        names[c["scryfall_id"]] = c
+            for r in e.rows[:20]:
+                c = names.get(r["scryfall_id"])
+                label = (f"{(c['set_code'] or '').upper()} {c['collector_number']} {c['name']}"
+                         if c else r["scryfall_id"])
+                typer.echo(f"  {label} [{r['finish']}]: sheet {r['expected']} → now {r['current']}",
+                           err=True)
+            if len(e.rows) > 20:
+                typer.echo(f"  …and {len(e.rows) - 20} more", err=True)
+            typer.echo(f"Regenerate it with `uv run mm set master-list {anchor} --mode modify`, "
+                       "or pass --allow-stale.", err=True)
+        raise typer.Exit(EXIT_STALE_CHECKLIST)
     except Exception as e:
         error = repr(e)
 
@@ -3071,6 +3110,9 @@ def deck_compose_cmd(
     ``deck_assignments`` — a separate join table so inventory qty is preserved
     and the recipe survives a later decompose.
 
+    Tops up: only the recipe cards NOT already pledged to this deck are
+    pledged, so re-running on a partly-pledged deck completes it.
+
     Overflow protection: refuses to write if the total pledged (including
     prior assignments across all decks) would exceed either the deck's own
     recipe or the free inventory pool.
@@ -3083,10 +3125,18 @@ def deck_compose_cmd(
     if dry_run:
         typer.echo(f"# selector: deck:{slug} (compose plan, foil_first={foil_first})")
         typer.echo(f"# rows: {len(plan['rows'])}  shortfalls: {len(plan['shortfalls'])}  either_choices: {len(plan['either_choices'])}")
+        typer.echo(
+            f"# already pledged to this deck: "
+            f"{sum(min(r['pledged'], r['need']) for r in plan['rows'])} of "
+            f"{sum(r['need'] for r in plan['rows'])} card-qty"
+        )
         if plan["shortfalls"]:
             typer.echo("shortfalls:")
             for s in plan["shortfalls"][:20]:
-                typer.echo(f"  {s['scryfall_id'][:8]}/{s['finish']}: need {s['need']}, free {s['free']}")
+                typer.echo(
+                    f"  {s['scryfall_id'][:8]}/{s['finish']}: need {s['remaining']} "
+                    f"(recipe {s['need']}, pledged {s['pledged']}), free {s['free']}"
+                )
             if len(plan["shortfalls"]) > 20:
                 typer.echo(f"  ...and {len(plan['shortfalls']) - 20} more")
         if plan["either_choices"]:
@@ -4687,6 +4737,31 @@ def db_unlock_cmd(
     typer.echo(f"Removed {len(present)} sidecar file(s).")
 
 
+def _built_decks_short() -> list[dict]:
+    """Built decks (``precon_state = 'built'``) whose pledges don't cover their
+    recipe: ``[{slug, need, pledged, short, coverable}]`` where ``short`` = Σ the
+    plan's ``remaining``, ``coverable`` = how much of it free inventory covers."""
+    with db.connect() as conn:
+        slugs = [r["slug"] for r in conn.execute(
+            "SELECT slug FROM decks WHERE precon_state = 'built' ORDER BY slug")]
+    out: list[dict] = []
+    for slug in slugs:
+        try:
+            plan = decks_mod.deck_compose_plan(slug)
+        except LookupError:
+            continue
+        short = sum(r["remaining"] for r in plan["rows"])
+        if short > 0:
+            out.append({
+                "slug": slug,
+                "need": sum(r["need"] for r in plan["rows"]),
+                "pledged": sum(min(r["pledged"], r["need"]) for r in plan["rows"]),
+                "short": short,
+                "coverable": sum(min(r["remaining"], r["free"]) for r in plan["rows"]),
+            })
+    return out
+
+
 @audit_app.command("deck-inventory")
 def audit_deck_inventory_cmd(
     fix: bool = typer.Option(False, "--fix", help="Delete orphan (empty) decks found."),
@@ -4704,6 +4779,9 @@ def audit_deck_inventory_cmd(
         report-only).
       - **over-assignment** — printings whose ``deck_assignments`` total exceeds
         the owned inventory quantity (report-only; never auto-changed).
+      - **built decks short of their recipe** — ``built`` decks whose pledges
+        don't cover the playable recipe, with how much free inventory could top
+        up via ``mm deck compose`` (report-only; doesn't change the exit code).
     """
     with db.connect() as conn:
         # Orphan = the deck's CURRENT version (V18: deck_cards hangs off
@@ -4778,6 +4856,15 @@ def audit_deck_inventory_cmd(
                         f"{last_removal['method']} ({last_removal['label'] or '—'}) "
                         f"at {last_removal['at']}"
                     )
+
+    short_decks = _built_decks_short()
+    typer.echo(f"Built decks short of their recipe: {len(short_decks)}")
+    for d in short_decks:
+        typer.echo(
+            f"  {d['slug']}  pledged {d['pledged']} of {d['need']}; free inventory "
+            f"covers {d['coverable']} of the {d['short']} missing — "
+            f"`uv run mm deck compose {d['slug']}`"
+        )
 
     if fix and orphans:
         for o in orphans:
