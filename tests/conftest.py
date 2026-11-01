@@ -286,9 +286,28 @@ def _isolated_scraper_health(tmp_path, monkeypatch):
 @pytest.fixture(autouse=True)
 def _single_layout(monkeypatch):
     """Tests run in the single-file layout unless one opts into split
-    (tests/test_layout.py), whatever the developer's shell exports."""
+    (tests/test_layout.py), whatever the developer's shell exports. The hosted
+    strict flag (set by a hosted ``create_app``) never leaks into the next test."""
     for var in ("MM_LAYOUT", "MM_DATA_DIR", "MM_USER"):
         monkeypatch.delenv(var, raising=False)
+    from magic_manager import layout
+    layout.set_strict(False)
+    yield
+    layout.set_strict(False)
+
+
+@pytest.fixture
+def split_dir(tmp_db, tmp_path, monkeypatch):
+    """A split data dir (``catalog.db`` + ``users/owner.db``) made by the real
+    splitter from this test's ``tmp_db`` (seed it first), and the process pointed at
+    it: ``MM_LAYOUT=split``, ``MM_DATA_DIR``, no ``MAGIC_MANAGER_DB``."""
+    from magic_manager import split
+    data = tmp_path / "data"
+    split.split(tmp_db, data)
+    monkeypatch.delenv("MAGIC_MANAGER_DB")
+    monkeypatch.setenv("MM_LAYOUT", "split")
+    monkeypatch.setenv("MM_DATA_DIR", str(data))
+    return data
 
 
 @pytest.fixture(autouse=True)

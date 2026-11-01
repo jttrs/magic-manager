@@ -31,7 +31,6 @@ from pathlib import Path
 from . import db
 from . import layout as _layout
 
-_SIDECARS = ("-journal", "-wal", "-shm")
 _JOURNAL_MODES = {"delete", "truncate", "persist", "wal"}
 _CREATE_RE = re.compile(r"^(CREATE\s+(?:UNIQUE\s+)?(?:TABLE|INDEX|TRIGGER)\s+(?:IF\s+NOT\s+EXISTS\s+)?)", re.I)
 # Attached-schema names on the copy connection.
@@ -103,8 +102,7 @@ def _qualify(sql: str, schema: str) -> str:
     return out
 
 
-def _sidecars(path: Path) -> list[Path]:
-    return [p for p in (path.with_name(path.name + s) for s in _SIDECARS) if p.exists()]
+_sidecars = db.sidecars
 
 
 def _unlink(path: Path) -> None:

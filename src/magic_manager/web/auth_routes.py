@@ -28,7 +28,8 @@ from fastapi import APIRouter, FastAPI, Query, Request
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 from urllib.parse import urlencode
 
-from .. import analytics, auth
+from .. import analytics, auth, db, userfiles
+from .. import layout as _layout
 from ..api import auth as auth_api
 from ..auth import oauth, ratelimit, store
 
@@ -200,6 +201,11 @@ def _finish(request: Request, profile: oauth.Profile, pending: oauth.Pending) ->
     if not auth.may_sign_in(user.is_admin):
         return _fail("profiles_soon")
     store.update_profile(user.id, profile.display_name, profile.email)
+    try:
+        userfiles.ensure(db.data_dir(), user.id)  # first sign-in: an empty collection file; else migrate it
+    except Exception:  # noqa: BLE001 — never sign in to a missing/unmigrated file
+        log.exception("could not prepare the collection file of user %s", user.id)
+        return _fail("profile_unavailable")
     new = store.create_session(user.id, replaces=request.cookies.get(cookie_name()))
     resp = RedirectResponse(pending.next_path, status_code=303)
     _set_cookie(resp, cookie_name(), new.token, int(store.SESSION_ABSOLUTE.total_seconds()))
@@ -239,11 +245,24 @@ def install(app: FastAPI) -> None:
                 return _refuse(request, 403, "auth.csrf", "This page is out of date — reload it and try again.")
             if not write_limiter.take(session.token_hash):
                 return _refuse(request, 429, "auth.rate_limited", "Too many changes at once — wait a minute and try again.")
-        # Server events in this request (and delete-my-data) key on the signed-in user.
+        if session is not None and not userfiles.path_for(db.data_dir(), session.user.id).exists():
+            # A session minted before its file existed (e.g. before step 5): create it now.
+            try:
+                await asyncio.to_thread(userfiles.ensure, db.data_dir(), session.user.id)
+            except Exception:  # noqa: BLE001 — never serve a request without the user's own file
+                log.exception("could not prepare the collection file of user %s", session.user.id)
+                return _refuse(request, 503, "auth.profile_unavailable",
+                               "Your collection couldn’t be opened on this server. Try again in a moment.")
+        # Server events in this request (and delete-my-data) key on the signed-in user,
+        # and every connection in it opens ONLY that user's file (no session → none:
+        # db.connect fails closed). Never from client input.
         bound = analytics.bind(replace(analytics.current(), user_id=session.user.id)) if session else None
+        user_token = _layout.bind_user(session.user.id) if session else None
         try:
             resp = await call_next(request)
         finally:
+            if user_token is not None:
+                _layout.reset_user(user_token)
             if bound is not None:
                 analytics.reset(bound)
         resp.headers.setdefault("Cache-Control", "no-store")

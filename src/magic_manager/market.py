@@ -230,7 +230,8 @@ def product_cost(kind: str, set_code: str, name: str, finish: str | None = None)
     as a line (exact + floor + your free copies). Memoized 30 min per product —
     market prices don't move faster, and valuing is slow. The memo is also keyed
     on the inventory/pledge fingerprint so owned/free counts never go stale."""
-    key = (kind, set_code.lower(), name, finish)
+    # db.user_scope(): owned/free counts are one user's — never served to another.
+    key = (db.user_scope(), kind, set_code.lower(), name, finish)
     fp = _inventory_fingerprint()
     hit = _cost_memo.get(key)
     if hit and hit[1] == fp and time.monotonic() - hit[0] < _COST_TTL:

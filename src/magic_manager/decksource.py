@@ -513,6 +513,10 @@ def import_deck(cards: list[dict], *, slug: str, name: str | None = None,
             slug = existing.slug  # a forced re-pull targets the matched deck
 
         by_sid, by_setcn, by_name, warnings = _resolve_cards(cards)
+        matched = {m["id"]: m for c in cards if (m := _match(c, by_sid, by_setcn, by_name)) is not None}
+        with db.catalog_first(conn):  # §25.3: cards commit before the deck writes below
+            for card in matched.values():
+                db.upsert_card(conn, card)
 
         created = replaced = False
         if decks_mod.deck_get(slug, conn=conn) is None:
@@ -541,7 +545,6 @@ def import_deck(cards: list[dict], *, slug: str, name: str | None = None,
                     "reason": "unresolved against Scryfall",
                 })
                 continue
-            db.upsert_card(conn, card)
             sid = card["id"]
             r = decks_mod.deck_add_card(slug, sid, c["board"], c["finish"], c["qty"], conn=conn)
             if r["action"] == "inserted":

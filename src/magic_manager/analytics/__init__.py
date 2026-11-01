@@ -16,6 +16,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
+from .. import layout as _layout
 from . import catalog, consent, identity, store
 
 log = logging.getLogger("magic_manager.analytics")
@@ -92,9 +93,14 @@ def record(name: str, props: dict | None = None, *, ctx: Context | None = None) 
         if consent.disabled():
             return False
         checked = catalog.validate(name, props, source="server")
-        if not consent.get().allows(checked.event.category):
+        ctx = ctx or current()
+        # The event's user decides (a job or the telemetry middleware records
+        # outside the request's bound context).
+        with _layout.as_user(ctx.user_id if ctx.user_id and ctx.user_id != _layout.bound_user() else None):
+            allowed = consent.get().allows(checked.event.category)
+        if not allowed:
             return False
-        store.insert([_row(checked, ctx or current())])
+        store.insert([_row(checked, ctx)])
         return True
     except Exception as e:  # noqa: BLE001 — analytics never breaks the caller
         log.warning("analytics: could not record %s (%s: %s)", name, type(e).__name__, e)

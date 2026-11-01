@@ -3,8 +3,8 @@
 Only the tables you own are copied (inventory + the provenance ledger, decks,
 their cards/assignments/versions, wishlist, earmarks, set targets, settings) —
 a few MB, versus the 677 MB live DB that is mostly the rebuildable card/price
-cache. The snapshot is a separate SQLite file beside the DB (``undo.db``), with
-exactly one slot.
+cache. The snapshot is a separate SQLite file beside the DB (``undo.db``; in the
+split layout one per user, ``users/<id>.undo.db``), with exactly one slot.
 
 * :func:`take` overwrites the slot (atomically: written to a temp file, then
   renamed). The web app takes one before the first write of each session
@@ -51,6 +51,12 @@ class UndoError(RuntimeError):
 
 
 def snapshot_path() -> Path:
+    """The restore point of whoever this context's connection opens: ``undo.db``
+    beside the single file, ``users/<id>.undo.db`` beside a split user file."""
+    lay = db.layout()
+    if lay.kind == "split":
+        from .userfiles import undo_path_for
+        return undo_path_for(lay.path)
     return db.db_dir() / SNAPSHOT_FILE
 
 
@@ -297,17 +303,21 @@ class SessionGuard:
     nothing changed. Requests overlapping an in-flight pending snapshot join it.
     """
 
-    def __init__(self, gap: float = SESSION_GAP_SECONDS, clock=time.monotonic):
+    def __init__(self, gap: float = SESSION_GAP_SECONDS, clock=time.monotonic, *, path: Path | None = None):
         self._gap = gap
         self._clock = clock
+        self._path = path        # this guard's restore point; None = resolve per call
         self._last: float | None = None
         self._lock = threading.Lock()
         self._inflight = 0       # requests sharing the pending snapshot
         self._wrote = False      # any of them may have written
 
-    @staticmethod
-    def pending_path() -> Path:
-        return snapshot_path().with_name(SNAPSHOT_FILE + ".pending")
+    def snapshot_path(self) -> Path:
+        return self._path or snapshot_path()
+
+    def pending_path(self) -> Path:
+        from .userfiles import pending_path_for
+        return pending_path_for(self.snapshot_path())
 
     def begin(self, reason: str) -> bool:
         """Call before a write. Returns True when the caller must call
@@ -335,7 +345,7 @@ class SessionGuard:
                 return
             pending = self.pending_path()
             if self._wrote:
-                os.replace(pending, snapshot_path())
+                os.replace(pending, self.snapshot_path())
                 self._last = self._clock()
             else:
                 pending.unlink(missing_ok=True)
@@ -349,3 +359,22 @@ class SessionGuard:
             if self._inflight:
                 raise UndoError("A change is still being saved — try again in a moment.")
             yield
+
+
+class SessionGuards:
+    """One :class:`SessionGuard` per user (keyed on that user's restore point), so
+    each user's 30-minute session and pending snapshot are their own."""
+
+    def __init__(self, gap: float = SESSION_GAP_SECONDS, clock=time.monotonic):
+        self._gap, self._clock = gap, clock
+        self._guards: dict[str, SessionGuard] = {}
+        self._lock = threading.Lock()
+
+    def current(self) -> SessionGuard:
+        """The guard of the user bound to this context."""
+        path = snapshot_path()
+        with self._lock:
+            g = self._guards.get(str(path))
+            if g is None:
+                g = self._guards[str(path)] = SessionGuard(self._gap, self._clock, path=path)
+            return g
