@@ -11,16 +11,21 @@ import { Button } from '../components/Button';
 import { Chevron } from '../components/Chevron';
 import { InfoTip } from '../components/InfoTip';
 import { MultiSelect } from '../components/MultiSelect';
+import { IconAction } from '../components/IconAction';
 import { DateField, SideSection, TextField } from '../components/Sidebar';
+import { FindProductsMark, ReadOrdersMark } from '../components/StoreMarks';
 import { SplitPanes } from '../components/SplitPanes';
 import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../components/States';
 import { VirtualGuide } from '../components/VirtualGuide';
-import type { HistoryEntryOut } from '../core/api';
+import type { HistoryEntryOut, PurchaseOut } from '../core/api';
+import { exportLines } from '../core/guideCard';
 import { fmtCount, fmtInt, fmtUsd } from '../core/format';
-import { datedNote, filterHistory, groupTimeline, historyCardGroups, KIND_HELP, KIND_LABEL, kindCounts, movesSummary, type HistorySearch, type MonthGroup, type TimelineRow } from '../core/history';
+import { datedNote, filterHistory, filterOrders, fromHistoryLine, groupTimeline, historyCardGroups, KIND_HELP, KIND_LABEL, kindCounts, mergeOrders, movesSummary, type HistorySearch, type MonthGroup, type TimelineRow } from '../core/history';
+import { STATUS_LABEL } from '../core/purchases';
 import { CollectionTabs } from './collection/CollectionTabs';
+import { FindProductsDialog } from './history/FindProductsDialog';
 import { OrderReview } from './history/OrderReview';
-import { OrdersList, OrdersTotals } from './history/OrdersList';
+import { OrderRow, OrdersTotals } from './history/OrderRow';
 import { ReadOrdersDialog } from './history/ReadOrdersDialog';
 import { RevertImport } from './history/RevertImport';
 
@@ -29,7 +34,8 @@ const DAY = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', t
 const FULL = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeZone: 'UTC' });
 const dayLabel = (at: string) => DAY.format(new Date(at));
 
-/** Purchase history: every ledger entry, newest first; the chosen entry's cards on the right. */
+/** Purchase history: every ledger entry and store order, newest first — orders still to decide pinned
+ *  under Needs review; the chosen entry's cards (or the order's review) on the right. */
 export function HistoryView() {
   const search = route.useSearch();
   const navigate = useNavigate({ from: '/collection/history' });
@@ -38,21 +44,30 @@ export function HistoryView() {
   const narrow = useMediaQuery('(max-width: 47.99rem)');
   const purchasesOn = useFeature('purchases');
   const orders = useQuery(purchasesQuery(purchasesOn));
-  const showOrders = purchasesOn && search.orders;
+  const openEntry = (entry: number | undefined) => set({ entry, order: undefined });
+  const openOrder = (order: number | undefined) => set({ order, entry: undefined });
 
-  const entries = q.data?.entries;
-  const shown = useMemo(() => (entries ? filterHistory(entries, search) : []), [entries, search]);
-  const groups = useMemo(() => groupTimeline(shown), [shown]);
-  const kinds = useMemo(() => (entries ? kindCounts(entries) : []), [entries]);
-  const first = entries?.at(-1)?.at.slice(0, 10);
-  const last = entries?.[0]?.at.slice(0, 10);
+  const merged = useMemo(() => (q.data ? mergeOrders(q.data.entries, purchasesOn ? orders.data?.purchases : []) : null), [q.data, orders.data, purchasesOn]);
+  const shown = useMemo(() => (merged ? filterHistory(merged.entries, search) : []), [merged, search]);
+  const review = useMemo(() => (merged ? filterOrders(merged.review, search) : []), [merged, search]);
+  const recorded = useMemo(() => (merged ? filterOrders(merged.orders, search) : []), [merged, search]);
+  const groups = useMemo(() => groupTimeline(shown, recorded), [shown, recorded]);
+  const kinds = useMemo(() => (merged ? kindCounts(merged.entries, merged.review.length + merged.orders.length) : []), [merged]);
+  const allDays = useMemo(() => (merged ? [...merged.entries.map((e) => e.at), ...merged.review.map((p) => p.ordered_at), ...merged.orders.map((p) => p.ordered_at)].map((d) => d.slice(0, 10)).sort() : []), [merged]);
+  const first = allDays[0];
+  const last = allDays.at(-1);
   const filtered = Boolean(search.q || search.kinds.length || search.from || search.to);
+
+  // Marks live with the open entry's cards; the header copies them.
+  const ev = useQuery(historyEventQuery(search.order == null ? search.entry : undefined));
+  const { selected, toggle, clear } = useSelection(`history:${search.entry ?? 0}`);
+  const markedCards = useMemo(() => (ev.data ? ev.data.lines.map(fromHistoryLine).filter((c) => selected.has(c.key)) : []), [ev.data, selected]);
+  const markable = search.order == null && search.entry != null && Boolean(ev.data?.entry.ledgered && ev.data.lines.length);
 
   const sidebar = (
     <>
-      {!showOrders && (<>
       <SideSection title="Find">
-        <TextField name="q" label="Product, set or file" value={search.q} placeholder="e.g. Jumpstart, FIN…" onChange={(qv) => set({ q: qv })} />
+        <TextField name="q" label={purchasesOn ? 'Product, set, file or order' : 'Product, set or file'} value={search.q} placeholder="e.g. Jumpstart, FIN…" onChange={(qv) => set({ q: qv })} />
       </SideSection>
       <SideSection title="Show">
         <MultiSelect
@@ -65,24 +80,15 @@ export function HistoryView() {
           onChange={(v) => set({ kinds: v as HistorySearch['kinds'] })}
           options={kinds}
         />
-        <div className="grid grid-cols-2 gap-2">
-          <DateField name="from" label="From" value={search.from} min={first} max={search.to ?? last} onChange={(from) => set({ from })} />
-          <DateField name="to" label="To" value={search.to} min={search.from ?? first} max={last} onChange={(to) => set({ to })} />
-        </div>
+        <DateField name="from" label="From" value={search.from} min={first} max={search.to ?? last} onChange={(from) => set({ from })} />
+        <DateField name="to" label="To" value={search.to} min={search.from ?? first} max={last} onChange={(to) => set({ to })} />
         {filtered && (
           <button type="button" onClick={() => set({ q: '', kinds: [], from: undefined, to: undefined })} className="self-start cursor-pointer text-sm text-on-chrome-muted underline hover:text-on-chrome">
             Clear filters
           </button>
         )}
       </SideSection>
-      </>)}
-      {purchasesOn && (
-        <SideSection title="Store orders">
-          {orders.data && orders.data.purchases.length > 0 && <OrdersTotals totals={orders.data} tone="chrome" />}
-          <ReadOrdersDialog trigger={<Button>Read my orders</Button>} onReview={(order) => set({ orders: true, order, entry: undefined })} />
-        </SideSection>
-      )}
-      {!showOrders && <SideSection title="What the kinds mean">
+      <SideSection title="What the kinds mean">
         <dl className="flex flex-col gap-1.5 text-xs leading-snug text-on-chrome-muted">
           {kinds.map((k) => (
             <div key={k.value}>
@@ -91,47 +97,52 @@ export function HistoryView() {
             </div>
           ))}
         </dl>
-      </SideSection>}
+      </SideSection>
     </>
   );
 
   let body;
-  if (showOrders) {
-    if (orders.isPending) body = <GridSkeleton label="Reading your store orders…" />;
-    else if (orders.isError) body = <ErrorNote error={orders.error} onRetry={() => orders.refetch()} />;
-    else {
-      const list = <OrdersList data={orders.data} active={search.order} onPick={(order) => set({ order })} />;
-      const inspector = search.order ? (
-        <OrderReview key={search.order} purchaseId={search.order} onBack={narrow ? () => set({ order: undefined }) : undefined} onForgotten={() => set({ order: undefined })} />
-      ) : (
-        <EmptyNote title="Pick an order">Choose an order to see what you paid for each card and match it to cards you own.</EmptyNote>
-      );
-      body = narrow ? (search.order ? inspector : list) : <SplitPanes id="mm.history.orders.split" label="Resize orders list" list={list} inspector={inspector} defaults={[40, 60]} />;
-    }
-  } else if (q.isPending) body = <GridSkeleton label="Reading your purchase history…" />;
+  if (q.isPending) body = <GridSkeleton label="Reading your purchase history…" />;
   else if (q.isError) body = <ErrorNote error={q.error} onRetry={() => q.refetch()} />;
-  else if (!q.data.entries.length) body = <EmptyNote title="Nothing added yet">Add cards from Collection → Add cards; every addition appears here with what came in and what it is worth.</EmptyNote>;
-  else {
-    const list = <Timeline groups={groups} total={shown.length} active={search.entry} onPick={(entry) => set({ entry })} />;
-    const inspector = search.entry ? (
-      <EntryInspector key={search.entry} ingestId={search.entry} view={search.view} onReview={(order) => set({ orders: true, order })} onView={(view) => set({ view })} onOpen={(entry) => set({ entry })} onBack={narrow ? () => set({ entry: undefined }) : undefined} />
+  else if (!merged || (!merged.entries.length && !merged.review.length && !merged.orders.length)) {
+    body = <EmptyNote title="Nothing added yet">Add cards from Collection → Add cards; every addition appears here with what came in and what it is worth.</EmptyNote>;
+  } else {
+    const list = <Timeline review={review} groups={groups} total={shown.length + review.length + recorded.length} orderOf={merged.orderOf} active={{ entry: search.entry, order: search.order }} onEntry={openEntry} onOrder={openOrder} />;
+    const back = narrow ? () => set({ entry: undefined, order: undefined }) : undefined;
+    const inspector = search.order != null && purchasesOn ? (
+      <OrderReview key={`o${search.order}`} purchaseId={search.order} onBack={back} onForgotten={() => openOrder(undefined)} />
+    ) : search.entry != null ? (
+      <EntryInspector key={search.entry} ingestId={search.entry} view={search.view} selected={selected} onToggle={toggle} onReview={openOrder} onView={(view) => set({ view })} onOpen={openEntry} onBack={back} />
     ) : (
-      <EmptyNote title="Pick an entry">Choose an entry to see the exact cards it brought in and what they are worth today.</EmptyNote>
+      <EmptyNote title={review.length ? 'Pick an entry or an order' : 'Pick an entry'}>
+        {review.length
+          ? 'Choose an order under Needs review to match it to cards you own or add it, or an entry to see the exact cards it brought in.'
+          : 'Choose an entry to see the exact cards it brought in and what they are worth today.'}
+      </EmptyNote>
     );
-    body = narrow ? (search.entry ? inspector : list) : <SplitPanes id="mm.history.split" label="Resize history list" list={list} inspector={inspector} defaults={[40, 60]} />;
+    const open = search.entry != null || (search.order != null && purchasesOn);
+    body = narrow ? (open ? inspector : list) : <SplitPanes id="mm.history.split" label="Resize history list" list={list} inspector={inspector} defaults={[40, 60]} />;
   }
 
   const held = useMemo(() => shown.filter((e) => e.kind !== 'move').reduce((t, e) => t + e.value_usd, 0), [shown]);
+  const orderTotals = purchasesOn && orders.data?.purchases.length ? orders.data : null;
   return (
-    <ViewLayout label="History controls" summary={showOrders ? 'Store orders' : filtered ? `${fmtCount(shown.length, 'entry', 'entries')} shown` : 'Every entry'} sidebar={sidebar}>
+    <ViewLayout label="History controls" summary={filtered ? `${fmtCount(shown.length + review.length + recorded.length, 'entry', 'entries')} shown` : 'Every entry'} sidebar={sidebar} subnav={<CollectionTabs />}>
       <GuideSheet
-        nav={<CollectionTabs orders={showOrders} />}
-        title={showOrders ? 'Store orders' : 'Purchase history'}
-        hideTitle
+        title="Purchase history"
+        actionsLabel="Purchase history actions"
+        actions={
+          <>
+            {purchasesOn && <ReadOrdersDialog trigger={<IconAction Icon={ReadOrdersMark} label="Read my orders" />} onReview={openOrder} />}
+            <FindProductsDialog trigger={<IconAction Icon={FindProductsMark} label="Find products in your cards" />} />
+          </>
+        }
+        marked={markable ? { count: markedCards.length, getText: () => exportLines(markedCards, 'plain'), onClear: clear } : undefined}
         summary={
-          !showOrders && q.data
+          q.data
             ? <>
-                {fmtCount(shown.length, 'entry', 'entries')} · {fmtUsd(held)} held at today’s prices
+                {fmtCount(shown.length + review.length + recorded.length, 'entry', 'entries')} · {fmtUsd(held)} held at today’s prices
+                {orderTotals && <> · <OrdersTotals totals={orderTotals} /></>}
                 {q.data.prices_as_of && ` · prices ${q.data.prices_as_of}`}
                 {q.data.stale_sets.length > 0 && <span title={q.data.stale_sets.join(', ').toUpperCase()}> · {fmtInt(q.data.stale_sets.length)} sets older than a week</span>}
               </>
@@ -144,14 +155,40 @@ export function HistoryView() {
   );
 }
 
-/** Month sections; one tab stop for the list (↑/↓, Home/End). */
-function Timeline({ groups, total, active, onPick }: { groups: MonthGroup[]; total: number; active?: number; onPick: (id: number) => void }) {
-  const keys = groups.flatMap((g) => g.rows.map((r) => r.key));
-  const activeKey = active == null ? undefined : groups.flatMap((g) => g.rows).find((r) => (r.type === 'entry' ? r.entry.ingest_id === active : r.entries.some((e) => e.ingest_id === active)))?.key;
+type Active = { entry?: number; order?: number };
+
+/** Needs review (pinned) then month sections; one tab stop for the whole list (↑/↓, Home/End). */
+function Timeline({ review, groups, total, orderOf, active, onEntry, onOrder }: { review: PurchaseOut[]; groups: MonthGroup[]; total: number; orderOf: Map<number, PurchaseOut>; active: Active; onEntry: (id: number) => void; onOrder: (id: number) => void }) {
+  const reviewKeys = review.map((p) => `review:${p.purchase_id}`);
+  const keys = [...reviewKeys, ...groups.flatMap((g) => g.rows.map((r) => r.key))];
+  const isActive = (r: TimelineRow) =>
+    r.type === 'entry' ? r.entry.ingest_id === active.entry || (active.order != null && orderOf.get(r.entry.ingest_id)?.purchase_id === active.order)
+    : r.type === 'order' ? r.order.purchase_id === active.order
+    : r.entries.some((e) => e.ingest_id === active.entry);
+  const activeKey = active.order != null && review.some((p) => p.purchase_id === active.order)
+    ? `review:${active.order}`
+    : groups.flatMap((g) => g.rows).find(isActive)?.key;
   const { navRef, tabKey, setFocusKey, onKeyDown: move } = useRovingFocus(keys, activeKey, 'data-row');
   if (!total) return <EmptyNote title="No entries match">Clear the search, widen the dates, or show more kinds.</EmptyNote>;
+  const paid = review.reduce((t, p) => t + p.paid_usd, 0);
   return (
     <nav ref={navRef} aria-label="Purchase history" onKeyDown={move} className="h-full min-h-0 overflow-y-auto overscroll-contain px-4 pb-6 [scrollbar-gutter:stable]">
+      {review.length > 0 && (
+        <section aria-labelledby="hm-review" className="mb-2">
+          <h2 id="hm-review" className="sticky top-0 z-10 flex items-baseline gap-2 border-b border-rule-strong bg-paper pb-1 pt-3 text-sm voice-condensed font-medium uppercase tracking-[0.06em] text-accent-ink">
+            <span className="min-w-0 truncate">Needs review</span>
+            <span className="ml-auto tabular normal-case tracking-normal text-ink-muted">{fmtCount(review.length, 'order')} · paid {fmtUsd(paid)}</span>
+          </h2>
+          <p className="pt-1 text-xs text-ink-muted">Store orders not fully in your collection yet. Open one to match its cards to copies you own or add them.</p>
+          <ul>
+            {review.map((p, i) => (
+              <li key={p.purchase_id}>
+                <OrderRow p={p} rowKey={reviewKeys[i]} active={active.order === p.purchase_id} tabbable={reviewKeys[i] === tabKey} onFocus={() => setFocusKey(reviewKeys[i])} onPick={onOrder} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       {groups.map((g) => (
         <section key={g.key} aria-labelledby={`hm-${g.key}`} className="[content-visibility:auto] [contain-intrinsic-size:auto_24rem]">
           <h2 id={`hm-${g.key}`} className="sticky top-0 z-10 flex items-baseline gap-2 border-b border-rule bg-paper pb-1 pt-3 text-sm voice-condensed font-medium uppercase tracking-[0.06em] text-ink-muted">
@@ -161,7 +198,7 @@ function Timeline({ groups, total, active, onPick }: { groups: MonthGroup[]; tot
           <ul>
             {g.rows.map((r) => (
               <li key={r.key}>
-                <Row row={r} active={active} tabbable={r.key === tabKey} onFocus={() => setFocusKey(r.key)} onPick={onPick} />
+                <Row row={r} order={r.type === 'entry' ? orderOf.get(r.entry.ingest_id) : undefined} active={active} current={isActive(r)} tabbable={r.key === tabKey} onFocus={() => setFocusKey(r.key)} onEntry={onEntry} onOrder={onOrder} />
               </li>
             ))}
           </ul>
@@ -171,17 +208,18 @@ function Timeline({ groups, total, active, onPick }: { groups: MonthGroup[]; tot
   );
 }
 
-function Row({ row, active, tabbable, onFocus, onPick }: { row: TimelineRow; active?: number; tabbable: boolean; onFocus: () => void; onPick: (id: number) => void }) {
-  if (row.type === 'moves') return <MovesRun row={row} active={active} tabbable={tabbable} onFocus={onFocus} onPick={onPick} />;
+function Row({ row, order, active, current, tabbable, onFocus, onEntry, onOrder }: { row: TimelineRow; order?: PurchaseOut; active: Active; current: boolean; tabbable: boolean; onFocus: () => void; onEntry: (id: number) => void; onOrder: (id: number) => void }) {
+  if (row.type === 'moves') return <MovesRun row={row} active={active.entry} tabbable={tabbable} onFocus={onFocus} onPick={onEntry} />;
+  if (row.type === 'order') return <OrderRow p={row.order} rowKey={row.key} active={current} tabbable={tabbable} onFocus={onFocus} onPick={onOrder} />;
   const e = row.entry;
-  if (e.kind === 'move') return <MoveLine e={e} rowKey={row.key} active={active === e.ingest_id} tabbable={tabbable} onFocus={onFocus} onPick={onPick} />;
-  return <EntryRow e={e} rowKey={row.key} active={active === e.ingest_id} tabbable={tabbable} onFocus={onFocus} onPick={onPick} />;
+  if (e.kind === 'move') return <MoveLine e={e} rowKey={row.key} active={current} tabbable={tabbable} onFocus={onFocus} onPick={onEntry} />;
+  return <EntryRow e={e} order={order} rowKey={row.key} active={current} tabbable={tabbable} onFocus={onFocus} onPick={onEntry} />;
 }
 
 const rowClass = (active: boolean) => `ruled flex w-full cursor-pointer items-center gap-3 px-1 text-left transition-colors ease-guide hover:bg-paper-sunk ${active ? 'highlighter' : ''}`;
 
-function EntryRow({ e, rowKey, active, tabbable, onFocus, onPick }: { e: HistoryEntryOut; rowKey: string; active: boolean; tabbable: boolean; onFocus: () => void; onPick: (id: number) => void }) {
-  const sub = [KIND_LABEL[e.kind], e.set_code?.toUpperCase(), e.detail && e.detail !== e.product ? e.detail : null].filter(Boolean).join(' · ');
+function EntryRow({ e, order, rowKey, active, tabbable, onFocus, onPick }: { e: HistoryEntryOut; order?: PurchaseOut; rowKey: string; active: boolean; tabbable: boolean; onFocus: () => void; onPick: (id: number) => void }) {
+  const sub = [KIND_LABEL[e.kind], order && STATUS_LABEL[order.status], e.set_code?.toUpperCase(), e.detail && e.detail !== e.product ? e.detail : null].filter(Boolean).join(' · ');
   return (
     <button type="button" data-row={rowKey} tabIndex={tabbable ? 0 : -1} onFocus={onFocus} onClick={() => onPick(e.ingest_id)} aria-current={active ? 'true' : undefined} className={`${rowClass(active)} py-2`}>
       <time dateTime={e.at} className="w-12 shrink-0 text-xs tabular text-ink-muted">{dayLabel(e.at)}</time>
@@ -245,11 +283,10 @@ function MovesRun({ row, active, tabbable, onFocus, onPick }: { row: Extract<Tim
   );
 }
 
-function EntryInspector({ ingestId, view, onView, onReview, onOpen, onBack }: { ingestId: number; view: 'grid' | 'list'; onView: (v: 'grid' | 'list') => void; onReview: (purchaseId: number) => void; onOpen: (id: number) => void; onBack?: () => void }) {
+function EntryInspector({ ingestId, view, selected, onToggle, onView, onReview, onOpen, onBack }: { ingestId: number; view: 'grid' | 'list'; selected: ReadonlySet<string>; onToggle: (key: string) => void; onView: (v: 'grid' | 'list') => void; onReview: (purchaseId: number) => void; onOpen: (id: number) => void; onBack?: () => void }) {
   const q = useQuery(historyEventQuery(ingestId));
   const all = useQuery(historyQuery());
   const reconstructed = all.data?.entries.find((x) => x.kind === 'checklist' && x.dated === 'reconstructed')?.ingest_id;
-  const { selected, toggle } = useSelection(`history:${ingestId}`);
   const [reverted, setReverted] = useState<string | null>(null);
   const sections = useMemo(() => (q.data ? historyCardGroups(q.data.lines).map((g) => ({ ...g, level: 2 as const, noun: 'section' })) : []), [q.data]);
 
@@ -276,7 +313,7 @@ function EntryInspector({ ingestId, view, onView, onReview, onOpen, onBack }: { 
   } else if (!lines.length) {
     cards = <EmptyNote title="No cards">This entry moved no copies.</EmptyNote>;
   } else {
-    cards = <VirtualGuide sections={sections} density={view} selected={selected} onToggle={toggle} label={`${e.title} cards`} minCardWidth={118} />;
+    cards = <VirtualGuide sections={sections} density={view} selected={selected} onToggle={onToggle} label={`${e.title} cards`} minCardWidth={118} />;
   }
 
   return (
@@ -284,7 +321,7 @@ function EntryInspector({ ingestId, view, onView, onReview, onOpen, onBack }: { 
       <header className="mx-4 flex flex-col gap-2 border-b-2 border-rule-strong pb-2 pt-1">
         {onBack && (
           <button type="button" onClick={onBack} className="inline-flex w-full cursor-pointer items-center gap-0.5 text-sm voice-semi text-accent-ink">
-            <Chevron dir="left" className="size-3.5" /> All entries
+            <Chevron dir="left" className="size-3.5" /> Purchase history
           </button>
         )}
         <div className="flex flex-wrap items-end gap-x-4 gap-y-1">

@@ -10,7 +10,7 @@ import { GridSkeleton, ErrorNote } from '../../components/States';
 import { purchaseApply, purchaseForget, type ReviewLineOut } from '../../core/api';
 import { fmtCount, fmtInt, fmtUsd } from '../../core/format';
 import { clampDecision, decisionsBody, decisionTotals, defaultDecisions, isAssignable, STATUS_LABEL, subtotalGap, type Decision, type Decisions } from '../../core/purchases';
-import { Valued } from './OrdersList';
+import { Valued } from './OrderRow';
 import { VerificationMark } from './StoreVerification';
 
 const FULL = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeZone: 'UTC' });
@@ -57,7 +57,7 @@ export function OrderReview({ purchaseId, onBack, onForgotten }: { purchaseId: n
       <header className="mx-4 flex flex-col gap-2 border-b-2 border-rule-strong pb-2 pt-1">
         {onBack && (
           <button type="button" onClick={onBack} className="inline-flex w-full cursor-pointer items-center gap-0.5 text-sm voice-semi text-accent-ink">
-            <Chevron dir="left" className="size-3.5" /> All orders
+            <Chevron dir="left" className="size-3.5" /> Purchase history
           </button>
         )}
         <div className="flex flex-wrap items-end gap-x-4 gap-y-1">

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { HistoryEntryOut, HistoryLineOut, RevertPlanOut } from './api';
-import { datedNote, filterHistory, fromHistoryLine, groupTimeline, historySearch, kindCounts, movesSummary, planFromError, revertActionLabel, revertBlockNote, revertLead } from './history';
+import type { HistoryEntryOut, HistoryLineOut, PurchaseOut, RevertPlanOut } from './api';
+import { datedNote, filterHistory, filterOrders, fromHistoryLine, groupTimeline, historySearch, kindCounts, mergeOrders, movesSummary, planFromError, revertActionLabel, revertBlockNote, revertLead } from './history';
 
 const e = (o: Partial<HistoryEntryOut>): HistoryEntryOut => ({
   ingest_id: 1, at: '2026-10-01T03:00:00+00:00', method: 'precon', kind: 'deck', title: 'Party Time', detail: null, dated: 'acquired',
@@ -51,6 +51,44 @@ describe('history view-model', () => {
     const c = fromHistoryLine(l);
     expect([c.key, c.finish, c.price, c.owned, c.missing]).toEqual(['s|foil', 'foil', 4.5, { foil: 2 }, false]);
     expect(c.tags).toEqual(['+3 in', '−1 out']);
+  });
+});
+
+describe('store orders in the timeline', () => {
+  const o = (x: Partial<PurchaseOut>): PurchaseOut => ({
+    purchase_id: 1, store: 'manapool', store_name: 'Mana Pool', order_id: 'MP-1', ordered_at: '2026-09-20', read_at: '2026-09-21', lines: 1, copies: 2,
+    assigned: 0, assignable: 2, unresolved: 0, status: 'new', paid_usd: 10, worth_usd: 12, compared_paid_usd: 10, gain_usd: 2, ingest_id: null, ...x,
+  });
+  const done = o({ purchase_id: 2, order_id: 'MP-2', status: 'done', ingest_id: 20, ordered_at: '2026-09-10' });
+  const partial = o({ purchase_id: 3, order_id: 'MP-3', status: 'partial', ingest_id: 30, ordered_at: '2026-09-15' });
+  const fresh = o({ purchase_id: 4, order_id: 'MP-4', status: 'new', ordered_at: '2026-09-25' });
+  const recorded = o({ purchase_id: 5, order_id: 'MP-5', status: 'nothing', ordered_at: '2026-09-23' });
+  const entries = [
+    ...ENTRIES.slice(0, 3),
+    e({ ingest_id: 30, kind: 'purchase', method: 'purchase', title: 'Mana Pool order #MP-3', at: '2026-09-28T00:00:00+00:00', purchase_id: 3 }),
+    ...ENTRIES.slice(3),
+    e({ ingest_id: 20, kind: 'purchase', method: 'purchase', title: 'Mana Pool order #MP-2', at: '2026-08-30T00:00:00+00:00', purchase_id: 2 }),
+  ];
+
+  it('shows every order once: undecided ones under Needs review, an applied one on its ledger entry, a recorded-only one on its own', () => {
+    const m = mergeOrders(entries, [done, partial, fresh, recorded]);
+    expect(m.review.map((p) => p.purchase_id)).toEqual([4, 3]);
+    expect(m.entries.map((x) => x.ingest_id)).not.toContain(30);
+    expect(m.orderOf.get(20)?.purchase_id).toBe(2);
+    expect(m.orders.map((p) => p.purchase_id)).toEqual([5]);
+    expect(kindCounts(m.entries, m.review.length + m.orders.length).find((k) => k.value === 'purchase')).toMatchObject({ label: 'Store order', count: 4 });
+    expect(mergeOrders(entries).entries).toHaveLength(entries.length);
+  });
+
+  it('interleaves recorded-only orders by date and filters orders like entries', () => {
+    const m = mergeOrders(entries, [recorded]);
+    const sep = groupTimeline(m.entries, m.orders).find((g) => g.key === '2026-09')!;
+    expect(sep.rows.map((r) => r.key)).toEqual(['30', '3', 'order:5', '2', '1']);
+    const f = { q: '', kinds: [], from: undefined, to: undefined };
+    expect(filterOrders([fresh, recorded], { ...f, kinds: ['pool'] })).toEqual([]);
+    expect(filterOrders([fresh, recorded], { ...f, kinds: ['purchase'], from: '2026-09-24' }).map((p) => p.purchase_id)).toEqual([4]);
+    expect(filterOrders([fresh, recorded], { ...f, q: 'mp-5' }).map((p) => p.purchase_id)).toEqual([5]);
+    expect(filterOrders([fresh, recorded], { ...f, q: 'not added' }).map((p) => p.purchase_id)).toEqual([4]);
   });
 });
 

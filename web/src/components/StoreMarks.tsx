@@ -199,6 +199,17 @@ export function FindProductsMark(p: MarkProps) {
   );
 }
 
+/** A store receipt with an arrow coming in (read your store orders). */
+export function ReadOrdersMark(p: MarkProps) {
+  return (
+    <svg {...base} {...p}>
+      <path d="M5 2.8h11v18.4l-1.8-1.2-1.8 1.2-1.9-1.2-1.8 1.2-1.9-1.2L5 21.2Z" />
+      <path d="M8 7.2h5M8 10.4h5M8 13.6h2.6" />
+      <path d="M21.4 12.4h-6.6M17.4 9.8l-2.6 2.6 2.6 2.6" />
+    </svg>
+  );
+}
+
 /** A card with tally marks (count the cards you have). */
 export function CountCardsMark(p: MarkProps) {
   return (

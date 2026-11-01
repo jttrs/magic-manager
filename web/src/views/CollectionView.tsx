@@ -7,9 +7,8 @@ import { ViewLayout } from '../components/AppShell';
 import { AddCardsDialog } from '../components/addcards/AddCardsDialog';
 import { CopyTargets } from '../components/CopyButton';
 import { buyListTargets } from '../components/buyTargets';
-import { AddCardMark, CountCardsMark, FindProductsMark } from '../components/StoreMarks';
+import { AddCardMark, CountCardsMark } from '../components/StoreMarks';
 import { IconAction } from '../components/IconAction';
-import { FindProductsDialog } from './collection/FindProductsDialog';
 import { CollectionTabs } from './collection/CollectionTabs';
 import { CartCheckDialog } from './collection/CartCheckDialog';
 import { ChecklistActions, ChecklistLeaveGuard, ChecklistNotes, ChecklistTable } from './collection/Checklist';
@@ -31,7 +30,7 @@ import { buyFinish, buyTotal, collectionStats, filterCollection, functionCounts,
 import { InfoTip } from '../components/InfoTip';
 import { summaryLine } from '../core/checklist';
 import { fmtInt, fmtUsd } from '../core/format';
-import { fromCollection, groupCards, type GuideCard } from '../core/guideCard';
+import { exportLines, fromCollection, groupCards, type GuideCard } from '../core/guideCard';
 import { SHOW, type CollectionSearch } from '../core/search';
 import { decodeSort, encodeSort, leadSection, sortBy, type SortRule } from '../core/sort';
 
@@ -249,9 +248,6 @@ export function CollectionView() {
         {cartCheck && (
           <CartCheckDialog family={search.families.length === 1 ? search.families[0] : undefined} trigger={<Button>Check my cart</Button>} />
         )}
-        {selected.size > 0 && (
-          <button type="button" onClick={clear} className="self-start cursor-pointer text-sm text-on-chrome-muted underline hover:text-on-chrome">Clear marks</button>
-        )}
       </SideSection>
     </>
   );
@@ -284,25 +280,24 @@ export function CollectionView() {
   const s = view?.stats;
   const famN = q.data?.families.length ?? 0;
   return (
-    <ViewLayout label="Collection controls" summary={controlsSummary(search, rules, fams.data)} sidebar={sidebar} startOpen={!search.families.length}>
+    <ViewLayout label="Collection controls" summary={controlsSummary(search, rules, fams.data)} sidebar={sidebar} startOpen={!search.families.length} subnav={<CollectionTabs />}>
       <GuideSheet
-        nav={<CollectionTabs />}
         title="Collection"
-        hideTitle
+        actionsLabel="Collection actions"
+        marked={view ? { count: marked.length, getText: () => exportLines(view.cards.filter((c) => selected.has(c.key)), 'plain'), onClear: clear } : undefined}
         actions={
-          <span role="toolbar" aria-label="Collection actions" className="flex items-center gap-0.5">
+          <>
             {counting && <ChecklistActions checklist={checklist} />}
             <IconAction
               Icon={CountCardsMark}
               aria-pressed={counting}
-              label={counting ? 'Done counting' : checklist.dirty ? `Count cards · ${fmtInt(checklist.summary.cells)} unsaved` : 'Count cards'}
+              label={counting ? 'Done modifying counts' : checklist.dirty ? `Bulk modify counts · ${fmtInt(checklist.summary.cells)} unsaved` : 'Bulk modify counts'}
               disabled={!search.families.length}
-              disabledReason="Choose a set family to count"
+              disabledReason="Choose a set family to modify its counts"
               onClick={() => set({ count: !search.count })}
             />
             <AddCardsDialog trigger={<IconAction Icon={AddCardMark} label="Add cards" />} />
-            <FindProductsDialog trigger={<IconAction Icon={FindProductsMark} label="Find products in your cards" />} />
-          </span>
+          </>
         }
         summary={
           counting

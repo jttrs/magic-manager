@@ -1,10 +1,11 @@
 // Purchase history view-model: the acquisition timeline over the provenance ledger.
 // Framework-free — filter, month grouping, deck-move runs, and the drill-in cards.
 import { z } from 'zod';
-import type { HistoryEntryOut, HistoryLineOut, RevertLineOut, RevertPlanOut } from './api';
+import type { HistoryEntryOut, HistoryLineOut, PurchaseOut, RevertLineOut, RevertPlanOut } from './api';
 import { typeGroup, TYPE_GROUPS } from './cardFacts';
 import { fmtCount } from './format';
 import { fromPrinting, groupCards, type GuideCard, type GuideGroup } from './guideCard';
+import { STATUS_LABEL } from './purchases';
 
 const KINDS = ['deck', 'pool', 'singles', 'checklist', 'unknown', 'move', 'purchase', 'revert'] as const;
 export type HistoryKind = (typeof KINDS)[number];
@@ -16,7 +17,7 @@ export const KIND_LABEL: Record<HistoryKind, string> = {
   checklist: 'Checklist',
   unknown: 'Unknown',
   move: 'Deck move',
-  purchase: 'Order',
+  purchase: 'Store order',
   revert: 'Revert',
 };
 
@@ -27,7 +28,7 @@ export const KIND_HELP: Record<HistoryKind, string> = {
   checklist: 'A bulk checklist ingest. Which product the cards came out of was not recorded.',
   unknown: 'Copies reconstructed when the ledger began, with no known source.',
   move: 'Cards pledged to a built deck or released from one. What you own does not change.',
-  purchase: 'A store order read from your order history (Mana Pool, TCGplayer, Card Kingdom) with what you paid.',
+  purchase: 'An order read from your store order history (Mana Pool, TCGplayer, Card Kingdom) with what you paid. Orders not in your collection yet wait under Needs review.',
   revert: 'An import you took back out: the copies it added were removed (and any it removed put back). The original entry stays, marked reverted.',
 };
 
@@ -45,9 +46,7 @@ export const historySearch = z.object({
   /** The entry open in the inspector (ingest id). */
   entry: z.coerce.number().int().positive().optional().catch(undefined),
   view: z.enum(['grid', 'list']).catch('list').default('list'),
-  /** Show the store orders list instead of the timeline. */
-  orders: z.boolean().catch(false).default(false),
-  /** The store order open in the inspector (purchase id). */
+  /** The store order open in the inspector (purchase id); wins over `entry`. */
   order: z.coerce.number().int().positive().optional().catch(undefined),
 });
 export type HistorySearch = z.infer<typeof historySearch>;
@@ -68,15 +67,71 @@ export function filterHistory(entries: readonly HistoryEntryOut[], f: HistoryFil
   });
 }
 
-export function kindCounts(entries: readonly HistoryEntryOut[]): { value: HistoryKind; label: string; count: number }[] {
+/** Kinds present, in canonical order; `orders` = store orders shown outside the ledger entries (Needs review, recorded only). */
+export function kindCounts(entries: readonly HistoryEntryOut[], orders = 0): { value: HistoryKind; label: string; count: number }[] {
   const n = new Map<HistoryKind, number>();
   for (const e of entries) n.set(e.kind, (n.get(e.kind) ?? 0) + 1);
+  if (orders) n.set('purchase', (n.get('purchase') ?? 0) + orders);
   return KINDS.filter((k) => n.has(k)).map((k) => ({ value: k, label: KIND_LABEL[k], count: n.get(k)! }));
 }
 
-/** A timeline row: one entry, or a run of consecutive same-day deck moves shown as one quiet line. */
+// ---------- store orders, merged into the timeline ----------
+
+/** Store orders that still need a decision: nothing added yet, or only part of it. */
+const needsReview = (p: Pick<PurchaseOut, 'status'>): boolean => p.status === 'new' || p.status === 'partial';
+
+export type MergedHistory = {
+  /** Orders waiting for a decision, newest first — pinned above the timeline. */
+  review: PurchaseOut[];
+  /** Ledger entries to list: a partly-added order's entry is left out (the order shows once, under Needs review). */
+  entries: HistoryEntryOut[];
+  /** Settled orders with no ledger entry (nothing assignable — recorded only): a timeline row of their own. */
+  orders: PurchaseOut[];
+  /** Ledger entry (ingest id) → the store order it applied, so the row shows once with the order's facts. */
+  orderOf: Map<number, PurchaseOut>;
+};
+
+const byOrderedDesc = (a: PurchaseOut, b: PurchaseOut) => (a.ordered_at < b.ordered_at ? 1 : a.ordered_at > b.ordered_at ? -1 : b.purchase_id - a.purchase_id);
+
+/** One list from the ledger and the store orders: every order appears exactly once. */
+export function mergeOrders(entries: readonly HistoryEntryOut[], purchases: readonly PurchaseOut[] = []): MergedHistory {
+  const byId = new Map(purchases.map((p) => [p.purchase_id, p]));
+  const orderOf = new Map<number, PurchaseOut>();
+  const placed = new Set<number>();
+  const kept: HistoryEntryOut[] = [];
+  for (const e of entries) {
+    const p = e.kind === 'purchase' && e.purchase_id != null ? byId.get(e.purchase_id) : undefined;
+    if (p && needsReview(p)) continue;
+    if (p) {
+      orderOf.set(e.ingest_id, p);
+      placed.add(p.purchase_id);
+    }
+    kept.push(e);
+  }
+  const review = purchases.filter(needsReview).sort(byOrderedDesc);
+  const orders = purchases.filter((p) => !needsReview(p) && !placed.has(p.purchase_id)).sort(byOrderedDesc);
+  return { review, entries: kept, orders, orderOf };
+}
+
+export const orderTitle = (p: Pick<PurchaseOut, 'store_name' | 'order_id'>): string => `${p.store_name} order #${p.order_id}`;
+
+/** The same filters as the ledger entries: kind (Store order), order day, and text (store, order number, status). */
+export function filterOrders(orders: readonly PurchaseOut[], f: HistoryFilters): PurchaseOut[] {
+  if (f.kinds.length && !f.kinds.includes('purchase')) return [];
+  const q = f.q.trim().toLowerCase();
+  return orders.filter((p) => {
+    const d = day(p.ordered_at);
+    if (f.from && d < f.from) return false;
+    if (f.to && d > f.to) return false;
+    if (!q) return true;
+    return [orderTitle(p), p.store_name, p.order_id, STATUS_LABEL[p.status], KIND_LABEL.purchase].some((s) => s.toLowerCase().includes(q));
+  });
+}
+
+/** A timeline row: one entry, a store order with no ledger entry, or a run of consecutive same-day deck moves shown as one quiet line. */
 export type TimelineRow =
   | { type: 'entry'; key: string; entry: HistoryEntryOut }
+  | { type: 'order'; key: string; order: PurchaseOut }
   | { type: 'moves'; key: string; entries: HistoryEntryOut[] };
 
 export type MonthGroup = { key: string; label: string; rows: TimelineRow[]; copiesIn: number; valueUsd: number };
@@ -85,16 +140,30 @@ const MONTH = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric',
 const monthLabel = (ym: string) => MONTH.format(new Date(`${ym}-01T00:00:00Z`));
 
 /** Newest-first entries → month groups. A day's deck moves gather into ONE quiet run row (≥ 2),
- *  placed where the day's newest move falls — they interleave with the precons they build. */
-export function groupTimeline(entries: readonly HistoryEntryOut[]): MonthGroup[] {
+ *  placed where the day's newest move falls — they interleave with the precons they build.
+ *  `orders` (newest first) interleave by order date as rows of their own; they hold no copies. */
+export function groupTimeline(entries: readonly HistoryEntryOut[], orders: readonly PurchaseOut[] = []): MonthGroup[] {
   const groups: MonthGroup[] = [];
   const runs = new Map<string, Extract<TimelineRow, { type: 'moves' }>>();
   const moveCount = new Map<string, number>();
   for (const e of entries) if (e.kind === 'move') moveCount.set(day(e.at), (moveCount.get(day(e.at)) ?? 0) + 1);
-  for (const e of entries) {
-    const ym = e.at.slice(0, 7);
+  const month = (at: string) => {
+    const ym = at.slice(0, 7);
     let g = groups[groups.length - 1];
     if (!g || g.key !== ym) groups.push((g = { key: ym, label: monthLabel(ym), rows: [], copiesIn: 0, valueUsd: 0 }));
+    return g;
+  };
+  let oi = 0;
+  const ordersUpTo = (at: string | null) => {
+    // An order goes before the first entry on an earlier day (same day: after that day's entries).
+    while (oi < orders.length && (at == null || day(orders[oi].ordered_at) > day(at))) {
+      const o = orders[oi++];
+      month(o.ordered_at).rows.push({ type: 'order', key: `order:${o.purchase_id}`, order: o });
+    }
+  };
+  for (const e of entries) {
+    ordersUpTo(e.at);
+    const g = month(e.at);
     if (e.kind !== 'move') {
       g.copiesIn += e.held;
       g.valueUsd += e.value_usd;
@@ -110,6 +179,7 @@ export function groupTimeline(entries: readonly HistoryEntryOut[]): MonthGroup[]
     }
     g.rows.push({ type: 'entry', key: String(e.ingest_id), entry: e });
   }
+  ordersUpTo(null);
   for (const g of groups) g.valueUsd = Math.round(g.valueUsd * 100) / 100;
   return groups;
 }

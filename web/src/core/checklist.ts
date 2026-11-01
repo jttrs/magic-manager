@@ -209,7 +209,7 @@ export function nextCell(
 const copies = (plus: number, minus: number) =>
   `${[plus ? `+${fmtInt(plus)}` : '', minus ? `−${fmtInt(minus)}` : ''].filter(Boolean).join(' ') || '±0'} ${plus + minus === 1 ? 'copy' : 'copies'}`;
 
-/** The sheet summary while counting: the running diff (or the last save) in plain numbers. */
+/** The sheet summary while bulk-modifying counts: the running diff (or the last save) in plain numbers. */
 export function summaryLine(s: DraftSummary, saved: ChecklistOut | null): string {
   if (saved && !s.cells) {
     const n = saved.rows.length;
@@ -217,7 +217,7 @@ export function summaryLine(s: DraftSummary, saved: ChecklistOut | null): string
       ? `Saved ${fmtInt(n)} ${n === 1 ? 'count' : 'counts'} · ${copies(saved.copies_added, saved.copies_removed)}`
       : 'Nothing to save — every count matched';
   }
-  if (!s.cells) return 'Counting · type how many you have; Enter moves down, ←/→ switch finish, Esc undoes a cell';
+  if (!s.cells) return 'Modifying counts · type how many you have; Enter moves down, ←/→ switch finish, Esc undoes a cell';
   const val = `${s.value >= 0 ? '+' : '−'}${fmtUsd(Math.abs(s.value))}`;
-  return `Counting · ${fmtInt(s.cells)} ${s.cells === 1 ? 'change' : 'changes'} · ${copies(s.added, s.removed)} · ${val} at market${s.unpriced ? ` (${fmtInt(s.unpriced)} unpriced)` : ''}`;
+  return `Modifying counts · ${fmtInt(s.cells)} ${s.cells === 1 ? 'change' : 'changes'} · ${copies(s.added, s.removed)} · ${val} at market${s.unpriced ? ` (${fmtInt(s.unpriced)} unpriced)` : ''}`;
 }

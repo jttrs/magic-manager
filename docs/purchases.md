@@ -6,7 +6,7 @@ pinned "Order history → Purchase history" follow-up (`docs/browser-companion.m
 
 ## What it does
 
-1. **Read** — Collection → Purchase history → *Read my orders*. Pick a store; the browser companion
+1. **Read** — Collection → Purchase history → *Read my orders* (header action). Pick a store; the browser companion
    reads your **order list** in your own browser (click-to-read, you approve in its window). The app
    marks each order: not read / read, not added / partly added / in your collection / recorded only.
    Tick orders (or *Read all*); the companion reads those orders' lines and, after you approve, the
@@ -15,8 +15,10 @@ pinned "Order history → Purchase history" follow-up (`docs/browser-companion.m
 2. **Assign** — open an order. Per line, choose how many copies to **match** to copies you already
    own (net-zero: only their *source* moves to the order) and how many to **add** as new copies.
    *Match to cards I own* and *Add all as new* fill the counts; *Save to collection* writes them.
-3. **See** — orders list with Paid / Worth today / gain or loss and a total for all orders; applied
-   orders also appear in the Purchase history timeline as **Order** entries with what you paid.
+3. **See** — store orders live in Purchase history (no separate tab): orders not fully added are
+   pinned under **Needs review** with Paid / Worth today / gain or loss; an applied order is one
+   **Store order** timeline entry (its ledger event, with what you paid); the sheet summary carries
+   the total for all orders.
 
 ## Engine (`src/magic_manager/purchases.py`)
 

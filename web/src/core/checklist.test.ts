@@ -104,7 +104,7 @@ describe('checklist draft', () => {
 
   it('writes the running diff line', () => {
     const d = setCell(setCell({}, card(), 'nonfoil', 5, 'T'), card({ scryfall_id: 'b', owned: { foil: 1 } }), 'foil', 0, 'T');
-    expect(summaryLine(summarize(d), null)).toBe('Counting · 2 changes · +2 −1 copies · −$1.00 at market');
+    expect(summaryLine(summarize(d), null)).toBe('Modifying counts · 2 changes · +2 −1 copies · −$1.00 at market');
     expect(summaryLine(summarize({}), { ingest_id: 1, added: 0, updated: 1, zeroed: 0, copies_added: 2, copies_removed: 0, rows: [{ scryfall_id: 'a', finish: 'nonfoil', old_qty: 3, new_qty: 5 }] })).toBe('Saved 1 count · +2 copies');
   });
 
