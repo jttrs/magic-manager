@@ -55,7 +55,8 @@ def snapshot_path() -> Path:
     beside the single file, ``users/<id>.undo.db`` beside a split user file."""
     lay = db.layout()
     if lay.kind == "split":
-        return lay.path.with_name(lay.path.stem + ".undo.db")
+        from .userfiles import undo_path_for
+        return undo_path_for(lay.path)
     return db.db_dir() / SNAPSHOT_FILE
 
 
@@ -315,8 +316,8 @@ class SessionGuard:
         return self._path or snapshot_path()
 
     def pending_path(self) -> Path:
-        p = self.snapshot_path()
-        return p.with_name(p.name + ".pending")
+        from .userfiles import pending_path_for
+        return pending_path_for(self.snapshot_path())
 
     def begin(self, reason: str) -> bool:
         """Call before a write. Returns True when the caller must call

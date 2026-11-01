@@ -2296,6 +2296,11 @@ SPLIT_SNAPSHOT_PREFIX = "split.bak-"
 _SIDECAR_SUFFIXES = ("-journal", "-wal", "-shm")
 
 
+def sidecars(path: Path) -> list[Path]:
+    """The journal/WAL sidecars of ``path`` that exist (present = possibly open)."""
+    return [p for p in (path.with_name(path.name + s) for s in _SIDECAR_SUFFIXES) if p.exists()]
+
+
 def _split_data_dir(lay: _layout.Layout) -> Path:
     return lay.catalog.parent
 

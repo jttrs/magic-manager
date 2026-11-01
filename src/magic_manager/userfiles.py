@@ -26,9 +26,10 @@ from pathlib import Path
 
 from . import db
 from . import layout as _layout
+from .analytics import consent as _consent
 
-_SIDECARS = ("-journal", "-wal", "-shm")
 UNDO_SUFFIX = ".undo.db"
+PENDING_SUFFIX = ".pending"
 _lock = threading.Lock()
 
 
@@ -41,8 +42,18 @@ def path_for(data_dir: Path, user: str) -> Path:
 
 
 def undo_path_for(user_db: Path) -> Path:
-    """``users/<id>.undo.db`` beside ``users/<id>.db``."""
+    """``users/<id>.undo.db`` beside ``users/<id>.db`` — the one naming rule (``undo`` uses it)."""
     return user_db.with_name(user_db.stem + UNDO_SUFFIX)
+
+
+def pending_path_for(snapshot: Path) -> Path:
+    """The not-yet-promoted restore point beside ``snapshot`` (``undo.SessionGuard``)."""
+    return snapshot.with_name(snapshot.name + PENDING_SUFFIX)
+
+
+def _undo_files(user_db: Path) -> list[Path]:
+    undo = undo_path_for(user_db)
+    return [undo, pending_path_for(undo)]
 
 
 @lru_cache(maxsize=1)
@@ -67,10 +78,6 @@ def user_schema() -> tuple[str, ...]:
         return tuple(out)
     finally:
         conn.close()
-
-
-def _sidecars(p: Path) -> list[Path]:
-    return [q for q in (p.with_name(p.name + s) for s in _SIDECARS) if q.exists()]
 
 
 def create(data_dir: Path, user: str) -> Path:
@@ -125,26 +132,46 @@ def user_files(data_dir: Path) -> list[Path]:
 class MigrateReport:
     catalog: list[int] = field(default_factory=list)
     users: dict[str, list[int]] = field(default_factory=dict)
+    failed: dict[str, str] = field(default_factory=dict)   # user file → why it didn't migrate
 
 
 def migrate_all(data_dir: Path) -> MigrateReport:
-    """Server start: the catalog once, then every user file (each snapshotted by
-    ``migrate_split_file`` before it changes; nothing pending → nothing touched)."""
+    """Server start: the catalog once (a failure stops startup), then every user file
+    (each snapshotted by ``migrate_split_file`` before it changes). One user's file
+    that can't migrate is reported in ``failed`` and skipped — split connect refuses
+    a file at the wrong version, so only that user is affected."""
     data_dir = Path(data_dir)
     out = MigrateReport()
     out.catalog = db.migrate_split_file(data_dir / _layout.CATALOG_FILENAME, "catalog")
     for p in user_files(data_dir):
-        out.users[p.stem] = db.migrate_split_file(p, "user")
+        try:
+            out.users[p.stem] = db.migrate_split_file(p, "user")
+        except Exception as e:  # noqa: BLE001 — isolate one user's file from everyone else's
+            out.failed[p.stem] = f"{type(e).__name__}: {e}"
     return out
 
 
+# Settings written before any real use (the hosted first-visit privacy prompt) aren't
+# "data": an otherwise-empty profile that holds only these can still be replaced.
+_PROFILE_ONLY_SETTINGS = (_consent.SETTING_KEY,)
+
+
 def has_user_data(user_db: Path) -> bool:
-    """Any row in any user table (an empty profile has none)."""
+    """Any row in any user table, ignoring a stored privacy choice (an empty profile has none)."""
     conn = sqlite3.connect(f"{user_db.resolve().as_uri()}?mode=ro", uri=True)
     try:
         present = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-        return any(conn.execute(f'SELECT 1 FROM "{t}" LIMIT 1').fetchone()
-                   for t in _layout.USER_TABLES if t in present)
+        marks = ", ".join("?" for _ in _PROFILE_ONLY_SETTINGS)
+        for t in _layout.USER_TABLES:
+            if t not in present:
+                continue
+            if t == "settings":
+                hit = conn.execute(f"SELECT 1 FROM settings WHERE key NOT IN ({marks}) LIMIT 1", _PROFILE_ONLY_SETTINGS).fetchone()
+            else:
+                hit = conn.execute(f'SELECT 1 FROM "{t}" LIMIT 1').fetchone()
+            if hit:
+                return True
+        return False
     finally:
         conn.close()
 
@@ -173,7 +200,7 @@ def bind_file(data_dir: Path, user_id: str, source: str = _layout.DEFAULT_USER) 
         raise UserFileError(f"no file {src} to bind")
     with _lock:
         for p in (src, dst):
-            if side := _sidecars(p):
+            if side := db.sidecars(p):
                 raise UserFileError(f"{p.name} looks open ({', '.join(q.name for q in side)}) — stop the server first")
         report = BindReport(str(src), str(dst))
         if dst.exists():
@@ -183,13 +210,12 @@ def bind_file(data_dir: Path, user_id: str, source: str = _layout.DEFAULT_USER) 
             aside = data_dir / db.REPLACED_SUBDIR / f"users.replaced-{ts}"
             aside.mkdir(parents=True, exist_ok=True)
             os.replace(dst, aside / dst.name)
-            undo = undo_path_for(dst)
-            if undo.exists():
-                os.replace(undo, aside / undo.name)
+            for f in _undo_files(dst):
+                if f.exists():
+                    os.replace(f, aside / f.name)
             report.replaced = str(aside / dst.name)
         os.replace(src, dst)
-        for suffix in ("", ".pending"):
-            old = undo_path_for(src).with_name(undo_path_for(src).name + suffix)
+        for old, new in zip(_undo_files(src), _undo_files(dst)):
             if old.exists():
-                os.replace(old, undo_path_for(dst).with_name(undo_path_for(dst).name + suffix))
+                os.replace(old, new)
     return report

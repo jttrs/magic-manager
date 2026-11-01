@@ -198,7 +198,8 @@ def auth_bind(
 ):
     """Make an existing split collection file (default users/owner.db) that user's
     collection: it becomes users/<user>.db. The user's own file from their first
-    sign-in must still be empty; it is moved to <data dir>/replaced/. Stop the server first."""
+    sign-in must still be empty; it is moved to <data dir>/replaced/. Stop the server first.
+    Afterwards split-layout CLI commands need MM_USER=<user> (users/owner.db is gone)."""
     import json
     from . import layout as layout_mod, userfiles
     from .auth import store as auth_store

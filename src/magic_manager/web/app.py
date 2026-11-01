@@ -75,11 +75,13 @@ def _migrate_split_files() -> None:
     before serving (each file is snapshotted before it changes)."""
     if db.layout_kind() != "split":
         return
+    log = logging.getLogger("magic_manager.web")
     report = userfiles.migrate_all(db.data_dir())
     applied = {k: v for k, v in report.users.items() if v}
     if report.catalog or applied:
-        logging.getLogger("magic_manager.web").info(
-            "migrated catalog %s and %d user file(s)", report.catalog, len(applied))
+        log.info("migrated catalog %s and %d user file(s)", report.catalog, len(applied))
+    for name, why in report.failed.items():
+        log.error("user file %s could not be migrated (that user can't sign in until it is fixed): %s", name, why)
 
 
 def create_app(*, serve_frontend: bool = True) -> FastAPI:

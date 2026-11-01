@@ -23,7 +23,7 @@ from magic_manager.api import jobs as jobs_api
 from magic_manager.auth import store
 from magic_manager.cli import app as cli_app
 from magic_manager.web import auth_routes
-from magic_manager.web.runtime import JobManager
+from magic_manager.web.runtime import JobManager, JobRecord, JobsBusy
 
 from test_auth import ORIGIN, _concrete, api_routes, hosted, me, provider, sign_in  # noqa: F401 — fixtures
 
@@ -146,6 +146,42 @@ def test_bind_hands_the_owner_file_to_the_auth_user(owner_split):
         userfiles.bind_file(owner_split, "../x", "owner")
 
 
+def test_bind_ignores_a_stored_privacy_choice(owner_split):
+    """The owner's first hosted visit answers the privacy prompt before `mm auth bind`."""
+    userfiles.create(owner_split, UA)
+    with layout.as_user(UA):
+        consent.update(usage=True)
+    assert not userfiles.has_user_data(owner_split / "users" / f"{UA}.db")
+    assert userfiles.bind_file(owner_split, UA).replaced
+    with layout.as_user(UA):
+        assert _copies() == 2
+
+
+def test_ensure_tolerates_a_concurrent_create(owner_split, monkeypatch):
+    def racing(data_dir, user):
+        userfiles.path_for(data_dir, user).write_bytes(b"")  # the other sign-in won
+        raise userfiles.UserFileError("already exists")
+    monkeypatch.setattr(userfiles, "create", racing)
+    monkeypatch.setattr(db, "migrate_split_file", lambda p, t: [])
+    assert userfiles.ensure(owner_split, UA) == "ok"
+
+
+def test_one_bad_user_file_does_not_stop_the_others(owner_split, monkeypatch):
+    userfiles.create(owner_split, UA)
+    real = db.migrate_split_file
+
+    def flaky(p, target):
+        if Path(p).stem == UA:
+            raise layout.LayoutError("stuck at v12")
+        return real(p, target)
+    monkeypatch.setattr(db, "migrate_split_file", flaky)
+    rep = userfiles.migrate_all(owner_split)
+    assert rep.failed == {UA: "LayoutError: stuck at v12"} and rep.users == {"owner": []}
+    monkeypatch.setattr(db, "migrate_split_file", lambda p, t: (_ for _ in ()).throw(RuntimeError("catalog")))
+    with pytest.raises(RuntimeError):  # the catalog still stops startup
+        userfiles.migrate_all(owner_split)
+
+
 def test_bind_refuses_an_open_file(owner_split):
     (owner_split / "users" / "owner.db-journal").write_bytes(b"")
     with pytest.raises(userfiles.UserFileError, match="looks open"):
@@ -212,7 +248,7 @@ def test_job_runs_as_its_submitter_and_is_visible_only_to_them(owner_split, monk
             await m._execute(rec.id)
             with layout.as_user(UA):
                 assert m.get(rec.id) is rec and m.list() == [rec] and m.events_after(rec.id, 0)
-                with pytest.raises(Exception):  # A's own mutating job would block A's restore
+                with pytest.raises(JobsBusy):  # A's own mutating job would block A's restore
                     rec.status = "running"
                     with m.no_mutating_jobs():
                         pass
@@ -234,6 +270,15 @@ def test_job_runs_as_its_submitter_and_is_visible_only_to_them(owner_split, monk
             await m.shutdown()
     asyncio.run(go())
     assert set(seen) == {(UA, 0)}  # (the in-memory broker may run it as well)
+
+
+def test_job_history_is_trimmed_per_user():
+    m = JobManager(max_history=1)
+    for i, user in enumerate((UA, UA, UB)):
+        m._jobs[str(i)] = JobRecord(id=str(i), name="x", title="X", inputs={}, status="succeeded",
+                                    created_at=f"2026-01-0{i + 1}", user=user)
+    m._trim()
+    assert sorted(m._jobs) == ["1", "2"]  # A keeps its newest; B's only job survives A's flood
 
 
 # ---------- process-wide caches are user-scoped ----------
@@ -454,6 +499,22 @@ def test_startup_migrates_every_user_file(owner_split, hosted, monkeypatch):
     with TestClient(hosted):
         pass
     assert calls == [owner_split]
+
+
+def test_sign_in_fails_closed_when_the_file_cannot_be_prepared(owner_split, hosted, provider, monkeypatch):
+    from test_auth import _error
+    monkeypatch.setattr(userfiles, "ensure", lambda *a: (_ for _ in ()).throw(OSError("disk full")))
+    c = TestClient(hosted, base_url=ORIGIN)
+    r = sign_in(c, provider, "discord", invite=store.create_invite(is_admin=True).code)
+    assert _error(r) == "profile_unavailable" and not c.cookies.get("mm_session")
+    with store.connect() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0] == 0
+    # an existing session whose file can't be made: refused, never another user's file
+    u = store.users()[0][0]
+    s = store.create_session(u.id)
+    c.cookies.set("mm_session", s.token)
+    r = c.get("/api/decks")
+    assert r.status_code == 503 and r.json()["code"] == "auth.profile_unavailable"
 
 
 def test_a_session_without_a_file_gets_an_empty_one(owner_split, hosted):

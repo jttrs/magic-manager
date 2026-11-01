@@ -245,13 +245,18 @@ def install(app: FastAPI) -> None:
                 return _refuse(request, 403, "auth.csrf", "This page is out of date — reload it and try again.")
             if not write_limiter.take(session.token_hash):
                 return _refuse(request, 429, "auth.rate_limited", "Too many changes at once — wait a minute and try again.")
+        if session is not None and not userfiles.path_for(db.data_dir(), session.user.id).exists():
+            # A session minted before its file existed (e.g. before step 5): create it now.
+            try:
+                await asyncio.to_thread(userfiles.ensure, db.data_dir(), session.user.id)
+            except Exception:  # noqa: BLE001 — never serve a request without the user's own file
+                log.exception("could not prepare the collection file of user %s", session.user.id)
+                return _refuse(request, 503, "auth.profile_unavailable",
+                               "Your collection couldn’t be opened on this server. Try again in a moment.")
         # Server events in this request (and delete-my-data) key on the signed-in user,
         # and every connection in it opens ONLY that user's file (no session → none:
         # db.connect fails closed). Never from client input.
         bound = analytics.bind(replace(analytics.current(), user_id=session.user.id)) if session else None
-        if session is not None and not userfiles.path_for(db.data_dir(), session.user.id).exists():
-            # A session minted before its file existed (e.g. before step 5): create it now.
-            await asyncio.to_thread(userfiles.ensure, db.data_dir(), session.user.id)
         user_token = _layout.bind_user(session.user.id) if session else None
         try:
             resp = await call_next(request)
