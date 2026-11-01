@@ -49,7 +49,7 @@ export function PriceTarget({ product: p, cost }: { product: DealProduct; cost?:
             </label>
             <label className="inline-flex min-h-9 cursor-pointer items-center gap-1.5">
               <input type="radio" name={`${id}-mode`} checked={mode === 'pct_under'} onChange={() => setMode('pct_under')} className="accent-[var(--theme-accent)]" />
-              % under {p.kind === 'single' ? 'its price' : 'sealed price'}
+              % under {p.kind === 'single' ? 'its value' : 'sealed value'}
             </label>
           </span>
         </fieldset>
@@ -92,7 +92,7 @@ function Status({ p, cost }: { p: DealProduct; cost?: ProductCostOut }) {
   const met = targetMet(p, cost);
   const best = trustedBest(p);
   const how = t.mode === 'price' ? fmtUsd(t.value) : `${fmtUsd(at ?? 0)} (${targetText(t, p.kind)})`;
-  if (at == null) return <p role="status" className="text-sm text-ink-muted">Target {targetText(t, p.kind)} — waiting for the sealed price to work out the price.</p>;
+  if (at == null) return <p role="status" className="text-sm text-ink-muted">Target {targetText(t, p.kind)} — waiting for the sealed value to work out the price.</p>;
   if (met && best?.price != null) {
     return (
       <p role="status" className="text-sm text-ink">

@@ -58,7 +58,7 @@ test('a deck costs out three ways and its buy list uses the cheapest printings',
   await page.goto(`/market?subject=deck&deck=${deck.slug}`);
   const ledger = page.getByRole('table', { name: 'Three ways to get this deck' });
   await expect(ledger.getByRole('row', { name: /Buy it sealed/ })).toContainText('$30.00');
-  await expect(ledger.getByRole('row', { name: /free cards first/ })).toContainText('$9.00lowest');
+  await expect(ledger.getByRole('row', { name: /unused cards first/ })).toContainText('$9.00lowest');
   await expect(page.getByRole('table', { name: /To buy/ })).toContainText('XYZ 9');
   await page.getByRole('button', { name: 'Copy ManaPool list' }).click();
   await expect(page.getByText('Copied 1 line', { exact: true })).toBeVisible();
@@ -112,7 +112,7 @@ test('the inspector shows the cheapest printing among synced sets and can rechec
   expect(bodies.map((b) => (b as { live: boolean }).live)).toEqual([false, true]);
 });
 
-test('a deck’s cheapest printings can be checked across every set', async ({ page }) => {
+test('a deck’s cheapest printings can be rechecked across every printing from the sheet header', async ({ page }) => {
   const deck = fixtures.decks[0];
   const seen: string[] = [];
   await page.route('**/api/market/deck?*', (r) => {
@@ -122,9 +122,10 @@ test('a deck’s cheapest printings can be checked across every set', async ({ p
       lines: [{ scryfall_id: 'd', finish: 'nonfoil', name: 'Pricey Card', set_code: 'abc', collector_number: '1', need: 1, free: 0, buy: 1, unit_usd: 6, floor_usd: live ? 1 : 4.5, floor_set_code: 'xyz', floor_collector_number: '9', floor_scryfall_id: 'c' }] } });
   });
   await page.goto(`/market?subject=deck&deck=${deck.slug}`);
-  await expect(page.getByText('Cheapest printings from the sets you’ve synced.')).toBeVisible();
-  await page.getByRole('button', { name: 'Check every set on Scryfall' }).click();
-  await expect(page.getByText('Cheapest printings checked across every set on Scryfall.')).toBeVisible();
+  await expect(page.getByText('Cheapest printings among the sets synced here.')).toBeVisible();
+  await page.getByRole('button', { name: 'Recheck for cheapest' }).click();
+  await expect(page.getByText(/Cheapest printings rechecked across every printing · \d{1,2}:\d{2}/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Recheck for cheapest' })).toHaveCount(0);
   await expect(page).toHaveURL(/live=true/);
   await expect(page.getByRole('table', { name: 'Three ways to get this deck' })).toContainText('$1.00');
   expect(seen).toEqual(['false', 'true']);
@@ -138,7 +139,7 @@ const sseBody = (rows: unknown) =>
     ['status', { status: 'succeeded' }],
   ].map(([e, d], i) => `event: ${e}\ndata: ${JSON.stringify(d)}\nid: ${i + 1}\n\n`).join('');
 
-test('switching to Cards mid-pricing keeps following the same job instead of starting another', async ({ page }) => {
+test('switching to Singles mid-pricing keeps following the same job instead of starting another', async ({ page }) => {
   let submits = 0;
   let streams = 0;
   let release: () => void = () => {};
@@ -160,7 +161,7 @@ test('switching to Cards mid-pricing keeps following the same job instead of sta
 
   await page.goto('/market?code=blb');
   await expect.poll(() => streams).toBe(1);
-  await page.getByRole('radio', { name: 'Cards' }).click();
+  await page.getByRole('radio', { name: 'Singles' }).click();
   await expect(page).toHaveURL(/tab=cards/);
   await page.getByRole('radio', { name: 'Sealed' }).click();
   await expect(page.getByRole('row', { name: /Bloomburrow Bundle/ })).toContainText('$55.50');
@@ -168,7 +169,7 @@ test('switching to Cards mid-pricing keeps following the same job instead of sta
   release();
 });
 
-test('products that failed to price can be priced again, and are not kept across reloads', async ({ page }) => {
+test('products that failed to value can be valued again, and are not kept across reloads', async ({ page }) => {
   let submits = 0;
   const failedOnce = [values[0], { set_code: 'blb', name: 'Bloomburrow Bundle', error: 'timeout' }];
   await page.route('**/api/jobs/market.value_family', (r) => {
@@ -180,9 +181,9 @@ test('products that failed to price can be priced again, and are not kept across
   await page.route('**/api/market/products?*', (r) => r.fulfill({ json: products }));
 
   await page.goto('/market?code=blb');
-  await expect(page.getByRole('row', { name: /Bloomburrow Bundle/ })).toContainText('Couldn’t price: timeout');
+  await expect(page.getByRole('row', { name: /Bloomburrow Bundle/ })).toContainText('Couldn’t value: timeout');
   expect(await page.evaluate(() => localStorage.getItem('mm.market.values.v3.blb'))).toBeNull();
-  await page.getByRole('button', { name: 'Price again' }).click();
+  await page.getByRole('button', { name: 'Value again' }).click();
   await expect(page.getByRole('row', { name: /Bloomburrow Bundle/ })).toContainText('$55.50');
   expect(submits).toBe(2);
   expect(await page.evaluate(() => localStorage.getItem('mm.market.values.v3.blb'))).not.toBeNull();
@@ -244,4 +245,37 @@ test('product detail shows both printings’ totals, marks a partial one, and na
   const box = page.getByText(/At each card’s own printing: \$45\.00/);
   await expect(box).not.toContainText('boosters');
   await expect(box).not.toContainText('+');
+});
+
+test('Market modes are a sub-nav strip and every rail control has a field label', async ({ page }) => {
+  await page.route('**/api/market/products?*', (r) => r.fulfill({ json: { code: 'blb', name: 'Bloomburrow', products: [] } }));
+  await page.goto('/market?code=blb');
+  const modes = page.getByRole('navigation', { name: 'Market views' });
+  await expect(modes.getByRole('link')).toHaveText(['Set family', 'Deck', 'Secret Lair']);
+  await expect(modes.getByRole('link', { name: 'Set family' })).toHaveAttribute('aria-current', 'page');
+  // No big title: the sheet's h1 is for screen readers only.
+  await expect(page.getByRole('heading', { level: 1, name: 'Bloomburrow' })).toHaveClass(/sr-only/);
+  // Find (search alone) → Show (family, product type) — Sealed | Singles.
+  await expect(page.getByRole('searchbox', { name: 'Product name' })).toBeVisible();
+  const type = page.getByRole('radiogroup', { name: 'Product type' });
+  await expect(type.getByRole('radio')).toHaveText(['Sealed', 'Singles']);
+  await type.getByRole('radio', { name: 'Singles' }).click();
+  await expect(page.getByRole('searchbox', { name: 'Card name' })).toBeVisible();
+
+  await modes.getByRole('link', { name: 'Deck' }).click();
+  await expect(page).toHaveURL(/subject=deck/);
+  await expect(modes.getByRole('link', { name: 'Deck' })).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('main').getByText('Choose a deck', { exact: true })).toBeVisible();
+});
+
+test('a failed recheck says so and keeps the synced-set floor', async ({ page }) => {
+  const deck = fixtures.decks[0];
+  await page.route('**/api/market/deck?*', (r) => {
+    const live = new URL(r.request().url()).searchParams.get('live') === 'true';
+    return r.fulfill({ json: { slug: deck.slug, sealed_product: null, sealed: null, scratch: 6, with_collection: 6, scratch_floor: 4.5, with_collection_floor: 4.5, coverage: 1, unpriced: 0, total_need: 1, live: false, live_error: live ? 'timed out' : null,
+      lines: [{ scryfall_id: 'd', finish: 'nonfoil', name: 'Pricey Card', set_code: 'abc', collector_number: '1', need: 1, free: 0, buy: 1, unit_usd: 6, floor_usd: 4.5, floor_set_code: 'xyz', floor_collector_number: '9', floor_scryfall_id: 'c' }] } });
+  });
+  await page.goto(`/market?subject=deck&deck=${deck.slug}&live=true`);
+  await expect(page.getByRole('alert')).toContainText('Couldn’t recheck every printing — showing the cheapest among the sets synced here. timed out');
+  await expect(page.getByText('Cheapest printings among the sets synced here.')).toBeVisible();
 });

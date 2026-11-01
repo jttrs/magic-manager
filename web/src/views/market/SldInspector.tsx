@@ -11,7 +11,7 @@ import { H3, Row } from './DealInspector';
 import { ProductContents } from './ProductContents';
 import type { CostState } from './useDealsData';
 
-/** One Secret Lair drop: its sealed price against the cards inside (bonus card included). */
+/** One Secret Lair drop: its sealed value against the cards inside (bonus card included). */
 export function SldInspector({ row: r, cost, costState, watchedUrls }: { row: SldRow; cost?: ProductCostOut; costState?: CostState; watchedUrls?: string[] }) {
   const edition = r.finish === 'foil' ? 'Foil Edition' : 'Regular edition';
   const bonus = cost?.lines?.filter((l) => l.bonus) ?? [];
@@ -36,19 +36,19 @@ export function SldInspector({ row: r, cost, costState, watchedUrls }: { row: Sl
         ) : (
           <>
             <dl className="flex flex-col">
-              <Row strong label="Sealed price" value={cost.market} best={null} note={cost.market_source} />
+              <Row strong label="Sealed value" value={cost.market} best={null} note={cost.market_source} />
               <Row label="Cards inside, exact printings" value={cost.exact} best={cost.market ?? null} />
               <Row label="Cards inside, cheapest printings" value={cost.floor} best={cost.market ?? null} />
               {(cost.booster_ev ?? 0) > 0 && <Row label="of which the bonus card, expected value" value={cost.booster_ev} best={null} />}
             </dl>
             <p className="text-sm text-ink-muted">
-              The % beside each line is how far the sealed price sits under (−) or over (+) it.
+              The % beside each line is how far the sealed value sits under (−) or over (+) it.
               {bonus.length > 0 && ` Includes the bonus card${bonus.length > 1 ? 's' : ''}: ${bonus.map((l) => l.name).join(', ')}.`}
               {(cost.booster_ev ?? 0) > 0 && ' The bonus card is random, so it counts at its expected value.'}
             </p>
-            {cost.market == null && <p className="text-sm text-ink-muted">No sealed market price yet — new drops take a while to list.</p>}
+            {cost.market == null && <p className="text-sm text-ink-muted">No sealed market value yet — new drops take a while to list.</p>}
             {(cost.unpriced ?? 0) > 0 && (
-              <p className="text-sm text-ink-muted">{cost.unpriced} of {cost.total_cards} cards have no price at their exact printing — totals count only the rest.</p>
+              <p className="text-sm text-ink-muted">{cost.unpriced} of {cost.total_cards} cards have no value at their exact printing — totals count only the rest.</p>
             )}
             {cost.notes?.map((n) => <p key={n} className="text-sm text-ink-muted">{n}</p>)}
             {r.tcgplayer_url && (
@@ -97,7 +97,7 @@ function WatchControl({ r, price, watchedUrls }: { r: SldRow; price: number | nu
           tone="paper"
           emphasis="quiet"
           disabled={!url || watch.isPending}
-          title={url ? 'Track its TCGplayer market price in Deals → Watching' : 'Not listed on TCGplayer yet'}
+          title={url ? 'Track its market value in Deals → Watching' : 'Not listed for sale yet'}
           onClick={() => watch.mutate()}
         >
           {watch.isPending ? 'Saving…' : 'Watch'}
@@ -111,7 +111,7 @@ function WatchControl({ r, price, watchedUrls }: { r: SldRow; price: number | nu
         confirmLabel="Stop watching"
         onConfirm={async () => { unwrap(await dealsUnwatch({ query: { url: url! } })); await refresh(); }}
       >
-        <p>Its TCGplayer price stops being tracked.</p>
+        <p>Its market value stops being tracked.</p>
       </ConfirmDialog>
     </span>
   );

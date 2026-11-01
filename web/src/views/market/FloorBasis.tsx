@@ -1,16 +1,18 @@
-import { IconAction } from '../../components/IconAction';
-import { ScryfallMark } from '../../components/StoreMarks';
+const clock = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
-/** Where the "cheapest printing" prices came from, with the opt-in live check. */
-export function FloorBasis({ live, liveError, onCheckLive }: { live: boolean; liveError?: string | null; onCheckLive: () => void }) {
+/** Where the "cheapest printing" values came from. The recheck itself is the
+ *  sheet header's *Recheck for cheapest* action (A12): once it has run, this
+ *  note says so with the time. (The source is never named.) */
+export function FloorBasis({ live, liveError, checkedAt }: { live: boolean; liveError?: string | null; checkedAt?: number }) {
   return (<>
-    <p className="-mt-3 flex min-h-9 items-center gap-2 text-sm text-ink-muted">
-      {live ? 'Cheapest printings checked across every set on Scryfall.' : 'Cheapest printings from the sets you’ve synced.'}
-      {!live && <IconAction label="Check every set on Scryfall" Icon={ScryfallMark} onClick={onCheckLive} />}
+    <p className="-mt-3 text-sm text-ink-muted">
+      {live
+        ? `Cheapest printings rechecked across every printing${checkedAt ? ` · ${clock(checkedAt)}` : ''}.`
+        : 'Cheapest printings among the sets synced here.'}
     </p>
     {liveError && (
       <p role="alert" className="-mt-3 text-sm text-danger">
-        Couldn’t check every set on Scryfall — showing prices from your synced sets. {liveError}
+        Couldn’t recheck every printing — showing the cheapest among the sets synced here. {liveError}
       </p>
     )}
   </>);

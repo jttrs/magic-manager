@@ -93,7 +93,7 @@ export type LedgerRow = { key: 'sealed' | 'new' | 'free'; label: string; exact: 
 
 /** The three ways to get a deck × exact printing vs cheapest printing. A
  *  total missing prices is a lower bound (`partial`) and never competes: the
- *  lowest COMPLETE cell is marked best. "Free cards first" only misses the
+ *  lowest COMPLETE cell is marked best. "Unused cards first" only misses the
  *  prices of cards still to buy. Sealed has one price (both columns). */
 export function deckLedger(d: DeckCostOut): LedgerRow[] {
   const rows: Omit<LedgerRow, 'exact' | 'floor'>[] = [];
@@ -109,7 +109,7 @@ export function deckLedger(d: DeckCostOut): LedgerRow[] {
     free: [d.with_collection ?? null, d.with_collection_floor ?? null],
   };
   if (d.sealed != null) rows.push({ key: 'sealed', label: 'Buy it sealed' });
-  rows.push({ key: 'new', label: 'Buy every card' }, { key: 'free', label: 'Use your free cards first' });
+  rows.push({ key: 'new', label: 'Buy every card' }, { key: 'free', label: 'Use your unused cards first' });
   const partial = (key: LedgerRow['key'], col: 0 | 1) => missing[key][col];
   const complete = rows.flatMap((r) => raw[r.key].filter((v, col) => v != null && !partial(r.key, col as 0 | 1))) as number[];
   const min = complete.length ? Math.min(...complete) : null;

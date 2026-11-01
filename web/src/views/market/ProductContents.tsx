@@ -3,7 +3,7 @@ import { productTreeQuery } from '../../app/queries';
 import type { TreeNodeOut } from '../../core/api';
 import { fmtUsd } from '../../core/format';
 
-/** A sealed product's contents tree: each sub-product's market price beside what the cards inside are worth. */
+/** A sealed product's contents tree: each sub-product's market value beside what the cards inside are worth. */
 export function ProductContents({ set, name }: { set: string; name: string }) {
   const tree = useQuery(productTreeQuery(set, name, true));
   if (tree.isPending) return <p role="status" className="text-sm text-ink-muted">Opening the box…</p>;
@@ -29,7 +29,7 @@ function TreeLine({ n, depth }: { n: TreeNodeOut; depth: number }) {
           {n.name}
           <span className="ml-1.5 text-xs text-ink-muted">{n.kind}</span>
         </span>
-        <span className="w-20 shrink-0 text-right tabular text-ink-muted" title="Market price">{fmtUsd(n.market)}</span>
+        <span className="w-20 shrink-0 text-right tabular text-ink-muted" title="Market value">{fmtUsd(n.market)}</span>
         <span className="w-20 shrink-0 text-right tabular text-ink" title="Cards inside">{fmtUsd(n.contents_value)}</span>
       </div>
       {n.children?.length ? <ul>{n.children.map((c, i) => <TreeLine key={i} n={c} depth={depth + 1} />)}</ul> : null}

@@ -80,7 +80,7 @@ export function productType(kind: 'sealed' | 'sld' | 'single', category: string 
 
 export const BASES = ['market', 'exact', 'floor'] as const;
 export type Basis = (typeof BASES)[number];
-export const BASIS_LABEL: Record<Basis, string> = { market: 'sealed price', exact: 'cards, exact printings', floor: 'cards, cheapest printings' };
+export const BASIS_LABEL: Record<Basis, string> = { market: 'sealed value', exact: 'cards, exact printings', floor: 'cards, cheapest printings' };
 
 export const DEAL_SORTS = ['gap_pct', 'gap_usd', 'price', 'market', 'exact', 'floor', 'name'] as const;
 export type DealSort = (typeof DEAL_SORTS)[number];
@@ -231,9 +231,9 @@ export function targetMet(p: DealProduct, cost: ProductCostOut | undefined, now:
   return best?.price != null && best.price <= at + 1e-9;
 }
 
-/** "$72.00" or "10% under sealed price" — how the owner set it. */
+/** "$72.00" or "10% under the sealed value" — how the owner set it. */
 export function targetText(t: TargetOut, kind: DealProduct['kind']): string {
-  return t.mode === 'price' ? usd(t.value) : `${fmtPct(t.value)} under ${kind === 'single' ? 'the printing’s price' : 'the sealed price'}`;
+  return t.mode === 'price' ? usd(t.value) : `${fmtPct(t.value)} under ${kind === 'single' ? 'the printing’s value' : 'the sealed value'}`;
 }
 
 const usd = (v: number) => v.toLocaleString('en-US', { style: 'currency', currency: 'USD' });

@@ -50,7 +50,7 @@ test('Secret Lair lists drops by biggest discount vs the cards inside', async ({
   await expect(page.getByRole('row', { name: /Garfield/ })).toContainText('+200%');
   await expect(rows).toHaveText(['Cats of Chaos', 'Garfield: As Intended']);
 
-  await page.getByRole('searchbox', { name: 'Search' }).fill('garf');
+  await page.getByRole('searchbox', { name: 'Drop name' }).fill('garf');
   await expect(rows).toHaveText(['Garfield: As Intended']);
 });
 
@@ -58,7 +58,7 @@ test('a drop opens its worth, bonus card and cards; Watch needs the deals flag',
   await page.goto('/market?subject=sld');
   await page.getByRole('button', { name: 'Garfield: As Intended' }).click();
   const worth = page.getByRole('region', { name: 'What it’s worth' });
-  await expect(worth).toContainText('Sealed price');
+  await expect(worth).toContainText('Sealed value');
   await expect(worth).toContainText('Includes the bonus card: Clone.');
   await expect(page.getByRole('row', { name: /Clone/ })).toContainText('bonus');
   await expect(page.getByRole('link', { name: /TCGplayer/ })).toHaveAttribute('href', 'https://www.tcgplayer.com/product/694967');
@@ -76,7 +76,7 @@ test('with the deals flag: Watch tracks the drop at its TCGplayer page', async (
     return r.fulfill({ json: { watching: true, message: 'Watching' } });
   });
   await page.goto('/market?subject=sld');
-  await expect(page.getByRole('radio', { name: 'Deals' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Market views' }).getByRole('link', { name: 'Deals' })).toBeVisible();
   await page.getByRole('button', { name: 'Garfield: As Intended' }).click();
   await page.getByRole('button', { name: 'Watch' }).click();
   await expect(page.getByRole('button', { name: 'Stop watching' })).toBeVisible();

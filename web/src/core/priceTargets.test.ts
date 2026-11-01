@@ -46,8 +46,8 @@ describe('price targets', () => {
   });
   it('describes the target the way it was set', () => {
     expect(targetText(T('price', 72), 'sealed')).toBe('$72.00');
-    expect(targetText(T('pct_under', 12.5), 'sealed')).toBe('12.5% under the sealed price');
-    expect(targetText(T('pct_under', 10), 'single')).toBe('10% under the printing’s price');
+    expect(targetText(T('pct_under', 12.5), 'sealed')).toBe('12.5% under the sealed value');
+    expect(targetText(T('pct_under', 10), 'single')).toBe('10% under the printing’s value');
   });
   it('filters to products at or under target', () => {
     const f: DealFilters = { q: '', stores: [], types: [], minOff: 0, basis: 'market', sort: 'name', inStock: false, atTarget: true };

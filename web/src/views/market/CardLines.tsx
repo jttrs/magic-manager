@@ -20,7 +20,7 @@ const DECK_LABELS = { need: 'Need', exact: 'Deck’s printing', floor: 'Cheapest
 const exactOf = (l: DeckLineOut) => l.unit_usd;
 const floorOf = (l: DeckLineOut) => l.floor_usd;
 
-/** A card list with the price of the listed printing beside the cheapest printing anywhere. */
+/** A card list with the value of the listed printing beside the cheapest printing anywhere. */
 export function CardLines({ title, lines, unitBasis, worth = false, labels = DECK_LABELS, sortable = false }: Props) {
   const [sort, setSort] = useState<{ key: Unit; dir: 1 | -1 }>({ key: 'exact', dir: -1 });
   const rows = useMemo(() => {
@@ -56,7 +56,7 @@ export function CardLines({ title, lines, unitBasis, worth = false, labels = DEC
         <tr className="border-b-2 border-rule-strong text-left text-xs voice-semi text-ink-muted">
           <th scope="col" className="py-1.5 pr-3 font-medium">Card</th>
           <th scope="col" className="py-1.5 pl-3 text-right font-medium">{labels.need}</th>
-          <th scope="col" className="hidden py-1.5 pl-3 text-right font-medium sm:table-cell">Free</th>
+          <th scope="col" className="hidden py-1.5 pl-3 text-right font-medium sm:table-cell">Unused</th>
           {th('exact', labels.exact, 'hidden sm:table-cell')}
           {th('floor', labels.floor, '')}
         </tr>

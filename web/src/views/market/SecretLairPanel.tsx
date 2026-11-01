@@ -40,7 +40,7 @@ function useWatchedDrops(): Map<string, string[]> {
   return useMemo(() => new Map((watched.data ?? []).filter((w) => w.kind === 'sld').map((w) => [watchKey(w.name, w.finish ?? 'nonfoil'), w.stores.map((s) => s.url)])), [watched.data]);
 }
 
-/** Sidebar controls for the Secret Lair subject. */
+/** Rail for the Secret Lair mode: Find → Show → Arrange. */
 export function SecretLairFind({ search, set }: { search: MarketSearch; set: Set }) {
   const { rows, costs } = useSecretLair(search);
   // A filter change keeps the open drop only while it's still listed (a new edition is a new row).
@@ -49,52 +49,58 @@ export function SecretLairFind({ search, set }: { search: MarketSearch; set: Set
     set(search.item && !kept ? { ...patch, item: undefined } : patch);
   };
   return (
-    <SideSection title="Find">
-      <TextField name="dq" label="Search" value={search.dq} placeholder="Drop name" onChange={(dq) => setFilter({ dq })} />
-      <Segmented<SldEdition>
-        label="Edition"
-        showLabel
-        labelExtra={<InfoTip label="Which edition?">Most drops sell as a regular and a foil edition — separate products with their own prices. A drop sold in one edition only shows that one.</InfoTip>}
-        value={search.edition}
-        onChange={(edition) => setFilter({ edition })}
-        options={[{ value: 'nonfoil', label: 'Regular' }, { value: 'foil', label: 'Foil' }]}
-      />
-      <SelectField<`${(typeof SLD_LIMITS)[number]}`>
-        label="Show"
-        value={String(search.sldN) as '30'}
-        onChange={(v) => setFilter({ sldN: Number(v) })}
-        options={SLD_LIMITS.map((n) => ({ value: `${n}` as '30', label: `${n} newest drops` }))}
-      />
-      <Segmented<'0' | '10' | '20' | '30'>
-        label="Discount"
-        showLabel
-        labelExtra={<InfoTip label="Under what?">How far the sealed price sits under the price chosen in <b>Compare to</b>.</InfoTip>}
-        value={String(search.minOff) as '0'}
-        onChange={(v) => setFilter({ minOff: Number(v) as 0 })}
-        options={[{ value: '0', label: 'Any' }, { value: '10', label: '10%+' }, { value: '20', label: '20%+' }, { value: '30', label: '30%+' }]}
-      />
-      <Segmented<SldBasis>
-        label="Compare to"
-        showLabel
-        labelExtra={<InfoTip label="What is the sealed price compared to?"><b>Exact</b> is the drop’s cards and its bonus card at their Secret Lair printings. <b>Cheapest</b> is each of those cards at its cheapest printing anywhere — what the cards cost for a deck.</InfoTip>}
-        value={search.sbasis}
-        onChange={(sbasis) => setFilter({ sbasis })}
-        options={[{ value: 'exact', label: 'Exact' }, { value: 'floor', label: 'Cheapest' }]}
-      />
-      <SelectField<SldSort>
-        label="Sort"
-        value={search.ssort}
-        onChange={(ssort) => setFilter({ ssort })}
-        options={[
-          { value: 'gap_pct', label: 'Biggest discount %' }, { value: 'gap_usd', label: 'Biggest discount $' },
-          { value: 'price', label: 'Lowest sealed price' }, { value: 'release', label: 'Newest' }, { value: 'name', label: 'Name' },
-        ]}
-      />
-    </SideSection>
+    <>
+      <SideSection title="Find">
+        <TextField name="dq" label="Drop name" value={search.dq} placeholder="e.g. Garfield…" onChange={(dq) => setFilter({ dq })} />
+      </SideSection>
+      <SideSection title="Show">
+        <SelectField<`${(typeof SLD_LIMITS)[number]}`>
+          label="Drops"
+          value={String(search.sldN) as '30'}
+          onChange={(v) => setFilter({ sldN: Number(v) })}
+          options={SLD_LIMITS.map((n) => ({ value: `${n}` as '30', label: `${n} newest drops` }))}
+        />
+        <Segmented<SldEdition>
+          label="Edition"
+          showLabel
+          labelExtra={<InfoTip label="Which edition?">Most drops sell as a regular and a foil edition — separate products with their own values. A drop sold in one edition only shows that one.</InfoTip>}
+          value={search.edition}
+          onChange={(edition) => setFilter({ edition })}
+          options={[{ value: 'nonfoil', label: 'Regular' }, { value: 'foil', label: 'Foil' }]}
+        />
+        <Segmented<SldBasis>
+          label="Compare to"
+          showLabel
+          labelExtra={<InfoTip label="What is the sealed value compared to?"><b>Exact</b> is the drop’s cards and its bonus card at their Secret Lair printings. <b>Cheapest</b> is each of those cards at its cheapest printing anywhere — what the cards cost for a deck.</InfoTip>}
+          value={search.sbasis}
+          onChange={(sbasis) => setFilter({ sbasis })}
+          options={[{ value: 'exact', label: 'Exact' }, { value: 'floor', label: 'Cheapest' }]}
+        />
+        <Segmented<'0' | '10' | '20' | '30'>
+          label="Discount"
+          showLabel
+          labelExtra={<InfoTip label="Under what?">How far the sealed value sits under the value chosen in <b>Compare to</b>.</InfoTip>}
+          value={String(search.minOff) as '0'}
+          onChange={(v) => setFilter({ minOff: Number(v) as 0 })}
+          options={[{ value: '0', label: 'Any' }, { value: '10', label: '10%+' }, { value: '20', label: '20%+' }, { value: '30', label: '30%+' }]}
+        />
+      </SideSection>
+      <SideSection title="Arrange">
+        <SelectField<SldSort>
+          label="Sort"
+          value={search.ssort}
+          onChange={(ssort) => setFilter({ ssort })}
+          options={[
+            { value: 'gap_pct', label: 'Biggest discount %' }, { value: 'gap_usd', label: 'Biggest discount $' },
+            { value: 'price', label: 'Lowest sealed value' }, { value: 'release', label: 'Newest' }, { value: 'name', label: 'Name' },
+          ]}
+        />
+      </SideSection>
+    </>
   );
 }
 
-/** Market → Secret Lair: the newest drops, sealed price beside the cards inside, with an inspector. */
+/** Market → Secret Lair: the newest drops, sealed value beside the cards inside, with an inspector. */
 export function SecretLairPanel({ search, set }: { search: MarketSearch; set: Set }) {
   const { list, rows, costs } = useSecretLair(search);
   const watched = useWatchedDrops();

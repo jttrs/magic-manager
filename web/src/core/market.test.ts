@@ -90,13 +90,14 @@ describe('market view-model', () => {
     expect(unknown.flatMap((r) => [r.exact.best, r.floor.best]).some(Boolean)).toBe(false);
   });
 
-  it('keeps "free cards first" complete when the unpriced cards are all covered by free copies', () => {
+  it('keeps "unused cards first" complete when the unpriced cards are all covered by unused copies', () => {
     const d = deck({ scratch: 5, with_collection: 3, scratch_floor: 4, with_collection_floor: 2, unpriced: 1, floor_unpriced: 1,
       lines: [line({ buy: 1, unit_usd: 3, floor_usd: 2 }), line({ scryfall_id: 'mine', buy: 0, free: 1, unit_usd: null, floor_usd: null })] });
     const [neu, free] = deckLedger(d);
     expect([neu.exact.partial, neu.floor.partial]).toEqual([true, true]);
     expect(free.exact).toEqual({ value: 3, best: false, partial: false });
     expect(free.floor).toEqual({ value: 2, best: true, partial: false });
+    expect(free.label).toBe('Use your unused cards first');
   });
 
   it('flags a valuation with products that failed to price', () => {
