@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -15,6 +16,7 @@ from pathlib import Path
 import typer
 
 from . import (
+    audit as audit_mod,
     db,
     decks as decks_mod,
     earmarks as earmarks_mod,
@@ -46,6 +48,8 @@ INPUT_DIR = CHECKLISTS_DIR
 EXIT_UNPROCESSED_INTAKE = 3
 # Ingest collision: file SHA matches a prior successful ingest_log row.
 EXIT_DUPLICATE_INGEST = 4
+# Modify checklist refused: rows it would change moved since it was generated.
+EXIT_STALE_CHECKLIST = 5
 
 VALID_RARITIES = ("mythic", "rare", "uncommon", "common", "bonus", "special")
 
@@ -684,6 +688,35 @@ def _resolve_codes(name_or_code: str, *, include_kinds: list[str], only: list[st
     if not codes:
         raise typer.BadParameter("set selection produced 0 codes")
     return r, codes
+
+
+def _stale_row_labels(rows: list[dict]) -> dict[str, dict]:
+    """``{scryfall_id: {set, cn, name}}`` for the rows of a ``StaleCounts``."""
+    ids = sorted({r["scryfall_id"] for r in rows})
+    if not ids:
+        return {}
+    with db.connect() as conn:
+        return {c["scryfall_id"]: {"set": c["set_code"], "cn": c["collector_number"], "name": c["name"]}
+                for c in conn.execute(
+                    "SELECT scryfall_id, set_code, collector_number, name FROM cards "
+                    f"WHERE scryfall_id IN ({','.join('?' for _ in ids)})", ids)}
+
+
+def _stale_regenerate_cmd(src: Path, anchor: str, meta: dict) -> str:
+    """The `mm set master-list` command that rebuilds ``src`` in place, from the
+    file's own ``_meta`` (set codes + rarity slice → ``--only``/``--rarity``, so the
+    same partition) and its path/format (``--out`` + ``--format``). ``--force``
+    states the cost: this file's edits are discarded."""
+    parts = ["uv", "run", "mm", "set", "master-list", anchor]
+    if meta.get("set_codes"):
+        parts += ["--only", meta["set_codes"]]
+    if meta.get("rarity_filter"):
+        parts += ["--rarity", meta["rarity_filter"]]
+    parts += ["--mode", "modify"]
+    if src.suffix.lower() == ".md":
+        parts += ["--format", "md"]
+    parts += ["--out", str(src), "--force"]
+    return shlex.join(parts)
 
 
 @set_app.command("master-list")
@@ -1349,6 +1382,11 @@ def set_ingest(
         False, "--force",
         help="Re-ingest even if this exact file (by SHA-256) succeeded previously.",
     ),
+    allow_stale: bool = typer.Option(
+        False, "--allow-stale",
+        help="Ingest a modify checklist even if the collection changed since it "
+             "was generated — those rows are set back to the sheet's values.",
+    ),
     json_out: bool = typer.Option(
         False, "--json",
         help="Emit a single JSON document on stdout summarizing the run "
@@ -1367,6 +1405,11 @@ def set_ingest(
     (``modify`` checklists → replace semantics, ``add`` checklists → additive
     semantics). Pass ``--mode`` explicitly to override; the override is honored
     with a stderr warning when it disagrees with the file's declared mode.
+
+    A modify ingest is refused (exit 5, nothing written) when the ledger shows
+    a row it would change moved since the file's ``_meta.generated_at`` — the
+    stale sheet would set it back. Regenerate the checklist, or pass
+    ``--allow-stale``.
     """
     if mode is not None and mode not in ("replace", "additive"):
         typer.echo(f"error: --mode must be 'replace' or 'additive', got {mode!r}", err=True)
@@ -1531,8 +1574,34 @@ def set_ingest(
     try:
         result = sets_mod.ingest_inventory_from_xlsx(
             src, mode=mode, zero_untouched=do_zero,
-            label=log_label, source_sha256=sha,
+            label=log_label, source_sha256=sha, allow_stale=allow_stale,
         )
+    except sets_mod.StaleCounts as e:
+        # Nothing was written or archived; the file stays in place.
+        labels = _stale_row_labels(e.rows)
+        rows = [{**r, **labels.get(r["scryfall_id"], {"set": None, "cn": None, "name": None})}
+                for r in e.rows]
+        regenerate = _stale_regenerate_cmd(src, anchor, file_meta)
+        if json_out:
+            json.dump({"status": "stale", "file": str(src), "anchor": anchor,
+                       "mode": declared_meta_mode, "kind": file_meta.get("kind"),
+                       "message": str(e), "regenerate": regenerate, "rows": rows},
+                      sys.stdout, indent=2)
+            sys.stdout.write("\n")
+        else:
+            typer.echo(f"error: {e}", err=True)
+            for r in rows[:20]:
+                label = (f"{(r['set'] or '').upper()} {r['cn']} {r['name']}"
+                         if r["name"] else r["scryfall_id"])
+                typer.echo(f"  {label} [{r['finish']}]: sheet {r['expected']} → now {r['current']}",
+                           err=True)
+            if len(rows) > 20:
+                typer.echo(f"  …and {len(rows) - 20} more", err=True)
+            typer.echo("Two ways out:", err=True)
+            typer.echo(f"  regenerate (discards any edits in this file): {regenerate}", err=True)
+            typer.echo("  ingest anyway (sets the listed rows back to the sheet's values): "
+                       "add --allow-stale", err=True)
+        raise typer.Exit(EXIT_STALE_CHECKLIST)
     except Exception as e:
         error = repr(e)
 
@@ -3071,6 +3140,9 @@ def deck_compose_cmd(
     ``deck_assignments`` — a separate join table so inventory qty is preserved
     and the recipe survives a later decompose.
 
+    Tops up: only the recipe cards NOT already pledged to this deck are
+    pledged, so re-running on a partly-pledged deck completes it.
+
     Overflow protection: refuses to write if the total pledged (including
     prior assignments across all decks) would exceed either the deck's own
     recipe or the free inventory pool.
@@ -3083,10 +3155,15 @@ def deck_compose_cmd(
     if dry_run:
         typer.echo(f"# selector: deck:{slug} (compose plan, foil_first={foil_first})")
         typer.echo(f"# rows: {len(plan['rows'])}  shortfalls: {len(plan['shortfalls'])}  either_choices: {len(plan['either_choices'])}")
+        cov = decks_mod.compose_summary(plan)
+        typer.echo(f"# already pledged to this deck: {cov['pledged']} of {cov['need']} card-qty")
         if plan["shortfalls"]:
             typer.echo("shortfalls:")
             for s in plan["shortfalls"][:20]:
-                typer.echo(f"  {s['scryfall_id'][:8]}/{s['finish']}: need {s['need']}, free {s['free']}")
+                typer.echo(
+                    f"  {s['scryfall_id'][:8]}/{s['finish']}: need {s['remaining']} "
+                    f"(recipe {s['need']}, pledged {s['pledged']}), free {s['free']}"
+                )
             if len(plan["shortfalls"]) > 20:
                 typer.echo(f"  ...and {len(plan['shortfalls']) - 20} more")
         if plan["either_choices"]:
@@ -4704,6 +4781,9 @@ def audit_deck_inventory_cmd(
         report-only).
       - **over-assignment** — printings whose ``deck_assignments`` total exceeds
         the owned inventory quantity (report-only; never auto-changed).
+      - **built decks short of their recipe** — ``built`` decks whose pledges
+        don't cover the playable recipe, with how much free inventory could top
+        up via ``mm deck compose`` (report-only; doesn't change the exit code).
     """
     with db.connect() as conn:
         # Orphan = the deck's CURRENT version (V18: deck_cards hangs off
@@ -4778,6 +4858,15 @@ def audit_deck_inventory_cmd(
                         f"{last_removal['method']} ({last_removal['label'] or '—'}) "
                         f"at {last_removal['at']}"
                     )
+
+    short_decks = audit_mod.built_decks_short()
+    typer.echo(f"Built decks short of their recipe: {len(short_decks)}")
+    for d in short_decks:
+        typer.echo(
+            f"  {d['slug']}  pledged {d['pledged']} of {d['need']}; free inventory "
+            f"covers {d['coverable']} of the {d['short']} missing — "
+            f"`uv run mm deck compose {d['slug']}`"
+        )
 
     if fix and orphans:
         for o in orphans:

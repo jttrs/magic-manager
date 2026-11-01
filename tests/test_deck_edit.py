@@ -205,6 +205,22 @@ def test_either_slot_splits_across_finishes_and_shares_free():
     assert deck_edit._needs([DraftCard(A, "main", "either", 2)], {(A, "foil"): 1}, free) == {(A, "foil"): 1, (A, "nonfoil"): 1}
 
 
+def test_needs_is_the_shared_resolve_needs_rule():
+    """deck_edit._needs delegates to decks.resolve_needs (the rule compose shares):
+    a representative split — exact row, 'either' across pledged + free, a token
+    keeping its pledge, excess landing on nonfoil — resolves identically."""
+    free = {(A, "nonfoil"): 1, (A, "foil"): 2, (B, "nonfoil"): 0, (B, "foil"): 0}
+    pledged = {(A, "foil"): 1, (B, "nonfoil"): 1, (C, "foil"): 1}
+    cards_ = [DraftCard(A, "main", "either", 3), DraftCard(A, "side", "foil", 1),
+              DraftCard(B, "main", "either", 2), DraftCard(C, "token", "either", 1)]
+    expect = {(A, "foil"): 3, (A, "nonfoil"): 1, (B, "nonfoil"): 2, (C, "foil"): 1}   # output of the pre-lift _needs
+    assert deck_edit._needs(cards_, pledged, free) == expect
+    assert decks.resolve_needs(cards_, pledged, free) == expect
+    # `order` only changes which finish is tried first / takes the excess.
+    assert decks.resolve_needs([DraftCard(B, "main", "either", 2)], {}, free,
+                               order=("foil", "nonfoil")) == {(B, "foil"): 2}
+
+
 def test_build_either_split_has_no_false_shortfall(cards):
     inventory.inventory_add(A, "nonfoil", 2)
     inventory.inventory_add(A, "foil", 1)

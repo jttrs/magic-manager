@@ -67,8 +67,7 @@ def _recipe_rows(slug: str) -> list[str]:
 
 
 def _pledged(conn, deck_id: int) -> dict[tuple[str, str], int]:
-    return {(r[0], r[1]): r[2] for r in conn.execute(
-        "SELECT scryfall_id, finish, count FROM deck_assignments WHERE deck_id = ?", (deck_id,))}
+    return decks.deck_pledged(conn, deck_id)
 
 
 def _state(conn, slug: str) -> str:
@@ -81,58 +80,13 @@ def _unique_slug(conn, name: str) -> str:
 
 def _needs(cards: list[DraftCard], pledged: dict[tuple[str, str], int],
            free: dict[tuple[str, str], int]) -> dict[tuple[str, str], int]:
-    """Collapse a playable decklist to per-(sid, finish) copies. Exact finishes
-    first; then each 'either' slot keeps copies already pledged, then takes free
-    nonfoil, then free foil (splitting across finishes), and any excess lands on
-    nonfoil (short). Free copies are shared across slots, never double-counted.
-    Token rows aren't pledged by a Build, but copies already pledged to them stay
-    (never sleeved, never pulled)."""
-    out: dict[tuple[str, str], int] = {}
-
-    def add(key: tuple[str, str], n: int) -> None:
-        if n > 0:
-            out[key] = out.get(key, 0) + n
-
-    def kept(key: tuple[str, str]) -> int:       # pledged copies not yet claimed
-        return max(0, pledged.get(key, 0) - out.get(key, 0))
-
-    def room(key: tuple[str, str]) -> int:       # free copies not yet claimed
-        return max(0, free.get(key, 0) - max(0, out.get(key, 0) - pledged.get(key, 0)))
-
-    playable = [c for c in cards if c.board in PLAYABLE and c.count > 0]
-    for c in playable:
-        if c.finish in ("nonfoil", "foil"):
-            add((c.scryfall_id, c.finish), c.count)
-    for c in playable:
-        if c.finish in ("nonfoil", "foil"):
-            continue
-        left = c.count
-        for pick in (kept, room):
-            for fin in ("nonfoil", "foil"):
-                key = (c.scryfall_id, fin)
-                take = min(left, pick(key))
-                add(key, take)
-                left -= take
-        add((c.scryfall_id, "nonfoil"), left)
-    for c in cards:
-        if c.board != "token" or c.count <= 0:
-            continue
-        left = c.count
-        for fin in (("nonfoil", "foil") if c.finish == "either" else (c.finish,)):
-            key = (c.scryfall_id, fin)
-            take = min(left, kept(key))
-            add(key, take)
-            left -= take
-    return out
+    """Playable decklist → per-(sid, finish) copies: the shared 'either' rule."""
+    return decks.resolve_needs(cards, pledged, free)
 
 
 def _free_map(sids) -> dict[tuple[str, str], int]:
-    out: dict[tuple[str, str], int] = {}
     with db.connect() as conn:
-        for sid in set(sids):
-            for fin in ("nonfoil", "foil"):
-                out[(sid, fin)] = inventory.free_quantity(sid, fin, conn=conn)
-    return out
+        return decks.free_map(conn, sids)
 
 
 def _swap(needs: dict[tuple[str, str], int], pledged: dict[tuple[str, str], int],

@@ -74,7 +74,7 @@ b. **Run the ingest.** Build and run:
 uv run mm set ingest --path "<file.path>" --json
 ```
 
-Add `--force` IFF the user explicitly chose "Re-ingest with --force" in step 3a. Do NOT pass `--mode` — the CLI reads the file's `_meta` and applies the right semantics automatically (inventory: `modify`→replace / `add`→additive; deck checklists: always additive). The command is identical for both families.
+Add `--force` IFF the user explicitly chose "Re-ingest with --force" in step 3a. Exit 4 (duplicate hash) and exit 5 (stale modify sheet, see below) are refusals that wrote nothing. Do NOT pass `--mode` — the CLI reads the file's `_meta` and applies the right semantics automatically (inventory: `modify`→replace / `add`→additive; deck checklists: always additive). The command is identical for both families.
 
 **Legacy file edge case (inventory only)** — if `mm set ingest` exits with code 2 and the error mentions `_meta.mode`, the file is a pre-tagging inventory checklist. Deck checklists (`kind` precon/jumpstart) never hit this. In that one case, fall back to the per-file prompt:
 
@@ -82,6 +82,15 @@ Add `--force` IFF the user explicitly chose "Re-ingest with --force" in step 3a.
   - **Replace (recommended if the file is a full set audit / current-inventory snapshot)** — pass `--mode replace`.
   - **Additive (recommended if the file is a new-acquisitions delta)** — pass `--mode additive`.
 - Then re-run `mm set ingest --path "<file.path>" --mode <chosen> --json`.
+
+**Stale modify sheet (exit 5, inventory `modify` only).** If the command exits 5 and the JSON has `"status": "stale"`, the collection changed after the sheet was generated, so ingesting would silently set those rows back. **Nothing was written and the file is still in `checklists/`.** The JSON is `{status, file, anchor, mode, kind, message, regenerate, rows: [{scryfall_id, finish, set, cn, name, expected, current}]}` where each row is `sheet's value (expected)` vs `now (current)`. Do this:
+
+1. Show the changed rows: `<SET> <cn> <name> [<finish>]: sheet <expected> → now <current>` (all of them; if there are many, list the first 20 and the count).
+2. Ask via `AskUserQuestion` (header `Stale checklist`, question `<filename>: N row(s) changed since this sheet was generated. What do you want to do?`), options:
+   - **Regenerate (Recommended)** — run the `regenerate` command from the JSON verbatim. It rebuilds the same sheet from current inventory in place, so any edits already made in this file are discarded; tell the user to re-enter them and re-run this command.
+   - **Ingest anyway** — re-run `uv run mm set ingest --path "<file.path>" --allow-stale --json`. Every listed row is set back to the sheet's value, undoing the newer change. Only choose this when the sheet is the intended truth for those rows.
+   - **Skip** — leave the file and move on.
+3. Count a file the user regenerates or skips as `skipped (stale)` in the final aggregate (a regenerated sheet needs a fresh edit before it can be ingested).
 
 Parse the JSON output and surface it to the user. **The `kind` field (also in the JSON) selects the report shape:**
 
@@ -112,7 +121,7 @@ After all files are processed (skipped or ingested), print a single combined sum
 
 > Ingested N files. Inventory: A added, U updated, Z zeroed across labels [list]. Precon/jumpstart: C built, L torn down, Q cards added. K files skipped.
 
-Omit whichever family had no files.
+Omit whichever family had no files. Count each stale sheet (exit 5) the user regenerated or skipped as `skipped (stale)`, separately from duplicate skips.
 
 If any file failed (status=`failed` in the JSON), call that out explicitly and tell the user the error from the JSON's `error` field.
 
@@ -121,7 +130,8 @@ If any file failed (status=`failed` in the JSON), call that out explicitly and t
 
 - **One file at a time.** Do not batch ingest commands together. Each file gets its own `mm set ingest --path X --json` call so the user can inspect output between files.
 - **Trust the file's declared mode.** `_meta.mode` is the source of truth — don't ask the user to confirm mode for tagged files (that defeats the whole point of the tagging system). The only exception is the legacy-file fallback in step 3b.
-- **Never overwrite without confirmation.** The CLI itself refuses with exit 4 on duplicate hash; trust the CLI to do the right thing rather than computing it yourself.
+- **Never overwrite without confirmation.** The CLI itself refuses with exit 4 on duplicate hash and exit 5 on a stale modify sheet; trust the CLI to do the right thing rather than computing it yourself.
 - **Surface all warnings.** Especially `name/printing mismatch` — they almost always mean the user has a typo, not that the data is fine. Also surface the stderr override warning if `--mode` was passed and disagreed with `_meta.mode`.
+- **Never pass `--allow-stale` unprompted.** It is only added after the user picks "Ingest anyway" in the exit-5 prompt for that specific file, and never carried over to the next file.
 - **Do not delete `checklists/processed/` files** under any circumstances. The archived copy is the audit trail.
 - **All shell paths are quoted** because XLSX filenames contain hyphens and the user's set names sometimes contain colons that survive into the slug.

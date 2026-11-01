@@ -663,10 +663,57 @@ def read_master_list_meta(path: Path) -> dict | None:
 
 # ---------- V2 inventory ingest ----------
 
+def _meta_generated_at_utc(path: Path) -> tuple[str, str] | None:
+    """The checklist's ``_meta.generated_at`` as ``(utc_iso_seconds, raw)`` —
+    the form ``inventory_events.at`` uses — or ``None`` when the file carries no
+    readable timestamp (legacy file). A naive timestamp is read as local time."""
+    meta = read_master_list_meta(path) or {}
+    raw = (meta.get("generated_at") or "").strip()
+    if not raw:
+        return None
+    try:
+        dt = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.astimezone()
+    return dt.astimezone(timezone.utc).isoformat(timespec="seconds"), raw
+
+
+def _stale_rows(conn, writes: list[tuple[str, str, int, int]], since_iso: str) -> list[dict]:
+    """Planned writes ``(scryfall_id, finish, new_qty, current_qty)`` whose row
+    moved in the ledger after ``since_iso`` AND that would actually change.
+    ``expected`` is the count when the sheet was generated (current − Σ delta
+    since)."""
+    moved = {
+        (r["scryfall_id"], r["finish"]): r["d"]
+        for r in conn.execute(
+            "SELECT scryfall_id, finish, SUM(delta) AS d FROM inventory_events "
+            "WHERE at > ? GROUP BY scryfall_id, finish", (since_iso,))
+    }
+    # A card listed twice is written sequentially (the later SET wins, its
+    # ``current_qty`` is the projection of the earlier one), so judge each key
+    # once by its NET effect: the first write's ``current_qty`` is the real stored
+    # count, the last write's ``new_qty`` is where the ingest leaves it.
+    first: dict[tuple[str, str], int] = {}
+    last: dict[tuple[str, str], int] = {}
+    for sid, finish, new_qty, current_qty in writes:
+        first.setdefault((sid, finish), current_qty)
+        last[(sid, finish)] = new_qty
+    rows: list[dict] = []
+    for (sid, finish), current_qty in first.items():
+        d = moved.get((sid, finish)) or 0
+        if d != 0 and last[(sid, finish)] != current_qty:
+            rows.append({"scryfall_id": sid, "finish": finish,
+                         "expected": current_qty - d, "current": current_qty})
+    return rows
+
+
 def ingest_inventory_from_xlsx(path: Path, *, mode: str = "replace",
                                zero_untouched: bool = False,
                                label: str | None = None,
-                               source_sha256: str | None = None) -> dict:
+                               source_sha256: str | None = None,
+                               allow_stale: bool = False) -> dict:
     """Parse a filled-in master-list XLSX/MD and write qty cells to inventory.
 
     Per-cell semantics by ``mode``:
@@ -687,6 +734,14 @@ def ingest_inventory_from_xlsx(path: Path, *, mode: str = "replace",
     inferred from the rows present (fallback). Cards in the file that
     aren't in the partition's set codes are flagged as 'extras' (the user
     pasted unrelated cards into a set's checklist).
+
+    ``allow_stale`` (replace mode only): a ``modify`` checklist is prefilled from
+    inventory when it is generated. If the ledger shows a row this ingest would
+    change moved since the file's ``_meta.generated_at``, ingesting would silently
+    set it back, so the whole ingest is refused with :class:`StaleCounts` (rows =
+    ``{scryfall_id, finish, expected, current}``; nothing is written). Pass
+    ``allow_stale=True`` to apply it anyway. Files with no readable
+    ``generated_at`` (legacy) skip the check.
 
     Provenance: the write happens under a single ``checklist`` ingest event
     (``ingest`` module). Every per-cell change appends a SIGNED delta to
@@ -719,16 +774,12 @@ def ingest_inventory_from_xlsx(path: Path, *, mode: str = "replace",
     seen_keys: set[tuple[str, str]] = set()
 
     with db.connect() as conn:
-        # One checklist event spans every per-cell delta below, in this same
-        # transaction — the ledger append and the inventory mutation commit
-        # together (or roll back together).
-        ingest_id = ingest_mod.create_event(
-            conn, "checklist",
-            label=label or f"checklist:{path.stem}",
-            source_path=str(path),
-            source_sha256=source_sha256,
-            mode=mode,
-        )
+        # Pre-pass: plan every write as (scryfall_id, finish, new_qty,
+        # current_qty) so the staleness check can refuse BEFORE the event is
+        # created or anything is written. ``projected`` keeps a repeated key
+        # (the same card listed twice) accumulating like sequential writes.
+        writes: list[tuple[str, str, int, int]] = []
+        projected: dict[tuple[str, str], int] = {}
         for entry in result.entries:
             if entry.card is None:
                 continue
@@ -752,11 +803,15 @@ def ingest_inventory_from_xlsx(path: Path, *, mode: str = "replace",
 
             seen_keys.add((scry_id, finish))
 
-            row = conn.execute(
-                "SELECT quantity FROM inventory WHERE scryfall_id = ? AND finish = ?",
-                (scry_id, finish),
-            ).fetchone()
-            current_qty = row["quantity"] if row else 0
+            key = (scry_id, finish)
+            if key in projected:
+                current_qty = projected[key]
+            else:
+                row = conn.execute(
+                    "SELECT quantity FROM inventory WHERE scryfall_id = ? AND finish = ?",
+                    (scry_id, finish),
+                ).fetchone()
+                current_qty = row["quantity"] if row else 0
 
             if mode == "replace":
                 new_qty = entry.qty
@@ -765,13 +820,8 @@ def ingest_inventory_from_xlsx(path: Path, *, mode: str = "replace",
                     continue
                 new_qty = current_qty + entry.qty
 
-            outcome = _write_count(conn, ingest_id, scry_id, finish, new_qty)
-            if outcome == "added":
-                added += 1
-            elif outcome == "updated":
-                updated += 1
-            elif outcome == "zeroed":
-                zeroed += 1
+            projected[key] = new_qty
+            writes.append((scry_id, finish, new_qty, current_qty))
 
         # Replace mode, opt-in only: zero out in-partition inventory rows not
         # seen in the file (full-audit "file is authoritative"). Off by default
@@ -794,8 +844,38 @@ def ingest_inventory_from_xlsx(path: Path, *, mode: str = "replace",
                 key = (r["scryfall_id"], r["finish"])
                 if key in seen_keys:
                     continue
-                if _write_count(conn, ingest_id, r["scryfall_id"], r["finish"], 0) == "zeroed":
-                    zeroed += 1
+                writes.append((r["scryfall_id"], r["finish"], 0, r["quantity"]))
+
+        if mode == "replace" and not allow_stale:
+            since = _meta_generated_at_utc(path)
+            if since is not None:
+                stale = _stale_rows(conn, writes, since[0])
+                if stale:
+                    raise StaleCounts(
+                        f"{len(stale)} row(s) changed since this checklist was "
+                        f"generated ({since[1]}); ingesting it would set them back "
+                        f"to the sheet's values",
+                        stale,
+                    )
+
+        # One checklist event spans every per-cell delta below, in this same
+        # transaction — the ledger append and the inventory mutation commit
+        # together (or roll back together).
+        ingest_id = ingest_mod.create_event(
+            conn, "checklist",
+            label=label or f"checklist:{path.stem}",
+            source_path=str(path),
+            source_sha256=source_sha256,
+            mode=mode,
+        )
+        for scry_id, finish, new_qty, _current in writes:
+            outcome = _write_count(conn, ingest_id, scry_id, finish, new_qty)
+            if outcome == "added":
+                added += 1
+            elif outcome == "updated":
+                updated += 1
+            elif outcome == "zeroed":
+                zeroed += 1
 
         if added + updated + zeroed == 0:
             # No-op ingest (empty/unresolved file, or a modify file whose cells
