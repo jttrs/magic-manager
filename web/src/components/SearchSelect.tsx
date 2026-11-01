@@ -5,7 +5,7 @@ type Option = { value: string; label: string; hint?: string };
 
 /** One-of-many picker for long lists: a compact trigger opening a filter box
  *  over a list; picking closes it. Arrow keys move, Enter picks. */
-export function SearchSelect({ label, options, value, onChange, noun, placeholder }: { label: string; options: Option[]; value: string | undefined; onChange: (v: string) => void; noun: string; placeholder?: string }) {
+export function SearchSelect({ label, options, value, onChange, noun, nouns = `${noun}s`, placeholder }: { label: string; options: Option[]; value: string | undefined; onChange: (v: string) => void; noun: string; nouns?: string; placeholder?: string }) {
   const id = useId();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
@@ -57,7 +57,7 @@ export function SearchSelect({ label, options, value, onChange, noun, placeholde
                 aria-expanded="true"
                 aria-controls={`${id}-list`}
                 aria-activedescendant={shown[active] ? `${id}-o${active}` : undefined}
-                aria-label={`Filter ${noun}s`}
+                aria-label={`Filter ${nouns}`}
                 placeholder={placeholder ?? 'Filter…'}
                 autoComplete="off"
                 spellCheck={false}
@@ -68,7 +68,7 @@ export function SearchSelect({ label, options, value, onChange, noun, placeholde
               />
             </div>
             <ul ref={listRef} id={`${id}-list`} role="listbox" aria-label={label} className="min-h-0 overflow-y-auto overscroll-contain py-1">
-              {shown.length === 0 && <li className="px-3 py-2 text-sm text-on-chrome-muted">No {noun}s match “{q}”.</li>}
+              {shown.length === 0 && <li className="px-3 py-2 text-sm text-on-chrome-muted">No {nouns} match “{q}”.</li>}
               {shown.map((o, i) => (
                 <li
                   key={o.value}

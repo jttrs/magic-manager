@@ -1,12 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import type { FactsOut, RankedOut, RankingOut } from './api';
-import { cardType, creatureType, edhrecUrl, emptyRankingNote, exploreMode, failureText, rankedTypes, fetchedAgo, fmtMetric, nextPage, rankedCard, rankingPage, rankingRequest, rankingSummary, roleFor, timeframeApplies, type RankingsState } from './rankings';
+import { cardType, creatureType, edhrecUrl, emptyRankingNote, exploreMode, failureText, rankedTypes, fetchedAgo, fmtMetric, nextPage, partialRankingNote, rankedCard, rankingPage, rankingRequest, rankingSummary, roleFor, timeframeApplies, type RankingsState } from './rankings';
 
 const state = (o: Partial<RankingsState> = {}): RankingsState => ({ rank: 'commanders', tf: 'week', own: 'all', rq: '', ...o });
 const facts = (o: Partial<FactsOut> = {}): FactsOut => ({ oracle_id: 'o', type_line: 'Legendary Creature', cmc: 3, color_identity: ['R'], lowest_usd: 2, scryfall_id: 's', image_uri: null, set_code: 'm13', collector_number: '1', scryfall_url: null, owned: 0, free: 0, ...o });
 const row = (name: string, o: Partial<RankedOut> = {}): RankedOut => ({ rank: 1, name, slug: name.toLowerCase(), facts: facts({ oracle_id: `o-${name}` }), num_decks: 1234, salt: null, trend: null, ...o });
 
 describe('rankings', () => {
+  it('names a short pool honestly, and stays quiet when the list was read in full', () => {
+    expect(partialRankingNote({ base: 100, pool_complete: true, pool_partial_reason: null })).toBeNull();
+    expect(partialRankingNote({ base: 200, pool_complete: false, pool_partial_reason: 'rate_limited' }))
+      .toBe('Showing the first 200 — EDHREC limited the read. Refresh to fetch the rest.');
+    expect(partialRankingNote({ base: 1300, pool_complete: false, pool_partial_reason: 'read_failed' }))
+      .toBe('Showing the first 1,300 — EDHREC stopped answering partway through. Refresh to fetch the rest.');
+  });
+
   it('opens on rankings until a card is picked; an explicit mode wins', () => {
     expect(exploreMode(undefined, undefined)).toBe('rankings');
     expect(exploreMode(undefined, 'Sol Ring')).toBe('card');

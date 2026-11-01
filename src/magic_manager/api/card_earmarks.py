@@ -48,7 +48,7 @@ class DeckEarmarkOut(EarmarkEntryOut):
 
 class DeckEarmarksOut(BaseModel):
     format: str | None = Field(description="The format filtered on (None = the deck has no format: nothing filtered).")
-    commander_colors: list[str] | None = Field(description="The commander's colour identity (None = no commander yet, or not a commander format).")
+    commander_colors: list[str] | None = Field(description="The commander's color identity (None = no commander yet, or not a commander format).")
     rule: str = Field(description="The filter in words, e.g. 'Legal in Commander · within white, black'.")
     for_deck: list[DeckEarmarkOut] = Field(description="Earmarked for this deck — always listed.")
     legal: list[DeckEarmarkOut]

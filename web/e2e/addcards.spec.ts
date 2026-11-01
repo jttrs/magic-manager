@@ -112,6 +112,46 @@ test('deck URL: fetch job streams, then the deck lands in review and commits wit
   expect((bodies[0] as { source: string; label: string }).label).toBe('Goblins');
 });
 
+test('deck URL: editing the field mid-read keeps that read and its result', async ({ page }) => {
+  let release!: () => void;
+  const gate = new Promise<void>((ok) => { release = ok; });
+  const asked: string[] = [];
+  await page.route('**/api/jobs/ingest.fetch_deck', (r) => {
+    asked.push((r.request().postDataJSON() as { url: string }).url);
+    return r.fulfill({ status: 202, json: job('jd2', 'ingest.fetch_deck') });
+  });
+  await page.route('**/api/jobs/jd2/events', async (r) => {
+    await gate;
+    await r.fulfill({
+      status: 200, contentType: 'text/event-stream',
+      body: sse([['status', { status: 'running' }], ['result', { summary: 'Goblins · 5 cards to review', artifacts: [{ kind: 'json', label: 'lines', data: { ...resolved, format: 'deck', deck_name: 'Goblins' } }] }], ['status', { status: 'succeeded' }]]),
+    });
+  });
+  await page.goto(COLLECTION_URL);
+  await page.getByRole('button', { name: 'Add cards' }).click();
+  await page.getByRole('tab', { name: 'Add decklist or product' }).click();
+  const field = page.getByRole('searchbox', { name: 'Deck link or product' });
+  await field.fill('archidekt.com/decks/123');
+  await field.press('Enter');
+  const results = page.getByRole('list', { name: 'Results' });
+  await expect(results.getByRole('button', { name: 'Reading…' })).toBeVisible();
+  // Edit the link while it reads: the read keeps its row instead of being dropped.
+  await field.fill('archidekt.com/decks/1234');
+  await expect(results.getByRole('listitem')).toHaveCount(2);
+  await expect(results.getByRole('button', { name: 'Reading…' })).toBeVisible();
+  await expect(results.getByRole('button', { name: 'Read deck' })).toBeVisible();
+  release();
+  await expect(results.getByText('Goblins')).toBeVisible();
+  await expect(results.getByRole('button', { name: 'Add…' })).toBeVisible();
+  // Enter reads only the link in the field; the earlier read isn't repeated.
+  expect(asked).toEqual(['https://archidekt.com/decks/123']);
+  // Back to the first link: still one row, with its result.
+  await field.fill('archidekt.com/decks/123');
+  await expect(results.getByRole('listitem')).toHaveCount(1);
+  await results.getByRole('button', { name: 'Add…' }).click();
+  await expect(page.getByRole('heading', { name: 'Goblins' })).toBeVisible();
+});
+
 test('precon: search the catalog, add a copy via a job', async ({ page }) => {
   let submitted: unknown;
   await page.route('**/api/ingest/precons**', (r) => r.fulfill({ json: [{ file_name: 'CounterBlitz_FIC', name: 'Counter Blitz', set_code: 'fic', type: 'Commander Deck', release_date: '2025-06-13', default_state: 'built', owned_built: 1, owned_deconstructed: 0, image_uri: IMG }] }));

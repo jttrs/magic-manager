@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { preconCatalogQuery } from '../../app/queries';
 import { useJob, type JobLive } from '../../app/useJob';
 import type { PreconOptionOut, ResolveOut } from '../../core/api';
@@ -21,6 +21,12 @@ export function DeckPane({ onFetched }: { onFetched: (r: ResolveOut) => void }) 
   const query = readDeckQuery(text);
   const reader = useRef<DeckReader | null>(null);
   const hintId = useId();
+  // Links whose read was started stay listed (each row keeps its own read), so
+  // editing the field mid-read never discards a read or its result.
+  const [started, setStarted] = useState<DeckLinkQuery[]>([]);
+  const onStarted = useCallback((q: DeckLinkQuery) => setStarted((s) => (s.some((x) => x.url === q.url) ? s : [q, ...s])), []);
+  const current = query.kind === 'deck' ? query : null;
+  const links = current ? [current, ...started.filter((q) => q.url !== current.url)] : started;
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <label className="flex flex-col gap-1.5 text-sm voice-semi text-ink-muted">
@@ -42,17 +48,24 @@ export function DeckPane({ onFetched }: { onFetched: (r: ResolveOut) => void }) 
           : `Paste a deck link from ${DECK_SITES} — or search products by name, set code or type.`}
       </p>
       <div className="relative min-h-0 flex-1 overflow-y-auto pr-3 [scrollbar-gutter:stable]">
-        {query.kind === 'deck' ? (
-          <DeckLink key={query.url} query={query} onFetched={onFetched} reader={reader} />
-        ) : query.kind === 'search' ? (
-          <Products q={query.q} />
-        ) : null}
+        {links.length > 0 && (
+          <section aria-label={links.length > 1 ? 'Deck links' : 'Deck link'} className="mb-4 flex flex-col gap-2">
+            <ResultsHead>{links.length > 1 ? 'Deck links' : 'Deck link'}</ResultsHead>
+            <ul aria-label="Results" className="flex flex-col">
+              {links.map((q) => (
+                <DeckLink key={q.url} query={q} onFetched={onFetched} onStarted={onStarted} reader={q.url === current?.url ? reader : null} />
+              ))}
+            </ul>
+          </section>
+        )}
+        {query.kind === 'search' && <Products q={query.q} />}
       </div>
     </div>
   );
 }
 
 type DeckReader = () => void;
+type DeckLinkQuery = Extract<DeckQuery, { kind: 'deck' }>;
 
 function JobLine({ live }: { live: JobLive | null }) {
   if (!live) return null;
@@ -73,9 +86,10 @@ function ResultsHead({ children }: { children: ReactNode }) {
   return <h3 className="border-b-2 border-rule-strong pb-1 text-lg voice-condensed font-bold uppercase text-ink">{children}</h3>;
 }
 
-/** The pasted deck link as one result: read it (server job, or the companion in
- *  this browser), then `Add…` opens the review. */
-function DeckLink({ query, onFetched, reader }: { query: Extract<DeckQuery, { kind: 'deck' }>; onFetched: (r: ResolveOut) => void; reader: RefObject<DeckReader | null> }) {
+/** A deck link as one result: read it (server job, or the companion in this
+ *  browser), then `Add…` opens the review. Only the link in the field answers
+ *  Enter (`reader`); a link read earlier keeps its row, its read and its result. */
+function DeckLink({ query, onFetched, onStarted, reader }: { query: DeckLinkQuery; onFetched: (r: ResolveOut) => void; onStarted: (q: DeckLinkQuery) => void; reader: RefObject<DeckReader | null> | null }) {
   const [deck, setDeck] = useState<ResolveOut | null>(null);
   const [error, setError] = useState('');
   const { live, start } = useJob();
@@ -95,6 +109,7 @@ function DeckLink({ query, onFetched, reader }: { query: Extract<DeckQuery, { ki
   async function readDeck() {
     if (starting.current || running || deck) return;
     starting.current = true;
+    onStarted(query);
     setError('');
     browser.reset();
     try {
@@ -113,28 +128,26 @@ function DeckLink({ query, onFetched, reader }: { query: Extract<DeckQuery, { ki
     }
   }
   useEffect(() => {
+    if (!reader) return;
     reader.current = readDeck;
     return () => { reader.current = null; };
   });
 
   const title = deck?.deck_name ?? `Deck on ${query.site}`;
   return (
-    <section aria-label="Deck link" className="flex flex-col gap-2">
-      <ResultsHead>Deck link</ResultsHead>
-      <ul aria-label="Results" className="flex flex-col">
-        <li className="ruled flex items-center gap-3 py-2">
-          {deck ? <Thumb uri={deck.deck_image_uri} /> : <LinkTile />}
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-md voice-semi font-medium text-ink">{title}</p>
-            <p className="truncate text-xs tabular text-ink-muted">{deck ? deckFacts(deck, query.site) : query.url}</p>
-          </div>
-          {deck ? (
-            <Button tone="paper" onClick={() => onFetched(deck)} className="shrink-0">Add…</Button>
-          ) : (
-            <Button tone="paper" onClick={readDeck} disabled={running} className="shrink-0">{running ? 'Reading…' : 'Read deck'}</Button>
-          )}
-        </li>
-      </ul>
+    <li className="ruled flex flex-col gap-2 py-2">
+      <div className="flex items-center gap-3">
+        {deck ? <Thumb uri={deck.deck_image_uri} /> : <LinkTile />}
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-md voice-semi font-medium text-ink">{title}</p>
+          <p className="truncate text-xs tabular text-ink-muted">{deck ? deckFacts(deck, query.site) : query.url}</p>
+        </div>
+        {deck ? (
+          <Button tone="paper" onClick={() => onFetched(deck)} className="shrink-0">Add…</Button>
+        ) : (
+          <Button tone="paper" onClick={readDeck} disabled={running} className="shrink-0">{running ? 'Reading…' : 'Read deck'}</Button>
+        )}
+      </div>
       <DeckSourceHealth url={query.url} viaBrowser={viaBrowser} settled={live?.status === 'succeeded' || live?.status === 'failed' ? live.status : browser.error ? 'error' : ''} />
       {!deck && (viaBrowser ? (
         <p className="text-xs text-ink-muted">Read in this browser by the companion, so your private decks work too. You approve what it sends.</p>
@@ -146,7 +159,7 @@ function DeckLink({ query, onFetched, reader }: { query: Extract<DeckQuery, { ki
       {browser.error && <FailureNote error={browser.error} />}
       {error && <p role="alert" className="text-sm text-danger">{error}</p>}
       {!deck && <JobLine live={live} />}
-    </section>
+    </li>
   );
 }
 

@@ -151,6 +151,35 @@ def resolve(name_or_code: str) -> ResolvedSet:
     return ResolvedSet(code=anchor["code"], name=anchor["name"], related=related)
 
 
+PAPER_FAMILY_SET_TYPES = frozenset({"expansion", "core", "masters", "commander", "draft_innovation",
+                                    "funny", "starter", "duel_deck", "from_the_vault", "spellbook",
+                                    "premium_deck", "box", "masterpiece", "arsenal"})
+
+
+def paper_families() -> list[dict]:
+    """Every top-level paper set family (no parent, not digital, a playable
+    set type), newest first: ``{value, label, year}`` with ``value`` the
+    lowercase family code — the one list a family picker offers."""
+    out = [
+        {"value": s["code"].lower(), "label": s["name"], "year": (s.get("released_at") or "")[:4] or None}
+        for s in scryfall.all_sets()
+        if not s.get("parent_set_code") and not s.get("digital") and s.get("set_type") in PAPER_FAMILY_SET_TYPES
+    ]
+    out.sort(key=lambda o: (o["year"] or "", o["label"]), reverse=True)
+    return out
+
+
+def owned_family_roots(*, conn=None) -> set[str]:
+    """Lowercase root codes (Scryfall parent chain walked to the top) of every
+    set you own a copy from — cheap: one query + the cached set list."""
+    by_code = {s["code"].lower(): s for s in scryfall.all_sets()}
+    with db.transaction(conn) as c:
+        codes = [r[0].lower() for r in c.execute(
+            "SELECT DISTINCT c.set_code FROM cards c JOIN inventory i ON i.scryfall_id = c.scryfall_id "
+            "WHERE i.quantity > 0 AND c.set_code IS NOT NULL")]
+    return {_walk_to_parent(by_code, by_code[code])["code"].lower() for code in codes if code in by_code}
+
+
 def _walk_to_parent(by_code: dict, start: dict) -> dict:
     cur = start
     while cur.get("parent_set_code"):

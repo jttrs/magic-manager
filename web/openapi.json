@@ -7989,7 +7989,7 @@
             },
             "type": "array",
             "title": "Almost",
-            "description": "Combos one card away, in the deck's colours."
+            "description": "Combos one card away, in the deck's colors."
           },
           "missing_cards": {
             "items": {
@@ -8002,7 +8002,7 @@
           "off_color": {
             "type": "integer",
             "title": "Off Color",
-            "description": "Near-misses that would need another colour (not listed)."
+            "description": "Near-misses that would need another color (not listed)."
           }
         },
         "type": "object",
@@ -8274,7 +8274,7 @@
               }
             ],
             "title": "Commander Colors",
-            "description": "The commander's colour identity (None = no commander yet, or not a commander format)."
+            "description": "The commander's color identity (None = no commander yet, or not a commander format)."
           },
           "rule": {
             "type": "string",
@@ -9332,6 +9332,42 @@
           "cards"
         ],
         "title": "FamilyCardsOut"
+      },
+      "FamilyChoiceOut": {
+        "properties": {
+          "value": {
+            "type": "string",
+            "title": "Value",
+            "description": "Family code (lowercase), the ranking's `set_family`."
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          },
+          "owned": {
+            "type": "boolean",
+            "title": "Owned",
+            "description": "You own a card from this family."
+          }
+        },
+        "type": "object",
+        "required": [
+          "value",
+          "label",
+          "owned"
+        ],
+        "title": "FamilyChoiceOut"
       },
       "FamilyOption": {
         "properties": {
@@ -12977,13 +13013,22 @@
             "type": "array",
             "title": "Tags",
             "description": "Tags already fetched (suggestions)."
+          },
+          "families": {
+            "items": {
+              "$ref": "#/components/schemas/FamilyChoiceOut"
+            },
+            "type": "array",
+            "title": "Families",
+            "description": "Every top-level paper set family; families you own cards from first, each newest first."
           }
         },
         "type": "object",
         "required": [
           "timeframes",
           "colors",
-          "tags"
+          "tags",
+          "families"
         ],
         "title": "RankingOptionsOut"
       },
@@ -13077,6 +13122,28 @@
             "type": "array",
             "title": "Local Filters",
             "description": "Axes applied locally to the base list (EDHREC's filters don't combine)."
+          },
+          "pool_complete": {
+            "type": "boolean",
+            "title": "Pool Complete",
+            "description": "False when EDHREC stopped answering partway through the list: the pool holds only the pages read until a Refresh reads the rest.",
+            "default": true
+          },
+          "pool_partial_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "rate_limited",
+                  "read_failed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pool Partial Reason",
+            "description": "Why the pool is short: EDHREC limited the read (rate_limited) or a page failed."
           }
         },
         "type": "object",
@@ -15275,7 +15342,7 @@
           "colors": {
             "type": "string",
             "title": "Colors",
-            "description": "Colour identity letters WUBRG, or C for colourless.",
+            "description": "Color identity letters WUBRG, or C for colorless.",
             "default": ""
           },
           "color_match": {

@@ -168,5 +168,37 @@
  ],
  "tags": [
   "goblins"
+ ],
+ "families": [
+  {
+   "value": "tla",
+   "label": "Avatar: The Last Airbender",
+   "year": "2025",
+   "owned": true
+  },
+  {
+   "value": "blb",
+   "label": "Bloomburrow",
+   "year": "2024",
+   "owned": true
+  },
+  {
+   "value": "acr",
+   "label": "Assassin's Creed",
+   "year": "2024",
+   "owned": true
+  },
+  {
+   "value": "eoe",
+   "label": "Edge of Eternities",
+   "year": "2025",
+   "owned": false
+  },
+  {
+   "value": "dsk",
+   "label": "Duskmourn: House of Horror",
+   "year": "2024",
+   "owned": false
+  }
  ]
 }
