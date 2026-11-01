@@ -6,6 +6,8 @@ The whole suite is offline + deterministic:
   - `fake_scryfall` / `fake_mtgjson` monkeypatch the semantic network boundaries
     (scryfall.search/collection/all_sets, mtgjson.deck) so no bash wrapper or
     HTTP is ever touched.
+  - every test's default DB (`_isolated_db`, autouse) is a throwaway too, so a
+    test that forgets `tmp_db` never opens the repo's db/magic_manager.db.
   - `make_card` builds raw-Scryfall-API-shaped dicts (the shape db.upsert_card /
     scryfall.search return), so seeding goes through the real projection code.
 """
@@ -254,6 +256,24 @@ def _reset_all_sets_memo():
     scryfall._all_sets_memo = None
     yield
     scryfall._all_sets_memo = None
+
+
+@pytest.fixture(autouse=True)
+def _reset_deck_list_memo():
+    """`mtgjson.deck_list()` memoizes in-process too — same rule."""
+    from magic_manager import mtgjson
+    mtgjson._deck_list_memo = None
+    yield
+    mtgjson._deck_list_memo = None
+
+
+@pytest.fixture(autouse=True)
+def _isolated_db(tmp_path, monkeypatch):
+    """No test ever opens the repo's db/magic_manager.db (absent in a fresh
+    worktree, the owner's REAL collection in the main checkout): the default
+    DB is a per-test throwaway. ``tmp_db`` and tests that set their own
+    MAGIC_MANAGER_DB still win."""
+    monkeypatch.setenv("MAGIC_MANAGER_DB", str(tmp_path / "default-db" / "magic_manager.db"))
 
 
 @pytest.fixture(autouse=True)

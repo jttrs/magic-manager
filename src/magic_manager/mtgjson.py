@@ -28,6 +28,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import time
 from functools import lru_cache
 from pathlib import Path
 from typing import Iterable
@@ -145,11 +146,45 @@ def deck_list(*, set_code: str | None = None) -> list[dict]:
     ``set_code`` filter is case-insensitive and matches MTGJSON's uppercase
     ``code`` field.
     """
-    body = _run_json(["decklist"])
-    rows = body.get("data", [])
+    rows = _deck_list_rows()
     if set_code is not None:
         wanted = set_code.upper()
         rows = [r for r in rows if r.get("code") == wanted]
+    else:
+        rows = list(rows)
+    return rows
+
+
+_DECK_LIST_TTL_S = 300.0
+# (taken at, DeckList.json cache stamp, rows) — see _deck_list_rows.
+_deck_list_memo: tuple[float, tuple[int, int] | None, list[dict]] | None = None
+
+
+def _cache_stamp(resource_path: str) -> tuple[int, int] | None:
+    """``(mtime_ns, size)`` of the wrapper's cached copy, ``None`` when absent."""
+    try:
+        st = cache_path(resource_path).stat()
+    except OSError:
+        return None
+    return st.st_mtime_ns, st.st_size
+
+
+def _deck_list_rows() -> list[dict]:
+    """The whole DeckList, memoized in-process (like ``scryfall.all_sets``).
+
+    The wrapper caches DeckList.json on disk, but each call still spawned it
+    and re-parsed ~3000 entries — the precon catalog search paid that per
+    keystroke. Reused for ``_DECK_LIST_TTL_S`` while the on-disk copy is
+    unchanged (a refresh/re-download changes its stamp → re-read). Callers
+    must not mutate the entries."""
+    global _deck_list_memo
+    now = time.monotonic()
+    memo = _deck_list_memo
+    stamp = _cache_stamp("DeckList.json")
+    if memo is not None and stamp is not None and memo[1] == stamp and now - memo[0] < _DECK_LIST_TTL_S:
+        return memo[2]
+    rows = _run_json(["decklist"]).get("data", [])
+    _deck_list_memo = (now, _cache_stamp("DeckList.json"), rows)
     return rows
 
 
@@ -653,7 +688,10 @@ def is_stale(resource_path: str) -> bool:
 
 def refresh(resource_path: str) -> None:
     """Delete the cached copy of ``resource_path`` so the next fetch re-downloads."""
+    global _deck_list_memo
     _run(["refresh", resource_path])
+    if resource_path == "DeckList.json":
+        _deck_list_memo = None
 
 
 # ---------- helpers for the precon-attribution use case ----------
