@@ -172,27 +172,42 @@ MASTER_LIST_COLUMNS = (
 )
 
 
-def parse_master_list_xlsx(path: Path) -> ParseResult:
-    """Read a filled-in master-list spreadsheet emitted by ``mm set master-list``.
+@dataclass
+class MasterListRow:
+    """One non-empty data row of a master-list sheet, quantities still raw."""
 
-    Yields one Entry per (row, finish) where the qty column is a positive
-    integer. Both ``qty_normal`` and ``qty_foil`` may produce entries from the
-    same row.
+    row_num: int
+    set: str
+    collector_number: str
+    name: str
+    qty_normal_raw: object
+    qty_foil_raw: object
 
-    If the workbook has a ``_meta`` sheet (written by recent
-    ``write_master_list_xlsx`` runs) its key/value pairs are attached to
-    ``ParseResult.meta``. Older XLSX files without ``_meta`` parse fine but
-    leave ``meta=None`` — the caller can then infer scope from the rows.
+
+@dataclass
+class MasterListSheet:
+    """A master-list workbook read once: ``_meta`` (``None`` if absent), the data
+    rows (blank-qty and zero rows kept; only fully empty rows skipped), the
+    required columns the header lacks, and header-level warnings."""
+
+    meta: dict | None = None
+    rows: list[MasterListRow] = field(default_factory=list)
+    missing_columns: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+
+def read_master_list_rows(path: Path) -> MasterListSheet:
+    """Read a master-list workbook into raw rows — the one sheet reader shared by
+    :func:`parse_master_list_xlsx` and the census tool.
+
+    Prefers the explicitly named ``checklist`` sheet (V1.6+); falls back to the
+    first non-private sheet otherwise. ``_meta`` and ``_legend`` are internal
+    sheets and are never parsed as data. Headers are matched case-insensitively.
     """
     from openpyxl import load_workbook
 
     wb = load_workbook(filename=str(path), data_only=True)
 
-    # Active sheet is the visible master-list sheet; the meta sheet (if any)
-    # is hidden and named "_meta".
-    # Prefer the explicitly named ``checklist`` sheet (V1.6+); fall back to
-    # the first non-private sheet otherwise. ``_meta`` and ``_legend`` are
-    # internal sheets and should never be parsed as data.
     ws = None
     if "checklist" in wb.sheetnames:
         ws = wb["checklist"]
@@ -204,7 +219,7 @@ def parse_master_list_xlsx(path: Path) -> ParseResult:
     if ws is None:
         ws = wb.active
 
-    res = ParseResult()
+    out = MasterListSheet()
 
     if "_meta" in wb.sheetnames:
         meta_ws = wb["_meta"]
@@ -217,23 +232,23 @@ def parse_master_list_xlsx(path: Path) -> ParseResult:
             k = str(mrow[0]).strip()
             v = "" if (len(mrow) < 2 or mrow[1] is None) else str(mrow[1]).strip()
             meta[k] = v
-        res.meta = meta
+        out.meta = meta
 
     rows = ws.iter_rows(values_only=True)
     header = next(rows, None)
     if not header:
-        res.warnings.append("XLSX has no header row")
-        return res
+        out.warnings.append("XLSX has no header row")
+        return out
 
     header_lower = [str(h).strip().lower() if h is not None else "" for h in header]
     idx = {c: header_lower.index(c) for c in MASTER_LIST_COLUMNS if c in header_lower}
     # ``treatment`` is display-only and was added in V1.5 — older XLSX files
     # legitimately lack it, so don't warn about its absence.
     required = {"set", "collector_number", "qty_normal", "qty_foil"}
-    missing = [c for c in MASTER_LIST_COLUMNS
-               if c not in idx and c in required]
-    if missing:
-        res.warnings.append(f"XLSX missing required columns: {missing!r}")
+    out.missing_columns = [c for c in MASTER_LIST_COLUMNS
+                           if c not in idx and c in required]
+    if out.missing_columns:
+        out.warnings.append(f"XLSX missing required columns: {out.missing_columns!r}")
 
     for row_num, row in enumerate(rows, start=2):
         if all(v is None or str(v).strip() == "" for v in row):
@@ -246,20 +261,40 @@ def parse_master_list_xlsx(path: Path) -> ParseResult:
             qf_raw = row[idx["qty_foil"]] if "qty_foil" in idx else None
         except KeyError:
             continue
+        out.rows.append(MasterListRow(row_num, set_code, cn, name, qn_raw, qf_raw))
+    return out
 
-        qn = _coerce_qty(qn_raw, row_num, "qty_normal", res)
-        qf = _coerce_qty(qf_raw, row_num, "qty_foil", res)
+
+def parse_master_list_xlsx(path: Path) -> ParseResult:
+    """Read a filled-in master-list spreadsheet emitted by ``mm set master-list``.
+
+    Yields one Entry per (row, finish) where the qty column is a positive
+    integer. Both ``qty_normal`` and ``qty_foil`` may produce entries from the
+    same row.
+
+    If the workbook has a ``_meta`` sheet (written by recent
+    ``write_master_list_xlsx`` runs) its key/value pairs are attached to
+    ``ParseResult.meta``. Older XLSX files without ``_meta`` parse fine but
+    leave ``meta=None`` — the caller can then infer scope from the rows.
+    """
+    sheet = read_master_list_rows(path)
+    res = ParseResult(meta=sheet.meta)
+    res.warnings.extend(sheet.warnings)
+
+    for r in sheet.rows:
+        qn = _coerce_qty(r.qty_normal_raw, r.row_num, "qty_normal", res)
+        qf = _coerce_qty(r.qty_foil_raw, r.row_num, "qty_foil", res)
 
         if qn > 0:
             res.entries.append(Entry(
-                qty=qn, raw=f"row {row_num}: {qn} {name} ({set_code}) {cn}",
-                name=name, set=set_code, collector_number=cn,
+                qty=qn, raw=f"row {r.row_num}: {qn} {r.name} ({r.set}) {r.collector_number}",
+                name=r.name, set=r.set, collector_number=r.collector_number,
                 foil=False, section="mainboard",
             ))
         if qf > 0:
             res.entries.append(Entry(
-                qty=qf, raw=f"row {row_num}: {qf} {name} ({set_code}) {cn} ★",
-                name=name, set=set_code, collector_number=cn,
+                qty=qf, raw=f"row {r.row_num}: {qf} {r.name} ({r.set}) {r.collector_number} ★",
+                name=r.name, set=r.set, collector_number=r.collector_number,
                 foil=True, section="mainboard",
             ))
 
