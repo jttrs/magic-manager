@@ -16,6 +16,8 @@ export type CompanionState = {
   latest: string | null;
   /** The Chrome Web Store page (the primary install), once published; null until then. */
   storeUrl: string | null;
+  /** The optional Microsoft Edge Add-ons page; null unless the owner listed it there. */
+  edgeStoreUrl: string | null;
   privacyUrl: string | null;
   outdated: boolean;
   catalog: ErrorCatalog;
@@ -58,6 +60,7 @@ export function useCompanion(): CompanionState {
     hello,
     latest,
     storeUrl: info.data?.store_url ?? null,
+    edgeStoreUrl: info.data?.edge_store_url ?? null,
     privacyUrl: info.data?.privacy_url ?? null,
     outdated: Boolean(hello && latest && isOlder(hello.version, latest)),
     catalog,

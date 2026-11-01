@@ -7181,6 +7181,18 @@
             "title": "Store Url",
             "description": "The Chrome Web Store page \u2014 the primary install \u2014 once published; null until then (extension/store/store.toml or MM_COMPANION_STORE_URL)."
           },
+          "edge_store_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edge Store Url",
+            "description": "The optional Microsoft Edge Add-ons page; null unless listed there ([edge_add_ons] in extension/store/store.toml or MM_COMPANION_EDGE_STORE_URL)."
+          },
           "bookmarklet_url": {
             "type": "string",
             "title": "Bookmarklet Url"

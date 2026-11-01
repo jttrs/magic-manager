@@ -152,7 +152,11 @@ sequenceDiagram
   as a draft — submitting is the owner's decision. The developer install (unpacked zip) remains, with
   no auto-update: a deliberate re-download (the app shows "update available" by comparing versions).
   The store URL the app links to must be a `chromewebstore.google.com/detail/` address
-  (`companion.store_url`). Privacy policy: [`privacy-companion.md`](privacy-companion.md).
+  (`companion.store_url`); the optional Edge Add-ons listing (same zip, uploaded by hand, Microsoft's
+  review) must be a `microsoftedge.microsoft.com/addons/detail/` address (`companion.edge_store_url`).
+  Both are a strict allowlist — the prefix plus plain path segments (no `%`-escapes, dot segments,
+  fragments or quotes), else ignored — and the CI workflow's third-party actions are SHA-pinned.
+  Privacy policy: [`privacy-companion.md`](privacy-companion.md).
 
 ### 4. Data misuse / overreach
 

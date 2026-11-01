@@ -20,7 +20,7 @@ artifacts the app serves:
   path can produce, with a plain message + fix (``extension/errors.json``).
 * :func:`icon_png` — the toolbar/store icons (``extension/icons/``), rasterized
   here from the app's favicon shapes, so they're generated and checked too.
-* :func:`store_url` / :func:`bump_version` — Chrome Web Store distribution
+* :func:`store_url` / :func:`edge_store_url` / :func:`bump_version` — Chrome Web Store (and optional Edge Add-ons) distribution
   (listing + release: ``extension/store/``, ``docs/browser-companion.md``).
 """
 from __future__ import annotations
@@ -52,6 +52,14 @@ STORE_DIR = EXT_DIR / "store"
 STORE_TOML = STORE_DIR / "store.toml"
 STORE_URL_ENV = "MM_COMPANION_STORE_URL"
 STORE_URL_PREFIX = "https://chromewebstore.google.com/detail/"
+# Edge Add-ons' store logo (300×300 recommended), generated like the icons.
+EDGE_LOGO = STORE_DIR / "edge-logo-300.png"
+# Optional Microsoft Edge Add-ons listing of the same store zip ([edge_add_ons] in store.toml).
+EDGE_STORE_URL_ENV = "MM_COMPANION_EDGE_STORE_URL"
+EDGE_STORE_URL_PREFIX = "https://microsoftedge.microsoft.com/addons/detail/"
+# What may follow a store prefix: plain path segments and an optional plain query (?hl=en) — no
+# whitespace, quotes, %-escapes, fragments or dot segments, so a configured URL stays on that store.
+_STORE_URL_TAIL = re.compile(r"(?!\.)[A-Za-z0-9._~-]+(?:/(?!\.)[A-Za-z0-9._~-]+)*/?(?:\?[A-Za-z0-9._~=&-]*)?")
 # The public privacy policy the store listing (and the setup dialog) links to.
 PRIVACY_URL = "https://github.com/jttrs/magic-manager/blob/main/docs/privacy-companion.md"
 WEB_TOKENS = EXT_DIR.parent / "web" / "tokens"
@@ -239,6 +247,7 @@ def generated_files() -> dict[Path, str | bytes]:
     out: dict[Path, str | bytes] = {MANIFEST: json.dumps(manifest, indent=2) + "\n", STORES_JS: _stores_js(), TOKENS_CSS: _tokens_css()}
     for s, rel in _icon_paths().items():
         out[EXT_DIR / rel] = icon_png(s)
+    out[EDGE_LOGO] = icon_png(300)
     return out
 
 
@@ -322,6 +331,22 @@ def bump_version(part: str) -> str:
     return new
 
 
+def _configured_store_url(env: str, section: str, prefix: str) -> str | None:
+    """A store page from ``env`` (wins) or ``url`` in ``store.toml``'s ``[section]`` —
+    only when it is ``prefix`` + a plain path (``_STORE_URL_TAIL``); anything else is
+    ``None``, so a typo can't send users to another site or take down GET /api/companion."""
+    url = (os.environ.get(env) or "").strip()
+    if not url and STORE_TOML.exists():
+        try:
+            table = tomllib.loads(STORE_TOML.read_text()).get(section)
+        except tomllib.TOMLDecodeError:
+            table = None   # a hand-edit typo must not take down GET /api/companion
+        raw = table.get("url") if isinstance(table, dict) else None
+        url = raw.strip() if isinstance(raw, str) else ""
+    ok = url.startswith(prefix) and _STORE_URL_TAIL.fullmatch(url[len(prefix):])
+    return url if ok else None
+
+
 def store_url() -> str | None:
     """The companion's Chrome Web Store page, once it's published — ``None`` until then.
 
@@ -329,15 +354,15 @@ def store_url() -> str | None:
     else ``url`` in ``extension/store/store.toml`` (empty until the owner publishes).
     Only a ``chromewebstore.google.com/detail/…`` address counts — anything else is
     ignored, so a typo can't send users to another site."""
-    url = (os.environ.get(STORE_URL_ENV) or "").strip()
-    if not url and STORE_TOML.exists():
-        try:
-            section = tomllib.loads(STORE_TOML.read_text()).get("chrome_web_store")
-        except tomllib.TOMLDecodeError:
-            section = None   # a hand-edit typo must not take down GET /api/companion
-        raw = section.get("url") if isinstance(section, dict) else None
-        url = raw.strip() if isinstance(raw, str) else ""
-    return url if url.startswith(STORE_URL_PREFIX) else None
+    return _configured_store_url(STORE_URL_ENV, "chrome_web_store", STORE_URL_PREFIX)
+
+
+def edge_store_url() -> str | None:
+    """The companion's Microsoft Edge Add-ons page — optional, ``None`` until the owner
+    publishes there. Same rules as :func:`store_url`: ``MM_COMPANION_EDGE_STORE_URL`` wins,
+    else ``[edge_add_ons] url`` in ``store.toml``; only
+    ``https://microsoftedge.microsoft.com/addons/detail/…`` counts."""
+    return _configured_store_url(EDGE_STORE_URL_ENV, "edge_add_ons", EDGE_STORE_URL_PREFIX)
 
 
 def _files() -> list[Path]:
@@ -354,7 +379,8 @@ def build_zip(*, store: bool = False) -> bytes:
     permissions, so the same source always yields the same bytes (users and
     reviewers can compare a download to the repo). The download unzips to a
     ``magic-manager-companion/`` folder (for Load unpacked); ``store=True`` puts
-    ``manifest.json`` at the zip root, as the Chrome Web Store requires."""
+    ``manifest.json`` at the zip root, as the Chrome Web Store and Edge Add-ons require
+    (one store zip serves both)."""
     prefix = "" if store else ZIP_FOLDER
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as z:

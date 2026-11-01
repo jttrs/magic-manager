@@ -47,7 +47,7 @@ searchable); the unpacked zip stays as the setup dialog's collapsed *Developer i
   purpose, per-permission justifications, data-use answers, reviewer test instructions;
   `screenshots/*.png` (1280×800) + `promo-small.png` (440×280), captured from the real extension pages
   by `uv run python scripts/capture_store_assets.py`. Icons `extension/icons/icon-{16,32,48,128}.png`
-  are generated from the favicon shapes by `scripts/build_extension.py` (`companion.icon_png`; `--check`
+  are generated from the favicon shapes by `scripts/build_extension.py` (`companion.icon_png`; `test_extension_icon_matches_the_app_favicon` ties `_ICON_SHAPES` to `web/public/favicon.svg`; `--check`
   keeps them current). Privacy policy: [`privacy-companion.md`](privacy-companion.md).
 - **Release:** bump in a PR — `uv run python scripts/build_extension.py --bump patch` (the store refuses
   a version that isn't higher) — merge, then tag `companion-v<version>`. The `extension-release`
@@ -62,6 +62,13 @@ searchable); the unpacked zip stays as the setup dialog's collapsed *Developer i
   (and its id in `extension_id`); optionally add the five secrets (publisher id from the dashboard's Account page) for automatic draft uploads. Store
   installs auto-update; an existing developer install keeps working (a store install gets a new
   extension id, so pair it again and remove the unpacked copy).
+- **Microsoft Edge Add-ons (optional):** the same `--store-zip` runs unchanged on Edge (MV3, no store
+  named in the shipped files — `test_shipped_extension_names_no_single_store`). `[edge_add_ons] url` in
+  `store.toml` / `MM_COMPANION_EDGE_STORE_URL` → `companion.edge_store_url()` (only
+  `https://microsoftedge.microsoft.com/addons/detail/…`, same strict allowlist as the Chrome URL) →
+  `GET /api/companion` `edge_store_url` → the dialog adds **Add to Edge**; empty = no change in the app.
+  Partner Center account is free; uploads are manual (the workflow uploads to Chrome only). Steps,
+  differences and the generated `edge-logo-300.png`: [`extension/store/README.md`](../extension/store/README.md).
 
 ## The bridge survives a reload or update (0.4.3)
 

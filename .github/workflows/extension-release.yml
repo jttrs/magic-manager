@@ -2,7 +2,11 @@
 # the developer install, --store-zip with the manifest at the root for the store),
 # attached to a GitHub release and — once the store item exists and its secrets are set —
 # uploaded to the Chrome Web Store as a new draft. Submitting for review stays a person's
-# decision in the dashboard (docs/browser-companion.md § Chrome Web Store).
+# decision in the dashboard (docs/browser-companion.md § Chrome Web Store). The same -store.zip
+# is the package for the optional Microsoft Edge Add-ons listing, uploaded by hand in Partner
+# Center (extension/store/README.md § Microsoft Edge Add-ons).
+#
+# Third-party actions are pinned to full commit SHAs (# the release they are); bump them deliberately.
 #
 # Release: bump the version in a PR (uv run python scripts/build_extension.py --bump patch),
 # merge, then push a tag that matches it:  git tag companion-v0.4.6 && git push origin companion-v0.4.6
@@ -20,8 +24,8 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
       - run: uv sync --frozen
 
       - name: Generated files are current
@@ -49,7 +53,7 @@ jobs:
           echo "ZIP=$zip" >> "$GITHUB_ENV"
           echo "STORE_ZIP=$store" >> "$GITHUB_ENV"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: magic-manager-companion-${{ steps.version.outputs.version }}
           path: |
@@ -68,7 +72,7 @@ jobs:
           else
             gh release create "$GITHUB_REF_NAME" "$ZIP" "$STORE_ZIP" SHA256SUMS \
               --title "Browser companion ${{ steps.version.outputs.version }}" \
-              --notes "Reproducible builds of extension/ (scripts/build_extension.py --zip / --store-zip). Compare SHA256SUMS with a local build of the same commit."
+              --notes "Reproducible builds of extension/ (scripts/build_extension.py --zip / --store-zip). The -store.zip is the package for both the Chrome Web Store and Microsoft Edge Add-ons. Compare SHA256SUMS with a local build of the same commit."
           fi
 
       # Optional: needs the store item (first upload is manual) and five repo secrets — see

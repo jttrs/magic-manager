@@ -1799,6 +1799,12 @@ export type CompanionOut = {
      */
     store_url?: string | null;
     /**
+     * Edge Store Url
+     *
+     * The optional Microsoft Edge Add-ons page; null unless listed there ([edge_add_ons] in extension/store/store.toml or MM_COMPANION_EDGE_STORE_URL).
+     */
+    edge_store_url?: string | null;
+    /**
      * Bookmarklet Url
      */
     bookmarklet_url: string;

@@ -63,6 +63,7 @@ test.describe('setup', () => {
     await expect(d.getByRole('status')).toContainText('Not connected');
     await expect(d.getByRole('link', { name: 'Download the companion' })).toHaveAttribute('href', '/api/companion/extension.zip');
     await expect(d.getByRole('link', { name: /Add to Chrome/ })).toHaveCount(0);   // not published: the developer install leads
+    await expect(d.getByRole('link', { name: /Add to Edge/ })).toHaveCount(0);     // no Edge listing configured: no Edge link
     await expect(d).toContainText('isn’t on the Chrome Web Store yet');
     await expect(d).toContainText(new URL(page.url()).origin);
     await expect(d).toContainText('Read cookies, passwords, email or addresses.');
@@ -83,6 +84,37 @@ test.describe('setup', () => {
     await d.getByText('Developer install').click();
     await expect(d.getByRole('link', { name: 'Download the companion' })).toBeVisible();
     await expect(d.getByRole('link', { name: 'Privacy policy' })).toHaveAttribute('href', COMPANION_INFO.privacy_url);
+    await expect(d.getByRole('link', { name: /Add to Edge/ })).toHaveCount(0);     // Edge stays opt-in
+    await expect(d).toContainText('From the Chrome Web Store. Chrome keeps it up to date.');
+  });
+
+  test('an Edge Add-ons listing adds Add to Edge beside Add to Chrome', async ({ page }) => {
+    const STORE = 'https://chromewebstore.google.com/detail/magic-manager-companion/abcdefghijklmnopabcdefghijklmnop';
+    const EDGE = 'https://microsoftedge.microsoft.com/addons/detail/magic-manager-companion/abcdefghijklmnopabcdefghijklmnop';
+    await flags(page, { companion: true });
+    await page.route('**/api/companion', (r) => r.fulfill({ json: { ...COMPANION_INFO, store_url: STORE, edge_store_url: EDGE } }));
+    await page.goto(COLLECTION_URL);
+    await page.getByRole('button', { name: 'Browser companion · set up' }).click();
+    const d = page.getByRole('dialog', { name: 'Browser companion' });
+    await expect(d.getByRole('link', { name: /Add to Chrome/ })).toHaveAttribute('href', STORE);
+    const edge = d.getByRole('link', { name: /Add to Edge/ });
+    await expect(edge).toHaveAttribute('href', EDGE);
+    await expect(edge).toHaveAttribute('target', '_blank');
+    await expect(d).toContainText('Your browser keeps it up to date.');
+    await expect(d.getByRole('link', { name: 'Download the companion' })).toBeHidden();
+  });
+
+  test('Edge only: Add to Edge leads and the developer install is folded away', async ({ page }) => {
+    const EDGE = 'https://microsoftedge.microsoft.com/addons/detail/magic-manager-companion/abcdefghijklmnopabcdefghijklmnop';
+    await flags(page, { companion: true });
+    await page.route('**/api/companion', (r) => r.fulfill({ json: { ...COMPANION_INFO, edge_store_url: EDGE } }));
+    await page.goto(COLLECTION_URL);
+    await page.getByRole('button', { name: 'Browser companion · set up' }).click();
+    const d = page.getByRole('dialog', { name: 'Browser companion' });
+    await expect(d.getByRole('link', { name: /Add to Chrome/ })).toHaveCount(0);
+    await expect(d.getByRole('link', { name: /Add to Edge/ })).toHaveAttribute('href', EDGE);
+    await expect(d).toContainText('From Microsoft Edge Add-ons. Edge keeps it up to date.');
+    await expect(d.getByRole('link', { name: 'Download the companion' })).toBeHidden();
   });
 
   test('published + an older install: the store copy updates once that version is published', async ({ page }) => {

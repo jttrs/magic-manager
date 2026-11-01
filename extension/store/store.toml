@@ -11,3 +11,12 @@ url = ""
 # The item id the dashboard assigns on first upload (used by the release workflow's
 # optional upload step via the CWS_EXTENSION_ID secret, with CWS_PUBLISHER_ID; recorded here for reference).
 extension_id = ""
+
+[edge_add_ons]
+# Optional: the same store zip listed on Microsoft Edge Add-ons (see README.md § Microsoft Edge).
+# Empty = not listed: the app's setup dialog shows no "Add to Edge" link.
+# Must start with https://microsoftedge.microsoft.com/addons/detail/ — anything else is ignored.
+# MM_COMPANION_EDGE_STORE_URL overrides it on a host.
+url = ""
+# The Product ID Partner Center assigns (Overview page) — for reference.
+product_id = ""
