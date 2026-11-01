@@ -76,10 +76,10 @@ describe('art swaps', () => {
     expect(draftPrintingIds(d)).toEqual(['a2', 'b1', 'c1', 'd1']);
   });
 
-  it('notes free copies, else the price', () => {
-    expect(choiceNote(P.a2)).toBe('2 free');
+  it('notes unused copies, else the value', () => {
+    expect(choiceNote(P.a2)).toBe('2 unused');
     expect(choiceNote(P.b2)).toBe('$3.00');
-    expect(choiceNote(pr('x', { price_usd: null, owned: { foil: 1 } }))).toBe('no price · yours, all in decks');
+    expect(choiceNote(pr('x', { price_usd: null, owned: { foil: 1 } }))).toBe('no value · yours, all in built decks');
   });
 
   it('only calls a swap free when one finish covers the row', () => {
@@ -89,7 +89,7 @@ describe('art swaps', () => {
     expect(swapChoice(row(), foilOnly, fb)).toEqual({ finish: 'foil', free: 2, covered: true });
     expect(swapChoice(row({ finish: 'either' }), foilOnly, fb).finish).toBe('foil');
     expect(swapChoice(row(), P.a2, fb)).toEqual({ finish: undefined, free: 1, covered: false }); // 1 free < 2 in the row
-    expect(choiceNote(P.a2, 0)).toBe('$1.00 · yours, all in decks');
+    expect(choiceNote(P.a2, 0)).toBe('$1.00 · yours, all in built decks');
     const d = { ...data, free_by_finish: fb, printings: { ...P, a2: { ...P.a2, free: 1 } } };
     const v = artView(draftFromDeck([dc(P.a1, { count: 2 })]), d);
     expect(v.freeSwaps).toBe(0);

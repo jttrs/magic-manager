@@ -91,11 +91,11 @@ export function swapAllFree(d: Draft, view: ArtView): Draft {
   return view.swap.reduce((acc, r) => (r.pick && r.pickChoice?.covered ? swapPrinting(acc, r.row.key, r.pick, r.pickChoice.finish) : acc), d);
 }
 
-/** One short fact for a printing choice: free copies (`free`, default the
- *  printing's total), else its price. */
+/** One short fact for a printing choice: unused copies (`free`, default the
+ *  printing's total), else its value. */
 export function choiceNote(p: PrintingOut, free: number = p.free ?? 0): string {
-  if (free > 0) return `${free} free`;
+  if (free > 0) return `${free} unused`;
   const price = p.price_usd ?? p.price_usd_foil;
-  const usd = price != null ? fmtUsd(price) : 'no price';
-  return owned(p) > 0 ? `${usd} · yours, all in decks` : usd;
+  const usd = price != null ? fmtUsd(price) : 'no value';
+  return owned(p) > 0 ? `${usd} · yours, all in built decks` : usd;
 }

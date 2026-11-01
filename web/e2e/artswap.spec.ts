@@ -19,7 +19,7 @@ const swaps = (sids: string[]) => ({
   free_by_finish: { 'cat-free': { nonfoil: 2, foil: 0 } },
 });
 
-test('editor: the Art tab swaps a card onto an on-theme printing you have free, and undoes it', async ({ page }) => {
+test('editor: the Art tab swaps a card onto an on-theme printing you have unused, and undoes it', async ({ page }) => {
   const asked: string[][] = [];
   let looked = 0;
   await page.route((u) => u.pathname === `/api/decks/${detail.deck.slug}`, (r) => r.fulfill({ json: editable }));
@@ -48,12 +48,12 @@ test('editor: the Art tab swaps a card onto an on-theme printing you have free, 
   await page.getByLabel('Art theme').fill('ca');
   await page.getByRole('button', { name: /^cat/ }).click();
   await expect(page.getByRole('heading', { name: /Can swap/ })).toContainText('1');
-  await expect(page.getByText('SLD #42 · 2 free')).toBeVisible();
+  await expect(page.getByText('SLD #42 · 2 unused')).toBeVisible();
 
   await page.getByRole('button', { name: '1 other printing' }).click();
   await expect(page.getByRole('button', { name: 'Use PLST #7, $0.25' })).toBeVisible();
 
-  await page.getByRole('button', { name: /Swap all free · 1/ }).click();
+  await page.getByRole('button', { name: /Swap all unused · 1/ }).click();
   await expect(page.getByText('1 swapped')).toBeVisible();
   await expect.poll(() => asked.some((s) => s.includes('cat-free'))).toBe(true);   // re-asked with the new printing
   await expect(page.getByText(/was /)).toBeVisible();
@@ -62,7 +62,7 @@ test('editor: the Art tab swaps a card onto an on-theme printing you have free, 
   await page.getByRole('button', { name: `Undo swap of ${cur.name}` }).click();
   await expect(page.getByText('1 swapped')).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Look on Scryfall for more' }).click();
+  await page.getByRole('button', { name: 'Look for more printings' }).click();
   await expect(page.getByText('Scryfall has nothing new for these cards.')).toBeVisible();
   expect(looked).toBe(1);
 });

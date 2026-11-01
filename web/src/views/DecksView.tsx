@@ -6,11 +6,12 @@ import { useJob } from '../app/useJob';
 import { useMediaQuery } from '../app/useMediaQuery';
 import { ViewLayout } from '../components/AppShell';
 import { CopyTargets } from '../components/CopyButton';
+import type { MarkedCopy } from '../components/CopyMarked';
 import { IconAction } from '../components/IconAction';
 import { InfoTip } from '../components/InfoTip';
 import { MultiSelect } from '../components/MultiSelect';
 import { ProgressRule } from '../components/ProgressRule';
-import { Segmented, SegmentedToggles, SelectField, SideSection, TextField } from '../components/Sidebar';
+import { ChipToggles, Segmented, SelectField, SideSection, TextField } from '../components/Sidebar';
 import { SplitPanes } from '../components/SplitPanes';
 import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../components/States';
 import { buyListTargets } from '../components/buyTargets';
@@ -58,6 +59,8 @@ export function DecksView() {
   const { live: readLive, start: startRead, reset: resetRead } = useJob();
   const [startError, setStartError] = useState<string | null>(null);
   const [readCode, setReadCode] = useState<string | null>(null);
+  // The open inspector's marked cards, copied from the sheet header.
+  const [marked, setMarked] = useState<MarkedCopy | null>(null);
   const readError = startError ?? (readLive?.status === 'failed' ? (readLive.error ?? 'Reading the recipes failed.') : null);
   const reading = readLive != null && readLive.status !== 'succeeded' && readLive.status !== 'failed';
   const readSet = () => {
@@ -77,7 +80,7 @@ export function DecksView() {
         <TextField name="q" label="Deck, set or author" value={search.q} placeholder="e.g. Counter Blitz, Angels, fic…" onChange={(q) => set({ q })} />
       </SideSection>
       <SideSection title="Show">
-        <SegmentedToggles<Ownership>
+        <ChipToggles<Ownership>
           label="You own"
           showLabel
           value={search.own}
@@ -115,7 +118,7 @@ export function DecksView() {
           options={counts.sets}
         />
         <SelectField<Cover>
-          label="Free cards"
+          label="Unused cards"
           value={search.cover}
           onChange={(cover) => set({ cover })}
           options={COVER.map((c) => ({ value: c, label: COVER_LABEL[c], count: counts.cover[c] ?? undefined }))}
@@ -138,13 +141,13 @@ export function DecksView() {
     const back = narrow ? () => set({ deck: undefined }) : undefined;
     const onView = narrow ? (view: 'grid' | 'list') => set({ view }) : undefined;
     const inspector = !search.deck ? (
-      <EmptyNote title="Pick a recipe">Choose a deck or pack on the left to see its cards — which you have free, and which you’d still need.</EmptyNote>
+      <EmptyNote title="Pick a recipe">Choose a deck or pack on the left to see its cards — which you have unused, and which you’d still need.</EmptyNote>
     ) : openRow?.slug ? (
-      <DeckInspector key={openRow.slug} slug={openRow.slug} recipe={openRow} view={search.view} autoAdd={search.add === true} onAutoAdded={() => set({ add: undefined })} onView={onView} onBack={back} />
+      <DeckInspector key={openRow.slug} slug={openRow.slug} recipe={openRow} view={search.view} autoAdd={search.add === true} onAutoAdded={() => set({ add: undefined })} onView={onView} onBack={back} onMarked={setMarked} />
     ) : fn ? (
-      <RecipeInspector key={fn} fileName={fn} view={search.view} closeShort={recipes.data.close_short ?? 3} onView={onView} onBack={back} />
+      <RecipeInspector key={fn} fileName={fn} view={search.view} closeShort={recipes.data.close_short ?? 3} onView={onView} onBack={back} onMarked={setMarked} />
     ) : (
-      <DeckInspector key={search.deck} slug={search.deck} view={search.view} autoAdd={search.add === true} onAutoAdded={() => set({ add: undefined })} onView={onView} onBack={back} />
+      <DeckInspector key={search.deck} slug={search.deck} view={search.view} autoAdd={search.add === true} onAutoAdded={() => set({ add: undefined })} onView={onView} onBack={back} onMarked={setMarked} />
     );
     body = narrow ? (search.deck ? inspector : list) : <SplitPanes id="mm.decks.split" detailId="deck" label="Resize recipe list" list={list} inspector={inspector} />;
   }
@@ -161,10 +164,11 @@ export function DecksView() {
     <ViewLayout label="Deck controls" summary={`${fmtInt(shown.length)} recipes · grouped by ${DECK_GROUP_LABEL[search.group].toLowerCase()}`} sidebar={sidebar}>
       <GuideSheet
         title="Decks"
-        hideTitle
         summary={<span role="status" aria-live="polite">{summary}</span>}
+        actionsLabel="Deck list actions"
+        marked={marked ?? undefined}
         actions={
-          <span role="toolbar" aria-label="Deck list actions" className="flex items-center gap-0.5">
+          <>
             {oneSet && (
               <IconAction
                 label={unread ? `Read ${fmtCount(unread, 'unread recipe')} in ${oneSet.toUpperCase()}` : `Read ${oneSet.toUpperCase()} recipes again`}
@@ -176,7 +180,7 @@ export function DecksView() {
             )}
             <NewDeckDialog trigger={<IconAction label="New deck" Icon={NewDeckMark} />} />
             <ImportDeckDialog trigger={<IconAction label="Import a deck from a link" Icon={ImportDeckMark} />} />
-          </span>
+          </>
         }
       >
         {body}

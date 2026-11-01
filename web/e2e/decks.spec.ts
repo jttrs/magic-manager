@@ -23,7 +23,7 @@ test('recipe list shows what you own by default; ownership, kind, deck type and 
   await expect(unowned).toContainText('Precon');
   await expect(unowned).toContainText('not owned');
   await expect(unowned).toContainText('not read');
-  await expect(list.getByRole('button', { name: /^Armed/ })).toContainText('All 20 free');
+  await expect(list.getByRole('button', { name: /^Armed/ })).toContainText('All 20 unused');
   await expect(list.getByRole('button', { name: /Bounty Hunter/ })).toContainText('2 short');
   await expect(list.getByRole('button', { name: /My Brew/ })).toContainText('Imported');
 
@@ -59,7 +59,7 @@ test('inspector: sections by board then type, card facts, deep link', async ({ p
   await page.keyboard.press('Escape');
   await page.getByRole('radio', { name: 'List' }).click();
   await expect(page.getByRole('article')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: /^Mark / }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Mark (?!cards to copy)/ }).first()).toBeVisible();
 });
 
 test('add the whole deck, or only marked cards, through the add-cards review', async ({ page }) => {
@@ -86,6 +86,9 @@ test('add the whole deck, or only marked cards, through the add-cards review', a
     names.push((await mark.getAttribute('aria-label'))!.replace(/^Mark /, ''));
     await mark.click();
   }
+  // The sheet header copies the marked cards as a list, and clears them.
+  const header = page.getByRole('toolbar', { name: 'Deck list actions' });
+  await expect(header.getByRole('button', { name: 'Copy 2 marked cards as a list' })).toBeVisible();
   await page.getByRole('button', { name: 'Add 2 marked cards to collection' }).click();
   const two = names.map((nm) => detail.cards.find((c) => c.printing.name === nm)!);
   const n = two.reduce((s, c) => s + c.count, 0);
@@ -110,12 +113,12 @@ test('deck list is one tab stop with arrow-key navigation', async ({ page }) => 
   await expect(page).toHaveURL(/deck=/);
 });
 
-test('one row per recipe: built copies and loose copies are marked', async ({ page }) => {
+test('one row per recipe: built copies and broken-down copies are marked', async ({ page }) => {
   await page.goto('/decks');
   const list = page.getByRole('navigation', { name: 'Deck recipes' });
   const d = fixtures.recipes.recipes.find((x) => x.name === 'Avengers Assemble')!;
   await expect(list.getByRole('button', { name: /Avengers Assemble/ })).toContainText(`×${d.built} built`);
-  await expect(list.getByRole('button', { name: /Bounty Hunter/ })).toContainText('1 loose');
+  await expect(list.getByRole('button', { name: /Bounty Hunter/ })).toContainText('1 broken down');
   await expect(list.getByRole('button', { name: /My Brew/ })).toContainText('not built');
 });
 
@@ -134,14 +137,14 @@ test('deck actions are icons with tooltips; precons offer Copy to edit; building
   await expect(page.getByRole('tooltip')).toHaveText('Add deck cards to collection');
   await bar.getByRole('button', { name: 'Build from your cards' }).click();
   const dialog = page.getByRole('alertdialog', { name: /Build/ });
-  await expect(dialog).toContainText('2 of the 3 cards free');
+  await expect(dialog).toContainText('2 of the 3 cards unused');
   await expect(dialog.getByRole('list', { name: 'Missing cards' })).toContainText(detail.cards[0].printing.name);
   await dialog.getByRole('button', { name: 'Build with 1 missing' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Built —' })).toBeVisible();
   expect(built).toEqual({ allow_shortfall: true });
 });
 
-test('build dialog: with no card free, Build is disabled and says why', async ({ page }) => {
+test('build dialog: with no card unused, Build is disabled and says why', async ({ page }) => {
   let calls = 0;
   await page.route('**/api/decks/*/build-plan', (r) => r.fulfill({ json: { target: detail.deck.slug, need: 2, covered: 0, short: [{ printing: detail.cards[0].printing, finish: 'nonfoil', qty: 2 }], buildable: false } }));
   await page.route('**/api/decks/*/build', (r) => { calls += 1; return r.fulfill({ status: 409, json: { detail: 'x' } }); });
@@ -149,7 +152,7 @@ test('build dialog: with no card free, Build is disabled and says why', async ({
   await page.goto(DECK_URL);
   await page.getByRole('toolbar', { name: 'Deck actions' }).getByRole('button', { name: 'Build from your cards' }).click();
   const dialog = page.getByRole('alertdialog', { name: /Build/ });
-  await expect(dialog).toContainText('None of the 2 cards are free');
+  await expect(dialog).toContainText('None of the 2 cards are unused');
   await expect(dialog.getByRole('button', { name: 'Build deck' })).toBeDisabled();
   expect(calls).toBe(0);
 });

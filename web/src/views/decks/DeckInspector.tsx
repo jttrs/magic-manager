@@ -12,15 +12,18 @@ import { VirtualGuide } from '../../components/VirtualGuide';
 import type { RecipeOut } from '../../core/api';
 import { coverage, deckGuideGroups, deckReviewLines } from '../../core/decks';
 import { fmtCount, fmtInt, fmtUsd } from '../../core/format';
+import type { MarkedCopy } from '../../components/CopyMarked';
 import { DeckActions } from './DeckActions';
+import { useReportMarked } from './marked';
 import { KindMark } from './RecipeList';
 
-/** A deck you track: its cards with owned / pledged / free, and its actions. */
-export function DeckInspector({ slug, recipe, view, autoAdd = false, onAutoAdded, onView, onBack }: { slug: string; recipe?: RecipeOut; view: 'grid' | 'list'; autoAdd?: boolean; onAutoAdded?: () => void; onView?: (v: 'grid' | 'list') => void; onBack?: () => void }) {
+/** A deck you track: its cards with owned / pledged / unused, and its actions. */
+export function DeckInspector({ slug, recipe, view, autoAdd = false, onAutoAdded, onView, onBack, onMarked }: { slug: string; recipe?: RecipeOut; view: 'grid' | 'list'; autoAdd?: boolean; onAutoAdded?: () => void; onView?: (v: 'grid' | 'list') => void; onBack?: () => void; onMarked?: (m: MarkedCopy | null) => void }) {
   const q = useQuery(deckQuery(slug));
   const { selected, toggle, clear } = useSelection(`deck:${slug}`);
   const [seed, setSeed] = useState<AddCardsSeed | null>(null);
   const sections = useMemo(() => (q.data ? deckGuideGroups(q.data.cards).map((g) => ({ ...g, level: 2 as const, noun: 'section' })) : []), [q.data]);
+  useReportMarked(sections, selected, clear, onMarked);
   useEffect(() => setSeed(null), [slug]);
   // Arrived from "Import a deck" with "I have these cards": open the add review once.
   useEffect(() => {
@@ -50,21 +53,19 @@ export function DeckInspector({ slug, recipe, view, autoAdd = false, onAutoAdded
             {' · '}
             {fmtCount(deck.cards, 'card')} · {fmtUsd(deck.value_usd)}
             {deck.built > 0 && ` · ×${deck.built} built (${Math.round(deck.pledged_pct)}% pledged)`}
-            {recipe && recipe.loose > 0 && ` · ${fmtInt(recipe.loose)} ${recipe.kind === 'import' || recipe.kind === 'custom' ? 'not built' : 'loose'}`}
-            {recipe && coverage(recipe) && ` · free cards: ${coverage(recipe)}`}
+            {recipe && recipe.loose > 0 && ` · ${fmtInt(recipe.loose)} ${recipe.kind === 'import' || recipe.kind === 'custom' ? 'not built' : 'broken down'}`}
+            {recipe && coverage(recipe) && ` · ${coverage(recipe)}`}
             <span className="ml-1 inline-flex align-middle">
-              <InfoTip label="What do built, pledged and free mean?" tone="paper">
-                <b>Built</b>: you keep this deck assembled; its cards are <b>pledged</b> to it, so they aren’t counted as free. <b>Free to use</b>: copies you own that no built deck has pledged. Breaking a deck down returns its cards to your collection.
+              <InfoTip label="What do built, pledged and unused mean?" tone="paper">
+                <b>Built</b>: you keep this deck assembled; its cards are <b>pledged</b> to it, so they aren’t counted as unused. <b>Unused</b>: copies you own that aren’t in a built deck. Breaking a deck down returns its cards to your collection.
               </InfoTip>
             </span>
           </p>
         </div>
         <span className="ml-auto flex flex-wrap items-center justify-end gap-x-2">
           {marked > 0 && (
-            <span className="flex items-center gap-1 text-sm text-ink-muted">
+            <span className="flex items-center gap-1">
               <IconAction label={`Add ${fmtCount(marked, 'marked card')} to collection`} Icon={AddCardMark} onClick={() => setSeed({ name: deck.name, lines: deckReviewLines(cards, selected) })} />
-              {fmtInt(marked)} marked
-              <button type="button" onClick={clear} className="cursor-pointer px-1 underline hover:text-ink">Clear</button>
               <span aria-hidden="true" className="mx-1 h-5 w-px bg-rule" />
             </span>
           )}

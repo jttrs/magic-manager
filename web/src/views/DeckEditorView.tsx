@@ -106,6 +106,7 @@ function Editor({ slug, detail }: { slug: string; detail: DeckDetailOut }) {
       <div className="paper-grain flex h-full min-h-[70dvh] flex-col rounded-sm bg-paper text-ink shadow-[0_1px_0_var(--theme-chrome-line),0_18px_40px_-28px_var(--theme-scrim)]">
         <header className="flex flex-wrap items-end gap-x-5 gap-y-2 border-b-2 border-rule-strong px-5 pb-2 pt-3">
           <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <h1 className="sr-only">Edit {detail.deck.name}</h1>
             <Link to="/decks" search={(s) => ({ ...s, deck: slug })} className="inline-flex items-center gap-0.5 self-start text-sm voice-semi text-accent-ink">
               <Chevron dir="left" className="size-3.5" /> Back to deck
             </Link>
@@ -240,7 +241,7 @@ function DraftLine({ row, onEdit, onInspect }: { row: DraftRow; onEdit: (fn: (d:
       <span className="flex min-w-0 flex-1 flex-col">
         <CardName p={p} onInspect={onInspect} struck={removed} />
         <span className="truncate text-xs tabular text-ink-muted">
-          {[p.set_code.toUpperCase(), `#${p.collector_number}`, row.finish !== 'either' && FINISH_LABEL[row.finish], free > 0 ? `${free} free` : Object.values(p.owned ?? {}).some(Boolean) ? 'owned, all pledged' : 'not owned'].filter(Boolean).join(' · ')}
+          {[p.set_code.toUpperCase(), `#${p.collector_number}`, row.finish !== 'either' && FINISH_LABEL[row.finish], free > 0 ? `${free} unused` : Object.values(p.owned ?? {}).some(Boolean) ? 'owned, all in built decks' : 'not owned'].filter(Boolean).join(' · ')}
         </span>
       </span>
       {delta !== 0 ? (
@@ -381,7 +382,7 @@ function SearchTab({ inDeck, wantsCommander, onAdd, onInspect }: { inDeck: Set<s
           className="h-10 rounded-sm border border-rule-strong bg-paper-raised px-3 text-md text-ink placeholder:text-ink-muted focus-visible:border-accent"
         />
       </label>
-      <p className="mx-4 mt-1 text-xs text-ink-muted">Cards you own and have free are listed first.</p>
+      <p className="mx-4 mt-1 text-xs text-ink-muted">Your unused cards are listed first.</p>
       <ResultList
         empty={q.trim().length < 2 ? 'Type at least two letters.' : res.isPending ? null : 'No cards match.'}
         loading={q.trim().length >= 2 && res.isFetching && !res.data}
@@ -396,7 +397,7 @@ function SearchTab({ inDeck, wantsCommander, onAdd, onInspect }: { inDeck: Set<s
 }
 
 const owned = (p: PrintingOut) => Object.values(p.owned ?? {}).reduce((s, n) => s + n, 0);
-const freeNote = (free: number, own: number) => (free > 0 ? `${free} free` : own > 0 ? 'owned, all pledged' : null);
+const freeNote = (free: number, own: number) => (free > 0 ? `${free} unused` : own > 0 ? 'owned, all in built decks' : null);
 
 function SuggestTab({ commander, inDeck, onAdd, onInspect }: { commander: string | null; inDeck: Set<string>; onAdd: (p: PrintingOut, board: Board) => void; onInspect: Inspect }) {
   const [freeOnly, setFreeOnly] = useState(false);
@@ -411,7 +412,7 @@ function SuggestTab({ commander, inDeck, onAdd, onInspect }: { commander: string
     <>
       <div className="mx-4 mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
         <span className="min-w-0 truncate text-ink-muted">EDHREC picks for <b className="text-ink">{res.data?.commander ?? commander}</b></span>
-        <label className="ml-auto inline-flex cursor-pointer items-center gap-1.5"><input type="checkbox" checked={freeOnly} onChange={(e) => setFreeOnly(e.target.checked)} className="accent-[var(--theme-accent)]" /> Free in my collection</label>
+        <label className="ml-auto inline-flex cursor-pointer items-center gap-1.5"><input type="checkbox" checked={freeOnly} onChange={(e) => setFreeOnly(e.target.checked)} className="accent-[var(--theme-accent)]" /> Only unused cards</label>
         <label className="inline-flex cursor-pointer items-center gap-1.5"><input type="checkbox" checked={hideInDeck} onChange={(e) => setHideInDeck(e.target.checked)} className="accent-[var(--theme-accent)]" /> Hide cards in deck</label>
       </div>
       <ResultList empty={res.isPending ? null : 'No suggestions match.'} loading={res.isPending} error={res.isError ? (res.error as Error).message : null}>
@@ -505,7 +506,7 @@ function ResultLine({ p, inDeck, lead, note, warn, onAdd, onInspect, offerComman
         <CardName p={p} onInspect={onInspect} />
         <span className="truncate text-xs tabular text-ink-muted">
           {[p.type_line?.split(' — ')[0], `${p.set_code.toUpperCase()} #${p.collector_number}`].filter(Boolean).join(' · ')}
-          {note && <> · <span className={note.endsWith('free') ? 'text-accent-ink' : ''}>{note}</span></>}
+          {note && <> · <span className={note.endsWith('unused') ? 'text-accent-ink' : ''}>{note}</span></>}
           {inDeck && <> · <span className="voice-semi text-ink">in deck</span></>}
         </span>
         {warn && <span className="truncate text-xs text-danger">{warn}</span>}
@@ -527,9 +528,9 @@ function SwapList({ swap }: { swap: NonNullable<PreviewOut['swap']> }) {
   return (
     <>
       <p>This deck is built, so saving moves cards in and out of it to match the new list.</p>
-      <SwapGroup title={`Take out · ${n(swap.pull)}`} lines={swap.pull} note="These go back to your collection as free copies." />
-      <SwapGroup title={`Put in · ${n(swap.sleeve)}`} lines={swap.sleeve} note="Free copies from your collection." />
-      <SwapGroup title={`Missing · ${n(swap.short)}`} lines={swap.short} note="Not free in your collection — get these to finish the deck." tone="danger" />
+      <SwapGroup title={`Take out · ${n(swap.pull)}`} lines={swap.pull} note="These go back to your collection as unused copies." />
+      <SwapGroup title={`Put in · ${n(swap.sleeve)}`} lines={swap.sleeve} note="Unused copies from your collection." />
+      <SwapGroup title={`Missing · ${n(swap.short)}`} lines={swap.short} note="You have no unused copies — get these to finish the deck." tone="danger" />
     </>
   );
 }

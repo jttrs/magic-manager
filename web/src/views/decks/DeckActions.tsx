@@ -13,7 +13,7 @@ type Dialog = { kind: 'build'; plan: BuildPlanOut } | { kind: 'break' } | { kind
 
 /** The deck's actions as one calm row of icons (tooltips carry the words):
  *  add its cards to your collection · edit (or copy-to-edit a precon) · build from
- *  your free cards · break down. Physical changes confirm first. */
+ *  your unused cards · break down. Physical changes confirm first. */
 export function DeckActions({ detail, slug, onAddToCollection }: { detail: DeckDetailOut; slug: string; onAddToCollection: () => void }) {
   const { deck } = detail;
   const qc = useQueryClient();
@@ -86,10 +86,10 @@ export function DeckActions({ detail, slug, onAddToCollection }: { detail: DeckD
           <>
             <p>
               {!plan.buildable
-                ? <>None of the <b>{fmtInt(plan.need)}</b> cards are free in your collection, so there’s nothing to pledge yet.</>
+                ? <>None of the <b>{fmtInt(plan.need)}</b> cards are unused in your collection, so there’s nothing to pledge yet.</>
                 : short
-                ? <>You have <b>{fmtInt(plan.covered)}</b> of the <b>{fmtInt(plan.need)}</b> cards free. Building pledges those to the deck; the rest stay listed as missing.</>
-                : <>{plan.need === 1 ? 'Its card is' : <>All <b>{fmtInt(plan.need)}</b> cards are</>} free in your collection. Building pledges {plan.need === 1 ? 'it' : 'them'} to this deck, so {plan.need === 1 ? 'it stops' : 'they stop'} counting as free.</>}
+                ? <>You have <b>{fmtInt(plan.covered)}</b> of the <b>{fmtInt(plan.need)}</b> cards unused. Building pledges those to the deck; the rest stay listed as missing.</>
+                : <>{plan.need === 1 ? 'Its card is' : <>All <b>{fmtInt(plan.need)}</b> cards are</>} unused in your collection. Building pledges {plan.need === 1 ? 'it' : 'them'} to this deck, so {plan.need === 1 ? 'it stops' : 'they stop'} counting as unused.</>}
             </p>
             {short > 0 && (
               <ul aria-label="Missing cards" className="max-h-48 overflow-y-auto border-t border-rule pt-2 text-sm">
@@ -106,7 +106,7 @@ export function DeckActions({ detail, slug, onAddToCollection }: { detail: DeckD
       </ConfirmDialog>
 
       <ConfirmDialog open={dialog?.kind === 'break'} onOpenChange={(o) => !o && setDialog(null)} title={`Break down ${deck.name}?`} confirmLabel="Break down" onConfirm={breakDown}>
-        <p>Its cards go back to your collection as free copies. The decklist stays, so you can build it again later.</p>
+        <p>Its cards go back to your collection as unused copies. The decklist stays, so you can build it again later.</p>
       </ConfirmDialog>
 
       <ConfirmDialog open={dialog?.kind === 'copy'} onOpenChange={(o) => !o && setDialog(null)} title="Copy to edit" confirmLabel="Copy and edit" onConfirm={copy}>

@@ -19,7 +19,7 @@ type Edit = (fn: (d: Draft) => Draft) => void;
 type Inspect = (p: PrintingOut) => void;
 
 /** Find cards → Art: pick a Scryfall Tagger art tag and put each card in the
- *  draft on an on-theme printing — yours with free copies first, else the
+ *  draft on an on-theme printing — yours with unused copies first, else the
  *  cheapest. Swaps only change the draft; Save writes them as usual. */
 export function ArtSwapTab({ draft, onEdit, onInspect, tag, onTag }: { draft: Draft; onEdit: Edit; onInspect: Inspect; tag: ArtTagRefOut | null; onTag: (t: ArtTagRefOut | null) => void }) {
   const sids = useDebounced(draftPrintingIds(draft), 400);
@@ -42,7 +42,7 @@ export function ArtSwapTab({ draft, onEdit, onInspect, tag, onTag }: { draft: Dr
       <TagPicker tag={tag} onTag={onTag} />
       {!tag ? (
         <p className="mx-4 mt-4 max-w-[52ch] text-sm text-ink-muted">
-          Pick an art theme and each card in the deck that has a printing with that art shows up here, on the copy you have free, else the cheapest.
+          Pick an art theme and each card in the deck that has a printing with that art shows up here, on a printing you have unused, else the cheapest.
         </p>
       ) : q.isError ? (
         <p role="alert" className="mx-4 mt-4 text-sm text-danger">{(q.error as Error).message}</p>
@@ -128,8 +128,8 @@ function Results({ tag, sids, view, onEdit, onInspect }: { tag: ArtTagRefOut; si
           <b className="voice-semi font-medium text-ink">{fmtInt(view.onTheme.length)}</b> of {fmtCount(total, 'card')} on theme
           {view.swap.length > 0 && <> · <b className="voice-semi font-medium text-ink">{fmtInt(view.swap.length)}</b> can swap</>}
         </p>
-        <Button tone="paper" disabled={view.freeSwaps === 0} onClick={() => onEdit((d) => swapAllFree(d, view))} title="Swap every card whose on-theme printing you have free">
-          Swap all free · {fmtInt(view.freeSwaps)}
+        <Button tone="paper" disabled={view.freeSwaps === 0} onClick={() => onEdit((d) => swapAllFree(d, view))} title="Swap every card whose on-theme printing you have unused">
+          Swap all unused · {fmtInt(view.freeSwaps)}
         </Button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-8 [scrollbar-gutter:stable]">
@@ -252,7 +252,7 @@ function Lookup({ tag, sids, without }: { tag: ArtTagRefOut; sids: string[]; wit
     <div className="mt-4 flex flex-col gap-2 border-t border-rule pt-3 text-sm text-ink-muted">
       {without > 0 && <p>{fmtCount(without, 'card')} {without === 1 ? 'has' : 'have'} no {tag.label} printing in your catalog.</p>}
       <div className="flex flex-wrap items-center gap-3">
-        <Button tone="paper" disabled={busy} onClick={run}>{busy ? 'Asking Scryfall…' : 'Look on Scryfall for more'}</Button>
+        <Button tone="paper" disabled={busy} onClick={run}>{busy ? 'Looking for more…' : 'Look for more printings'}</Button>
         {msg && <span role={failed ? 'alert' : 'status'} className={failed ? 'text-danger' : ''}>{msg}</span>}
       </div>
     </div>
