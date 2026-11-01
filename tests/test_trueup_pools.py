@@ -103,16 +103,17 @@ def test_apply_drift_rolls_back_deck_rows(tmp_db, seed_cards, make_card,
     )
 
     tp = _load()
-    # Force drift: make reconcile (as seen by _apply via the ingest module) report a mismatch.
-    monkeypatch.setattr(tp.ingest_mod, "reconcile_inventory_ledger",
-                        lambda conn: [{"scryfall_id": a, "finish": "nonfoil",
-                                       "inventory_qty": 1, "ledger_qty": 0}])
     import pytest
-    with pytest.raises(Exception):  # RuntimeError bubbles → db.connect rolls back
-        tp.run(mode="from-unattributed", target=None, apply=True, picks=set(),
-               sld_threshold=0.9, json_out=True)
-
-    monkeypatch.undo()  # restore the real reconcile before asserting DB state
+    # Force drift: make reconcile (as seen by _apply via the ingest module) report a mismatch.
+    # Scoped, so leaving the block restores ONLY the real reconcile (a bare
+    # monkeypatch.undo() would also drop tmp_db and assert against the repo DB).
+    with monkeypatch.context() as m:
+        m.setattr(tp.ingest_mod, "reconcile_inventory_ledger",
+                  lambda conn: [{"scryfall_id": a, "finish": "nonfoil",
+                                 "inventory_qty": 1, "ledger_qty": 0}])
+        with pytest.raises(Exception):  # RuntimeError bubbles → db.connect rolls back
+            tp.run(mode="from-unattributed", target=None, apply=True, picks=set(),
+                   sld_threshold=0.9, json_out=True)
     with db.connect() as conn:
         # No orphan deck row, and the ledger move rolled back too.
         assert conn.execute(

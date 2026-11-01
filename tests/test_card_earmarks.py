@@ -215,6 +215,10 @@ def test_v37_migration_single_and_split(tmp_path, monkeypatch):
     single.parent.mkdir()
     shutil.copy(fresh, single)
     _at_v36(single)
+    # The pre-migration snapshot copies the ACTIVE DB (db_path()), not the
+    # path passed to connect(); point it at `single` so the test is hermetic
+    # (no repo db/ needed, and the real DB is never snapshotted).
+    monkeypatch.setenv("MAGIC_MANAGER_DB", str(single))
     with db.connect(single) as conn:                       # the single layout runs V37 on connect
         assert conn.execute("SELECT version FROM schema_version").fetchone()[0] == db.CURRENT_VERSION
         assert conn.execute("SELECT COUNT(*) FROM card_earmarks").fetchone()[0] == 0
