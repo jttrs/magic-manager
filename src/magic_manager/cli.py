@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -15,6 +16,7 @@ from pathlib import Path
 import typer
 
 from . import (
+    audit as audit_mod,
     db,
     decks as decks_mod,
     earmarks as earmarks_mod,
@@ -686,6 +688,35 @@ def _resolve_codes(name_or_code: str, *, include_kinds: list[str], only: list[st
     if not codes:
         raise typer.BadParameter("set selection produced 0 codes")
     return r, codes
+
+
+def _stale_row_labels(rows: list[dict]) -> dict[str, dict]:
+    """``{scryfall_id: {set, cn, name}}`` for the rows of a ``StaleCounts``."""
+    ids = sorted({r["scryfall_id"] for r in rows})
+    if not ids:
+        return {}
+    with db.connect() as conn:
+        return {c["scryfall_id"]: {"set": c["set_code"], "cn": c["collector_number"], "name": c["name"]}
+                for c in conn.execute(
+                    "SELECT scryfall_id, set_code, collector_number, name FROM cards "
+                    f"WHERE scryfall_id IN ({','.join('?' for _ in ids)})", ids)}
+
+
+def _stale_regenerate_cmd(src: Path, anchor: str, meta: dict) -> str:
+    """The `mm set master-list` command that rebuilds ``src`` in place, from the
+    file's own ``_meta`` (set codes + rarity slice → ``--only``/``--rarity``, so the
+    same partition) and its path/format (``--out`` + ``--format``). ``--force``
+    states the cost: this file's edits are discarded."""
+    parts = ["uv", "run", "mm", "set", "master-list", anchor]
+    if meta.get("set_codes"):
+        parts += ["--only", meta["set_codes"]]
+    if meta.get("rarity_filter"):
+        parts += ["--rarity", meta["rarity_filter"]]
+    parts += ["--mode", "modify"]
+    if src.suffix.lower() == ".md":
+        parts += ["--format", "md"]
+    parts += ["--out", str(src), "--force"]
+    return shlex.join(parts)
 
 
 @set_app.command("master-list")
@@ -1547,30 +1578,29 @@ def set_ingest(
         )
     except sets_mod.StaleCounts as e:
         # Nothing was written or archived; the file stays in place.
+        labels = _stale_row_labels(e.rows)
+        rows = [{**r, **labels.get(r["scryfall_id"], {"set": None, "cn": None, "name": None})}
+                for r in e.rows]
+        regenerate = _stale_regenerate_cmd(src, anchor, file_meta)
         if json_out:
-            json.dump({"status": "stale", "file": str(src), "message": str(e),
-                       "rows": e.rows}, sys.stdout, indent=2)
+            json.dump({"status": "stale", "file": str(src), "anchor": anchor,
+                       "mode": declared_meta_mode, "kind": file_meta.get("kind"),
+                       "message": str(e), "regenerate": regenerate, "rows": rows},
+                      sys.stdout, indent=2)
             sys.stdout.write("\n")
         else:
             typer.echo(f"error: {e}", err=True)
-            names = {}
-            if e.rows:
-                ids = [r["scryfall_id"] for r in e.rows]
-                with db.connect() as conn:
-                    for c in conn.execute(
-                        "SELECT scryfall_id, set_code, collector_number, name FROM cards "
-                        f"WHERE scryfall_id IN ({','.join('?' for _ in ids)})", ids):
-                        names[c["scryfall_id"]] = c
-            for r in e.rows[:20]:
-                c = names.get(r["scryfall_id"])
-                label = (f"{(c['set_code'] or '').upper()} {c['collector_number']} {c['name']}"
-                         if c else r["scryfall_id"])
+            for r in rows[:20]:
+                label = (f"{(r['set'] or '').upper()} {r['cn']} {r['name']}"
+                         if r["name"] else r["scryfall_id"])
                 typer.echo(f"  {label} [{r['finish']}]: sheet {r['expected']} → now {r['current']}",
                            err=True)
-            if len(e.rows) > 20:
-                typer.echo(f"  …and {len(e.rows) - 20} more", err=True)
-            typer.echo(f"Regenerate it with `uv run mm set master-list {anchor} --mode modify`, "
-                       "or pass --allow-stale.", err=True)
+            if len(rows) > 20:
+                typer.echo(f"  …and {len(rows) - 20} more", err=True)
+            typer.echo("Two ways out:", err=True)
+            typer.echo(f"  regenerate (discards any edits in this file): {regenerate}", err=True)
+            typer.echo("  ingest anyway (sets the listed rows back to the sheet's values): "
+                       "add --allow-stale", err=True)
         raise typer.Exit(EXIT_STALE_CHECKLIST)
     except Exception as e:
         error = repr(e)
@@ -3125,11 +3155,8 @@ def deck_compose_cmd(
     if dry_run:
         typer.echo(f"# selector: deck:{slug} (compose plan, foil_first={foil_first})")
         typer.echo(f"# rows: {len(plan['rows'])}  shortfalls: {len(plan['shortfalls'])}  either_choices: {len(plan['either_choices'])}")
-        typer.echo(
-            f"# already pledged to this deck: "
-            f"{sum(min(r['pledged'], r['need']) for r in plan['rows'])} of "
-            f"{sum(r['need'] for r in plan['rows'])} card-qty"
-        )
+        cov = decks_mod.compose_summary(plan)
+        typer.echo(f"# already pledged to this deck: {cov['pledged']} of {cov['need']} card-qty")
         if plan["shortfalls"]:
             typer.echo("shortfalls:")
             for s in plan["shortfalls"][:20]:
@@ -4737,31 +4764,6 @@ def db_unlock_cmd(
     typer.echo(f"Removed {len(present)} sidecar file(s).")
 
 
-def _built_decks_short() -> list[dict]:
-    """Built decks (``precon_state = 'built'``) whose pledges don't cover their
-    recipe: ``[{slug, need, pledged, short, coverable}]`` where ``short`` = Σ the
-    plan's ``remaining``, ``coverable`` = how much of it free inventory covers."""
-    with db.connect() as conn:
-        slugs = [r["slug"] for r in conn.execute(
-            "SELECT slug FROM decks WHERE precon_state = 'built' ORDER BY slug")]
-    out: list[dict] = []
-    for slug in slugs:
-        try:
-            plan = decks_mod.deck_compose_plan(slug)
-        except LookupError:
-            continue
-        short = sum(r["remaining"] for r in plan["rows"])
-        if short > 0:
-            out.append({
-                "slug": slug,
-                "need": sum(r["need"] for r in plan["rows"]),
-                "pledged": sum(min(r["pledged"], r["need"]) for r in plan["rows"]),
-                "short": short,
-                "coverable": sum(min(r["remaining"], r["free"]) for r in plan["rows"]),
-            })
-    return out
-
-
 @audit_app.command("deck-inventory")
 def audit_deck_inventory_cmd(
     fix: bool = typer.Option(False, "--fix", help="Delete orphan (empty) decks found."),
@@ -4857,7 +4859,7 @@ def audit_deck_inventory_cmd(
                         f"at {last_removal['at']}"
                     )
 
-    short_decks = _built_decks_short()
+    short_decks = audit_mod.built_decks_short()
     typer.echo(f"Built decks short of their recipe: {len(short_decks)}")
     for d in short_decks:
         typer.echo(

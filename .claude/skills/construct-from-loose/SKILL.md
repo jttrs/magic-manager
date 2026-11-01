@@ -76,6 +76,9 @@ uv run mm db snapshot --label pre-construct-<fileName>
 uv run mm query show "assigned:<slug>"       # what got pledged
 uv run mm deck compose <slug> --dry-run       # remaining shortfalls, if partial
 ```
+The compose dry-run is net of this deck's own pledges: `# already pledged to this
+deck: X of Y` is what the deck holds, and each shortfall line reads
+`need N (recipe R, pledged P), free F` — `N` is only what is still missing.
 Inventory value must be **unchanged** before/after (this command adds no
 inventory): `uv run mm inventory value`.
 

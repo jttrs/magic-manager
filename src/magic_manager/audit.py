@@ -11,7 +11,7 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass, field
 
-from . import db
+from . import db, decks
 from .layout import USER_TABLES
 
 
@@ -48,4 +48,22 @@ def catalog_refs(conn: sqlite3.Connection | None = None) -> list[CatalogRefs]:
                 found.rows += n
                 found.scryfall_ids.append(sid)
             out.append(found)
+    return out
+
+
+def built_decks_short() -> list[dict]:
+    """Built decks (``precon_state = 'built'``) whose pledges don't cover their
+    recipe: ``[{slug, need, pledged, short, coverable}]`` from
+    :func:`decks.compose_summary` of each deck's compose plan."""
+    with db.connect() as conn:
+        slugs = [r["slug"] for r in conn.execute(
+            "SELECT slug FROM decks WHERE precon_state = 'built' ORDER BY slug")]
+    out: list[dict] = []
+    for slug in slugs:
+        try:
+            summary = decks.compose_summary(decks.deck_compose_plan(slug))
+        except LookupError:
+            continue
+        if summary["short"] > 0:
+            out.append({"slug": slug, **summary})
     return out

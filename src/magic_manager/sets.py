@@ -691,10 +691,19 @@ def _stale_rows(conn, writes: list[tuple[str, str, int, int]], since_iso: str) -
             "SELECT scryfall_id, finish, SUM(delta) AS d FROM inventory_events "
             "WHERE at > ? GROUP BY scryfall_id, finish", (since_iso,))
     }
-    rows: list[dict] = []
+    # A card listed twice is written sequentially (the later SET wins, its
+    # ``current_qty`` is the projection of the earlier one), so judge each key
+    # once by its NET effect: the first write's ``current_qty`` is the real stored
+    # count, the last write's ``new_qty`` is where the ingest leaves it.
+    first: dict[tuple[str, str], int] = {}
+    last: dict[tuple[str, str], int] = {}
     for sid, finish, new_qty, current_qty in writes:
+        first.setdefault((sid, finish), current_qty)
+        last[(sid, finish)] = new_qty
+    rows: list[dict] = []
+    for (sid, finish), current_qty in first.items():
         d = moved.get((sid, finish)) or 0
-        if d != 0 and new_qty != current_qty:
+        if d != 0 and last[(sid, finish)] != current_qty:
             rows.append({"scryfall_id": sid, "finish": finish,
                          "expected": current_qty - d, "current": current_qty})
     return rows

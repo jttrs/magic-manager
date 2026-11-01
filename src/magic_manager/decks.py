@@ -1618,13 +1618,83 @@ def deck_assignments_list(slug: str) -> list[DeckCardRow]:
     return [DeckCardRow(**dict(r)) for r in rows]
 
 
+def deck_pledged(conn, deck_id: int) -> dict[tuple[str, str], int]:
+    """What ``deck_id`` already holds, per ``(scryfall_id, finish)`` — the ONE
+    pledge read shared by the web Build (``deck_edit``) and compose."""
+    return {(r[0], r[1]): r[2] for r in conn.execute(
+        "SELECT scryfall_id, finish, count FROM deck_assignments WHERE deck_id = ?", (deck_id,))}
+
+
+def free_map(conn, sids) -> dict[tuple[str, str], int]:
+    """Free (unpledged) copies per ``(scryfall_id, finish)`` for ``sids``."""
+    out: dict[tuple[str, str], int] = {}
+    for sid in set(sids):
+        for fin in ("nonfoil", "foil"):
+            out[(sid, fin)] = inv_mod.free_quantity(sid, fin, conn=conn)
+    return out
+
+
+def resolve_needs(cards, pledged: dict[tuple[str, str], int],
+                  free: dict[tuple[str, str], int], *,
+                  order: tuple[str, str] = ("nonfoil", "foil")) -> dict[tuple[str, str], int]:
+    """Collapse a playable decklist to per-(sid, finish) copies. Exact finishes
+    first; then each 'either' slot keeps copies already pledged, then takes free
+    copies in ``order`` (default nonfoil, then foil, splitting across finishes),
+    and any excess lands on ``order[0]`` (short). Free copies are shared across
+    slots, never double-counted. Token rows aren't pledged by a Build, but copies
+    already pledged to them stay (never sleeved, never pulled).
+
+    The ONE 'either' rule — the web Build (``deck_edit``) and :func:`deck_compose_plan`
+    both resolve through it. ``cards`` is duck-typed (``scryfall_id``, ``finish``,
+    ``board``, ``count``)."""
+    out: dict[tuple[str, str], int] = {}
+
+    def add(key: tuple[str, str], n: int) -> None:
+        if n > 0:
+            out[key] = out.get(key, 0) + n
+
+    def kept(key: tuple[str, str]) -> int:       # pledged copies not yet claimed
+        return max(0, pledged.get(key, 0) - out.get(key, 0))
+
+    def room(key: tuple[str, str]) -> int:       # free copies not yet claimed
+        return max(0, free.get(key, 0) - max(0, out.get(key, 0) - pledged.get(key, 0)))
+
+    playable = [c for c in cards if c.board in PLAYABLE_BOARDS and c.count > 0]
+    for c in playable:
+        if c.finish in ("nonfoil", "foil"):
+            add((c.scryfall_id, c.finish), c.count)
+    for c in playable:
+        if c.finish in ("nonfoil", "foil"):
+            continue
+        left = c.count
+        for pick in (kept, room):
+            for fin in order:
+                key = (c.scryfall_id, fin)
+                take = min(left, pick(key))
+                add(key, take)
+                left -= take
+        add((c.scryfall_id, order[0]), left)
+    for c in cards:
+        if c.board != "token" or c.count <= 0:
+            continue
+        left = c.count
+        for fin in (order if c.finish == "either" else (c.finish,)):
+            key = (c.scryfall_id, fin)
+            take = min(left, kept(key))
+            add(key, take)
+            left -= take
+    return out
+
+
 def deck_compose_plan(slug: str, *, foil_first: bool = False) -> dict:
     """Preview what a full-composition assign would do without writing.
 
-    Reads the recipe from ``deck_cards``, picks a concrete finish for every
-    ``'either'`` slot (nonfoil-first by default; ``foil_first=True`` inverts
-    that), aggregates by ``(scryfall_id, finish)``, and reports current free
-    inventory. Callers use this both for dry-run display and as the input to
+    Reads the recipe from ``deck_cards`` and resolves it to concrete
+    ``(scryfall_id, finish)`` needs through :func:`resolve_needs` — the same
+    'either' rule the web Build uses: this deck's existing pledges are kept
+    first, then free nonfoil, then free foil (``foil_first=True`` inverts the
+    nonfoil/foil order), splitting a slot across finishes when needed. Callers
+    use this both for dry-run display and as the input to
     :func:`deck_assign_batch`.
 
     The plan nets what THIS deck already holds: ``free`` already excludes every
@@ -1635,94 +1705,66 @@ def deck_compose_plan(slug: str, *, foil_first: bool = False) -> dict:
 
     Returns ``{"rows": [{scryfall_id, finish, need, pledged, remaining, free},
     ...], "shortfalls": [same shape], "either_choices": [{scryfall_id,
-    chose_finish, reason}]}``. An ``'either'`` slot prefers a finish this deck
-    already holds (``reason`` ``"already-pledged"``) before the primary/secondary
-    rule (``"primary"`` / ``"primary-short-fallback"``).
+    chose_finish, reason}]}``. One ``either_choices`` entry per 'either' recipe
+    row: ``chose_finish`` is ``"nonfoil"``, ``"foil"`` or ``"split"`` (the slot
+    resolved across both finishes) and ``reason`` is ``"shared-rule"``.
     """
-    from .inventory import free_quantity
-
     # Compose against the PLAYABLE recipe only — tokens ride the deck for
     # record-keeping but are never pledged from inventory (they'd otherwise
     # surface as spurious shortfalls, since token printings aren't tracked as
     # loose singles). deck_assign_batch's recipe_caps applies the same exclusion.
     recipe = deck_show(slug, exclude_boards=("token",))  # already validates the slug
 
-    # Collapse recipe rows into per-(sid, finish) needs, resolving 'either'.
-    needs: dict[tuple[str, str], int] = {}
-    either_choices: list[dict] = []
     with db.connect() as conn:
-        # What THIS deck already holds, per (sid, finish).
-        pledged: dict[tuple[str, str], int] = {}
-        deck_row = _fetch_deck(conn, slug)
-        for a in conn.execute(
-            "SELECT scryfall_id, finish, count FROM deck_assignments WHERE deck_id = ?",
-            (deck_row["deck_id"],),
-        ).fetchall():
-            pledged[(a["scryfall_id"], a["finish"])] = (
-                pledged.get((a["scryfall_id"], a["finish"]), 0) + a["count"]
-            )
+        pledged = deck_pledged(conn, _fetch_deck(conn, slug)["deck_id"])
+        free = free_map(conn, (r.scryfall_id for r in recipe))
+    needs = resolve_needs(recipe, pledged, free,
+                          order=("foil", "nonfoil") if foil_first else ("nonfoil", "foil"))
 
-        for r in recipe:
-            if r.finish in ("nonfoil", "foil"):
-                needs[(r.scryfall_id, r.finish)] = (
-                    needs.get((r.scryfall_id, r.finish), 0) + r.count
-                )
-                continue
-            # 'either': prefer the requested primary, fall back to the other.
-            primary = "foil" if foil_first else "nonfoil"
-            secondary = "nonfoil" if foil_first else "foil"
+    # An 'either' row's finish = the copies resolve_needs gave its printing
+    # beyond the exact-finish rows of that printing.
+    exact: dict[tuple[str, str], int] = {}
+    for r in recipe:
+        if r.finish in ("nonfoil", "foil") and r.count > 0:
+            exact[(r.scryfall_id, r.finish)] = exact.get((r.scryfall_id, r.finish), 0) + r.count
+    either_choices: list[dict] = []
+    for r in recipe:
+        if r.finish in ("nonfoil", "foil") or r.count <= 0:
+            continue
+        got = [f for f in ("nonfoil", "foil")
+               if needs.get((r.scryfall_id, f), 0) > exact.get((r.scryfall_id, f), 0)]
+        chose = "split" if len(got) == 2 else (got[0] if got else ("foil" if foil_first else "nonfoil"))
+        either_choices.append({"scryfall_id": r.scryfall_id, "chose_finish": chose,
+                               "reason": "shared-rule"})
 
-            def headroom(f: str) -> int:
-                return (pledged.get((r.scryfall_id, f), 0)
-                        - needs.get((r.scryfall_id, f), 0))
-
-            # A finish this deck already holds wins: re-composing must not
-            # flip a pledged foil to nonfoil (and pledge it twice).
-            if headroom(primary) >= r.count:
-                needs[(r.scryfall_id, primary)] = (
-                    needs.get((r.scryfall_id, primary), 0) + r.count)
-                either_choices.append({"scryfall_id": r.scryfall_id,
-                                       "chose_finish": primary,
-                                       "reason": "already-pledged"})
-                continue
-            if headroom(secondary) >= r.count:
-                needs[(r.scryfall_id, secondary)] = (
-                    needs.get((r.scryfall_id, secondary), 0) + r.count)
-                either_choices.append({"scryfall_id": r.scryfall_id,
-                                       "chose_finish": secondary,
-                                       "reason": "already-pledged"})
-                continue
-            free_primary = free_quantity(r.scryfall_id, primary, conn=conn)
-            already_needed_primary = needs.get((r.scryfall_id, primary), 0)
-            if free_primary - already_needed_primary >= r.count:
-                chose = primary
-                reason = "primary"
-            else:
-                chose = secondary
-                reason = "primary-short-fallback"
-            needs[(r.scryfall_id, chose)] = needs.get((r.scryfall_id, chose), 0) + r.count
-            either_choices.append({
-                "scryfall_id": r.scryfall_id,
-                "chose_finish": chose,
-                "reason": reason,
-            })
-
-        rows_out: list[dict] = []
-        shortfalls: list[dict] = []
-        for (sid, finish), need in needs.items():
-            free = free_quantity(sid, finish, conn=conn)
-            have = pledged.get((sid, finish), 0)
-            remaining = max(0, need - have)
-            entry = {"scryfall_id": sid, "finish": finish, "need": need,
-                     "pledged": have, "remaining": remaining, "free": free}
-            rows_out.append(entry)
-            if remaining > free:
-                shortfalls.append(entry)
+    rows_out: list[dict] = []
+    shortfalls: list[dict] = []
+    for (sid, finish), need in needs.items():
+        have = pledged.get((sid, finish), 0)
+        entry = {"scryfall_id": sid, "finish": finish, "need": need,
+                 "pledged": have, "remaining": max(0, need - have),
+                 "free": free.get((sid, finish), 0)}
+        rows_out.append(entry)
+        if entry["remaining"] > entry["free"]:
+            shortfalls.append(entry)
 
     return {
         "rows": rows_out,
         "shortfalls": shortfalls,
         "either_choices": either_choices,
+    }
+
+
+def compose_summary(plan: dict) -> dict:
+    """Coverage of a :func:`deck_compose_plan` result: ``need`` (recipe copies),
+    ``pledged`` (already held, capped at need per row), ``short`` (still to
+    pledge) and ``coverable`` (how much of ``short`` free inventory covers)."""
+    rows = plan["rows"]
+    return {
+        "need": sum(r["need"] for r in rows),
+        "pledged": sum(min(r["pledged"], r["need"]) for r in rows),
+        "short": sum(r["remaining"] for r in rows),
+        "coverable": sum(min(r["remaining"], r["free"]) for r in rows),
     }
 
 
