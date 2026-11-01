@@ -251,7 +251,7 @@ export function MarketView() {
 
   const sideSummary = subject === 'family' ? famName : subject === 'sld' ? 'Secret Lair' : subject === 'deals' ? 'Deals' : deckName;
   return (
-    <ViewLayout label="Market controls" summary={sideSummary} sidebar={sidebar} subnav={<MarketTabs subject={subject} />} startOpen={!(search.code || search.deck || subject === 'deals' || subject === 'sld')}>
+    <ViewLayout label="Market controls" summary={sideSummary} sidebar={sidebar} subnav={<MarketTabs subject={subject} />} startOpen={!(search.code || search.deck || search.subject === 'deals' || subject === 'sld')}>
       <GuideSheet title={title} summary={summary} actions={actions}>
         {inDeals || subject === 'sld' ? <div className="h-full min-h-0">{body}</div> : <div className="h-full overflow-y-auto pb-8">{body}</div>}
       </GuideSheet>

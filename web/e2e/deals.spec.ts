@@ -15,6 +15,10 @@ test('Deals is hidden unless its flag is on', async ({ page }) => {
   const modes = page.getByRole('navigation', { name: 'Market views' });
   await expect(modes.getByRole('link', { name: 'Set family' })).toBeVisible();
   await expect(modes.getByRole('link', { name: 'Deals' })).toHaveCount(0);
+  // A Deals link without the flag falls back to the default mode.
+  await page.goto('/market?subject=deals&code=blb');
+  await expect(modes.getByRole('link', { name: 'Set family' })).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('searchbox', { name: 'Product name' })).toBeVisible();
 });
 
 test('with the flag on: read open tabs, grouped by store', async ({ page }) => {

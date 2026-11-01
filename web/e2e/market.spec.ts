@@ -267,3 +267,15 @@ test('Market modes are a sub-nav strip and every rail control has a field label'
   await expect(modes.getByRole('link', { name: 'Deck' })).toHaveAttribute('aria-current', 'page');
   await expect(page.getByRole('main').getByText('Choose a deck', { exact: true })).toBeVisible();
 });
+
+test('a failed recheck says so and keeps the synced-set floor', async ({ page }) => {
+  const deck = fixtures.decks[0];
+  await page.route('**/api/market/deck?*', (r) => {
+    const live = new URL(r.request().url()).searchParams.get('live') === 'true';
+    return r.fulfill({ json: { slug: deck.slug, sealed_product: null, sealed: null, scratch: 6, with_collection: 6, scratch_floor: 4.5, with_collection_floor: 4.5, coverage: 1, unpriced: 0, total_need: 1, live: false, live_error: live ? 'timed out' : null,
+      lines: [{ scryfall_id: 'd', finish: 'nonfoil', name: 'Pricey Card', set_code: 'abc', collector_number: '1', need: 1, free: 0, buy: 1, unit_usd: 6, floor_usd: 4.5, floor_set_code: 'xyz', floor_collector_number: '9', floor_scryfall_id: 'c' }] } });
+  });
+  await page.goto(`/market?subject=deck&deck=${deck.slug}&live=true`);
+  await expect(page.getByRole('alert')).toContainText('Couldn’t recheck every printing — showing the cheapest among the sets synced here. timed out');
+  await expect(page.getByText('Cheapest printings among the sets synced here.')).toBeVisible();
+});
