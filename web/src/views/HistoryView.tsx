@@ -51,7 +51,8 @@ export function HistoryView() {
   const shown = useMemo(() => (merged ? filterHistory(merged.entries, search) : []), [merged, search]);
   const review = useMemo(() => (merged ? filterOrders(merged.review, search) : []), [merged, search]);
   const recorded = useMemo(() => (merged ? filterOrders(merged.orders, search) : []), [merged, search]);
-  const groups = useMemo(() => groupTimeline(shown, recorded), [shown, recorded]);
+  const pending = useMemo(() => (merged ? filterHistory(merged.pending, search) : []), [merged, search]);
+  const groups = useMemo(() => groupTimeline(shown, recorded, pending), [shown, recorded, pending]);
   const kinds = useMemo(() => (merged ? kindCounts(merged.entries, merged.review.length + merged.orders.length) : []), [merged]);
   const allDays = useMemo(() => (merged ? [...merged.entries.map((e) => e.at), ...merged.review.map((p) => p.ordered_at), ...merged.orders.map((p) => p.ordered_at)].map((d) => d.slice(0, 10)).sort() : []), [merged]);
   const first = allDays[0];
@@ -110,7 +111,7 @@ export function HistoryView() {
     const list = <Timeline review={review} groups={groups} total={shown.length + review.length + recorded.length} orderOf={merged.orderOf} active={{ entry: search.entry, order: search.order }} onEntry={openEntry} onOrder={openOrder} />;
     const back = narrow ? () => set({ entry: undefined, order: undefined }) : undefined;
     const inspector = search.order != null && purchasesOn ? (
-      <OrderReview key={`o${search.order}`} purchaseId={search.order} onBack={back} onForgotten={() => openOrder(undefined)} />
+      <OrderReview key={`o${search.order}`} purchaseId={search.order} onBack={back} onForgotten={() => openOrder(undefined)} onOpenEntry={openEntry} />
     ) : search.entry != null ? (
       <EntryInspector key={search.entry} ingestId={search.entry} view={search.view} selected={selected} onToggle={toggle} onReview={openOrder} onView={(view) => set({ view })} onOpen={openEntry} onBack={back} />
     ) : (
@@ -124,7 +125,7 @@ export function HistoryView() {
     body = narrow ? (open ? inspector : list) : <SplitPanes id="mm.history.split" label="Resize history list" list={list} inspector={inspector} defaults={[40, 60]} />;
   }
 
-  const held = useMemo(() => shown.filter((e) => e.kind !== 'move').reduce((t, e) => t + e.value_usd, 0), [shown]);
+  const held = useMemo(() => [...shown, ...pending].filter((e) => e.kind !== 'move').reduce((t, e) => t + e.value_usd, 0), [shown, pending]);
   const orderTotals = purchasesOn && orders.data?.purchases.length ? orders.data : null;
   return (
     <ViewLayout label="History controls" summary={filtered ? `${fmtCount(shown.length + review.length + recorded.length, 'entry', 'entries')} shown` : 'Every entry'} sidebar={sidebar} subnav={<CollectionTabs />}>

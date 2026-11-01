@@ -74,6 +74,11 @@ describe('store orders in the timeline', () => {
     const m = mergeOrders(entries, [done, partial, fresh, recorded]);
     expect(m.review.map((p) => p.purchase_id)).toEqual([4, 3]);
     expect(m.entries.map((x) => x.ingest_id)).not.toContain(30);
+    expect(m.pending.map((x) => x.ingest_id)).toEqual([30]);
+    // Its copies are held: the month still counts them without a row.
+    const sep = groupTimeline(m.entries, m.orders, m.pending).find((g) => g.key === '2026-09')!;
+    expect(sep.rows.some((r) => r.key === '30')).toBe(false);
+    expect([sep.copiesIn, sep.valueUsd]).toEqual([40, 7.5]);
     expect(m.orderOf.get(20)?.purchase_id).toBe(2);
     expect(m.orders.map((p) => p.purchase_id)).toEqual([5]);
     expect(kindCounts(m.entries, m.review.length + m.orders.length).find((k) => k.value === 'purchase')).toMatchObject({ label: 'Store order', count: 4 });

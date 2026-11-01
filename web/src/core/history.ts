@@ -85,6 +85,8 @@ export type MergedHistory = {
   review: PurchaseOut[];
   /** Ledger entries to list: a partly-added order's entry is left out (the order shows once, under Needs review). */
   entries: HistoryEntryOut[];
+  /** Those left-out entries: their copies are held, so totals still count them (and the order review links to them). */
+  pending: HistoryEntryOut[];
   /** Settled orders with no ledger entry (nothing assignable — recorded only): a timeline row of their own. */
   orders: PurchaseOut[];
   /** Ledger entry (ingest id) → the store order it applied, so the row shows once with the order's facts. */
@@ -99,9 +101,13 @@ export function mergeOrders(entries: readonly HistoryEntryOut[], purchases: read
   const orderOf = new Map<number, PurchaseOut>();
   const placed = new Set<number>();
   const kept: HistoryEntryOut[] = [];
+  const pending: HistoryEntryOut[] = [];
   for (const e of entries) {
     const p = e.kind === 'purchase' && e.purchase_id != null ? byId.get(e.purchase_id) : undefined;
-    if (p && needsReview(p)) continue;
+    if (p && needsReview(p)) {
+      pending.push(e);
+      continue;
+    }
     if (p) {
       orderOf.set(e.ingest_id, p);
       placed.add(p.purchase_id);
@@ -110,7 +116,7 @@ export function mergeOrders(entries: readonly HistoryEntryOut[], purchases: read
   }
   const review = purchases.filter(needsReview).sort(byOrderedDesc);
   const orders = purchases.filter((p) => !needsReview(p) && !placed.has(p.purchase_id)).sort(byOrderedDesc);
-  return { review, entries: kept, orders, orderOf };
+  return { review, entries: kept, pending, orders, orderOf };
 }
 
 export const orderTitle = (p: Pick<PurchaseOut, 'store_name' | 'order_id'>): string => `${p.store_name} order #${p.order_id}`;
@@ -141,8 +147,9 @@ const monthLabel = (ym: string) => MONTH.format(new Date(`${ym}-01T00:00:00Z`));
 
 /** Newest-first entries → month groups. A day's deck moves gather into ONE quiet run row (≥ 2),
  *  placed where the day's newest move falls — they interleave with the precons they build.
- *  `orders` (newest first) interleave by order date as rows of their own; they hold no copies. */
-export function groupTimeline(entries: readonly HistoryEntryOut[], orders: readonly PurchaseOut[] = []): MonthGroup[] {
+ *  `orders` (newest first) interleave by order date as rows of their own; they hold no copies.
+ *  `counted` entries add to their month's totals without a row (a partly-added order's entry). */
+export function groupTimeline(entries: readonly HistoryEntryOut[], orders: readonly PurchaseOut[] = [], counted: readonly HistoryEntryOut[] = []): MonthGroup[] {
   const groups: MonthGroup[] = [];
   const runs = new Map<string, Extract<TimelineRow, { type: 'moves' }>>();
   const moveCount = new Map<string, number>();
@@ -180,6 +187,12 @@ export function groupTimeline(entries: readonly HistoryEntryOut[], orders: reado
     g.rows.push({ type: 'entry', key: String(e.ingest_id), entry: e });
   }
   ordersUpTo(null);
+  for (const e of counted) {
+    const g = groups.find((x) => x.key === e.at.slice(0, 7));
+    if (!g) continue;
+    g.copiesIn += e.held;
+    g.valueUsd += e.value_usd;
+  }
   for (const g of groups) g.valueUsd = Math.round(g.valueUsd * 100) / 100;
   return groups;
 }
