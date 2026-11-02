@@ -35,7 +35,7 @@ jobs:
           cache-dependency-glob: uv.lock
       - run: uv sync --frozen
       # xdist: every test gets its own tmp DB/config (tests/conftest.py), so workers share nothing.
-      - run: uv run pytest -q -p no:warnings -n auto
+      - run: uv run pytest -q -p no:warnings -n auto -rs
 
   web-check:
     runs-on: ubuntu-latest
