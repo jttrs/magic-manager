@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
 import { artSwapsQuery, artTagsQuery } from '../../app/queries';
+import { useJobAllowed } from '../../app/jobAccess';
 import { useDebounced } from '../../app/useDebounced';
 import { useJob } from '../../app/useJob';
 import { Button } from '../../components/Button';
@@ -11,6 +12,7 @@ import type { ArtTagRefOut, PrintingOut } from '../../core/api';
 import { artView, choiceFor, choiceNote, draftPrintingIds, swapAllFree, wasPrinting, type ArtRow } from '../../core/artSwap';
 import { restorePrinting, swapPrinting, type Draft } from '../../core/deckDraft';
 import { fmtCount, fmtInt } from '../../core/format';
+import { ADMIN_JOB_NOTE } from '../../core/jobs';
 
 const crop = (url: string) => url.replace('/normal/', '/art_crop/');
 const QUICK = ['cat', 'moon', 'ocean', 'dragon', 'forest'];
@@ -240,6 +242,7 @@ function Lookup({ tag, sids, without }: { tag: ArtTagRefOut; sids: string[]; wit
   useEffect(() => {
     if (live?.status === 'succeeded') void qc.invalidateQueries({ queryKey: ['art', 'swaps'] });
   }, [live?.status, qc]);
+  const allowed = useJobAllowed('art.lookup');
   const run = async () => {
     setErr(await start('art.lookup', { tag: tag.id, cards: sids.map((scryfall_id) => ({ scryfall_id, board: 'main', finish: 'either', count: 1 })) }));
   };
@@ -252,7 +255,9 @@ function Lookup({ tag, sids, without }: { tag: ArtTagRefOut; sids: string[]; wit
     <div className="mt-4 flex flex-col gap-2 border-t border-rule pt-3 text-sm text-ink-muted">
       {without > 0 && <p>{fmtCount(without, 'card')} {without === 1 ? 'has' : 'have'} no {tag.label} printing in your catalog.</p>}
       <div className="flex flex-wrap items-center gap-3">
-        <Button tone="paper" disabled={busy} onClick={run}>{busy ? 'Looking for more…' : 'Look for more printings'}</Button>
+        {allowed
+          ? <Button tone="paper" disabled={busy} onClick={run}>{busy ? 'Looking for more…' : 'Look for more printings'}</Button>
+          : <span>{ADMIN_JOB_NOTE}</span>}
         {msg && <span role={failed ? 'alert' : 'status'} className={failed ? 'text-danger' : ''}>{msg}</span>}
       </div>
     </div>
@@ -265,9 +270,13 @@ function SyncTags() {
   const { live, start } = useJob();
   const [err, setErr] = useState<string | null>(null);
   const running = Boolean(live && live.status !== 'succeeded' && live.status !== 'failed');
+  const allowed = useJobAllowed('scryfall.sync_tags');
   useEffect(() => {
     if (live?.status === 'succeeded') void qc.invalidateQueries({ queryKey: ['art'] });
   }, [live?.status, qc]);
+  if (!allowed) {
+    return <EmptyNote title="Art themes aren’t loaded yet">Art themes come from Scryfall’s tags. {ADMIN_JOB_NOTE}</EmptyNote>;
+  }
   return (
     <EmptyNote title="Art themes aren’t loaded yet">
       <span className="flex flex-col items-start gap-3">

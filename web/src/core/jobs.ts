@@ -28,3 +28,9 @@ export function watchJob(id: string, onEvent: (e: JobEvent) => void): () => void
   }
   return () => es.close();
 }
+
+/** Shown where a catalog-wide job's button would be, for someone who may not run it (hosted members). */
+export const ADMIN_JOB_NOTE = 'Only an admin can fetch this on this server. You see what it has already fetched.';
+
+/** An EDHREC ranking no admin has fetched yet, for someone who may not fetch it. */
+export const RANKING_UNREAD_NOTE = 'No one has fetched this list on this server yet, and only an admin can.';

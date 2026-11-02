@@ -229,19 +229,24 @@ def _inventory_fingerprint() -> tuple:
     return tuple(row)
 
 
-def product_cost(kind: str, set_code: str, name: str, finish: str | None = None) -> dict:
+def product_cost(kind: str, set_code: str, name: str, finish: str | None = None, *,
+                 on_miss: Callable[[], None] | None = None) -> dict:
     """What a sealed product or Secret Lair drop is worth, every way: its own
     market price; what's inside at exact printings and at each card's cheapest
     printing, split into KNOWN cards and random-booster EV; and every known card
     as a line (exact + floor + your free copies). Memoized 30 min per product —
     market prices don't move faster, and valuing is slow. The memo is also keyed
-    on the inventory/pledge fingerprint so owned/free counts never go stale."""
+    on the inventory/pledge fingerprint so owned/free counts never go stale.
+    ``on_miss`` runs before a product is valued afresh (the web charges its
+    live-read limit there, so memo hits stay free); it may raise to refuse."""
     # db.user_scope(): owned/free counts are one user's — never served to another.
     key = (db.user_scope(), kind, set_code.lower(), name, finish)
     fp = _inventory_fingerprint()
     hit = _cost_memo.get(key)
     if hit and hit[1] == fp and time.monotonic() - hit[0] < _COST_TTL:
         return hit[2]
+    if on_miss is not None:
+        on_miss()
     out = _sld_cost(name, finish) if kind == "sld" else _sealed_cost(set_code, name)
     _cost_memo[key] = (time.monotonic(), fp, out)
     return out

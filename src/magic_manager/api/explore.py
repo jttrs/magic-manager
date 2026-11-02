@@ -263,4 +263,5 @@ SYNC_RANKING = register(JobSpec(
     description="Top commanders (optionally by color, tag and set), top cards, or the saltiest cards.",
     input_model=SyncRankingInput,
     run=_run_sync_ranking,
+    scope="catalog",
 ))

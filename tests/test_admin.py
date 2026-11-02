@@ -245,7 +245,7 @@ def test_a_job_refused_by_the_pin_fails_with_the_code(people, monkeypatch):
         owner_machine.require("manapool.server_login")
         return jobs_api.JobResult(summary="ran")
     monkeypatch.setitem(jobs_api._REGISTRY, "test.pinned",
-                        jobs_api.JobSpec(name="test.pinned", title="Pinned", description="", input_model=In, run=run))
+                        jobs_api.JobSpec(name="test.pinned", title="Pinned", description="", input_model=In, run=run, scope="user"))
     with cm:
         job = cm.post("/api/jobs/test.pinned", headers=hm, json={}).json()
         cm.get(f"/api/jobs/{job['id']}/events")

@@ -452,7 +452,7 @@ def fetch_deck_lines(url: str, *, progress: Callable[[str], None] | None = None)
     except RuntimeError as e:
         if key:
             outcome, code = scraper_health.classify_error(str(e))
-            scraper_health.record_use(key, outcome, code, str(e))
+            scraper_health.record_use(key, outcome, code)  # the code only: health is global
         raise
     if key:
         scraper_health.record_use(key, "ok")

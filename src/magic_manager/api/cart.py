@@ -27,6 +27,7 @@ class FeaturesOut(BaseModel):
     flags: dict[str, bool] = Field(description="Every flag's value for you (hosted: with your admin-set overrides).")
     owner_paths: dict[str, bool] = Field(default_factory=dict, description="Paths that run on the owner's machine or logins (owner_machine.PATHS) → may you use them here. All true locally; admins only when hosted, whatever the flags say.")
     mode: Literal["local", "hosted"] = Field("local", description="hosted = sign-in required (MM_MODE=hosted); local = no login.")
+    jobs: dict[str, bool] = Field(default_factory=dict, description="Catalog-wide jobs (JobSpec scope `catalog`) → may you run them here. All true locally; admins only when hosted.")
 
 
 class CartSetupOut(BaseModel):
@@ -106,7 +107,9 @@ class CartAuditOut(BaseModel):
 
 def flags() -> FeaturesOut:
     from ..analytics import consent
-    return FeaturesOut(flags=features.flags(), owner_paths=owner_machine.access(), mode=consent.mode())
+    from . import jobs as jobs_api
+    return FeaturesOut(flags=features.flags(), owner_paths=owner_machine.access(), mode=consent.mode(),
+                       jobs=jobs_api.access())
 
 
 def _cart_script():

@@ -72,12 +72,33 @@ pace() {
 # to the on-disk cache path under $CACHE_DIR.
 cache_path_for() { printf '%s/%s' "$CACHE_DIR" "$1"; }
 
+# Defense in depth (the Python client validates first — mtgjson.valid_set_code /
+# valid_deck_name): a resource path never leaves the cache dir or the API base.
+safe_resource() {
+  case "$1" in
+    ""|/*|*..*|*\\*|*//*|*[[:space:]]*|*[[:cntrl:]]*|-*)
+      echo "mtgjson.sh: refusing resource path '$1'" >&2; exit 2 ;;
+  esac
+}
+safe_set_code() {
+  [[ "$1" =~ ^[A-Za-z0-9]{2,8}$ ]] || { echo "mtgjson.sh: '$1' isn't a set code (2-8 letters or digits)" >&2; exit 2; }
+}
+safe_deck_name() {
+  # Real deck file names carry Unicode letters, so this is a deny-list: no path
+  # separator, dot, leading dash, whitespace or control character.
+  case "$1" in
+    ""|*/*|*.*|*\\*|*[[:space:]]*|*[[:cntrl:]]*|-*)
+      echo "mtgjson.sh: '$1' isn't an MTGJSON deck file name" >&2; exit 2 ;;
+  esac
+}
+
 # Fetch a URL into a target file. Honors cache (returns immediately if present
 # and force=0). Set force=1 to bypass cache.
 fetch_to_cache() {
   # $1 = resource path under /api/v5/  (e.g. "FIC.json", "decks/X_Y.json", "FIC.json.sha256")
   # $2 = force (0 or 1)
   local resource="$1" force="${2:-0}"
+  safe_resource "$resource"
   local url="${BASE}/${resource}"
   local cache_file
   cache_file="$(cache_path_for "$resource")"
@@ -130,6 +151,7 @@ case "$cmd" in
   set)
     code="${1:-}"
     [ -z "$code" ] && { echo "usage: mtgjson.sh set <SETCODE>" >&2; exit 1; }
+    safe_set_code "$code"
     code_upper=$(printf '%s' "$code" | tr '[:lower:]' '[:upper:]')
     fetch_to_cache "${code_upper}.json" 0
     emit_cached "${code_upper}.json"
@@ -139,6 +161,7 @@ case "$cmd" in
     [ -z "$name" ] && { echo "usage: mtgjson.sh deck <FILENAME>  (no .json suffix; e.g. CounterBlitz_FIC)" >&2; exit 1; }
     # Strip .json if user passed it.
     name="${name%.json}"
+    safe_deck_name "$name"
     fetch_to_cache "decks/${name}.json" 0
     emit_cached "decks/${name}.json"
     ;;
@@ -159,6 +182,7 @@ case "$cmd" in
     # [{name, category, subtype, cardCount, decks:[fileName-ish {name,set}], other:[...]}]
     code="${1:-}"
     [ -z "$code" ] && { echo "usage: mtgjson.sh sealed <SETCODE> [name-substring]" >&2; exit 1; }
+    safe_set_code "$code"
     substr="${2:-}"
     code_upper=$(printf '%s' "$code" | tr '[:lower:]' '[:upper:]')
     fetch_to_cache "${code_upper}.json" 0
@@ -202,6 +226,7 @@ sys.stdout.write("\n")
   check-stale)
     resource="${1:-}"
     [ -z "$resource" ] && { echo "usage: mtgjson.sh check-stale <RESOURCE_PATH>" >&2; exit 1; }
+    safe_resource "$resource"
     cache_file="$(cache_path_for "$resource")"
     if [ ! -s "$cache_file" ]; then
       echo "absent"
@@ -220,6 +245,7 @@ sys.stdout.write("\n")
   refresh)
     resource="${1:-}"
     [ -z "$resource" ] && { echo "usage: mtgjson.sh refresh <RESOURCE_PATH>" >&2; exit 1; }
+    safe_resource "$resource"
     cache_file="$(cache_path_for "$resource")"
     rm -f "$cache_file" "${cache_file}.sha256" "$(cache_path_for "${resource}.sha256")"
     echo "removed: $cache_file"
@@ -228,6 +254,7 @@ sys.stdout.write("\n")
     # Diagnostic helper — print where a resource would be cached.
     resource="${1:-}"
     [ -z "$resource" ] && { echo "usage: mtgjson.sh cache-path <RESOURCE_PATH>" >&2; exit 1; }
+    safe_resource "$resource"
     cache_path_for "$resource"
     ;;
   *)

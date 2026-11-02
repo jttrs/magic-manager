@@ -3,14 +3,19 @@
 # CI builds this image on every PR so Linux portability stays honest.
 # macOS-only features (tab reading, AppleScript store reads) stay off here.
 
-FROM node:22-bookworm-slim AS web
+# Base images are pinned by digest (multi-arch index); bump deliberately:
+#   docker buildx imagetools inspect <tag>  → the Digest line.
+# node:22-bookworm-slim
+FROM node:22-bookworm-slim@sha256:4b150b48b4116e2a22f2c39cc27025fbf4f153e2078fd3b14d159fdb5c7279da AS web
 WORKDIR /app/web
 COPY web/package.json web/package-lock.json ./
-RUN npm ci
+# No package install hooks run (supply chain, §25.4 step 10); the build needs none.
+RUN npm ci --ignore-scripts
 COPY web/ ./
 RUN npm run build
 
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+# ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim@sha256:e5b65587bce7de595f299855d7385fe7fca39b8a74baa261ba1b7147afa78e58
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl ca-certificates util-linux \
     && rm -rf /var/lib/apt/lists/*

@@ -574,13 +574,14 @@ def test_installer_dry_run_writes_nothing(tmp_path):
     (["--data", str(ROOT / "data")], "outside the app checkout"),
     (["--kit", "relative/kit"], "absolute"),
     (["--logs", "/x/$(id)"], "unsupported character"),
+    (["--trusted-proxy", "nginx"], "--trusted-proxy"),
 ])
 def test_installer_refuses_bad_settings(tmp_path, args, err):
     r = _install(tmp_path, *args)
     assert r.returncode == 2 and err in r.stderr
 
 
-@pytest.mark.skipif(sys.platform != "darwin", reason="--apply is macOS-only")
+@pytest.mark.skipif(sys.platform != "darwin" or not shutil.which("gpg"), reason="--apply is macOS-only and needs gpg")
 def test_installer_apply_is_private_idempotent_and_never_touches_other_agents(tmp_path):
     kit = tmp_path / "kit dir"
     (kit / "bin").mkdir(parents=True)
@@ -588,8 +589,13 @@ def test_installer_apply_is_private_idempotent_and_never_touches_other_agents(tm
     fake.write_text(f"#!/bin/sh\necho {offsite.LITESTREAM_VERSION}\n")
     fake.chmod(0o755)
     env = {"MM_INSTALL_NO_LAUNCHCTL": "1"}
-    r = _install(tmp_path, "--apply", "--owner-id", UID, env=env)
+    r = _install(tmp_path, "--apply", "--owner-id", UID, "--trusted-proxy", "tailscale", env=env)
     assert r.returncode == 0, r.stdout + r.stderr
+    keyring = kit / "gnupg"
+    assert stat.S_IMODE(keyring.stat().st_mode) == 0o700
+    fprs = subprocess.run(["gpg", "--batch", "--with-colons", "--fingerprint"], capture_output=True, text=True,
+                          env={**os.environ, "GNUPGHOME": str(keyring)}).stdout
+    assert "fpr:::::::::968479A1AFF927E37D1A566BB5690EEEBB952194:" in fprs
     agents = sorted(p.name for p in (tmp_path / "agents").iterdir())
     assert agents == [f"com.magic-manager.hosted.{s}.plist" for s in ("catalog-backup", "deploy", "litestream", "serve")]
     for p in (tmp_path / "agents").iterdir():
@@ -599,10 +605,11 @@ def test_installer_apply_is_private_idempotent_and_never_touches_other_agents(tm
     henv = (kit / "hosted.env").read_text()
     assert stat.S_IMODE((kit / "hosted.env").stat().st_mode) == 0o600
     assert f"MM_OWNER_ID={UID}" in henv
+    assert "MM_TRUSTED_PROXY=tailscale" in henv
     assert not any(k in henv for k in ("MM_OAUTH", "MM_OFFSITE", "ACCESS_KEY", "MANAPOOL", "MM_ANALYTICS_SECRET"))
     assert stat.S_IMODE((tmp_path / "data").stat().st_mode) == 0o700 and not any((tmp_path / "data").iterdir())
     assert stat.S_IMODE((kit / "deploy.sh").stat().st_mode) == 0o700
-    again = _install(tmp_path, "--apply", "--owner-id", UID, env=env)
+    again = _install(tmp_path, "--apply", "--owner-id", UID, "--trusted-proxy", "tailscale", env=env)
     assert again.returncode == 0 and "(new)" not in again.stdout and "(changed)" not in again.stdout
     assert not (kit / ".install-stage").exists()
 

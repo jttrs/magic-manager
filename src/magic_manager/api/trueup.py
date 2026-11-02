@@ -116,6 +116,7 @@ SCAN = register(JobSpec(
     description="Match your loose cards to the products they came from (read-only).",
     input_model=ScanInput,
     run=_run_scan,
+    scope="user",
 ))
 
 APPLY = register(JobSpec(
@@ -125,4 +126,5 @@ APPLY = register(JobSpec(
     input_model=ApplyInput,
     run=_run_apply,
     mutates=True,
+    scope="user",
 ))

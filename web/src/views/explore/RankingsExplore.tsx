@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useJobAllowed } from '../../app/jobAccess';
 import { rankingOptionsQuery, rankingQuery } from '../../app/queries';
 import { useJob } from '../../app/useJob';
 import { useSelection } from '../../app/selection';
@@ -25,6 +26,7 @@ import { EdhrecHealth } from '../../components/EdhrecHealth';
 import type { RankedOut, RankingOut } from '../../core/api';
 import { fmtInt, fmtUsd } from '../../core/format';
 import { exportLines, type GuideCard } from '../../core/guideCard';
+import { RANKING_UNREAD_NOTE } from '../../core/jobs';
 import {
   edhrecUrl, emptyRankingNote, failureText, fetchedAgo, filtersApply, FIRST_PAGE, fmtMetric, metricLabel, nextPage, OWN_LABEL, partialRankingNote, rankedCard, rankedTypes,
   rankingPage, rankingRequest, rankingSummary, roleFor, SCOPE_LABEL, TIMEFRAME_LABEL, timeframeApplies,
@@ -58,6 +60,8 @@ export function RankingsExplore({ search, set, subnav }: Props) {
 
   // A ranking never read is fetched once per visit; Refresh re-reads it.
   const { live: jobLive, start, reset } = useJob();
+  // Hosted members can't fetch (a catalog-wide job): they read what an admin fetched.
+  const fetchOk = useJobAllowed('edhrec.rankings');
   const [startedKey, setStartedKey] = useState<string | null>(null);
   // Mirrors startedKey synchronously so a double-run effect can't submit twice.
   const startedRef = useRef<string | null>(null);
@@ -70,8 +74,8 @@ export function RankingsExplore({ search, set, subnav }: Props) {
   const data = ranking.isPlaceholderData ? undefined : ranking.data;
   useEffect(() => {
     // Wait for a fresh read: a stale "never read" answer may already be outdated.
-    if (data && !data.cached && !ranking.isFetching && startedRef.current !== reqKey) fetchRanking(false);
-  }, [data, ranking.isFetching, reqKey, fetchRanking]);
+    if (fetchOk && data && !data.cached && !ranking.isFetching && startedRef.current !== reqKey) fetchRanking(false);
+  }, [fetchOk, data, ranking.isFetching, reqKey, fetchRanking]);
   const live = startedKey === reqKey ? jobLive : null;
   const running = Boolean(live && live.status !== 'succeeded' && live.status !== 'failed');
   useEffect(() => {
@@ -154,6 +158,8 @@ export function RankingsExplore({ search, set, subnav }: Props) {
     body = <GridSkeleton label="Reading the ranking…" />;
   } else if (ranking.isError) {
     body = <ErrorNote error={ranking.error} onRetry={() => ranking.refetch()} />;
+  } else if (data && !data.cached && !fetchOk) {
+    body = <EmptyNote title="Not fetched yet">{RANKING_UNREAD_NOTE}</EmptyNote>;
   } else if (data && !data.cached) {
     body = live?.status === 'failed' ? (
       <ErrorNote error={new Error(`Couldn’t read this ranking. ${failureText(live.error)}`)} onRetry={() => fetchRanking(false)} />
@@ -192,7 +198,7 @@ export function RankingsExplore({ search, set, subnav }: Props) {
         actions={
           r && (
             <>
-              <IconAction label={running ? 'Refreshing…' : 'Refresh'} Icon={RereadMark} disabled={running} disabledReason="Refreshing…" onClick={() => fetchRanking(true)} />
+              {fetchOk && <IconAction label={running ? 'Refreshing…' : 'Refresh'} Icon={RereadMark} disabled={running} disabledReason="Refreshing…" onClick={() => fetchRanking(true)} />}
               <IconTooltip label="Open results in EDHREC">
                 <a href={edhrecUrl(r)} target="_blank" rel="noreferrer" aria-label="Open results in EDHREC (opens in a new tab)" className={iconActionClass('paper')}>
                   <EdhrecMark className="size-4" />

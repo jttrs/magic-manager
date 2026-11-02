@@ -12,7 +12,8 @@ The gate (deny by default):
 * A write with a session needs ``X-CSRF-Token`` == the session's token (from
   ``GET /api/auth/me``; constant-time compare) → else 403 ``auth.csrf``; writes are
   limited per session → 429 ``auth.rate_limited``.
-* Sign-in start + callback are limited per client IP; their failures redirect to
+* Sign-in start + callback are limited per client IP (the real client behind a proxy
+  only when ``MM_TRUSTED_PROXY`` names it — :func:`security.client_ip`); their failures redirect to
   ``/?auth_error=<code>`` for the sign-in screen.
 
 Refusals use the app's error body ``{detail, code, request_id}``.
@@ -33,7 +34,7 @@ from .. import analytics, auth, db, userfiles
 from .. import layout as _layout
 from ..api import auth as auth_api
 from ..auth import oauth, ratelimit, store
-from . import account_routes, admin_routes
+from . import account_routes, admin_routes, security
 
 log = logging.getLogger("magic_manager.web.auth")
 
@@ -83,7 +84,9 @@ def allowed(session: store.Session | None) -> store.Session | None:
 
 
 def _client_ip(request: Request) -> str:
-    return request.client.host if request.client else "unknown"
+    # The real client behind Tailscale Serve / Cloudflare Tunnel, only when
+    # MM_TRUSTED_PROXY names that proxy (security.client_ip).
+    return security.client_ip(request)
 
 
 def _set_cookie(resp: Response, name: str, value: str, max_age: int) -> None:
@@ -221,6 +224,7 @@ def install(app: FastAPI) -> None:
     if not auth.hosted():
         return
     app.state.public_origin = auth.check_hosted()
+    security.trusted_proxy()  # a misspelt MM_TRUSTED_PROXY refuses to start (never silently trusts nothing)
     app.include_router(router)
     app.include_router(admin_routes.router)
     app.include_router(account_routes.delete_router)

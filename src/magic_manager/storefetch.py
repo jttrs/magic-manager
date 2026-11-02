@@ -22,7 +22,7 @@ import threading
 import time
 from pathlib import Path
 from typing import Callable
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, urljoin, urlsplit
 
 import httpx
 
@@ -49,6 +49,28 @@ class TabGone(RuntimeError):
     """The tab was closed (or navigated away) before it could be read."""
 
 
+MAX_REDIRECTS = 5
+
+
+class OffStoreRedirect(storepage.Blocked):
+    """The store redirected the read off its own https site (or too many times): not followed."""
+
+    error_code = "store.redirect_refused"
+
+
+def _same_store(start: str, target: str) -> bool:
+    """``target`` is https on the SAME catalogued store as ``start`` (any of its hosts);
+    an uncatalogued start may only redirect within its own host."""
+    a, b = urlsplit(start), urlsplit(target)
+    if b.scheme != "https" or not b.hostname or b.username or b.password:
+        return False
+    va = vendors.classify(a.hostname or "", a.path).vendor
+    vb = vendors.classify(b.hostname, b.path).vendor
+    if va is not None:
+        return vb is not None and vb.key == va.key
+    return (a.hostname or "").lower() == b.hostname.lower()
+
+
 def _cache_dir() -> Path:
     d = Path(os.environ.get("MM_VENDOR_CACHE") or Path(tempfile.gettempdir()) / "mm-vendor-cache")
     d.mkdir(parents=True, exist_ok=True)
@@ -68,12 +90,26 @@ def _get(url: str, *, fresh: bool = False, client: httpx.Client | None = None) -
     if not fresh and key.exists() and time.time() - key.stat().st_mtime < CACHE_SECONDS:
         status, _, body = key.read_text().partition("\n")
         return int(status), body
-    _pace(urlsplit(url).hostname or "")
-    try:
-        r = (client or httpx).get(url, headers={"User-Agent": USER_AGENT, "Accept-Language": "en-US,en;q=0.9"},
-                                  timeout=20, follow_redirects=True)
-    except httpx.TimeoutException as e:
-        raise storepage.Blocked("the store didn’t answer (timed out) — it may block automated reads") from e
+    # Redirects are followed by hand: every hop must stay on this store, over https.
+    target = url
+    for _hop in range(MAX_REDIRECTS + 1):
+        _pace(urlsplit(target).hostname or "")
+        try:
+            r = (client or httpx).get(target, headers={"User-Agent": USER_AGENT, "Accept-Language": "en-US,en;q=0.9"},
+                                      timeout=20, follow_redirects=False)
+        except httpx.TimeoutException as e:
+            raise storepage.Blocked("the store didn’t answer (timed out) — it may block automated reads") from e
+        if not (300 <= r.status_code < 400 and r.status_code != 304):
+            break
+        location = r.headers.get("location")
+        if not location:
+            break
+        nxt = urljoin(target, location)
+        if not _same_store(url, nxt):
+            raise OffStoreRedirect("the store sent this read to another site — not followed")
+        target = nxt
+    else:
+        raise OffStoreRedirect("the store redirected too many times — not followed")
     if r.status_code in (200, 404):
         key.write_text(f"{r.status_code}\n{r.text}")
     return r.status_code, r.text

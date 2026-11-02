@@ -62,6 +62,11 @@ Useful flags:
 
 ## Wrapper: `.claude/skills/mtgjson-search/mtgjson.sh`
 
+Bad names are refused with exit 2 and the reason on stderr (the Python client checks first —
+`mtgjson.valid_set_code` / `valid_deck_name`): a set code is 2–8 letters/digits; a deck name is a
+bare fileName (no `/`, `.` other than the `.json` suffix, whitespace or leading `-`); a resource path
+is relative with no `..`.
+
 Subcommands:
 - `meta` — Meta.json (build date + version).
 - `set <SETCODE>` — `<SETCODE>.json` (case-insensitive).

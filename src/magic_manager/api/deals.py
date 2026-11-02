@@ -125,6 +125,7 @@ READ_PRICES = register(JobSpec(
     input_model=ReadPricesInput,
     run=_run_read_prices,
     mutates=True,
+    scope="user",
 ))
 
 
@@ -296,4 +297,5 @@ WATCHLIST = register(JobSpec(
     input_model=WatchlistInput,
     run=_run_watchlist,
     mutates=True,
+    scope="user",
 ))
