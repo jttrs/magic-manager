@@ -69,6 +69,9 @@ class JobCancelled(RuntimeError):
     error_code = "jobs.cancelled"
 
 
+_NEVER_STARTED = "Stopped before it started: this account was turned off."
+
+
 def _user_allowed(user: str | None) -> bool:
     """Is the job's user still enabled (hosted)? Unbound/local jobs: yes."""
     if user is None or analytics_consent.mode() != "hosted":
@@ -148,6 +151,7 @@ class JobManager:
         self._user_locks_guard = threading.Lock()
         self._closing: set[str | None] = set()   # users whose account is being deleted
         self._events_lock = threading.Lock()  # orders event seqs across threads
+        self._state_lock = threading.Lock()   # queued → running vs. cancel_user ending a queued job
         self._max_history = max_history
         self._loop: asyncio.AbstractEventLoop | None = None
 
@@ -190,13 +194,23 @@ class JobManager:
 
     def cancel_user(self, user: str) -> int:
         """Disabling or deleting ``user``: every queued or running job of theirs
-        stops (queued ones never start; running ones at their next progress
-        tick). Returns how many were marked."""
+        stops. A queued one ends now (failed, ``jobs.cancelled``) — it never
+        starts, and it doesn't wait behind another user's job holding the run
+        lock; a running one stops at its next progress tick. Returns how many."""
         n = 0
         for r in list(self._jobs.values()):
-            if r.user == user and r.status in ("queued", "running") and not r.cancelled:
+            if r.user != user or r.status not in ("queued", "running") or r.cancelled:
+                continue
+            with self._state_lock:
                 r.cancelled = True
-                n += 1
+                ended = r.status == "queued"
+                if ended:
+                    r.status, r.finished_at = "failed", _now()
+                    r.error, r.error_code = _NEVER_STARTED, JobCancelled.error_code
+            if ended:
+                self._emit(r, "error", {"error": r.error, "code": r.error_code, "trace": None})
+                self._emit(r, "status", {"status": r.status})
+            n += 1
         if n:
             log.info("cancelling %d job(s) of user %s", n, user)
         return n
@@ -285,6 +299,8 @@ class JobManager:
 
     async def _execute(self, job_id: str) -> None:
         rec = self._jobs[job_id]
+        if rec.status in TERMINAL:  # cancelled while queued (cancel_user ended it)
+            return
         spec = jobs_api.get(rec.name)
         inputs = spec.input_model.model_validate(rec.inputs)
 
@@ -311,9 +327,12 @@ class JobManager:
                 # user disabled or deleted while this job waited never gets to write.
                 if rec.cancelled or not _user_allowed(rec.user):
                     rec.cancelled = True
-                    raise JobCancelled("Stopped before it started: this account was turned off.")
+                    raise JobCancelled(_NEVER_STARTED)
                 jobs_api.require_allowed(spec)  # a catalog job's scope, re-checked as the worker
-                rec.status, rec.started_at = "running", _now()
+                with self._state_lock:
+                    if rec.cancelled:  # cancel_user got here first
+                        raise JobCancelled(_NEVER_STARTED)
+                    rec.status, rec.started_at = "running", _now()
                 self._emit(rec, "status", {"status": rec.status})
                 return spec.run(inputs, progress)
 
@@ -321,6 +340,8 @@ class JobManager:
         try:
             result = await asyncio.to_thread(body)
         except Exception as e:  # noqa: BLE001 — surface any job failure to the client
+            if rec.status in TERMINAL:  # cancel_user already ended it (and told subscribers)
+                return
             rec.status, rec.finished_at = "failed", _now()
             log.exception("job %s (%s) failed", rec.id, rec.name)
             coded = getattr(type(e), "error_code", None)  # e.g. owner_machine.OwnerOnly: a plain, safe message

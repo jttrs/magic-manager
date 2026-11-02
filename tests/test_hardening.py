@@ -582,3 +582,97 @@ def test_a_members_reads_neither_flag_nor_clear_a_scraper(member, health_file):
     with layout.as_user(b):
         scraper_health.record_use(key, "ok")                            # a member can't hide it either
     assert json.loads(health_file.read_text())["scrapers"][key]["status"] == "down"
+
+
+def test_a_cancelled_queued_job_ends_at_once_and_never_blocks_a_delete():
+    """It must not wait behind another user's job holding the run lock to stop counting."""
+    m = JobManager()
+    m._jobs["q"] = JobRecord(id="q", name="x", title="X", inputs={}, status="queued", user="u")
+    m._jobs["other"] = JobRecord(id="other", name="x", title="X", inputs={}, status="running", user="v")
+    assert m.cancel_user("u") == 1
+    q = m._jobs["q"]
+    assert q.status == "failed" and q.error_code == "jobs.cancelled" and q.finished_at
+    assert [e.type for e in q.events] == ["error", "status"]
+    assert m.wait_idle("u", 0.05) is True
+    with m.closing_user("u"):
+        pass
+    asyncio.run(m._execute("q"))  # the broker's later run is a no-op
+    assert [e.type for e in q.events] == ["error", "status"]
+
+
+def _git(repo: Path, *args: str, env: dict | None = None) -> str:
+    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=True,
+                          env={**__import__("os").environ, **(env or {})}).stdout.strip()
+
+
+@pytest.mark.skipif(not __import__("shutil").which("gpg"), reason="needs gpg")
+def test_verify_main_deploys_only_signed_single_parent_descendants(tmp_path):
+    import os
+    kit = tmp_path / "k"
+    gh = kit / "gnupg"
+    gh.mkdir(parents=True, mode=0o700)
+    genv = {"GNUPGHOME": str(gh)}
+    made = subprocess.run(["gpg", "--batch", "--passphrase", "", "--quick-gen-key", "Web Flow <wf@example.com>",
+                           "ed25519", "sign", "never"], capture_output=True, text=True, env={**os.environ, **genv})
+    if made.returncode != 0:
+        pytest.skip(f"gpg can't make a key here: {made.stderr[-200:]}")
+    fpr = next(line.split(":")[9] for line in subprocess.run(
+        ["gpg", "--batch", "--with-colons", "--fingerprint"], capture_output=True, text=True,
+        env={**os.environ, **genv}).stdout.splitlines() if line.startswith("fpr:"))
+    repo = tmp_path / "r"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    ident = ["-c", "user.name=t", "-c", "user.email=t@example.com", "-c", f"user.signingkey={fpr}"]
+
+    def commit(msg: str, *, sign: bool = True) -> str:
+        (repo / "f").write_text(msg)
+        _git(repo, "add", "f")
+        _git(repo, *ident, "commit", "-q", *(["-S"] if sign else ["--no-gpg-sign"]), "-m", msg, env=genv)
+        return _git(repo, "rev-parse", "HEAD")
+
+    base = commit("base")
+    good = commit("good")
+    common = (ROOT / "deploy" / "macos" / "bin" / "common.sh").read_text()
+    fn = common[common.index("MM_WEBFLOW_FPR="):common.index("\n}\n", common.index("verify_main()")) + 3]
+
+    def verify(cur: str, new: str, *, keyring: bool = True) -> int:
+        script = f'{fn}\nMM_WEBFLOW_FPR={fpr}\nMM_KIT="{kit if keyring else tmp_path / "nokit"}"\ncd "{repo}"\nverify_main {cur} {new}'
+        return subprocess.run(["bash", "-c", script], capture_output=True, text=True).returncode
+
+    assert verify(base, good) == 0
+    assert verify(base, good, keyring=False) == 1                       # no keyring: hold
+    unsigned = commit("unsigned", sign=False)
+    after = commit("signed on top")
+    assert verify(good, after) == 1                                     # an unsigned commit in range
+    _git(repo, "reset", "-q", "--hard", good)
+    _git(repo, "checkout", "-q", "-b", "side")
+    side = commit("side")
+    _git(repo, "checkout", "-q", "main")
+    _git(repo, *ident, "merge", "-q", "-S", "--no-ff", "-m", "merge", side, env=genv)
+    assert verify(good, _git(repo, "rev-parse", "HEAD")) == 1           # a merge commit
+    assert verify(good, base) == 1                                      # main rewritten / not a descendant
+    assert unsigned
+
+
+def test_product_cost_charges_the_live_limit_only_on_a_memo_miss(member, monkeypatch):
+    c, data, (a, ta), (b, tb) = member
+    from magic_manager import market
+    monkeypatch.setattr(security, "live_limiter", ratelimit.Limiter(1))
+    valued = []
+    monkeypatch.setattr(market, "_sealed_cost", lambda s, n: valued.append(n) or {"never": "validated"})
+    monkeypatch.setattr(market, "_inventory_fingerprint", lambda: (0,))
+    market._cost_memo.clear()
+    _as(c, tb)
+    got = [c.get("/api/market/product-cost", params={"kind": "sealed", "set": "fin", "name": n}).status_code
+           for n in ("A", "A", "A", "B")]
+    assert got[3] == 429 and valued == ["A"]                            # repeats of A were memo hits: free
+    assert got[0] == got[1] == got[2] != 429
+
+
+def test_ingest_search_and_resolve_are_live_limited(member, monkeypatch):
+    c, data, (a, ta), (b, tb) = member
+    monkeypatch.setattr(security, "live_limiter", ratelimit.Limiter(1))
+    h = _as(c, tb)
+    assert c.get("/api/ingest/search", params={"q": "zzzz"}).status_code != 429
+    assert c.get("/api/ingest/search", params={"q": "zzzz"}).status_code == 429
+    assert c.post("/api/ingest/resolve", json={"text": "1 Nothing"}, headers=h).status_code == 429

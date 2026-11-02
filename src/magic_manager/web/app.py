@@ -510,11 +510,13 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         except (mtgjson.MtgJsonError, scryfall.ScryfallError) as e:
             raise HTTPException(502, f"Couldn't read this product: {e}") from e
 
-    @app.get("/api/market/product-cost", response_model=market_api.ProductCostOut, tags=["market"], dependencies=[_live])
-    def market_product_cost(kind: Annotated[Literal["sealed", "sld"], Query()], set: Annotated[SetCode, Query()],
+    @app.get("/api/market/product-cost", response_model=market_api.ProductCostOut, tags=["market"])
+    def market_product_cost(request: Request, kind: Annotated[Literal["sealed", "sld"], Query()], set: Annotated[SetCode, Query()],
                             name: Annotated[str, Query(min_length=1)], finish: Annotated[str | None, Query()] = None):
+        # Lists ask for one product per row: only a product valued afresh (not the
+        # 30-min memo) counts against the live-read limit.
         try:
-            return market_api.product_cost(kind, set, name, finish)
+            return market_api.product_cost(kind, set, name, finish, on_miss=lambda: security.live_fetch(request))
         except LookupError as e:
             raise HTTPException(404, str(e)) from e
         except (mtgjson.MtgJsonError, scryfall.ScryfallError) as e:
@@ -831,11 +833,11 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
 
     # ---------- add cards (ingest) ----------
 
-    @app.get("/api/ingest/search", response_model=ingest_api.SearchOut, tags=["ingest"])
+    @app.get("/api/ingest/search", response_model=ingest_api.SearchOut, tags=["ingest"], dependencies=[_live])
     def ingest_search(q: Annotated[str, Query(min_length=2, max_length=120)], limit: Annotated[int, Query(ge=1, le=200)] = 60):
         return ingest_api.search(q, limit)
 
-    @app.post("/api/ingest/resolve", response_model=ingest_api.ResolveOut, tags=["ingest"])
+    @app.post("/api/ingest/resolve", response_model=ingest_api.ResolveOut, tags=["ingest"], dependencies=[_live])
     def ingest_resolve(body: ingest_api.ResolveIn):
         return ingest_api.resolve(body)
 

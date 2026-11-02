@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import asdict
 
-from typing import Literal
+from typing import Callable, Literal
 
 from pydantic import BaseModel, Field
 
@@ -148,8 +148,9 @@ class ProductCostOut(BaseModel):
     lines: list[DeckLineOut] = Field(default_factory=list, description="Every known card (exact + cheapest printing, your free copies).")
 
 
-def product_cost(kind: str, set_code: str, name: str, finish: str | None = None) -> ProductCostOut:
-    return ProductCostOut(**market.product_cost(kind, set_code, name, finish))
+def product_cost(kind: str, set_code: str, name: str, finish: str | None = None, *,
+                 on_miss: Callable[[], None] | None = None) -> ProductCostOut:
+    return ProductCostOut(**market.product_cost(kind, set_code, name, finish, on_miss=on_miss))
 
 
 def family_products(code: str) -> FamilyProductsOut:

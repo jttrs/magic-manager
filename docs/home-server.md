@@ -240,6 +240,14 @@ a commit by hand:
 ```sh
 GNUPGHOME="$HOME/Library/Application Support/magic-manager-hosted/gnupg" git -C ~/magic-manager/app verify-commit --raw origin/main 2>&1 | grep VALIDSIG
 ```
+**Clearing a hold.** A held commit stays in every later `cur..new` range, so deploys keep holding
+until the running checkout moves past it. Look at it first (`git -C ~/magic-manager/app log --show-signature -3 origin/main`);
+if it is wrong, fix `main` through a PR (a revert is itself a signed squash-merge — but the bad
+commit stays in the range, so the next step is still needed). Once you have checked the commits by
+hand: `mmctl stop deploy`, `git -C ~/magic-manager/app checkout --detach <the newest commit you checked>`,
+`rm "$HOME/Library/Application Support/magic-manager-hosted"/hold-*`, `mmctl start deploy` — the
+next run verifies only what comes after it (a database upgrade still goes through `upgrade.sh`).
+
 If GitHub ever rotates the key (it did in January 2024), deploys hold with "isn't signed by GitHub":
 download the new key from <https://github.com/web-flow.gpg>, check its fingerprint against
 GitHub's announcement, update `web-flow.gpg` + `MM_WEBFLOW_FPR` in a PR, and re-run
