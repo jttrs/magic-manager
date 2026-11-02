@@ -66,7 +66,7 @@ prepare)
   ;;
 install-data)
   kit
-  [ -f "$MM_DATA_DIR/catalog.db" ] && [ -f "$MM_DATA_DIR/users/owner.db" ] \
+  { [ -f "$MM_DATA_DIR/catalog.db" ] && [ -f "$MM_DATA_DIR/users/owner.db" ]; } \
     || die "copy the split first: $MM_DATA_DIR needs catalog.db + users/owner.db"
   [ -e "$MM_DATA_DIR/auth.db" ] && die "$MM_DATA_DIR/auth.db exists — install-data already ran; next: finish --user <id>"
   "$KIT/mm-hosted" host deploy-check --ref HEAD --repo "$MM_APP" \

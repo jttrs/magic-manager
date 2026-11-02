@@ -52,6 +52,8 @@ There is a pytest suite under `tests/` (`uv run pytest`); fixtures use the
 
 There is a pytest suite (`uv run pytest`, dev-dep in `pyproject.toml`); no linter config and no build step beyond `uv_build`. `uv sync` installs deps.
 
+**CI runs the heavy gates on every PR** (`.github/workflows/ci.yml`, ubuntu; the jobs `pytest` (full suite, `-n auto` via pytest-xdist), `web-check` (`npm --prefix web run check`), `e2e` (Playwright, report artifact on failure) and `extension` (`build_extension.py --check`) are required checks on `main`). Locally, run targeted tests while building (`uv run pytest tests/test_<area>.py`, `npm --prefix web run check` when web changed) — not the full suites. Tests must stay offline and Linux-portable; a macOS-only test (osascript, launchd, real Chrome, Keychain) skips off darwin with a reason.
+
 ## Architecture (the parts that need cross-file reading)
 
 ### Selector grammar — the central abstraction

@@ -67,7 +67,7 @@ done
 [ -n "$ORIGIN" ] || die "--origin is required (MM_PUBLIC_ORIGIN, e.g. https://<mini>.<tailnet>.ts.net)"
 [[ "$ORIGIN" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?$ || "$ORIGIN" =~ ^http://(localhost|127\.0\.0\.1)(:[0-9]+)?$ ]] \
   || die "--origin must be https://<host>[:port] (http only for localhost)"
-[[ "$PORT" =~ ^[0-9]{2,5}$ ]] && [ "$PORT" -ge 1024 ] && [ "$PORT" -le 65535 ] || die "--port must be 1024-65535"
+{ [[ "$PORT" =~ ^[0-9]{2,5}$ ]] && [ "$PORT" -ge 1024 ] && [ "$PORT" -le 65535 ]; } || die "--port must be 1024-65535"
 [ -z "$OWNER_ID" ] || [[ "$OWNER_ID" =~ ^[a-z0-9]{16}$ ]] || die "--owner-id must be a 16-character user id"
 [ -d "$APP/.git" ] || [ -f "$APP/.git" ] || die "$APP isn't a git checkout of the app"
 [ -f "$APP/src/magic_manager/offsite.py" ] || die "$APP isn't the magic-manager app"
