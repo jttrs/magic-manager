@@ -4,15 +4,20 @@
 import type { Page } from '@playwright/test';
 import { COLLECTION_URL, expect, test } from './support';
 
+// A fixed local noon, so "3 hours ago" is always today (a real clock fails before 3am).
+const NOW = new Date('2026-09-12T12:00:00');
+
 const row = (key: string, label: string, site_name: string, over: Record<string, unknown> = {}) => ({
   key, scraper: key.split('/')[0], site: key.split('/')[1], site_name, label, where: '', canary: 'http',
-  status: 'down', since: new Date(Date.now() - 3 * 3600_000).toISOString(), checked_at: null, last_ok: null,
+  status: 'down', since: new Date(NOW.getTime() - 3 * 3600_000).toISOString(), checked_at: null, last_ok: null,
   code: 'scrape.no_cards', message: 'The deck page returned no cards — its format changed.', fix: 'Fix the parser.', via: 'canary', ...over,
 });
 
 async function health(page: Page, rows: unknown[]) {
   await page.route('**/api/scrapers/health', (r) => r.fulfill({ json: { scrapers: rows, down: rows.length } }));
 }
+
+test.beforeEach(async ({ page }) => { await page.clock.setFixedTime(NOW); });
 
 test('deck import: the notice follows the pasted link’s builder and never blocks', async ({ page }) => {
   await health(page, [row('deck-import/archidekt', 'Archidekt deck import', 'Archidekt')]);

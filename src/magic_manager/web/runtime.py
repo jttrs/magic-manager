@@ -254,18 +254,24 @@ class JobManager:
                 trace = traceback.format_exc(limit=5)
             rec.error_code = coded if isinstance(coded, str) else analytics_catalog.to_code(type(e).__name__)
             self._emit(rec, "error", {"error": rec.error, "code": rec.error_code, "trace": trace})
-            self._emit(rec, "status", {"status": rec.status})
-            await asyncio.to_thread(analytics.record, "job.failed", {
-                "job": rec.name, "code": rec.error_code, "job_id": rec.id,
-                "duration_ms": int((time.monotonic() - t0) * 1000)}, ctx=rec.ctx)
+            # Recorded before the terminal status: that event ends every SSE stream, so a client
+            # that has seen the job finish can rely on its job.* record being there.
+            try:
+                await asyncio.to_thread(analytics.record, "job.failed", {
+                    "job": rec.name, "code": rec.error_code, "job_id": rec.id,
+                    "duration_ms": int((time.monotonic() - t0) * 1000)}, ctx=rec.ctx)
+            finally:
+                self._emit(rec, "status", {"status": rec.status})
             return
         rec.status, rec.finished_at = "succeeded", _now()
         rec.summary = result.summary
         rec.artifacts = [asdict(a) for a in result.artifacts]
         self._emit(rec, "result", {"summary": rec.summary, "artifacts": rec.artifacts})
-        self._emit(rec, "status", {"status": rec.status})
-        await asyncio.to_thread(analytics.record, "job.succeeded", {
-            "job": rec.name, "job_id": rec.id, "duration_ms": int((time.monotonic() - t0) * 1000)}, ctx=rec.ctx)
+        try:
+            await asyncio.to_thread(analytics.record, "job.succeeded", {
+                "job": rec.name, "job_id": rec.id, "duration_ms": int((time.monotonic() - t0) * 1000)}, ctx=rec.ctx)
+        finally:
+            self._emit(rec, "status", {"status": rec.status})
 
     # ---------- fan-out ----------
 
