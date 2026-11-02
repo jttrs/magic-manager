@@ -62,6 +62,11 @@ INFRA_TABLES: frozenset[str] = frozenset({"schema_version", "sqlite_sequence"})
 # into the split layout.
 LEGACY_TABLES: frozenset[str] = frozenset({"lists", "list_rows"})
 
+# Bookkeeping Litestream creates in every file it replicates (hosted, §25.4 step 8):
+# a sequence counter and an always-empty lock table — never user data. Not part of
+# the code's schema; readers that list a file's tables skip them.
+LITESTREAM_TABLES: frozenset[str] = frozenset({"_litestream_seq", "_litestream_lock"})
+
 CATALOG_SCHEMA = "catalog"
 CATALOG_FILENAME = "catalog.db"
 USERS_SUBDIR = "users"

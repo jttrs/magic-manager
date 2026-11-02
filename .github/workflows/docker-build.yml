@@ -33,5 +33,8 @@ jobs:
           done
           curl -fsS http://localhost:8765/api/features
           curl -fsS http://localhost:8765/ | grep -qi '<div id="root"'
+          docker exec mm litestream version
+          docker exec mm uv run --frozen --no-dev python -c "import magic_manager.offsite, magic_manager.hostops, magic_manager.objectstore"
+          docker exec mm uv run --frozen --no-dev mm host litestream-config --data-dir /data --url file:///data/offsite --out - | grep -q 'pattern: "????????????????.db"'
       - if: failure()
         run: docker logs mm

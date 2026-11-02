@@ -2198,7 +2198,10 @@ def snapshot(*, label: str | None = None, dest: Path | None = None,
         suffix = f"-{label}" if label else ""
         dest = bdir / f"{src.name}.bak-{ts}{suffix}"
     dest.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(src, dest)
+    if is_wal(src):
+        backup_file(src, dest)  # a WAL file's latest commits may live only in its -wal
+    else:
+        shutil.copy2(src, dest)
     result = _check_integrity(dest)
     if result != "ok":
         try:
@@ -2280,6 +2283,17 @@ def backup_file(src: Path, dst: Path) -> None:
     finally:
         s.close()
         d.close()
+
+
+def is_wal(path: Path) -> bool:
+    """The file is in WAL mode (header bytes 18–19 = 2, the persistent marker
+    ``PRAGMA journal_mode=WAL`` writes) — read without opening a connection."""
+    try:
+        with open(path, "rb") as f:
+            head = f.read(20)
+    except OSError:
+        return False
+    return len(head) == 20 and head[:16] == b"SQLite format 3\x00" and head[18] == 2 and head[19] == 2
 
 
 def snapshot_size(path: Path) -> int:

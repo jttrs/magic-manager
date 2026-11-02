@@ -1,0 +1,6 @@
+#!/bin/bash
+# The app's CLI against the hosted data dir, e.g.:  mm-hosted auth users
+# shellcheck source=deploy/macos/bin/common.sh
+. "$(dirname "$0")/common.sh"
+cd "$MM_APP" || exit 1
+exec uv run --frozen mm "$@"

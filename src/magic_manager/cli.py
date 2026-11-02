@@ -107,7 +107,8 @@ def secret_status():
     """Where each personal secret comes from: environment, .env or not set (names only — values are never shown)."""
     from . import secrets as secrets_mod
     from . import auth
-    for name in (*secrets_mod.PERSONAL, *auth.SECRETS):
+    from . import offsite
+    for name in (*secrets_mod.PERSONAL, *auth.SECRETS, offsite.ENV_URL, offsite.ENV_KEY_ID, offsite.ENV_SECRET):
         typer.echo(f"{name}: {secrets_mod.source(name) or 'not set'}")
 
 
@@ -5979,6 +5980,255 @@ def collection_diff_cmd(
     if json_out:
         args.append("--json")
     _run_collection_sync(args)
+
+
+# ---------- home server (Phase 3 §25.4 step 8; deploy/macos/, docs/home-server.md) ----------
+
+host_app = typer.Typer(no_args_is_help=True,
+                       help="Home-server operations on the hosted (split) data dir: the deploy hold, WAL, "
+                            "permissions, Litestream replication, the weekly catalog backup, restore drills. "
+                            "Called by deploy/macos/ (docs/home-server.md).")
+app.add_typer(host_app, name="host")
+
+
+def _host_data_dir(data_dir: Path | None) -> Path:
+    if data_dir is not None:
+        return data_dir
+    if db.layout_kind() != "split":
+        typer.echo("error: pass --data-dir, or run with MM_LAYOUT=split MM_DATA_DIR=<dir>", err=True)
+        raise typer.Exit(2)
+    return db.data_dir()
+
+
+_DATA_DIR_OPT = typer.Option(None, "--data-dir", help="The hosted data dir (default: MM_DATA_DIR in the split layout).")
+
+
+@host_app.command("deploy-check")
+def host_deploy_check(
+    ref: str = typer.Option("origin/main", "--ref", help="The git ref about to be deployed."),
+    repo: Path = typer.Option(Path("."), "--repo", help="The app checkout (git) to read the ref from."),
+    data_dir: Path | None = _DATA_DIR_OPT,
+    as_json: bool = typer.Option(False, "--json", help="Print the decision as JSON."),
+):
+    """May auto-deploy roll out <ref>? Exit 0 = yes (every file is already at its schema
+    version); 3 = HOLD (the catalog or a user file would need a migration — upgrade with
+    deploy/macos/bin/upgrade.sh, which snapshots first); 2 = can't tell (treat as hold)."""
+    from . import hostops
+    d = _host_data_dir(data_dir)
+    try:
+        decision = hostops.hold_decision(hostops.code_version_at(ref, repo), hostops.data_versions(d))
+    except hostops.HostOpsError as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+    if as_json:
+        typer.echo(json.dumps({"hold": decision.hold, "message": decision.message, "code_version": decision.code_version,
+                               "versions": decision.versions, "behind": decision.behind, "ahead": decision.ahead}))
+    else:
+        typer.echo(decision.message)
+    raise typer.Exit(3 if decision.hold else 0)
+
+
+@host_app.command("wal")
+def host_wal(
+    data_dir: Path | None = _DATA_DIR_OPT,
+    apply: bool = typer.Option(False, "--apply", help="Turn WAL on (default: show what would change)."),
+):
+    """Put the catalog, auth.db and every user file in WAL mode (Litestream needs it).
+    Run with the server and Litestream stopped; WAL then sticks to the files."""
+    from . import hostops
+    try:
+        changes = hostops.set_wal(_host_data_dir(data_dir), apply=apply)
+    except hostops.HostOpsError as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+    for c in changes:
+        typer.echo(f"{c.path}: {c.before} → {c.after}")
+    if not apply and any(c.before != "wal" for c in changes):
+        typer.echo("dry run — pass --apply to change them")
+
+
+@host_app.command("permissions")
+def host_permissions(
+    data_dir: Path | None = _DATA_DIR_OPT,
+    apply: bool = typer.Option(False, "--apply", help="Fix them (default: show what would change)."),
+):
+    """Data dir 0700, its files 0600 (personal data and sign-in sessions)."""
+    from . import hostops
+    try:
+        changes = hostops.secure_permissions(_host_data_dir(data_dir), apply=apply)
+    except hostops.HostOpsError as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+    for c in changes:
+        typer.echo(f"{c.path}: {c.before} → {c.after}")
+    typer.echo(f"{len(changes)} change(s){'' if apply else ' — dry run, pass --apply'}" if changes else "ok: already private")
+
+
+@host_app.command("litestream-config")
+def host_litestream_config(
+    data_dir: Path | None = _DATA_DIR_OPT,
+    url: str | None = typer.Option(None, "--url", help="Offsite base URL (default MM_OFFSITE_URL)."),
+    out: Path | None = typer.Option(None, "--out", help="Write here (default <data dir>/litestream.yml); '-' prints it."),
+):
+    """Write Litestream's config for the data dir (no credentials in it)."""
+    from . import offsite
+    d = _host_data_dir(data_dir)
+    try:
+        if out is not None and str(out) == "-":
+            typer.echo(offsite.litestream_config(d, offsite.offsite_url(url)), nl=False)
+            return
+        typer.echo(str(offsite.write_config(d, offsite.offsite_url(url), out)))
+    except (offsite.OffsiteError, ValueError) as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+
+
+@host_app.command("replicate")
+def host_replicate(
+    data_dir: Path | None = _DATA_DIR_OPT,
+    exec_cmd: str | None = typer.Option(None, "--exec", help="Run this command under Litestream (it exits with it) — the container pattern."),
+):
+    """Run Litestream for the data dir: auth.db + every users/<id>.db, continuously, to
+    MM_OFFSITE_URL with the server's credentials (environment or .env, never in the config).
+    Replaces this process (launchd keeps it alive)."""
+    from . import offsite
+    try:
+        offsite.replicate(_host_data_dir(data_dir), exec_cmd=exec_cmd)
+    except (offsite.OffsiteError, ValueError) as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+
+
+@host_app.command("catalog-backup")
+def host_catalog_backup(
+    data_dir: Path | None = _DATA_DIR_OPT,
+    keep: int = typer.Option(2, "--keep", min=1, help="Snapshots to keep offsite."),
+    as_json: bool = typer.Option(False, "--json", help="Print the result as JSON."),
+):
+    """Weekly: VACUUM INTO a copy of catalog.db, gzip it, upload it to MM_OFFSITE_URL/catalog/,
+    keep the newest --keep. Safe while the server runs."""
+    from . import objectstore, offsite
+    say = None if as_json else (lambda m: typer.echo(m, err=True))
+    try:
+        r = offsite.catalog_backup(_host_data_dir(data_dir), offsite.store(), keep=keep, progress=say)
+    except (offsite.OffsiteError, objectstore.StoreError, ValueError, OSError) as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(1)
+    if as_json:
+        typer.echo(json.dumps(r.to_dict()))
+        return
+    typer.echo(f"uploaded {r.key} ({r.size / 1e6:,.1f} MB gz, v{r.version}); kept {len(r.kept)}, deleted {len(r.deleted)}")
+
+
+@host_app.command("prune-deleted")
+def host_prune_deleted(
+    data_dir: Path | None = _DATA_DIR_OPT,
+    apply: bool = typer.Option(False, "--apply", help="Delete them (default: show the plan)."),
+    as_json: bool = typer.Option(False, "--json", help="Print the plan as JSON."),
+):
+    """Age out the offsite replicas of deleted accounts: an id with no auth.db row and no
+    local file is removed once its newest backup is older than the 30-day retention."""
+    from . import objectstore, offsite
+    try:
+        plan = offsite.prune_deleted(_host_data_dir(data_dir), offsite.store(), apply=apply)
+    except (offsite.OffsiteError, objectstore.StoreError, ValueError) as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(1)
+    if as_json:
+        typer.echo(json.dumps(plan.to_dict()))
+        return
+    typer.echo(f"live replicas: {len(plan.live)}; waiting out retention: {len(plan.waiting)}; "
+               f"{'deleted' if apply else 'would delete'}: {len(plan.deleted_ids)} account(s)"
+               + ("" if apply or not plan.deleted_ids else " — pass --apply"))
+
+
+@host_app.command("verify-replica")
+def host_verify_replica(
+    data_dir: Path | None = _DATA_DIR_OPT,
+    as_json: bool = typer.Option(False, "--json", help="Print the report as JSON."),
+):
+    """Restore drill: restore auth.db + every user file from the offsite replica into a
+    scratch dir and compare each table with the live file (+ integrity, ledger, catalog
+    refs). Exit 0 = every restored file equals live. Run it when the app is quiet."""
+    from . import objectstore, offsite
+    say = None if as_json else (lambda m: typer.echo(m, err=True))
+    try:
+        r = offsite.verify_replicas(_host_data_dir(data_dir), progress=say)
+    except (offsite.OffsiteError, objectstore.StoreError, ValueError) as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+    if as_json:
+        typer.echo(json.dumps(r.to_dict()))
+    else:
+        for f in r.files:
+            typer.echo(f"{'✓' if f.ok else '✗'} {f.name}: {f.detail}")
+        typer.echo("REPLICA OK" if r.ok else "REPLICA CHECK FAILED")
+    raise typer.Exit(0 if r.ok else 1)
+
+
+@host_app.command("restore")
+def host_restore(
+    data_dir: Path = typer.Option(..., "--data-dir", help="A NEW, empty data dir to rebuild."),
+    as_json: bool = typer.Option(False, "--json", help="Print the report as JSON."),
+):
+    """Disaster recovery / the vendor move: rebuild a hosted data dir from MM_OFFSITE_URL —
+    auth.db, every account's file (deleted accounts stay deleted), the newest catalog
+    snapshot — verified, WAL, private. Refuses a non-empty dir. Exit 0 ok, 1 failed, 2 refused."""
+    from . import objectstore, offsite
+    say = None if as_json else (lambda m: typer.echo(m, err=True))
+    try:
+        r = offsite.restore_all(data_dir, progress=say)
+    except offsite.PullRefused as e:
+        typer.echo(f"refused: {e}", err=True)
+        raise typer.Exit(2)
+    except (offsite.OffsiteError, objectstore.StoreError, ValueError, OSError) as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(1)
+    if as_json:
+        typer.echo(json.dumps(r.to_dict()))
+        return
+    typer.echo(f"restored {r.data_dir}: auth.db, {len(r.users)} user file(s), catalog {r.catalog}"
+               + (f"; skipped {len(r.skipped)} deleted account replica(s)" if r.skipped else ""))
+    if r.missing:
+        typer.echo(f"warning: no offsite copy for {len(r.missing)} account(s): {', '.join(r.missing)} — "
+                   "they get an empty collection at sign-in", err=True)
+    for w in r.warnings:
+        typer.echo(f"warning: {w}", err=True)
+
+
+@db_app.command("pull")
+def db_pull_cmd(
+    to: Path = typer.Option(..., "--to", help="LOCAL split data dir to restore into (never the hosted one)."),
+    user: str = typer.Option(..., "--user", help="Your hosted user id (users/<id>.db; `mm auth users` on the server)."),
+    source: str = typer.Option("r2", "--from", help="'r2' = MM_OFFSITE_URL, or an explicit s3://… / file://… URL."),
+    catalog: str = typer.Option("remote", "--catalog", help="remote = the newest weekly catalog snapshot; keep = reuse <to>/catalog.db."),
+    force: bool = typer.Option(False, "--force", help="Replace an existing copy (the old files move to <to>/replaced/)."),
+    as_json: bool = typer.Option(False, "--json", help="Print the report as JSON."),
+):
+    """Re-pull a LOCAL COPY of your hosted collection from the offsite backup (read-only
+    token), verified before it is swapped in. The hosted server stays the source of truth:
+    what you change in the copy is NOT sent back. Exit 0 = pulled; 1 = failed (nothing
+    swapped in); 2 = refused (nothing written)."""
+    from . import objectstore, offsite
+    say = None if as_json else (lambda m: typer.echo(m, err=True))
+    try:
+        r = offsite.pull(user, to, url=None if source == "r2" else source, catalog=catalog, force=force, progress=say)
+    except offsite.PullRefused as e:
+        typer.echo(f"refused: {e}", err=True)
+        raise typer.Exit(2)
+    except (offsite.OffsiteError, objectstore.StoreError, ValueError, OSError) as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(1)
+    if as_json:
+        typer.echo(json.dumps({**r.to_dict(), "env": r.env()}))
+        return
+    typer.echo(f"pulled {r.user_db} (catalog: {r.catalog_source})"
+               + (f"; the previous copy moved to {r.replaced}" if r.replaced else ""))
+    typer.echo("  " + ", ".join(f"{t}={n}" for t, n in sorted(r.tables.items()) if n))
+    for w in r.warnings:
+        typer.echo(f"warning: {w}", err=True)
+    typer.echo("This is a LOCAL COPY — not your real data. Changes made to it are not sent to the server.")
+    typer.echo(f"Use it with:  {r.env()} uv run mm …")
 
 
 # ---------- entry point ----------
