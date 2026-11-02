@@ -145,8 +145,10 @@ export function parseAppOrigin(input) {
   const local = host === 'localhost' || host === '127.0.0.1';
   if (u.protocol === 'http:' && !local) return { code: 'pair.insecure_http' };
   if (!local) {
+    // One plain DNS name: letters, digits, dots and hyphens only (IDNs arrive as punycode). The URL
+    // standard lets `*` through as a host character — that would make the pattern a wildcard.
     const ip = host.startsWith('[') || /^[0-9.]+$/.test(host) || /^0x/i.test(host);
-    if (ip || !host.includes('.') || host.endsWith('.') || host.startsWith('.')) return { code: 'pair.host' };
+    if (ip || !/^[a-z0-9.-]+$/.test(host) || !host.includes('.') || host.endsWith('.') || host.startsWith('.') || host.includes('..')) return { code: 'pair.host' };
     if (isReaderSite(host)) return { code: 'pair.reader_site' };
   }
   return { origin: u.origin, pattern: `${u.protocol}//${host}/*` };

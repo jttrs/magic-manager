@@ -310,7 +310,7 @@ def test_precon_catalog_art_offline(cards, monkeypatch):
 def test_fetch_deck_failure(monkeypatch):
     monkeypatch.setattr(addcards.subprocess, "Popen", lambda *a, **k: _FakeProc("", "a\nboom\n", 1))
     with pytest.raises(RuntimeError, match="boom"):
-        addcards.fetch_deck_lines("u")
+        addcards.fetch_deck_lines("https://archidekt.com/decks/1")
 
 
 # ---------- API ----------

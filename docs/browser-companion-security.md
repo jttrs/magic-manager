@@ -255,6 +255,32 @@ Moxfield's sign-in token (security exception)"*). The design keeps the exception
   as on moxfield.com). A compromised reader file could misuse the token — the same trust as the
   extension's code, mitigated by no remote code, a reproducible zip and code review.
 
+## Security review (2026-11-01, hosted companion — pair any https origin, extension 0.5.0)
+
+The security-review agent reviewed the diff: **no findings at the reporting threshold.**
+
+| # | Severity | File | Lines | Vulnerability | Confidence |
+|---|---|---|---|---|---|
+| — | — | — | — | No vulnerabilities found | — |
+
+Checked: `parseAppOrigin` against URL-parser quirks (decimal/hex/octal/short IPv4 forms all normalise
+to dotted IPs and are refused; `[::1]`, trailing dots, credentials, paths refused; uppercase /
+percent-encoded / full-width hosts canonicalised; punycode accepted as one host; ports kept in the
+origin, port-less pattern); Pair requests exactly `[parsed.pattern]` and nothing requests `https://*/*`;
+re-pair / Unpair can't remove Allow-access sites (reader sites are refused as app addresses); bridge +
+worker exact-origin, top-frame and tab-URL checks and the bridge's reset on a pairing change; members
+can't reach server browser automation (Moxfield refused before spawning, `--no-browser` /
+`MM_NO_SERVER_BROWSER` honoured at every launch seam, server and script classify the URL with the same
+`source_of`, whose substring match only over-refuses); companion-fed routes stay session + CSRF +
+Origin gated. Two below-threshold notes, both **fixed**:
+- `parseAppOrigin` let `*` through as a host character (`https://*.example.com` → a wildcard pattern;
+  not exploitable — no real page origin equals it — but it broke "exactly one origin"). Hosts are now
+  `[a-z0-9.-]` only (`pair.host`; pinned in the refusals e2e).
+- (pre-existing) the deck fetch passed the URL as a bare argument, so `--file=<server path>` could make
+  `import_deck.py` read a server file as deck JSON. The URL now follows `--`, `fetch_deck_payload`
+  requires http(s), and the `ingest.fetch_deck` input requires `^https?://`
+  (`test_a_deck_url_is_never_read_as_an_option`).
+
 ## Security review (2026-10-11, Archidekt decks + Moxfield collection / binders, extension 0.4.0)
 
 The security-review agent reviewed the diff: **no findings.** Checked: the Moxfield token never leaves

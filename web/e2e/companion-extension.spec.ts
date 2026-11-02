@@ -501,6 +501,8 @@ test('the settings page refuses addresses it may not pair with', async ({ ext })
     ['https://192.168.1.10', 'pair.host'],
     ['https://[::1]:8443', 'pair.host'],
     ['https://cards', 'pair.host'],
+    ['https://*.example.com', 'pair.host'],
+    ['https://*.com', 'pair.host'],
     ['https://moxfield.com', 'pair.reader_site'],
     ['https://www.cardkingdom.com', 'pair.reader_site'],
     ['ftp://cards.example.com', 'pair.bad_address'],

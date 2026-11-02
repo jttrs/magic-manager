@@ -481,10 +481,13 @@ def fetch_deck_payload(url: str, *, progress: Callable[[str], None] | None = Non
         raise owner_machine.OwnerOnly("decks.moxfield_server")
     env = {**os.environ, "MM_NONINTERACTIVE": "1"}
     env.pop(NO_SERVER_BROWSER_ENV, None)
-    args = [sys.executable, str(_IMPORT_DECK), url]
+    if not url.lower().startswith(("https://", "http://")):
+        raise RuntimeError("Paste the deck’s web address (https://…).")
+    args = [sys.executable, str(_IMPORT_DECK)]
     if not browser_ok:
         args.append("--no-browser")
         env[NO_SERVER_BROWSER_ENV] = "1"
+    args += ["--", url]  # the URL is never read as an option (e.g. --file=<server path>)
     proc = subprocess.Popen(
         args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env,
     )

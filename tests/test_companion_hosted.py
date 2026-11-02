@@ -133,3 +133,16 @@ def test_member_moxfield_import_never_reaches_a_server_browser(member, monkeypat
     monkeypatch.setenv(browser_launch.NO_SERVER_BROWSER_ENV, "1")
     with pytest.raises(browser_launch.ServerBrowserRefused):
         browser_launch.launch(object(), headless=True)
+
+
+def test_a_deck_url_is_never_read_as_an_option(member, monkeypatch):
+    """`--file=<server path>` as the "URL" can't make import_deck.py read a server file."""
+    from magic_manager import addcards
+    from magic_manager.api import ingest as ingest_api
+    with pytest.raises(ValueError):
+        ingest_api.FetchDeckInput(url="--file=/etc/passwd")
+    with pytest.raises(RuntimeError):
+        addcards.fetch_deck_payload("--file=/etc/passwd")
+    from test_user_connections import _fetch_args
+    args = _fetch_args(monkeypatch, "https://archidekt.com/decks/1")
+    assert args["argv"][-2:] == ["--", "https://archidekt.com/decks/1"]
