@@ -50,8 +50,9 @@ reports `cart.page_changed` / `moxfield.changed` / `moxfield.collection_changed`
 member's is dropped with a 204); a server deck
 fetch that parses no cards flags that builder; any successful EDHREC sync clears its flag.
 Blocks, private decks, empty decks and empty carts never flag. A real-use record stores only its
-reason **code** (never exception text, URLs or ids); hosted, only admins see a check's own
-message — everyone else sees the reason catalog's plain message. In the Moxfield canary a navigation
+reason **code** (never exception text, URLs or ids), and hosted only an **admin's** reads count — a
+member's read (whose page they may supply through the companion) neither flags nor clears a
+scraper; only admins see a check's own message — everyone else sees the reason catalog's plain message. In the Moxfield canary a navigation
 error (offline, DNS, timeout) is `unverified`; only a page that loaded without firing the deck call is `fail`.
 
 ## Status file

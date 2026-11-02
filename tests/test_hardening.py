@@ -569,3 +569,16 @@ def test_deploys_run_no_install_hooks_and_verify_commits():
     fpr = re.search(r"^MM_WEBFLOW_FPR=([0-9A-F]{40})$", (kit / "bin" / "common.sh").read_text(), re.M).group(1)
     assert fpr == "968479A1AFF927E37D1A566BB5690EEEBB952194"
     assert "BEGIN PGP PUBLIC KEY BLOCK" in (kit / "web-flow.gpg").read_text()
+
+
+def test_a_members_reads_neither_flag_nor_clear_a_scraper(member, health_file):
+    c, data, (a, ta), (b, tb) = member
+    key = scraper_health.store_key("bestbuy")
+    with layout.as_user(b):
+        scraper_health.record_use(key, "fail", "scrape.no_price")      # e.g. an empty companion extract
+    assert key not in json.loads(health_file.read_text() if health_file.exists() else '{"scrapers": {}}')["scrapers"]
+    with layout.as_user(a):
+        scraper_health.record_use(key, "fail", "scrape.no_price")
+    with layout.as_user(b):
+        scraper_health.record_use(key, "ok")                            # a member can't hide it either
+    assert json.loads(health_file.read_text())["scrapers"][key]["status"] == "down"

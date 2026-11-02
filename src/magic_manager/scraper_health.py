@@ -295,9 +295,10 @@ def record_use(key: str, outcome: Outcome, code: str | None = None) -> None:
     """A real read in the app. Never raises — health must never break a feature.
     ``unverified`` uses (blocked, private deck, offline) aren't recorded.
 
-    Health is GLOBAL (every user sees it) and a read may be any member's, so a use
-    stores only its reason CODE — never exception text, URLs or ids; the shown
-    message comes from :data:`REASONS`."""
+    Health is GLOBAL (every user sees it), so a use stores only its reason CODE —
+    never exception text, URLs or ids; the shown message comes from :data:`REASONS`.
+    Hosted, only an ADMIN's reads count: a member's read (whose page content they
+    may supply, e.g. a companion extract) can neither flag nor clear a scraper."""
     record_uses([(key, outcome, code)])
 
 
@@ -307,6 +308,9 @@ def record_uses(uses: list[tuple[str, Outcome, str | None]]) -> None:
     if not rows:
         return
     try:
+        from . import owner_machine
+        if not owner_machine.is_admin():   # always True locally
+            return
         # A read that confirms what's already recorded needs no write (bulk syncs
         # call this per card).
         recs = _read(path())["scrapers"]
