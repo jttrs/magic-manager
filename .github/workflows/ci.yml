@@ -50,9 +50,16 @@ jobs:
       - run: npm --prefix web ci
       - run: npm --prefix web run check
 
-  e2e:
+  # Sharded across runners (one ubuntu runner runs the suite in ~8 min); `e2e` below is the one
+  # required check name.
+  e2e-shard:
+    name: e2e (${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -60,6 +67,13 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: web/package-lock.json
+      # A reader spec builds the bookmarklet with scripts/build_extension.py (uv run).
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - run: uv sync --frozen
       - run: npm --prefix web ci
       - name: Playwright version
         id: pw
@@ -77,15 +91,23 @@ jobs:
         run: npx --prefix web playwright install-deps chromium
       # The suite mocks the API with recorded fixtures (no `mm serve`); the companion-extension
       # specs launch their own headless Chromium with the unpacked extension.
-      - run: npm --prefix web run e2e -- --reporter=list,html
+      - run: npm --prefix web run e2e -- --shard=${{ matrix.shard }}/4 --reporter=list,html
       - if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: |
             web/playwright-report
             web/test-results
           retention-days: 14
+
+  e2e:
+    needs: e2e-shard
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every shard passed
+        run: test "${{ needs.e2e-shard.result }}" = success
 
   extension:
     runs-on: ubuntu-latest
