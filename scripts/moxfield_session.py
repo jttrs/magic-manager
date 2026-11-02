@@ -37,10 +37,10 @@ SESSION_FILE = SESSION_DIR / "moxfield.json"
 
 LOGIN_URL = "https://www.moxfield.com/account/signin"
 HOME_URL = "https://www.moxfield.com/"
-# Set by the web app for a non-admin's deck fetch (hosted): public decks only.
-PUBLIC_ONLY_ENV = "MM_PUBLIC_DECKS_ONLY"
-PUBLIC_ONLY_MESSAGE = ("This Moxfield deck is private. Read it with the browser companion (it reads the deck "
-                       "in your own browser, signed in as you), or make the deck public and fetch it again.")
+# Hosted members' deck fetches set MM_NO_SERVER_BROWSER (browser_launch): no browser on this machine at all.
+if str(ROOT / "src") not in sys.path:
+    sys.path.insert(0, str(ROOT / "src"))
+from magic_manager.browser_launch import NO_SERVER_BROWSER_MESSAGE, refused as _no_server_browser  # noqa: E402
 
 
 def _load_env() -> dict:
@@ -109,10 +109,10 @@ class MoxfieldSession:
         # logged-OUT context — enough to clear Cloudflare and read a PUBLIC deck.
         # This is the default first attempt for reads; callers escalate to a
         # full (authenticated) session only when the anonymous fetch 401/403s.
-        if not anonymous and os.environ.get(PUBLIC_ONLY_ENV) == "1":
-            # The web app's non-admin deck fetch (owner_machine "decks.moxfield_login"):
-            # never this machine's persisted session, login or a headed login window.
-            raise RuntimeError(PUBLIC_ONLY_MESSAGE)
+        if _no_server_browser():
+            # The hosted web app's deck fetch for a member (owner_machine "decks.moxfield_server"):
+            # no browser on this machine at all — anonymous, saved session or login window.
+            raise RuntimeError(NO_SERVER_BROWSER_MESSAGE)
         self.fresh = fresh
         self.headless = headless
         self.anonymous = anonymous
@@ -146,8 +146,6 @@ class MoxfieldSession:
     def _launch(self):
         """Real Chrome when installed (clears Cloudflare's managed challenge),
         else bundled Chromium — the shared rule in ``magic_manager.browser_launch``."""
-        if str(ROOT / "src") not in sys.path:
-            sys.path.insert(0, str(ROOT / "src"))
         from magic_manager import browser_launch
         return browser_launch.launch(self._pw, headless=self.headless)
 
@@ -210,8 +208,6 @@ class MoxfieldSession:
 
         Inherently human: refused up front (before any window opens) when no
         one can press Enter — agents, the web app's jobs (``MM_NONINTERACTIVE``)."""
-        if str(ROOT / "src") not in sys.path:
-            sys.path.insert(0, str(ROOT / "src"))
         from magic_manager import interactive
         if not interactive.can_wait_for_enter():
             print(

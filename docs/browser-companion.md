@@ -4,8 +4,8 @@ A Manifest V3 Chrome extension (`extension/`) plus a cart bookmarklet. They read
 **own** browser, what the server can't or shouldn't: the Mana Pool cart, open store tabs (Deals),
 Moxfield and Archidekt decks, and your Moxfield collection / binders. They hand the app only the normalized lines, after the user approves each time.
 This replaces the local-only paths (H9): the .env cart login, AppleScript tab reads and the
-headed-Chrome Moxfield import. Those keep working on the owner's Mac when the companion isn't
-connected. Security design: [`browser-companion-security.md`](browser-companion-security.md).
+headed-Chrome Moxfield import. Those keep working on the owner's Mac (locally, and for admins when
+hosted) when the companion isn't connected; a hosted member uses only the companion. Security design: [`browser-companion-security.md`](browser-companion-security.md).
 
 ## Using it (beta)
 
@@ -14,7 +14,7 @@ connected. Security design: [`browser-companion-security.md`](browser-companion-
 2. App header → plug icon → **Add to Chrome** (the Chrome Web Store listing — shown once published,
    see *Chrome Web Store* below). Until then, or as a fallback, the dialog's **Developer install**:
    **Download the companion**, unzip, `chrome://extensions` → Developer mode → **Load unpacked**.
-3. Companion icon → paste the app's exact address (the app's header → **Browser companion** shows it with a copy button; the field starts empty, no default port) → **Pair** (Chrome asks to allow it) → reload the app tab. The settings page then says whether that address has checked in (the worker records the paired app's last hello, `storage.local` `lastHello`); "hasn't checked in yet" means the app isn't open at exactly that address.
+3. Companion icon → paste the address you open the app at (the app's header → **Browser companion** shows it with a copy button; the field starts empty, no default port) → **Pair** (Chrome asks to allow that one address) → reload the app tab. See *Pairing with a hosted address* below for what is accepted. The settings page then says whether that address has checked in (the worker records the paired app's last hello, `storage.local` `lastHello`); "hasn't checked in yet" means the app isn't open at exactly that address.
 4. Optional: switch on **Allow access** on the companion's settings page (0.4.3: ONE switch, owner
    2026-10-11, replacing the six per-feature switches). It asks Chrome once for every site the readers
    use (`ALL_ACCESS_ORIGINS` in `protocol.js`: TCGplayer + Card Kingdom carts, the Deals stores,
@@ -32,6 +32,49 @@ the bookmarklet paste and .env login are Mana Pool only — see *Other carts* be
 Watching → **Read watched prices** (the watched open-tab store pages), Add cards → Deck and
 Decks → Import (Moxfield links; Archidekt links once Allow access is on — private decks too),
 Add cards → **Import a collection** → *Live from Moxfield* (your collection, one binder, or a shared link — each one button that reads). Without a connected companion each falls back to the existing path.
+
+## Pairing with a hosted address (0.5.0, Phase 3 step 9)
+
+The companion pairs with **one exact origin**: `http://localhost` / `http://127.0.0.1` (any port —
+this computer) or **any `https://` domain** — the owner's own domain, a `*.ts.net` Tailscale name,
+whatever the app is opened at — so a Chrome Web Store build isn't tied to one domain.
+`parseAppOrigin` (`protocol.js`) refuses, each with a `pair.*` code in `errors.json` shown as message +
+fix on the settings page: a path / query / fragment (`pair.has_path`), a user name or password
+(`pair.credentials`), plain http off this computer (`pair.insecure_http`), an IP address or a one-word
+host over https (`pair.host` — no public certificate is issued for those and they are what a LAN or
+rebinding trick would use), a site the companion itself reads — a store, Mana Pool, Moxfield,
+Archidekt (`pair.reader_site` — pairing one would let that site ask for reads, and Unpair would take
+away the readers' own access), and anything that isn't http(s) (`pair.bad_address`).
+
+**Permission scope.** `optional_host_permissions` lists `https://*/*` only as the *pool* Pair asks
+from: Pair calls `chrome.permissions.request({origins: ['https://<that host>/*']})` — Chrome grants
+exactly the patterns requested, never the whole optional entry — and nothing else ever requests it
+(Allow access excludes it; `test_manifest_asks_for_the_least` pins both). Re-pairing with another
+address removes the old address's permission; Unpair removes it too. The match pattern can't carry a
+port, so the bridge (registered for that pattern) and the worker both re-check the **exact origin**,
+port included, on every message; a bridge already in an old address's tab goes silent when the
+pairing changes (`storage.onChanged`).
+
+**No API token (H12 refinement).** The extension never calls the app's API and holds no credential
+for it: it hands the approved lines to the paired app **page** by `postMessage`, and the page posts
+them with the signed-in user's session cookie + CSRF header, like any other write. Hosted, every
+companion-fed route (`/api/cart/lines`, `/api/deals/tabs`, `/api/ingest/deck-from-browser`,
+`/api/collection/import/*`, `/api/purchases/orders`, the `deals.watchlist` job with `in_browser`) is
+therefore session + CSRF + Origin gated and writes only the signed-in user's file
+(`tests/test_companion_hosted.py`).
+
+**Members use the companion, never the server's machine.** Hosted, the owner-machine paths
+(`owner_machine.PATHS`) stay admin-only. A member's Moxfield deck is refused before anything runs
+(`decks.moxfield_server` → 403 `auth.admin_only` with a "use the companion" hint) and their other deck
+fetches run with `--no-browser` / `MM_NO_SERVER_BROWSER=1`, which `browser_launch.launch`,
+`MoxfieldSession` and `import_deck.fetch_moxfield` all refuse; open tabs, rendered store reads and
+the cart come only from the companion (or the bookmarklet). The web routes members straight there
+(`useBrowserDeck().needsCompanion`, `components/companion/CompanionRequired.tsx` with *Set up the
+browser companion*), never offering a server option that would 403.
+
+**The approval window names the destination.** Every read's window shows *Goes to
+`<paired origin>`* as its own prominent line (punycode for international names, so look-alike
+domains show as `xn--…`), above what will be sent.
 
 ## Chrome Web Store
 
@@ -220,5 +263,5 @@ background tab it closes), you approve the lines, the app posts them to `POST /a
   above. Still open: the owner's live check of the signed-in paths.
 - ~~Deals **Watching → refresh** still reads open-tab stores on this Mac.~~ Done 2026-10-10 (extension
   0.2.1): the companion's `watched` request reads them, opening background tabs for pages that aren't open.
-- Chrome Web Store distribution, plus pairing with a hosted domain (beyond `*.ts.net`) once Phase 3
-  hosting picks one.
+- Chrome Web Store distribution. ~~Pairing with a hosted domain (beyond `*.ts.net`).~~ Done in 0.5.0
+  (Phase 3 step 9): any https origin, see *Pairing with a hosted address*.

@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import urllib.error
 import urllib.request
@@ -107,8 +108,13 @@ def fetch_scryfall(deck_id: str) -> tuple[list[dict], str | None, str | None]:
 
 # ---------- Moxfield: Playwright authed context ----------
 
-def fetch_moxfield(deck_id: str, *, fresh: bool, public_only: bool = False) -> tuple[list[dict], str | None, str | None]:
-    from moxfield_session import PUBLIC_ONLY_MESSAGE, MoxfieldSession
+def fetch_moxfield(deck_id: str, *, fresh: bool) -> tuple[list[dict], str | None, str | None]:
+    from magic_manager.browser_launch import NO_SERVER_BROWSER_MESSAGE, refused
+    if refused():
+        # --no-browser / MM_NO_SERVER_BROWSER (the hosted app's fetch for a member):
+        # Moxfield needs a browser on this machine, so never start one — the companion reads it.
+        raise RuntimeError(NO_SERVER_BROWSER_MESSAGE)
+    from moxfield_session import MoxfieldSession
     from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
     deck_page = f"https://www.moxfield.com/decks/{deck_id}"
@@ -138,8 +144,6 @@ def fetch_moxfield(deck_id: str, *, fresh: bool, public_only: bool = False) -> t
 
     # 1. Anonymous browser first — a real browser clears Cloudflare, and PUBLIC
     #    decks need no login. This is the common case and avoids any login prompt.
-    if public_only:
-        fresh = False
     if not fresh:
         # Headed real-Chrome clears Cloudflare's managed challenge without any
         # interaction for a public deck; headless is what gets the interstitial.
@@ -150,9 +154,6 @@ def fetch_moxfield(deck_id: str, *, fresh: bool, public_only: bool = False) -> t
             return _moxfield_cards(data), data.get("name"), decksource.author_moxfield(data)
         if status and status not in (401, 403):
             raise RuntimeError(f"Moxfield api2 returned HTTP {status}")
-        if public_only:
-            raise RuntimeError(PUBLIC_ONLY_MESSAGE if status in (401, 403)
-                               else "Moxfield didn’t load this deck — check the link and try again.")
         why = "is private" if status in (401, 403) else "did not load (timeout)"
         print(f"moxfield: anonymous read {why} — authenticating…", file=sys.stderr)
 
@@ -201,10 +202,13 @@ def main() -> int:
     ap.add_argument("url", nargs="?", help="Deck URL (moxfield/archidekt/mtggoldfish/manabox/scryfall).")
     ap.add_argument("--file", help="Read normalized-cards JSON from a file, or '-' for stdin (bookmarklet path).")
     ap.add_argument("--fresh", action="store_true", help="Moxfield: force re-login (ignore persisted session).")
-    ap.add_argument("--public-only", action="store_true",
-                    help="Moxfield: read public decks only — never this machine's saved session or login "
-                         "(the web app passes it for non-admins when hosted).")
+    ap.add_argument("--no-browser", action="store_true",
+                    help="Never open a browser on this machine (Moxfield is then refused; the web app passes "
+                         "it for non-admins when hosted — they read Moxfield with the browser companion).")
     args = ap.parse_args()
+    if args.no_browser:
+        from magic_manager.browser_launch import NO_SERVER_BROWSER_ENV
+        os.environ[NO_SERVER_BROWSER_ENV] = "1"
 
     if args.file is not None:
         cards, name, author = fetch_from_file(args.file)
@@ -223,7 +227,7 @@ def main() -> int:
             elif source == "scryfall":
                 cards, name, author = fetch_scryfall(deck_id)
             else:
-                cards, name, author = fetch_moxfield(deck_id, fresh=args.fresh, public_only=args.public_only)
+                cards, name, author = fetch_moxfield(deck_id, fresh=args.fresh)
         except (urllib.error.HTTPError, urllib.error.URLError) as e:
             print(f"import_deck: fetch failed: {e}", file=sys.stderr)
             return 1

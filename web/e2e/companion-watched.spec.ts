@@ -29,7 +29,7 @@ const test = base.extend<Fixtures>({
     const dir = mkdtempSync(join(tmpdir(), 'mm-companion-'));
     cpSync(resolve(ROOT, 'extension'), dir, { recursive: true });
     const manifest = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8'));
-    const stores = (manifest.optional_host_permissions as string[]).filter((o) => !/localhost|127\.0\.0\.1|ts\.net|moxfield/.test(o));
+    const stores = (manifest.optional_host_permissions as string[]).filter((o) => !/localhost|127\.0\.0\.1|ts\.net|moxfield|^https:\/\/\*\/\*$/.test(o));
     manifest.host_permissions.push('http://localhost/*', ...stores);
     writeFileSync(join(dir, 'manifest.json'), JSON.stringify(manifest));
     const context = await chromium.launchPersistentContext('', {

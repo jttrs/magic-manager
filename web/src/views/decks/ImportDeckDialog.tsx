@@ -8,6 +8,7 @@ import { Button } from '../../components/Button';
 import { useBrowserDeck } from '../../app/useBrowserDeck';
 import { DeckSourceHealth } from '../../components/DeckSourceHealth';
 import { AwaitingNote, FailureNote } from '../../components/companion/CompanionNotes';
+import { CompanionRequired } from '../../components/companion/CompanionRequired';
 import { deckImport, type ResolveOut } from '../../core/api';
 
 const DECK_URL = /^https?:\/\/([\w-]+\.)*(archidekt\.com|moxfield\.com|mtggoldfish\.com|manabox\.app|scryfall\.com)\//i;
@@ -29,6 +30,7 @@ export function ImportDeckDialog({ trigger }: { trigger: ReactNode }) {
   const navigate = useNavigate();
   const browser = useBrowserDeck();
   const [saving, setSaving] = useState(false);
+  const blocked = !browser.handles(url) && browser.needsCompanion(url.trim());
   const running = saving || browser.pending || (live != null && live.status !== 'succeeded' && live.status !== 'failed');
 
   /** Save a fetched deck's recipe (server fetch or companion read), then open it. */
@@ -66,6 +68,7 @@ export function ImportDeckDialog({ trigger }: { trigger: ReactNode }) {
       setError('Paste a deck link from Archidekt, Moxfield, MTGGoldfish, ManaBox or Scryfall.');
       return;
     }
+    if (blocked) return;
     setError('');
     browser.reset();
     reset();
@@ -110,7 +113,8 @@ export function ImportDeckDialog({ trigger }: { trigger: ReactNode }) {
               <span>Also add these cards to my collection <span className="block text-sm text-ink-muted">You’ll review the printings before anything is added.</span></span>
             </label>
             <DeckSourceHealth url={url} viaBrowser={browser.handles(url)} settled={live?.status === 'succeeded' || live?.status === 'failed' ? live.status : browser.error ? 'error' : ''} />
-            {url.includes('moxfield') && (
+            {blocked && <CompanionRequired what="Moxfield decks" />}
+            {url.includes('moxfield') && !blocked && (
               <p className="text-xs text-ink-muted">{browser.handles(url) ? 'Read in this browser by the companion — you approve what it sends.' : 'Moxfield opens a Chrome window to read the deck.'}</p>
             )}
             {browser.awaiting != null && <AwaitingNote summary={browser.awaiting} />}
@@ -121,7 +125,7 @@ export function ImportDeckDialog({ trigger }: { trigger: ReactNode }) {
               <Dialog.Close asChild>
                 <Button tone="paper" disabled={running}>Cancel</Button>
               </Dialog.Close>
-              <Button type="submit" emphasis="primary" disabled={running || !url.trim()}>{running ? 'Importing…' : 'Import deck'}</Button>
+              <Button type="submit" emphasis="primary" disabled={running || !url.trim() || blocked}>{running ? 'Importing…' : 'Import deck'}</Button>
             </div>
           </form>
         </Dialog.Content>

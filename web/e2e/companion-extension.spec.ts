@@ -26,11 +26,11 @@ const TCG_EXPECTED = JSON.parse(readFileSync(resolve(ROOT, 'tests/fixtures/compa
 type Fixtures = { ext: { context: BrowserContext; worker: Worker; id: string } };
 
 /** A copy of the shipped extension with the harness grants (see the header). */
-function extensionCopy(): string {
+function extensionCopy(extra: string[] = []): string {
   const dir = mkdtempSync(join(tmpdir(), 'mm-companion-'));
   cpSync(resolve(ROOT, 'extension'), dir, { recursive: true });
   const manifest = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8'));
-  manifest.host_permissions.push('http://localhost/*', 'https://www.tcgplayer.com/*', 'https://moxfield.com/*', 'https://*.moxfield.com/*');
+  manifest.host_permissions.push('http://localhost/*', 'https://www.tcgplayer.com/*', 'https://moxfield.com/*', 'https://*.moxfield.com/*', ...extra);
   writeFileSync(join(dir, 'manifest.json'), JSON.stringify(manifest));
   return dir;
 }
@@ -421,7 +421,8 @@ test('one Allow access switch covers every optional site; Mana Pool stays always
   expect(asked).toHaveLength(1);
   const origins = asked[0].origins;
   // Every optional site except the app addresses (those are pairing), and nothing else.
-  expect(new Set(origins)).toEqual(new Set(optional.filter((o: string) => !/^http:\/\/(localhost|127\.0\.0\.1)\/|\.ts\.net\//.test(o))));
+  expect(new Set(origins)).toEqual(new Set(optional.filter((o: string) => !/^http:\/\/(localhost|127\.0\.0\.1)\/|^https:\/\/\*\/\*$/.test(o))));
+  expect(origins).not.toContain('https://*/*');
   await access.click();
   await expect(access).toHaveAttribute('aria-checked', 'false');
   await expect(access).toContainText('Off');
@@ -494,15 +495,98 @@ test('paired with the wrong address: the app never checks in, and the settings p
 test('the settings page refuses addresses it may not pair with', async ({ ext }) => {
   const opts = await ext.context.newPage();
   await opts.goto(`chrome-extension://${ext.id}/src/options.html`);
-  for (const [addr, why] of [
-    ['http://example.com', 'Plain http is only allowed for this computer'],
-    ['https://example.com', 'Tailscale address'],
-    ['http://localhost:8765/app', 'no path'],
-    ['https://user:pw@x.ts.net', 'user name or password'],
+  for (const [addr, code] of [
+    ['http://example.com', 'pair.insecure_http'],
+    ['http://192.168.1.10:8765', 'pair.insecure_http'],
+    ['https://192.168.1.10', 'pair.host'],
+    ['https://[::1]:8443', 'pair.host'],
+    ['https://cards', 'pair.host'],
+    ['https://*.example.com', 'pair.host'],
+    ['https://*.com', 'pair.host'],
+    ['https://moxfield.com', 'pair.reader_site'],
+    ['https://www.cardkingdom.com', 'pair.reader_site'],
+    ['https://tcgplayer.com', 'pair.reader_site'],
+    ['https://shop.manapool.com', 'pair.reader_site'],
+    ['ftp://cards.example.com', 'pair.bad_address'],
+    ['not an address', 'pair.bad_address'],
+    ['http://localhost:8765/app', 'pair.has_path'],
+    ['https://cards.example.com/?x=1', 'pair.has_path'],
+    ['https://u:p@cards.example.com', 'pair.credentials'],
   ] as const) {
     await opts.getByRole('textbox', { name: 'App address' }).fill(addr);
     await opts.getByRole('button', { name: 'Pair', exact: true }).click();
-    await expect(opts.locator('#pair-status')).toContainText(why);
+    await expect(opts.locator('#pair-status')).toHaveAttribute('data-code', code);
+    await expect(opts.locator('#pair-status')).toHaveClass('error');
+    if (addr === 'http://example.com') await expect(opts.locator('#pair-status')).toContainText('Plain http is only allowed for this computer');
   }
-  await expect(opts.locator('#pair-status')).toHaveClass('error');
+  // Chrome's prompt declined (or the request refused): not paired, and it says so.
+  await opts.evaluate(() => Object.defineProperty(chrome, 'permissions', { configurable: true, value: {
+    ...chrome.permissions, request: () => Promise.reject(new Error('declined')), contains: () => Promise.resolve(false),
+  } }));
+  await opts.getByRole('textbox', { name: 'App address' }).fill('https://cards.example.com');
+  await opts.getByRole('button', { name: 'Pair', exact: true }).click();
+  await expect(opts.locator('#pair-status')).toHaveAttribute('data-code', 'pair.permission_denied');
+  expect(await ext.worker.evaluate(() => chrome.storage.local.get('appOrigin'))).toEqual({ appOrigin: APP });   // still the old pairing
 });
+
+test('pairs with any https app address: Chrome is asked for that one origin, and re-pairing revokes it', async () => {
+  const A = 'https://mm-app.example', B = 'https://mm-other.example:8443';
+  // Harness grant (the prompt can't be clicked): both test origins, as Chrome would after the prompt.
+  const dir = extensionCopy(['https://mm-app.example/*', 'https://mm-other.example/*']);
+  const ext = await launch(dir);
+  try {
+    const opts = await ext.context.newPage();
+    await opts.goto(`chrome-extension://${ext.id}/src/options.html`);
+    await opts.evaluate(() => {
+      // Record what Pair asks Chrome for (contains() stays Chrome's own).
+      const w = window as unknown as { asked: unknown[] };
+      w.asked = [];
+      const real = chrome.permissions;
+      Object.defineProperty(chrome, 'permissions', { configurable: true, value: {
+        contains: (p: chrome.permissions.Permissions) => real.contains(p),
+        request: (p: chrome.permissions.Permissions) => { w.asked.push({ request: p.origins }); return Promise.resolve(true); },
+        remove: (p: chrome.permissions.Permissions) => { w.asked.push({ remove: p.origins }); return Promise.resolve(true); },
+      } });
+    });
+    const asked = () => opts.evaluate(() => (window as unknown as { asked: unknown[] }).asked);
+    const field = opts.getByRole('textbox', { name: 'App address' });
+    await field.fill(`${A}/`);
+    await opts.getByRole('button', { name: 'Pair', exact: true }).click();
+    await expect(opts.locator('#pair-status')).toContainText(`Paired with ${A}`);
+    expect(await asked()).toEqual([{ request: ['https://mm-app.example/*'] }]);   // exactly this origin, never https://*/*
+    expect(await ext.worker.evaluate(() => chrome.scripting.getRegisteredContentScripts())).toMatchObject([{ id: 'mm-bridge', matches: ['https://mm-app.example/*'] }]);
+    expect(await ext.worker.evaluate(() => chrome.permissions.getAll())).not.toMatchObject({ origins: expect.arrayContaining(['https://*/*']) });
+
+    // The app served at the https address connects.
+    const app = await hostedApp(ext.context, A);
+    await expect(app.getByRole('button', { name: 'Browser companion · connected' })).toBeVisible();
+
+    await field.fill(B);
+    await opts.getByRole('button', { name: 'Pair', exact: true }).click();
+    await expect(opts.locator('#pair-status')).toContainText(`Paired with ${B}`);
+    expect(await asked()).toEqual([{ request: ['https://mm-app.example/*'] }, { request: ['https://mm-other.example/*'] }, { remove: ['https://mm-app.example/*'] }]);
+    expect(await ext.worker.evaluate(() => chrome.scripting.getRegisteredContentScripts())).toMatchObject([{ id: 'mm-bridge', matches: ['https://mm-other.example/*'] }]);
+    // The old address's open tab can't read any more: no approval window, nothing awaiting.
+    const opened: string[] = [];
+    ext.context.on('page', (p) => opened.push(p.url()));
+    const answer = await forgedRequest(app);
+    expect(answer === 'no answer' || (answer as { ok?: boolean }).ok === false).toBe(true);
+    expect(opened).toEqual([]);
+  } finally {
+    await ext.context.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+/** The app (dev server, API mocked) served at an https origin, as a hosted address would be. */
+async function hostedApp(context: BrowserContext, origin: string): Promise<Page> {
+  const page = await context.newPage();
+  await mockApi(page, { '/api/features': () => ({ json: { flags: { companion: true } } }) });
+  await page.route(`${origin}/**`, async (r) => {
+    const u = new URL(r.request().url());
+    if (u.pathname.startsWith('/api/')) return r.fallback();
+    return r.fulfill({ response: await r.fetch({ url: `${APP}${u.pathname}${u.search}` }) });
+  });
+  await page.goto(`${origin}/collection?families=%5B%22blb%22%5D`);
+  return page;
+}

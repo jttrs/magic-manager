@@ -568,18 +568,21 @@ def test_member_is_refused_every_pinned_path(two_users, monkeypatch):
         for seam in (storefetch._osascript, tabs._osascript):
             with pytest.raises(owner_machine.OwnerOnly):
                 seam("return 1")
-        # the deck fetch: public decks only, never this machine's Moxfield session
-        args = _fetch_args(monkeypatch)
-        assert "--public-only" in args["argv"] and args["env"]["MM_PUBLIC_DECKS_ONLY"] == "1"
+        # the deck fetch (step 9): Moxfield is refused before anything runs (the companion
+        # reads it); plain-HTTP sources run with no browser allowed on this machine at all
+        with pytest.raises(owner_machine.OwnerOnly):
+            _fetch_args(monkeypatch)
+        args = _fetch_args(monkeypatch, "https://archidekt.com/decks/123")
+        assert "--no-browser" in args["argv"] and args["env"]["MM_NO_SERVER_BROWSER"] == "1"
     with layout.as_user(a):  # the admin keeps the owner-machine paths
         assert owner_machine.access() == {k: True for k in owner_machine.PATHS}
         args = _fetch_args(monkeypatch)
-        assert "--public-only" not in args["argv"] and "MM_PUBLIC_DECKS_ONLY" not in args["env"]
+        assert "--no-browser" not in args["argv"] and "MM_NO_SERVER_BROWSER" not in args["env"]
     _as(c, ta)
     assert all(c.get("/api/features").json()["owner_paths"].values())
 
 
-def _fetch_args(monkeypatch) -> dict:
+def _fetch_args(monkeypatch, url: str = "https://moxfield.com/decks/abc") -> dict:
     from magic_manager import addcards
     got: dict = {}
 
@@ -592,7 +595,7 @@ def _fetch_args(monkeypatch) -> dict:
         def wait(self):
             return 0
     monkeypatch.setattr(addcards.subprocess, "Popen", FakeProc)
-    addcards.fetch_deck_payload("https://moxfield.com/decks/abc")
+    addcards.fetch_deck_payload(url)
     return got
 
 

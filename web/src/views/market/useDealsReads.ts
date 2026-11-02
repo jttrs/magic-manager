@@ -31,7 +31,7 @@ export function useDealsReads(enabled: boolean) {
   const watch = useJob();
   const [awaiting, setAwaiting] = useState<string | null>(null);
   const [notes, setNotes] = useState<string[]>([]);
-  const [failure, setFailure] = useState<{ error: unknown; companion: boolean } | null>(null);
+  const [failure, setFailure] = useState<{ error: unknown; companion: boolean; needsCompanion?: boolean } | null>(null);
   const [reading, setReading] = useState<'tabs' | 'watched' | null>(null);
   /** The last read that ran (set as it starts): tells the status line which result to explain. */
   const [lastRead, setLastRead] = useState<'tabs' | 'watched' | null>(null);
@@ -69,7 +69,7 @@ export function useDealsReads(enabled: boolean) {
       } else if (serverTabs) {
         out = (await tabsQuery.refetch({ throwOnError: true })).data!;
       } else {
-        setFailure({ error: new Error(NO_SERVER_TABS), companion: false });
+        setFailure({ error: new Error(NO_SERVER_TABS), companion: false, needsCompanion: true });
         return;
       }
       // A new read replaces the pinned group, dismissals included.

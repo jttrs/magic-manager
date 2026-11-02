@@ -8,7 +8,7 @@ const PATHS = [
   { key: 'manapool.server_login', feature: 'cart_check', title: 'Read the Mana Pool cart with this server’s login' },
   { key: 'deals.mac_tabs', feature: 'deals', title: 'Read open tabs and store pages in this server’s Chrome' },
   { key: 'analytics.dashboard', feature: 'analytics', title: 'The Analytics dashboard (everyone’s activity)' },
-  { key: 'decks.moxfield_login', feature: null, title: 'Fetch private Moxfield decks with this server’s Moxfield login' },
+  { key: 'decks.moxfield_server', feature: null, title: 'Read Moxfield decks with this server’s browser and Moxfield login' },
 ];
 const flag = (name: string, about: string, owner_paths: string[] = [], override: boolean | null = null) =>
   ({ name, about, default: false, override, effective: override ?? false, owner_paths });

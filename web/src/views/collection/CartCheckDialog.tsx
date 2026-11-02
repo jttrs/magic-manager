@@ -6,6 +6,7 @@ import { cartSetupQuery, unwrap } from '../../app/queries';
 import { useCompanion } from '../../app/useCompanion';
 import { Button } from '../../components/Button';
 import { AwaitingNote, BookmarkletLink, FailureNote } from '../../components/companion/CompanionNotes';
+import { SetUpCompanionButton } from '../../components/companion/CompanionSetup';
 import { cartCheck, cartLines, companionBookmarklet, type CartAuditOut } from '../../core/api';
 import { CART_STORE_NAME, CompanionError, parseBookmarkletPaste, warningLines, type CartLine, type CartStore } from '../../core/companion';
 import { CART_STORES, cartAllowed, cartSwitchHint, lineQualifier } from '../../core/cartCheck';
@@ -119,10 +120,13 @@ function CartCheck({ family }: { family?: string }) {
                     <p className="max-w-[62ch] text-md leading-relaxed text-ink-muted">{READS[store]}</p>
                     {!allowed && <p role="status" className="max-w-[62ch] text-md leading-relaxed text-ink">{cartSwitchHint(store)}</p>}
                   </>
+                ) : c.status === 'checking' ? (
+                  <p className="max-w-[62ch] text-md leading-relaxed text-ink-muted">Looking for the browser companion…</p>
                 ) : (
-                  <p className="max-w-[62ch] text-md leading-relaxed text-ink-muted">
-                    {c.status === 'checking' ? 'Looking for the browser companion…' : 'Set up the browser companion first — the plug icon at the top of the app.'}
-                  </p>
+                  <>
+                    <p className="max-w-[62ch] text-md leading-relaxed text-ink-muted">Set up the browser companion first: it reads your cart page in this browser.</p>
+                    <SetUpCompanionButton />
+                  </>
                 )}
                 <Button tone="paper" emphasis="primary" className="self-start" onClick={() => viaCompanion.mutate()} disabled={c.status !== 'ready' || !allowed || busy}>
                   {viaCompanion.isPending ? (awaiting != null ? 'Waiting for approval…' : 'Reading your cart…') : 'Read my cart'}

@@ -61,10 +61,12 @@ sequenceDiagram
 ### 2. A compromised or spoofed app server (or someone impersonating our app)
 
 - **Pinned, user-confirmed origin.** The user types the app address on the extension's settings page
-  and Chrome asks them to allow it. Nothing on a web page can set it. Allowed: `http://localhost`,
-  `http://127.0.0.1`, or `https://*.ts.net` (Tailscale) in this build. Plain http is refused for
-  anything but this computer. Addresses with a path or credentials are refused (`parseAppOrigin`,
-  pinned by the extension e2e).
+  and Chrome asks them to allow it. Nothing on a web page can set it. Allowed (0.5.0): `http://localhost`
+  / `http://127.0.0.1` (this computer, any port) or **any `https://` domain name** — the hosted app's
+  own domain, a `*.ts.net` name. Refused, each with a `pair.*` code: plain http off this computer, a
+  path / query / fragment, credentials, an IP address or one-word host over https, and a site the
+  companion reads (`parseAppOrigin`, pinned by the extension e2e). See *Pairing with any https origin*
+  below for the threat this opens and how it is contained.
 - **Data minimisation.** Even a malicious paired app can only receive what the readers produce, after
   the user approves it:
   - cart: card name, printing id (Scryfall id from the image link), set name, finish, condition,
@@ -182,11 +184,45 @@ verbatim** plus a few lines that copy the result to the clipboard
 or storage. The user pastes it into the app themselves. The app validates the paste with the same
 schema (`parseBookmarkletPaste`) and the server's strict model.
 
+### 2a. Pairing with any https origin (0.5.0, Phase 3 step 9)
+
+Opening pairing beyond `localhost` / `*.ts.net` lets one build serve the owner's domain, a Tailscale
+name and a Chrome Web Store install alike. The new threat is **a user tricked into pairing with an
+attacker's site** ("paste this address into your companion"): that site could then ask for reads.
+
+| Attack / risk | Defence | Pinned by |
+|---|---|---|
+| A website pairs itself | It can't: the address is typed on the extension's own settings page (no web page can reach it — no `externally_connectable`, no `web_accessible_resources`), and Pair needs the user's click plus Chrome's own permission prompt naming the site. | `test_manifest_asks_for_the_least`, `companion-extension.spec.ts` |
+| A user is talked into pairing with an attacker's site | **Explicit typed address** (nothing pre-filled from a page). **Every read** opens the companion's approval window with **"Goes to `<origin>`"** as its own prominent line above the data (international names show as punycode, `xn--…`, so a look-alike domain is visible), and nothing leaves without Send. **Data minimisation**: even then the site receives only the approved card lines (§2), never cookies, tokens, e-mail or addresses. One paired origin at a time, so pairing an attacker un-pairs the real app (its hello stops: the app shows *Not connected*). | `companion-extension.spec.ts` (`#origin` text), reader goldens |
+| Pairing with a site the companion reads (a store, Mana Pool, Moxfield, Archidekt) | Refused (`pair.reader_site`): such a page could otherwise ask for reads of the user's own account there, and Unpair would remove the readers' own permission. | `companion-extension.spec.ts` (refusals) |
+| IP-literal / one-word https hosts, plain http off this computer | Refused (`pair.host`, `pair.insecure_http`): no public certificate is issued for them, and they are what a LAN or DNS-rebinding trick would use. | same |
+| The wildcard optional permission is granted wholesale | `optional_host_permissions` lists `https://*/*` only as the pool Pair asks from; Pair requests **exactly** `https://<host>/*` (Chrome grants only the requested patterns), nothing else ever requests it, and Allow access excludes it. Re-pairing removes the old address's permission; Unpair removes it too. A user who grants *all sites* in Chrome's own site-access menu changes nothing here: the bridge is registered for the paired pattern only and the worker checks the exact origin. | `test_manifest_asks_for_the_least`; e2e asserts the one requested origin and the revoke |
+| Another port on the paired host | A match pattern can't carry a port, so the bridge **and** the worker compare the exact origin (scheme + host + port) on every message. | `companion-extension.spec.ts` (other port) |
+| An old address's tab after re-pairing | Its bridge re-checks the pairing when `appOrigin` changes and goes silent; the worker refuses its messages regardless (`sender.origin !== pinned`). No window opens. | `companion-extension.spec.ts` (re-pair) |
+
+**No API token (H12 refinement).** The extension never calls the app's API and holds no credential for
+it. It hands approved lines to the paired app **page** (`postMessage`, pinned to that page's origin); the
+page posts them with the signed-in user's session cookie + CSRF header. Nothing extension-held can leak,
+and local and hosted work the same way. Hosted, every companion-fed route (`/api/cart/lines`,
+`/api/deals/tabs`, `/api/ingest/deck-from-browser`, `/api/collection/import/*`, `/api/purchases/orders`,
+the `deals.watchlist` job) needs a session (401), the session's CSRF token and the app's Origin (403)
+and passes `Sec-Fetch-Site`; it writes only the signed-in user's own file
+(`tests/test_companion_hosted.py`).
+
+**Members never reach the server's browser.** Hosted, a non-admin's Moxfield deck fetch is refused
+before any process starts (`owner_machine` `decks.moxfield_server`); their plain-HTTP deck fetches run
+with `--no-browser` / `MM_NO_SERVER_BROWSER=1`, refused again at `browser_launch.launch`,
+`MoxfieldSession` and `import_deck.fetch_moxfield`. Tabs, rendered store pages and carts already were
+admin-only on the server (step 6). Pinned by `test_member_moxfield_import_never_reaches_a_server_browser`
+and `test_member_is_refused_every_pinned_path`.
+
 ## Residual risks (accepted, documented)
 
 - **A compromised machine or browser** defeats any extension. Out of scope.
 - **XSS in the paired app** could trigger requests. Each still needs the user's Send in the
-  extension's window, which names the asking origin and shows the data.
+  extension's window, which names the destination origin and shows the data.
+- **A user who pairs with an attacker's https site and then presses Send** on what it asks for gives
+  that site the shown card lines. Contained to approved, minimised lines (§2a); accepted.
 - **Store page text lines** are filtered to lines mentioning a price or stock, so a personal line that
   also contains a price (e.g. "Jared's cart: $0.00") could be included. The same holds for a short
   line that starts like an offer label ("Sold by …", "Condition …") or follows a bare one. Both are
@@ -218,6 +254,32 @@ Moxfield's sign-in token (security exception)"*). The design keeps the exception
 - **Residual:** the refresh call can rotate Moxfield's refresh cookie (the browser stores the new one,
   as on moxfield.com). A compromised reader file could misuse the token — the same trust as the
   extension's code, mitigated by no remote code, a reproducible zip and code review.
+
+## Security review (2026-11-01, hosted companion — pair any https origin, extension 0.5.0)
+
+The security-review agent reviewed the diff: **no findings at the reporting threshold.**
+
+| # | Severity | File | Lines | Vulnerability | Confidence |
+|---|---|---|---|---|---|
+| — | — | — | — | No vulnerabilities found | — |
+
+Checked: `parseAppOrigin` against URL-parser quirks (decimal/hex/octal/short IPv4 forms all normalise
+to dotted IPs and are refused; `[::1]`, trailing dots, credentials, paths refused; uppercase /
+percent-encoded / full-width hosts canonicalised; punycode accepted as one host; ports kept in the
+origin, port-less pattern); Pair requests exactly `[parsed.pattern]` and nothing requests `https://*/*`;
+re-pair / Unpair can't remove Allow-access sites (reader sites are refused as app addresses); bridge +
+worker exact-origin, top-frame and tab-URL checks and the bridge's reset on a pairing change; members
+can't reach server browser automation (Moxfield refused before spawning, `--no-browser` /
+`MM_NO_SERVER_BROWSER` honoured at every launch seam, server and script classify the URL with the same
+`source_of`, whose substring match only over-refuses); companion-fed routes stay session + CSRF +
+Origin gated. Two below-threshold notes, both **fixed**:
+- `parseAppOrigin` let `*` through as a host character (`https://*.example.com` → a wildcard pattern;
+  not exploitable — no real page origin equals it — but it broke "exactly one origin"). Hosts are now
+  `[a-z0-9.-]` only (`pair.host`; pinned in the refusals e2e).
+- (pre-existing) the deck fetch passed the URL as a bare argument, so `--file=<server path>` could make
+  `import_deck.py` read a server file as deck JSON. The URL now follows `--`, `fetch_deck_payload`
+  requires http(s), and the `ingest.fetch_deck` input requires `^https?://`
+  (`test_a_deck_url_is_never_read_as_an_option`).
 
 ## Security review (2026-10-11, Archidekt decks + Moxfield collection / binders, extension 0.4.0)
 

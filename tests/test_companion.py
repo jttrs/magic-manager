@@ -47,8 +47,16 @@ def test_manifest_asks_for_the_least():
               "nativeMessaging", "clipboardRead", "declarativeNetRequest", "<all_urls>", "activeTab"}
     assert not banned & set(m["permissions"])
     opt = m["optional_host_permissions"]
-    assert not any(p in ("<all_urls>", "*://*/*", "https://*/*", "http://*/*") for p in opt)
+    assert not any(p in ("<all_urls>", "*://*/*", "http://*/*") for p in opt)
     assert all(p.startswith("https://") or p in ("http://localhost/*", "http://127.0.0.1/*") for p in opt)
+    # https://*/* is ONLY the pool the paired app address comes from (step 9): Pair asks Chrome for
+    # exactly one origin's pattern, nothing else ever asks for it, and Allow access excludes it.
+    assert companion.APP_HOSTS == ["http://localhost/*", "http://127.0.0.1/*", "https://*/*"] and opt.count("https://*/*") == 1
+    js = _ext_js()
+    asks = [(p.name, line.strip()) for p, src in js.items() for line in src.splitlines() if "permissions.request(" in line]
+    assert sorted(n for n, _ in asks) == ["options.js", "options.js"], asks
+    assert any("origins: [parsed.pattern]" in line for _, line in asks)
+    assert "https://*/*" not in "".join(js.values())
     for key in ("externally_connectable", "web_accessible_resources", "content_scripts", "update_url", "key"):
         assert key not in m, f"{key} widens who can reach the extension"
     csp = m["content_security_policy"]["extension_pages"]

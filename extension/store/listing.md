@@ -17,7 +17,7 @@ The same copy serves the optional Microsoft Edge Add-ons listing — field mappi
 **Description:**
 
 ```
-The companion for magic-manager, the Magic: The Gathering collection manager you run yourself.
+The companion for magic-manager, the Magic: The Gathering collection manager you run yourself or sign in to.
 
 Some of your card lists only exist in your own browser: your Mana Pool, TCGplayer or Card Kingdom cart, the store tabs you have open, your Moxfield and Archidekt decks, your Moxfield collection and binders, your store order history. The companion reads them where they are — in your browser — so your magic-manager app can:
 
@@ -33,7 +33,7 @@ You stay in charge of every read:
 • Only Mana Pool is allowed at install. Other sites need you to switch on "Allow access" in its settings, and you can switch it off any time.
 • No analytics, no tracking, no remote code. The source is plain, readable JavaScript: https://github.com/jttrs/magic-manager/tree/main/extension
 
-Requires a magic-manager app you run (on this computer or your own Tailscale network).
+Requires a magic-manager app (on this computer, or at the https address you open it at).
 ```
 
 **Category:** Tools · **Language:** English (United States)
@@ -66,7 +66,7 @@ Screenshots + tile are captured from the real extension pages by
 | `storage` | Remembers the one magic-manager app address the user paired (and when it last checked in, so the settings page can confirm pairing works), and holds a read in session memory while it waits for the user to approve or decline it. Nothing else is stored. |
 | `scripting` | Runs the extension's own bundled reader on a page only when the user asks for a read (for example, their cart page), to extract the card lines shown there; and registers the small bridge script on the one app address the user paired, so that app — and no other site — can ask for a read. No remote code is ever injected. |
 | Host permission `https://manapool.com/*` | The Mana Pool cart page, the extension's core read (checking a cart against the user's collection). Only the cart and order pages are read, and only when the user asks. |
-| Optional host permissions (app address) `http://localhost/*`, `http://127.0.0.1/*`, `https://*.ts.net/*` | Requested by **Pair** for the single address the user enters — their own magic-manager app on this computer or their private Tailscale network. The bridge runs only on that exact origin. |
+| Optional host permissions (app address) `http://localhost/*`, `http://127.0.0.1/*`, `https://*/*` | The pool **Pair** asks from: it requests exactly one origin, `https://<the address the user typed>/*` (or localhost), never all sites — the user's own magic-manager app, wherever it is hosted. IP addresses, plain http off this computer and the store/deck sites the extension reads are refused. The bridge runs only on that exact origin; re-pairing removes the old one. |
 | Optional host permissions (sites) — TCGplayer, Card Kingdom, Moxfield, Archidekt and the card stores listed in the manifest | Requested together, only when the user switches on **Allow access** in the extension's settings; removed together when switched off. Used to read the user's cart, deck, collection, open product page or order history on that site when the user asks. Holding the permission reads nothing by itself: each read is requested by the user and approved in the extension's window before anything is sent. |
 
 **Remote code:** No, I am not using remote code. (All JavaScript is in the package; the extension-page
@@ -103,8 +103,9 @@ communications, location, user activity.
 ```
 The extension needs a magic-manager app to pair with; it reads nothing on its own.
 1. Install and open the extension's settings (toolbar icon). Without a paired magic-manager app it
-   reads nothing. The settings page shows pairing — try "https://example.com": refused, not a local or
-   Tailscale address — and the Allow access switch.
+   reads nothing. The settings page shows pairing — try "http://example.com" (refused: plain http
+   off this computer) or "https://moxfield.com" (refused: a site the extension reads) — and the Allow
+   access switch.
 2. Optional full run: https://github.com/jttrs/magic-manager — `MM_FEATURES=companion,cart_check uv run mm serve`, then pair
    http://localhost:8765 and press "Read my cart" in Collection → Check my cart while a Mana Pool cart
    tab is open. The approval window shows the lines; nothing is sent until "Send to magic-manager".

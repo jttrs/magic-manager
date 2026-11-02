@@ -76,7 +76,10 @@ MANAPOOL_HOSTS = ["https://manapool.com/*"]
 MOXFIELD_HOSTS = ["https://moxfield.com/*", "https://*.moxfield.com/*"]
 # Archidekt decks (opt-in): the deck page, read with the user's own session.
 ARCHIDEKT_HOSTS = ["https://archidekt.com/*", "https://www.archidekt.com/*"]
-APP_HOSTS = ["http://localhost/*", "http://127.0.0.1/*", "https://*.ts.net/*"]
+# The paired app address: http on this computer, or ANY https host — only as the optional POOL
+# that Pair asks Chrome for ONE exact origin's pattern from (extension/src/protocol.js
+# parseAppOrigin); never requested or granted wholesale (docs/browser-companion-security.md).
+APP_HOSTS = ["http://localhost/*", "http://127.0.0.1/*", "https://*/*"]
 # Order history (purchases): TCGplayer's account site + Card Kingdom (optional "Order history" feature).
 ORDER_HOSTS = ["https://store.tcgplayer.com/*", "https://www.cardkingdom.com/*"]
 # Other carts (one opt-in switch per store): each cart page's own host.

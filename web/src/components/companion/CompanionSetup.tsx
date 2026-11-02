@@ -31,23 +31,42 @@ export function CompanionButton() {
           )}
         </Dialog.Trigger>
       </IconTooltip>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim backdrop-blur-[1px]" />
-        <Dialog.Content className="paper-grain fixed left-1/2 top-1/2 z-50 flex max-h-[min(52rem,calc(100dvh-1.5rem))] w-[min(44rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col rounded-sm bg-paper text-ink shadow-[0_24px_60px_-24px_var(--theme-scrim)] focus:outline-none">
-          <div className="flex flex-col gap-2 border-b-2 border-rule-strong px-5 pb-3 pt-5">
-            <Dialog.Title className="text-2xl voice-condensed font-bold leading-none">Browser companion</Dialog.Title>
-            <Dialog.Description className="max-w-[62ch] text-md leading-relaxed text-ink-muted">
-              A Chrome extension that reads your carts, your open store tabs, Moxfield and Archidekt decks and your Moxfield collection in your own browser. Each time, it shows you exactly what it would send and waits for you to approve.
-            </Dialog.Description>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-            <Setup c={c} />
-          </div>
-          <div className="flex justify-end border-t border-rule px-5 py-3">
-            <Dialog.Close asChild><Button tone="paper">Done</Button></Dialog.Close>
-          </div>
-        </Dialog.Content>
-      </Dialog.Portal>
+      <SetupPortal c={c} />
+    </Dialog.Root>
+  );
+}
+
+/** The setup dialog's body (shared by the header icon and every "Set up the companion" button). */
+function SetupPortal({ c }: { c: CompanionState }) {
+  return (
+    <Dialog.Portal>
+      <Dialog.Overlay className="fixed inset-0 z-40 bg-scrim backdrop-blur-[1px]" />
+      <Dialog.Content className="paper-grain fixed left-1/2 top-1/2 z-50 flex max-h-[min(52rem,calc(100dvh-1.5rem))] w-[min(44rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col rounded-sm bg-paper text-ink shadow-[0_24px_60px_-24px_var(--theme-scrim)] focus:outline-none">
+        <div className="flex flex-col gap-2 border-b-2 border-rule-strong px-5 pb-3 pt-5">
+          <Dialog.Title className="text-2xl voice-condensed font-bold leading-none">Browser companion</Dialog.Title>
+          <Dialog.Description className="max-w-[62ch] text-md leading-relaxed text-ink-muted">
+            A Chrome extension that reads your carts, your open store tabs, Moxfield and Archidekt decks and your Moxfield collection in your own browser. Each time, it shows you exactly what it would send and waits for you to approve.
+          </Dialog.Description>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          <Setup c={c} />
+        </div>
+        <div className="flex justify-end border-t border-rule px-5 py-3">
+          <Dialog.Close asChild><Button tone="paper">Done</Button></Dialog.Close>
+        </div>
+      </Dialog.Content>
+    </Dialog.Portal>
+  );
+}
+
+/** A plain button that opens the companion setup — where a feature reads only in your browser
+ *  (hosted members: Moxfield decks, open tabs, carts) and the companion isn't connected yet. */
+export function SetUpCompanionButton({ label = 'Set up the browser companion' }: { label?: string }) {
+  const c = useCompanion();
+  return (
+    <Dialog.Root>
+      <Dialog.Trigger asChild><Button tone="paper" className="self-start">{label}</Button></Dialog.Trigger>
+      <SetupPortal c={c} />
     </Dialog.Root>
   );
 }
@@ -92,7 +111,7 @@ function Setup({ c }: { c: CompanionState }) {
         </details>
         <ol className="flex list-decimal flex-col gap-3 pl-5 text-md leading-relaxed marker:text-ink-muted">
           <li>
-            Click the companion’s icon (pin it from Chrome’s puzzle-piece menu), enter this app’s address and press <strong>Pair</strong>:
+            Click the companion’s icon (pin it from Chrome’s puzzle-piece menu), enter the address you open the app at — exactly this one — and press <strong>Pair</strong>. Chrome asks you to allow that one address:
             <span className="mt-1 flex flex-wrap items-center gap-2">
               <code className="rounded-xs bg-paper-sunk px-2 py-1 tabular text-sm">{origin}</code>
               <CopyButton getText={() => origin} label="Copy address" tone="paper" />
@@ -137,7 +156,7 @@ function Status({ c }: { c: CompanionState }) {
       <div role="status" className="flex flex-col gap-2 text-md leading-relaxed">
         <p>
           <span className="font-medium">Not connected.</span>{' '}
-          <span className="text-ink-muted">The companion must be paired with exactly this address. Paste it into the companion’s settings, press Pair, then reload this page.</span>
+          <span className="text-ink-muted">The companion must be paired with the address you open the app at — exactly this one. Paste it into the companion’s settings, press Pair, then reload this page.</span>
         </p>
         <span className="flex flex-wrap items-center gap-2">
           <code className="rounded-xs bg-paper-sunk px-2 py-1 tabular text-sm">{origin}</code>

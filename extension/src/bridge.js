@@ -65,6 +65,12 @@
     post(Object.assign({}, r || { ok: false, code: 'companion.timeout' }, { type: 'ack', id: d.id }));
   });
 
+  // Unpaired or re-paired with another address: this page re-checks (and goes silent if it no
+  // longer matches). The worker checks the exact origin of every message regardless.
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && 'appOrigin' in changes) paired = null;
+  });
+
   chrome.runtime.onMessage.addListener((m, sender) => {
     if (sender.id !== chrome.runtime.id || sender.tab) return;
     if (m && m.type === 'result' && typeof m.id === 'string') post(m);

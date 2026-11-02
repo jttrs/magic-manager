@@ -6,6 +6,14 @@ import { ALL_ACCESS_ORIGINS, MANAPOOL_ORIGINS, parseAppOrigin } from './protocol
 
 const $ = (id) => document.getElementById(id);
 let access = false;
+const CATALOG = fetch(chrome.runtime.getURL('errors.json')).then((r) => r.json()).then((j) => j.codes).catch(() => ({}));
+
+/** A pairing failure: its catalogued message and fix (extension/errors.json), as an error line. */
+async function refuse(code) {
+  const c = (await CATALOG)[code] || {};
+  status([c.message || code, c.fix ? ` ${c.fix}` : ''].join(''), 'error');
+  $('pair-status').dataset.code = code;
+}
 
 /** The pairing line: text pieces, the origin set in its own span (never parsed as HTML). */
 function status(parts, cls = 'ok') {
@@ -18,6 +26,7 @@ function status(parts, cls = 'ok') {
     return span;
   }));
   el.className = cls;
+  delete el.dataset.code;
 }
 
 /** "just now" / "4 min ago" / "3 h ago" / a date. */
@@ -71,11 +80,12 @@ async function pair() {
 }
 
 async function pairWith(parsed) {
-  if (parsed.error) return status(parsed.error, 'error');
-  // First await in the click handler, so Chrome still sees the user's click.
-  const granted = await chrome.permissions.request({ origins: [parsed.pattern] });
+  if (parsed.code) return refuse(parsed.code);
+  // First await in the click handler, so Chrome still sees the user's click. Exactly this one
+  // origin's pattern is asked for (the manifest's any-https entry is only the pool it comes from).
+  const granted = await chrome.permissions.request({ origins: [parsed.pattern] }).catch(() => false);
   const { appOrigin: before } = await chrome.storage.local.get('appOrigin');
-  if (!granted) return status('Chrome permission was not given, so the companion is not paired.', 'error');
+  if (!granted) return refuse('pair.permission_denied');
   await chrome.storage.local.remove('lastHello');
   await chrome.storage.local.set({ appOrigin: parsed.origin });
   if (before && before !== parsed.origin) {
@@ -83,7 +93,7 @@ async function pairWith(parsed) {
     if (old.pattern && old.pattern !== parsed.pattern) await chrome.permissions.remove({ origins: [old.pattern] }).catch(() => {});
   }
   const bridged = await syncBridge();
-  if (!bridged?.ok) return status('Paired, but the companion couldn’t reach the app address. Reload the extension in chrome://extensions and press Pair again.', 'error');
+  if (!bridged?.ok) return refuse('pair.bridge_failed');
   $('origin').value = parsed.origin;
   await refresh();
 }
