@@ -166,6 +166,10 @@ sequenceDiagram
   collection or polling. The **extension** sends no analytics. The **app** reports only a failure's
   catalogued code as `companion.error {code}` (`config/analytics_events.toml`, the enum is exactly
   `extension/errors.json`), under the user's analytics consent. Never any cart, tab or deck content.
+- A page-changed code may also flag the site in the app's **scraper health** (`POST
+  /api/scrapers/report`, the code + store only). Health is shared by every user, so hosted only an
+  **admin's** report counts; a member's is dropped (204), and members see only the reason code's
+  plain message, never a raw one (§25.4 step 10).
 - Storage: the paired origin and when that origin last said hello (`storage.local` `appOrigin`, `lastHello` — an origin and a time, nothing else; cleared on re-pair/unpair), plus the one pending request in `storage.session`
   (memory only, not readable by content scripts, cleared on decision; since 0.4.4 its data is held
   gzipped in one string so a whole collection fits — the same data, unpacked for the approval window

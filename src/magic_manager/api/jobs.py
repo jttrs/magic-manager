@@ -47,6 +47,14 @@ class JobResult:
     artifacts: list[Artifact] = field(default_factory=list)
 
 
+# Who may run a job when hosted (§25.4 step 10). Every spec MUST declare it (no default):
+#   user    — reads/writes only the submitter's own data (and the catalog rows it needs);
+#   shared  — fetches third-party data bounded by its input for the submitter (cache-filling);
+#   catalog — catalog-wide / third-party-heavy work for everyone: admins only when hosted.
+JobScope = Literal["user", "shared", "catalog"]
+ADMIN_ONLY_CODE = "jobs.admin_only"
+
+
 @dataclass(frozen=True)
 class JobSpec:
     name: str
@@ -55,6 +63,31 @@ class JobSpec:
     input_model: type[BaseModel]
     run: Callable[[Any, ProgressFn], JobResult]
     mutates: bool = False  # writes user data (vs cache-only / read)
+    scope: JobScope = field(kw_only=True)
+
+
+class JobNotAllowed(Exception):
+    """A catalog-scope job asked for by someone who isn't an admin (hosted)."""
+
+    error_code = ADMIN_ONLY_CODE
+
+    def __init__(self, spec: JobSpec) -> None:
+        super().__init__(f"“{spec.title}” updates the shared catalog, so only an admin can run it here. "
+                         "You see what it has already fetched.")
+        self.spec = spec
+
+
+def may_run(spec: JobSpec) -> bool:
+    """May the bound user run ``spec``? Catalog jobs: admins only when hosted (always locally)."""
+    if spec.scope != "catalog":
+        return True
+    from .. import owner_machine
+    return owner_machine.is_admin()
+
+
+def require_allowed(spec: JobSpec) -> None:
+    if not may_run(spec):
+        raise JobNotAllowed(spec)
 
 
 _REGISTRY: dict[str, JobSpec] = {}
@@ -76,3 +109,10 @@ def get(name: str) -> JobSpec:
 
 def all_specs() -> list[JobSpec]:
     return list(_REGISTRY.values())
+
+
+def access() -> dict[str, bool]:
+    """Every catalog-scope job → may the bound user run it here (one admin lookup)."""
+    from .. import owner_machine
+    ok = owner_machine.is_admin()
+    return {s.name: ok for s in _REGISTRY.values() if s.scope == "catalog"}

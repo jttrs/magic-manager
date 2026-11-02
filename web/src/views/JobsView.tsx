@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
+import { useJobAllowed } from '../app/jobAccess';
 import { jobsQuery } from '../app/queries';
 import { useJob } from '../app/useJob';
 import { ViewLayout } from '../components/AppShell';
@@ -7,6 +8,7 @@ import { Button } from '../components/Button';
 import { SideSection, TextField } from '../components/Sidebar';
 import { EmptyNote, GuideSheet } from '../components/States';
 import { fmtInt } from '../core/format';
+import { ADMIN_JOB_NOTE } from '../core/jobs';
 
 /** The job-runner chassis: configure → enqueue → stream progress (SSE) → result. */
 export function JobsView() {
@@ -18,6 +20,8 @@ export function JobsView() {
   const [formError, setFormError] = useState('');
   const [tagError, setTagError] = useState('');
   const { live, start, follow } = useJob();
+  const warmOk = useJobAllowed('edhrec.sync_bulk');
+  const tagsOk = useJobAllowed('scryfall.sync_tags');
 
   async function onSubmit(ev: FormEvent) {
     ev.preventDefault();
@@ -54,13 +58,15 @@ export function JobsView() {
           <input type="checkbox" checked={resume} onChange={(e) => setResume(e.target.checked)} className="h-4 w-4 accent-[var(--theme-accent)]" />
           Skip cards already cached
         </label>
-        <Button type="submit" emphasis="primary" disabled={submitting}>{submitting ? 'Starting…' : 'Start warm-up'}</Button>
+        <Button type="submit" emphasis="primary" disabled={submitting || !warmOk}>{submitting ? 'Starting…' : 'Start warm-up'}</Button>
+        {!warmOk && <p className="text-sm text-on-chrome-muted">{ADMIN_JOB_NOTE}</p>}
         <p id="job-form-error" role="alert" className="min-h-4 text-sm text-danger">{formError}</p>
       </SideSection>
     </form>
     <SideSection title="Sync card and art tags">
       <p className="text-sm leading-relaxed text-on-chrome-muted">Download Scryfall’s daily oracle-tag file so Commanders can group cards by function.</p>
-      <Button type="button" disabled={submitting} onClick={onSyncTags}>Sync tags</Button>
+      <Button type="button" disabled={submitting || !tagsOk} onClick={onSyncTags}>Sync tags</Button>
+      {!tagsOk && <p className="text-sm text-on-chrome-muted">{ADMIN_JOB_NOTE}</p>}
       {tagError && <p role="alert" className="text-sm text-danger">{tagError}</p>}
     </SideSection>
     </div>

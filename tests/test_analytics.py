@@ -274,7 +274,7 @@ def test_failed_job_detail_is_hidden_when_hosted(on, monkeypatch):
     from magic_manager.web import runtime
 
     class Spec:
-        name, title = "boom", "Boom"
+        name, title, scope = "boom", "Boom", "user"
 
         class input_model:
             @staticmethod

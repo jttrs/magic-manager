@@ -14,6 +14,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from .. import addcards
+from .ids import DeckFileName, SetCode
 from .jobs import Artifact, JobResult, JobSpec, ProgressEvent, ProgressFn, register
 
 Finish = Literal["nonfoil", "foil"]
@@ -137,7 +138,7 @@ def precons(q: str = "", limit: int = 50) -> list[PreconOptionOut]:
 # ---------- jobs ----------
 
 class AddPreconInput(BaseModel):
-    file_name: str = Field(min_length=1, description="MTGJSON deck fileName from the precon catalog.")
+    file_name: DeckFileName = Field(description="MTGJSON deck fileName from the precon catalog.")
     copies: int = Field(1, ge=1, le=50)
     state: Literal["auto", "built", "deconstructed"] = Field(
         "auto", description="auto = mtgjson.default_precon_state (pool-shaped products go loose).",
@@ -157,6 +158,7 @@ ADD_PRECON = register(JobSpec(
     input_model=AddPreconInput,
     run=_run_add_precon,
     mutates=True,
+    scope="user",
 ))
 
 
@@ -181,4 +183,5 @@ FETCH_DECK = register(JobSpec(
     description="Read a deck from a deck-builder URL and resolve it to printings for review (adds nothing yet).",
     input_model=FetchDeckInput,
     run=_run_fetch_deck,
+    scope="shared",
 ))

@@ -68,7 +68,7 @@ set sync rewrites thousands of pages, which would burn write ops on a cache we c
 3. **Tools** (as `mm`):
    ```sh
    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-   brew install git uv node@22 && brew link --force node@22
+   brew install git uv node@22 gnupg && brew link --force node@22
    brew install --cask tailscale google-chrome
    ```
    Litestream is installed by the installer (pinned v0.5.17, SHA-256 checked), not by brew.
@@ -85,7 +85,7 @@ set sync rewrites thousands of pages, which would burn write ops on a cache we c
    mkdir -p ~/magic-manager && cd ~/magic-manager
    GIT_SSH_COMMAND='ssh -i ~/.ssh/mm_deploy' git clone git@github.com:jttrs/magic-manager.git app
    cd app && git config core.sshCommand 'ssh -i ~/.ssh/mm_deploy'
-   uv sync --frozen && npm --prefix web ci && npm --prefix web run build
+   uv sync --frozen && npm --prefix web ci --ignore-scripts && npm --prefix web run build
    uv run playwright install chromium        # only for the admin-only Moxfield import
    ```
 6. **Cloudflare R2.** Cloudflare dashboard → R2 → *Create bucket* `magic-manager-backups`
@@ -126,8 +126,11 @@ set sync rewrites thousands of pages, which would burn write ops on a cache we c
    ```sh
    cd ~/magic-manager/app
    deploy/macos/install.sh --origin https://<mini>.<tailnet>.ts.net            # shows the plan, writes nothing
-   deploy/macos/install.sh --origin https://<mini>.<tailnet>.ts.net --apply
+   deploy/macos/install.sh --origin https://<mini>.<tailnet>.ts.net --trusted-proxy tailscale --apply
    ```
+   `--trusted-proxy` (→ `MM_TRUSTED_PROXY` in `hosted.env`) names the proxy in front — see
+   [Client IP behind the proxy](#client-ip-behind-the-proxy). It also imports GitHub's commit-signing
+   key into the kit's own keyring — see [Deploy verification](#deploy-verification).
    It installs Litestream into `~/Library/Application Support/magic-manager-hosted/bin/`,
    copies the wrapper scripts there with `hosted.env` (non-secret settings, 0600), writes four
    agents `com.magic-manager.hosted.{serve,litestream,deploy,catalog-backup}` (umask 077, logs
@@ -193,7 +196,7 @@ bind renames files, and a replica started on `owner.db` would be orphaned under 
   upgrade.sh --apply     # only the rehearsed commit: stop, deploy, pair snapshot (data/bak/split.bak-…), upgrade + verify, start
   ```
   A commit that fails to deploy (build or health check) is rolled back and not retried; the
-  next commit is.
+  next commit is. A commit GitHub didn't make is **held** too (next section).
   The app's start-up then migrates every other user's file (each snapshotted first, #199).
   When a deploy changes `deploy/macos/`, you get a notification to re-run `install.sh --apply`.
 - **Restore drill** (monthly, when quiet): `mm-hosted host verify-replica` restores auth.db and
@@ -216,6 +219,52 @@ bind renames files, and a replica started on `owner.db` would be orphaned under 
 - **Replication has no alert yet**: if R2 is unreachable or the token is wrong, Litestream
   retries and logs to `litestream.log`, but nothing notifies you. The monthly restore drill
   (above) is the check until an alert exists.
+
+### Deploy verification
+
+`deploy.sh` and `upgrade.sh` deploy only **squash-merges of pull requests**: every first-parent
+commit between the running one and `origin/main` must have one parent and a valid signature by
+**GitHub's web-flow key** (`git verify-commit` — GitHub signs what it makes itself when a PR is
+merged in the web UI or with `gh pr merge`), and `origin/main` must descend from the running
+commit (no force-push). `main`'s branch protection requires the PR checks (`pytest`, `web-check`,
+`e2e`, `extension`, `review-stamp`) before a merge, so a signed squash-merge passed them. A direct
+push, a locally made commit or a rewritten `main` is held: logged in `deploy.log`
+(`HOLD … not deployed — <why>`) with one notification; `upgrade.sh` refuses it (exit 2).
+
+Key setup is part of `install.sh --apply` (needs `brew install gnupg`): it imports
+`deploy/macos/web-flow.gpg` (a copy of <https://github.com/web-flow.gpg>) into
+`~/Library/Application Support/magic-manager-hosted/gnupg` (0700, its own keyring — your personal
+GnuPG keyring is untouched) and refuses unless it holds the fingerprint pinned in
+`deploy/macos/bin/common.sh` (`MM_WEBFLOW_FPR=968479A1AFF927E37D1A566BB5690EEEBB952194`). Check
+a commit by hand:
+```sh
+GNUPGHOME="$HOME/Library/Application Support/magic-manager-hosted/gnupg" git -C ~/magic-manager/app verify-commit --raw origin/main 2>&1 | grep VALIDSIG
+```
+If GitHub ever rotates the key (it did in January 2024), deploys hold with "isn't signed by GitHub":
+download the new key from <https://github.com/web-flow.gpg>, check its fingerprint against
+GitHub's announcement, update `web-flow.gpg` + `MM_WEBFLOW_FPR` in a PR, and re-run
+`install.sh --apply` on the mini. Web dependencies install with `npm ci --ignore-scripts` (no
+package install hooks run on the server; the build needs none — the only package with one,
+`fsevents`, ships prebuilt) and Python with `uv sync --frozen`.
+
+### Client IP behind the proxy
+
+The sign-in rate limit keys on the client's IP. Behind Tailscale Serve or Cloudflare Tunnel every
+request reaches the app from 127.0.0.1, so the app must be told which proxy's header to believe —
+and only that one: `MM_TRUSTED_PROXY` (`install.sh --trusted-proxy …`).
+
+| `MM_TRUSTED_PROXY` | client IP = | when |
+|---|---|---|
+| unset (default) | the TCP peer; **every** forwarding header is ignored | nothing in front, or you don't want to trust one |
+| `tailscale` | the last `X-Forwarded-For` hop (the one Tailscale Serve appended) | the beta: Tailscale Serve only |
+| `cloudflare` | `CF-Connecting-IP` | step 11: Cloudflare Tunnel (`cloudflared` → 127.0.0.1) |
+
+The header is used only when the TCP peer is loopback (the proxy on the same Mac); from anywhere
+else it is ignored, and a malformed value falls back to the peer. A misspelt value refuses to start.
+`mm serve` turns off uvicorn's own `X-Forwarded-For` rewrite (`proxy_headers=False`) so this is
+the only place it's decided. Set exactly one proxy: with both Serve and a Tunnel pointing at the
+app, a tailnet client could send its own `CF-Connecting-IP`. Writes are limited per **session**,
+not per IP, so they don't depend on this.
 
 ## 4. The laptop's local copy (H3)
 

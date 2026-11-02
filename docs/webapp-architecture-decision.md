@@ -555,6 +555,7 @@ The browser companion (H12) applies the same principle with its own threat model
   image is still built in CI for the vendor move (H7).
 - **Analytics host (resolved 2026-10-07):** a separate SQLite analytics file on the home server
   until the vendor move (H14).
+- **Backups: client-side encryption (Litestream age) — deferred; needs an off-box key escrow plan.**
 - **Budget (decided 2026-10-12):** minimal: a domain (~$10/yr) + free-tier object storage
   (Cloudflare R2) for Litestream backups. Anything beyond that comes back to the owner first.
 
@@ -608,7 +609,14 @@ The browser companion (H12) applies the same principle with its own threat model
    interim) and their other deck fetches run with no browser allowed (`MM_NO_SERVER_BROWSER`); tabs,
    rendered store reads and the cart were already admin-only on the server. The admin pin itself
    stays — admins keep the owner-machine paths on the home server.)*
-10. Security review of the hosted build (§25.0) — gate before any outside user.
+10. Security review of the hosted build (§25.0) — gate before any outside user. *(Done: the
+    whole-system review on `8dbf86f` found no exploitable vulnerabilities; its hardening list is
+    built in the step-10 PR — CSP + security headers (a per-response style nonce, no `unsafe-*`),
+    API docs off hosted, member-proof scraper health, one set-code/deck-name validator (+ the
+    wrapper), same-store https-only redirects, job scopes (`catalog` = admins only) + 3 active jobs
+    per user + a live-read limit, coded error bodies, `MM_TRUSTED_PROXY`, cancel a disabled
+    user's jobs, deploys of web-flow-signed squash-merges only with `npm ci --ignore-scripts`,
+    digest-pinned base images and SHA-pinned actions.)*
 11. Owner admin access over Tailscale; friends' external access via Cloudflare Tunnel + own
     domain (§25.2).
 

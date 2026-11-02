@@ -7,6 +7,10 @@
   (``StaleCounts`` → ``stale_counts``), ``request_validation``, or ``http_<status>``.
   Unhandled exceptions become a 500 that names the exception — never a bare
   "Internal Server Error".
+* Hosted, an error's ``detail`` never carries raw engine text: a SQLite / OS /
+  subprocess error, or any message showing a filesystem path, SQL text or a
+  wrapper's stderr, becomes a plain message for its status (:func:`public_detail`);
+  the full text stays in the server log under the same ``request_id``.
 * The client's in-memory session id arrives as ``X-MM-Session`` (a UUID, else
   ignored) and links server events to that browser session.
 * After the response, :func:`analytics.record_response` records ``api.error`` or a
@@ -17,6 +21,9 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
+import sqlite3
+import subprocess
 import uuid
 
 from fastapi import FastAPI, Request
@@ -25,7 +32,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from .. import analytics, owner_machine
+from .. import analytics, mtgjson, owner_machine
 from ..analytics import catalog, consent
 
 log = logging.getLogger("magic_manager.web")
@@ -45,6 +52,48 @@ def error_code(exc: StarletteHTTPException) -> str:
     if cause is not None:
         return catalog.to_code(type(cause).__name__)
     return "not_found" if exc.status_code == 404 else f"http_{exc.status_code}"
+
+
+# Text that must never reach a hosted user: an absolute filesystem path, SQLite
+# text, a wrapper script's exit/stderr, a traceback.
+_LEAKY = re.compile(
+    r"(?<![\w:/.])/(?:[\w.~-]+/)+[\w.~-]*"            # /Users/…/x, /data/users/…, /var/folders/…
+    r"|\bsqlite3?\b|SQLITE_|no such (?:table|column)|constraint failed|database is locked"
+    r"|\.sh\b|\bexited \d+|Traceback|File \"",
+    re.I)
+# Exceptions whose text is never shown hosted, whatever it says.
+_RAW_CAUSES: tuple[type[BaseException], ...] = (sqlite3.Error, OSError, subprocess.SubprocessError)
+
+_PLAIN_BY_STATUS = {
+    502: "An outside service didn’t answer as expected — try again in a moment.",
+    503: "That isn’t available right now — try again in a moment.",
+}
+PLAIN_DEFAULT = "This couldn’t be done — the details are in the server log."
+
+
+def leaky(text: str) -> bool:
+    return bool(_LEAKY.search(text))
+
+
+def public_detail(detail, cause: BaseException | None, status: int):
+    """Hosted: ``detail`` with raw engine text replaced by a plain message (the code
+    and request id still identify it). Local mode keeps every detail."""
+    if consent.mode() != "hosted":
+        return detail
+    plain = _PLAIN_BY_STATUS.get(status, PLAIN_DEFAULT)
+    if isinstance(cause, _RAW_CAUSES):
+        return {**detail, "message": plain} if isinstance(detail, dict) and "message" in detail else plain
+    return _scrub(detail, plain)
+
+
+def _scrub(value, plain: str):
+    if isinstance(value, str):
+        return plain if leaky(value) else value
+    if isinstance(value, dict):
+        return {k: _scrub(v, plain) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_scrub(v, plain) for v in value]
+    return value
 
 
 class TelemetryMiddleware:
@@ -111,7 +160,11 @@ def install(app: FastAPI) -> None:
         request.state.error_code = code
         if exc.status_code in (204, 304):
             return Response(status_code=exc.status_code, headers=exc.headers)
-        return JSONResponse({"detail": exc.detail, "code": code,
+        if exc.__cause__ is not None and consent.mode() == "hosted":
+            log.warning("%s %s → %s %s ref=%s: %s: %s", request.method, request.url.path, exc.status_code, code,
+                        getattr(request.state, "request_id", None), type(exc.__cause__).__name__, exc.__cause__)
+        detail = public_detail(exc.detail, exc.__cause__, exc.status_code)
+        return JSONResponse({"detail": detail, "code": code,
                              "request_id": getattr(request.state, "request_id", None)},
                             status_code=exc.status_code, headers=exc.headers)
 
@@ -121,6 +174,13 @@ def install(app: FastAPI) -> None:
         request.state.error_code = owner_machine.CODE
         return JSONResponse({"detail": str(exc), "code": owner_machine.CODE,
                              "request_id": getattr(request.state, "request_id", None)}, status_code=403)
+
+    @app.exception_handler(mtgjson.BadIdentifier)
+    async def bad_identifier(request: Request, exc: mtgjson.BadIdentifier):
+        # A set code / deck file name that isn't one reached the engine (the API types refuse most first).
+        request.state.error_code = mtgjson.BadIdentifier.error_code
+        return JSONResponse({"detail": str(exc), "code": mtgjson.BadIdentifier.error_code,
+                             "request_id": getattr(request.state, "request_id", None)}, status_code=422)
 
     @app.exception_handler(RequestValidationError)
     async def coded_validation_error(request: Request, exc: RequestValidationError):

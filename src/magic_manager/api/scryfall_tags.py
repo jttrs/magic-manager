@@ -41,4 +41,5 @@ SYNC_TAGS = register(JobSpec(
     description="Download Scryfall's official oracle_tags + art_tags bulk files and rebuild the local Tagger cache.",
     input_model=SyncTagsInput,
     run=_run_sync_tags,
+    scope="catalog",
 ))

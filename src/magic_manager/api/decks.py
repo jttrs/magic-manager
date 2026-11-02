@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from .. import addcards, deck_edit, deck_view, recipes
 from .ingest import DeckSourceOut, PrintingOut
+from .ids import DeckFileName, SetCode
 from .jobs import Artifact, JobResult, JobSpec, ProgressEvent, ProgressFn, register
 
 
@@ -250,8 +251,8 @@ def recipe_detail(file_name: str) -> RecipeDetailOut:
 # ---------- job: read recipes' card lists ----------
 
 class ReadRecipesInput(BaseModel):
-    file_names: list[str] = Field(default_factory=list, max_length=500, description="MTGJSON deck fileNames to read.")
-    set: str | None = Field(None, min_length=2, max_length=8, description="Read every catalog recipe in this set (code).")
+    file_names: list[DeckFileName] = Field(default_factory=list, max_length=500, description="MTGJSON deck fileNames to read.")
+    set: SetCode | None = Field(None, description="Read every catalog recipe in this set (code).")
 
 
 def _run_read(inp: ReadRecipesInput, progress: ProgressFn) -> JobResult:
@@ -275,6 +276,7 @@ READ_RECIPES = register(JobSpec(
     description="Fetch deck recipes' card lists (MTGJSON), fill card sets with no local prices, and Jumpstart front cards.",
     input_model=ReadRecipesInput,
     run=_run_read,
+    scope="shared",
 ))
 
 

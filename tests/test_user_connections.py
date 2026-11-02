@@ -231,7 +231,7 @@ def _count_job(seen: list):
     def run(_inputs, _progress):
         seen.append((layout.bound_user(), _copies()))
         return jobs_api.JobResult(summary="ok")
-    return jobs_api.JobSpec(name="test.count", title="Count", description="", input_model=_In, run=run, mutates=True)
+    return jobs_api.JobSpec(name="test.count", title="Count", description="", input_model=_In, run=run, mutates=True, scope="user")
 
 
 def test_job_runs_as_its_submitter_and_is_visible_only_to_them(owner_split, monkeypatch):

@@ -12,6 +12,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from .. import market, sld_market
+from .ids import DeckFileName, SetCode
 from .jobs import Artifact, JobResult, JobSpec, ProgressEvent, ProgressFn, register
 
 
@@ -194,7 +195,7 @@ def sld_drops(limit: int = 30) -> SldDropsOut:
 
 
 class ValueFamilyInput(BaseModel):
-    code: str = Field(min_length=2, max_length=10, description="Any set code in the family.")
+    code: SetCode = Field(description="Any set code in the family.")
 
 
 def _run_value_family(inp: ValueFamilyInput, progress: ProgressFn) -> JobResult:
@@ -218,4 +219,5 @@ VALUE_FAMILY = register(JobSpec(
     description="Price every sealed product in a set family: sealed market vs what's inside.",
     input_model=ValueFamilyInput,
     run=_run_value_family,
+    scope="shared",
 ))

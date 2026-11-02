@@ -355,7 +355,10 @@ def test_delete_route_checks_csrf_reauth_confirmation_and_jobs(web, split_dir, m
     # a running job of M's
     jobs = cm.app.state.jobs
     jobs._jobs["j1"] = JobRecord(id="j1", name="x", title="Read prices", inputs={}, status="running", user=m)
+    monkeypatch.setattr(account_routes, "JOB_STOP_WAIT", 0.2)
     r = _delete(cm, hm)
+    # their job was told to stop; one still running after the wait refuses the delete
+    assert jobs._jobs["j1"].cancelled
     assert r.status_code == 409 and r.json()["code"] == "account.jobs_running" and "Read prices" in r.json()["detail"]["message"]
     jobs._jobs["j1"].status = "succeeded"
     # stale sign-in: 11 minutes later
@@ -385,7 +388,7 @@ def test_delete_route_refuses_the_last_admin(web, split_dir):
 def test_a_job_cant_start_while_the_account_is_being_deleted(web):
     _a, (cm, hm, m) = web
     with cm.app.state.jobs.closing_user(m), layout.as_user(m):
-        r = cm.post("/api/jobs/scryfall.sync_tags", headers=hm, json={})
+        r = cm.post("/api/jobs/decks.read_recipes", headers=hm, json={"set": "fin"})
     assert r.status_code == 409 and "deleting your account" in r.json()["detail"]
 
 

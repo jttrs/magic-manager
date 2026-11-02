@@ -46,9 +46,12 @@ those checks are then unverified, never down.
 
 **Real use is the backup** for what the canary can't reach (eBay, your own cart, private decks):
 a Deals read that finds no price flags the store; a read that works clears it; the companion
-reports `cart.page_changed` / `moxfield.changed` / `moxfield.collection_changed` / `archidekt.changed` / `orders.page_changed` + store (cart reports name their store; none = Mana Pool) (`POST /api/scrapers/report`); a server deck
+reports `cart.page_changed` / `moxfield.changed` / `moxfield.collection_changed` / `archidekt.changed` / `orders.page_changed` + store (cart reports name their store; none = Mana Pool) (`POST /api/scrapers/report` — hosted, only an admin's report flags anything: health is global, so a
+member's is dropped with a 204); a server deck
 fetch that parses no cards flags that builder; any successful EDHREC sync clears its flag.
-Blocks, private decks, empty decks and empty carts never flag. In the Moxfield canary a navigation
+Blocks, private decks, empty decks and empty carts never flag. A real-use record stores only its
+reason **code** (never exception text, URLs or ids); hosted, only admins see a check's own
+message — everyone else sees the reason catalog's plain message. In the Moxfield canary a navigation
 error (offline, DNS, timeout) is `unverified`; only a page that loaded without firing the deck call is `fail`.
 
 ## Status file

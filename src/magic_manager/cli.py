@@ -704,8 +704,10 @@ def serve_cmd(
             typer.echo(f"error: {e}", err=True)
             raise typer.Exit(2)
         typer.echo(f"hosted mode: sign-in on {origin} via {', '.join(auth.configured_providers())}", err=True)
+    # proxy_headers=False: uvicorn would otherwise trust X-Forwarded-For from
+    # 127.0.0.1; the app decides that itself (MM_TRUSTED_PROXY, web/security.py).
     uvicorn.run("magic_manager.web.app:create_app", factory=True,
-                host=host, port=port, reload=reload)
+                host=host, port=port, reload=reload, proxy_headers=False)
 
 
 @set_app.command("backfill-dates")

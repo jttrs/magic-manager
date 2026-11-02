@@ -291,15 +291,19 @@ def record(results: list[tuple[str, Outcome, str | None, str | None, dict | None
     return out
 
 
-def record_use(key: str, outcome: Outcome, code: str | None = None, message: str | None = None) -> None:
+def record_use(key: str, outcome: Outcome, code: str | None = None) -> None:
     """A real read in the app. Never raises — health must never break a feature.
-    ``unverified`` uses (blocked, private deck, offline) aren't recorded."""
-    record_uses([(key, outcome, code, message)])
+    ``unverified`` uses (blocked, private deck, offline) aren't recorded.
+
+    Health is GLOBAL (every user sees it) and a read may be any member's, so a use
+    stores only its reason CODE — never exception text, URLs or ids; the shown
+    message comes from :data:`REASONS`."""
+    record_uses([(key, outcome, code)])
 
 
-def record_uses(uses: list[tuple[str, Outcome, str | None, str | None]]) -> None:
+def record_uses(uses: list[tuple[str, Outcome, str | None]]) -> None:
     """Many real reads at once (one file write) — see :func:`record_use`."""
-    rows = [(k, o, c, m, None) for k, o, c, m in uses if o != "unverified"]
+    rows = [(k, o, c, None, None) for k, o, c in uses if o != "unverified"]
     if not rows:
         return
     try:

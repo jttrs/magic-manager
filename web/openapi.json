@@ -327,6 +327,9 @@
               }
             }
           },
+          "204": {
+            "description": "Not recorded: only an admin's report flags a scraper (hosted)."
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -1763,7 +1766,6 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 2,
               "title": "Code"
             }
           }
@@ -1806,7 +1808,6 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 2,
               "title": "Set"
             }
           },
@@ -1859,7 +1860,6 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 2,
               "title": "Set"
             }
           },
@@ -1925,7 +1925,6 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 2,
               "title": "Set"
             }
           },
@@ -2039,7 +2038,6 @@
             "required": true,
             "schema": {
               "type": "string",
-              "minLength": 2,
               "title": "Code"
             }
           }
@@ -10031,6 +10029,14 @@
             "title": "Mode",
             "description": "hosted = sign-in required (MM_MODE=hosted); local = no login.",
             "default": "local"
+          },
+          "jobs": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "type": "object",
+            "title": "Jobs",
+            "description": "Catalog-wide jobs (JobSpec scope `catalog`) \u2192 may you run them here. All true locally; admins only when hosted."
           }
         },
         "type": "object",
