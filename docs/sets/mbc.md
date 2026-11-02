@@ -43,7 +43,7 @@ Three structural bands by CN (all black-bordered):
 
 | Band | CNs | Count | Frame | Stamp | Finishes | Rarity | Commander-legal |
 |---|---|---:|---|---|---|---|---|
-| New commanders | 1–60 | 60 | 2015 (`legendary` frame effect on the 52 legendary non-planeswalkers) | `oval` | nonfoil + foil | rare | **no** (playtest-style new cards) |
+| New commanders | 1–60 | 60 | 2015 (`legendary` frame effect on the 51 legendary non-planeswalkers; the 9 planeswalkers carry none) | `oval` | nonfoil + foil | rare | **no** (playtest-style new cards) |
 | Acorn "conjure" cards | 61–70 | 10 | 2015 (`enchantment` on 62/67, `legendary` on 70) | `acorn` | foil only (7) / none (3 digital) | uncommon | no (acorn) |
 | Future Sight-frame staples | 71–80 | 10 | `future` | none | nonfoil + foil | common/uncommon/rare | yes (reprints: Chaos Warp, Chromatic Lantern, Exotic Orchard, Path of Ancestry, Fellwar Stone, Mind Stone, Swiftfoot Boots, Thought Vessel, Jeweled Amulet, Dust to Dust) |
 
@@ -155,5 +155,8 @@ families, so valuing it syncs `mb2` + `plst` first:
 | `futureSight` / `futureSightFoil` | 1 | 119 / 134 | `mb2` CN 122–257 + `mbc` CN 71–80 (foil in ~4.4% of packs) |
 | `alchemyAcorn` | replaces the Future Sight slot | 10 | `mbc` CN 61–70 (~0.3% of packs; includes the 3 digital prints) |
 
-Coverage < 100% is mostly unpriced `plst` and acorn printings, not an unsynced
-set.
+Coverage < 100% is missing prices, not an unsynced set (every sheet card is
+local, 2026-11-01). Unpriced share of each sheet's weight: `commander` 88%,
+`wildcard` 85%, `alchemyAcorn` 80%, `newCommanderFoil` 45% (mbc foils with no
+foil price yet), `futureSightFoil` 18%, colour sheets 15–17%; `newCommander`,
+`futureSight` and `playtest` are fully priced.
