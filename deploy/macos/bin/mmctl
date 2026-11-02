@@ -1,0 +1,23 @@
+#!/bin/bash
+# Start / stop / restart / show the hosted launchd agents.
+#   mmctl start|stop|restart|status [serve litestream deploy catalog-backup]
+# shellcheck source=deploy/macos/bin/common.sh
+. "$(dirname "$0")/common.sh"
+ALL="litestream serve deploy catalog-backup"
+cmd="${1:-status}"; shift || true
+names="${*:-$ALL}"
+domain="gui/$(id -u)"
+for n in $names; do
+  case "$n" in serve|litestream|deploy|catalog-backup) ;; *) echo "unknown service: $n" >&2; exit 2 ;; esac
+  label="com.magic-manager.hosted.$n"
+  plist="$MM_LAUNCH_AGENTS/$label.plist"
+  loaded=no; launchctl print "$domain/$label" >/dev/null 2>&1 && loaded=yes
+  case "$cmd" in
+    start)   [ "$loaded" = yes ] || launchctl bootstrap "$domain" "$plist" ;;
+    stop)    [ "$loaded" = no ] || launchctl bootout "$domain/$label" ;;
+    restart) if [ "$loaded" = yes ]; then launchctl kickstart -k "$domain/$label"; else launchctl bootstrap "$domain" "$plist"; fi ;;
+    status)  state=$(launchctl print "$domain/$label" 2>/dev/null | awk -F'= ' '/^\tstate =/{print $2; exit}')
+             echo "$n: ${state:-not loaded}" ;;
+    *) echo "usage: mmctl start|stop|restart|status [service…]" >&2; exit 2 ;;
+  esac
+done

@@ -1,7 +1,7 @@
 """Per-user collection files in the split layout (Phase 3 §25.4 step 5).
 
 * :func:`create` writes a new, empty ``users/<id>.db`` at :data:`db.CURRENT_VERSION`
-  holding only the USER schema. The schema is not a hand-written copy: it is read
+  holding only the USER schema (in WAL when the catalog is — the hosted data dir). The schema is not a hand-written copy: it is read
   from a fresh in-memory DB built by the same migrations every file runs
   (``db._ensure_schema``), keeping only the tables :mod:`layout` classifies as user
   tables (+ their indexes and ``schema_version``) — the rule the splitter uses.
@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import sqlite3
 import threading
 from dataclasses import dataclass, field
@@ -99,6 +100,9 @@ def create(data_dir: Path, user: str) -> Path:
                     conn.execute(sql)
                 conn.execute("INSERT INTO schema_version (version) VALUES (?)", (db.CURRENT_VERSION,))
                 conn.commit()
+                if db.is_wal(Path(data_dir) / _layout.CATALOG_FILENAME):
+                    # A WAL data dir (hosted, replicated by Litestream) stays all-WAL.
+                    conn.execute("PRAGMA journal_mode = WAL")
             finally:
                 conn.close()
             os.chmod(tmp, 0o600)
@@ -261,9 +265,20 @@ def user_artifacts(data_dir: Path, user: str) -> list[Path]:
     return out
 
 
+def litestream_dirs(data_dir: Path, user: str) -> list[Path]:
+    """Litestream's local state for ``users/<id>.db`` (``users/.<id>.db-litestream/``:
+    recent changes of the file, kept after the file is gone). Real directories inside
+    ``users/`` only — a symlink is never followed."""
+    _layout.check_user(user)
+    users = Path(data_dir) / _layout.USERS_SUBDIR
+    d = users / f".{user}.db-litestream"
+    return [d] if d.is_dir() and not d.is_symlink() and not users.is_symlink() else []
+
+
 def remove_user_files(data_dir: Path, user: str) -> list[Path]:
-    """Delete every :func:`user_artifacts` file (the collection file before its sidecars).
-    Idempotent: a missing file is skipped. Returns what was removed."""
+    """Delete every :func:`user_artifacts` file (the collection file before its sidecars),
+    then Litestream's local state for it (:func:`litestream_dirs`). Idempotent: a missing
+    file is skipped. Returns what was removed."""
     removed: list[Path] = []
     with _lock:
         for p in user_artifacts(data_dir, user):
@@ -272,4 +287,7 @@ def remove_user_files(data_dir: Path, user: str) -> list[Path]:
             except FileNotFoundError:
                 continue
             removed.append(p)
+        for d in litestream_dirs(data_dir, user):
+            shutil.rmtree(d, ignore_errors=True)
+            removed.append(d)
     return removed

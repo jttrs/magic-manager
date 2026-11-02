@@ -589,7 +589,12 @@ The browser companion (H12) applies the same principle with its own threat model
 6. Per-user feature flags + admin page; pin H9 features to the owner's machine. *(Built: auth.db v2 `feature_overrides` + `users.last_seen_at`; `features.flags()` adds the bound user's overrides on top of the file/env layers; `owner_machine` pins four capability paths — the cart read with the server's Mana Pool login, AppleScript tab/rendered-store reads, the Analytics dashboard, the deck fetch's Moxfield session/login (non-admins: public decks only) — to admins when hosted, checked apart from the flags so an override can't unlock them (403 `auth.admin_only`); the Admin page `/admin` + `mm auth flag|flags|enable`; `PROFILES_OPEN = True`.)*
 7. Export / delete-my-account. *(Built: `magic_manager.account` — `export()` = one zip of the bound user's own data (`my-collection.db`: split = their file via the backup API, single = the user tables only via the splitter's `copy_tables`; readable CSVs; README), `GET /api/account/export` + `mm account export --to`; `delete_account` (hosted) in a crash-safe, idempotent order — sign-in off + sessions ended → every file of their collection (file, sidecars, undo, snapshots, set-aside copies) → their analytics (`forget(user_key)`) → auth rows (unused invites they made deleted, used ones unlinked) — behind a ≤10-minute-old sign-in, the typed phrase, the last-admin rule and no running job; `POST /api/account/delete` + `mm auth delete-user <id> --yes`. Settings → Account in the web. No migration.)*
 8. Litestream + native home deploy runbook (launchd/systemd). The Dockerfile + CI build land
-   first, alongside this doc.
+   first, alongside this doc. *(Built: `docs/home-server.md`, `deploy/macos/` (launchd; systemd
+   deferred), `magic_manager.offsite`/`hostops`, `mm host …`, `mm db pull`. Refines H2: only
+   `auth.db` + `users/*.db` replicate continuously (Litestream directory watcher, 30-day
+   retention); `catalog.db` is a weekly `VACUUM INTO` snapshot (keep 2) — it is a rebuildable
+   cache whose syncs would burn the R2 free tier's write ops; `analytics.db` is never offsite.
+   The hosted data dir is all-WAL; the laptop re-pulls with a separate read-only token (H3).)*
 9. Chrome extension (H12): API token endpoint → tabs → rendered store reads → Mana Pool cart →
    Moxfield import; then drop the macOS-only paths' admin pinning (H9 interim).
 10. Security review of the hosted build (§25.0) — gate before any outside user.

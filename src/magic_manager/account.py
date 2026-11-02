@@ -20,13 +20,14 @@ secrets, session or invite hashes, analytics, or another user's rows.
 idempotent, in this order: (1) sign-in off + every session ended (``auth.db``), so
 nothing new reaches their file; (2) every file holding their collection
 (``userfiles.remove_user_files``: the file + sidecars, the undo restore point,
-migration and pair snapshots, set-aside copies); (3) their analytics events
+migration and pair snapshots, set-aside copies, Litestream's local state); (3) their analytics events
 (``analytics.store.forget`` under their pseudonymous key); (4) their auth rows
 (identities, sessions, flag overrides; unused invites they made are deleted, used
 ones are unlinked); (5) the files once more (a request that was already past the
 gate may have recreated an empty one). Re-running a half-done delete finishes it.
 Refused for the last admin (:class:`LastAdmin`, checked inside step 1's transaction). Offsite backups age out on their
-own retention (§25.4 step 8).
+own retention: ``mm host prune-deleted`` removes a deleted id's replica once it is
+older than 30 days (§25.4 step 8, ``offsite.prune_deleted``).
 """
 from __future__ import annotations
 
@@ -159,6 +160,9 @@ def _user_db_bytes(lay: _layout.Layout) -> bytes:
     mem = sqlite3.connect(":memory:")
     try:
         src.backup(mem)
+        for t in sorted(_layout.LITESTREAM_TABLES):  # replication bookkeeping, not the user's data
+            mem.execute(f'DROP TABLE IF EXISTS "{t}"')
+        mem.commit()
         return _rollback_journal(mem.serialize())
     finally:
         src.close()
