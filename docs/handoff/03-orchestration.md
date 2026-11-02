@@ -56,7 +56,7 @@
 - Commits carry `Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>` in
   this environment (use your environment's equivalent trailer).
 
-## Merge gate — `tools/ci_gate.sh <pr> "<squash title>"`
+## Merge gate — `tools/ci_gate.md <pr> "<squash title>"`
 
 Copy it to `/tmp` (or run in place) from any checkout of the repo. It: updates the PR branch onto
 main **on GitHub** (`update-branch`, rebase) if behind → waits (≤30 min) for `pytest`,

@@ -12,7 +12,7 @@ GitHub Copilot app session ("Resume the magic-manager web app's remaining roadma
 | 3 | [03-orchestration.md](03-orchestration.md) | How to run the work: roles, PR rules, the CI merge gate, review stamp, db-upgrade, builder briefs, ports, tripwires |
 | 4 | [04-work-locations.md](04-work-locations.md) | Every branch / worktree / session / plan file that holds work, and what to do with each |
 | 5 | [05-owner.md](05-owner.md) | The owner's to-do list, how they like to work, and the decisions they made this cycle |
-| — | [tools/ci_gate.sh](tools/ci_gate.sh) | The merge gate script (rebase on GitHub → wait for CI → verify stamp → merge pinned sha) |
+| — | [tools/ci_gate.md](tools/ci_gate.md) | The merge gate script (rebase on GitHub → wait for CI → verify stamp → merge pinned sha) |
 | — | [tools/child-protocol.md](tools/child-protocol.md) | The builder ("child") protocol every implementation agent follows |
 
 Then read, in the repo: `CLAUDE.md` (binding engineering rules 1–5 + module map),
@@ -26,5 +26,5 @@ companion (`extension/`), SQLite. Phase 3 (hosting, invite-only login, per-user 
 cutover to a home Mac mini waits on the owner buying the hardware and creating accounts
 (OAuth apps, Cloudflare R2). The owner's laptop still runs the app in local single-file mode on
 `:8766`, auto-deployed from `main`. CI now runs all heavy gates; merges go through
-`tools/ci_gate.sh`. Next engineering work that does *not* need the Mac mini: Chrome Web Store
+`tools/ci_gate.md`. Next engineering work that does *not* need the Mac mini: Chrome Web Store
 listing (owner account needed), Phase 5 scoping, and the follow-up backlog in 02-roadmap.md.

@@ -65,7 +65,7 @@
   (`recipes`), nightly `vendor-canary.yml`, `extension-release.yml`.
 - Ruleset **24885345** on `main`: required checks `review-stamp`, `pytest`, `web-check`, `e2e`,
   `extension` (GitHub Actions integration 15368), **strict** (branch must be up to date), no
-  bypass. Merge via REST with the head sha pinned — `tools/ci_gate.sh` does it.
+  bypass. Merge via REST with the head sha pinned — `tools/ci_gate.md` does it.
 
 ## Phase 3 — what shipped (docs/webapp-architecture-decision.md §25.4)
 

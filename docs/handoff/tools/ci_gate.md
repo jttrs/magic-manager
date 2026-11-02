@@ -1,3 +1,6 @@
+# ci_gate.sh — merge gate (copy the block below to a file, then `bash ci_gate.sh <pr> "<title>"`)
+
+```bash
 # usage: ci_gate.sh <pr> "<squash title>"
 # Rebase the PR branch onto main (server-side update), wait for CI on the new head,
 # verify the review stamp locally, merge pinned to that head. Heavy gates run in CI.
@@ -30,3 +33,4 @@ uv run python scripts/pr_review.py check --body-file <(gh api repos/$R/pulls/$n 
 [ $r = 0 ] || { echo "#$n review stamp missing/stale — not merging"; exit 3; }
 [ "${DRY:-}" = 1 ] && { echo "#$n ok (dry)"; exit 0; }
 gh api -X PUT repos/$R/pulls/$n/merge -f merge_method=squash -f sha="$head" -f commit_title="$title (#$n)" --jq .merged
+```
