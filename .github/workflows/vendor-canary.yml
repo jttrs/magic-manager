@@ -35,3 +35,14 @@ jobs:
           if [ -n "$num" ]; then gh issue comment "$num" --body-file body.md
           else gh issue create --title "$title" --body-file body.md; fi
           exit 1
+      - if: steps.run.outputs.status == '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          title="Vendor recipe canary failing"
+          num=$(gh issue list --state open --search "in:title \"$title\"" --json number --jq '.[0].number')
+          if [ -n "$num" ]; then
+            { echo "Canary green again: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"; echo; cat report.md; } > body.md
+            gh issue comment "$num" --body-file body.md
+            gh issue close "$num"
+          fi
