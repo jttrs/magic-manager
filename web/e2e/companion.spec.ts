@@ -381,6 +381,60 @@ test.describe('Moxfield', () => {
     expect(await page.evaluate(() => (window as unknown as { __companionRequests: unknown[] }).__companionRequests)).toEqual([{ kind: 'moxfield', params: { url: DECK.url } }]);
   });
 
+  // Hosted, a member (not an admin): the server never opens a browser for them (step 9, H12).
+  async function member(page: Page, f: Record<string, boolean>) {
+    await page.route('**/api/features', (r) => r.fulfill({ json: { flags: f, mode: 'hosted', owner_paths: {
+      'manapool.server_login': false, 'deals.mac_tabs': false, 'analytics.dashboard': false, 'decks.moxfield_server': false } } }));
+    await page.route('**/api/auth/me', (r) => r.fulfill({ json: {
+      user: { id: 'mmmmmmmmmmmmmmmm', display_name: 'Friend', email: null, is_admin: false }, csrf_token: 'csrf-1',
+      providers: [{ name: 'discord', title: 'Discord', login_url: '/api/auth/login/discord' }], profiles_open: true } }));
+  }
+
+  test('a hosted member’s Moxfield link goes to the companion setup, never a server read', async ({ page }) => {
+    await member(page, { companion: true });
+    const jobs: string[] = [];
+    await page.route('**/api/jobs/**', (r) => { jobs.push(r.request().url()); return r.fulfill({ status: 500, json: {} }); });
+    await page.goto(COLLECTION_URL);
+    await page.getByRole('button', { name: 'Add cards' }).click();
+    await page.getByRole('tab', { name: 'Add decklist or product' }).click();
+    await page.getByRole('searchbox', { name: 'Deck link or product' }).fill(DECK.url);
+    await expect(page.getByText('Moxfield decks are read in your own browser by the browser companion')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Read deck' })).toHaveCount(0);
+    await expect(page.getByText('Moxfield opens a Chrome window')).toHaveCount(0);
+    await page.screenshot({ path: test.info().outputPath('member-moxfield.png') });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({ path: test.info().outputPath('member-moxfield-phone.png') });
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.getByRole('searchbox', { name: 'Deck link or product' }).press('Enter');
+    await page.getByRole('button', { name: 'Set up the browser companion' }).click();
+    await expect(page.getByRole('dialog', { name: 'Browser companion' })).toContainText('the address you open the app at');
+    expect(jobs).toEqual([]);
+  });
+
+  test('a hosted member with the companion connected reads Moxfield in this browser', async ({ page }) => {
+    await member(page, { companion: true });
+    await fakeCompanion(page, { answers: { moxfield: { ok: true, data: DECK } } });
+    await page.route('**/api/ingest/deck-from-browser', (r) => r.fulfill({ json: { format: 'deck', deck_name: 'Goblin Party', warnings: [], deck: { source: 'moxfield', id: 'AbCd1234', name: 'Goblin Party', author: 'goblinfan', cards: [] }, lines: [] } }));
+    await page.goto('/decks');
+    await page.getByRole('toolbar', { name: 'Deck list actions' }).getByRole('button', { name: 'Import a deck from a link' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Import a deck' });
+    await dialog.getByRole('textbox').fill(DECK.url);
+    await expect(dialog.getByText('Read in this browser by the companion')).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Import deck' })).toBeEnabled();
+  });
+
+  test('a hosted member without the companion flag is told who can turn it on', async ({ page }) => {
+    await member(page, {});
+    await page.goto('/decks');
+    await page.getByRole('toolbar', { name: 'Deck list actions' }).getByRole('button', { name: 'Import a deck from a link' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Import a deck' });
+    await dialog.getByRole('textbox').fill(DECK.url);
+    await expect(dialog.getByRole('status')).toContainText('Ask the app’s admin to turn on the browser companion');
+    await expect(dialog.getByRole('button', { name: 'Import deck' })).toBeDisabled();
+    await dialog.getByRole('textbox').fill('https://archidekt.com/decks/42/x');   // plain-HTTP builders still fetch on the server
+    await expect(dialog.getByRole('button', { name: 'Import deck' })).toBeEnabled();
+  });
+
   test('a private deck names the fix', async ({ page }) => {
     await flags(page, { companion: true });
     await fakeCompanion(page, { answers: { moxfield: { ok: false, code: 'moxfield.private' } } });

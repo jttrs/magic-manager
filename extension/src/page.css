@@ -25,6 +25,8 @@ button:disabled { opacity: 0.5; cursor: default; }
 .actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; position: sticky; bottom: 0; background: var(--theme-paper); padding: 10px 0; border-top: 1px solid var(--theme-rule); }
 input[type="url"] { font: inherit; padding: 6px 8px; border: 1px solid var(--theme-rule-strong); border-radius: 3px; background: var(--theme-paper-raised); color: var(--theme-ink); width: 100%; }
 .error { color: var(--theme-danger); }
+.dest { font-size: 18px; margin: 8px 0 2px; }
+.dest .origin { border-bottom: 2px solid var(--theme-accent); }
 .ok { color: var(--theme-accent-ink); font-weight: 600; }
 ul.plain { margin: 6px 0; padding-left: 18px; }
 details summary { cursor: pointer; color: var(--theme-ink-muted); }

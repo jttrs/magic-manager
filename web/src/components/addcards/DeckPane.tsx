@@ -9,6 +9,7 @@ import { Button } from '../Button';
 import { useBrowserDeck } from '../../app/useBrowserDeck';
 import { DeckSourceHealth } from '../DeckSourceHealth';
 import { AwaitingNote, FailureNote } from '../companion/CompanionNotes';
+import { CompanionRequired } from '../companion/CompanionRequired';
 
 const crop = (url: string) => url.replace('/normal/', '/art_crop/');
 
@@ -95,6 +96,7 @@ function DeckLink({ query, onFetched, onStarted, reader }: { query: DeckLinkQuer
   const { live, start } = useJob();
   const browser = useBrowserDeck();
   const viaBrowser = browser.handles(query.url);
+  const blocked = !viaBrowser && browser.needsCompanion(query.url);
   const running = browser.pending || (live != null && live.status !== 'succeeded' && live.status !== 'failed');
   // Set synchronously: `running` only turns true once the job is enqueued, so a
   // double press could otherwise start a second read (another Chrome window for Moxfield).
@@ -107,7 +109,7 @@ function DeckLink({ query, onFetched, onStarted, reader }: { query: DeckLinkQuer
   }, [live?.status, live?.artifacts]);
 
   async function readDeck() {
-    if (starting.current || running || deck) return;
+    if (starting.current || running || deck || blocked) return;
     starting.current = true;
     onStarted(query);
     setError('');
@@ -144,12 +146,13 @@ function DeckLink({ query, onFetched, onStarted, reader }: { query: DeckLinkQuer
         </div>
         {deck ? (
           <Button tone="paper" onClick={() => onFetched(deck)} className="shrink-0">Add…</Button>
-        ) : (
+        ) : !blocked && (
           <Button tone="paper" onClick={readDeck} disabled={running} className="shrink-0">{running ? 'Reading…' : 'Read deck'}</Button>
         )}
       </div>
       <DeckSourceHealth url={query.url} viaBrowser={viaBrowser} settled={live?.status === 'succeeded' || live?.status === 'failed' ? live.status : browser.error ? 'error' : ''} />
-      {!deck && (viaBrowser ? (
+      {blocked && <CompanionRequired what="Moxfield decks" />}
+      {!deck && !blocked && (viaBrowser ? (
         <p className="text-xs text-ink-muted">Read in this browser by the companion, so your private decks work too. You approve what it sends.</p>
       ) : query.site === 'Moxfield' ? (
         <p className="text-xs text-ink-muted">Moxfield opens a Chrome window to read the deck.</p>

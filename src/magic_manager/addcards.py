@@ -23,6 +23,7 @@ from . import (
 _CAND_CAP = 60
 _CHUNK = 300
 _IMPORT_DECK = Path(__file__).resolve().parent.parent.parent / "scripts" / "import_deck.py"
+from .browser_launch import NO_SERVER_BROWSER_ENV  # noqa: E402
 _SKIP_BOARDS = {"maybe", "maybeboard", "considering"}
 _METHOD = {"search": "adhoc", "paste": "import-block", "deck": "import-block"}
 
@@ -465,15 +466,25 @@ def fetch_deck_payload(url: str, *, progress: Callable[[str], None] | None = Non
     by Add cards and the scrape canary (``scrape_canary``)."""
     # No stdin and MM_NONINTERACTIVE: a private Moxfield deck that would need a
     # manual browser login fails fast instead of waiting on the server's terminal.
-    # Hosted, only an admin may use this machine's Moxfield session/login
-    # (owner_machine "decks.moxfield_login"); everyone else reads public decks only.
-    from . import owner_machine
+    # Moxfield is read by driving a browser on this machine, so hosted only an admin
+    # may (owner_machine "decks.moxfield_server"); a member reads Moxfield decks with
+    # the browser companion (refused here before anything runs), and their plain-HTTP
+    # fetches (Archidekt, MTGGoldfish, ManaBox, Scryfall) run with --no-browser +
+    # MM_NO_SERVER_BROWSER=1 so no server browser can open for them at all.
+    from . import decksource, owner_machine
+    browser_ok = owner_machine.allowed("decks.moxfield_server")
+    try:
+        moxfield = decksource.source_of(url) == "moxfield"
+    except ValueError:
+        moxfield = False
+    if moxfield and not browser_ok:
+        raise owner_machine.OwnerOnly("decks.moxfield_server")
     env = {**os.environ, "MM_NONINTERACTIVE": "1"}
-    env.pop("MM_PUBLIC_DECKS_ONLY", None)
+    env.pop(NO_SERVER_BROWSER_ENV, None)
     args = [sys.executable, str(_IMPORT_DECK), url]
-    if not owner_machine.allowed("decks.moxfield_login"):
-        args.append("--public-only")
-        env["MM_PUBLIC_DECKS_ONLY"] = "1"
+    if not browser_ok:
+        args.append("--no-browser")
+        env[NO_SERVER_BROWSER_ENV] = "1"
     proc = subprocess.Popen(
         args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env,
     )

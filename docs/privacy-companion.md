@@ -1,6 +1,6 @@
 # magic-manager companion — privacy policy
 
-_Last updated: 2026-11-01 · applies to the "magic-manager companion" Chrome extension, version 0.4.5 and later._
+_Last updated: 2026-11-01 · applies to the "magic-manager companion" Chrome extension, version 0.5.0 and later._
 
 The companion is a helper for **magic-manager**, a Magic: The Gathering collection manager you run
 yourself (on your own computer or your own private network). The extension reads card lists that only
@@ -45,8 +45,8 @@ one read. The token is never stored, never sent to magic-manager and never sent 
 
 ## Where data goes
 
-- **To your magic-manager app only** — the address you paired (this computer, or an address on your
-  own Tailscale network). Only the normalized card lines you approved are sent.
+- **To your magic-manager app only** — the one address you paired (this computer, or the https
+  address you open your app at; every approval window names it). Only the normalized card lines you approved are sent.
 - **Nowhere else.** The extension sends nothing to the developer, to Google, or to any third party,
   and nothing is sold or shared.
 

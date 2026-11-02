@@ -113,21 +113,43 @@ export function storeOf(hostname) {
   return STORES.find((s) => s.hosts.some((x) => h === x || h.endsWith(`.${x}`))) || null;
 }
 
+/** Does a Chrome match pattern (host, or *.host) cover this hostname? */
+function patternCovers(pattern, hostname) {
+  const m = /^https:\/\/(\*\.)?([^/]+)\/\*$/.exec(pattern);
+  if (!m) return false;
+  return hostname === m[2] || (Boolean(m[1]) && hostname.endsWith(`.${m[2]}`));
+}
+
+/** A site the companion reads (a cart, store, Moxfield, Archidekt, order history): never an app address. */
+export function isReaderSite(hostname) {
+  const h = String(hostname || '').toLowerCase();
+  return Boolean(storeOf(h)) || [...MANAPOOL_ORIGINS, ...ALL_ACCESS_ORIGINS].some((p) => patternCovers(p, h));
+}
+
 /**
- * The app address the user typed, as a bare origin — or an error string.
- * http only on this computer (localhost / 127.0.0.1); anything else must be
- * https on a Tailscale name (*.ts.net) — the hosts this build may be paired with.
+ * The app address the user typed, as a bare origin + the ONE match pattern Pair asks Chrome for —
+ * or `{ code }` (a `pair.*` code in errors.json). Exact origin only: no path, query, fragment or
+ * user name. http only on this computer (localhost / 127.0.0.1, any port); anything else must be
+ * https on a domain name — not an IP address or a one-word name (no public certificate is issued
+ * for those, and they are what a rebinding or LAN trick would use) — and never a site the
+ * companion itself reads (pairing it would let that site ask for reads, and Unpair would take
+ * away the companion's own access to it).
  */
 export function parseAppOrigin(input) {
   let u;
-  try { u = new URL(String(input || '').trim()); } catch { return { error: 'Enter the address you open the app at, like http://localhost:8766.' }; }
-  if (u.username || u.password) return { error: 'The address must not contain a user name or password.' };
-  if (u.pathname !== '/' || u.search || u.hash) return { error: 'Enter just the address (no path), like http://localhost:8766.' };
-  const local = u.hostname === 'localhost' || u.hostname === '127.0.0.1';
-  if (u.protocol === 'http:' && !local) return { error: 'Plain http is only allowed for this computer (localhost). Use https.' };
-  if (u.protocol !== 'http:' && u.protocol !== 'https:') return { error: 'The address must start with http:// or https://.' };
-  if (!local && !/\.ts\.net$/i.test(u.hostname)) return { error: 'This build can pair with this computer (localhost) or your Tailscale address (…ts.net) only.' };
-  return { origin: u.origin, pattern: `${u.protocol}//${u.hostname}/*` };
+  try { u = new URL(String(input || '').trim()); } catch { return { code: 'pair.bad_address' }; }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return { code: 'pair.bad_address' };
+  if (u.username || u.password) return { code: 'pair.credentials' };
+  if (u.pathname !== '/' || u.search || u.hash) return { code: 'pair.has_path' };
+  const host = u.hostname.toLowerCase();
+  const local = host === 'localhost' || host === '127.0.0.1';
+  if (u.protocol === 'http:' && !local) return { code: 'pair.insecure_http' };
+  if (!local) {
+    const ip = host.startsWith('[') || /^[0-9.]+$/.test(host) || /^0x/i.test(host);
+    if (ip || !host.includes('.') || host.endsWith('.') || host.startsWith('.')) return { code: 'pair.host' };
+    if (isReaderSite(host)) return { code: 'pair.reader_site' };
+  }
+  return { origin: u.origin, pattern: `${u.protocol}//${host}/*` };
 }
 
 /** Small, total summaries for the approval window. */

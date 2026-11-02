@@ -9,7 +9,7 @@ const user = (over: Partial<AdminUserOut> = {}): AdminUserOut => ({
 });
 const PATHS: OwnerPathOut[] = [
   { key: 'deals.mac_tabs', feature: 'deals', title: 'Read tabs in this server’s Chrome' },
-  { key: 'decks.moxfield_login', feature: null, title: 'Private Moxfield decks' },
+  { key: 'decks.moxfield_server', feature: null, title: 'Private Moxfield decks' },
 ];
 
 describe('admin view-model', () => {
@@ -54,6 +54,6 @@ describe('admin view-model', () => {
     expect(ownerOnlyNote(flag(), PATHS, false)).toBeNull();
     expect(ownerOnlyNote(flag({ owner_paths: ['deals.mac_tabs'] }), PATHS, false)).toBe('Stays owner-only for members: Read tabs in this server’s Chrome.');
     expect(ownerOnlyNote(flag({ owner_paths: ['deals.mac_tabs'] }), PATHS, true)).toMatch(/^Includes owner-only parts/);
-    expect(unflaggedPaths(PATHS).map((p) => p.key)).toEqual(['decks.moxfield_login']);
+    expect(unflaggedPaths(PATHS).map((p) => p.key)).toEqual(['decks.moxfield_server']);
   });
 });

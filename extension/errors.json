@@ -61,6 +61,46 @@
       "message": "This request came from another website, so the app refused it.",
       "fix": "Use the app’s own page. If you see this in the app itself, report it."
     },
+    "pair.bad_address": {
+      "where": "extension",
+      "message": "That isn’t an address the companion can pair with.",
+      "fix": "Enter the address you open the app at, starting with https:// (or http://localhost on this computer), like https://cards.example.com."
+    },
+    "pair.credentials": {
+      "where": "extension",
+      "message": "The address must not contain a user name or password.",
+      "fix": "Enter just the address you open the app at, like https://cards.example.com."
+    },
+    "pair.has_path": {
+      "where": "extension",
+      "message": "Enter just the address, with no path, ? or # after it.",
+      "fix": "Use the part up to the first single /, like https://cards.example.com or http://localhost:8766."
+    },
+    "pair.insecure_http": {
+      "where": "extension",
+      "message": "Plain http is only allowed for this computer (localhost).",
+      "fix": "Use the app’s https:// address."
+    },
+    "pair.host": {
+      "where": "extension",
+      "message": "Pair with the app’s domain name, not an IP address or a one-word name.",
+      "fix": "Enter the full name you open the app at, like https://cards.example.com or https://your-mac.your-tailnet.ts.net."
+    },
+    "pair.reader_site": {
+      "where": "extension",
+      "message": "That is a site the companion reads from (a store, Moxfield or Archidekt), not your magic-manager app.",
+      "fix": "Enter the address of your magic-manager app — the one shown under Browser companion in the app."
+    },
+    "pair.permission_denied": {
+      "where": "extension",
+      "message": "Chrome permission was not given, so the companion is not paired.",
+      "fix": "Press Pair again and allow the address when Chrome asks."
+    },
+    "pair.bridge_failed": {
+      "where": "extension",
+      "message": "Paired, but the companion couldn’t reach the app address.",
+      "fix": "Reload the extension in chrome://extensions and press Pair again."
+    },
     "permission.deals_off": {
       "where": "extension",
       "message": "The companion isn’t allowed to see your store tabs yet.",

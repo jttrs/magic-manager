@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { Button } from '../../components/Button';
 import { AwaitingNote, FailureNote } from '../../components/companion/CompanionNotes';
+import { CompanionRequired } from '../../components/companion/CompanionRequired';
 import { EmptyNote, ErrorNote } from '../../components/States';
 import { sharedErrors, type DealProduct, type NewlyMet, type PriceRow } from '../../core/deals';
 import { fmtCount, fmtInt, fmtUsd } from '../../core/format';
@@ -30,7 +31,9 @@ export function DealsPanel({ data, costs, reads, search, set }: { data: DealsDat
     <div className="flex flex-col gap-2 empty:hidden">
       {reads.awaiting != null && <AwaitingNote summary={reads.awaiting} />}
       {reads.reading === 'tabs' && reads.awaiting == null && !running && <p role="status" className="text-sm text-ink-muted">Reading your open tabs…</p>}
-      {reads.failure && (reads.failure.companion
+      {reads.failure && (reads.failure.needsCompanion
+        ? <CompanionRequired what="Your open store tabs" />
+        : reads.failure.companion
         ? <FailureNote error={reads.failure.error} />
         : <p role="alert" className="text-md text-danger">{(reads.failure.error as Error).message}</p>)}
       {reads.notes.map((w) => <p key={w} role="status" className="text-md leading-relaxed text-ink">{w}</p>)}
