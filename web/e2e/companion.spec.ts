@@ -346,6 +346,18 @@ test.describe('Deals', () => {
     await expect.poll(() => jobBody).toEqual({ refresh: true });
   });
 
+  test('a hosted member without the companion: Read my open tabs offers its setup, never this server’s tabs', async ({ page }) => {
+    await member(page, { companion: true, deals: true });
+    const asked: string[] = [];
+    await page.route('**/api/deals/tabs', (r) => { asked.push(r.request().method()); return r.fulfill({ status: 403, json: {} }); });
+    await page.route('**/api/deals/watched', (r) => r.fulfill({ json: [] }));
+    await page.goto('/market?subject=deals');
+    await page.getByRole('button', { name: 'Read my open tabs' }).click();
+    await expect(page.getByText('Your open store tabs are read in your own browser by the browser companion')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Set up the browser companion' })).toBeVisible();
+    expect(asked).toEqual([]);
+  });
+
   test('Deals not allowed in the companion: points to its one Allow access switch', async ({ page }) => {
     await flags(page, { companion: true, deals: true });
     await fakeCompanion(page, { answers: { tabs: { ok: false, code: 'permission.deals_off' } } });
@@ -355,6 +367,15 @@ test.describe('Deals', () => {
     await expect(page.getByRole('alert')).toContainText('switch on Allow access');
   });
 });
+
+// Hosted, a member (not an admin): the server never opens a browser for them (step 9, H12).
+async function member(page: Page, f: Record<string, boolean>) {
+  await page.route('**/api/features', (r) => r.fulfill({ json: { flags: f, mode: 'hosted', owner_paths: {
+    'manapool.server_login': false, 'deals.mac_tabs': false, 'analytics.dashboard': false, 'decks.moxfield_server': false } } }));
+  await page.route('**/api/auth/me', (r) => r.fulfill({ json: {
+    user: { id: 'mmmmmmmmmmmmmmmm', display_name: 'Friend', email: null, is_admin: false }, csrf_token: 'csrf-1',
+    providers: [{ name: 'discord', title: 'Discord', login_url: '/api/auth/login/discord' }], profiles_open: true } }));
+}
 
 test.describe('Moxfield', () => {
   const DECK = {
@@ -380,15 +401,6 @@ test.describe('Moxfield', () => {
     expect(body).toEqual({ source: 'moxfield', deck: DECK.deck });
     expect(await page.evaluate(() => (window as unknown as { __companionRequests: unknown[] }).__companionRequests)).toEqual([{ kind: 'moxfield', params: { url: DECK.url } }]);
   });
-
-  // Hosted, a member (not an admin): the server never opens a browser for them (step 9, H12).
-  async function member(page: Page, f: Record<string, boolean>) {
-    await page.route('**/api/features', (r) => r.fulfill({ json: { flags: f, mode: 'hosted', owner_paths: {
-      'manapool.server_login': false, 'deals.mac_tabs': false, 'analytics.dashboard': false, 'decks.moxfield_server': false } } }));
-    await page.route('**/api/auth/me', (r) => r.fulfill({ json: {
-      user: { id: 'mmmmmmmmmmmmmmmm', display_name: 'Friend', email: null, is_admin: false }, csrf_token: 'csrf-1',
-      providers: [{ name: 'discord', title: 'Discord', login_url: '/api/auth/login/discord' }], profiles_open: true } }));
-  }
 
   test('a hosted member’s Moxfield link goes to the companion setup, never a server read', async ({ page }) => {
     await member(page, { companion: true });

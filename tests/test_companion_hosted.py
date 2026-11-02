@@ -141,8 +141,25 @@ def test_a_deck_url_is_never_read_as_an_option(member, monkeypatch):
     from magic_manager.api import ingest as ingest_api
     with pytest.raises(ValueError):
         ingest_api.FetchDeckInput(url="--file=/etc/passwd")
+    assert ingest_api.FetchDeckInput(url="Https://archidekt.com/decks/1").url   # a capitalised scheme still reads
     with pytest.raises(RuntimeError):
         addcards.fetch_deck_payload("--file=/etc/passwd")
     from test_user_connections import _fetch_args
     args = _fetch_args(monkeypatch, "https://archidekt.com/decks/1")
     assert args["argv"][-2:] == ["--", "https://archidekt.com/decks/1"]
+
+
+def test_subprocess_seams_refuse_a_server_browser(monkeypatch):
+    """The fetcher's own guards (behind the pre-spawn refusal): --no-browser / MM_NO_SERVER_BROWSER
+    stop Moxfield in import_deck.py and any MoxfieldSession, anonymous included."""
+    from magic_manager import browser_launch
+    from pathlib import Path
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "scripts"))
+    import import_deck
+    import moxfield_session
+    monkeypatch.setenv(browser_launch.NO_SERVER_BROWSER_ENV, "1")
+    with pytest.raises(RuntimeError, match="browser companion"):
+        import_deck.fetch_moxfield("abcdef", fresh=False)
+    for kw in ({"anonymous": True}, {"anonymous": False}):
+        with pytest.raises(RuntimeError, match="browser companion"):
+            moxfield_session.MoxfieldSession(**kw)

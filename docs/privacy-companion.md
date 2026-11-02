@@ -3,7 +3,7 @@
 _Last updated: 2026-11-01 · applies to the "magic-manager companion" Chrome extension, version 0.5.0 and later._
 
 The companion is a helper for **magic-manager**, a Magic: The Gathering collection manager you run
-yourself (on your own computer or your own private network). The extension reads card lists that only
+yourself or sign in to (on your own computer, or at an address someone who invited you runs). The extension reads card lists that only
 your browser can see — your store carts, your open store tabs, your decks and collection on deck sites,
 your store order history — and, **only after you approve each read in the extension's own window**,
 hands the card lines to the magic-manager app you paired it with.
@@ -11,8 +11,9 @@ hands the card lines to the magic-manager app you paired it with.
 ## Who runs it
 
 magic-manager is an open-source project (<https://github.com/jttrs/magic-manager>). The extension has
-no server of its own. Nobody operates a service that receives your data: it goes to the
-magic-manager app **you** paired, at the address **you** entered.
+no server of its own. Your data goes only to the magic-manager app **you** paired, at the address
+**you** entered — your own, or a hosted magic-manager run by whoever invited you, who then holds the card
+lines you approved (every approval window names that address).
 
 ## What it reads
 

@@ -505,6 +505,8 @@ test('the settings page refuses addresses it may not pair with', async ({ ext })
     ['https://*.com', 'pair.host'],
     ['https://moxfield.com', 'pair.reader_site'],
     ['https://www.cardkingdom.com', 'pair.reader_site'],
+    ['https://tcgplayer.com', 'pair.reader_site'],
+    ['https://shop.manapool.com', 'pair.reader_site'],
     ['ftp://cards.example.com', 'pair.bad_address'],
     ['not an address', 'pair.bad_address'],
     ['http://localhost:8765/app', 'pair.has_path'],
@@ -517,6 +519,13 @@ test('the settings page refuses addresses it may not pair with', async ({ ext })
     await expect(opts.locator('#pair-status')).toHaveClass('error');
     if (addr === 'http://example.com') await expect(opts.locator('#pair-status')).toContainText('Plain http is only allowed for this computer');
   }
+  // Chrome's prompt declined (or the request refused): not paired, and it says so.
+  await opts.evaluate(() => Object.defineProperty(chrome, 'permissions', { configurable: true, value: {
+    ...chrome.permissions, request: () => Promise.reject(new Error('declined')), contains: () => Promise.resolve(false),
+  } }));
+  await opts.getByRole('textbox', { name: 'App address' }).fill('https://cards.example.com');
+  await opts.getByRole('button', { name: 'Pair', exact: true }).click();
+  await expect(opts.locator('#pair-status')).toHaveAttribute('data-code', 'pair.permission_denied');
   expect(await ext.worker.evaluate(() => chrome.storage.local.get('appOrigin'))).toEqual({ appOrigin: APP });   // still the old pairing
 });
 

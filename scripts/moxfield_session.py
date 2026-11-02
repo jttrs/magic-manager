@@ -37,7 +37,7 @@ SESSION_FILE = SESSION_DIR / "moxfield.json"
 
 LOGIN_URL = "https://www.moxfield.com/account/signin"
 HOME_URL = "https://www.moxfield.com/"
-# Set by the web app for a non-admin's deck fetch (hosted): public decks only.
+# Hosted members' deck fetches set MM_NO_SERVER_BROWSER (browser_launch): no browser on this machine at all.
 if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 from magic_manager.browser_launch import NO_SERVER_BROWSER_MESSAGE, refused as _no_server_browser  # noqa: E402
@@ -146,8 +146,6 @@ class MoxfieldSession:
     def _launch(self):
         """Real Chrome when installed (clears Cloudflare's managed challenge),
         else bundled Chromium — the shared rule in ``magic_manager.browser_launch``."""
-        if str(ROOT / "src") not in sys.path:
-            sys.path.insert(0, str(ROOT / "src"))
         from magic_manager import browser_launch
         return browser_launch.launch(self._pw, headless=self.headless)
 
@@ -210,8 +208,6 @@ class MoxfieldSession:
 
         Inherently human: refused up front (before any window opens) when no
         one can press Enter — agents, the web app's jobs (``MM_NONINTERACTIVE``)."""
-        if str(ROOT / "src") not in sys.path:
-            sys.path.insert(0, str(ROOT / "src"))
         from magic_manager import interactive
         if not interactive.can_wait_for_enter():
             print(

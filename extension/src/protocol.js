@@ -113,17 +113,17 @@ export function storeOf(hostname) {
   return STORES.find((s) => s.hosts.some((x) => h === x || h.endsWith(`.${x}`))) || null;
 }
 
-/** Does a Chrome match pattern (host, or *.host) cover this hostname? */
-function patternCovers(pattern, hostname) {
-  const m = /^https:\/\/(\*\.)?([^/]+)\/\*$/.exec(pattern);
-  if (!m) return false;
-  return hostname === m[2] || (Boolean(m[1]) && hostname.endsWith(`.${m[2]}`));
-}
-
-/** A site the companion reads (a cart, store, Moxfield, Archidekt, order history): never an app address. */
+/** A site the companion reads (a cart, store, Moxfield, Archidekt, order history) — that site's whole
+ *  domain (tcgplayer.com covers www. and store.): never an app address. */
 export function isReaderSite(hostname) {
   const h = String(hostname || '').toLowerCase();
-  return Boolean(storeOf(h)) || [...MANAPOOL_ORIGINS, ...ALL_ACCESS_ORIGINS].some((p) => patternCovers(p, h));
+  const domains = [...MANAPOOL_ORIGINS, ...ALL_ACCESS_ORIGINS].map((p) => /^https:\/\/(?:\*\.)?([^/]+)\/\*$/.exec(p)?.[1])
+    .filter(Boolean).map((host) => {
+      const parts = host.split('.');
+      const n = parts.length > 2 && parts.at(-1).length === 2 && parts.at(-2).length <= 3 ? 3 : 2;   // shop.co.uk
+      return parts.slice(-n).join('.');
+    });
+  return Boolean(storeOf(h)) || domains.some((d) => h === d || h.endsWith(`.${d}`));
 }
 
 /**

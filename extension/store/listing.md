@@ -17,7 +17,7 @@ The same copy serves the optional Microsoft Edge Add-ons listing — field mappi
 **Description:**
 
 ```
-The companion for magic-manager, the Magic: The Gathering collection manager you run yourself.
+The companion for magic-manager, the Magic: The Gathering collection manager you run yourself or sign in to.
 
 Some of your card lists only exist in your own browser: your Mana Pool, TCGplayer or Card Kingdom cart, the store tabs you have open, your Moxfield and Archidekt decks, your Moxfield collection and binders, your store order history. The companion reads them where they are — in your browser — so your magic-manager app can:
 

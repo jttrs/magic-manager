@@ -161,7 +161,7 @@ ADD_PRECON = register(JobSpec(
 
 
 class FetchDeckInput(BaseModel):
-    url: str = Field(min_length=8, max_length=500, pattern=r"^https?://", description="Archidekt, MTGGoldfish, ManaBox, Scryfall or Moxfield deck URL.")
+    url: str = Field(min_length=8, max_length=500, pattern=r"^(?i:https?)://", description="Archidekt, MTGGoldfish, ManaBox, Scryfall or Moxfield deck URL.")
 
 
 def _run_fetch_deck(inp: FetchDeckInput, progress: ProgressFn) -> JobResult:
