@@ -4,10 +4,10 @@
 
 - **Repo:** `jttrs/magic-manager` (PUBLIC on GitHub). Local clone (main checkout):
   `/Users/torre/repos/personal/magic-manager` — branch `main`, clean.
-- **origin/main:** `789bdf4` — "Phase 3 step 10: hosted hardening …" (#206).
-- **Open PRs:** none (besides this handoff branch's PR, if opened).
-- **Open issues:** #119 "Vendor recipe canary failing" (2026-10-07; opened automatically by the
-  nightly `vendor-canary.yml`). Check whether it is still current before acting on it.
+- **origin/main:** `194480e` (#210) as of 2026-11-03. Since the handoff: #207 (these docs),
+  #208 (vendor canary), #209 (Litestream stall alert), #210 (account-delete follow-ups).
+- **Open PRs:** none.
+- **Open issues:** none (#119 closed by #208).
 - **gh auth:** the default `gh` account on this machine may be an Adobe EMU account that cannot act
   on this personal repo. Always:
   `GH_TOKEN=$(env -u GH_TOKEN gh auth token --hostname github.com --user jttrs) gh …`.

@@ -70,24 +70,29 @@ reviewers will ask; justify it in `listing.md`).
 ## D. Follow-up backlog (small PRs, no owner hardware needed)
 
 From Phase 3 PR "deferred" lists:
-- #201: an in-flight request during account delete can recreate an empty user file; reauth
-  doesn't force the provider's login prompt (`prompt=login` / `max_age`) — revisit; pre-bind
-  `owner` snapshots aren't deleted; delete's cache clearing is a hand-maintained list.
-- #202: no alert when Litestream replication stalls; `deploy/linux/` systemd kit deferred.
+- #201: done in #210 (no orphan/recreated user file; per-user cache registry). Owner decided
+  2026-11-03 to keep re-auth as is (no forced provider login). Pre-bind `owner` snapshots stay
+  (decided in #201). Residual: CLI `mm auth delete-user` doesn't hold the web undo guard lock.
+- #202: stall alert done in #209 (`mm host replica-lag` + `replica-check` agent); its 5-min
+  `LAG_SLACK` is unmeasured against real Litestream timing — add a `replica-lag` step to
+  `scripts/rehearse_home_deploy.py`, or watch for false alarms after cutover.
+  `deploy/linux/` systemd kit still deferred.
 - #204: no dedicated test for `pair.bridge_failed` / bridge reset on pairing change; verify on a
   real Chrome update that an existing `*.ts.net` pairing keeps its permission.
 - #206: 2 deferred review items (see the PR's Code review section).
 - Backup encryption (Litestream `age`) with an off-box key escrow plan (§25.2).
 From the web UX round-2 fan-out (all chunks merged; open follow-ups):
-- OpenAPI field descriptions still say "colour" (api/combos.py, api/surf.py, api/card_earmarks.py).
-- Explore set-family picker lists only owned families (ranking an unowned family needs URL `fam=`).
-- `art.lookup` JobSpec title still names a vendor ("Look on Scryfall …") — D3 says don't.
+- (Checked 2026-11-03, already done on main: "colour" copy — only the stable `colour_identity`
+  API code remains; Explore family picker lists every paper family, owned first; `art.lookup`
+  title no longer names a vendor.)
 - `/api/ingest/precons` ~5 s on the owner's live server (didn't reproduce in tests) — profile live.
 - Owner questions never answered: Deals "Open tabs | Watching" as a rail segment vs sub-nav tabs;
   a partly-added store order shown only under Needs review vs also on the timeline.
 - `tests/test_card_earmarks.py::test_v37_migration_single_and_split` was reported flaky/order-
   dependent before #196 — confirm it's fixed in CI history.
 Other:
-- Issue #119 (vendor canary) — check and close or fix.
+- Issue #119 (vendor canary): fixed in #208 (CI forgives only a bot wall, `scrape.blocked`;
+  closes its issue on a clean run). The close step hasn't fired live yet.
+- `_open_split` now opens through `file:` URIs: no test covers data dirs with spaces/symlinks.
 - Untracked `docs/sets/*.md` drafts for 14 families in a Claude worktree (see 04) — characterize-set
   output that was never committed.
