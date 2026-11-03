@@ -16,7 +16,6 @@
    invite a friend.
 6. **Step 11:** buy the domain; Cloudflare Tunnel.
 7. **Chrome Web Store:** developer account ($5) → upload → Unlisted → submit (see 02-roadmap §B).
-8. Answer two parked UX questions (02-roadmap §D) when convenient.
 
 ## How the owner likes to work
 
@@ -46,4 +45,5 @@
 | 11-02 | Set-docs Claude session (14 `docs/sets` drafts) is still running — leave its worktree alone |
 | 11-02 | Mac mini / OAuth apps / R2: none started yet. Chrome Web Store listing: later |
 | 11-03 | Account delete re-auth stays as is (10-min fresh sign-in + typed confirm); no forced Google/Discord login |
+| 11-03 | Parked UX questions closed: Deals stays one watchlist with open-tab finds pinned above (the tabs/watching split is gone); a partly-added store order shows only under Needs review (its cards still count in month totals) |
 | (builder-level, accepted) | Members never reach the server's browser (companion only); EDHREC rankings fetch = admin-only, members see cached; 3-job cap for everyone; HSTS without includeSubDomains; pairing refuses IP/one-word hosts and reader sites |
