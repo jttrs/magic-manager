@@ -564,6 +564,8 @@ def test_installer_dry_run_writes_nothing(tmp_path):
     r = _install(tmp_path)
     assert r.returncode == 0, r.stderr
     assert "Dry run — nothing was written" in r.stdout and "MM_LAYOUT=split" in r.stdout
+    assert "home/Library/Caches/magic-manager-hosted/ (wrapper caches" in r.stdout
+    assert "export SCRYFALL_CACHE_DIR=" in r.stdout
     assert not any(tmp_path.iterdir())
 
 
@@ -575,6 +577,8 @@ def test_installer_dry_run_writes_nothing(tmp_path):
     (["--kit", "relative/kit"], "absolute"),
     (["--logs", "/x/$(id)"], "unsupported character"),
     (["--trusted-proxy", "nginx"], "--trusted-proxy"),
+    (["--cache-dir", "relative/cache"], "absolute"),
+    (["--cache-dir", "/x/`id`"], "unsupported character"),
 ])
 def test_installer_refuses_bad_settings(tmp_path, args, err):
     r = _install(tmp_path, *args)
@@ -606,9 +610,13 @@ def test_installer_apply_is_private_idempotent_and_never_touches_other_agents(tm
     assert stat.S_IMODE((kit / "hosted.env").stat().st_mode) == 0o600
     assert f"MM_OWNER_ID={UID}" in henv
     assert "MM_TRUSTED_PROXY=tailscale" in henv
-    assert not any(k in henv for k in ("MM_OAUTH", "MM_OFFSITE", "ACCESS_KEY", "MANAPOOL", "MM_ANALYTICS_SECRET"))
+    assert not any(k in henv for k in ("MM_OAUTH", "MM_OFFSITE", "ACCESS_KEY", "MANAPOOL_EMAIL", "MANAPOOL_PASSWORD", "MANAPOOL_ACCESS_TOKEN", "MM_ANALYTICS_SECRET"))
     assert stat.S_IMODE((tmp_path / "data").stat().st_mode) == 0o700 and not any((tmp_path / "data").iterdir())
     assert stat.S_IMODE((kit / "deploy.sh").stat().st_mode) == 0o700
+    cache = tmp_path / "home" / "Library" / "Caches" / "magic-manager-hosted"
+    assert stat.S_IMODE(cache.stat().st_mode) == 0o700
+    for var, sub in hostops.WRAPPER_CACHE_VARS:
+        assert f"export {var}={cache / sub}\n" in henv
     again = _install(tmp_path, "--apply", "--owner-id", UID, "--trusted-proxy", "tailscale", env=env)
     assert again.returncode == 0 and "(new)" not in again.stdout and "(changed)" not in again.stdout
     assert not (kit / ".install-stage").exists()
@@ -641,6 +649,22 @@ def test_code_version_fails_closed_when_db_py_changes_shape():
         hostops.code_version_from_source(text.replace("CURRENT_VERSION = len(MIGRATIONS)", "CURRENT_VERSION = 37"))
     with pytest.raises(hostops.HostOpsError, match="parse"):
         hostops.code_version_from_source("MIGRATIONS = [")
+
+
+def test_wrapper_cache_vars_match_the_wrappers_installer_and_dockerfile(tmp_path):
+    import re
+    honored = set()
+    for sh in (ROOT / ".claude" / "skills").glob("*/*.sh"):
+        honored |= set(re.findall(r"\$\{([A-Z]+_(?:CACHE|STATE)_DIR):-", sh.read_text()))
+    assert honored == {v for v, _ in hostops.WRAPPER_CACHE_VARS}
+    for var, sub in hostops.WRAPPER_CACHE_VARS:
+        assert sub.split("-")[0].upper() == var.split("_")[0]
+    docker = (ROOT / "Dockerfile").read_text()
+    for var, sub in hostops.WRAPPER_CACHE_VARS:
+        assert f"{var}=/data/cache/{sub}" in docker
+    out = _install(tmp_path, "--cache-dir", str(tmp_path / "c")).stdout
+    for var, sub in hostops.WRAPPER_CACHE_VARS:
+        assert f"export {var}={tmp_path / 'c' / sub}\n" in out
 
 
 def test_litestream_version_is_pinned_the_same_everywhere():
@@ -836,3 +860,10 @@ def test_replica_lag_cli_exit_codes(owner_split, tmp_path, monkeypatch):
     monkeypatch.setattr(offsite, "store", boom)
     r = runner.invoke(cli_app, args)
     assert r.exit_code == 2 and "unreachable" in r.output
+
+
+def test_mtgjson_cache_path_honors_mtgjson_cache_dir(monkeypatch, tmp_path):
+    from magic_manager import mtgjson
+    monkeypatch.setenv("MTGJSON_CACHE_DIR", str(tmp_path / "persist"))
+    monkeypatch.setenv("TMPDIR", str(tmp_path / "tmp"))
+    assert mtgjson.cache_path("DeckList.json") == tmp_path / "persist" / "DeckList.json"
