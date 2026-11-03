@@ -234,3 +234,16 @@ def test_lib_syntax_and_no_hosts():
     text = LIB.read_text()
     assert "://" not in text  # no network, nothing for the guards to trip on
     assert "stat -f" not in text and "stat -c" not in text
+
+
+def test_reserve_ignores_a_future_dated_last_call(tmp_path):
+    """A last-call time far in the future (the clock stepped back) must not freeze
+    every caller: anything more than a minute out is reset to now."""
+    state = tmp_path / "state"; state.mkdir()
+    (state / "last_call_ms").write_text(str(int(time.time() * 1000) + 3_600_000))
+    lib = Path(__file__).resolve().parent.parent / ".claude" / "skills" / "_lib" / "ratelimit.sh"
+    t0 = time.monotonic()
+    r = subprocess.run(["bash", "-c", f'RL_NAME=t.sh LOCK_FILE="{state}/lock" LAST_CALL_FILE="{state}/last_call_ms"; . "{lib}"; rl_reserve 200'],
+                       capture_output=True, text=True, timeout=30)
+    assert r.returncode == 0, r.stderr
+    assert time.monotonic() - t0 < 5

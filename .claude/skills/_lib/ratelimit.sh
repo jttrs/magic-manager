@@ -83,6 +83,8 @@ try:
 except (OSError, ValueError):
     last = 0
 nxt = max(t, last + gap)
+if nxt - t > 60000:  # no real queue reaches a minute out: a clock that stepped back
+    nxt = t
 with open(last_f, "w") as f:
     f.write(str(nxt) + "\n")
 print(nxt - t, nxt)
