@@ -621,4 +621,59 @@ The browser companion (H12) applies the same principle with its own threat model
     domain (§25.2).
 
 Phase 5 (shared server-side Scryfall/MTGJSON/EDHREC cache + rate limiter; the browser-driven
-Moxfield import is retired by H12) is re-evaluated **after** this lands.
+Moxfield import is retired by H12) is re-evaluated **after** this lands. *(Shaped 2026-11-03: §26.)*
+
+## 26. Phase 5 — harden external API access; servers never drive a browser (shaped 2026-11-03)
+
+**Finding (repo survey, 2026-11-03).** On one machine the "shared server-side cache + central
+rate limiter" that §7 asked for **already exists**. Every client (`scryfall.py`, `mtgjson.py`,
+`edhrec.py`, `commander_spellbook.py`, `manapool.py`, `tcgcsv.py`, `tcgapi.py`, `ebay.py`) runs
+its bash wrapper in `.claude/skills/*/`. Each wrapper keeps its cache (`<name>-cache`, 24h TTL;
+MTGJSON has no TTL) and its pacing state (`<name>-state/{lock,last_call_ms,backoff_until}`)
+on disk, so every user, request and process on the machine shares them. The real gaps:
+
+1. **Stale lock.** The lock is a `mkdir` folder released only by `trap … EXIT`. After a SIGKILL
+   it is never cleared, so every later call to that service waits 30 s and fails (502) for
+   every user.
+2. **Lock held through the network call.** Calls to one service run strictly one at a time.
+   Concurrent web requests queue, and a request still waiting after 30 s fails.
+3. **No timeout.** The clients' `subprocess.run` calls have none, so a hung call blocks its
+   request or job forever.
+4. **Caches in `$TMPDIR`.** On the mini a LaunchAgent's `$TMPDIR` is `/var/folders/…/T`, which
+   macOS cleans of files unused for about 3 days. MTGJSON's large set files then re-download.
+
+### 26.1 Decisions (owner, 2026-11-03)
+
+| # | Decision |
+|---|---|
+| P5-1 | **Harden what exists; no Redis.** A central cache service only pays off with several app servers. Keep the file-based shared cache and limiter and fix gaps 1–4. Revisit only at the vendor move (H7). |
+| P5-2 | **Hosted: Moxfield imports through the companion only, admin included.** The `decks.moxfield_server` path (`addcards.fetch_deck_payload` → `scripts/import_deck.py` with headed Chrome) is refused for everyone when `MM_MODE=hosted`. Locally (the laptop) it stays: `mm deck import-deck`, the `import-deck` skill, `mm deck push-moxfield` and the laptop scrape canary are unchanged. |
+| P5-3 | **Hosted: no AppleScript tab reads.** `deals.mac_tabs` (the "Read my open tabs" fallback) is refused for everyone hosted, because on the mini it would read the mini's own Chrome. The companion is the only tab reader there. Local mode is unchanged. |
+| P5-4 | Consequence of P5-2/3: the hosted server never drives a browser. The mini needs no Playwright browsers for imports; the runbook drops that install step (keep Chrome only if another documented use needs it). |
+| P5-5 | The Linux/systemd kit and the Docker vendor move (H7) stay deferred until leaving the home server. |
+
+### 26.2 Build order (small PRs; no migrations expected)
+
+1. **Shared wrapper rate-limit library.** Lift the lock, pacing and backoff code duplicated
+   across the eight wrappers into one sourced file (e.g. `.claude/skills/_lib/ratelimit.sh`),
+   with no behaviour change. Keep every guard hook's wrapper allowlist working.
+2. **Stale-lock takeover + pace-only locking.** The lock records its owner PID and start time.
+   A lock whose process is gone, or that is older than a bound, is taken over (the same rule
+   as the deploy lock, `deploy/macos/bin/common.sh take_lock`). The lock now covers only
+   reserving the next call slot (read and write `last_call_ms`, honour `backoff_until`), not
+   the download, so concurrent requests run in parallel while still being spaced. Cache hits
+   stay lock-free. Tests: two concurrent calls are spaced but don't serialize; a stale lock is
+   taken over; a 429 backoff still stops everyone.
+3. **Client timeouts.** Each Python client passes a `timeout=` to `subprocess.run` (normal reads
+   ~60–120 s; MTGJSON and Scryfall bulk downloads longer) and maps a timeout to its existing
+   error (→ coded 502 / job failure). No hang path is left.
+4. **Persistent cache dir when hosted.** `deploy/macos/install.sh` writes `*_CACHE_DIR` /
+   `*_STATE_DIR` (incl. `MTGJSON_CACHE_DIR`, which `mtgjson.py` also reads directly) under
+   `~/Library/Caches/magic-manager-hosted/` into `hosted.env`. The Dockerfile points them
+   under `/data/cache`. Laptop and CLI defaults are unchanged.
+5. **Hosted: no server browser (P5-2, P5-3).** `owner_machine` refuses `decks.moxfield_server`
+   and `deals.mac_tabs` for everyone when hosted (local unchanged). `/api/features.owner_paths`
+   then reports them off, so the web routes the admin to the companion exactly as it already
+   does for members (`useBrowserDeck().needsCompanion`, `CompanionRequired`). Update
+   `docs/home-server.md` (drop `playwright install` from the mini setup) and CLAUDE.md. Run the
+   security-review agent on the diff.

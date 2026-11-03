@@ -46,4 +46,5 @@
 | 11-02 | Mac mini / OAuth apps / R2: none started yet. Chrome Web Store listing: later |
 | 11-03 | Account delete re-auth stays as is (10-min fresh sign-in + typed confirm); no forced Google/Discord login |
 | 11-03 | Parked UX questions closed: Deals stays one watchlist with open-tab finds pinned above (the tabs/watching split is gone); a partly-added store order shows only under Needs review (its cards still count in month totals) |
+| 11-03 | Phase 5 shaped (§26): harden the existing file-based API cache/limiter, no Redis; hosted = companion only for Moxfield (admin too) and for open-tab reads; laptop CLI/skills unchanged; Linux/Docker deferred |
 | (builder-level, accepted) | Members never reach the server's browser (companion only); EDHREC rankings fetch = admin-only, members see cached; 3-job cap for everyone; HSTS without includeSubDomains; pairing refuses IP/one-word hosts and reader sites |
