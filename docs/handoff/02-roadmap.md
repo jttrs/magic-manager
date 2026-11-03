@@ -55,15 +55,14 @@ Engineering to check before submission: the listing copy and permission justific
 0.5.0 (optional host permission pool `https://*/*` from which ONE origin is requested at Pair —
 reviewers will ask; justify it in `listing.md`).
 
-## C. Phase 5 (shaped with the owner 2026-11-03 — `docs/webapp-architecture-decision.md` §26)
+## C. Phase 5 — DONE (2026-11-03; `docs/webapp-architecture-decision.md` §26)
 
-The shared cache and limiter already exist machine-wide (file-based wrappers), so Phase 5 is
-**hardening, no Redis**, plus **"the hosted server never drives a browser"**. Five small PRs, in
-order (§26.2): (1) one shared wrapper rate-limit library (no behaviour change); (2) stale-lock
-takeover + lock only to pace calls, not during the download; (3) subprocess timeouts in every
-client; (4) a persistent cache dir on the mini (`hosted.env`) and in Docker; (5) hosted refuses
-`decks.moxfield_server` and `deals.mac_tabs` for everyone (companion only), the runbook drops
-Playwright from the mini. Linux/systemd kit + Docker vendor move stay deferred (H7).
+Merged: #216 shared wrapper rate-limit library, #218 call-slot reservation under a kernel
+`flock` (no stale locks, downloads overlap, a 429 stops queued callers), #214 timeouts on every
+wrapper call (`util.run_wrapper`), #215 persistent cache dir on the mini/in Docker
+(`install.sh --cache-dir`), #217 hosted server never drives a browser (Moxfield + Mac tabs via
+the companion for everyone). Follow-ups: `scripts/import_deck.py` subprocess (`addcards`) has no
+timeout; Linux/systemd kit + Docker vendor move stay deferred (H7).
 
 ## D. Follow-up backlog (small PRs, no owner hardware needed)
 

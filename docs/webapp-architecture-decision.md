@@ -623,7 +623,7 @@ The browser companion (H12) applies the same principle with its own threat model
 Phase 5 (shared server-side Scryfall/MTGJSON/EDHREC cache + rate limiter; the browser-driven
 Moxfield import is retired by H12) is re-evaluated **after** this lands. *(Shaped 2026-11-03: §26.)*
 
-## 26. Phase 5 — harden external API access; servers never drive a browser (shaped 2026-11-03)
+## 26. Phase 5 — harden external API access; servers never drive a browser (shaped + built 2026-11-03: #214–#218)
 
 **Finding (repo survey, 2026-11-03).** On one machine the "shared server-side cache + central
 rate limiter" that §7 asked for **already exists**. Every client (`scryfall.py`, `mtgjson.py`,

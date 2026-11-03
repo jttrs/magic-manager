@@ -4,8 +4,8 @@
 
 - **Repo:** `jttrs/magic-manager` (PUBLIC on GitHub). Local clone (main checkout):
   `/Users/torre/repos/personal/magic-manager` — branch `main`, clean.
-- **origin/main:** `194480e` (#210) as of 2026-11-03. Since the handoff: #207 (these docs),
-  #208 (vendor canary), #209 (Litestream stall alert), #210 (account-delete follow-ups).
+- **origin/main:** after #218 (2026-11-03). Since the handoff: #207–#213 (docs, canary #208, stall
+  alert #209, account-delete #210), Phase 5 #214–#218.
 - **Open PRs:** none.
 - **Open issues:** none (#119 closed by #208).
 - **gh auth:** the default `gh` account on this machine may be an Adobe EMU account that cannot act
