@@ -30,7 +30,7 @@
 - Wants deterministic engine code with thin CLI/web/skill adapters, DRY (CLAUDE.md rules 1–2).
 - Real DB is precious: ask before every apply; show rehearsal results first.
 
-## Decisions made this cycle (2026-10-12 → 2026-11-01)
+## Decisions made this cycle (2026-10-12 → 2026-11-03)
 
 | Date | Decision |
 |---|---|
@@ -43,4 +43,7 @@
 | 11-01 | Post-cutover CLI on the laptop = **local copy re-pulled from R2** (no two-way sync, H3) |
 | 11-01 | Heavy gates → **GitHub CI** (public repo = free runners); local = targeted tests only; ruleset requires CI checks, strict |
 | 11-01 | Step 10 hardening: fix all review items **except** client-side backup encryption (deferred; needs off-box key escrow) |
+| 11-02 | Set-docs Claude session (14 `docs/sets` drafts) is still running — leave its worktree alone |
+| 11-02 | Mac mini / OAuth apps / R2: none started yet. Chrome Web Store listing: later |
+| 11-03 | Account delete re-auth stays as is (10-min fresh sign-in + typed confirm); no forced Google/Discord login |
 | (builder-level, accepted) | Members never reach the server's browser (companion only); EDHREC rankings fetch = admin-only, members see cached; 3-job cap for everyone; HSTS without includeSubDomains; pairing refuses IP/one-word hosts and reader sites |
