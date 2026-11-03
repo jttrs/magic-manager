@@ -151,7 +151,8 @@ def test_admin_lists_users_without_any_collection(people, monkeypatch):
     # hosted-only page: the server-browser paths are off for everyone, so they aren't listed
     assert {p["key"] for p in body["owner_paths"]} == set(owner_machine.PATHS) - owner_machine.HOSTED_OFF
     deals = next(f for f in rows[m]["flags"] if f["name"] == "deals")
-    assert deals["override"] is None and deals["owner_paths"] == []  # deals.mac_tabs is off for everyone hosted and deals["about"]
+    # deals.mac_tabs is off for everyone hosted, so the flag lists no owner-only path
+    assert deals["override"] is None and deals["owner_paths"] == [] and deals["about"]
 
 
 def test_admin_sets_a_flag_the_member_sees_it_and_the_pin_holds(people):
@@ -222,7 +223,8 @@ def test_cli_twins():
     assert store.overrides(m.id) == {"deals": True}
     flags = json.loads(run(cli_app, ["auth", "flags", "--user", m.id, "--json"]).output)
     deals = next(f for f in flags if f["name"] == "deals")
-    assert deals["effective"] is True and deals["owner_paths"] == []  # deals.mac_tabs is off for everyone hosted
+    # deals.mac_tabs is off for everyone hosted, so the flag lists no owner-only path
+    assert deals["effective"] is True and deals["owner_paths"] == []
     rows = json.loads(run(cli_app, ["auth", "users", "--json"]).output)
     assert rows[0]["overrides"] == {"deals": True}
     assert run(cli_app, ["auth", "flag", "--user", m.id, "--flag", "deals", "--set", "maybe"]).exit_code == 2

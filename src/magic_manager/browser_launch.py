@@ -22,7 +22,11 @@ class ServerBrowserRefused(RuntimeError):
 
 
 def refused() -> bool:
-    return os.environ.get(NO_SERVER_BROWSER_ENV) == "1"
+    """No server browser: when asked (MM_NO_SERVER_BROWSER=1), and ALWAYS when hosted —
+    the hosted server never drives a browser (Phase 5, P5-2), so this last seam
+    fails closed even if a future in-process caller forgot the owner_machine check."""
+    from .analytics import consent
+    return os.environ.get(NO_SERVER_BROWSER_ENV) == "1" or consent.mode() == "hosted"
 
 
 ARGS = ["--disable-blink-features=AutomationControlled"]  # drops the most obvious automation tell

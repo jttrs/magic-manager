@@ -111,7 +111,7 @@ def fetch_scryfall(deck_id: str) -> tuple[list[dict], str | None, str | None]:
 def fetch_moxfield(deck_id: str, *, fresh: bool) -> tuple[list[dict], str | None, str | None]:
     from magic_manager.browser_launch import NO_SERVER_BROWSER_MESSAGE, refused
     if refused():
-        # --no-browser / MM_NO_SERVER_BROWSER (the hosted app's fetch for a member):
+        # --no-browser / MM_NO_SERVER_BROWSER / hosted (every hosted fetch, admins too):
         # Moxfield needs a browser on this machine, so never start one — the companion reads it.
         raise RuntimeError(NO_SERVER_BROWSER_MESSAGE)
     from moxfield_session import MoxfieldSession

@@ -629,3 +629,15 @@ def test_a_disabled_admin_is_not_an_admin(owner_split, monkeypatch):
         assert owner_machine.is_admin()
         store.revoke(u.id, disable=True)
         assert not owner_machine.is_admin()
+
+
+def test_browser_launch_refuses_whenever_hosted(monkeypatch):
+    """Phase 5 P5-2: the last Playwright seam fails closed when hosted, flag or not."""
+    from magic_manager import browser_launch
+    monkeypatch.delenv(browser_launch.NO_SERVER_BROWSER_ENV, raising=False)
+    monkeypatch.setenv("MM_MODE", "local")
+    assert not browser_launch.refused()
+    monkeypatch.setenv("MM_MODE", "hosted")
+    assert browser_launch.refused()
+    with pytest.raises(browser_launch.ServerBrowserRefused):
+        browser_launch.launch(object(), headless=True)
