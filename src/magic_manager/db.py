@@ -1466,21 +1466,20 @@ def _open_split(lay: _layout.Layout) -> sqlite3.Connection:
     attached files). Nothing is created or migrated here: the files must exist
     at :data:`CURRENT_VERSION` (per-target migrations are a later step).
     """
-    for f, what in ((lay.path, "user"), (lay.catalog, "catalog")):
-        if not f.is_file():
-            raise _layout.LayoutError(f"split layout: {what} DB {f} does not exist")
-    # mode=rw never creates: a file removed since the check above (an account being
-    # deleted under a request already past the gate) is an error, not an empty file.
-    def _gone(e: sqlite3.OperationalError) -> _layout.LayoutError | None:
+    def _missing() -> _layout.LayoutError | None:
         for f, what in ((lay.path, "user"), (lay.catalog, "catalog")):
             if not f.is_file():
                 return _layout.LayoutError(f"split layout: {what} DB {f} does not exist")
         return None
 
+    if (gone := _missing()) is not None:
+        raise gone
+    # mode=rw never creates: a file removed since the check above (an account being
+    # deleted under a request already past the gate) is an error, not an empty file.
     try:
         conn = sqlite3.connect(lay.path.resolve().as_uri() + "?mode=rw", uri=True, factory=Connection)
     except sqlite3.OperationalError as e:
-        gone = _gone(e)
+        gone = _missing()
         if gone is None:
             raise
         raise gone from e
@@ -1491,7 +1490,7 @@ def _open_split(lay: _layout.Layout) -> sqlite3.Connection:
             conn.execute(f"ATTACH DATABASE ? AS {_layout.CATALOG_SCHEMA}",
                          (lay.catalog.resolve().as_uri() + "?mode=rw",))
         except sqlite3.OperationalError as e:
-            gone = _gone(e)
+            gone = _missing()
             if gone is None:
                 raise
             raise gone from e
@@ -2393,9 +2392,10 @@ def _snapshot_split(lay: _layout.Layout, *, label: str | None, dest: Path | None
     partial = dest.with_name(dest.name + ".partial")
     shutil.rmtree(partial, ignore_errors=True)
     rel = _split_rel(lay)
-    hold = sqlite3.connect(str(lay.path), isolation_level=None)
+    # mode=rw never creates: a user file removed since the check above is an error, not a new empty file.
+    hold = sqlite3.connect(lay.path.resolve().as_uri() + "?mode=rw", uri=True, isolation_level=None)
     try:
-        hold.execute(f"ATTACH DATABASE ? AS {_layout.CATALOG_SCHEMA}", (str(lay.catalog),))
+        hold.execute(f"ATTACH DATABASE ? AS {_layout.CATALOG_SCHEMA}", (lay.catalog.resolve().as_uri() + "?mode=rw",))
         hold.execute("BEGIN IMMEDIATE")  # writers wait; readers (the backups below) don't
         for what, f in live.items():
             out = partial / rel[what]

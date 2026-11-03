@@ -207,7 +207,10 @@ def _finish(request: Request, profile: oauth.Profile, pending: oauth.Pending) ->
         return _fail("profiles_soon")
     store.update_profile(user.id, profile.display_name, profile.email)
     try:
-        userfiles.ensure(db.data_dir(), user.id)  # first sign-in: an empty collection file; else migrate it
+        # first sign-in: an empty collection file; else migrate it. Not for an account closed meanwhile.
+        userfiles.ensure(db.data_dir(), user.id, still_open=lambda: store.is_open(user.id))
+    except userfiles.AccountClosed:
+        return _fail("disabled")
     except Exception:  # noqa: BLE001 — never sign in to a missing/unmigrated file
         log.exception("could not prepare the collection file of user %s", user.id)
         return _fail("profile_unavailable")
@@ -256,7 +259,12 @@ def install(app: FastAPI) -> None:
         if session is not None and not userfiles.path_for(db.data_dir(), session.user.id).exists():
             # A session minted before its file existed (e.g. before step 5): create it now.
             try:
-                await asyncio.to_thread(userfiles.ensure, db.data_dir(), session.user.id)
+                await asyncio.to_thread(
+                    lambda: userfiles.ensure(db.data_dir(), session.user.id,
+                                             still_open=lambda: store.is_open(session.user.id)))
+            except userfiles.AccountClosed:
+                # Deleted/disabled after this request's session was read: don't recreate the file.
+                return _refuse(request, 401, "auth.required", "Sign in to use this.")
             except Exception:  # noqa: BLE001 — never serve a request without the user's own file
                 log.exception("could not prepare the collection file of user %s", session.user.id)
                 return _refuse(request, 503, "auth.profile_unavailable",

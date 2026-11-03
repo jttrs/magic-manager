@@ -200,6 +200,13 @@ def get_user(user_id: str) -> User | None:
     return _user(row) if row else None
 
 
+def is_open(user_id: str) -> bool:
+    """The user exists and isn't disabled (account deletion disables first, so a closed
+    or deleted account reads False)."""
+    u = get_user(user_id)
+    return u is not None and not u.disabled
+
+
 def users() -> list[tuple[User, list[str]]]:
     """Every user with the providers linked to them, oldest first."""
     with connect() as conn:
