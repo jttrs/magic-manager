@@ -55,17 +55,15 @@ Engineering to check before submission: the listing copy and permission justific
 0.5.0 (optional host permission pool `https://*/*` from which ONE origin is requested at Pair —
 reviewers will ask; justify it in `listing.md`).
 
-## C. Phase 5 (re-evaluate scope with the owner first — owner said "after Phase 3")
+## C. Phase 5 (shaped with the owner 2026-11-03 — `docs/webapp-architecture-decision.md` §26)
 
-1. **Shared server-side Scryfall / MTGJSON / EDHREC cache + rate limiter.** Today each external API
-   goes through rate-limited, cached bash wrappers in `.claude/skills/*-search/*.sh` (+ PreToolUse
-   guard hooks) — fine for one machine, wrong for a multi-user server. Hosted already restricts
-   catalog-wide jobs to admins and rate-limits live reads per user (#206); Phase 5 makes the cache
-   and limiter server-wide and shared across users.
-2. **Retire the headed-Chrome Moxfield import** (`scripts/moxfield_session.py`, the Moxfield path
-   of `scripts/import_deck.py`) in favour of the companion. Members already can't reach it (#204);
-   decide with the owner whether the admin keeps it.
-3. Possibly: the Linux/systemd deploy kit and Docker vendor move (H7) when leaving the home server.
+The shared cache and limiter already exist machine-wide (file-based wrappers), so Phase 5 is
+**hardening, no Redis**, plus **"the hosted server never drives a browser"**. Five small PRs, in
+order (§26.2): (1) one shared wrapper rate-limit library (no behaviour change); (2) stale-lock
+takeover + lock only to pace calls, not during the download; (3) subprocess timeouts in every
+client; (4) a persistent cache dir on the mini (`hosted.env`) and in Docker; (5) hosted refuses
+`decks.moxfield_server` and `deals.mac_tabs` for everyone (companion only), the runbook drops
+Playwright from the mini. Linux/systemd kit + Docker vendor move stay deferred (H7).
 
 ## D. Follow-up backlog (small PRs, no owner hardware needed)
 
