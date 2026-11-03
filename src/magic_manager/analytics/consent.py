@@ -103,6 +103,7 @@ def clear_cache() -> None:
         _cache.clear()
 
 
+@db.user_cache
 def forget_scope(scope: str) -> None:
     """Drop one user's cached consent (``db.user_scope()``; account deletion)."""
     with _lock:

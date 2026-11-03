@@ -14,8 +14,8 @@ import pytest
 from fastapi.testclient import TestClient
 from typer.testing import CliRunner
 
-from magic_manager import account, db, decks, inventory, layout, split, undo, userfiles, wishlist
-from magic_manager.analytics import identity
+from magic_manager import account, db, decks, family_status, inventory, layout, market, split, undo, userfiles, wishlist
+from magic_manager.analytics import consent, identity
 from magic_manager.analytics import store as analytics_store
 from magic_manager.auth import store
 from magic_manager.cli import app as cli_app
@@ -487,3 +487,39 @@ def test_the_final_sweep_removes_a_file_recreated_mid_delete(admins_and_member, 
     out = account.delete_account(m, data_dir=data)
     assert not (data / "users" / f"{m}.db").exists()
     assert out.files.count(f"users/{m}.db") == 2
+
+
+def test_delete_account_clears_that_users_caches_only(admins_and_member, monkeypatch):
+    data, a, m = admins_and_member
+    mine, theirs = str(userfiles.path_for(data, m)), str(userfiles.path_for(data, a))
+    monkeypatch.setattr(family_status, "_ST_INDEX", {mine: ({}, {}), theirs: ({}, {})})
+    monkeypatch.setattr(market, "_cost_memo", {(mine, "x"): (0, (), {}), (theirs, "x"): (0, (), {})})
+    monkeypatch.setattr(consent, "_cache", {f"{mine}|hosted": 1, f"{theirs}|hosted": 2})
+    account.delete_account(m, data_dir=data)
+    assert set(family_status._ST_INDEX) == {theirs}
+    assert set(market._cost_memo) == {(theirs, "x")}
+    assert set(consent._cache) == {f"{theirs}|hosted"}
+
+
+def test_create_and_ensure_refuse_a_closed_account(two_users, tmp_path):
+    data, _m = two_users
+    uid = "a" * 16
+    with pytest.raises(userfiles.AccountClosed):
+        userfiles.create(data, uid, still_open=lambda: False)
+    with pytest.raises(userfiles.AccountClosed):
+        userfiles.ensure(data, uid, still_open=lambda: False)
+    assert not userfiles.path_for(data, uid).exists()
+    assert userfiles.ensure(data, uid, still_open=lambda: True) == "created"
+
+
+def test_the_gate_doesnt_recreate_the_file_of_an_account_closed_mid_request(web, split_dir, monkeypatch):
+    _a, (cm, hm, m) = web
+    stale = store.session_for(cm.cookies.get(auth_routes.cookie_name()))
+    assert stale is not None
+    account.delete_account(m, data_dir=split_dir)
+    target = split_dir / "users" / f"{m}.db"
+    assert not target.exists()
+    monkeypatch.setattr(store, "session_for", lambda token: stale)  # read before the delete ran
+    r = cm.get("/api/undo")
+    assert r.status_code == 401 and r.json()["code"] == "auth.required"
+    assert not target.exists()

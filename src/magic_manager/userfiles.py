@@ -23,6 +23,7 @@ import re
 import shutil
 import sqlite3
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from functools import lru_cache
@@ -39,6 +40,10 @@ _lock = threading.Lock()
 
 class UserFileError(Exception):
     """A user file can't be created, migrated or bound as asked (nothing changed)."""
+
+
+class AccountClosed(UserFileError):
+    """The account was closed; its file isn't created."""
 
 
 def path_for(data_dir: Path, user: str) -> Path:
@@ -84,10 +89,20 @@ def user_schema() -> tuple[str, ...]:
         conn.close()
 
 
-def create(data_dir: Path, user: str) -> Path:
-    """Write ``users/<user>.db`` (empty, current schema). Refuses an existing file."""
+def create(data_dir: Path, user: str, *, still_open: Callable[[], bool] | None = None) -> Path:
+    """Write ``users/<user>.db`` (empty, current schema). Refuses an existing file.
+
+    ``still_open`` (the lazy creator at the auth gate passes it) is asked INSIDE the
+    lock, before anything is written: account deletion commits the close first and
+    then takes this same lock to remove the files, so a check made under the lock
+    can't miss a delete that is about to remove (or just removed) the file —
+    an in-flight request never recreates a deleted user's file. A closed account
+    raises :class:`AccountClosed` and nothing is created.
+    """
     target = path_for(data_dir, user)
     with _lock:
+        if still_open is not None and not still_open():
+            raise AccountClosed(f"the account of {target.stem} was closed; {target.name} isn't created")
         if target.exists():
             raise UserFileError(f"{target.name} already exists")
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -114,13 +129,19 @@ def create(data_dir: Path, user: str) -> Path:
     return target
 
 
-def ensure(data_dir: Path, user: str) -> str:
-    """``created`` | ``migrated`` | ``ok`` — the user's file exists at the current version."""
+def ensure(data_dir: Path, user: str, *, still_open: Callable[[], bool] | None = None) -> str:
+    """``created`` | ``migrated`` | ``ok`` — the user's file exists at the current version.
+
+    ``still_open`` is checked under :func:`create`'s lock (see there); a closed account
+    raises :class:`AccountClosed` — never swallowed, never falls through to a migrate.
+    """
     target = path_for(data_dir, user)
     if not target.exists():
         try:
-            create(data_dir, user)
+            create(data_dir, user, still_open=still_open)
             return "created"
+        except AccountClosed:
+            raise
         except UserFileError:
             if not target.exists():
                 raise

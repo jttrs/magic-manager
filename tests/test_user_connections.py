@@ -160,7 +160,7 @@ def test_bind_ignores_a_stored_privacy_choice(owner_split):
 
 
 def test_ensure_tolerates_a_concurrent_create(owner_split, monkeypatch):
-    def racing(data_dir, user):
+    def racing(data_dir, user, **_kw):
         userfiles.path_for(data_dir, user).write_bytes(b"")  # the other sign-in won
         raise userfiles.UserFileError("already exists")
     monkeypatch.setattr(userfiles, "create", racing)

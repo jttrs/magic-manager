@@ -211,6 +211,7 @@ _COST_TTL = 30 * 60
 _cost_memo: dict[tuple, tuple[float, tuple, dict]] = {}
 
 
+@db.user_cache
 def forget_scope(scope: str) -> None:
     """Drop one user's memoized product costs (their owned/free counts; account deletion)."""
     for k in [k for k in list(_cost_memo) if k[0] == scope]:
