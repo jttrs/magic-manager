@@ -86,8 +86,6 @@ From the web UX round-2 fan-out (all chunks merged; open follow-ups):
   API code remains; Explore family picker lists every paper family, owned first; `art.lookup`
   title no longer names a vendor.)
 - `/api/ingest/precons` ~5 s on the owner's live server (didn't reproduce in tests) — profile live.
-- Owner questions never answered: Deals "Open tabs | Watching" as a rail segment vs sub-nav tabs;
-  a partly-added store order shown only under Needs review vs also on the timeline.
 - `tests/test_card_earmarks.py::test_v37_migration_single_and_split` was reported flaky/order-
   dependent before #196 — confirm it's fixed in CI history.
 Other:
