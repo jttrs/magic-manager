@@ -788,6 +788,22 @@ def test_replica_lag_ok_behind_missing_and_new(owner_split, tmp_path):
     assert not r.ok and [f.status for f in r.files] == ["ok", "behind"]
     assert r.files[1].lag_seconds == 70 * 60 and r.to_dict()["ok"] is False
     assert offsite.replica_lag(owner_split, st, now=now, threshold=timedelta(hours=2)).ok
+    # a stall followed by an early write, then silence: the replica stood still an hour,
+    # the write came 15 min after it — behind (not "15 min < 30 min, ok")
+    _age(objs["users/owner.db"], now - timedelta(minutes=60))
+    _age(wal, now - timedelta(minutes=45))
+    r = offsite.replica_lag(owner_split, st, now=now)
+    assert r.files[1].status == "behind" and r.files[1].lag_seconds == 60 * 60
+    # unsynced writes but the replica moved 20 min ago: not yet behind; a checkpoint
+    # just after the last upload (within LAG_SLACK) never counts as unsynced
+    _age(objs["users/owner.db"], now - timedelta(minutes=20))
+    _age(wal, now - timedelta(minutes=10))
+    assert offsite.replica_lag(owner_split, st, now=now).files[1].status == "ok"
+    _age(objs["users/owner.db"], now - timedelta(hours=5))
+    _age(wal, now - timedelta(hours=5) + timedelta(minutes=2))
+    _age(local["users/owner.db"], now - timedelta(hours=5) + timedelta(minutes=2))
+    assert offsite.replica_lag(owner_split, st, now=now).files[1].status == "ok"
+    wal.unlink()
     # no replica object: old file = missing, just-created file = ok
     objs["auth.db"].unlink()
     r = offsite.replica_lag(owner_split, st, now=now + timedelta(days=1))

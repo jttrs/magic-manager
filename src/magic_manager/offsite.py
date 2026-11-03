@@ -484,6 +484,9 @@ def verify_replicas(data_dir: Path, url: str | None = None, *, progress: Progres
 # ---------- replication lag (the stall alert) ----------
 
 LAG_THRESHOLD = timedelta(minutes=30)
+# Litestream checkpoints just after it uploads, which moves the file's mtime a little past
+# its newest object; a write further ahead than this is one the replica doesn't have.
+LAG_SLACK = timedelta(minutes=5)
 
 
 @dataclass
@@ -522,8 +525,9 @@ def replica_lag(data_dir: Path, st: objectstore.Store, *, now: datetime | None =
                 threshold: timedelta = LAG_THRESHOLD) -> LagReport:
     """Is the offsite replica keeping up? For ``auth.db`` and every user file, compare the
     file's last local write with the newest object under its replica prefix: a file is
-    ``behind`` when it was written more than ``threshold`` after the replica's newest
-    object, ``missing`` when it has no replica objects and is older than ``threshold``.
+    ``behind`` when it holds writes newer than the replica's newest object (beyond
+    :data:`LAG_SLACK`) and that object is more than ``threshold`` old, ``missing`` when
+    it has no replica objects and is older than ``threshold``.
     Litestream syncs every :data:`SYNC_INTERVAL`, so a healthy lag is seconds; the
     threshold absorbs checkpoint and idle-time noise. Read-only; a store that can't be
     reached raises :class:`objectstore.StoreError`."""
@@ -543,8 +547,12 @@ def replica_lag(data_dir: Path, st: objectstore.Store, *, now: datetime | None =
             status = "missing" if now - created > threshold else "ok"
             report.files.append(LagFile(name, status, stamp))
             continue
-        lag = written - newest
-        report.files.append(LagFile(name, "behind" if lag > threshold else "ok", stamp,
+        # Behind = it holds writes the replica lacks AND the replica hasn't moved for
+        # `threshold` (not "written long after": a stall followed by a few early writes
+        # would then never alert). The lag reported is how long the replica has stood still.
+        unsynced = written - newest > LAG_SLACK
+        lag = now - newest if unsynced else written - newest
+        report.files.append(LagFile(name, "behind" if unsynced and lag > threshold else "ok", stamp,
                                     newest.strftime("%Y-%m-%dT%H:%M:%SZ"), max(0, int(lag.total_seconds()))))
     return report
 

@@ -4,6 +4,11 @@
 # (behind / never replicated / store unreachable) and once when it recovers.
 # shellcheck source=deploy/macos/bin/common.sh
 . "$(dirname "$0")/common.sh"
+# Nothing replicates before the cutover finishes (same guards as litestream.sh): don't check.
+if [ ! -f "$MM_DATA_DIR/auth.db" ] || [ -e "$MM_DATA_DIR/users/owner.db" ]; then
+  log "the cutover isn't finished — not checking replication yet"
+  exit 0
+fi
 state_file="$MM_KIT/replica-check.state"
 prev=ok
 [ -r "$state_file" ] && prev=$(cat "$state_file")

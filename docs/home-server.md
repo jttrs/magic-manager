@@ -217,9 +217,10 @@ bind renames files, and a replica started on `owner.db` would be orphaned under 
 - **Logs**: `~/Library/Logs/magic-manager-hosted/*.log`. They grow slowly; trim by hand or add
   a `newsyslog` rule (`/etc/newsyslog.d/magic-manager.conf`, admin).
 - **Replication stall alert**: the `replica-check` agent runs every 15 minutes
-  (`mm-hosted host replica-lag`) and notifies once when any file's replica is more than 30
-  minutes behind its last write, was never replicated, or the store can't be reached (R2 down,
-  wrong token); it notifies again when replication catches up. Details in
+  (`mm-hosted host replica-lag`) and notifies once when any file holds writes its replica
+  doesn't have and the replica hasn't moved for 30 minutes, was never replicated, or the store
+  can't be reached (R2 down, wrong token); it notifies again when replication catches up. It
+  stays quiet until the cutover is finished. Details in
   `~/Library/Logs/magic-manager-hosted/replica-check.log`. It checks that Litestream is keeping
   up, not that the copy restores: the monthly restore drill (above) still proves that.
 
