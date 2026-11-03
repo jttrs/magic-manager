@@ -597,7 +597,7 @@ def test_installer_apply_is_private_idempotent_and_never_touches_other_agents(tm
                           env={**os.environ, "GNUPGHOME": str(keyring)}).stdout
     assert "fpr:::::::::968479A1AFF927E37D1A566BB5690EEEBB952194:" in fprs
     agents = sorted(p.name for p in (tmp_path / "agents").iterdir())
-    assert agents == [f"com.magic-manager.hosted.{s}.plist" for s in ("catalog-backup", "deploy", "litestream", "serve")]
+    assert agents == [f"com.magic-manager.hosted.{s}.plist" for s in ("catalog-backup", "deploy", "litestream", "replica-check", "serve")]
     for p in (tmp_path / "agents").iterdir():
         plist = plistlib.loads(p.read_bytes())
         assert plist["Umask"] == 0o077 and str(kit) in plist["ProgramArguments"][1]
@@ -754,3 +754,69 @@ def test_stale_deploy_lock_is_taken_over_and_a_live_one_is_obeyed(tmp_path):
     (kit / "deploy.lock" / "pid").write_text(f"{os.getpid()}\n")  # alive
     r = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
     assert "SKIPPED" in r.stdout and (kit / "deploy.lock").exists()
+
+
+# ---------- replication lag (the stall alert) ----------
+
+def _age(path: Path, when: datetime) -> None:
+    os.utime(path, (when.timestamp(), when.timestamp()))
+
+
+def _lag_setup(owner_split, tmp_path):
+    """Two files (auth.db, the owner's) each with a replica object; returns (store, objs, local files, now)."""
+    root = tmp_path / "lagremote"
+    st = objectstore.FileStore(root)
+    now = datetime(2026, 11, 3, 12, 0, 0, tzinfo=UTC)
+    local = {"auth.db": owner_split / "auth.db", "users/owner.db": owner_split / "users" / "owner.db"}
+    objs = {n: _put_replica(p, root, n) for n, p in local.items()}
+    return st, objs, local, now
+
+
+def test_replica_lag_ok_behind_missing_and_new(owner_split, tmp_path):
+    st, objs, local, now = _lag_setup(owner_split, tmp_path)
+    for n in local:
+        _age(local[n], now - timedelta(minutes=5))
+        _age(objs[n], now - timedelta(minutes=6))
+    r = offsite.replica_lag(owner_split, st, now=now)
+    assert r.ok and [f.status for f in r.files] == ["ok", "ok"] and r.files[0].lag_seconds == 60
+    # the owner file is written (only its -wal) an hour after its newest replica object
+    wal = local["users/owner.db"].with_name("owner.db-wal")
+    wal.write_bytes(b"")
+    _age(wal, now)
+    _age(objs["users/owner.db"], now - timedelta(minutes=70))
+    r = offsite.replica_lag(owner_split, st, now=now)
+    assert not r.ok and [f.status for f in r.files] == ["ok", "behind"]
+    assert r.files[1].lag_seconds == 70 * 60 and r.to_dict()["ok"] is False
+    assert offsite.replica_lag(owner_split, st, now=now, threshold=timedelta(hours=2)).ok
+    # no replica object: old file = missing, just-created file = ok
+    objs["auth.db"].unlink()
+    r = offsite.replica_lag(owner_split, st, now=now + timedelta(days=1))
+    assert r.files[0].status == "missing"
+    s = local["auth.db"].stat()
+    born = datetime.fromtimestamp(getattr(s, "st_birthtime", s.st_mtime), UTC)
+    r = offsite.replica_lag(owner_split, st, now=born + timedelta(minutes=1))
+    assert r.files[0].status == "ok" and r.files[0].replica_newest is None
+
+
+def test_replica_lag_cli_exit_codes(owner_split, tmp_path, monkeypatch):
+    st, objs, local, now = _lag_setup(owner_split, tmp_path)
+    monkeypatch.setattr(offsite, "store", lambda url=None: st)
+    runner = CliRunner()
+    args = ["host", "replica-lag", "--data-dir", str(owner_split)]
+    for n in local:
+        _age(objs[n], datetime.now(UTC))
+        _age(local[n], datetime.now(UTC) - timedelta(minutes=1))
+    r = runner.invoke(cli_app, args)
+    assert r.exit_code == 0 and "REPLICATION OK" in r.output
+    _age(objs["auth.db"], datetime.now(UTC) - timedelta(hours=3))
+    _age(local["auth.db"], datetime.now(UTC))
+    r = runner.invoke(cli_app, args)
+    assert r.exit_code == 1 and "REPLICATION BEHIND" in r.output and "min behind" in r.output
+    assert runner.invoke(cli_app, [*args, "--json"]).exit_code == 1
+
+    def boom(url=None):
+        raise objectstore.StoreError("unreachable")
+
+    monkeypatch.setattr(offsite, "store", boom)
+    r = runner.invoke(cli_app, args)
+    assert r.exit_code == 2 and "unreachable" in r.output

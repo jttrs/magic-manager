@@ -132,8 +132,8 @@ set sync rewrites thousands of pages, which would burn write ops on a cache we c
    [Client IP behind the proxy](#client-ip-behind-the-proxy). It also imports GitHub's commit-signing
    key into the kit's own keyring — see [Deploy verification](#deploy-verification).
    It installs Litestream into `~/Library/Application Support/magic-manager-hosted/bin/`,
-   copies the wrapper scripts there with `hosted.env` (non-secret settings, 0600), writes four
-   agents `com.magic-manager.hosted.{serve,litestream,deploy,catalog-backup}` (umask 077, logs
+   copies the wrapper scripts there with `hosted.env` (non-secret settings, 0600), writes five
+   agents `com.magic-manager.hosted.{serve,litestream,deploy,catalog-backup,replica-check}` (umask 077, logs
    in `~/Library/Logs/magic-manager-hosted/`) and creates the empty data dir (0700). It starts
    nothing yet — the cutover does. Add `~/Library/Application Support/magic-manager-hosted`
    to your `PATH` for `mmctl` (start/stop/status) and `mm-hosted` (the CLI with the hosted settings).
@@ -216,9 +216,12 @@ bind renames files, and a replica started on `owner.db` would be orphaned under 
   account* is unaffected.
 - **Logs**: `~/Library/Logs/magic-manager-hosted/*.log`. They grow slowly; trim by hand or add
   a `newsyslog` rule (`/etc/newsyslog.d/magic-manager.conf`, admin).
-- **Replication has no alert yet**: if R2 is unreachable or the token is wrong, Litestream
-  retries and logs to `litestream.log`, but nothing notifies you. The monthly restore drill
-  (above) is the check until an alert exists.
+- **Replication stall alert**: the `replica-check` agent runs every 15 minutes
+  (`mm-hosted host replica-lag`) and notifies once when any file's replica is more than 30
+  minutes behind its last write, was never replicated, or the store can't be reached (R2 down,
+  wrong token); it notifies again when replication catches up. Details in
+  `~/Library/Logs/magic-manager-hosted/replica-check.log`. It checks that Litestream is keeping
+  up, not that the copy restores: the monthly restore drill (above) still proves that.
 
 ### Deploy verification
 

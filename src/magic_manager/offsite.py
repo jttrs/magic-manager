@@ -481,6 +481,74 @@ def verify_replicas(data_dir: Path, url: str | None = None, *, progress: Progres
     return report
 
 
+# ---------- replication lag (the stall alert) ----------
+
+LAG_THRESHOLD = timedelta(minutes=30)
+
+
+@dataclass
+class LagFile:
+    name: str
+    status: str                         # 'ok' | 'behind' | 'missing'
+    local_written: str                  # ISO, seconds, UTC
+    replica_newest: str | None = None
+    lag_seconds: int | None = None
+
+
+@dataclass
+class LagReport:
+    files: list[LagFile] = field(default_factory=list)
+
+    @property
+    def ok(self) -> bool:
+        return bool(self.files) and all(f.status == "ok" for f in self.files)
+
+    def to_dict(self) -> dict:
+        return {"ok": self.ok, "files": [asdict(f) for f in self.files]}
+
+
+def _local_written(path: Path) -> tuple[datetime, datetime]:
+    """(newest write, creation) of a database file: the later mtime of the file and its
+    ``-wal`` (a write sits in the WAL until a checkpoint); creation = birth time where
+    the OS has it, else the file's mtime."""
+    st = path.stat()
+    wal = path.with_name(path.name + "-wal")
+    newest = max(st.st_mtime, wal.stat().st_mtime if wal.exists() else 0.0)
+    created = getattr(st, "st_birthtime", st.st_mtime)
+    return datetime.fromtimestamp(newest, UTC), datetime.fromtimestamp(created, UTC)
+
+
+def replica_lag(data_dir: Path, st: objectstore.Store, *, now: datetime | None = None,
+                threshold: timedelta = LAG_THRESHOLD) -> LagReport:
+    """Is the offsite replica keeping up? For ``auth.db`` and every user file, compare the
+    file's last local write with the newest object under its replica prefix: a file is
+    ``behind`` when it was written more than ``threshold`` after the replica's newest
+    object, ``missing`` when it has no replica objects and is older than ``threshold``.
+    Litestream syncs every :data:`SYNC_INTERVAL`, so a healthy lag is seconds; the
+    threshold absorbs checkpoint and idle-time noise. Read-only; a store that can't be
+    reached raises :class:`objectstore.StoreError`."""
+    data_dir = Path(data_dir)
+    now = now or datetime.now(UTC)
+    names = [AUTH_FILE] + [f"{_layout.USERS_SUBDIR}/{p.name}" for p in userfiles.user_files(data_dir)]
+    report = LagReport()
+    for name in names:
+        try:
+            written, created = _local_written(data_dir / name)
+        except FileNotFoundError:  # an account deleted while we looked: nothing to replicate
+            continue
+        objs = st.list(f"{name}/")
+        newest = max((o.modified for o in objs), default=None)
+        stamp = written.strftime("%Y-%m-%dT%H:%M:%SZ")
+        if newest is None:
+            status = "missing" if now - created > threshold else "ok"
+            report.files.append(LagFile(name, status, stamp))
+            continue
+        lag = written - newest
+        report.files.append(LagFile(name, "behind" if lag > threshold else "ok", stamp,
+                                    newest.strftime("%Y-%m-%dT%H:%M:%SZ"), max(0, int(lag.total_seconds()))))
+    return report
+
+
 # ---------- the laptop's re-pull (H3) ----------
 
 @dataclass
