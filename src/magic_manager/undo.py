@@ -60,6 +60,14 @@ def snapshot_path() -> Path:
     return db.db_dir() / SNAPSHOT_FILE
 
 
+def _require_user_file() -> None:
+    """Split layout: refuse to write an undo file for a user whose file is gone (an
+    account deleted under a request already past the gate) — it would orphan one."""
+    lay = db.layout()
+    if lay.kind == "split" and not lay.path.is_file():
+        raise db._layout.LayoutError(f"split layout: user DB {lay.path} does not exist")
+
+
 def _tables(conn: sqlite3.Connection, schema: str = "main") -> set[str]:
     return {r[0] for r in conn.execute(f"SELECT name FROM {schema}.sqlite_master WHERE type='table'")}
 
@@ -187,7 +195,14 @@ def _write(conn: sqlite3.Connection, dest: Path, reason: str) -> None:
 def take(reason: str = "manual", dest: Path | None = None) -> dict | None:
     """Overwrite the one snapshot slot (or ``dest``) with your current data."""
     with db.connect() as conn:
-        _write(conn, dest or snapshot_path(), reason)
+        _require_user_file()
+        target = dest or snapshot_path()
+        _write(conn, target, reason)
+        try:
+            _require_user_file()  # deleted mid-copy: don't leave the file behind
+        except db._layout.LayoutError:
+            target.unlink(missing_ok=True)
+            raise
     return info() if dest is None else None
 
 
@@ -335,6 +350,14 @@ class SessionGuard:
             self._inflight, self._wrote = 1, False
             return True
 
+    def _user_gone(self) -> bool:
+        """Split layout: this guard's user file no longer exists (account deleted)."""
+        from .userfiles import UNDO_SUFFIX
+        snap = self._path   # only an explicit (per-user) path: end() runs outside the user binding
+        if snap is None or not snap.name.endswith(UNDO_SUFFIX):
+            return False
+        return not snap.with_name(snap.name[: -len(UNDO_SUFFIX)] + ".db").is_file()
+
     def end(self, wrote: bool) -> None:
         """Settle a :meth:`begin` that returned True. ``wrote`` = the request
         succeeded or failed unexpectedly (it may have written)."""
@@ -344,7 +367,9 @@ class SessionGuard:
             if self._inflight:
                 return
             pending = self.pending_path()
-            if self._wrote:
+            if self._user_gone():
+                pending.unlink(missing_ok=True)  # the user was deleted meanwhile
+            elif self._wrote:
                 os.replace(pending, self.snapshot_path())
                 self._last = self._clock()
             else:

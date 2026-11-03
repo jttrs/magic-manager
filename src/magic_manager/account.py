@@ -312,8 +312,8 @@ def delete_account(user_id: str, *, data_dir: Path | None = None) -> Deleted:
     auth id (checked before any path is built). Idempotent: an unknown or half-deleted
     id is swept again. Caller checks re-auth / confirmation / jobs; this checks the
     last-admin rule."""
-    from . import family_status, market, userfiles
-    from .analytics import consent, identity
+    from . import userfiles
+    from .analytics import identity
     from .analytics import store as analytics_store
     from .auth import store
     if not _layout.AUTH_ID_RE.fullmatch(user_id or ""):
@@ -328,6 +328,5 @@ def delete_account(user_id: str, *, data_dir: Path | None = None) -> Deleted:
     out.user_row, out.identities = rows.user, rows.identities
     out.invites_deleted, out.invites_unlinked = rows.invites_deleted, rows.invites_unlinked
     scope = str(userfiles.path_for(data_dir, user_id))
-    for forget in (consent.forget_scope, market.forget_scope, family_status.forget_scope):
-        forget(scope)
+    db.forget_user_scope(scope)
     return out

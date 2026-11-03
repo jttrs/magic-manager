@@ -17,7 +17,7 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Iterable, Iterator
+from typing import Callable, Iterable, Iterator
 
 from . import layout as _layout
 from . import util as _util
@@ -1415,8 +1415,34 @@ def data_dir() -> Path:
 
 def user_scope() -> str:
     """Whose data :func:`connect` opens in this context (the user file in split,
-    the one file in single). Key every process-wide cache of USER data on it."""
+    the one file in single). Key every process-wide cache of USER data on it, and
+    register its forget function with :func:`user_cache`."""
     return str(layout().path)
+
+
+_USER_CACHES: list[Callable[[str], None]] = []
+
+
+def user_cache(forget: Callable[[str], None]) -> Callable[[str], None]:
+    """Register a module's forget-one-user function for a process-wide cache keyed on
+    user_scope(); account deletion calls every registered one. Decorate the module's
+    forget_scope with it."""
+    if forget not in _USER_CACHES:
+        _USER_CACHES.append(forget)
+    return forget
+
+
+def forget_user_scope(scope: str) -> None:
+    """Drop ``scope``'s entry from every registered per-user cache. Every function
+    runs even if one raises; the first exception is re-raised afterwards."""
+    first: Exception | None = None
+    for forget in list(_USER_CACHES):
+        try:
+            forget(scope)
+        except Exception as e:  # noqa: BLE001 - keep clearing the rest
+            first = first or e
+    if first is not None:
+        raise first
 
 
 @contextmanager
@@ -1443,11 +1469,32 @@ def _open_split(lay: _layout.Layout) -> sqlite3.Connection:
     for f, what in ((lay.path, "user"), (lay.catalog, "catalog")):
         if not f.is_file():
             raise _layout.LayoutError(f"split layout: {what} DB {f} does not exist")
-    conn = sqlite3.connect(str(lay.path), factory=Connection)
+    # mode=rw never creates: a file removed since the check above (an account being
+    # deleted under a request already past the gate) is an error, not an empty file.
+    def _gone(e: sqlite3.OperationalError) -> _layout.LayoutError | None:
+        for f, what in ((lay.path, "user"), (lay.catalog, "catalog")):
+            if not f.is_file():
+                return _layout.LayoutError(f"split layout: {what} DB {f} does not exist")
+        return None
+
+    try:
+        conn = sqlite3.connect(lay.path.resolve().as_uri() + "?mode=rw", uri=True, factory=Connection)
+    except sqlite3.OperationalError as e:
+        gone = _gone(e)
+        if gone is None:
+            raise
+        raise gone from e
     try:
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
-        conn.execute(f"ATTACH DATABASE ? AS {_layout.CATALOG_SCHEMA}", (str(lay.catalog),))
+        try:
+            conn.execute(f"ATTACH DATABASE ? AS {_layout.CATALOG_SCHEMA}",
+                         (lay.catalog.resolve().as_uri() + "?mode=rw",))
+        except sqlite3.OperationalError as e:
+            gone = _gone(e)
+            if gone is None:
+                raise
+            raise gone from e
         for schema in ("main", _layout.CATALOG_SCHEMA):
             row = conn.execute(f"SELECT version FROM {schema}.schema_version").fetchone()
             have = row[0] if row else 0

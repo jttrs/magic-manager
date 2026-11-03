@@ -78,6 +78,7 @@ def resolve_family(anchor: str) -> tuple[str, str, list[dict]]:
 _ST_INDEX: dict[str, tuple[dict[str, str], dict[str, set[str]]]] = {}
 
 
+@db.user_cache
 def forget_scope(scope: str) -> None:
     """Drop one user's cached set_targets index (account deletion)."""
     _ST_INDEX.pop(scope, None)
