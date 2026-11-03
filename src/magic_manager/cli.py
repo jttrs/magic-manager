@@ -6168,6 +6168,38 @@ def host_verify_replica(
     raise typer.Exit(0 if r.ok else 1)
 
 
+@host_app.command("replica-lag")
+def host_replica_lag(
+    data_dir: Path | None = _DATA_DIR_OPT,
+    threshold_min: int = typer.Option(30, "--threshold-min", min=1,
+                                      help="Minutes a file may be written ahead of its newest offsite object."),
+    as_json: bool = typer.Option(False, "--json", help="Print the report as JSON."),
+):
+    """Is the offsite replica keeping up? Compares each replicated file's last local write
+    with its newest offsite object; exit 0 ok, 1 behind or never replicated, 2 couldn't check."""
+    from datetime import timedelta
+
+    from . import objectstore, offsite
+    try:
+        r = offsite.replica_lag(_host_data_dir(data_dir), offsite.store(), threshold=timedelta(minutes=threshold_min))
+    except (offsite.OffsiteError, objectstore.StoreError, ValueError, OSError) as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+    if as_json:
+        typer.echo(json.dumps(r.to_dict()))
+    else:
+        for f in r.files:
+            if f.status == "missing":
+                typer.echo(f"✗ {f.name}: never replicated")
+            elif f.status == "behind":
+                typer.echo(f"✗ {f.name}: replica {(f.lag_seconds or 0) // 60} min behind its last write")
+            else:
+                typer.echo(f"✓ {f.name}: replica {f.lag_seconds or 0}s behind" if f.lag_seconds is not None
+                           else f"✓ {f.name}: new, not replicated yet")
+        typer.echo("REPLICATION OK" if r.ok else "REPLICATION BEHIND")
+    raise typer.Exit(0 if r.ok else 1)
+
+
 @host_app.command("restore")
 def host_restore(
     data_dir: Path = typer.Option(..., "--data-dir", help="A NEW, empty data dir to rebuild."),

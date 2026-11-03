@@ -20,8 +20,8 @@
 # kit dir; imports GitHub's web-flow signing key (deploy/macos/web-flow.gpg, a copy of
 # https://github.com/web-flow.gpg; fingerprint pinned in bin/common.sh) into the kit's own GnuPG keyring,
 # so deploys accept only commits GitHub made (needs `gpg`: brew install gnupg); copies the wrapper
-# scripts there, writes hosted.env (non-secret settings, 0600) and four launchd agents
-# (com.magic-manager.hosted.{serve,litestream,deploy,catalog-backup}); makes the data dir (0700) and
+# scripts there, writes hosted.env (non-secret settings, 0600) and five launchd agents
+# (com.magic-manager.hosted.{serve,litestream,deploy,catalog-backup,replica-check}); makes the data dir (0700) and
 # the checkout's .env private (0600); reloads agents that are already running. It doesn't
 # start an agent for the first time (the cutover does: docs/home-server.md; launchd loads them at the next
 # login, and each refuses to run until the cutover step it needs is done), never creates or changes a
@@ -32,7 +32,7 @@ set -euo pipefail
 LITESTREAM_VERSION=0.5.17
 SHA_darwin_arm64=e211f68ff7658d19f193f2914417afdf8f89a053ff8f263e5d6b3b1d3bbc7b08
 SHA_darwin_x86_64=891875af09db152e93a4b31a8a79f538ce7ce702c132803cfe0a831e7cb1b7db
-SERVICES="serve litestream deploy catalog-backup"
+SERVICES="serve litestream deploy catalog-backup replica-check"
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP="$(cd "$HERE/../.." && pwd)"
