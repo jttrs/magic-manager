@@ -10,11 +10,12 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
 import time
 from pathlib import Path
 from typing import Iterable, Iterator
 from urllib.parse import urlparse
+
+from . import util
 
 WRAPPER = (
     Path(__file__).resolve().parents[2]
@@ -29,13 +30,7 @@ class ScryfallError(RuntimeError):
 def _run(args: list[str], stdin: str | None = None) -> dict:
     if not WRAPPER.exists():
         raise ScryfallError(f"wrapper missing: {WRAPPER}")
-    res = subprocess.run(
-        [str(WRAPPER), *args],
-        input=stdin,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
+    res = util.run_wrapper([str(WRAPPER), *args], error=ScryfallError, service="Scryfall", input=stdin)
     if res.returncode != 0:
         raise ScryfallError(
             f"scryfall.sh {' '.join(args)} exited {res.returncode}: "
@@ -62,7 +57,8 @@ def bulk_file(bulk_type: str, *, refresh: bool = False) -> Path:
     if not WRAPPER.exists():
         raise ScryfallError(f"wrapper missing: {WRAPPER}")
     args = [str(WRAPPER), "bulk", bulk_type] + (["--refresh"] if refresh else [])
-    res = subprocess.run(args, text=True, capture_output=True, check=False)
+    res = util.run_wrapper(args, error=ScryfallError, service="Scryfall",
+                           timeout=util.WRAPPER_BULK_TIMEOUT)
     if res.returncode != 0:
         raise ScryfallError(
             f"scryfall.sh bulk {bulk_type} exited {res.returncode}: "

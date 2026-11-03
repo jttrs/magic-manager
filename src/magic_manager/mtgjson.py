@@ -28,13 +28,13 @@ from __future__ import annotations
 import json
 import os
 import re
-import subprocess
 import time
 from functools import lru_cache
 from pathlib import Path
 from typing import Iterable
 
 from . import config as _config
+from . import util
 
 WRAPPER = (
     Path(__file__).resolve().parents[2]
@@ -82,14 +82,16 @@ def is_missing_file(e: Exception) -> bool:
     return isinstance(e, MtgJsonError) and "HTTP 404 from" in str(e)
 
 
+# Subcommands that download large files (set files, DeckList, forced refresh).
+_BULK_COMMANDS = frozenset({"set", "decklist", "refresh"})
+
+
 def _run(args: list[str]) -> str:
     if not WRAPPER.exists():
         raise MtgJsonError(f"wrapper missing: {WRAPPER}")
-    res = subprocess.run(
-        [str(WRAPPER), *args],
-        text=True,
-        capture_output=True,
-        check=False,
+    res = util.run_wrapper(
+        [str(WRAPPER), *args], error=MtgJsonError, service="MTGJSON",
+        timeout=util.WRAPPER_BULK_TIMEOUT if args and args[0] in _BULK_COMMANDS else util.WRAPPER_TIMEOUT,
     )
     if res.returncode != 0:
         raise MtgJsonError(

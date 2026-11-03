@@ -15,8 +15,9 @@ group's price table so a whole tree costs one request per referenced group.
 from __future__ import annotations
 
 import json
-import subprocess
 from pathlib import Path
+
+from . import util
 
 MAGIC_CATEGORY_ID = 1
 
@@ -33,9 +34,7 @@ class TcgcsvError(RuntimeError):
 def _run(args: list[str]) -> dict:
     if not WRAPPER.exists():
         raise TcgcsvError(f"wrapper missing: {WRAPPER}")
-    res = subprocess.run(
-        [str(WRAPPER), *args], text=True, capture_output=True, check=False,
-    )
+    res = util.run_wrapper([str(WRAPPER), *args], error=TcgcsvError, service="TCGcsv")
     if res.returncode != 0:
         raise TcgcsvError(
             f"tcgcsv.sh {' '.join(args)} exited {res.returncode}: "
