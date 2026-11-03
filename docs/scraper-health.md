@@ -36,7 +36,7 @@ out of scope by the owner's choice (2026-10-10).
 |---|---|---|
 | `ok` | read the sample and it matched what was validated | clears a down flag |
 | `fail` | the page loaded but no longer reads as validated (`scrape.no_price`, `scrape.no_cards`, `scrape.shape_changed`, `scrape.expectation`, `scrape.error`, `cart.page_changed`, `moxfield.changed`) | flags **down** (since = first failure) |
-| `unverified` | the check couldn't run: blocked (`scrape.blocked`), offline (`scrape.unreachable`), sample removed (`scrape.sample_gone`), an empty deck (`scrape.empty_deck`), a wrapper's 429 backoff abort, no browser | never flags, never clears |
+| `unverified` | the check couldn't run: blocked (`scrape.blocked`), site down or moved (`scrape.unavailable`), offline (`scrape.unreachable`), sample removed (`scrape.sample_gone`), an empty deck (`scrape.empty_deck`), a wrapper's 429 backoff abort, no browser | never flags, never clears |
 
 Browser checks run headless first; anything that didn't read is retried once in a visible real
 Chrome window and that verdict stands (bot defenses serve headless browsers a stripped page —
@@ -70,7 +70,10 @@ Written atomically under a file lock.
   (down / reading again / needs a new sample). Install: `scripts/launchd/install-scrape-canary.sh
   [--run-now | --uninstall]`. Log: `~/Library/Logs/magic-manager/scrape-canary.log`.
 - **GitHub, nightly**: `.github/workflows/vendor-canary.yml` (`scripts/vendor_canary.py`, the store
-  half) opens or comments on one issue when a store stops reading.
+  half) opens or comments on one issue when a store stops reading. CI forgives only a bot wall
+  (`scrape.blocked` -- the owner's daily local canary covers those stores) and fails on everything
+  else (including `scrape.unavailable`, `scrape.unreachable`, `scrape.sample_gone`); a run with no
+  failures closes its issue.
 
 ## In the app
 

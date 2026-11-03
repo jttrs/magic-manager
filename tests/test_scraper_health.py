@@ -189,7 +189,8 @@ def _listing(price, title="Box", available=True):
     (lambda: _listing(None), "fail", "scrape.no_price"),
     (lambda: _listing(5.0, title=None), "fail", "scrape.no_title"),
     (LookupError("the store no longer has this product"), "unverified", "scrape.sample_gone"),
-    (storepage.Blocked("403"), "unverified", "scrape.blocked"),
+    (storepage.BotWall("403"), "unverified", "scrape.blocked"),
+    (storepage.Blocked("HTTP 503"), "unverified", "scrape.unavailable"),
     (httpx.ConnectTimeout("slow"), "unverified", "scrape.unreachable"),
     (KeyError("variants"), "fail", "scrape.error"),
 ])
