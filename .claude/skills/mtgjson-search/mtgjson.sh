@@ -36,37 +36,11 @@ LOCK_FILE="$STATE_DIR/lock"
 
 mkdir -p "$CACHE_DIR" "$STATE_DIR"
 
-now_ms() { python3 -c 'import time; print(int(time.time()*1000))'; }
+RL_NAME=mtgjson.sh
+# shellcheck source=../_lib/ratelimit.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../_lib/ratelimit.sh"
+
 sha256_file() { python3 -c 'import sys,hashlib; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$1"; }
-
-# Acquire a coarse lock so concurrent invocations serialize. Same mkdir-mutex
-# pattern as scryfall.sh because macOS lacks flock(1).
-acquire_lock() {
-  local waited=0
-  while ! mkdir "$LOCK_FILE" 2>/dev/null; do
-    sleep 0.05
-    waited=$((waited+50))
-    if [ $waited -gt 30000 ]; then
-      echo "mtgjson.sh: lock timeout" >&2
-      exit 2
-    fi
-  done
-  trap 'rmdir "$LOCK_FILE" 2>/dev/null || true' EXIT
-}
-
-pace() {
-  local need_ms=$1 last_ms cur_ms gap sleep_ms
-  cur_ms=$(now_ms)
-  if [ -f "$LAST_CALL_FILE" ]; then
-    last_ms=$(cat "$LAST_CALL_FILE" 2>/dev/null || echo 0)
-    gap=$(( cur_ms - last_ms ))
-    if [ "$gap" -lt "$need_ms" ]; then
-      sleep_ms=$(( need_ms - gap ))
-      python3 -c "import time; time.sleep($sleep_ms/1000.0)"
-    fi
-  fi
-  now_ms > "$LAST_CALL_FILE"
-}
 
 # Translate a logical resource path (e.g. "FIC.json", "decks/CounterBlitz_FIC.json")
 # to the on-disk cache path under $CACHE_DIR.
@@ -107,8 +81,8 @@ fetch_to_cache() {
     return 0
   fi
 
-  acquire_lock
-  pace $POLITE_GAP_MS
+  rl_acquire_lock
+  rl_pace $POLITE_GAP_MS
 
   mkdir -p "$(dirname "$cache_file")"
   local tmp_body http_code

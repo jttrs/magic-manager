@@ -27,6 +27,10 @@ LOCK_FILE="$STATE_DIR/lock"
 
 mkdir -p "$CACHE_DIR" "$STATE_DIR"
 
+RL_NAME=tcgapi.sh
+# shellcheck source=../_lib/ratelimit.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../_lib/ratelimit.sh"
+
 # Load TCGAPI_KEY from repo .env if not already exported.
 if [ -z "${TCGAPI_KEY:-}" ]; then
   ENV_FILE="$(cd "$(dirname "$0")/../../.." && pwd)/.env"
@@ -39,31 +43,8 @@ if [ -z "${TCGAPI_KEY:-}" ]; then
   exit 7
 fi
 
-now_ms() { python3 -c 'import time; print(int(time.time()*1000))'; }
 sha() { python3 -c 'import sys,hashlib; print(hashlib.sha256(sys.stdin.read().encode()).hexdigest())'; }
 urlencode() { python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$1"; }
-
-acquire_lock() {
-  local waited=0
-  while ! mkdir "$LOCK_FILE" 2>/dev/null; do
-    sleep 0.05; waited=$((waited+50))
-    [ $waited -gt 30000 ] && { echo "tcgapi.sh: lock timeout" >&2; exit 2; }
-  done
-  trap 'rmdir "$LOCK_FILE" 2>/dev/null || true' EXIT
-}
-
-pace() {
-  local need_ms=$1 last_ms cur_ms gap sleep_ms
-  cur_ms=$(now_ms)
-  if [ -f "$LAST_CALL_FILE" ]; then
-    last_ms=$(cat "$LAST_CALL_FILE" 2>/dev/null || echo 0)
-    gap=$(( cur_ms - last_ms ))
-    if [ "$gap" -lt "$need_ms" ]; then
-      python3 -c "import time; time.sleep($(( need_ms - gap ))/1000.0)"
-    fi
-  fi
-  now_ms > "$LAST_CALL_FILE"
-}
 
 call_api() {
   local path="$1"
@@ -76,7 +57,7 @@ call_api() {
     age=$(( $(date +%s) - $(stat -f %m "$cache_file" 2>/dev/null || stat -c %Y "$cache_file") ))
     [ "$age" -lt "$CACHE_TTL_SECONDS" ] && { cat "$cache_file"; return 0; }
   fi
-  acquire_lock; pace $GAP_MS
+  rl_acquire_lock; rl_pace $GAP_MS
   local tmp_body http_code
   tmp_body=$(mktemp)
   # shellcheck disable=SC2064

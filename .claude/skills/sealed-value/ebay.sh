@@ -35,7 +35,10 @@ TOKEN_FILE="$STATE_DIR/token.json"
 
 mkdir -p "$CACHE_DIR" "$STATE_DIR"
 
-now_ms() { python3 -c 'import time; print(int(time.time()*1000))'; }
+RL_NAME=ebay.sh
+# shellcheck source=../_lib/ratelimit.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../_lib/ratelimit.sh"
+
 now_s() { python3 -c 'import time; print(int(time.time()))'; }
 sha() { python3 -c 'import sys,hashlib; print(hashlib.sha256(sys.stdin.read().encode()).hexdigest())'; }
 urlencode() { python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$1"; }
@@ -103,26 +106,6 @@ PY
   rm -f "$tmp"
 }
 
-acquire_lock() {
-  local waited=0
-  while ! mkdir "$LOCK_FILE" 2>/dev/null; do
-    sleep 0.05; waited=$((waited+50))
-    [ $waited -gt 30000 ] && { echo "ebay.sh: lock timeout" >&2; exit 2; }
-  done
-  trap 'rmdir "$LOCK_FILE" 2>/dev/null || true' EXIT
-}
-
-pace() {
-  local need_ms=$1 last_ms cur_ms gap
-  cur_ms=$(now_ms)
-  if [ -f "$LAST_CALL_FILE" ]; then
-    last_ms=$(cat "$LAST_CALL_FILE" 2>/dev/null || echo 0)
-    gap=$(( cur_ms - last_ms ))
-    [ "$gap" -lt "$need_ms" ] && python3 -c "import time; time.sleep($(( need_ms - gap ))/1000.0)"
-  fi
-  now_ms > "$LAST_CALL_FILE"
-}
-
 call_api() {
   local path="$1"
   local url="${BASE}${path}"
@@ -139,7 +122,7 @@ call_api() {
   # propagate the code explicitly since a subshell exit inside $(...) won't
   # reliably trip set -e.
   token=$(get_token) || { rc=$?; exit "$rc"; }
-  acquire_lock; pace $GAP_MS
+  rl_acquire_lock; rl_pace $GAP_MS
   local tmp_body http_code
   tmp_body=$(mktemp)
   # shellcheck disable=SC2064

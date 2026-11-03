@@ -25,52 +25,11 @@ LOCK_FILE="$STATE_DIR/lock"
 
 mkdir -p "$CACHE_DIR" "$STATE_DIR"
 
-now_ms() { python3 -c 'import time; print(int(time.time()*1000))'; }
+RL_NAME=spellbook.sh
+# shellcheck source=../_lib/ratelimit.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../_lib/ratelimit.sh"
+
 sha() { python3 -c 'import sys,hashlib; print(hashlib.sha256(sys.stdin.read().encode()).hexdigest())'; }
-
-# Acquire a coarse lock so concurrent invocations serialize their pacing logic.
-# macOS lacks flock(1), so we use a mkdir-based mutex.
-acquire_lock() {
-  local waited=0
-  while ! mkdir "$LOCK_FILE" 2>/dev/null; do
-    sleep 0.05
-    waited=$((waited+50))
-    if [ $waited -gt 30000 ]; then
-      echo "spellbook.sh: lock timeout" >&2
-      exit 2
-    fi
-  done
-  trap 'rmdir "$LOCK_FILE" 2>/dev/null || true' EXIT
-}
-
-check_backoff() {
-  if [ -f "$BACKOFF_FILE" ]; then
-    local until_ms cur_ms
-    until_ms=$(cat "$BACKOFF_FILE" 2>/dev/null || echo 0)
-    cur_ms=$(now_ms)
-    if [ "$cur_ms" -lt "$until_ms" ]; then
-      local remaining=$(( (until_ms - cur_ms) / 1000 + 1 ))
-      echo "spellbook.sh: in backoff window after a 429, ${remaining}s remaining. Aborting." >&2
-      exit 3
-    fi
-    rm -f "$BACKOFF_FILE"
-  fi
-}
-
-pace() {
-  # $1 = required gap in ms
-  local need_ms=$1 last_ms cur_ms gap sleep_ms
-  cur_ms=$(now_ms)
-  if [ -f "$LAST_CALL_FILE" ]; then
-    last_ms=$(cat "$LAST_CALL_FILE" 2>/dev/null || echo 0)
-    gap=$(( cur_ms - last_ms ))
-    if [ "$gap" -lt "$need_ms" ]; then
-      sleep_ms=$(( need_ms - gap ))
-      python3 -c "import time; time.sleep($sleep_ms/1000.0)"
-    fi
-  fi
-  now_ms > "$LAST_CALL_FILE"
-}
 
 call_api() {
   # $1 = path (e.g. /find-my-combos, or /variants/?q=... for GET)
@@ -93,9 +52,9 @@ call_api() {
     fi
   fi
 
-  acquire_lock
-  check_backoff
-  pace $GAP_MS
+  rl_acquire_lock
+  rl_check_backoff
+  rl_pace $GAP_MS
 
   local tmp_body
   tmp_body=$(mktemp)
@@ -142,8 +101,7 @@ call_api() {
 
   if [ "$http_code" = "429" ]; then
     # Persist a backoff window of 35s to be safe.
-    local until_ms=$(( $(now_ms) + 35000 ))
-    echo "$until_ms" > "$BACKOFF_FILE"
+    rl_set_backoff 35
     echo "spellbook.sh: HTTP 429 from Commander Spellbook. Backing off for 35s. Do NOT retry." >&2
     cat "$tmp_body" >&2
     exit 5
