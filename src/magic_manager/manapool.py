@@ -26,9 +26,10 @@ from __future__ import annotations
 
 import json
 import statistics
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+
+from . import util
 
 WRAPPER = (
     Path(__file__).resolve().parents[2]
@@ -53,9 +54,7 @@ class ManapoolUnconfigured(ManapoolError):
 def _run(args: list[str]) -> dict:
     if not WRAPPER.exists():
         raise ManapoolError(f"wrapper missing: {WRAPPER}")
-    res = subprocess.run(
-        [str(WRAPPER), *args], text=True, capture_output=True, check=False,
-    )
+    res = util.run_wrapper([str(WRAPPER), *args], error=ManapoolError, service="Mana Pool")
     if res.returncode == 2:   # manapool.sh's missing-creds exit (lines 45-48)
         raise ManapoolUnconfigured(res.stderr.strip() or "MANAPOOL_* not set")
     if res.returncode != 0:

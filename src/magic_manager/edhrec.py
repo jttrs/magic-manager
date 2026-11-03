@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import json
 import re
-import subprocess
 import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -48,12 +47,7 @@ class EdhrecError(RuntimeError):
 def _run(args: list[str]) -> dict:
     if not WRAPPER.exists():
         raise EdhrecError(f"wrapper missing: {WRAPPER}")
-    res = subprocess.run(
-        [str(WRAPPER), *args],
-        text=True,
-        capture_output=True,
-        check=False,
-    )
+    res = util.run_wrapper([str(WRAPPER), *args], error=EdhrecError, service="EDHREC")
     if res.returncode != 0:
         raise EdhrecError(
             f"edhrec.sh {' '.join(args)} exited {res.returncode}: "

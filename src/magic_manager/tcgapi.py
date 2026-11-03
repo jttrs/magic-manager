@@ -23,8 +23,9 @@ tcgcsv exactly).
 from __future__ import annotations
 
 import json
-import subprocess
 from pathlib import Path
+
+from . import util
 
 WRAPPER = (
     Path(__file__).resolve().parents[2]
@@ -43,9 +44,7 @@ class TcgapiUnconfigured(TcgapiError):
 def _run(args: list[str]) -> dict:
     if not WRAPPER.exists():
         raise TcgapiError(f"wrapper missing: {WRAPPER}")
-    res = subprocess.run(
-        [str(WRAPPER), *args], text=True, capture_output=True, check=False,
-    )
+    res = util.run_wrapper([str(WRAPPER), *args], error=TcgapiError, service="TCGAPI")
     if res.returncode == 7:
         raise TcgapiUnconfigured(res.stderr.strip() or "TCGAPI_KEY not set")
     if res.returncode != 0:
@@ -127,10 +126,7 @@ class TcgapiMarketProvider:
     def __init__(self):
         # Probe configuration eagerly so an unconfigured provider is dropped
         # rather than returning None for every node with no explanation.
-        res = subprocess.run(
-            [str(WRAPPER), "raw", "/__probe__"], text=True,
-            capture_output=True, check=False,
-        )
+        res = util.run_wrapper([str(WRAPPER), "raw", "/__probe__"], error=TcgapiError, service="TCGAPI")
         if res.returncode == 7:
             raise TcgapiUnconfigured(res.stderr.strip() or "TCGAPI_KEY not set")
         self._by_set: dict[str, dict[int, float]] = {}
