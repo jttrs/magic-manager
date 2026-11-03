@@ -52,14 +52,12 @@ call_api() {
     fi
   fi
 
-  rl_acquire_lock
-  rl_check_backoff
-  rl_pace $GAP_MS
+  rl_reserve $GAP_MS
 
   local tmp_body
   tmp_body=$(mktemp)
   # shellcheck disable=SC2064
-  trap "rm -f '$tmp_body'; rmdir '$LOCK_FILE' 2>/dev/null || true" EXIT
+  trap "rm -f '$tmp_body'" EXIT
 
   # Transient server errors (500/502/503/504) get a few retries with backoff —
   # a bare abort would kill a whole batch on an occasional 503.

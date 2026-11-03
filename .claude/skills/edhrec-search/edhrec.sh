@@ -53,14 +53,12 @@ call_api() {
     fi
   fi
 
-  rl_acquire_lock
-  rl_check_backoff
-  rl_pace $GAP_MS
+  rl_reserve $GAP_MS
 
   local tmp_body
   tmp_body=$(mktemp)
   # shellcheck disable=SC2064
-  trap "rm -f '$tmp_body'; rmdir '$LOCK_FILE' 2>/dev/null || true" EXIT
+  trap "rm -f '$tmp_body'" EXIT
 
   # Transient server errors get a few retries with backoff.
   local http_code attempt=0

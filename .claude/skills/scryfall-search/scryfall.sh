@@ -56,18 +56,15 @@ call_api() {
     fi
   fi
 
-  rl_acquire_lock
-  rl_check_backoff
-
   case "$path" in
-    /cards/search|/cards/named|/cards/random|/cards/collection) rl_pace $SLOW_GAP_MS ;;
-    *) rl_pace $FAST_GAP_MS ;;
+    /cards/search|/cards/named|/cards/random|/cards/collection) rl_reserve $SLOW_GAP_MS ;;
+    *) rl_reserve $FAST_GAP_MS ;;
   esac
 
   local tmp_body
   tmp_body=$(mktemp)
   # shellcheck disable=SC2064
-  trap "rm -f '$tmp_body'; rmdir '$LOCK_FILE' 2>/dev/null || true" EXIT
+  trap "rm -f '$tmp_body'" EXIT
 
   # Transient server errors (500/502/503/504) get a few retries with backoff —
   # Scryfall occasionally 503s mid-run and a bare abort would kill a whole batch.
@@ -161,13 +158,11 @@ for b in json.load(sys.stdin).get("data", []):
     echo "$dest"
     return 0
   fi
-  rl_acquire_lock
-  rl_check_backoff
-  rl_pace $FAST_GAP_MS
+  rl_reserve $FAST_GAP_MS
   local tmp http_code
   tmp=$(mktemp "$dir/.dl.XXXXXX")
   # shellcheck disable=SC2064
-  trap "rm -f '$tmp'; rmdir '$LOCK_FILE' 2>/dev/null || true" EXIT
+  trap "rm -f '$tmp'" EXIT
   http_code=$(curl -sS -L -H "User-Agent: $UA" -o "$tmp" -w '%{http_code}' "$uri") || {
     echo "scryfall.sh: bulk download failed for $uri" >&2
     exit 4
