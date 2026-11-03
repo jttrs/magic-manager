@@ -657,13 +657,13 @@ on disk, so every user, request and process on the machine shares them. The real
 1. **Shared wrapper rate-limit library.** Lift the lock, pacing and backoff code duplicated
    across the eight wrappers into one sourced file (e.g. `.claude/skills/_lib/ratelimit.sh`),
    with no behaviour change. Keep every guard hook's wrapper allowlist working.
-2. **Stale-lock takeover + pace-only locking.** The lock records its owner PID and start time.
-   A lock whose process is gone, or that is older than a bound, is taken over (the same rule
-   as the deploy lock, `deploy/macos/bin/common.sh take_lock`). The lock now covers only
-   reserving the next call slot (read and write `last_call_ms`, honour `backoff_until`), not
-   the download, so concurrent requests run in parallel while still being spaced. Cache hits
-   stay lock-free. Tests: two concurrent calls are spaced but don't serialize; a stale lock is
-   taken over; a 429 backoff still stops everyone.
+2. **Kernel lock + pace-only locking.** The lock is an `fcntl.flock` on a lock file, so the
+   kernel releases it when the holder exits, even on SIGKILL: there is no stale lock to take
+   over. It covers only reserving the next call slot (read and write `last_call_ms`, honour
+   `backoff_until`), not the download, so concurrent requests run in parallel while still being
+   spaced; a caller re-checks the backoff after sleeping to its slot. Cache hits stay lock-free.
+   Tests: concurrent calls are spaced but don't serialize; a SIGKILLed holder frees the lock; a
+   429 backoff still stops everyone, including callers already queued.
 3. **Client timeouts.** Each Python client passes a `timeout=` to `subprocess.run` (normal reads
    ~60–120 s; MTGJSON and Scryfall bulk downloads longer) and maps a timeout to its existing
    error (→ coded 502 / job failure). No hang path is left.

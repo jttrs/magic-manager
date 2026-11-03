@@ -57,11 +57,11 @@ call_api() {
     age=$(( $(date +%s) - $(stat -f %m "$cache_file" 2>/dev/null || stat -c %Y "$cache_file") ))
     [ "$age" -lt "$CACHE_TTL_SECONDS" ] && { cat "$cache_file"; return 0; }
   fi
-  rl_acquire_lock; rl_pace $GAP_MS
+  rl_reserve $GAP_MS
   local tmp_body http_code
   tmp_body=$(mktemp)
   # shellcheck disable=SC2064
-  trap "rm -f '$tmp_body'; rmdir '$LOCK_FILE' 2>/dev/null || true" EXIT
+  trap "rm -f '$tmp_body'" EXIT
   http_code=$(curl -sS -H "User-Agent: $UA" -H "X-API-Key: $TCGAPI_KEY" \
     -H 'Accept: application/json' -o "$tmp_body" -w '%{http_code}' "$url") \
     || { echo "tcgapi.sh: curl failed for $url" >&2; exit 4; }

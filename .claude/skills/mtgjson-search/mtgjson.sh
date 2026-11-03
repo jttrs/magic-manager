@@ -81,14 +81,13 @@ fetch_to_cache() {
     return 0
   fi
 
-  rl_acquire_lock
-  rl_pace $POLITE_GAP_MS
+  rl_reserve $POLITE_GAP_MS
 
   mkdir -p "$(dirname "$cache_file")"
   local tmp_body http_code
   tmp_body=$(mktemp)
   # shellcheck disable=SC2064
-  trap "rm -f '$tmp_body'; rmdir '$LOCK_FILE' 2>/dev/null || true" EXIT
+  trap "rm -f '$tmp_body'" EXIT
 
   http_code=$(curl -sS \
     -H "User-Agent: $UA" \
