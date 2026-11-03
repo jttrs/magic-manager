@@ -38,11 +38,17 @@ jobs:
       - if: steps.run.outputs.status == '0'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UNCHECKED: ${{ steps.run.outputs.unchecked }}
         run: |
           title="Vendor recipe canary failing"
           num=$(gh issue list --state open --search "in:title \"$title\"" --json number --jq '.[0].number')
           if [ -n "$num" ]; then
-            { echo "Canary green again: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"; echo; cat report.md; } > body.md
+            {
+              echo "No failures this run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+              if [ -n "$UNCHECKED" ]; then echo "Couldn't check from CI (blocks GitHub's servers): $UNCHECKED — covered by the owner's daily local check."; fi
+              echo
+              cat report.md
+            } > body.md
             gh issue comment "$num" --body-file body.md
             gh issue close "$num"
           fi

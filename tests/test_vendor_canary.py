@@ -20,6 +20,7 @@ V2 = SimpleNamespace(name="Store Two", key="two", mode="meta")
 
 OK = (V1, "ok", None, 9.99, True, "")
 BLOCKED = (V2, "unverified", "scrape.blocked", None, None, "blocked")
+UNREACHABLE = (V2, "unverified", "scrape.unreachable", None, None, "no network")
 FAIL = (V2, "fail", "scrape.no_price", None, None, "no price")
 
 
@@ -27,7 +28,8 @@ FAIL = (V2, "fail", "scrape.no_price", None, None, "no price")
     ("ok", None, False),
     ("fail", "scrape.no_price", True),
     ("unverified", "scrape.blocked", False),
-    ("unverified", "scrape.unreachable", False),
+    ("unverified", "scrape.unavailable", True),
+    ("unverified", "scrape.unreachable", True),
     ("unverified", "scrape.sample_gone", True),
 ])
 def test_fails_ci(outcome, code, expected):
@@ -59,3 +61,18 @@ def test_plain_output_words(monkeypatch, capsys):
     code, out = _main(monkeypatch, capsys, [OK, BLOCKED, FAIL], [])
     assert code == 1
     assert "skip" in out.out and "FAIL" in out.out and "ok  " in out.out
+
+
+def test_unreachable_exits_1(monkeypatch, capsys):
+    code, out = _main(monkeypatch, capsys, [OK, UNREACHABLE], [])
+    assert code == 1
+    assert "FAIL" in out.out
+
+
+@pytest.mark.parametrize("rows,expected", [([OK, BLOCKED], "unchecked=Store Two\n"), ([OK], "unchecked=\n")])
+def test_github_output_lists_unchecked(monkeypatch, capsys, tmp_path, rows, expected):
+    out_file = tmp_path / "gh_output"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(out_file))
+    code, _ = _main(monkeypatch, capsys, rows, ["--markdown"])
+    assert code == 0
+    assert out_file.read_text() == expected

@@ -41,7 +41,11 @@ class Listing:
 
 
 class Blocked(RuntimeError):
-    """The store served a bot wall or refused the request."""
+    """The store refused the request or its site is unavailable."""
+
+
+class BotWall(Blocked):
+    """The store served a bot wall or refused automated reads (401/403/429 or a bot-check page)."""
 
 
 class NotCounted(LookupError):
@@ -75,7 +79,7 @@ def title_of(page: str) -> str | None:
 def check_blocked(page: str, status: int = 200) -> None:
     t = (title_of(page) or "").lower()
     if status in (401, 403, 429) or any(b in t for b in _BLOCK_TITLES):
-        raise Blocked(f"the store blocked the request ({status}{', ' + t if t else ''})")
+        raise BotWall(f"the store blocked the request ({status}{', ' + t if t else ''})")
     if status not in (200, 404):
         raise Blocked(f"the store’s site is unavailable right now (HTTP {status})")
 

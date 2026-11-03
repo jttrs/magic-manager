@@ -8,12 +8,14 @@ Each recipe ends in one of three outcomes (from ``scrape_canary.check_store``):
 * ok          -- the recipe read a price/title.
 * fail        -- the store changed its page: update the recipe in
                  config/vendors.toml + re-capture its fixture. Fails CI.
-* unverified  -- the check couldn't run from here (the store blocks GitHub's
-                 datacenter IPs, or is unreachable). NOT a failure: the daily
-                 scrape canary on the owner's machine (scripts/check_scrapers.py
-                 --live) reads from the owner's network and covers it. The one
-                 exception is ``scrape.sample_gone`` (the sample product was
-                 removed -- pick a new sample_url), which is actionable and fails.
+* unverified  -- the check couldn't run. Only a bot wall (``scrape.blocked``:
+                 the store refuses GitHub's datacenter IPs) is forgiven -- the
+                 daily scrape canary on the owner's machine (scripts/
+                 check_scrapers.py --live) reads from the owner's network and
+                 covers it. Every other non-ok outcome fails CI: a removed
+                 sample (``scrape.sample_gone``), a moved or dead site
+                 (``scrape.unavailable``) and ``scrape.unreachable``, so a
+                 runner with no network fails rather than goes green.
 
 Exit 0 when no row fails; 1 otherwise (the CI workflow then opens or updates an
 issue, and closes it again once green). Open-tab (`rendered`) stores can't run
@@ -22,6 +24,7 @@ here -- they need your browser -- so they're listed as skipped.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -31,8 +34,18 @@ from magic_manager import scrape_canary, vendors  # noqa: E402
 
 
 def fails_ci(outcome: str, code: str | None) -> bool:
-    """A failed recipe, or a removed sample product (actionable: new sample_url)."""
-    return outcome == "fail" or code == "scrape.sample_gone"
+    """Everything but ok fails CI, except a bot wall (the owner's local canary covers it)."""
+    if outcome == "ok":
+        return False
+    return not (outcome == "unverified" and code == "scrape.blocked")
+
+
+def write_unchecked(names: list[str]) -> None:
+    """Hand the forgiven stores to the workflow as the ``unchecked`` step output."""
+    path = os.environ.get("GITHUB_OUTPUT")
+    if path:
+        with open(path, "a") as f:
+            f.write(f"unchecked={','.join(names)}\n")
 
 
 def run() -> tuple[list[tuple], list[str]]:
@@ -68,8 +81,8 @@ def main() -> int:
                 mark = "❌"
             else:
                 mark = "⚠️"
-                note = (f"Couldn't check from CI: {note} — the daily check on the "
-                        "owner's machine covers it.")
+                note = (f"Couldn't check from CI: {note} — this store blocks GitHub's servers; "
+                        "the daily check on the owner's machine covers it.")
             print(f"| {v.name} | {v.mode} | {mark} | {'' if price is None else f'${price:,.2f}'} | "
                   f"{'' if avail is None else ('yes' if avail else 'no')} | {note} |")
         print(f"\nSkipped (read from your open tab, not CI): {', '.join(skipped) or '—'}")
@@ -79,6 +92,7 @@ def main() -> int:
             print(f"{word} {v.key:16} {v.mode:8} {price!s:>10} {avail!s:>6} {note}")
     print(f"\n{len(ok)} of {len(rows)} recipes read; {len(unchecked)} couldn't be checked "
           f"from CI; {len(failed)} failed", file=sys.stderr)
+    write_unchecked([r[0].name for r in unchecked])
     return 1 if failed else 0
 
 

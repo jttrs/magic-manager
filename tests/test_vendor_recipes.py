@@ -252,10 +252,17 @@ def test_page_tags_beat_text_patterns_for_rendered_stores():
 
 @pytest.mark.parametrize("title", ["Just a moment...", "Robot or human?", "Attention Required! | Cloudflare"])
 def test_bot_walls_are_recognized(title):
-    with pytest.raises(storepage.Blocked):
+    with pytest.raises(storepage.BotWall):
         storepage.check_blocked(f"<html><head><title>{title}</title></head></html>")
-    with pytest.raises(storepage.Blocked):
+    with pytest.raises(storepage.BotWall):
         storepage.check_blocked("", 403)
+
+
+@pytest.mark.parametrize("status", [503, 410])
+def test_unavailable_site_is_blocked_but_not_a_bot_wall(status):
+    with pytest.raises(storepage.Blocked) as e:
+        storepage.check_blocked("", status)
+    assert not isinstance(e.value, storepage.BotWall)
 
 
 def test_shopify_variant_links_read_that_variant():

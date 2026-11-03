@@ -90,8 +90,10 @@ def check_store(vendor) -> Check:
         if type(e) is not LookupError:   # a KeyError/IndexError is a parser crash, not a 404
             return _fail(key, "scrape.error", f"{type(e).__name__}: {e}", url=url)
         return _unverified(key, "scrape.sample_gone", f"{health.reason('scrape.sample_gone')} ({e})", url=url)
-    except storepage.Blocked as e:
+    except storepage.BotWall as e:
         return _unverified(key, "scrape.blocked", str(e), url=url)
+    except storepage.Blocked as e:
+        return _unverified(key, "scrape.unavailable", str(e), url=url)
     except httpx.HTTPError as e:
         return _unverified(key, "scrape.unreachable", f"{type(e).__name__}: {e}", url=url)
     except Exception as e:  # noqa: BLE001 — a crash in the parser is a changed page

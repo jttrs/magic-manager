@@ -62,6 +62,8 @@ REASONS: dict[str, tuple[str, str]] = {
                      "A code bug or a changed page — run the scraper by hand and read the traceback."),
     "scrape.blocked": ("The site blocked the automated check.",
                        "Nothing to fix yet — the check couldn't run. Use the app as usual."),
+    "scrape.unavailable": ("The store's site didn't serve the page (it moved, is down, or answered with an error).",
+                           "Usually temporary. If it persists, check the sample URL by hand and pick a new sample_url."),
     "scrape.sample_gone": ("The sample page the check reads was removed.",
                            "Pick a new sample (vendors.toml sample_url or config/scraper_canaries.toml)."),
     "scrape.unreachable": ("The site couldn't be reached.",
