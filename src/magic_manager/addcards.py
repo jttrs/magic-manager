@@ -466,11 +466,11 @@ def fetch_deck_payload(url: str, *, progress: Callable[[str], None] | None = Non
     by Add cards and the scrape canary (``scrape_canary``)."""
     # No stdin and MM_NONINTERACTIVE: a private Moxfield deck that would need a
     # manual browser login fails fast instead of waiting on the server's terminal.
-    # Moxfield is read by driving a browser on this machine, so hosted only an admin
-    # may (owner_machine "decks.moxfield_server"); a member reads Moxfield decks with
-    # the browser companion (refused here before anything runs), and their plain-HTTP
+    # Moxfield is read by driving a browser on this machine, so hosted NOBODY may
+    # (owner_machine "decks.moxfield_server" is off for everyone, admins included: the
+    # companion reads Moxfield; refused here before anything runs). Hosted, the plain-HTTP
     # fetches (Archidekt, MTGGoldfish, ManaBox, Scryfall) run with --no-browser +
-    # MM_NO_SERVER_BROWSER=1 so no server browser can open for them at all.
+    # MM_NO_SERVER_BROWSER=1 so no server browser can open for anyone.
     from . import decksource, owner_machine
     browser_ok = owner_machine.allowed("decks.moxfield_server")
     try:
@@ -478,7 +478,7 @@ def fetch_deck_payload(url: str, *, progress: Callable[[str], None] | None = Non
     except ValueError:
         moxfield = False
     if moxfield and not browser_ok:
-        raise owner_machine.OwnerOnly("decks.moxfield_server")
+        owner_machine.require("decks.moxfield_server")  # raises the coded refusal
     env = {**os.environ, "MM_NONINTERACTIVE": "1"}
     env.pop(NO_SERVER_BROWSER_ENV, None)
     if not url.lower().startswith(("https://", "http://")):

@@ -554,7 +554,8 @@ def test_member_is_refused_every_pinned_path(two_users, monkeypatch):
                ("GET", "/api/analytics/trace/0123456789abcdef", None)]
     for method, path, body in refused:
         r = c.request(method, path, headers=h, json=body)
-        assert r.status_code == 403 and r.json()["code"] == "auth.admin_only", (path, r.status_code, r.text)
+        want = "owner.server_browser_off" if path == "/api/deals/tabs" else "auth.admin_only"
+        assert r.status_code == 403 and r.json()["code"] == want, (path, r.status_code, r.text)
     # the companion paths (the member's own browser) are theirs to use
     r = c.post("/api/deals/tabs", headers=h, json={"tabs": []})
     assert r.status_code == 200, r.text
@@ -574,12 +575,32 @@ def test_member_is_refused_every_pinned_path(two_users, monkeypatch):
             _fetch_args(monkeypatch)
         args = _fetch_args(monkeypatch, "https://archidekt.com/decks/123")
         assert "--no-browser" in args["argv"] and args["env"]["MM_NO_SERVER_BROWSER"] == "1"
-    with layout.as_user(a):  # the admin keeps the owner-machine paths
-        assert owner_machine.access() == {k: True for k in owner_machine.PATHS}
-        args = _fetch_args(monkeypatch)
-        assert "--no-browser" not in args["argv"] and "MM_NO_SERVER_BROWSER" not in args["env"]
-    _as(c, ta)
-    assert all(c.get("/api/features").json()["owner_paths"].values())
+    admin_engine.set_flag(a, "deals", True, actor=a)
+    with layout.as_user(a):  # the admin keeps the admin-only pins, but the server browser is off for everyone (P5-2/P5-3)
+        assert owner_machine.access() == {k: k not in owner_machine.HOSTED_OFF for k in owner_machine.PATHS}
+        owner_machine.require("manapool.server_login")
+        owner_machine.require("analytics.dashboard")
+        for key in owner_machine.HOSTED_OFF:
+            assert owner_machine.allowed(key) is False
+            with pytest.raises(owner_machine.ServerBrowserOff) as e:
+                owner_machine.require(key)
+            assert e.value.error_code == "owner.server_browser_off" and "companion" in str(e.value)
+        for seam in (storefetch._osascript, tabs._osascript):
+            with pytest.raises(owner_machine.ServerBrowserOff):
+                seam("return 1")
+        with pytest.raises(owner_machine.ServerBrowserOff):  # Moxfield refused before any subprocess starts
+            _fetch_args(monkeypatch)
+        args = _fetch_args(monkeypatch, "https://archidekt.com/decks/123")
+        assert "--no-browser" in args["argv"] and args["env"]["MM_NO_SERVER_BROWSER"] == "1"
+        seen = {}
+        monkeypatch.setattr(deals_api.deals, "read_and_compare", lambda urls, **k: seen.update(k) or [])
+        deals_api._run_read_prices(deals_api.ReadPricesInput(urls=["https://x.example/p"]), lambda e: None)
+        assert seen["tabs_on_mac"] is False
+    h = _as(c, ta)
+    paths = c.get("/api/features").json()["owner_paths"]
+    assert paths == {k: k not in owner_machine.HOSTED_OFF for k in owner_machine.PATHS}
+    r = c.get("/api/deals/tabs", headers=h)
+    assert r.status_code == 403 and r.json()["code"] == "owner.server_browser_off"
 
 
 def _fetch_args(monkeypatch, url: str = "https://moxfield.com/decks/abc") -> dict:
@@ -608,3 +629,15 @@ def test_a_disabled_admin_is_not_an_admin(owner_split, monkeypatch):
         assert owner_machine.is_admin()
         store.revoke(u.id, disable=True)
         assert not owner_machine.is_admin()
+
+
+def test_browser_launch_refuses_whenever_hosted(monkeypatch):
+    """Phase 5 P5-2: the last Playwright seam fails closed when hosted, flag or not."""
+    from magic_manager import browser_launch
+    monkeypatch.delenv(browser_launch.NO_SERVER_BROWSER_ENV, raising=False)
+    monkeypatch.setenv("MM_MODE", "local")
+    assert not browser_launch.refused()
+    monkeypatch.setenv("MM_MODE", "hosted")
+    assert browser_launch.refused()
+    with pytest.raises(browser_launch.ServerBrowserRefused):
+        browser_launch.launch(object(), headless=True)

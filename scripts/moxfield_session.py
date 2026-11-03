@@ -110,7 +110,7 @@ class MoxfieldSession:
         # This is the default first attempt for reads; callers escalate to a
         # full (authenticated) session only when the anonymous fetch 401/403s.
         if _no_server_browser():
-            # The hosted web app's deck fetch for a member (owner_machine "decks.moxfield_server"):
+            # Every hosted deck fetch, admins too (owner_machine "decks.moxfield_server" is off hosted):
             # no browser on this machine at all — anonymous, saved session or login window.
             raise RuntimeError(NO_SERVER_BROWSER_MESSAGE)
         self.fresh = fresh

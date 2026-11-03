@@ -48,6 +48,8 @@ class UserRow:
 def _paths_by_feature() -> dict[str | None, list[str]]:
     out: dict[str | None, list[str]] = {}
     for p in owner_machine.PATHS.values():
+        if p.key in owner_machine.HOSTED_OFF:  # the Admin page is hosted-only: these are off for everyone
+            continue
         out.setdefault(p.feature, []).append(p.key)
     return out
 

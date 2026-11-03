@@ -76,6 +76,8 @@ def test_the_per_user_layer_is_hosted_only_and_on_top(monkeypatch):
 def test_local_mode_is_the_owners_machine():
     assert owner_machine.access() == {k: True for k in owner_machine.PATHS}
     owner_machine.require("manapool.server_login")
+    for key in owner_machine.HOSTED_OFF:
+        owner_machine.require(key)
 
 
 def test_hosted_pin_follows_admin_status_not_flags(monkeypatch):
@@ -146,9 +148,11 @@ def test_admin_lists_users_without_any_collection(people, monkeypatch):
     rows = {u["id"]: u for u in body["users"]}
     assert rows[a]["is_admin"] and not rows[m]["is_admin"]
     assert rows[m]["providers"] == ["discord"] and rows[m]["sessions"] == 1 and rows[m]["last_seen_at"]
-    assert {p["key"] for p in body["owner_paths"]} == set(owner_machine.PATHS)
+    # hosted-only page: the server-browser paths are off for everyone, so they aren't listed
+    assert {p["key"] for p in body["owner_paths"]} == set(owner_machine.PATHS) - owner_machine.HOSTED_OFF
     deals = next(f for f in rows[m]["flags"] if f["name"] == "deals")
-    assert deals["override"] is None and deals["owner_paths"] == ["deals.mac_tabs"] and deals["about"]
+    # deals.mac_tabs is off for everyone hosted, so the flag lists no owner-only path
+    assert deals["override"] is None and deals["owner_paths"] == [] and deals["about"]
 
 
 def test_admin_sets_a_flag_the_member_sees_it_and_the_pin_holds(people):
@@ -219,7 +223,8 @@ def test_cli_twins():
     assert store.overrides(m.id) == {"deals": True}
     flags = json.loads(run(cli_app, ["auth", "flags", "--user", m.id, "--json"]).output)
     deals = next(f for f in flags if f["name"] == "deals")
-    assert deals["effective"] is True and deals["owner_paths"] == ["deals.mac_tabs"]
+    # deals.mac_tabs is off for everyone hosted, so the flag lists no owner-only path
+    assert deals["effective"] is True and deals["owner_paths"] == []
     rows = json.loads(run(cli_app, ["auth", "users", "--json"]).output)
     assert rows[0]["overrides"] == {"deals": True}
     assert run(cli_app, ["auth", "flag", "--user", m.id, "--flag", "deals", "--set", "maybe"]).exit_code == 2
