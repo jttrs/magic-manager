@@ -34,6 +34,17 @@ from . import userfiles
 
 AUTH_FILE = "auth.db"
 
+# The external-API wrappers (.claude/skills/*/*.sh) keep their response caches and
+# pacing state under ``${<NAME>_CACHE_DIR|_STATE_DIR:-${TMPDIR:-/tmp}/<name>-cache|state}``.
+# macOS purges $TMPDIR files unused for ~3 days, so the hosted installs
+# (deploy/macos/install.sh -> hosted.env, the Dockerfile) point every one of them at a
+# persistent folder. (env var, subdirectory) pairs; a test checks this against the
+# wrapper scripts, install.sh and the Dockerfile.
+WRAPPERS = ("scryfall", "edhrec", "spellbook", "manapool", "mtgjson", "tcgcsv", "tcgapi", "ebay")
+WRAPPER_CACHE_VARS = tuple(
+    (f"{w.upper()}_{kind.upper()}_DIR", f"{w}-{kind}") for w in WRAPPERS for kind in ("cache", "state")
+)
+
 
 class HostOpsError(RuntimeError):
     """The data dir isn't in a state this operation can run in (nothing changed)."""

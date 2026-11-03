@@ -51,6 +51,23 @@ RUN useradd --create-home --uid 10001 app && mkdir -p /data && chown -R app:app 
 USER app
 
 ENV MAGIC_MANAGER_DB=/data/magic_manager.db
+# External-API wrapper caches + pacing state live in the volume, not $TMPDIR (hostops.WRAPPER_CACHE_VARS).
+ENV SCRYFALL_CACHE_DIR=/data/cache/scryfall-cache \
+    SCRYFALL_STATE_DIR=/data/cache/scryfall-state \
+    EDHREC_CACHE_DIR=/data/cache/edhrec-cache \
+    EDHREC_STATE_DIR=/data/cache/edhrec-state \
+    SPELLBOOK_CACHE_DIR=/data/cache/spellbook-cache \
+    SPELLBOOK_STATE_DIR=/data/cache/spellbook-state \
+    MANAPOOL_CACHE_DIR=/data/cache/manapool-cache \
+    MANAPOOL_STATE_DIR=/data/cache/manapool-state \
+    MTGJSON_CACHE_DIR=/data/cache/mtgjson-cache \
+    MTGJSON_STATE_DIR=/data/cache/mtgjson-state \
+    TCGCSV_CACHE_DIR=/data/cache/tcgcsv-cache \
+    TCGCSV_STATE_DIR=/data/cache/tcgcsv-state \
+    TCGAPI_CACHE_DIR=/data/cache/tcgapi-cache \
+    TCGAPI_STATE_DIR=/data/cache/tcgapi-state \
+    EBAY_CACHE_DIR=/data/cache/ebay-cache \
+    EBAY_STATE_DIR=/data/cache/ebay-state
 VOLUME /data
 EXPOSE 8765
 CMD ["uv", "run", "--frozen", "--no-dev", "mm", "serve", "--host", "0.0.0.0", "--port", "8765"]

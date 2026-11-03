@@ -131,6 +131,9 @@ set sync rewrites thousands of pages, which would burn write ops on a cache we c
    `--trusted-proxy` (→ `MM_TRUSTED_PROXY` in `hosted.env`) names the proxy in front — see
    [Client IP behind the proxy](#client-ip-behind-the-proxy). It also imports GitHub's commit-signing
    key into the kit's own keyring — see [Deploy verification](#deploy-verification).
+   It also makes `~/Library/Caches/magic-manager-hosted/` (0700) and points every external-API
+   wrapper's cache and pacing state there via `hosted.env` (macOS purges `$TMPDIR` files unused for
+   ~3 days, which would re-download MTGJSON's big set files; override with `--cache-dir`).
    It installs Litestream into `~/Library/Application Support/magic-manager-hosted/bin/`,
    copies the wrapper scripts there with `hosted.env` (non-secret settings, 0600), writes five
    agents `com.magic-manager.hosted.{serve,litestream,deploy,catalog-backup,replica-check}` (umask 077, logs

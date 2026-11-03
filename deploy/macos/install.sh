@@ -14,6 +14,7 @@
 #                      client-IP header the rate limits trust      [unset: trust no header]
 #   --kit DIR          where the wrapper scripts + Litestream go   [$HOME/Library/Application Support/magic-manager-hosted]
 #   --logs DIR         log dir                                     [$HOME/Library/Logs/magic-manager-hosted]
+#   --cache-dir DIR    the external-API wrappers' caches + pacing  [$HOME/Library/Caches/magic-manager-hosted]
 #   --launch-agents DIR                                            [$HOME/Library/LaunchAgents]
 #
 # What it does with --apply: installs Litestream v$LITESTREAM_VERSION (pinned, SHA-256 checked) into the
@@ -21,7 +22,7 @@
 # https://github.com/web-flow.gpg; fingerprint pinned in bin/common.sh) into the kit's own GnuPG keyring,
 # so deploys accept only commits GitHub made (needs `gpg`: brew install gnupg); copies the wrapper
 # scripts there, writes hosted.env (non-secret settings, 0600) and five launchd agents
-# (com.magic-manager.hosted.{serve,litestream,deploy,catalog-backup,replica-check}); makes the data dir (0700) and
+# (com.magic-manager.hosted.{serve,litestream,deploy,catalog-backup,replica-check}); makes the data dir and the wrapper cache dir (0700) and
 # the checkout's .env private (0600); reloads agents that are already running. It doesn't
 # start an agent for the first time (the cutover does: docs/home-server.md; launchd loads them at the next
 # login, and each refuses to run until the cutover step it needs is done), never creates or changes a
@@ -32,6 +33,9 @@ set -euo pipefail
 LITESTREAM_VERSION=0.5.17
 SHA_darwin_arm64=e211f68ff7658d19f193f2914417afdf8f89a053ff8f263e5d6b3b1d3bbc7b08
 SHA_darwin_x86_64=891875af09db152e93a4b31a8a79f538ce7ce702c132803cfe0a831e7cb1b7db
+# The external-API wrappers (.claude/skills/*/*.sh); each honors <NAME>_CACHE_DIR / <NAME>_STATE_DIR
+# (hostops.WRAPPER_CACHE_VARS mirrors this; tests/test_home_server.py checks both against the scripts).
+WRAPPERS="scryfall edhrec spellbook manapool mtgjson tcgcsv tcgapi ebay"
 SERVICES="serve litestream deploy catalog-backup replica-check"
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -43,6 +47,7 @@ OWNER_ID=""
 TRUSTED_PROXY=""
 KIT="$HOME/Library/Application Support/magic-manager-hosted"
 LOGS="$HOME/Library/Logs/magic-manager-hosted"
+CACHE="$HOME/Library/Caches/magic-manager-hosted"
 AGENTS="$HOME/Library/LaunchAgents"
 APPLY=no
 
@@ -59,15 +64,16 @@ while [ $# -gt 0 ]; do
     --trusted-proxy) TRUSTED_PROXY="${2?}"; shift ;;
     --kit) KIT="${2:?}"; shift ;;
     --logs) LOGS="${2:?}"; shift ;;
+    --cache-dir) CACHE="${2:?}"; shift ;;
     --launch-agents) AGENTS="${2:?}"; shift ;;
-    -h|--help) sed -n '2,29p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,30p' "$0"; exit 0 ;;
     *) die "unknown option $1 (see --help)" ;;
   esac
   shift
 done
 
 # ---- validate (refuse anything that could break a plist or a shell line) ----
-for v in "$APP" "$DATA" "$KIT" "$LOGS" "$AGENTS"; do
+for v in "$APP" "$DATA" "$KIT" "$LOGS" "$CACHE" "$AGENTS"; do
   case "$v" in /*) ;; *) die "paths must be absolute: $v" ;; esac
   case "$v" in *[\&\<\>\"\'\$\`\\]*|*$'\n'*) die "unsupported character in path: $v" ;; esac
 done
@@ -98,6 +104,13 @@ render_env() {
     MM_MODE hosted MM_LAYOUT split MM_DATA_DIR "$DATA" MM_PUBLIC_ORIGIN "$ORIGIN" MM_PORT "$PORT" \
     MM_ANALYTICS_DB "$DATA/analytics.db" MM_LITESTREAM "$LS_BIN" MM_OWNER_ID "$OWNER_ID" \
     MM_TRUSTED_PROXY "$TRUSTED_PROXY"
+  # Persistent wrapper caches + pacing state (macOS purges $TMPDIR files unused for ~3 days); exported,
+  # so the server, the agents and the CLI (mmh) all share them.
+  local w up
+  for w in $WRAPPERS; do
+    up=$(printf '%s' "$w" | tr '[:lower:]' '[:upper:]')
+    printf 'export %s=%q\nexport %s=%q\n' "${up}_CACHE_DIR" "$CACHE/$w-cache" "${up}_STATE_DIR" "$CACHE/$w-state"
+  done
 }
 render_plist() { sed -e "s|@KIT@|$KIT|g" -e "s|@LOGS@|$LOGS|g" "$HERE/launchd/$1.plist.in"; }
 
@@ -109,7 +122,7 @@ plan() { # plan <target> <content-file>   (nothing is written)
 }
 
 echo "magic-manager hosted install — $([ "$APPLY" = yes ] && echo APPLY || echo 'dry run (pass --apply)')"
-echo "  app: $APP    data: $DATA    origin: $ORIGIN    port: 127.0.0.1:$PORT"
+echo "  app: $APP    cache: $CACHE    data: $DATA    origin: $ORIGIN    port: 127.0.0.1:$PORT"
 echo "files:"
 plan "$KIT/hosted.env" <(render_env)
 for f in "$HERE"/bin/*; do plan "$KIT/$(basename "$f")" "$f"; done
@@ -118,6 +131,7 @@ have_ls=$("$LS_BIN" version 2>/dev/null || true)
 if [ "$have_ls" = "$LITESTREAM_VERSION" ]; then echo "  = $LS_BIN (v$LITESTREAM_VERSION)"
 else echo "  + $LS_BIN (Litestream v$LITESTREAM_VERSION darwin-$arch, sha256 ${LS_SHA:0:12}…)"; changes=$((changes+1)); fi
 [ -d "$DATA" ] && echo "  = $DATA/ (data dir)" || echo "  + $DATA/ (data dir, 0700, empty)"
+[ -d "$CACHE" ] && echo "  = $CACHE/ (wrapper caches)" || echo "  + $CACHE/ (wrapper caches + pacing state, 0700)"
 if command -v gpg >/dev/null 2>&1 && [ -d "$KEYRING" ] && has_webflow "$KEYRING"; then echo "  = $KEYRING (GitHub web-flow key ${WEBFLOW_FPR:24})"
 else echo "  + $KEYRING (GitHub web-flow key ${WEBFLOW_FPR:24}, from deploy/macos/web-flow.gpg)"; changes=$((changes+1)); fi
 command -v gpg >/dev/null 2>&1 || echo "  ! gpg isn't installed — brew install gnupg (deploys verify each commit's GitHub signature)"
@@ -142,6 +156,8 @@ mkdir -p "$KIT/bin" "$LOGS" "$AGENTS"
 chmod 700 "$KIT" "$LOGS"
 if [ ! -d "$DATA" ]; then mkdir -p "$DATA"; fi
 chmod 700 "$DATA"
+mkdir -p "$CACHE"
+chmod 700 "$CACHE"
 if [ -f "$APP/.env" ]; then chmod 600 "$APP/.env"; fi
 stage="$KIT/.install-stage"
 rm -rf "$stage"; mkdir -p "$stage"
