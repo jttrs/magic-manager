@@ -127,7 +127,7 @@ def test_member_moxfield_import_never_reaches_a_server_browser(member, monkeypat
     with layout.as_user(b):
         with pytest.raises(owner_machine.OwnerOnly) as e:
             addcards.fetch_deck_lines("https://www.moxfield.com/decks/abcdef")
-        assert e.value.error_code == "auth.admin_only" and "browser companion" in str(e.value)
+        assert e.value.error_code == "owner.server_browser_off" and "browser companion" in str(e.value)
     assert started == []
     # the launch seam itself refuses in a process started for a member
     monkeypatch.setenv(browser_launch.NO_SERVER_BROWSER_ENV, "1")

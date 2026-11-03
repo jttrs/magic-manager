@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 
 # Set (to "1") for a process that must never open a browser on this machine: the hosted web
-# app's deck fetch for a member (owner_machine "decks.moxfield_server"). Checked here, at the one
+# app's deck fetch (owner_machine "decks.moxfield_server"). Checked here, at the one
 # launch seam, and by scripts/moxfield_session.py + scripts/import_deck.py before they start one.
 NO_SERVER_BROWSER_ENV = "MM_NO_SERVER_BROWSER"
 NO_SERVER_BROWSER_MESSAGE = ("Moxfield decks are read in your own browser here: use the browser companion "

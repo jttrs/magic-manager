@@ -49,8 +49,7 @@ set sync rewrites thousands of pages, which would burn write ops on a cache we c
 1. **macOS account.** Create one standard (non-admin) user for the server, e.g. `mm`, and do
    everything below as that user (use an admin account only for `sudo` steps). Turn
    **FileVault on** (the data dir holds people's collections and sign-in sessions). The
-   agents run in that user's login session (they need it for the H9 Chrome/AppleScript
-   features), so after a *power cut* someone unlocks the Mac at the keyboard; for planned
+   agents run in that user's login session (launchd user agents), so after a *power cut* someone unlocks the Mac at the keyboard; for planned
    restarts use `sudo fdesetup authrestart` (it comes back logged in).
 2. **Always on** (admin):
    ```sh
@@ -69,8 +68,10 @@ set sync rewrites thousands of pages, which would burn write ops on a cache we c
    ```sh
    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
    brew install git uv node@22 gnupg && brew link --force node@22
-   brew install --cask tailscale google-chrome
+   brew install --cask tailscale
    ```
+   No browser is installed: the hosted server never drives one (Moxfield decks and open store tabs are read
+   in each user's own browser by the companion; the scrape canary runs on the laptop, not here).
    Litestream is installed by the installer (pinned v0.5.17, SHA-256 checked), not by brew.
 4. **Tailscale.** Open Tailscale, sign in to your tailnet. In the admin console enable
    *MagicDNS* and *HTTPS Certificates*. Then publish the app to the tailnet only (not Funnel):
@@ -86,7 +87,6 @@ set sync rewrites thousands of pages, which would burn write ops on a cache we c
    GIT_SSH_COMMAND='ssh -i ~/.ssh/mm_deploy' git clone git@github.com:jttrs/magic-manager.git app
    cd app && git config core.sshCommand 'ssh -i ~/.ssh/mm_deploy'
    uv sync --frozen && npm --prefix web ci --ignore-scripts && npm --prefix web run build
-   uv run playwright install chromium        # only for the admin-only Moxfield import
    ```
 6. **Cloudflare R2.** Cloudflare dashboard → R2 → *Create bucket* `magic-manager-backups`
    (Standard storage class — not Infrequent Access; no public access, no r2.dev URL). Then

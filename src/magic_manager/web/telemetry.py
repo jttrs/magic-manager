@@ -171,8 +171,9 @@ def install(app: FastAPI) -> None:
     @app.exception_handler(owner_machine.AdminOnly)
     async def admin_only(request: Request, exc: owner_machine.AdminOnly):
         # A path on the owner's machine/logins, asked for by a non-admin (hosted): fail closed.
-        request.state.error_code = owner_machine.CODE
-        return JSONResponse({"detail": str(exc), "code": owner_machine.CODE,
+        code = getattr(exc, "error_code", owner_machine.CODE)
+        request.state.error_code = code
+        return JSONResponse({"detail": str(exc), "code": code,
                              "request_id": getattr(request.state, "request_id", None)}, status_code=403)
 
     @app.exception_handler(mtgjson.BadIdentifier)

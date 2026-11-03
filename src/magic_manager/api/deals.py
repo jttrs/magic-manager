@@ -44,7 +44,7 @@ class OpenTabsOut(BaseModel):
 
 def open_tabs(browser: str = "chrome") -> OpenTabsOut:
     features.require("deals")
-    owner_machine.require("deals.mac_tabs")  # AppleScript on the server Mac: admins only when hosted
+    owner_machine.require("deals.mac_tabs")  # AppleScript on the server Mac: off for everyone when hosted
     return OpenTabsOut(**deals.open_tabs(browser))
 
 

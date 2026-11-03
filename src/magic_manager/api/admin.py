@@ -75,7 +75,8 @@ def _user(r: admin.UserRow) -> AdminUserOut:
 def users() -> AdminUsersOut:
     return AdminUsersOut(users=[_user(r) for r in admin.users()],
                          owner_paths=[OwnerPathOut(key=p.key, feature=p.feature, title=p.title)
-                                      for p in owner_machine.PATHS.values()])
+                                      for p in owner_machine.PATHS.values()
+                                      if p.key not in owner_machine.HOSTED_OFF])  # off for everyone hosted
 
 
 def invite(req: InviteIn, actor: str) -> InviteOut:

@@ -20,8 +20,8 @@ const ARCHIDEKT_DECK = /^https:\/\/(?:www\.)?archidekt\.com\/decks\/\d{1,12}(?:[
  *  your private decks work; lands as the same review lines. */
 export function useBrowserDeck() {
   const on = useFeature('companion');
-  // Reading Moxfield on the server drives a browser there: admins only when hosted
-  // (owner_machine "decks.moxfield_server"); everyone else reads it with the companion.
+  // Reading Moxfield on the server drives a browser there: off for everyone when hosted
+  // (owner_machine "decks.moxfield_server"); the companion reads it.
   // Hosted only, and only once /api/features said so: locally (or while it loads) the server path stays.
   const paths = useQuery(ownerPathsQuery()).data;
   const companionOnly = Boolean(paths?.hosted && !paths.paths['decks.moxfield_server']);
