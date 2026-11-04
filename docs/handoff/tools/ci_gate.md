@@ -8,8 +8,10 @@ set -u
 n=$1; title=$2
 export GH_TOKEN=$(env -u GH_TOKEN gh auth token --hostname github.com --user jttrs); R=jttrs/magic-manager
 REQ="pytest web-check e2e extension review-stamp"
-base=$(gh api repos/$R/pulls/$n --jq .base.sha); main=$(gh api repos/$R/branches/main --jq .commit.sha)
-if [ "$base" != "$main" ]; then
+# .base.sha is the CURRENT main tip, not the branch's fork point — ask how far behind the head is.
+cur=$(gh api repos/$R/pulls/$n --jq .head.sha)
+behind=$(gh api "repos/$R/compare/main...$cur" --jq .behind_by) || { echo "#$n could not compare with main"; exit 1; }
+if [ "$behind" != "0" ]; then
   gh api -X PUT repos/$R/pulls/$n/update-branch -f update_method=rebase >/dev/null 2>&1 \
     || { echo "#$n server rebase failed (conflict?) — rebase the branch by hand"; exit 2; }
   sleep 15

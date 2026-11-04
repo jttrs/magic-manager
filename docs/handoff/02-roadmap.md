@@ -62,7 +62,7 @@ Merged: #216 shared wrapper rate-limit library, #218 call-slot reservation under
 wrapper call (`util.run_wrapper`), #215 persistent cache dir on the mini/in Docker
 (`install.sh --cache-dir`), #217 hosted server never drives a browser (Moxfield + Mac tabs via
 the companion for everyone). Follow-ups: `scripts/import_deck.py` subprocess (`addcards`) has no
-timeout; Linux/systemd kit + Docker vendor move stay deferred (H7).
+timeout (fixed in a follow-up, `util.DECK_FETCH_TIMEOUT`); Linux/systemd kit + Docker vendor move stay deferred (H7).
 
 ## D. Follow-up backlog (small PRs, no owner hardware needed)
 
@@ -71,20 +71,21 @@ From Phase 3 PR "deferred" lists:
   2026-11-03 to keep re-auth as is (no forced provider login). Pre-bind `owner` snapshots stay
   (decided in #201). Residual: CLI `mm auth delete-user` doesn't hold the web undo guard lock.
 - #202: stall alert done in #209 (`mm host replica-lag` + `replica-check` agent); its 5-min
-  `LAG_SLACK` is unmeasured against real Litestream timing — add a `replica-lag` step to
-  `scripts/rehearse_home_deploy.py`, or watch for false alarms after cutover.
+  `LAG_SLACK` measured in #222 with real Litestream 0.5.17 (file:// replica): idle lag 0 s;
+  R2 upload latency / clock skew still unmeasured (check after cutover).
   `deploy/linux/` systemd kit still deferred.
-- #204: no dedicated test for `pair.bridge_failed` / bridge reset on pairing change; verify on a
-  real Chrome update that an existing `*.ts.net` pairing keeps its permission.
-- #206: 2 deferred review items (see the PR's Code review section).
+- #204: bridge reset + `pair.bridge_failed` now tested (#224). Open: after `pair.bridge_failed` the
+  origin stays saved as paired with no bridge (extension behaviour; needs a version bump), and a
+  real Chrome update keeping an existing `*.ts.net` grant is unverified (owner, real Chrome).
+- #206: F7 (CSP e2e breadth) done in #225; F6 (Tailscale Serve sets X-Forwarded-For) is an owner check on the mini.
 - Backup encryption (Litestream `age`) with an off-box key escrow plan (§25.2).
 From the web UX round-2 fan-out (all chunks merged; open follow-ups):
 - (Checked 2026-11-03, already done on main: "colour" copy — only the stable `colour_identity`
   API code remains; Explore family picker lists every paper family, owned first; `art.lookup`
   title no longer names a vendor.)
-- `/api/ingest/precons` ~5 s on the owner's live server (didn't reproduce in tests) — profile live.
-- `tests/test_card_earmarks.py::test_v37_migration_single_and_split` was reported flaky/order-
-  dependent before #196 — confirm it's fixed in CI history.
+- `/api/ingest/precons` slowness: fixed in #221 (read the cached DeckList.json directly; cold ~10 ms).
+- Flaky tests: the V37 earmarks test hasn't failed in 60 CI runs (fixed); `test_analytics` job flake was fixed
+  by #203; companion e2e flakes fixed in #224; rate-limit timing bounds loosened in #223.
 Other:
 - Issue #119 (vendor canary): fixed in #208 (CI forgives only a bot wall, `scrape.blocked`;
   closes its issue on a clean run). The close step hasn't fired live yet.
