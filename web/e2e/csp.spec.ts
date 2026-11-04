@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { COLLECTION_URL, COMPARE_URL, expect, test } from './support';
+import { COLLECTION_URL, COMPARE_URL, expect, mockApi, test } from './support';
 
 const WEB = path.resolve(import.meta.dirname, '..');
 const OUT = path.join(WEB, 'test-results', 'csp-dist');
@@ -63,6 +63,15 @@ test('the built SPA runs under the hosted CSP with no violations', async ({ page
     if (/Content Security Policy/i.test(m.text())) refused.push(m.text());
   });
   await serveBuilt(page, h);
+  // Hosted + signed in, so the Account popover and the delete-account alert dialog exist too.
+  await mockApi(page, {
+    '/api/features': () => ({ json: { flags: {}, owner_paths: {}, mode: 'hosted' } }),
+    '/api/auth/me': () => ({ json: {
+      user: { id: 'mmmmmmmmmmmmmmmm', display_name: 'Friend', email: 'friend@example.com', is_admin: false, providers: ['discord'] },
+      csrf_token: 'csrf-1', providers: [{ name: 'discord', title: 'Discord', login_url: '/api/auth/login/discord' }], profiles_open: true,
+      signed_in_at: new Date().toISOString(), reauth_minutes: 10, reauth_seconds_left: 540,
+    } }),
+  });
 
   const views: [string, () => Promise<void>][] = [
     [COMPARE_URL, () => expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible()],
@@ -82,6 +91,76 @@ test('the built SPA runs under the hosted CSP with no violations', async ({ page
     const seen = await page.evaluate(() => (window as unknown as { __csp: string[] }).__csp);
     expect(seen, `CSP violations on ${url}`).toEqual([]);
   }
+  expect(refused).toEqual([]);
+
+  // Every Radix primitive the app uses, opened once (they inject their own styles / portals):
+  // Dialog, Tabs, Switch, ToggleGroup, AlertDialog, Popover, Tooltip, DropdownMenu, HoverCard.
+  const violations = () => page.evaluate(() => (window as unknown as { __csp: string[] }).__csp);
+  await page.goto(COLLECTION_URL);
+  await page.waitForLoadState('networkidle');
+
+  // Tooltip: hover an icon button.
+  await page.getByRole('link', { name: 'Background jobs' }).hover();
+  await expect(page.getByRole('tooltip').first()).toBeVisible();
+  await page.mouse.move(0, 0);
+
+  // Popover: the Account popover.
+  await page.getByRole('button', { name: /Signed in as Friend/ }).click();
+  await expect(page.getByRole('dialog', { name: 'Your account' })).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  // Dialog + Switch + ToggleGroup + AlertDialog, all inside Settings.
+  await page.getByRole('button', { name: 'Settings' }).click();
+  const settings = page.getByRole('dialog', { name: 'Settings' });
+  await expect(settings).toBeVisible();
+  await expect(settings.getByRole('switch').first()).toBeVisible();
+  await expect(settings.getByRole('radio').first()).toBeVisible();
+  await settings.getByRole('switch').first().click();
+  await settings.getByRole('button', { name: 'Delete account…' }).click();
+  await expect(page.getByRole('alertdialog', { name: 'Delete your account' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  await expect(settings).toBeHidden();
+
+  // Dialog + Tabs: Add cards.
+  await page.getByRole('button', { name: 'Add cards' }).click();
+  const add = page.getByRole('dialog', { name: 'Add cards' });
+  await expect(add.getByRole('tablist', { name: 'How to add' })).toBeVisible();
+  await add.getByRole('tab').nth(1).click();
+  await page.keyboard.press('Escape');
+  await expect(add).toBeHidden();
+
+  // Popover: the sort builder.
+  await page.getByRole('button', { name: /^Sort/ }).first().click();
+  await expect(page.getByRole('dialog').first()).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  // DropdownMenu: a Select field in the view rail.
+  await page.goto('/decks');
+  await page.getByRole('button', { name: /^Group by/ }).click();
+  await expect(page.getByRole('menuitemradio').first()).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  // Popover (listbox): a searchable select in Market.
+  await page.goto('/market');
+  await page.getByRole('button', { name: /^Set family/ }).click();
+  await expect(page.getByRole('combobox', { name: 'Filter families' })).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  // HoverCard: a card name's art preview.
+  await page.goto(COMPARE_URL);
+  await page.waitForLoadState('networkidle');
+  await page.getByRole('radio', { name: 'List' }).click();   // list rows carry the hover preview
+  const tile = page.getByRole('region', { name: 'Tifa Lockhart only cards' }).getByRole('button', { name: /^Inspect / }).first();
+  await tile.hover();
+  await expect(page.locator('[data-radix-popper-content-wrapper]').first()).toBeVisible();
+
+  // Dialog (sheet): the card inspector.
+  await tile.click();
+  await expect(page.getByRole('dialog').first()).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  expect(await violations(), 'CSP violations while opening overlays').toEqual([]);
   expect(refused).toEqual([]);
 
   // The policy is really in force: an injected inline script is refused.
