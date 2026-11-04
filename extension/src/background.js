@@ -92,9 +92,11 @@ async function ensureBridge({ injectOpenTabs = false } = {}) {
     if (have) await chrome.scripting.unregisterContentScripts({ ids: [BRIDGE_ID] }).catch(() => {});
     return false;
   }
-  if (!have || have.matches?.length !== 1 || have.matches[0] !== p.pattern) {
-    if (have) await chrome.scripting.unregisterContentScripts({ ids: [BRIDGE_ID] }).catch(() => {});
+  if (!have) {
     await chrome.scripting.registerContentScripts([bridgeScript(p.pattern)]);
+  } else if (have.matches?.length !== 1 || have.matches[0] !== p.pattern) {
+    // One step: if Chrome refuses the new address, the old registration stays as it was.
+    await chrome.scripting.updateContentScripts([bridgeScript(p.pattern)]);
   }
   if (injectOpenTabs) {
     for (const t of await chrome.tabs.query({ url: p.pattern })) {

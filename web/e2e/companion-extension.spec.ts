@@ -686,10 +686,45 @@ test('pressing Pair again on the working address when the worker doesn’t answe
   await opts.getByRole('textbox', { name: 'App address' }).fill(APP);
   await opts.getByRole('button', { name: 'Pair', exact: true }).click();
   await expect(opts.locator('#pair-status')).toHaveAttribute('data-code', 'pair.bridge_failed');
+  // The worker never sees the stubbed message, so these two are the checks: nothing removed, pairing kept.
   const removed = await opts.evaluate(() => (window as unknown as { __removed?: unknown[] }).__removed);
   expect(removed ?? []).toEqual([]);
   expect(await ext.worker.evaluate(() => chrome.storage.local.get('appOrigin'))).toEqual({ appOrigin: APP });
-  expect(await ext.worker.evaluate(() => chrome.scripting.getRegisteredContentScripts())).toMatchObject([{ id: 'mm-bridge', matches: ['http://localhost/*'] }]);
+});
+
+test('a failed attempt whose answer is lost still leaves the earlier pairing with its bridge', async ({ ext }) => {
+  const opts = await ext.context.newPage();
+  await opts.goto(`chrome-extension://${ext.id}/src/options.html`);
+  await opts.evaluate(() => {
+    const real = chrome.permissions;
+    Object.defineProperty(chrome, 'permissions', { configurable: true, value: {
+      contains: (p: chrome.permissions.Permissions) => real.contains(p),
+      request: () => Promise.resolve(true),
+      remove: (p: chrome.permissions.Permissions) => {
+        ((window as unknown as { __removed?: unknown[] }).__removed ??= []).push(p);
+        return Promise.resolve(true);
+      },
+    } });
+    const send = chrome.runtime.sendMessage.bind(chrome.runtime) as (...a: unknown[]) => Promise<unknown>;
+    let lost = false;
+    Object.defineProperty(chrome.runtime, 'sendMessage', { configurable: true, value: (...a: unknown[]) => {
+      if ((a[0] as { type?: string } | undefined)?.type === 'bridge' && !lost) {
+        lost = true;
+        // The worker handles it (dropping the bridge: that pattern isn't held), but the reply never arrives.
+        return send(...a).then(() => { throw new Error('lost'); });
+      }
+      return send(...a);
+    } });
+  });
+  await opts.getByRole('textbox', { name: 'App address' }).fill('https://mm-unheld.example');
+  await opts.getByRole('button', { name: 'Pair', exact: true }).click();
+  await expect(opts.locator('#pair-status')).toHaveAttribute('data-code', 'pair.bridge_failed');
+  const removed = await opts.evaluate(() => (window as unknown as { __removed?: unknown[] }).__removed);
+  expect(removed).toEqual([{ origins: ['https://mm-unheld.example/*'] }]);
+  expect(await ext.worker.evaluate(() => chrome.storage.local.get('appOrigin'))).toEqual({ appOrigin: APP });
+  await expect.poll(() => ext.worker.evaluate(() => chrome.scripting.getRegisteredContentScripts()))
+    .toMatchObject([{ id: 'mm-bridge', matches: ['http://localhost/*'] }]);
+  await expect(opts.locator('#unpair')).toBeEnabled();
   const { page } = await appPage(ext.context);
   await expect(page.getByRole('button', { name: 'Browser companion · connected' })).toBeVisible();
 });

@@ -103,6 +103,7 @@ async function pairWith(parsed) {
     else await chrome.storage.local.remove(['appOrigin', 'lastHello']);
     if (parsed.pattern !== old?.pattern) await chrome.permissions.remove({ origins: [parsed.pattern] }).catch(() => {});
     await syncBridge();   // the worker re-registers the prior bridge, or none
+    $('unpair').disabled = !before;   // held error: the button must still match the restored pairing
     return refuse('pair.bridge_failed');
   }
   if (old?.pattern && old.pattern !== parsed.pattern) await chrome.permissions.remove({ origins: [old.pattern] }).catch(() => {});
@@ -111,6 +112,7 @@ async function pairWith(parsed) {
 }
 
 async function unpair() {
+  if (pairing) return;   // a pair attempt in flight finishes (and restores) first
   holdError = false;
   const { appOrigin } = await chrome.storage.local.get('appOrigin');
   await chrome.storage.local.remove(['appOrigin', 'lastHello']);
