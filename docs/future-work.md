@@ -47,8 +47,10 @@ Small PRs, one per item.
 - **Flaky earmark migration test:** confirm
   `tests/test_card_earmarks.py::test_v37_migration_single_and_split` is stable in CI history
   (reported order-dependent before #196).
-- **Set docs drafts:** 14 uncommitted `docs/sets/*.md` drafts from a characterize-set run sit in a
-  Claude worktree (`docs/handoff/04-work-locations.md`) — review and commit or drop.
+- **Set docs branch:** a characterize-set session committed ~36 `docs/sets/*.md` docs on branch
+  `claude/uncharacterized-set-families-905987` (5 commits ahead of main as of 2026-11-04, no PR
+  yet; one more draft, `plst.md`, still untracked). If that session has finished: check the docs
+  against `docs/sets/_TEMPLATE.md`, run `uv run pytest tests/test_config_schema.py`, open a docs PR.
 
 ## 4. Deferred by decision
 
