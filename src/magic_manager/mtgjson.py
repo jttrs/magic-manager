@@ -208,16 +208,23 @@ def _deck_list_rows() -> list[dict]:
     The wrapper caches DeckList.json on disk, but each call still spawned it
     and re-parsed ~3000 entries — the precon catalog search paid that per
     keystroke. Reused for ``_DECK_LIST_TTL_S`` while the on-disk copy is
-    unchanged (a refresh/re-download changes its stamp → re-read). Callers
-    must not mutate the entries."""
+    unchanged (a refresh/re-download changes its stamp → re-read). A (re-)read
+    of a cached copy parses the file directly; only a missing one goes through
+    the wrapper. Callers must not mutate the entries."""
     global _deck_list_memo
     now = time.monotonic()
     memo = _deck_list_memo
     stamp = _cache_stamp("DeckList.json")
     if memo is not None and stamp is not None and memo[1] == stamp and now - memo[0] < _DECK_LIST_TTL_S:
         return memo[2]
-    rows = _run_json(["decklist"]).get("data", [])
-    _deck_list_memo = (now, _cache_stamp("DeckList.json"), rows)
+    # A cached copy is read straight from disk (what the wrapper would `cat`):
+    # spawning it costs 0.3 s idle and seconds on a loaded machine.
+    body = _cached_json("DeckList.json") if stamp is not None else None
+    if body is None:
+        body = _run_json(["decklist"])  # not cached (or unreadable): the wrapper fetches it
+        stamp = _cache_stamp("DeckList.json")
+    rows = body.get("data", [])
+    _deck_list_memo = (now, stamp, rows)
     return rows
 
 
@@ -688,11 +695,19 @@ def cached_deck(file_name: str) -> dict | None:
     """``decks/<file_name>.json``'s ``data`` block straight from the wrapper's
     disk cache — no subprocess, never the network; ``None`` when not cached
     (or unreadable)."""
-    p = cache_path(f"decks/{valid_deck_name(file_name)}.json")
+    body = _cached_json(f"decks/{valid_deck_name(file_name)}.json")
+    return None if body is None else body.get("data") or {}
+
+
+def _cached_json(resource_path: str) -> dict | None:
+    """``resource_path`` parsed straight from the wrapper's disk cache — no
+    subprocess, never the network; ``None`` when absent, empty or unreadable
+    (the wrapper treats an empty file as absent too)."""
     try:
-        return json.loads(p.read_text()).get("data") or {}
+        body = json.loads(cache_path(resource_path).read_bytes())
     except (OSError, ValueError):
         return None
+    return body if isinstance(body, dict) else None
 
 
 def cached_deck_mtime(file_name: str) -> float | None:
