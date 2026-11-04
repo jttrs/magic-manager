@@ -32,6 +32,8 @@ OUTPUT_ROOT = Path(__file__).resolve().parents[2] / "output"
 # transient 5xx, so 120 s covers a normal read; bulk files get far longer.
 WRAPPER_TIMEOUT = 120
 WRAPPER_BULK_TIMEOUT = 1800
+# Seconds a deck fetch (scripts/import_deck.py) may run: it may page, wait on a rate limit or, locally only, drive a headed browser for Moxfield.
+DECK_FETCH_TIMEOUT = 300
 
 
 def run_wrapper(argv: list[str], *, error: type[Exception], service: str,

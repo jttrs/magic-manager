@@ -234,7 +234,7 @@ class _FakeProc:
     def __init__(self, out, err, rc=0):
         self.stdout, self.stderr, self.returncode = io.StringIO(out), io.StringIO(err), rc
 
-    def wait(self):
+    def wait(self, timeout=None):
         return self.returncode
 
 
@@ -330,3 +330,44 @@ def test_api_search_resolve_commit(client, cards, monkeypatch):
     assert r.status_code == 200 and r.json()["copies"] == 2
     r = client.post("/api/ingest/commit", json={"items": [{"scryfall_id": "ghost", "finish": "nonfoil", "qty": 1}], "source": "search"})
     assert r.status_code == 422
+
+
+def _fake_import_deck(monkeypatch, tmp_path, body: str):
+    script = tmp_path / "fake_import_deck.py"
+    script.write_text(body)
+    monkeypatch.setattr(addcards, "_IMPORT_DECK", script)
+
+
+def test_deck_fetch_times_out_and_kills_the_child(monkeypatch, tmp_path):
+    import os
+    import time
+    from magic_manager import util
+    pidfile = tmp_path / "pid"
+    _fake_import_deck(monkeypatch, tmp_path, (
+        "import os, time\n"
+        f"open({str(pidfile)!r}, 'w').write(str(os.getpid()))\n"
+        "time.sleep(60)\n"
+    ))
+    monkeypatch.setattr(util, "DECK_FETCH_TIMEOUT", 1)
+    t0 = time.monotonic()
+    with pytest.raises(RuntimeError, match="didn't answer in time"):
+        addcards.fetch_deck_payload("https://archidekt.com/decks/1")
+    assert time.monotonic() - t0 < 15
+    pid = int(pidfile.read_text())
+    with pytest.raises(ProcessLookupError):
+        os.kill(pid, 0)
+
+
+def test_deck_fetch_drains_large_stdout_and_stderr(monkeypatch, tmp_path):
+    from magic_manager import util
+    _fake_import_deck(monkeypatch, tmp_path, (
+        "import sys, json\n"
+        "for _ in range(1024):\n"
+        "    sys.stderr.write('progress ' + 'x' * 1000 + '\\n')\n"
+        "sys.stdout.write(json.dumps({'cards': [], 'pad': 'y' * 1_000_000}))\n"
+    ))
+    monkeypatch.setattr(util, "DECK_FETCH_TIMEOUT", 60)
+    seen: list[str] = []
+    payload = addcards.fetch_deck_payload("https://archidekt.com/decks/1", progress=seen.append)
+    assert payload["cards"] == [] and len(payload["pad"]) == 1_000_000
+    assert len(seen) == 1024
