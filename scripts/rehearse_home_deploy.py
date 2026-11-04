@@ -17,6 +17,11 @@ Every step runs the same ``mm`` commands the deploy kit runs (``deploy/macos/``)
                         the catalog snapshot restores; ``mm db pull`` refuses without --force, verifies,
                         and the laptop CLI audits the copy clean; ``mm host restore`` rebuilds a new data
                         dir; deleting the member removes Litestream's local state for them.
+ 5. replica lag       — a write replicates, the server idles ``--idle`` seconds (default 150), then per
+                        replicated file: last local write (db / -wal mtime) minus the newest replica
+                        object, printed and held within ``offsite.LAG_SLACK``; ``mm host replica-lag``
+                        exits 0. Negative proof: Litestream stopped, one more write, and the engine
+                        (threshold + slack shrunk to 5 s) reports the owner's file ``behind``.
 
 The source DB is opened read-only (SQLite backup API). Services started here are
 stopped by PID at the end. Exit 0 = every check passed. Needs Litestream
@@ -158,7 +163,19 @@ def user_counts(path: Path, tables) -> dict[str, int]:
         conn.close()
 
 
-def run(source: Path, work: Path, port: int) -> int:
+def lag_seconds(data: Path, st: objectstore.Store) -> dict[str, float | None]:
+    """Per replicated file (the names ``offsite.replica_lag`` checks): last local write
+    minus its newest replica object, in seconds (None = no replica objects)."""
+    from magic_manager import userfiles
+    out: dict[str, float | None] = {}
+    for name in [offsite.AUTH_FILE] + [f"{layout.USERS_SUBDIR}/{p.name}" for p in userfiles.user_files(data)]:
+        written, _created = offsite._local_written(data / name)
+        newest = max((o.modified for o in st.list(f"{name}/")), default=None)
+        out[name] = None if newest is None else (written - newest).total_seconds()
+    return out
+
+
+def run(source: Path, work: Path, port: int, idle: int = 150) -> int:
     if work.exists() and any(work.iterdir()):
         raise SystemExit(f"{work} isn't empty")
     work.mkdir(parents=True, exist_ok=True)
@@ -288,7 +305,56 @@ def run(source: Path, work: Path, port: int) -> int:
     plan = json.loads(mm(hosted, "host", "prune-deleted", "--json", quiet=True).stdout)
     check(member_id in plan["waiting"] and owner_id in plan["live"], "member's replica waits out the 30-day retention; owner's is live")
 
-    stop(ls)
+    step(f"5. replica lag: a replicated write, {idle}s idle, then measure (LAG_SLACK = "
+         f"{int(offsite.LAG_SLACK.total_seconds())}s)")
+    write_owner = ["uv", "run", "--frozen", "python", "-c", write]
+    owner_name = f"{layout.USERS_SUBDIR}/{owner_id}.db"
+    subprocess.run(write_owner, cwd=ROOT, env=hosted, check=True)
+    written_at = offsite._local_written(owner_db)[0]
+    check(wait_for(lambda: max((o.modified for o in st.list(f"{owner_name}/")), default=written_at) > written_at, 60),
+          "the write reached the replica (an object newer than the write)")
+    worst: dict[str, float] = {}
+    t0 = time.monotonic()
+    while True:
+        for name, s in lag_seconds(data, st).items():
+            if s is not None:
+                worst[name] = max(worst.get(name, s), s)
+        if time.monotonic() - t0 >= idle:
+            break
+        time.sleep(min(15, max(1, idle - (time.monotonic() - t0))))
+    final = lag_seconds(data, st)
+    slack = offsite.LAG_SLACK.total_seconds()
+    print(f"    {'file':<30} {'final (local write − newest object)':>36} {'worst while idle':>18}")
+    for name, s in final.items():
+        print(f"    {name:<30} {('%.1fs' % s) if s is not None else 'no objects':>36} "
+              f"{('%.1fs' % worst[name]) if name in worst else '—':>18}")
+    check(all(s is not None for s in final.values()), "every replicated file has replica objects")
+    check(all(w <= slack for w in worst.values()),
+          f"idle lag stays within LAG_SLACK ({int(slack)}s): worst {max(worst.values(), default=0):.1f}s")
+    lag = mm(hosted, "host", "replica-lag", "--data-dir", str(data), "--json", ok_codes=(0, 1), quiet=True)
+    rep_ = json.loads(lag.stdout)
+    for f in rep_["files"]:
+        print(f"    replica-lag: {f['name']} {f['status']} lag {f['lag_seconds']}s "
+              f"(written {f['local_written']}, newest {f['replica_newest']})")
+    check(lag.returncode == 0 and rep_["ok"], "mm host replica-lag --json exits 0 (ok) after the idle wait")
+
+    stop(ls)  # negative proof: no replication from here on
+    time.sleep(2)
+    subprocess.run(write_owner, cwd=ROOT, env=hosted, check=True)
+    time.sleep(10)
+    probe = ("import json, sys\nfrom datetime import timedelta\nfrom pathlib import Path\n"
+             "from magic_manager import objectstore, offsite\n"
+             "offsite.LAG_SLACK = timedelta(seconds=5)\n"
+             "r = offsite.replica_lag(Path(sys.argv[1]), objectstore.FileStore(Path(sys.argv[2])), "
+             "threshold=timedelta(seconds=5))\nprint(json.dumps(r.to_dict()))\n")
+    neg = json.loads(subprocess.run(["uv", "run", "--frozen", "python", "-c", probe, str(data), str(r2)], cwd=ROOT,
+                                    env=hosted, check=True, capture_output=True, text=True).stdout)
+    owner_status = next((f for f in neg["files"] if f["name"] == owner_name), {})
+    print(f"    stopped Litestream + 1 write: {owner_name} {owner_status.get('status')} "
+          f"lag {owner_status.get('lag_seconds')}s")
+    check(owner_status.get("status") == "behind" and not neg["ok"],
+          "Litestream stopped + a write: replica_lag (threshold/slack 5 s) reports the owner's file behind")
+
     owner_c.close()
     member_c.close()
     failed = [w for ok, w in RESULTS if not ok]
@@ -304,9 +370,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--source", type=Path, required=True, help="a single-file DB to rehearse on (opened read-only)")
     ap.add_argument("--work", type=Path, required=True, help="a new, empty work dir")
     ap.add_argument("--port", type=int, default=8788)
+    ap.add_argument("--idle", type=int, default=150,
+                    help="seconds the server sits idle before the replica-lag measurement (default 150)")
     args = ap.parse_args(argv)
     try:
-        return run(args.source, args.work.resolve(), args.port)
+        return run(args.source, args.work.resolve(), args.port, args.idle)
     finally:
         for p in list(PROCS):
             stop(p)
