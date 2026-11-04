@@ -613,7 +613,7 @@ def _fetch_args(monkeypatch, url: str = "https://moxfield.com/decks/abc") -> dic
             import io
             self.stdout, self.stderr, self.returncode = io.StringIO('{"cards": []}'), io.StringIO(""), 0
 
-        def wait(self):
+        def wait(self, timeout=None):
             return 0
     monkeypatch.setattr(addcards.subprocess, "Popen", FakeProc)
     addcards.fetch_deck_payload(url)

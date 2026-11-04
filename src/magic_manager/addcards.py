@@ -501,11 +501,25 @@ def fetch_deck_payload(url: str, *, progress: Callable[[str], None] | None = Non
                 if progress:
                     progress(msg)
 
-    t = threading.Thread(target=_pump, daemon=True)
-    t.start()
-    out = proc.stdout.read()
-    proc.wait()
-    t.join()
+    out_chunks: list[str] = []
+
+    def _drain() -> None:
+        out_chunks.append(proc.stdout.read())
+
+    threads = [threading.Thread(target=_pump, daemon=True), threading.Thread(target=_drain, daemon=True)]
+    for t in threads:
+        t.start()
+    try:
+        proc.wait(timeout=util.DECK_FETCH_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
+        for t in threads:  # bounded: a grandchild (a browser) may still hold the pipes open
+            t.join(timeout=5)
+        raise RuntimeError(f"The deck site didn't answer in time ({util.DECK_FETCH_TIMEOUT} s).") from None
+    for t in threads:
+        t.join()
+    out = "".join(out_chunks)
     if proc.returncode != 0:
         raise RuntimeError(err_lines[-1] if err_lines else f"import_deck exited {proc.returncode}")
     return json.loads(out)
