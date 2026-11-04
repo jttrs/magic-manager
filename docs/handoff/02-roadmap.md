@@ -74,9 +74,7 @@ From Phase 3 PR "deferred" lists:
   `LAG_SLACK` measured in #222 with real Litestream 0.5.17 (file:// replica): idle lag 0 s;
   R2 upload latency / clock skew still unmeasured (check after cutover).
   `deploy/linux/` systemd kit still deferred.
-- #204: bridge reset + `pair.bridge_failed` now tested (#224). Open: after `pair.bridge_failed` the
-  origin stays saved as paired with no bridge (extension behaviour; needs a version bump), and a
-  real Chrome update keeping an existing `*.ts.net` grant is unverified (owner, real Chrome).
+- #204: bridge reset + `pair.bridge_failed` now tested (#224); a failed pairing now restores the pairing from before the click (extension 0.5.1). Open: a real Chrome update keeping an existing `*.ts.net` grant is unverified (owner, real Chrome).
 - #206: F7 (CSP e2e breadth) done in #225; F6 (Tailscale Serve sets X-Forwarded-For) is an owner check on the mini.
 - Backup encryption (Litestream `age`) with an off-box key escrow plan (§25.2).
 From the web UX round-2 fan-out (all chunks merged; open follow-ups):
