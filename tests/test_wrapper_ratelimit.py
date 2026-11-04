@@ -106,11 +106,11 @@ def hold_flock(state, seconds=30):
 
 def test_concurrent_reserves_are_spaced_but_downloads_overlap(tmp_path):
     t = time.time()
-    procs = [spawn(tmp_path, "rl_reserve 300; sleep 2") for _ in range(3)]
+    procs = [spawn(tmp_path, "rl_reserve 300; sleep 4") for _ in range(3)]
     results = [(p.wait(), p.stderr.read()) for p in procs]
     elapsed = time.time() - t
     assert all(rc == 0 for rc, _ in results), results
-    assert elapsed < 4.5  # serialized downloads would take >= 6 s
+    assert elapsed < 9  # overlapping ~4.6 s; serialized downloads would take >= 12 s
     slots = sorted(slot_of(err) for _, err in results)
     assert slots[1] - slots[0] >= 300 and slots[2] - slots[1] >= 300
 
@@ -130,9 +130,11 @@ def test_sigkilled_holder_does_not_block(tmp_path):
     holder.kill()
     holder.wait()
     t = time.time()
-    r = run(tmp_path, "rl_reserve 0; echo reached")
+    # a dead holder must not make us wait out the lock timeout (20 s here); bounds are
+    # generous so a loaded CI runner's process start-up can't flake them
+    r = run(tmp_path, "rl_reserve 0; echo reached", {"RL_LOCK_TIMEOUT_MS": "20000"})
     assert r.returncode == 0, r.stderr
-    assert time.time() - t < 1
+    assert time.time() - t < 10
     assert "reached" in r.stdout
 
 
@@ -187,17 +189,17 @@ def test_leftover_mkdir_lock_directory_is_ignored(tmp_path):
     (tmp_path / "lock").mkdir()
     (tmp_path / "lock" / "owner").write_text("999999 1\n")
     t = time.time()
-    r = run(tmp_path, "rl_reserve 0; echo reached")
+    r = run(tmp_path, "rl_reserve 0; echo reached", {"RL_LOCK_TIMEOUT_MS": "20000"})
     assert r.returncode == 0, r.stderr
-    assert time.time() - t < 1
+    assert time.time() - t < 10  # not the 20 s lock timeout
     assert (tmp_path / "lock").is_dir()  # left alone
 
 
 def test_first_reserve_does_not_wait(tmp_path):
     t = time.time()
-    r = run(tmp_path, "rl_reserve 5000")
+    r = run(tmp_path, "rl_reserve 20000")
     assert r.returncode == 0, r.stderr
-    assert time.time() - t < 4
+    assert time.time() - t < 10  # not the 20 s gap
     assert (tmp_path / "last_call_ms").exists()
 
 
