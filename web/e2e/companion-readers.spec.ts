@@ -22,6 +22,17 @@ function golden(name: string, actual: unknown) {
   expect(actual).toEqual(JSON.parse(readFileSync(path, 'utf8')));
 }
 
+// Offline by construction: the saved pages still reference real CDNs (images, fonts,
+// tag-manager iframes), and `page.goto` waits for `load`, so one slow or unreachable host
+// on CI hung a navigation past the test timeout. Every request a test hasn't routed on the
+// page is aborted here (page routes take precedence over context routes), so no test
+// touches the network and `load` fires as soon as the fixture itself is parsed.
+let unrouted: string[] = [];
+test.beforeEach(async ({ context }) => {
+  unrouted = [];
+  await context.route('**/*', (r) => { unrouted.push(r.request().url()); return r.abort('blockedbyclient'); });
+});
+
 async function servePage(page: Page, url: string, html: string) {
   await page.route(url, (r) => r.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: html }));
   await page.route('https://images.manapool.com/**', (r) => r.fulfill({ status: 404, body: '' }));
@@ -126,6 +137,8 @@ test.describe('open-tab store page reader', () => {
       out[vendor] = await page.evaluate(() => (window as unknown as { readStorePage: (d: Document) => unknown }).readStorePage(document));
       await page.unroute('https://store.example/p');
     }
+    // These saved pages do reach for third-party hosts (the CI hang) — all of it was blocked.
+    expect(unrouted.some((u) => !u.startsWith('https://store.example/'))).toBe(true);
     golden('store-extracts.expected.json', out);
   });
 
