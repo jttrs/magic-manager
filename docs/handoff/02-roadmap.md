@@ -1,5 +1,7 @@
 # 02 — Roadmap: what's left, in order
 
+> **Superseded for the live list:** [`docs/future-work.md`](../future-work.md) is the maintained list of remaining work. This file is the 2026-11 handoff snapshot (more context per item).
+
 Priorities as the owner set them: **finish Phase 3 (hosting) → Chrome Web Store publish of the
 companion → Phase 5**. Phase 3 code is done; the remaining Phase 3 items need the owner's hardware
 and accounts, so plan engineering work that doesn't block on them in parallel.
