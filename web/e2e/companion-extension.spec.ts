@@ -625,7 +625,7 @@ test('re-pairing with another address silences the old address’s open tab (its
   expect(await probe(b)).toMatchObject({ ok: false, code: 'request.invalid' });
 });
 
-test('Chrome says yes but the companion can’t hold the address: Pair says so (pair.bridge_failed) and leaves no bridge behind', async ({ ext }) => {
+test('Chrome says yes but the companion can’t hold the address: Pair says so (pair.bridge_failed) and leaves it unpaired, with no bridge behind', async ({ ext }) => {
   const opts = await ext.context.newPage();
   await opts.goto(`chrome-extension://${ext.id}/src/options.html`);
   // The settings page is told the prompt was granted, but Chrome never granted it to the extension
@@ -636,7 +636,10 @@ test('Chrome says yes but the companion can’t hold the address: Pair says so (
     Object.defineProperty(chrome, 'permissions', { configurable: true, value: {
       contains: (p: chrome.permissions.Permissions) => real.contains(p),
       request: () => Promise.resolve(true),
-      remove: () => Promise.resolve(true),
+      remove: (p: chrome.permissions.Permissions) => {
+        ((window as unknown as { __removed?: unknown[] }).__removed ??= []).push(p);
+        return Promise.resolve(true);
+      },
     } });
   });
   expect(await ext.worker.evaluate(() => chrome.permissions.contains({ origins: ['https://mm-unheld.example/*'] }))).toBe(false);
@@ -644,8 +647,13 @@ test('Chrome says yes but the companion can’t hold the address: Pair says so (
   await opts.getByRole('button', { name: 'Pair', exact: true }).click();
   await expect(opts.locator('#pair-status')).toHaveAttribute('data-code', 'pair.bridge_failed');
   await expect(opts.locator('#pair-status')).toHaveClass('error');
-  await expect(opts.locator('#pair-status')).toContainText('couldn’t reach the app address');
+  await expect(opts.locator('#pair-status')).toContainText('so it is not paired');
+  // Rolled back: the permission it just got is given back, nothing stays saved, no bridge remains.
+  expect(await opts.evaluate(() => (window as unknown as { __removed?: unknown[] }).__removed)).toContainEqual({ origins: ['https://mm-unheld.example/*'] });
+  expect(await ext.worker.evaluate(() => chrome.storage.local.get('appOrigin'))).toEqual({});
   expect(await ext.worker.evaluate(() => chrome.scripting.getRegisteredContentScripts())).toEqual([]);   // the old bridge is gone too
+  await opts.reload();
+  await expect(opts.locator('#pair-status')).toContainText('Not paired');
   const { page } = await appPage(ext.context);
   await page.getByRole('button', { name: 'Browser companion · set up' }).waitFor();
   expect(await forgedRequest(page)).toBe('no answer');

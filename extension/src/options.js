@@ -93,7 +93,13 @@ async function pairWith(parsed) {
     if (old.pattern && old.pattern !== parsed.pattern) await chrome.permissions.remove({ origins: [old.pattern] }).catch(() => {});
   }
   const bridged = await syncBridge();
-  if (!bridged?.ok) return refuse('pair.bridge_failed');
+  if (!bridged?.ok) {
+    // Roll back to fully unpaired: a pairing that can't hold a bridge can never work.
+    await chrome.storage.local.remove(['appOrigin', 'lastHello']);
+    await chrome.permissions.remove({ origins: [parsed.pattern] }).catch(() => {});
+    await syncBridge();   // no paired address: the worker unregisters any bridge
+    return refuse('pair.bridge_failed');
+  }
   $('origin').value = parsed.origin;
   await refresh();
 }
@@ -128,6 +134,7 @@ $('unpair').addEventListener('click', unpair);
 $('access').addEventListener('click', toggleAccess);
 // The app checking in (or a pairing change) updates the line while this page is open.
 chrome.storage.onChanged.addListener((changes, area) => {
+  if (pairing) return;
   if (area === 'local' && ('lastHello' in changes || 'appOrigin' in changes)) showPairing();
 });
 chrome.storage.local.get('appOrigin').then(({ appOrigin }) => { $('origin').value = appOrigin || ''; });
