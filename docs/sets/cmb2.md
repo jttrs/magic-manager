@@ -12,9 +12,10 @@
 ---
 
 > **Playtest cards.** 121 R&D "playtest" joke/prototype cards (the
-> `playtest` promo type on every print) distributed in Mystery Booster product.
-> Not tournament-legal. Sibling: `cmb1` (Mystery Booster Playtest Cards 2019),
-> its own family.
+> `playtest` promo type on every print), one per pack of the 2021 Mystery
+> Booster Convention Edition (MTGJSON `mb1` booster `convention-2021`, sheet
+> `playtest2`). Not tournament-legal. A reprint of [`cmb1`](cmb1.md) (2019):
+> the same 121 cards at the same CNs, but its own family.
 
 ## 1. Family map
 
@@ -79,6 +80,9 @@ n/a.
 - `set_type: funny` — included in master-list set types, so the cards appear
   in checklists and Collection.
 - Nonfoil only.
+- **Same cards as `cmb1`** at the same CNs; 119 of 121 share art (Soulmates 84
+  and Yawgmoth's Testament 52 differ). The 2019 `cmb1` prints are worth
+  several times more (Slivdrazi Monstrosity ~$55 vs ~$14).
 
 ---
 
@@ -94,7 +98,7 @@ n/a.
 
 | Product | Archetype (→ [`../product-types.md`](../product-types.md)) | Family-specific detail |
 |---|---|---|
-| Mystery Booster (playtest slot) | n/a — inserted card | one playtest card per pack of the Mystery Booster product that carried them |
+| Mystery Booster Convention Edition (2021) | booster product (`mb1`) | one `cmb2` card per pack — MTGJSON `mb1` booster `convention-2021`, sheet `playtest2` |
 
 **Booster types (for `sealed-value` EV):** none — `scripts/sealed_value.py cmb2
 --list-boosters` → "no booster data in MTGJSON".
