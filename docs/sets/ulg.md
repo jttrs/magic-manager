@@ -21,7 +21,7 @@
 | `ulg` | expansion | 143 | 1999-02-15 | parent — booster set 1–143 (no basics) |
 | `pulg` | promo | 1 | 1999-02-15 | prerelease Beast of Burden `122` — foil, `datestamped`, same art as `ulg` 122, ~$8 |
 
-`set:ulg+related` covers all. (`mm set list-related` reports `pulg` as 2 cards; Scryfall search returns 1.)
+`set:ulg+related` covers all. (`mm set list-related` reports `pulg` as 2 cards: the second is the unsynced variation `122†`, see §7.)
 
 ---
 
@@ -66,6 +66,7 @@ None configured yet (proposals pending owner review).
 
 ## 7. Edge cases & gotchas
 
+- **`pulg` has a second prerelease Beast of Burden, `122†`** (foil, same art, ~$33) that isn't local — it's why `mm set list-related` reports 2 cards. Scryfall's search leaves out `variation` prints, so `mm set sync` never fetches them.
 - **First set with foils.** [`usg`](usg.md) (four months earlier) is nonfoil-only.
 - MTGJSON: 4 Theme Decks (Crusher, Phyrexian Assault, Radiant's Revenge, Time Drain) plus an `Enhanced Deck` version of each. No Fat Pack.
 

@@ -76,6 +76,7 @@ None configured yet (proposals pending owner review).
 
 ## 7. Edge cases & gotchas
 
+- **A foil Vizzerdrix `S7a`** (same art as S7) is on Scryfall but not local. Scryfall's search leaves out `variation` prints, so `mm set sync` never fetches them.
 - **Every card is two printings** (nonfoil `N`, foil `N★`), so distinct-printing
   counts are double the card count and any finish-blind "missing" list shows
   both. Match CN **and** finish.

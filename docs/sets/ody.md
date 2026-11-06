@@ -66,6 +66,7 @@ None configured yet (proposals pending owner review).
 
 ## 7. Edge cases & gotchas
 
+- **3 `N†` variation prints are not local**: Cephalid Looter 72† (English, same art), Seafloor Debris 325† (English foil, same art), Zombify 171† (Simplified Chinese). Scryfall's search leaves out `variation` prints, so `mm set sync` never fetches them.
 - **`pody` is non-English** (Arabic): nothing local. The 2001–2002 prerelease promos were each printed in one unusual language (see [`apc`](apc.md), [`pls`](pls.md), [`tor`](tor.md)).
 - **No mythics.** Foil prices dwarf nonfoil (R foil total ~11× nonfoil).
 - MTGJSON: 4 Theme Decks (Liftoff, One Two Punch, Pressure Cooker, Trounce O Matic), Tournament Pack, Fat Pack, MTGO Redemption.

@@ -64,6 +64,7 @@ None configured yet (proposals pending owner review).
 
 ## 7. Edge cases & gotchas
 
+- **5 English `N†` variation prints are not local** (same art): Game of Chaos 232†, Inferno 243†, Ironclaw Curse 244†, Manabarbs 250†, Shivan Dragon 267†. Scryfall's search leaves out `variation` prints, so `mm set sync` never fetches them.
 - **Largest core set of the era** (429 non-basic cards).
 - **No foils.**
 - MTGJSON: Two Player Starter Set (decks `Deck A` / `Deck B`), Starter Deck (a `starter` booster type in `sealed-value`).

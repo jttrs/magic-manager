@@ -66,6 +66,7 @@ None configured yet (proposals pending owner review).
 
 ## 7. Edge cases & gotchas
 
+- **2 English foil `N★` variation prints are not local** (same art): Shadow Lance 14★, Thunderheads 37★. Scryfall's search leaves out `variation` prints, so `mm set sync` never fetches them — they're the 2 missing from Scryfall's 167.
 - **No basic lands**, **no mythics**, no token set.
 - Scryfall's set count is 167; 165 prints are local.
 - MTGJSON: 3 Theme Decks + MTGO Redemption.

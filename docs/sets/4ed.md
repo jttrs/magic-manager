@@ -63,6 +63,7 @@ n/a.
 
 ## 7. Edge cases & gotchas
 
+- **2 German `N†` variation prints** (Drudge Skeletons 107†, El-Hajjâj 134†) exist on Scryfall; not local. Scryfall's search leaves out `variation` prints, so `mm set sync` never fetches them.
 - **`4bb` is non-English** (eight languages, one print per language per card).
 - **No foils.**
 - MTGJSON: Fourth Edition Gift Box (`multiple_decks` / `two_player_starter`), Starter Deck (a `starter` booster type).

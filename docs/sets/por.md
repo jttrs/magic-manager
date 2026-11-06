@@ -66,6 +66,7 @@ None configured yet (proposals pending owner review).
 
 ## 7. Edge cases & gotchas
 
+- **13 English variation prints are not local** (same art; `N†` or `Nd`): Armored Pegasus 6d, Warrior's Charge 38†, Cloud Pirates 46d, Snapping Drake 67d, Storm Crow 69d, Feral Shadow 93d, Hand of Death 96†, Blaze 118†, Raging Goblin 145†, Anaconda 158†, Bull Hippo 160d, Elite Cat Warrior 163†, Monstrous Growth 173†. Scryfall's search leaves out `variation` prints, so `mm set sync` never fetches them.
 - **The Chinese alt-art run is large here** (29 prints, incl. most basics), the biggest of the `schinesealtart` sets characterized so far ([`5ed`](5ed.md), [`6ed`](6ed.md), [`usg`](usg.md), [`7ed`](7ed.md), [`inv`](inv.md)).
 - **No foils.**
 - MTGJSON: Two Player Starter Set (decks `Preconstructed deck 1`/`2`), Gift Box, 2 Demo Decks.

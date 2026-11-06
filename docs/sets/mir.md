@@ -64,6 +64,7 @@ None configured yet (proposals pending owner review).
 
 ## 7. Edge cases & gotchas
 
+- **2 more `N†` variation prints are not local**: Savage Twister 280† (English, same art) and Reality Ripple 87† (Spanish). Scryfall's search leaves out `variation` prints, so `mm set sync` never fetches them.
 - **No foils.**
 - MTGJSON: decks typed `MTGO Theme Deck` (Burning Sky, Jungle Jam, Night Terrors, Ride Like the Wind); Mirage Starter Deck (a `starter` booster type in `sealed-value`).
 

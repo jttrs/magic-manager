@@ -34,7 +34,7 @@ Every print computes `regular`.
 | base | 143 | `tor` 1–143, no basic lands (55 C / 44 U / 44 R) | `regular` | rarity/base sub-selectors — R+M ≈ $143 nonfoil / $1382 foil (Cabal Coffers 139 ~$29 / ~$220 foil, Grim Lavamancer 100 ~$20 / ~$226, Cabal Ritual 51 ~$20 / ~$225, Insidious Dreams 66 ~$17, Nantuko Shade 74 ~$17) |
 | tombstone (flashback) | 10 | `tor` (5 C / 2 U / 3 R) | `regular` | part of base — cosmetic |
 
-**`promo_types`:** `ptor` holds one Russian prerelease Laquatus's Champion `67`. `mm set sync ptor` 404s (it asks for `lang:en`), so the promo is absent locally. (`mm set list-related` reports `ptor` as 3 cards; Scryfall search returns 1.) No fancy-foil sheet →
+**`promo_types`:** `ptor` holds one Russian prerelease Laquatus's Champion `67`. `mm set sync ptor` 404s (it asks for `lang:en`), so the promo is absent locally. (`mm set list-related` reports `ptor` as 3 cards: the other 2 are Russian variation prints, see §7.) No fancy-foil sheet →
 proposed `[dupe_foil] tor = []` to enable `mm query missing-set tor`.
 
 ---
@@ -66,6 +66,7 @@ None configured yet (proposals pending owner review).
 
 ## 7. Edge cases & gotchas
 
+- **`ptor` also has two Russian variation prints** (`67†`, `67†a`) — the other 2 in `mm set list-related`'s count. Scryfall's search leaves out `variation` prints, so `mm set sync` never fetches them, and they're non-English anyway.
 - **`ptor` is non-English** (Russian): nothing local.
 - **No basic lands**, **no mythics**, no token set.
 - MTGJSON: 4 Theme Decks + MTGO Redemption; boosters include `fat-pack`.

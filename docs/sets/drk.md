@@ -20,7 +20,7 @@
 |---|---|---:|---|---|
 | `drk` | expansion | 119 | 1994-08-01 | parent — CN 1–119 |
 
-No children. (`mm set list-related` reports 122; Scryfall's English search returns 119.)
+No children. (`mm set list-related` reports 122: the other 3 are unsynced variation prints, see §7.)
 
 ---
 
@@ -61,6 +61,7 @@ n/a.
 
 ## 7. Edge cases & gotchas
 
+- **3 English `N†` variation prints are not local** (same art): Gaea's Touch 77†, Fountain of Youth 103†, Runesword 107†. Scryfall's search leaves out `variation` prints, so `mm set sync` never fetches them — this is why `mm set list-related` reports 122.
 - **Valuable uncommons** (Maze of Ith, Tormod's Crypt, Elves of Deep Shadow; U ≈ a quarter of the set's value) are invisible to the rare/mythic sub-selectors.
 - **No foils.** MTGJSON lists no decks or sealed products besides boosters.
 
