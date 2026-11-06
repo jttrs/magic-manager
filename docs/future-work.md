@@ -22,7 +22,23 @@ need an explicit OK at every irreversible step.
 
 ## 2. Checks that need the live server
 
-Can only be done after O3 (some after O5).
+Live tests: the owner clicks in their own Chrome, an agent verifies (DB read-only with
+`sqlite3 -readonly`; never press Import / Add during a check unless intended).
+
+### Can run now (laptop live app `:8766`, companion paired)
+
+Done 2026-11-05 on companion 0.5.1→0.5.2: Moxfield collection read, Moxfield binder (list →
+per-binder read), Archidekt deck via the companion, and a read with an unloaded Archidekt tab open
+(the `archidekt.blocked` fix, #230).
+
+- **Private Archidekt deck:** the 2026-11-05 run used a public deck (`private: false`); repeat
+  Add cards → Add decklist or product → a *private* deck URL → Read deck, signed in to Archidekt.
+- **Moxfield binder card count:** the binder-list approval's Cards column is blank —
+  `extension/src/readers/moxfield-collection.js` guesses `totalCards` / `cardCount` /
+  `totalOverall`. One signed-in probe of Moxfield's `/v1/trade-binders` response names the real
+  field; then fix the reader (companion 0.5.3) and pin it with a fixture.
+
+### After the mini (O3, some after O5)
 
 - **Tailscale proxy header:** confirm `tailscale serve` sets `X-Forwarded-For` on the mini, so the
   login rate limiter keys on the real client (`MM_TRUSTED_PROXY=tailscale`; #206 deferred item).
