@@ -102,7 +102,7 @@ export async function readOrderList(params, h) {
   return withOwnTab(store.list, async (tab) => {
     if (!await h.loaded(tab.id, 25_000)) return h.fail('orders.load_timeout');
     const out = await listPages(key, tab, h);
-    if (!out.ok) return h.fail(out.code || 'orders.page_changed', { warnings: out.warnings || [] });
+    if (!out.ok) return h.fail(out.code || 'orders.page_changed', { warnings: out.warnings || [], ...(out.detail ? { detail: out.detail } : {}) });
     return { ok: true, data: {
       store: key, range: out.range, pages: out.pages, warnings: out.warnings,
       orders: out.orders.map((o) => ({ order_id: o.order_id, ordered_at: o.ordered_at, total: o.total ?? null, lines: o.lines ? o.lines.length : null })),
