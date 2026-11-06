@@ -15,7 +15,7 @@ import { STORES } from './stores.js';
 import {
   APPROVAL_TTL_MS, ARCHIDEKT_DECK, ARCHIDEKT_ORIGINS, BRIDGE_ID, CART_STORES, KINDS, MANAPOOL_ORIGINS,
   MOXFIELD_BINDER, MOXFIELD_COLLECTION, MOXFIELD_DECK, MOXFIELD_ORIGINS, MOXFIELD_TABS, SESSION_BUDGET_BYTES, STORE_ORIGINS, bridgeScript,
-  jsonBytes, maxPayload, packData, parseAppOrigin, storeOf, summarize, unpackData,
+  jsonBytes, maxPayload, packData, parseAppOrigin, pickTab, storeOf, summarize, unpackData,
 } from './protocol.js';
 import { readOrderList, readOrders, ORDER_FEATURES } from './orders.js';
 import { planWatched, readWatched } from './watched.js';
@@ -31,6 +31,12 @@ async function fail(code, extra = {}) {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 /** A short, plain detail for a failure (the app shows it under the message). */
 const shortDetail = (e) => String(e?.message || e || '').slice(0, 120);
+/** A page the companion couldn't script: say why in the worker console, and carry the reason as the
+ *  failure's detail (shown under the message in the app — never sent to analytics, which gets the code only). */
+function notScriptable(code, e, extra = {}) {
+  console.warn(`[companion] ${code}:`, e);
+  return fail(code, { ...extra, detail: shortDetail(e) });
+}
 const megabytes = (n) => `${(n / 1e6).toFixed(1)} MB`;
 
 /**
@@ -312,11 +318,14 @@ async function inject(tabId, file, func, args = []) {
   return res?.result;
 }
 
+/** A tab for `url`: your open tab showing it (or another on that site — see pickTab), else one it
+ *  opens in the background and closes afterwards. `pending` (a tab it opened, or yours still
+ *  loading) tells the reader to wait for load first. */
 async function withTab(url, matches, fn) {
-  const existing = (await chrome.tabs.query({ url: matches })).find((t) => !t.incognito && !t.discarded);
+  const existing = pickTab(await chrome.tabs.query({ url: matches }), url);
   const tab = existing || await chrome.tabs.create({ url, active: false });
   try {
-    return await fn(tab, !existing);
+    return await fn(tab, !existing || existing.status !== 'complete');
   } finally {
     if (!existing) chrome.tabs.remove(tab.id).catch(() => {});
   }
@@ -328,16 +337,16 @@ async function readCart(params) {
   if (!Object.hasOwn(CART_STORES, key)) return fail('request.invalid', { detail: 'unknown store' });
   const store = CART_STORES[key];
   if (!await chrome.permissions.contains({ origins: store.origins })) return fail(store.permission);
-  return withTab(store.url, store.matches, async (tab, opened) => {
-    if (opened && !await loaded(tab.id, 20_000)) return fail('cart.load_timeout', { store: key });
+  return withTab(store.url, store.matches, async (tab, pending) => {
+    if (pending && !await loaded(tab.id, 20_000)) return fail('cart.load_timeout', { store: key });
     // The cart renders after load: give rows up to 8 s to appear.
     const end = Date.now() + 8_000;
     let out;
     for (;;) {
       try {
         out = await inject(tab.id, store.reader, (fn) => globalThis[fn](document), [store.fn]);
-      } catch {
-        return fail('cart.not_scriptable', { store: key });
+      } catch (e) {
+        return notScriptable('cart.not_scriptable', e, { store: key });
       }
       if (out?.ok || Date.now() > end) break;
       await sleep(500);
@@ -383,13 +392,13 @@ async function readMoxfield(params) {
   if (!m) return fail('moxfield.bad_url');
   if (!await chrome.permissions.contains({ origins: MOXFIELD_ORIGINS })) return fail('permission.moxfield_off');
   const id = m[1];
-  return withTab(`https://moxfield.com/decks/${id}`, MOXFIELD_TABS, async (tab, opened) => {
-    if (opened && !await loaded(tab.id, 20_000)) return fail('moxfield.load_timeout');
+  return withTab(`https://moxfield.com/decks/${id}`, MOXFIELD_TABS, async (tab, pending) => {
+    if (pending && !await loaded(tab.id, 20_000)) return fail('moxfield.load_timeout');
     let out;
     try {
       out = await inject(tab.id, ['src/readers/moxfield-api.js', 'src/readers/moxfield-deck.js'], (deckId) => readMoxfieldDeck(deckId), [id]); // eslint-disable-line no-undef
-    } catch {
-      return fail('moxfield.blocked');
+    } catch (e) {
+      return notScriptable('moxfield.blocked', e);
     }
     if (!out?.ok) return fail(out?.code || 'moxfield.changed', out?.status ? { status: out.status } : {});
     return { ok: true, data: { url: `https://moxfield.com/decks/${id}`, deck: out.deck } };
@@ -413,13 +422,13 @@ async function readMoxfieldCollection(params) {
     id = params.binder;
   } else if (what !== 'collection') return fail('request.invalid');
   if (!await chrome.permissions.contains({ origins: MOXFIELD_ORIGINS })) return fail('permission.moxfield_off');
-  return withTab('https://moxfield.com/', MOXFIELD_TABS, async (tab, opened) => {
-    if (opened && !await loaded(tab.id, 20_000)) return fail('moxfield.load_timeout');
+  return withTab('https://moxfield.com/', MOXFIELD_TABS, async (tab, pending) => {
+    if (pending && !await loaded(tab.id, 20_000)) return fail('moxfield.load_timeout');
     let out;
     try {
       out = await inject(tab.id, ['src/readers/moxfield-api.js', 'src/readers/moxfield-collection.js'], (o) => readMoxfieldCollection(o), [{ what, id }]); // eslint-disable-line no-undef
-    } catch {
-      return fail('moxfield.blocked');
+    } catch (e) {
+      return notScriptable('moxfield.blocked', e);
     }
     if (!out?.ok) {
       const code = !out?.code || out.code === 'moxfield.changed' ? 'moxfield.collection_changed' : out.code;
@@ -436,13 +445,13 @@ async function readArchidekt(params) {
   if (!m) return fail('archidekt.bad_url');
   if (!await chrome.permissions.contains({ origins: ARCHIDEKT_ORIGINS })) return fail('permission.archidekt_off');
   const id = m[1];
-  return withTab(`https://archidekt.com/decks/${id}`, ARCHIDEKT_ORIGINS, async (tab, opened) => {
-    if (opened && !await loaded(tab.id, 20_000)) return fail('archidekt.load_timeout');
+  return withTab(`https://archidekt.com/decks/${id}`, ARCHIDEKT_ORIGINS, async (tab, pending) => {
+    if (pending && !await loaded(tab.id, 20_000)) return fail('archidekt.load_timeout');
     let out;
     try {
       out = await inject(tab.id, 'src/readers/archidekt-deck.js', (deckId) => readArchidektDeck(deckId), [id]); // eslint-disable-line no-undef
-    } catch {
-      return fail('archidekt.blocked');
+    } catch (e) {
+      return notScriptable('archidekt.blocked', e);
     }
     if (!out?.ok) return fail(out?.code || 'archidekt.changed', out?.status ? { status: out.status } : {});
     return { ok: true, data: { url: `https://archidekt.com/decks/${id}`, deck: out.deck } };
