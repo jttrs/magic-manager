@@ -33,12 +33,12 @@ Every print computes `regular`. No `frame_effects`, no `promo_types`.
 | Class | Count | CN band | Computed treatment | Preferred-filter disposition |
 |---|---:|---|---|---|
 | deck cards (nonfoil-only) | 45 | `dkm` 1–41 minus 7/29, with 6 `a`/`b` pairs | `regular` | rarity sub-selectors — rares ≈ $28 (Sulfurous Springs 40 ~$9, Underground River 41 ~$7, Jokulhaups 15 ~$6, Karplusan Forest 39 ~$5) |
-| foil-only rares | 2 | `dkm` 7 Necropotence (~$179), 29 Lhurgoyf (~$3) | `regular` | rare-regular — **Necropotence is 85% of the set's value** |
+| foil-only rares | 2 | `dkm` 7 Necropotence (~$179), 29 Lhurgoyf (~$3) | `regular` | rare-regular — **Necropotence is ~70% of the set's value (~$252)** |
 | foil `★` doubles | 2 | `dkm` 14★ Incinerate (~$9), 36★ Icy Manipulator (~$1.33) | `regular` | **same art** as nonfoil 14 / 36 (finish split, like [`9ed`](9ed.md)) |
 | `a`/`b` art pairs | 12 | `dkm` 6, 8, 13, 21, 31, 37 | `regular` | **different art** per letter — distinct printings |
 | basics | 9 | `dkm` 42–50 (Swamp, Mountain, Forest ×3) | `regular` | basics |
 
-**New art (local check):** 30 prints have art seen nowhere else locally.
+**New art (local check):** none — every print shares art with another local set.
 
 **`promo_types` dupe-foil / stamped signals:** none. Proposed
 `[dupe_foil] dkm = []` to enable `mm query missing-set dkm`.

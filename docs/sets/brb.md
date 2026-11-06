@@ -51,7 +51,7 @@ None configured yet (proposals pending owner review).
 | Tier | Prints | Recommendation |
 |---|---:|---|
 | `[dupe_foil] brb = []` | 0 | **apply** — empty, enables missing-set |
-| whole family | 136 | **owner's call** — a reprint box (35 prints whose art no other local set has); kept (default) — pending owner review |
+| whole family | 136 | **owner's call** — a reprint box (every print shares art with another local set); kept (default) — pending owner review |
 
 ---
 

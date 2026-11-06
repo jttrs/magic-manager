@@ -12,7 +12,7 @@
 
 ---
 
-> **Two-player beginner box of white-bordered Fourth Edition reprints**, nonfoil only. Standalone root. Only 2 prints have art no other local set has.
+> **Two-player beginner box of white-bordered Fourth Edition reprints**, nonfoil only. Standalone root. Every print shares art with another local set.
 
 ## 1. Family map
 
@@ -51,7 +51,7 @@ None configured yet (proposals pending owner review).
 | Tier | Prints | Recommendation |
 |---|---:|---|
 | `[dupe_foil] itp = []` | 0 | **apply** — empty, enables missing-set |
-| whole family | 67 | **owner's call** — a reprint starter box (new art only on Phantom Monster 11 and Island 56); kept (default) — pending owner review |
+| whole family | 67 | **owner's call** — a reprint starter box (no art unique to this box); kept (default) — pending owner review |
 
 ---
 

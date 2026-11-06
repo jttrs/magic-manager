@@ -51,7 +51,7 @@ None configured yet (proposals pending owner review).
 | Tier | Prints | Recommendation |
 |---|---:|---|
 | `[dupe_foil] ath = []` | 0 | **apply** — empty, enables missing-set |
-| whole family | 85 | **owner's call** — a reprint box (31 prints whose art no other local set has); kept (default) — pending owner review |
+| whole family | 85 | **owner's call** — a reprint box (only Forest 84 has art no other local set has); kept (default) — pending owner review |
 
 ---
 

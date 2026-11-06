@@ -64,7 +64,7 @@ n/a.
 ## 7. Edge cases & gotchas
 
 - **Prices are unreliable**: 276 of 306 prints have no price, and the rest are thin-market listings. Value reports for this set mean little.
-- **Same card list as [`3ed`](3ed.md)** (Revised) — 296 names, 306 prints; only 42 prints have art no other local set has.
+- **Same card list as [`3ed`](3ed.md)** (Revised) — 296 names, 306 prints; every print shares art with another local set.
 - MTGJSON lists no decks or sealed products; `sealed-value` shows a `default` booster (EV ~$613, from those sparse prices).
 
 ---

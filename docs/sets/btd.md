@@ -51,7 +51,7 @@ None configured yet (proposals pending owner review).
 | Tier | Prints | Recommendation |
 |---|---:|---|
 | `[dupe_foil] btd = []` | 0 | **apply** — empty, enables missing-set |
-| whole family | 90 | **owner's call** — a reprint box (30 prints whose art no other local set has); kept (default) — pending owner review |
+| whole family | 90 | **owner's call** — a reprint box (only Clockwork Beast 70 has art no other local set has); kept (default) — pending owner review |
 
 ---
 

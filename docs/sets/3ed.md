@@ -65,7 +65,7 @@ n/a.
 ## 7. Edge cases & gotchas
 
 - **`fbb` is non-English** (French / German / Italian).
-- **No foils.** Only 1 print has art no other local set has.
+- **No foils.** Every print shares art with another local set.
 - MTGJSON: Revised Edition Gift Box and Starter Deck (a `starter` booster type in `sealed-value`).
 
 ---
