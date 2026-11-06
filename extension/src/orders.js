@@ -51,8 +51,9 @@ async function poll(tab, store, fn, h, ms = 10_000) {
   for (;;) {
     try {
       out = await h.inject(tab.id, store.reader, fn);
-    } catch {
-      return { ok: false, code: 'orders.not_scriptable' };
+    } catch (e) {
+      console.warn('[companion] orders.not_scriptable:', e);
+      return { ok: false, code: 'orders.not_scriptable', detail: String(e?.message || e || '').slice(0, 120) };
     }
     if (out?.ok || out?.code === 'orders.sign_in' || Date.now() > end) return out || { ok: false, code: 'orders.page_changed' };
     await sleep(500);

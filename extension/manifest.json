@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "magic-manager companion",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Reads your card carts, store tabs and decks in your browser and, after you approve, hands the card lines to your magic-manager app.",
   "homepage_url": "https://github.com/jttrs/magic-manager/tree/main/extension",
   "minimum_chrome_version": "116",
