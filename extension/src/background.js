@@ -318,13 +318,14 @@ async function inject(tabId, file, func, args = []) {
   return res?.result;
 }
 
-/** A tab for `url`: your loaded tab showing it (or another loaded one on that site), else one it
- *  opens in the background and closes afterwards. `opened` tells the reader to wait for load. */
+/** A tab for `url`: your open tab showing it (or another on that site — see pickTab), else one it
+ *  opens in the background and closes afterwards. `pending` (a tab it opened, or yours still
+ *  loading) tells the reader to wait for load first. */
 async function withTab(url, matches, fn) {
   const existing = pickTab(await chrome.tabs.query({ url: matches }), url);
   const tab = existing || await chrome.tabs.create({ url, active: false });
   try {
-    return await fn(tab, !existing);
+    return await fn(tab, !existing || existing.status !== 'complete');
   } finally {
     if (!existing) chrome.tabs.remove(tab.id).catch(() => {});
   }
@@ -336,8 +337,8 @@ async function readCart(params) {
   if (!Object.hasOwn(CART_STORES, key)) return fail('request.invalid', { detail: 'unknown store' });
   const store = CART_STORES[key];
   if (!await chrome.permissions.contains({ origins: store.origins })) return fail(store.permission);
-  return withTab(store.url, store.matches, async (tab, opened) => {
-    if (opened && !await loaded(tab.id, 20_000)) return fail('cart.load_timeout', { store: key });
+  return withTab(store.url, store.matches, async (tab, pending) => {
+    if (pending && !await loaded(tab.id, 20_000)) return fail('cart.load_timeout', { store: key });
     // The cart renders after load: give rows up to 8 s to appear.
     const end = Date.now() + 8_000;
     let out;
@@ -391,8 +392,8 @@ async function readMoxfield(params) {
   if (!m) return fail('moxfield.bad_url');
   if (!await chrome.permissions.contains({ origins: MOXFIELD_ORIGINS })) return fail('permission.moxfield_off');
   const id = m[1];
-  return withTab(`https://moxfield.com/decks/${id}`, MOXFIELD_TABS, async (tab, opened) => {
-    if (opened && !await loaded(tab.id, 20_000)) return fail('moxfield.load_timeout');
+  return withTab(`https://moxfield.com/decks/${id}`, MOXFIELD_TABS, async (tab, pending) => {
+    if (pending && !await loaded(tab.id, 20_000)) return fail('moxfield.load_timeout');
     let out;
     try {
       out = await inject(tab.id, ['src/readers/moxfield-api.js', 'src/readers/moxfield-deck.js'], (deckId) => readMoxfieldDeck(deckId), [id]); // eslint-disable-line no-undef
@@ -421,8 +422,8 @@ async function readMoxfieldCollection(params) {
     id = params.binder;
   } else if (what !== 'collection') return fail('request.invalid');
   if (!await chrome.permissions.contains({ origins: MOXFIELD_ORIGINS })) return fail('permission.moxfield_off');
-  return withTab('https://moxfield.com/', MOXFIELD_TABS, async (tab, opened) => {
-    if (opened && !await loaded(tab.id, 20_000)) return fail('moxfield.load_timeout');
+  return withTab('https://moxfield.com/', MOXFIELD_TABS, async (tab, pending) => {
+    if (pending && !await loaded(tab.id, 20_000)) return fail('moxfield.load_timeout');
     let out;
     try {
       out = await inject(tab.id, ['src/readers/moxfield-api.js', 'src/readers/moxfield-collection.js'], (o) => readMoxfieldCollection(o), [{ what, id }]); // eslint-disable-line no-undef
@@ -444,8 +445,8 @@ async function readArchidekt(params) {
   if (!m) return fail('archidekt.bad_url');
   if (!await chrome.permissions.contains({ origins: ARCHIDEKT_ORIGINS })) return fail('permission.archidekt_off');
   const id = m[1];
-  return withTab(`https://archidekt.com/decks/${id}`, ARCHIDEKT_ORIGINS, async (tab, opened) => {
-    if (opened && !await loaded(tab.id, 20_000)) return fail('archidekt.load_timeout');
+  return withTab(`https://archidekt.com/decks/${id}`, ARCHIDEKT_ORIGINS, async (tab, pending) => {
+    if (pending && !await loaded(tab.id, 20_000)) return fail('archidekt.load_timeout');
     let out;
     try {
       out = await inject(tab.id, 'src/readers/archidekt-deck.js', (deckId) => readArchidektDeck(deckId), [id]); // eslint-disable-line no-undef

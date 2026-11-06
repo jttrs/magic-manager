@@ -27,16 +27,22 @@ describe('companion pickTab', () => {
     expect(pickTab(tabs, DECK)?.id).toBe(2);
   });
 
-  it('opens its own tab when every match is unloaded, loading, discarded or incognito', async () => {
+  it('opens its own tab when every match is unloaded, discarded or incognito', async () => {
     const { pickTab } = await load();
     const tabs = [
       { id: 1, url: DECK, status: 'unloaded' },
-      { id: 2, url: DECK, status: 'loading' },
       { id: 3, url: DECK, status: 'complete', discarded: true },
       { id: 4, url: DECK, status: 'complete', incognito: true },
     ];
     expect(pickTab(tabs, DECK)).toBeNull();
     expect(pickTab([], DECK)).toBeNull();
+  });
+
+  it('reuses a tab still loading (the reader waits for it), but a loaded one wins', async () => {
+    const { pickTab } = await load();
+    const loading = { id: 1, url: DECK, status: 'loading' };
+    expect(pickTab([{ id: 0, url: DECK, status: 'unloaded' }, loading], DECK)?.id).toBe(1);
+    expect(pickTab([loading, { id: 2, url: ARTICLE, status: 'complete' }], DECK)?.id).toBe(2);
   });
 
   it('prefers the target page, else any loaded tab on the site', async () => {

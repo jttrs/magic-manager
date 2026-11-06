@@ -79,14 +79,16 @@ export function samePage(tabUrl, target) {
 }
 
 /**
- * The open tab a reader can use for `target`, or null (then it opens its own). Only a tab that
- * has finished loading: a session-restored tab Chrome hasn't loaded yet (`status: 'unloaded'`,
- * which is not `discarded`) or one still loading can't be scripted. Among those, the one
- * showing the target page itself wins; else any of them (the readers fetch by id).
+ * The open tab a reader can use for `target`, or null (then it opens its own). Never a
+ * session-restored tab Chrome hasn't loaded (`status: 'unloaded'`, which is not `discarded`) — it
+ * can't be scripted — nor a discarded or incognito one. A loaded tab beats one still loading (the
+ * reader waits for that one, as for a tab it opens); within each, the one showing the target page
+ * itself wins, else any on the site (the readers fetch by id).
  */
 export function pickTab(tabs, target) {
-  const usable = (tabs || []).filter((t) => t && t.status === 'complete' && !t.incognito && !t.discarded);
-  return usable.find((t) => samePage(t.url, target)) || usable[0] || null;
+  const usable = (tabs || []).filter((t) => t && (t.status === 'complete' || t.status === 'loading') && !t.incognito && !t.discarded);
+  const rank = (t) => (t.status === 'complete' ? 0 : 2) + (samePage(t.url, target) ? 0 : 1);
+  return usable.reduce((best, t) => (best && rank(best) <= rank(t) ? best : t), null);
 }
 
 /** `1 binder`, `2 binders`. */
