@@ -15,8 +15,9 @@ from ..auth import admin
 
 class FlagStateOut(BaseModel):
     name: str
+    title: str = Field(description="Short display name (config/features.toml).")
     about: str
-    default: bool = Field(description="The server's value (config files + MM_FEATURES).")
+    default: bool = Field(description="The value a per-user override falls back to (config files + the 'everyone' value + MM_FEATURES).")
     override: bool | None = Field(description="This user's override; null = the default.")
     effective: bool
     owner_paths: list[str] = Field(description="Owner-machine paths in this flag's surface: admins only, whatever the flag says.")

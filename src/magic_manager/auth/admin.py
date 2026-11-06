@@ -24,6 +24,7 @@ class SelfLockout(ValueError):
 @dataclass(frozen=True)
 class FlagState:
     name: str
+    title: str
     about: str
     default: bool                 # the process layers (files + MM_FEATURES)
     override: bool | None         # this user's admin-set value; None = default
@@ -56,9 +57,9 @@ def _paths_by_feature() -> dict[str | None, list[str]]:
 
 def flag_states(overrides: dict[str, bool], *, base: dict[str, bool] | None = None) -> list[FlagState]:
     base = features.base_flags() if base is None else base
-    about = features.about()
+    defs = features.declared()
     paths = _paths_by_feature()
-    return [FlagState(name, about.get(name, ""), default, overrides.get(name),
+    return [FlagState(name, defs[name].title, defs[name].about, default, overrides.get(name),
                       overrides.get(name, default), paths.get(name, []))
             for name, default in base.items()]
 

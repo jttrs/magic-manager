@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { AdminUserOut, FlagStateOut, OwnerPathOut } from './api';
-import { adminSearch, choiceValue, defaultChoiceLabel, filterUsers, flagChoice, flagTitle, ownerOnlyNote, providersLabel, seenLabel, showCounts, statusLabel, unflaggedPaths } from './admin';
+import { adminSearch, choiceValue, defaultChoiceLabel, filterUsers, flagChoice, ownerOnlyNote, providersLabel, seenLabel, showCounts, statusLabel, unflaggedPaths } from './admin';
 
-const flag = (over: Partial<FlagStateOut> = {}): FlagStateOut => ({ name: 'deals', about: '', default: false, override: null, effective: false, owner_paths: [], ...over });
+const flag = (over: Partial<FlagStateOut> = {}): FlagStateOut => ({ name: 'deals', title: 'Deals', about: '', default: false, override: null, effective: false, owner_paths: [], ...over });
 const user = (over: Partial<AdminUserOut> = {}): AdminUserOut => ({
   id: 'aaaaaaaaaaaaaaaa', display_name: 'Ana', email: 'ana@example.com', providers: ['discord'], is_admin: false,
   created_at: '2026-10-01T00:00:00+00:00', last_seen_at: null, disabled_at: null, sessions: 0, flags: [], ...over,
@@ -46,8 +46,6 @@ describe('admin view-model', () => {
     expect(choiceValue('on')).toBe(true);
     expect(choiceValue('default')).toBeNull();
     expect(defaultChoiceLabel(flag({ default: true }))).toBe('Default · on');
-    expect(flagTitle('cart_check')).toBe('Cart check');
-    expect(flagTitle('new_thing')).toBe('New thing');
   });
 
   it('labels owner-only parts of a flag', () => {

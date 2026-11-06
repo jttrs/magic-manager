@@ -10,12 +10,12 @@ const PATHS = [
   { key: 'analytics.dashboard', feature: 'analytics', title: 'The Analytics dashboard (everyone’s activity)' },
   { key: 'decks.moxfield_server', feature: null, title: 'Read Moxfield decks with this server’s browser and Moxfield login' },
 ];
-const flag = (name: string, about: string, owner_paths: string[] = [], override: boolean | null = null) =>
-  ({ name, about, default: false, override, effective: override ?? false, owner_paths });
+const flag = (name: string, title: string, about: string, owner_paths: string[] = [], override: boolean | null = null) =>
+  ({ name, title, about, default: false, override, effective: override ?? false, owner_paths });
 const flags = (deals: boolean | null = null) => [
-  flag('cart_check', 'Check a store cart against the collection.', ['manapool.server_login']),
-  flag('deals', 'Deals: watch store prices and read store tabs.', ['deals.mac_tabs'], deals),
-  flag('companion', 'The browser companion.'),
+  flag('cart_check', 'Cart check', 'Check a store cart against the collection.', ['manapool.server_login']),
+  flag('deals', 'Deals', 'Deals: watch store prices and read store tabs.', ['deals.mac_tabs'], deals),
+  flag('companion', 'Browser companion', 'The browser companion.'),
 ];
 const user = (over: Record<string, unknown>) => ({
   providers: ['discord'], created_at: '2026-10-01T00:00:00+00:00', last_seen_at: '2026-11-01T10:00:00+00:00',

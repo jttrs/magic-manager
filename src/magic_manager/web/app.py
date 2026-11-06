@@ -30,7 +30,7 @@ from ..api import purchases as purchases_api
 from ..api import collection_import as collection_import_api, companion as companion_api, deals as deals_api, undo as undo_api, cart as cart_api, cards as cards_api, collection as collection_api, explore as explore_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api, market as market_api, trueup as trueup_api, history as history_api, combos as combos_api, card_earmarks as card_earmarks_api, art as art_api, jumpstart as jumpstart_api, surf as surf_api
 from ..api.ids import DeckFileName, SetCode
 from .runtime import TERMINAL, JobManager, JobsBusy, JobsTooMany
-from . import account_routes, analytics_routes, auth_routes, scraper_routes, security, sitecheck, telemetry
+from . import account_routes, analytics_routes, auth_routes, flag_routes, scraper_routes, security, sitecheck, telemetry
 from ..analytics import store as analytics_store
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -165,6 +165,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     app.include_router(analytics_routes.router)
     app.include_router(account_routes.router)
     app.include_router(scraper_routes.router)
+    app.include_router(flag_routes.router)
 
     # ---------- jobs chassis ----------
 
