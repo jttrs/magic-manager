@@ -12,7 +12,7 @@
 
 ---
 
-> **Core set, white border, no foils, no mythics.** 20 basics. No promo or token set. One Simplified-Chinese alt-art print (`123s`) is on Scryfall but not local.**
+> **Core set, white border, no foils, no mythics.** 20 basics. No promo or token set. One Simplified-Chinese alt-art print (`123s`) is on Scryfall but not local.
 
 ## 1. Family map
 

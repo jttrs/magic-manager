@@ -12,7 +12,7 @@
 
 ---
 
-> **First Un-set, silver border, nonfoil only.** Five full-art basics, a two-card B.F.M., and a token set.**
+> **First Un-set, silver border, nonfoil only.** Five full-art basics, a two-card B.F.M., and a token set.
 
 ## 1. Family map
 

@@ -12,7 +12,7 @@
 
 ---
 
-> **Five-year anniversary box (1998): two 40-card reprint decks** (Dark Alliance, Defenders of the Cause), nonfoil only. Standalone root. Several cards come in two arts.**
+> **Five-year anniversary box (1998): two 40-card reprint decks** (Dark Alliance, Defenders of the Cause), nonfoil only. Standalone root. Several cards come in two arts.
 
 ## 1. Family map
 

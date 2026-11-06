@@ -12,7 +12,7 @@
 
 ---
 
-> **Four-player multiplayer box (1999): four 40-card reprint decks**, nonfoil only. Standalone root, no tokens, no promos. 36 basics.**
+> **Four-player multiplayer box (1999): four 40-card reprint decks**, nonfoil only. Standalone root, no tokens, no promos. 36 basics.
 
 ## 1. Family map
 

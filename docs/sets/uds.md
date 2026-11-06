@@ -12,7 +12,7 @@
 
 ---
 
-> **Third Urza-block set, old border, no mythics, no basics.** The most valuable rare slot of its era (Replenish, Metalworker, Academy Rector). Its English prerelease foil (`puds` False Prophet 6) reuses the booster card's CN and art.**
+> **Third Urza-block set, old border, no mythics, no basics.** The most valuable rare slot of its era (Replenish, Metalworker, Academy Rector). Its English prerelease foil (`puds` False Prophet 6) reuses the booster card's CN and art.
 
 ## 1. Family map
 

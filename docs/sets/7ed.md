@@ -12,7 +12,7 @@
 
 ---
 
-> **First core set with foils, and the first fully finish-split set:** every card is a nonfoil print at `N` plus a foil print at `N★` (700 local rows = 350 cards × 2). 349 of the 350 pairs share art; **Relentless Assault 214★ has its own art**. No mythics, no promo or token sets. Eight Simplified-Chinese alt-art prints (`Ns` / `N★s`) are on Scryfall but not local.**
+> **First core set with foils, and the first fully finish-split set:** every card is a nonfoil print at `N` plus a foil print at `N★` (700 local rows = 350 cards × 2). 349 of the 350 pairs share art; **Relentless Assault 214★ has its own art**. No mythics, no promo or token sets. Eight Simplified-Chinese alt-art prints (`Ns` / `N★s`) are on Scryfall but not local.
 
 ## 1. Family map
 

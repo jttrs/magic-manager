@@ -12,7 +12,7 @@
 
 ---
 
-> **First Masques-block set, old border, no mythics.** 20 basics. Its English prerelease foil (`pmmq` Overtaker 89) reuses the booster card's CN and art.**
+> **First Masques-block set, old border, no mythics.** 20 basics. Its English prerelease foil (`pmmq` Overtaker 89) reuses the booster card's CN and art.
 
 ## 1. Family map
 

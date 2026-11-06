@@ -12,7 +12,7 @@
 
 ---
 
-> **Two 45-card reprint decks (Aerodoom, Ground Pounder)** in a box with two foil-only uncommons. Standalone root, no tokens, no promos.**
+> **Two 45-card reprint decks (Aerodoom, Ground Pounder)** in a box with two foil-only uncommons. Standalone root, no tokens, no promos.
 
 ## 1. Family map
 

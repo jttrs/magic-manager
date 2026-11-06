@@ -12,7 +12,7 @@
 
 ---
 
-> **Third Masques-block set, old border, no mythics, no basics.** Its English prerelease foil (`ppcy` Avatar of Hope 3) reuses the booster card's CN and art. Rhystic Study is a **common** here (~$66).**
+> **Third Masques-block set, old border, no mythics, no basics.** Its English prerelease foil (`ppcy` Avatar of Hope 3) reuses the booster card's CN and art. Rhystic Study is a **common** here (~$66).
 
 ## 1. Family map
 

@@ -12,7 +12,7 @@
 
 ---
 
-> **Second Masques-block set, old border, no mythics, no basics.** Its English prerelease foil (`pnem` Rathi Assassin 67) reuses the booster card's CN and art.**
+> **Second Masques-block set, old border, no mythics, no basics.** Its English prerelease foil (`pnem` Rathi Assassin 67) reuses the booster card's CN and art.
 
 ## 1. Family map
 

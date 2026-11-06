@@ -12,7 +12,7 @@
 
 ---
 
-> **First Odyssey-block set, old border, no mythics (C/U/R).** Flashback cards carry `tombstone`. 20 basics. Its only promo is an **Arabic** prerelease foil, which can't be synced.**
+> **First Odyssey-block set, old border, no mythics (C/U/R).** Flashback cards carry `tombstone`. 20 basics. Its only promo is an **Arabic** prerelease foil, which can't be synced.
 
 ## 1. Family map
 

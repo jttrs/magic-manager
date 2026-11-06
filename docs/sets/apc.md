@@ -12,7 +12,7 @@
 
 ---
 
-> **Third Invasion-block set, old border, no mythics, no basics.** Home of the five enemy painlands (CN 139–143). Its only promo is a **Sanskrit** prerelease foil, which can't be synced.**
+> **Third Invasion-block set, old border, no mythics, no basics.** Home of the five enemy painlands (CN 139–143). Its only promo is a **Sanskrit** prerelease foil, which can't be synced.
 
 ## 1. Family map
 

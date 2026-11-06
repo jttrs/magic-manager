@@ -12,7 +12,7 @@
 
 ---
 
-> **Asia-market beginner set themed on the Romance of the Three Kingdoms**, nonfoil only, short print run — the most expensive per-card set in this run (rares ≈ $7451). 15 basics. Its prerelease Lu Bu exists as **two datestamped prints with the same art** (`pptk` 115a, 115b).**
+> **Asia-market beginner set themed on the Romance of the Three Kingdoms**, nonfoil only, short print run — the most expensive per-card set in this run (rares ≈ $7451). 15 basics. Its prerelease Lu Bu exists as **two datestamped prints with the same art** (`pptk` 115a, 115b).
 
 ## 1. Family map
 

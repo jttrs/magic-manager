@@ -12,7 +12,7 @@
 
 ---
 
-> **Second Urza-block set, old border, no basics, no mythics — the first expansion printed in foil.** Its English prerelease foil (`pulg` Beast of Burden 122) reuses the booster card's CN and art.**
+> **Second Urza-block set, old border, no basics, no mythics — the first expansion printed in foil.** Its English prerelease foil (`pulg` Beast of Burden 122) reuses the booster card's CN and art.
 
 ## 1. Family map
 

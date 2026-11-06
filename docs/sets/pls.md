@@ -12,7 +12,7 @@
 
 ---
 
-> **Second Invasion-block set, old border, no mythics, no basics.** Three rares have a **foil-only alternate-art** print at `N★` (Ertai, Tahngarth, Skyship Weatherlight). Its only promo is an **Ancient Greek** prerelease foil, which can't be synced.**
+> **Second Invasion-block set, old border, no mythics, no basics.** Three rares have a **foil-only alternate-art** print at `N★` (Ertai, Tahngarth, Skyship Weatherlight). Its only promo is an **Ancient Greek** prerelease foil, which can't be synced.
 
 ## 1. Family map
 

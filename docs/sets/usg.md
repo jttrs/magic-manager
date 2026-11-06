@@ -12,7 +12,7 @@
 
 ---
 
-> **First Urza-block set, old border, no mythics, nonfoil only.** 20 basics. Its English prerelease Lightning Dragon (`pusg` 202) is the **only foil Urza's Saga card**, same art and CN as the booster print. Seven Simplified-Chinese alt-art prints (`Ns`) are on Scryfall but not local.**
+> **First Urza-block set, old border, no mythics, nonfoil only.** 20 basics. Its English prerelease Lightning Dragon (`pusg` 202) is the **only foil Urza's Saga card**, same art and CN as the booster print. Seven Simplified-Chinese alt-art prints (`Ns`) are on Scryfall but not local.
 
 ## 1. Family map
 

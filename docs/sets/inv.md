@@ -12,7 +12,7 @@
 
 ---
 
-> **First Invasion-block set (multicolour), old border, no mythics.** 20 basics. Two commons have an extra **foil-only `N★` print tagged `schinesealtart`** (the art used for Chinese printings). Its only promo is a **Latin** prerelease foil, which can't be synced.**
+> **First Invasion-block set (multicolour), old border, no mythics.** 20 basics. Two commons have an extra **foil-only `N★` print tagged `schinesealtart`** (the art used for Chinese printings). Its only promo is a **Latin** prerelease foil, which can't be synced.
 
 ## 1. Family map
 
