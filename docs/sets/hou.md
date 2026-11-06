@@ -100,9 +100,8 @@ None configured yet (proposals pending owner review).
 
 ## 7. Edge cases & gotchas
 
-- **Ramunap Excavator 129 carries `datestamped` but has its own art.** The
-  datestamped-with-sibling drop in `missing.py` may treat it as a dupe of the
-  base card.
+- **Ramunap Excavator 129 carries `datestamped` but has its own art.** `missing.drop_datestamped_with_sibling`
+  drops it from missing-set (it matches name + treatment, not art).
 - **Invocations are filed under `akh`**: `mp2` lists both sets' Invocations,
   so a "missing from HOU" run won't show The Scarab God's Invocation.
 - Only 4 Promo Pack prints — far fewer than later sets.

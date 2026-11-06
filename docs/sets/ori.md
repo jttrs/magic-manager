@@ -95,8 +95,8 @@ None configured yet (proposals pending owner review).
   cards are Khans-block reprints with new art.
 - **Prerelease packs are per-planeswalker** (`prerelease-<walker>` booster
   types, EV ~$2.35–$6.20).
-- Mizzium Meddler 64 carries `datestamped` but has its own art; the
-  datestamped-with-sibling drop may treat it as a dupe.
+- Mizzium Meddler 64 carries `datestamped` but has its own art; `missing.drop_datestamped_with_sibling`
+  drops it from missing-set (it matches name + treatment, not art).
 
 ---
 

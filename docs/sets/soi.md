@@ -103,8 +103,8 @@ None configured yet (proposals pending owner review).
 - **Tamiyo's Journal 265 is nonfoil-only** in Scryfall — the only booster rare
   with no foil print.
 - **Local count is 297 of Scryfall's 302** for `soi`.
-- Angel of Deliverance 2 carries `datestamped` but has its own art; the
-  datestamped-with-sibling drop may treat it as a dupe.
+- Angel of Deliverance 2 carries `datestamped` but has its own art; `missing.drop_datestamped_with_sibling`
+  drops it from missing-set (it matches name + treatment, not art).
 
 ---
 

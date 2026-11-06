@@ -88,8 +88,8 @@ None configured yet (proposals pending owner review).
   Scryfall dates them 2023-12-12. The local `cards` table keeps no
   availability column, so only the CN suffix and date give them away.
 - **Prerelease packs are per-clan** (`prerelease-<clan>`, EV ~$4.60–$8.16).
-- Dragon Throne of Tarkir 219 carries `datestamped` but has its own art; the
-  datestamped-with-sibling drop may treat it as a dupe.
+- Dragon Throne of Tarkir 219 carries `datestamped` but has its own art; `missing.drop_datestamped_with_sibling`
+  drops it from missing-set (it matches name + treatment, not art).
 
 ---
 

@@ -118,8 +118,8 @@ None configured yet (proposals pending owner review).
   (`eld`, `med`, `cmr`, …); a `b` rule won't touch the Invocations.
 - **280–287 are eight common gain lands** (Cinder Barrens, Woodland Stream, …)
   tagged `planeswalkerdeck`, past the two decks' own 270–279.
-- Oracle's Vault 234 carries `datestamped` but has its own art; the
-  datestamped-with-sibling drop may treat it as a dupe.
+- Oracle's Vault 234 carries `datestamped` but has its own art; `missing.drop_datestamped_with_sibling`
+  drops it from missing-set (it matches name + treatment, not art).
 
 ---
 

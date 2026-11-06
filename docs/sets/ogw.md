@@ -112,8 +112,8 @@ None configured yet (proposals pending owner review).
 - **The booster basic slot uses Battle for Zendikar basics** (MTGJSON's
   `basic` sheet is 25 BFZ cards); the foil slot can be any of the 45
   Expeditions (`foilOrMasterpiece1In144`).
-- Endbringer 3 carries `datestamped` but has its own art; the
-  datestamped-with-sibling drop may treat it as a dupe.
+- Endbringer 3 carries `datestamped` but has its own art; `missing.drop_datestamped_with_sibling`
+  drops it from missing-set (it matches name + treatment, not art).
 
 ---
 

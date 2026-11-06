@@ -118,8 +118,8 @@ None configured yet (proposals pending owner review).
   rarity-`special` gap is the same.
 - **`pkld` 200 Chief of the Foundry** is a CN above the 264-card booster set —
   a Gift Box exclusive art, not a booster card number.
-- Saheeli's Artistry 62 carries `datestamped` but has its own art; the
-  datestamped-with-sibling drop may treat it as a dupe.
+- Saheeli's Artistry 62 carries `datestamped` but has its own art; `missing.drop_datestamped_with_sibling`
+  drops it from missing-set (it matches name + treatment, not art).
 - MTGJSON lists `buyabox` and `showdown` booster types for KLD (multi-set
   promo pools, EV ~$9.82 / ~$9.67) — not retail packs.
 

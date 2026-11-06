@@ -102,8 +102,8 @@ None configured yet (proposals pending owner review).
 - **No AER basics:** the booster basic slot (and the basic-land foils) come
   from Kaladesh, so `set:aer` has no basics.
 - **Inventions are filed under `kld`** (`mps` covers both sets).
-- Quicksmith Rebel 93 carries `datestamped` but has its own art; the
-  datestamped-with-sibling drop may treat it as a dupe.
+- Quicksmith Rebel 93 carries `datestamped` but has its own art; `missing.drop_datestamped_with_sibling`
+  drops it from missing-set (it matches name + treatment, not art).
 
 ---
 

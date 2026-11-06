@@ -100,8 +100,8 @@ None configured yet (proposals pending owner review).
 - **`ugin` is a separate promo set** with its own CNs taken from the Khans
   block (Ugin 1, Altar of the Brood 216) — not FRF CNs.
 - **Prerelease packs are per-clan** (`prerelease-<clan>`, EV ~$2.81–$6.53).
-- Sandsteppe Mastodon 137 carries `datestamped` but has its own art; the
-  datestamped-with-sibling drop may treat it as a dupe.
+- Sandsteppe Mastodon 137 carries `datestamped` but has its own art; `missing.drop_datestamped_with_sibling`
+  drops it from missing-set (it matches name + treatment, not art).
 
 ---
 

@@ -105,8 +105,8 @@ None configured yet (proposals pending owner review).
   (Bruna 15, Midnight Scavengers 96, Hanweir Garrison 130); both halves of
   every meld pair are in `emn`.
 - **No basics** — boosters used Shadows over Innistrad basics.
-- Identity Thief 64 carries `datestamped` but has its own art; the
-  datestamped-with-sibling drop may treat it as a dupe.
+- Identity Thief 64 carries `datestamped` but has its own art; `missing.drop_datestamped_with_sibling`
+  drops it from missing-set (it matches name + treatment, not art).
 
 ---
 

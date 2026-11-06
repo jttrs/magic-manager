@@ -110,8 +110,8 @@ None configured yet (proposals pending owner review).
   missing-set treats the three masterpiece series differently.
 - **50 basics:** each full-art basic has an unlettered (foil + nonfoil) and an
   `a` (nonfoil) print of the same art; OGW boosters also use these basics.
-- Blight Herder 2 carries `datestamped` but has its own art; the
-  datestamped-with-sibling drop may treat it as a dupe.
+- Blight Herder 2 carries `datestamped` but has its own art; `missing.drop_datestamped_with_sibling`
+  drops it from missing-set (it matches name + treatment, not art).
 
 ---
 
