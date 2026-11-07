@@ -63,10 +63,11 @@ Small PRs, one per item.
 - **Flaky earmark migration test:** confirm
   `tests/test_card_earmarks.py::test_v37_migration_single_and_split` is stable in CI history
   (reported order-dependent before #196).
-- **Set docs branch:** a characterize-set session committed ~36 `docs/sets/*.md` docs on branch
-  `claude/uncharacterized-set-families-905987` (5 commits ahead of main as of 2026-11-04, no PR
-  yet; one more draft, `plst.md`, still untracked). If that session has finished: check the docs
-  against `docs/sets/_TEMPLATE.md`, run `uv run pytest tests/test_config_schema.py`, open a docs PR.
+- **Set-doc owner decisions:** every paper family now has a `docs/sets/<anchor>.md` (#232). Each
+  keep/exclude tier there is "kept (default) — pending owner review"; the proposals (mostly empty
+  `[dupe_foil]` entries and `stamped` exclusions) and the sync gaps they found (Scryfall
+  `variation` prints and non-English-only sets are never synced; finish-split core sets 7ed–10e;
+  rarity `special` sheets) await the owner before any `config/families.toml` or code change.
 
 ## 4. Deferred by decision
 
