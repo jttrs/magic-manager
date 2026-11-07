@@ -9,6 +9,12 @@ Hosted, each is **admin-only regardless of any flag or
 per-user override** — the pin is checked separately from the flags, so an
 override can't unlock it. Locally (no login) the user IS the owner: all allowed.
 
+Two of them are off for EVERYONE when hosted, admins included (Phase 5, P5-2/P5-3):
+``HOSTED_OFF``. On the home-server mini the server's Chrome and Moxfield login are
+not the user's, so the hosted server never drives a browser or reads the Mac's
+tabs; Moxfield decks and open store tabs are read in the user's own browser by the
+companion. Locally these stay allowed.
+
 Paths that run in the user's OWN browser (the companion: cart lines, supplied
 tabs, Moxfield/Archidekt reads, orders) are not pinned; their flags decide. Since
 Phase 3 step 9 (H12) members use ONLY those: the server never opens a browser or
@@ -23,6 +29,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 CODE = "auth.admin_only"
+SERVER_BROWSER_OFF_CODE = "owner.server_browser_off"
+
+# Paths that drive a browser / the Mac's tabs on the server: refused for everyone when hosted.
+HOSTED_OFF = frozenset({"decks.moxfield_server", "deals.mac_tabs"})
 
 
 @dataclass(frozen=True)
@@ -59,6 +69,17 @@ class OwnerOnly(AdminOnly):
         super().__init__(" ".join(x for x in (f"{p.title} runs on the owner’s machine — only an admin can use it here.", p.instead) if x))
 
 
+class ServerBrowserOff(OwnerOnly):
+    """A server-browser path asked for while hosted: off for everyone, admins included (403)."""
+
+    error_code = SERVER_BROWSER_OFF_CODE
+
+    def __init__(self, key: str) -> None:
+        self.key = key
+        AdminOnly.__init__(self, f"{PATHS[key].title} is off on the hosted app — "
+                                 "the browser companion reads it in your own browser instead.")
+
+
 def _hosted() -> bool:
     from .analytics import consent
     return consent.mode() == "hosted"
@@ -80,15 +101,18 @@ def is_admin() -> bool:
 def allowed(key: str) -> bool:
     if key not in PATHS:
         raise KeyError(f"unknown owner-machine path {key!r}")
+    if key in HOSTED_OFF and _hosted():
+        return False
     return is_admin()
 
 
 def require(key: str) -> None:
     if not allowed(key):
-        raise OwnerOnly(key)
+        raise (ServerBrowserOff(key) if key in HOSTED_OFF and _hosted() else OwnerOnly(key))
 
 
 def access() -> dict[str, bool]:
     """Every pinned path → may the bound user use it here (one admin lookup)."""
     ok = is_admin()
-    return {k: ok for k in PATHS}
+    off = _hosted()
+    return {k: ok and not (off and k in HOSTED_OFF) for k in PATHS}

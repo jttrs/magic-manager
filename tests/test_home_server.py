@@ -564,6 +564,8 @@ def test_installer_dry_run_writes_nothing(tmp_path):
     r = _install(tmp_path)
     assert r.returncode == 0, r.stderr
     assert "Dry run — nothing was written" in r.stdout and "MM_LAYOUT=split" in r.stdout
+    assert "home/Library/Caches/magic-manager-hosted/ (wrapper caches" in r.stdout
+    assert "export SCRYFALL_CACHE_DIR=" in r.stdout
     assert not any(tmp_path.iterdir())
 
 
@@ -574,13 +576,16 @@ def test_installer_dry_run_writes_nothing(tmp_path):
     (["--data", str(ROOT / "data")], "outside the app checkout"),
     (["--kit", "relative/kit"], "absolute"),
     (["--logs", "/x/$(id)"], "unsupported character"),
+    (["--trusted-proxy", "nginx"], "--trusted-proxy"),
+    (["--cache-dir", "relative/cache"], "absolute"),
+    (["--cache-dir", "/x/`id`"], "unsupported character"),
 ])
 def test_installer_refuses_bad_settings(tmp_path, args, err):
     r = _install(tmp_path, *args)
     assert r.returncode == 2 and err in r.stderr
 
 
-@pytest.mark.skipif(sys.platform != "darwin", reason="--apply is macOS-only")
+@pytest.mark.skipif(sys.platform != "darwin" or not shutil.which("gpg"), reason="--apply is macOS-only and needs gpg")
 def test_installer_apply_is_private_idempotent_and_never_touches_other_agents(tmp_path):
     kit = tmp_path / "kit dir"
     (kit / "bin").mkdir(parents=True)
@@ -588,10 +593,15 @@ def test_installer_apply_is_private_idempotent_and_never_touches_other_agents(tm
     fake.write_text(f"#!/bin/sh\necho {offsite.LITESTREAM_VERSION}\n")
     fake.chmod(0o755)
     env = {"MM_INSTALL_NO_LAUNCHCTL": "1"}
-    r = _install(tmp_path, "--apply", "--owner-id", UID, env=env)
+    r = _install(tmp_path, "--apply", "--owner-id", UID, "--trusted-proxy", "tailscale", env=env)
     assert r.returncode == 0, r.stdout + r.stderr
+    keyring = kit / "gnupg"
+    assert stat.S_IMODE(keyring.stat().st_mode) == 0o700
+    fprs = subprocess.run(["gpg", "--batch", "--with-colons", "--fingerprint"], capture_output=True, text=True,
+                          env={**os.environ, "GNUPGHOME": str(keyring)}).stdout
+    assert "fpr:::::::::968479A1AFF927E37D1A566BB5690EEEBB952194:" in fprs
     agents = sorted(p.name for p in (tmp_path / "agents").iterdir())
-    assert agents == [f"com.magic-manager.hosted.{s}.plist" for s in ("catalog-backup", "deploy", "litestream", "serve")]
+    assert agents == [f"com.magic-manager.hosted.{s}.plist" for s in ("catalog-backup", "deploy", "litestream", "replica-check", "serve")]
     for p in (tmp_path / "agents").iterdir():
         plist = plistlib.loads(p.read_bytes())
         assert plist["Umask"] == 0o077 and str(kit) in plist["ProgramArguments"][1]
@@ -599,10 +609,15 @@ def test_installer_apply_is_private_idempotent_and_never_touches_other_agents(tm
     henv = (kit / "hosted.env").read_text()
     assert stat.S_IMODE((kit / "hosted.env").stat().st_mode) == 0o600
     assert f"MM_OWNER_ID={UID}" in henv
-    assert not any(k in henv for k in ("MM_OAUTH", "MM_OFFSITE", "ACCESS_KEY", "MANAPOOL", "MM_ANALYTICS_SECRET"))
+    assert "MM_TRUSTED_PROXY=tailscale" in henv
+    assert not any(k in henv for k in ("MM_OAUTH", "MM_OFFSITE", "ACCESS_KEY", "MANAPOOL_EMAIL", "MANAPOOL_PASSWORD", "MANAPOOL_ACCESS_TOKEN", "MM_ANALYTICS_SECRET"))
     assert stat.S_IMODE((tmp_path / "data").stat().st_mode) == 0o700 and not any((tmp_path / "data").iterdir())
     assert stat.S_IMODE((kit / "deploy.sh").stat().st_mode) == 0o700
-    again = _install(tmp_path, "--apply", "--owner-id", UID, env=env)
+    cache = tmp_path / "home" / "Library" / "Caches" / "magic-manager-hosted"
+    assert stat.S_IMODE(cache.stat().st_mode) == 0o700
+    for var, sub in hostops.WRAPPER_CACHE_VARS:
+        assert f"export {var}={cache / sub}\n" in henv
+    again = _install(tmp_path, "--apply", "--owner-id", UID, "--trusted-proxy", "tailscale", env=env)
     assert again.returncode == 0 and "(new)" not in again.stdout and "(changed)" not in again.stdout
     assert not (kit / ".install-stage").exists()
 
@@ -634,6 +649,22 @@ def test_code_version_fails_closed_when_db_py_changes_shape():
         hostops.code_version_from_source(text.replace("CURRENT_VERSION = len(MIGRATIONS)", "CURRENT_VERSION = 37"))
     with pytest.raises(hostops.HostOpsError, match="parse"):
         hostops.code_version_from_source("MIGRATIONS = [")
+
+
+def test_wrapper_cache_vars_match_the_wrappers_installer_and_dockerfile(tmp_path):
+    import re
+    honored = set()
+    for sh in (ROOT / ".claude" / "skills").glob("*/*.sh"):
+        honored |= set(re.findall(r"\$\{([A-Z]+_(?:CACHE|STATE)_DIR):-", sh.read_text()))
+    assert honored == {v for v, _ in hostops.WRAPPER_CACHE_VARS}
+    for var, sub in hostops.WRAPPER_CACHE_VARS:
+        assert sub.split("-")[0].upper() == var.split("_")[0]
+    docker = (ROOT / "Dockerfile").read_text()
+    for var, sub in hostops.WRAPPER_CACHE_VARS:
+        assert f"{var}=/data/cache/{sub}" in docker
+    out = _install(tmp_path, "--cache-dir", str(tmp_path / "c")).stdout
+    for var, sub in hostops.WRAPPER_CACHE_VARS:
+        assert f"export {var}={tmp_path / 'c' / sub}\n" in out
 
 
 def test_litestream_version_is_pinned_the_same_everywhere():
@@ -747,3 +778,92 @@ def test_stale_deploy_lock_is_taken_over_and_a_live_one_is_obeyed(tmp_path):
     (kit / "deploy.lock" / "pid").write_text(f"{os.getpid()}\n")  # alive
     r = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
     assert "SKIPPED" in r.stdout and (kit / "deploy.lock").exists()
+
+
+# ---------- replication lag (the stall alert) ----------
+
+def _age(path: Path, when: datetime) -> None:
+    os.utime(path, (when.timestamp(), when.timestamp()))
+
+
+def _lag_setup(owner_split, tmp_path):
+    """Two files (auth.db, the owner's) each with a replica object; returns (store, objs, local files, now)."""
+    root = tmp_path / "lagremote"
+    st = objectstore.FileStore(root)
+    now = datetime(2026, 11, 3, 12, 0, 0, tzinfo=UTC)
+    local = {"auth.db": owner_split / "auth.db", "users/owner.db": owner_split / "users" / "owner.db"}
+    objs = {n: _put_replica(p, root, n) for n, p in local.items()}
+    return st, objs, local, now
+
+
+def test_replica_lag_ok_behind_missing_and_new(owner_split, tmp_path):
+    st, objs, local, now = _lag_setup(owner_split, tmp_path)
+    for n in local:
+        _age(local[n], now - timedelta(minutes=5))
+        _age(objs[n], now - timedelta(minutes=6))
+    r = offsite.replica_lag(owner_split, st, now=now)
+    assert r.ok and [f.status for f in r.files] == ["ok", "ok"] and r.files[0].lag_seconds == 60
+    # the owner file is written (only its -wal) an hour after its newest replica object
+    wal = local["users/owner.db"].with_name("owner.db-wal")
+    wal.write_bytes(b"")
+    _age(wal, now)
+    _age(objs["users/owner.db"], now - timedelta(minutes=70))
+    r = offsite.replica_lag(owner_split, st, now=now)
+    assert not r.ok and [f.status for f in r.files] == ["ok", "behind"]
+    assert r.files[1].lag_seconds == 70 * 60 and r.to_dict()["ok"] is False
+    assert offsite.replica_lag(owner_split, st, now=now, threshold=timedelta(hours=2)).ok
+    # a stall followed by an early write, then silence: the replica stood still an hour,
+    # the write came 15 min after it — behind (not "15 min < 30 min, ok")
+    _age(objs["users/owner.db"], now - timedelta(minutes=60))
+    _age(wal, now - timedelta(minutes=45))
+    r = offsite.replica_lag(owner_split, st, now=now)
+    assert r.files[1].status == "behind" and r.files[1].lag_seconds == 60 * 60
+    # unsynced writes but the replica moved 20 min ago: not yet behind; a checkpoint
+    # just after the last upload (within LAG_SLACK) never counts as unsynced
+    _age(objs["users/owner.db"], now - timedelta(minutes=20))
+    _age(wal, now - timedelta(minutes=10))
+    assert offsite.replica_lag(owner_split, st, now=now).files[1].status == "ok"
+    _age(objs["users/owner.db"], now - timedelta(hours=5))
+    _age(wal, now - timedelta(hours=5) + timedelta(minutes=2))
+    _age(local["users/owner.db"], now - timedelta(hours=5) + timedelta(minutes=2))
+    assert offsite.replica_lag(owner_split, st, now=now).files[1].status == "ok"
+    wal.unlink()
+    # no replica object: old file = missing, just-created file = ok
+    objs["auth.db"].unlink()
+    r = offsite.replica_lag(owner_split, st, now=now + timedelta(days=1))
+    assert r.files[0].status == "missing"
+    s = local["auth.db"].stat()
+    born = datetime.fromtimestamp(getattr(s, "st_birthtime", s.st_mtime), UTC)
+    r = offsite.replica_lag(owner_split, st, now=born + timedelta(minutes=1))
+    assert r.files[0].status == "ok" and r.files[0].replica_newest is None
+
+
+def test_replica_lag_cli_exit_codes(owner_split, tmp_path, monkeypatch):
+    st, objs, local, now = _lag_setup(owner_split, tmp_path)
+    monkeypatch.setattr(offsite, "store", lambda url=None: st)
+    runner = CliRunner()
+    args = ["host", "replica-lag", "--data-dir", str(owner_split)]
+    for n in local:
+        _age(objs[n], datetime.now(UTC))
+        _age(local[n], datetime.now(UTC) - timedelta(minutes=1))
+    r = runner.invoke(cli_app, args)
+    assert r.exit_code == 0 and "REPLICATION OK" in r.output
+    _age(objs["auth.db"], datetime.now(UTC) - timedelta(hours=3))
+    _age(local["auth.db"], datetime.now(UTC))
+    r = runner.invoke(cli_app, args)
+    assert r.exit_code == 1 and "REPLICATION BEHIND" in r.output and "min behind" in r.output
+    assert runner.invoke(cli_app, [*args, "--json"]).exit_code == 1
+
+    def boom(url=None):
+        raise objectstore.StoreError("unreachable")
+
+    monkeypatch.setattr(offsite, "store", boom)
+    r = runner.invoke(cli_app, args)
+    assert r.exit_code == 2 and "unreachable" in r.output
+
+
+def test_mtgjson_cache_path_honors_mtgjson_cache_dir(monkeypatch, tmp_path):
+    from magic_manager import mtgjson
+    monkeypatch.setenv("MTGJSON_CACHE_DIR", str(tmp_path / "persist"))
+    monkeypatch.setenv("TMPDIR", str(tmp_path / "tmp"))
+    assert mtgjson.cache_path("DeckList.json") == tmp_path / "persist" / "DeckList.json"

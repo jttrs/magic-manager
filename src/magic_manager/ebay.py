@@ -32,9 +32,10 @@ from __future__ import annotations
 import json
 import re
 import statistics
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+
+from . import util
 
 # Generic words that carry no product identity — dropped from query tokens so
 # matching keys on the distinguishing terms (set name/code + product type).
@@ -84,9 +85,7 @@ class EbayUnconfigured(EbayError):
 def _run(args: list[str]) -> dict:
     if not WRAPPER.exists():
         raise EbayError(f"wrapper missing: {WRAPPER}")
-    res = subprocess.run(
-        [str(WRAPPER), *args], text=True, capture_output=True, check=False,
-    )
+    res = util.run_wrapper([str(WRAPPER), *args], error=EbayError, service="eBay")
     if res.returncode == 7:
         raise EbayUnconfigured(res.stderr.strip() or "eBay credentials not set")
     if res.returncode != 0:
@@ -318,10 +317,7 @@ class EbayAdvisoryProvider:
     name = "ebay-advisory"
 
     def __init__(self, *, allow_inspection: bool = False):
-        res = subprocess.run(
-            [str(WRAPPER), "raw", "/__probe__"], text=True,
-            capture_output=True, check=False,
-        )
+        res = util.run_wrapper([str(WRAPPER), "raw", "/__probe__"], error=EbayError, service="eBay")
         if res.returncode == 7:
             raise EbayUnconfigured(res.stderr.strip() or "eBay credentials not set")
         self.allow_inspection = allow_inspection

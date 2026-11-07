@@ -3254,6 +3254,14 @@ export type FeaturesOut = {
      * hosted = sign-in required (MM_MODE=hosted); local = no login.
      */
     mode?: 'local' | 'hosted';
+    /**
+     * Jobs
+     *
+     * Catalog-wide jobs (JobSpec scope `catalog`) → may you run them here. All true locally; admins only when hosted.
+     */
+    jobs?: {
+        [key: string]: boolean;
+    };
 };
 
 /**
@@ -7782,6 +7790,10 @@ export type ScrapersReportResponses = {
      * Successful Response
      */
     200: ScraperHealthOut;
+    /**
+     * Not recorded: only an admin's report flags a scraper (hosted).
+     */
+    204: void;
 };
 
 export type ScrapersReportResponse = ScrapersReportResponses[keyof ScrapersReportResponses];

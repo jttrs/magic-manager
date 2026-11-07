@@ -3,14 +3,19 @@
 # CI builds this image on every PR so Linux portability stays honest.
 # macOS-only features (tab reading, AppleScript store reads) stay off here.
 
-FROM node:22-bookworm-slim AS web
+# Base images are pinned by digest (multi-arch index); bump deliberately:
+#   docker buildx imagetools inspect <tag>  → the Digest line.
+# node:22-bookworm-slim
+FROM node:22-bookworm-slim@sha256:4b150b48b4116e2a22f2c39cc27025fbf4f153e2078fd3b14d159fdb5c7279da AS web
 WORKDIR /app/web
 COPY web/package.json web/package-lock.json ./
-RUN npm ci
+# No package install hooks run (supply chain, §25.4 step 10); the build needs none.
+RUN npm ci --ignore-scripts
 COPY web/ ./
 RUN npm run build
 
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+# ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim@sha256:e5b65587bce7de595f299855d7385fe7fca39b8a74baa261ba1b7147afa78e58
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl ca-certificates util-linux \
     && rm -rf /var/lib/apt/lists/*
@@ -46,6 +51,23 @@ RUN useradd --create-home --uid 10001 app && mkdir -p /data && chown -R app:app 
 USER app
 
 ENV MAGIC_MANAGER_DB=/data/magic_manager.db
+# External-API wrapper caches + pacing state live in the volume, not $TMPDIR (hostops.WRAPPER_CACHE_VARS).
+ENV SCRYFALL_CACHE_DIR=/data/cache/scryfall-cache \
+    SCRYFALL_STATE_DIR=/data/cache/scryfall-state \
+    EDHREC_CACHE_DIR=/data/cache/edhrec-cache \
+    EDHREC_STATE_DIR=/data/cache/edhrec-state \
+    SPELLBOOK_CACHE_DIR=/data/cache/spellbook-cache \
+    SPELLBOOK_STATE_DIR=/data/cache/spellbook-state \
+    MANAPOOL_CACHE_DIR=/data/cache/manapool-cache \
+    MANAPOOL_STATE_DIR=/data/cache/manapool-state \
+    MTGJSON_CACHE_DIR=/data/cache/mtgjson-cache \
+    MTGJSON_STATE_DIR=/data/cache/mtgjson-state \
+    TCGCSV_CACHE_DIR=/data/cache/tcgcsv-cache \
+    TCGCSV_STATE_DIR=/data/cache/tcgcsv-state \
+    TCGAPI_CACHE_DIR=/data/cache/tcgapi-cache \
+    TCGAPI_STATE_DIR=/data/cache/tcgapi-state \
+    EBAY_CACHE_DIR=/data/cache/ebay-cache \
+    EBAY_STATE_DIR=/data/cache/ebay-state
 VOLUME /data
 EXPOSE 8765
 CMD ["uv", "run", "--frozen", "--no-dev", "mm", "serve", "--host", "0.0.0.0", "--port", "8765"]

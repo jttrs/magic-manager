@@ -14,8 +14,9 @@ touch the network in tests.
 from __future__ import annotations
 
 import json
-import subprocess
 from pathlib import Path
+
+from . import util
 
 WRAPPER = (
     Path(__file__).resolve().parents[2]
@@ -35,13 +36,8 @@ class CommanderSpellbookError(RuntimeError):
 def _run(args: list[str], stdin: str | None = None) -> dict:
     if not WRAPPER.exists():
         raise CommanderSpellbookError(f"wrapper missing: {WRAPPER}")
-    res = subprocess.run(
-        [str(WRAPPER), *args],
-        input=stdin,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
+    res = util.run_wrapper([str(WRAPPER), *args], error=CommanderSpellbookError,
+                           service="Commander Spellbook", input=stdin)
     if res.returncode != 0:
         raise CommanderSpellbookError(
             f"spellbook.sh {' '.join(args)} exited {res.returncode}: "

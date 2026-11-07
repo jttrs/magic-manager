@@ -98,7 +98,7 @@
     },
     "pair.bridge_failed": {
       "where": "extension",
-      "message": "Paired, but the companion couldn’t reach the app address.",
+      "message": "The companion couldn’t hold that address, so the pairing wasn’t changed.",
       "fix": "Reload the extension in chrome://extensions and press Pair again."
     },
     "permission.deals_off": {

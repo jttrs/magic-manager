@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import subprocess
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -24,6 +25,31 @@ _CN_RE = re.compile(r"^(\d+)(.*)$")
 # directory, and the writers agree with cleanup_queries' prune root (which
 # imports this same constant).
 OUTPUT_ROOT = Path(__file__).resolve().parents[2] / "output"
+
+
+# Seconds a client waits on an external-API wrapper (.claude/skills/*/*.sh).
+# The wrapper paces itself, may wait up to 30 s for its lock and retries
+# transient 5xx, so 120 s covers a normal read; bulk files get far longer.
+WRAPPER_TIMEOUT = 120
+WRAPPER_BULK_TIMEOUT = 1800
+# Seconds a deck fetch (scripts/import_deck.py) may run: it may page, wait on a rate limit or, locally only, drive a headed browser for Moxfield.
+DECK_FETCH_TIMEOUT = 300
+
+
+def run_wrapper(argv: list[str], *, error: type[Exception], service: str,
+                timeout: int = WRAPPER_TIMEOUT, **kwargs) -> subprocess.CompletedProcess:
+    """``subprocess.run`` for a wrapper script with the shared timeout rule.
+
+    A timeout raises ``error`` (the client's own exception class) with a plain
+    message — never a hang, never swallowed. ``subprocess.run`` kills the child
+    on timeout (its EXIT trap may not run)."""
+    kwargs.setdefault("text", True)
+    kwargs.setdefault("capture_output", True)
+    kwargs.setdefault("check", False)
+    try:
+        return subprocess.run(argv, timeout=timeout, **kwargs)
+    except subprocess.TimeoutExpired as e:
+        raise error(f"{service} didn't answer in time ({timeout} s)") from e
 
 
 def chunks(seq, n: int = 900):

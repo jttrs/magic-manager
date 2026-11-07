@@ -25,6 +25,10 @@ take_lock || { echo "a deploy is running — try again in a minute" >&2; exit 1;
 cd "$MM_APP" || exit 1
 git fetch -q origin main || { echo "git fetch failed" >&2; exit 1; }
 new=$(git rev-parse origin/main); cur=$(git rev-parse HEAD)
+if [ "$cur" != "$new" ] && ! why=$(verify_main "$cur" "$new"); then
+  echo "origin/main (${new:0:7}) won't be deployed: $why" >&2
+  exit 2
+fi
 
 if [ "$apply" = no ]; then
   wt="$MM_KIT/upgrade-rehearsal"
@@ -53,7 +57,7 @@ log "upgrade ${cur:0:7} → ${new:0:7} (apply)"
 "$MM_KIT/mmctl" stop serve deploy
 git checkout -q --detach "$new" || exit 1
 uv sync -q --frozen || { echo "uv sync failed; still stopped at ${new:0:7} — check out ${cur:0:7} to go back" >&2; exit 1; }
-if ! { npm --prefix web ci --silent && npm --prefix web run build; } >/dev/null 2>&1; then
+if ! { npm --prefix web ci --ignore-scripts --silent && npm --prefix web run build; } >/dev/null 2>&1; then
   echo "web build failed; the app is stopped" >&2; exit 1
 fi
 if ! uv run --frozen python scripts/post_merge_upgrade.py --layout split --data-dir "$MM_DATA_DIR" \

@@ -86,4 +86,5 @@ LOOKUP = register(JobSpec(
     description="Ask Scryfall for printings of the draft's cards whose art carries the tag, and add any missing to the local catalog.",
     input_model=ArtSwapsIn,
     run=_run_lookup,
+    scope="catalog",
 ))

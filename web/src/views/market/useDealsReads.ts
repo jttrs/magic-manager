@@ -24,7 +24,7 @@ export function useDealsReads(enabled: boolean) {
   const qc = useQueryClient();
   const c = useCompanion();
   const inBrowser = useFeature('companion') && c.status === 'ready';
-  // Reading tabs in this server's Chrome (AppleScript) is the owner's machine: admins only when hosted.
+  // Reading tabs in this server's Chrome (AppleScript) is off for everyone when hosted (the companion reads tabs).
   const serverTabs = useOwnerPath('deals.mac_tabs');
   const tabsQuery = useQuery(dealsTabsQuery());
   const prices = useJob();

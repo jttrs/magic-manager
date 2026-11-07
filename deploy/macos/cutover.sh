@@ -105,7 +105,7 @@ finish)
   done
   [ "$ok" = yes ] || die "the offsite replica didn't verify — see $MM_LOGS/litestream.log; the app stays stopped"
   "$KIT/mm-hosted" host catalog-backup || die "the first catalog backup failed — see the error; the app stays stopped"
-  "$KIT/mmctl" start serve deploy catalog-backup
+  "$KIT/mmctl" start serve deploy catalog-backup replica-check
   health || die "the app didn't come up — see $MM_LOGS/serve.log"
   echo
   echo "CUTOVER DONE. Record your id for upgrades:"

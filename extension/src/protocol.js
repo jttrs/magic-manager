@@ -62,6 +62,38 @@ export const MOXFIELD_TABS = ['https://moxfield.com/*', 'https://www.moxfield.co
 // Archidekt decks (opt-in): the deck page itself, read with your own session.
 export const ARCHIDEKT_ORIGINS = ['https://archidekt.com/*', 'https://www.archidekt.com/*'];
 export const ARCHIDEKT_DECK = /^https:\/\/(?:www\.)?archidekt\.com\/decks\/(\d{1,12})(?:[/?#-]|$)/;
+
+/** `tabUrl` shows the page `target` names: same host (www. or not) and the same path, or a
+ *  sub-page of it (Archidekt's `/decks/<id>/<slug>`); query and hash ignored. A target of
+ *  `/` only matches the site's front page. */
+export function samePage(tabUrl, target) {
+  let a;
+  let b;
+  try { a = new URL(String(tabUrl || '')); b = new URL(target); } catch { return false; }
+  const host = (u) => u.hostname.replace(/^www\./, '');
+  if (a.protocol !== b.protocol || host(a) !== host(b)) return false;
+  const path = (u) => u.pathname.replace(/\/+$/, '') || '/';
+  const pa = path(a);
+  const pb = path(b);
+  return pa === pb || (pb !== '/' && pa.startsWith(pb + '/'));
+}
+
+/**
+ * The open tab a reader can use for `target`, or null (then it opens its own). Never a
+ * session-restored tab Chrome hasn't loaded (`status: 'unloaded'`, which is not `discarded`) — it
+ * can't be scripted — nor a discarded or incognito one. A loaded tab beats one still loading (the
+ * reader waits for that one, as for a tab it opens); within each, the one showing the target page
+ * itself wins, else any on the site (the readers fetch by id).
+ */
+export function pickTab(tabs, target) {
+  const usable = (tabs || []).filter((t) => t && (t.status === 'complete' || t.status === 'loading') && !t.incognito && !t.discarded);
+  const rank = (t) => (t.status === 'complete' ? 0 : 2) + (samePage(t.url, target) ? 0 : 1);
+  return usable.reduce((best, t) => (best && rank(best) <= rank(t) ? best : t), null);
+}
+
+/** `1 binder`, `2 binders`. */
+export const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
 // Moxfield collection / binder share links.
 export const MOXFIELD_COLLECTION = /^https:\/\/(?:www\.)?moxfield\.com\/collection\/([A-Za-z0-9_-]{4,64})(?:[/?#]|$)/;
 export const MOXFIELD_BINDER = /^https:\/\/(?:www\.)?moxfield\.com\/binders\/([A-Za-z0-9_-]{4,64})(?:[/?#]|$)/;
@@ -182,7 +214,7 @@ export function summarize(kind, data) {
     const n = (data.deck?.cards || []).reduce((t, c) => t + (c.quantity || 0), 0);
     return `${data.deck?.name || 'Deck'} · ${n} cards`;
   }
-  if (kind === 'moxfield_binders') return `${(data.binders || []).length} Moxfield binders`;
+  if (kind === 'moxfield_binders') return plural((data.binders || []).length, 'Moxfield binder');
   if (kind === 'moxfield_collection') {
     const c = data.collection || {};
     const lines = c.lines || [];

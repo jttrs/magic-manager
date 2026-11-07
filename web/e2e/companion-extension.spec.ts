@@ -47,16 +47,29 @@ async function launch(dir: string, profile = '') {
   return { context, worker, id: new URL(worker.url()).host };
 }
 
+/**
+ * What pressing Pair does after Chrome's prompt (see src/options.js): store the address, then ask
+ * the worker — from its own settings page — to register the bridge. The worker runs bridge checks
+ * one at a time, and its own start-up / onInstalled checks are still running right after launch;
+ * registering the script from the test instead raced them (a check that had read "not paired" saw
+ * the fresh registration and removed it, so the app never connected). Asking through that queue
+ * lands after them, and the bridge is checked to be there before any test starts.
+ */
+async function pairFromSettings(context: BrowserContext, worker: Worker, id: string, origin: string) {
+  await worker.evaluate((o) => chrome.storage.local.set({ appOrigin: o }), origin);
+  const opts = await context.newPage();
+  await opts.goto(`chrome-extension://${id}/src/options.html`);
+  expect(await opts.evaluate(() => chrome.runtime.sendMessage({ type: 'bridge' }))).toEqual({ ok: true });
+  await opts.close();
+  expect(await worker.evaluate(() => chrome.scripting.getRegisteredContentScripts())).toMatchObject([{ id: 'mm-bridge', matches: ['http://localhost/*'] }]);
+}
+
 const test = base.extend<Fixtures>({
   // eslint-disable-next-line no-empty-pattern
   ext: async ({}, use) => {
     const dir = extensionCopy();
     const { context, worker, id } = await launch(dir);
-    // What pressing Pair does after Chrome's prompt (see src/options.js).
-    await worker.evaluate(async (origin) => {
-      await chrome.storage.local.set({ appOrigin: origin });
-      await chrome.scripting.registerContentScripts([{ id: 'mm-bridge', matches: ['http://localhost/*'], js: ['src/bridge.js'], runAt: 'document_start', allFrames: false }]);
-    }, APP);
+    await pairFromSettings(context, worker, id, APP);
     await use({ context, worker, id });
     await context.close();
     rmSync(dir, { recursive: true, force: true });
@@ -569,16 +582,154 @@ test('pairs with any https app address: Chrome is asked for that one origin, and
     // The old address's open tab can't read any more: no approval window, nothing awaiting.
     const opened: string[] = [];
     ext.context.on('page', (p) => opened.push(p.url()));
-    const answer = await forgedRequest(app);
-    expect(answer === 'no answer' || (answer as { ok?: boolean }).ok === false).toBe(true);
+    // Its bridge re-checks the pairing when it changes and goes silent (and the worker refuses it anyway).
+    await expect.poll(() => forgedRequest(app), { timeout: 15_000 }).toBe('no answer');
     expect(opened).toEqual([]);
+    const appB = await hostedApp(ext.context, B);
+    await expect(appB.getByRole('button', { name: 'Browser companion · connected' })).toBeVisible();
   } finally {
     await ext.context.close();
     rmSync(dir, { recursive: true, force: true });
   }
 });
 
-/** The app (dev server, API mocked) served at an https origin, as a hosted address would be. */
+/** A request with an id the worker refuses (request.invalid): only a live, paired bridge gets that answer. */
+const probe = (page: Page) => page.evaluate(() => new Promise((resolve) => {
+  window.addEventListener('message', (ev) => { if (ev.data?.from === 'companion' && ev.data.type === 'ack' && ev.data.id === 'x') resolve(ev.data); });
+  window.postMessage({ channel: 'magic-manager/companion', from: 'app', type: 'request', id: 'x', kind: 'cart', params: {} }, location.origin);
+  setTimeout(() => resolve('no answer'), 2500);
+}));
+
+test('re-pairing with another address silences the old address’s open tab (its bridge re-checks), and the new address answers', async ({ ext }) => {
+  // Both addresses share the http://localhost/* pattern, so the bridge stays registered and stays
+  // injected in the old tab: what silences that tab is the bridge itself re-reading the pairing when
+  // it changes (bridge.js storage.onChanged). Without that it keeps forwarding, and the old tab gets
+  // an answer back (companion.timeout) instead of nothing.
+  const B = 'http://localhost:5999';
+  const { page: a } = await appPage(ext.context);
+  await expect(a.getByRole('button', { name: 'Browser companion · connected' })).toBeVisible();
+  expect(await probe(a)).toMatchObject({ ok: false, code: 'request.invalid' });   // paired: the worker answers
+
+  const opts = await ext.context.newPage();
+  await opts.goto(`chrome-extension://${ext.id}/src/options.html`);
+  await opts.getByRole('textbox', { name: 'App address' }).fill(B);
+  await opts.getByRole('button', { name: 'Pair', exact: true }).click();
+  await expect(opts.locator('#pair-status')).toContainText(`Paired with ${B}`);
+  expect(await ext.worker.evaluate(() => chrome.scripting.getRegisteredContentScripts())).toMatchObject([{ id: 'mm-bridge', matches: ['http://localhost/*'] }]);
+
+  await expect.poll(() => forgedRequest(a), { timeout: 15_000 }).toBe('no answer');   // no ack, no hello: silent
+  expect(await probe(a)).toBe('no answer');
+
+  const b = await hostedApp(ext.context, B);
+  await expect(b.getByRole('button', { name: 'Browser companion · connected' })).toBeVisible();
+  expect(await probe(b)).toMatchObject({ ok: false, code: 'request.invalid' });
+});
+
+test('Chrome says yes but the companion can’t hold the new address: Pair says so (pair.bridge_failed), keeps the working pairing, and gives the new permission back', async ({ ext }) => {
+  const opts = await ext.context.newPage();
+  await opts.goto(`chrome-extension://${ext.id}/src/options.html`);
+  // The settings page is told the prompt was granted, but Chrome never granted it to the extension
+  // (as when it is revoked again before the bridge is registered): the worker, which checks Chrome's
+  // own permissions, can't register a bridge for it.
+  await opts.evaluate(() => {
+    const real = chrome.permissions;
+    Object.defineProperty(chrome, 'permissions', { configurable: true, value: {
+      contains: (p: chrome.permissions.Permissions) => real.contains(p),
+      request: () => Promise.resolve(true),
+      remove: (p: chrome.permissions.Permissions) => {
+        ((window as unknown as { __removed?: unknown[] }).__removed ??= []).push(p);
+        return Promise.resolve(true);
+      },
+    } });
+  });
+  expect(await ext.worker.evaluate(() => chrome.permissions.contains({ origins: ['https://mm-unheld.example/*'] }))).toBe(false);
+  await opts.getByRole('textbox', { name: 'App address' }).fill('https://mm-unheld.example');
+  await opts.getByRole('button', { name: 'Pair', exact: true }).click();
+  await expect(opts.locator('#pair-status')).toHaveAttribute('data-code', 'pair.bridge_failed');
+  await expect(opts.locator('#pair-status')).toHaveClass('error');
+  await expect(opts.locator('#pair-status')).toContainText('the pairing wasn’t changed');
+  // The new permission is given back; the working pairing (APP, and its bridge) is untouched.
+  const removed = await opts.evaluate(() => (window as unknown as { __removed?: unknown[] }).__removed);
+  expect(removed).toContainEqual({ origins: ['https://mm-unheld.example/*'] });
+  expect(removed).not.toContainEqual({ origins: ['http://localhost/*'] });
+  expect(await ext.worker.evaluate(() => chrome.storage.local.get('appOrigin'))).toEqual({ appOrigin: APP });
+  expect(await ext.worker.evaluate(() => chrome.scripting.getRegisteredContentScripts())).toMatchObject([{ id: 'mm-bridge', matches: ['http://localhost/*'] }]);
+  // The error stays on screen through a later storage change (the app checking in).
+  await ext.worker.evaluate((o) => chrome.storage.local.set({ lastHello: { origin: o, at: Date.now() } }), APP);
+  await opts.waitForTimeout(300);
+  await expect(opts.locator('#pair-status')).toHaveAttribute('data-code', 'pair.bridge_failed');
+  await expect(opts.locator('#pair-status')).toHaveClass('error');
+  await opts.reload();
+  await expect(opts.locator('#pair-status')).toContainText('Paired with');
+  await expect(opts.locator('#pair-status')).toContainText(APP);
+  const { page } = await appPage(ext.context);
+  await expect(page.getByRole('button', { name: 'Browser companion · connected' })).toBeVisible();
+});
+
+test('pressing Pair again on the working address when the worker doesn’t answer leaves the pairing alone', async ({ ext }) => {
+  const opts = await ext.context.newPage();
+  await opts.goto(`chrome-extension://${ext.id}/src/options.html`);
+  await opts.evaluate(() => {
+    const real = chrome.permissions;
+    Object.defineProperty(chrome, 'permissions', { configurable: true, value: {
+      contains: (p: chrome.permissions.Permissions) => real.contains(p),
+      request: () => Promise.resolve(true),
+      remove: (p: chrome.permissions.Permissions) => {
+        ((window as unknown as { __removed?: unknown[] }).__removed ??= []).push(p);
+        return Promise.resolve(true);
+      },
+    } });
+    const send = chrome.runtime.sendMessage.bind(chrome.runtime) as (...a: unknown[]) => Promise<unknown>;
+    Object.defineProperty(chrome.runtime, 'sendMessage', { configurable: true, value: (...a: unknown[]) =>
+      (a[0] as { type?: string } | undefined)?.type === 'bridge' ? Promise.reject(new Error('Receiving end does not exist.')) : send(...a) });
+  });
+  await opts.getByRole('textbox', { name: 'App address' }).fill(APP);
+  await opts.getByRole('button', { name: 'Pair', exact: true }).click();
+  await expect(opts.locator('#pair-status')).toHaveAttribute('data-code', 'pair.bridge_failed');
+  // The worker never sees the stubbed message, so these two are the checks: nothing removed, pairing kept.
+  const removed = await opts.evaluate(() => (window as unknown as { __removed?: unknown[] }).__removed);
+  expect(removed ?? []).toEqual([]);
+  expect(await ext.worker.evaluate(() => chrome.storage.local.get('appOrigin'))).toEqual({ appOrigin: APP });
+});
+
+test('a failed attempt whose answer is lost still leaves the earlier pairing with its bridge', async ({ ext }) => {
+  const opts = await ext.context.newPage();
+  await opts.goto(`chrome-extension://${ext.id}/src/options.html`);
+  await opts.evaluate(() => {
+    const real = chrome.permissions;
+    Object.defineProperty(chrome, 'permissions', { configurable: true, value: {
+      contains: (p: chrome.permissions.Permissions) => real.contains(p),
+      request: () => Promise.resolve(true),
+      remove: (p: chrome.permissions.Permissions) => {
+        ((window as unknown as { __removed?: unknown[] }).__removed ??= []).push(p);
+        return Promise.resolve(true);
+      },
+    } });
+    const send = chrome.runtime.sendMessage.bind(chrome.runtime) as (...a: unknown[]) => Promise<unknown>;
+    let lost = false;
+    Object.defineProperty(chrome.runtime, 'sendMessage', { configurable: true, value: (...a: unknown[]) => {
+      if ((a[0] as { type?: string } | undefined)?.type === 'bridge' && !lost) {
+        lost = true;
+        // The worker handles it (dropping the bridge: that pattern isn't held), but the reply never arrives.
+        return send(...a).then(() => { throw new Error('lost'); });
+      }
+      return send(...a);
+    } });
+  });
+  await opts.getByRole('textbox', { name: 'App address' }).fill('https://mm-unheld.example');
+  await opts.getByRole('button', { name: 'Pair', exact: true }).click();
+  await expect(opts.locator('#pair-status')).toHaveAttribute('data-code', 'pair.bridge_failed');
+  const removed = await opts.evaluate(() => (window as unknown as { __removed?: unknown[] }).__removed);
+  expect(removed).toEqual([{ origins: ['https://mm-unheld.example/*'] }]);
+  expect(await ext.worker.evaluate(() => chrome.storage.local.get('appOrigin'))).toEqual({ appOrigin: APP });
+  await expect.poll(() => ext.worker.evaluate(() => chrome.scripting.getRegisteredContentScripts()))
+    .toMatchObject([{ id: 'mm-bridge', matches: ['http://localhost/*'] }]);
+  await expect(opts.locator('#unpair')).toBeEnabled();
+  const { page } = await appPage(ext.context);
+  await expect(page.getByRole('button', { name: 'Browser companion · connected' })).toBeVisible();
+});
+
+/** The app (dev server, API mocked) served at another origin (an https address, as a hosted one would be, or another port). */
 async function hostedApp(context: BrowserContext, origin: string): Promise<Page> {
   const page = await context.newPage();
   await mockApi(page, { '/api/features': () => ({ json: { flags: { companion: true } } }) });

@@ -3,6 +3,8 @@
 # hosted app — but NEVER upgrades a database: when the new code's schema is newer than the
 # catalog OR any user file (`mm host deploy-check`, exit 3), it holds, keeps the running
 # build and notifies once. The owner upgrades explicitly with upgrade.sh (snapshot first).
+# It also holds any commit GitHub didn't make (verify_main: squash-merges of PRs only), and
+# installs web dependencies with --ignore-scripts (no package install hooks run here).
 # shellcheck source=deploy/macos/bin/common.sh
 . "$(dirname "$0")/common.sh"
 take_lock || exit 0
@@ -11,6 +13,16 @@ git fetch -q origin main || { log "fetch failed"; exit 0; }
 cur=$(git rev-parse HEAD); new=$(git rev-parse origin/main)
 [ "$cur" = "$new" ] && exit 0
 [ -e "$MM_KIT/failed-$new" ] && exit 0   # tried once and rolled back; wait for the next commit
+
+if ! why=$(verify_main "$cur" "$new"); then
+  flag="$MM_KIT/hold-$new"
+  if [ ! -e "$flag" ]; then
+    log "HOLD ${new:0:7}: not deployed — $why"
+    notify "Update held: ${new:0:7} wasn't merged through a pull request — see deploy.log"
+    touch "$flag"
+  fi
+  exit 0
+fi
 
 # The CURRENT code decides (it reads the new db.py as text; nothing new runs yet).
 msg=$(uv run --frozen mm host deploy-check --ref "$new" --repo "$MM_APP" 2>&1); rc=$?
@@ -39,7 +51,7 @@ rollback() {
   touch "$MM_KIT/failed-$new"
   git checkout -q --detach "$cur"
   uv sync -q --frozen
-  npm --prefix web ci --silent >/dev/null 2>&1
+  npm --prefix web ci --ignore-scripts --silent >/dev/null 2>&1
   npm --prefix web run build >/dev/null 2>&1
   [ "$restarted" = yes ] && "$MM_KIT/mmctl" restart serve litestream >/dev/null
   notify "Deploy of ${new:0:7} failed ($1); kept ${cur:0:7}"
@@ -48,7 +60,7 @@ rollback() {
 git checkout -q --detach "$new" || rollback checkout
 uv sync -q --frozen || rollback "uv sync"
 if [ "$lock_before" != "$lock_after" ] || [ ! -d web/node_modules ]; then
-  npm --prefix web ci --silent >/dev/null 2>&1 || rollback "npm ci"
+  npm --prefix web ci --ignore-scripts --silent >/dev/null 2>&1 || rollback "npm ci"
 fi
 npm --prefix web run build >/dev/null 2>&1 || rollback "web build"
 restarted=yes

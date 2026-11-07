@@ -165,6 +165,16 @@ export const ownerPathsQuery = () =>
     staleTime: Infinity,
   });
 
+/** Catalog-wide jobs (JobSpec scope `catalog`) → may you run them here (the same /api/features call).
+ *  Locally always yes; hosted, admins only — members see what an admin already fetched. */
+export const jobAccessQuery = () =>
+  queryOptions({
+    queryKey: ['features'],
+    queryFn: async ({ signal }) => unwrap(await featuresRoute({ signal })),
+    select: (d) => d.jobs ?? {},
+    staleTime: Infinity,
+  });
+
 /** Hosted, admins only: everyone who can sign in, with their flags (the Admin page). */
 export const adminUsersQuery = () =>
   queryOptions({

@@ -59,8 +59,11 @@ def admin_sign_out(user_id: Annotated[str, _UID]):
 
 
 @router.post("/users/{user_id}/disable", response_model=admin_api.AdminUserOut)
-def admin_disable(user_id: Annotated[str, _UID], actor: Admin):
-    return _call(admin_api.disable, user_id, actor)
+def admin_disable(user_id: Annotated[str, _UID], actor: Admin, request: Request):
+    out = _call(admin_api.disable, user_id, actor)
+    # Their queued jobs never start; running ones stop at the next progress tick.
+    request.app.state.jobs.cancel_user(user_id)
+    return out
 
 
 @router.post("/users/{user_id}/enable", response_model=admin_api.AdminUserOut)

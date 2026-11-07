@@ -51,6 +51,40 @@ def _mutates(name: str) -> bool:
         return False
 
 
+# Hosted: at most this many queued + running jobs per user (429 ``jobs.too_many``).
+MAX_ACTIVE_PER_USER = 3
+# A running job re-checks that its user is still allowed in at most this often (seconds).
+USER_RECHECK_SECONDS = 5.0
+
+
+class JobsTooMany(RuntimeError):
+    """The user already has :data:`MAX_ACTIVE_PER_USER` jobs queued or running."""
+
+    error_code = "jobs.too_many"
+
+
+class JobCancelled(RuntimeError):
+    """The job's user was disabled or deleted: it stops at its next progress tick."""
+
+    error_code = "jobs.cancelled"
+
+
+_NEVER_STARTED = "Stopped before it started: this account was turned off."
+
+
+def _user_allowed(user: str | None) -> bool:
+    """Is the job's user still enabled (hosted)? Unbound/local jobs: yes."""
+    if user is None or analytics_consent.mode() != "hosted":
+        return True
+    from ..auth import store
+    try:
+        u = store.get_user(user)
+    except Exception:  # noqa: BLE001 — can't tell: fail closed
+        log.exception("could not check whether user %s is still enabled", user)
+        return False
+    return bool(u and not u.disabled)
+
+
 class JobsBusy(RuntimeError):
     """A (mutating) job is queued or running, or the user's account is being deleted."""
 
@@ -93,12 +127,15 @@ class JobRecord:
     ctx: analytics.Context = field(default_factory=analytics.Context, repr=False)
     # Whose data the job reads and writes (the bound user at submit); never public.
     user: str | None = field(default=None, repr=False)
+    # Set when the user is disabled/deleted: the job stops at its next progress tick.
+    cancelled: bool = field(default=False, repr=False)
 
     def public(self) -> dict:
         d = asdict(self)
         d.pop("events")
         d.pop("ctx")
         d.pop("user")
+        d.pop("cancelled")
         return d
 
 
@@ -114,6 +151,7 @@ class JobManager:
         self._user_locks_guard = threading.Lock()
         self._closing: set[str | None] = set()   # users whose account is being deleted
         self._events_lock = threading.Lock()  # orders event seqs across threads
+        self._state_lock = threading.Lock()   # queued → running vs. cancel_user ending a queued job
         self._max_history = max_history
         self._loop: asyncio.AbstractEventLoop | None = None
 
@@ -141,12 +179,51 @@ class JobManager:
         with self._user_locks_guard:  # atomic with closing_user's mark + scan
             if rec.user in self._closing:
                 raise JobsBusy("deleting your account")
+            if analytics_consent.mode() == "hosted" and self._active(rec.user) >= MAX_ACTIVE_PER_USER:
+                raise JobsTooMany(f"You already have {MAX_ACTIVE_PER_USER} jobs queued or running — "
+                                  "wait for one to finish, then start this one.")
             self._jobs[rec.id] = rec
         self._trim()
         self._emit(rec, "status", {"status": rec.status})
         await self._task.kiq(rec.id)
         await asyncio.to_thread(analytics.record, "job.started", {"job": rec.name, "job_id": rec.id}, ctx=rec.ctx)
         return rec
+
+    def _active(self, user: str | None) -> int:
+        return sum(1 for r in list(self._jobs.values()) if r.user == user and r.status in ("queued", "running"))
+
+    def cancel_user(self, user: str) -> int:
+        """Disabling or deleting ``user``: every queued or running job of theirs
+        stops. A queued one ends now (failed, ``jobs.cancelled``) — it never
+        starts, and it doesn't wait behind another user's job holding the run
+        lock; a running one stops at its next progress tick. Returns how many."""
+        n = 0
+        for r in list(self._jobs.values()):
+            if r.user != user or r.status not in ("queued", "running") or r.cancelled:
+                continue
+            with self._state_lock:
+                r.cancelled = True
+                ended = r.status == "queued"
+                if ended:
+                    r.status, r.finished_at = "failed", _now()
+                    r.error, r.error_code = _NEVER_STARTED, JobCancelled.error_code
+            if ended:
+                self._emit(r, "error", {"error": r.error, "code": r.error_code, "trace": None})
+                self._emit(r, "status", {"status": r.status})
+            n += 1
+        if n:
+            log.info("cancelling %d job(s) of user %s", n, user)
+        return n
+
+    def wait_idle(self, user: str, timeout: float) -> bool:
+        """Block (a worker thread, never the loop) until ``user`` has no queued or
+        running job, up to ``timeout`` seconds. True when idle."""
+        deadline = time.monotonic() + timeout
+        while self._active(user):
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(0.1)
+        return True
 
     def _user_lock(self, user: str | None) -> threading.Lock:
         with self._user_locks_guard:
@@ -222,17 +299,40 @@ class JobManager:
 
     async def _execute(self, job_id: str) -> None:
         rec = self._jobs[job_id]
+        if rec.status in TERMINAL:  # cancelled while queued (cancel_user ended it)
+            return
         spec = jobs_api.get(rec.name)
         inputs = spec.input_model.model_validate(rec.inputs)
 
+        checked = [time.monotonic()]
+
+        def still_allowed() -> None:
+            if rec.cancelled:
+                raise JobCancelled("Stopped: this account was turned off.")
+            if time.monotonic() - checked[0] >= USER_RECHECK_SECONDS:
+                checked[0] = time.monotonic()
+                if not _user_allowed(rec.user):
+                    rec.cancelled = True
+                    raise JobCancelled("Stopped: this account was turned off.")
+
         def progress(ev: jobs_api.ProgressEvent) -> None:
+            still_allowed()  # cooperative cancel at every tick
             rec.progress = asdict(ev)
             self._emit(rec, "progress", rec.progress)
 
         def body() -> jobs_api.JobResult:
             mutating = getattr(spec, "mutates", False)
             with self._run_lock, (self._user_lock(rec.user) if mutating else nullcontext()), _layout.as_user(rec.user):
-                rec.status, rec.started_at = "running", _now()
+                # Re-checked once the locks are held, right before anything runs: a
+                # user disabled or deleted while this job waited never gets to write.
+                if rec.cancelled or not _user_allowed(rec.user):
+                    rec.cancelled = True
+                    raise JobCancelled(_NEVER_STARTED)
+                jobs_api.require_allowed(spec)  # a catalog job's scope, re-checked as the worker
+                with self._state_lock:
+                    if rec.cancelled:  # cancel_user got here first
+                        raise JobCancelled(_NEVER_STARTED)
+                    rec.status, rec.started_at = "running", _now()
                 self._emit(rec, "status", {"status": rec.status})
                 return spec.run(inputs, progress)
 
@@ -240,6 +340,8 @@ class JobManager:
         try:
             result = await asyncio.to_thread(body)
         except Exception as e:  # noqa: BLE001 — surface any job failure to the client
+            if rec.status in TERMINAL:  # cancel_user already ended it (and told subscribers)
+                return
             rec.status, rec.finished_at = "failed", _now()
             log.exception("job %s (%s) failed", rec.id, rec.name)
             coded = getattr(type(e), "error_code", None)  # e.g. owner_machine.OwnerOnly: a plain, safe message

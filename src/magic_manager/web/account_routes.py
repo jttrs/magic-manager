@@ -6,8 +6,8 @@ it; nothing here reads a user id from the request). The export streams a zip bui
 in memory — no temp file. Deleting needs, in order: a fresh sign-in (the session was
 made ≤ ``store.REAUTH_WINDOW`` ago, else 403 ``auth.reauth_required``), the typed
 confirmation (422 ``account.confirm``), not being the last admin (409
-``auth.last_admin``), and no queued/running job of theirs (409
-``account.jobs_running``). The gate already enforced Origin + CSRF + the write limit.
+``auth.last_admin``); their queued and running jobs are cancelled first (a job
+still running after :data:`JOB_STOP_WAIT` → 409 ``account.jobs_running``). The gate already enforced Origin + CSRF + the write limit.
 """
 from __future__ import annotations
 
@@ -26,6 +26,7 @@ from .runtime import JobsBusy
 log = logging.getLogger("magic_manager.web.account")
 
 EXPORTS_PER_MINUTE = 6
+JOB_STOP_WAIT = 15.0  # seconds a delete waits for the user's cancelled jobs to stop
 export_limiter = ratelimit.Limiter(EXPORTS_PER_MINUTE)
 
 router = APIRouter(prefix="/api/account", tags=["account"])
@@ -70,7 +71,12 @@ def account_delete(body: account_api.DeleteIn, request: Request):
         raise _refused(422, "account.confirm", f"Type “{account.DELETE_CONFIRMATION}” to confirm.")
     try:
         account.check_not_last_admin(uid)  # early, friendly; delete re-checks in its transaction
-        with request.app.state.jobs.closing_user(uid), request.app.state.undo_guards.current().restoring():
+        # Their queued jobs never start; running ones stop at the next progress tick.
+        # A job still running after the wait refuses the delete below (JobsBusy).
+        jobs = request.app.state.jobs
+        if jobs.cancel_user(uid):
+            jobs.wait_idle(uid, JOB_STOP_WAIT)
+        with jobs.closing_user(uid), request.app.state.undo_guards.current().restoring():
             out = account_api.delete(uid)
     except account.LastAdmin as e:
         raise _refused(409, account.LAST_ADMIN, str(e)) from e

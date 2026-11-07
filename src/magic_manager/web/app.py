@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
@@ -28,8 +28,9 @@ from .. import api, sets as sets_mod, tabs as tabs_engine, undo as undo_engine, 
 from .. import auth, collection_sync, db, ingest as ingest_mod, layout as layout_mod, purchases as purchases_engine, userfiles
 from ..api import purchases as purchases_api
 from ..api import collection_import as collection_import_api, companion as companion_api, deals as deals_api, undo as undo_api, cart as cart_api, cards as cards_api, collection as collection_api, explore as explore_api, decks as decks_api, edhrec as edhrec_api, ingest as ingest_api, jobs as jobs_api, market as market_api, trueup as trueup_api, history as history_api, combos as combos_api, card_earmarks as card_earmarks_api, art as art_api, jumpstart as jumpstart_api, surf as surf_api
-from .runtime import TERMINAL, JobManager, JobsBusy
-from . import account_routes, analytics_routes, auth_routes, scraper_routes, sitecheck, telemetry
+from ..api.ids import DeckFileName, SetCode
+from .runtime import TERMINAL, JobManager, JobsBusy, JobsTooMany
+from . import account_routes, analytics_routes, auth_routes, scraper_routes, security, sitecheck, telemetry
 from ..analytics import store as analytics_store
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -107,11 +108,16 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         pruning.cancel()
         await manager.shutdown()
 
+    hosted = auth.hosted()
+    # Hosted: no interactive API docs or schema (scripts/dump_openapi.py builds the
+    # schema offline from app.openapi(), which doesn't need the route).
+    docs = {"docs_url": None, "redoc_url": None, "openapi_url": None} if hosted else {}
     app = FastAPI(title="magic-manager", version="0.1.0", lifespan=lifespan,
-                  generate_unique_id_function=lambda route: route.name)
+                  generate_unique_id_function=lambda route: route.name, **docs)
     app.state.jobs = manager
     app.state.undo_guards = guards
     assert api  # registers jobs
+    _live = Depends(security.live_fetch)  # hosted: per-user limit on live third-party reads
     # Writes only from this app's own pages: a browser marks every request with
     # Sec-Fetch-Site, so a POST from another website (or another localhost
     # port) is refused before it reaches a route. Non-browser clients (CLI,
@@ -144,6 +150,11 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         _settle(request, wrote=not 400 <= response.status_code < 500)
         return response
 
+    # Hosted: security headers on EVERY response (added last = outermost, so error
+    # bodies, refusals and the SPA all carry them).
+    if hosted:
+        app.add_middleware(security.SecurityHeaders, public_origin=app.state.public_origin)
+
     def _settle(request: Request, *, wrote: bool) -> None:
         # Synchronous (a rename or unlink): an await could be cancelled with a
         # disconnected request and leave the guard's in-flight count stuck.
@@ -169,6 +180,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     async def submit_job(name: str, body: dict):
         try:
             spec = jobs_api.get(name)
+            jobs_api.require_allowed(spec)  # catalog-wide jobs: admins only when hosted
             spec.input_model.model_validate(body)  # refuse bad input before touching the restore point
             guard = guards.current()
             begun = spec.mutates and await asyncio.to_thread(guard.begin, f"before {spec.title.lower()}")
@@ -184,6 +196,10 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             raise HTTPException(422, e.errors(include_url=False, include_context=False)) from e
         except JobsBusy as e:  # the account is being deleted
             raise HTTPException(409, f"Can't start a job while {e.title}.") from e
+        except JobsTooMany as e:
+            raise HTTPException(429, {"code": JobsTooMany.error_code, "message": str(e)}) from e
+        except jobs_api.JobNotAllowed as e:
+            raise HTTPException(403, {"code": jobs_api.ADMIN_ONLY_CODE, "message": str(e)}) from e
         return rec.public()
 
     @app.get("/api/jobs", response_model=list[JobOut], tags=["jobs"])
@@ -230,7 +246,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     def commanders(q: Annotated[str, Query(min_length=1)], limit: int = 20):
         return edhrec_api.search_commanders(q, limit=limit)
 
-    @app.get("/api/edhrec/compare", response_model=edhrec_api.CompareOut, tags=["edhrec"])
+    @app.get("/api/edhrec/compare", response_model=edhrec_api.CompareOut, tags=["edhrec"], dependencies=[_live])
     def compare(a: Annotated[str, Query(min_length=1)], b: Annotated[str | None, Query(min_length=1)] = None):
         try:
             return edhrec_api.compare(a, b)
@@ -245,7 +261,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     def explore_search(q: Annotated[str, Query(min_length=1)], limit: Annotated[int, Query(ge=1, le=50)] = 20):
         return explore_api.search(q, limit=limit)
 
-    @app.get("/api/explore/card", response_model=explore_api.CardExploreOut, tags=["explore"])
+    @app.get("/api/explore/card", response_model=explore_api.CardExploreOut, tags=["explore"], dependencies=[_live])
     def explore_card(a: Annotated[str, Query(min_length=1)], b: Annotated[str | None, Query(min_length=1)] = None):
         try:
             return explore_api.card(a, b)
@@ -467,8 +483,8 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
 
     # ---------- market ----------
 
-    @app.get("/api/market/products", response_model=market_api.FamilyProductsOut, tags=["market"])
-    def market_products(code: Annotated[str, Query(min_length=2)]):
+    @app.get("/api/market/products", response_model=market_api.FamilyProductsOut, tags=["market"], dependencies=[_live])
+    def market_products(code: Annotated[SetCode, Query()]):
         try:
             return market_api.family_products(code)
         except LookupError as e:
@@ -476,8 +492,8 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         except mtgjson.MtgJsonError as e:
             raise HTTPException(502, f"Couldn't read MTGJSON: {e}") from e
 
-    @app.get("/api/market/value", response_model=market_api.ProductValueOut, tags=["market"])
-    def market_value(set: Annotated[str, Query(min_length=2)], name: Annotated[str, Query(min_length=1)]):
+    @app.get("/api/market/value", response_model=market_api.ProductValueOut, tags=["market"], dependencies=[_live])
+    def market_value(set: Annotated[SetCode, Query()], name: Annotated[str, Query(min_length=1)]):
         try:
             return market_api.value_product(set, name)
         except LookupError as e:
@@ -485,8 +501,8 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         except (mtgjson.MtgJsonError, scryfall.ScryfallError) as e:
             raise HTTPException(502, f"Couldn't price this product: {e}") from e
 
-    @app.get("/api/market/product-tree", response_model=market_api.TreeNodeOut, tags=["market"])
-    def market_product_tree(set: Annotated[str, Query(min_length=2)], name: Annotated[str, Query(min_length=1)]):
+    @app.get("/api/market/product-tree", response_model=market_api.TreeNodeOut, tags=["market"], dependencies=[_live])
+    def market_product_tree(set: Annotated[SetCode, Query()], name: Annotated[str, Query(min_length=1)]):
         try:
             return market_api.product_tree(set, name)
         except LookupError as e:
@@ -495,16 +511,18 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             raise HTTPException(502, f"Couldn't read this product: {e}") from e
 
     @app.get("/api/market/product-cost", response_model=market_api.ProductCostOut, tags=["market"])
-    def market_product_cost(kind: Annotated[Literal["sealed", "sld"], Query()], set: Annotated[str, Query(min_length=2)],
+    def market_product_cost(request: Request, kind: Annotated[Literal["sealed", "sld"], Query()], set: Annotated[SetCode, Query()],
                             name: Annotated[str, Query(min_length=1)], finish: Annotated[str | None, Query()] = None):
+        # Lists ask for one product per row: only a product valued afresh (not the
+        # 30-min memo) counts against the live-read limit.
         try:
-            return market_api.product_cost(kind, set, name, finish)
+            return market_api.product_cost(kind, set, name, finish, on_miss=lambda: security.live_fetch(request))
         except LookupError as e:
             raise HTTPException(404, str(e)) from e
         except (mtgjson.MtgJsonError, scryfall.ScryfallError) as e:
             raise HTTPException(502, f"Couldn't price this product: {e}") from e
 
-    @app.get("/api/market/secret-lair", response_model=market_api.SldDropsOut, tags=["market"])
+    @app.get("/api/market/secret-lair", response_model=market_api.SldDropsOut, tags=["market"], dependencies=[_live])
     def market_secret_lair(limit: Annotated[int, Query(ge=1, le=200)] = 30):
         try:
             return market_api.sld_drops(limit)
@@ -512,14 +530,16 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             raise HTTPException(502, f"Couldn't list Secret Lair drops: {e}") from e
 
     @app.get("/api/market/cards", response_model=market_api.FamilyCardsOut, tags=["market"])
-    def market_cards(code: Annotated[str, Query(min_length=2)]):
+    def market_cards(code: Annotated[SetCode, Query()]):
         try:
             return market_api.family_cards(code)
         except LookupError as e:
             raise HTTPException(404, str(e)) from e
 
     @app.get("/api/market/deck", response_model=market_api.DeckCostOut, tags=["market"])
-    def market_deck(slug: Annotated[str, Query(min_length=1)], live: bool = False):
+    def market_deck(request: Request, slug: Annotated[str, Query(min_length=1)], live: bool = False):
+        if live:
+            security.live_fetch(request)
         try:
             return market_api.deck_cost(slug, live)
         except LookupError as e:
@@ -566,7 +586,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         return decks_api.recipe_list()
 
     @app.get("/api/recipes/{file_name}", response_model=decks_api.RecipeDetailOut, tags=["decks"])
-    def recipe_detail(file_name: str):
+    def recipe_detail(file_name: DeckFileName):
         try:
             return decks_api.recipe_detail(file_name)
         except LookupError as e:
@@ -631,7 +651,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     def deck_save(slug: str, body: decks_api.SaveIn):
         return _deck_call(decks_api.save, slug, body)
 
-    @app.get("/api/decks-suggestions", response_model=decks_api.SuggestionsOut, tags=["decks"])
+    @app.get("/api/decks-suggestions", response_model=decks_api.SuggestionsOut, tags=["decks"], dependencies=[_live])
     def deck_suggestions(commander: Annotated[str, Query(min_length=1)]):
         try:
             return decks_api.suggestions(commander)
@@ -661,15 +681,15 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
 
     # ---------- combos (Commander Spellbook) ----------
 
-    @app.get("/api/decks/{slug}/combos", response_model=combos_api.DeckCombosOut, tags=["combos"])
+    @app.get("/api/decks/{slug}/combos", response_model=combos_api.DeckCombosOut, tags=["combos"], dependencies=[_live])
     def deck_combos(slug: str):
         return _deck_call(combos_api.deck, slug)
 
-    @app.post("/api/combos/draft", response_model=combos_api.DeckCombosOut, tags=["combos"])
+    @app.post("/api/combos/draft", response_model=combos_api.DeckCombosOut, tags=["combos"], dependencies=[_live])
     def draft_combos(body: combos_api.DraftCombosIn):
         return combos_api.draft(body)
 
-    @app.get("/api/combos/card", response_model=combos_api.CardCombosOut, tags=["combos"])
+    @app.get("/api/combos/card", response_model=combos_api.CardCombosOut, tags=["combos"], dependencies=[_live])
     def card_combos(name: Annotated[str, Query(min_length=1, max_length=200)],
                     limit: Annotated[int, Query(ge=1, le=100)] = 30):
         return combos_api.card(name, limit=limit)
@@ -690,7 +710,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
 
     # ---------- card surfer ----------
 
-    @app.post("/api/surf/draw", response_model=surf_api.SurfDrawOut, tags=["surf"])
+    @app.post("/api/surf/draw", response_model=surf_api.SurfDrawOut, tags=["surf"], dependencies=[_live])
     def surf_draw(body: surf_api.SurfDrawIn):
         """The next random cards for the card surfer (read-only)."""
         try:
@@ -711,7 +731,9 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         return cards_api.holdings(scryfall_id)
 
     @app.post("/api/cards/floors", response_model=cards_api.FloorsOut, tags=["cards"])
-    def card_floors(body: cards_api.FloorsIn):
+    def card_floors(request: Request, body: cards_api.FloorsIn):
+        if body.live:
+            security.live_fetch(request)
         try:
             return cards_api.floors(body)
         except scryfall.ScryfallError as e:
@@ -796,14 +818,14 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     # ---------- jumpstart ----------
 
     @app.get("/api/jumpstart/{code}", response_model=jumpstart_api.JumpstartOut, tags=["jumpstart"])
-    def jumpstart_view(code: str):
+    def jumpstart_view(code: SetCode):
         try:
             return jumpstart_api.view(code)
         except LookupError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
     @app.post("/api/jumpstart/{code}/buy-list", response_model=jumpstart_api.JumpstartBuyOut, tags=["jumpstart"])
-    def jumpstart_buy_list(code: str, body: jumpstart_api.JumpstartBuyIn):
+    def jumpstart_buy_list(code: SetCode, body: jumpstart_api.JumpstartBuyIn):
         try:
             return jumpstart_api.buy_list(code, body)
         except LookupError as e:
@@ -811,11 +833,11 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
 
     # ---------- add cards (ingest) ----------
 
-    @app.get("/api/ingest/search", response_model=ingest_api.SearchOut, tags=["ingest"])
+    @app.get("/api/ingest/search", response_model=ingest_api.SearchOut, tags=["ingest"], dependencies=[_live])
     def ingest_search(q: Annotated[str, Query(min_length=2, max_length=120)], limit: Annotated[int, Query(ge=1, le=200)] = 60):
         return ingest_api.search(q, limit)
 
-    @app.post("/api/ingest/resolve", response_model=ingest_api.ResolveOut, tags=["ingest"])
+    @app.post("/api/ingest/resolve", response_model=ingest_api.ResolveOut, tags=["ingest"], dependencies=[_live])
     def ingest_resolve(body: ingest_api.ResolveIn):
         return ingest_api.resolve(body)
 
@@ -835,13 +857,22 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     if serve_frontend and DIST_DIR.is_dir():
         app.mount("/assets", StaticFiles(directory=DIST_DIR / "assets"), name="assets")
 
+        index_page: list[str] = []
+
         @app.get("/{path:path}", include_in_schema=False)
-        def spa(path: str):
+        def spa(request: Request, path: str):
             if path.startswith("api/"):
                 raise HTTPException(404)
             f = DIST_DIR / path
-            if path and f.is_file() and DIST_DIR in f.resolve().parents:
+            if path and f.is_file() and DIST_DIR in f.resolve().parents and f.name != "index.html":
                 return FileResponse(f)
-            return FileResponse(DIST_DIR / "index.html")
+            if not hosted:
+                return FileResponse(DIST_DIR / "index.html")
+            # Hosted: this response's CSP style nonce, in the page and in its policy.
+            if not index_page:
+                index_page.append((DIST_DIR / "index.html").read_text())
+            nonce = security.new_nonce()
+            request.state.csp_nonce = nonce
+            return HTMLResponse(security.render_index(index_page[0], nonce), headers={"Cache-Control": "no-store"})
 
     return app

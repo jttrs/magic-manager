@@ -27,13 +27,14 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
+import re
 import time
 from functools import lru_cache
 from pathlib import Path
 from typing import Iterable
 
 from . import config as _config
+from . import util
 
 WRAPPER = (
     Path(__file__).resolve().parents[2]
@@ -45,20 +46,52 @@ class MtgJsonError(RuntimeError):
     """Raised when the wrapper exits non-zero or returns non-JSON."""
 
 
+# ---------- identifiers (the ONE check before a name reaches the wrapper or a cache path) ----------
+
+SET_CODE_RE = re.compile(r"^[A-Za-z0-9]{2,8}$")
+# Real file names carry Unicode letters (``DandânDeck_SLD``, ``OishiiTokensオイシイトークン_SLD``):
+# word characters only — never a path separator, a dot, a dash or a space.
+DECK_NAME_RE = re.compile(r"^\w+$")
+_RESOURCE_RE = re.compile(r"^(?:decks/)?\w+\.json(?:\.sha256)?$")
+
+
+class BadIdentifier(ValueError):
+    """A set code or MTGJSON deck file name that isn't one (422 ``input.bad_identifier``)."""
+
+    error_code = "input.bad_identifier"
+
+
+def valid_set_code(code: str) -> str:
+    """``code`` if it is a set code (2–8 letters/digits), else :class:`BadIdentifier`."""
+    if not isinstance(code, str) or not SET_CODE_RE.fullmatch(code):
+        raise BadIdentifier(f"{str(code)[:40]!r} isn't a set code (2–8 letters or digits).")
+    return code
+
+
+def valid_deck_name(file_name: str) -> str:
+    """An MTGJSON deck file name without ``.json`` (letters, digits, ``_``), else :class:`BadIdentifier`."""
+    name = file_name.removesuffix(".json") if isinstance(file_name, str) else ""
+    if not DECK_NAME_RE.fullmatch(name):
+        raise BadIdentifier(f"{str(file_name)[:80]!r} isn't an MTGJSON deck file name (letters, digits and _ only).")
+    return name
+
+
 def is_missing_file(e: Exception) -> bool:
     """True when ``e`` is the wrapper reporting that MTGJSON has no such file
     (HTTP 404) — as opposed to an outage, a network failure or a bad response."""
     return isinstance(e, MtgJsonError) and "HTTP 404 from" in str(e)
 
 
+# Subcommands that download large files (set files, DeckList, forced refresh).
+_BULK_COMMANDS = frozenset({"set", "decklist", "refresh"})
+
+
 def _run(args: list[str]) -> str:
     if not WRAPPER.exists():
         raise MtgJsonError(f"wrapper missing: {WRAPPER}")
-    res = subprocess.run(
-        [str(WRAPPER), *args],
-        text=True,
-        capture_output=True,
-        check=False,
+    res = util.run_wrapper(
+        [str(WRAPPER), *args], error=MtgJsonError, service="MTGJSON",
+        timeout=util.WRAPPER_BULK_TIMEOUT if args and args[0] in _BULK_COMMANDS else util.WRAPPER_TIMEOUT,
     )
     if res.returncode != 0:
         raise MtgJsonError(
@@ -104,7 +137,7 @@ def set_file(set_code: str) -> dict:
         mapping — see ``sealed_products`` / ``sealed_product_decks``. Do NOT
         infer product membership from a deck's ``type`` field.
     """
-    body = _run_json(["set", set_code])
+    body = _run_json(["set", valid_set_code(set_code)])
     return body.get("data", {})
 
 
@@ -135,7 +168,7 @@ def deck(file_name: str) -> dict:
     All callers treat the result as READ-ONLY (``.get()`` / iteration only), so
     sharing one dict instance across calls is safe.
     """
-    body = _run_json(["deck", file_name])
+    body = _run_json(["deck", valid_deck_name(file_name)])
     return body.get("data", {})
 
 
@@ -175,16 +208,23 @@ def _deck_list_rows() -> list[dict]:
     The wrapper caches DeckList.json on disk, but each call still spawned it
     and re-parsed ~3000 entries — the precon catalog search paid that per
     keystroke. Reused for ``_DECK_LIST_TTL_S`` while the on-disk copy is
-    unchanged (a refresh/re-download changes its stamp → re-read). Callers
-    must not mutate the entries."""
+    unchanged (a refresh/re-download changes its stamp → re-read). A (re-)read
+    of a cached copy parses the file directly; only a missing one goes through
+    the wrapper. Callers must not mutate the entries."""
     global _deck_list_memo
     now = time.monotonic()
     memo = _deck_list_memo
     stamp = _cache_stamp("DeckList.json")
     if memo is not None and stamp is not None and memo[1] == stamp and now - memo[0] < _DECK_LIST_TTL_S:
         return memo[2]
-    rows = _run_json(["decklist"]).get("data", [])
-    _deck_list_memo = (now, _cache_stamp("DeckList.json"), rows)
+    # A cached copy is read straight from disk (what the wrapper would `cat`):
+    # spawning it costs 0.3 s idle and seconds on a loaded machine.
+    body = _cached_json("DeckList.json") if stamp is not None else None
+    if body is None:
+        body = _run_json(["decklist"])  # not cached (or unreadable): the wrapper fetches it
+        stamp = _cache_stamp("DeckList.json")
+    rows = body.get("data", [])
+    _deck_list_memo = (now, stamp, rows)
     return rows
 
 
@@ -639,6 +679,8 @@ def precon_variants(
 def cache_path(resource_path: str) -> Path:
     """Where mtgjson.sh caches ``resource_path`` (its ``CACHE_DIR``/<resource>
     layout — the one Python mirror of it). Offline; the file may not exist."""
+    if not _RESOURCE_RE.fullmatch(resource_path or ""):
+        raise BadIdentifier(f"{str(resource_path)[:80]!r} isn't an MTGJSON resource path.")
     base = os.environ.get("MTGJSON_CACHE_DIR") or Path(os.environ.get("TMPDIR") or "/tmp") / "mtgjson-cache"
     return Path(base) / resource_path
 
@@ -653,17 +695,25 @@ def cached_deck(file_name: str) -> dict | None:
     """``decks/<file_name>.json``'s ``data`` block straight from the wrapper's
     disk cache — no subprocess, never the network; ``None`` when not cached
     (or unreadable)."""
-    p = cache_path(f"decks/{file_name.removesuffix('.json')}.json")
+    body = _cached_json(f"decks/{valid_deck_name(file_name)}.json")
+    return None if body is None else body.get("data") or {}
+
+
+def _cached_json(resource_path: str) -> dict | None:
+    """``resource_path`` parsed straight from the wrapper's disk cache — no
+    subprocess, never the network; ``None`` when absent, empty or unreadable
+    (the wrapper treats an empty file as absent too)."""
     try:
-        return json.loads(p.read_text()).get("data") or {}
+        body = json.loads(cache_path(resource_path).read_bytes())
     except (OSError, ValueError):
         return None
+    return body if isinstance(body, dict) else None
 
 
 def cached_deck_mtime(file_name: str) -> float | None:
     """The cached deck file's mtime (a memo key for callers), ``None`` when absent."""
     try:
-        return cache_path(f"decks/{file_name.removesuffix('.json')}.json").stat().st_mtime
+        return cache_path(f"decks/{valid_deck_name(file_name)}.json").stat().st_mtime
     except OSError:
         return None
 
@@ -676,6 +726,7 @@ def is_stale(resource_path: str) -> bool:
     ``resource_path`` is the path under ``/api/v5/`` (e.g. ``"FIC.json"``,
     ``"DeckList.json"``, ``"decks/CounterBlitzFinalFantasyX_FIC.json"``).
     """
+    cache_path(resource_path)  # validates the resource path
     out = _run(["check-stale", resource_path]).strip()
     if out == "fresh":
         return False
@@ -689,6 +740,7 @@ def is_stale(resource_path: str) -> bool:
 def refresh(resource_path: str) -> None:
     """Delete the cached copy of ``resource_path`` so the next fetch re-downloads."""
     global _deck_list_memo
+    cache_path(resource_path)  # validates the resource path
     _run(["refresh", resource_path])
     if resource_path == "DeckList.json":
         _deck_list_memo = None

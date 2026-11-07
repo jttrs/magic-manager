@@ -235,6 +235,95 @@ def test_split_catalog_refs_finds_orphans(split_env):
     assert found["inventory"].rows == 0
 
 
+def test_split_connect_after_user_file_removed_creates_nothing(split_env):
+    catalog, user = split_env
+    user.unlink()
+    with pytest.raises(layout.LayoutError, match="user DB .* does not exist"):
+        with db.connect():
+            pass
+    assert not user.exists()
+
+
+def test_split_connect_race_user_file_vanishes_after_precheck(split_env, monkeypatch):
+    """The is_file() pre-check passes but the file is gone by connect time (a request
+    already past the auth gate while the account is deleted): mode=rw never creates."""
+    catalog, user = split_env
+    user.unlink()
+    real = Path.is_file
+    seen = []
+
+    def fake(self):
+        if self == user:
+            seen.append(self)
+            return len(seen) <= 1  # pre-check passes; the post-failure lookup sees the truth
+        return real(self)
+
+    monkeypatch.setattr(Path, "is_file", fake)
+    with pytest.raises(layout.LayoutError, match="user DB .* does not exist"):
+        with db.connect():
+            pass
+    assert not user.exists()
+
+
+def test_split_connect_race_catalog_vanishes_after_precheck(split_env, monkeypatch):
+    catalog, user = split_env
+    catalog.unlink()
+    real = Path.is_file
+    seen = []
+
+    def fake(self):
+        if self == catalog:
+            seen.append(self)
+            return len(seen) <= 1
+        return real(self)
+
+    monkeypatch.setattr(Path, "is_file", fake)
+    with pytest.raises(layout.LayoutError, match="catalog DB .* does not exist"):
+        with db.connect():
+            pass
+    assert not catalog.exists()
+
+
+def test_split_connect_still_reads_and_writes_after_uri_open(split_env):
+    with db.connect() as conn:
+        assert conn.execute("SELECT name FROM cards WHERE scryfall_id='c-1'").fetchone()[0] == "Sol Ring"
+        conn.execute("UPDATE inventory SET quantity = 5 WHERE scryfall_id='c-1'")
+    with db.connect() as conn:
+        assert conn.execute("SELECT quantity FROM inventory").fetchone()[0] == 5
+
+
+def test_undo_take_for_a_deleted_user_creates_no_file(split_env):
+    catalog, user = split_env
+    user.unlink()
+    with pytest.raises(layout.LayoutError):
+        undo.take("x")
+    assert sorted(p.name for p in user.parent.iterdir()) == []
+
+
+def test_undo_take_when_user_vanishes_mid_copy_leaves_nothing(split_env, monkeypatch):
+    catalog, user = split_env
+    real = undo._write
+
+    def write_then_delete(conn, dest, reason):
+        real(conn, dest, reason)
+        user.unlink()
+
+    monkeypatch.setattr(undo, "_write", write_then_delete)
+    with pytest.raises(layout.LayoutError):
+        undo.take("x")
+    assert sorted(p.name for p in user.parent.iterdir()) == []
+
+
+def test_session_guard_end_drops_pending_for_a_deleted_user(split_env):
+    catalog, user = split_env
+    guard = undo.SessionGuard(path=undo.snapshot_path())
+    assert guard.begin("w")
+    assert guard.pending_path().exists()
+    user.unlink()
+    guard.end(True)
+    assert sorted(p.name for p in user.parent.iterdir()) == []
+
+
 # ---------- single layout unchanged ----------
 
 def test_single_connect_unchanged(tmp_db, monkeypatch):

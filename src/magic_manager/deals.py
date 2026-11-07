@@ -153,9 +153,9 @@ def _record_store_health(rows: list[dict]) -> None:
             continue
         key = scraper_health.store_key(r["vendor"])
         if r.get("price") is not None:
-            uses.append((key, "ok", None, None))
+            uses.append((key, "ok", None))
         elif (r.get("error") or "").startswith("No price found"):
-            uses.append((key, "fail", "scrape.no_price", None))
+            uses.append((key, "fail", "scrape.no_price"))
     scraper_health.record_uses(uses)
 
 

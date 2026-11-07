@@ -4,6 +4,10 @@
 shows a "temporarily down" notice wherever a down scraper is offered.
 ``POST /api/scrapers/report`` — the browser companion found a page changed in the
 user's own browser (only page-changed codes are accepted; they flag the scraper).
+
+Health is global, so hosted only an admin's report flags anything (a member's is
+dropped — :func:`may_report`) and only an admin sees a check's raw message;
+everyone else sees the reason catalog's plain message for its code.
 """
 from __future__ import annotations
 
@@ -43,16 +47,26 @@ class ScraperReportIn(BaseModel):
     store: Literal["manapool", "tcgplayer", "cardkingdom"] | None = Field(None, description="Cart and order-history reports: which store's reader (a cart report without one is Mana Pool's).")
 
 
-def _out(h: scraper_health.Health) -> ScraperHealthOut:
+def may_report() -> bool:
+    """May the bound user's report flag a scraper? Always locally; admins only hosted."""
+    from .. import owner_machine
+    return owner_machine.is_admin()
+
+
+def _out(h: scraper_health.Health, *, raw: bool = True) -> ScraperHealthOut:
     s = h.scraper
+    message = h.message if raw else scraper_health.reason(h.code)
     return ScraperHealthOut(key=s.key, scraper=s.scraper, site=s.site, site_name=s.site_name, label=s.label,
                             where=s.where, canary=s.canary, status=h.status, since=h.since,
-                            checked_at=h.checked_at, last_ok=h.last_ok, code=h.code, message=h.message,
+                            checked_at=h.checked_at, last_ok=h.last_ok, code=h.code, message=message,
                             fix=h.fix, via=h.via if h.via in ("canary", "use") else None)
 
 
 def health() -> ScrapersHealthOut:
-    rows = [_out(h) for h in scraper_health.health()]
+    """Every scraper's status — with each check's own message for an admin (always
+    locally), else only the plain message of its reason code."""
+    raw = may_report()
+    rows = [_out(h, raw=raw) for h in scraper_health.health()]
     return ScrapersHealthOut(scrapers=rows, down=sum(r.status == "down" for r in rows))
 
 

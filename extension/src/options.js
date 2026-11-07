@@ -68,6 +68,8 @@ async function refresh() {
 const syncBridge = () => chrome.runtime.sendMessage({ type: 'bridge' }).catch(() => null);
 
 let pairing = false;
+// While true, the pairing line keeps a pairing error on screen, so storage changes don't redraw over it (cleared by the next Pair/Unpair).
+let holdError = false;
 
 async function pair() {
   if (pairing) return;
@@ -84,21 +86,34 @@ async function pairWith(parsed) {
   // First await in the click handler, so Chrome still sees the user's click. Exactly this one
   // origin's pattern is asked for (the manifest's any-https entry is only the pool it comes from).
   const granted = await chrome.permissions.request({ origins: [parsed.pattern] }).catch(() => false);
-  const { appOrigin: before } = await chrome.storage.local.get('appOrigin');
+  holdError = false;   // a new attempt clears any held error
+  const { appOrigin: before, lastHello: prevHello } = await chrome.storage.local.get(['appOrigin', 'lastHello']);
   if (!granted) return refuse('pair.permission_denied');
-  await chrome.storage.local.remove('lastHello');
-  await chrome.storage.local.set({ appOrigin: parsed.origin });
-  if (before && before !== parsed.origin) {
-    const old = parseAppOrigin(before);
-    if (old.pattern && old.pattern !== parsed.pattern) await chrome.permissions.remove({ origins: [old.pattern] }).catch(() => {});
+  const old = before ? parseAppOrigin(before) : null;
+  if (before !== parsed.origin) {
+    await chrome.storage.local.remove('lastHello');
+    await chrome.storage.local.set({ appOrigin: parsed.origin });
   }
   const bridged = await syncBridge();
-  if (!bridged?.ok) return refuse('pair.bridge_failed');
+  if (!bridged?.ok) {
+    // Restore the pairing from before the click: a prior pairing stays paired and working, and
+    // with none the page is unpaired. The error stays on screen until the next Pair/Unpair.
+    holdError = true;
+    if (before) await chrome.storage.local.set({ appOrigin: before, ...(prevHello ? { lastHello: prevHello } : {}) });
+    else await chrome.storage.local.remove(['appOrigin', 'lastHello']);
+    if (parsed.pattern !== old?.pattern) await chrome.permissions.remove({ origins: [parsed.pattern] }).catch(() => {});
+    await syncBridge();   // the worker re-registers the prior bridge, or none
+    $('unpair').disabled = !before;   // held error: the button must still match the restored pairing
+    return refuse('pair.bridge_failed');
+  }
+  if (old?.pattern && old.pattern !== parsed.pattern) await chrome.permissions.remove({ origins: [old.pattern] }).catch(() => {});
   $('origin').value = parsed.origin;
   await refresh();
 }
 
 async function unpair() {
+  if (pairing) return;   // a pair attempt in flight finishes (and restores) first
+  holdError = false;
   const { appOrigin } = await chrome.storage.local.get('appOrigin');
   await chrome.storage.local.remove(['appOrigin', 'lastHello']);
   await syncBridge();   // no paired address: the worker unregisters the bridge
@@ -128,6 +143,7 @@ $('unpair').addEventListener('click', unpair);
 $('access').addEventListener('click', toggleAccess);
 // The app checking in (or a pairing change) updates the line while this page is open.
 chrome.storage.onChanged.addListener((changes, area) => {
+  if (holdError) return;
   if (area === 'local' && ('lastHello' in changes || 'appOrigin' in changes)) showPairing();
 });
 chrome.storage.local.get('appOrigin').then(({ appOrigin }) => { $('origin').value = appOrigin || ''; });

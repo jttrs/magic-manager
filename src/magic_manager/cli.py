@@ -704,8 +704,10 @@ def serve_cmd(
             typer.echo(f"error: {e}", err=True)
             raise typer.Exit(2)
         typer.echo(f"hosted mode: sign-in on {origin} via {', '.join(auth.configured_providers())}", err=True)
+    # proxy_headers=False: uvicorn would otherwise trust X-Forwarded-For from
+    # 127.0.0.1; the app decides that itself (MM_TRUSTED_PROXY, web/security.py).
     uvicorn.run("magic_manager.web.app:create_app", factory=True,
-                host=host, port=port, reload=reload)
+                host=host, port=port, reload=reload, proxy_headers=False)
 
 
 @set_app.command("backfill-dates")
@@ -6163,6 +6165,38 @@ def host_verify_replica(
         for f in r.files:
             typer.echo(f"{'✓' if f.ok else '✗'} {f.name}: {f.detail}")
         typer.echo("REPLICA OK" if r.ok else "REPLICA CHECK FAILED")
+    raise typer.Exit(0 if r.ok else 1)
+
+
+@host_app.command("replica-lag")
+def host_replica_lag(
+    data_dir: Path | None = _DATA_DIR_OPT,
+    threshold_min: int = typer.Option(30, "--threshold-min", min=1,
+                                      help="Minutes a file may be written ahead of its newest offsite object."),
+    as_json: bool = typer.Option(False, "--json", help="Print the report as JSON."),
+):
+    """Is the offsite replica keeping up? Compares each replicated file's last local write
+    with its newest offsite object; exit 0 ok, 1 behind or never replicated, 2 couldn't check."""
+    from datetime import timedelta
+
+    from . import objectstore, offsite
+    try:
+        r = offsite.replica_lag(_host_data_dir(data_dir), offsite.store(), threshold=timedelta(minutes=threshold_min))
+    except (offsite.OffsiteError, objectstore.StoreError, ValueError, OSError) as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+    if as_json:
+        typer.echo(json.dumps(r.to_dict()))
+    else:
+        for f in r.files:
+            if f.status == "missing":
+                typer.echo(f"✗ {f.name}: never replicated")
+            elif f.status == "behind":
+                typer.echo(f"✗ {f.name}: replica {(f.lag_seconds or 0) // 60} min behind its last write")
+            else:
+                typer.echo(f"✓ {f.name}: replica {f.lag_seconds or 0}s behind" if f.lag_seconds is not None
+                           else f"✓ {f.name}: new, not replicated yet")
+        typer.echo("REPLICATION OK" if r.ok else "REPLICATION BEHIND")
     raise typer.Exit(0 if r.ok else 1)
 
 

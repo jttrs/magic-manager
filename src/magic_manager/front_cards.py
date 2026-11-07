@@ -17,12 +17,11 @@ from __future__ import annotations
 
 import json
 import sqlite3
-import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from . import db
+from . import db, util
 
 if TYPE_CHECKING:
     from .selectors import MaterializedRow
@@ -154,9 +153,8 @@ def _manapool_prices(scryfall_ids: list[str]) -> dict[str, float]:
     if not _MANAPOOL_SH.exists() or not scryfall_ids:
         return {}
     try:
-        res = subprocess.run(
-            [str(_MANAPOOL_SH), "products", *scryfall_ids],
-            capture_output=True, text=True, check=False,
+        res = util.run_wrapper(
+            [str(_MANAPOOL_SH), "products", *scryfall_ids], error=RuntimeError, service="Mana Pool",
         )
         if res.returncode != 0:
             return {}

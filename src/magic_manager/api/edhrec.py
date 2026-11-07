@@ -58,6 +58,7 @@ SYNC_BULK = register(JobSpec(
     description="Fetch EDHREC commander + card pages for every card in a selector or set family.",
     input_model=SyncBulkInput,
     run=_run_sync_bulk,
+    scope="catalog",
 ))
 
 

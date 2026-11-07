@@ -130,7 +130,7 @@ def test_deck_fetcher_runs_without_a_terminal(monkeypatch):
         stdout = __import__("io").StringIO('{"cards": []}')
         stderr = __import__("io").StringIO("")
 
-        def wait(self):
+        def wait(self, timeout=None):
             return 0
 
     def popen(cmd, **kw):

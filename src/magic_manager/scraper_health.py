@@ -62,6 +62,8 @@ REASONS: dict[str, tuple[str, str]] = {
                      "A code bug or a changed page — run the scraper by hand and read the traceback."),
     "scrape.blocked": ("The site blocked the automated check.",
                        "Nothing to fix yet — the check couldn't run. Use the app as usual."),
+    "scrape.unavailable": ("The store's site didn't serve the page (it moved, is down, or answered with an error).",
+                           "Usually temporary. If it persists, check the sample URL by hand and pick a new sample_url."),
     "scrape.sample_gone": ("The sample page the check reads was removed.",
                            "Pick a new sample (vendors.toml sample_url or config/scraper_canaries.toml)."),
     "scrape.unreachable": ("The site couldn't be reached.",
@@ -291,18 +293,26 @@ def record(results: list[tuple[str, Outcome, str | None, str | None, dict | None
     return out
 
 
-def record_use(key: str, outcome: Outcome, code: str | None = None, message: str | None = None) -> None:
+def record_use(key: str, outcome: Outcome, code: str | None = None) -> None:
     """A real read in the app. Never raises — health must never break a feature.
-    ``unverified`` uses (blocked, private deck, offline) aren't recorded."""
-    record_uses([(key, outcome, code, message)])
+    ``unverified`` uses (blocked, private deck, offline) aren't recorded.
+
+    Health is GLOBAL (every user sees it), so a use stores only its reason CODE —
+    never exception text, URLs or ids; the shown message comes from :data:`REASONS`.
+    Hosted, only an ADMIN's reads count: a member's read (whose page content they
+    may supply, e.g. a companion extract) can neither flag nor clear a scraper."""
+    record_uses([(key, outcome, code)])
 
 
-def record_uses(uses: list[tuple[str, Outcome, str | None, str | None]]) -> None:
+def record_uses(uses: list[tuple[str, Outcome, str | None]]) -> None:
     """Many real reads at once (one file write) — see :func:`record_use`."""
-    rows = [(k, o, c, m, None) for k, o, c, m in uses if o != "unverified"]
+    rows = [(k, o, c, None, None) for k, o, c in uses if o != "unverified"]
     if not rows:
         return
     try:
+        from . import owner_machine
+        if not owner_machine.is_admin():   # always True locally
+            return
         # A read that confirms what's already recorded needs no write (bulk syncs
         # call this per card).
         recs = _read(path())["scrapers"]

@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 
 # Set (to "1") for a process that must never open a browser on this machine: the hosted web
-# app's deck fetch for a member (owner_machine "decks.moxfield_server"). Checked here, at the one
+# app's deck fetch (owner_machine "decks.moxfield_server"). Checked here, at the one
 # launch seam, and by scripts/moxfield_session.py + scripts/import_deck.py before they start one.
 NO_SERVER_BROWSER_ENV = "MM_NO_SERVER_BROWSER"
 NO_SERVER_BROWSER_MESSAGE = ("Moxfield decks are read in your own browser here: use the browser companion "
@@ -22,7 +22,11 @@ class ServerBrowserRefused(RuntimeError):
 
 
 def refused() -> bool:
-    return os.environ.get(NO_SERVER_BROWSER_ENV) == "1"
+    """No server browser: when asked (MM_NO_SERVER_BROWSER=1), and ALWAYS when hosted —
+    the hosted server never drives a browser (Phase 5, P5-2), so this last seam
+    fails closed even if a future in-process caller forgot the owner_machine check."""
+    from .analytics import consent
+    return os.environ.get(NO_SERVER_BROWSER_ENV) == "1" or consent.mode() == "hosted"
 
 
 ARGS = ["--disable-blink-features=AutomationControlled"]  # drops the most obvious automation tell

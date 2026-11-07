@@ -36,7 +36,7 @@ out of scope by the owner's choice (2026-10-10).
 |---|---|---|
 | `ok` | read the sample and it matched what was validated | clears a down flag |
 | `fail` | the page loaded but no longer reads as validated (`scrape.no_price`, `scrape.no_cards`, `scrape.shape_changed`, `scrape.expectation`, `scrape.error`, `cart.page_changed`, `moxfield.changed`) | flags **down** (since = first failure) |
-| `unverified` | the check couldn't run: blocked (`scrape.blocked`), offline (`scrape.unreachable`), sample removed (`scrape.sample_gone`), an empty deck (`scrape.empty_deck`), a wrapper's 429 backoff abort, no browser | never flags, never clears |
+| `unverified` | the check couldn't run: blocked (`scrape.blocked`), site down or moved (`scrape.unavailable`), offline (`scrape.unreachable`), sample removed (`scrape.sample_gone`), an empty deck (`scrape.empty_deck`), a wrapper's 429 backoff abort, no browser | never flags, never clears |
 
 Browser checks run headless first; anything that didn't read is retried once in a visible real
 Chrome window and that verdict stands (bot defenses serve headless browsers a stripped page —
@@ -46,9 +46,13 @@ those checks are then unverified, never down.
 
 **Real use is the backup** for what the canary can't reach (eBay, your own cart, private decks):
 a Deals read that finds no price flags the store; a read that works clears it; the companion
-reports `cart.page_changed` / `moxfield.changed` / `moxfield.collection_changed` / `archidekt.changed` / `orders.page_changed` + store (cart reports name their store; none = Mana Pool) (`POST /api/scrapers/report`); a server deck
+reports `cart.page_changed` / `moxfield.changed` / `moxfield.collection_changed` / `archidekt.changed` / `orders.page_changed` + store (cart reports name their store; none = Mana Pool) (`POST /api/scrapers/report` — hosted, only an admin's report flags anything: health is global, so a
+member's is dropped with a 204); a server deck
 fetch that parses no cards flags that builder; any successful EDHREC sync clears its flag.
-Blocks, private decks, empty decks and empty carts never flag. In the Moxfield canary a navigation
+Blocks, private decks, empty decks and empty carts never flag. A real-use record stores only its
+reason **code** (never exception text, URLs or ids), and hosted only an **admin's** reads count — a
+member's read (whose page they may supply through the companion) neither flags nor clears a
+scraper; only admins see a check's own message — everyone else sees the reason catalog's plain message. In the Moxfield canary a navigation
 error (offline, DNS, timeout) is `unverified`; only a page that loaded without firing the deck call is `fail`.
 
 ## Status file
@@ -66,7 +70,10 @@ Written atomically under a file lock.
   (down / reading again / needs a new sample). Install: `scripts/launchd/install-scrape-canary.sh
   [--run-now | --uninstall]`. Log: `~/Library/Logs/magic-manager/scrape-canary.log`.
 - **GitHub, nightly**: `.github/workflows/vendor-canary.yml` (`scripts/vendor_canary.py`, the store
-  half) opens or comments on one issue when a store stops reading.
+  half) opens or comments on one issue when a store stops reading. CI forgives only a bot wall
+  (`scrape.blocked` -- the owner's daily local canary covers those stores) and fails on everything
+  else (including `scrape.unavailable`, `scrape.unreachable`, `scrape.sample_gone`); a run with no
+  failures closes its issue.
 
 ## In the app
 
