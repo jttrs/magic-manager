@@ -63,15 +63,6 @@ export const flagChoice = (f: Pick<FlagStateOut, 'override'>): FlagChoice => (f.
 export const choiceValue = (c: FlagChoice): boolean | null => (c === 'default' ? null : c === 'on');
 export const defaultChoiceLabel = (f: Pick<FlagStateOut, 'default'>) => `Default · ${f.default ? 'on' : 'off'}`;
 
-const FLAG_TITLE: Record<string, string> = {
-  cart_check: 'Cart check',
-  deals: 'Deals',
-  analytics: 'Analytics dashboard',
-  companion: 'Browser companion',
-  purchases: 'Store orders',
-};
-export const flagTitle = (name: string) => FLAG_TITLE[name] ?? name.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
-
 /** The owner-machine paths inside a flag's surface, by title — admins only, whatever the flag says. */
 export function ownerOnlyNote(f: Pick<FlagStateOut, 'owner_paths'>, paths: readonly OwnerPathOut[], isAdmin: boolean): string | null {
   if (!f.owner_paths.length) return null;

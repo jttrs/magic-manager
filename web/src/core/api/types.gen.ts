@@ -3255,6 +3255,12 @@ export type FeaturesOut = {
      */
     mode?: 'local' | 'hosted';
     /**
+     * Flag Admin
+     *
+     * May you use the flag picker (GET/PUT /api/flags): always locally; admins only when hosted.
+     */
+    flag_admin?: boolean;
+    /**
      * Jobs
      *
      * Catalog-wide jobs (JobSpec scope `catalog`) → may you run them here. All true locally; admins only when hosted.
@@ -3265,15 +3271,65 @@ export type FeaturesOut = {
 };
 
 /**
- * FlagIn
+ * FlagRowOut
  */
-export type FlagIn = {
+export type FlagRowOut = {
     /**
-     * Value
-     *
-     * true / false, or null for the default.
+     * Name
      */
-    value: boolean | null;
+    name: string;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * About
+     */
+    about: string;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Default
+     *
+     * The value from config/features.toml with features.local.toml applied.
+     */
+    default: boolean;
+    /**
+     * Everyone
+     *
+     * The instance-wide value set in the picker; null = not set.
+     */
+    everyone?: boolean | null;
+    /**
+     * Pinned By Env
+     *
+     * MM_FEATURES pins this flag, so 'everyone' cannot change what runs.
+     */
+    pinned_by_env: boolean;
+    /**
+     * Mine
+     *
+     * Your own override (hosted only); null = none.
+     */
+    mine?: boolean | null;
+    /**
+     * Effective
+     */
+    effective: boolean;
+    /**
+     * Source
+     */
+    source: 'default' | 'local_file' | 'everyone' | 'env' | 'user';
+    /**
+     * Changed At
+     */
+    changed_at?: string | null;
+    /**
+     * Changed By
+     */
+    changed_by?: string | null;
 };
 
 /**
@@ -3285,13 +3341,19 @@ export type FlagStateOut = {
      */
     name: string;
     /**
+     * Title
+     *
+     * Short display name (config/features.toml).
+     */
+    title: string;
+    /**
      * About
      */
     about: string;
     /**
      * Default
      *
-     * The server's value (config files + MM_FEATURES).
+     * The value a per-user override falls back to (config files + the 'everyone' value + MM_FEATURES).
      */
     default: boolean;
     /**
@@ -3310,6 +3372,22 @@ export type FlagStateOut = {
      * Owner-machine paths in this flag's surface: admins only, whatever the flag says.
      */
     owner_paths: Array<string>;
+};
+
+/**
+ * FlagsOut
+ */
+export type FlagsOut = {
+    /**
+     * Flags
+     */
+    flags: Array<FlagRowOut>;
+    /**
+     * Per User
+     *
+     * Just-me overrides exist (hosted mode).
+     */
+    per_user: boolean;
 };
 
 /**
@@ -7452,6 +7530,18 @@ export type WatchedOut = {
 };
 
 /**
+ * FlagIn
+ */
+export type MagicManagerApiAdminFlagIn = {
+    /**
+     * Value
+     *
+     * true / false, or null for the default.
+     */
+    value: boolean | null;
+};
+
+/**
  * StoreOut
  */
 export type MagicManagerApiAnalyticsStoreOut = {
@@ -7509,6 +7599,22 @@ export type MagicManagerApiDecksSaveOut = {
      * Sleeved
      */
     sleeved: number;
+};
+
+/**
+ * FlagIn
+ */
+export type MagicManagerApiFlagsFlagIn = {
+    /**
+     * Scope
+     */
+    scope: 'everyone' | 'me';
+    /**
+     * Value
+     *
+     * true / false, or null to clear the value at that scope.
+     */
+    value: boolean | null;
 };
 
 /**
@@ -7797,6 +7903,52 @@ export type ScrapersReportResponses = {
 };
 
 export type ScrapersReportResponse = ScrapersReportResponses[keyof ScrapersReportResponses];
+
+export type ListFlagsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/flags';
+};
+
+export type ListFlagsResponses = {
+    /**
+     * Successful Response
+     */
+    200: FlagsOut;
+};
+
+export type ListFlagsResponse = ListFlagsResponses[keyof ListFlagsResponses];
+
+export type PutFlagData = {
+    body: MagicManagerApiFlagsFlagIn;
+    path: {
+        /**
+         * Flag
+         */
+        flag: string;
+    };
+    query?: never;
+    url: '/api/flags/{flag}';
+};
+
+export type PutFlagErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PutFlagError = PutFlagErrors[keyof PutFlagErrors];
+
+export type PutFlagResponses = {
+    /**
+     * Successful Response
+     */
+    200: FlagRowOut;
+};
+
+export type PutFlagResponse = PutFlagResponses[keyof PutFlagResponses];
 
 export type JobSpecsData = {
     body?: never;
@@ -10356,7 +10508,7 @@ export type AdminEnableResponses = {
 export type AdminEnableResponse = AdminEnableResponses[keyof AdminEnableResponses];
 
 export type AdminSetFlagData = {
-    body: FlagIn;
+    body: MagicManagerApiAdminFlagIn;
     path: {
         /**
          * User Id
