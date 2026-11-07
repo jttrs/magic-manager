@@ -71,13 +71,15 @@ def declared() -> dict[str, FlagDef]:
     return out
 
 
+def _local_layer(known: dict[str, FlagDef]) -> dict[str, bool]:
+    """features.local.toml, declared names only."""
+    return {k: v for k, v in _simple("features.local.toml").items() if k in known}
+
+
 def file_flags() -> dict[str, bool]:
     """Declared flags with features.toml defaults and features.local.toml applied."""
-    out = {k: d.default for k, d in declared().items()}
-    for k, v in _simple("features.local.toml").items():
-        if k in out:
-            out[k] = v
-    return out
+    defs = declared()
+    return {k: d.default for k, d in defs.items()} | _local_layer(defs)
 
 
 def env_pins() -> dict[str, bool]:
@@ -104,10 +106,7 @@ def instance_flags() -> dict[str, bool]:
 
 def base_flags() -> dict[str, bool]:
     """Every declared flag with its value from the layers below a per-user override."""
-    out = file_flags()
-    out.update(instance_flags())
-    out.update(env_pins())
-    return out
+    return {k: r.value for k, r in resolve(None).items()}
 
 
 def about() -> dict[str, str]:
@@ -116,8 +115,8 @@ def about() -> dict[str, str]:
 
 
 def _hosted() -> bool:
-    from .analytics import consent
-    return consent.mode() == "hosted"
+    from . import auth
+    return auth.hosted()
 
 
 def user_overrides(user_id: str | None) -> dict[str, bool]:
@@ -131,15 +130,13 @@ def user_overrides(user_id: str | None) -> dict[str, bool]:
 def resolve(user_id: str | None) -> dict[str, Resolved]:
     """The one evaluator: every declared flag's value, the layer that set it, and the
     'everyone' / 'just me' values (``mine`` only hosted with a user)."""
-    out = {k: d.default for k, d in declared().items()}
+    defs = declared()
+    out = {k: d.default for k, d in defs.items()}
     source: dict[str, Source] = dict.fromkeys(out, "default")
-    for k, v in _simple("features.local.toml").items():
-        if k in out:
-            out[k], source[k] = v, "local_file"
     everyone = instance_flags()
     pins = env_pins()
     mine = {k: v for k, v in user_overrides(user_id).items() if k in out}
-    for layer, name in ((everyone, "everyone"), (pins, "env"), (mine, "user")):
+    for layer, name in ((_local_layer(defs), "local_file"), (everyone, "everyone"), (pins, "env"), (mine, "user")):
         for k, v in layer.items():
             out[k], source[k] = v, name
     return {k: Resolved(out[k], source[k], k in pins, everyone.get(k), mine.get(k)) for k in out}

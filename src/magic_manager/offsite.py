@@ -590,8 +590,24 @@ def _split_problems(r) -> tuple[list[str], list[str]]:
     return hard, warn
 
 
+def _has_sign_ins(auth_db: Path) -> bool:
+    """``auth.db`` holds at least one account — what makes a data dir the server's. A
+    local auth.db (only the flag picker's 'everyone' layer) has none. Unreadable or not
+    an auth store → True, so a doubtful dir is refused, never overwritten."""
+    try:
+        conn = sqlite3.connect(f"{auth_db.resolve().as_uri()}?mode=ro", uri=True)
+        try:
+            return conn.execute("SELECT EXISTS (SELECT 1 FROM users)").fetchone()[0] == 1
+        finally:
+            conn.close()
+    except (sqlite3.Error, OSError):
+        return True
+
+
 def _is_hosted_dir(path: Path) -> bool:
-    if (path / AUTH_FILE).exists() or (path / f".{AUTH_FILE}-litestream").exists():
+    if (path / f".{AUTH_FILE}-litestream").exists():
+        return True
+    if (path / AUTH_FILE).exists() and _has_sign_ins(path / AUTH_FILE):
         return True
     if (os.environ.get("MM_MODE") or "").strip().lower() == "hosted" and os.environ.get("MM_DATA_DIR"):
         try:
@@ -615,7 +631,7 @@ def pull(user: str, to: Path, *, url: str | None = None, catalog: str = "remote"
     to = Path(to).expanduser().resolve()
     url = offsite_url(url)
     if _is_hosted_dir(to):
-        raise PullRefused(f"{to} is a hosted data dir (it has {AUTH_FILE}) — pull only into a local copy dir")
+        raise PullRefused(f"{to} is a hosted data dir (its {AUTH_FILE} has accounts, or it is replicated) — pull only into a local copy dir")
     target_user = _layout.user_db_path(to, user)
     target_catalog = to / _layout.CATALOG_FILENAME
     for f in (target_user, target_catalog):

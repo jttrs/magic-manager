@@ -35,6 +35,18 @@ def test_local_get_put_persist(tmp_db):
     assert r.json()["effective"] is False and r.json()["everyone"] is None
 
 
+def test_change_credit_only_when_that_change_sets_the_value(tmp_db, monkeypatch):
+    c = TestClient(create_app(serve_frontend=False))
+    c.put("/api/flags/deals", json={"scope": "everyone", "value": True})
+    monkeypatch.setenv("MM_FEATURES", "-deals")          # env pin wins: the toggle isn't why it's off
+    row = _row(c.get("/api/flags").json(), "deals")
+    assert row["source"] == "env" and row["pinned_by_env"] and row["changed_at"] is None and row["changed_by"] is None
+    monkeypatch.delenv("MM_FEATURES")
+    c.put("/api/flags/deals", json={"scope": "everyone", "value": None})   # reset → the default sets it
+    row = _row(c.get("/api/flags").json(), "deals")
+    assert row["source"] == "default" and row["changed_at"] is None
+
+
 def test_local_errors_and_flag_admin(tmp_db):
     c = TestClient(create_app(serve_frontend=False))
     assert c.put("/api/flags/nope", json={"scope": "everyone", "value": True}).status_code == 422

@@ -5,13 +5,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from .. import features
+from .. import auth
 from ..api import flags as flags_api
 from . import admin_routes
 
 
 def require_flag_admin(request: Request) -> str | None:
-    if not features._hosted():
+    if not auth.hosted():
         return None
     return admin_routes.require_admin(request)
 

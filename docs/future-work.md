@@ -67,6 +67,21 @@ Small PRs, one per item.
   `claude/uncharacterized-set-families-905987` (5 commits ahead of main as of 2026-11-04, no PR
   yet; one more draft, `plst.md`, still untracked). If that session has finished: check the docs
   against `docs/sets/_TEMPLATE.md`, run `uv run pytest tests/test_config_schema.py`, open a docs PR.
+- **Flag reads when auth.db is unreadable:** once `auth.db` exists, every `features.enabled()`
+  reads it (`features.instance_flags`), and the first `auth.store.connect()` per process writes
+  its schema. A corrupt, locked or foreign-owned file (e.g. an `mm …` CLI run on the mini as a
+  different OS user than the server; the file is 0600) then fails every flag-gated route and
+  command. Hardening: catch `sqlite3.Error` in `instance_flags()`, log it, fall back to the file
+  layers; read `defaults()` through a read-only connection.
+- **Deploy scripts key on a bare `auth.db`:** `deploy/macos/cutover.sh` (install-data),
+  `bin/litestream.sh` and `bin/replica-check.sh` treat `$MM_DATA_DIR/auth.db` as "cut over".
+  A local (non-hosted) `mm flags set` against that dir before `install-data` would create it.
+  `offsite._is_hosted_dir` now checks for accounts instead; the scripts could do the same.
+- **Flag picker leftovers:** `feature_defaults` rows for a flag removed from `features.toml` are
+  never cleared (re-declaring the name brings the old value back); closing the picker mid-toggle
+  and toggling the same flag again can send overlapping PUTs (last write wins); tests missing for
+  clearing a just-me override via the API, a pinned flag via the API/CLI, and `mm flags ls`
+  text output / `mm flags set --json`.
 
 ## 4. Deferred by decision
 

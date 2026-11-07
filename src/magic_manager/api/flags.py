@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .. import features
+from .. import auth, features
 
 
 class FlagRowOut(BaseModel):
@@ -34,10 +34,6 @@ class FlagIn(BaseModel):
     value: bool | None = Field(description="true / false, or null to clear the value at that scope.")
 
 
-def _hosted() -> bool:
-    return features._hosted()
-
-
 def _rows(user_id: str | None) -> list[FlagRowOut]:
     from ..auth import store
     defs = features.declared()
@@ -57,8 +53,9 @@ def _rows(user_id: str | None) -> list[FlagRowOut]:
     out = []
     for name, d in defs.items():
         r = resolved[name]
-        key = (name, user_id if r.source == "user" else None)
-        at, by = changes.get(key, (None, None))
+        # credit a change only when it is what sets the value now
+        key = {"user": (name, user_id), "everyone": (name, None)}.get(r.source)
+        at, by = changes.get(key, (None, None)) if key else (None, None)
         out.append(FlagRowOut(name=name, title=d.title, about=d.about, kind=d.kind, default=base[name],
                               everyone=r.everyone, pinned_by_env=r.pinned_by_env, mine=r.mine, effective=r.value,
                               source=r.source, changed_at=at, changed_by=who(by)))
@@ -66,14 +63,14 @@ def _rows(user_id: str | None) -> list[FlagRowOut]:
 
 
 def listing(user_id: str | None) -> FlagsOut:
-    return FlagsOut(flags=_rows(user_id), per_user=_hosted())
+    return FlagsOut(flags=_rows(user_id), per_user=auth.hosted())
 
 
 def set_flag(flag: str, body: FlagIn, user_id: str | None) -> FlagRowOut:
     if flag not in features.declared():
         raise ValueError(f"unknown flag {flag!r} (declared in config/features.toml: {', '.join(features.declared())})")
     if body.scope == "me":
-        if not _hosted() or not user_id:
+        if not auth.hosted() or not user_id:
             raise ValueError("just-me overrides need sign-in (hosted mode); set it for everyone instead")
         from ..auth import store
         store.set_override(user_id, flag, body.value, set_by=user_id)
