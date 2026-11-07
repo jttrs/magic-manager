@@ -9,6 +9,10 @@ Only what §25.1 H10 allows is stored: the provider's subject id, a display name
 an email. Secrets are stored hashed: a session token and an invite code are random
 256-bit values handed out ONCE; only their SHA-256 lives here, so a copy of this file
 can't sign anyone in. Provider access tokens are never stored.
+
+auth.db also holds the instance flag layer (``feature_defaults`` + the
+``feature_flag_events`` audit). It is created in LOCAL mode too, on the first flag
+toggle: local mode has no users or sessions, only those two tables are used there.
 """
 from __future__ import annotations
 
@@ -27,7 +31,7 @@ from pathlib import Path
 
 from .. import db
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 FILE_NAME = "auth.db"
 
 SESSION_IDLE = timedelta(days=14)
@@ -81,6 +85,24 @@ _SCHEMA = [
         set_by  TEXT,
         set_at  TEXT NOT NULL,
         PRIMARY KEY (user_id, flag)
+    )""",
+    # v3: instance-wide flag values set from the flag picker (the 'everyone' layer).
+    """CREATE TABLE IF NOT EXISTS feature_defaults (
+        flag    TEXT PRIMARY KEY CHECK (length(flag) BETWEEN 1 AND 64),
+        enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+        set_by  TEXT,
+        set_at  TEXT NOT NULL
+    )""",
+    # v3: append-only audit of every flag change (value NULL = reset). No FK on user_id:
+    # events outlive rows; account deletion removes them explicitly.
+    """CREATE TABLE IF NOT EXISTS feature_flag_events (
+        id      INTEGER PRIMARY KEY AUTOINCREMENT,
+        at      TEXT NOT NULL,
+        flag    TEXT NOT NULL,
+        scope   TEXT NOT NULL CHECK (scope IN ('everyone', 'user')),
+        user_id TEXT,
+        value   INTEGER CHECK (value IN (0, 1)),
+        set_by  TEXT
     )""",
 ]
 
@@ -319,6 +341,9 @@ def remove_user_rows(user_id: str) -> RemovedAuth:
         overrides = conn.execute("UPDATE feature_overrides SET set_by = NULL WHERE set_by = ? AND user_id <> ?",
                                  (user_id, user_id)).rowcount
         conn.execute("DELETE FROM feature_overrides WHERE user_id = ?", (user_id,))
+        conn.execute("DELETE FROM feature_flag_events WHERE user_id = ?", (user_id,))
+        conn.execute("UPDATE feature_flag_events SET set_by = NULL WHERE set_by = ?", (user_id,))
+        conn.execute("UPDATE feature_defaults SET set_by = NULL WHERE set_by = ?", (user_id,))
         conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
         user = conn.execute("DELETE FROM users WHERE id = ?", (user_id,)).rowcount > 0
     return RemovedAuth(user, identities, deleted, unlinked, overrides)
@@ -342,6 +367,12 @@ def all_overrides() -> dict[str, dict[str, bool]]:
     return out
 
 
+def _event(conn: sqlite3.Connection, flag: str, scope: str, user_id: str | None,
+           enabled: bool | None, set_by: str | None) -> None:
+    conn.execute("INSERT INTO feature_flag_events (at, flag, scope, user_id, value, set_by) VALUES (?, ?, ?, ?, ?, ?)",
+                 (_iso(_now()), flag, scope, user_id, None if enabled is None else int(enabled), set_by))
+
+
 def set_override(user_id: str, flag: str, enabled: bool | None, *, set_by: str | None = None) -> None:
     """Turn ``flag`` on/off for one user, or back to the default (``None``)."""
     with connect() as conn, _tx(conn):
@@ -349,10 +380,41 @@ def set_override(user_id: str, flag: str, enabled: bool | None, *, set_by: str |
             raise LookupError(f"no user {user_id!r}")
         if enabled is None:
             conn.execute("DELETE FROM feature_overrides WHERE user_id = ? AND flag = ?", (user_id, flag))
-            return
-        conn.execute("INSERT INTO feature_overrides (user_id, flag, enabled, set_by, set_at) VALUES (?, ?, ?, ?, ?) "
-                     "ON CONFLICT (user_id, flag) DO UPDATE SET enabled = excluded.enabled, set_by = excluded.set_by, "
-                     "set_at = excluded.set_at", (user_id, flag, int(enabled), set_by, _iso(_now())))
+        else:
+            conn.execute("INSERT INTO feature_overrides (user_id, flag, enabled, set_by, set_at) VALUES (?, ?, ?, ?, ?) "
+                         "ON CONFLICT (user_id, flag) DO UPDATE SET enabled = excluded.enabled, set_by = excluded.set_by, "
+                         "set_at = excluded.set_at", (user_id, flag, int(enabled), set_by, _iso(_now())))
+        _event(conn, flag, "user", user_id, enabled, set_by)
+
+
+# ---------- instance-wide flag values (v3, the 'everyone' layer) ----------
+
+def defaults() -> dict[str, bool]:
+    """The instance-wide flag values (flag → on/off); absent = not set."""
+    with connect() as conn:
+        rows = conn.execute("SELECT flag, enabled FROM feature_defaults").fetchall()
+    return {r["flag"]: bool(r["enabled"]) for r in rows}
+
+
+def set_default(flag: str, enabled: bool | None, *, set_by: str | None = None) -> None:
+    """Set ``flag`` for everyone, or clear it (``None``); one audit event, same transaction."""
+    with connect() as conn, _tx(conn):
+        if enabled is None:
+            conn.execute("DELETE FROM feature_defaults WHERE flag = ?", (flag,))
+        else:
+            conn.execute("INSERT INTO feature_defaults (flag, enabled, set_by, set_at) VALUES (?, ?, ?, ?) "
+                         "ON CONFLICT (flag) DO UPDATE SET enabled = excluded.enabled, set_by = excluded.set_by, "
+                         "set_at = excluded.set_at", (flag, int(enabled), set_by, _iso(_now())))
+        _event(conn, flag, "everyone", None, enabled, set_by)
+
+
+def last_changes() -> dict[tuple[str, str | None], tuple[str, str | None]]:
+    """(flag, user id or None for 'everyone') → (when, set_by) of the newest event."""
+    with connect() as conn:
+        rows = conn.execute("SELECT e.flag, e.user_id, e.at, e.set_by FROM feature_flag_events e "
+                            "JOIN (SELECT MAX(id) AS id FROM feature_flag_events GROUP BY flag, scope, user_id) m "
+                            "ON e.id = m.id").fetchall()
+    return {(r["flag"], r["user_id"]): (r["at"], r["set_by"]) for r in rows}
 
 
 # ---------- invites ----------

@@ -360,6 +360,25 @@ def test_pull_refuses_hosted_dirs_bad_ids_and_open_files(remote, tmp_path, monke
     assert calls == [f"{url}/users/{UID}.db"]   # refusals never reached the store
 
 
+def test_a_local_flag_toggle_does_not_make_a_copy_dir_hosted(remote, tmp_path, monkeypatch):
+    from magic_manager import features
+    from magic_manager.auth import store
+    url, _calls = remote
+    to = tmp_path / "laptop"
+    offsite.pull(UID, to, url=url)
+    monkeypatch.setenv("MM_AUTH_DB", str(to / "auth.db"))      # = <copy dir>/auth.db, as with MM_DATA_DIR=<copy>
+    features.set_instance("deals", True, actor="local")
+    assert (to / "auth.db").is_file()
+    assert offsite.pull(UID, to, url=url, force=True).replaced      # flags only: still a local copy
+    with store.connect() as conn:
+        conn.execute("INSERT INTO users (id, display_name, is_admin, created_at) VALUES ('aaaaaaaaaaaaaaaa', 'X', 0, '2026-01-01')")
+    with pytest.raises(offsite.PullRefused, match="hosted"):         # an account → the server's dir
+        offsite.pull(UID, to, url=url, force=True)
+    (to / "auth.db").write_bytes(b"not a database")
+    with pytest.raises(offsite.PullRefused, match="hosted"):         # unreadable → refused, never overwritten
+        offsite.pull(UID, to, url=url, force=True)
+
+
 def test_pull_that_doesnt_verify_swaps_nothing_in(remote, tmp_path):
     url, _calls = remote
     replica = Path(urlsplit(url).path) / "users" / f"{UID}.db" / "db"

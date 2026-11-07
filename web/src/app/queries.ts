@@ -3,7 +3,7 @@ import { keepPreviousData, queryOptions } from '@tanstack/react-query';
 import type { DraftCardIn } from '../core/api';
 import { apiErrorFrom } from '../core/apiError';
 import type { RankingPageRequest } from '../core/rankings';
-import { adminUsers, analyticsConsent, analyticsSummary, analyticsCatalog, dealsTabs, dealsWatched, marketProductCost, marketSecretLair, undoInfo, cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, cardFloors, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs, historyList, historyEvent, historyRevertPlan, exploreRanking, exploreRankingOptions, cardCombos, deckCombos, draftCombos, artTags, artSwaps, jumpstartView, recipeList, recipeDetail, surfOptions, companionInfo, scrapersHealth, purchaseStores, purchaseList, purchaseReview, cardEarmarksList, deckEarmarks } from '../core/api';
+import { adminUsers, analyticsConsent, analyticsSummary, analyticsCatalog, dealsTabs, dealsWatched, marketProductCost, marketSecretLair, undoInfo, cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, cardFloors, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs, historyList, historyEvent, historyRevertPlan, exploreRanking, exploreRankingOptions, cardCombos, deckCombos, draftCombos, artTags, artSwaps, jumpstartView, recipeList, recipeDetail, surfOptions, companionInfo, scrapersHealth, purchaseStores, purchaseList, purchaseReview, cardEarmarksList, deckEarmarks, listFlags } from '../core/api';
 
 export function unwrap<T>(r: { data?: T; error?: unknown; response?: Response }): T {
   if (r.error !== undefined || r.data === undefined) throw apiErrorFrom(r.error, r.response);
@@ -190,6 +190,24 @@ export const serverModeQuery = () =>
     queryFn: async ({ signal }) => unwrap(await featuresRoute({ signal })),
     select: (d) => d.mode ?? 'local',
     staleTime: Infinity,
+  });
+
+/** May you use the feature-flag picker? Locally always; hosted, admins only (the same /api/features call). */
+export const flagAdminQuery = () =>
+  queryOptions({
+    queryKey: ['features'],
+    queryFn: async ({ signal }) => unwrap(await featuresRoute({ signal })),
+    select: (d) => d.flag_admin ?? false,
+    staleTime: Infinity,
+  });
+
+/** Every feature flag with where its value comes from (the masthead picker). */
+export const flagsQuery = (enabled = true) =>
+  queryOptions({
+    queryKey: ['flags'],
+    queryFn: async ({ signal }) => unwrap(await listFlags({ signal })),
+    enabled,
+    staleTime: 0,
   });
 
 /** The companion version in this repo + the error catalog (unflagged). */

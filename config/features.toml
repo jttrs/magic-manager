@@ -1,38 +1,52 @@
-# Feature flags. Defaults ship OFF for anything internal-only.
+# Feature flags: one table per flag. Defaults ship OFF for anything internal-only.
+#   default    the value when nothing else says otherwise
+#   title      short label for the flag picker (<= 24 chars)
+#   about      one plain sentence (<= 80 chars), ending in "."
+#   kind       release (ships on once ready; needs review_by) | ops | permission
+#   added / review_by   ISO dates; a release flag is reviewed (turned on or removed) by review_by
 #
-# Turn a flag on for this machine without committing it:
-#   config/features.local.toml (git-ignored), e.g.  [features]\n cart_check = true
-#   or the environment:  MM_FEATURES=cart_check  (comma list; "-name" forces off)
-# Precedence: environment > features.local.toml > this file. Hosted (MM_MODE=hosted),
-# an admin's per-user override (Admin page / `mm auth flag`, stored in auth.db) sits on top.
+# Precedence, lowest first: this file < config/features.local.toml (git-ignored,
+# `[features]\n name = true`) < "everyone" (set at runtime from the flag picker /
+# `mm flags set`, stored in auth.db) < MM_FEATURES env (pin; comma list, "-name" = off)
+# < hosted only: a per-user override (flag picker "just me" / Admin page / `mm auth flag`).
 # Paths that run on the owner's machine or logins (owner_machine.PATHS) stay admin-only
 # when hosted, whatever these flags say.
 
-[features]
-# Read your Mana Pool cart and audit it against your collection. Internal: read
-# with your own login from .env, or in your browser by the browser
-# companion / cart bookmarklet (only cart lines reach the app).
-cart_check = false
-# Read your open browser tabs (macOS) and price store product pages against
-# market. Internal: local-machine browser access.
-deals = false
-# The Analytics dashboard (error trends, usage, sessions). Internal: it shows
-# every user's pseudonymous activity, so only the owner/admin turns it on.
-# (Recording itself is governed by each user's consent, not by this flag.)
-analytics = false
-# The browser companion (extension/): setup panel, extension download, and
-# reading the cart, store tabs and Moxfield decks in your own browser.
-# Internal while it's in beta.
-companion = false
-# Order history → purchases: read your Mana Pool / TCGplayer / Card Kingdom orders
-# with the browser companion and record what you paid. Internal: not every store
-# path is verified yet (see docs/purchases.md § Verification).
-purchases = false
+[flags.cart_check]
+default = false
+title = "Cart check"
+about = "Audit a store cart against your collection."
+kind = "release"
+added = "2026-06-01"
+review_by = "2027-03-31"
 
-# One plain sentence per flag, shown on the Admin page next to each switch.
-[about]
-cart_check = "Check a store cart against the collection (in the user's own browser; the server's Mana Pool login stays owner-only)."
-deals = "Deals: watch store prices and read store tabs (in the user's own browser; this server's Chrome stays owner-only)."
-analytics = "The Analytics dashboard (owner-only when hosted: it shows everyone's activity)."
-companion = "The browser companion: read carts, store tabs, decks and collections in the user's own browser."
-purchases = "Store orders → purchases: record what was paid, read with the browser companion."
+[flags.deals]
+default = false
+title = "Deals"
+about = "Watch store prices and read store tabs for deals."
+kind = "release"
+added = "2026-06-01"
+review_by = "2027-03-31"
+
+[flags.analytics]
+default = false
+title = "Analytics"
+about = "Usage and error dashboard; shows everyone's activity."
+kind = "permission"
+added = "2026-06-01"
+
+[flags.companion]
+default = false
+title = "Browser companion"
+about = "Read carts, tabs and decks in your own browser."
+kind = "release"
+added = "2026-06-01"
+review_by = "2027-03-31"
+
+[flags.purchases]
+default = false
+title = "Purchases"
+about = "Record what you paid from your store order history."
+kind = "release"
+added = "2026-06-01"
+review_by = "2027-03-31"

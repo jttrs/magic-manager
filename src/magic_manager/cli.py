@@ -222,6 +222,54 @@ def auth_flag(
     typer.echo(f"{flag} for {user}: {value.strip().lower()}")
 
 
+flags_app = typer.Typer(no_args_is_help=True,
+                        help="Feature flags for everyone on this instance (the flag picker's CLI twin). Writes auth.db; MM_FEATURES still pins.")
+app.add_typer(flags_app, name="flags")
+
+
+@flags_app.command("ls")
+def flags_ls(json_out: bool = typer.Option(False, "--json", help="Machine-readable output.")):
+    """Every flag: effective value, the layer that set it, the 'everyone' value and whether the env pins it."""
+    from . import features
+    defs = features.declared()
+    rows = [{"name": k, "title": defs[k].title, "kind": defs[k].kind, "effective": r.value, "source": r.source,
+             "everyone": r.everyone, "pinned_by_env": r.pinned_by_env}
+            for k, r in features.resolve(None).items()]
+    if json_out:
+        typer.echo(json.dumps(rows, indent=2))
+        return
+    for r in rows:
+        every = "-" if r["everyone"] is None else ("on" if r["everyone"] else "off")
+        typer.echo(f"{r['name']:<16} {'on' if r['effective'] else 'off':<4} source={r['source']:<10} "
+                   f"everyone={every}" + ("  (pinned by MM_FEATURES)" if r["pinned_by_env"] else ""))
+
+
+@flags_app.command("set")
+def flags_set(
+    flag: str = typer.Argument(..., help="A flag declared in config/features.toml."),
+    value: str = typer.Argument(..., help="on | off | default (clears the everyone value)."),
+    json_out: bool = typer.Option(False, "--json", help="Machine-readable output."),
+):
+    """Set a flag for everyone on this instance."""
+    from . import features
+    choice = {"on": True, "off": False, "default": None}.get(value.strip().lower(), "bad")
+    if choice == "bad":
+        typer.echo("error: value must be on, off or default", err=True)
+        raise typer.Exit(2)
+    try:
+        features.set_instance(flag, choice)
+    except ValueError as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+    r = features.resolve(None)[flag]
+    if json_out:
+        typer.echo(json.dumps({"name": flag, "effective": r.value, "source": r.source, "everyone": r.everyone,
+                               "pinned_by_env": r.pinned_by_env}))
+        return
+    typer.echo(f"{flag} for everyone: {value.strip().lower()}"
+               + ("  (MM_FEATURES still pins it)" if r.pinned_by_env else ""))
+
+
 @auth_app.command("flags")
 def auth_flags(
     user: str = typer.Option(..., "--user", help="The user id (see mm auth users)."),

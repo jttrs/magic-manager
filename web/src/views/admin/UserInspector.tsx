@@ -5,7 +5,7 @@ import { Button } from '../../components/Button';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { SettingsChoice, SettingsGroup, SettingsRow } from '../../components/settings/SettingsControls';
 import { adminDisable, adminEnable, adminSetFlag, adminSignOut, type AdminUserOut, type AdminUsersOut, type OwnerPathOut } from '../../core/api';
-import { choiceValue, defaultChoiceLabel, flagChoice, flagTitle, ownerOnlyNote, providersLabel, roleLabel, seenLabel, statusLabel, unflaggedPaths, type FlagChoice } from '../../core/admin';
+import { choiceValue, defaultChoiceLabel, flagChoice, ownerOnlyNote, providersLabel, roleLabel, seenLabel, statusLabel, unflaggedPaths, type FlagChoice } from '../../core/admin';
 
 const DATE = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' });
 
@@ -21,10 +21,10 @@ export function UserInspector({ user, paths, self, onClose }: { user: AdminUserO
   const begin = () => { setError(null); setNote(null); };
 
   const flag = useMutation({
-    mutationFn: async ({ name, choice }: { name: string; choice: FlagChoice }) =>
+    mutationFn: async ({ name, choice }: { name: string; title: string; choice: FlagChoice }) =>
       unwrap(await adminSetFlag({ path: { ...path, flag: name }, body: { value: choiceValue(choice) } })),
     onMutate: begin,
-    onSuccess: (row, v) => { put(row); if (self) void qc.invalidateQueries({ queryKey: ['features'] }); setNote(`${flagTitle(v.name)}: ${v.choice === 'default' ? 'back to the default' : `turned ${v.choice}`} for ${user.display_name}.`); },
+    onSuccess: (row, v) => { put(row); if (self) void qc.invalidateQueries({ queryKey: ['features'] }); setNote(`${v.title}: ${v.choice === 'default' ? 'back to the default' : `turned ${v.choice}`} for ${user.display_name}.`); },
     onError: (e) => setError(e.message),
   });
   const signOut = useMutation({
@@ -89,7 +89,7 @@ export function UserInspector({ user, paths, self, onClose }: { user: AdminUserO
             return (
               <SettingsRow
                 key={f.name}
-                label={`${flagTitle(f.name)} — ${f.effective ? 'on' : 'off'}`}
+                label={`${f.title} — ${f.effective ? 'on' : 'off'}`}
                 description={
                   <>
                     {f.about}
@@ -101,7 +101,7 @@ export function UserInspector({ user, paths, self, onClose }: { user: AdminUserO
                     {...ids}
                     value={flagChoice(f)}
                     options={[{ value: 'default', label: defaultChoiceLabel(f) }, { value: 'on', label: 'On' }, { value: 'off', label: 'Off' }]}
-                    onChange={(choice) => { if (!busy) flag.mutate({ name: f.name, choice }); }}
+                    onChange={(choice) => { if (!busy) flag.mutate({ name: f.name, title: f.title, choice }); }}
                   />
                 )}
               />

@@ -27,6 +27,7 @@ class FeaturesOut(BaseModel):
     flags: dict[str, bool] = Field(description="Every flag's value for you (hosted: with your admin-set overrides).")
     owner_paths: dict[str, bool] = Field(default_factory=dict, description="Paths that run on the owner's machine or logins (owner_machine.PATHS) → may you use them here. All true locally; admins only when hosted, whatever the flags say.")
     mode: Literal["local", "hosted"] = Field("local", description="hosted = sign-in required (MM_MODE=hosted); local = no login.")
+    flag_admin: bool = Field(False, description="May you use the flag picker (GET/PUT /api/flags): always locally; admins only when hosted.")
     jobs: dict[str, bool] = Field(default_factory=dict, description="Catalog-wide jobs (JobSpec scope `catalog`) → may you run them here. All true locally; admins only when hosted.")
 
 
@@ -109,7 +110,7 @@ def flags() -> FeaturesOut:
     from ..analytics import consent
     from . import jobs as jobs_api
     return FeaturesOut(flags=features.flags(), owner_paths=owner_machine.access(), mode=consent.mode(),
-                       jobs=jobs_api.access())
+                       flag_admin=owner_machine.is_admin(), jobs=jobs_api.access())
 
 
 def _cart_script():

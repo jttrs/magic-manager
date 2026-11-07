@@ -343,6 +343,80 @@
         }
       }
     },
+    "/api/flags": {
+      "get": {
+        "tags": [
+          "flags"
+        ],
+        "summary": "List Flags",
+        "operationId": "list_flags",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FlagsOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/flags/{flag}": {
+      "put": {
+        "tags": [
+          "flags"
+        ],
+        "summary": "Put Flag",
+        "operationId": "put_flag",
+        "parameters": [
+          {
+            "name": "flag",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,63}$",
+              "title": "Flag"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/magic_manager__api__flags__FlagIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FlagRowOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/jobs/specs": {
       "get": {
         "tags": [
@@ -4370,7 +4444,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/FlagIn"
+                "$ref": "#/components/schemas/magic_manager__api__admin__FlagIn"
               }
             }
           }
@@ -10030,6 +10104,12 @@
             "description": "hosted = sign-in required (MM_MODE=hosted); local = no login.",
             "default": "local"
           },
+          "flag_admin": {
+            "type": "boolean",
+            "title": "Flag Admin",
+            "description": "May you use the flag picker (GET/PUT /api/flags): always locally; admins only when hosted.",
+            "default": false
+          },
           "jobs": {
             "additionalProperties": {
               "type": "boolean"
@@ -10045,9 +10125,30 @@
         ],
         "title": "FeaturesOut"
       },
-      "FlagIn": {
+      "FlagRowOut": {
         "properties": {
-          "value": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "about": {
+            "type": "string",
+            "title": "About"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "default": {
+            "type": "boolean",
+            "title": "Default",
+            "description": "The value from config/features.toml with features.local.toml applied."
+          },
+          "everyone": {
             "anyOf": [
               {
                 "type": "boolean"
@@ -10056,22 +10157,87 @@
                 "type": "null"
               }
             ],
-            "title": "Value",
-            "description": "true / false, or null for the default."
+            "title": "Everyone",
+            "description": "The instance-wide value set in the picker; null = not set."
+          },
+          "pinned_by_env": {
+            "type": "boolean",
+            "title": "Pinned By Env",
+            "description": "MM_FEATURES pins this flag, so 'everyone' cannot change what runs."
+          },
+          "mine": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mine",
+            "description": "Your own override (hosted only); null = none."
+          },
+          "effective": {
+            "type": "boolean",
+            "title": "Effective"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "default",
+              "local_file",
+              "everyone",
+              "env",
+              "user"
+            ],
+            "title": "Source"
+          },
+          "changed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed At"
+          },
+          "changed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed By"
           }
         },
-        "additionalProperties": false,
         "type": "object",
         "required": [
-          "value"
+          "name",
+          "title",
+          "about",
+          "kind",
+          "default",
+          "pinned_by_env",
+          "effective",
+          "source"
         ],
-        "title": "FlagIn"
+        "title": "FlagRowOut"
       },
       "FlagStateOut": {
         "properties": {
           "name": {
             "type": "string",
             "title": "Name"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Short display name (config/features.toml)."
           },
           "about": {
             "type": "string",
@@ -10080,7 +10246,7 @@
           "default": {
             "type": "boolean",
             "title": "Default",
-            "description": "The server's value (config files + MM_FEATURES)."
+            "description": "The value a per-user override falls back to (config files + the 'everyone' value + MM_FEATURES)."
           },
           "override": {
             "anyOf": [
@@ -10110,6 +10276,7 @@
         "type": "object",
         "required": [
           "name",
+          "title",
           "about",
           "default",
           "override",
@@ -10117,6 +10284,28 @@
           "owner_paths"
         ],
         "title": "FlagStateOut"
+      },
+      "FlagsOut": {
+        "properties": {
+          "flags": {
+            "items": {
+              "$ref": "#/components/schemas/FlagRowOut"
+            },
+            "type": "array",
+            "title": "Flags"
+          },
+          "per_user": {
+            "type": "boolean",
+            "title": "Per User",
+            "description": "Just-me overrides exist (hosted mode)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "flags",
+          "per_user"
+        ],
+        "title": "FlagsOut"
       },
       "FloorOut": {
         "properties": {
@@ -17322,6 +17511,28 @@
         ],
         "title": "WatchedOut"
       },
+      "magic_manager__api__admin__FlagIn": {
+        "properties": {
+          "value": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value",
+            "description": "true / false, or null for the default."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "title": "FlagIn"
+      },
       "magic_manager__api__analytics__StoreOut": {
         "properties": {
           "path": {
@@ -17427,6 +17638,37 @@
           "sleeved"
         ],
         "title": "SaveOut"
+      },
+      "magic_manager__api__flags__FlagIn": {
+        "properties": {
+          "scope": {
+            "type": "string",
+            "enum": [
+              "everyone",
+              "me"
+            ],
+            "title": "Scope"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value",
+            "description": "true / false, or null to clear the value at that scope."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "scope",
+          "value"
+        ],
+        "title": "FlagIn"
       },
       "magic_manager__api__purchases__SaveOut": {
         "properties": {

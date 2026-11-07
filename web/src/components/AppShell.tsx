@@ -16,6 +16,7 @@ import { useFeature } from '../app/features';
 import { SettingsButton } from './settings/SettingsDialog';
 import { SettingsChoice, SettingsRow } from './settings/SettingsControls';
 import { SubnavSlot } from './subnavSlot';
+import { FlagsButton } from './flags/FlagsButton';
 import { AccountButton } from './auth/AccountButton';
 import { AccountSettings } from './account/AccountSettings';
 
@@ -61,6 +62,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <UndoButton />
           <CompanionSlot />
           <JobsLink />
+          <FlagsButton />
           <SettingsButton />
           <AccountButton />
         </div>
