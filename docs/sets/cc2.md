@@ -52,12 +52,12 @@ None.
 
 ## 5. Unobtainable rules
 
-None configured, none needed. Proposed `[dupe_foil] cc2 = []` only to enable
+No rule is active; none needed. Configured `[dupe_foil] cc2 = []` (2026-11-08) only to enable
 `mm query missing-set cc2`.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] cc2 = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] cc2 = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | foil finish (Premium box) | 8 | keep — the "foil" basis is the Premium box; whether you count it is a finish-basis choice, not a rule |
 
 **Totals (local prices, 2026-11-04):** ≈ $58 nonfoil / $94 foil for the 8 cards
@@ -82,7 +82,7 @@ n/a.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] cc2 = []` — configured 2026-11-08 (enables `mm query missing-set cc2`).
 - `config/families.toml` `[[unobtainable.cc2.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.cc2]]` — none.
 

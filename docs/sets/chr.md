@@ -35,7 +35,7 @@ Every print computes `regular`.
 | Urza lands ×4 arts | 12 | `chr` 114a–116d (uncommon) | `regular` | **different art** per letter — distinct printings; ≈ $11 total |
 
 **`promo_types`:** none. No fancy-foil sheet →
-proposed `[dupe_foil] chr = []` to enable `mm query missing-set chr`.
+configured `[dupe_foil] chr = []` (2026-11-08) to enable `mm query missing-set chr`.
 
 ---
 
@@ -47,11 +47,11 @@ No chase variants; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] chr = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] chr = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `bchr` Japanese black border | 125 (0 local) | **owner's call** — Japanese-only, not syncable |
 
 ---
@@ -74,7 +74,7 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] chr = []` — configured 2026-11-08 (enables `mm query missing-set chr`).
 - `config/families.toml` `[[unobtainable.chr.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.chr]]` — none.
 

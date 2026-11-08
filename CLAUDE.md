@@ -79,6 +79,8 @@ A Magic "set" is rarely one Scryfall code. `sets_mod.resolve(name_or_code)` retu
 
 `mm query missing-set` is a flagship workflow (also exposed as the `missing-from-set` skill). It unions three printing-level sub-selectors (rare-regular, mythic-regular, treatment-class) and emits four artifacts: Scryfall URL chunks (chat output), an XLSX checklist (`output/missing-set/checklists/`) + ManaPool bulk-add `.txt` + TCGplayer Mass Entry `.txt` (`output/missing-set/buy-lists/`). Per-family configuration lives in `config/families.toml` (the `[dupe_foil]` / `[[unobtainable.<anchor>.rules]]` / `[[scenes.<anchor>]]` tables, loaded by `magic_manager.config` and exposed as `selectors.FAMILY_*`) — when supporting a new family, add its entry there first.
 
+A family rule with `enabled = false` is a PROPOSAL, not an exclusion: `config.build_unobtainable_rules` leaves it out of `selectors.FAMILY_UNOBTAINABLE_RULES` and `config.family_proposed_rules()` loads it (with its `note`) into `selectors.FAMILY_PROPOSED_RULES`, which nothing reads yet. Rules can name a promo set with `set_codes` (the print's own set code, e.g. `pala`), alone or with `collector_numbers`/`promo_types_any_of` to cover only part of it. To switch a proposal on, delete its `enabled = false` line.
+
 ### Inventory checklists — generate → fill → ingest → archive
 
 `checklists/` (formerly `input/`, both names work — `INPUT_DIR` is an alias) holds active XLSX/MD checklists awaiting ingest. The lifecycle is:

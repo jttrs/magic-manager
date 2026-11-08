@@ -35,7 +35,7 @@ Every print computes `regular`.
 | enemy painlands | 5 | `apc` 139–143 (Battlefield Forge, Caves of Koilos, Llanowar Wastes, Shivan Reef, Yavimaya Coast; rare) | `regular` | part of base — about half the rare value |
 
 **`promo_types`:** `papc` holds one Sanskrit prerelease Fungal Shambler `100`. `mm set sync papc` 404s (English-only), so it's absent locally. No fancy-foil sheet →
-proposed `[dupe_foil] apc = []` to enable `mm query missing-set apc`.
+configured `[dupe_foil] apc = []` (2026-11-08) to enable `mm query missing-set apc`.
 
 ---
 
@@ -47,11 +47,11 @@ No chase variants; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] apc = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] apc = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `papc` promo | 1 (0 local) | **owner's call** — Sanskrit-only, not syncable |
 
 ---
@@ -74,7 +74,7 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] apc = []` — configured 2026-11-08 (enables `mm query missing-set apc`).
 - `config/families.toml` `[[unobtainable.apc.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.apc]]` — none.
 

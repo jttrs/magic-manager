@@ -60,11 +60,11 @@ n/a.
 
 ## 5. Unobtainable rules
 
-None configured, none needed.
+No rule is active; none needed.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] gk2 = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] gk2 = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | whole family | 133 | **owner's call** — all reprints, mostly with their original art (106 of 133 share an earlier illustration locally); a completion target only for a Guild Kit collector |
 
 ---
@@ -88,7 +88,7 @@ n/a. No promo child.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] gk2 = []` — configured 2026-11-08 (enables `mm query missing-set gk2`).
 - `config/families.toml` `[[unobtainable.gk2.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.gk2]]` — none.
 

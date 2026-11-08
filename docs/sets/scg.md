@@ -34,7 +34,7 @@ Every print computes `regular`.
 | base | 143 | `scg` 1–143, no basic lands (55 C / 44 U / 44 R) | `regular` | rarity/base sub-selectors — R+M ≈ $215 nonfoil / $2493 foil (Stifle 52 ~$38 / ~$400 foil, Sliver Overlord 139 ~$37 / ~$250, Decree of Silence 32 ~$21, Decree of Justice 8 ~$19, Goblin Warchief 97 ~$11 / ~$94) |
 
 **`promo_types`:** the prerelease Soul Collector `74` (~$5.85) reuses the booster art, on the same CN as `scg` 74. It carries `datestamped`, so `missing.drop_datestamped_with_sibling` drops it — here it really is a same-art foil. No fancy-foil sheet →
-proposed `[dupe_foil] scg = []` to enable `mm query missing-set scg`.
+configured `[dupe_foil] scg = []` (2026-11-08) to enable `mm query missing-set scg`.
 
 ---
 
@@ -46,11 +46,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] scg = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] scg = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pscg` promos | 1 | **owner's call** — same art as the booster card |
 
 ---
@@ -74,8 +74,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.scg.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] scg = []` — configured 2026-11-08 (enables `mm query missing-set scg`).
+- `config/families.toml` `[[unobtainable.scg.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.scg]]` — none.
 
 ---

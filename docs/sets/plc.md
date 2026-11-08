@@ -35,7 +35,7 @@ Every print computes `regular`.
 | colorshifted | 45 | `plc` (scattered CNs; `frame_effects = ["colorshifted"]`) | `regular` | part of base — `colorshifted` is cosmetic |
 
 **`promo_types`:** the prerelease Oros `161★` has its own art; the release Hedge Troll `151★` (~$0.46) reuses the booster art. Only the prerelease carries `datestamped` (dropped by missing-set); the same-art release foil is listed next to `plc` 151. No fancy-foil sheet →
-proposed `[dupe_foil] plc = []` to enable `mm query missing-set plc`.
+configured `[dupe_foil] plc = []` (2026-11-08) to enable `mm query missing-set plc`.
 
 ---
 
@@ -47,11 +47,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] plc = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] plc = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pplc` promos | 2 | **owner's call** — 1 of 2 has its own art |
 
 ---
@@ -76,8 +76,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.plc.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] plc = []` — configured 2026-11-08 (enables `mm query missing-set plc`).
+- `config/families.toml` `[[unobtainable.plc.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.plc]]` — none.
 
 ---

@@ -53,7 +53,7 @@ Survey (`survey_treatment_signature.py RNA`, 674 print-rows by finish).
 | `setpromo` | — | marker on every `prna` print | not a dupe signal |
 | `planeswalkerdeck` / `buyabox` | — | unique cards | 260–273 |
 
-No fancy-foil sheet → proposed `[dupe_foil] rna = []` to enable `mm query missing-set rna`.
+No fancy-foil sheet → configured `[dupe_foil] rna = []` (2026-11-08) to enable `mm query missing-set rna`.
 
 **Full-art convention:** none.
 
@@ -73,11 +73,11 @@ None.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] rna = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] rna = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `prna` promo-pack stamped `Np` | 33 | **exclude** — `promo_types_any_of = ["stamped"]`; ~$166 |
 | `prna` FNM / league / event promos | 8 | **owner's call** — same question as [`war`](war.md) |
 | PW-deck 265–272, buy-a-box 273 | 9 | keep — real cards |
@@ -117,8 +117,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.rna.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] rna = []` — configured 2026-11-08 (enables `mm query missing-set rna`).
+- `config/families.toml` `[[unobtainable.rna.rules]]` — 2 proposed rules, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.rna]]` — none.
 
 ---

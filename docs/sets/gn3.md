@@ -67,7 +67,7 @@ Plains/Island/Swamp/Mountain/Forest).
 
 **`promo_types` dupe-foil / stamped signals:** none — no print carries any
 `promo_types` token, and no print computes to `ff`. A `[dupe_foil]` list has
-nothing to drop → proposed `gn3 = []`.
+nothing to drop → configured `gn3 = []` (2026-11-08).
 
 **Full-art convention:** `full_art = false` on every print.
 
@@ -93,7 +93,7 @@ n/a — no borderless prints at all, so no scene/poster runs.
 
 ## 5. Unobtainable rules
 
-None configured. No kept-by-default alt-treatment tier (showcase/borderless)
+No rule is active. No kept-by-default alt-treatment tier (showcase/borderless)
 exists, so there is no keep/exclude decision on treatments.
 
 **Scarcity check:** `set_status.py gn3` prints no ⚠ concentration note (family
@@ -103,7 +103,7 @@ Maeve $12.41, Vilis $9.63, Beast Whisperer $9.16, Elven Ambush $9.12, Zamriel
 $8.46. No promo/scarcity tier to exclude.
 
 **Missing-set baseline (2026-11-02):** 0 owned; `mm query missing-set gn3`
-currently refuses (no `[dupe_foil]` entry). Proposed `gn3 = []` unblocks it and
+currently refuses (no `[dupe_foil]` entry). Configured `gn3 = []` (2026-11-08) unblocks it and
 filters nothing.
 
 ---
@@ -135,7 +135,7 @@ n/a — no `pgn3` promo set and no promo prints. The five foil mythics live in
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] gn3 = []` — configured 2026-11-08 (enables `mm query missing-set gn3`).
 - `config/families.toml` `[[unobtainable.gn3.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.gn3]]` — none (no scenes).
 

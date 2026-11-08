@@ -36,7 +36,7 @@ Every print computes `regular`.
 | Theme Deck reprints (`cst`) | 62 | `cst` (42 C / 20 U, nonfoil) | `regular` | rarity sub-selectors — ≈ $47; Dark Ritual 120 ~$5, Brainstorm 61 ~$1.59 |
 
 **`promo_types`:** the prerelease Allosaurus Rider `101★` (~$12.56) has its own art; the release promo is a Marit Lage token, dropped as a token. The prerelease carries `datestamped`, so `missing.drop_datestamped_with_sibling` drops it from missing-set. No fancy-foil sheet →
-proposed `[dupe_foil] csp = []` to enable `mm query missing-set csp`.
+configured `[dupe_foil] csp = []` (2026-11-08) to enable `mm query missing-set csp`.
 
 ---
 
@@ -48,11 +48,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] csp = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] csp = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pcsp` promos | 2 | **owner's call** — the prerelease has its own art; the other is a token |
 | `cst` Theme Deck reprints | 62 | **owner's call** — `box` reprints shipped only in Coldsnap Theme Decks; kept (default) — pending owner review |
 
@@ -77,8 +77,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.csp.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] csp = []` — configured 2026-11-08 (enables `mm query missing-set csp`).
+- `config/families.toml` `[[unobtainable.csp.rules]]` — 2 proposed rules, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.csp]]` — none.
 
 ---

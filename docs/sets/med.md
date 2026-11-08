@@ -62,11 +62,11 @@ None.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] med = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] med = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | whole family | 24 | keep — distinct art, a real collectible run; owner may prefer to track it per release (`cn` prefix) |
 
 ---
@@ -101,7 +101,7 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] med = []` — configured 2026-11-08 (enables `mm query missing-set med`).
 - `config/families.toml` `[[unobtainable.med.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.med]]` — none.
 

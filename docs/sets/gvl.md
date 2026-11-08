@@ -41,15 +41,14 @@ All `regular`. No `frame_effects`, no `promo_types`.
 **Art:** 0 new — every print shares its illustration with the original
 `ddd` (or an earlier printing).
 
-Proposed `[dupe_foil] gvl = []` to enable `mm query missing-set gvl`.
+Configured `[dupe_foil] gvl = []` (2026-11-08) to enable `mm query missing-set gvl`.
 
 ---
 
 ## 3–6.
 
-No chase variants, scenes or PRM destinations. Unobtainable rules: none
-configured yet (proposals pending owner review); `[dupe_foil] gvl = []` —
-**apply**.
+No chase variants, scenes or PRM destinations. Unobtainable rules: no rule is active; `[dupe_foil] gvl = []` —
+**applied 2026-11-08**.
 
 ---
 
@@ -65,7 +64,7 @@ configured yet (proposals pending owner review); `[dupe_foil] gvl = []` —
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] gvl = []` — configured 2026-11-08 (enables `mm query missing-set gvl`).
 - `config/families.toml` `[[unobtainable.gvl.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.gvl]]` — none.
 

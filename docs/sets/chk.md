@@ -35,7 +35,7 @@ Every print computes `regular`.
 | Brothers Yamazaki | 2 | `chk` `160a`, `160b` (uncommon; two arts) | `regular` | both kept — distinct printings, one card |
 
 **`promo_types`:** the prerelease Ryusei `185★` (~$5.42) has its own art. It carries `datestamped`, so `missing.drop_datestamped_with_sibling` drops it from missing-set. No fancy-foil sheet →
-proposed `[dupe_foil] chk = []` to enable `mm query missing-set chk`.
+configured `[dupe_foil] chk = []` (2026-11-08) to enable `mm query missing-set chk`.
 
 ---
 
@@ -47,11 +47,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] chk = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] chk = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pchk` promos | 1 | **owner's call** — its own art |
 
 ---
@@ -75,8 +75,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.chk.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] chk = []` — configured 2026-11-08 (enables `mm query missing-set chk`).
+- `config/families.toml` `[[unobtainable.chk.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.chk]]` — none.
 
 ---

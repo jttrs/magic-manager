@@ -33,7 +33,7 @@ Every print computes `regular`.
 | base | 78 | `arn` 1–78 (26 C / 18 U / 33 R + Mountain 77) | `regular` | rarity/base sub-selectors — R ≈ $8940 (Juzám Djinn 29 ~$2114, Diamond Valley 73 ~$690, Guardian Beast 26 ~$625, Drop of Honey 47 ~$608, Serendib Efreet 20 ~$580); U ≈ $5472 (Bazaar of Baghdad 70 ~$2013, Library of Alexandria 76 ~$1940, City of Brass 71 ~$802); C ≈ $554 |
 
 **`promo_types`:** none. No fancy-foil sheet →
-proposed `[dupe_foil] arn = []` to enable `mm query missing-set arn`.
+configured `[dupe_foil] arn = []` (2026-11-08) to enable `mm query missing-set arn`.
 
 ---
 
@@ -45,11 +45,11 @@ Juzám Djinn 29, Bazaar of Baghdad 70, Library of Alexandria 76 (each ~$1950–2
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] arn = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] arn = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `variation` `N†` | 14 (0 local) | **owner's call** — same-art English printing variants (~$290 total); invisible until sync fetches variations |
 
 ---
@@ -73,7 +73,7 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] arn = []` — configured 2026-11-08 (enables `mm query missing-set arn`).
 - `config/families.toml` `[[unobtainable.arn.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.arn]]` — none.
 

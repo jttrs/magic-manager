@@ -35,7 +35,7 @@ Every print computes `regular`.
 | Multiverse Gift Box | 10 | `mgb` 1–10 (rare: Peace Talks, Ovinomancer, Dark Privilege, Necrosavant, Urborg Mindsucker, Vampirism, Wicked Reward, Viashino Sandstalker, Bull Elephant, King Cheetah) | `regular` | rare-regular — **same art** as `vis`; no dupe signal, so missing-set lists them |
 
 **`promo_types`:** none. The `mgb` prints carry no `promo_types`, so nothing marks them as dupes of the `vis` rares. No fancy-foil sheet →
-proposed `[dupe_foil] vis = []` to enable `mm query missing-set vis`.
+configured `[dupe_foil] vis = []` (2026-11-08) to enable `mm query missing-set vis`.
 
 ---
 
@@ -47,11 +47,11 @@ No chase variants; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] vis = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] vis = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `mgb` gift-box rares | 10 | **owner's call** — same-art early printings of `vis` rares, unpriced; exclude (`set_code` rule) unless you track the gift box |
 
 ---
@@ -74,8 +74,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.vis.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] vis = []` — configured 2026-11-08 (enables `mm query missing-set vis`).
+- `config/families.toml` `[[unobtainable.vis.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.vis]]` — none.
 
 ---

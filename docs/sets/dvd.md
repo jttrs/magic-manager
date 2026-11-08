@@ -41,15 +41,14 @@ All `regular`. No `frame_effects`, no `promo_types`.
 **Art:** 0 new — every print shares its illustration with the original
 `ddc` (or an earlier printing).
 
-Proposed `[dupe_foil] dvd = []` to enable `mm query missing-set dvd`.
+Configured `[dupe_foil] dvd = []` (2026-11-08) to enable `mm query missing-set dvd`.
 
 ---
 
 ## 3–6.
 
-No chase variants, scenes or PRM destinations. Unobtainable rules: none
-configured yet (proposals pending owner review); `[dupe_foil] dvd = []` —
-**apply**.
+No chase variants, scenes or PRM destinations. Unobtainable rules: no rule is active; `[dupe_foil] dvd = []` —
+**applied 2026-11-08**.
 
 ---
 
@@ -66,7 +65,7 @@ configured yet (proposals pending owner review); `[dupe_foil] dvd = []` —
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] dvd = []` — configured 2026-11-08 (enables `mm query missing-set dvd`).
 - `config/families.toml` `[[unobtainable.dvd.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.dvd]]` — none.
 

@@ -80,11 +80,11 @@ None.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] ust = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] ust = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | lettered variants | 65 | keep — each is its own printing; the owner may prefer to collect one per group |
 | `pust` 108 Draft Weekend | 1 | **owner's call** — same as other families' event promos |
 
@@ -116,8 +116,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.ust.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] ust = []` — configured 2026-11-08 (enables `mm query missing-set ust`).
+- `config/families.toml` `[[unobtainable.ust.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.ust]]` — none.
 
 ---

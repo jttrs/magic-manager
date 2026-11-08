@@ -52,7 +52,7 @@ Survey (`survey_treatment_signature.py ORI`): every print computes `regular`.
 | `resale` | — | same art | Outland Colossus `193★` |
 | `starterdeck` | — | product band | 273–288 |
 
-No fancy-foil sheet → proposed `[dupe_foil] ori = []` to enable `mm query missing-set ori`.
+No fancy-foil sheet → configured `[dupe_foil] ori = []` (2026-11-08) to enable `mm query missing-set ori`.
 
 ---
 
@@ -64,11 +64,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] ori = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] ori = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pori` promo-pack stamped `Np` | 4 | **exclude** — `promo_types_any_of = ["stamped"]`; ~$23 |
 | `pori` Intro Pack foils + event promos | 10 | **owner's call** — 8 have their own art |
 | Sample Deck band 273–288, `cp3` | 22 | keep |
@@ -102,8 +102,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.ori.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] ori = []` — configured 2026-11-08 (enables `mm query missing-set ori`).
+- `config/families.toml` `[[unobtainable.ori.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.ori]]` — none.
 
 ---

@@ -33,7 +33,7 @@ Every print computes `regular`.
 | base | 167 | `wth` 1–167 (62 C / 55 U / 50 R) | `regular` | rarity/base sub-selectors — R ≈ $508 (Null Rod 154 ~$108, Scorched Ruins 166 ~$65, Lotus Vale 165 ~$46, Firestorm 101 ~$44, Winding Canyons 167 ~$36, Abeyance 1 ~$28) |
 
 **`promo_types`:** none. No fancy-foil sheet →
-proposed `[dupe_foil] wth = []` to enable `mm query missing-set wth`.
+configured `[dupe_foil] wth = []` (2026-11-08) to enable `mm query missing-set wth`.
 
 ---
 
@@ -45,11 +45,11 @@ No chase variants; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] wth = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] wth = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 
 ---
 
@@ -69,7 +69,7 @@ n/a.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] wth = []` — configured 2026-11-08 (enables `mm query missing-set wth`).
 - `config/families.toml` `[[unobtainable.wth.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.wth]]` — none.
 

@@ -58,7 +58,7 @@ Survey (`survey_treatment_signature.py XLN`): every print computes `regular`.
 | `setpromo` | — | marker on every `pxln` print | not a dupe signal |
 | `planeswalkerdeck` | — | unique cards | 280–289 |
 
-No fancy-foil sheet → proposed `[dupe_foil] xln = []` to enable `mm query missing-set xln`.
+No fancy-foil sheet → configured `[dupe_foil] xln = []` (2026-11-08) to enable `mm query missing-set xln`.
 
 **Full-art convention:** none.
 
@@ -79,11 +79,11 @@ None.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] xln = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] xln = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pxln` promo-pack stamped `Np` | 37 | **exclude** — `promo_types_any_of = ["stamped"]`; ~$154 |
 | `pxtc` Treasure Chest lands | 10 | **owner's call** — same-art foils of booster rares; a rule would need `set_code`/`promo_types_any_of = ["buyabox"]` scoped to `pxtc` (not `pxln` 135, which has its own art) |
 | `pxln` buy-a-box 135 + event promos | 5 | **owner's call** — 4 have their own art |
@@ -127,8 +127,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.xln.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] xln = []` — configured 2026-11-08 (enables `mm query missing-set xln`).
+- `config/families.toml` `[[unobtainable.xln.rules]]` — 3 proposed rules, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.xln]]` — none.
 
 ---

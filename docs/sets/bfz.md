@@ -56,7 +56,7 @@ basics 250–274 (`fa`). `devoid` (55 colourless Eldrazi prints) is cosmetic.
 | `resale` | — | yes — same art | Felidar Sovereign `26★` (~$4.61) |
 | `standardshowdown` + `instore` | — | **no** — own art | `pss1` battle lands (~$23 total) |
 
-No fancy-foil sheet → proposed `[dupe_foil] bfz = []` to enable `mm query missing-set bfz`.
+No fancy-foil sheet → configured `[dupe_foil] bfz = []` (2026-11-08) to enable `mm query missing-set bfz`.
 
 **Full-art convention:** all booster basics are full-art (both prints).
 
@@ -75,11 +75,11 @@ None configured.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] bfz = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] bfz = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `exp` Expeditions | 45 | **owner's call** — they WILL appear in missing-set (~$5,774). Exclude with a set-scoped rule if you don't collect masterpieces; keep if you do. Note the inconsistency with `mp2`/`mps`, which are hidden by rarity `special` |
 | `pbfz` promo-pack stamped `Np` | 11 | **exclude** — `promo_types_any_of = ["stamped"]`; ~$61 |
 | `pbfz` Intro Pack foils + event promos | 10 | **owner's call** — 10 of the 11 non-prerelease promos have their own art |
@@ -117,8 +117,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.bfz.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] bfz = []` — configured 2026-11-08 (enables `mm query missing-set bfz`).
+- `config/families.toml` `[[unobtainable.bfz.rules]]` — 4 proposed rules, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.bfz]]` — none.
 
 ---

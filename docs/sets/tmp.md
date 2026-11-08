@@ -35,7 +35,7 @@ Every print computes `regular`.
 | prerelease | 1 | `ptmp` 221 | `regular` | **same art** — auto-dropped |
 
 **`promo_types`:** `ptmp` 221 carries `prerelease` + `datestamped` and shares art with `tmp` 221, so missing-set drops it correctly. No fancy-foil sheet →
-proposed `[dupe_foil] tmp = []` to enable `mm query missing-set tmp`.
+configured `[dupe_foil] tmp = []` (2026-11-08) to enable `mm query missing-set tmp`.
 
 ---
 
@@ -47,11 +47,11 @@ No chase variants; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] tmp = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] tmp = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `ptmp` prerelease | 1 | none needed — auto-dropped (same art) |
 
 ---
@@ -73,7 +73,7 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] tmp = []` — configured 2026-11-08 (enables `mm query missing-set tmp`).
 - `config/families.toml` `[[unobtainable.tmp.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.tmp]]` — none.
 

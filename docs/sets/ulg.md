@@ -35,7 +35,7 @@ Every print computes `regular`.
 | prerelease | 1 | `pulg` 122 | `regular` | **same art** — auto-dropped |
 
 **`promo_types`:** `pulg` 122 carries `prerelease` + `datestamped` and shares art with `ulg` 122, so missing-set drops it correctly. No fancy-foil sheet →
-proposed `[dupe_foil] ulg = []` to enable `mm query missing-set ulg`.
+configured `[dupe_foil] ulg = []` (2026-11-08) to enable `mm query missing-set ulg`.
 
 ---
 
@@ -47,11 +47,11 @@ Grim Monolith 126 (Reserved List) is over half the nonfoil rare value; foil ~$34
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] ulg = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] ulg = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pulg` prerelease | 1 | none needed — auto-dropped (same art) |
 
 ---
@@ -74,7 +74,7 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] ulg = []` — configured 2026-11-08 (enables `mm query missing-set ulg`).
 - `config/families.toml` `[[unobtainable.ulg.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.ulg]]` — none.
 

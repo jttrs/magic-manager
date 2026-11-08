@@ -51,7 +51,7 @@ Survey (`survey_treatment_signature.py EMN`): every print computes `regular`.
 | `buyabox` | — | **no** — own art | Thalia, Heretic Cathar 46 (~$2.51) |
 | `resale` | — | yes — same art | Thalia's Lancers `47★` |
 
-No fancy-foil sheet → proposed `[dupe_foil] emn = []` to enable `mm query missing-set emn`.
+No fancy-foil sheet → configured `[dupe_foil] emn = []` (2026-11-08) to enable `mm query missing-set emn`.
 
 **Full-art convention:** none.
 
@@ -71,11 +71,11 @@ None.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] emn = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] emn = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pemn` promo-pack stamped `Np` | 3 | **exclude** — `promo_types_any_of = ["stamped"]`; ~$31 |
 | `pemn` Intro Pack foils | 5 | **owner's call** — own art, came in a retail product |
 | `pemn` game day / release / buy-a-box / resale | 5 | **owner's call** — 4 have their own art |
@@ -112,8 +112,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.emn.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] emn = []` — configured 2026-11-08 (enables `mm query missing-set emn`).
+- `config/families.toml` `[[unobtainable.emn.rules]]` — 3 proposed rules, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.emn]]` — none.
 
 ---

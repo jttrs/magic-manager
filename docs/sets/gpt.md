@@ -34,7 +34,7 @@ Every print computes `regular`.
 | base | 165 | `gpt` 1–165, no basic lands (55 C / 55 U / 55 R) | `regular` | rarity/base sub-selectors — R+M ≈ $132 nonfoil / $851 foil (Steam Vents 164 ~$26 / ~$161 foil, Godless Shrine 157 ~$16, Stomping Ground 165 ~$13, Spelltithe Enforcer 18 ~$11) |
 
 **`promo_types`:** the prerelease Djinn Illuminatus `142★` has its own art; the release Gruul Guildmage `144★` (~$0.50) reuses the booster art. Only the prerelease carries `datestamped` (dropped by missing-set); the same-art release foil is listed next to `gpt` 144. No fancy-foil sheet →
-proposed `[dupe_foil] gpt = []` to enable `mm query missing-set gpt`.
+configured `[dupe_foil] gpt = []` (2026-11-08) to enable `mm query missing-set gpt`.
 
 ---
 
@@ -46,11 +46,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] gpt = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] gpt = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pgpt` promos | 2 | **owner's call** — 1 of 2 has its own art |
 
 ---
@@ -75,8 +75,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.gpt.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] gpt = []` — configured 2026-11-08 (enables `mm query missing-set gpt`).
+- `config/families.toml` `[[unobtainable.gpt.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.gpt]]` — none.
 
 ---

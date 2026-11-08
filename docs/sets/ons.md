@@ -35,7 +35,7 @@ Every print computes `regular`.
 | nonfoil-only uncommon | 1 | `ons` 200 Embermage Goblin (its foil is a separate own-art variation `200★`, not local) | `regular` | part of base |
 
 **`promo_types`:** the prerelease Silent Specter `169` (~$3.10) reuses the booster art, on the same CN. It carries `datestamped`, so missing-set drops it — a same-art foil. No fancy-foil sheet →
-proposed `[dupe_foil] ons = []` to enable `mm query missing-set ons`.
+configured `[dupe_foil] ons = []` (2026-11-08) to enable `mm query missing-set ons`.
 
 ---
 
@@ -47,11 +47,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] ons = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] ons = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pons` promos | 1 | **owner's call** — same art as the booster card |
 
 ---
@@ -77,8 +77,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.ons.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] ons = []` — configured 2026-11-08 (enables `mm query missing-set ons`).
+- `config/families.toml` `[[unobtainable.ons.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.ons]]` — none.
 
 ---

@@ -35,7 +35,7 @@ Every print computes `regular`.
 | prerelease foil | 1 | `pusg` 202 Lightning Dragon (~$154) | `regular` | **same art** — dropped by `drop_datestamped_with_sibling` |
 
 **`promo_types`:** `pusg` 202 carries `prerelease` + `datestamped` and shares art with `usg` 202, so missing-set drops it — although it's the set's only foil. No fancy-foil sheet →
-proposed `[dupe_foil] usg = []` to enable `mm query missing-set usg`.
+configured `[dupe_foil] usg = []` (2026-11-08) to enable `mm query missing-set usg`.
 
 ---
 
@@ -47,11 +47,11 @@ Gaea's Cradle 321 (~$1650) is ~45% of rare value. No scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] usg = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] usg = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pusg` prerelease foil | 1 | **owner's call** — auto-dropped as a same-art dupe, but it's the only foil of the set (~$154) |
 | `zhs` alt-art `Ns` | 7 (0 local) | **owner's call** — Chinese-only, not syncable |
 
@@ -76,7 +76,7 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] usg = []` — configured 2026-11-08 (enables `mm query missing-set usg`).
 - `config/families.toml` `[[unobtainable.usg.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.usg]]` — none.
 

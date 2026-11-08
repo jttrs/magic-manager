@@ -51,7 +51,7 @@ basics (`fa`) and the inverted game-day Adorned Pouncer (`b`).
 | `buyabox` | — | **no** — own art | Wildfire Eternal 109 |
 | `planeswalkerdeck` | — | unique cards | 200–209 |
 
-No fancy-foil sheet → proposed `[dupe_foil] hou = []` to enable `mm query missing-set hou`.
+No fancy-foil sheet → configured `[dupe_foil] hou = []` (2026-11-08) to enable `mm query missing-set hou`.
 
 **Full-art convention:** the 5 basics at 185–189.
 
@@ -71,11 +71,11 @@ None.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] hou = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] hou = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `phou` promo-pack stamped `Np` | 4 | **exclude** — `promo_types_any_of = ["stamped"]`; ~$59 |
 | `phou` game day / draft weekend / buy-a-box | 4 | **owner's call** — all have their own art |
 | PW-deck 200–209 | 10 | keep — real cards |
@@ -110,8 +110,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.hou.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] hou = []` — configured 2026-11-08 (enables `mm query missing-set hou`).
+- `config/families.toml` `[[unobtainable.hou.rules]]` — 2 proposed rules, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.hou]]` — none.
 
 ---

@@ -35,7 +35,7 @@ Every print computes `regular`.
 | tombstone (flashback) | 10 | `tor` (5 C / 2 U / 3 R) | `regular` | part of base — cosmetic |
 
 **`promo_types`:** `ptor` holds one Russian prerelease Laquatus's Champion `67`. `mm set sync ptor` 404s (it asks for `lang:en`), so the promo is absent locally. (`mm set list-related` reports `ptor` as 3 cards: the other 2 are Russian variation prints, see §7.) No fancy-foil sheet →
-proposed `[dupe_foil] tor = []` to enable `mm query missing-set tor`.
+configured `[dupe_foil] tor = []` (2026-11-08) to enable `mm query missing-set tor`.
 
 ---
 
@@ -47,11 +47,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] tor = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] tor = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `ptor` promos | 1 (0 local) | **owner's call** — Russian-only, not syncable |
 
 ---
@@ -75,7 +75,7 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] tor = []` — configured 2026-11-08 (enables `mm query missing-set tor`).
 - `config/families.toml` `[[unobtainable.tor.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.tor]]` — none.
 

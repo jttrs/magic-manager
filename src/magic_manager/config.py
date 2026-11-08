@@ -52,18 +52,25 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 #                  predicate — it gates WHICH tier filter the rule participates
 #                  in (selectors._matches_unobtainable_rule's `tiers` arg).
 #   "note"       → rationale only, stripped from the evaluated rule
+#   "enabled"    → bool, default true; NOT a predicate. ``enabled = false`` marks
+#                  a PROPOSED rule: build_unobtainable_rules(enabled=True) (what
+#                  selectors.FAMILY_UNOBTAINABLE_RULES loads) omits it, so it
+#                  excludes nothing until switched on; family_proposed_rules()
+#                  returns exactly those rules (with their ``note``).
 # selectors._matches_unobtainable_rule consumes the predicate keys; the loader
 # derives its coercion from here; tests/test_config_schema validates against it —
 # so adding a key is a ONE-line change here, not a 3-site edit that can silently
 # miss the frozenset coercion and crash the matcher at query time.
 UNOBTAINABLE_RULE_KEYS: dict[str, str] = {
     "promo_types_any_of": "promo_set",
+    "set_codes": "promo_set",
     "promo_types_all_of": "promo_set",
     "frame_effects_all_of": "promo_set",
     "collector_numbers": "cn_set",
     "border_color": "scalar",
     "tier": "tier",
     "note": "note",
+    "enabled": "enabled",
 }
 
 
@@ -140,7 +147,7 @@ def get_setting(file_name: str, key: str, default,
     return data.get(key, default)
 
 
-def build_unobtainable_rules(raw: dict) -> dict[str, list[dict]]:
+def build_unobtainable_rules(raw: dict, *, enabled: bool = True) -> dict[str, list[dict]]:
     """Turn the TOML ``[[unobtainable.<fam>.rules]]`` tables into the exact
     nested shape ``selectors._matches_unobtainable_rule`` consumes:
     ``{anchor: [rule, …]}`` where each rule's set-valued predicate keys are
@@ -153,16 +160,29 @@ def build_unobtainable_rules(raw: dict) -> dict[str, list[dict]]:
         border_color = "black"
         note = "76 D&D-rulebook showcase prints the user doesn't pursue; …"
 
-    The ``note`` field is rationale-only (dropped from the evaluated rule).
+    The ``note`` field is rationale-only (dropped from the evaluated rule). So is
+    ``enabled`` (default true): only rules whose ``enabled`` equals the
+    ``enabled`` argument are returned, so ``enabled = false`` rules (proposals)
+    are absent from the default result. A proposed rule keeps its ``note`` under
+    ``"note"`` (the matcher ignores unknown keys). A non-bool ``enabled`` raises
+    :class:`ConfigError`.
     """
     out: dict[str, list[dict]] = {}
     for fam, body in (raw.get("unobtainable") or {}).items():
         rules: list[dict] = []
         for rule in (body.get("rules") or []):
+            flag = rule.get("enabled", True)
+            if not isinstance(flag, bool):
+                raise ConfigError(
+                    f"families.toml unobtainable.{fam}: enabled must be true or false, got {flag!r}")
+            if flag != enabled:
+                continue
             r: dict = {}
             for k, v in rule.items():
                 kind = UNOBTAINABLE_RULE_KEYS.get(k)
-                if kind == "note":
+                if kind in ("note", "enabled"):
+                    if kind == "note" and not enabled:
+                        r["note"] = v  # proposals keep their rationale for the UI
                     continue
                 if kind == "promo_set":
                     r[k] = frozenset(str(x).lower() for x in v)
@@ -173,7 +193,10 @@ def build_unobtainable_rules(raw: dict) -> dict[str, list[dict]]:
                 else:  # "scalar" or an unknown key — pass through verbatim
                     r[k] = v
             rules.append(r)
-        out[fam.lower()] = rules
+        # A family whose rules are all proposals has no ACTIVE entry (an empty
+        # table with no rules at all keeps its historical empty list).
+        if rules or (enabled and not body.get("rules")):
+            out[fam.lower()] = rules
     return out
 
 
@@ -193,6 +216,14 @@ def family_unobtainable_rules(*, override: str | Path | None = None) -> dict[str
     ``{family: [rule, …]}`` the selector matcher consumes (set-valued keys as
     frozensets, ``note`` stripped). families.toml is REQUIRED."""
     return build_unobtainable_rules(load_toml("families.toml", override=override, required=True))
+
+
+def family_proposed_rules(*, override: str | Path | None = None) -> dict[str, list[dict]]:
+    """The ``enabled = false`` rules of ``[[unobtainable.<fam>.rules]]`` — proposals
+    nothing reads yet. Same shape as :func:`family_unobtainable_rules`, plus each
+    rule's ``note`` under ``"note"``. Families with no proposals are absent."""
+    return build_unobtainable_rules(
+        load_toml("families.toml", override=override, required=True), enabled=False)
 
 
 SCENE_KINDS = ("scene", "poster")

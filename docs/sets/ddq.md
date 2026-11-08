@@ -58,11 +58,11 @@ None.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] ddq = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] ddq = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 
 ---
 
@@ -83,7 +83,7 @@ n/a.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] ddq = []` — configured 2026-11-08 (enables `mm query missing-set ddq`).
 - `config/families.toml` `[[unobtainable.ddq.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.ddq]]` — none.
 

@@ -40,7 +40,7 @@ Survey (`survey_treatment_signature.py UMA`, 564 print-rows by finish).
 | tokens | 16 | `tuma` 1–16 | `regular` | tokens |
 
 **`promo_types` dupe-foil / stamped signals:** only `boxtopper` (40). No promo
-child, no prerelease / promo-pack prints. Proposed `[dupe_foil] uma = []` to
+child, no prerelease / promo-pack prints. Configured `[dupe_foil] uma = []` (2026-11-08) to
 enable `mm query missing-set uma`.
 
 **Full-art convention:** none.
@@ -61,11 +61,11 @@ None.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] uma = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] uma = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `puma` box toppers | 40 | already dropped by the ext preferred class; nothing to add. If you want them listed, that's an explicit keep (owner's call). Same question as [`2xm`](2xm.md)'s toppers, but here the art is the same as base |
 
 **Scarcity check:** n/a until a `[dupe_foil]` entry exists.
@@ -94,7 +94,7 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] uma = []` — configured 2026-11-08 (enables `mm query missing-set uma`).
 - `config/families.toml` `[[unobtainable.uma.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.uma]]` — none.
 

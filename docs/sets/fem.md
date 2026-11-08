@@ -34,7 +34,7 @@ Every print computes `regular`.
 | multi-art commons | 120 | `fem` `Na`–`Nd` for 35 names (15 names in 4 arts, e.g. Hymn to Tourach 38a–38d) | `regular` | commons — **different art** per letter |
 
 **`promo_types`:** none. No fancy-foil sheet →
-proposed `[dupe_foil] fem = []` to enable `mm query missing-set fem`.
+configured `[dupe_foil] fem = []` (2026-11-08) to enable `mm query missing-set fem`.
 
 ---
 
@@ -46,11 +46,11 @@ No chase variants; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] fem = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] fem = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 
 ---
 
@@ -69,7 +69,7 @@ n/a.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] fem = []` — configured 2026-11-08 (enables `mm query missing-set fem`).
 - `config/families.toml` `[[unobtainable.fem.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.fem]]` — none.
 

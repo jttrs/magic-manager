@@ -34,7 +34,7 @@ Every print computes `regular`.
 | base | 378 | `4ed` 1–378 (121 C / 121 U / 121 R + 15 basics) | `regular` | rarity/base sub-selectors — R ≈ $423 (Mana Vault 334 ~$96, Sylvan Library 273 ~$33, Land Tax 34 ~$20, Strip Mine 363 ~$19, Birds of Paradise 234 ~$18, Winter Orb 358 ~$16) |
 
 **`promo_types`:** none. No fancy-foil sheet →
-proposed `[dupe_foil] 4ed = []` to enable `mm query missing-set 4ed`.
+configured `[dupe_foil] 4ed = []` (2026-11-08) to enable `mm query missing-set 4ed`.
 
 ---
 
@@ -46,11 +46,11 @@ No chase variants; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] 4ed = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] 4ed = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `4bb` Foreign Black Border | ~1871 (0 local) | **owner's call** — non-English only, not syncable |
 
 ---
@@ -72,7 +72,7 @@ n/a.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] 4ed = []` — configured 2026-11-08 (enables `mm query missing-set 4ed`).
 - `config/families.toml` `[[unobtainable.4ed.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.4ed]]` — none.
 

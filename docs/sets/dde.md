@@ -35,16 +35,15 @@ All `regular`. No `frame_effects`, no `promo_types`.
 | face cards (**foil-only**, mythic) | 2 | `dde` 1 Phyrexian Negator (~$12.38, new art), 36 Urza's Rage (~$0.48) | `regular` | mythic-regular |
 | deck cards (nonfoil-only) | 69 | the rest (Phyrexian Arena 27 ~$6, Lightning Greaves 19 ~$6, Carrion Feeder 2 ~$5, Voltaic Key 17, Dark Ritual 18) | `regular` | rarity sub-selectors — ≈ $55 |
 
-**New art (local check):** 28 prints (Phyrexian Negator 1, Phyrexian Totem 20, Darigaaz 47, Treva 49, the three Charms 59–61, …). Proposed `[dupe_foil] dde = []` to enable
+**New art (local check):** 28 prints (Phyrexian Negator 1, Phyrexian Totem 20, Darigaaz 47, Treva 49, the three Charms 59–61, …). Configured `[dupe_foil] dde = []` (2026-11-08) to enable
 `mm query missing-set dde`.
 
 ---
 
 ## 3–6.
 
-No chase variants, scenes or PRM destinations. Unobtainable rules: none
-configured yet (proposals pending owner review); `[dupe_foil] dde = []` —
-**apply**.
+No chase variants, scenes or PRM destinations. Unobtainable rules: no rule is active; `[dupe_foil] dde = []` —
+**applied 2026-11-08**.
 
 ---
 
@@ -59,7 +58,7 @@ configured yet (proposals pending owner review); `[dupe_foil] dde = []` —
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] dde = []` — configured 2026-11-08 (enables `mm query missing-set dde`).
 - `config/families.toml` `[[unobtainable.dde.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.dde]]` — none.
 

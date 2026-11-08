@@ -53,7 +53,7 @@ Survey (`survey_treatment_signature.py IKO`, 540 prints).
 | `boxtopper` | `b` | — | 370–384 |
 | `bundle` / `buyabox` / `resale` | — | distinct | kept |
 
-No fancy-foil sheet → proposed `[dupe_foil] iko = []` to enable `mm query missing-set iko`.
+No fancy-foil sheet → configured `[dupe_foil] iko = []` (2026-11-08) to enable `mm query missing-set iko`.
 
 **Full-art convention:** none in `iko`.
 
@@ -73,11 +73,11 @@ None.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] iko = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] iko = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `piko` promo-pack stamped `Np` | 68 | **exclude** — `promo_types_any_of = ["stamped"]`; ~$303 |
 | Godzilla box toppers 370–384 | 15 | **owner's call** — chase alts of base monsters (~$289). Same question as [`2xm`](2xm.md)'s box toppers; `cn_range = [370, 384]` if excluded |
 | Zilortha 275 | 1 | keep — the only print of that card |
@@ -116,8 +116,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.iko.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] iko = []` — configured 2026-11-08 (enables `mm query missing-set iko`).
+- `config/families.toml` `[[unobtainable.iko.rules]]` — 2 proposed rules, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.iko]]` — none.
 
 ---

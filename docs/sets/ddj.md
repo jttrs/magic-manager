@@ -35,16 +35,15 @@ All `regular`. No `frame_effects`, no `promo_types`.
 | face cards (**foil-only**, mythic) | 2 | `ddj` 1 Niv-Mizzet, the Firemind (~$1.20, new art), 45 Jarad, Golgari Lich Lord (~$4.14) | `regular` | mythic-regular |
 | deck cards (nonfoil-only) | 88 | the rest (Isochron Scepter 16 ~$12, Life from the Loam 69 ~$5, Elves of Deep Shadow 47 ~$5) | `regular` | rarity sub-selectors — ≈ $50 |
 
-**New art (local check):** Niv-Mizzet 1, Train of Thought 19, Vacuumelt 24, Overwhelming Intellect 28, Gleancrawler 64, Ghoul's Feast 67, Twilight's Call 76, Life // Death 77. Proposed `[dupe_foil] ddj = []` to enable
+**New art (local check):** Niv-Mizzet 1, Train of Thought 19, Vacuumelt 24, Overwhelming Intellect 28, Gleancrawler 64, Ghoul's Feast 67, Twilight's Call 76, Life // Death 77. Configured `[dupe_foil] ddj = []` (2026-11-08) to enable
 `mm query missing-set ddj`.
 
 ---
 
 ## 3–6.
 
-No chase variants, scenes or PRM destinations. Unobtainable rules: none
-configured yet (proposals pending owner review); `[dupe_foil] ddj = []` —
-**apply**.
+No chase variants, scenes or PRM destinations. Unobtainable rules: no rule is active; `[dupe_foil] ddj = []` —
+**applied 2026-11-08**.
 
 ---
 
@@ -58,7 +57,7 @@ configured yet (proposals pending owner review); `[dupe_foil] ddj = []` —
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] ddj = []` — configured 2026-11-08 (enables `mm query missing-set ddj`).
 - `config/families.toml` `[[unobtainable.ddj.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.ddj]]` — none.
 

@@ -43,7 +43,7 @@ Every print computes `regular`.
 **`promo_types`:** `playtest` (17 Look at Me, I'm R&D) and `upsidedown` (47
 Topsy Turvy) are cosmetic. The `punh` release foil carries `datestamped`, so
 `missing.drop_datestamped_with_sibling` drops it (name + treatment match). No
-fancy-foil sheet → proposed `[dupe_foil] unh = []` to enable
+fancy-foil sheet → configured `[dupe_foil] unh = []` (2026-11-08) to enable
 `mm query missing-set unh`.
 
 ---
@@ -63,11 +63,11 @@ None.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] unh = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] unh = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `N★` foil halves | 27 | **owner's call** — the foil printing of a nonfoil `N`; same finish-split pattern as `9ed`/`10e` |
 | `punh` 117★ | 1 | already dropped (datestamped) |
 
@@ -95,7 +95,7 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] unh = []` — configured 2026-11-08 (enables `mm query missing-set unh`).
 - `config/families.toml` `[[unobtainable.unh.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.unh]]` — none.
 

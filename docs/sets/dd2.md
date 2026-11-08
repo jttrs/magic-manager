@@ -35,16 +35,15 @@ All `regular`. No `frame_effects`, no `promo_types`.
 | face cards (**foil-only**, mythic) | 2 | `dd2` 1 Jace Beleren (~$3.49, new art), 34 Chandra Nalaar (~$1.12, new art) | `regular` | mythic-regular |
 | deck cards (nonfoil-only) | 62 | the rest (Counterspell 24 ~$6, Terrain Generator 29 ~$3, Gush 27, Ancestral Vision 21, Daze 23) | `regular` | rarity sub-selectors — ≈ $30 |
 
-**New art (local check):** 45 prints first seen here (Jace 1, Chandra 34, Counterspell 24, Daze 23, Fireball 56, …). Proposed `[dupe_foil] dd2 = []` to enable
+**New art (local check):** 45 prints first seen here (Jace 1, Chandra 34, Counterspell 24, Daze 23, Fireball 56, …). Configured `[dupe_foil] dd2 = []` (2026-11-08) to enable
 `mm query missing-set dd2`.
 
 ---
 
 ## 3–6.
 
-No chase variants, scenes or PRM destinations. Unobtainable rules: none
-configured yet (proposals pending owner review); `[dupe_foil] dd2 = []` —
-**apply**.
+No chase variants, scenes or PRM destinations. Unobtainable rules: no rule is active; `[dupe_foil] dd2 = []` —
+**applied 2026-11-08**.
 
 ---
 
@@ -60,7 +59,7 @@ configured yet (proposals pending owner review); `[dupe_foil] dd2 = []` —
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] dd2 = []` — configured 2026-11-08 (enables `mm query missing-set dd2`).
 - `config/families.toml` `[[unobtainable.dd2.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.dd2]]` — none.
 

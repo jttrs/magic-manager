@@ -34,7 +34,7 @@ Every print computes `regular`.
 | basics | 20 | `por` 196–215 | `regular` | basics |
 
 **`promo_types`:** none locally. The `schinesealtart` prints are Chinese-language only. No fancy-foil sheet →
-proposed `[dupe_foil] por = []` to enable `mm query missing-set por`.
+configured `[dupe_foil] por = []` (2026-11-08) to enable `mm query missing-set por`.
 
 ---
 
@@ -46,11 +46,11 @@ No chase variants; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] por = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] por = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `zhs` alt-art `Ns` | 29 (0 local) | **owner's call** — Chinese-only, not syncable; several cost more than the set's top rare |
 | whole family | 215 | **owner's call** — a beginner set with real boosters; kept (default) — pending owner review |
 
@@ -75,7 +75,7 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] por = []` — configured 2026-11-08 (enables `mm query missing-set por`).
 - `config/families.toml` `[[unobtainable.por.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.por]]` — none.
 

@@ -56,7 +56,7 @@ Survey (`survey_treatment_signature.py STX`, 795 local prints).
 | `bundle` / `buyabox` | — | distinct | kept |
 
 `sta` etched is a finish on the same row (no separate etched CN band). No
-fancy-foil sheet → proposed `[dupe_foil] stx = []` to enable `mm query missing-set stx`.
+fancy-foil sheet → configured `[dupe_foil] stx = []` (2026-11-08) to enable `mm query missing-set stx`.
 
 **Full-art convention:** `full_art = 1` on `sstx` only.
 
@@ -77,11 +77,11 @@ not a panorama.)
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] stx = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] stx = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pstx` promo-pack stamped `Np` | 74 | **exclude** — `promo_types_any_of = ["stamped"]`; ~$102 |
 | `sta` Mystical Archive 1–63 | 63 | keep — the desirable bonus sheet; the biggest alt-$ tier |
 | borderless 276–284 | 9 | keep |
@@ -121,8 +121,8 @@ Tainted Pact lead).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.stx.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] stx = []` — configured 2026-11-08 (enables `mm query missing-set stx`).
+- `config/families.toml` `[[unobtainable.stx.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.stx]]` — none.
 
 ---

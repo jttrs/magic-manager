@@ -51,7 +51,7 @@ historic-legendary crown) is cosmetic.
 | `setpromo` | — | marker on every `pdom` print | not a dupe signal |
 | `planeswalkerdeck` / `buyabox` | — | unique cards | 270–280 |
 
-No fancy-foil sheet → proposed `[dupe_foil] dom = []` to enable `mm query missing-set dom`.
+No fancy-foil sheet → configured `[dupe_foil] dom = []` (2026-11-08) to enable `mm query missing-set dom`.
 
 **Full-art convention:** none.
 
@@ -71,11 +71,11 @@ None.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] dom = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] dom = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pdom` promo-pack stamped `Np` | 22 | **exclude** — `promo_types_any_of = ["stamped"]`; ~$120 |
 | `pdom` FNM / league / event promos | 7 | **owner's call** — same question as [`war`](war.md) / [`m19`](m19.md) |
 | PW-deck 270–279, buy-a-box 280 | 11 | keep — real cards |
@@ -112,8 +112,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.dom.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] dom = []` — configured 2026-11-08 (enables `mm query missing-set dom`).
+- `config/families.toml` `[[unobtainable.dom.rules]]` — 2 proposed rules, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.dom]]` — none.
 
 ---

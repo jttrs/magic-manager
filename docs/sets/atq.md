@@ -34,7 +34,7 @@ Every print computes `regular`.
 | four-art lands | 20 | `atq` 80a–85d | `regular` | **different art** per letter; **rarity varies by art** (Mishra's Factory 80a uncommon, 80b–d rare) — 80d ~$633, 80c ~$220, 80b ~$201, 80a ~$113 |
 
 **`promo_types`:** none. No fancy-foil sheet →
-proposed `[dupe_foil] atq = []` to enable `mm query missing-set atq`.
+configured `[dupe_foil] atq = []` (2026-11-08) to enable `mm query missing-set atq`.
 
 ---
 
@@ -46,11 +46,11 @@ Mishra's Workshop 81 (~$3925), Candelabra of Tawnos 43 (~$2750). No scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] atq = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] atq = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `variation` `N†` | 2 (0 local) | **owner's call** — English prints Scryfall hides from search; needs a sync fix (`include:variations` or `is:variation`) |
 
 ---
@@ -75,7 +75,7 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] atq = []` — configured 2026-11-08 (enables `mm query missing-set atq`).
 - `config/families.toml` `[[unobtainable.atq.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.atq]]` — none.
 

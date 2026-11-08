@@ -76,7 +76,7 @@ fancy-foil token exists in this family — the only `ff` class is the serialized
 | `universesbeyond` | — | n/a | all 31 `bot`/`tbot` prints |
 
 No `[dupe_foil]` token is needed (no same-art fancy foil computes to `ff`
-except the globally filtered serialized sheet) → proposed `[dupe_foil] bro = []`
+except the globally filtered serialized sheet) → configured `[dupe_foil] bro = []` (2026-11-08)
 just to enable `treatment=preferred` / `mm query missing-set bro`.
 
 **Full-art convention:** `full_art = 1` on `bro` 278–287 and the tokens
@@ -104,7 +104,7 @@ None. The 8 `bro` borderless prints (293–300) are 2+2+4 by different artists;
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
@@ -155,8 +155,8 @@ No `bulk-add` skill references to `pbro`/`brr` yet.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.bro.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] bro = []` — configured 2026-11-08 (enables `mm query missing-set bro`).
+- `config/families.toml` `[[unobtainable.bro.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.bro]]` — none (no scenes).
 
 ---

@@ -38,7 +38,7 @@ Every print computes `regular`.
 | base | 244 | `avr` 1–244 (116 C / 60 U / 53 R / 15 M; 11 miracles) | `regular` | rarity/base sub-selectors — R+M ≈ $284 nonfoil / $832 foil (Cavern of Souls 226 ~$51 / $94, Avacyn, Angel of Hope 6 ~$45 / $91, Exquisite Blood 102 ~$41, Craterhoof Behemoth 172 ~$24, Griselbrand 106 ~$9 / $54) |
 
 **`promo_types`:** every `pavr` print except the resale `A9` has its own art (Killing Wave 111 ~$10). No `datestamped` token on these, so missing-set keeps the prerelease and release promos. No fancy-foil sheet →
-proposed `[dupe_foil] avr = []` to enable `mm query missing-set avr`.
+configured `[dupe_foil] avr = []` (2026-11-08) to enable `mm query missing-set avr`.
 
 ---
 
@@ -50,11 +50,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] avr = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] avr = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pavr` promos | 6 | **owner's call** — 5 of 6 have their own art |
 | `phel` Helvault | 5 | already off by default (memorabilia); same art as `avr` |
 
@@ -81,8 +81,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.avr.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] avr = []` — configured 2026-11-08 (enables `mm query missing-set avr`).
+- `config/families.toml` `[[unobtainable.avr.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.avr]]` — none.
 
 ---

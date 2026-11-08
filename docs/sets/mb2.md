@@ -57,7 +57,7 @@ No showcase, no borderless, no extended-art, no etched, no fancy-foil `promo_typ
 |---|---|---|---|
 | `playtest` (121) | — | no — unique cards | not globally filtered; kept |
 | `alchemy` (7) | — | no | paper acorn foils mis-caught by the digital filter (§7) |
-| (no surgefoil / textured / serialized / datestamped) | — | — | nothing for `[dupe_foil]` to collapse → proposed `mb2 = []` |
+| (no surgefoil / textured / serialized / datestamped) | — | — | nothing for `[dupe_foil]` to collapse → configured `mb2 = []` (2026-11-08) |
 
 **Full-art convention:** `full_art` TRUE only on the 4 `fa` prints above (art-dependent, not a sheet treatment).
 
@@ -79,7 +79,7 @@ n/a — no borderless prints.
 
 ## 5. Unobtainable rules
 
-None configured. Tiers flagged for owner review (all kept (default) — pending owner review):
+No rule is active. Tiers flagged for owner review (all kept (default) — pending owner review):
 
 - **Missing-set baseline (2026-11-02, nothing owned, no exclusions; local prices synced 2026-11-02):** rare-regular = **224 prints / ~$450**, mythic-regular = **29 prints / ~$746** → ~$1,196 total.
 - **Concentration (manual — `set_status.py mb2` can't compute missing until `[dupe_foil] mb2` exists, so no ⚠ note emitted):** top 5 = Urza, Lord High Artificer 244 ($286.55 foil), Titania, Protector of Argoth 249 ($190.83), Gix, Yawgmoth Praetor 245 ($96.88), Karn, Legacy Reforged 255 ($47.78), Reflecting Pool 257 ($42.41) ≈ $664 = **56%** — all on the **foil-only future sheet 243–257** (rare+mythic $809 of the ~$1,196). Excluding it would drop missing to ~$387. Proposed (not applied) rule: `collector_numbers` 243–257 (see return value / below).
@@ -109,7 +109,7 @@ n/a — no promo channel (no `pmb2` set, no prerelease / WPN stamped prints).
 
 None configured yet (proposals pending owner review).
 
-- Proposed: `[dupe_foil]` `mb2 = []` in `config/families.toml` (no fancy-foil sheet; the empty list unblocks `treatment=preferred` / `mm query missing-set mb2`).
+- `config/families.toml` `[dupe_foil] mb2 = []` — configured 2026-11-08 (enables `mm query missing-set mb2`).
 - Proposed (owner decision): `[[unobtainable.mb2.rules]]` for the foil-only future sheet 243–257 and/or playtest cards.
 
 ---

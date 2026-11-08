@@ -37,15 +37,14 @@ All `regular` except the full-art Goblin token (`fa`).
 | token | 1 | `ddn` 82 Goblin (`is_token = 1`, full-art) | `fa` | token — dropped by missing-set |
 
 **New art (local check):** Zurgo 1, Fury of the Horde 30, Swamp 39,
-Aquamorph Entity 54, Hold the Line 66. Proposed `[dupe_foil] ddn = []`.
+Aquamorph Entity 54, Hold the Line 66. Configured `[dupe_foil] ddn = []` (2026-11-08).
 
 ---
 
 ## 3–6.
 
-No chase variants, scenes or PRM destinations. Unobtainable rules: none
-configured yet (proposals pending owner review); `[dupe_foil] ddn = []` —
-**apply**.
+No chase variants, scenes or PRM destinations. Unobtainable rules: no rule is active; `[dupe_foil] ddn = []` —
+**applied 2026-11-08**.
 
 ---
 
@@ -58,7 +57,7 @@ configured yet (proposals pending owner review); `[dupe_foil] ddn = []` —
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] ddn = []` — configured 2026-11-08 (enables `mm query missing-set ddn`).
 - `config/families.toml` `[[unobtainable.ddn.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.ddn]]` — none.
 

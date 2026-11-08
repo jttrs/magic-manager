@@ -35,7 +35,7 @@ Every print computes `regular`.
 | prerelease | 1 | `pmmq` 89 | `regular` | **same art** — auto-dropped |
 
 **`promo_types`:** `pmmq` 89 carries `prerelease` + `datestamped` and shares art with `mmq` 89, so missing-set drops it correctly. No fancy-foil sheet →
-proposed `[dupe_foil] mmq = []` to enable `mm query missing-set mmq`.
+configured `[dupe_foil] mmq = []` (2026-11-08) to enable `mm query missing-set mmq`.
 
 ---
 
@@ -47,11 +47,11 @@ Foil commons are pricey (common foil total ~$3696, vs ~$80 nonfoil). No scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] mmq = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] mmq = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pmmq` prerelease | 1 | none needed — auto-dropped (same art) |
 
 ---
@@ -73,7 +73,7 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] mmq = []` — configured 2026-11-08 (enables `mm query missing-set mmq`).
 - `config/families.toml` `[[unobtainable.mmq.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.mmq]]` — none.
 

@@ -94,7 +94,7 @@ borderless reprints by many artists, not a single-artist contiguous scene; no
 
 ## 5. Unobtainable rules
 
-**None configured yet (proposals pending owner review).** Tiers that need a
+**No rule is active.** Tiers that need a
 keep/exclude decision:
 
 | Tier | Disposition | Rationale |
@@ -151,7 +151,7 @@ itself. A "PRM"-stamped Ravnica card belongs to an original Ravnica-plane set
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review). Proposed: `rvr = []`.
+- `config/families.toml` `[dupe_foil] rvr = []` — configured 2026-11-08 (enables `mm query missing-set rvr`).
 - `config/families.toml` `[[unobtainable.rvr.rules]]` — None configured yet (proposals pending owner review).
 - `[[scenes.rvr]]` — not configured (no scene; see §4).
 

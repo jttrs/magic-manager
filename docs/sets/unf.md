@@ -53,7 +53,7 @@ All boosterfun prints carry `promo_types: boosterfun`; the galaxy-foil sheet add
 
 | promo_type | Treatment keyword | Dupe of a sibling? | Notes |
 |---|---|---|---|
-| `galaxyfoil` | `ff` | **yes** → proposed `[dupe_foil] unf = ["galaxyfoil"]` | 251 prints, Collector-Booster-only galaxy-foil sheet. Includes the scarcity tier of galaxy shocks 528–537 ($100–182 each, ~$1,320 total) and galaxy basics 486–495 — all same art as 235–244 / 277–286 |
+| `galaxyfoil` | `ff` | **yes** → configured `[dupe_foil] unf = ["galaxyfoil"]` (2026-11-08) | 251 prints, Collector-Booster-only galaxy-foil sheet. Includes the scarcity tier of galaxy shocks 528–537 ($100–182 each, ~$1,320 total) and galaxy basics 486–495 — all same art as 235–244 / 277–286 |
 | `boosterfun` | — | umbrella | skipped by axis 1; real structure is in `frame_effects` |
 | `release` | — | no sibling | 538 only |
 
@@ -87,7 +87,7 @@ None detected. The inverted borderless prints (basics 235–244, shocks 277–28
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Candidate | Status | Rationale |
 |---|---|---|
@@ -125,7 +125,7 @@ n/a — Unfinity has no prerelease/promo-pack set (`punf` doesn't exist). The on
 
 None configured yet (proposals pending owner review).
 
-- `config/families.toml` `[dupe_foil]` — no `unf` entry (proposal: `unf = ["galaxyfoil"]`).
+- `config/families.toml` `[dupe_foil] unf = ["galaxyfoil"]` — configured 2026-11-08 (enables `mm query missing-set unf`).
 - `config/families.toml` `[[unobtainable.unf.rules]]` — none.
 - Scenes — none.
 

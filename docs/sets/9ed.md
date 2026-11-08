@@ -42,7 +42,7 @@ Every print computes `regular`.
 
 **`promo_types` dupe-foil / stamped signals:** `starterdeck` marks S-cards;
 the `p9ed` release foil is same-art with no dupe signal. No fancy-foil sheet →
-proposed `[dupe_foil] 9ed = []` to enable `mm query missing-set 9ed`.
+configured `[dupe_foil] 9ed = []` (2026-11-08) to enable `mm query missing-set 9ed`.
 
 ---
 
@@ -54,11 +54,11 @@ No chase variants; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] 9ed = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] 9ed = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `N★` foil halves | 350 | **owner's call** — same art as `N`; owning one finish leaves the other "missing". Same finish-split pattern as `10e` |
 | Starter Deck `S` cards | 9 | keep — real cards |
 | `p9ed` 242★ | 1 | **owner's call** — same art, no dupe signal |
@@ -89,8 +89,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.9ed.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] 9ed = []` — configured 2026-11-08 (enables `mm query missing-set 9ed`).
+- `config/families.toml` `[[unobtainable.9ed.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.9ed]]` — none.
 
 ---

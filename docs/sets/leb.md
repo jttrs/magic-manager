@@ -34,7 +34,7 @@ Every print computes `regular`.
 | basics | 15 | `leb` 288–302 (3 arts per land) | `regular` | basics |
 
 **`promo_types`:** none. No fancy-foil sheet →
-proposed `[dupe_foil] leb = []` to enable `mm query missing-set leb`.
+configured `[dupe_foil] leb = []` (2026-11-08) to enable `mm query missing-set leb`.
 
 ---
 
@@ -46,11 +46,11 @@ The Power Nine — only Mox Ruby and Mox Jet are priced locally. No scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] leb = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] leb = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 
 ---
 
@@ -70,7 +70,7 @@ n/a.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] leb = []` — configured 2026-11-08 (enables `mm query missing-set leb`).
 - `config/families.toml` `[[unobtainable.leb.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.leb]]` — none.
 

@@ -35,7 +35,7 @@ Every print computes `regular`.
 | alt-art foil | 1 | `7ed` 214★ Relentless Assault (~$120) | `regular` | **different art** from nonfoil 214 (~$4.45) |
 
 **`promo_types`:** none on any print. The foil `N★` rows carry no dupe signal, so missing-set lists both halves of every card unless a finish-split rule is added. No fancy-foil sheet →
-proposed `[dupe_foil] 7ed = []` to enable `mm query missing-set 7ed`.
+configured `[dupe_foil] 7ed = []` (2026-11-08) to enable `mm query missing-set 7ed`.
 
 ---
 
@@ -47,11 +47,11 @@ Foil rares are the chase: foil Birds of Paradise 231★ (~$3981) alone is ~20% o
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] 7ed = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] 7ed = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | foil `N★` same-art half | 349 | **owner's call** — part of the finish-split decision ([`8ed`](8ed.md), [`9ed`](9ed.md), [`10e`](10e.md)); one card per name+art regardless of finish |
 | 214★ Relentless Assault | 1 | keep — unique art |
 | `zhs` alt-art `Ns` | 8 (0 local) | **owner's call** — Chinese-only, not syncable |
@@ -79,7 +79,7 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] 7ed = []` — configured 2026-11-08 (enables `mm query missing-set 7ed`).
 - `config/families.toml` `[[unobtainable.7ed.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.7ed]]` — none.
 

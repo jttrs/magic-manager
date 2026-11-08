@@ -59,11 +59,11 @@ None.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] dkm = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] dkm = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | foil `★` doubles 14★ / 36★ | 2 | **owner's call** — same-art foil of a nonfoil print (part of the finish-split decision) |
 | whole family | 58 | **owner's call** — a one-time box product; kept (default) — pending owner review |
 
@@ -93,7 +93,7 @@ n/a.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] dkm = []` — configured 2026-11-08 (enables `mm query missing-set dkm`).
 - `config/families.toml` `[[unobtainable.dkm.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.dkm]]` — none.
 

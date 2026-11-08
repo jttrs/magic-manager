@@ -37,7 +37,7 @@ Every print computes `regular`.
 | base | 158 | `dka` 1–158 (64 C / 44 U / 38 R / 12 M; 13 transforming DFCs) | `regular` | rarity/base sub-selectors — R+M ≈ $73 nonfoil / $326 foil (Mikaeus, the Unhallowed 70 ~$23 / $66, Elbrus 147, Havengul Lich 139, Grafdigger's Cage 149 ~$19 foil, Geralf's Messenger 63) |
 
 **`promo_types`:** every `pdka` print has its own art; Gravecrawler `64★` and Zombie Apocalypse 80 are worth more than most of the set. The prerelease and release promos carry `datestamped`, so `missing.drop_datestamped_with_sibling` drops them from missing-set (name + treatment match, not art). No fancy-foil sheet →
-proposed `[dupe_foil] dka = []` to enable `mm query missing-set dka`.
+configured `[dupe_foil] dka = []` (2026-11-08) to enable `mm query missing-set dka`.
 
 ---
 
@@ -49,11 +49,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] dka = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] dka = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pdka` promos | 5 | **owner's call** — all have their own art |
 
 ---
@@ -77,8 +77,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.dka.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] dka = []` — configured 2026-11-08 (enables `mm query missing-set dka`).
+- `config/families.toml` `[[unobtainable.dka.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.dka]]` — none.
 
 ---

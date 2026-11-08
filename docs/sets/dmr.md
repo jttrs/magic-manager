@@ -89,7 +89,7 @@ Not encoded in `[[scenes.dmr]]`.
 
 ## 5. Unobtainable rules
 
-**None configured yet (proposals pending owner review).** Tiers that need a
+**No rule is active.** Tiers that need a
 keep/exclude decision:
 
 | Tier | Disposition | Rationale |
@@ -137,7 +137,7 @@ Counterspell (`release`, foil-only), which lives in the parent itself. A
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review). Proposed: `dmr = []`.
+- `config/families.toml` `[dupe_foil] dmr = []` — configured 2026-11-08 (enables `mm query missing-set dmr`).
 - `config/families.toml` `[[unobtainable.dmr.rules]]` — None configured yet (proposals pending owner review).
 - `[[scenes.dmr]]` — not configured (no scene; see §4).
 

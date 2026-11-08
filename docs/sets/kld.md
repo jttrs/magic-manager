@@ -57,7 +57,7 @@ Survey (`survey_treatment_signature.py KLD`): every card computes `regular`
 | `resale` | — | yes — same art | Bristling Hydra `147★` |
 | `planeswalkerdeck` | — | unique cards | 265–274 |
 
-No fancy-foil sheet → proposed `[dupe_foil] kld = []` to enable `mm query missing-set kld`.
+No fancy-foil sheet → configured `[dupe_foil] kld = []` (2026-11-08) to enable `mm query missing-set kld`.
 
 **Full-art convention:** none on cards.
 
@@ -79,11 +79,11 @@ None.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] kld = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] kld = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pkld` promo-pack stamped `Np` | 9 | **exclude** — `promo_types_any_of = ["stamped"]`; ~$44 |
 | `pkld` game day / release / buy-a-box / Gift Box / resale | 6 | **owner's call** — 5 have their own art |
 | `mps` Inventions | 54 | **keep — but a CODE gap:** rarity `special` is never listed by missing-set (see [`tsr`](tsr.md) §5) |
@@ -127,8 +127,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.kld.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] kld = []` — configured 2026-11-08 (enables `mm query missing-set kld`).
+- `config/families.toml` `[[unobtainable.kld.rules]]` — 2 proposed rules, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.kld]]` — none.
 
 ---

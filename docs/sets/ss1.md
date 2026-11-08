@@ -70,11 +70,11 @@ None.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] ss1 = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] ss1 = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 
 ---
 
@@ -97,7 +97,7 @@ n/a.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] ss1 = []` — configured 2026-11-08 (enables `mm query missing-set ss1`).
 - `config/families.toml` `[[unobtainable.ss1.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.ss1]]` — none.
 

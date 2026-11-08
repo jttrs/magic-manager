@@ -53,7 +53,7 @@ Every print computes `regular`.
 | `giftbox` | — | **no** — own art | Karametra's Acolyte 160 |
 | `instore` | — | challenge-deck cards | `tfth`, `thp1` |
 
-No Promo Pack, no fancy-foil sheet → proposed `[dupe_foil] ths = []` to enable
+No Promo Pack, no fancy-foil sheet → configured `[dupe_foil] ths = []` (2026-11-08) to enable
 `mm query missing-set ths`.
 
 ---
@@ -66,11 +66,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] ths = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] ths = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pths` promos | 10 | **owner's call** — all have their own art; the datestamped ones are hidden by missing-set today (a code question, see [`m15`](m15.md) §7) |
 | `tfth` / `thp1` | 22 | already off by default (memorabilia) |
 
@@ -97,8 +97,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.ths.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] ths = []` — configured 2026-11-08 (enables `mm query missing-set ths`).
+- `config/families.toml` `[[unobtainable.ths.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.ths]]` — none.
 
 ---

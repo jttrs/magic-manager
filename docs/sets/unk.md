@@ -105,7 +105,7 @@ n/a — no art, no borderless prints, so no scene/poster runs exist.
 
 ## 5. Unobtainable rules
 
-None configured. **Owner decision pending:** the whole family is a scarcity tier
+No rule is active. **Owner decision pending:** the whole family is a scarcity tier
 — event-attendance-only cards (MagicCon play areas), 579 prints, only 173 priced
 locally ($6,920.53 total; top: Snapsail Rider RR05 $499.99, The Snapstone Wielder
 RZ06h $427.99, Your Favorite Character RC05c $267.49, Monet, Sensei of the Sewers
@@ -146,7 +146,7 @@ card match Scryfall's (`unk` `RW90b`, `punk` `PLA012`, …).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] unk = []` — configured 2026-11-08 (enables `mm query missing-set unk`).
 - `config/families.toml` `[[unobtainable.unk.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.unk]]` — n/a (no scenes).
 

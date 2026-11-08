@@ -40,15 +40,15 @@ frame effect.
 | release promo | 1 | `pcns` `48★` Magister of Worth (foil, own art) | `regular` | owner's call |
 
 Foils run high relative to nonfoil (draft-only product, low foil supply).
-Proposed `[dupe_foil] cns = []` to enable `mm query missing-set cns`.
+Configured `[dupe_foil] cns = []` (2026-11-08) to enable `mm query missing-set cns`.
 
 ---
 
 ## 3–6.
 
 No chase variants or scenes. PRM: `pcns` `48★` (release). Unobtainable rules:
-none configured yet (proposals pending owner review); `[dupe_foil] cns = []` —
-**apply**; `pcns` 48★ — owner's call.
+no rule is active; `[dupe_foil] cns = []` —
+**applied 2026-11-08**; `pcns` 48★ — owner's call.
 
 ---
 
@@ -62,7 +62,7 @@ none configured yet (proposals pending owner review); `[dupe_foil] cns = []` —
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] cns = []` — configured 2026-11-08 (enables `mm query missing-set cns`).
 - `config/families.toml` `[[unobtainable.cns.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.cns]]` — none.
 

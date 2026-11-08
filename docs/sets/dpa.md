@@ -33,16 +33,15 @@ All `regular`. No `frame_effects`, no `promo_types`.
 | deck foils (**foil-only**, rare) | 5 | `dpa` 10 Mahamoti Djinn, 19 Ascendant Evincar, 49 Kamahl, Pit Fighter, 70 Immaculate Magistrate, 87 Verdant Force | `regular` | rare-regular — ≈ $8 foil |
 | deck cards (nonfoil-only) | 108 | the rest (55 C / 33 U / 20 R; Coat of Arms 90 ~$25, Elvish Champion 60 ~$19, Vigor 88 ~$17, Furnace of Rath 44, The Rack 95) | `regular` | rarity sub-selectors — ≈ $135 |
 
-**New art (local check):** Counterbore 5, Crowd of Cinders 21, Moonglove Winnower 29, Elvish Warrior 64, Roughshod Mentor 81. Proposed `[dupe_foil] dpa = []` to enable
+**New art (local check):** Counterbore 5, Crowd of Cinders 21, Moonglove Winnower 29, Elvish Warrior 64, Roughshod Mentor 81. Configured `[dupe_foil] dpa = []` (2026-11-08) to enable
 `mm query missing-set dpa`.
 
 ---
 
 ## 3–6.
 
-No chase variants, scenes or PRM destinations. Unobtainable rules: none
-configured yet (proposals pending owner review); `[dupe_foil] dpa = []` —
-**apply**.
+No chase variants, scenes or PRM destinations. Unobtainable rules: no rule is active; `[dupe_foil] dpa = []` —
+**applied 2026-11-08**.
 
 ---
 
@@ -55,7 +54,7 @@ configured yet (proposals pending owner review); `[dupe_foil] dpa = []` —
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] dpa = []` — configured 2026-11-08 (enables `mm query missing-set dpa`).
 - `config/families.toml` `[[unobtainable.dpa.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.dpa]]` — none.
 

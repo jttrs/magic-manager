@@ -45,7 +45,7 @@ computes `regular`** — there are no borderless/showcase/ext frames. The
 | `promopack` + `stamped` | `regular` | yes — base + stamp | 3 prints; `stamped` rule would drop them |
 | `release` + `buyabox` | — | distinct | 411 Lotus Bloom |
 
-No fancy-foil sheet → proposed `[dupe_foil] tsr = []` to enable `mm query missing-set tsr`.
+No fancy-foil sheet → configured `[dupe_foil] tsr = []` (2026-11-08) to enable `mm query missing-set tsr`.
 
 **Full-art convention:** none.
 
@@ -65,11 +65,11 @@ None.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] tsr = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] tsr = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `ptsr` promo-pack stamped | 3 | **exclude** — `promo_types_any_of = ["stamped"]` |
 | timeshifted 290–410 | 121 | **keep — but it's a CODE gap, not a config one:** missing-set ignores rarity `special`, so these never appear in buy lists regardless. Fixing it means a `special` sub-selector (or folding `special` into rare) in `missing.missing_selectors` — owner decision |
 
@@ -101,8 +101,8 @@ timeshifted foils dominate the family's foil $ (~$4.5k of ~$5.6k).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.tsr.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] tsr = []` — configured 2026-11-08 (enables `mm query missing-set tsr`).
+- `config/families.toml` `[[unobtainable.tsr.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.tsr]]` — none.
 
 ---

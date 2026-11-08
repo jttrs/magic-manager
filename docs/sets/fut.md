@@ -34,7 +34,7 @@ Every print computes `regular`.
 | base | 180 | `fut` 1–180, no basic lands (60 C / 60 U / 60 R) | `regular` | rarity/base sub-selectors — R+M ≈ $307 nonfoil / $2193 foil (Sliver Legion 158 ~$51 / ~$240 foil, Akroma's Memorial 159 ~$37, Bitter Ordeal 80 ~$28, Tarmogoyf 153 ~$26 / ~$188 foil, Pact of Negation 42 ~$21 / ~$188 foil) |
 
 **`promo_types`:** the prerelease Korlash `87★` has its own art; the release Storm Entity `122★` (~$1.32) reuses the booster art. Only the prerelease carries `datestamped` (dropped by missing-set); the same-art release foil is listed next to `fut` 122. No fancy-foil sheet →
-proposed `[dupe_foil] fut = []` to enable `mm query missing-set fut`.
+configured `[dupe_foil] fut = []` (2026-11-08) to enable `mm query missing-set fut`.
 
 ---
 
@@ -46,11 +46,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] fut = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] fut = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pfut` promos | 2 | **owner's call** — 1 of 2 has its own art |
 
 ---
@@ -74,8 +74,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.fut.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] fut = []` — configured 2026-11-08 (enables `mm query missing-set fut`).
+- `config/families.toml` `[[unobtainable.fut.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.fut]]` — none.
 
 ---

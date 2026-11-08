@@ -34,7 +34,7 @@ Every print computes `regular`.
 | basics | 8 | `ath` 78–85 (pairs with different art) | `regular` | basics |
 
 **`promo_types`:** none. No fancy-foil sheet →
-proposed `[dupe_foil] ath = []` to enable `mm query missing-set ath`.
+configured `[dupe_foil] ath = []` (2026-11-08) to enable `mm query missing-set ath`.
 
 ---
 
@@ -46,11 +46,11 @@ No chase variants; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] ath = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] ath = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | whole family | 85 | **owner's call** — a reprint box (only Forest 84 has art no other local set has); kept (default) — pending owner review |
 
 ---
@@ -70,7 +70,7 @@ n/a.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] ath = []` — configured 2026-11-08 (enables `mm query missing-set ath`).
 - `config/families.toml` `[[unobtainable.ath.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.ath]]` — none.
 

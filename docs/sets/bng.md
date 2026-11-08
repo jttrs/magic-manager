@@ -52,7 +52,7 @@ Every print computes `regular`.
 | `buyabox` | — | **no** — own art | Fated Conflagration 94★ |
 | `instore` | — | challenge-deck cards | `tbth`, `thp2` |
 
-No Promo Pack, no fancy-foil sheet → proposed `[dupe_foil] bng = []` to enable
+No Promo Pack, no fancy-foil sheet → configured `[dupe_foil] bng = []` (2026-11-08) to enable
 `mm query missing-set bng`.
 
 ---
@@ -65,11 +65,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] bng = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] bng = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pbng` promos | 9 | **owner's call** — all have their own art; the datestamped ones are hidden by missing-set today (a code question, see [`m15`](m15.md) §7) |
 | `tbth` / `thp2` | 22 | already off by default (memorabilia) |
 
@@ -97,8 +97,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.bng.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] bng = []` — configured 2026-11-08 (enables `mm query missing-set bng`).
+- `config/families.toml` `[[unobtainable.bng.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.bng]]` — none.
 
 ---

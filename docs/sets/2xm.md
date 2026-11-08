@@ -43,7 +43,7 @@ Survey (`survey_treatment_signature.py 2XM`, 415 prints).
 | `boxtopper` + `boosterfun` | `b` / `regular` | same CARD as a main-set print, different art (except Jace 334) | 40 prints; the family's alt-$ |
 | `release` + `buyabox` | — | distinct | 383–384 |
 
-No fancy-foil sheet → proposed `[dupe_foil] 2xm = []` to enable `mm query missing-set 2xm`.
+No fancy-foil sheet → configured `[dupe_foil] 2xm = []` (2026-11-08) to enable `mm query missing-set 2xm`.
 
 **Full-art convention:** `full_art = 1` on 17 `t2xm` tokens (basics 373–382 are full-art frame but flagged via promo, not `full_art`).
 
@@ -63,11 +63,11 @@ None.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] 2xm = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] 2xm = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | box toppers 333–372 | 40 | **owner's call** — ~$1,971 nonfoil, more than the whole main-set R+M. They're one-per-box chase alts of cards already in 1–332; keep if completing the box-topper sheet is a goal, else exclude with `cn_range = [333, 372]` |
 | Jace 334 (same art as 56) | 1 | if the toppers are kept, this one is still a same-art borderless dupe — candidate for exclusion on its own |
 
@@ -97,8 +97,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.2xm.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] 2xm = []` — configured 2026-11-08 (enables `mm query missing-set 2xm`).
+- `config/families.toml` `[[unobtainable.2xm.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.2xm]]` — none.
 
 ---

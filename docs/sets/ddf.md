@@ -35,16 +35,15 @@ All `regular`. No `frame_effects`, no `promo_types`.
 | face cards (**foil-only**, mythic) | 2 | `ddf` 1 Elspeth, Knight-Errant (~$10.64, new art), 39 Tezzeret the Seeker (~$22.66, new art) | `regular` | mythic-regular |
 | deck cards (nonfoil-only) | 77 | the rest (Energy Chamber 64 ~$7, Thoughtcast 71 ~$4, Foil 70 ~$3, Seat of the Synod 74) | `regular` | rarity sub-selectors — ≈ $43 |
 
-**New art (local check):** Elspeth 1, Mosquito Guard 6, Burrenton Bombardier 11, Crusade 27, Rustic Clachan 34, Tezzeret 39, Energy Chamber 64, Trip Noose 65, Foil 70. Proposed `[dupe_foil] ddf = []` to enable
+**New art (local check):** Elspeth 1, Mosquito Guard 6, Burrenton Bombardier 11, Crusade 27, Rustic Clachan 34, Tezzeret 39, Energy Chamber 64, Trip Noose 65, Foil 70. Configured `[dupe_foil] ddf = []` (2026-11-08) to enable
 `mm query missing-set ddf`.
 
 ---
 
 ## 3–6.
 
-No chase variants, scenes or PRM destinations. Unobtainable rules: none
-configured yet (proposals pending owner review); `[dupe_foil] ddf = []` —
-**apply**.
+No chase variants, scenes or PRM destinations. Unobtainable rules: no rule is active; `[dupe_foil] ddf = []` —
+**applied 2026-11-08**.
 
 ---
 
@@ -58,7 +57,7 @@ configured yet (proposals pending owner review); `[dupe_foil] ddf = []` —
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] ddf = []` — configured 2026-11-08 (enables `mm query missing-set ddf`).
 - `config/families.toml` `[[unobtainable.ddf.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.ddf]]` — none.
 

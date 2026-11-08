@@ -66,11 +66,11 @@ None.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] ima = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] ima = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 
 ---
 
@@ -92,7 +92,7 @@ n/a. No promo child.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] ima = []` — configured 2026-11-08 (enables `mm query missing-set ima`).
 - `config/families.toml` `[[unobtainable.ima.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.ima]]` — none.
 

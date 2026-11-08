@@ -35,7 +35,7 @@ Every print computes `regular`.
 | base | 150 | `mor` 1–150 (60 C / 40 U / 50 R) | `regular` | rarity/base sub-selectors — R+M ≈ $305 nonfoil / $1640 foil (Scapeshift 136 ~$55 / **$246** foil, Bitterblossom 58 ~$36 / $139, Maralen 65 ~$31, Thornbite Staff 145, Idyllic Tutor 12 ~$122 foil) |
 
 **`promo_types`:** the prerelease Door of Destinies `143★` has its own art; the release Earwig Squad `60★` reuses the booster art. The prerelease is `datestamped` (dropped by `missing.drop_datestamped_with_sibling`); the release foil isn't, so missing-set lists it. No fancy-foil sheet →
-proposed `[dupe_foil] mor = []` to enable `mm query missing-set mor`.
+configured `[dupe_foil] mor = []` (2026-11-08) to enable `mm query missing-set mor`.
 
 ---
 
@@ -47,11 +47,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] mor = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] mor = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pmor` promos | 2 | **owner's call** — 1 of 2 has its own art |
 
 ---
@@ -74,8 +74,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.mor.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] mor = []` — configured 2026-11-08 (enables `mm query missing-set mor`).
+- `config/families.toml` `[[unobtainable.mor.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.mor]]` — none.
 
 ---

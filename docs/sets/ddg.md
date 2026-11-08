@@ -35,16 +35,15 @@ All `regular`. No `frame_effects`, no `promo_types`.
 | face cards (**foil-only**, mythic) | 2 | `ddg` 1 Knight of the Reliquary (~$2.88), 47 Bogardan Hellkite (~$0.93, new art) | `regular` | mythic-regular |
 | deck cards (nonfoil-only) | 79 | the rest (Seething Song 70 ~$14, Kinsbaile Cavalier 17 ~$11, Knight Exemplar 14 ~$5, Loxodon Warhammer 31) | `regular` | rarity sub-selectors — ≈ $67 |
 
-**New art (local check):** 19 prints incl. Bogardan Hellkite 47, Silver Knight 8, Oblivion Ring 34, Loxodon Warhammer 31 and five basics. Proposed `[dupe_foil] ddg = []` to enable
+**New art (local check):** 19 prints incl. Bogardan Hellkite 47, Silver Knight 8, Oblivion Ring 34, Loxodon Warhammer 31 and five basics. Configured `[dupe_foil] ddg = []` (2026-11-08) to enable
 `mm query missing-set ddg`.
 
 ---
 
 ## 3–6.
 
-No chase variants, scenes or PRM destinations. Unobtainable rules: none
-configured yet (proposals pending owner review); `[dupe_foil] ddg = []` —
-**apply**.
+No chase variants, scenes or PRM destinations. Unobtainable rules: no rule is active; `[dupe_foil] ddg = []` —
+**applied 2026-11-08**.
 
 ---
 
@@ -58,7 +57,7 @@ configured yet (proposals pending owner review); `[dupe_foil] ddg = []` —
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] ddg = []` — configured 2026-11-08 (enables `mm query missing-set ddg`).
 - `config/families.toml` `[[unobtainable.ddg.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.ddg]]` — none.
 

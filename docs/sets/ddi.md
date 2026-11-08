@@ -35,16 +35,15 @@ All `regular`. No `frame_effects`, no `promo_types`.
 | face cards (**foil-only**, mythic) | 2 | `ddi` 1 Venser, the Sojourner (~$4.69, new art), 44 Koth of the Hammer (~$2.04, new art) | `regular` | mythic-regular |
 | deck cards (nonfoil-only) | 75 | the rest (Sigil of Sleep 25 ~$10, Path to Exile 23 ~$4, Steel of the Godhead 30 ~$3) | `regular` | rarity sub-selectors — ≈ $35 |
 
-**New art (local check):** 13 prints incl. Venser 1, Koth 44, Path to Exile 23, Minamo Sightbender 5, Greater Stone Spirit 61. Proposed `[dupe_foil] ddi = []` to enable
+**New art (local check):** 13 prints incl. Venser 1, Koth 44, Path to Exile 23, Minamo Sightbender 5, Greater Stone Spirit 61. Configured `[dupe_foil] ddi = []` (2026-11-08) to enable
 `mm query missing-set ddi`.
 
 ---
 
 ## 3–6.
 
-No chase variants, scenes or PRM destinations. Unobtainable rules: none
-configured yet (proposals pending owner review); `[dupe_foil] ddi = []` —
-**apply**.
+No chase variants, scenes or PRM destinations. Unobtainable rules: no rule is active; `[dupe_foil] ddi = []` —
+**applied 2026-11-08**.
 
 ---
 
@@ -58,7 +57,7 @@ configured yet (proposals pending owner review); `[dupe_foil] ddi = []` —
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] ddi = []` — configured 2026-11-08 (enables `mm query missing-set ddi`).
 - `config/families.toml` `[[unobtainable.ddi.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.ddi]]` — none.
 

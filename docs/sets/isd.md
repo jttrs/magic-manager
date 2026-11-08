@@ -37,7 +37,7 @@ Every print computes `regular`.
 | base | 264 | `isd` 1–264 (122 C / 67 U / 59 R / 16 M; 20 transforming DFCs) | `regular` | rarity/base sub-selectors — R+M ≈ $152 nonfoil / $637 foil (Parallel Lives 199 ~$37, Balefire Dragon 129 ~$17, Snapcaster Mage 78 ~$16 / $42, Liliana of the Veil 105 ~$10 / **$84** foil, Bloodline Keeper 90) |
 
 **`promo_types`:** every `pisd` print has its own art. No `datestamped` token on these, so missing-set keeps them. No fancy-foil sheet →
-proposed `[dupe_foil] isd = []` to enable `mm query missing-set isd`.
+configured `[dupe_foil] isd = []` (2026-11-08) to enable `mm query missing-set isd`.
 
 ---
 
@@ -49,11 +49,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] isd = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] isd = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pisd` promos | 5 | **owner's call** — all have their own art |
 
 ---
@@ -78,8 +78,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.isd.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] isd = []` — configured 2026-11-08 (enables `mm query missing-set isd`).
+- `config/families.toml` `[[unobtainable.isd.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.isd]]` — none.
 
 ---

@@ -33,7 +33,7 @@ Every print computes `regular`.
 | Italian reprints | 69 (0 local) | `rin` 1–… (e.g. Abu Ja'far 1 ~$1.59, Aladdin 70 ~$10) | — | not syncable |
 
 **`promo_types`:** none. No fancy-foil sheet →
-proposed `[dupe_foil] rin = []` to enable `mm query missing-set rin`.
+configured `[dupe_foil] rin = []` (2026-11-08) to enable `mm query missing-set rin`.
 
 ---
 
@@ -45,11 +45,11 @@ No chase variants; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] rin = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] rin = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | whole family | 69 (0 local) | **owner's call** — Italian-only; can't be synced (same gap as [`ps11`](ps11.md), [`psal`](psal.md)) |
 
 ---
@@ -69,7 +69,7 @@ n/a.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] rin = []` — configured 2026-11-08 (enables `mm query missing-set rin`).
 - `config/families.toml` `[[unobtainable.rin.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.rin]]` — none.
 

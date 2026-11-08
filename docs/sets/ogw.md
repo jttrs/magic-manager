@@ -56,7 +56,7 @@ Kalitas 86, Mirrorpool 174 ~$15 foil).
 | `release` + `datestamped` | — | **no** — own art | Endbringer 3 |
 | `buyabox` | — | **no** — own art | Goblin Dark-Dwellers 110 |
 
-No fancy-foil sheet → proposed `[dupe_foil] ogw = []` to enable `mm query missing-set ogw`.
+No fancy-foil sheet → configured `[dupe_foil] ogw = []` (2026-11-08) to enable `mm query missing-set ogw`.
 
 **Full-art convention:** Wastes 183/184 only.
 
@@ -76,11 +76,11 @@ None.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] ogw = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] ogw = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pogw` promo-pack stamped `Np` | 2 | **exclude** — `promo_types_any_of = ["stamped"]`; ~$7 |
 | `pogw` Intro Pack foils | 5 | **owner's call** — own art |
 | `pogw` game day / release / buy-a-box | 4 | **owner's call** — all have their own art |
@@ -119,8 +119,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.ogw.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] ogw = []` — configured 2026-11-08 (enables `mm query missing-set ogw`).
+- `config/families.toml` `[[unobtainable.ogw.rules]]` — 4 proposed rules, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.ogw]]` — none.
 
 ---

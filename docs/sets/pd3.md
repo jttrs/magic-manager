@@ -40,9 +40,8 @@ All `regular`, foil-only. No `frame_effects`, no `promo_types`.
 
 ## 3–6.
 
-No chase variants, scenes or PRM destinations. Unobtainable rules: none
-configured yet (proposals pending owner review); `[dupe_foil] pd3 = []` —
-**apply**.
+No chase variants, scenes or PRM destinations. Unobtainable rules: no rule is active; `[dupe_foil] pd3 = []` —
+**applied 2026-11-08**.
 
 ---
 
@@ -57,7 +56,7 @@ configured yet (proposals pending owner review); `[dupe_foil] pd3 = []` —
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] pd3 = []` — configured 2026-11-08 (enables `mm query missing-set pd3`).
 - `config/families.toml` `[[unobtainable.pd3.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.pd3]]` — none.
 

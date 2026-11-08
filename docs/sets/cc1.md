@@ -49,7 +49,7 @@ None.
 
 ## 5. Unobtainable rules
 
-None configured, none needed. Proposed `[dupe_foil] cc1 = []` only to enable
+No rule is active; none needed. Configured `[dupe_foil] cc1 = []` (2026-11-08) only to enable
 `mm query missing-set cc1`.
 
 **Totals (local prices, 2026-11-04):** ≈ $99 nonfoil / $145 foil (Worldly Tutor 6,
@@ -72,7 +72,7 @@ n/a.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] cc1 = []` — configured 2026-11-08 (enables `mm query missing-set cc1`).
 - `config/families.toml` `[[unobtainable.cc1.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.cc1]]` — none.
 

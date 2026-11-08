@@ -50,7 +50,7 @@ Survey (`survey_treatment_signature.py CMR`, 747 prints).
 | `boosterfun` | — | n/a | ext band + 512–513 |
 | `buyabox` / `prerelease` | — | distinct | 721 / 722 |
 
-No fancy-foil sheet → proposed `[dupe_foil] cmr = []` to enable `mm query missing-set cmr`.
+No fancy-foil sheet → configured `[dupe_foil] cmr = []` (2026-11-08) to enable `mm query missing-set cmr`.
 
 **Full-art convention:** `full_art = 1` only on 14 `tcmr` tokens.
 
@@ -70,11 +70,11 @@ None.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] cmr = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] cmr = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pcmr` promo-pack stamped | 6 | **exclude** — `promo_types_any_of = ["stamped"]`; ~$125 |
 | borderless PWs 512–513 | 2 | keep — distinct art |
 | etched-only legends 514–545 | 32 | **unsure** — currently invisible to missing-set (etched auto-drop) though they're the only `cmr` print of each card. Leaving it is the cheap default; surfacing them needs a code change, not config |
@@ -109,8 +109,8 @@ band holds most of the family's alt-$ (Jeweled Lotus ext ~$70 / ~$236 foil).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.cmr.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] cmr = []` — configured 2026-11-08 (enables `mm query missing-set cmr`).
+- `config/families.toml` `[[unobtainable.cmr.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.cmr]]` — none.
 
 ---

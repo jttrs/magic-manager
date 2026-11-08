@@ -35,7 +35,7 @@ Every print computes `regular`.
 | prerelease | 1 | `ppcy` 3 | `regular` | **same art** — dropped by `drop_datestamped_with_sibling` |
 
 **`promo_types`:** `ppcy` 3 carries `prerelease` + `datestamped` and shares art with `pcy` 3, so missing-set drops it correctly. No fancy-foil sheet →
-proposed `[dupe_foil] pcy = []` to enable `mm query missing-set pcy`.
+configured `[dupe_foil] pcy = []` (2026-11-08) to enable `mm query missing-set pcy`.
 
 ---
 
@@ -47,11 +47,11 @@ Rhystic Study 45 (common, ~$66 / ~$457 foil) is the most valuable card; it's inv
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] pcy = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] pcy = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `ppcy` prerelease | 1 | none needed — auto-dropped (same art) |
 
 ---
@@ -74,7 +74,7 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] pcy = []` — configured 2026-11-08 (enables `mm query missing-set pcy`).
 - `config/families.toml` `[[unobtainable.pcy.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.pcy]]` — none.
 

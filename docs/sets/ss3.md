@@ -65,7 +65,7 @@ n/a.
 
 ## 5. Unobtainable rules
 
-None configured, none needed. Proposed `[dupe_foil] ss3 = []` only to enable
+No rule is active; none needed. Configured `[dupe_foil] ss3 = []` (2026-11-08) only to enable
 `mm query missing-set ss3`.
 
 **Totals (local prices, 2026-11-04):** ≈ $25 nonfoil / $68 foil (Pyroblast 5
@@ -89,7 +89,7 @@ n/a.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] ss3 = []` — configured 2026-11-08 (enables `mm query missing-set ss3`).
 - `config/families.toml` `[[unobtainable.ss3.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.ss3]]` — none.
 

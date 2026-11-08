@@ -35,16 +35,15 @@ All `regular`. No `frame_effects`, no `promo_types`.
 | face cards (**foil-only**, mythic) | 2 | `ddk` 1 Sorin, Lord of Innistrad (~$2.04, new art), 41 Tibalt, the Fiend-Blooded (~$0.62) | `regular` | mythic-regular |
 | deck cards (nonfoil-only) | 78 | the rest (Mesmeric Fiend 7 ~$1, Sulfuric Vortex 68, Corpse Connoisseur 54, Faithless Looting 59) | `regular` | rarity sub-selectors — ≈ $18 |
 
-**New art (local check):** Sorin 1, Revenant Patriarch 16, Decompose 20, Blazing Salvo 58, Browbeat 66, Breaking Point 67, Blightning 69. Proposed `[dupe_foil] ddk = []` to enable
+**New art (local check):** Sorin 1, Revenant Patriarch 16, Decompose 20, Blazing Salvo 58, Browbeat 66, Breaking Point 67, Blightning 69. Configured `[dupe_foil] ddk = []` (2026-11-08) to enable
 `mm query missing-set ddk`.
 
 ---
 
 ## 3–6.
 
-No chase variants, scenes or PRM destinations. Unobtainable rules: none
-configured yet (proposals pending owner review); `[dupe_foil] ddk = []` —
-**apply**.
+No chase variants, scenes or PRM destinations. Unobtainable rules: no rule is active; `[dupe_foil] ddk = []` —
+**applied 2026-11-08**.
 
 ---
 
@@ -58,7 +57,7 @@ configured yet (proposals pending owner review); `[dupe_foil] ddk = []` —
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] ddk = []` — configured 2026-11-08 (enables `mm query missing-set ddk`).
 - `config/families.toml` `[[unobtainable.ddk.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.ddk]]` — none.
 

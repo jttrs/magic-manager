@@ -40,7 +40,7 @@ All `regular`. No `frame_effects`.
 | oversized legends | 15 | `ocmd` (foil) | `regular` | memorabilia, off by default |
 | launch-party foils | 5 | `pcmd` (foil, regular size) | `regular` | **memorabilia, off by default — but these are real foil cards** (~$96) |
 
-**New art (local check):** 21 prints. Proposed `[dupe_foil] cmd = []`.
+**New art (local check):** 21 prints. Configured `[dupe_foil] cmd = []` (2026-11-08).
 
 ---
 
@@ -52,11 +52,11 @@ No chase variants; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] cmd = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] cmd = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pcmd` launch-party foils | 5 | **owner's call** — regular-size foils filed as `memorabilia`, so hidden by default; opt in with `mm set master-list cmd --include memorabilia` |
 
 ---
@@ -83,7 +83,7 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] cmd = []` — configured 2026-11-08 (enables `mm query missing-set cmd`).
 - `config/families.toml` `[[unobtainable.cmd.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.cmd]]` — none.
 

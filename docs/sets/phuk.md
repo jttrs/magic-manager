@@ -33,16 +33,15 @@ All `regular`; every print is nonfoil and `promo_types = ["mediainsert"]` (2 als
 | deck cards | 36 | `phuk` 1–7, 13–19, 25–31, 37–44, 49–55 (Marrow-Gnawer 1, Patron of the Nezumi 25, Larceny 49, Diabolic Tutor 51, Betrayal of Flesh 52; many cards appear 2–3× under different CNs) | `regular` | rarity sub-selectors (5 R / 13 U / 18 C) — **unpriced** |
 | Swamps | 24 | `phuk` 8–12, 20–24, 32–36, 45–48, 56–60 | `regular` | basics |
 
-**New art (local check):** none certain — the art comes from Kamigawa-block and older printings, some of which aren't synced locally. Proposed `[dupe_foil] phuk = []` to enable
+**New art (local check):** none certain — the art comes from Kamigawa-block and older printings, some of which aren't synced locally. Configured `[dupe_foil] phuk = []` (2026-11-08) to enable
 `mm query missing-set phuk`.
 
 ---
 
 ## 3–6.
 
-No chase variants, scenes or PRM destinations. Unobtainable rules: none
-configured yet (proposals pending owner review); `[dupe_foil] phuk = []` —
-**apply**. Whole family (60) — **owner's call**: a UK magazine-partwork deck; kept (default) — pending owner review.
+No chase variants, scenes or PRM destinations. Unobtainable rules: no rule is active; `[dupe_foil] phuk = []` —
+**applied 2026-11-08**. Whole family (60) — **owner's call**: a UK magazine-partwork deck; kept (default) — pending owner review.
 
 ---
 
@@ -56,7 +55,7 @@ configured yet (proposals pending owner review); `[dupe_foil] phuk = []` —
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] phuk = []` — configured 2026-11-08 (enables `mm query missing-set phuk`).
 - `config/families.toml` `[[unobtainable.phuk.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.phuk]]` — none.
 

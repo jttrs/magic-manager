@@ -36,7 +36,7 @@ Every print computes `regular`.
 | prerelease | 2 | `pptk` 115a, 115b | `regular` | **same art** — auto-dropped |
 
 **`promo_types`:** `pptk` 115a / 115b carry `prerelease` + `datestamped` and share art with `ptk` 115; both are dropped by `drop_datestamped_with_sibling`. They differ only in the date stamp. No fancy-foil sheet →
-proposed `[dupe_foil] ptk = []` to enable `mm query missing-set ptk`.
+configured `[dupe_foil] ptk = []` (2026-11-08) to enable `mm query missing-set ptk`.
 
 ---
 
@@ -48,11 +48,11 @@ Imperial Seal 78 (~$1354) and Zodiac Dragon 131 (~$850). Even commons average ~$
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] ptk = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] ptk = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pptk` prereleases | 2 | none needed — auto-dropped (same art); owner's call if both date stamps are wanted |
 | whole family | 182 | keep — a real (if Asia-only) set |
 
@@ -77,7 +77,7 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] ptk = []` — configured 2026-11-08 (enables `mm query missing-set ptk`).
 - `config/families.toml` `[[unobtainable.ptk.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.ptk]]` — none.
 

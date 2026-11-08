@@ -62,11 +62,11 @@ None.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] dds = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] dds = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 
 ---
 
@@ -86,7 +86,7 @@ n/a.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] dds = []` — configured 2026-11-08 (enables `mm query missing-set dds`).
 - `config/families.toml` `[[unobtainable.dds.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.dds]]` — none.
 

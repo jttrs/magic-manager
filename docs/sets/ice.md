@@ -33,7 +33,7 @@ Every print computes `regular`.
 | base | 383 | `ice` 1–383 (121 C / 121 U / 121 R + 20 basics) | `regular` | rarity/base sub-selectors — R ≈ $397 (Necropotence 154 ~$47, Underground River 362 ~$29, Karplusan Forest 356 ~$28, Adarkar Wastes 351 ~$24, Sulfurous Springs 360 ~$20, Brushland 352 ~$17) |
 
 **`promo_types`:** none. No fancy-foil sheet →
-proposed `[dupe_foil] ice = []` to enable `mm query missing-set ice`.
+configured `[dupe_foil] ice = []` (2026-11-08) to enable `mm query missing-set ice`.
 
 ---
 
@@ -45,11 +45,11 @@ No chase variants; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] ice = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] ice = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 
 ---
 
@@ -69,7 +69,7 @@ n/a.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] ice = []` — configured 2026-11-08 (enables `mm query missing-set ice`).
 - `config/families.toml` `[[unobtainable.ice.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.ice]]` — none.
 

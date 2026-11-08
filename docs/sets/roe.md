@@ -37,7 +37,7 @@ Every print computes `regular`.
 | base | 248 | `roe` 1–248 (120 C / 60 U / 53 R / 15 M) | `regular` | rarity/base sub-selectors — R+M ≈ $353 nonfoil / $1618 foil (Kozilek 6 ~$48 / $173, Ulamog 12 ~$35 / $148, Emrakul 4 ~$29 / $196, Lighthouse Chronologist 75 ~$26, Linvala 33 ~$24 / $107, Bear Umbra 177) |
 
 **`promo_types`:** all three `proe` prints have their own art; the prerelease Emrakul `4★` (~$33) is the priciest. The prerelease and release promos carry `datestamped`, so `missing.drop_datestamped_with_sibling` drops them from missing-set (name + treatment match, not art). No fancy-foil sheet →
-proposed `[dupe_foil] roe = []` to enable `mm query missing-set roe`.
+configured `[dupe_foil] roe = []` (2026-11-08) to enable `mm query missing-set roe`.
 
 ---
 
@@ -49,11 +49,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] roe = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] roe = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `proe` promos | 3 | **owner's call** — all have their own art |
 
 ---
@@ -75,8 +75,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.roe.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] roe = []` — configured 2026-11-08 (enables `mm query missing-set roe`).
+- `config/families.toml` `[[unobtainable.roe.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.roe]]` — none.
 
 ---

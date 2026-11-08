@@ -32,16 +32,15 @@ All `regular`. No `frame_effects`, no `promo_types`.
 |---|---:|---|---|---|
 | reprints | 15 | `drb` 1–15 (Kokusho 9 ~$34, Dragonstorm 5 ~$20, Bladewing 1 ~$16, Draco 3 ~$12, Nicol Bolas 10 ~$11, Niv-Mizzet 11) | `regular` | **rare**-regular — ≈ $145 foil |
 
-**New art (local check):** 14 of 15 first seen here (Ebon Dragon 6 reuses its older art). Proposed `[dupe_foil] drb = []` to enable
+**New art (local check):** 14 of 15 first seen here (Ebon Dragon 6 reuses its older art). Configured `[dupe_foil] drb = []` (2026-11-08) to enable
 `mm query missing-set drb`.
 
 ---
 
 ## 3–6.
 
-No chase variants, scenes or PRM destinations. Unobtainable rules: none
-configured yet (proposals pending owner review); `[dupe_foil] drb = []` —
-**apply**.
+No chase variants, scenes or PRM destinations. Unobtainable rules: no rule is active; `[dupe_foil] drb = []` —
+**applied 2026-11-08**.
 
 ---
 
@@ -55,7 +54,7 @@ configured yet (proposals pending owner review); `[dupe_foil] drb = []` —
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] drb = []` — configured 2026-11-08 (enables `mm query missing-set drb`).
 - `config/families.toml` `[[unobtainable.drb.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.drb]]` — none.
 

@@ -35,7 +35,7 @@ Every print computes `regular`.
 | prerelease | 1 | `psth` 68 | `regular` | **same art** — auto-dropped |
 
 **`promo_types`:** `psth` 68 carries `prerelease` + `datestamped` and shares art with `sth` 68, so missing-set drops it correctly. No fancy-foil sheet →
-proposed `[dupe_foil] sth = []` to enable `mm query missing-set sth`.
+configured `[dupe_foil] sth = []` (2026-11-08) to enable `mm query missing-set sth`.
 
 ---
 
@@ -47,11 +47,11 @@ Mox Diamond 138 (~$1120) is ~62% of rare value. No scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] sth = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] sth = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `psth` prerelease | 1 | none needed — auto-dropped (same art) |
 
 ---
@@ -73,7 +73,7 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] sth = []` — configured 2026-11-08 (enables `mm query missing-set sth`).
 - `config/families.toml` `[[unobtainable.sth.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.sth]]` — none.
 

@@ -70,7 +70,7 @@ No showcase, extended-art, etched, or fancy-foil (`ff`) classes exist in this fa
 | `universesbeyond` | 108 | — | n/a | umbrella tag on `mar` + `lmar` |
 | `boosterfun` | 41 | — | n/a | `mar` 1-40 + `lmar` 1 only (the SPM wave); MSH wave omitted it |
 
-**No dupe-foil signal** → proposed `[dupe_foil] mar = []`.
+**No dupe-foil signal** → configured `[dupe_foil] mar = []` (2026-11-08).
 
 **Full-art convention:** `full_art: true` on all 100 `mar` prints (supersedes the older note in `docs/scryfall-set-families-and-bonus-sheets.md` that MAR was mixed); `false` on `lmar` and `omb`. Security stamp: `oval` on all except `mar` 39 Alibou (`circle`); `lmar` `oval`; `omb` none.
 
@@ -98,7 +98,7 @@ None. Artist-run scan over all 100 `mar` prints found no contiguous same-artist 
 
 ## 5. Unobtainable rules
 
-None configured. Proposals (pending owner review — NOT applied):
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules. Proposals (pending owner review — NOT applied):
 
 | Proposed rule | Rationale |
 |---|---|
@@ -136,8 +136,8 @@ lmar 1-4 are Spider-Man characters (same oracle as `spm`/`pspm`/`om1` printings,
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — none configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.mar.rules]]` — none configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] mar = []` — configured 2026-11-08 (enables `mm query missing-set mar`).
+- `config/families.toml` `[[unobtainable.mar.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.mar]]` — none (no scenes).
 - `src/magic_manager/family_status.py` `NON_FAMILY_SETS` — contains `mar` (owned-only reporting).
 - `src/magic_manager/selectors.py:_is_digital_only` — the gate that misses `omb` (§7).

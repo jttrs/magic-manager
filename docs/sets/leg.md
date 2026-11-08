@@ -33,7 +33,7 @@ Every print computes `regular`.
 | base | 310 | `leg` 1–310 (75 C / 114 U / 121 R) | `regular` | rarity/base sub-selectors — R ≈ $14,144 (The Tabernacle at Pendrell Vale 307 ~$3620, Chains of Mephistopheles 91 ~$1260, Moat 28 ~$936, The Abyss 120 ~$775, Nether Void 113 ~$674, All Hallow's Eve 88 ~$551); U ≈ $1283 (Mana Drain 65 ~$239, Sylvan Library 207 ~$187) |
 
 **`promo_types`:** none. No fancy-foil sheet →
-proposed `[dupe_foil] leg = []` to enable `mm query missing-set leg`.
+configured `[dupe_foil] leg = []` (2026-11-08) to enable `mm query missing-set leg`.
 
 ---
 
@@ -45,11 +45,11 @@ The Tabernacle at Pendrell Vale 307 (~$3620). Valuable uncommons (Mana Drain, Sy
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] leg = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] leg = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 
 ---
 
@@ -67,7 +67,7 @@ n/a.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] leg = []` — configured 2026-11-08 (enables `mm query missing-set leg`).
 - `config/families.toml` `[[unobtainable.leg.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.leg]]` — none.
 

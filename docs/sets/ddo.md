@@ -37,15 +37,14 @@ All `regular` except the two full-art tokens (`fa`).
 | tokens | 2 | `ddo` 66 Soldier, 67 Kraken (`is_token = 1`, full-art) | `fa` | tokens — dropped by missing-set |
 
 **New art (local check):** Kiora 34, Gempalm Avenger 9, Accumulated
-Knowledge 35. Proposed `[dupe_foil] ddo = []`.
+Knowledge 35. Configured `[dupe_foil] ddo = []` (2026-11-08).
 
 ---
 
 ## 3–6.
 
-No chase variants, scenes or PRM destinations. Unobtainable rules: none
-configured yet (proposals pending owner review); `[dupe_foil] ddo = []` —
-**apply**.
+No chase variants, scenes or PRM destinations. Unobtainable rules: no rule is active; `[dupe_foil] ddo = []` —
+**applied 2026-11-08**.
 
 ---
 
@@ -58,7 +57,7 @@ configured yet (proposals pending owner review); `[dupe_foil] ddo = []` —
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] ddo = []` — configured 2026-11-08 (enables `mm query missing-set ddo`).
 - `config/families.toml` `[[unobtainable.ddo.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.ddo]]` — none.
 

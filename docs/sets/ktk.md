@@ -48,7 +48,7 @@ Every print computes `regular`.
 | `intropack` | — | **no** — own art | 5 foil rares (Ankle Shanker 164, Avalanche Tusker 166, Ivorytusk Fortress 179, Rakshasa Vizier 193, Sage of the Inward Eye 195) |
 | `gameday` / `release` / `buyabox` / `giftbox` | — | **no** — own art | Utter End 210, Heir of the Wilds 134, Dragon Throne of Tarkir 219, Rattleclaw Mystic 144, Sultai Charm 204 |
 
-No fancy-foil sheet → proposed `[dupe_foil] ktk = []` to enable `mm query missing-set ktk`.
+No fancy-foil sheet → configured `[dupe_foil] ktk = []` (2026-11-08) to enable `mm query missing-set ktk`.
 
 ---
 
@@ -60,11 +60,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] ktk = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] ktk = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | Arena-only `Ny` prints | 24 | **exclude — but fix in code, not config:** extend `_is_digital_only` to treat Scryfall `availability`/`digital` (or a `y`-suffix CN with no paper availability) as digital. Until then an interim rule could target CNs ending in `y` |
 | `pktk` promo-pack stamped `Np` | 6 | **exclude** — `promo_types_any_of = ["stamped"]`; ~$24 |
 | `pktk` Intro Pack foils + event promos | 10 | **owner's call** — all have their own art |
@@ -95,8 +95,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.ktk.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] ktk = []` — configured 2026-11-08 (enables `mm query missing-set ktk`).
+- `config/families.toml` `[[unobtainable.ktk.rules]]` — 2 proposed rules, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.ktk]]` — none.
 
 ---

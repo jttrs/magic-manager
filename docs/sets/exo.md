@@ -35,7 +35,7 @@ Every print computes `regular`.
 | prerelease | 1 | `pexo` 89 | `regular` | **same art** — auto-dropped |
 
 **`promo_types`:** `pexo` 89 carries `prerelease` + `datestamped` and shares art with `exo` 89, so missing-set drops it correctly. No fancy-foil sheet →
-proposed `[dupe_foil] exo = []` to enable `mm query missing-set exo`.
+configured `[dupe_foil] exo = []` (2026-11-08) to enable `mm query missing-set exo`.
 
 ---
 
@@ -47,11 +47,11 @@ City of Traitors 143 and Survival of the Fittest 129 (both Reserved List) are ~7
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] exo = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] exo = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pexo` prerelease | 1 | none needed — auto-dropped (same art) |
 
 ---
@@ -73,7 +73,7 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] exo = []` — configured 2026-11-08 (enables `mm query missing-set exo`).
 - `config/families.toml` `[[unobtainable.exo.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.exo]]` — none.
 

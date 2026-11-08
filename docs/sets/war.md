@@ -53,7 +53,7 @@ Survey (`survey_treatment_signature.py WAR`, 743 print-rows by finish).
 | `setpromo` | — | marker on every `pwar` print | not a dupe signal by itself |
 | `planeswalkerdeck` / `buyabox` | — | unique cards | 265–275 |
 
-No fancy-foil sheet → proposed `[dupe_foil] war = []` to enable `mm query missing-set war`.
+No fancy-foil sheet → configured `[dupe_foil] war = []` (2026-11-08) to enable `mm query missing-set war`.
 
 **Full-art convention:** none.
 
@@ -74,11 +74,11 @@ None.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] war = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] war = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pwar` promo-pack stamped `Np` | 44 | **exclude** — `promo_types_any_of = ["stamped"]`; ~$192 |
 | `pwar` FNM / in-store / open-house / resale | 8 | **owner's call** — promo-only copies; `promo_types_any_of = ["fnm","instore","openhouse","resale"]` if excluded (~$28 foil) |
 | PW-deck 265–274, buy-a-box 275 | 11 | keep — real cards |
@@ -119,8 +119,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.war.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] war = []` — configured 2026-11-08 (enables `mm query missing-set war`).
+- `config/families.toml` `[[unobtainable.war.rules]]` — 2 proposed rules, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.war]]` — none.
 
 ---

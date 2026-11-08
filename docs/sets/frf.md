@@ -53,7 +53,7 @@ Every print computes `regular`. `cp2`'s `enchantment` frame effect is cosmetic.
 | `resale` | — | same art | Atarka `149★` |
 | `setpromo` (`ugin`) | — | **no** — own art | marker on every Ugin's Fate card |
 
-No fancy-foil sheet → proposed `[dupe_foil] frf = []` to enable `mm query missing-set frf`.
+No fancy-foil sheet → configured `[dupe_foil] frf = []` (2026-11-08) to enable `mm query missing-set frf`.
 
 ---
 
@@ -65,11 +65,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] frf = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] frf = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pfrf` promo-pack stamped `Np` | 3 | **exclude** — `promo_types_any_of = ["stamped"]`; ~$16 |
 | `pfrf` Intro Pack foils + event promos | 10 | **owner's call** — 9 have their own art |
 | `ugin` Ugin's Fate | 26 | **owner's call** — alt-art promos from the FRF prerelease/launch event; real cards, ~$96 |
@@ -107,8 +107,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.frf.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] frf = []` — configured 2026-11-08 (enables `mm query missing-set frf`).
+- `config/families.toml` `[[unobtainable.frf.rules]]` — 3 proposed rules, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.frf]]` — none.
 
 ---

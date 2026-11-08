@@ -34,16 +34,15 @@ All nonfoil, no `frame_effects` (data from live Scryfall, 2026-11-06).
 | Italian decks | 120 | `psal` K–L | `regular` | n/a locally |
 | (all) | 720 | 503 C / 157 U / 60 R | — | only 14 prints priced, ≈ $296 total (Lightning Greaves L2 ~$150, Soul Warden J14 ~$19, Marrow-Gnawer A1 ~$18) |
 
-**New art (local check):** n/a — nothing local; the decks reprint existing cards. Proposed `[dupe_foil] psal = []` to enable
+**New art (local check):** n/a — nothing local; the decks reprint existing cards. Configured `[dupe_foil] psal = []` (2026-11-08) to enable
 `mm query missing-set psal`.
 
 ---
 
 ## 3–6.
 
-No chase variants, scenes or PRM destinations. Unobtainable rules: none
-configured yet (proposals pending owner review); `[dupe_foil] psal = []` —
-**apply**. Whole family (720) — **owner's call**: non-English partwork, not syncable; kept (default) — pending owner review.
+No chase variants, scenes or PRM destinations. Unobtainable rules: no rule is active; `[dupe_foil] psal = []` —
+**applied 2026-11-08**. Whole family (720) — **owner's call**: non-English partwork, not syncable; kept (default) — pending owner review.
 
 ---
 
@@ -57,7 +56,7 @@ configured yet (proposals pending owner review); `[dupe_foil] psal = []` —
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] psal = []` — configured 2026-11-08 (enables `mm query missing-set psal`).
 - `config/families.toml` `[[unobtainable.psal.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.psal]]` — none.
 

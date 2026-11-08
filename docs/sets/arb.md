@@ -37,7 +37,7 @@ Every print computes `regular`.
 | base | 145 | `arb` 1–145 (60 C / 40 U / 35 R / 10 M) | `regular` | rarity/base sub-selectors — R+M ≈ $84 nonfoil / $421 foil (Sen Triplets 109 ~$10 / $37, Time Sieve 31 ~$8, Dragon Broodmother 53, Lich Lord of Unx 24, Karrthus 117) |
 
 **`promo_types`:** 2 of 3 `parb` prints have their own art (resale `A4` reuses it). No buy-a-box promo. The prerelease and release promos carry `datestamped`, so `missing.drop_datestamped_with_sibling` drops them from missing-set (name + treatment match, not art). No fancy-foil sheet →
-proposed `[dupe_foil] arb = []` to enable `mm query missing-set arb`.
+configured `[dupe_foil] arb = []` (2026-11-08) to enable `mm query missing-set arb`.
 
 ---
 
@@ -49,11 +49,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] arb = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] arb = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `parb` promos | 3 | **owner's call** — 2 of 3 have their own art |
 
 ---
@@ -76,8 +76,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.arb.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] arb = []` — configured 2026-11-08 (enables `mm query missing-set arb`).
+- `config/families.toml` `[[unobtainable.arb.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.arb]]` — none.
 
 ---

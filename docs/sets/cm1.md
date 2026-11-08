@@ -36,15 +36,14 @@ All `regular`, foil-only. No `frame_effects`, no `promo_types`.
 | reprints (foil) | 18 | `cm1` 1–18 (2 C / 1 U / 11 R / 4 M; Rhystic Study 15 ~$133, Scroll Rack 16 ~$42, Sylvan Library 17 ~$38, Command Tower 2 ~$30, Diaochan 5 ~$20) | `regular` | rarity sub-selectors — ≈ $336 foil |
 | oversized commanders | 10 | `ocm1` 1–10 (foil) | `regular` | memorabilia, off by default — ≈ $214 |
 
-Proposed `[dupe_foil] cm1 = []` to enable `mm query missing-set cm1`.
+Configured `[dupe_foil] cm1 = []` (2026-11-08) to enable `mm query missing-set cm1`.
 
 ---
 
 ## 3–6.
 
-No chase variants, scenes or PRM destinations. Unobtainable rules: none
-configured yet (proposals pending owner review); `[dupe_foil] cm1 = []` —
-**apply**.
+No chase variants, scenes or PRM destinations. Unobtainable rules: no rule is active; `[dupe_foil] cm1 = []` —
+**applied 2026-11-08**.
 
 ---
 
@@ -60,7 +59,7 @@ configured yet (proposals pending owner review); `[dupe_foil] cm1 = []` —
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] cm1 = []` — configured 2026-11-08 (enables `mm query missing-set cm1`).
 - `config/families.toml` `[[unobtainable.cm1.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.cm1]]` — none.
 

@@ -58,7 +58,7 @@ Survey (`survey_treatment_signature.py KHM`, 808 prints).
 | `themepack` | — | no — unique cards | 374–393 |
 | `bundle` / `buyabox` / `resale` | — | distinct | kept |
 
-No fancy-foil sheet → proposed `[dupe_foil] khm = []` to enable `mm query missing-set khm`.
+No fancy-foil sheet → configured `[dupe_foil] khm = []` (2026-11-08) to enable `mm query missing-set khm`.
 
 **Full-art convention:** `full_art = 1` only on tokens/substitute cards (`tkhm` 8, `skhm` 9).
 
@@ -78,11 +78,11 @@ None detected.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] khm = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] khm = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pkhm` promo-pack stamped `Np` | 68 | **exclude** — `promo_types_any_of = ["stamped"]`; ~$228 |
 | `khm` 407 Vorinclex stepandcompleat | 1 | **exclude** — `promo_types_any_of = ["stepandcompleat"]` (same art as 406, foil-only) |
 | Vorinclex concept 406 | 1 | keep or exclude — owner's call (~$68 nonfoil, the family's top kept alt) |
@@ -121,8 +121,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.khm.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] khm = []` — configured 2026-11-08 (enables `mm query missing-set khm`).
+- `config/families.toml` `[[unobtainable.khm.rules]]` — 2 proposed rules, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.khm]]` — none.
 
 ---
