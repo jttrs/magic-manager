@@ -75,7 +75,7 @@ in `frame_effects` / `finishes` / `border_color`:
 |---|---|---|---|
 | `boosterfun` | `b` / `ext` / `b\|ff` | n/a (umbrella) | tags borderless, ext and etched bands |
 | `portrait` | `b` | no — unique art | the profile-legend borderless; also on 9 of the 10 textured prints |
-| `textured` | `b\|ff` | **yes** — same illustration as the portrait/full-art borderless sibling (10/10) | → `[dupe_foil] cmm = ["textured"]` (proposed) |
+| `textured` | `b\|ff` | **yes** — same illustration as the portrait/full-art borderless sibling (10/10) | → `[dupe_foil] cmm = ["textured"]` (configured 2026-11-08) |
 | `thick` | `b\|ff` [etched] | yes (display-size copies of 704/705/706/707 commanders) | oversized display cards; not in missing output |
 | `release` | `b` | no — unique art | 1067 Disrupt Decorum, foil only |
 
@@ -126,7 +126,7 @@ in families.toml — config injected in-process):**
 - `[dupe_foil] cmm = ["textured"]` → **412 prints / ~$2,891**, a flat curve topped by full-art borderless staples (Deflecting Swat 698, Demonic Tutor 696, Jeweled Lotus 702, Fierce Guardianship 694). Breakdown: booster regular 169 / $1,397; borderless 82 / $1,143; precon reprints 59 / $148; precon-new 16 / $124; foil faces 4 / $73; release 1 / $5; plus 81 unpriced `acmm` art cards (§7).
 
 **Scarcity check:** `scripts/set_status.py cmm` printed no ⚠ concentration note
-(missing figures show "cross-set; n/a" until `[dupe_foil]` is configured).
+(missing figures showed "cross-set; n/a" at this audit, before `[dupe_foil]` was configured).
 
 ---
 

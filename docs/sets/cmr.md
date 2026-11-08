@@ -80,7 +80,7 @@ No rule is active. Proposals below are in `config/families.toml` as `enabled = f
 | etched-only legends 514–545 | 32 | **unsure** — currently invisible to missing-set (etched auto-drop) though they're the only `cmr` print of each card. Leaving it is the cheap default; surfacing them needs a code change, not config |
 | ext 615–716 | 102 | n/a — auto-dropped |
 
-**Scarcity check:** n/a until a `[dupe_foil]` entry exists. The dropped ext
+**Scarcity check:** not run yet (written before `[dupe_foil]` was added). The dropped ext
 band holds most of the family's alt-$ (Jeweled Lotus ext ~$70 / ~$236 foil).
 
 ---

@@ -97,7 +97,7 @@ No rule is active.
 | borderless shocklands (277–286) | kept (default) — pending owner review | ~$260 nonfoil for the 10; the family's highest-value kept tier |
 | Attraction lit-number variants (134 lettered CNs) | kept (default) — pending owner review | same art, functionally distinct; a "one per attraction" preference would need a `collector_numbers` rule |
 
-Before/after missing totals: n/a (family unconfigured; `set_status.py` can't compute missing until `[dupe_foil]` exists). Rough local-price shape: galaxy foils $1,760 total (dropped by the dupe-foil proposal); everything else in `unf`+`sunf` ≈ $411 at nonfoil-else-foil prices, led by the ten borderless shocks.
+Before/after missing totals: n/a (family unconfigured; `set_status.py` couldn't compute missing at this audit, before `[dupe_foil]` existed). Rough local-price shape: galaxy foils $1,760 total (dropped by the dupe-foil proposal); everything else in `unf`+`sunf` ≈ $411 at nonfoil-else-foil prices, led by the ten borderless shocks.
 
 Filtered globally: no serialized, no digital/arena prints (`missing | grep -i arena` → 0).
 

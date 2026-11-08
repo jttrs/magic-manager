@@ -73,7 +73,7 @@ No rule is active. Proposals below are in `config/families.toml` as `enabled = f
 | `ptsr` promo-pack stamped | 3 | **exclude** — `promo_types_any_of = ["stamped"]` |
 | timeshifted 290–410 | 121 | **keep — but it's a CODE gap, not a config one:** missing-set ignores rarity `special`, so these never appear in buy lists regardless. Fixing it means a `special` sub-selector (or folding `special` into rare) in `missing.missing_selectors` — owner decision |
 
-**Scarcity check:** n/a until a `[dupe_foil]` entry exists. By inspection the
+**Scarcity check:** not run yet (written before `[dupe_foil]` was added). By inspection the
 timeshifted foils dominate the family's foil $ (~$4.5k of ~$5.6k).
 
 ---

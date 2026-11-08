@@ -85,7 +85,7 @@ No rule is active. Proposals below are in `config/families.toml` as `enabled = f
 | showcase 273–302, borderless PWs 270–272 | 33 | keep — distinct art |
 | buy-a-box 303, PW-deck 304–313, Brawl 314–333 | 31 | keep — real cards found nowhere in 1–269 |
 
-**Scarcity check:** n/a until a `[dupe_foil]` entry exists.
+**Scarcity check:** not run yet (written before `[dupe_foil]` was added).
 
 ---
 

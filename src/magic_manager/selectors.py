@@ -1257,7 +1257,11 @@ def _filter_treatment_preferred(rows: list[MaterializedRow]) -> list[Materialize
     for setc in set_codes:
         try:
             resolved = sets_mod.resolve(setc)
-            anchors.add(resolved.code)  # parent anchor of the family
+            anchors.add(resolved.code)  # stays the MEMBER when setc is a child
+            # A family's rows can all sit in child sets (its anchor set complete):
+            # .all_codes holds the whole family, so the configured anchor is found.
+            anchors.update(c.lower() for c in resolved.all_codes
+                           if c.lower() in FAMILY_DUPE_FOIL_PROMO_TYPES)
         except LookupError:
             pass
     # Of the anchors found, do we have config for any?

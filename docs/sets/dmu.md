@@ -99,7 +99,7 @@ No rule is active. Proposals below are in `config/families.toml` as `enabled = f
 | borderless planeswalkers 372–376 + painlands 377–382 | 11 | keep — ordinary borderless tier |
 | showcase Ajani 371 | 1 | keep |
 
-**Scarcity check:** n/a until a `[dupe_foil]` entry exists (`set_status.py`
+**Scarcity check:** not run yet (written before `[dupe_foil]` was added) (`set_status.py`
 can't compute missing $). By inspection, Sheoldred's prints dominate the $.
 
 ---

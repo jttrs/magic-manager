@@ -98,7 +98,7 @@ keep/exclude decision:
 | borderless (`inverted`, CN 412–456) | kept (default) — pending owner review | Distinct art, the family's chase tier (45 prints, ~$434 nonfoil). Recommend keep |
 
 **Scarcity check:** `scripts/set_status.py dmr` printed no ⚠ concentration note
-(missing-set is not available until `[dupe_foil]` is configured). Top
+(missing-set was not available at this audit, before `[dupe_foil]` was configured). Top
 collectible-alt missing value is a flat curve of borderless staples (Force of
 Will 418 ~$55, Vampiric Tutor 430 ~$51, Enlightened Tutor 412 ~$34) — no
 serialized/headliner/stamped scarcity tier exists in this family.

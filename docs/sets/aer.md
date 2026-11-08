@@ -79,7 +79,7 @@ No rule is active. Proposals below are in `config/families.toml` as `enabled = f
 | `paer` game day / release / buy-a-box | 4 | **owner's call** — 3 have their own art |
 | PW-deck 185–194 | 10 | keep — real cards |
 
-**Scarcity check:** n/a until a `[dupe_foil]` entry exists.
+**Scarcity check:** not run yet (written before `[dupe_foil]` was added).
 
 ---
 

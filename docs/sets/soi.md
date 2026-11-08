@@ -80,7 +80,7 @@ No rule is active. Proposals below are in `config/families.toml` as `enabled = f
 | `psoi` Intro Pack foils | 5 | **owner's call** — own art, came in a retail product |
 | `psoi` game day / release / buy-a-box / Gift Box | 6 | **owner's call** — all have their own art; Anguished Unmaking 242 is ~$32 |
 
-**Scarcity check:** n/a until a `[dupe_foil]` entry exists.
+**Scarcity check:** not run yet (written before `[dupe_foil]` was added).
 
 ---
 

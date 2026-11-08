@@ -94,7 +94,7 @@ No rule is active. Proposals below are in `config/families.toml` as `enabled = f
 | borderless 278–285 | 8 | keep — ~$40 nonfoil |
 | promo-pack inverted 387–391 | 5 | keep — sub-rare, harmless |
 
-**Scarcity check:** n/a until a `[dupe_foil]` entry exists. By inspection no
+**Scarcity check:** not run yet (written before `[dupe_foil]` was added). By inspection no
 tier concentrates the missing $; base rares/mythics (~$155) lead.
 
 ---

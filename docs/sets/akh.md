@@ -88,7 +88,7 @@ No rule is active. Proposals below are in `config/families.toml` as `enabled = f
 | `mp2` Invocations | 54 | **keep — but a CODE gap, not config:** rarity `special` is never listed by missing-set (see [`tsr`](tsr.md) §5). Owner decision on a `special` sub-selector |
 | PW-deck 270–287 | 18 | keep — real cards |
 
-**Scarcity check:** n/a until a `[dupe_foil]` entry exists.
+**Scarcity check:** not run yet (written before `[dupe_foil]` was added).
 
 ---
 

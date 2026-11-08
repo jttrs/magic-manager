@@ -81,7 +81,7 @@ No rule is active. Proposals below are in `config/families.toml` as `enabled = f
 ## 8. Code refs
 
 - `config/families.toml` `[dupe_foil] zen = []` — configured 2026-11-08 (enables `mm query missing-set zen`).
-- `config/families.toml` `[[unobtainable.zen.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
+- `config/families.toml` `[[unobtainable.zen.rules]]` — 2 proposed rules, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.zen]]` — none.
 
 ---

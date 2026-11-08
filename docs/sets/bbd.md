@@ -88,7 +88,7 @@ No rule is active.
 | `[dupe_foil] bbd = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | alt-art foil Kenriths 255–256 | 2 | keep — booster cards with their own art |
 
-**Scarcity check:** n/a until a `[dupe_foil]` entry exists.
+**Scarcity check:** not run yet (written before `[dupe_foil]` was added).
 
 ---
 

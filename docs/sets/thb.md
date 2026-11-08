@@ -81,7 +81,7 @@ No rule is active. Proposals below are in `config/families.toml` as `enabled = f
 | showcase Nyx 258–268, borderless PWs 255–257 | 14 | keep — distinct art |
 | PW-deck / theme-booster exclusives 270–297, buy-a-box 269 | 29 | keep — real cards found nowhere in 1–254 |
 
-**Scarcity check:** n/a until a `[dupe_foil]` entry exists.
+**Scarcity check:** not run yet (written before `[dupe_foil]` was added).
 
 ---
 

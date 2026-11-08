@@ -71,7 +71,7 @@ No rule is active. Proposals below are in `config/families.toml` as `enabled = f
 | box toppers 333–372 | 40 | **owner's call** — ~$1,971 nonfoil, more than the whole main-set R+M. They're one-per-box chase alts of cards already in 1–332; keep if completing the box-topper sheet is a goal, else exclude with `cn_range = [333, 372]` |
 | Jace 334 (same art as 56) | 1 | if the toppers are kept, this one is still a same-art borderless dupe — candidate for exclusion on its own |
 
-**Scarcity check:** n/a until a `[dupe_foil]` entry exists.
+**Scarcity check:** not run yet (written before `[dupe_foil]` was added).
 
 ---
 

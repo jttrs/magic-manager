@@ -90,7 +90,7 @@ No rule is active. Proposals below are in `config/families.toml` as `enabled = f
 | borderless 286–298 | 13 | keep |
 | theme-booster exclusives 374–393 | 20 | keep — real cards |
 
-**Scarcity check:** n/a until a `[dupe_foil]` entry exists.
+**Scarcity check:** not run yet (written before `[dupe_foil]` was added).
 
 ---
 

@@ -81,7 +81,7 @@ No rule is active. Proposals below are in `config/families.toml` as `enabled = f
 | `pmh1` `1p` stamped | 1 | **exclude** — `promo_types_any_of = ["stamped"]`; ~$8 |
 | buy-a-box 255 | 1 | keep — distinct art |
 
-**Scarcity check:** n/a until a `[dupe_foil]` entry exists.
+**Scarcity check:** not run yet (written before `[dupe_foil]` was added).
 
 ---
 

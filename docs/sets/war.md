@@ -83,7 +83,7 @@ No rule is active. Proposals below are in `config/families.toml` as `enabled = f
 | `pwar` FNM / in-store / open-house / resale | 8 | **owner's call** — promo-only copies; `promo_types_any_of = ["fnm","instore","openhouse","resale"]` if excluded (~$28 foil) |
 | PW-deck 265–274, buy-a-box 275 | 11 | keep — real cards |
 
-**Scarcity check:** n/a until a `[dupe_foil]` entry exists.
+**Scarcity check:** not run yet (written before `[dupe_foil]` was added).
 
 ---
 

@@ -381,7 +381,7 @@ cn_hi = 750
 [[unobtainable.10e.rules]]
 set_codes = ["p10e"]
 enabled = false
-note = "The p10e promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The p10e promos set. Owner's call: see the family doc for which share art with the booster card."
 
 # Proposed rules (off until switched on) — see docs/sets/2xm.md §5
 [[unobtainable.2xm.rules]]
@@ -394,7 +394,7 @@ note = "One-per-box topper alternates of cards already in 1-332. Owner's call: k
 [[unobtainable.5dn.rules]]
 set_codes = ["p5dn"]
 enabled = false
-note = "The p5dn promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The p5dn promos set. Owner's call: see the family doc for which share art with the booster card."
 
 # Proposed rules (off until switched on) — see docs/sets/8ed.md §5
 [[unobtainable.8ed.rules]]
@@ -448,19 +448,19 @@ note = "Game day, buy-a-box, release and resale promos. Owner's call; the prerel
 [[unobtainable.ala.rules]]
 set_codes = ["pala"]
 enabled = false
-note = "The pala promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The pala promos set. Owner's call: see the family doc for which share art with the booster card."
 
 # Proposed rules (off until switched on) — see docs/sets/arb.md §5
 [[unobtainable.arb.rules]]
 set_codes = ["parb"]
 enabled = false
-note = "The parb promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The parb promos set. Owner's call: see the family doc for which share art with the booster card."
 
 # Proposed rules (off until switched on) — see docs/sets/avr.md §5
 [[unobtainable.avr.rules]]
 set_codes = ["pavr"]
 enabled = false
-note = "The pavr promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The pavr promos set. Owner's call: see the family doc for which share art with the booster card."
 
 # Proposed rules (off until switched on) — see docs/sets/bfz.md §5
 [[unobtainable.bfz.rules]]
@@ -498,13 +498,13 @@ note = "raisedfoil premium-foil chase tier (added 2026-08-30). The 21 `raisedfoi
 [[unobtainable.bng.rules]]
 set_codes = ["pbng"]
 enabled = false
-note = "The pbng promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The pbng promos set. Owner's call: see the family doc for which share art with the booster card."
 
 # Proposed rules (off until switched on) — see docs/sets/bok.md §5
 [[unobtainable.bok.rules]]
 set_codes = ["pbok"]
 enabled = false
-note = "The pbok promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The pbok promos set. Owner's call: see the family doc for which share art with the booster card."
 
 # Proposed rules (off until switched on) — see docs/sets/bro.md §5
 [[unobtainable.bro.rules]]
@@ -516,7 +516,7 @@ note = "Promo-pack stamped variants (pbro): the same card as a kept sibling plus
 [[unobtainable.chk.rules]]
 set_codes = ["pchk"]
 enabled = false
-note = "The pchk promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The pchk promos set. Owner's call: see the family doc for which share art with the booster card."
 
 [[unobtainable.clb.rules]]
 frame_effects_all_of = ["showcase"]
@@ -534,13 +534,13 @@ note = "Promo-pack stamped variants (pcmr): the same card as a kept sibling plus
 [[unobtainable.con.rules]]
 set_codes = ["pcon"]
 enabled = false
-note = "The pcon promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The pcon promos set. Owner's call: see the family doc for which share art with the booster card."
 
 # Proposed rules (off until switched on) — see docs/sets/csp.md §5
 [[unobtainable.csp.rules]]
 set_codes = ["pcsp"]
 enabled = false
-note = "The pcsp promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The pcsp promos set. Owner's call: see the family doc for which share art with the booster card."
 
 [[unobtainable.csp.rules]]
 set_codes = ["cst"]
@@ -560,19 +560,19 @@ note = "Documented no-op (parity): DFT 376 The Aetherspark is serialized+headlin
 [[unobtainable.dgm.rules]]
 set_codes = ["pdgm"]
 enabled = false
-note = "The pdgm promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The pdgm promos set. Owner's call: see the family doc for which share art with the booster card."
 
 # Proposed rules (off until switched on) — see docs/sets/dis.md §5
 [[unobtainable.dis.rules]]
 set_codes = ["pdis"]
 enabled = false
-note = "The pdis promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The pdis promos set. Owner's call: see the family doc for which share art with the booster card."
 
 # Proposed rules (off until switched on) — see docs/sets/dka.md §5
 [[unobtainable.dka.rules]]
 set_codes = ["pdka"]
 enabled = false
-note = "The pdka promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The pdka promos set. Owner's call: see the family doc for which share art with the booster card."
 
 # Proposed rules (off until switched on) — see docs/sets/dmu.md §5
 [[unobtainable.dmu.rules]]
@@ -601,7 +601,7 @@ note = "FNM, league and event promos. Owner's call; the prerelease and promo-pac
 [[unobtainable.dst.rules]]
 set_codes = ["pdst"]
 enabled = false
-note = "The pdst promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The pdst promos set. Owner's call: see the family doc for which share art with the booster card."
 
 # Proposed rules (off until switched on) — see docs/sets/dtk.md §5
 [[unobtainable.dtk.rules]]
@@ -661,7 +661,7 @@ note = "Promo-pack/prerelease STAMP variants (added 2026-08-26, mirroring SNC). 
 [[unobtainable.eve.rules]]
 set_codes = ["peve"]
 enabled = false
-note = "The peve promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The peve promos set. Owner's call: see the family doc for which share art with the booster card."
 
 [[unobtainable.fdn.rules]]
 promo_types_any_of = ["stamped"]
@@ -704,13 +704,13 @@ note = "Intro Pack foils and event promos. Owner's call; the prerelease and prom
 [[unobtainable.fut.rules]]
 set_codes = ["pfut"]
 enabled = false
-note = "The pfut promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The pfut promos set. Owner's call: see the family doc for which share art with the booster card."
 
 # Proposed rules (off until switched on) — see docs/sets/gpt.md §5
 [[unobtainable.gpt.rules]]
 set_codes = ["pgpt"]
 enabled = false
-note = "The pgpt promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The pgpt promos set. Owner's call: see the family doc for which share art with the booster card."
 
 # Proposed rules (off until switched on) — see docs/sets/grn.md §5
 [[unobtainable.grn.rules]]
@@ -728,7 +728,7 @@ note = "FNM, league and event promos. Owner's call; the prerelease and promo-pac
 [[unobtainable.gtc.rules]]
 set_codes = ["pgtc"]
 enabled = false
-note = "The pgtc promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The pgtc promos set. Owner's call: see the family doc for which share art with the booster card."
 
 [[unobtainable.hob.rules]]
 promo_types_any_of = ["gleaminggold", "headliner"]
@@ -773,7 +773,7 @@ note = "English foils of the Chinese alternate art (unpriced). Owner's call."
 [[unobtainable.isd.rules]]
 set_codes = ["pisd"]
 enabled = false
-note = "The pisd promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The pisd promos set. Owner's call: see the family doc for which share art with the booster card."
 
 # Proposed rules (off until switched on) — see docs/sets/jmp.md §5
 [[unobtainable.jmp.rules]]
@@ -785,7 +785,7 @@ note = "Arena-only digital cards, unobtainable in paper. Stopgap until digital d
 [[unobtainable.jou.rules]]
 set_codes = ["pjou"]
 enabled = false
-note = "The pjou promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The pjou promos set. Owner's call: see the family doc for which share art with the booster card."
 
 # Proposed rules (off until switched on) — see docs/sets/khm.md §5
 [[unobtainable.khm.rules]]
@@ -831,13 +831,13 @@ note = "The 6 serialized neon-ink Cavern of Souls (LCI 410a-f), foil-only, $74-$
 [[unobtainable.lgn.rules]]
 set_codes = ["plgn"]
 enabled = false
-note = "The plgn promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The plgn promos set. Owner's call: see the family doc for which share art with the booster card."
 
 # Proposed rules (off until switched on) — see docs/sets/lrw.md §5
 [[unobtainable.lrw.rules]]
 set_codes = ["plrw"]
 enabled = false
-note = "The plrw promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The plrw promos set. Owner's call: see the family doc for which share art with the booster card."
 
 [[unobtainable.ltr.rules]]
 promo_types_all_of = ["scroll", "silverfoil"]
@@ -858,31 +858,31 @@ note = "WPN Play Promo (added 2026-09-11). LTR 299 Gandalf the White — `playpr
 [[unobtainable.m10.rules]]
 set_codes = ["pm10"]
 enabled = false
-note = "The pm10 promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The pm10 promos set. Owner's call: see the family doc for which share art with the booster card."
 
 # Proposed rules (off until switched on) — see docs/sets/m11.md §5
 [[unobtainable.m11.rules]]
 set_codes = ["pm11"]
 enabled = false
-note = "The pm11 promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The pm11 promos set. Owner's call: see the family doc for which share art with the booster card."
 
 # Proposed rules (off until switched on) — see docs/sets/m12.md §5
 [[unobtainable.m12.rules]]
 set_codes = ["pm12"]
 enabled = false
-note = "The pm12 promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The pm12 promos set. Owner's call: see the family doc for which share art with the booster card."
 
 # Proposed rules (off until switched on) — see docs/sets/m13.md §5
 [[unobtainable.m13.rules]]
 set_codes = ["pm13"]
 enabled = false
-note = "The pm13 promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The pm13 promos set. Owner's call: see the family doc for which share art with the booster card."
 
 # Proposed rules (off until switched on) — see docs/sets/m14.md §5
 [[unobtainable.m14.rules]]
 set_codes = ["pm14"]
 enabled = false
-note = "The pm14 promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The pm14 promos set. Owner's call: see the family doc for which share art with the booster card."
 
 # Proposed rules (off until switched on) — see docs/sets/m15.md §5
 [[unobtainable.m15.rules]]
@@ -912,7 +912,7 @@ note = "FNM, league and event promos. Owner's call; the prerelease and promo-pac
 [[unobtainable.m20.rules]]
 promo_types_any_of = ["stamped"]
 enabled = false
-note = "Promo-pack stamped variants (pm20 + ppp1): the same card as a kept sibling plus a stamp, which would otherwise show as missing. Proposed exclude."
+note = "Promo-pack stamped variants (pm20 + ppp1): the same card as a kept sibling plus a stamp, which would otherwise show as missing (ppp1's 5 basics have their own art). Proposed exclude."
 
 # Proposed rules (off until switched on) — see docs/sets/m21.md §5
 [[unobtainable.m21.rules]]
@@ -945,7 +945,7 @@ note = "halofoil fancy-foil dupes (added 2026-08-30). All 43 `halofoil` prints a
 [[unobtainable.mbs.rules]]
 set_codes = ["pmbs"]
 enabled = false
-note = "The pmbs promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The pmbs promos set. Owner's call: see the family doc for which share art with the booster card."
 
 # Proposed rules (off until switched on) — see docs/sets/mh1.md §5
 [[unobtainable.mh1.rules]]
@@ -997,13 +997,13 @@ note = "Documented no-op (parity with INR/ECL/SOS/TDM): the Praetor transform du
 [[unobtainable.mor.rules]]
 set_codes = ["pmor"]
 enabled = false
-note = "The pmor promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The pmor promos set. Owner's call: see the family doc for which share art with the booster card."
 
 # Proposed rules (off until switched on) — see docs/sets/mrd.md §5
 [[unobtainable.mrd.rules]]
 set_codes = ["pmrd"]
 enabled = false
-note = "The pmrd promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The pmrd promos set. Owner's call: see the family doc for which share art with the booster card."
 
 [[unobtainable.msh.rules]]
 promo_types_any_of = ["headliner"]
@@ -1034,7 +1034,7 @@ note = "Promo-pack STAMP variants (added 2026-08-30). 69 `pneo` `promopack`+`sta
 [[unobtainable.nph.rules]]
 set_codes = ["pnph"]
 enabled = false
-note = "The pnph promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The pnph promos set. Owner's call: see the family doc for which share art with the booster card."
 
 # Proposed rules (off until switched on) — see docs/sets/ogw.md §5
 [[unobtainable.ogw.rules]]
@@ -1077,13 +1077,19 @@ note = "Documented no-op (parity with INR/ACR/ECL/SOS): `serialized` is already 
 [[unobtainable.ons.rules]]
 set_codes = ["pons"]
 enabled = false
-note = "The pons promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The pons promos set. Owner's call: see the family doc for which share art with the booster card."
 
 # Proposed rules (off until switched on) — see docs/sets/ori.md §5
 [[unobtainable.ori.rules]]
 promo_types_any_of = ["stamped"]
 enabled = false
 note = "Promo-pack stamped variants (pori): the same card as a kept sibling plus a stamp, which would otherwise show as missing. Proposed exclude."
+
+[[unobtainable.ori.rules]]
+set_codes = ["pori"]
+promo_types_any_of = ["intropack", "gameday", "resale", "release", "buyabox"]
+enabled = false
+note = "Intro Pack foils and event promos. Owner's call; the prerelease and promo-pack prints in this set are not part of this row."
 
 [[unobtainable.otj.rules]]
 promo_types_any_of = ["textured"]
@@ -1098,13 +1104,13 @@ note = "Promo-pack/prerelease STAMP variants (mirrors SNC/EOE/ECL/SOS). 94 stamp
 [[unobtainable.plc.rules]]
 set_codes = ["pplc"]
 enabled = false
-note = "The pplc promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The pplc promos set. Owner's call: see the family doc for which share art with the booster card."
 
 # Proposed rules (off until switched on) — see docs/sets/rav.md §5
 [[unobtainable.rav.rules]]
 set_codes = ["prav"]
 enabled = false
-note = "The prav promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The prav promos set. Owner's call: see the family doc for which share art with the booster card."
 
 # Proposed rules (off until switched on) — see docs/sets/rix.md §5
 [[unobtainable.rix.rules]]
@@ -1134,25 +1140,25 @@ note = "FNM, league and event promos. Owner's call; the prerelease and promo-pac
 [[unobtainable.roe.rules]]
 set_codes = ["proe"]
 enabled = false
-note = "The proe promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The proe promos set. Owner's call: see the family doc for which share art with the booster card."
 
 # Proposed rules (off until switched on) — see docs/sets/rtr.md §5
 [[unobtainable.rtr.rules]]
 set_codes = ["prtr"]
 enabled = false
-note = "The prtr promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The prtr promos set. Owner's call: see the family doc for which share art with the booster card."
 
 # Proposed rules (off until switched on) — see docs/sets/scg.md §5
 [[unobtainable.scg.rules]]
 set_codes = ["pscg"]
 enabled = false
-note = "The pscg promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The pscg promos set. Owner's call: see the family doc for which share art with the booster card."
 
 # Proposed rules (off until switched on) — see docs/sets/shm.md §5
 [[unobtainable.shm.rules]]
 set_codes = ["pshm"]
 enabled = false
-note = "The pshm promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The pshm promos set. Owner's call: see the family doc for which share art with the booster card."
 
 [[unobtainable.snc.rules]]
 promo_types_any_of = ["stamped"]
@@ -1185,13 +1191,13 @@ note = "Game day, release, buy-a-box and gift box promos. Owner's call; the prer
 [[unobtainable.sok.rules]]
 set_codes = ["psok"]
 enabled = false
-note = "The psok promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The psok promos set. Owner's call: see the family doc for which share art with the booster card."
 
 # Proposed rules (off until switched on) — see docs/sets/som.md §5
 [[unobtainable.som.rules]]
 set_codes = ["psom"]
 enabled = false
-note = "The psom promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The psom promos set. Owner's call: see the family doc for which share art with the booster card."
 
 [[unobtainable.sos.rules]]
 promo_types_any_of = ["headliner", "serialized"]
@@ -1243,7 +1249,7 @@ note = "Promo-pack stamped variants (pthb): the same card as a kept sibling plus
 [[unobtainable.ths.rules]]
 set_codes = ["pths"]
 enabled = false
-note = "The pths promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The pths promos set. Owner's call: see the family doc for which share art with the booster card."
 
 [[unobtainable.tla.rules]]
 promo_types_any_of = ["headliner", "neonink", "raisedfoil"]
@@ -1284,7 +1290,7 @@ note = "Bundle-exclusive starship showcase prints with distinct art. Unsure: own
 [[unobtainable.tsp.rules]]
 set_codes = ["ptsp"]
 enabled = false
-note = "The ptsp promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The ptsp promos set. Owner's call: see the family doc for which share art with the booster card."
 
 # Proposed rules (off until switched on) — see docs/sets/tsr.md §5
 [[unobtainable.tsr.rules]]
@@ -1320,7 +1326,7 @@ note = "FNM, in-store, open-house and resale promo-only copies. Owner's call; th
 [[unobtainable.wwk.rules]]
 set_codes = ["pwwk"]
 enabled = false
-note = "The pwwk promos set. Owner's call: some of these share art with the booster card, most have their own art."
+note = "The pwwk promos set. Owner's call: see the family doc for which share art with the booster card."
 
 # Proposed rules (off until switched on) — see docs/sets/xln.md §5
 [[unobtainable.xln.rules]]
@@ -1345,6 +1351,11 @@ set_codes = ["zen"]
 collector_numbers = ["230a", "231a", "232a", "233a", "234a", "235a", "236a", "237a", "238a", "239a", "240a", "241a", "242a", "243a", "244a", "245a", "246a", "247a", "248a", "249a"]
 enabled = false
 note = "Basics with the same art as 230-249. Owner's call (same pattern as bfz)."
+
+[[unobtainable.zen.rules]]
+set_codes = ["pzen"]
+enabled = false
+note = "The pzen promos set. Owner's call: see the family doc for which share art with the booster card."
 
 # Proposed rules (off until switched on) — see docs/sets/znr.md §5
 [[unobtainable.znr.rules]]

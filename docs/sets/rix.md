@@ -82,7 +82,7 @@ No rule is active. Proposals below are in `config/families.toml` as `enabled = f
 | `prix` league / event promos | 5 | **owner's call** — same question as [`war`](war.md) / [`dom`](dom.md) |
 | PW-deck 197–205 | 9 | keep — real cards |
 
-**Scarcity check:** n/a until a `[dupe_foil]` entry exists.
+**Scarcity check:** not run yet (written before `[dupe_foil]` was added).
 
 ---
 

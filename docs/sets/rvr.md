@@ -107,7 +107,7 @@ keep/exclude decision:
 Retro rares/mythics total 74 prints (58 R + 16 M), ~$505 nonfoil.
 
 **Scarcity check:** `scripts/set_status.py rvr` printed no ⚠ concentration note
-(missing-set is not available until `[dupe_foil]` is configured; nothing owned
+(missing-set was not available at this audit, before `[dupe_foil]` was configured; nothing owned
 yet). The only true scarcity tier — 64 serialized double-rainbow foils
 (`Nz`, up to ~$2,000 each) — is already dropped by the global `serialized`
 filter. Remaining top values are a flat curve of borderless/retro staples

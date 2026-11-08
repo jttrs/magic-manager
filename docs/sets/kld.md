@@ -89,7 +89,7 @@ No rule is active. Proposals below are in `config/families.toml` as `enabled = f
 | `mps` Inventions | 54 | **keep — but a CODE gap:** rarity `special` is never listed by missing-set (see [`tsr`](tsr.md) §5) |
 | PW-deck 265–274 | 10 | keep — real cards |
 
-**Scarcity check:** n/a until a `[dupe_foil]` entry exists.
+**Scarcity check:** not run yet (written before `[dupe_foil]` was added).
 
 ---
 

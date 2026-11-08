@@ -68,7 +68,7 @@ No rule is active.
 | `[dupe_foil] uma = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `puma` box toppers | 40 | already dropped by the ext preferred class; nothing to add. If you want them listed, that's an explicit keep (owner's call). Same question as [`2xm`](2xm.md)'s toppers, but here the art is the same as base |
 
-**Scarcity check:** n/a until a `[dupe_foil]` entry exists.
+**Scarcity check:** not run yet (written before `[dupe_foil]` was added).
 
 ---
 

@@ -83,7 +83,7 @@ No rule is active. Proposals below are in `config/families.toml` as `enabled = f
 | Zilortha 275 | 1 | keep — the only print of that card |
 | showcase 279–313, borderless PWs 276–278 | 38 | keep — distinct art |
 
-**Scarcity check:** n/a until a `[dupe_foil]` entry exists.
+**Scarcity check:** not run yet (written before `[dupe_foil]` was added).
 
 ---
 

@@ -128,7 +128,6 @@ lmar 1-4 are Spider-Man characters (same oracle as `spm`/`pspm`/`om1` printings,
 - `arena` grep on `set:mar+related missing` → no rows (the arena-stamp path is fine; the leak is the set-level flag).
 - **Duplicate names within `mar`** (Path to Exile, Counterspell, Beast Within ×2; Heroic Intervention ×4) are distinct arts — never collapse by name.
 - **Name collisions with `omb`:** `omb` N has the same name as `mar` N for N=1-40 but different art and is digital.
-- `treatment=preferred` raises `SelectorParseError` until `[dupe_foil] mar` exists; use `treatment=collectible-alt` meanwhile.
 - No meld backs, no tokens, no serialized prints.
 - Owned at audit: 37 printings ($379.81) — `mar` 34 (30 in CN 1-40, 4 in 41-100), `lmar` 1/2/4.
 

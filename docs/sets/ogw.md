@@ -86,7 +86,7 @@ No rule is active. Proposals below are in `config/families.toml` as `enabled = f
 | `pogw` game day / release / buy-a-box | 4 | **owner's call** — all have their own art |
 | Wastes `183a`/`184a` | 2 | **owner's call** — same art as 183/184, not full-art frame; keep unless the owner wants one Wastes per art |
 
-**Scarcity check:** n/a until a `[dupe_foil]` entry exists.
+**Scarcity check:** not run yet (written before `[dupe_foil]` was added).
 
 ---
 

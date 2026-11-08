@@ -103,7 +103,7 @@ No rule is active. Proposals below are in `config/families.toml` as `enabled = f
 ## 8. Code refs
 
 - `config/families.toml` `[dupe_foil] ori = []` — configured 2026-11-08 (enables `mm query missing-set ori`).
-- `config/families.toml` `[[unobtainable.ori.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
+- `config/families.toml` `[[unobtainable.ori.rules]]` — 2 proposed rules, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.ori]]` — none.
 
 ---

@@ -94,7 +94,7 @@ No rule is active. Proposals below are in `config/families.toml` as `enabled = f
 | borderless 304–326 | 23 | keep |
 | showcase sketch 327–380 | 54 | keep — distinct art (not the D&D rulebook frame that CLB/AFR exclude) |
 
-**Scarcity check:** n/a until a `[dupe_foil]` entry exists. By inspection the
+**Scarcity check:** not run yet (written before `[dupe_foil]` was added). By inspection the
 alt tiers are spread out — no single chase print dominates outside Ragavan /
 Esper Sentinel.
 

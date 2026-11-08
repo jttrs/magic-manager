@@ -88,7 +88,7 @@ No rule is active. Proposals below are in `config/families.toml` as `enabled = f
 | promo-pack inverted 378–382 | 5 | keep — sub-rare |
 | `sta` 64–126 Japanese | 63 | n/a — not synced (English-only catalog) |
 
-**Scarcity check:** n/a until a `[dupe_foil]` entry exists. By inspection the
+**Scarcity check:** not run yet (written before `[dupe_foil]` was added). By inspection the
 Mystical Archive carries most of the alt-$ (Demonic Tutor, Teferi's Protection,
 Tainted Pact lead).
 

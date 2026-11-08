@@ -84,7 +84,7 @@ No rule is active. Proposals below are in `config/families.toml` as `enabled = f
 | `pgrn` FNM / league / event promos | 8 | **owner's call** — same question as [`war`](war.md) / [`rna`](rna.md) |
 | PW-deck 265–272, buy-a-box 273 | 9 | keep — real cards |
 
-**Scarcity check:** n/a until a `[dupe_foil]` entry exists.
+**Scarcity check:** not run yet (written before `[dupe_foil]` was added).
 
 ---
 

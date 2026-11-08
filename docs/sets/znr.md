@@ -90,7 +90,7 @@ No rule is active. Proposals below are in `config/families.toml` as `enabled = f
 | borderless 281–289 | 9 | keep |
 | promo-pack inverted 387–391 | 5 | keep — sub-rare |
 
-**Scarcity check:** n/a until a `[dupe_foil]` entry exists. By inspection the
+**Scarcity check:** not run yet (written before `[dupe_foil]` was added). By inspection the
 Expeditions are ~3.5× the whole base R+M value.
 
 ---

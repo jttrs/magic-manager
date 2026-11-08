@@ -89,7 +89,7 @@ No rule is active. Proposals below are in `config/families.toml` as `enabled = f
 | `pxln` buy-a-box 135 + event promos | 5 | **owner's call** — 4 have their own art |
 | PW-deck 280–289 | 10 | keep — real cards |
 
-**Scarcity check:** n/a until a `[dupe_foil]` entry exists.
+**Scarcity check:** not run yet (written before `[dupe_foil]` was added).
 
 ---
 
