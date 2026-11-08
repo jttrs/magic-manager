@@ -194,3 +194,18 @@ def test_multi_family_diff_empty_when_all_codes_unresolvable(tmp_db, tla_family)
     diffs = card_diff.multi_family_diff(["nope-1", "nope-2"], on_skip=skipped.append)
     assert diffs == []
     assert skipped == ["nope-1", "nope-2"]
+
+
+def test_functional_pool_ignores_the_chase_preference(tmp_db, tla_family, seed_cards, make_card):
+    """Functional missing is measured against the full (chase-excluded) family
+    whatever the user's chase preference says — pinned like the explicit
+    ``--chase`` modes, so card-diff and set-status agree."""
+    from magic_manager import card_diff, collection_prefs
+    seed_cards([
+        make_card(id="stranger", oracle_id="o-stranger", set="tla", collector_number="6",
+                  rarity="rare", name="Stranger", prices={"usd": "5.00", "usd_foil": None}),
+    ])
+    baseline = card_diff.family_diff("tla").functional.count
+    assert baseline == 1
+    collection_prefs.update("chase_in_lists", "only")
+    assert card_diff.family_diff("tla").functional.count == baseline

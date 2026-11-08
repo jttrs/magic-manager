@@ -1177,6 +1177,20 @@ export type ChecklistOut = {
 };
 
 /**
+ * ChoiceOut
+ */
+export type ChoiceOut = {
+    /**
+     * Value
+     */
+    value: string;
+    /**
+     * Label
+     */
+    label: string;
+};
+
+/**
  * ClientEventIn
  */
 export type ClientEventIn = {
@@ -4793,6 +4807,64 @@ export type PreconOptionOut = {
 };
 
 /**
+ * PrefIn
+ */
+export type PrefIn = {
+    /**
+     * Value
+     */
+    value?: string | Array<string> | null;
+};
+
+/**
+ * PrefOut
+ */
+export type PrefOut = {
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * About
+     */
+    about: string;
+    /**
+     * Kind
+     */
+    kind: 'choice' | 'multi';
+    /**
+     * Choices
+     */
+    choices: Array<ChoiceOut>;
+    /**
+     * Value
+     */
+    value: string | Array<string>;
+    /**
+     * Default
+     */
+    default: string | Array<string>;
+    /**
+     * Changed
+     */
+    changed: boolean;
+};
+
+/**
+ * PrefsOut
+ */
+export type PrefsOut = {
+    /**
+     * Prefs
+     */
+    prefs: Array<PrefOut>;
+};
+
+/**
  * PreviewOut
  */
 export type PreviewOut = {
@@ -7949,6 +8021,52 @@ export type PutFlagResponses = {
 };
 
 export type PutFlagResponse = PutFlagResponses[keyof PutFlagResponses];
+
+export type ListPrefsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/preferences/collection';
+};
+
+export type ListPrefsResponses = {
+    /**
+     * Successful Response
+     */
+    200: PrefsOut;
+};
+
+export type ListPrefsResponse = ListPrefsResponses[keyof ListPrefsResponses];
+
+export type PutPrefData = {
+    body: PrefIn;
+    path: {
+        /**
+         * Key
+         */
+        key: string;
+    };
+    query?: never;
+    url: '/api/preferences/collection/{key}';
+};
+
+export type PutPrefErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PutPrefError = PutPrefErrors[keyof PutPrefErrors];
+
+export type PutPrefResponses = {
+    /**
+     * Successful Response
+     */
+    200: PrefsOut;
+};
+
+export type PutPrefResponse = PutPrefResponses[keyof PutPrefResponses];
 
 export type JobSpecsData = {
     body?: never;

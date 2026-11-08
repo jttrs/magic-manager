@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from magic_manager import (  # noqa: E402
-    db, scryfall, sets as sets_mod, selectors, missing as missing_mod, util,
+    collection_prefs, db, scryfall, sets as sets_mod, selectors, missing as missing_mod, util,
     mtgjson, card_floor,
 )
 from magic_manager.family_status import (  # noqa: E402
@@ -238,7 +238,7 @@ def functional_missing_summary(parent_code: str) -> tuple[int, float, float] | N
     The anywhere floor uses the memoized live ``oracleid:`` lookup. Delegates to
     ``missing.functional_missing`` — the in-family price is local (no fetch)."""
     try:
-        rows = missing_mod.missing_printings(parent_code)
+        rows = missing_mod.missing_printings(parent_code, chase="exclude")
     except (selectors.SelectorParseError, LookupError):
         return None
     # Pre-warm EVERY candidate oracle_id's anywhere floor in ONE batched pass
@@ -350,7 +350,10 @@ def render_overview(*, refresh: bool = False, warn=None) -> str:
         if non_family or mrows is None:
             func = None
         else:
-            fm = missing_mod.functional_missing(pc, precomputed_missing=mrows)
+            # Functional ignores the chase preference (as card-diff does).
+            frows = (mrows if collection_prefs.get().chase_in_lists == "exclude"
+                     else missing_mod.missing_printings(pc, chase="exclude"))
+            fm = missing_mod.functional_missing(pc, precomputed_missing=frows)
             func = (fm.n_cards, fm.family_total_usd, fm.family_total_usd)
         rows_data.append((pc, pn, prints, qty, usd, n_precon, dist, func, non_family))
         tot_prints += prints

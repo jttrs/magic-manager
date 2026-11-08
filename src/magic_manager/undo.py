@@ -29,6 +29,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import db
+from . import collection_prefs
 from .analytics import consent
 # Your data, parents before children — the one registry is ``layout``. Card/price/
 # EDHREC/tag tables are caches and are never touched (cards only ever grow, so
@@ -40,7 +41,7 @@ from .layout import USER_TABLES
 # (opting out of tracking, then pressing Undo, must not opt you back in). Keys
 # that describe the card catalog live in ``catalog_settings`` (V36), which a
 # restore never touches.
-KEEP_SETTINGS = (consent.SETTING_KEY,)
+KEEP_SETTINGS = (consent.SETTING_KEY, collection_prefs.SETTING_KEY)
 
 SESSION_GAP_SECONDS = 30 * 60
 SNAPSHOT_FILE = "undo.db"

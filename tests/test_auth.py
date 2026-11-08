@@ -404,7 +404,8 @@ def test_every_api_route_needs_a_session_except_the_public_ones(hosted):
     c = _client(hosted)
     seen = 0
     routes = api_routes(hosted)
-    assert {r.path for r in routes} >= {"/api/analytics/consent", "/api/scrapers/health", "/api/auth/me"}
+    assert {r.path for r in routes} >= {"/api/analytics/consent", "/api/scrapers/health", "/api/auth/me",
+                                                  "/api/preferences/collection", "/api/preferences/collection/{key}"}
     for route in routes:
         if not route.path.startswith("/api/"):
             continue

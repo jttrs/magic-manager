@@ -1332,6 +1332,8 @@ def _filter_treatment_preferred(rows: list[MaterializedRow]) -> list[Materialize
             "codes": codes,
         })
 
+    from . import collection_prefs as _prefs
+    show_datestamped = _prefs.get().datestamped == "show"
     out: list[MaterializedRow] = []
     for r in collectible:
         sid = r.scryfall_id
@@ -1340,7 +1342,7 @@ def _filter_treatment_preferred(rows: list[MaterializedRow]) -> list[Materialize
         name = r.card.get("name")
 
         # Step 2: datestamped + non-stamped sibling → drop.
-        if "datestamped" in my_pt:
+        if "datestamped" in my_pt and not show_datestamped:
             sibs_same_codes = by_name_codes.get((name, frozenset(codes)), [])
             non_stamped_sibling_exists = any(
                 s["scryfall_id"] != sid and "datestamped" not in s["promo_types"]

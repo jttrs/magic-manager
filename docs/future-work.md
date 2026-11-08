@@ -83,6 +83,13 @@ Small PRs, one per item.
   and toggling the same flag again can send overlapping PUTs (last write wins); tests missing for
   clearing a just-me override via the API, a pinned flag via the API/CLI, and `mm flags ls`
   text output / `mm flags set --json`.
+- **"What counts" preference leftovers** (`collection_prefs.py`, review of the prefs PR):
+  `update()` reads and writes the one JSON blob on two connections with no transaction, so two
+  concurrent PUTs on different keys (two tabs, or the CLI while the web app saves) can lose one —
+  wrap both in one `BEGIN IMMEDIATE`; a `get()` that started before an `update()` can put the old
+  value back in the cache for up to 30 s (a generation counter bumped by `clear_cache` fixes it);
+  `mm prefs set` from a terminal reaches a running `mm serve` only after its 30 s cache expires;
+  a forget function that raises after the write commits turns a saved PUT into a 500.
 
 ## 4. Deferred by decision
 
