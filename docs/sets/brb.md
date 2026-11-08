@@ -34,7 +34,7 @@ Every print computes `regular`.
 | basics | 36 | `brb` 101–136 | `regular` | basics |
 
 **`promo_types`:** none. No fancy-foil sheet →
-proposed `[dupe_foil] brb = []` to enable `mm query missing-set brb`.
+configured `[dupe_foil] brb = []` (2026-11-08) to enable `mm query missing-set brb`.
 
 ---
 
@@ -46,11 +46,11 @@ No chase variants; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] brb = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] brb = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | whole family | 136 | **owner's call** — a reprint box (every print shares art with another local set); kept (default) — pending owner review |
 
 ---
@@ -70,7 +70,7 @@ n/a.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] brb = []` — configured 2026-11-08 (enables `mm query missing-set brb`).
 - `config/families.toml` `[[unobtainable.brb.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.brb]]` — none.
 

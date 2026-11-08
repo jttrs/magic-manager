@@ -64,11 +64,11 @@ n/a.
 
 ## 5. Unobtainable rules
 
-None configured, none needed.
+No rule is active; none needed.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] gn2 = []` | 0 | **apply** — empty, enables missing-set (15 R/M ≈ $27) |
+| `[dupe_foil] gn2 = []` | 0 | **applied 2026-11-08** — empty, enables missing-set (15 R/M ≈ $27) |
 
 ---
 
@@ -90,7 +90,7 @@ n/a. No promo child.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] gn2 = []` — configured 2026-11-08 (enables `mm query missing-set gn2`).
 - `config/families.toml` `[[unobtainable.gn2.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.gn2]]` — none.
 

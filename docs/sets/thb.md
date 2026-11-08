@@ -51,7 +51,7 @@ Survey (`survey_treatment_signature.py THB`, 509 prints).
 | `planeswalkerdeck` / `themepack` | — | unique cards | 270–297 |
 | `bundle` / `buyabox` / `resale` | — | distinct | kept |
 
-No fancy-foil sheet → proposed `[dupe_foil] thb = []` to enable `mm query missing-set thb`.
+No fancy-foil sheet → configured `[dupe_foil] thb = []` (2026-11-08) to enable `mm query missing-set thb`.
 
 **Full-art convention:** basics 250–254 only.
 
@@ -72,16 +72,16 @@ None.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] thb = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] thb = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pthb` promo-pack stamped `Np` | 68 | **exclude** — `promo_types_any_of = ["stamped"]`; ~$281 |
 | showcase Nyx 258–268, borderless PWs 255–257 | 14 | keep — distinct art |
 | PW-deck / theme-booster exclusives 270–297, buy-a-box 269 | 29 | keep — real cards found nowhere in 1–254 |
 
-**Scarcity check:** n/a until a `[dupe_foil]` entry exists.
+**Scarcity check:** not run yet (written before `[dupe_foil]` was added).
 
 ---
 
@@ -115,8 +115,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.thb.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] thb = []` — configured 2026-11-08 (enables `mm query missing-set thb`).
+- `config/families.toml` `[[unobtainable.thb.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.thb]]` — none.
 
 ---

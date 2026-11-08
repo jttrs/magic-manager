@@ -37,15 +37,14 @@ All `regular`. No `frame_effects`, no `promo_types`.
 | deck cards (nonfoil-only) | 86 | the rest (Ohran Viper 57 ~$1.84, Control Magic 30 ~$1.58) | `regular` | rarity sub-selectors — ≈ $23 |
 
 **New art (local check):** Jace 1, Memory Lapse 24, Vraska 42, Putrid Leech
-51, Hypnotic Cloud 67. Proposed `[dupe_foil] ddm = []`.
+51, Hypnotic Cloud 67. Configured `[dupe_foil] ddm = []` (2026-11-08).
 
 ---
 
 ## 3–6.
 
-No chase variants, scenes or PRM destinations. Unobtainable rules: none
-configured yet (proposals pending owner review); `[dupe_foil] ddm = []` —
-**apply**.
+No chase variants, scenes or PRM destinations. Unobtainable rules: no rule is active; `[dupe_foil] ddm = []` —
+**applied 2026-11-08**.
 
 ---
 
@@ -58,7 +57,7 @@ configured yet (proposals pending owner review); `[dupe_foil] ddm = []` —
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] ddm = []` — configured 2026-11-08 (enables `mm query missing-set ddm`).
 - `config/families.toml` `[[unobtainable.ddm.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.ddm]]` — none.
 

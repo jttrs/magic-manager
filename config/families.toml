@@ -1,55 +1,300 @@
 # Per-family treatment/unobtainable config (selectors.py).
 #
-# Externalized from Python constants; code ships identical baked-in defaults,
-# so this file is OPTIONAL. Three sections:
+# REQUIRED: config.py raises ConfigError if this file is missing or unparseable
+# (unlike promo_types.toml / precon.toml, which have baked-in defaults). Three sections:
 #   [dupe_foil]       family -> fancy-foil promo_types that mark a same-art dupe
 #                     (collapsed by the preferred filter). Empty = no dupe signal.
 #   [[unobtainable.<fam>.rules]]  predicate rules for prints the user won't pursue;
 #                     each rule's `note` is the rationale (travels WITH the rule).
+#                     `enabled = false` marks a PROPOSED rule: it is loaded into
+#                     selectors.FAMILY_PROPOSED_RULES, not FAMILY_UNOBTAINABLE_RULES,
+#                     so it excludes nothing until the line is deleted (or set true).
 #   [[scenes.<fam>]]  poster/scene groupings (scenes.py: Collection "Scene" group +
 #                     scene_table.py). Keys: name, artist, set, cn_lo, cn_hi,
 #                     optional kind = "scene" (default) | "poster".
 #
 # Predicate keys (AND within a rule, OR across a family's rules):
 #   promo_types_any_of / promo_types_all_of / frame_effects_all_of (lists),
+#   set_codes (list of set codes: the print's own set, e.g. a promo set `pala`),
 #   border_color (string), collector_numbers (list of CN strings).
+# Non-predicate keys: tier ("hard" default | "chase"), enabled (bool, default true), note.
 
 [dupe_foil]
+10e = []
+2ed = []
+2x2 = ["textured"]
+2xm = []
+3ed = []
 40k = ["surgefoil"]
+4ed = []
+5dn = []
+5ed = []
+6ed = []
+7ed = []
+8ed = []
+9ed = []
+a25 = []
 acr = ["textured"]
+aer = []
 afr = []
+akh = []
+ala = []
+all = []
+apc = []
+arb = []
+arn = []
+ath = []
+atq = []
+avr = []
+bbd = []
+bfz = []
 blb = []
+bng = []
+bok = []
+brb = []
+bro = []
+btd = []
+c13 = []
+c14 = []
+c15 = []
+c16 = []
+c17 = []
+c18 = []
+c19 = []
+c20 = []
 c21 = []
+cc1 = []
+cc2 = []
+chk = []
+chr = []
 clb = []
+cm1 = []
+cm2 = []
+cma = []
+cmb1 = []
+cmb2 = []
+cmd = []
+cmm = ["textured"]
+cmr = []
+cn2 = []
+cns = []
+con = []
+csp = []
+dbl = []
+dd1 = []
+dd2 = []
+ddc = []
+ddd = []
+dde = []
+ddf = []
+ddg = []
+ddh = []
+ddi = []
+ddj = []
+ddk = []
+ddl = []
+ddm = []
+ddn = []
+ddo = []
+ddp = []
+ddq = []
+ddr = []
+dds = []
+ddt = []
+ddu = []
 dft = ["fracturefoil"]
+dgm = []
+dis = []
+dka = []
+dkm = []
+dmr = []
+dmu = ["textured"]
+dom = []
+dpa = []
+drb = []
+drk = []
 dsk = ["fracturefoil"]
+dst = []
+dtk = []
+dvd = []
+e02 = []
 ecl = ["fracturefoil"]
+eld = []
+ema = []
+emn = []
 eoe = ["fracturefoil"]
+eve = []
+evg = []
+exo = []
 fdn = ["fracturefoil", "manafoil"]
+fem = []
 fin = ["surgefoil"]
+fra = ["fracturefoil"]
+frf = []
+fut = []
+g17 = []
+gk1 = []
+gk2 = []
+gn2 = []
+gn3 = []
+gnt = []
+gpt = []
+grn = []
+gs1 = []
+gtc = []
+gvl = []
+h09 = []
+h17 = []
+hho = []
+hml = []
 hob = ["surgefoil"]
+hou = []
+ice = []
+iko = []
+ima = []
 inr = []
+inv = []
+isd = []
+itp = []
+j22 = []
+jmp = []
+jou = []
+jud = []
+jvc = []
+khm = []
+kld = []
+ktk = []
 lci = ["embossed"]
+lea = []
+leb = []
+leg = []
+lgn = []
+lrw = []
 ltr = ["doublerainbow", "surgefoil"]
+m10 = []
+m11 = []
+m12 = []
+m13 = []
+m14 = []
+m15 = []
+m19 = []
+m20 = []
+m21 = []
+mar = []
 mat = []
+mb2 = []
 mbc = []
+mbs = []
+md1 = []
+med = []
+mh1 = []
+mh2 = []
 mh3 = ["ripplefoil", "textured"]
+mid = []
+mir = []
 mkm = []
+mm2 = []
+mm3 = []
+mma = []
+mmq = []
 mom = ["halofoil"]
+mor = []
+mrd = []
 msh = []
+nem = []
 neo = []
+nph = []
+ody = []
+ogw = []
 one = []
+ons = []
+ori = []
 otj = ["raisedfoil"]
+p02 = []
+pcy = []
+pd2 = []
+pd3 = []
+ph21 = []
+ph22 = []
+ph23 = []
+phuk = []
 pip = ["surgefoil"]
+plc = []
+pls = []
+por = []
+psal = []
+ptg = []
+ptk = []
+q06 = []
+rav = []
+ren = []
+rin = []
+rix = []
+rna = []
+roe = []
+rqs = []
+rtr = []
+rvr = []
+s00 = []
+s99 = []
+scd = []
+scg = []
+shm = []
+slz = []
 snc = ["gilded"]
+soi = []
+sok = []
+som = []
 sos = []
 spg = ["firstplacefoil", "textured"]
 spm = []
+ss1 = []
+ss2 = []
+ss3 = []
+sth = []
+stx = []
+sum = []
 tdm = ["halofoil"]
+thb = []
+ths = []
 tla = []
+tmp = []
 tmt = ["fracturefoil", "surgefoil"]
+tor = []
+trk = ["surgefoil"]
+tsp = []
+tsr = []
+uds = []
+ugl = []
+ulg = []
+uma = []
+und = []
+unf = ["galaxyfoil"]
+unh = []
+unk = []
+usg = []
+ust = []
+v09 = []
+v10 = []
+v11 = []
+v12 = []
+v13 = []
+v14 = []
+v15 = []
+v16 = []
+v17 = []
+vis = []
 vow = []
+w16 = []
+w17 = []
+war = []
+who = ["surgefoil"]
 woe = ["confettifoil"]
+wth = []
+wwk = []
+xln = []
+zen = []
+znr = []
 
 [[scenes.ltr]]
 name = "Shire / Hobbits"
@@ -132,15 +377,113 @@ set = "ltr"
 cn_lo = 746
 cn_hi = 750
 
+# Proposed rules (off until switched on) — see docs/sets/10e.md §5
+[[unobtainable.10e.rules]]
+set_codes = ["p10e"]
+enabled = false
+note = "The p10e promos set. Owner's call: see the family doc for which share art with the booster card."
+
+# Proposed rules (off until switched on) — see docs/sets/2xm.md §5
+[[unobtainable.2xm.rules]]
+set_codes = ["2xm"]
+collector_numbers = ["333", "334", "335", "336", "337", "338", "339", "340", "341", "342", "343", "344", "345", "346", "347", "348", "349", "350", "351", "352", "353", "354", "355", "356", "357", "358", "359", "360", "361", "362", "363", "364", "365", "366", "367", "368", "369", "370", "371", "372"]
+enabled = false
+note = "One-per-box topper alternates of cards already in 1-332. Owner's call: keep only if completing the topper sheet is a goal."
+
+# Proposed rules (off until switched on) — see docs/sets/5dn.md §5
+[[unobtainable.5dn.rules]]
+set_codes = ["p5dn"]
+enabled = false
+note = "The p5dn promos set. Owner's call: see the family doc for which share art with the booster card."
+
+# Proposed rules (off until switched on) — see docs/sets/8ed.md §5
+[[unobtainable.8ed.rules]]
+set_codes = ["p8ed"]
+collector_numbers = ["216★"]
+enabled = false
+note = "The p8ed promo: same art as the main-set card, no dupe-foil signal. Owner's call."
+
+# Proposed rules (off until switched on) — see docs/sets/9ed.md §5
+[[unobtainable.9ed.rules]]
+set_codes = ["p9ed"]
+collector_numbers = ["242★"]
+enabled = false
+note = "The p9ed promo: same art as the main-set card, no dupe-foil signal. Owner's call."
+
 [[unobtainable.acr.rules]]
 promo_types_any_of = ["doublerainbow", "serialized"]
 note = "Assassin's Creed headline serialized chase — ACR 120z Mary Read and Anne Bonny (serialized + doublerainbow, foil-only, ~$600). NOTE: a documented no-op — `serialized` is already in the GLOBAL UNOBTAINABLE_PROMO_TYPES, so 120z never reaches missing-set regardless (verified identical result with/without). Kept for parity with the INR/ECL/SOS headliner families. See docs/sets/acr.md §5."
+
+# Proposed rules (off until switched on) — see docs/sets/aer.md §5
+[[unobtainable.aer.rules]]
+promo_types_any_of = ["stamped"]
+enabled = false
+note = "Promo-pack stamped variants (paer): the same card as a kept sibling plus a stamp, which would otherwise show as missing. Proposed exclude."
+
+[[unobtainable.aer.rules]]
+set_codes = ["paer"]
+promo_types_any_of = ["gameday", "release", "buyabox"]
+enabled = false
+note = "Game day, release and buy-a-box promos. Owner's call; the prerelease and promo-pack prints in this set are not part of this row."
 
 [[unobtainable.afr.rules]]
 frame_effects_all_of = ["showcase"]
 border_color = "black"
 tier = "chase"
 note = "Same UNWANTED showcase as CLB — AFR and CLB share the SAME Universes Beyond: D&D \"rulebook/module-page\" showcase frame (verified 2026-09-30: both frame_effects:showcase[+legendary], promo_types:boosterfun, same D&D block). The 60 showcase prints (afr 299-358) are black-bordered and compute to `shw`, which `preferred` otherwise keeps. The border_color guard SPARES the 17 borderless planeswalkers + Dragons (afr 282-298, incl. Tiamat / Old Gnawbone) — borderless is the chase the user keeps. The 38 extendedart (afr 359-396) + the afc commander-deck extendedart (afc 274-329) already drop via the generic `ext` exclusion; afc has NO showcase. See docs/sets/afr.md §2/§5."
+
+# Proposed rules (off until switched on) — see docs/sets/akh.md §5
+[[unobtainable.akh.rules]]
+promo_types_any_of = ["stamped"]
+enabled = false
+note = "Promo-pack stamped variants (pakh): the same card as a kept sibling plus a stamp, which would otherwise show as missing. Proposed exclude."
+
+[[unobtainable.akh.rules]]
+set_codes = ["pakh"]
+promo_types_any_of = ["gameday", "buyabox", "release", "resale"]
+enabled = false
+note = "Game day, buy-a-box, release and resale promos. Owner's call; the prerelease and promo-pack prints in this set are not part of this row."
+
+# Proposed rules (off until switched on) — see docs/sets/ala.md §5
+[[unobtainable.ala.rules]]
+set_codes = ["pala"]
+enabled = false
+note = "The pala promos set. Owner's call: see the family doc for which share art with the booster card."
+
+# Proposed rules (off until switched on) — see docs/sets/arb.md §5
+[[unobtainable.arb.rules]]
+set_codes = ["parb"]
+enabled = false
+note = "The parb promos set. Owner's call: see the family doc for which share art with the booster card."
+
+# Proposed rules (off until switched on) — see docs/sets/avr.md §5
+[[unobtainable.avr.rules]]
+set_codes = ["pavr"]
+enabled = false
+note = "The pavr promos set. Owner's call: see the family doc for which share art with the booster card."
+
+# Proposed rules (off until switched on) — see docs/sets/bfz.md §5
+[[unobtainable.bfz.rules]]
+promo_types_any_of = ["stamped"]
+enabled = false
+note = "Promo-pack stamped variants (pbfz): the same card as a kept sibling plus a stamp, which would otherwise show as missing. Proposed exclude."
+
+[[unobtainable.bfz.rules]]
+set_codes = ["bfz"]
+collector_numbers = ["250a", "251a", "252a", "253a", "254a", "255a", "256a", "257a", "258a", "259a", "260a", "261a", "262a", "263a", "264a", "265a", "266a", "267a", "268a", "269a", "270a", "271a", "272a", "273a", "274a"]
+enabled = false
+note = "Full-art-numbered basics with the same art as 250-274. Owner's call."
+
+[[unobtainable.bfz.rules]]
+set_codes = ["exp"]
+enabled = false
+note = "Zendikar Expeditions masterpieces; they appear in missing-set. Exclude if masterpieces are not collected."
+
+[[unobtainable.bfz.rules]]
+set_codes = ["pbfz"]
+promo_types_any_of = ["intropack", "gameday", "resale", "release", "buyabox"]
+enabled = false
+note = "Intro Pack foils and event promos. Owner's call; the prerelease and promo-pack prints in this set are not part of this row."
 
 [[unobtainable.blb.rules]]
 promo_types_any_of = ["stamped"]
@@ -151,11 +494,58 @@ promo_types_any_of = ["raisedfoil"]
 tier = "chase"
 note = "raisedfoil premium-foil chase tier (added 2026-08-30). The 21 `raisedfoil` showcase-legend foils are a fancy-foil variant the user does not shop for — same stance as SNC gilded/stepandcompleat. Unlike a DUPE_FOIL entry (which only drops the 7 that dupe a boosterfun- showcase twin), the 14 sole-showcase raisedfoils print ONLY in raisedfoil (no regular-foil of that art) — Ms. Bumbleflower blc 103 ~$1,380, Lumra blb 343 ~$802, Bello blc 101 ~$559, etc., $5,701 of the $7,016 total. any_of:{raisedfoil} catches all 21; the base and boosterfun-showcase prints of each card stay in scope. Effect combined with the stamped rule: missing-set 484→383 prints ($7,302→~$1,315). See docs/sets/blb.md §2/§5."
 
+# Proposed rules (off until switched on) — see docs/sets/bng.md §5
+[[unobtainable.bng.rules]]
+set_codes = ["pbng"]
+enabled = false
+note = "The pbng promos set. Owner's call: see the family doc for which share art with the booster card."
+
+# Proposed rules (off until switched on) — see docs/sets/bok.md §5
+[[unobtainable.bok.rules]]
+set_codes = ["pbok"]
+enabled = false
+note = "The pbok promos set. Owner's call: see the family doc for which share art with the booster card."
+
+# Proposed rules (off until switched on) — see docs/sets/bro.md §5
+[[unobtainable.bro.rules]]
+promo_types_any_of = ["stamped"]
+enabled = false
+note = "Promo-pack stamped variants (pbro): the same card as a kept sibling plus a stamp, which would otherwise show as missing. Proposed exclude."
+
+# Proposed rules (off until switched on) — see docs/sets/chk.md §5
+[[unobtainable.chk.rules]]
+set_codes = ["pchk"]
+enabled = false
+note = "The pchk promos set. Owner's call: see the family doc for which share art with the booster card."
+
 [[unobtainable.clb.rules]]
 frame_effects_all_of = ["showcase"]
 border_color = "black"
 tier = "chase"
 note = "Showcase frame is UNWANTED for CLB (2026-09-30 user directive): the Universes Beyond: D&D \"rulebook/module-page\" showcase style isn't liked. The 76 showcase prints (clb 375-450) all carry frame_effects:showcase + border_color:black and compute to treatment `shw`, which `preferred` otherwise KEEPS as a separately-wanted printing. The `border_color:black` guard SPARES the 3 borderless-showcase planeswalkers (clb 362-364 Elminster/Minsc & Boo/Tasha) and the 10 borderless Dragons/legends (365-374) — borderless is the chase the user DOES want (keep). NOTE: etched-foil (clb 471-534, finishes:etched → treatment `b|ff`) and BOTH extended-art bands (set 553-645 + deck-card 936, frame `ext`) are ALREADY dropped by the generic pipeline (ff-dupe collapse + the `ext` exclusion in `preferred`), so no rule is needed for them. See docs/sets/clb.md §2/§5."
+
+# Proposed rules (off until switched on) — see docs/sets/cmr.md §5
+[[unobtainable.cmr.rules]]
+promo_types_any_of = ["stamped"]
+enabled = false
+note = "Promo-pack stamped variants (pcmr): the same card as a kept sibling plus a stamp, which would otherwise show as missing. Proposed exclude."
+
+# Proposed rules (off until switched on) — see docs/sets/con.md §5
+[[unobtainable.con.rules]]
+set_codes = ["pcon"]
+enabled = false
+note = "The pcon promos set. Owner's call: see the family doc for which share art with the booster card."
+
+# Proposed rules (off until switched on) — see docs/sets/csp.md §5
+[[unobtainable.csp.rules]]
+set_codes = ["pcsp"]
+enabled = false
+note = "The pcsp promos set. Owner's call: see the family doc for which share art with the booster card."
+
+[[unobtainable.csp.rules]]
+set_codes = ["cst"]
+enabled = false
+note = "Reprints that shipped only in Coldsnap Theme Decks. Owner's call (kept by default)."
 
 [[unobtainable.dft.rules]]
 promo_types_any_of = ["firstplacefoil"]
@@ -166,6 +556,65 @@ note = "firstplacefoil (DFT 427-553) — 127 \"First Place\" box-topper foils, s
 promo_types_any_of = ["headliner", "rainbowfoil", "serialized"]
 note = "Documented no-op (parity): DFT 376 The Aetherspark is serialized+headliner, already dropped by the GLOBAL serialized filter. rainbowfoil never occurs without serialized here. See docs/sets/dft.md §5."
 
+# Proposed rules (off until switched on) — see docs/sets/dgm.md §5
+[[unobtainable.dgm.rules]]
+set_codes = ["pdgm"]
+enabled = false
+note = "The pdgm promos set. Owner's call: see the family doc for which share art with the booster card."
+
+# Proposed rules (off until switched on) — see docs/sets/dis.md §5
+[[unobtainable.dis.rules]]
+set_codes = ["pdis"]
+enabled = false
+note = "The pdis promos set. Owner's call: see the family doc for which share art with the booster card."
+
+# Proposed rules (off until switched on) — see docs/sets/dka.md §5
+[[unobtainable.dka.rules]]
+set_codes = ["pdka"]
+enabled = false
+note = "The pdka promos set. Owner's call: see the family doc for which share art with the booster card."
+
+# Proposed rules (off until switched on) — see docs/sets/dmu.md §5
+[[unobtainable.dmu.rules]]
+promo_types_any_of = ["stamped"]
+enabled = false
+note = "Promo-pack stamped variants (pdmu): the same card as a kept sibling plus a stamp, which would otherwise show as missing. Proposed exclude."
+
+[[unobtainable.dmu.rules]]
+promo_types_any_of = ["stepandcompleat"]
+enabled = false
+note = "Step-and-Compleat foil: same art as 435 but computes as a borderless print, so the dupe-foil filter misses it. Proposed exclude."
+
+# Proposed rules (off until switched on) — see docs/sets/dom.md §5
+[[unobtainable.dom.rules]]
+promo_types_any_of = ["stamped"]
+enabled = false
+note = "Promo-pack stamped variants (pdom): the same card as a kept sibling plus a stamp, which would otherwise show as missing. Proposed exclude."
+
+[[unobtainable.dom.rules]]
+set_codes = ["pdom"]
+promo_types_any_of = ["fnm", "storechampionship", "league", "draftweekend", "openhouse"]
+enabled = false
+note = "FNM, league and event promos. Owner's call; the prerelease and promo-pack prints in this set are not part of this row."
+
+# Proposed rules (off until switched on) — see docs/sets/dst.md §5
+[[unobtainable.dst.rules]]
+set_codes = ["pdst"]
+enabled = false
+note = "The pdst promos set. Owner's call: see the family doc for which share art with the booster card."
+
+# Proposed rules (off until switched on) — see docs/sets/dtk.md §5
+[[unobtainable.dtk.rules]]
+promo_types_any_of = ["stamped"]
+enabled = false
+note = "Promo-pack stamped variants (pdtk): the same card as a kept sibling plus a stamp, which would otherwise show as missing. Proposed exclude."
+
+[[unobtainable.dtk.rules]]
+set_codes = ["pdtk", "ptkdf"]
+promo_types_any_of = ["intropack", "gameday", "release", "buyabox", "instore"]
+enabled = false
+note = "Intro Pack foils and event promos (pdtk plus ptkdf). Owner's call; the prerelease and promo-pack prints in this set are not part of this row."
+
 [[unobtainable.ecl.rules]]
 promo_types_any_of = ["headliner", "serialized"]
 tier = "chase"
@@ -174,6 +623,30 @@ note = "Lorwyn Eclipsed headline serialized chase (added 2026-08-26). ecl 352 Bi
 [[unobtainable.ecl.rules]]
 promo_types_any_of = ["stamped"]
 note = "Promo-pack STAMP variants (added 2026-08-28 — corrects a characterization error that wrongly claimed pecl had 0 stamped). All 80 `pecl` cards are `promopack`+`stamped` — same card as a kept base/showcase sibling, priced on scarcity. Validated all 80 have a non-stamped sibling (safe to drop) and that the 5 `promopack`-ONLY alt-arts (ecl 402-406, inverted frame, no `stamped`) are KEPT. Signal is `stamped` ONLY, like SNC/EOE. Effect: missing-set 252→~172 prints. See docs/sets/ecl.md §5."
+
+# Proposed rules (off until switched on) — see docs/sets/eld.md §5
+[[unobtainable.eld.rules]]
+promo_types_any_of = ["stamped"]
+enabled = false
+note = "Promo-pack stamped variants (peld): the same card as a kept sibling plus a stamp, which would otherwise show as missing. Proposed exclude."
+
+# Proposed rules (off until switched on) — see docs/sets/emn.md §5
+[[unobtainable.emn.rules]]
+promo_types_any_of = ["stamped"]
+enabled = false
+note = "Promo-pack stamped variants (pemn): the same card as a kept sibling plus a stamp, which would otherwise show as missing. Proposed exclude."
+
+[[unobtainable.emn.rules]]
+set_codes = ["pemn"]
+promo_types_any_of = ["intropack"]
+enabled = false
+note = "Intro Pack foils sold in a retail product. Owner's call; the prerelease and promo-pack prints in this set are not part of this row."
+
+[[unobtainable.emn.rules]]
+set_codes = ["pemn"]
+promo_types_any_of = ["gameday", "release", "buyabox", "resale"]
+enabled = false
+note = "Game day, release, buy-a-box and resale promos. Owner's call; the prerelease and promo-pack prints in this set are not part of this row."
 
 [[unobtainable.eoe.rules]]
 promo_types_any_of = ["galaxyfoil", "headliner", "singularityfoil"]
@@ -184,6 +657,12 @@ note = "Chase-tier premiums the user does not shop for (2026-08-23 directive). -
 promo_types_any_of = ["stamped"]
 note = "Promo-pack/prerelease STAMP variants (added 2026-08-26, mirroring SNC). 80 stamped prints (mostly peoe) — same card as a kept base/boosterfun sibling, priced on scarcity (Quantum Riddler peoe 72p ~$38 vs base eoe 72 ~$33 + boosterfun eoe 305, both kept). Signal is `stamped` ONLY: validated that all 80 dupes carry `stamped`, while 5 borderless alt-arts (eoe 393-397, inverted frame) are `promopack` WITHOUT `stamped` and must stay. Effect: missing-set drops ~$291 (217→137 prints). See docs/sets/eoe.md §5."
 
+# Proposed rules (off until switched on) — see docs/sets/eve.md §5
+[[unobtainable.eve.rules]]
+set_codes = ["peve"]
+enabled = false
+note = "The peve promos set. Owner's call: see the family doc for which share art with the booster card."
+
 [[unobtainable.fdn.rules]]
 promo_types_any_of = ["stamped"]
 note = "Promo-pack STAMP variants (added 2026-08-30). All 25 `pfdn` `promopack`+`stamped` prints are the same card as a kept base sibling + a promo-pack stamp; they compute to `regular` so the rare/mythic-regular sub-selectors pick them up (bypassing the `preferred` dedup) — this rule removes them. Validated: all 25 promopack cards ALSO carry `stamped` (signal is `stamped`), and Foundations has NO `promopack`-only alt-art trap (unlike SNC/EOE/ECL/BLB — zero promopack-without-stamped prints in the family), so `{stamped}` is exact. See docs/sets/fdn.md §5."
@@ -193,19 +672,172 @@ promo_types_any_of = ["neonink"]
 tier = "chase"
 note = "The 4 Neon Ink Traveling Chocobo prints (FIN 551a-d, foil-only, ~$1,820-$1,932 each, ~$7,450 total — ~70% of fin's missing $). DISTINCT art per neon colorway (each its own illustration), so the dupe-foil filter KEEPS them; this rule is what removes them. Direct analog of TLA/NEO/LCI neonink. `neonink` appears on Traveling Chocobo ONLY in this family (verified 4 prints, DB). The serialized 551f auto-drops globally; the base (210) + boosterfun (406/568) + chocobotrackfoil Chocobos stay. See docs/sets/fin.md §5."
 
+# Proposed rules (off until switched on) — see docs/sets/fra.md §5
+[[unobtainable.fra.rules]]
+promo_types_any_of = ["stamped"]
+enabled = false
+note = "Promo-pack stamped variants (pfra): the same card as a kept sibling plus a stamp, which would otherwise show as missing. Proposed exclude."
+
+[[unobtainable.fra.rules]]
+promo_types_any_of = ["facetfoil"]
+enabled = false
+note = "Facet-foil collector prints (449-461): same art as 321-333 but they compute as plain borderless, so [dupe_foil] cannot catch them. Proposed exclude."
+
+# Proposed rules (off until switched on) — see docs/sets/frf.md §5
+[[unobtainable.frf.rules]]
+promo_types_any_of = ["stamped"]
+enabled = false
+note = "Promo-pack stamped variants (pfrf): the same card as a kept sibling plus a stamp, which would otherwise show as missing. Proposed exclude."
+
+[[unobtainable.frf.rules]]
+set_codes = ["ugin"]
+enabled = false
+note = "Alt-art promos from the FRF prerelease/launch event. Real cards; owner's call."
+
+[[unobtainable.frf.rules]]
+set_codes = ["pfrf"]
+promo_types_any_of = ["intropack", "gameday", "resale", "release", "buyabox"]
+enabled = false
+note = "Intro Pack foils and event promos. Owner's call; the prerelease and promo-pack prints in this set are not part of this row."
+
+# Proposed rules (off until switched on) — see docs/sets/fut.md §5
+[[unobtainable.fut.rules]]
+set_codes = ["pfut"]
+enabled = false
+note = "The pfut promos set. Owner's call: see the family doc for which share art with the booster card."
+
+# Proposed rules (off until switched on) — see docs/sets/gpt.md §5
+[[unobtainable.gpt.rules]]
+set_codes = ["pgpt"]
+enabled = false
+note = "The pgpt promos set. Owner's call: see the family doc for which share art with the booster card."
+
+# Proposed rules (off until switched on) — see docs/sets/grn.md §5
+[[unobtainable.grn.rules]]
+promo_types_any_of = ["stamped"]
+enabled = false
+note = "Promo-pack stamped variants (pgrn): the same card as a kept sibling plus a stamp, which would otherwise show as missing. Proposed exclude."
+
+[[unobtainable.grn.rules]]
+set_codes = ["pgrn"]
+promo_types_any_of = ["fnm", "storechampionship", "resale", "league", "draftweekend", "openhouse"]
+enabled = false
+note = "FNM, league and event promos. Owner's call; the prerelease and promo-pack prints in this set are not part of this row."
+
+# Proposed rules (off until switched on) — see docs/sets/gtc.md §5
+[[unobtainable.gtc.rules]]
+set_codes = ["pgtc"]
+enabled = false
+note = "The pgtc promos set. Owner's call: see the family doc for which share art with the booster card."
+
 [[unobtainable.hob.rules]]
 promo_types_any_of = ["gleaminggold", "headliner"]
 tier = "chase"
 note = "Smaug the Magnificent (hob 249) — headliner+gleaminggold, foil-only, ~$22,250, the set's headline ultra-rare (analog of TLA Avatar Aang / EOE Sothera / ECL Bitterbloom Bearer / MSH Mind Stone). It computes to an EMPTY treatment (not `regular`-excluded, not `ff`-dupe), so it leaks into the mythic-regular sub-selector — 93% of hob's raw missing $. Both `headliner` and `gleaminggold` are exclusive to this one print in the family (verified 1 each), so any_of catches exactly Smaug 249. See docs/sets/hob.md §5."
 
+# Proposed rules (off until switched on) — see docs/sets/hou.md §5
+[[unobtainable.hou.rules]]
+promo_types_any_of = ["stamped"]
+enabled = false
+note = "Promo-pack stamped variants (phou): the same card as a kept sibling plus a stamp, which would otherwise show as missing. Proposed exclude."
+
+[[unobtainable.hou.rules]]
+set_codes = ["phou"]
+promo_types_any_of = ["gameday", "draftweekend", "buyabox"]
+enabled = false
+note = "Game day, draft weekend and buy-a-box promos. Owner's call; the prerelease and promo-pack prints in this set are not part of this row."
+
+# Proposed rules (off until switched on) — see docs/sets/iko.md §5
+[[unobtainable.iko.rules]]
+promo_types_any_of = ["stamped"]
+enabled = false
+note = "Promo-pack stamped variants (piko): the same card as a kept sibling plus a stamp, which would otherwise show as missing. Proposed exclude."
+
+[[unobtainable.iko.rules]]
+set_codes = ["iko"]
+collector_numbers = ["370", "371", "372", "373", "374", "375", "376", "377", "378", "379", "380", "381", "382", "383", "384"]
+enabled = false
+note = "Godzilla box-topper alternates of base monsters. Owner's call: same question as the 2xm box toppers."
+
 [[unobtainable.inr.rules]]
 promo_types_any_of = ["headliner", "serialized"]
 note = "Innistrad Remastered headline serialized chase — INR 491 Edgar Markov (serialized + headliner + doublerainbow + poster + boosterfun, foil-only, ~$2,825). Analog of EOE Sothera / ECL Bitterbloom Bearer / SOS Emeritus. NOTE: this rule is a documented no-op — `serialized` is already in the GLOBAL UNOBTAINABLE_PROMO_TYPES, so Edgar 491 never reaches missing-set regardless (verified: identical 178-print/$940 result with and without this rule). Kept for parity/discoverability with the other headliner families. See docs/sets/inr.md §5."
+
+# Proposed rules (off until switched on) — see docs/sets/inv.md §5
+[[unobtainable.inv.rules]]
+promo_types_any_of = ["schinesealtart"]
+enabled = false
+note = "English foils of the Chinese alternate art (unpriced). Owner's call."
+
+# Proposed rules (off until switched on) — see docs/sets/isd.md §5
+[[unobtainable.isd.rules]]
+set_codes = ["pisd"]
+enabled = false
+note = "The pisd promos set. Owner's call: see the family doc for which share art with the booster card."
+
+# Proposed rules (off until switched on) — see docs/sets/jmp.md §5
+[[unobtainable.jmp.rules]]
+set_codes = ["ajmp"]
+enabled = false
+note = "Arena-only digital cards, unobtainable in paper. Stopgap until digital detection is fixed in code (docs/sets/jmp.md section 7). Proposed exclude."
+
+# Proposed rules (off until switched on) — see docs/sets/jou.md §5
+[[unobtainable.jou.rules]]
+set_codes = ["pjou"]
+enabled = false
+note = "The pjou promos set. Owner's call: see the family doc for which share art with the booster card."
+
+# Proposed rules (off until switched on) — see docs/sets/khm.md §5
+[[unobtainable.khm.rules]]
+promo_types_any_of = ["stamped"]
+enabled = false
+note = "Promo-pack stamped variants (pkhm): the same card as a kept sibling plus a stamp, which would otherwise show as missing. Proposed exclude."
+
+[[unobtainable.khm.rules]]
+promo_types_any_of = ["stepandcompleat"]
+enabled = false
+note = "Step-and-Compleat foil (foil-only): same art as 406. Proposed exclude."
+
+# Proposed rules (off until switched on) — see docs/sets/kld.md §5
+[[unobtainable.kld.rules]]
+promo_types_any_of = ["stamped"]
+enabled = false
+note = "Promo-pack stamped variants (pkld): the same card as a kept sibling plus a stamp, which would otherwise show as missing. Proposed exclude."
+
+[[unobtainable.kld.rules]]
+set_codes = ["pkld"]
+promo_types_any_of = ["gameday", "release", "buyabox", "giftbox", "resale"]
+enabled = false
+note = "Game day, release, buy-a-box, gift box and resale promos. Owner's call; the prerelease and promo-pack prints in this set are not part of this row."
+
+# Proposed rules (off until switched on) — see docs/sets/ktk.md §5
+[[unobtainable.ktk.rules]]
+promo_types_any_of = ["stamped"]
+enabled = false
+note = "Promo-pack stamped variants (pktk): the same card as a kept sibling plus a stamp, which would otherwise show as missing. Proposed exclude."
+
+[[unobtainable.ktk.rules]]
+set_codes = ["pktk"]
+promo_types_any_of = ["intropack", "gameday", "release", "buyabox", "giftbox"]
+enabled = false
+note = "Intro Pack foils and event promos. Owner's call; the prerelease and promo-pack prints in this set are not part of this row."
 
 [[unobtainable.lci.rules]]
 promo_types_any_of = ["neonink"]
 tier = "chase"
 note = "The 6 serialized neon-ink Cavern of Souls (LCI 410a-f), foil-only, $74-$4,900 each (~$7,200 total). DISTINCT art (each neon colorway its own illustration), so the dupe-foil filter would KEEP them — this rule is what removes them. A chase tier the user does not shop for; direct analog of TLA/NEO neonink. any_of:{neonink} catches exactly these 6 prints (LCI 410b also carries wizardsplaynetwork; still matched). The base (LCI 269) and boosterfun showcase (LCI 345) Caverns stay in scope. No `stamped` rule needed — every plci promo-pack/prerelease stamp has a non-stamped sibling, so the global preferred filter already drops them (0 promopack-without-stamped trap prints). See docs/sets/lci.md §5."
+
+# Proposed rules (off until switched on) — see docs/sets/lgn.md §5
+[[unobtainable.lgn.rules]]
+set_codes = ["plgn"]
+enabled = false
+note = "The plgn promos set. Owner's call: see the family doc for which share art with the booster card."
+
+# Proposed rules (off until switched on) — see docs/sets/lrw.md §5
+[[unobtainable.lrw.rules]]
+set_codes = ["plrw"]
+enabled = false
+note = "The plrw promos set. Owner's call: see the family doc for which share art with the booster card."
 
 [[unobtainable.ltr.rules]]
 promo_types_all_of = ["scroll", "silverfoil"]
@@ -222,6 +854,84 @@ promo_types_any_of = ["playpromo"]
 tier = "chase"
 note = "WPN Play Promo (added 2026-09-11). LTR 299 Gandalf the White — `playpromo`, nonfoil ~$2,999.99, the SOLE `playpromo` in the family (verified 1 print, DB) and ~52% of ltr's post-poster missing $. A scarce WPN store-play promo the user won't realistically buy; the base (LTR 19) and other Gandalf the White prints stay in scope. any_of:{playpromo} catches exactly this one card. See docs/sets/ltr.md §5."
 
+# Proposed rules (off until switched on) — see docs/sets/m10.md §5
+[[unobtainable.m10.rules]]
+set_codes = ["pm10"]
+enabled = false
+note = "The pm10 promos set. Owner's call: see the family doc for which share art with the booster card."
+
+# Proposed rules (off until switched on) — see docs/sets/m11.md §5
+[[unobtainable.m11.rules]]
+set_codes = ["pm11"]
+enabled = false
+note = "The pm11 promos set. Owner's call: see the family doc for which share art with the booster card."
+
+# Proposed rules (off until switched on) — see docs/sets/m12.md §5
+[[unobtainable.m12.rules]]
+set_codes = ["pm12"]
+enabled = false
+note = "The pm12 promos set. Owner's call: see the family doc for which share art with the booster card."
+
+# Proposed rules (off until switched on) — see docs/sets/m13.md §5
+[[unobtainable.m13.rules]]
+set_codes = ["pm13"]
+enabled = false
+note = "The pm13 promos set. Owner's call: see the family doc for which share art with the booster card."
+
+# Proposed rules (off until switched on) — see docs/sets/m14.md §5
+[[unobtainable.m14.rules]]
+set_codes = ["pm14"]
+enabled = false
+note = "The pm14 promos set. Owner's call: see the family doc for which share art with the booster card."
+
+# Proposed rules (off until switched on) — see docs/sets/m15.md §5
+[[unobtainable.m15.rules]]
+promo_types_any_of = ["stamped"]
+enabled = false
+note = "Promo-pack stamped variants (pm15): the same card as a kept sibling plus a stamp, which would otherwise show as missing. Proposed exclude."
+
+[[unobtainable.m15.rules]]
+set_codes = ["pm15"]
+promo_types_any_of = ["gameday", "release", "buyabox", "resale"]
+enabled = false
+note = "Game day, release, buy-a-box and resale promos. Owner's call; the prerelease and promo-pack prints in this set are not part of this row."
+
+# Proposed rules (off until switched on) — see docs/sets/m19.md §5
+[[unobtainable.m19.rules]]
+promo_types_any_of = ["stamped"]
+enabled = false
+note = "Promo-pack stamped variants (pm19): the same card as a kept sibling plus a stamp, which would otherwise show as missing. Proposed exclude."
+
+[[unobtainable.m19.rules]]
+set_codes = ["pm19"]
+promo_types_any_of = ["fnm", "storechampionship", "resale", "league", "draftweekend", "convention", "openhouse"]
+enabled = false
+note = "FNM, league and event promos. Owner's call; the prerelease and promo-pack prints in this set are not part of this row."
+
+# Proposed rules (off until switched on) — see docs/sets/m20.md §5
+[[unobtainable.m20.rules]]
+promo_types_any_of = ["stamped"]
+enabled = false
+note = "Promo-pack stamped variants (pm20 + ppp1): the same card as a kept sibling plus a stamp, which would otherwise show as missing (ppp1's 5 basics have their own art). Proposed exclude."
+
+# Proposed rules (off until switched on) — see docs/sets/m21.md §5
+[[unobtainable.m21.rules]]
+promo_types_any_of = ["stamped"]
+enabled = false
+note = "Promo-pack stamped variants (pm21): the same card as a kept sibling plus a stamp, which would otherwise show as missing. Proposed exclude."
+
+[[unobtainable.m21.rules]]
+set_codes = ["m21"]
+collector_numbers = ["285", "286", "287", "288", "289", "290", "291", "292", "293", "294", "295", "296", "297", "298", "299", "300", "301", "302", "303", "304", "305", "306", "307", "308"]
+enabled = false
+note = "Frame-only showcase alternates of base cards. Unsure: exclude if a base copy should satisfy the slot."
+
+# Proposed rules (off until switched on) — see docs/sets/mar.md §5
+[[unobtainable.mar.rules]]
+border_color = "black"
+enabled = false
+note = "Catches the digital-only omb prints (the only black-bordered cards in the family). Stopgap for the global digital-detection gap. Proposed exclude."
+
 [[unobtainable.mat.rules]]
 promo_types_any_of = ["stamped"]
 note = "Promo-pack STAMP variants (added 2026-08-30). All 8 `pmat` `promopack`+`stamped` `Np` prints are the same card as a kept base sibling + a promo-pack stamp; they compute to `regular` so the rare/mythic-regular sub-selectors pick them up (bypassing the `preferred` dedup) — this rule removes them. Validated: all 8 have a non-stamped base sibling in `mat` (50p→50, 4p→4, 22p→22, …), and there is NO `promopack`-only alt-art trap (all 8 carry both tokens). No serialized/headliner tier in this family. See docs/sets/mat.md §5."
@@ -231,9 +941,40 @@ promo_types_any_of = ["halofoil"]
 tier = "chase"
 note = "halofoil fancy-foil dupes (added 2026-08-30). All 43 `halofoil` prints are same-art as a non-halofoil sibling (verified Arni 200 shares illustration_id 732292ff with boosterfun-showcase 66). DUPE_FOIL would drop 42 but miss Tyvar 227 (frame-effect codes mismatch — see §2), so exclude the whole treatment here instead. any_of:{halofoil} catches all 43; the boosterfun/showcase/base prints of each card stay in scope."
 
+# Proposed rules (off until switched on) — see docs/sets/mbs.md §5
+[[unobtainable.mbs.rules]]
+set_codes = ["pmbs"]
+enabled = false
+note = "The pmbs promos set. Owner's call: see the family doc for which share art with the booster card."
+
+# Proposed rules (off until switched on) — see docs/sets/mh1.md §5
+[[unobtainable.mh1.rules]]
+promo_types_any_of = ["stamped"]
+enabled = false
+note = "Promo-pack stamped variants (pmh1): the same card as a kept sibling plus a stamp, which would otherwise show as missing. Proposed exclude."
+
+# Proposed rules (off until switched on) — see docs/sets/mh2.md §5
+[[unobtainable.mh2.rules]]
+set_codes = ["pmh2"]
+promo_types_any_of = ["stamped"]
+enabled = false
+note = "Promo-pack stamped variants (pmh2): the same card as a kept sibling plus a stamp, which would otherwise show as missing. Proposed exclude."
+
+[[unobtainable.mh2.rules]]
+set_codes = ["mh2"]
+collector_numbers = ["381", "382", "383", "384", "385", "386", "387", "388", "389", "390", "391", "392", "393", "394", "395", "396", "397", "398", "399", "400", "401", "402", "403", "404", "405", "406", "407", "408", "409", "410", "411", "412", "413", "414", "415", "416", "417", "418", "419", "420", "421", "422", "423", "424", "425", "426", "427", "428", "429", "430", "431", "432", "433", "434", "435", "436", "437", "438", "439", "440", "441"]
+enabled = false
+note = "Retro-frame alternates (same art as the base print, different frame) that compute regular and list beside their twin. Unsure: owner's call."
+
 [[unobtainable.mh3.rules]]
 promo_types_any_of = ["doublerainbow", "serialized"]
 note = "Documented no-op (parity with TDM/INR headliner families): the 3 serialized Eldrazi (mh3 381z-383z, up to ~$2,335) are already dropped by the GLOBAL serialized filter; doublerainbow adds nothing. The ripplefoil/textured dupes are handled in DUPE_FOIL. See docs/sets/mh3.md §5."
+
+# Proposed rules (off until switched on) — see docs/sets/mid.md §5
+[[unobtainable.mid.rules]]
+promo_types_any_of = ["stamped"]
+enabled = false
+note = "Promo-pack stamped variants (pmid): the same card as a kept sibling plus a stamp, which would otherwise show as missing. Proposed exclude."
 
 [[unobtainable.mkm.rules]]
 promo_types_any_of = ["datestamped", "stamped"]
@@ -251,6 +992,18 @@ note = "pmom promo-pack STAMP dupes — 54 `Np` promopack+stamped prints, same c
 [[unobtainable.mom.rules]]
 promo_types_any_of = ["doublerainbow", "serialized"]
 note = "Documented no-op (parity with INR/ECL/SOS/TDM): the Praetor transform duals (mom 338-342) + mul `z` twins are serialized, already dropped by the GLOBAL serialized filter; doublerainbow never occurs without serialized."
+
+# Proposed rules (off until switched on) — see docs/sets/mor.md §5
+[[unobtainable.mor.rules]]
+set_codes = ["pmor"]
+enabled = false
+note = "The pmor promos set. Owner's call: see the family doc for which share art with the booster card."
+
+# Proposed rules (off until switched on) — see docs/sets/mrd.md §5
+[[unobtainable.mrd.rules]]
+set_codes = ["pmrd"]
+enabled = false
+note = "The pmrd promos set. Owner's call: see the family doc for which share art with the booster card."
 
 [[unobtainable.msh.rules]]
 promo_types_any_of = ["headliner"]
@@ -277,6 +1030,36 @@ note = "Chase-tier premiums the user does not shop for (added 2026-08-30). - neo
 promo_types_any_of = ["stamped"]
 note = "Promo-pack STAMP variants (added 2026-08-30). 69 `pneo` `promopack`+`stamped` `Np` prints — same card as a kept `neo` base sibling + a promo-pack stamp (2p→neo 2, 134p→neo 134, …); compute to `regular`, so the rare/mythic-regular sub-selectors pick them up (bypassing the `preferred` dedup). Validated: all 69 have a non-stamped base sibling, and the 5 `promopack`-ONLY in-set alt-arts (neo 508-512, no `stamped`) are KEPT — signal is `stamped` ONLY (SNC/EOE/ECL/BLB/FDN lesson). The 77 `Ns` prerelease+datestamped promos auto-drop via the Step-2 datestamped filter; the 2 `resale` ★ promos are distinct art, kept. Effect: missing-set 373→293 prints. See docs/sets/neo.md §5."
 
+# Proposed rules (off until switched on) — see docs/sets/nph.md §5
+[[unobtainable.nph.rules]]
+set_codes = ["pnph"]
+enabled = false
+note = "The pnph promos set. Owner's call: see the family doc for which share art with the booster card."
+
+# Proposed rules (off until switched on) — see docs/sets/ogw.md §5
+[[unobtainable.ogw.rules]]
+promo_types_any_of = ["stamped"]
+enabled = false
+note = "Promo-pack stamped variants (pogw): the same card as a kept sibling plus a stamp, which would otherwise show as missing. Proposed exclude."
+
+[[unobtainable.ogw.rules]]
+set_codes = ["ogw"]
+collector_numbers = ["183a", "184a"]
+enabled = false
+note = "Wastes with the same art as 183/184 in the non-full-art frame. Owner's call: keep unless one Wastes per art is wanted."
+
+[[unobtainable.ogw.rules]]
+set_codes = ["pogw"]
+promo_types_any_of = ["intropack"]
+enabled = false
+note = "Intro Pack foils. Owner's call; the prerelease and promo-pack prints in this set are not part of this row."
+
+[[unobtainable.ogw.rules]]
+set_codes = ["pogw"]
+promo_types_any_of = ["gameday", "release", "buyabox"]
+enabled = false
+note = "Game day, release and buy-a-box promos. Owner's call; the prerelease and promo-pack prints in this set are not part of this row."
+
 [[unobtainable.one.rules]]
 promo_types_any_of = ["stamped"]
 note = "Promo-pack STAMP variants — 80 `pone` promopack+stamped `Np` prints, same card as a kept base/showcase sibling + a stamp; compute to `regular` (bypass preferred dedup). Signal is `stamped` ONLY: the 5 `promopack`-WITHOUT-`stamped` inverted alt-arts (one 277-281 Ossification/ Sheoldred's Edict/Slaughter Singer/Bladehold War-Whip/Experimental Augury) are KEPT (verified 5 traps survive the rule)."
@@ -290,6 +1073,24 @@ note = "Premium DISTINCT-ART foil tiers the user doesn't chase (2026-09-03): oil
 promo_types_any_of = ["serialized"]
 note = "Documented no-op (parity with INR/ACR/ECL/SOS): `serialized` is already in the GLOBAL UNOBTAINABLE_PROMO_TYPES, so ONE's serialized prints never reach missing-set regardless. Kept for discoverability. See docs/sets/one.md §5."
 
+# Proposed rules (off until switched on) — see docs/sets/ons.md §5
+[[unobtainable.ons.rules]]
+set_codes = ["pons"]
+enabled = false
+note = "The pons promos set. Owner's call: see the family doc for which share art with the booster card."
+
+# Proposed rules (off until switched on) — see docs/sets/ori.md §5
+[[unobtainable.ori.rules]]
+promo_types_any_of = ["stamped"]
+enabled = false
+note = "Promo-pack stamped variants (pori): the same card as a kept sibling plus a stamp, which would otherwise show as missing. Proposed exclude."
+
+[[unobtainable.ori.rules]]
+set_codes = ["pori"]
+promo_types_any_of = ["intropack", "gameday", "resale", "release", "buyabox"]
+enabled = false
+note = "Intro Pack foils and event promos. Owner's call; the prerelease and promo-pack prints in this set are not part of this row."
+
 [[unobtainable.otj.rules]]
 promo_types_any_of = ["textured"]
 tier = "chase"
@@ -299,6 +1100,66 @@ note = "\"Breaking News\" textured-foil masterpieces (added 2026-09-03). The 15 
 promo_types_any_of = ["stamped"]
 note = "Promo-pack/prerelease STAMP variants (mirrors SNC/EOE/ECL/SOS). 94 stamped prints (pbig 14 + potj 80) — same card as a kept base/showcase sibling + a stamp, priced on scarcity. Signal is `stamped` ONLY: validated the 5 `promopack`-WITHOUT-`stamped` OTJ alt-arts (368-372, inverted-frame DISTINCT art) are KEPT. (datestamped prerelease prints are already dropped by the global preferred Step-2 filter — all 80 have a non-stamped OTJ sibling.) See docs/sets/otj.md §5."
 
+# Proposed rules (off until switched on) — see docs/sets/plc.md §5
+[[unobtainable.plc.rules]]
+set_codes = ["pplc"]
+enabled = false
+note = "The pplc promos set. Owner's call: see the family doc for which share art with the booster card."
+
+# Proposed rules (off until switched on) — see docs/sets/rav.md §5
+[[unobtainable.rav.rules]]
+set_codes = ["prav"]
+enabled = false
+note = "The prav promos set. Owner's call: see the family doc for which share art with the booster card."
+
+# Proposed rules (off until switched on) — see docs/sets/rix.md §5
+[[unobtainable.rix.rules]]
+promo_types_any_of = ["stamped"]
+enabled = false
+note = "Promo-pack stamped variants (prix): the same card as a kept sibling plus a stamp, which would otherwise show as missing. Proposed exclude."
+
+[[unobtainable.rix.rules]]
+set_codes = ["prix"]
+promo_types_any_of = ["storechampionship", "league", "draftweekend", "resale", "openhouse"]
+enabled = false
+note = "League and event promos. Owner's call; the prerelease and promo-pack prints in this set are not part of this row."
+
+# Proposed rules (off until switched on) — see docs/sets/rna.md §5
+[[unobtainable.rna.rules]]
+promo_types_any_of = ["stamped"]
+enabled = false
+note = "Promo-pack stamped variants (prna): the same card as a kept sibling plus a stamp, which would otherwise show as missing. Proposed exclude."
+
+[[unobtainable.rna.rules]]
+set_codes = ["prna"]
+promo_types_any_of = ["fnm", "storechampionship", "resale", "league", "draftweekend", "openhouse"]
+enabled = false
+note = "FNM, league and event promos. Owner's call; the prerelease and promo-pack prints in this set are not part of this row."
+
+# Proposed rules (off until switched on) — see docs/sets/roe.md §5
+[[unobtainable.roe.rules]]
+set_codes = ["proe"]
+enabled = false
+note = "The proe promos set. Owner's call: see the family doc for which share art with the booster card."
+
+# Proposed rules (off until switched on) — see docs/sets/rtr.md §5
+[[unobtainable.rtr.rules]]
+set_codes = ["prtr"]
+enabled = false
+note = "The prtr promos set. Owner's call: see the family doc for which share art with the booster card."
+
+# Proposed rules (off until switched on) — see docs/sets/scg.md §5
+[[unobtainable.scg.rules]]
+set_codes = ["pscg"]
+enabled = false
+note = "The pscg promos set. Owner's call: see the family doc for which share art with the booster card."
+
+# Proposed rules (off until switched on) — see docs/sets/shm.md §5
+[[unobtainable.shm.rules]]
+set_codes = ["pshm"]
+enabled = false
+note = "The pshm promos set. Owner's call: see the family doc for which share art with the booster card."
+
 [[unobtainable.snc.rules]]
 promo_types_any_of = ["stamped"]
 note = "Promo-pack + prerelease STAMP variants the user does not shop for (2026-08-24). Prints across pncc (NCC commander promos), psnc (prerelease/promo-pack), snc. They're the same card as the base with a promo stamp, priced 10-30x on scarcity (Currency Converter pncc 81p ~$182 vs base ncc 81 ~$5). Normally the global preferred filter drops promopack/stamped, but these lack a non-stamped sibling in the family graph so they survive — this rule removes them explicitly.  Signal is `stamped` ONLY, not `promopack` (corrected 2026-08-26): the promo-pack STAMP always carries `stamped`; but 5 borderless alt-arts (snc 463-467, inverted frame) are `promopack` WITHOUT `stamped` — a distinct art the user WANTS. Matching on `promopack` would wrongly drop those 5. See docs/sets/snc.md §5."
@@ -307,6 +1168,36 @@ note = "Promo-pack + prerelease STAMP variants the user does not shop for (2026-
 promo_types_any_of = ["stepandcompleat"]
 tier = "chase"
 note = "stepandcompleat: the Phyrexian \"Step-and-Compleat\" premium foil — SNC 469 Urabrask is the same borderless concept art as SNC 468, just that fancy foil process (foil-only, ~2x price). It computes to treatment 'b' (not 'ff'), so the dupe-foil step doesn't catch it; exclude it here as a fancy-foil variant the user doesn't chase. Single print in family. See docs/sets/snc.md §2/§5."
+
+# Proposed rules (off until switched on) — see docs/sets/soi.md §5
+[[unobtainable.soi.rules]]
+promo_types_any_of = ["stamped"]
+enabled = false
+note = "Promo-pack stamped variants (psoi): the same card as a kept sibling plus a stamp, which would otherwise show as missing. Proposed exclude."
+
+[[unobtainable.soi.rules]]
+set_codes = ["psoi"]
+promo_types_any_of = ["intropack"]
+enabled = false
+note = "Intro Pack foils sold in a retail product. Owner's call; the prerelease and promo-pack prints in this set are not part of this row."
+
+[[unobtainable.soi.rules]]
+set_codes = ["psoi"]
+promo_types_any_of = ["gameday", "release", "buyabox", "giftbox"]
+enabled = false
+note = "Game day, release, buy-a-box and gift box promos. Owner's call; the prerelease and promo-pack prints in this set are not part of this row."
+
+# Proposed rules (off until switched on) — see docs/sets/sok.md §5
+[[unobtainable.sok.rules]]
+set_codes = ["psok"]
+enabled = false
+note = "The psok promos set. Owner's call: see the family doc for which share art with the booster card."
+
+# Proposed rules (off until switched on) — see docs/sets/som.md §5
+[[unobtainable.som.rules]]
+set_codes = ["psom"]
+enabled = false
+note = "The psom promos set. Owner's call: see the family doc for which share art with the booster card."
 
 [[unobtainable.sos.rules]]
 promo_types_any_of = ["headliner", "serialized"]
@@ -333,6 +1224,13 @@ border_color = "borderless"
 tier = "chase"
 note = "The Soul Stone borderless foil (SPM 243, ~$1,839) — the family's flagship $ chase. Distinct borderless-inverted boosterfun art; no promo_type distinguishes it from ordinary boosterfun mythics, so pinned by CN + border_color (same technique as MSH Mind Stone 386). The base/other prints of The Soul Stone stay in scope. (2026-09-07 user directive.)"
 
+# Proposed rules (off until switched on) — see docs/sets/stx.md §5
+[[unobtainable.stx.rules]]
+set_codes = ["pstx"]
+promo_types_any_of = ["stamped"]
+enabled = false
+note = "Promo-pack stamped variants (pstx): the same card as a kept sibling plus a stamp, which would otherwise show as missing. Proposed exclude."
+
 [[unobtainable.tdm.rules]]
 promo_types_any_of = ["stamped"]
 note = "Promo-pack STAMP variants — ptdm `Np` promopack+stamped prints, same card as a kept base/showcase sibling + a stamp; compute to `regular` (bypass preferred dedup) and would leak ~$689 into missing-set. Mirrors the ONE family's `stamped` rule. See docs/sets/tdm.md §5."
@@ -340,6 +1238,18 @@ note = "Promo-pack STAMP variants — ptdm `Np` promopack+stamped prints, same c
 [[unobtainable.tdm.rules]]
 promo_types_any_of = ["doublerainbow", "headliner", "serialized"]
 note = "Documented no-op (parity with INR/ACR/ONE): TDM 419 Mox Jasper (serialized+headliner+doublerainbow, ~$2,750) — `serialized` is already in the GLOBAL UNOBTAINABLE_PROMO_TYPES, so 419 never reaches missing-set regardless. Kept for discoverability. See docs/sets/tdm.md §5."
+
+# Proposed rules (off until switched on) — see docs/sets/thb.md §5
+[[unobtainable.thb.rules]]
+promo_types_any_of = ["stamped"]
+enabled = false
+note = "Promo-pack stamped variants (pthb): the same card as a kept sibling plus a stamp, which would otherwise show as missing. Proposed exclude."
+
+# Proposed rules (off until switched on) — see docs/sets/ths.md §5
+[[unobtainable.ths.rules]]
+set_codes = ["pths"]
+enabled = false
+note = "The pths promos set. Owner's call: see the family doc for which share art with the booster card."
 
 [[unobtainable.tla.rules]]
 promo_types_any_of = ["headliner", "neonink", "raisedfoil"]
@@ -357,3 +1267,98 @@ border_color = "borderless"
 tier = "chase"
 note = "tmc CN 83-97 surgefoil borderless showcase sheet — 15 prints, all surgefoil+borderless+inverted, foil-only, distinct illustration_ids from their base siblings, $37-$310 each (~$1,870 total). Premium-art chase tier excluded by default, surfaceable via --chase include/only. The surgefoil+borderless signature matches exactly these 15 in the family (the surgefoil basic-land dupes — e.g. tmt 309 Forest — are black-bordered and already drop as dupe-foil, so this rule neither needs nor affects them). Added 2026-10-02: before it, the art-blind dupe-foil filter wrongly dropped 6 of the 15 (CN 83/85/89/91/92/96, whose base sibling is also borderless) and kept 9 — now all 15 are a coherent chase tier. Analog of MSH surgefoil / OTJ textured chase. See docs/sets/tmt.md §5."
 
+# Proposed rules (off until switched on) — see docs/sets/trk.md §5
+[[unobtainable.trk.rules]]
+promo_types_any_of = ["headliner"]
+enabled = false
+note = "Headliner borderless foils (analog of the TLA/TMT/MSH/HOB headliner rules); several compute to an empty treatment and leak into mythic-regular. Proposed exclude."
+
+[[unobtainable.trk.rules]]
+set_codes = ["trk"]
+collector_numbers = ["436", "437", "438", "439", "440", "441", "442", "443", "444", "445"]
+frame_effects_all_of = ["showcase"]
+enabled = false
+note = "Klingon-language showcase foils: same art as 426-435, only the language differs. No distinguishing promo type, so CN plus showcase frame (trc reuses CNs 436-445). Proposed exclude."
+
+[[unobtainable.trk.rules]]
+set_codes = ["trk"]
+collector_numbers = ["550", "551", "552", "553", "554", "555", "556", "557"]
+enabled = false
+note = "Bundle-exclusive starship showcase prints with distinct art. Unsure: owner's call whether a bundle-only tier is a target."
+
+# Proposed rules (off until switched on) — see docs/sets/tsp.md §5
+[[unobtainable.tsp.rules]]
+set_codes = ["ptsp"]
+enabled = false
+note = "The ptsp promos set. Owner's call: see the family doc for which share art with the booster card."
+
+# Proposed rules (off until switched on) — see docs/sets/tsr.md §5
+[[unobtainable.tsr.rules]]
+promo_types_any_of = ["stamped"]
+enabled = false
+note = "Promo-pack stamped variants (ptsr): the same card as a kept sibling plus a stamp, which would otherwise show as missing. Proposed exclude."
+
+# Proposed rules (off until switched on) — see docs/sets/ust.md §5
+[[unobtainable.ust.rules]]
+set_codes = ["pust"]
+enabled = false
+note = "Draft Weekend promo. Owner's call, same as other families' event promos."
+
+# Proposed rules (off until switched on) — see docs/sets/vis.md §5
+[[unobtainable.vis.rules]]
+set_codes = ["mgb"]
+enabled = false
+note = "Same-art early printings of vis rares from the gift box. Exclude unless the gift box is tracked."
+
+# Proposed rules (off until switched on) — see docs/sets/war.md §5
+[[unobtainable.war.rules]]
+promo_types_any_of = ["stamped"]
+enabled = false
+note = "Promo-pack stamped variants (pwar): the same card as a kept sibling plus a stamp, which would otherwise show as missing. Proposed exclude."
+
+[[unobtainable.war.rules]]
+set_codes = ["pwar"]
+promo_types_any_of = ["fnm", "instore", "openhouse", "resale"]
+enabled = false
+note = "FNM, in-store, open-house and resale promo-only copies. Owner's call; the prerelease and promo-pack prints in this set are not part of this row."
+
+# Proposed rules (off until switched on) — see docs/sets/wwk.md §5
+[[unobtainable.wwk.rules]]
+set_codes = ["pwwk"]
+enabled = false
+note = "The pwwk promos set. Owner's call: see the family doc for which share art with the booster card."
+
+# Proposed rules (off until switched on) — see docs/sets/xln.md §5
+[[unobtainable.xln.rules]]
+promo_types_any_of = ["stamped"]
+enabled = false
+note = "Promo-pack stamped variants (pxln): the same card as a kept sibling plus a stamp, which would otherwise show as missing. Proposed exclude."
+
+[[unobtainable.xln.rules]]
+set_codes = ["pxtc"]
+enabled = false
+note = "Treasure Chest buy-a-box foils: same art as booster rares. Owner's call."
+
+[[unobtainable.xln.rules]]
+set_codes = ["pxln"]
+promo_types_any_of = ["buyabox", "league", "draftweekend", "convention", "openhouse"]
+enabled = false
+note = "Buy-a-box and event promos (pxln only; the Treasure Chest set is a separate row). Owner's call; the prerelease and promo-pack prints in this set are not part of this row."
+
+# Proposed rules (off until switched on) — see docs/sets/zen.md §5
+[[unobtainable.zen.rules]]
+set_codes = ["zen"]
+collector_numbers = ["230a", "231a", "232a", "233a", "234a", "235a", "236a", "237a", "238a", "239a", "240a", "241a", "242a", "243a", "244a", "245a", "246a", "247a", "248a", "249a"]
+enabled = false
+note = "Basics with the same art as 230-249. Owner's call (same pattern as bfz)."
+
+[[unobtainable.zen.rules]]
+set_codes = ["pzen"]
+enabled = false
+note = "The pzen promos set. Owner's call: see the family doc for which share art with the booster card."
+
+# Proposed rules (off until switched on) — see docs/sets/znr.md §5
+[[unobtainable.znr.rules]]
+promo_types_any_of = ["stamped"]
+enabled = false
+note = "Promo-pack stamped variants (pznr): the same card as a kept sibling plus a stamp, which would otherwise show as missing. Proposed exclude."

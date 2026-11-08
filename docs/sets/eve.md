@@ -35,7 +35,7 @@ Every print computes `regular`.
 | base | 180 | `eve` 1–180 (60 C / 60 U / 60 R) | `regular` | rarity/base sub-selectors — R+M ≈ $268 nonfoil / $1349 foil (Ward of Bones 174 ~$29, Ashling, the Extinguisher 33 ~$25, Crumbling Ashes 35 ~$24, Bloom Tender 66 ~$19 / **$185** foil, Waves of Aggression 148) |
 
 **`promo_types`:** the prerelease Overbeing `157★` has its own art; the release Figure of Destiny `139★` reuses the booster art. The prerelease is `datestamped` (dropped by `missing.drop_datestamped_with_sibling`); the release foil isn't, so missing-set lists it. No fancy-foil sheet →
-proposed `[dupe_foil] eve = []` to enable `mm query missing-set eve`.
+configured `[dupe_foil] eve = []` (2026-11-08) to enable `mm query missing-set eve`.
 
 ---
 
@@ -47,11 +47,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] eve = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] eve = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `peve` promos | 2 | **owner's call** — 1 of 2 has its own art |
 
 ---
@@ -74,8 +74,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.eve.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] eve = []` — configured 2026-11-08 (enables `mm query missing-set eve`).
+- `config/families.toml` `[[unobtainable.eve.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.eve]]` — none.
 
 ---

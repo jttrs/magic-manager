@@ -33,7 +33,7 @@ Every print computes `regular`.
 | base | 350 | `mir` 1–350 (110 C / 110 U / 110 R + 20 basics) | `regular` | rarity/base sub-selectors — R ≈ $1566 (Lion's Eye Diamond 307 ~$809, Phyrexian Dreadnought 315 ~$270, Shallow Grave 141 ~$109, Tombstone Stairwell 149 ~$52, Enlightened Tutor 14 ~$38, Worldly Tutor 255 ~$30) |
 
 **`promo_types`:** none. No fancy-foil sheet →
-proposed `[dupe_foil] mir = []` to enable `mm query missing-set mir`.
+configured `[dupe_foil] mir = []` (2026-11-08) to enable `mm query missing-set mir`.
 
 ---
 
@@ -45,11 +45,11 @@ Lion's Eye Diamond 307 (~$809) is ~52% of rare value. No scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] mir = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] mir = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | German-only `120†` | 1 (0 local) | **owner's call** — not syncable |
 
 ---
@@ -72,7 +72,7 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] mir = []` — configured 2026-11-08 (enables `mm query missing-set mir`).
 - `config/families.toml` `[[unobtainable.mir.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.mir]]` — none.
 

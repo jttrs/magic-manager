@@ -52,7 +52,7 @@ Every print computes `regular`.
 | `buyabox` | — | **no** — own art | Eidolon of Blossoms 122★ (~$5) |
 | `instore` | — | challenge-deck cards | `tdag`, `thp3` |
 
-No Promo Pack, no fancy-foil sheet → proposed `[dupe_foil] jou = []` to enable
+No Promo Pack, no fancy-foil sheet → configured `[dupe_foil] jou = []` (2026-11-08) to enable
 `mm query missing-set jou`.
 
 ---
@@ -65,11 +65,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] jou = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] jou = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pjou` promos | 10 | **owner's call** — all have their own art; the datestamped ones are hidden by missing-set today (a code question, see [`m15`](m15.md) §7) |
 | `tdag` / `thp3` | 23 | already off by default (memorabilia) |
 
@@ -97,8 +97,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.jou.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] jou = []` — configured 2026-11-08 (enables `mm query missing-set jou`).
+- `config/families.toml` `[[unobtainable.jou.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.jou]]` — none.
 
 ---

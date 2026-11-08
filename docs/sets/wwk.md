@@ -37,7 +37,7 @@ Every print computes `regular`.
 | base | 145 | `wwk` 1–145 (60 C / 40 U / 35 R / 10 M) | `regular` | rarity/base sub-selectors — R+M ≈ $253 nonfoil / $1011 foil (Eye of Ugin 136 ~$53, Amulet of Vigor 121 ~$48, Stoneforge Mystic 20 ~$29 / $72, Jace, the Mind Sculptor 31 ~$27 / **$222** foil) |
 
 **`promo_types`:** 3 of 4 `pwwk` prints have their own art (resale `A6` reuses it); the buy-a-box Celestial Colonnade is at plain CN 133, not `133★`. The prerelease and release promos carry `datestamped`, so `missing.drop_datestamped_with_sibling` drops them from missing-set (name + treatment match, not art). No fancy-foil sheet →
-proposed `[dupe_foil] wwk = []` to enable `mm query missing-set wwk`.
+configured `[dupe_foil] wwk = []` (2026-11-08) to enable `mm query missing-set wwk`.
 
 ---
 
@@ -49,11 +49,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] wwk = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] wwk = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pwwk` promos | 4 | **owner's call** — 3 of 4 have their own art |
 
 ---
@@ -78,8 +78,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.wwk.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] wwk = []` — configured 2026-11-08 (enables `mm query missing-set wwk`).
+- `config/families.toml` `[[unobtainable.wwk.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.wwk]]` — none.
 
 ---

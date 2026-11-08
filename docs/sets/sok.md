@@ -34,7 +34,7 @@ Every print computes `regular`.
 | base | 165 | `sok` 1–165, no basic lands (55 C / 55 U / 55 R) | `regular` | rarity/base sub-selectors — R+M ≈ $261 nonfoil / $1755 foil (Choice of Damnations 62 ~$23, Miren, the Moaning Well 163 ~$23 / ~$93 foil, Oboro, Palace in the Clouds 164 ~$22 / ~$115, Erayo, Soratami Ascendant 35 ~$20 / ~$187, Sakashima the Impostor 53 ~$18 / ~$155) |
 
 **`promo_types`:** the prerelease Kiyomaro `18★` has its own art; the release Ghost-Lit Raider `99★` (~$0.99) reuses the booster art. Only the prerelease carries `datestamped` (dropped by missing-set); the same-art release foil is listed next to `sok` 99. No fancy-foil sheet →
-proposed `[dupe_foil] sok = []` to enable `mm query missing-set sok`.
+configured `[dupe_foil] sok = []` (2026-11-08) to enable `mm query missing-set sok`.
 
 ---
 
@@ -46,11 +46,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] sok = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] sok = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `psok` promos | 2 | **owner's call** — 1 of 2 has its own art |
 
 ---
@@ -74,8 +74,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.sok.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] sok = []` — configured 2026-11-08 (enables `mm query missing-set sok`).
+- `config/families.toml` `[[unobtainable.sok.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.sok]]` — none.
 
 ---

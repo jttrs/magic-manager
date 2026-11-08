@@ -64,7 +64,7 @@ in `frame_effects` / `finishes` / `border_color`:
 | etched (foil-etched, black border, `inverted+etched`) | 170 + 4 thick | 452–621, 779–782 | `b\|ff` [etched] | never reaches missing-set output (verified by simulation: 0 etched rows). 169/170 share art with the booster print; **Ezuri's Predation 558** has different art from 287 |
 | borderless (`inverted`) | 46 + 12 full-art | 622–667, 692–703 | `b` | **KEPT (default) — pending owner review.** Distinct art from the booster prints (0 illustration matches). The full-art 692–703 sub-band (`full_art: true`) also computes `b`, not `fa` |
 | borderless profile/portrait (`portrait`, `legendary+inverted`) | 24 | 668–691 | `b` | **KEPT (default) — pending owner review.** Distinct art |
-| textured foil (`textured`) | 10 | 1057–1066 | `b\|ff` [foil] | **same art** as the portrait borderless (9) / full-art Jeweled Lotus 702 (1) → dupe-foil (proposed `[dupe_foil] cmm = ["textured"]`; collapses in step 3). Unconfigured, it is the family's scarcity tier (~$1,276 foil, Jeweled Lotus 1066 $628, The Ur-Dragon 1065 $237) |
+| textured foil (`textured`) | 10 | 1057–1066 | `b\|ff` [foil] | **same art** as the portrait borderless (9) / full-art Jeweled Lotus 702 (1) → dupe-foil (configured `[dupe_foil] cmm = ["textured"]` (2026-11-08); collapses in step 3). Unconfigured, it is the family's scarcity tier (~$1,276 foil, Jeweled Lotus 1066 $628, The Ur-Dragon 1065 $237) |
 | extended-art | 35 | 744–778 | `ext` | auto-dropped by `preferred` (ext class); same art as 712–743 / the commander faces |
 | release promo | 1 | 1067 | `b` [foil] | kept — Disrupt Decorum, distinct art |
 | showcase | 0 | — | — | none in this family |
@@ -75,7 +75,7 @@ in `frame_effects` / `finishes` / `border_color`:
 |---|---|---|---|
 | `boosterfun` | `b` / `ext` / `b\|ff` | n/a (umbrella) | tags borderless, ext and etched bands |
 | `portrait` | `b` | no — unique art | the profile-legend borderless; also on 9 of the 10 textured prints |
-| `textured` | `b\|ff` | **yes** — same illustration as the portrait/full-art borderless sibling (10/10) | → `[dupe_foil] cmm = ["textured"]` (proposed) |
+| `textured` | `b\|ff` | **yes** — same illustration as the portrait/full-art borderless sibling (10/10) | → `[dupe_foil] cmm = ["textured"]` (configured 2026-11-08) |
 | `thick` | `b\|ff` [etched] | yes (display-size copies of 704/705/706/707 commanders) | oversized display cards; not in missing output |
 | `release` | `b` | no — unique art | 1067 Disrupt Decorum, foil only |
 
@@ -112,13 +112,13 @@ treatment ladder, not a same-treatment chase.
 
 ## 5. Unobtainable rules
 
-**None configured yet (proposals pending owner review).**
+**No rule is active.**
 
 | Tier | Disposition | Rationale |
 |---|---|---|
 | borderless (`inverted`, 622–667 + full-art 692–703) | kept (default) — pending owner review | Distinct art, the family's main collector tier (58 prints, ~$1,143 nonfoil missing incl. portrait). Recommend keep |
 | borderless portrait legends (668–691) | kept (default) — pending owner review | Distinct profile art of the set's commanders. Recommend keep |
-| textured foil (1057–1066) | handled by proposed `[dupe_foil] cmm = ["textured"]` | Same art as the portrait/full-art borderless; scarcity tier. If dupe-foil is NOT adopted, an `unobtainable` rule `promo_types_any_of = ["textured"]` is the equivalent |
+| textured foil (1057–1066) | handled by configured `[dupe_foil] cmm = ["textured"]` (2026-11-08) | Same art as the portrait/full-art borderless; scarcity tier. If dupe-foil is NOT adopted, an `unobtainable` rule `promo_types_any_of = ["textured"]` is the equivalent |
 
 **Missing-set baseline (simulated 2026-11-02, local prices, nothing configured
 in families.toml — config injected in-process):**
@@ -126,7 +126,7 @@ in families.toml — config injected in-process):**
 - `[dupe_foil] cmm = ["textured"]` → **412 prints / ~$2,891**, a flat curve topped by full-art borderless staples (Deflecting Swat 698, Demonic Tutor 696, Jeweled Lotus 702, Fierce Guardianship 694). Breakdown: booster regular 169 / $1,397; borderless 82 / $1,143; precon reprints 59 / $148; precon-new 16 / $124; foil faces 4 / $73; release 1 / $5; plus 81 unpriced `acmm` art cards (§7).
 
 **Scarcity check:** `scripts/set_status.py cmm` printed no ⚠ concentration note
-(missing figures show "cross-set; n/a" until `[dupe_foil]` is configured).
+(missing figures showed "cross-set; n/a" at this audit, before `[dupe_foil]` was configured).
 
 ---
 
@@ -166,7 +166,7 @@ channel (Secret Lair, WPN), not this family.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review). Proposed: `cmm = ["textured"]`.
+- `config/families.toml` `[dupe_foil] cmm = ["textured"]` — configured 2026-11-08 (enables `mm query missing-set cmm`).
 - `config/families.toml` `[[unobtainable.cmm.rules]]` — None configured yet (proposals pending owner review).
 - `[[scenes.cmm]]` — not configured (no scene; see §4).
 

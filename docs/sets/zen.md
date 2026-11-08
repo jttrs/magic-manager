@@ -39,7 +39,7 @@ Every print computes `regular`.
 | full-art basics, `a` prints | 20 | `zen` `230a`–`249a` (nonfoil-only, **same art** as the unlettered CN) | `regular` | distinct printings — missing-set lists them |
 
 **`promo_types`:** 3 of 4 `pzen` prints have their own art (resale `A5` reuses it). The prerelease and release promos carry `datestamped`, so `missing.drop_datestamped_with_sibling` drops them from missing-set (name + treatment match, not art). No fancy-foil sheet →
-proposed `[dupe_foil] zen = []` to enable `mm query missing-set zen`.
+configured `[dupe_foil] zen = []` (2026-11-08) to enable `mm query missing-set zen`.
 
 ---
 
@@ -51,11 +51,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] zen = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] zen = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pzen` promos | 4 | **owner's call** — 3 of 4 have their own art |
 | basics `230a`–`249a` | 20 | **owner's call** — same art as 230–249; same pattern as [`bfz`](bfz.md) |
 
@@ -80,8 +80,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.zen.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] zen = []` — configured 2026-11-08 (enables `mm query missing-set zen`).
+- `config/families.toml` `[[unobtainable.zen.rules]]` — 2 proposed rules, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.zen]]` — none.
 
 ---

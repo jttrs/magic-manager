@@ -34,7 +34,7 @@ Every print computes `regular`.
 | base | 165 | `dst` 1–165, no basic lands (55 C / 55 U / 55 R) | `regular` | rarity/base sub-selectors — R+M ≈ $331 nonfoil / $1267 foil (Sword of Fire and Ice 148 ~$44, Darksteel Forge 110 ~$43 / ~$130 foil, Trinisphere 154 ~$39, Mycosynth Lattice 130 ~$37, Panoptic Mirror 136 ~$26, Arcbound Ravager 100 ~$20) |
 
 **`promo_types`:** the prerelease Shield of Kaldra `139★` (~$19.20) has its own art. It carries `datestamped`, so missing-set drops it (a ~$19 alt-art card hidden). No fancy-foil sheet →
-proposed `[dupe_foil] dst = []` to enable `mm query missing-set dst`.
+configured `[dupe_foil] dst = []` (2026-11-08) to enable `mm query missing-set dst`.
 
 ---
 
@@ -46,11 +46,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] dst = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] dst = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pdst` promos | 1 | **owner's call** — its own art (~$19) |
 
 ---
@@ -72,8 +72,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.dst.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] dst = []` — configured 2026-11-08 (enables `mm query missing-set dst`).
+- `config/families.toml` `[[unobtainable.dst.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.dst]]` — none.
 
 ---

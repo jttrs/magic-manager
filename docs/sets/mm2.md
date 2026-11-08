@@ -44,15 +44,15 @@ Tezzeret the Seeker 62, Elesh Norn 16, Emrakul, the Aeons Torn 3.
 132, Waxmane Baku 38, Skyreach Manta 229, … (upper bound — the local catalog
 undercounts older sets).
 
-Proposed `[dupe_foil] mm2 = []` to enable `mm query missing-set mm2`.
+Configured `[dupe_foil] mm2 = []` (2026-11-08) to enable `mm query missing-set mm2`.
 
 ---
 
 ## 3–6.
 
 No chase variants, scenes or PRM destinations (no promo child). Unobtainable
-rules: none configured yet (proposals pending owner review);
-`[dupe_foil] mm2 = []` — **apply**.
+rules: no rule is active;
+`[dupe_foil] mm2 = []` — **applied 2026-11-08**.
 
 ---
 
@@ -65,7 +65,7 @@ rules: none configured yet (proposals pending owner review);
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] mm2 = []` — configured 2026-11-08 (enables `mm query missing-set mm2`).
 - `config/families.toml` `[[unobtainable.mm2.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.mm2]]` — none.
 

@@ -41,15 +41,14 @@ All `regular`. No `frame_effects`, no `promo_types`.
 **Art:** 0 new — every print shares its illustration with the original
 `dd1` (or an earlier printing).
 
-Proposed `[dupe_foil] evg = []` to enable `mm query missing-set evg`.
+Configured `[dupe_foil] evg = []` (2026-11-08) to enable `mm query missing-set evg`.
 
 ---
 
 ## 3–6.
 
-No chase variants, scenes or PRM destinations. Unobtainable rules: none
-configured yet (proposals pending owner review); `[dupe_foil] evg = []` —
-**apply**.
+No chase variants, scenes or PRM destinations. Unobtainable rules: no rule is active; `[dupe_foil] evg = []` —
+**applied 2026-11-08**.
 
 ---
 
@@ -66,7 +65,7 @@ configured yet (proposals pending owner review); `[dupe_foil] evg = []` —
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] evg = []` — configured 2026-11-08 (enables `mm query missing-set evg`).
 - `config/families.toml` `[[unobtainable.evg.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.evg]]` — none.
 

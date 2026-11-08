@@ -58,6 +58,20 @@ def test_unconfigured_family_preferred_raises(tmp_db, seed_cards, make_card, mon
 
 # ---------- materialize against a seeded DB ----------
 
+def test_preferred_finds_the_family_when_all_rows_are_in_a_child_set(tmp_db, seed_cards, make_card, monkeypatch):
+    """A family whose anchor set is complete leaves only child-set rows; `preferred`
+    must still find the configured anchor instead of raising "not configured"."""
+    import magic_manager.scryfall as scry
+    monkeypatch.setattr(scry, "all_sets", lambda: [
+        {"code": "zzc", "parent_set_code": None, "name": "Zzc", "set_type": "expansion"},
+        {"code": "pzzc", "parent_set_code": "zzc", "name": "Zzc Promos", "set_type": "promo"},
+    ])
+    monkeypatch.setitem(selectors.FAMILY_DUPE_FOIL_PROMO_TYPES, "zzc", frozenset())
+    seed_cards([make_card(id="kid", set="pzzc", collector_number="1", name="Kid", frame_effects=["showcase"])])
+    rows = selectors.materialize("set:zzc+related missing treatment=preferred")
+    assert {r.scryfall_id for r in rows} == {"kid"}
+
+
 def test_materialize_owned_filters_to_inventory(tmp_db, seed_cards, make_card, monkeypatch):
     import magic_manager.scryfall as scry
     monkeypatch.setattr(scry, "all_sets",

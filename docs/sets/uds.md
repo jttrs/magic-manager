@@ -35,7 +35,7 @@ Every print computes `regular`.
 | prerelease | 1 | `puds` 6 | `regular` | **same art** — auto-dropped |
 
 **`promo_types`:** `puds` 6 carries `prerelease` + `datestamped` and shares art with `uds` 6, so missing-set drops it correctly. No fancy-foil sheet →
-proposed `[dupe_foil] uds = []` to enable `mm query missing-set uds`.
+configured `[dupe_foil] uds = []` (2026-11-08) to enable `mm query missing-set uds`.
 
 ---
 
@@ -47,11 +47,11 @@ Replenish 15 and Metalworker 135 (Reserved List) are ~40% of nonfoil rare value.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] uds = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] uds = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `puds` prerelease | 1 | none needed — auto-dropped (same art) |
 
 ---
@@ -73,7 +73,7 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] uds = []` — configured 2026-11-08 (enables `mm query missing-set uds`).
 - `config/families.toml` `[[unobtainable.uds.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.uds]]` — none.
 

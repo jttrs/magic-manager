@@ -106,7 +106,13 @@ FAMILY_DUPE_FOIL_PROMO_TYPES: dict[str, frozenset[str]] = _config.family_dupe_fo
 #       The card's collector_number must be one of these. Use to pin a specific
 #       print that has no distinguishing promo_type (e.g. a borderless foil chase
 #       identified only by CN). Pair with border_color/frame_effects for safety.
-# Conditions can be combined within a rule for AND semantics.
+#   - set_codes: frozenset[str]
+#       The card's set code must be one of these (lowercased). Use for a promo
+#       set that belongs to the family (e.g. `pala`); pair with collector_numbers
+#       when only part of that set is meant.
+# Conditions can be combined within a rule for AND semantics. A rule with
+# `enabled = false` is a PROPOSAL: it is not loaded here but into
+# FAMILY_PROPOSED_RULES, and excludes nothing until switched on.
 #
 # When adding a new family: survey its prints with the script in
 # `scripts/survey_treatment_signature.py` (added 2026-06-14), then write the
@@ -114,6 +120,9 @@ FAMILY_DUPE_FOIL_PROMO_TYPES: dict[str, frozenset[str]] = _config.family_dupe_fo
 # Loaded from config/families.toml [[unobtainable.<fam>.rules]] (see
 # config.family_unobtainable_rules). Schema documented in the comment above.
 FAMILY_UNOBTAINABLE_RULES: dict[str, list[dict]] = _config.family_unobtainable_rules()
+# The `enabled = false` rules from the same file: proposals, switched off. Nothing
+# reads this yet (a later UI lists them); each rule carries its `note`.
+FAMILY_PROPOSED_RULES: dict[str, list[dict]] = _config.family_proposed_rules()
 
 
 # Per-family "scene" groupings — sets of collector numbers that form a single
@@ -184,6 +193,11 @@ def _matches_unobtainable_rule(
             return False
     if "frame_effects_all_of" in rule:
         if not rule["frame_effects_all_of"].issubset(_card_frame_effects(card)):
+            return False
+    if "set_codes" in rule:
+        # DB-row dicts carry `set_code`, selector card dicts carry `set`.
+        code = (card.get("set") or card.get("set_code") or "").lower()
+        if code not in rule["set_codes"]:
             return False
     if "border_color" in rule:
         if (card.get("border_color") or "") != rule["border_color"]:
@@ -1243,7 +1257,11 @@ def _filter_treatment_preferred(rows: list[MaterializedRow]) -> list[Materialize
     for setc in set_codes:
         try:
             resolved = sets_mod.resolve(setc)
-            anchors.add(resolved.code)  # parent anchor of the family
+            anchors.add(resolved.code)  # stays the MEMBER when setc is a child
+            # A family's rows can all sit in child sets (its anchor set complete):
+            # .all_codes holds the whole family, so the configured anchor is found.
+            anchors.update(c.lower() for c in resolved.all_codes
+                           if c.lower() in FAMILY_DUPE_FOIL_PROMO_TYPES)
         except LookupError:
             pass
     # Of the anchors found, do we have config for any?

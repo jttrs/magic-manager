@@ -53,7 +53,7 @@ All boosterfun prints carry `promo_types: boosterfun`; the galaxy-foil sheet add
 
 | promo_type | Treatment keyword | Dupe of a sibling? | Notes |
 |---|---|---|---|
-| `galaxyfoil` | `ff` | **yes** → proposed `[dupe_foil] unf = ["galaxyfoil"]` | 251 prints, Collector-Booster-only galaxy-foil sheet. Includes the scarcity tier of galaxy shocks 528–537 ($100–182 each, ~$1,320 total) and galaxy basics 486–495 — all same art as 235–244 / 277–286 |
+| `galaxyfoil` | `ff` | **yes** → configured `[dupe_foil] unf = ["galaxyfoil"]` (2026-11-08) | 251 prints, Collector-Booster-only galaxy-foil sheet. Includes the scarcity tier of galaxy shocks 528–537 ($100–182 each, ~$1,320 total) and galaxy basics 486–495 — all same art as 235–244 / 277–286 |
 | `boosterfun` | — | umbrella | skipped by axis 1; real structure is in `frame_effects` |
 | `release` | — | no sibling | 538 only |
 
@@ -87,7 +87,7 @@ None detected. The inverted borderless prints (basics 235–244, shocks 277–28
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Candidate | Status | Rationale |
 |---|---|---|
@@ -97,7 +97,7 @@ None configured yet (proposals pending owner review).
 | borderless shocklands (277–286) | kept (default) — pending owner review | ~$260 nonfoil for the 10; the family's highest-value kept tier |
 | Attraction lit-number variants (134 lettered CNs) | kept (default) — pending owner review | same art, functionally distinct; a "one per attraction" preference would need a `collector_numbers` rule |
 
-Before/after missing totals: n/a (family unconfigured; `set_status.py` can't compute missing until `[dupe_foil]` exists). Rough local-price shape: galaxy foils $1,760 total (dropped by the dupe-foil proposal); everything else in `unf`+`sunf` ≈ $411 at nonfoil-else-foil prices, led by the ten borderless shocks.
+Before/after missing totals: n/a (family unconfigured; `set_status.py` couldn't compute missing at this audit, before `[dupe_foil]` existed). Rough local-price shape: galaxy foils $1,760 total (dropped by the dupe-foil proposal); everything else in `unf`+`sunf` ≈ $411 at nonfoil-else-foil prices, led by the ten borderless shocks.
 
 Filtered globally: no serialized, no digital/arena prints (`missing | grep -i arena` → 0).
 
@@ -125,7 +125,7 @@ n/a — Unfinity has no prerelease/promo-pack set (`punf` doesn't exist). The on
 
 None configured yet (proposals pending owner review).
 
-- `config/families.toml` `[dupe_foil]` — no `unf` entry (proposal: `unf = ["galaxyfoil"]`).
+- `config/families.toml` `[dupe_foil] unf = ["galaxyfoil"]` — configured 2026-11-08 (enables `mm query missing-set unf`).
 - `config/families.toml` `[[unobtainable.unf.rules]]` — none.
 - Scenes — none.
 

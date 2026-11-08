@@ -35,7 +35,7 @@ Every print computes `regular`.
 | alt-art foils | 3 | `pls` 74★ Tahngarth, Talruum Hero (~$231), 107★ Ertai, the Corrupted (~$190), 133★ Skyship Weatherlight (~$250) — foil-only, rare | `regular` | rare-regular — **different art** from 74 / 107 / 133; ≈ $672 |
 
 **`promo_types`:** none on the `★` prints (they're plain booster foils). `ppls` holds one Ancient Greek prerelease Questing Phelddagrif `119`; `mm set sync ppls` 404s (English-only). No fancy-foil sheet →
-proposed `[dupe_foil] pls = []` to enable `mm query missing-set pls`.
+configured `[dupe_foil] pls = []` (2026-11-08) to enable `mm query missing-set pls`.
 
 ---
 
@@ -47,11 +47,11 @@ The three alt-art `★` foils (~$190–$250 each) are the set's chase prints. No
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] pls = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] pls = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `ppls` promo | 1 (0 local) | **owner's call** — Ancient Greek-only, not syncable |
 | alt-art `N★` foils | 3 | keep — unique art |
 
@@ -77,7 +77,7 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] pls = []` — configured 2026-11-08 (enables `mm query missing-set pls`).
 - `config/families.toml` `[[unobtainable.pls.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.pls]]` — none.
 

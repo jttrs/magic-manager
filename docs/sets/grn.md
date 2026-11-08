@@ -55,7 +55,7 @@ except 4 FNM / open-house `inverted` promos (`b`).
 | `setpromo` | — | marker on every `pgrn` print | not a dupe signal |
 | `planeswalkerdeck` / `buyabox` | — | unique cards | 260–273 |
 
-No fancy-foil sheet → proposed `[dupe_foil] grn = []` to enable `mm query missing-set grn`.
+No fancy-foil sheet → configured `[dupe_foil] grn = []` (2026-11-08) to enable `mm query missing-set grn`.
 
 **Full-art convention:** none.
 
@@ -75,16 +75,16 @@ None.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] grn = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] grn = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pgrn` promo-pack stamped `Np` | 36 | **exclude** — `promo_types_any_of = ["stamped"]`; ~$130 |
 | `pgrn` FNM / league / event promos | 8 | **owner's call** — same question as [`war`](war.md) / [`rna`](rna.md) |
 | PW-deck 265–272, buy-a-box 273 | 9 | keep — real cards |
 
-**Scarcity check:** n/a until a `[dupe_foil]` entry exists.
+**Scarcity check:** not run yet (written before `[dupe_foil]` was added).
 
 ---
 
@@ -119,8 +119,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.grn.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] grn = []` — configured 2026-11-08 (enables `mm query missing-set grn`).
+- `config/families.toml` `[[unobtainable.grn.rules]]` — 2 proposed rules, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.grn]]` — none.
 
 ---

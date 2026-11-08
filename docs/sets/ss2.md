@@ -64,7 +64,7 @@ n/a.
 
 ## 5. Unobtainable rules
 
-None configured, none needed. Proposed `[dupe_foil] ss2 = []` only to enable
+No rule is active; none needed. Configured `[dupe_foil] ss2 = []` (2026-11-08) only to enable
 `mm query missing-set ss2`.
 
 **Totals (local prices, 2026-11-05):** ≈ $18 nonfoil / $45 foil.
@@ -88,7 +88,7 @@ n/a.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] ss2 = []` — configured 2026-11-08 (enables `mm query missing-set ss2`).
 - `config/families.toml` `[[unobtainable.ss2.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.ss2]]` — none.
 

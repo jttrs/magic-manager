@@ -34,7 +34,7 @@ No children. No `--only` needed.
 | playtest base (nonfoil-only) | 121 | `cmb2` 1–121 (black border; 8 `legendary`) | `regular` | rarity/base sub-selectors — Scryfall rates **every card `rare`**, so all 121 reach `rare-regular` |
 
 **`promo_types` signals:** `playtest` on all 121 — a set-wide marker, not a
-dupe or stamp. Nothing to dedup → proposed `[dupe_foil] cmb2 = []` only to
+dupe or stamp. Nothing to dedup → configured `[dupe_foil] cmb2 = []` (2026-11-08) only to
 enable `mm query missing-set cmb2`.
 
 No security stamps, no full-art, no foils.
@@ -55,11 +55,11 @@ None.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] cmb2 = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] cmb2 = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | whole set | 121 | keep or don't track — owner's call whether playtest cards are a completion target |
 
 **Totals (local prices, 2026-11-04):** ≈ $66 nonfoil for all 121; Slivdrazi
@@ -88,7 +88,7 @@ n/a.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] cmb2 = []` — configured 2026-11-08 (enables `mm query missing-set cmb2`).
 - `config/families.toml` `[[unobtainable.cmb2.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.cmb2]]` — none.
 

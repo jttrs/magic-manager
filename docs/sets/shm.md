@@ -36,7 +36,7 @@ Every print computes `regular`.
 | Reflecting Pool foil | 1 | `shm` `278★` (foil-only, **same art** as 278 which is nonfoil-only; not in MTGJSON's booster sheets) | `regular` | **one card, two rows** — the foil is `278★` |
 
 **`promo_types`:** the prerelease Demigod `183★` has its own art; the release Vexing Shusher `222★` reuses the booster art. The prerelease is `datestamped` (dropped by `missing.drop_datestamped_with_sibling`); the release foil isn't, so missing-set lists it. No fancy-foil sheet →
-proposed `[dupe_foil] shm = []` to enable `mm query missing-set shm`.
+configured `[dupe_foil] shm = []` (2026-11-08) to enable `mm query missing-set shm`.
 
 ---
 
@@ -48,11 +48,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] shm = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] shm = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pshm` promos | 2 | **owner's call** — 1 of 2 has its own art |
 
 ---
@@ -76,8 +76,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.shm.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] shm = []` — configured 2026-11-08 (enables `mm query missing-set shm`).
+- `config/families.toml` `[[unobtainable.shm.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.shm]]` — none.
 
 ---

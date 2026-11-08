@@ -36,7 +36,7 @@ Every print computes `regular`.
 | tokens | 6 | `tugl` | `regular` | tokens |
 
 **`promo_types`:** none. No fancy-foil sheet →
-proposed `[dupe_foil] ugl = []` to enable `mm query missing-set ugl`.
+configured `[dupe_foil] ugl = []` (2026-11-08) to enable `mm query missing-set ugl`.
 
 ---
 
@@ -48,11 +48,11 @@ Blacker Lotus 70 (~$25). No scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] ugl = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] ugl = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | whole family | 88 | **owner's call** — silver-bordered; kept (default) — pending owner review |
 
 ---
@@ -73,7 +73,7 @@ n/a.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] ugl = []` — configured 2026-11-08 (enables `mm query missing-set ugl`).
 - `config/families.toml` `[[unobtainable.ugl.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.ugl]]` — none.
 

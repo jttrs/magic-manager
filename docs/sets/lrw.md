@@ -35,7 +35,7 @@ Every print computes `regular`.
 | base | 301 | `lrw` 1–301 (141 C / 80 U / 80 R) | `regular` | rarity/base sub-selectors — R+M ≈ $401 nonfoil / $1974 foil (Wort, Boggart Auntie 252 ~$29, Dolmen Gate 256 ~$29, Timber Protector 238 ~$23, Knucklebone Witch 120 ~$21, Vigor 240, Thousand-Year Elixir 263 ~$104 foil) |
 
 **`promo_types`:** the prerelease Packmaster `244★` has its own art; the release Shriekmaw `139★` (~$6.72) and resale `A2` reuse the booster art. Only the prerelease carries `datestamped` (so `missing.drop_datestamped_with_sibling` drops it); the same-art release foil has no dupe signal, so missing-set lists it next to `lrw` 139. No fancy-foil sheet →
-proposed `[dupe_foil] lrw = []` to enable `mm query missing-set lrw`.
+configured `[dupe_foil] lrw = []` (2026-11-08) to enable `mm query missing-set lrw`.
 
 ---
 
@@ -47,11 +47,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] lrw = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] lrw = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `plrw` promos | 3 | **owner's call** — 1 of 3 has its own art |
 
 ---
@@ -76,8 +76,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.lrw.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] lrw = []` — configured 2026-11-08 (enables `mm query missing-set lrw`).
+- `config/families.toml` `[[unobtainable.lrw.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.lrw]]` — none.
 
 ---

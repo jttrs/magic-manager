@@ -32,16 +32,15 @@ All `regular`, foil-only. No `frame_effects`, no `promo_types`.
 |---|---:|---|---|---|
 | reprints (foil) | 34 | `pd2` 1–34 (13 C / 15 U / 6 R; Price of Progress 18 ~$9, Reverberate 20 ~$4, Chain Lightning 16, Fireblast 26, Lightning Bolt 17; Mountains 31–34) | `regular` | rarity sub-selectors — ≈ $31 foil |
 
-**New art (local check):** Thunderbolt 19 only. Proposed `[dupe_foil] pd2 = []` to enable
+**New art (local check):** Thunderbolt 19 only. Configured `[dupe_foil] pd2 = []` (2026-11-08) to enable
 `mm query missing-set pd2`.
 
 ---
 
 ## 3–6.
 
-No chase variants, scenes or PRM destinations. Unobtainable rules: none
-configured yet (proposals pending owner review); `[dupe_foil] pd2 = []` —
-**apply**.
+No chase variants, scenes or PRM destinations. Unobtainable rules: no rule is active; `[dupe_foil] pd2 = []` —
+**applied 2026-11-08**.
 
 ---
 
@@ -55,7 +54,7 @@ configured yet (proposals pending owner review); `[dupe_foil] pd2 = []` —
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] pd2 = []` — configured 2026-11-08 (enables `mm query missing-set pd2`).
 - `config/families.toml` `[[unobtainable.pd2.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.pd2]]` — none.
 

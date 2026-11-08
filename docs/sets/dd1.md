@@ -35,16 +35,15 @@ All `regular`. No `frame_effects`, no `promo_types`.
 | face cards (**foil-only**, rare) | 2 | `dd1` 1 Ambush Commander (~$1.70), 32 Siege-Gang Commander (~$0.79) | `regular` | rare-regular |
 | deck cards (nonfoil-only) | 60 | the rest (Wirewood Lodge 26 ~$13, Elvish Promenade 20 ~$10, Elvish Harbinger 4 ~$8, Boggart Shenanigans 54 ~$6) | `regular` | rarity sub-selectors — ≈ $83 |
 
-**New art (local check):** 21 prints first seen here (counting only earlier-or-same-date printings). Proposed `[dupe_foil] dd1 = []` to enable
+**New art (local check):** 21 prints first seen here (counting only earlier-or-same-date printings). Configured `[dupe_foil] dd1 = []` (2026-11-08) to enable
 `mm query missing-set dd1`.
 
 ---
 
 ## 3–6.
 
-No chase variants, scenes or PRM destinations. Unobtainable rules: none
-configured yet (proposals pending owner review); `[dupe_foil] dd1 = []` —
-**apply**.
+No chase variants, scenes or PRM destinations. Unobtainable rules: no rule is active; `[dupe_foil] dd1 = []` —
+**applied 2026-11-08**.
 
 ---
 
@@ -60,7 +59,7 @@ configured yet (proposals pending owner review); `[dupe_foil] dd1 = []` —
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] dd1 = []` — configured 2026-11-08 (enables `mm query missing-set dd1`).
 - `config/families.toml` `[[unobtainable.dd1.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.dd1]]` — none.
 

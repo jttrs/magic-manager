@@ -60,11 +60,11 @@ None.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] hho = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] hho = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | whole family | 20 | **owner's call** — never sold (gift-only); kept (default) — pending owner review |
 
 ---
@@ -90,7 +90,7 @@ n/a.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] hho = []` — configured 2026-11-08 (enables `mm query missing-set hho`).
 - `config/families.toml` `[[unobtainable.hho.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.hho]]` — none.
 

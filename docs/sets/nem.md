@@ -35,7 +35,7 @@ Every print computes `regular`.
 | prerelease | 1 | `pnem` 67 | `regular` | **same art** — auto-dropped |
 
 **`promo_types`:** `pnem` 67 carries `prerelease` + `datestamped` and shares art with `nem` 67, so missing-set drops it correctly. No fancy-foil sheet →
-proposed `[dupe_foil] nem = []` to enable `mm query missing-set nem`.
+configured `[dupe_foil] nem = []` (2026-11-08) to enable `mm query missing-set nem`.
 
 ---
 
@@ -47,11 +47,11 @@ Foil Daze 30 (common, ~$331) is the costliest common foil. No scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] nem = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] nem = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pnem` prerelease | 1 | none needed — auto-dropped (same art) |
 
 ---
@@ -73,7 +73,7 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] nem = []` — configured 2026-11-08 (enables `mm query missing-set nem`).
 - `config/families.toml` `[[unobtainable.nem.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.nem]]` — none.
 

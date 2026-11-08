@@ -37,15 +37,14 @@ All `regular`. No `frame_effects`, no `promo_types`.
 
 **New art (local check, 9):** Sun Titan 1, Daily Regimen 18, Stand Firm 21,
 Griffin Guide 28, Polukranos 43, Ghor-Clan Savage 53, Deus of Calamity 54,
-Skarrgan Skybreaker 60, Shower of Sparks 61. Proposed `[dupe_foil] ddl = []`.
+Skarrgan Skybreaker 60, Shower of Sparks 61. Configured `[dupe_foil] ddl = []` (2026-11-08).
 
 ---
 
 ## 3–6.
 
-No chase variants, scenes or PRM destinations. Unobtainable rules: none
-configured yet (proposals pending owner review); `[dupe_foil] ddl = []` —
-**apply**.
+No chase variants, scenes or PRM destinations. Unobtainable rules: no rule is active; `[dupe_foil] ddl = []` —
+**applied 2026-11-08**.
 
 ---
 
@@ -58,7 +57,7 @@ configured yet (proposals pending owner review); `[dupe_foil] ddl = []` —
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] ddl = []` — configured 2026-11-08 (enables `mm query missing-set ddl`).
 - `config/families.toml` `[[unobtainable.ddl.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.ddl]]` — none.
 

@@ -33,7 +33,7 @@ Every print computes `regular`.
 | base | 350 | `6ed` 1–350 (110 C / 110 U / 110 R + 20 basics) | `regular` | rarity/base sub-selectors — R ≈ $369 (Vampiric Tutor 161 ~$67, Enlightened Tutor 19 ~$37, Worldly Tutor 269 ~$27, City of Brass 321 ~$26, Birds of Paradise 217 ~$18); U ≈ $162 (Mystical Tutor 83 ~$19) |
 
 **`promo_types`:** none. No fancy-foil sheet →
-proposed `[dupe_foil] 6ed = []` to enable `mm query missing-set 6ed`.
+configured `[dupe_foil] 6ed = []` (2026-11-08) to enable `mm query missing-set 6ed`.
 
 ---
 
@@ -45,11 +45,11 @@ No chase variants; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] 6ed = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] 6ed = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `zhs` alt-art `123s` | 1 (0 local) | **owner's call** — Chinese-only, not syncable |
 
 ---
@@ -72,7 +72,7 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] 6ed = []` — configured 2026-11-08 (enables `mm query missing-set 6ed`).
 - `config/families.toml` `[[unobtainable.6ed.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.6ed]]` — none.
 

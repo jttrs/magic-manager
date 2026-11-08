@@ -34,7 +34,7 @@ Every print computes `regular`.
 | base | 145 | `lgn` 1–145, no basic lands (55 C / 45 U / 45 R) | `regular` | rarity/base sub-selectors — R+M ≈ $183 nonfoil / $2128 foil (Seedborn Muse 138 ~$32 / ~$363 foil, Akroma, Angel of Wrath 1 ~$21 / ~$400, Caller of the Claw 121 ~$19, Graveborn Muse 73 ~$19 / ~$325, Phage the Untouchable 78 ~$13 / ~$197) |
 
 **`promo_types`:** the prerelease Feral Throwback `126` (~$0.94) reuses the booster art, on the same CN. It carries `datestamped`, so missing-set drops it — a same-art foil. No fancy-foil sheet →
-proposed `[dupe_foil] lgn = []` to enable `mm query missing-set lgn`.
+configured `[dupe_foil] lgn = []` (2026-11-08) to enable `mm query missing-set lgn`.
 
 ---
 
@@ -46,11 +46,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] lgn = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] lgn = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `plgn` promos | 1 | **owner's call** — same art as the booster card |
 
 ---
@@ -73,8 +73,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.lgn.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] lgn = []` — configured 2026-11-08 (enables `mm query missing-set lgn`).
+- `config/families.toml` `[[unobtainable.lgn.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.lgn]]` — none.
 
 ---

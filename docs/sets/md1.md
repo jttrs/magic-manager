@@ -42,9 +42,8 @@ All `regular`, nonfoil-only. No `frame_effects`, no `promo_types` on cards.
 
 ## 3–6.
 
-No chase variants, scenes or PRM destinations. Unobtainable rules: none
-configured yet (proposals pending owner review); `[dupe_foil] md1 = []` —
-**apply**.
+No chase variants, scenes or PRM destinations. Unobtainable rules: no rule is active; `[dupe_foil] md1 = []` —
+**applied 2026-11-08**.
 
 ---
 
@@ -59,7 +58,7 @@ configured yet (proposals pending owner review); `[dupe_foil] md1 = []` —
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] md1 = []` — configured 2026-11-08 (enables `mm query missing-set md1`).
 - `config/families.toml` `[[unobtainable.md1.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.md1]]` — none.
 

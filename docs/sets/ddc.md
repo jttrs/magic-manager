@@ -35,16 +35,15 @@ All `regular`. No `frame_effects`, no `promo_types`.
 | face cards (**foil-only**, mythic) | 2 | `ddc` 1 Akroma, Angel of Wrath (~$4.68), 30 Lord of the Pit (~$0.45, new art) | `regular` | mythic-regular |
 | deck cards (nonfoil-only) | 60 | the rest (Demonic Tutor 49 ~$83, Dark Ritual 45 ~$5, Reya Dawnbringer 13 ~$3) | `regular` | rarity sub-selectors — ≈ $113 |
 
-**New art (local check):** 26 prints first seen here (Demonic Tutor 49, Kuro 44, Twilight Shepherd 11, …), counting only earlier-or-same-date printings. Proposed `[dupe_foil] ddc = []` to enable
+**New art (local check):** 26 prints first seen here (Demonic Tutor 49, Kuro 44, Twilight Shepherd 11, …), counting only earlier-or-same-date printings. Configured `[dupe_foil] ddc = []` (2026-11-08) to enable
 `mm query missing-set ddc`.
 
 ---
 
 ## 3–6.
 
-No chase variants, scenes or PRM destinations. Unobtainable rules: none
-configured yet (proposals pending owner review); `[dupe_foil] ddc = []` —
-**apply**.
+No chase variants, scenes or PRM destinations. Unobtainable rules: no rule is active; `[dupe_foil] ddc = []` —
+**applied 2026-11-08**.
 
 ---
 
@@ -60,7 +59,7 @@ configured yet (proposals pending owner review); `[dupe_foil] ddc = []` —
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] ddc = []` — configured 2026-11-08 (enables `mm query missing-set ddc`).
 - `config/families.toml` `[[unobtainable.ddc.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.ddc]]` — none.
 

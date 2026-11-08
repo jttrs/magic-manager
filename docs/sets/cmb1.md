@@ -35,7 +35,7 @@ No children. Related but separate: `mb1` (the Mystery Booster itself),
 | playtest cards (nonfoil-only) | 121 | `cmb1` 1–121 (black border; 8 `legendary`) | `regular` | Scryfall rates **every card `rare`**, so all 121 reach `rare-regular` |
 
 **`promo_types` signals:** `playtest` on all 121 — a set-wide marker, not a
-dupe or stamp. Proposed `[dupe_foil] cmb1 = []` only to enable
+dupe or stamp. Configured `[dupe_foil] cmb1 = []` (2026-11-08) only to enable
 `mm query missing-set cmb1`.
 
 No foils, no full-art, no stamps.
@@ -58,11 +58,11 @@ None.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] cmb1 = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] cmb1 = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | whole set | 121 | **owner's call** whether playtest cards are a completion target (≈ $243 nonfoil for all 121) |
 
 ---
@@ -87,7 +87,7 @@ n/a.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] cmb1 = []` — configured 2026-11-08 (enables `mm query missing-set cmb1`).
 - `config/families.toml` `[[unobtainable.cmb1.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.cmb1]]` — none.
 

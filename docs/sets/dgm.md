@@ -39,7 +39,7 @@ Every print computes `regular`. No `frame_effects`.
 **`promo_types`:** every `pdgm` print has its own art. The two prerelease and
 the release promo carry `datestamped`, so `missing.drop_datestamped_with_sibling`
 drops Maze's End `152★` and Breaking // Entering `124★` (Plains `157★` has
-no `dgm` sibling, so it stays). Proposed `[dupe_foil] dgm = []`.
+no `dgm` sibling, so it stays). Configured `[dupe_foil] dgm = []` (2026-11-08).
 
 ---
 
@@ -51,11 +51,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] dgm = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] dgm = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pdgm` promos | 6 | **owner's call** — all have their own art |
 
 ---
@@ -83,8 +83,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.dgm.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] dgm = []` — configured 2026-11-08 (enables `mm query missing-set dgm`).
+- `config/families.toml` `[[unobtainable.dgm.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.dgm]]` — none.
 
 ---

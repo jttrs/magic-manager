@@ -28,6 +28,9 @@ DOCS_SETS = ROOT / "docs" / "sets"
 # typo / unsupported.
 _KNOWN_RULE_KEYS = set(config.UNOBTAINABLE_RULE_KEYS)
 
+# Keys that gate or describe a rule without constraining which cards it matches.
+_NON_PREDICATE_KEYS = {"note", "tier", "enabled"}
+
 # Families intentionally in config without a docs/sets doc, or vice versa.
 # (Keep empty; add with a reason if a legitimate exception arises.)
 _CONFIG_ONLY_OK: set[str] = set()
@@ -55,7 +58,7 @@ def test_every_unobtainable_rule_has_a_predicate(raw):
     worse, everything if the matcher changed) — every rule must constrain
     something. `tier` is a non-predicate key (like `note`): it gates WHICH tier
     filter the rule participates in, not WHICH cards it matches."""
-    predicate_keys = _KNOWN_RULE_KEYS - {"note", "tier"}
+    predicate_keys = _KNOWN_RULE_KEYS - _NON_PREDICATE_KEYS
     empty = []
     for fam, body in (raw.get("unobtainable") or {}).items():
         for i, rule in enumerate(body.get("rules", [])):
@@ -88,13 +91,88 @@ def test_loader_coerces_every_set_kind_key_to_frozenset(raw):
     set_kinds = {"promo_set", "cn_set"}
     set_keys = {k for k, kind in config.UNOBTAINABLE_RULE_KEYS.items() if kind in set_kinds}
     rules = config.build_unobtainable_rules(raw)
+    proposed = config.build_unobtainable_rules(raw, enabled=False)
     for fam, rlist in rules.items():
         for r in rlist:
             assert "note" not in r, f"{fam}: note leaked into evaluated rule"
+            assert "enabled" not in r, f"{fam}: enabled leaked into evaluated rule"
+    for fam, rlist in [*rules.items(), *proposed.items()]:
+        for r in rlist:
             for k in set_keys:
                 if k in r:
                     assert isinstance(r[k], frozenset), \
                         f"{fam}.{k} is a set-kind key but was not coerced to frozenset"
+
+
+def test_set_codes_is_a_lowercased_predicate_and_enabled_is_not():
+    assert config.UNOBTAINABLE_RULE_KEYS["set_codes"] == "promo_set"
+    assert "set_codes" not in _NON_PREDICATE_KEYS
+    assert "enabled" in _NON_PREDICATE_KEYS
+    out = config.build_unobtainable_rules(
+        {"unobtainable": {"zzz": {"rules": [{"set_codes": ["PALA", "Pxyz"], "note": "n"}]}}})
+    assert out["zzz"] == [{"set_codes": frozenset({"pala", "pxyz"})}]
+
+
+def test_enabled_false_rule_is_proposed_not_active(tmp_path):
+    (tmp_path / "families.toml").write_text(
+        '[[unobtainable.zzzp.rules]]\n'
+        'promo_types_any_of = ["stamped"]\n'
+        'note = "active"\n\n'
+        '[[unobtainable.zzzp.rules]]\n'
+        'set_codes = ["pzzzp"]\n'
+        'enabled = false\n'
+        'note = "proposed"\n')
+    active = config.family_unobtainable_rules(override=tmp_path)
+    proposed = config.family_proposed_rules(override=tmp_path)
+    assert active == {"zzzp": [{"promo_types_any_of": frozenset({"stamped"})}]}
+    assert proposed == {"zzzp": [{"set_codes": frozenset({"pzzzp"}), "note": "proposed"}]}
+
+
+def test_non_bool_enabled_is_a_config_error():
+    with pytest.raises(config.ConfigError, match="enabled"):
+        config.build_unobtainable_rules(
+            {"unobtainable": {"zzz": {"rules": [{"promo_types_any_of": ["x"], "enabled": "no"}]}}})
+
+
+def test_proposed_rule_never_excludes_a_card(monkeypatch):
+    """A card an `enabled = false` rule would match is NOT unobtainable: the rule
+    lives in FAMILY_PROPOSED_RULES only."""
+    from magic_manager import selectors
+    raw = {"unobtainable": {"zzzq": {"rules": [
+        {"promo_types_any_of": ["stamped"], "enabled": False, "note": "p"}]}}}
+    active = config.build_unobtainable_rules(raw)
+    proposed = config.build_unobtainable_rules(raw, enabled=False)
+    assert "zzzq" not in active
+    monkeypatch.setitem(selectors.FAMILY_PROPOSED_RULES, "zzzq", proposed["zzzq"])
+    monkeypatch.delitem(selectors.FAMILY_UNOBTAINABLE_RULES, "zzzq", raising=False)
+    card = {"set": "pzzzq", "collector_number": "1p", "promo_types": ["stamped"]}
+    assert selectors._matches_unobtainable_rule(card, proposed["zzzq"][0])  # it would match...
+    assert not selectors._is_family_unobtainable(card, "zzzq")              # ...but is not active
+    assert "zzzq" in selectors.FAMILY_PROPOSED_RULES
+
+
+def test_committed_proposals_are_disabled_and_documented(raw):
+    """Every committed `enabled = false` rule carries a note and is absent from the
+    active rules; the loaded active rule count is unchanged by proposals."""
+    from magic_manager import selectors
+    disabled = sum(1 for body in raw["unobtainable"].values()
+                   for r in body["rules"] if r.get("enabled", True) is False)
+    assert disabled == sum(len(v) for v in selectors.FAMILY_PROPOSED_RULES.values())
+    assert all(r.get("note") for v in selectors.FAMILY_PROPOSED_RULES.values() for r in v)
+    total = sum(len(body["rules"]) for body in raw["unobtainable"].values())
+    assert total - disabled == sum(len(v) for v in selectors.FAMILY_UNOBTAINABLE_RULES.values())
+
+
+def test_set_codes_matcher_handles_both_card_shapes():
+    from magic_manager import selectors
+    rule = {"set_codes": frozenset({"pala"})}
+    assert selectors._matches_unobtainable_rule({"set": "pala"}, rule)            # selector card dict
+    assert selectors._matches_unobtainable_rule({"set_code": "PALA"}, rule)       # DB row dict
+    assert not selectors._matches_unobtainable_rule({"set": "ala"}, rule)
+    assert not selectors._matches_unobtainable_rule({}, rule)
+    both = {"set_codes": frozenset({"pala"}), "collector_numbers": frozenset({"A3"})}
+    assert selectors._matches_unobtainable_rule({"set": "pala", "collector_number": "A3"}, both)
+    assert not selectors._matches_unobtainable_rule({"set": "pala", "collector_number": "154★"}, both)
 
 
 def test_dupe_foil_values_are_lists_of_strings(raw):

@@ -135,7 +135,7 @@ Globally filtered (not per-family): `serialized`, `rebalanced`, `alchemy`.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` `who` — None configured yet (proposals pending owner review). Proposed: `who = ["surgefoil"]`.
+- `config/families.toml` `[dupe_foil] who = ["surgefoil"]` — configured 2026-11-08 (enables `mm query missing-set who`).
 - `config/families.toml` `[[unobtainable.who.rules]]` — None configured yet (none proposed).
 - `config/families.toml` `[[scenes.who]]` — none (no scenes).
 - Related test data: none.

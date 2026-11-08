@@ -112,7 +112,7 @@ panorama. Re-check after release if Scryfall groups any as "Scene Cards".
 
 ## 5. Unobtainable rules
 
-None configured. Kept-by-default tiers awaiting an owner keep/exclude decision
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules. Kept-by-default tiers awaiting an owner keep/exclude decision
 (all "kept (default) — pending owner review"):
 
 | Tier | Prints | Recommendation |
@@ -170,8 +170,8 @@ No `ptrk` set yet. Star Trek promos found elsewhere (all `universesbeyond`):
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.trk.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] trk = ["surgefoil"]` — configured 2026-11-08 (enables `mm query missing-set trk`).
+- `config/families.toml` `[[unobtainable.trk.rules]]` — 3 proposed rules, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.trk]]` — none (no scenes).
 
 ---

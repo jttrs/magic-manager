@@ -57,7 +57,7 @@ effect, so they compute `regular` too.
 | `resale` | — | yes — same art | Curator of Mysteries `49★` |
 | `planeswalkerdeck` | — | unique cards | 270–287 |
 
-No fancy-foil sheet → proposed `[dupe_foil] akh = []` to enable `mm query missing-set akh`.
+No fancy-foil sheet → configured `[dupe_foil] akh = []` (2026-11-08) to enable `mm query missing-set akh`.
 
 **Full-art convention:** the 5 basics at 250–254.
 
@@ -78,17 +78,17 @@ None.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] akh = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] akh = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pakh` promo-pack stamped `Np` | 4 | **exclude** — `promo_types_any_of = ["stamped"]`; ~$9 |
 | `pakh` game day / buy-a-box / release / resale | 5 | **owner's call** — 4 have their own art |
 | `mp2` Invocations | 54 | **keep — but a CODE gap, not config:** rarity `special` is never listed by missing-set (see [`tsr`](tsr.md) §5). Owner decision on a `special` sub-selector |
 | PW-deck 270–287 | 18 | keep — real cards |
 
-**Scarcity check:** n/a until a `[dupe_foil]` entry exists.
+**Scarcity check:** not run yet (written before `[dupe_foil]` was added).
 
 ---
 
@@ -125,8 +125,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.akh.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] akh = []` — configured 2026-11-08 (enables `mm query missing-set akh`).
+- `config/families.toml` `[[unobtainable.akh.rules]]` — 2 proposed rules, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.akh]]` — none.
 
 ---

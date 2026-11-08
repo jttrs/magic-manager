@@ -34,7 +34,7 @@ Every print computes `regular`.
 | basics | 15 | `2ed` 288–302 (3 arts per land) | `regular` | basics |
 
 **`promo_types`:** none. No fancy-foil sheet →
-proposed `[dupe_foil] 2ed = []` to enable `mm query missing-set 2ed`.
+configured `[dupe_foil] 2ed = []` (2026-11-08) to enable `mm query missing-set 2ed`.
 
 ---
 
@@ -46,11 +46,11 @@ The Power Nine (Black Lotus 233, Moxen 262–266, Ancestral Recall 48, Time Walk
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] 2ed = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] 2ed = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 
 ---
 
@@ -70,7 +70,7 @@ n/a.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] 2ed = []` — configured 2026-11-08 (enables `mm query missing-set 2ed`).
 - `config/families.toml` `[[unobtainable.2ed.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.2ed]]` — none.
 

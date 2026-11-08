@@ -51,7 +51,7 @@ except the inverted Game Day Anguished Unmaking (`b`).
 | `buyabox` | — | **no** — own art | Elusive Tormentor 108 |
 | `giftbox` | — | **no** — own art | Ravenous Bloodseeker 175 (SOI Gift Box) |
 
-No fancy-foil sheet → proposed `[dupe_foil] soi = []` to enable `mm query missing-set soi`.
+No fancy-foil sheet → configured `[dupe_foil] soi = []` (2026-11-08) to enable `mm query missing-set soi`.
 
 **Full-art convention:** none.
 
@@ -71,16 +71,16 @@ None.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] soi = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] soi = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `psoi` promo-pack stamped `Np` | 2 | **exclude** — `promo_types_any_of = ["stamped"]`; ~$16 |
 | `psoi` Intro Pack foils | 5 | **owner's call** — own art, came in a retail product |
 | `psoi` game day / release / buy-a-box / Gift Box | 6 | **owner's call** — all have their own art; Anguished Unmaking 242 is ~$32 |
 
-**Scarcity check:** n/a until a `[dupe_foil]` entry exists.
+**Scarcity check:** not run yet (written before `[dupe_foil]` was added).
 
 ---
 
@@ -110,8 +110,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.soi.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] soi = []` — configured 2026-11-08 (enables `mm query missing-set soi`).
+- `config/families.toml` `[[unobtainable.soi.rules]]` — 3 proposed rules, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.soi]]` — none.
 
 ---

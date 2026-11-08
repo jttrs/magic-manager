@@ -59,7 +59,7 @@ Seedborn Muse 212 ~$19).
 | `prerelease` + `datestamped` | `regular` | yes | 22 prints, auto-dropped |
 | `setpromo` | — | marker on every `pbbd` print | not a dupe signal |
 
-No fancy-foil sheet → proposed `[dupe_foil] bbd = []` to enable
+No fancy-foil sheet → configured `[dupe_foil] bbd = []` (2026-11-08) to enable
 `mm query missing-set bbd`.
 
 **Full-art convention:** none.
@@ -81,14 +81,14 @@ None. (Partner pairs are rules pairs, not art scenes.)
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] bbd = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] bbd = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | alt-art foil Kenriths 255–256 | 2 | keep — booster cards with their own art |
 
-**Scarcity check:** n/a until a `[dupe_foil]` entry exists.
+**Scarcity check:** not run yet (written before `[dupe_foil]` was added).
 
 ---
 
@@ -116,7 +116,7 @@ No Promo Pack, FNM or buy-a-box prints.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] bbd = []` — configured 2026-11-08 (enables `mm query missing-set bbd`).
 - `config/families.toml` `[[unobtainable.bbd.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.bbd]]` — none.
 

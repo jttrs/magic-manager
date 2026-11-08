@@ -34,7 +34,7 @@ Every print computes `regular`.
 | foil-only uncommons | 2 | `btd` 29 Sengir Vampire (~$1.70), 54 Erhnam Djinn (~$0.97) | `regular` | uncommon |
 
 **`promo_types`:** none. No fancy-foil sheet →
-proposed `[dupe_foil] btd = []` to enable `mm query missing-set btd`.
+configured `[dupe_foil] btd = []` (2026-11-08) to enable `mm query missing-set btd`.
 
 ---
 
@@ -46,11 +46,11 @@ No chase variants; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] btd = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] btd = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | whole family | 90 | **owner's call** — a reprint box (only Clockwork Beast 70 has art no other local set has); kept (default) — pending owner review |
 
 ---
@@ -70,7 +70,7 @@ n/a.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] btd = []` — configured 2026-11-08 (enables `mm query missing-set btd`).
 - `config/families.toml` `[[unobtainable.btd.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.btd]]` — none.
 

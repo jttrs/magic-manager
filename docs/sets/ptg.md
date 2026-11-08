@@ -58,11 +58,11 @@ n/a.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] ptg = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] ptg = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | whole family | 3 | **owner's call** — silver-bordered collectibles, ≈ $417; track only if collecting Un/crossover one-offs |
 
 ---
@@ -85,7 +85,7 @@ n/a.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] ptg = []` — configured 2026-11-08 (enables `mm query missing-set ptg`).
 - `config/families.toml` `[[unobtainable.ptg.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.ptg]]` — none.
 

@@ -34,7 +34,7 @@ Every print computes `regular`.
 | base | 165 | `bok` 1–165, no basic lands (55 C / 55 U / 55 R) | `regular` | rarity/base sub-selectors — R+M ≈ $229 nonfoil / $2066 foil (Lifegift 132 ~$24, Umezawa's Jitte 163 ~$21 / ~$383 foil, Goryo's Vengeance 67 ~$20 / ~$130, Higure, the Still Wind 37 ~$18, Disrupting Shoal 33 ~$16 / ~$285) |
 
 **`promo_types`:** the prerelease Ink-Eyes `71★` has its own art; the release Budoka Pupil `122★` (~$0.67) reuses the booster art. Only the prerelease carries `datestamped` (dropped by missing-set, which hides a ~$21 alt-art card); the same-art release foil is listed next to `bok` 122. No fancy-foil sheet →
-proposed `[dupe_foil] bok = []` to enable `mm query missing-set bok`.
+configured `[dupe_foil] bok = []` (2026-11-08) to enable `mm query missing-set bok`.
 
 ---
 
@@ -46,11 +46,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] bok = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] bok = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pbok` promos | 2 | **owner's call** — 1 of 2 has its own art (Ink-Eyes ~$21) |
 
 ---
@@ -74,8 +74,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.bok.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] bok = []` — configured 2026-11-08 (enables `mm query missing-set bok`).
+- `config/families.toml` `[[unobtainable.bok.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.bok]]` — none.
 
 ---

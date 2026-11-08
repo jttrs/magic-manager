@@ -37,7 +37,7 @@ Every print computes `regular`.
 | base | 249 | `som` 1–249 (121 C / 60 U / 53 R / 15 M) | `regular` | rarity/base sub-selectors — R+M ≈ $461 nonfoil / $1306 foil (Mox Opal 179 ~$226 / **$500** foil, Ezuri 119 ~$23, Sword of Body and Mind 208 ~$20, Platinum Emperion 193, Skithiryx 79 ~$62 foil) |
 
 **`promo_types`:** 3 of 4 `psom` prints have their own art (resale `A8` reuses it). The prerelease and release promos carry `datestamped`, so `missing.drop_datestamped_with_sibling` drops them from missing-set (name + treatment match, not art). No fancy-foil sheet →
-proposed `[dupe_foil] som = []` to enable `mm query missing-set som`.
+configured `[dupe_foil] som = []` (2026-11-08) to enable `mm query missing-set som`.
 
 ---
 
@@ -49,11 +49,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] som = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] som = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `psom` promos | 4 | **owner's call** — 3 of 4 have their own art |
 
 ---
@@ -77,8 +77,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.som.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] som = []` — configured 2026-11-08 (enables `mm query missing-set som`).
+- `config/families.toml` `[[unobtainable.som.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.som]]` — none.
 
 ---

@@ -64,11 +64,11 @@ None.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] cn2 = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] cn2 = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | Kaya alt-art foil 222 | 1 | keep — booster card with its own art |
 
 ---
@@ -94,7 +94,7 @@ Scryfall).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] cn2 = []` — configured 2026-11-08 (enables `mm query missing-set cn2`).
 - `config/families.toml` `[[unobtainable.cn2.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.cn2]]` — none.
 

@@ -35,16 +35,15 @@ All `regular`. No `frame_effects`, no `promo_types`.
 | face cards (**foil-only**, mythic) | 2 | `ddd` 1 Garruk Wildspeaker (~$11.78), 32 Liliana Vess (~$11.60) | `regular` | mythic-regular |
 | deck cards (nonfoil-only) | 61 | the rest (Snuff Out 53 ~$10, Faerie Macabre 42 ~$7, Nature's Lore 17 ~$4, Bad Moon 48) | `regular` | rarity sub-selectors — ≈ $43 |
 
-**New art (local check):** none counted — its art is shared with the 2014 reprint [`gvl`](gvl.md), so a local check can't tell which came first. The planeswalker faces were new art here. Proposed `[dupe_foil] ddd = []` to enable
+**New art (local check):** none counted — its art is shared with the 2014 reprint [`gvl`](gvl.md), so a local check can't tell which came first. The planeswalker faces were new art here. Configured `[dupe_foil] ddd = []` (2026-11-08) to enable
 `mm query missing-set ddd`.
 
 ---
 
 ## 3–6.
 
-No chase variants, scenes or PRM destinations. Unobtainable rules: none
-configured yet (proposals pending owner review); `[dupe_foil] ddd = []` —
-**apply**.
+No chase variants, scenes or PRM destinations. Unobtainable rules: no rule is active; `[dupe_foil] ddd = []` —
+**applied 2026-11-08**.
 
 ---
 
@@ -59,7 +58,7 @@ configured yet (proposals pending owner review); `[dupe_foil] ddd = []` —
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] ddd = []` — configured 2026-11-08 (enables `mm query missing-set ddd`).
 - `config/families.toml` `[[unobtainable.ddd.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.ddd]]` — none.
 

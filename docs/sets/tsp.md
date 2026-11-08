@@ -36,7 +36,7 @@ Every print computes `regular`.
 | timeshifted (`tsb`) | 121 | `tsb` 1–121 (rarity `special`) | `regular` | **invisible to rarity sub-selectors** — ≈ $225 nonfoil / $2,153 foil (Darkness 40 ~$24, Claws of Gix 107 ~$217 foil, Akroma, Angel of Wrath 1) |
 
 **`promo_types`:** the prerelease Lotus Bloom `259★` has its own art; the release Sudden Shock `179★` (~$5.84) and resale `A1` reuse the booster art. Only the prerelease carries `datestamped` (dropped by `missing.drop_datestamped_with_sibling`); the same-art release foil has no dupe signal, so missing-set lists it next to `tsp` 179. No fancy-foil sheet →
-proposed `[dupe_foil] tsp = []` to enable `mm query missing-set tsp`.
+configured `[dupe_foil] tsp = []` (2026-11-08) to enable `mm query missing-set tsp`.
 
 ---
 
@@ -48,11 +48,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] tsp = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] tsp = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `ptsp` promos | 3 | **owner's call** — 1 of 3 has its own art |
 | `tsb` timeshifted | 121 | **keep** — real cards; but rarity `special` means missing-set's rare/mythic sub-selectors skip them (code gap — same as the masterpiece `special` problem) |
 
@@ -80,8 +80,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.tsp.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] tsp = []` — configured 2026-11-08 (enables `mm query missing-set tsp`).
+- `config/families.toml` `[[unobtainable.tsp.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.tsp]]` — none.
 
 ---

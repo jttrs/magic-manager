@@ -59,7 +59,7 @@ Survey (`survey_treatment_signature.py ZNR`, 849 prints).
 | `resale` | — | `pznr` 203★ Scute Swarm | kept |
 | `bundle` / `buyabox` | — | distinct | 386 / 385 |
 
-No fancy-foil sheet → proposed `[dupe_foil] znr = []` to enable `mm query missing-set znr`.
+No fancy-foil sheet → configured `[dupe_foil] znr = []` (2026-11-08) to enable `mm query missing-set znr`.
 
 **Full-art convention:** `full_art = 1` on basics 266–280 only (+ substitute cards).
 
@@ -79,18 +79,18 @@ None.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] znr = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] znr = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pznr` promo-pack stamped `Np` | 68 | **exclude** — `promo_types_any_of = ["stamped"]`; ~$141 |
 | `zne` Expeditions | 30 | keep — the desirable bonus sheet (~$895 / ~$1,479); owner may prefer excluding it as a separate chase target given the price |
 | showcase 290–313 | 24 | keep |
 | borderless 281–289 | 9 | keep |
 | promo-pack inverted 387–391 | 5 | keep — sub-rare |
 
-**Scarcity check:** n/a until a `[dupe_foil]` entry exists. By inspection the
+**Scarcity check:** not run yet (written before `[dupe_foil]` was added). By inspection the
 Expeditions are ~3.5× the whole base R+M value.
 
 ---
@@ -123,8 +123,8 @@ Expeditions are ~3.5× the whole base R+M value.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.znr.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] znr = []` — configured 2026-11-08 (enables `mm query missing-set znr`).
+- `config/families.toml` `[[unobtainable.znr.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.znr]]` — none.
 
 ---

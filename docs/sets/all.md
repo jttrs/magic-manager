@@ -34,7 +34,7 @@ Every print computes `regular`.
 | two-art commons | 110 | `all` `Na` / `Nb` for 55 names (all common) | `regular` | commons — **different art** per letter, both distinct printings; ≈ $30 total |
 
 **`promo_types`:** none. No fancy-foil sheet →
-proposed `[dupe_foil] all = []` to enable `mm query missing-set all`.
+configured `[dupe_foil] all = []` (2026-11-08) to enable `mm query missing-set all`.
 
 ---
 
@@ -46,11 +46,11 @@ Lake of the Dead 140 (~$124). No scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] all = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] all = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 
 ---
 
@@ -70,7 +70,7 @@ n/a.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] all = []` — configured 2026-11-08 (enables `mm query missing-set all`).
 - `config/families.toml` `[[unobtainable.all.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.all]]` — none.
 

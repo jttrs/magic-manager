@@ -49,7 +49,7 @@ Survey (`survey_treatment_signature.py AER`): every print computes `regular`.
 | `buyabox` | — | **no** — own art | Scrap Trawler 175 (~$2) |
 | `planeswalkerdeck` | — | unique cards | 185–194 |
 
-No fancy-foil sheet → proposed `[dupe_foil] aer = []` to enable `mm query missing-set aer`.
+No fancy-foil sheet → configured `[dupe_foil] aer = []` (2026-11-08) to enable `mm query missing-set aer`.
 
 **Full-art convention:** none.
 
@@ -70,16 +70,16 @@ None.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] aer = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] aer = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `paer` promo-pack stamped `Np` | 7 | **exclude** — `promo_types_any_of = ["stamped"]`; ~$52 |
 | `paer` game day / release / buy-a-box | 4 | **owner's call** — 3 have their own art |
 | PW-deck 185–194 | 10 | keep — real cards |
 
-**Scarcity check:** n/a until a `[dupe_foil]` entry exists.
+**Scarcity check:** not run yet (written before `[dupe_foil]` was added).
 
 ---
 
@@ -109,8 +109,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.aer.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] aer = []` — configured 2026-11-08 (enables `mm query missing-set aer`).
+- `config/families.toml` `[[unobtainable.aer.rules]]` — 2 proposed rules, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.aer]]` — none.
 
 ---

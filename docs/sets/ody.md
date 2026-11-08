@@ -35,7 +35,7 @@ Every print computes `regular`.
 | tombstone (flashback) | 28 | `ody` (13 C / 11 U / 4 R) | `regular` | part of base — cosmetic |
 
 **`promo_types`:** `pody` holds one Arabic prerelease Stone-Tongue Basilisk `276`. `mm set sync pody` 404s (it asks for `lang:en`), so the promo is absent locally. No fancy-foil sheet →
-proposed `[dupe_foil] ody = []` to enable `mm query missing-set ody`.
+configured `[dupe_foil] ody = []` (2026-11-08) to enable `mm query missing-set ody`.
 
 ---
 
@@ -47,11 +47,11 @@ No chase variants; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] ody = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] ody = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pody` promo | 1 (0 local) | **owner's call** — Arabic-only, not syncable |
 
 ---
@@ -75,7 +75,7 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] ody = []` — configured 2026-11-08 (enables `mm query missing-set ody`).
 - `config/families.toml` `[[unobtainable.ody.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.ody]]` — none.
 

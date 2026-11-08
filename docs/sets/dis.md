@@ -34,7 +34,7 @@ Every print computes `regular`.
 | base | 180 | `dis` 1–180, no basic lands (60 C / 60 U / 60 R) | `regular` | rarity/base sub-selectors — R+M ≈ $201 nonfoil / $1646 foil (Blood Crypt 171 ~$21 / ~$219 foil, Breeding Pool 172 ~$19 / ~$300, Hallowed Fountain 174 ~$19 / ~$385, Grand Arbiter Augustin IV 112 ~$19) |
 
 **`promo_types`:** the prerelease Avatar of Discord `140★` has its own art; the release Azorius Guildmage `141★` (~$1.90) reuses the booster art. Only the prerelease carries `datestamped` (dropped by missing-set); the same-art release foil is listed next to `dis` 141. No fancy-foil sheet →
-proposed `[dupe_foil] dis = []` to enable `mm query missing-set dis`.
+configured `[dupe_foil] dis = []` (2026-11-08) to enable `mm query missing-set dis`.
 
 ---
 
@@ -46,11 +46,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] dis = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] dis = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pdis` promos | 2 | **owner's call** — 1 of 2 has its own art |
 
 ---
@@ -74,8 +74,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.dis.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] dis = []` — configured 2026-11-08 (enables `mm query missing-set dis`).
+- `config/families.toml` `[[unobtainable.dis.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.dis]]` — none.
 
 ---

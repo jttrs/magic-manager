@@ -62,7 +62,7 @@ Survey (`survey_treatment_signature.py MID`, 858 prints).
 | `buyabox` / `bundle` / `resale` | — | distinct | kept |
 | `thick` | etched | n/a | `omic` |
 
-No textured / fancy-foil sheet in this family → proposed `[dupe_foil] mid = []`
+No textured / fancy-foil sheet in this family → configured `[dupe_foil] mid = []` (2026-11-08)
 just to enable `mm query missing-set mid`.
 
 **Full-art convention:** `full_art = 1` on `mid` 268–277 and `smid` 1–9.
@@ -83,18 +83,18 @@ None detected.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] mid = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] mid = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pmid` promo-pack stamped `Np` | 68 | **exclude** — `promo_types_any_of = ["stamped"]` (ONE/NEO/TDM precedent); ~$117 |
 | showcase sun/moon 286–311 | 26 | keep — cheap, distinct art |
 | showcase legends 312–325 (black border) | 14 | keep — cheap, distinct art (confirm visually; this is the class that bit CLB/AFR) |
 | borderless 278–285 | 8 | keep — ~$40 nonfoil |
 | promo-pack inverted 387–391 | 5 | keep — sub-rare, harmless |
 
-**Scarcity check:** n/a until a `[dupe_foil]` entry exists. By inspection no
+**Scarcity check:** not run yet (written before `[dupe_foil]` was added). By inspection no
 tier concentrates the missing $; base rares/mythics (~$155) lead.
 
 ---
@@ -125,8 +125,8 @@ tier concentrates the missing $; base rares/mythics (~$155) lead.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.mid.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] mid = []` — configured 2026-11-08 (enables `mm query missing-set mid`).
+- `config/families.toml` `[[unobtainable.mid.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.mid]]` — none.
 
 ---

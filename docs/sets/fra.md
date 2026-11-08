@@ -46,7 +46,7 @@ Computed via `treatments.compute_treatment` (survey 2026-11-02). Every class bel
 | borderless basics ("tower lands") | 15 | `fra` 382–396 | `b` (`full_art`) | KEPT (default) — 3 arts × 5 basics, same artist per type |
 | borderless dual lands | 5 | `fra` 397–401 | `b` | KEPT (default) — Piotr Dura cycle |
 | **Japan showcase (black border)** | 10 | `fra` 403–412 | `b\|shw` (black border, `showcase`+`inverted`, foil-only, `japanshowcase`) | **KEPT (default) — pending owner review.** High-risk class: black-bordered showcase. $15–$85 each, ~$306 total |
-| Japan showcase fracturefoil | 10 | `fra` 413–422 | `b\|shw\|ff` | same art as 403–412 → **dupe foil** (proposed `[dupe_foil] fra = ["fracturefoil"]`); $128–$497 ea, ~$2,167 total |
+| Japan showcase fracturefoil | 10 | `fra` 413–422 | `b\|shw\|ff` | same art as 403–412 → **dupe foil** (configured `[dupe_foil] fra = ["fracturefoil"]` (2026-11-08)); $128–$497 ea, ~$2,167 total |
 | extended-art | 9 + ~15 | `fra` 423–431, `frc` ~89–103 | `ext` | auto-dropped by `preferred` |
 | dark-frame promo-pack charms | 5 | `fra` 432–436 | `b` (black border, `inverted`, `promopack`) | KEPT (default) — pending owner review. Same illustration as base charms 132/138/150/155/160; Promo Pack `darkFrame` sheet; unpriced |
 | Bundle promo | 1 | `fra` 437 | `regular` (foil-only, `bundle`) | kept via rare sub-selector — distinct art Carnivorous Cultivator |
@@ -58,7 +58,7 @@ Computed via `treatments.compute_treatment` (survey 2026-11-02). Every class bel
 
 | promo_type | Treatment keyword | Dupe of a sibling? | Notes |
 |---|---|---|---|
-| `fracturefoil` (+`japanshowcase`) | `ff` | **yes** — 413–422 share `illustration_id` with 403–412 | → proposed `[dupe_foil] fra = ["fracturefoil"]` |
+| `fracturefoil` (+`japanshowcase`) | `ff` | **yes** — 413–422 share `illustration_id` with 403–412 | → configured `[dupe_foil] fra = ["fracturefoil"]` (2026-11-08) |
 | `facetfoil` | none (computes `b`) | **yes** — 449–461 share `illustration_id` with 321–333 | dupe_foil gate misses it (SNC `stepandcompleat` pattern) → `promo_types_any_of = ["facetfoil"]` rule proposed |
 | `japanshowcase` | (frame: `shw`) | no — unique art | kept (default) — pending owner review |
 | `promopack` + `stamped` | none (`regular`) | yes — `pfra` `Np` = base card + stamp | leaks via rare/mythic-regular; `stamped` rule proposed (mirrors TDM/ONE) |
@@ -95,11 +95,11 @@ None detected. Borderless runs by artist: Aleksi Briclot draws most planeswalker
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Candidate | Status | Rationale |
 |---|---|---|
-| `[dupe_foil] fra = ["fracturefoil"]` | proposed | 413–422 same art as Japan showcase 403–412; compute `b\|shw\|ff` so dupe_foil catches them (~$2,167) |
+| `[dupe_foil] fra = ["fracturefoil"]` | **applied 2026-11-08** | 413–422 same art as Japan showcase 403–412; compute `b\|shw\|ff` so dupe_foil catches them (~$2,167) |
 | `promo_types_any_of: ["facetfoil"]` | proposed (exclude) | 449–461 same art as 321–333 but compute `b` (no `ff`), ~$3,327 scarcity tier (collector foilBoosterfun only) |
 | `promo_types_any_of: ["stamped"]` (or `["promopack"]` to also take 432–436) | proposed (exclude) | `pfra` 90 `Np` stamped prints compute `regular` and would leak via rare/mythic-regular (~$488 nonfoil / ~$755 foil). Mirrors TDM/ONE |
 | dark-frame charms 432–436 (`promopack` alone) | kept (default) — pending owner review | Same art as base charms, Promo Pack only, unpriced |
@@ -139,7 +139,8 @@ No `pfra` prerelease `Ns` prints exist (all 90 `pfra` CNs end in `p`). No bulk-a
 
 ## 8. Code refs
 
-None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] fra = ["fracturefoil"]` — configured 2026-11-08 (enables `mm query missing-set fra`).
+- `config/families.toml` `[[unobtainable.fra.rules]]` — 2 proposed rules, `enabled = false` (off until switched on).
 
 ---
 

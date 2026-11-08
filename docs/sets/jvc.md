@@ -41,15 +41,14 @@ All `regular`. No `frame_effects`, no `promo_types`.
 **Art:** 0 new — every print shares its illustration with the original
 `dd2` (or an earlier printing).
 
-Proposed `[dupe_foil] jvc = []` to enable `mm query missing-set jvc`.
+Configured `[dupe_foil] jvc = []` (2026-11-08) to enable `mm query missing-set jvc`.
 
 ---
 
 ## 3–6.
 
-No chase variants, scenes or PRM destinations. Unobtainable rules: none
-configured yet (proposals pending owner review); `[dupe_foil] jvc = []` —
-**apply**.
+No chase variants, scenes or PRM destinations. Unobtainable rules: no rule is active; `[dupe_foil] jvc = []` —
+**applied 2026-11-08**.
 
 ---
 
@@ -65,7 +64,7 @@ configured yet (proposals pending owner review); `[dupe_foil] jvc = []` —
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] jvc = []` — configured 2026-11-08 (enables `mm query missing-set jvc`).
 - `config/families.toml` `[[unobtainable.jvc.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.jvc]]` — none.
 

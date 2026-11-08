@@ -52,7 +52,7 @@ Survey (`survey_treatment_signature.py MH1`, 608 print-rows by finish).
 | `promopack` + `stamped` | `regular` | **yes** | 1 print; ONE/NEO/TDM `stamped` rule |
 | `buyabox` | — | distinct art | kept |
 
-No fancy-foil sheet → proposed `[dupe_foil] mh1 = []` to enable `mm query missing-set mh1`.
+No fancy-foil sheet → configured `[dupe_foil] mh1 = []` (2026-11-08) to enable `mm query missing-set mh1`.
 
 **Full-art convention:** the snow basics 250–254 only.
 
@@ -73,15 +73,15 @@ None.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] mh1 = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] mh1 = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pmh1` `1p` stamped | 1 | **exclude** — `promo_types_any_of = ["stamped"]`; ~$8 |
 | buy-a-box 255 | 1 | keep — distinct art |
 
-**Scarcity check:** n/a until a `[dupe_foil]` entry exists.
+**Scarcity check:** not run yet (written before `[dupe_foil]` was added).
 
 ---
 
@@ -112,8 +112,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.mh1.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] mh1 = []` — configured 2026-11-08 (enables `mm query missing-set mh1`).
+- `config/families.toml` `[[unobtainable.mh1.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.mh1]]` — none.
 
 ---

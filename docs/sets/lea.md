@@ -34,7 +34,7 @@ Every print computes `regular`.
 | basics | 10 | `lea` 286–295 (2 arts per land) | `regular` | basics |
 
 **`promo_types`:** none. No fancy-foil sheet →
-proposed `[dupe_foil] lea = []` to enable `mm query missing-set lea`.
+configured `[dupe_foil] lea = []` (2026-11-08) to enable `mm query missing-set lea`.
 
 ---
 
@@ -46,11 +46,11 @@ The Power Nine (all unpriced here). No scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] lea = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] lea = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 
 ---
 
@@ -70,7 +70,7 @@ n/a.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] lea = []` — configured 2026-11-08 (enables `mm query missing-set lea`).
 - `config/families.toml` `[[unobtainable.lea.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.lea]]` — none.
 

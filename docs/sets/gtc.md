@@ -39,7 +39,7 @@ Every print computes `regular`.
 **`promo_types`:** every `pgtc` print except the resale `A11` has its own art (Firemane Avenger 163 ~$8). The prerelease and release promos carry
 `datestamped`, so `missing.drop_datestamped_with_sibling` drops them from
 missing-set (name + treatment match, not art). No fancy-foil sheet →
-proposed `[dupe_foil] gtc = []` to enable `mm query missing-set gtc`.
+configured `[dupe_foil] gtc = []` (2026-11-08) to enable `mm query missing-set gtc`.
 
 ---
 
@@ -51,11 +51,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] gtc = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] gtc = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pgtc` promos | 10 | **owner's call** — 9 of 10 have their own art |
 
 ---
@@ -80,8 +80,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.gtc.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] gtc = []` — configured 2026-11-08 (enables `mm query missing-set gtc`).
+- `config/families.toml` `[[unobtainable.gtc.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.gtc]]` — none.
 
 ---

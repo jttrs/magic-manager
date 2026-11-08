@@ -38,7 +38,7 @@ Every print computes `regular`.
 | showcase set extension | 1 | `ala` 250 Rafiq of the Many (paper, nonfoil, released 2022-04-29; `showcase`+`inverted`, promo_types `boosterfun`+`setextension`) | `b\|shw` | **kept by default** — ~$1.19 |
 
 **`promo_types`:** the prerelease Ajani Vengeant `154★` has its own art; the resale `A3` reuses it. The prerelease and release promos carry `datestamped`, so `missing.drop_datestamped_with_sibling` drops them from missing-set (name + treatment match, not art). No fancy-foil sheet →
-proposed `[dupe_foil] ala = []` to enable `mm query missing-set ala`.
+configured `[dupe_foil] ala = []` (2026-11-08) to enable `mm query missing-set ala`.
 
 ---
 
@@ -50,11 +50,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] ala = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] ala = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pala` promos | 2 | **owner's call** — 1 of 2 has its own art |
 
 ---
@@ -78,8 +78,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.ala.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] ala = []` — configured 2026-11-08 (enables `mm query missing-set ala`).
+- `config/families.toml` `[[unobtainable.ala.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.ala]]` — none.
 
 ---

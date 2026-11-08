@@ -33,7 +33,7 @@ Every print computes `regular`.
 | base | 449 | `5ed` 1–449 (165 C / 132 U / 132 R + 20 basics) | `regular` | rarity/base sub-selectors — R ≈ $486 (Mana Vault 388 ~$99, Necropotence 182 ~$37, Sylvan Library 329 ~$29, City of Brass 413 ~$20, Game of Chaos 232 ~$16, Birds of Paradise 280 ~$14) |
 
 **`promo_types`:** none. No fancy-foil sheet →
-proposed `[dupe_foil] 5ed = []` to enable `mm query missing-set 5ed`.
+configured `[dupe_foil] 5ed = []` (2026-11-08) to enable `mm query missing-set 5ed`.
 
 ---
 
@@ -45,11 +45,11 @@ No chase variants; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] 5ed = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] 5ed = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `zhs` alt-art `Ns` | 6 (0 local) | **owner's call** — Chinese-only, not syncable |
 
 ---
@@ -73,7 +73,7 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] 5ed = []` — configured 2026-11-08 (enables `mm query missing-set 5ed`).
 - `config/families.toml` `[[unobtainable.5ed.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.5ed]]` — none.
 

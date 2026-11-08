@@ -34,7 +34,7 @@ Every print computes `regular`.
 | basics | 15 | `sum` 292–306 (Plains 293, Swamp 299, Mountain 301 ~$450 each) | `regular` | basics |
 
 **`promo_types`:** none. No fancy-foil sheet →
-proposed `[dupe_foil] sum = []` to enable `mm query missing-set sum`.
+configured `[dupe_foil] sum = []` (2026-11-08) to enable `mm query missing-set sum`.
 
 ---
 
@@ -46,11 +46,11 @@ No chase variants; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] sum = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] sum = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | whole family | 306 | **owner's call** — a recalled print run collected as a rarity; prices unreliable; kept (default) — pending owner review |
 
 ---
@@ -71,7 +71,7 @@ n/a.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] sum = []` — configured 2026-11-08 (enables `mm query missing-set sum`).
 - `config/families.toml` `[[unobtainable.sum.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.sum]]` — none.
 

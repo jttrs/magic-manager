@@ -34,7 +34,7 @@ Every print computes `regular`.
 | base | 165 | `5dn` 1–165, no basic lands (55 C / 55 U / 55 R) | `regular` | rarity/base sub-selectors — R+M ≈ $335 nonfoil / $1394 foil (Mycosynth Golem 137 ~$56, Doubling Cube 116 ~$33, Crucible of Worlds 114 ~$33, Beacon of Immortality 6 ~$18 / ~$102 foil, Vedalken Orrery 163 ~$17) |
 
 **`promo_types`:** the prerelease Helm of Kaldra `131★` (~$5.32) has its own art. It carries `datestamped`, so missing-set drops it. No fancy-foil sheet →
-proposed `[dupe_foil] 5dn = []` to enable `mm query missing-set 5dn`.
+configured `[dupe_foil] 5dn = []` (2026-11-08) to enable `mm query missing-set 5dn`.
 
 ---
 
@@ -46,11 +46,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] 5dn = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] 5dn = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `p5dn` promos | 1 | **owner's call** — its own art |
 
 ---
@@ -73,8 +73,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.5dn.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] 5dn = []` — configured 2026-11-08 (enables `mm query missing-set 5dn`).
+- `config/families.toml` `[[unobtainable.5dn.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.5dn]]` — none.
 
 ---

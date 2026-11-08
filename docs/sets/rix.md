@@ -52,7 +52,7 @@ one mythic) is cosmetic.
 | `setpromo` | — | marker on every `prix` print | not a dupe signal |
 | `planeswalkerdeck` | — | unique cards | 197–205 |
 
-No fancy-foil sheet → proposed `[dupe_foil] rix = []` to enable `mm query missing-set rix`.
+No fancy-foil sheet → configured `[dupe_foil] rix = []` (2026-11-08) to enable `mm query missing-set rix`.
 
 **Full-art convention:** none.
 
@@ -72,17 +72,17 @@ None.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] rix = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] rix = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `prix` promo-pack stamped `Np` | 31 | **exclude** — `promo_types_any_of = ["stamped"]`; ~$149 |
 | `prix` buy-a-box 177 | 1 | keep — alternate art, ~$0.31 |
 | `prix` league / event promos | 5 | **owner's call** — same question as [`war`](war.md) / [`dom`](dom.md) |
 | PW-deck 197–205 | 9 | keep — real cards |
 
-**Scarcity check:** n/a until a `[dupe_foil]` entry exists.
+**Scarcity check:** not run yet (written before `[dupe_foil]` was added).
 
 ---
 
@@ -115,8 +115,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.rix.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] rix = []` — configured 2026-11-08 (enables `mm query missing-set rix`).
+- `config/families.toml` `[[unobtainable.rix.rules]]` — 2 proposed rules, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.rix]]` — none.
 
 ---

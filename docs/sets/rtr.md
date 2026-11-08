@@ -39,7 +39,7 @@ Every print computes `regular`.
 **`promo_types`:** every `prtr` print has its own art (Supreme Verdict `201★` ~$4.93). The prerelease and release promos carry
 `datestamped`, so `missing.drop_datestamped_with_sibling` drops them from
 missing-set (name + treatment match, not art). No fancy-foil sheet →
-proposed `[dupe_foil] rtr = []` to enable `mm query missing-set rtr`.
+configured `[dupe_foil] rtr = []` (2026-11-08) to enable `mm query missing-set rtr`.
 
 ---
 
@@ -51,11 +51,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] rtr = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] rtr = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `prtr` promos | 10 | **owner's call** — all have their own art |
 
 ---
@@ -79,8 +79,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.rtr.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] rtr = []` — configured 2026-11-08 (enables `mm query missing-set rtr`).
+- `config/families.toml` `[[unobtainable.rtr.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.rtr]]` — none.
 
 ---

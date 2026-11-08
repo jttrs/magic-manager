@@ -34,7 +34,7 @@ Every print computes `regular`.
 | base | 306 | `mrd` 1–306; basics 287–306 (130 C incl. basics / 88 U / 88 R) | `regular` | rarity/base sub-selectors — R+M ≈ $477 nonfoil / $1966 foil (Chrome Mox 152 ~$167 / ~$449 foil, Quicksilver Elemental 47 ~$20, Sword of Kaldra 251 ~$18, Krark's Thumb 190 ~$18, Chalice of the Void 150 ~$17, Mesmeric Orb 204 ~$17) |
 
 **`promo_types`:** the prerelease Sword of Kaldra `251★` (~$32.74) has its own art. It carries `datestamped`, so missing-set drops it (a ~$33 alt-art card hidden). No fancy-foil sheet →
-proposed `[dupe_foil] mrd = []` to enable `mm query missing-set mrd`.
+configured `[dupe_foil] mrd = []` (2026-11-08) to enable `mm query missing-set mrd`.
 
 ---
 
@@ -46,11 +46,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] mrd = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] mrd = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pmrd` promos | 1 | **owner's call** — its own art (~$33) |
 
 ---
@@ -74,8 +74,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.mrd.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] mrd = []` — configured 2026-11-08 (enables `mm query missing-set mrd`).
+- `config/families.toml` `[[unobtainable.mrd.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.mrd]]` — none.
 
 ---

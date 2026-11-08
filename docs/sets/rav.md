@@ -34,7 +34,7 @@ Every print computes `regular`.
 | base | 306 | `rav` 1–306; basics 287–306 (110 C + 20 basics / 88 U / 88 R) | `regular` | rarity/base sub-selectors — R+M ≈ $287 nonfoil / $1676 foil (Doubling Season 158 ~$42 / ~$133 foil, Breath of Fury 116 ~$18, Watery Grave 286 ~$16 / ~$162, Sacred Foundry 280 ~$16, Cloudstone Curio 257 ~$16, Birds of Paradise 153 ~$14) |
 
 **`promo_types`:** the prerelease Gleancrawler `247★` has its own art; the release Dimir Guildmage `245★` (~$1.07) reuses the booster art. Only the prerelease carries `datestamped` (dropped by missing-set); the same-art release foil is listed next to `rav` 245. No fancy-foil sheet →
-proposed `[dupe_foil] rav = []` to enable `mm query missing-set rav`.
+configured `[dupe_foil] rav = []` (2026-11-08) to enable `mm query missing-set rav`.
 
 ---
 
@@ -46,11 +46,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] rav = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] rav = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `prav` promos | 2 | **owner's call** — 1 of 2 has its own art |
 
 ---
@@ -73,8 +73,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.rav.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] rav = []` — configured 2026-11-08 (enables `mm query missing-set rav`).
+- `config/families.toml` `[[unobtainable.rav.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.rav]]` — none.
 
 ---

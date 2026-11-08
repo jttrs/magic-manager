@@ -89,7 +89,7 @@ Not encoded in `[[scenes.dmr]]`.
 
 ## 5. Unobtainable rules
 
-**None configured yet (proposals pending owner review).** Tiers that need a
+**No rule is active.** Tiers that need a
 keep/exclude decision:
 
 | Tier | Disposition | Rationale |
@@ -98,7 +98,7 @@ keep/exclude decision:
 | borderless (`inverted`, CN 412–456) | kept (default) — pending owner review | Distinct art, the family's chase tier (45 prints, ~$434 nonfoil). Recommend keep |
 
 **Scarcity check:** `scripts/set_status.py dmr` printed no ⚠ concentration note
-(missing-set is not available until `[dupe_foil]` is configured). Top
+(missing-set was not available at this audit, before `[dupe_foil]` was configured). Top
 collectible-alt missing value is a flat curve of borderless staples (Force of
 Will 418 ~$55, Vampiric Tutor 430 ~$51, Enlightened Tutor 412 ~$34) — no
 serialized/headliner/stamped scarcity tier exists in this family.
@@ -137,7 +137,7 @@ Counterspell (`release`, foil-only), which lives in the parent itself. A
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review). Proposed: `dmr = []`.
+- `config/families.toml` `[dupe_foil] dmr = []` — configured 2026-11-08 (enables `mm query missing-set dmr`).
 - `config/families.toml` `[[unobtainable.dmr.rules]]` — None configured yet (proposals pending owner review).
 - `[[scenes.dmr]]` — not configured (no scene; see §4).
 

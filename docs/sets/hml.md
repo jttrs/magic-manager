@@ -34,7 +34,7 @@ Every print computes `regular`.
 | two-art commons | 50 | `hml` `Na` / `Nb` for 25 names (all common) | `regular` | commons — **different art** per letter |
 
 **`promo_types`:** none. No fancy-foil sheet →
-proposed `[dupe_foil] hml = []` to enable `mm query missing-set hml`.
+configured `[dupe_foil] hml = []` (2026-11-08) to enable `mm query missing-set hml`.
 
 ---
 
@@ -46,11 +46,11 @@ No chase variants; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] hml = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] hml = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 
 ---
 
@@ -70,7 +70,7 @@ n/a.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] hml = []` — configured 2026-11-08 (enables `mm query missing-set hml`).
 - `config/families.toml` `[[unobtainable.hml.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.hml]]` — none.
 

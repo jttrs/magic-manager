@@ -35,7 +35,7 @@ Every print computes `regular`.
 | dual lands | 10 | `3ed` 282–291 (Underground Sea 290 ~$1099, Volcanic Island 291 ~$1008, Tundra 289 ~$715, Tropical Island 288 ~$604, Badlands 282 ~$585 …; rare) | `regular` | part of base — **~$6227, ~86% of rare value** |
 
 **`promo_types`:** none. No fancy-foil sheet →
-proposed `[dupe_foil] 3ed = []` to enable `mm query missing-set 3ed`.
+configured `[dupe_foil] 3ed = []` (2026-11-08) to enable `mm query missing-set 3ed`.
 
 ---
 
@@ -47,11 +47,11 @@ The ten dual lands. No scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] 3ed = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] 3ed = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `fbb` Foreign Black Border | 919 (0 local) | **owner's call** — non-English only, not syncable |
 
 ---
@@ -72,7 +72,7 @@ n/a.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] 3ed = []` — configured 2026-11-08 (enables `mm query missing-set 3ed`).
 - `config/families.toml` `[[unobtainable.3ed.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.3ed]]` — none.
 

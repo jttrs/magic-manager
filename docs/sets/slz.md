@@ -49,7 +49,7 @@ Uniform: every one of the 363 prints computes to treatment **`fa`** (full-art), 
 
 **v2/v3 scarcity versions (CN 122–363, 242 prints): kept (default) — pending owner review.** These are distinct-art, pack-scarce (~10% / ~5% of slots) versions of the v1 cards; nothing in the metadata separates them other than CN.
 
-**`promo_types` dupe-foil / stamped signals:** none — `promo_types` is null on every print, there are no foils, so no dupe-foil candidate exists. Proposed `[dupe_foil] slz = []`.
+**`promo_types` dupe-foil / stamped signals:** none — `promo_types` is null on every print, there are no foils, so no dupe-foil candidate exists. Configured `[dupe_foil] slz = []` (2026-11-08).
 
 **Full-art convention:** `full_art = TRUE` on all 363 prints.
 
@@ -71,7 +71,7 @@ None. No borderless/inverted prints, no `poster` promo_type; versions are per-ca
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Candidate | Status | Rationale |
 |---|---|---|
@@ -103,7 +103,7 @@ n/a — no promo/prerelease channel; the product is the Secret Lair-subtype boos
 
 None configured yet (proposals pending owner review).
 
-- `config/families.toml` `[dupe_foil]` — no `slz` entry (proposal: `slz = []`).
+- `config/families.toml` `[dupe_foil] slz = []` — configured 2026-11-08 (enables `mm query missing-set slz`).
 - `config/families.toml` `[[unobtainable.slz.rules]]` — none (v2/v3 scarcity rule pending owner review).
 - Scenes — none.
 

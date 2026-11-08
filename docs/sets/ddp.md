@@ -40,15 +40,14 @@ is cosmetic.
 **New art (local check):** Avenger 1, Primal Command 20, Oblivion Sower 41,
 Consume the Meek 49 (+ two tokens).
 
-Proposed `[dupe_foil] ddp = []` to enable `mm query missing-set ddp`.
+Configured `[dupe_foil] ddp = []` (2026-11-08) to enable `mm query missing-set ddp`.
 
 ---
 
 ## 3–6.
 
-No chase variants, scenes or PRM destinations. Unobtainable rules: none
-configured yet (proposals pending owner review); `[dupe_foil] ddp = []` —
-**apply**.
+No chase variants, scenes or PRM destinations. Unobtainable rules: no rule is active; `[dupe_foil] ddp = []` —
+**applied 2026-11-08**.
 
 ---
 
@@ -62,7 +61,7 @@ configured yet (proposals pending owner review); `[dupe_foil] ddp = []` —
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] ddp = []` — configured 2026-11-08 (enables `mm query missing-set ddp`).
 - `config/families.toml` `[[unobtainable.ddp.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.ddp]]` — none.
 

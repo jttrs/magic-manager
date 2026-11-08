@@ -37,7 +37,7 @@ Every print computes `regular`.
 | base | 145 | `con` 1–145 (60 C / 40 U / 35 R / 10 M) | `regular` | rarity/base sub-selectors — R+M ≈ $107 nonfoil / $529 foil (Paleoloth 88 ~$15, Font of Mythos 136 ~$15 / $39, Noble Hierarch 87 ~$13 / $50, Kederekt Parasite 48 ~$45 foil, Master Transmuter 31 ~$46 foil) |
 
 **`promo_types`:** both `pcon` prints have their own art. The prerelease and release promos carry `datestamped`, so `missing.drop_datestamped_with_sibling` drops them from missing-set (name + treatment match, not art). No fancy-foil sheet →
-proposed `[dupe_foil] con = []` to enable `mm query missing-set con`.
+configured `[dupe_foil] con = []` (2026-11-08) to enable `mm query missing-set con`.
 
 ---
 
@@ -49,11 +49,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] con = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] con = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pcon` promos | 2 | **owner's call** — both have their own art |
 
 ---
@@ -75,8 +75,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.con.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] con = []` — configured 2026-11-08 (enables `mm query missing-set con`).
+- `config/families.toml` `[[unobtainable.con.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.con]]` — none.
 
 ---

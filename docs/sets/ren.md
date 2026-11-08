@@ -33,7 +33,7 @@ Every print computes `regular`.
 | French / German reprints | 244 (0 local) | `ren` (e.g. Abomination 46, Alabaster Potion 2) | — | not syncable |
 
 **`promo_types`:** none. No fancy-foil sheet →
-proposed `[dupe_foil] ren = []` to enable `mm query missing-set ren`.
+configured `[dupe_foil] ren = []` (2026-11-08) to enable `mm query missing-set ren`.
 
 ---
 
@@ -45,11 +45,11 @@ No chase variants; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] ren = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] ren = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | whole family | 244 (0 local) | **owner's call** — non-English only; can't be synced |
 
 ---
@@ -69,7 +69,7 @@ n/a.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] ren = []` — configured 2026-11-08 (enables `mm query missing-set ren`).
 - `config/families.toml` `[[unobtainable.ren.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.ren]]` — none.
 

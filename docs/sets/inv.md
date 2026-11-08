@@ -35,7 +35,7 @@ Every print computes `regular`.
 | `schinesealtart` foils | 2 | `inv` 124★ Soul Burn (same art as 124), 134★ Urborg Skeleton (**own art**) — foil-only, common, unpriced | `regular` | common sub-selectors don't list commons in missing-set; harmless |
 
 **`promo_types`:** `schinesealtart` on 124★ / 134★ marks the Chinese-printing art; no dupe signal. `pinv` holds one Latin prerelease Raging Kavu `262`; `mm set sync pinv` 404s (English-only). No fancy-foil sheet →
-proposed `[dupe_foil] inv = []` to enable `mm query missing-set inv`.
+configured `[dupe_foil] inv = []` (2026-11-08) to enable `mm query missing-set inv`.
 
 ---
 
@@ -47,11 +47,11 @@ No chase variants; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] inv = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] inv = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pinv` promo | 1 (0 local) | **owner's call** — Latin-only, not syncable |
 | `schinesealtart` `N★` | 2 | **owner's call** — unpriced English foils of the Chinese art; 134★ has unique art |
 
@@ -77,8 +77,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.inv.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] inv = []` — configured 2026-11-08 (enables `mm query missing-set inv`).
+- `config/families.toml` `[[unobtainable.inv.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.inv]]` — none.
 
 ---

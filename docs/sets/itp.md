@@ -34,7 +34,7 @@ Every print computes `regular`.
 | basics | 15 | `itp` 53–67 (~$109, ~$7 each) | `regular` | basics |
 
 **`promo_types`:** none. No fancy-foil sheet →
-proposed `[dupe_foil] itp = []` to enable `mm query missing-set itp`.
+configured `[dupe_foil] itp = []` (2026-11-08) to enable `mm query missing-set itp`.
 
 ---
 
@@ -46,11 +46,11 @@ No chase variants; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] itp = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] itp = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | whole family | 67 | **owner's call** — a reprint starter box (no art unique to this box); kept (default) — pending owner review |
 
 ---
@@ -71,7 +71,7 @@ n/a.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] itp = []` — configured 2026-11-08 (enables `mm query missing-set itp`).
 - `config/families.toml` `[[unobtainable.itp.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.itp]]` — none.
 

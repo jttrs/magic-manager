@@ -33,7 +33,7 @@ Every print computes `regular`.
 | base | 119 | `drk` 1–119 (40 C / 44 U / 35 R) | `regular` | rarity/base sub-selectors — R ≈ $539 (Goblin Wizard 69 ~$96, City of Shadows 116 ~$71, Blood Moon 58 ~$69, Ball Lightning 57 ~$50); U ≈ $174 (Maze of Ith 117 ~$36, Tormod's Crypt 112 ~$31, Elves of Deep Shadow 76 ~$21) |
 
 **`promo_types`:** none. No fancy-foil sheet →
-proposed `[dupe_foil] drk = []` to enable `mm query missing-set drk`.
+configured `[dupe_foil] drk = []` (2026-11-08) to enable `mm query missing-set drk`.
 
 ---
 
@@ -45,11 +45,11 @@ No chase variants; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] drk = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] drk = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 
 ---
 
@@ -69,7 +69,7 @@ n/a.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] drk = []` — configured 2026-11-08 (enables `mm query missing-set drk`).
 - `config/families.toml` `[[unobtainable.drk.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.drk]]` — none.
 

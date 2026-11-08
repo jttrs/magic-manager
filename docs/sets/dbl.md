@@ -41,7 +41,7 @@ an alt tier.
 
 **`promo_types` dupe-foil / stamped signals:** only `prerelease` on CN 535.
 No `boosterfun`, textured, stamped or serialized prints. Nothing to dedup →
-proposed `[dupe_foil] dbl = []` just to enable `mm query missing-set dbl`.
+configured `[dupe_foil] dbl = []` (2026-11-08) just to enable `mm query missing-set dbl`.
 
 **Art identity vs MID/VOW:** only 2 of 535 prints share an `illustration_id`
 with a `mid`/`vow` print — Scryfall treats the grayscale renders as new
@@ -65,11 +65,11 @@ None.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] dbl = []` | 0 | **apply** — empty entry, enables missing-set |
+| `[dupe_foil] dbl = []` | 0 | **applied 2026-11-08** — empty entry, enables missing-set |
 | whole set (`b`) | 534 | keep — it's the base; the only choice is whether to track the family at all (it duplicates MID/VOW's card list in a different frame) |
 | prerelease 535 | 1 | keep |
 
@@ -99,7 +99,7 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] dbl = []` — configured 2026-11-08 (enables `mm query missing-set dbl`).
 - `config/families.toml` `[[unobtainable.dbl.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.dbl]]` — none.
 

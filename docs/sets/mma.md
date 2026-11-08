@@ -43,15 +43,15 @@ Chalice of the Void 203.
 
 **New art (local check):** 45 prints (Vendilion Clique 70, Arcbound Ravager
 198, Tooth and Nail 170, Vedalken Shackles 218, Yosei 35, …) — upper bound.
-Proposed `[dupe_foil] mma = []`.
+Configured `[dupe_foil] mma = []` (2026-11-08).
 
 ---
 
 ## 3–6.
 
 No chase variants, scenes or PRM destinations (no promo child). Unobtainable
-rules: none configured yet (proposals pending owner review);
-`[dupe_foil] mma = []` — **apply**.
+rules: no rule is active;
+`[dupe_foil] mma = []` — **applied 2026-11-08**.
 
 ---
 
@@ -66,7 +66,7 @@ rules: none configured yet (proposals pending owner review);
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] mma = []` — configured 2026-11-08 (enables `mm query missing-set mma`).
 - `config/families.toml` `[[unobtainable.mma.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.mma]]` — none.
 

@@ -47,7 +47,7 @@ Every print computes `regular`. No `frame_effects`.
 | `gameday` / `release` / `buyabox` | — | **no** — own art | Thunderbreak Regent 162 (~$5), Scaleguard Sentinels 201, Deathbringer Regent 96, Ojutai's Command 227 |
 | `instore` (`ptkdf`) | — | **no** — own art | Dragon Fodder 135, Dragonlord's Servant 138, Foe-Razer Regent 187, Evolving Wilds 248 |
 
-No fancy-foil sheet → proposed `[dupe_foil] dtk = []` to enable `mm query missing-set dtk`.
+No fancy-foil sheet → configured `[dupe_foil] dtk = []` (2026-11-08) to enable `mm query missing-set dtk`.
 
 ---
 
@@ -59,11 +59,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] dtk = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] dtk = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pdtk` promo-pack stamped `Np` | 2 | **exclude** — `promo_types_any_of = ["stamped"]`; ~$31 |
 | `pdtk` Intro Pack foils + event promos, `ptkdf` | 13 | **owner's call** — all have their own art |
 
@@ -93,8 +93,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.dtk.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] dtk = []` — configured 2026-11-08 (enables `mm query missing-set dtk`).
+- `config/families.toml` `[[unobtainable.dtk.rules]]` — 2 proposed rules, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.dtk]]` — none.
 
 ---

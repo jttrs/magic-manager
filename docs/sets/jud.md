@@ -35,7 +35,7 @@ Every print computes `regular`.
 | tombstone (flashback) | 23 | `jud` (7 C / 12 U / 4 R; e.g. Cabal Therapy 62, Glory 11, Genesis 117) | `regular` | part of base — `tombstone` is cosmetic |
 
 **`promo_types`:** `pjud` holds one Hebrew prerelease Glory `11`. `mm set sync pjud` 404s (it asks for `lang:en`), so the family's promo is absent locally. No fancy-foil sheet →
-proposed `[dupe_foil] jud = []` to enable `mm query missing-set jud`.
+configured `[dupe_foil] jud = []` (2026-11-08) to enable `mm query missing-set jud`.
 
 ---
 
@@ -47,11 +47,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] jud = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] jud = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pjud` promos | 1 (0 local) | **owner's call** — Hebrew-only, not syncable |
 
 ---
@@ -74,7 +74,7 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] jud = []` — configured 2026-11-08 (enables `mm query missing-set jud`).
 - `config/families.toml` `[[unobtainable.jud.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.jud]]` — none.
 

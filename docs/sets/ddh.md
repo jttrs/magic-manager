@@ -35,16 +35,15 @@ All `regular`. No `frame_effects`, no `promo_types`.
 | face cards (**foil-only**, mythic) | 2 | `ddh` 1 Ajani Vengeant (~$4.87, new art), 42 Nicol Bolas, Planeswalker (~$2.19, new art) | `regular` | mythic-regular |
 | deck cards (nonfoil-only) | 78 | the rest (Essence Warden 3 ~$8, Undermine 62 ~$4, Titanic Ultimatum 31 ~$4) | `regular` | rarity sub-selectors — ≈ $39 |
 
-**New art (local check):** Ajani 1, Behemoth Sledge 28, Nicol Bolas 42, Morgue Toad 47, Blazing Specter 52, Agonizing Demise 66. Proposed `[dupe_foil] ddh = []` to enable
+**New art (local check):** Ajani 1, Behemoth Sledge 28, Nicol Bolas 42, Morgue Toad 47, Blazing Specter 52, Agonizing Demise 66. Configured `[dupe_foil] ddh = []` (2026-11-08) to enable
 `mm query missing-set ddh`.
 
 ---
 
 ## 3–6.
 
-No chase variants, scenes or PRM destinations. Unobtainable rules: none
-configured yet (proposals pending owner review); `[dupe_foil] ddh = []` —
-**apply**.
+No chase variants, scenes or PRM destinations. Unobtainable rules: no rule is active; `[dupe_foil] ddh = []` —
+**applied 2026-11-08**.
 
 ---
 
@@ -58,7 +57,7 @@ configured yet (proposals pending owner review); `[dupe_foil] ddh = []` —
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] ddh = []` — configured 2026-11-08 (enables `mm query missing-set ddh`).
 - `config/families.toml` `[[unobtainable.ddh.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.ddh]]` — none.
 

@@ -37,7 +37,7 @@ Every print computes `regular`.
 | base | 155 | `mbs` 1–155 (70 C / 40 U / 35 R / 10 M) | `regular` | rarity/base sub-selectors — R+M ≈ $236 nonfoil / $765 foil (Blightsteel Colossus 99 ~$45 / $139, Sword of Feast and Famine 138 ~$44, Consecrated Sphinx 21 ~$33, Green Sun's Zenith 81 ~$31, Inkmoth Nexus 145) |
 
 **`promo_types`:** all four `pmbs` prints have their own art. The prerelease and release promos carry `datestamped`, so `missing.drop_datestamped_with_sibling` drops them from missing-set (name + treatment match, not art). No fancy-foil sheet →
-proposed `[dupe_foil] mbs = []` to enable `mm query missing-set mbs`.
+configured `[dupe_foil] mbs = []` (2026-11-08) to enable `mm query missing-set mbs`.
 
 ---
 
@@ -49,11 +49,11 @@ No chase variants among uncommons; no scenes.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] mbs = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] mbs = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pmbs` promos | 4 | **owner's call** — all have their own art |
 
 ---
@@ -75,8 +75,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.mbs.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] mbs = []` — configured 2026-11-08 (enables `mm query missing-set mbs`).
+- `config/families.toml` `[[unobtainable.mbs.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.mbs]]` — none.
 
 ---

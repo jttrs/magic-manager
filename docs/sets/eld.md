@@ -56,7 +56,7 @@ Survey (`survey_treatment_signature.py ELD`, 1,075 print-rows by finish).
 | `bundle` / `buyabox` / `resale` | — | distinct | kept |
 | `boosterfun` | — | marker on 270–302 + ext | not a dupe signal |
 
-No fancy-foil sheet → proposed `[dupe_foil] eld = []` to enable `mm query missing-set eld`.
+No fancy-foil sheet → configured `[dupe_foil] eld = []` (2026-11-08) to enable `mm query missing-set eld`.
 
 **Full-art convention:** tokens only (7 in `teld`). ELD basics 250–269 are regular frame.
 
@@ -76,16 +76,16 @@ None.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] eld = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] eld = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `peld` promo-pack stamped `Np` | 68 | **exclude** — `promo_types_any_of = ["stamped"]`; ~$205 |
 | showcase 273–302, borderless PWs 270–272 | 33 | keep — distinct art |
 | buy-a-box 303, PW-deck 304–313, Brawl 314–333 | 31 | keep — real cards found nowhere in 1–269 |
 
-**Scarcity check:** n/a until a `[dupe_foil]` entry exists.
+**Scarcity check:** not run yet (written before `[dupe_foil]` was added).
 
 ---
 
@@ -122,8 +122,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.eld.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] eld = []` — configured 2026-11-08 (enables `mm query missing-set eld`).
+- `config/families.toml` `[[unobtainable.eld.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.eld]]` — none.
 
 ---

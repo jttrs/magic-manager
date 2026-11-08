@@ -43,7 +43,7 @@ Survey (`survey_treatment_signature.py DMU`, 1,009 prints).
 | base | 286 | `dmu` 1–286 (basics 262–281) | `regular` | rarity/base sub-selectors |
 | full-art basics | 5 | `dmu` 277–281 | `fa` | kept (commons) |
 | **stained-glass legends showcase (black border)** | 41 | `dmu` 287–327 (`showcase`+`inverted`+`legendary`) | `b\|shw` | **kept (default) — pending owner review.** The set's signature showcase frame (black border — the high-risk class); distinct art from base |
-| stained-glass textured foil | 41 | `dmu` 328–368 (foil-only, `textured`) | `b\|shw\|ff` | same art as 287–327 → dupe foil (proposed `[dupe_foil] dmu = ["textured"]`); ~$215 total |
+| stained-glass textured foil | 41 | `dmu` 328–368 (foil-only, `textured`) | `b\|shw\|ff` | same art as 287–327 → dupe foil (configured `[dupe_foil] dmu = ["textured"]` (2026-11-08)); ~$215 total |
 | showcase planeswalker | 1 | `dmu` 371 Ajani, Sleeper Agent (`showcase`, black border) | `shw` | kept (default) — pending owner review |
 | borderless planeswalkers | 5 | `dmu` 372–376 (Karn, Liliana of the Veil, Jaya, Ajani ×2) | `b` | **kept (default) — pending owner review.** Distinct art (375/376 are two further Ajani arts) |
 | borderless painlands | 6 | `dmu` 377–382 (`inverted`) | `b` | **kept (default) — pending owner review** |
@@ -87,11 +87,11 @@ None detected.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] dmu = ["textured"]` | 41 | **apply** — same-art textured foils of the stained-glass legends |
+| `[dupe_foil] dmu = ["textured"]` | 41 | **applied 2026-11-08** — same-art textured foils of the stained-glass legends |
 | `pdmu` promo-pack stamped `Np` | 80 | **exclude** — `promo_types_any_of = ["stamped"]` (ONE/NEO/TDM precedent); ~$259 |
 | `dmu` 436 Sheoldred stepandcompleat | 1 | **exclude** — `promo_types_any_of = ["stepandcompleat"]`; same art as 435, computes `b` so dupe-foil misses it ($311) |
 | stained-glass legends showcase 287–327 | 41 | keep — distinct-art showcase, cheap (the textured twins go via dupe-foil) |
@@ -99,7 +99,7 @@ None configured yet (proposals pending owner review).
 | borderless planeswalkers 372–376 + painlands 377–382 | 11 | keep — ordinary borderless tier |
 | showcase Ajani 371 | 1 | keep |
 
-**Scarcity check:** n/a until a `[dupe_foil]` entry exists (`set_status.py`
+**Scarcity check:** not run yet (written before `[dupe_foil]` was added) (`set_status.py`
 can't compute missing $). By inspection, Sheoldred's prints dominate the $.
 
 ---
@@ -132,8 +132,8 @@ can't compute missing $). By inspection, Sheoldred's prints dominate the $.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.dmu.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] dmu = ["textured"]` — configured 2026-11-08 (enables `mm query missing-set dmu`).
+- `config/families.toml` `[[unobtainable.dmu.rules]]` — 2 proposed rules, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.dmu]]` — none.
 
 ---

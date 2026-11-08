@@ -46,7 +46,7 @@ nonfoil except CN 496.
 `frame_effects` on base prints are cosmetic only (`legendary` 27).
 
 **`promo_types` dupe-foil / stamped signals:** `release`+`datestamped` on 496
-only. No fancy-foil sheet → proposed `[dupe_foil] jmp = []` to enable
+only. No fancy-foil sheet → configured `[dupe_foil] jmp = []` (2026-11-08) to enable
 `mm query missing-set jmp`.
 
 **Full-art convention:** none.
@@ -67,11 +67,11 @@ n/a.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] jmp = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] jmp = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `ajmp` Arena exclusives | 18 | **exclude** — digital only, unobtainable in paper. Prefer the code fix (§7); until then `[[unobtainable.jmp.rules]]` on set `ajmp` |
 | release promo 496 | 1 | keep — distinct art, foil-only |
 
@@ -102,8 +102,8 @@ None configured yet (proposals pending owner review).
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.jmp.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] jmp = []` — configured 2026-11-08 (enables `mm query missing-set jmp`).
+- `config/families.toml` `[[unobtainable.jmp.rules]]` — 1 proposed rule, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.jmp]]` — none.
 
 ---

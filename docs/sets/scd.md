@@ -51,7 +51,7 @@ Almost entirely regular-frame black-bordered reprints. `promo_types` is empty on
 
 No KEPT-by-default alt tier (showcase/borderless) exists, so there is no keep/exclude decision to make.
 
-**`promo_types` dupe-foil / stamped signals:** none. Proposed `[dupe_foil] scd = []` (unblocks `treatment=preferred`; filters nothing).
+**`promo_types` dupe-foil / stamped signals:** none. Configured `[dupe_foil] scd = []` (2026-11-08) (unblocks `treatment=preferred`; filters nothing).
 
 **Full-art convention:** `full_art = FALSE` everywhere (basics are regular-frame).
 
@@ -73,7 +73,7 @@ None. No borderless / inverted-scene / poster prints.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review). None needed: no scarcity, stamped, serialized or alt-frame tier exists; top print is True Conviction (CN 38) at $5.47, nothing near $100.
+No rule is active. None needed: no scarcity, stamped, serialized or alt-frame tier exists; top print is True Conviction (CN 38) at $5.47, nothing near $100.
 
 **Missing-set baseline (2026-11-02):** owner holds all 352 `scd` printings (500 copies; 10 deck rows — 5 built + 5 deconstructed). `set:scd+related missing` = only the 27 `tscd` tokens (unpriced; tokens never enter missing-set buy lists). `set_status.py scd` reports Owned as 347 printings / 495 cards · $205.54 (the 5 etched commanders, 1 copy each, are not counted there — same `b|ff` blind spot as §2), Missing as "cross-set; n/a" (commander root), and emits **no** concentration warning.
 
@@ -97,7 +97,7 @@ n/a — the product has no promo sibling (`pscd` does not exist); the etched com
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] scd = []` — configured 2026-11-08 (enables `mm query missing-set scd`).
 - `config/families.toml` `[[unobtainable.scd.rules]]` — None configured yet (proposals pending owner review).
 - `config/families.toml` `[[scenes.scd]]` — None configured yet (none exist).
 

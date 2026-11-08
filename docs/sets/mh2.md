@@ -60,7 +60,7 @@ Survey (`survey_treatment_signature.py MH2`, 806 prints). Every mh2 card from
 | `boosterfun` | — | n/a | borderless, showcase, retro bands |
 | `bundle` / `buyabox` | — | distinct | kept |
 
-No textured / fancy-foil sheet → proposed `[dupe_foil] mh2 = []` to enable
+No textured / fancy-foil sheet → configured `[dupe_foil] mh2 = []` (2026-11-08) to enable
 `mm query missing-set mh2`.
 
 **Full-art convention:** no `full_art` prints outside tokens.
@@ -83,18 +83,18 @@ None detected.
 
 ## 5. Unobtainable rules
 
-None configured yet (proposals pending owner review).
+No rule is active. Proposals below are in `config/families.toml` as `enabled = false` rules.
 
 | Tier | Prints | Recommendation |
 |---|---:|---|
-| `[dupe_foil] mh2 = []` | 0 | **apply** — empty, enables missing-set |
+| `[dupe_foil] mh2 = []` | 0 | **applied 2026-11-08** — empty, enables missing-set |
 | `pmh2` promo-pack stamped | 6 | **exclude** — `promo_types_any_of = ["stamped"]` |
 | retro-frame 381–441 | 61 | **unsure** — same art, different frame; listed alongside its twin because it computes `regular` (~$306 extra). Exclude rule would be `collector_numbers` 381–441 (a `boosterfun`+black-border rule would also catch the showcase band). Same open question as [`dmr`](dmr.md)'s retro band |
 | `h1r` MH1 Timeshifts | 40 | keep — the Collector Booster bonus sheet; foil-only |
 | borderless 304–326 | 23 | keep |
 | showcase sketch 327–380 | 54 | keep — distinct art (not the D&D rulebook frame that CLB/AFR exclude) |
 
-**Scarcity check:** n/a until a `[dupe_foil]` entry exists. By inspection the
+**Scarcity check:** not run yet (written before `[dupe_foil]` was added). By inspection the
 alt tiers are spread out — no single chase print dominates outside Ragavan /
 Esper Sentinel.
 
@@ -124,8 +124,8 @@ Esper Sentinel.
 
 ## 8. Code refs
 
-- `config/families.toml` `[dupe_foil]` — None configured yet (proposals pending owner review).
-- `config/families.toml` `[[unobtainable.mh2.rules]]` — None configured yet (proposals pending owner review).
+- `config/families.toml` `[dupe_foil] mh2 = []` — configured 2026-11-08 (enables `mm query missing-set mh2`).
+- `config/families.toml` `[[unobtainable.mh2.rules]]` — 2 proposed rules, `enabled = false` (off until switched on).
 - `config/families.toml` `[[scenes.mh2]]` — none.
 
 ---
