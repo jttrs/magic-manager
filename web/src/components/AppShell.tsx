@@ -18,6 +18,7 @@ import { SettingsChoice, SettingsRow } from './settings/SettingsControls';
 import { SubnavSlot } from './subnavSlot';
 import { FlagsButton } from './flags/FlagsButton';
 import { AccountButton } from './auth/AccountButton';
+import { useCollectionPrefsSettings } from './settings/CollectionPrefsSettings';
 import { AccountSettings } from './account/AccountSettings';
 
 const NAV = [
@@ -31,6 +32,7 @@ const NAV = [
 export function AppShell({ children }: { children: ReactNode }) {
   useAnalytics();
   useAppearanceSettings();
+  useCollectionPrefsSettings();
   return (
     <div className="grid min-h-dvh grid-rows-[var(--size-topbar)_1fr] overflow-x-clip bg-chrome text-on-chrome">
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-3 focus:z-50 bg-accent text-on-accent px-3 py-1 rounded-sm">

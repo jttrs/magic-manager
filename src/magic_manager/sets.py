@@ -103,7 +103,8 @@ class ResolvedSet:
         The anchor is always included regardless — naming a token set
         explicitly should still produce that set in the output.
         """
-        allowed = set(DEFAULT_INVENTORY_SET_TYPES) | set(include_kinds)
+        from . import collection_prefs
+        allowed = set(collection_prefs.get().set_types) | set(include_kinds)
         out: list[str] = []
         for s in self.related:
             if s["code"] == self.code or s.get("set_type") in allowed:

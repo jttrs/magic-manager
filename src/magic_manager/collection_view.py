@@ -11,10 +11,11 @@ family, my copies of each printing, and where the gaps are". So this module:
   set-status use), in ONE cards query;
 * keeps the printings a collector catalogs, reusing the master-list policy:
   the family's anchor set whatever its type (core, draft_innovation like ACR/MH3,
-  masters…), plus member sets whose type is in ``sets.DEFAULT_INVENTORY_SET_TYPES``
-  (no memorabilia/art-series, alchemy or token sets) — as
+  masters…), plus member sets whose type the user's "What counts" ``set_types``
+  preference includes (default ``sets.DEFAULT_INVENTORY_SET_TYPES``: no
+  memorabilia/art-series, alchemy or token sets) — as
   ``FamilyResolution.filtered_codes`` does — and not ``sets.is_excluded_variant`` (prerelease,
-  stamped, serialized, …); then drops tokens, digital-only
+  stamped, serialized, …) unless the ``variant_prints`` preference shows them; then drops tokens, digital-only
   (``selectors._is_digital_only``), the family's HARD-tier unobtainable rules,
   and meld-back faces (``missing._drop_meld_back_faces``). Every exclusion
   yields to ownership: a printing you own always shows (ground truth first).
@@ -34,7 +35,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 
-from . import db, exports, family_status, missing as missing_mod, scenes as scenes_mod, scryfall, selectors as sel_mod, sets as sets_mod, treatments
+from . import collection_prefs, db, exports, family_status, missing as missing_mod, scenes as scenes_mod, scryfall, selectors as sel_mod, sets as sets_mod, treatments
 
 log = logging.getLogger(__name__)
 
@@ -161,6 +162,7 @@ def family_cards(code: str) -> FamilyCollection:
     candidates: list[sel_mod.MaterializedRow] = []
     extra: dict[str, tuple[str | None, str | None]] = {}
     scene_cfg = scenes_mod.configured(parent_code)
+    prefs = collection_prefs.get()
     for r in rows:
         card = sel_mod._card_dict(r)
         sid = card["scryfall_id"]
@@ -170,8 +172,8 @@ def family_cards(code: str) -> FamilyCollection:
             or (
                 not scenes_mod.scene_of(scene_cfg, card["set"] or "", card.get("collector_number") or "")
                 and (
-                    (card["set"] != parent_code and set_types.get(card["set"]) not in sets_mod.DEFAULT_INVENTORY_SET_TYPES)
-                    or sets_mod.is_excluded_variant(card)
+                    (card["set"] != parent_code and set_types.get(card["set"]) not in prefs.set_types)
+                    or (prefs.variant_prints != "show" and sets_mod.is_excluded_variant(card))
                     or sel_mod._is_family_unobtainable(card, parent_code, _HARD_TIER)
                 )
             )
