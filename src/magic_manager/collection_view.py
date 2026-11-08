@@ -11,10 +11,11 @@ family, my copies of each printing, and where the gaps are". So this module:
   set-status use), in ONE cards query;
 * keeps the printings a collector catalogs, reusing the master-list policy:
   the family's anchor set whatever its type (core, draft_innovation like ACR/MH3,
-  masters…), plus member sets whose type is in ``sets.DEFAULT_INVENTORY_SET_TYPES``
-  (no memorabilia/art-series, alchemy or token sets) — as
+  masters…), plus member sets whose type the user's "What counts" ``set_types``
+  preference includes (default ``sets.DEFAULT_INVENTORY_SET_TYPES``: no
+  memorabilia/art-series, alchemy or token sets) — as
   ``FamilyResolution.filtered_codes`` does — and not ``sets.is_excluded_variant`` (prerelease,
-  stamped, serialized, …); then drops tokens, digital-only
+  stamped, serialized, …) unless the ``variant_prints`` preference shows them; then drops tokens, digital-only
   (``selectors._is_digital_only``), the family's HARD-tier unobtainable rules,
   and meld-back faces (``missing._drop_meld_back_faces``). Every exclusion
   yields to ownership: a printing you own always shows (ground truth first).

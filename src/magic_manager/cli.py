@@ -4299,7 +4299,10 @@ def query_missing_set_cmd(
     else:
         _subs = missing_mod.sub_selectors(code_l, treatment_class)
         union_selector_repr = (
-            f"({_subs[0][1]}) ∪ ({_subs[1][1]}) ∪ ({_subs[2][1]})  [printing-level union]"
+            # The regular-treatment sub-selectors (the "What counts" rarities);
+            # with the default preference this is today's three-part header.
+            " ∪ ".join(f"({sel})" for slug, sel in _subs if slug in missing_mod.REGULAR_SLUGS)
+            + "  [printing-level union]"
             + ("  + chase-tier prints" if chase == "include" else "")
         )
     _write_query_xlsx(

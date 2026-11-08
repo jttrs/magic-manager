@@ -164,6 +164,24 @@ def test_query_missing_set_e2e(tmp_db, app, fake_scryfall, seed_cards, make_card
     assert buylists, "expected missing-tla buy-list txt under output/missing-set/buy-lists/"
 
 
+def test_query_missing_set_with_narrowed_rarities(tmp_db, app, fake_scryfall, seed_cards,
+                                                  make_card, monkeypatch, tmp_path):
+    """A "What counts" rarity preference narrower than the default (one plain
+    rarity → two sub-selectors) still writes the checklist and buy lists."""
+    import magic_manager.util as util
+    monkeypatch.setattr(util, "OUTPUT_ROOT", tmp_path / "output")
+    import magic_manager.scryfall as scry
+    monkeypatch.setattr(scry, "all_sets",
+                        lambda: [{"code": "tla", "parent_set_code": None,
+                                  "name": "Avatar", "set_type": "expansion"}])
+    seed_cards([make_card(id="q1", set="tla", collector_number="5", rarity="rare", name="Buyme Rare")])
+    from magic_manager import collection_prefs
+    collection_prefs.update("missing_rarities", ["rare"])
+    res = runner.invoke(app, ["query", "missing-set", "tla"])
+    assert res.exit_code == 0, res.output
+    assert list((tmp_path / "output" / "missing-set" / "checklists").glob("missing-tla-checklist-*.xlsx"))
+
+
 # ---------- Phase 5: audit/debug commands ----------
 
 def test_set_is_synced_reports_counts(tmp_db, app, seed_cards, make_card, monkeypatch):

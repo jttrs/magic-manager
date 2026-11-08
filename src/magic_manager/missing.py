@@ -1,8 +1,10 @@
 """Missing-set printing union — the reusable core of `mm query missing-set`.
 
-`missing_printings(code)` returns the printing-level union of the four
-missing-set sub-selectors for a family (rare-regular, mythic-regular,
-uncommon-chase, and the treatment-class alt sub-selector). Both the CLI command
+`missing_printings(code)` returns the printing-level union of the missing-set
+sub-selectors for a family — one regular-treatment slice per rarity the user's
+"What counts" preference includes (by default rare-regular, mythic-regular and
+uncommon-chase; see ``collection_prefs``), plus the treatment-class alt
+sub-selector. Both the CLI command
 (`cli.query_missing_set_cmd`) and the standalone cart-check tool
 (`scripts/manapool_cart_check.py`) call this so the "what am I missing from the
 family?" logic lives in exactly one place.
@@ -144,21 +146,33 @@ def missing_printings(
 def _collapse_foil_twins(
     rows: list[sel_mod.MaterializedRow], anchor_code: str,
 ) -> list[sel_mod.MaterializedRow]:
-    """``foil_twins == "once"`` preference: older core sets list the foil of a
-    card as its own printing with the same art. A twin pair = two printings in
-    the same set with the same name and non-NULL illustration_id, one foil-only
-    and one with a nonfoil finish. Owning either member (any finish) drops both
-    from the missing rows; otherwise only the foil-only member is dropped.
-    Default ("each") returns ``rows`` untouched."""
+    """``foil_twins == "once"`` preference: older core sets (7ED–10E) list the
+    foil of a card as its own printing, ``N★`` beside the nonfoil ``N``, with
+    the same art. A twin pair is exactly that: same set, same name, same
+    non-NULL illustration_id, the foil-only member's collector number is the
+    nonfoil one plus ``★``, and the foil carries no promo type, frame effect or
+    promo flag — so premium foils (surge, galaxy, first-place, serialized,
+    prerelease stamps) that happen to share art are never collapsed. Owning
+    either member (any finish) drops both from the missing rows; otherwise only
+    the foil member is dropped. Default ("each") returns ``rows`` untouched."""
     import json as _json
 
     if _prefs.get().foil_twins != "once" or not rows:
         return rows
+
+    def _arr(raw) -> list:
+        try:
+            v = _json.loads(raw or "[]")
+        except ValueError:
+            return []
+        return v if isinstance(v, list) else []
+
     codes = _family_codes_for(anchor_code)
     marks = ",".join("?" for _ in codes)
     with db.connect() as conn:
         fam = conn.execute(
-            f"SELECT scryfall_id, set_code, name, illustration_id, finishes FROM cards "
+            f"SELECT scryfall_id, set_code, name, collector_number, illustration_id, finishes, "
+            f"promo_types, frame_effects, is_promo FROM cards "
             f"WHERE set_code IN ({marks}) AND illustration_id IS NOT NULL",
             list(codes),
         ).fetchall()
@@ -167,26 +181,24 @@ def _collapse_foil_twins(
                 "SELECT DISTINCT scryfall_id FROM inventory WHERE quantity > 0"
             )
         }
-    groups: dict[tuple, dict[str, list[str]]] = {}
+    nonfoil: dict[tuple, str] = {}
+    foils: list[tuple[tuple, str]] = []
     for c in fam:
-        try:
-            fin = _json.loads(c["finishes"] or "[]")
-        except ValueError:
-            continue
-        g = groups.setdefault((c["set_code"], c["name"], c["illustration_id"]),
-                              {"foil": [], "nonfoil": []})
-        if fin == ["foil"]:
-            g["foil"].append(c["scryfall_id"])
+        fin = _arr(c["finishes"])
+        cn = c["collector_number"] or ""
+        if fin == ["foil"] and cn.endswith("★"):
+            if not _arr(c["promo_types"]) and not _arr(c["frame_effects"]) and not c["is_promo"]:
+                foils.append(((c["set_code"], c["name"], c["illustration_id"], cn[:-1]), c["scryfall_id"]))
         elif "nonfoil" in fin:
-            g["nonfoil"].append(c["scryfall_id"])
+            nonfoil[(c["set_code"], c["name"], c["illustration_id"], cn)] = c["scryfall_id"]
     drop: set[str] = set()
-    for g in groups.values():
-        if not g["foil"] or not g["nonfoil"]:
+    for key, foil_id in foils:
+        nf_id = nonfoil.get(key)
+        if nf_id is None:
             continue
-        if any(i in owned for i in g["foil"] + g["nonfoil"]):
-            drop.update(g["foil"] + g["nonfoil"])
-        else:
-            drop.update(g["foil"])
+        drop.add(foil_id)
+        if foil_id in owned or nf_id in owned:
+            drop.add(nf_id)
     return [r for r in rows if r.scryfall_id not in drop]
 
 
@@ -522,7 +534,8 @@ def is_concentrated(conc: dict) -> bool:
 # Candidate cards = the oracle_ids appearing in missing_printings (which already
 # applies the digital-only / family-unobtainable / meld-back / preferred filters),
 # minus the oracle_ids the user owns any printing of. SCOPE NOTE: missing_printings
-# only unions rare/mythic/uncommon-chase + the preferred alt class, so a COMMON
+# unions only the rarities the "What counts" preference includes (by default
+# rare/mythic/uncommon-chase) + the preferred alt class, so by default a COMMON
 # owned in zero printings won't appear here — matching set-status's "don't chase
 # every common" stance. Documented limit, not a bug.
 
@@ -584,8 +597,10 @@ def functional_missing(
     falls back to the in-family price. Family scope matches ``missing_printings``
     (Scryfall graph via ``sets.resolve``), so the two figures are comparable.
     """
+    # Functional is measured against the full family whatever the user's chase
+    # preference says (card_diff pins the same), so the figure is stable.
     rows = precomputed_missing if precomputed_missing is not None \
-        else missing_printings(code, treatment_class)
+        else missing_printings(code, treatment_class, chase="exclude")
     # Candidate oracle_ids from the (already-filtered) printing-missing list.
     candidate_oids = {
         oid for r in rows

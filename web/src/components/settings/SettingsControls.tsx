@@ -55,8 +55,9 @@ export function SettingsChoice<T extends string>({ value, options, onChange, lab
   );
 }
 
-/** Multiple choice for a settings row: the same segmented look as `SettingsChoice`,
- *  any number on, wrapping onto several lines. */
+/** Multiple choice for a settings row. Up to 5 options: the same segmented look as
+ *  `SettingsChoice`, any number on. More than 5: a checkbox list (two columns from
+ *  `sm`), because DESIGN.md never renders more than 5 options as chips. */
 export function SettingsMultiChoice<T extends string>({ value, options, onChange, labelId, descriptionId, disabledValues = [] }: {
   value: T[];
   options: Choice<T>[];
@@ -65,7 +66,26 @@ export function SettingsMultiChoice<T extends string>({ value, options, onChange
   descriptionId?: string;
   disabledValues?: T[];
 }) {
-  const wide = options.length > 4;
+  if (options.length > 5) {
+    const on = new Set(value);
+    const toggle = (v: T) => onChange(options.map((o) => o.value).filter((x) => (x === v ? !on.has(v) : on.has(x))));
+    return (
+      <div role="group" aria-labelledby={labelId} aria-describedby={descriptionId} className="grid min-w-0 gap-x-4 sm:min-w-[15rem] sm:grid-cols-2">
+        {options.map((o) => (
+          <label key={o.value} className="flex min-h-8 cursor-pointer items-center gap-2 text-sm text-ink pointer-coarse:min-h-11 has-[:disabled]:cursor-not-allowed has-[:disabled]:text-ink-muted">
+            <input
+              type="checkbox"
+              checked={on.has(o.value)}
+              disabled={disabledValues.includes(o.value)}
+              onChange={() => toggle(o.value)}
+              className="h-3.5 w-3.5 shrink-0 accent-[var(--theme-accent)]"
+            />
+            {o.label}
+          </label>
+        ))}
+      </div>
+    );
+  }
   return (
     <ToggleGroup.Root
       type="multiple"
@@ -73,7 +93,7 @@ export function SettingsMultiChoice<T extends string>({ value, options, onChange
       onValueChange={(v) => onChange(v as T[])}
       aria-labelledby={labelId}
       aria-describedby={descriptionId}
-      className={`flex min-w-0 flex-wrap gap-0.5 rounded-sm border border-rule-strong p-0.5 ${wide ? '' : 'sm:min-w-[15rem]'}`}
+      className="flex min-w-0 flex-wrap gap-0.5 rounded-sm border border-rule-strong p-0.5 sm:min-w-[15rem]"
     >
       {options.map((o) => (
         <ToggleGroup.Item

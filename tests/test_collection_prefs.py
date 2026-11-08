@@ -215,7 +215,7 @@ def _twin_cards(make_card):
     return [
         make_card(id="nf", set="tla", collector_number="10", rarity="rare", name="Twin", oracle_id="o1",
                   illustration_id="ill-1", finishes=["nonfoil"]),
-        make_card(id="fo", set="tla", collector_number="110", rarity="rare", name="Twin", oracle_id="o1",
+        make_card(id="fo", set="tla", collector_number="10★", rarity="rare", name="Twin", oracle_id="o1",
                   illustration_id="ill-1", finishes=["foil"]),
         make_card(id="other", set="tla", collector_number="11", rarity="rare", name="Other", oracle_id="o2",
                   illustration_id="ill-2", finishes=["nonfoil", "foil"]),
@@ -237,6 +237,24 @@ def test_foil_twins_owning_either_drops_both(tmp_db, tla, seed_cards, make_card,
     assert _ids() == {"other"}
 
 
+def test_foil_twins_leave_premium_same_art_foils_alone(tmp_db, tla, seed_cards, make_card):
+    """Only plain N★ twins collapse: a same-art surge foil (★ CN with a promo
+    type) and a same-art foil-only print under another number stay listed."""
+    seed_cards([
+        make_card(id="nf", set="tla", collector_number="10", rarity="rare", name="Twin", oracle_id="o1",
+                  illustration_id="ill-1", finishes=["nonfoil"]),
+        make_card(id="surge", set="tla", collector_number="10★", rarity="rare", name="Twin", oracle_id="o1",
+                  illustration_id="ill-1", finishes=["foil"], promo_types=["surgefoil"]),
+        make_card(id="topper", set="tla", collector_number="310", rarity="rare", name="Twin", oracle_id="o1",
+                  illustration_id="ill-1", finishes=["foil"]),
+    ])
+    from magic_manager import selectors
+    rows = selectors.materialize("set:tla")
+    assert {r.scryfall_id for r in rows} == {"nf", "surge", "topper"}
+    cp.update("foil_twins", "once")
+    assert {r.scryfall_id for r in missing._collapse_foil_twins(rows, "tla")} == {"nf", "surge", "topper"}
+
+
 def test_cli_prefs_flow(tmp_db):
     from typer.testing import CliRunner
     from magic_manager.cli import app
@@ -253,3 +271,21 @@ def test_cli_prefs_flow(tmp_db):
                  ["reset", "nope"]):
         r = run(app, ["prefs", *args])
         assert r.exit_code == 2 and "error:" in r.output, args
+
+
+def test_cli_chase_flag_beats_the_preference(tmp_db):
+    import typer
+    from magic_manager.cli import _validate_chase
+    cp.update("chase_in_lists", "include")
+    assert _validate_chase(None) == "include"
+    assert _validate_chase("exclude") == "exclude"
+    with pytest.raises(typer.Exit):
+        _validate_chase("bogus")
+
+
+def test_update_forgets_the_users_derived_caches(tmp_db):
+    from magic_manager import family_status
+    scope = db.user_scope()
+    family_status._ST_INDEX[scope] = ({}, {})
+    cp.update("variant_prints", "show")
+    assert scope not in family_status._ST_INDEX
