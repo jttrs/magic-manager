@@ -270,6 +270,56 @@ def flags_set(
                + ("  (MM_FEATURES still pins it)" if r.pinned_by_env else ""))
 
 
+prefs_app = typer.Typer(no_args_is_help=True,
+                        help="'What counts' preferences (Settings → What counts): which sets, prints and rarities count in Collection, checklists and missing lists.")
+app.add_typer(prefs_app, name="prefs")
+
+
+@prefs_app.command("ls")
+def prefs_ls(json_out: bool = typer.Option(False, "--json", help="Machine-readable output.")):
+    """Every preference: current value, default (* = changed from the default)."""
+    from . import collection_prefs
+    rows = collection_prefs.describe()
+    if json_out:
+        typer.echo(json.dumps(rows, indent=2))
+        return
+    for r in rows:
+        val = ",".join(r["value"]) if r["kind"] == "multi" else r["value"]
+        dflt = ",".join(r["default"]) if r["kind"] == "multi" else r["default"]
+        typer.echo(f"{r['key']:<18} {val}" + (f"   (default: {dflt}) *" if r["changed"] else ""))
+
+
+@prefs_app.command("set")
+def prefs_set(
+    key: str = typer.Argument(..., help="A preference key (see mm prefs ls)."),
+    values: list[str] = typer.Argument(..., help="One value (choice keys) or several (multi keys)."),
+):
+    """Set a preference. Multi keys take several values (set_types, missing_rarities); choice keys exactly one."""
+    from . import collection_prefs
+    d = next((x for x in collection_prefs.DEFINITIONS if x.key == key), None)
+    if d is not None and d.kind == "choice" and len(values) != 1:
+        typer.echo(f"error: {key} takes exactly one value", err=True)
+        raise typer.Exit(2)
+    try:
+        collection_prefs.update(key, values if (d is not None and d.kind == "multi") else values[0])
+    except (LookupError, ValueError) as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+    typer.echo(f"{key}: {', '.join(values)}")
+
+
+@prefs_app.command("reset")
+def prefs_reset(key: str = typer.Argument(..., help="A preference key (see mm prefs ls).")):
+    """Reset a preference to its default."""
+    from . import collection_prefs
+    try:
+        collection_prefs.update(key, None)
+    except (LookupError, ValueError) as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+    typer.echo(f"{key}: reset to default")
+
+
 @auth_app.command("flags")
 def auth_flags(
     user: str = typer.Option(..., "--user", help="The user id (see mm auth users)."),
@@ -1055,10 +1105,10 @@ def set_master_list(
         help="Output format: 'xlsx' (default; clickable Scryfall hyperlinks) "
              "or 'md' (markdown checklist editable in any text editor).",
     ),
-    include_variants: bool = typer.Option(
-        False, "--include-variants",
+    include_variants: bool | None = typer.Option(
+        None, "--include-variants/--no-include-variants",
         help="Include prerelease, store-stamped, japanshowcase, serialized, "
-             "and white/yellow-bordered variants. Off by default — these are "
+             "and white/yellow-bordered variants. Off by default (Settings → What counts) — these are "
              "filtered out of the inventory checklist AND the seeded set:<anchor> list "
              "so set-missing math doesn't count them.",
     ),
@@ -1095,6 +1145,9 @@ def set_master_list(
     if mode not in ("add", "modify"):
         typer.echo(f"error: --mode must be 'add' or 'modify', got {mode!r}", err=True)
         raise typer.Exit(2)
+    if include_variants is None:
+        from . import collection_prefs
+        include_variants = collection_prefs.get().variant_prints == "show"
     try:
         r, codes = _resolve_codes(name_or_code, include_kinds=list(include or []), only=list(only or []))
     except (LookupError, typer.BadParameter) as e:
@@ -3754,15 +3807,19 @@ def _materialize_or_die(selector: str):
         typer.echo(e.message, err=True); raise typer.Exit(e.exit_code)
 
 
-def _validate_chase(chase: str) -> None:
+def _validate_chase(chase: str | None) -> str:
     """Reject an unknown ``--chase`` mode with exit 2. Shared by the two query
     commands that expose the flag (missing-set + card-diff) so both emit the
     same message; `missing.missing_printings` keeps its own ValueError as the
-    library-boundary guard."""
-    from . import missing as missing_mod
+    library-boundary guard. ``None`` (flag omitted) resolves to the user's
+    "What counts" preference; returns the mode to use."""
+    from . import collection_prefs, missing as missing_mod
+    if chase is None:
+        return collection_prefs.get().chase_in_lists
     if chase not in missing_mod.CHASE_MODES:
         typer.echo(f"error: --chase must be one of {missing_mod.CHASE_MODES}, got {chase!r}", err=True)
         raise typer.Exit(2)
+    return chase
 
 
 def _row_unit_price(r: sel_mod.MaterializedRow) -> float | None:
@@ -4147,12 +4204,12 @@ def query_missing_set_cmd(
              "Pass 'collectible-alt' to skip the dupe filtering, 'alt' to also include pure-ff, "
              "'any-alt' to also include ext.",
     ),
-    chase: str = typer.Option(
-        "exclude", "--chase",
+    chase: str | None = typer.Option(
+        None, "--chase",
         help="Grey/chase-tier handling (premium-art showcase/foil tiers configured as "
-             "tier='chase' per family): 'exclude' (default — dropped, today's behavior), "
+             "tier='chase' per family): 'exclude' (dropped, today's behavior), "
              "'include' (normal missing list PLUS the chase prints), or 'only' (ONLY the "
-             "chase prints).",
+             "chase prints). Default: Settings → What counts (exclude until changed).",
     ),
 ):
     """Canonical "what am I missing from set <CODE>?" workflow.
@@ -4196,7 +4253,7 @@ def query_missing_set_cmd(
 
     code_l = code.lower()
 
-    _validate_chase(chase)
+    chase = _validate_chase(chase)
 
     # 1. Materialize the printing-level union of the missing-set sub-selectors.
     # Shared with scripts/manapool_cart_check.py via magic_manager.missing.
@@ -4308,11 +4365,12 @@ def query_card_diff_cmd(
         help="Sync stale (>7d) referenced sets before pricing. Default: local-first "
              "(fast, uses local prices as-is; stale sets are just noted on stderr).",
     ),
-    chase: str = typer.Option(
-        "exclude", "--chase",
-        help="Grey/chase-tier handling (tier='chase' premium-art rules): 'exclude' "
-             "(default), 'include' (chase prints also feed the pools — e.g. the "
-             "variant-chase pool for cards you own), or 'only' (chase prints only).",
+    chase: str | None = typer.Option(
+        None, "--chase",
+        help="Grey/chase-tier handling (tier='chase' premium-art rules): 'exclude', "
+             "'include' (chase prints also feed the pools — e.g. the "
+             "variant-chase pool for cards you own), or 'only' (chase prints only). "
+             "Default: Settings → What counts (exclude until changed).",
     ),
 ):
     """Three-pool "diff vs collection" report for a family (or every owned
@@ -4344,7 +4402,7 @@ def query_card_diff_cmd(
         raise typer.Exit(2)
     pools = list(valid_pools) if pool == "all" else [pool]
 
-    _validate_chase(chase)
+    chase = _validate_chase(chase)
 
     stale_codes: list[str] = []
     log = lambda m: typer.echo(m, err=True)  # noqa: E731

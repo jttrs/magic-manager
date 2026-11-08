@@ -417,6 +417,79 @@
         }
       }
     },
+    "/api/preferences/collection": {
+      "get": {
+        "tags": [
+          "preferences"
+        ],
+        "summary": "List Prefs",
+        "operationId": "list_prefs",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrefsOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/preferences/collection/{key}": {
+      "put": {
+        "tags": [
+          "preferences"
+        ],
+        "summary": "Put Pref",
+        "operationId": "put_pref",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrefIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrefsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/jobs/specs": {
       "get": {
         "tags": [
@@ -6573,6 +6646,24 @@
           "rows"
         ],
         "title": "ChecklistOut"
+      },
+      "ChoiceOut": {
+        "properties": {
+          "value": {
+            "type": "string",
+            "title": "Value"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value",
+          "label"
+        ],
+        "title": "ChoiceOut"
       },
       "ClientEventIn": {
         "properties": {
@@ -12765,6 +12856,121 @@
           "owned_deconstructed"
         ],
         "title": "PreconOptionOut"
+      },
+      "PrefIn": {
+        "properties": {
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PrefIn"
+      },
+      "PrefOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "about": {
+            "type": "string",
+            "title": "About"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "choice",
+              "multi"
+            ],
+            "title": "Kind"
+          },
+          "choices": {
+            "items": {
+              "$ref": "#/components/schemas/ChoiceOut"
+            },
+            "type": "array",
+            "title": "Choices"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ],
+            "title": "Value"
+          },
+          "default": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ],
+            "title": "Default"
+          },
+          "changed": {
+            "type": "boolean",
+            "title": "Changed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "title",
+          "about",
+          "kind",
+          "choices",
+          "value",
+          "default",
+          "changed"
+        ],
+        "title": "PrefOut"
+      },
+      "PrefsOut": {
+        "properties": {
+          "prefs": {
+            "items": {
+              "$ref": "#/components/schemas/PrefOut"
+            },
+            "type": "array",
+            "title": "Prefs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prefs"
+        ],
+        "title": "PrefsOut"
       },
       "PreviewOut": {
         "properties": {

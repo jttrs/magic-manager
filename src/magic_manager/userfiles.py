@@ -29,6 +29,7 @@ from datetime import UTC, datetime
 from functools import lru_cache
 from pathlib import Path
 
+from . import collection_prefs as _collection_prefs
 from . import db
 from . import layout as _layout
 from .analytics import consent as _consent
@@ -181,7 +182,7 @@ def migrate_all(data_dir: Path) -> MigrateReport:
 
 # Settings written before any real use (the hosted first-visit privacy prompt) aren't
 # "data": an otherwise-empty profile that holds only these can still be replaced.
-_PROFILE_ONLY_SETTINGS = (_consent.SETTING_KEY,)
+_PROFILE_ONLY_SETTINGS = (_consent.SETTING_KEY, _collection_prefs.SETTING_KEY)
 
 
 def has_user_data(user_db: Path) -> bool:

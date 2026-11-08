@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from . import family_status, missing as missing_mod, selectors as sel_mod, sets as sets_mod
+from . import collection_prefs as _prefs, family_status, missing as missing_mod, selectors as sel_mod, sets as sets_mod
 
 
 @dataclass
@@ -50,7 +50,7 @@ def _build_family_diff(
     missing_rows: list,
     prices: dict,
     owned_rows: list | None = None,
-    chase: str = "exclude",
+    chase: str | None = None,
 ) -> FamilyDiff:
     """Assemble a FamilyDiff from already-materialized missing rows + a
     (scryfall_id -> prices dict) price map. Shared by `family_diff` (single
@@ -74,6 +74,8 @@ def _build_family_diff(
     meaningless count. We therefore derive functional from the FULL-family
     missing universe (``chase="exclude"``), so its count is stable across all
     three modes while printing/variant-chase vary with the filter."""
+    if chase is None:
+        chase = _prefs.get().chase_in_lists
     if owned_rows is None:
         owned_rows = family_status._owned_rows_for_codes(family_code_set)
     owned_prints = len(owned_rows)
@@ -107,7 +109,7 @@ def _build_family_diff(
     # through (no extra materialize).
     functional_missing_rows = (
         missing_rows if chase == "exclude"
-        else missing_mod.missing_printings(parent_code)
+        else missing_mod.missing_printings(parent_code, chase="exclude")
     )
     functional = missing_mod.functional_missing(
         parent_code, precomputed_missing=functional_missing_rows, precomputed_owned=owned_oids,
@@ -132,7 +134,7 @@ def _build_family_diff(
 
 
 def family_diff(code: str, *, price_map: dict | None = None, refresh: bool = False,
-                warn=None, log=None, chase: str = "exclude") -> FamilyDiff | None:
+                warn=None, log=None, chase: str | None = None) -> FamilyDiff | None:
     """None if the family is unconfigured (SelectorParseError/LookupError from
     missing) or the anchor is unresolvable.
 
@@ -166,7 +168,7 @@ def family_diff(code: str, *, price_map: dict | None = None, refresh: bool = Fal
 
 
 def collection_diff(*, refresh: bool = False, warn=None, log=None,
-                    chase: str = "exclude") -> list[FamilyDiff]:
+                    chase: str | None = None) -> list[FamilyDiff]:
     """One FamilyDiff per owned+characterized family, sorted by owned_usd desc.
 
     Shares the 4-step pre-pass (enumerate families → per-family code set →
@@ -202,7 +204,7 @@ def collection_diff(*, refresh: bool = False, warn=None, log=None,
 
 def _assemble_family_diffs(
     resolved: list[tuple[str, str, set[str], list]],
-    *, price_map: dict, owned_rows: list, chase: str = "exclude",
+    *, price_map: dict, owned_rows: list, chase: str | None = None,
 ) -> list[FamilyDiff]:
     """Build + value a FamilyDiff per already-resolved family, sorted by owned_usd
     desc. The shared tail of `collection_diff` and `multi_family_diff`: given each
@@ -233,7 +235,7 @@ def _assemble_family_diffs(
 
 
 def multi_family_diff(codes, *, refresh: bool = False, warn=None, log=None,
-                      on_skip=None, chase: str = "exclude") -> list[FamilyDiff]:
+                      on_skip=None, chase: str | None = None) -> list[FamilyDiff]:
     """FamilyDiffs for an explicit list of family codes, batched like
     `collection_diff` — ONE local-first price resolve over the union of every
     requested family's owned + missing ids, instead of a per-family resolve.

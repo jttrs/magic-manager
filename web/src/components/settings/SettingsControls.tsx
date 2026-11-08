@@ -55,6 +55,40 @@ export function SettingsChoice<T extends string>({ value, options, onChange, lab
   );
 }
 
+/** Multiple choice for a settings row: the same segmented look as `SettingsChoice`,
+ *  any number on, wrapping onto several lines. */
+export function SettingsMultiChoice<T extends string>({ value, options, onChange, labelId, descriptionId, disabledValues = [] }: {
+  value: T[];
+  options: Choice<T>[];
+  onChange: (next: T[]) => void;
+  labelId: string;
+  descriptionId?: string;
+  disabledValues?: T[];
+}) {
+  const wide = options.length > 4;
+  return (
+    <ToggleGroup.Root
+      type="multiple"
+      value={value}
+      onValueChange={(v) => onChange(v as T[])}
+      aria-labelledby={labelId}
+      aria-describedby={descriptionId}
+      className={`flex min-w-0 flex-wrap gap-0.5 rounded-sm border border-rule-strong p-0.5 ${wide ? '' : 'sm:min-w-[15rem]'}`}
+    >
+      {options.map((o) => (
+        <ToggleGroup.Item
+          key={o.value}
+          value={o.value}
+          disabled={disabledValues.includes(o.value)}
+          className="min-h-9 min-w-0 cursor-pointer truncate rounded-xs px-3 text-sm voice-semi text-ink-muted transition-colors ease-guide pointer-coarse:min-h-11 hover:text-ink data-[disabled]:cursor-not-allowed data-[state=on]:bg-accent data-[state=on]:text-on-accent data-[state=on]:hover:text-on-accent"
+        >
+          {o.label}
+        </ToggleGroup.Item>
+      ))}
+    </ToggleGroup.Root>
+  );
+}
+
 /** A ruled section of the Settings dialog. */
 export function SettingsGroup({ title, children }: { title: string; children: ReactNode }) {
   const id = useId();
