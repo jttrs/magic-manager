@@ -21,9 +21,15 @@ from . import db
 from . import layout as _layout
 
 SETTING_KEY = "collection.prefs"
+# Per-family rule switches: {anchor: {rule_id: "count"|"chase"|"hide"}}, only the
+# rules whose state differs from the shipped default (selectors.family_rule_catalog).
+FAMILY_RULES_KEY = "collection.family_rules"
+RULE_STATES = ("count", "chase", "hide")
 CACHE_SECONDS = 30.0
 
 _cache: dict[str, tuple[float, "Prefs"]] = {}
+_NO_RULES: dict[str, str] = {}
+_rules_cache: dict[str, tuple[float, dict[str, dict[str, str]]]] = {}
 _lock = threading.Lock()
 
 
@@ -239,6 +245,88 @@ def describe() -> list[dict]:
 def clear_cache() -> None:
     with _lock:
         _cache.clear()
+        _rules_cache.clear()
+
+
+# ---------- per-family rule overrides ----------
+
+def _stored_rules() -> dict[str, dict[str, str]]:
+    """The saved overrides, tolerant of bad JSON, wrong shapes and unknown states."""
+    with db.connect() as conn:
+        row = conn.execute("SELECT value FROM settings WHERE key = ?", (FAMILY_RULES_KEY,)).fetchone()
+    if not (row and row["value"]):
+        return {}
+    try:
+        data = json.loads(row["value"])
+    except ValueError:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    out: dict[str, dict[str, str]] = {}
+    for anchor, rules in data.items():
+        if not isinstance(anchor, str) or not isinstance(rules, dict):
+            continue
+        clean = {rid: st for rid, st in rules.items()
+                 if isinstance(rid, str) and st in RULE_STATES}
+        if clean:
+            out[anchor.lower()] = clean
+    return out
+
+
+def _all_family_rules() -> dict[str, dict[str, str]]:
+    try:
+        scope = db.user_scope()
+    except _layout.NoUserBound:
+        return {}
+    now = time.monotonic()
+    with _lock:
+        hit = _rules_cache.get(scope)
+        if hit and now - hit[0] < CACHE_SECONDS:
+            return hit[1]
+    data = _stored_rules()
+    with _lock:
+        _rules_cache[scope] = (now, data)
+    return data
+
+
+def family_rule_overrides(anchor: str) -> dict[str, str]:
+    """This user's saved ``{rule_id: state}`` for one family (cached per user file;
+    the SAME dict object until the cache expires or is cleared; empty when nothing is
+    saved or no user is bound). Callers must not mutate it."""
+    return _all_family_rules().get(anchor.lower(), _NO_RULES)
+
+
+def set_family_rule(anchor: str, rule_id: str, state: str | None) -> dict[str, str]:
+    """Set one rule's state for this user; ``state=None`` resets it to the shipped
+    default (so does saving the default itself). Unknown family or rule →
+    ``LookupError``, bad state → ``ValueError``. Returns the family's overrides."""
+    from . import selectors  # lazy: selectors reads this module too
+    if state is not None and state not in RULE_STATES:
+        raise ValueError(f"state must be one of: {', '.join(RULE_STATES)}")
+    anchor = anchor.lower()
+    defaults = selectors.family_rule_defaults(anchor)  # LookupError for an unknown family
+    if rule_id not in defaults:
+        raise LookupError(f"no rule {rule_id!r} in family {anchor!r}")
+    stored = _stored_rules()
+    fam = dict(stored.get(anchor, {}))
+    if state is None or state == defaults[rule_id]:
+        fam.pop(rule_id, None)
+    else:
+        fam[rule_id] = state
+    if fam:
+        stored[anchor] = fam
+    else:
+        stored.pop(anchor, None)
+    with db.connect() as conn:
+        if stored:
+            conn.execute("INSERT INTO settings (key, value) VALUES (?, ?) "
+                         "ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+                         (FAMILY_RULES_KEY, json.dumps(stored, sort_keys=True)))
+        else:
+            conn.execute("DELETE FROM settings WHERE key = ?", (FAMILY_RULES_KEY,))
+    clear_cache()
+    db.forget_user_scope(db.user_scope())
+    return dict(fam)
 
 
 @db.user_cache
@@ -246,3 +334,4 @@ def forget_scope(scope: str) -> None:
     """Drop one user's cached preferences (``db.user_scope()``; account deletion)."""
     with _lock:
         _cache.pop(scope, None)
+        _rules_cache.pop(scope, None)

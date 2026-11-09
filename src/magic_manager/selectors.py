@@ -38,7 +38,7 @@ import re
 import shlex
 from dataclasses import dataclass, field
 
-from . import config as _config, db, scryfall, sets as sets_mod, util
+from . import config as _config, db, layout as _layout, scryfall, sets as sets_mod, util
 
 
 # ---------- AST ----------
@@ -120,8 +120,8 @@ FAMILY_DUPE_FOIL_PROMO_TYPES: dict[str, frozenset[str]] = _config.family_dupe_fo
 # Loaded from config/families.toml [[unobtainable.<fam>.rules]] (see
 # config.family_unobtainable_rules). Schema documented in the comment above.
 FAMILY_UNOBTAINABLE_RULES: dict[str, list[dict]] = _config.family_unobtainable_rules()
-# The `enabled = false` rules from the same file: proposals, switched off. Nothing
-# reads this yet (a later UI lists them); each rule carries its `note`.
+# The `enabled = false` rules from the same file: proposals, switched off. Only a
+# user's per-rule override (_effective_family_rules) turns one on; each carries its `note`.
 FAMILY_PROPOSED_RULES: dict[str, list[dict]] = _config.family_proposed_rules()
 
 
@@ -208,16 +208,162 @@ def _matches_unobtainable_rule(
     return True
 
 
+_RULE_STATE_TIER = {"hide": "hard", "chase": "chase"}
+# (user_scope, anchor) -> (the overrides dict it was built from, effective rules).
+_effective_cache: dict[tuple[str, str], tuple[dict, list[dict]]] = {}
+
+
+def _effective_family_rules(anchor: str) -> list[dict] | None:
+    """The rules the gate applies for ``anchor`` for the bound user. With no saved
+    override this is the shipped list object itself (``FAMILY_UNOBTAINABLE_RULES``);
+    otherwise active + proposed rules re-tiered by the user's per-rule state (count
+    drops a rule, hide → hard, chase → chase; an un-overridden proposal stays out)."""
+    from . import collection_prefs
+    anchor = anchor.lower()
+    overrides = collection_prefs.family_rule_overrides(anchor)
+    if not overrides:
+        return FAMILY_UNOBTAINABLE_RULES.get(anchor)
+    key = (db.user_scope(), anchor)
+    hit = _effective_cache.get(key)
+    if hit is not None and hit[0] is overrides:
+        return hit[1]
+    out: list[dict] = []
+    shipped = ((False, FAMILY_UNOBTAINABLE_RULES.get(anchor) or []),
+               (True, FAMILY_PROPOSED_RULES.get(anchor) or []))
+    for proposed, rules in shipped:
+        for rule in rules:
+            state = overrides.get(_config.rule_id(rule))
+            if state is None:
+                if not proposed:
+                    out.append(rule)
+            elif state in _RULE_STATE_TIER:
+                tiered = {k: v for k, v in rule.items() if k != "note"}
+                out.append({**tiered, "tier": _RULE_STATE_TIER[state]})
+    _effective_cache[key] = (overrides, out)
+    return out
+
+
+@db.user_cache
+def forget_scope(scope: str) -> None:
+    """Drop one user's cached effective family rules (account deletion, rule updates)."""
+    for k in [k for k in _effective_cache if k[0] == scope]:
+        _effective_cache.pop(k, None)
+
+
 def _is_family_unobtainable(
     card: dict, anchor_code: str, tiers: frozenset[str] = _UNOBTAINABLE_TIERS
 ) -> bool:
     """True iff any of the family's unobtainable rules (restricted to ``tiers``)
     match this card. ``tiers`` defaults to both tiers (hard+chase) so existing
-    exclusion callers are unchanged."""
-    rules = FAMILY_UNOBTAINABLE_RULES.get(anchor_code.lower())
+    exclusion callers are unchanged. Rules come from :func:`_effective_family_rules`
+    (the shipped list unless the user switched a rule)."""
+    try:
+        rules = _effective_family_rules(anchor_code)
+    except _layout.NoUserBound:
+        rules = FAMILY_UNOBTAINABLE_RULES.get(anchor_code.lower())
     if not rules:
         return False
     return any(_matches_unobtainable_rule(card, rule, tiers) for rule in rules)
+
+
+def _shipped_rules(anchor: str) -> list[tuple[dict, bool]]:
+    """``[(rule, proposed)]`` for a family: active rules first, then proposals."""
+    anchor = anchor.lower()
+    return ([(r, False) for r in FAMILY_UNOBTAINABLE_RULES.get(anchor) or []]
+            + [(r, True) for r in FAMILY_PROPOSED_RULES.get(anchor) or []])
+
+
+def family_rule_defaults(anchor: str) -> dict[str, str]:
+    """``{rule_id: shipped state}`` (active hard → hide, active chase → chase,
+    proposed → count). Unknown family (no rules at all) → ``LookupError``."""
+    rules = _shipped_rules(anchor)
+    if not rules:
+        raise LookupError(f"no family rules for {anchor!r}")
+    out: dict[str, str] = {}
+    for rule, proposed in rules:
+        out[_config.rule_id(rule)] = (
+            "count" if proposed else ("chase" if (rule.get("tier") or "hard") == "chase" else "hide"))
+    return out
+
+
+def describe_rule(rule: dict) -> str:
+    """A rule's predicate in plain words, e.g. ``Promo type: stamped`` or
+    ``Set: pala · CN: 1, 2, 3``."""
+    parts: list[str] = []
+    if "set_codes" in rule:
+        parts.append("Set: " + ", ".join(sorted(rule["set_codes"])))
+    if "collector_numbers" in rule:
+        cns = sorted(rule["collector_numbers"], key=util.cn_sort_key)
+        text = ", ".join(cns[:6]) + (f" +{len(cns) - 6} more" if len(cns) > 6 else "")
+        parts.append("CN: " + text)
+    if "promo_types_any_of" in rule:
+        parts.append("Promo type: " + " or ".join(sorted(rule["promo_types_any_of"])))
+    if "promo_types_all_of" in rule:
+        parts.append("Promo types: " + " + ".join(sorted(rule["promo_types_all_of"])))
+    if "frame_effects_all_of" in rule:
+        parts.append("Frame: " + " + ".join(sorted(rule["frame_effects_all_of"])))
+    if "border_color" in rule:
+        parts.append(f"Border: {rule['border_color']}")
+    return " · ".join(parts) or "Every print"
+
+
+def family_rule_catalog(anchor: str) -> list[dict]:
+    """Every rule of a family (active, then proposed) for the bound user:
+    ``{id, description, note, default, state, changed, prints, owned}``. ``prints`` =
+    local printings across the family matching the rule whatever its tier (tokens and
+    digital included), ``owned`` = of those, ones with a copy; both ``None`` when the
+    family has no local cards. Unknown family → ``LookupError``."""
+    from . import collection_prefs
+    anchor = anchor.lower()
+    defaults = family_rule_defaults(anchor)
+    overrides = collection_prefs.family_rule_overrides(anchor)
+    notes = _config.family_rule_notes().get(anchor, {})
+    try:
+        codes = sets_mod.resolve(anchor).all_codes
+    except (LookupError, scryfall.ScryfallError):
+        codes = [anchor]
+    ph = ",".join("?" for _ in codes)
+    with db.connect() as conn:
+        cards = [_card_dict(r) for r in conn.execute(
+            f"SELECT {_CARD_COLS} FROM cards c WHERE c.set_code IN ({ph})", codes)]
+        held = {r[0] for r in conn.execute(
+            f"SELECT DISTINCT i.scryfall_id FROM inventory i JOIN cards c ON c.scryfall_id = i.scryfall_id "
+            f"WHERE i.quantity > 0 AND c.set_code IN ({ph})", codes)}
+    out: list[dict] = []
+    for rule, _proposed in _shipped_rules(anchor):
+        rid = _config.rule_id(rule)
+        default = defaults[rid]
+        state = overrides.get(rid, default)
+        hits = [c for c in cards if _matches_unobtainable_rule(c, rule)] if cards else None
+        out.append({
+            "id": rid, "description": describe_rule(rule), "note": notes.get(rid) or rule.get("note"),
+            "default": default, "state": state, "changed": state != default,
+            "prints": None if hits is None else len(hits),
+            "owned": None if hits is None else sum(1 for c in hits if c["scryfall_id"] in held),
+        })
+    return out
+
+
+def family_rule_families() -> list[dict]:
+    """Every family with a rule (active or proposed): ``{code, name, rules, changed}``,
+    families with a changed rule first, then by name."""
+    from . import collection_prefs
+    anchors = sorted(set(FAMILY_UNOBTAINABLE_RULES) | set(FAMILY_PROPOSED_RULES))
+    try:
+        names = {f["value"]: f["label"] for f in sets_mod.paper_families()}
+    except (LookupError, scryfall.ScryfallError):
+        names = {}
+    out: list[dict] = []
+    for a in anchors:
+        rules = _shipped_rules(a)
+        if not rules:
+            continue
+        defaults = family_rule_defaults(a)
+        overrides = collection_prefs.family_rule_overrides(a)
+        changed = sum(1 for rid, st in overrides.items() if rid in defaults and st != defaults[rid])
+        out.append({"code": a, "name": names.get(a) or a.upper(), "rules": len(rules), "changed": changed})
+    out.sort(key=lambda f: (f["changed"] == 0, f["name"].lower()))
+    return out
 
 
 # Global exclusion: prints that are effectively unobtainable for a physical

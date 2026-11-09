@@ -5,6 +5,7 @@ import { useSettingsSection } from '../../app/settings';
 import { putPref, type PrefOut, type PrefsOut } from '../../core/api';
 import { canToggleOff, predict, toggleMulti } from '../../core/collectionPrefs';
 import { FailureNote } from '../companion/CompanionNotes';
+import FamilyRulesSettings from './FamilyRulesSettings';
 import { SettingsChoice, SettingsMultiChoice, SettingsRow } from './SettingsControls';
 
 type Change = { key: string; value: string | string[] | null };
@@ -47,6 +48,7 @@ function CollectionPrefsSection() {
       {prefs.data?.prefs.map((row) => (
         <PrefRow key={row.key} row={row} busy={change.isPending} onChange={(value) => change.mutate({ key: row.key, value })} />
       ))}
+      <FamilyRulesSettings />
     </div>
   );
 }

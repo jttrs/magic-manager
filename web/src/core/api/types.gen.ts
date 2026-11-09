@@ -3175,6 +3175,68 @@ export type FamilyProductsOut = {
 };
 
 /**
+ * FamilyRuleIn
+ */
+export type FamilyRuleIn = {
+    /**
+     * State
+     */
+    state?: 'count' | 'chase' | 'hide' | null;
+};
+
+/**
+ * FamilyRuleOut
+ */
+export type FamilyRuleOut = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Note
+     */
+    note: string | null;
+    /**
+     * Default
+     */
+    default: 'count' | 'chase' | 'hide';
+    /**
+     * State
+     */
+    state: 'count' | 'chase' | 'hide';
+    /**
+     * Changed
+     */
+    changed: boolean;
+    /**
+     * Prints
+     */
+    prints: number | null;
+    /**
+     * Owned
+     */
+    owned: number | null;
+};
+
+/**
+ * FamilyRulesOut
+ */
+export type FamilyRulesOut = {
+    /**
+     * Code
+     */
+    code: string;
+    /**
+     * Rules
+     */
+    rules: Array<FamilyRuleOut>;
+};
+
+/**
  * FamilySummaryOut
  */
 export type FamilySummaryOut = {
@@ -6150,6 +6212,38 @@ export type ReviewOut = {
 };
 
 /**
+ * RuleFamiliesOut
+ */
+export type RuleFamiliesOut = {
+    /**
+     * Families
+     */
+    families: Array<RuleFamilyOut>;
+};
+
+/**
+ * RuleFamilyOut
+ */
+export type RuleFamilyOut = {
+    /**
+     * Code
+     */
+    code: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Rules
+     */
+    rules: number;
+    /**
+     * Changed
+     */
+    changed: number;
+};
+
+/**
  * SaveIn
  */
 export type SaveIn = {
@@ -8021,6 +8115,86 @@ export type PutFlagResponses = {
 };
 
 export type PutFlagResponse = PutFlagResponses[keyof PutFlagResponses];
+
+export type ListRuleFamiliesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/preferences/collection/families';
+};
+
+export type ListRuleFamiliesResponses = {
+    /**
+     * Successful Response
+     */
+    200: RuleFamiliesOut;
+};
+
+export type ListRuleFamiliesResponse = ListRuleFamiliesResponses[keyof ListRuleFamiliesResponses];
+
+export type GetFamilyRulesData = {
+    body?: never;
+    path: {
+        /**
+         * Anchor
+         */
+        anchor: string;
+    };
+    query?: never;
+    url: '/api/preferences/collection/families/{anchor}';
+};
+
+export type GetFamilyRulesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetFamilyRulesError = GetFamilyRulesErrors[keyof GetFamilyRulesErrors];
+
+export type GetFamilyRulesResponses = {
+    /**
+     * Successful Response
+     */
+    200: FamilyRulesOut;
+};
+
+export type GetFamilyRulesResponse = GetFamilyRulesResponses[keyof GetFamilyRulesResponses];
+
+export type PutFamilyRuleData = {
+    body: FamilyRuleIn;
+    path: {
+        /**
+         * Anchor
+         */
+        anchor: string;
+        /**
+         * Rule Id
+         */
+        rule_id: string;
+    };
+    query?: never;
+    url: '/api/preferences/collection/families/{anchor}/rules/{rule_id}';
+};
+
+export type PutFamilyRuleErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PutFamilyRuleError = PutFamilyRuleErrors[keyof PutFamilyRuleErrors];
+
+export type PutFamilyRuleResponses = {
+    /**
+     * Successful Response
+     */
+    200: FamilyRulesOut;
+};
+
+export type PutFamilyRuleResponse = PutFamilyRuleResponses[keyof PutFamilyRuleResponses];
 
 export type ListPrefsData = {
     body?: never;

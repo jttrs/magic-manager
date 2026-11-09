@@ -417,6 +417,130 @@
         }
       }
     },
+    "/api/preferences/collection/families": {
+      "get": {
+        "tags": [
+          "preferences"
+        ],
+        "summary": "List Rule Families",
+        "operationId": "list_rule_families",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleFamiliesOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/preferences/collection/families/{anchor}": {
+      "get": {
+        "tags": [
+          "preferences"
+        ],
+        "summary": "Get Family Rules",
+        "operationId": "get_family_rules",
+        "parameters": [
+          {
+            "name": "anchor",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Anchor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FamilyRulesOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/preferences/collection/families/{anchor}/rules/{rule_id}": {
+      "put": {
+        "tags": [
+          "preferences"
+        ],
+        "summary": "Put Family Rule",
+        "operationId": "put_family_rule",
+        "parameters": [
+          {
+            "name": "anchor",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Anchor"
+            }
+          },
+          {
+            "name": "rule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Rule Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FamilyRuleIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FamilyRulesOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/preferences/collection": {
       "get": {
         "tags": [
@@ -10080,6 +10204,129 @@
         ],
         "title": "FamilyProductsOut"
       },
+      "FamilyRuleIn": {
+        "properties": {
+          "state": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "count",
+                  "chase",
+                  "hide"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "FamilyRuleIn"
+      },
+      "FamilyRuleOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "default": {
+            "type": "string",
+            "enum": [
+              "count",
+              "chase",
+              "hide"
+            ],
+            "title": "Default"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "count",
+              "chase",
+              "hide"
+            ],
+            "title": "State"
+          },
+          "changed": {
+            "type": "boolean",
+            "title": "Changed"
+          },
+          "prints": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prints"
+          },
+          "owned": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owned"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "description",
+          "note",
+          "default",
+          "state",
+          "changed",
+          "prints",
+          "owned"
+        ],
+        "title": "FamilyRuleOut"
+      },
+      "FamilyRulesOut": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/FamilyRuleOut"
+            },
+            "type": "array",
+            "title": "Rules"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "rules"
+        ],
+        "title": "FamilyRulesOut"
+      },
       "FamilySummaryOut": {
         "properties": {
           "code": {
@@ -15259,6 +15506,50 @@
           "lines"
         ],
         "title": "ReviewOut"
+      },
+      "RuleFamiliesOut": {
+        "properties": {
+          "families": {
+            "items": {
+              "$ref": "#/components/schemas/RuleFamilyOut"
+            },
+            "type": "array",
+            "title": "Families"
+          }
+        },
+        "type": "object",
+        "required": [
+          "families"
+        ],
+        "title": "RuleFamiliesOut"
+      },
+      "RuleFamilyOut": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "rules": {
+            "type": "integer",
+            "title": "Rules"
+          },
+          "changed": {
+            "type": "integer",
+            "title": "Changed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "rules",
+          "changed"
+        ],
+        "title": "RuleFamilyOut"
       },
       "SaveIn": {
         "properties": {

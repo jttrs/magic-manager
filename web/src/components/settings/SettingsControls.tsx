@@ -15,7 +15,7 @@ export function SettingsRow({ label, description, control }: {
     <div className="flex flex-col gap-2 border-b border-rule py-3 last:border-b-0 sm:flex-row sm:items-center sm:gap-6">
       <div className="min-w-0 flex-1">
         <p id={`${id}-l`} className="text-md font-medium leading-snug">{label}</p>
-        {description && <p id={descriptionId} className="mt-0.5 text-sm leading-relaxed text-ink-muted">{description}</p>}
+        {description && <div id={descriptionId} className="mt-0.5 text-sm leading-relaxed text-ink-muted">{description}</div>}
       </div>
       <div className="shrink-0">{control({ labelId: `${id}-l`, descriptionId })}</div>
     </div>

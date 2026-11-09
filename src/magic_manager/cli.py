@@ -320,6 +320,59 @@ def prefs_reset(key: str = typer.Argument(..., help="A preference key (see mm pr
     typer.echo(f"{key}: reset to default")
 
 
+@prefs_app.command("rules")
+def prefs_rules(
+    family: str = typer.Argument(..., help="A family code (e.g. xln)."),
+    json_out: bool = typer.Option(False, "--json", help="Machine-readable output."),
+):
+    """A family's print rules: state (* = changed from the shipped state), prints, owned."""
+    from . import selectors
+    try:
+        rows = selectors.family_rule_catalog(family)
+    except LookupError as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+    if json_out:
+        typer.echo(json.dumps(rows, indent=2))
+        return
+    for r in rows:
+        prints = "-" if r["prints"] is None else r["prints"]
+        owned = "-" if r["owned"] is None else r["owned"]
+        typer.echo(f"{r['id']}  {r['state']:<5}{'*' if r['changed'] else ' '}  "
+                   f"{prints!s:>5} prints  {owned!s:>4} owned  {r['description']}")
+
+
+@prefs_app.command("rule")
+def prefs_rule(
+    family: str = typer.Argument(..., help="A family code (see mm prefs rules)."),
+    rule_id: str = typer.Argument(..., help="A rule id (see mm prefs rules <family>)."),
+    state: str = typer.Argument(..., help="count | chase | hide."),
+):
+    """Set one family rule for you: count (does nothing), chase (premium print) or hide (left out)."""
+    from . import collection_prefs
+    try:
+        collection_prefs.set_family_rule(family, rule_id, state)
+    except (LookupError, ValueError) as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+    typer.echo(f"{family.lower()} {rule_id}: {state}")
+
+
+@prefs_app.command("rule-reset")
+def prefs_rule_reset(
+    family: str = typer.Argument(..., help="A family code (see mm prefs rules)."),
+    rule_id: str = typer.Argument(..., help="A rule id (see mm prefs rules <family>)."),
+):
+    """Put one family rule back to its shipped state."""
+    from . import collection_prefs
+    try:
+        collection_prefs.set_family_rule(family, rule_id, None)
+    except (LookupError, ValueError) as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+    typer.echo(f"{family.lower()} {rule_id}: reset to the shipped state")
+
+
 @auth_app.command("flags")
 def auth_flags(
     user: str = typer.Option(..., "--user", help="The user id (see mm auth users)."),
