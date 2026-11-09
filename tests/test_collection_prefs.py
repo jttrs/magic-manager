@@ -36,11 +36,12 @@ def test_defaults_without_a_row(tmp_db):
     p = cp.get(fresh=True)
     assert p.changed == frozenset()
     assert p.set_types == sets.DEFAULT_INVENTORY_SET_TYPES
+    assert p.by_family == "off"
     assert (p.variant_prints, p.datestamped, p.chase_in_lists, p.foil_twins, p.tokens_in_missing) == (
         "hide", "hide", "exclude", "each", "exclude")
     assert p.missing_rarities == frozenset({"rare", "mythic", "uncommon_chase"})
     assert [k for k in (d.key for d in cp.DEFINITIONS)] == [
-        "set_types", "variant_prints", "datestamped", "missing_rarities", "chase_in_lists",
+        "set_types", "variant_prints", "by_family", "datestamped", "missing_rarities", "chase_in_lists",
         "foil_twins", "tokens_in_missing"]
 
 

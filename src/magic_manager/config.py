@@ -31,6 +31,8 @@ rule (no separate prose doc to drift from); a CI check
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import sys
 import tomllib
@@ -220,10 +222,47 @@ def family_unobtainable_rules(*, override: str | Path | None = None) -> dict[str
 
 def family_proposed_rules(*, override: str | Path | None = None) -> dict[str, list[dict]]:
     """The ``enabled = false`` rules of ``[[unobtainable.<fam>.rules]]`` — proposals
-    nothing reads yet. Same shape as :func:`family_unobtainable_rules`, plus each
-    rule's ``note`` under ``"note"``. Families with no proposals are absent."""
+    that only a user's per-rule switch turns on. Same shape as
+    :func:`family_unobtainable_rules`, plus each rule's ``note`` under ``"note"``. Families with no proposals are absent."""
     return build_unobtainable_rules(
         load_toml("families.toml", override=override, required=True), enabled=False)
+
+
+def rule_id(rule: dict) -> str:
+    """Stable id of an unobtainable rule: first 10 hex of SHA-1 over the canonical
+    JSON of its PREDICATE keys only (``tier``/``note``/``enabled`` excluded, so
+    editing a note or tier keeps a user's override; editing a predicate makes it a
+    new rule). Accepts evaluated rules (frozensets) and raw TOML tables (lists,
+    un-lowercased) alike — values are normalized the way the loader does."""
+    canon: dict = {}
+    for k, v in rule.items():
+        kind = UNOBTAINABLE_RULE_KEYS.get(k)
+        if kind in ("tier", "note", "enabled"):
+            continue
+        if kind == "promo_set":
+            canon[k] = sorted(str(x).lower() for x in v)
+        elif kind == "cn_set":
+            canon[k] = sorted(str(x) for x in v)
+        elif isinstance(v, (set, frozenset)):
+            canon[k] = sorted(str(x) for x in v)
+        elif isinstance(v, tuple):
+            canon[k] = list(v)
+        else:
+            canon[k] = v
+    return hashlib.sha1(json.dumps(canon, sort_keys=True).encode()).hexdigest()[:10]
+
+
+def family_rule_notes(*, override: str | Path | None = None) -> dict[str, dict[str, str]]:
+    """``{anchor: {rule_id: note}}`` for EVERY ``[[unobtainable.<fam>.rules]]`` rule
+    (active and proposed) from the raw TOML — evaluated active rules carry no note."""
+    raw = load_toml("families.toml", override=override, required=True)
+    out: dict[str, dict[str, str]] = {}
+    for fam, body in (raw.get("unobtainable") or {}).items():
+        for rule in (body.get("rules") or []):
+            note = rule.get("note")
+            if note:
+                out.setdefault(fam.lower(), {})[rule_id(rule)] = str(note)
+    return out
 
 
 SCENE_KINDS = ("scene", "poster")

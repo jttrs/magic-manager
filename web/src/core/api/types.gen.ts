@@ -3099,6 +3099,16 @@ export type FactsOut = {
 };
 
 /**
+ * FamilyAllIn
+ */
+export type FamilyAllIn = {
+    /**
+     * State
+     */
+    state?: 'count' | 'chase' | 'hide' | null;
+};
+
+/**
  * FamilyCardsOut
  */
 export type FamilyCardsOut = {
@@ -3172,6 +3182,88 @@ export type FamilyProductsOut = {
      * Products
      */
     products: Array<ProductOut>;
+};
+
+/**
+ * FamilyRuleIn
+ */
+export type FamilyRuleIn = {
+    /**
+     * State
+     */
+    state?: 'count' | 'chase' | 'hide' | null;
+};
+
+/**
+ * FamilyRuleOut
+ */
+export type FamilyRuleOut = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Note
+     */
+    note: string | null;
+    /**
+     * Default
+     */
+    default: 'count' | 'chase' | 'hide';
+    /**
+     * State
+     */
+    state: 'count' | 'chase' | 'hide' | null;
+    /**
+     * Source
+     */
+    source: 'rule' | 'family' | 'shipped';
+    /**
+     * Effective
+     */
+    effective: 'count' | 'chase' | 'hide';
+    /**
+     * Changed
+     */
+    changed: boolean;
+    /**
+     * Prints
+     */
+    prints: number | null;
+    /**
+     * Owned
+     */
+    owned: number | null;
+    /**
+     * Also Hidden
+     */
+    also_hidden: number;
+};
+
+/**
+ * FamilyRulesOut
+ */
+export type FamilyRulesOut = {
+    /**
+     * Code
+     */
+    code: string;
+    /**
+     * All Rules
+     */
+    all_rules: 'count' | 'chase' | 'hide' | null;
+    /**
+     * By Family
+     */
+    by_family: boolean;
+    /**
+     * Rules
+     */
+    rules: Array<FamilyRuleOut>;
 };
 
 /**
@@ -6150,6 +6242,38 @@ export type ReviewOut = {
 };
 
 /**
+ * RuleFamiliesOut
+ */
+export type RuleFamiliesOut = {
+    /**
+     * Families
+     */
+    families: Array<RuleFamilyOut>;
+};
+
+/**
+ * RuleFamilyOut
+ */
+export type RuleFamilyOut = {
+    /**
+     * Code
+     */
+    code: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Rules
+     */
+    rules: number;
+    /**
+     * Changed
+     */
+    changed: number;
+};
+
+/**
  * SaveIn
  */
 export type SaveIn = {
@@ -7354,6 +7478,48 @@ export type ValidationError = {
 };
 
 /**
+ * VariantKindIn
+ */
+export type VariantKindIn = {
+    /**
+     * State
+     */
+    state?: 'hide' | 'show' | null;
+};
+
+/**
+ * VariantKindOut
+ */
+export type VariantKindOut = {
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * State
+     */
+    state: 'hide' | 'show' | null;
+    /**
+     * Effective
+     */
+    effective: 'hide' | 'show';
+};
+
+/**
+ * VariantKindsOut
+ */
+export type VariantKindsOut = {
+    /**
+     * Kinds
+     */
+    kinds: Array<VariantKindOut>;
+};
+
+/**
  * ViewUsage
  */
 export type ViewUsage = {
@@ -8021,6 +8187,162 @@ export type PutFlagResponses = {
 };
 
 export type PutFlagResponse = PutFlagResponses[keyof PutFlagResponses];
+
+export type ListRuleFamiliesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/preferences/collection/families';
+};
+
+export type ListRuleFamiliesResponses = {
+    /**
+     * Successful Response
+     */
+    200: RuleFamiliesOut;
+};
+
+export type ListRuleFamiliesResponse = ListRuleFamiliesResponses[keyof ListRuleFamiliesResponses];
+
+export type GetFamilyRulesData = {
+    body?: never;
+    path: {
+        /**
+         * Anchor
+         */
+        anchor: string;
+    };
+    query?: never;
+    url: '/api/preferences/collection/families/{anchor}';
+};
+
+export type GetFamilyRulesErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetFamilyRulesError = GetFamilyRulesErrors[keyof GetFamilyRulesErrors];
+
+export type GetFamilyRulesResponses = {
+    /**
+     * Successful Response
+     */
+    200: FamilyRulesOut;
+};
+
+export type GetFamilyRulesResponse = GetFamilyRulesResponses[keyof GetFamilyRulesResponses];
+
+export type PutFamilyRuleData = {
+    body: FamilyRuleIn;
+    path: {
+        /**
+         * Anchor
+         */
+        anchor: string;
+        /**
+         * Rule Id
+         */
+        rule_id: string;
+    };
+    query?: never;
+    url: '/api/preferences/collection/families/{anchor}/rules/{rule_id}';
+};
+
+export type PutFamilyRuleErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PutFamilyRuleError = PutFamilyRuleErrors[keyof PutFamilyRuleErrors];
+
+export type PutFamilyRuleResponses = {
+    /**
+     * Successful Response
+     */
+    200: FamilyRulesOut;
+};
+
+export type PutFamilyRuleResponse = PutFamilyRuleResponses[keyof PutFamilyRuleResponses];
+
+export type PutFamilyAllData = {
+    body: FamilyAllIn;
+    path: {
+        /**
+         * Anchor
+         */
+        anchor: string;
+    };
+    query?: never;
+    url: '/api/preferences/collection/families/{anchor}/all';
+};
+
+export type PutFamilyAllErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PutFamilyAllError = PutFamilyAllErrors[keyof PutFamilyAllErrors];
+
+export type PutFamilyAllResponses = {
+    /**
+     * Successful Response
+     */
+    200: FamilyRulesOut;
+};
+
+export type PutFamilyAllResponse = PutFamilyAllResponses[keyof PutFamilyAllResponses];
+
+export type ListVariantKindsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/preferences/collection/variant-kinds';
+};
+
+export type ListVariantKindsResponses = {
+    /**
+     * Successful Response
+     */
+    200: VariantKindsOut;
+};
+
+export type ListVariantKindsResponse = ListVariantKindsResponses[keyof ListVariantKindsResponses];
+
+export type PutVariantKindData = {
+    body: VariantKindIn;
+    path: {
+        /**
+         * Kind
+         */
+        kind: string;
+    };
+    query?: never;
+    url: '/api/preferences/collection/variant-kinds/{kind}';
+};
+
+export type PutVariantKindErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PutVariantKindError = PutVariantKindErrors[keyof PutVariantKindErrors];
+
+export type PutVariantKindResponses = {
+    /**
+     * Successful Response
+     */
+    200: VariantKindsOut;
+};
+
+export type PutVariantKindResponse = PutVariantKindResponses[keyof PutVariantKindResponses];
 
 export type ListPrefsData = {
     body?: never;

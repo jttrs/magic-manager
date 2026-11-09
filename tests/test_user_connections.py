@@ -641,3 +641,33 @@ def test_browser_launch_refuses_whenever_hosted(monkeypatch):
     assert browser_launch.refused()
     with pytest.raises(browser_launch.ServerBrowserRefused):
         browser_launch.launch(object(), headless=True)
+
+
+# ---------- db.user_scope memo ----------
+
+def test_user_scope_memo_follows_user_strict_and_env(owner_split, monkeypatch):
+    db._scope_memo.clear()
+    first = db.user_scope()
+    assert db.user_scope() == first and len(db._scope_memo) == 1
+    userfiles.create(owner_split, UB)
+    with layout.as_user(UB):
+        assert db.user_scope() == str(owner_split / "users" / f"{UB}.db") != first
+    assert db.user_scope() == first
+    n = len(db._scope_memo)
+    monkeypatch.setenv("MM_USER", "other")        # an env var is part of the key
+    db.user_scope()
+    assert len(db._scope_memo) == n + 1
+    monkeypatch.delenv("MM_USER")
+    assert db.user_scope() == first
+
+
+def test_user_scope_raise_is_not_stored_and_strict_still_fails_closed(owner_split):
+    db._scope_memo.clear()
+    owner_path = db.user_scope()                   # unbound, non-strict: memoized
+    assert owner_path.endswith("owner.db") and len(db._scope_memo) == 1
+    layout.set_strict(True)
+    with pytest.raises(layout.NoUserBound):
+        db.user_scope()
+    assert len(db._scope_memo) == 1                # the raise stored nothing
+    with pytest.raises(layout.NoUserBound):
+        db.user_scope()

@@ -67,8 +67,9 @@ Small PRs, one per item.
   keep/exclude tier there is "kept (default) — pending owner review". The proposals are now in
   `config/families.toml`: the empty or fancy-foil `[dupe_foil]` entries are configured (they only
   let `mm query missing-set` run for those families), and the exclusion proposals are
-  `[[unobtainable.<anchor>.rules]]` entries with `enabled = false` (`selectors.FAMILY_PROPOSED_RULES`;
-  nothing reads them yet, a later UI lists them). Switching one on is deleting that line. Still open:
+  `[[unobtainable.<anchor>.rules]]` entries with `enabled = false` (`selectors.FAMILY_PROPOSED_RULES`).
+  Each rule, active or proposed, now has a per-user Count / Chase / Hide switch (`collection_prefs.set_family_rule`,
+  `mm prefs rule`, `/api/preferences/collection/families`); the shipped state is the default. Still open:
   the sync gaps the docs found (Scryfall `variation` prints and non-English-only sets are never synced;
   finish-split core sets 7ed–10e; rarity `special` sheets) and the code-fix rows (`ktk` Arena `Ny`
   prints, `m15` prerelease alt art, `pusg`, `pptk`).

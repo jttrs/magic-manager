@@ -14,8 +14,10 @@ family, my copies of each printing, and where the gaps are". So this module:
   masters…), plus member sets whose type the user's "What counts" ``set_types``
   preference includes (default ``sets.DEFAULT_INVENTORY_SET_TYPES``: no
   memorabilia/art-series, alchemy or token sets) — as
-  ``FamilyResolution.filtered_codes`` does — and not ``sets.is_excluded_variant`` (prerelease,
-  stamped, serialized, …) unless the ``variant_prints`` preference shows them; then drops tokens, digital-only
+  ``FamilyResolution.filtered_codes`` does — and not ``sets.variant_hidden`` (prerelease,
+  stamped, serialized, … per the user's ``variant_prints`` group and per-kind overrides)
+  unless a family rule they explicitly set to Count/Chase matches the print
+  (``selectors.family_rule_keeps_print``); then drops tokens, digital-only
   (``selectors._is_digital_only``), the family's HARD-tier unobtainable rules,
   and meld-back faces (``missing._drop_meld_back_faces``). Every exclusion
   yields to ownership: a printing you own always shows (ground truth first).
@@ -113,6 +115,14 @@ def inventory_finishes(raw_json: str | None) -> list[str]:
     return list(dict.fromkeys(f for f in raw if f in sel_mod.VALID_FINISHES)) or ["nonfoil"]
 
 
+def _serialized_kept(card: dict, parent_code: str, prefs, kinds: dict) -> bool:
+    """A print that is digital-only purely because it is serialized, and that the
+    user's variant settings or a family rule bring back."""
+    return (not sel_mod._is_digital_only_except_serialized(card)
+            and (not sets_mod.variant_hidden(card, prefs, kinds)
+                 or sel_mod.family_rule_keeps_print(card, parent_code)))
+
+
 def family_cards(code: str) -> FamilyCollection:
     """The full printing universe of ``code``'s family with ownership attached.
     Raises ``LookupError`` for an unknown code."""
@@ -163,17 +173,19 @@ def family_cards(code: str) -> FamilyCollection:
     extra: dict[str, tuple[str | None, str | None]] = {}
     scene_cfg = scenes_mod.configured(parent_code)
     prefs = collection_prefs.get()
+    kinds = collection_prefs.variant_kind_overrides()
     for r in rows:
         card = sel_mod._card_dict(r)
         sid = card["scryfall_id"]
         if sid not in owned_ids and (
             card.get("is_token")
-            or sel_mod._is_digital_only(card)
+            or (sel_mod._is_digital_only(card) and not _serialized_kept(card, parent_code, prefs, kinds))
             or (
                 not scenes_mod.scene_of(scene_cfg, card["set"] or "", card.get("collector_number") or "")
                 and (
                     (card["set"] != parent_code and set_types.get(card["set"]) not in prefs.set_types)
-                    or (prefs.variant_prints != "show" and sets_mod.is_excluded_variant(card))
+                    or (sets_mod.variant_hidden(card, prefs, kinds)
+                        and not sel_mod.family_rule_keeps_print(card, parent_code))
                     or sel_mod._is_family_unobtainable(card, parent_code, _HARD_TIER)
                 )
             )

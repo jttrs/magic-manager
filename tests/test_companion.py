@@ -25,7 +25,7 @@ from magic_manager.api import companion as companion_api
 ROOT = Path(__file__).resolve().parents[1]
 FIX = ROOT / "tests" / "fixtures" / "companion"
 EXT = ROOT / "extension"
-CODE = re.compile(r"""['"]((?:companion|request|permission|cart|tabs|moxfield|archidekt|collection|deck)\.(?!com\b|net\b|app\b|prefs\b)[a-z_]+)['"]""")
+CODE = re.compile(r"""['"]((?:companion|request|permission|cart|tabs|moxfield|archidekt|collection|deck)\.(?!com\b|net\b|app\b|prefs\b|family_rules\b|variant_kinds\b)[a-z_]+)['"]""")
 
 
 def _golden(name: str) -> dict:

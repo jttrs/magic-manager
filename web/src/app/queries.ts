@@ -1,9 +1,9 @@
 // Server state via TanStack Query over the generated, typed API client.
-import { keepPreviousData, queryOptions } from '@tanstack/react-query';
+import { keepPreviousData, queryOptions, type QueryClient } from '@tanstack/react-query';
 import type { DraftCardIn } from '../core/api';
 import { apiErrorFrom } from '../core/apiError';
 import type { RankingPageRequest } from '../core/rankings';
-import { adminUsers, analyticsConsent, analyticsSummary, analyticsCatalog, dealsTabs, dealsWatched, marketProductCost, marketSecretLair, undoInfo, cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, cardFloors, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs, historyList, historyEvent, historyRevertPlan, exploreRanking, exploreRankingOptions, cardCombos, deckCombos, draftCombos, artTags, artSwaps, jumpstartView, recipeList, recipeDetail, surfOptions, companionInfo, scrapersHealth, purchaseStores, purchaseList, purchaseReview, cardEarmarksList, deckEarmarks, listFlags, listPrefs } from '../core/api';
+import { adminUsers, analyticsConsent, analyticsSummary, analyticsCatalog, dealsTabs, dealsWatched, marketProductCost, marketSecretLair, undoInfo, cartSetup, featuresRoute, marketCards, marketDeck, marketProducts, marketProductTree, cardHoldings, cardFloors, collection, deckCheck, exploreCard, exploreSearch, deckSuggestions, collectionFamilies, commanders, compare, deckDetail, deckList, ingestPrecons, ingestSearch, listJobs, historyList, historyEvent, historyRevertPlan, exploreRanking, exploreRankingOptions, cardCombos, deckCombos, draftCombos, artTags, artSwaps, jumpstartView, recipeList, recipeDetail, surfOptions, companionInfo, scrapersHealth, purchaseStores, purchaseList, purchaseReview, cardEarmarksList, deckEarmarks, listFlags, listPrefs, listRuleFamilies, getFamilyRules, listVariantKinds } from '../core/api';
 
 export function unwrap<T>(r: { data?: T; error?: unknown; response?: Response }): T {
   if (r.error !== undefined || r.data === undefined) throw apiErrorFrom(r.error, r.response);
@@ -216,6 +216,33 @@ export const collectionPrefsQuery = (enabled = true) =>
     queryKey: ['preferences', 'collection'],
     queryFn: async ({ signal }) => unwrap(await listPrefs({ signal })),
     enabled,
+    staleTime: 60_000,
+  });
+
+/** Families that have switchable rules (Settings → What counts → Family rules). */
+export const ruleFamiliesQuery = (enabled = true) =>
+  queryOptions({
+    queryKey: ['preferences', 'collection', 'families'],
+    queryFn: async ({ signal }) => unwrap(await listRuleFamilies({ signal })),
+    enabled,
+    staleTime: 60_000,
+  });
+
+/** The variant kinds (white border, serialized, ...) and what each does for you now. */
+export const variantKindsQuery = (enabled = true) =>
+  queryOptions({
+    queryKey: ['preferences', 'collection', 'variant-kinds'],
+    queryFn: async ({ signal }) => unwrap(await listVariantKinds({ signal })),
+    enabled,
+    staleTime: 60_000,
+  });
+
+/** One family's rules with their state and print counts. */
+export const familyRulesQuery = (code: string) =>
+  queryOptions({
+    queryKey: ['preferences', 'collection', 'families', code],
+    queryFn: async ({ signal }) => unwrap(await getFamilyRules({ path: { anchor: code }, signal })),
+    enabled: Boolean(code),
     staleTime: 60_000,
   });
 
@@ -487,3 +514,9 @@ export const deckEarmarksQuery = (slug: string, cards: DraftCardIn[]) =>
     staleTime: 60_000,
     placeholderData: keepPreviousData,
   });
+
+/** Everything a preference, variant-kind or family-rule change can alter: re-read it all. */
+export const invalidateCounting = (qc: QueryClient) => Promise.all(
+  [['collection'], ['market'], ['jumpstart'], ['preferences', 'collection', 'families'], variantKindsQuery().queryKey]
+    .map((k) => qc.invalidateQueries({ queryKey: k })),
+);
