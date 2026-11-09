@@ -9,7 +9,7 @@ from ..api import collection_prefs as prefs_api
 router = APIRouter(prefix="/api/preferences/collection", tags=["preferences"])
 
 
-# Registered before "/{key}" so the fixed "families" path is never read as a preference key.
+# Registered before "/{key}" so the fixed "families" / "variant-kinds" paths is never read as a preference key.
 @router.get("/families", response_model=prefs_api.RuleFamiliesOut)
 def list_rule_families():
     return prefs_api.rule_families()
@@ -27,6 +27,31 @@ def get_family_rules(anchor: str):
 def put_family_rule(anchor: str, rule_id: str, body: prefs_api.FamilyRuleIn):
     try:
         return prefs_api.set_family_rule(anchor, rule_id, body)
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from e
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from e
+
+
+@router.put("/families/{anchor}/all", response_model=prefs_api.FamilyRulesOut)
+def put_family_all(anchor: str, body: prefs_api.FamilyAllIn):
+    try:
+        return prefs_api.set_family_all(anchor, body)
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from e
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from e
+
+
+@router.get("/variant-kinds", response_model=prefs_api.VariantKindsOut)
+def list_variant_kinds():
+    return prefs_api.variant_kinds()
+
+
+@router.put("/variant-kinds/{kind}", response_model=prefs_api.VariantKindsOut)
+def put_variant_kind(kind: str, body: prefs_api.VariantKindIn):
+    try:
+        return prefs_api.set_variant_kind(kind, body)
     except ValueError as e:
         raise HTTPException(422, str(e)) from e
     except LookupError as e:

@@ -325,20 +325,26 @@ def prefs_rules(
     family: str = typer.Argument(..., help="A family code (e.g. xln)."),
     json_out: bool = typer.Option(False, "--json", help="Machine-readable output."),
 ):
-    """A family's print rules: state (* = changed from the shipped state), prints, owned."""
-    from . import selectors
+    """A family's print rules: your switch (group = none; * = set), what applies now, prints, owned."""
+    from . import collection_prefs, selectors
     try:
         rows = selectors.family_rule_catalog(family)
     except LookupError as e:
         typer.echo(f"error: {e}", err=True)
         raise typer.Exit(2)
+    all_rules = selectors.family_rule_all(family)
     if json_out:
-        typer.echo(json.dumps(rows, indent=2))
+        typer.echo(json.dumps({"code": family.lower(), "all_rules": all_rules,
+                               "by_family": collection_prefs.get().by_family == "on", "rules": rows}, indent=2))
         return
+    typer.echo(f"All rules: {all_rules or 'shipped'}"
+               + ("" if collection_prefs.get().by_family == "on"
+                  else "   (not applied: mm prefs set by_family on)"))
     for r in rows:
         prints = "-" if r["prints"] is None else r["prints"]
         owned = "-" if r["owned"] is None else r["owned"]
-        typer.echo(f"{r['id']}  {r['state']:<5}{'*' if r['changed'] else ' '}  "
+        typer.echo(f"{r['id']}  {r['state'] or 'group':<5}{'*' if r['changed'] else ' '}  "
+                   f"now {r['effective']:<5} ({r['source']})  "
                    f"{prints!s:>5} prints  {owned!s:>4} owned  {r['description']}")
 
 
@@ -346,12 +352,12 @@ def prefs_rules(
 def prefs_rule(
     family: str = typer.Argument(..., help="A family code (see mm prefs rules)."),
     rule_id: str = typer.Argument(..., help="A rule id (see mm prefs rules <family>)."),
-    state: str = typer.Argument(..., help="count | chase | hide."),
+    state: str = typer.Argument(..., help="count | chase | hide | group (follow All rules, else the shipped state)."),
 ):
     """Set one family rule for you: count (does nothing), chase (premium print) or hide (left out)."""
     from . import collection_prefs
     try:
-        collection_prefs.set_family_rule(family, rule_id, state)
+        collection_prefs.set_family_rule(family, rule_id, None if state == "group" else state)
     except (LookupError, ValueError) as e:
         typer.echo(f"error: {e}", err=True)
         raise typer.Exit(2)
@@ -363,14 +369,56 @@ def prefs_rule_reset(
     family: str = typer.Argument(..., help="A family code (see mm prefs rules)."),
     rule_id: str = typer.Argument(..., help="A rule id (see mm prefs rules <family>)."),
 ):
-    """Put one family rule back to its shipped state."""
+    """Take one family rule's own switch off (it follows All rules, else the shipped state)."""
     from . import collection_prefs
     try:
         collection_prefs.set_family_rule(family, rule_id, None)
     except (LookupError, ValueError) as e:
         typer.echo(f"error: {e}", err=True)
         raise typer.Exit(2)
-    typer.echo(f"{family.lower()} {rule_id}: reset to the shipped state")
+    typer.echo(f"{family.lower()} {rule_id}: group")
+
+
+@prefs_app.command("family-all")
+def prefs_family_all(
+    family: str = typer.Argument(..., help="A family code (see mm prefs rules)."),
+    state: str = typer.Argument(..., help="count | chase | hide | shipped (the shipped rules)."),
+):
+    """Set what ALL of a family's rules do unless one is set on its own (needs by_family on to apply)."""
+    from . import collection_prefs
+    try:
+        collection_prefs.set_family_all(family, None if state == "shipped" else state)
+    except (LookupError, ValueError) as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+    typer.echo(f"{family.lower()} all rules: {state}")
+
+
+@prefs_app.command("kinds")
+def prefs_kinds(json_out: bool = typer.Option(False, "--json", help="Machine-readable output.")):
+    """The variant kinds: your switch (group = follows variant_prints) and what applies now."""
+    from . import selectors
+    rows = selectors.variant_kind_catalog()
+    if json_out:
+        typer.echo(json.dumps(rows, indent=2))
+        return
+    for r in rows:
+        typer.echo(f"{r['key']:<16} {r['state'] or 'group':<6} now {r['effective']:<5} {r['label']}")
+
+
+@prefs_app.command("kind")
+def prefs_kind(
+    kind: str = typer.Argument(..., help="A variant kind (see mm prefs kinds)."),
+    state: str = typer.Argument(..., help="hide | show | group (follow variant_prints)."),
+):
+    """Leave one kind of variant print out of, or include it in, your collection."""
+    from . import collection_prefs
+    try:
+        collection_prefs.set_variant_kind(kind, None if state == "group" else state)
+    except (LookupError, ValueError) as e:
+        typer.echo(f"error: {e}", err=True)
+        raise typer.Exit(2)
+    typer.echo(f"{kind}: {state}")
 
 
 @auth_app.command("flags")
@@ -1198,9 +1246,6 @@ def set_master_list(
     if mode not in ("add", "modify"):
         typer.echo(f"error: --mode must be 'add' or 'modify', got {mode!r}", err=True)
         raise typer.Exit(2)
-    if include_variants is None:
-        from . import collection_prefs
-        include_variants = collection_prefs.get().variant_prints == "show"
     try:
         r, codes = _resolve_codes(name_or_code, include_kinds=list(include or []), only=list(only or []))
     except (LookupError, typer.BadParameter) as e:

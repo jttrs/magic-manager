@@ -85,6 +85,52 @@ def is_excluded_variant(card_row) -> bool:
     return any(p in EXCLUDED_PROMO_TYPES for p in (pts or []))
 
 
+# The variant groups a user can set one by one (Settings → What counts → Variant
+# prints): (key, label, signals), a signal being ("border", colour) or ("promo", type).
+# Other EXCLUDED_PROMO_TYPES (rebalanced, alchemy, ...) have no kind and follow the group.
+VARIANT_KINDS: tuple[tuple[str, str, tuple[tuple[str, str], ...]], ...] = (
+    ("white_border", "White border", (("border", "white"),)),
+    ("yellow_border", "Yellow border", (("border", "yellow"),)),
+    ("prerelease", "Prerelease and date-stamped", (("promo", "prerelease"), ("promo", "datestamped"))),
+    ("promo_pack", "Promo Pack stamped", (("promo", "stamped"), ("promo", "promopack"))),
+    ("japan_showcase", "Japan showcase", (("promo", "japanshowcase"),)),
+    ("serialized", "Serialized", (("promo", "serialized"),)),
+)
+_KIND_OF_SIGNAL = {sig: key for key, _label, sigs in VARIANT_KINDS for sig in sigs}
+
+
+def variant_hidden(card_row, prefs, kind_overrides: dict) -> bool:
+    """True if ``card_row`` (sqlite Row or Scryfall dict) is left out as a variant
+    print for this user. Each excluded signal on the card (border, promo type) is
+    judged by its kind's override (``hide``/``show``), else by the group
+    (``prefs.variant_prints``); hidden if any signal resolves to hide. With no
+    overrides and the group on hide this equals :func:`is_excluded_variant`."""
+    def get(k):
+        return card_row[k] if hasattr(card_row, "keys") else card_row.get(k)
+
+    group_hide = prefs.variant_prints != "show"
+    signals: list[tuple[str, str]] = []
+    bc = get("border_color")
+    if bc and str(bc).lower() in EXCLUDED_BORDERS:
+        signals.append(("border", str(bc).lower()))
+    raw_pt = get("promo_types")
+    if raw_pt is not None:
+        if isinstance(raw_pt, str):
+            import json as _json
+            try:
+                pts = _json.loads(raw_pt)
+            except _json.JSONDecodeError:
+                pts = []
+        else:
+            pts = raw_pt
+        signals.extend(("promo", p) for p in (pts or []) if p in EXCLUDED_PROMO_TYPES)
+    for sig in signals:
+        state = kind_overrides.get(_KIND_OF_SIGNAL.get(sig))
+        if state == "hide" or (state is None and group_hide):
+            return True
+    return False
+
+
 @dataclass
 class ResolvedSet:
     code: str           # anchor set code, e.g. "fin"
@@ -293,8 +339,20 @@ def sync(set_codes: Iterable[str], *, progress=None) -> int:
 
 # ---------- master-list seeding + XLSX emit ----------
 
+def _drop_variants(rows: list, include_variants: bool | None) -> list:
+    """Master-list variant filter: True keeps every print, False applies
+    :func:`is_excluded_variant`, None applies the bound user's variant settings."""
+    if include_variants:
+        return rows
+    if include_variants is None:
+        from . import collection_prefs
+        prefs, kinds = collection_prefs.get(), collection_prefs.variant_kind_overrides()
+        return [r for r in rows if not variant_hidden(r, prefs, kinds)]
+    return [r for r in rows if not is_excluded_variant(r)]
+
+
 def register_set_target(anchor_code: str, related_codes: Iterable[str], *,
-                        include_variants: bool = False,
+                        include_variants: bool | None = False,
                         rarity_filter: Iterable[str] | None = None) -> dict:
     """Insert (or update) a set_targets row recording user intent to track a set.
 
@@ -306,6 +364,9 @@ def register_set_target(anchor_code: str, related_codes: Iterable[str], *,
     "related_codes": list[str]}``.
     """
     import json as _json
+    if include_variants is None:  # follow the user's Variant prints group
+        from . import collection_prefs
+        include_variants = collection_prefs.get().variant_prints == "show"
     anchor = anchor_code.lower()
     codes = sorted({c.lower() for c in related_codes})
     if not codes:
@@ -402,7 +463,7 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
                            rarity_filter: Iterable[str] | None = None,
                            anchor_code: str | None = None,
                            slug: str | None = None,
-                           include_variants: bool = False,
+                           include_variants: bool | None = False,
                            mode: str = "add") -> tuple[int, int]:
     """Emit a fillable XLSX of every printing in ``set_codes``.
 
@@ -462,8 +523,7 @@ def write_master_list_xlsx(set_codes: Iterable[str], out_path: Path,
 
     if not include_tokens:
         rows = [r for r in rows if not r["is_token"]]
-    if not include_variants:
-        rows = [r for r in rows if not is_excluded_variant(r)]
+    rows = _drop_variants(rows, include_variants)
     if rarity_set is not None:
         rows = [r for r in rows if (r["rarity"] or "").lower() in rarity_set]
 
@@ -1337,7 +1397,7 @@ def write_master_list_md(set_codes: Iterable[str], out_path: Path,
                          rarity_filter: Iterable[str] | None = None,
                          anchor_code: str | None = None,
                          slug: str | None = None,
-                         include_variants: bool = False,
+                         include_variants: bool | None = False,
                          mode: str = "add") -> tuple[int, int]:
     """Markdown twin of ``write_master_list_xlsx()``.
 
@@ -1398,8 +1458,7 @@ def write_master_list_md(set_codes: Iterable[str], out_path: Path,
 
     if not include_tokens:
         rows = [r for r in rows if not r["is_token"]]
-    if not include_variants:
-        rows = [r for r in rows if not is_excluded_variant(r)]
+    rows = _drop_variants(rows, include_variants)
     if rarity_set is not None:
         rows = [r for r in rows if (r["rarity"] or "").lower() in rarity_set]
 

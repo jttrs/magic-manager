@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
+from magic_manager import collection_prefs
 from magic_manager.web.app import create_app
 
 from test_auth import ORIGIN, hosted, me, provider, sign_in  # noqa: F401 — fixtures
@@ -62,13 +63,16 @@ def _rule_fixture(monkeypatch):
 
 def test_family_rules_shape_put_reset_and_errors(tmp_db, monkeypatch):
     hid, pro = _rule_fixture(monkeypatch)
+    collection_prefs.update("by_family", "on")
     c = TestClient(create_app(serve_frontend=False))
     fams = c.get(f"{URL}/families").json()["families"]
     assert (fams[0]["code"], fams[0]["rules"], fams[0]["changed"]) == ("tla", 2, 0)
     body = c.get(f"{URL}/families/tla").json()
     assert body["code"] == "tla" and [r["id"] for r in body["rules"]] == [hid, pro]
     r0 = body["rules"][1]
-    assert r0["default"] == "count" and r0["state"] == "count" and r0["changed"] is False and r0["note"] == "n"
+    assert r0["default"] == "count" and r0["state"] is None and r0["effective"] == "count" and r0["source"] == "shipped" \
+        and r0["changed"] is False and r0["note"] == "n" and r0["also_hidden"] == 0
+    assert body["all_rules"] is None and body["by_family"] is True
     assert r0["prints"] is None and "Set: tla" in r0["description"]
     r = c.put(f"{URL}/families/tla/rules/{pro}", json={"state": "hide"})
     assert r.status_code == 200, r.text
@@ -83,6 +87,34 @@ def test_family_rules_shape_put_reset_and_errors(tmp_db, monkeypatch):
     assert next(x for x in r.json()["rules"] if x["id"] == pro)["changed"] is False
 
 
+def test_family_all_and_variant_kinds_routes(tmp_db, monkeypatch):
+    hid, pro = _rule_fixture(monkeypatch)
+    collection_prefs.update("by_family", "on")
+    c = TestClient(create_app(serve_frontend=False))
+    r = c.put(f"{URL}/families/tla/all", json={"state": "count"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["all_rules"] == "count"
+    hard = next(x for x in body["rules"] if x["id"] == hid)
+    assert (hard["state"], hard["source"], hard["effective"], hard["changed"]) == (None, "family", "count", False)
+    assert c.get(f"{URL}/families").json()["families"][0]["changed"] == 1
+    assert c.put(f"{URL}/families/tla/all", json={"state": "maybe"}).status_code == 422
+    assert c.put(f"{URL}/families/nope/all", json={"state": "hide"}).status_code == 404
+    assert c.put(f"{URL}/families/tla/all", json={"state": None}).json()["all_rules"] is None
+
+    kinds = c.get(f"{URL}/variant-kinds").json()["kinds"]
+    assert [k["key"] for k in kinds][:2] == ["white_border", "yellow_border"]
+    assert all(k["state"] is None and k["effective"] == "hide" for k in kinds)
+    r = c.put(f"{URL}/variant-kinds/serialized", json={"state": "show"})
+    assert r.status_code == 200, r.text
+    got = {k["key"]: k for k in r.json()["kinds"]}
+    assert (got["serialized"]["state"], got["serialized"]["effective"]) == ("show", "show")
+    assert c.put(f"{URL}/variant-kinds/serialized", json={"state": "maybe"}).status_code == 422
+    assert c.put(f"{URL}/variant-kinds/nope", json={"state": "show"}).status_code == 404
+    r = c.put(f"{URL}/variant-kinds/serialized", json={"state": None})
+    assert {k["key"]: k for k in r.json()["kinds"]}["serialized"]["state"] is None
+
+
 def test_hosted_family_rules_are_per_user(people, monkeypatch):
     hid, pro = _rule_fixture(monkeypatch)
     (ca, ha, _a), (cm, hm, _m) = people
@@ -90,4 +122,4 @@ def test_hosted_family_rules_are_per_user(people, monkeypatch):
     assert r.status_code == 200, r.text
     mine = next(x for x in cm.get(f"{URL}/families/tla").json()["rules"] if x["id"] == pro)
     admin = next(x for x in ca.get(f"{URL}/families/tla").json()["rules"] if x["id"] == pro)
-    assert mine["state"] == "chase" and admin["state"] == "count"
+    assert mine["state"] == "chase" and admin["state"] is None

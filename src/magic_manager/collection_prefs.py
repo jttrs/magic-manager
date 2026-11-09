@@ -21,15 +21,20 @@ from . import db
 from . import layout as _layout
 
 SETTING_KEY = "collection.prefs"
-# Per-family rule switches: {anchor: {rule_id: "count"|"chase"|"hide"}}, only the
-# rules whose state differs from the shipped default (selectors.family_rule_catalog).
+# Per-family rule switches: {anchor: {rule_id | "*": "count"|"chase"|"hide"}}; "*" is
+# the family's "All rules" state. Any explicit state is stored, even the shipped one.
 FAMILY_RULES_KEY = "collection.family_rules"
 RULE_STATES = ("count", "chase", "hide")
+ALL_RULES = "*"
+# Per-kind variant overrides: {kind: "hide"|"show"} (absent = follow the group).
+VARIANT_KINDS_KEY = "collection.variant_kinds"
+KIND_STATES = ("hide", "show")
 CACHE_SECONDS = 30.0
 
 _cache: dict[str, tuple[float, "Prefs"]] = {}
 _NO_RULES: dict[str, str] = {}
 _rules_cache: dict[str, tuple[float, dict[str, dict[str, str]]]] = {}
+_kinds_cache: dict[str, tuple[float, dict[str, str]]] = {}
 _lock = threading.Lock()
 
 
@@ -84,6 +89,11 @@ DEFINITIONS: tuple[PrefDef, ...] = (
         "choice", _HIDE_SHOW, "hide",
     ),
     PrefDef(
+        "by_family", "Customize by family",
+        "Also set what each family's rules do. Off uses the shipped rules.",
+        "choice", (("off", "Print kinds only"), ("on", "Also by family")), "off",
+    ),
+    PrefDef(
         "datestamped", "Date-stamped copies",
         "A date-stamped prerelease print that has the same art as a plain copy in the family.",
         "choice", _HIDE_SHOW, "hide",
@@ -122,6 +132,7 @@ _BY_KEY = {d.key: d for d in DEFINITIONS}
 class Prefs:
     set_types: frozenset[str]
     variant_prints: str
+    by_family: str
     datestamped: str
     missing_rarities: frozenset[str]
     chase_in_lists: str
@@ -152,16 +163,32 @@ def _clean(d: PrefDef, value):
     return [v for v in allowed if v in items]
 
 
-def _stored() -> dict:
+def _read_json(key: str):
+    """The parsed JSON saved under user setting ``key``; None when absent or unparseable."""
     with db.connect() as conn:
-        row = conn.execute("SELECT value FROM settings WHERE key = ?", (SETTING_KEY,)).fetchone()
-    if row and row["value"]:
-        try:
-            data = json.loads(row["value"])
-        except ValueError:
-            return {}
-        return data if isinstance(data, dict) else {}
-    return {}
+        row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+    if not (row and row["value"]):
+        return None
+    try:
+        return json.loads(row["value"])
+    except ValueError:
+        return None
+
+
+def _write_json(key: str, value) -> None:
+    """Save ``value`` under user setting ``key`` (deleted when empty)."""
+    with db.connect() as conn:
+        if value:
+            conn.execute("INSERT INTO settings (key, value) VALUES (?, ?) "
+                         "ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+                         (key, json.dumps(value, sort_keys=True)))
+        else:
+            conn.execute("DELETE FROM settings WHERE key = ?", (key,))
+
+
+def _stored() -> dict:
+    data = _read_json(SETTING_KEY)
+    return data if isinstance(data, dict) else {}
 
 
 def _values(stored: dict) -> tuple[dict, frozenset[str]]:
@@ -215,13 +242,7 @@ def update(key: str, value) -> Prefs:
         stored.pop(key, None)
     else:
         stored[key] = _clean(d, value)
-    with db.connect() as conn:
-        if stored:
-            conn.execute("INSERT INTO settings (key, value) VALUES (?, ?) "
-                         "ON CONFLICT (key) DO UPDATE SET value = excluded.value",
-                         (SETTING_KEY, json.dumps(stored, sort_keys=True)))
-        else:
-            conn.execute("DELETE FROM settings WHERE key = ?", (SETTING_KEY,))
+    _write_json(SETTING_KEY, stored)
     clear_cache()
     # Per-user derived caches (family status, ...) recompute.
     db.forget_user_scope(db.user_scope())
@@ -246,20 +267,14 @@ def clear_cache() -> None:
     with _lock:
         _cache.clear()
         _rules_cache.clear()
+        _kinds_cache.clear()
 
 
 # ---------- per-family rule overrides ----------
 
 def _stored_rules() -> dict[str, dict[str, str]]:
     """The saved overrides, tolerant of bad JSON, wrong shapes and unknown states."""
-    with db.connect() as conn:
-        row = conn.execute("SELECT value FROM settings WHERE key = ?", (FAMILY_RULES_KEY,)).fetchone()
-    if not (row and row["value"]):
-        return {}
-    try:
-        data = json.loads(row["value"])
-    except ValueError:
-        return {}
+    data = _read_json(FAMILY_RULES_KEY)
     if not isinstance(data, dict):
         return {}
     out: dict[str, dict[str, str]] = {}
@@ -296,9 +311,26 @@ def family_rule_overrides(anchor: str) -> dict[str, str]:
     return _all_family_rules().get(anchor.lower(), _NO_RULES)
 
 
+def _save_family_entry(anchor: str, rule_id: str, state: str | None) -> dict[str, str]:
+    stored = _stored_rules()
+    fam = dict(stored.get(anchor, {}))
+    if state is None:
+        fam.pop(rule_id, None)
+    else:
+        fam[rule_id] = state
+    if fam:
+        stored[anchor] = fam
+    else:
+        stored.pop(anchor, None)
+    _write_json(FAMILY_RULES_KEY, stored)
+    clear_cache()
+    db.forget_user_scope(db.user_scope())
+    return dict(fam)
+
+
 def set_family_rule(anchor: str, rule_id: str, state: str | None) -> dict[str, str]:
-    """Set one rule's state for this user; ``state=None`` resets it to the shipped
-    default (so does saving the default itself). Unknown family or rule →
+    """Pin one rule's state for this user (any explicit state is stored, even the
+    shipped one); ``state=None`` removes the pin. Unknown family or rule →
     ``LookupError``, bad state → ``ValueError``. Returns the family's overrides."""
     from . import selectors  # lazy: selectors reads this module too
     if state is not None and state not in RULE_STATES:
@@ -307,26 +339,65 @@ def set_family_rule(anchor: str, rule_id: str, state: str | None) -> dict[str, s
     defaults = selectors.family_rule_defaults(anchor)  # LookupError for an unknown family
     if rule_id not in defaults:
         raise LookupError(f"no rule {rule_id!r} in family {anchor!r}")
-    stored = _stored_rules()
-    fam = dict(stored.get(anchor, {}))
-    if state is None or state == defaults[rule_id]:
-        fam.pop(rule_id, None)
+    return _save_family_entry(anchor, rule_id, state)
+
+
+def set_family_all(anchor: str, state: str | None) -> dict[str, str]:
+    """Set a family's "All rules" state (what its rules do unless one is pinned);
+    ``None`` removes it. Same errors as :func:`set_family_rule`."""
+    from . import selectors
+    if state is not None and state not in RULE_STATES:
+        raise ValueError(f"state must be one of: {', '.join(RULE_STATES)}")
+    anchor = anchor.lower()
+    selectors.family_rule_defaults(anchor)
+    return _save_family_entry(anchor, ALL_RULES, state)
+
+
+# ---------- per-kind variant overrides ----------
+
+def _stored_kinds() -> dict[str, str]:
+    data = _read_json(VARIANT_KINDS_KEY)
+    if not isinstance(data, dict):
+        return {}
+    return {k: v for k, v in data.items() if isinstance(k, str) and v in KIND_STATES}
+
+
+def variant_kind_overrides() -> dict[str, str]:
+    """This user's saved ``{kind: "hide"|"show"}`` (cached per user file; the SAME
+    dict until the cache expires or is cleared; empty when nothing is saved or no user
+    is bound). Callers must not mutate it."""
+    try:
+        scope = db.user_scope()
+    except _layout.NoUserBound:
+        return _NO_RULES
+    now = time.monotonic()
+    with _lock:
+        hit = _kinds_cache.get(scope)
+        if hit and now - hit[0] < CACHE_SECONDS:
+            return hit[1]
+    data = _stored_kinds()
+    with _lock:
+        _kinds_cache[scope] = (now, data)
+    return data
+
+
+def set_variant_kind(kind: str, state: str | None) -> dict[str, str]:
+    """Set one variant kind to ``hide`` or ``show`` (``None`` = follow the group).
+    Unknown kind → ``LookupError``, bad state → ``ValueError``."""
+    from . import sets  # lazy: sets reads this module too
+    if kind not in {k for k, _l, _s in sets.VARIANT_KINDS}:
+        raise LookupError(f"unknown variant kind {kind!r}")
+    if state is not None and state not in KIND_STATES:
+        raise ValueError(f"state must be one of: {', '.join(KIND_STATES)}")
+    stored = _stored_kinds()
+    if state is None:
+        stored.pop(kind, None)
     else:
-        fam[rule_id] = state
-    if fam:
-        stored[anchor] = fam
-    else:
-        stored.pop(anchor, None)
-    with db.connect() as conn:
-        if stored:
-            conn.execute("INSERT INTO settings (key, value) VALUES (?, ?) "
-                         "ON CONFLICT (key) DO UPDATE SET value = excluded.value",
-                         (FAMILY_RULES_KEY, json.dumps(stored, sort_keys=True)))
-        else:
-            conn.execute("DELETE FROM settings WHERE key = ?", (FAMILY_RULES_KEY,))
+        stored[kind] = state
+    _write_json(VARIANT_KINDS_KEY, stored)
     clear_cache()
     db.forget_user_scope(db.user_scope())
-    return dict(fam)
+    return dict(stored)
 
 
 @db.user_cache
@@ -335,3 +406,4 @@ def forget_scope(scope: str) -> None:
     with _lock:
         _cache.pop(scope, None)
         _rules_cache.pop(scope, None)
+        _kinds_cache.pop(scope, None)

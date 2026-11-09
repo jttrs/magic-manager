@@ -222,8 +222,8 @@ def family_unobtainable_rules(*, override: str | Path | None = None) -> dict[str
 
 def family_proposed_rules(*, override: str | Path | None = None) -> dict[str, list[dict]]:
     """The ``enabled = false`` rules of ``[[unobtainable.<fam>.rules]]`` — proposals
-    nothing reads yet. Same shape as :func:`family_unobtainable_rules`, plus each
-    rule's ``note`` under ``"note"``. Families with no proposals are absent."""
+    that only a user's per-rule switch turns on. Same shape as
+    :func:`family_unobtainable_rules`, plus each rule's ``note`` under ``"note"``. Families with no proposals are absent."""
     return build_unobtainable_rules(
         load_toml("families.toml", override=override, required=True), enabled=False)
 

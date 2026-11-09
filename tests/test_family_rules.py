@@ -14,7 +14,7 @@ from magic_manager import collection_prefs as cp
 from magic_manager import collection_view, config, db, layout, missing, selectors, undo
 from magic_manager.cli import app
 
-HARD = {"promo_types_any_of": frozenset({"zzstamp"}), "tier": "hard"}
+HARD = {"promo_types_any_of": frozenset({"stamped"}), "tier": "hard"}
 CHASE = {"promo_types_any_of": frozenset({"headliner"}), "tier": "chase"}
 PROPOSED = {"frame_effects_all_of": frozenset({"showcase"}), "border_color": "black",
             "note": "why we might hide it"}
@@ -36,7 +36,7 @@ def cards(tla, tmp_db, seed_cards, make_card):
     seed_cards([
         make_card(id="base", set="tla", collector_number="1", rarity="rare", name="Base", oracle_id="o1"),
         make_card(id="st", set="tla", collector_number="2", rarity="rare", name="Stamped", oracle_id="o2",
-                  promo_types=["zzstamp"]),
+                  promo_types=["stamped"]),
         make_card(id="hl", set="tla", collector_number="3", rarity="mythic", name="Head", oracle_id="o3",
                   promo_types=["headliner"], finishes=["foil"]),
         make_card(id="sc", set="tla", collector_number="4", rarity="rare", name="Show", oracle_id="o4",
@@ -52,10 +52,139 @@ def _coll():
     return {c.scryfall_id: c for c in collection_view.family_cards("tla").cards}
 
 
+def _on():
+    cp.update("by_family", "on")
+
+
 def _own(sid):
     with db.connect() as conn:
         conn.execute("INSERT INTO inventory (scryfall_id,finish,quantity,acquired_at) "
                      "VALUES (?,?,?,'2025-01-01')", (sid, "nonfoil", 1))
+
+
+# ---------- levels: variant group > kind > family All rules > rule ----------
+
+def test_by_family_off_applies_nothing_but_keeps_the_pins(cards):
+    cp.set_family_rule("tla", HID, "count")
+    cp.set_family_all("tla", "hide")
+    assert selectors._effective_family_rules("tla") is selectors.FAMILY_UNOBTAINABLE_RULES["tla"]
+    assert "st" not in _coll()
+    assert cp.family_rule_overrides("tla") == {HID: "count", "*": "hide"}
+    _on()
+    assert "st" in _coll()
+
+
+def test_precedence_rule_beats_all_rules_beats_shipped(cards):
+    _on()
+    cp.set_family_all("tla", "count")
+    cat = {r["id"]: r for r in selectors.family_rule_catalog("tla")}
+    assert [(cat[i]["effective"], cat[i]["source"]) for i in (HID, CHS, PRO)] == [("count", "family")] * 3
+    assert "hl" in _coll() and not _coll()["hl"].is_chase
+    cp.set_family_rule("tla", CHS, "chase")
+    cat = {r["id"]: r for r in selectors.family_rule_catalog("tla")}
+    assert (cat[CHS]["effective"], cat[CHS]["source"]) == ("chase", "rule")
+    assert _coll()["hl"].is_chase
+    cp.set_family_rule("tla", PRO, "hide")
+    assert "sc" not in _coll()
+    cp.set_family_all("tla", None)
+    assert selectors.family_rule_catalog("tla")[0]["source"] == "shipped"
+
+
+def test_all_rules_hide_takes_a_proposal_out(cards):
+    _on()
+    cp.set_family_all("tla", "hide")
+    assert "sc" not in _coll() and "st" not in _coll()
+
+
+def test_variant_kinds_override_the_group(cards, monkeypatch):
+    # default group hides stamped; the kind override includes it (no family rule hides it here)
+    monkeypatch.setattr(selectors, "FAMILY_UNOBTAINABLE_RULES", {"tla": [CHASE]})
+    assert "st" not in _coll()
+    cp.set_variant_kind("promo_pack", "show")
+    assert "st" in _coll()
+    cp.set_variant_kind("promo_pack", None)
+    assert "st" not in _coll()
+    cp.update("variant_prints", "show")
+    assert "st" in _coll()
+    cp.set_variant_kind("promo_pack", "hide")
+    assert "st" not in _coll()
+
+
+def test_variant_hidden_matches_is_excluded_variant_without_overrides():
+    from magic_manager import sets
+    prefs = cp.get()
+    def card(border=None, promo=None):
+        return {"border_color": border, "promo_types": promo}
+    cases = [card("white"), card("yellow"), card("black"), card(None, json.dumps(["prerelease"])),
+             card(None, ["serialized", "x"]), card(None, json.dumps(["alchemy"])),
+             card(None, json.dumps(["boosterfun"])), card()]
+    for c in cases:
+        assert sets.variant_hidden(c, prefs, {}) == sets.is_excluded_variant(c), c
+    show = cp.Prefs(**{**prefs.__dict__, "variant_prints": "show"})
+    assert not any(sets.variant_hidden(c, show, {}) for c in cases)
+    # an unkinded signal (alchemy) follows the group; a kind override doesn't touch it
+    assert sets.variant_hidden(card(None, ["alchemy"]), prefs, {"serialized": "show"})
+    assert not sets.variant_hidden(card(None, ["serialized"]), prefs, {"serialized": "show"})
+    assert sets.variant_hidden(card(None, ["serialized"]), show, {"serialized": "hide"})
+    # any hiding signal wins
+    assert sets.variant_hidden(card("white", ["serialized"]), prefs,
+                               {"serialized": "show"})
+
+
+def test_explicit_count_keeps_prints_but_shipped_count_does_not(cards, monkeypatch):
+    _on()
+    card = {"set": "tla", "promo_types": ["stamped"], "frame_effects": None, "border_color": "black"}
+    assert not selectors.family_rule_keeps_print(card, "tla")
+    cp.set_family_rule("tla", HID, "count")
+    assert selectors.family_rule_keeps_print(card, "tla")
+    cp.set_family_rule("tla", HID, "hide")
+    assert not selectors.family_rule_keeps_print(card, "tla")
+    cp.set_family_rule("tla", HID, None)
+    cp.set_family_all("tla", "chase")
+    assert selectors.family_rule_keeps_print(card, "tla")
+    cp.update("by_family", "off")
+    assert not selectors.family_rule_keeps_print(card, "tla")
+
+
+def test_also_hidden_counts_shipped_count_prints_the_variants_hide(cards, monkeypatch):
+    stamped_proposal = {"promo_types_any_of": frozenset({"stamped"}), "note": "n"}
+    monkeypatch.setattr(selectors, "FAMILY_UNOBTAINABLE_RULES", {"tla": [CHASE]})
+    monkeypatch.setattr(selectors, "FAMILY_PROPOSED_RULES", {"tla": [stamped_proposal]})
+    rid = config.rule_id(stamped_proposal)
+    row = {r["id"]: r for r in selectors.family_rule_catalog("tla")}[rid]
+    assert (row["prints"], row["also_hidden"]) == (1, 1)
+    cp.set_variant_kind("promo_pack", "show")
+    assert {r["id"]: r for r in selectors.family_rule_catalog("tla")}[rid]["also_hidden"] == 0
+    cp.set_variant_kind("promo_pack", None)
+    _on()
+    cp.set_family_rule("tla", rid, "count")   # explicit Count brings them back: nothing "also hidden"
+    assert {r["id"]: r for r in selectors.family_rule_catalog("tla")}[rid]["also_hidden"] == 0
+
+
+def test_kind_catalog_and_errors(tmp_db):
+    kinds = selectors.variant_kind_catalog()
+    assert [k["key"] for k in kinds] == ["white_border", "yellow_border", "prerelease", "promo_pack",
+                                         "japan_showcase", "serialized"]
+    assert all(k["state"] is None and k["effective"] == "hide" for k in kinds)
+    cp.update("variant_prints", "show")
+    assert all(k["effective"] == "show" for k in selectors.variant_kind_catalog())
+    with pytest.raises(LookupError):
+        cp.set_variant_kind("nope", "hide")
+    with pytest.raises(ValueError):
+        cp.set_variant_kind("serialized", "maybe")
+    with pytest.raises(LookupError):
+        cp.set_family_all("nope", "hide")
+
+
+def test_master_list_follows_kind_overrides(cards, tmp_path):
+    from magic_manager import sets
+    def n(**kw):
+        return sets.write_master_list_md(["tla"], tmp_path / "m.md", **kw)[0]
+    assert n(include_variants=None) == 3        # stamped hidden at default prefs
+    assert n(include_variants=True) == 4
+    cp.set_variant_kind("promo_pack", "show")
+    assert n(include_variants=None) == 4
+    assert n(include_variants=False) == 3       # the explicit flag keeps the old rule
 
 
 # ---------- ids ----------
@@ -73,7 +202,7 @@ def test_rule_id_unique_per_family_and_stable_across_forms():
 def test_rule_id_ignores_note_tier_enabled_and_form_but_not_predicates():
     base = config.rule_id(HARD)
     assert config.rule_id({**HARD, "tier": "chase", "note": "x"}) == base
-    assert config.rule_id({"promo_types_any_of": ["ZZStamp"], "enabled": False, "note": "n"}) == base
+    assert config.rule_id({"promo_types_any_of": ["Stamped"], "enabled": False, "note": "n"}) == base
     assert config.rule_id({**HARD, "border_color": "black"}) != base
     assert config.rule_id({"collector_numbers": ["2", "1"]}) == config.rule_id({"collector_numbers": ["1", "2"]})
 
@@ -112,6 +241,7 @@ def test_proposals_never_match_without_an_override(cards):
 # ---------- states ----------
 
 def test_hide_a_proposed_rule_removes_from_collection_and_missing_but_owned_stays(cards):
+    _on()
     assert "sc" in _coll()
     cp.set_family_rule("tla", PRO, "hide")
     assert "sc" not in _coll() and "sc" not in _ids()
@@ -122,6 +252,7 @@ def test_hide_a_proposed_rule_removes_from_collection_and_missing_but_owned_stay
 
 
 def test_chase_a_proposed_rule_tags_chase_and_follows_chase_in_lists(cards):
+    _on()
     assert not _coll()["sc"].is_chase
     cp.set_family_rule("tla", PRO, "chase")
     assert _coll()["sc"].is_chase
@@ -131,6 +262,7 @@ def test_chase_a_proposed_rule_tags_chase_and_follows_chase_in_lists(cards):
 
 
 def test_count_an_active_hard_rule_surfaces_the_print(cards):
+    _on()
     assert "st" not in _coll()
     cp.set_family_rule("tla", HID, "count")
     assert "st" in _coll() and not _coll()["st"].is_chase
@@ -138,21 +270,18 @@ def test_count_an_active_hard_rule_surfaces_the_print(cards):
 
 
 def test_hide_flips_an_active_chase_rule_and_chase_flips_a_hard_one(cards):
+    _on()
     cp.set_family_rule("tla", CHS, "hide")
     assert "hl" not in _coll()
     cp.set_family_rule("tla", HID, "chase")
     assert _coll()["st"].is_chase
 
 
-def test_saving_the_default_stores_nothing(cards):
-    assert cp.set_family_rule("tla", HID, "hide") == {}
-    assert cp.set_family_rule("tla", PRO, "count") == {}
-    with db.connect() as conn:
-        assert conn.execute("SELECT 1 FROM settings WHERE key=?", (cp.FAMILY_RULES_KEY,)).fetchone() is None
-    cp.set_family_rule("tla", PRO, "hide")
-    assert cp.family_rule_overrides("tla") == {PRO: "hide"}
-    cp.set_family_rule("tla", PRO, None)
-    assert cp.family_rule_overrides("tla") == {}
+def test_any_explicit_state_is_stored_even_the_shipped_one(cards):
+    assert cp.set_family_rule("tla", HID, "hide") == {HID: "hide"}
+    assert cp.set_family_rule("tla", PRO, "count") == {HID: "hide", PRO: "count"}
+    assert cp.set_family_rule("tla", HID, None) == {PRO: "count"}
+    assert cp.set_family_rule("tla", PRO, None) == {}
     with db.connect() as conn:
         assert conn.execute("SELECT 1 FROM settings WHERE key=?", (cp.FAMILY_RULES_KEY,)).fetchone() is None
 
@@ -183,6 +312,7 @@ def test_errors(cards):
 
 
 def test_cache_cleared_on_update(cards):
+    _on()
     cp.set_family_rule("tla", PRO, "hide")
     first = selectors._effective_family_rules("tla")
     assert any(r.get("border_color") == "black" and r["tier"] == "hard" and "note" not in r for r in first)
@@ -200,6 +330,8 @@ def test_restore_keeps_the_overrides(cards):
 
 def test_profile_only_and_undo_keep_keys():
     from magic_manager import userfiles
+    assert cp.VARIANT_KINDS_KEY in userfiles._PROFILE_ONLY_SETTINGS
+    assert cp.VARIANT_KINDS_KEY in undo.KEEP_SETTINGS
     assert cp.FAMILY_RULES_KEY in userfiles._PROFILE_ONLY_SETTINGS
     assert cp.FAMILY_RULES_KEY in undo.KEEP_SETTINGS
 
@@ -216,6 +348,7 @@ def test_describe_rule():
 
 
 def test_catalog_counts_defaults_and_state(cards):
+    _on()
     _own("st")
     cat = {r["id"]: r for r in selectors.family_rule_catalog("tla")}
     assert list(cat) == [HID, CHS, PRO]
@@ -226,7 +359,8 @@ def test_catalog_counts_defaults_and_state(cards):
     assert not any(r["changed"] for r in cat.values())
     cp.set_family_rule("tla", PRO, "hide")
     cat = {r["id"]: r for r in selectors.family_rule_catalog("tla")}
-    assert cat[PRO]["state"] == "hide" and cat[PRO]["changed"] and cat[HID]["state"] == "hide"
+    assert cat[PRO]["state"] == "hide" and cat[PRO]["changed"] and cat[HID]["state"] is None
+    assert (cat[HID]["effective"], cat[HID]["source"]) == ("hide", "shipped")
 
 
 def test_catalog_prints_null_when_family_not_local(tla, tmp_db):
@@ -262,6 +396,7 @@ def test_split_layout_overrides_are_per_user(tla, tmp_db, seed_cards, make_card,
     from magic_manager import userfiles
     ub = "bbbbbbbbbbbbbbbb"
     userfiles.create(split_dir, ub)
+    _on()
     cp.set_family_rule("tla", PRO, "hide")
     assert cp.family_rule_overrides("tla") == {PRO: "hide"}
     with layout.as_user(ub):
@@ -285,11 +420,28 @@ def test_cli_flow(cards):
     out = r.invoke(app, ["prefs", "rules", "tla"])
     assert out.exit_code == 0 and HID in out.output and PRO in out.output
     js = json.loads(r.invoke(app, ["prefs", "rules", "tla", "--json"]).output)
-    assert [x["id"] for x in js] == [HID, CHS, PRO]
+    assert [x["id"] for x in js["rules"]] == [HID, CHS, PRO] and js["all_rules"] is None
     assert r.invoke(app, ["prefs", "rule", "tla", PRO, "hide"]).exit_code == 0
     assert "hide *" in r.invoke(app, ["prefs", "rules", "tla"]).output
     assert r.invoke(app, ["prefs", "rule-reset", "tla", PRO]).exit_code == 0
     assert "hide *" not in r.invoke(app, ["prefs", "rules", "tla"]).output
+    assert r.invoke(app, ["prefs", "rule", "tla", PRO, "chase"]).exit_code == 0
+    assert r.invoke(app, ["prefs", "rule", "tla", PRO, "group"]).exit_code == 0
+    assert cp.family_rule_overrides("tla") == {}
+    assert r.invoke(app, ["prefs", "family-all", "tla", "count"]).exit_code == 0
+    assert cp.family_rule_overrides("tla") == {"*": "count"}
+    assert r.invoke(app, ["prefs", "family-all", "tla", "shipped"]).exit_code == 0
+    assert cp.family_rule_overrides("tla") == {}
+    assert r.invoke(app, ["prefs", "kind", "serialized", "show"]).exit_code == 0
+    assert cp.variant_kind_overrides() == {"serialized": "show"}
+    assert "serialized" in r.invoke(app, ["prefs", "kinds"]).output
+    ks = json.loads(r.invoke(app, ["prefs", "kinds", "--json"]).output)
+    assert {k["key"]: k["state"] for k in ks}["serialized"] == "show"
+    assert r.invoke(app, ["prefs", "kind", "serialized", "group"]).exit_code == 0
+    assert cp.variant_kind_overrides() == {}
+    for argv in (["kind", "nope", "hide"], ["kind", "serialized", "maybe"], ["family-all", "nope", "hide"],
+                 ["family-all", "tla", "maybe"]):
+        assert r.invoke(app, ["prefs", *argv]).exit_code == 2, argv
     for argv in (["rule", "tla", PRO, "maybe"], ["rule", "nope", PRO, "hide"], ["rule", "tla", "deadbeef00", "hide"],
                  ["rule-reset", "nope", PRO], ["rules", "nope"]):
         res = r.invoke(app, ["prefs", *argv])

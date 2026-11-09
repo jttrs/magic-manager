@@ -1416,8 +1416,25 @@ def data_dir() -> Path:
 def user_scope() -> str:
     """Whose data :func:`connect` opens in this context (the user file in split,
     the one file in single). Key every process-wide cache of USER data on it, and
-    register its forget function with :func:`user_cache`."""
-    return str(layout().path)
+    register its forget function with :func:`user_cache`.
+
+    Memoized on everything :func:`layout` reads (the bound user, strict mode and the
+    layout env vars; ``db_path``/``db_dir`` read only ``MAGIC_MANAGER_DB``), because
+    per-card gates call it. A raising resolution (``NoUserBound``, bad layout) is
+    never stored."""
+    key = (_layout.bound_user(), _layout.strict(), *(os.environ.get(k) for k in _SCOPE_ENV))
+    hit = _scope_memo.get(key)
+    if hit is not None:
+        return hit
+    scope = str(layout().path)
+    if len(_scope_memo) >= 64:
+        _scope_memo.clear()
+    _scope_memo[key] = scope
+    return scope
+
+
+_SCOPE_ENV = ("MAGIC_MANAGER_DB", "MM_LAYOUT", "MM_DATA_DIR", "MM_USER")
+_scope_memo: dict[tuple, str] = {}
 
 
 _USER_CACHES: list[Callable[[str], None]] = []

@@ -541,6 +541,131 @@
         }
       }
     },
+    "/api/preferences/collection/families/{anchor}/all": {
+      "put": {
+        "tags": [
+          "preferences"
+        ],
+        "summary": "Put Family All",
+        "operationId": "put_family_all",
+        "parameters": [
+          {
+            "name": "anchor",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Anchor"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FamilyAllIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FamilyRulesOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/preferences/collection/variant-kinds": {
+      "get": {
+        "tags": [
+          "preferences"
+        ],
+        "summary": "List Variant Kinds",
+        "operationId": "list_variant_kinds",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VariantKindsOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/preferences/collection/variant-kinds/{kind}": {
+      "put": {
+        "tags": [
+          "preferences"
+        ],
+        "summary": "Put Variant Kind",
+        "operationId": "put_variant_kind",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Kind"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VariantKindIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VariantKindsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/preferences/collection": {
       "get": {
         "tags": [
@@ -10098,6 +10223,29 @@
         "type": "object",
         "title": "FactsOut"
       },
+      "FamilyAllIn": {
+        "properties": {
+          "state": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "count",
+                  "chase",
+                  "hide"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "FamilyAllIn"
+      },
       "FamilyCardsOut": {
         "properties": {
           "code": {
@@ -10258,13 +10406,38 @@
             "title": "Default"
           },
           "state": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "count",
+                  "chase",
+                  "hide"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "rule",
+              "family",
+              "shipped"
+            ],
+            "title": "Source"
+          },
+          "effective": {
             "type": "string",
             "enum": [
               "count",
               "chase",
               "hide"
             ],
-            "title": "State"
+            "title": "Effective"
           },
           "changed": {
             "type": "boolean",
@@ -10291,6 +10464,10 @@
               }
             ],
             "title": "Owned"
+          },
+          "also_hidden": {
+            "type": "integer",
+            "title": "Also Hidden"
           }
         },
         "type": "object",
@@ -10300,9 +10477,12 @@
           "note",
           "default",
           "state",
+          "source",
+          "effective",
           "changed",
           "prints",
-          "owned"
+          "owned",
+          "also_hidden"
         ],
         "title": "FamilyRuleOut"
       },
@@ -10311,6 +10491,26 @@
           "code": {
             "type": "string",
             "title": "Code"
+          },
+          "all_rules": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "count",
+                  "chase",
+                  "hide"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "All Rules"
+          },
+          "by_family": {
+            "type": "boolean",
+            "title": "By Family"
           },
           "rules": {
             "items": {
@@ -10323,6 +10523,8 @@
         "type": "object",
         "required": [
           "code",
+          "all_rules",
+          "by_family",
           "rules"
         ],
         "title": "FamilyRulesOut"
@@ -17522,6 +17724,87 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "VariantKindIn": {
+        "properties": {
+          "state": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "hide",
+                  "show"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "VariantKindIn"
+      },
+      "VariantKindOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "hide",
+                  "show"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State"
+          },
+          "effective": {
+            "type": "string",
+            "enum": [
+              "hide",
+              "show"
+            ],
+            "title": "Effective"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "state",
+          "effective"
+        ],
+        "title": "VariantKindOut"
+      },
+      "VariantKindsOut": {
+        "properties": {
+          "kinds": {
+            "items": {
+              "$ref": "#/components/schemas/VariantKindOut"
+            },
+            "type": "array",
+            "title": "Kinds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kinds"
+        ],
+        "title": "VariantKindsOut"
       },
       "ViewUsage": {
         "properties": {

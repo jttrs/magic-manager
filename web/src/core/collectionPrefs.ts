@@ -1,6 +1,6 @@
 // "What counts" preferences view-model (framework-free): the optimistic row
 // for a change, multi-choice toggling and the one "can't be empty" rule.
-import type { FamilyRuleOut, PrefOut, RuleFamilyOut } from './api';
+import type { FamilyRuleOut, PrefOut, RuleFamilyOut, VariantKindOut } from './api';
 
 type Value = PrefOut['value'];
 
@@ -33,10 +33,30 @@ export function canToggleOff(row: Pick<PrefOut, 'key' | 'value'>, v: string): bo
   return !(now.length === 1 && now[0] === v);
 }
 
-/** The predicted rule while the server answers; `null` resets to the default. */
-export function predictRule(row: FamilyRuleOut, state: FamilyRuleOut['state'] | null): FamilyRuleOut {
-  const next = state ?? row.default;
-  return { ...row, state: next, changed: next !== row.default };
+/** The predicted rule while the server answers; `null` is Group (follows All rules, else the shipped state). */
+export function predictRule(row: FamilyRuleOut, state: FamilyRuleOut['state'], allRules: FamilyRulesAll = null): FamilyRuleOut {
+  if (state) return { ...row, state, effective: state, source: 'rule', changed: true };
+  if (allRules) return { ...row, state: null, effective: allRules, source: 'family', changed: false };
+  return { ...row, state: null, effective: row.default, source: 'shipped', changed: false };
+}
+
+type FamilyRulesAll = FamilyRuleOut['default'] | null;
+
+const label = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** "Now: Hide (shipped)" / "Now: Count (from All rules)" / "Now: Chase", plus how many prints the variant settings still hide. */
+export function ruleNow(row: Pick<FamilyRuleOut, 'effective' | 'source' | 'also_hidden'>): string {
+  const from = row.source === 'shipped' ? ' (shipped)' : row.source === 'family' ? ' (from All rules)' : '';
+  const hidden = row.also_hidden > 0 ? ` · ${row.also_hidden} hidden by Variant prints` : '';
+  return `Now: ${label(row.effective)}${from}${hidden}`;
+}
+
+/** A variant kind's control value: Group when it has no switch of its own. */
+export const kindValue = (k: Pick<VariantKindOut, 'state'>): 'group' | 'hide' | 'show' => k.state ?? 'group';
+
+/** The predicted kind while the server answers; `null` follows the group. */
+export function predictKind(k: VariantKindOut, state: VariantKindOut['state'], group: 'hide' | 'show'): VariantKindOut {
+  return { ...k, state, effective: state ?? group };
 }
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
