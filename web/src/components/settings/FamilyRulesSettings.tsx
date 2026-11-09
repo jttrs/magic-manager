@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
-import { familyRulesQuery, ruleFamiliesQuery, unwrap, variantKindsQuery } from '../../app/queries';
+import { familyRulesQuery, invalidateCounting, ruleFamiliesQuery, unwrap } from '../../app/queries';
 import { putFamilyAll, putFamilyRule, type FamilyRuleOut, type FamilyRulesOut } from '../../core/api';
 import { familyOption, predictRule, ruleCounts, ruleNow } from '../../core/collectionPrefs';
 import { FailureNote } from '../companion/CompanionNotes';
@@ -35,7 +35,7 @@ export default function FamilyRulesSettings() {
     <>
       <SettingsRow
         label="Family rules"
-        description="Pick a family to change what its rules do. Group follows All rules, or the shipped setting. Count and Chase bring back prints the variant settings leave out."
+        description="Pick a family to change what its rules do. Group follows All rules, or the shipped setting. Count and Chase bring back, in Collection, prints the variant settings leave out."
         control={() => (
           <SearchSelect label="Family" hideLabel tone="paper" noun="family" nouns="families" value={code || undefined} onChange={setCode} options={options} />
         )}
@@ -67,7 +67,7 @@ function FamilyRules({ code }: { code: string }) {
     },
     onError: (_e, _c, ctx) => { if (ctx?.before) qc.setQueryData(key, ctx.before); },
     onSuccess: (data) => qc.setQueryData<FamilyRulesOut>(key, data),
-    onSettled: () => Promise.all([['preferences', 'collection', 'families'], variantKindsQuery().queryKey, ['collection'], ['market'], ['jumpstart']].map((k) => qc.invalidateQueries({ queryKey: k }))),
+    onSettled: () => invalidateCounting(qc),
   });
 
   return (

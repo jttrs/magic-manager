@@ -1,5 +1,5 @@
 // Server state via TanStack Query over the generated, typed API client.
-import { keepPreviousData, queryOptions } from '@tanstack/react-query';
+import { keepPreviousData, queryOptions, type QueryClient } from '@tanstack/react-query';
 import type { DraftCardIn } from '../core/api';
 import { apiErrorFrom } from '../core/apiError';
 import type { RankingPageRequest } from '../core/rankings';
@@ -514,3 +514,9 @@ export const deckEarmarksQuery = (slug: string, cards: DraftCardIn[]) =>
     staleTime: 60_000,
     placeholderData: keepPreviousData,
   });
+
+/** Everything a preference, variant-kind or family-rule change can alter: re-read it all. */
+export const invalidateCounting = (qc: QueryClient) => Promise.all(
+  [['collection'], ['market'], ['jumpstart'], ['preferences', 'collection', 'families'], variantKindsQuery().queryKey]
+    .map((k) => qc.invalidateQueries({ queryKey: k })),
+);

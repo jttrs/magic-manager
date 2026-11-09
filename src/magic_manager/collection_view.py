@@ -115,6 +115,14 @@ def inventory_finishes(raw_json: str | None) -> list[str]:
     return list(dict.fromkeys(f for f in raw if f in sel_mod.VALID_FINISHES)) or ["nonfoil"]
 
 
+def _serialized_kept(card: dict, parent_code: str, prefs, kinds: dict) -> bool:
+    """A print that is digital-only purely because it is serialized, and that the
+    user's variant settings or a family rule bring back."""
+    return (not sel_mod._is_digital_only_except_serialized(card)
+            and (not sets_mod.variant_hidden(card, prefs, kinds)
+                 or sel_mod.family_rule_keeps_print(card, parent_code)))
+
+
 def family_cards(code: str) -> FamilyCollection:
     """The full printing universe of ``code``'s family with ownership attached.
     Raises ``LookupError`` for an unknown code."""
@@ -171,7 +179,7 @@ def family_cards(code: str) -> FamilyCollection:
         sid = card["scryfall_id"]
         if sid not in owned_ids and (
             card.get("is_token")
-            or sel_mod._is_digital_only(card)
+            or (sel_mod._is_digital_only(card) and not _serialized_kept(card, parent_code, prefs, kinds))
             or (
                 not scenes_mod.scene_of(scene_cfg, card["set"] or "", card.get("collector_number") or "")
                 and (

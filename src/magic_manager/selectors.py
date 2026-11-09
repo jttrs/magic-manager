@@ -217,15 +217,13 @@ def _resolve_rule(rid: str, shipped: str, overrides: dict, by_family: bool) -> t
     """``(state, source)`` of one rule for the user: its own override, else the
     family's "All rules" (``"*"``), else the shipped state; source is ``rule`` |
     ``family`` | ``shipped``. Overrides are only applied when ``by_family`` is on."""
+    from .collection_prefs import ALL_RULES
     if by_family:
         if rid in overrides:
             return overrides[rid], "rule"
-        if _ALL in overrides:
-            return overrides[_ALL], "family"
+        if ALL_RULES in overrides:
+            return overrides[ALL_RULES], "family"
     return shipped, "shipped"
-
-
-_ALL = "*"  # collection_prefs.ALL_RULES (kept literal: collection_prefs imports lazily)
 
 
 def _effective_family_rules(anchor: str) -> list[dict] | None:
@@ -263,7 +261,7 @@ def _effective_family_rules(anchor: str) -> list[dict] | None:
 @db.user_cache
 def forget_scope(scope: str) -> None:
     """Drop one user's cached effective family rules (account deletion, rule updates)."""
-    for k in [k for k in _effective_cache if k[0] == scope]:
+    for k in [k for k in list(_effective_cache) if k[0] == scope]:
         _effective_cache.pop(k, None)
 
 
@@ -392,7 +390,7 @@ def family_rule_catalog(anchor: str) -> list[dict]:
 def family_rule_all(anchor: str) -> str | None:
     """The family's saved "All rules" state, or None."""
     from . import collection_prefs
-    return collection_prefs.family_rule_overrides(anchor).get(_ALL)
+    return collection_prefs.family_rule_overrides(anchor).get(collection_prefs.ALL_RULES)
 
 
 def family_rule_families() -> list[dict]:
@@ -410,7 +408,7 @@ def family_rule_families() -> list[dict]:
         rules = _shipped_rules(a)
         if not rules:
             continue
-        ids = {_config.rule_id(r) for r, _p in rules} | {_ALL}
+        ids = {_config.rule_id(r) for r, _p in rules} | {collection_prefs.ALL_RULES}
         changed = sum(1 for rid in collection_prefs.family_rule_overrides(a) if rid in ids)
         out.append({"code": a, "name": names.get(a) or a.upper(), "rules": len(rules), "changed": changed})
     out.sort(key=lambda f: (f["changed"] == 0, f["name"].lower()))
@@ -455,10 +453,10 @@ DIGITAL_ONLY_PROMO_TYPES: frozenset[str] = _config.as_frozenset_setting(
     "promo_types.toml", "digital_only", frozenset({"rebalanced", "alchemy"}))
 
 
-def _is_digital_only(card: dict) -> bool:
+def _is_digital_only(card: dict, promo_types: frozenset[str] | None = None) -> bool:
     """True iff the card is unobtainable for a physical collector — Arena/Alchemy
     rebalanced or serialized 1-of-N. Name kept for backwards compat; the
-    underlying set is now ``UNOBTAINABLE_PROMO_TYPES``.
+    underlying set is now ``UNOBTAINABLE_PROMO_TYPES`` (``promo_types`` overrides it).
     """
     import json as _json
     # Alchemy-ORIGINAL cards (e.g. ysnc "Herald of Vengeance") carry NO
@@ -479,7 +477,13 @@ def _is_digital_only(card: dict) -> bool:
             return False
     else:
         pt = set(pt_raw)
-    return bool(pt & UNOBTAINABLE_PROMO_TYPES)
+    return bool(pt & (UNOBTAINABLE_PROMO_TYPES if promo_types is None else promo_types))
+
+
+def _is_digital_only_except_serialized(card: dict) -> bool:
+    """:func:`_is_digital_only` without counting ``serialized`` (arena stamp or a
+    digital-only promo type) — what stays dropped even when serialized prints count."""
+    return _is_digital_only(card, UNOBTAINABLE_PROMO_TYPES - {"serialized"})
 VALID_RARITIES = ("common", "uncommon", "rare", "mythic", "special", "bonus")
 VALID_FINISHES = ("nonfoil", "foil")
 VALID_MISSING_FINISHES = ("nonfoil", "foil", "either")

@@ -57,6 +57,33 @@ EXCLUDED_PROMO_TYPES = _config.as_frozenset_setting(
     "promo_types.toml", "excluded", _EXCLUDED_PROMO_TYPES_DEFAULT)
 
 
+def _variant_signals(card_row) -> list[tuple[str, str]]:
+    """The excluded signals on a card row (sqlite Row or Scryfall dict): ``("border",
+    colour)`` and ``("promo", type)``. A bad promo_types JSON reads as none."""
+    def get(k):
+        return card_row[k] if hasattr(card_row, "keys") else card_row.get(k)
+
+    signals: list[tuple[str, str]] = []
+    bc = get("border_color")
+    if bc and str(bc).lower() in EXCLUDED_BORDERS:
+        signals.append(("border", str(bc).lower()))
+    raw_pt = get("promo_types")
+    if raw_pt is None:
+        return signals
+    # promo_types is a JSON-encoded list in our DB rows but a real list in
+    # the Scryfall response — handle both.
+    if isinstance(raw_pt, str):
+        import json as _json
+        try:
+            pts = _json.loads(raw_pt)
+        except _json.JSONDecodeError:
+            return signals
+    else:
+        pts = raw_pt
+    signals.extend(("promo", p) for p in (pts or []) if p in EXCLUDED_PROMO_TYPES)
+    return signals
+
+
 def is_excluded_variant(card_row) -> bool:
     """Return True if a card row should be filtered from default master-list
     output. Operates on either a sqlite Row or a Scryfall API dict.
@@ -66,23 +93,7 @@ def is_excluded_variant(card_row) -> bool:
     effect is "the master list shows the printings I'd want to catalog,
     nothing else."
     """
-    bc = card_row["border_color"] if hasattr(card_row, "keys") else card_row.get("border_color")
-    if bc and str(bc).lower() in EXCLUDED_BORDERS:
-        return True
-    raw_pt = card_row["promo_types"] if hasattr(card_row, "keys") else card_row.get("promo_types")
-    if raw_pt is None:
-        return False
-    # promo_types is a JSON-encoded list in our DB rows but a real list in
-    # the Scryfall response — handle both.
-    if isinstance(raw_pt, str):
-        import json as _json
-        try:
-            pts = _json.loads(raw_pt)
-        except _json.JSONDecodeError:
-            return False
-    else:
-        pts = raw_pt
-    return any(p in EXCLUDED_PROMO_TYPES for p in (pts or []))
+    return bool(_variant_signals(card_row))
 
 
 # The variant groups a user can set one by one (Settings → What counts → Variant
@@ -101,34 +112,19 @@ _KIND_OF_SIGNAL = {sig: key for key, _label, sigs in VARIANT_KINDS for sig in si
 
 def variant_hidden(card_row, prefs, kind_overrides: dict) -> bool:
     """True if ``card_row`` (sqlite Row or Scryfall dict) is left out as a variant
-    print for this user. Each excluded signal on the card (border, promo type) is
-    judged by its kind's override (``hide``/``show``), else by the group
-    (``prefs.variant_prints``); hidden if any signal resolves to hide. With no
-    overrides and the group on hide this equals :func:`is_excluded_variant`."""
-    def get(k):
-        return card_row[k] if hasattr(card_row, "keys") else card_row.get(k)
-
+    print for this user. Each excluded signal with a kind is judged by that kind's
+    override: any explicit ``hide`` hides; else an explicit ``show`` brings the card
+    back, unless it also carries a signal with no kind (rebalanced, alchemy), which
+    keeps following the group (``prefs.variant_prints``). With no overrides and the
+    group on hide this equals :func:`is_excluded_variant`."""
+    signals = _variant_signals(card_row)
+    states = [kind_overrides.get(_KIND_OF_SIGNAL.get(sig)) for sig in signals]
+    if "hide" in states:
+        return True
     group_hide = prefs.variant_prints != "show"
-    signals: list[tuple[str, str]] = []
-    bc = get("border_color")
-    if bc and str(bc).lower() in EXCLUDED_BORDERS:
-        signals.append(("border", str(bc).lower()))
-    raw_pt = get("promo_types")
-    if raw_pt is not None:
-        if isinstance(raw_pt, str):
-            import json as _json
-            try:
-                pts = _json.loads(raw_pt)
-            except _json.JSONDecodeError:
-                pts = []
-        else:
-            pts = raw_pt
-        signals.extend(("promo", p) for p in (pts or []) if p in EXCLUDED_PROMO_TYPES)
-    for sig in signals:
-        state = kind_overrides.get(_KIND_OF_SIGNAL.get(sig))
-        if state == "hide" or (state is None and group_hide):
-            return True
-    return False
+    if "show" in states and all(_KIND_OF_SIGNAL.get(sig) for sig in signals):
+        return False
+    return group_hide and bool(signals)
 
 
 @dataclass

@@ -348,6 +348,12 @@ def prefs_rules(
                    f"{prints!s:>5} prints  {owned!s:>4} owned  {r['description']}")
 
 
+def _note_by_family_off() -> None:
+    from . import collection_prefs
+    if collection_prefs.get().by_family != "on":
+        typer.echo("(not applied: mm prefs set by_family on)", err=True)
+
+
 @prefs_app.command("rule")
 def prefs_rule(
     family: str = typer.Argument(..., help="A family code (see mm prefs rules)."),
@@ -362,6 +368,7 @@ def prefs_rule(
         typer.echo(f"error: {e}", err=True)
         raise typer.Exit(2)
     typer.echo(f"{family.lower()} {rule_id}: {state}")
+    _note_by_family_off()
 
 
 @prefs_app.command("rule-reset")
@@ -392,6 +399,7 @@ def prefs_family_all(
         typer.echo(f"error: {e}", err=True)
         raise typer.Exit(2)
     typer.echo(f"{family.lower()} all rules: {state}")
+    _note_by_family_off()
 
 
 @prefs_app.command("kinds")

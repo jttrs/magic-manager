@@ -126,9 +126,12 @@ def test_variant_hidden_matches_is_excluded_variant_without_overrides():
     assert sets.variant_hidden(card(None, ["alchemy"]), prefs, {"serialized": "show"})
     assert not sets.variant_hidden(card(None, ["serialized"]), prefs, {"serialized": "show"})
     assert sets.variant_hidden(card(None, ["serialized"]), show, {"serialized": "hide"})
-    # any hiding signal wins
+    # an explicit hide on any signal wins; an explicit show beats the group on the card's other kinded signals
     assert sets.variant_hidden(card("white", ["serialized"]), prefs,
-                               {"serialized": "show"})
+                               {"serialized": "show", "white_border": "hide"})
+    assert not sets.variant_hidden(card("white", ["serialized"]), prefs, {"serialized": "show"})
+    # ...but not on an unkinded one (alchemy), which keeps following the group
+    assert sets.variant_hidden(card(None, ["serialized", "alchemy"]), prefs, {"serialized": "show"})
 
 
 def test_explicit_count_keeps_prints_but_shipped_count_does_not(cards, monkeypatch):
@@ -447,3 +450,51 @@ def test_cli_flow(cards):
         res = r.invoke(app, ["prefs", *argv])
         assert res.exit_code == 2, argv
         assert "error:" in res.output
+
+
+def test_serialized_unowned_print_reaches_the_variant_gate(cards, seed_cards, make_card):
+    seed_cards([
+        make_card(id="ser", set="tla", collector_number="10", rarity="mythic", name="Ser", oracle_id="o10",
+                  promo_types=["serialized"]),
+        make_card(id="reb", set="tla", collector_number="11", rarity="rare", name="Reb", oracle_id="o11",
+                  promo_types=["rebalanced"]),
+        make_card(id="ser_reb", set="tla", collector_number="12", rarity="rare", name="SerReb", oracle_id="o12",
+                  promo_types=["serialized", "alchemy"]),
+    ])
+    assert not {"ser", "reb", "ser_reb"} & set(_coll())
+    cp.set_variant_kind("serialized", "show")
+    assert {"ser"} <= set(_coll()) and not {"reb", "ser_reb"} & set(_coll())
+    cp.set_variant_kind("serialized", None)
+    assert "ser" not in _coll()
+    # an explicit Count on a matching rule, with by_family on
+    rule = {"promo_types_any_of": frozenset({"serialized"}), "tier": "hard"}
+    selectors.FAMILY_UNOBTAINABLE_RULES["tla"] = [HARD, CHASE, rule]
+    _on()
+    cp.set_family_rule("tla", config.rule_id(rule), "count")
+    assert "ser" in _coll() and not {"reb", "ser_reb"} & set(_coll())
+
+
+def test_register_set_target_none_follows_variant_group(tmp_db):
+    from magic_manager import sets
+    def stored():
+        with db.connect() as conn:
+            return conn.execute("SELECT include_variants FROM set_targets WHERE anchor_code='tla'").fetchone()[0]
+    sets.register_set_target("tla", ["tla"], include_variants=None)
+    assert stored() == 0
+    cp.update("variant_prints", "show")
+    sets.register_set_target("tla", ["tla"], include_variants=None)
+    assert stored() == 1
+    sets.register_set_target("tla", ["tla"], include_variants=False)
+    assert stored() == 0
+    sets.register_set_target("tla", ["tla"], include_variants=True)
+    assert stored() == 1
+
+
+def test_cli_rule_notes_when_by_family_is_off(cards):
+    r = CliRunner().invoke(app, ["prefs", "rule", "tla", HID, "count"])
+    assert r.exit_code == 0 and "not applied: mm prefs set by_family on" in r.output
+    r = CliRunner().invoke(app, ["prefs", "family-all", "tla", "hide"])
+    assert r.exit_code == 0 and "not applied" in r.output
+    _on()
+    r = CliRunner().invoke(app, ["prefs", "family-all", "tla", "hide"])
+    assert r.exit_code == 0 and "not applied" not in r.output

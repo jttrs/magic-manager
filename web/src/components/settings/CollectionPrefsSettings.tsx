@@ -1,6 +1,6 @@
-import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Fragment, useMemo } from 'react';
-import { collectionPrefsQuery, unwrap, variantKindsQuery } from '../../app/queries';
+import { collectionPrefsQuery, invalidateCounting, unwrap, variantKindsQuery } from '../../app/queries';
 import { useSettingsSection } from '../../app/settings';
 import { putPref, putVariantKind, type PrefOut, type PrefsOut, type VariantKindOut, type VariantKindsOut } from '../../core/api';
 import { canToggleOff, kindValue, predict, predictKind, toggleMulti } from '../../core/collectionPrefs';
@@ -17,12 +17,6 @@ const KIND_OPTIONS: { value: KindChoice; label: string }[] = [
   { value: 'hide', label: 'Leave out' },
   { value: 'show', label: 'Include' },
 ];
-
-/** Everything a preference or variant-kind change can alter: re-read it all. */
-const invalidateCounting = (qc: QueryClient) => Promise.all(
-  [['collection'], ['market'], ['jumpstart'], ['preferences', 'collection', 'families'], variantKindsQuery().queryKey]
-    .map((k) => qc.invalidateQueries({ queryKey: k })),
-);
 
 /** Settings → What counts: which printings count in Collection, missing lists and checklists. */
 export function useCollectionPrefsSettings() {
