@@ -95,6 +95,14 @@ Small PRs, one per item.
   value back in the cache for up to 30 s (a generation counter bumped by `clear_cache` fixes it);
   `mm prefs set` from a terminal reaches a running `mm serve` only after its 30 s cache expires;
   a forget function that raises after the write commits turns a saved PUT into a 500.
+- **Feedback-batch review deferrals (PRs #239, #240):** the Deals and Secret Lair sort menus repeat
+  the same option labels (share the `gap_pct`/`gap_usd`/`name` labels); the Decks URL key `source`
+  shares a word with `RecipeOut.source` (the import site) — rename the key to `origins`; `decksSearch`
+  is cast `as unknown as` to keep the router's key types (apply the legacy `kinds` mapping in
+  `validateSearch` instead); Market's Deck type option counting duplicates `optionCounts.types`
+  (lift it into `core/decks.ts`).
+  Top cards by set family re-read the family's stored EDHREC set pages on every request to tag
+  reprints (`edhrec.set_reprint_slugs`); memoize it per cached batch if it ever shows up as slow.
 
 ## 4. Deferred by decision
 

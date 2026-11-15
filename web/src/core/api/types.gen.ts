@@ -5594,6 +5594,12 @@ export type RankedOut = {
      */
     salt?: number | null;
     /**
+     * Reprint
+     *
+     * Top cards from a set family: EDHREC lists the card as a reprint there (printed before the set).
+     */
+    reprint?: boolean;
+    /**
      * Trend
      *
      * EDHREC trend z-score.

@@ -1,4 +1,4 @@
-// Explore rankings (EDHREC top commanders / top cards / salt) — URL state → the
+// Explore rankings (EDHREC top commanders / top cards) — URL state → the
 // API request and page, and the guide view-model. Framework-free.
 import type { RankedOut, RankingOut } from './api';
 import { fromFacts } from './explore';
@@ -20,30 +20,27 @@ const MORE_PAGE = 50;
 /** The Explore tab: explicit `mode`, else a surfer link (`surf` — legacy links opened the surfer over any view), else a picked card, else rankings. */
 export const exploreMode = (mode: ExploreMode | undefined, a: string | undefined, surf?: string): ExploreMode => mode ?? (surf != null ? 'surf' : a ? 'card' : 'rankings');
 
-export const SCOPE_LABEL: Record<RankScope, string> = { commanders: 'Top commanders', cards: 'Top cards', salt: 'Saltiest cards' };
+export const SCOPE_LABEL: Record<RankScope, string> = { commanders: 'Top commanders', cards: 'Top cards' };
 export const TIMEFRAME_LABEL: Record<RankTimeframe, string> = { week: 'Week', month: 'Month', year: '2 years' };
 export const OWN_LABEL: Record<RankOwn, string> = { all: 'All', owned: 'You own', unused: 'Unused' };
 
-/** Color, tag and set narrow commander rankings only. */
-export const filtersApply = (s: Pick<RankingsState, 'rank'>): boolean => s.rank === 'commanders';
+/** Color and set family narrow both lists (on Top cards: cards that fit within the colours); a tag narrows top commanders only. */
+export const tagApplies = (s: Pick<RankingsState, 'rank'>): boolean => s.rank === 'commanders';
 
 const value = (v?: string) => (v?.trim() ? v.trim() : undefined);
 
-/** EDHREC serves a timeframe for top commanders/cards and color pages; salt, tags and sets are all-time.
- *  With a set family the set's list is read (no timeframe); a tag on its own is all-time. */
+/** EDHREC serves a timeframe for top commanders/cards and color pages; tags and sets are all-time.
+ *  With a set family the set's list is read (no timeframe); a tag on its own is all-time. Colour alone on Top cards narrows the timeframed list. */
 export function timeframeApplies(s: Pick<RankingsState, 'rank' | 'color' | 'tag' | 'fam'>): boolean {
-  if (s.rank === 'salt') return false;
-  if (!filtersApply(s)) return true;
   if (value(s.fam)) return false;
-  return !(value(s.tag) && !value(s.color));
+  return !(tagApplies(s) && value(s.tag) && !value(s.color));
 }
 
-/** The API request (the job input): every filter set, for commander lists. */
+/** The API request (the job input): color and set family for both lists, the tag for commanders only. */
 export function rankingRequest(s: RankingsState): RankingRequest {
   const base: RankingRequest = { scope: s.rank, timeframe: s.tf };
-  if (!filtersApply(s)) return base;
   const color = value(s.color);
-  const tag = value(s.tag);
+  const tag = tagApplies(s) ? value(s.tag) : undefined;
   const fam = value(s.fam);
   return { ...base, ...(color && { color }), ...(tag && { tag }), ...(fam && { set_family: fam }) };
 }
@@ -59,21 +56,19 @@ export const nextPage = (shown: number, total: number): number => Math.max(0, Ma
 export const failureText = (error: string | null | undefined): string =>
   (error ?? '').replace(/^[A-Z][A-Za-z]*(Error|Exception|Refused|Failed):\s*/, '').trim() || 'EDHREC didn’t answer.';
 
-/** The role a ranked card opens in: commander rankings lead decks; top cards and salt are cards in the 99. */
+/** The role a ranked card opens in: commander rankings lead decks; top cards are cards in the 99. */
 export const roleFor = (scope: RankScope): Role => (scope === 'commanders' ? 'commander' : 'card');
 
-/** The metric column: deck count, or salt for the salt ranking. */
-export const metricLabel = (scope: RankScope): string => (scope === 'salt' ? 'Salt' : 'Decks');
+/** The metric column: deck count. */
+export const metricLabel = (_scope: RankScope): string => 'Decks';
 
 const compact = new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 });
-export const fmtMetric = (scope: RankScope, r: RankedOut): string =>
-  scope === 'salt' ? (r.salt == null ? '—' : r.salt.toFixed(2)) : r.num_decks == null ? '—' : compact.format(r.num_decks);
+export const fmtMetric = (_scope: RankScope, r: RankedOut): string => (r.num_decks == null ? '—' : compact.format(r.num_decks));
 
 /** A ranked card as the shared guide view-model (grid view + inspector). */
 export function rankedCard(scope: RankScope, r: RankedOut): GuideCard {
   const c = fromFacts(r.name, r.slug, r.facts);
-  const metric = scope === 'salt' ? `salt ${fmtMetric(scope, r)}` : `${fmtMetric(scope, r)} decks`;
-  return { ...c, note: `#${r.rank ?? '—'} · ${metric}` };
+  return { ...c, note: `#${r.rank ?? '—'} · ${fmtMetric(scope, r)} decks${r.reprint ? ' · reprint' : ''}` };
 }
 
 /** "today" / "yesterday" / "5 days ago" / a date — when the ranking was read from EDHREC. */
@@ -97,7 +92,6 @@ export function edhrecUrl(r: Pick<RankingOut, 'scope' | 'timeframe' | 'filter'>)
   if (kind === 'color') path = `commanders/${val}${tf}`;
   else if (kind === 'tag') path = `tags/${val}`;
   else if (kind === 'set') path = `sets/${val}`;
-  else if (r.scope === 'salt') path = 'top/salt';
   else path = r.scope === 'commanders' ? `commanders${tf}` : `top${tf}`;
   return `https://edhrec.com/${path}`;
 }
@@ -118,7 +112,7 @@ export function partialRankingNote(r: Pick<RankingOut, 'base' | 'pool_complete' 
 
 /** A calm note for a list EDHREC left empty (a set family with no commanders yet). */
 export function emptyRankingNote(s: Pick<RankingsState, 'rank' | 'fam'>, famName?: string): string {
-  if (filtersApply(s) && value(s.fam)) return `EDHREC lists no commanders from ${famName ?? s.fam?.toUpperCase()} yet.`;
+  if (value(s.fam)) return `EDHREC lists no ${s.rank === 'cards' ? 'cards' : 'commanders'} from ${famName ?? s.fam?.toUpperCase()} yet.`;
   return 'EDHREC lists nothing here yet.';
 }
 

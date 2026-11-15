@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { compareSearch } from './search';
 import type { FactsOut, RankedOut, RankingOut } from './api';
-import { cardType, creatureType, edhrecUrl, emptyRankingNote, exploreMode, failureText, rankedTypes, fetchedAgo, fmtMetric, nextPage, partialRankingNote, rankedCard, rankingPage, rankingRequest, rankingSummary, roleFor, timeframeApplies, type RankingsState } from './rankings';
+import { cardType, creatureType, edhrecUrl, emptyRankingNote, exploreMode, failureText, rankedTypes, fetchedAgo, nextPage, partialRankingNote, rankedCard, rankingPage, rankingRequest, rankingSummary, roleFor, timeframeApplies, type RankingsState } from './rankings';
 
 const state = (o: Partial<RankingsState> = {}): RankingsState => ({ rank: 'commanders', tf: 'week', own: 'all', rq: '', ...o });
 const facts = (o: Partial<FactsOut> = {}): FactsOut => ({ oracle_id: 'o', type_line: 'Legendary Creature', cmc: 3, color_identity: ['R'], lowest_usd: 2, scryfall_id: 's', image_uri: null, set_code: 'm13', collector_number: '1', scryfall_url: null, owned: 0, free: 0, ...o });
@@ -29,8 +30,15 @@ describe('rankings', () => {
     expect(rankingRequest(state())).toEqual({ scope: 'commanders', timeframe: 'week' });
     expect(rankingRequest(state({ color: 'azorius', tag: '  goblins ', fam: 'fin' }))).toEqual({ scope: 'commanders', timeframe: 'week', color: 'azorius', tag: 'goblins', set_family: 'fin' });
     expect(rankingRequest(state({ color: '', tag: ' ' }))).toEqual({ scope: 'commanders', timeframe: 'week' });
-    // filters only narrow commanders: stale ones are ignored for cards / salt
-    expect(rankingRequest(state({ rank: 'salt', color: 'azorius' }))).toEqual({ scope: 'salt', timeframe: 'week' });
+    // color and set narrow both lists; a tag narrows commanders only
+    expect(rankingRequest(state({ rank: 'cards', color: 'azorius' }))).toEqual({ scope: 'cards', timeframe: 'week', color: 'azorius' });
+    expect(rankingRequest(state({ rank: 'cards', tag: 'goblins' }))).toEqual({ scope: 'cards', timeframe: 'week' });
+    expect(rankingRequest(state({ rank: 'cards', fam: 'fin', tag: 'goblins' }))).toEqual({ scope: 'cards', timeframe: 'week', set_family: 'fin' });
+  });
+
+  it('reads an old rank=salt link as top commanders', () => {
+    expect(compareSearch.parse({ rank: 'salt' }).rank).toBe('commanders');
+    expect(compareSearch.parse({ rank: 'cards' }).rank).toBe('cards');
   });
 
   it('offers a timeframe only where EDHREC has one', () => {
@@ -39,7 +47,8 @@ describe('rankings', () => {
     expect(timeframeApplies(state({ color: 'azorius', tag: 'goblins' }))).toBe(true);
     expect(timeframeApplies(state({ tag: 'goblins' }))).toBe(false);
     expect(timeframeApplies(state({ fam: 'fin', color: 'azorius' }))).toBe(false);
-    expect(timeframeApplies(state({ rank: 'salt' }))).toBe(false);
+    expect(timeframeApplies(state({ rank: 'cards', fam: 'fin' }))).toBe(false);
+    expect(timeframeApplies(state({ rank: 'cards', color: 'azorius' }))).toBe(true);
     expect(timeframeApplies(state({ rank: 'cards', tag: 'goblins' }))).toBe(true);
   });
 
@@ -55,12 +64,12 @@ describe('rankings', () => {
     expect(failureText('EdhrecError: EDHREC has no “gobblinz” tag.')).toBe('EDHREC has no “gobblinz” tag.');
     expect(failureText(null)).toBe('EDHREC didn’t answer.');
     expect(emptyRankingNote(state({ fam: 'acr' }), 'Assassin’s Creed')).toBe('EDHREC lists no commanders from Assassin’s Creed yet.');
+    expect(emptyRankingNote(state({ rank: 'cards', fam: 'fin' }), 'Final Fantasy')).toBe('EDHREC lists no cards from Final Fantasy yet.');
   });
 
-  it('opens commanders as commanders and cards / salt as cards', () => {
+  it('opens commanders as commanders and cards as cards', () => {
     expect(roleFor('commanders')).toBe('commander');
     expect(roleFor('cards')).toBe('card');
-    expect(roleFor('salt')).toBe('card');
   });
 
   it('maps a ranked row to the guide card with rank + metric in the note', () => {
@@ -68,14 +77,13 @@ describe('rankings', () => {
     expect(c.key).toBe('o-k');
     expect(c.note).toMatch(/^#3 · 5\.1K decks$/);
     expect(c.tags).toEqual(['2 owned · 1 unused']);
-    expect(fmtMetric('salt', row('Stasis', { salt: 3.0572 }))).toBe('3.06');
+    expect(rankedCard('cards', row('Sol Ring', { reprint: true })).note).toBe('#1 · 1.2K decks · reprint');
   });
 
   it('links each ranking to its EDHREC page', () => {
     const r = (o: Partial<RankingOut>) => ({ scope: 'commanders', timeframe: 'week', filter: '', ...o }) as RankingOut;
     expect(edhrecUrl(r({}))).toBe('https://edhrec.com/commanders/week');
     expect(edhrecUrl(r({ scope: 'cards', timeframe: 'month' }))).toBe('https://edhrec.com/top/month');
-    expect(edhrecUrl(r({ scope: 'salt', timeframe: 'all' }))).toBe('https://edhrec.com/top/salt');
     expect(edhrecUrl(r({ filter: 'color:mono-red' }))).toBe('https://edhrec.com/commanders/mono-red/week');
     expect(edhrecUrl(r({ filter: 'tag:goblins', timeframe: 'all' }))).toBe('https://edhrec.com/tags/goblins');
     expect(edhrecUrl(r({ filter: 'set:fin', timeframe: '' }))).toBe('https://edhrec.com/sets/fin');

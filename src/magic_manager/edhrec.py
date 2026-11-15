@@ -659,8 +659,9 @@ def _check_ranking_args(scope: str, color, tag, set_family) -> int:
     n_filters = sum(x is not None for x in (color, tag, set_family))
     if n_filters > 1:
         raise EdhrecError("color/tag/set filters are mutually exclusive — pass at most one")
-    if n_filters == 1 and scope != "commanders":
-        raise EdhrecError(f"filters apply only to the 'commanders' scope, not {scope!r}")
+    if n_filters == 1 and scope != "commanders" and not (scope == "cards" and set_family is not None):
+        raise EdhrecError(f"color/tag filters apply only to the 'commanders' scope, not {scope!r} "
+                          "(a set family also narrows 'cards')")
     if n_filters == 0 and scope not in _RANKING_SCOPES:
         raise EdhrecError(f"unknown ranking scope {scope!r} (expected commanders|cards|salt)")
     return n_filters
@@ -677,7 +678,7 @@ def ranking_key(scope: str = "commanders", timeframe: str = "week", *,
     if tag is not None:
         return RankingKey("commanders", "all", f"tag:{slugify(tag)}")
     if set_family is not None:
-        return RankingKey("commanders", "", f"set:{sets.resolve(set_family).code}")
+        return RankingKey(scope, "", f"set:{sets.resolve(set_family).code}")
     if scope == "salt":
         return RankingKey("salt", "all", "")
     return RankingKey(scope, timeframe, "")
@@ -838,6 +839,32 @@ def _deep_cardviews(group: dict, label: str, progress=None) -> tuple[list[dict],
     return _dedupe_cardviews(cardviews, resort=False), extra, partial
 
 
+def _is_set_card_list(tag: str) -> bool:
+    """A set page's card lists: ``cards`` / ``cards(<code>)`` (the set's own cards)
+    plus ``reprints`` (older cards reprinted in it — they ship in the set too)."""
+    return tag in ("cards", "reprints") or tag.startswith("cards(")
+
+
+def set_reprint_slugs(set_family: str) -> set[str]:
+    """Slugs EDHREC lists as REPRINTS on a family's stored set pages (offline: the
+    snapshots a set ranking already read). Used to tag top cards that ship in the
+    family but were printed before it."""
+    codes = [c.lower() for c in sets.resolve(set_family).all_codes]
+    out: set[str] = set()
+    with db.connect() as conn:
+        rows = conn.execute(
+            f"SELECT json FROM edhrec_pages WHERE slug IN ({','.join('?' * len(codes))})",
+            [f"sets/{c}" for c in codes]).fetchall()
+    own: set[str] = set()
+    for r in rows:
+        for tagname, cvs in cardlists(json.loads(r["json"])).items():
+            bucket = out if tagname == "reprints" else own if _is_set_card_list(tagname) else None
+            if bucket is not None:
+                bucket.update(cv["slug"] for cv in cvs or [] if cv.get("slug"))
+    # A card new to the family stays new even when a later child set reprints it.
+    return out - own
+
+
 def _is_set_commander_list(tag: str) -> bool:
     """A set page's commander lists: ``commanders`` (a one-code set such as
     ACR) or ``commanders(<code>)`` per code (``commanders(fin)``, …)."""
@@ -890,6 +917,9 @@ def _plan_rankings(scope: str, timeframe: str, *,
         )
 
     if set_family is not None:
+        # A set page lists both: commanders for the commanders scope, the set's
+        # cards + its reprints for the cards scope (ranked together by deck count).
+        pick = _is_set_card_list if scope == "cards" else _is_set_commander_list
         resolved_set = sets.resolve(set_family)
         anchor = resolved_set.code
         queue = [c.lower() for c in resolved_set.all_codes]
@@ -917,7 +947,7 @@ def _plan_rankings(scope: str, timeframe: str, *,
                 primary = page
             snapshots.append(("commanders", f"sets/{code}", page))
             for tagname, cvs in cardlists(page).items():
-                if _is_set_commander_list(tagname) and cvs:
+                if pick(tagname) and cvs:
                     merged.extend(cvs)
         return _RankingPlan(
             cardviews=_dedupe_cardviews(merged), filter_key=f"set:{anchor}",
@@ -965,7 +995,7 @@ def sync_rankings(scope: str = "commanders", timeframe: str = "week", *,
     plan = _plan_rankings(scope, timeframe, color=color, tag=tag,
                           set_family=set_family, progress=progress)
     # Filtered rankings are always commander rankings; unfiltered keeps its scope.
-    row_scope = "commanders" if n_filters == 1 else scope
+    row_scope = "commanders" if n_filters == 1 and scope != "cards" else scope
     at = db._utcnow_iso()
 
     names = [cv["name"] for cv in plan.cardviews if cv.get("name")]

@@ -1,11 +1,11 @@
 import { Popover } from 'radix-ui';
-import { useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 
 type Option = { value: string; label: string; hint?: string };
 
 /** One-of-many picker for long lists: a compact trigger opening a filter box
  *  over a list; picking closes it. Arrow keys move, Enter picks. */
-export function SearchSelect({ label, options, value, onChange, noun, nouns = `${noun}s`, placeholder, tone = 'chrome', hideLabel = false }: { label: string; options: Option[]; value: string | undefined; onChange: (v: string) => void; noun: string; nouns?: string; placeholder?: string; tone?: 'chrome' | 'paper'; hideLabel?: boolean }) {
+export function SearchSelect({ label, options, value, onChange, noun, nouns = `${noun}s`, placeholder, tone = 'chrome', hideLabel = false, labelExtra }: { label: string; options: Option[]; value: string | undefined; onChange: (v: string) => void; noun: string; nouns?: string; placeholder?: string; tone?: 'chrome' | 'paper'; hideLabel?: boolean; labelExtra?: ReactNode }) {
   const id = useId();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
@@ -35,7 +35,10 @@ export function SearchSelect({ label, options, value, onChange, noun, nouns = `$
 
   return (
     <div className="flex flex-col gap-1.5">
-      <span id={`${id}-l`} className={hideLabel ? 'sr-only' : `text-sm voice-semi ${paper ? 'text-ink-muted' : 'text-on-chrome-muted'}`}>{label}</span>
+      <span className="flex items-center gap-1.5">
+        <span id={`${id}-l`} className={hideLabel ? 'sr-only' : `text-sm voice-semi ${paper ? 'text-ink-muted' : 'text-on-chrome-muted'}`}>{label}</span>
+        {labelExtra}
+      </span>
       <Popover.Root open={open} onOpenChange={(o) => { setOpen(o); if (!o) setQ(''); else setActive(Math.max(0, options.findIndex((x) => x.value === value))); }}>
         <Popover.Trigger
           aria-labelledby={`${id}-l ${id}-s`}

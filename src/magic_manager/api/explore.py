@@ -139,7 +139,9 @@ RankingScope = Literal["commanders", "cards", "salt"]
 class RankingQuery(BaseModel):
     """One EDHREC ranking. Color, tag and set narrow COMMANDER rankings and stack:
     EDHREC serves one axis per page, so the most selective one (set, else color,
-    else tag) is read from EDHREC and the others filter it locally."""
+    else tag) is read from EDHREC and the others filter it locally. Top cards take
+    a set family (its cards + reprints) and a color (cards that fit within it);
+    a tag narrows commanders only, and salt takes no filter."""
     scope: RankingScope = "commanders"
     timeframe: Literal["week", "month", "year"] = Field(
         "week", description="Applies to top commanders/cards and a color identity on its own or with a tag; "
@@ -150,8 +152,10 @@ class RankingQuery(BaseModel):
 
     @model_validator(mode="after")
     def _commander_filters(self):
-        if any((self.color, self.tag, self.set_family)) and self.scope != "commanders":
-            raise ValueError("color, tag and set filters apply only to commander rankings")
+        if self.tag and self.scope != "commanders":
+            raise ValueError("a tag narrows commander rankings only")
+        if (self.color or self.set_family) and self.scope == "salt":
+            raise ValueError("color and set filters apply to commander and card rankings, not salt")
         return self
 
     def args(self) -> dict:
@@ -173,6 +177,7 @@ class RankedOut(BaseModel):
     facts: FactsOut
     num_decks: int | None = None
     salt: float | None = Field(None, description="Average 0–4 'unfun to play against' rating (salt rankings).")
+    reprint: bool = Field(False, description="Top cards from a set family: EDHREC lists the card as a reprint there (printed before the set).")
     trend: float | None = Field(None, description="EDHREC trend z-score.")
 
 
@@ -226,7 +231,7 @@ def ranking(q: RankingPageQuery) -> RankingOut:
         scope=r.key.scope, timeframe=r.key.timeframe, filter=r.key.filter, title=r.title,
         cached=r.cached, fetched_at=r.fetched_at,
         rows=[RankedOut(rank=x.rank, name=x.name, slug=x.slug, facts=_facts(x.facts),
-                        num_decks=x.num_decks, salt=x.salt, trend=x.trend) for x in r.rows],
+                        num_decks=x.num_decks, salt=x.salt, trend=x.trend, reprint=x.reprint) for x in r.rows],
         total=r.total, base=r.base, pool=r.pool, owned=r.owned, unused=r.unused, offset=q.offset,
         local_filters=r.local_filters,
         pool_complete=r.partial_reason is None, pool_partial_reason=r.partial_reason,
