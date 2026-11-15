@@ -2,7 +2,7 @@ import { useQueries, useQuery } from '@tanstack/react-query';
 import { useMemo, useRef, type KeyboardEvent } from 'react';
 import { productCostQuery, secretLairQuery, watchedQuery } from '../../app/queries';
 import { useFeature } from '../../app/features';
-import { ArrangeMenu, SortMark } from '../../components/ArrangeControls';
+import { SortMenu } from '../../components/ArrangeControls';
 import { Button } from '../../components/Button';
 import { InfoTip } from '../../components/InfoTip';
 import { Segmented, SelectField, SideSection, TextField } from '../../components/Sidebar';
@@ -59,7 +59,7 @@ function useSldFilter(search: MarketSearch, set: Set) {
 /** The sheet-header sort for the Secret Lair mode. */
 export function SecretLairSort({ search, set }: { search: MarketSearch; set: Set }) {
   const setFilter = useSldFilter(search, set);
-  return <ArrangeMenu label="Sort" Icon={SortMark} value={search.ssort} defaultValue="gap_pct" options={SLD_SORT_OPTIONS} onChange={(ssort) => setFilter({ ssort })} />;
+  return <SortMenu value={search.ssort} defaultValue="gap_pct" options={SLD_SORT_OPTIONS} onChange={(ssort) => setFilter({ ssort })} />;
 }
 
 /** Rail for the Secret Lair mode: Find → Show. */

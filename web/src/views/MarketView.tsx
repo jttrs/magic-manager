@@ -3,7 +3,7 @@ import { getRouteApi, useNavigate } from '@tanstack/react-router';
 import { useMemo, useState, type ReactNode } from 'react';
 import { decksQuery, deckCostQuery, familiesQuery, marketCardsQuery, marketProductsQuery } from '../app/queries';
 import { ViewLayout } from '../components/AppShell';
-import { ArrangeMenu, SortMark } from '../components/ArrangeControls';
+import { SortMenu } from '../components/ArrangeControls';
 import { useFeature } from '../app/features';
 import { DealsPanel } from './market/DealsPanel';
 import { useDealsReads } from './market/useDealsReads';
@@ -227,18 +227,14 @@ export function MarketView() {
 
   const arrange =
     subject === 'family' && singles ? (
-      <ArrangeMenu<MarketSearch['sort']>
-        label="Sort"
-        Icon={SortMark}
+      <SortMenu<MarketSearch['sort']>
         value={search.sort}
         defaultValue="savings"
         onChange={(sort) => set({ sort })}
         options={[{ value: 'savings', label: 'Biggest premium' }, { value: 'price', label: 'Highest value' }, { value: 'foil', label: 'Smallest foil premium' }, { value: 'set', label: 'Set and number' }]}
       />
     ) : inDeals ? (
-      <ArrangeMenu<DealSort>
-        label="Sort"
-        Icon={SortMark}
+      <SortMenu<DealSort>
         value={search.dsort}
         defaultValue="gap_pct"
         onChange={(dsort) => setFilter({ dsort })}

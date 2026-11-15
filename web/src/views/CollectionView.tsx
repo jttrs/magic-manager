@@ -31,7 +31,7 @@ import { InfoTip } from '../components/InfoTip';
 import { summaryLine } from '../core/checklist';
 import { fmtInt, fmtUsd } from '../core/format';
 import { exportLines, fromCollection, groupCards, type GuideCard } from '../core/guideCard';
-import { SHOW, type CollectionSearch } from '../core/search';
+import { SHOW, type CollectionSearch, COLLECTION_SORT_DEFAULT } from '../core/search';
 import { decodeSort, encodeSort, leadSection, sortBy, type SortRule } from '../core/sort';
 
 const route = getRouteApi('/collection');
@@ -327,7 +327,7 @@ export function CollectionView() {
               keys={collectionSortKeys(hasScenes)}
               rules={rules}
               presets={collectionPresets(hasScenes)}
-              defaultRules={activeRules(decodeSort(undefined, COLLECTION_SORT), hasScenes)}
+              defaultRules={activeRules(decodeSort(COLLECTION_SORT_DEFAULT, COLLECTION_SORT), hasScenes)}
               onChange={(r) => set({ sort: encodeSort(r, COLLECTION_SORT) })}
             />
             <ViewToggle value={search.view} onChange={(view) => set({ view })} />

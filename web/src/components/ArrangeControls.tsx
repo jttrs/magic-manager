@@ -12,7 +12,7 @@ type Mark = ComponentType<SVGProps<SVGSVGElement>>;
 const base = { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true } as const;
 
 /** Bars shortening downward with a down-arrow beside them (sort). */
-export function SortMark(p: SVGProps<SVGSVGElement>) {
+function SortMark(p: SVGProps<SVGSVGElement>) {
   return (
     <svg {...base} {...p}>
       <path d="M4 6h10M4 11h7M4 16h4" />
@@ -93,7 +93,7 @@ export function ViewToggle<V extends 'grid' | 'list'>({ value, onChange, label =
 type Choice<T extends string> = { value: T; label: string };
 
 /** One choice from a list, shown as mark + current choice, opening a radio menu. */
-export function ArrangeMenu<T extends string>({ label, Icon, value, options, onChange, defaultValue }: {
+function ArrangeMenu<T extends string>({ label, Icon, value, options, onChange, defaultValue }: {
   /** What the control arranges by: "Sort", "Group by". */
   label: string;
   Icon: Mark;
@@ -128,6 +128,11 @@ export function ArrangeMenu<T extends string>({ label, Icon, value, options, onC
       </DropdownMenu.Portal>
     </DropdownMenu.Root>
   );
+}
+
+/** A single-choice sort (a table's sort order): `ArrangeMenu` labelled Sort. */
+export function SortMenu<T extends string>(props: { value: T; options: readonly Choice<T>[]; onChange: (v: T) => void; defaultValue?: T }) {
+  return <ArrangeMenu label="Sort" Icon={SortMark} {...props} />;
 }
 
 /** Group by: two choices are a pressed-state pair you can see at a glance; more open a menu. */

@@ -21,7 +21,7 @@ import { coplayGroups, deckShare, pairedSections, profileCard, profileSections, 
 import { fmtInt, fmtUsd } from '../core/format';
 import { exportLines, fromCompare, type GuideCard } from '../core/guideCard';
 import { compareSections, hasFunctionData } from '../core/groupBy';
-import { BUCKETS, type Bucket, type CompareSearch, type GroupBy, type Role } from '../core/search';
+import { BUCKETS, type Bucket, type CompareSearch, type GroupBy, type Role, COMPARE_SORT_DEFAULT } from '../core/search';
 import { decodeSort, encodeSort, sortBy } from '../core/sort';
 import { exploreMode } from '../core/rankings';
 import { ExploreTabs } from './explore/ExploreTabs';
@@ -202,7 +202,7 @@ export function ExploreView() {
                   keys={COMPARE_SORT}
                   rules={rules}
                   presets={COMPARE_SORT_PRESETS}
-                  defaultRules={decodeSort(undefined, COMPARE_SORT)}
+                  defaultRules={decodeSort(COMPARE_SORT_DEFAULT, COMPARE_SORT)}
                   onChange={(r) => set({ sort: encodeSort(r, COMPARE_SORT) })}
                 />
               </>
