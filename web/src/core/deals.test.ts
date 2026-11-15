@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ProductCostOut } from './api';
-import { browserReadUrls, MAX_BROWSER_READS, basisValue, deltaLabel, filterSortProducts, filterListings, gapOf, listingStatus, mergeTabs, pricesFrom, productsFromTabs, productsFromWatched, productType, readAge, sharedErrors, stockLabel, trendLabel, watchlistErrors, type DealFilters, type DealProduct, type PriceRow } from './deals';
+import { dealCounts, browserReadUrls, MAX_BROWSER_READS, basisValue, deltaLabel, filterSortProducts, filterListings, gapOf, listingStatus, mergeTabs, pricesFrom, productsFromTabs, productsFromWatched, productType, readAge, sharedErrors, stockLabel, trendLabel, watchlistErrors, type DealFilters, type DealProduct, type PriceRow } from './deals';
 
 type WatchStore = Parameters<typeof trendLabel>[0];
 
@@ -121,6 +121,23 @@ describe('deal products', () => {
     expect(run({ minOff: 20 })).toEqual(['Alpha Box']);
     expect(run({ minOff: 30 })).toEqual([]);
     expect(run({ inStock: true })).toEqual(['Alpha Box']);
+  });
+  it('counts types under the other filters but not their own', () => {
+    const a = prod('Alpha Box', 80, { offers: [{ url: 'a', store: 'X', price: 80, available: true }], best: { url: 'a', store: 'X', price: 80, available: true } });
+    const b = prod('Beta Deck', 100, { set_code: 'zzz', type: 'bundle', offers: [{ url: 'b', store: 'Y', price: 100, available: false }], best: { url: 'b', store: 'Y', price: 100, available: false } });
+    const c = prod('Gamma', null, { type: 'single' });
+    const costs = new Map([['Alpha Box', cost({})], ['Beta Deck', cost({})]]);
+    const run = (o: Partial<DealFilters>) => dealCounts([a, b, c], costs, { ...F, ...o });
+    const base = run({});
+    expect(Object.values(base.types).reduce((n, v) => n + v, 0)).toBe(3);
+    const byStore = run({ stores: ['Y'], types: ['bundle'] });
+    expect(byStore.types.bundle).toBe(1);
+    expect(Object.values(byStore.types).reduce((n, v) => n + v, 0)).toBe(1);
+    expect(byStore.stores.get('X')).toBeUndefined();
+    expect(byStore.stores.get('Y')).toBe(1);
+    const byType = run({ types: ['bundle'] });
+    expect(byType.stores.get('X')).toBeUndefined();
+    expect(byType.stores.get('Y')).toBe(1);
   });
   it('sorts with unknowns last and ties by name', () => {
     const a = prod('A', 80), b = prod('B', 50), c = prod('C', 90), d = prod('D', null);

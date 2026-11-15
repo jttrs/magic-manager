@@ -1,6 +1,7 @@
 // Collection view derivations: which printings show under the active filters,
 // what counts as "missing", and which finish a buy-list line should name.
 import type { CollectionCardOut, SourceOut } from './api';
+import { facetCounts, passes, type Facets } from './facets';
 
 export type CollectionFilters = {
   show: readonly ('owned' | 'missing')[];
@@ -33,13 +34,6 @@ function sourceMatch(c: CollectionCardOut, src: ReadonlySet<string>, kinds: Read
 export const NO_FUNCTION = '_none';
 
 const fnKeys = (c: CollectionCardOut): string[] => (c.functions?.length ? c.functions : [NO_FUNCTION]);
-
-/** Cards per function root (incl. NO_FUNCTION); a multi-role card counts in each. */
-export function functionCounts(cards: readonly CollectionCardOut[]): Map<string, number> {
-  const m = new Map<string, number>();
-  for (const c of cards) for (const k of fnKeys(c)) m.set(k, (m.get(k) ?? 0) + 1);
-  return m;
-}
 
 export type TraitGroup = 'Rarity' | 'Finish' | 'Treatment' | 'Chase';
 type TraitDef = { key: string; label: string; group: TraitGroup };
@@ -92,15 +86,6 @@ export function traitsOf(c: CollectionCardOut): string[] {
   return [`rarity:${rarity}`, ...treat, c.is_chase ? 'chase:yes' : 'chase:no'];
 }
 
-/** Count of cards carrying each trait (for picker counts). */
-export function traitCounts(cards: readonly CollectionCardOut[]): Map<string, number> {
-  const m = new Map<string, number>();
-  for (const c of cards) {
-    for (const t of new Set([...finishTraits(c).map((f) => f.trait), ...traitsOf(c)])) m.set(t, (m.get(t) ?? 0) + 1);
-  }
-  return m;
-}
-
 const ownedIn = (c: CollectionCardOut, fins: readonly InvFinish[]) =>
   [...new Set(fins)].reduce((s, f) => s + (c.owned[f] ?? 0), 0);
 
@@ -115,24 +100,92 @@ function ownedCopies(c: CollectionCardOut, exclude: readonly string[]): number {
   return ownedIn(c, allowedFinishes(c, new Set(exclude)));
 }
 
-export function filterCollection(cards: readonly CollectionCardOut[], f: CollectionFilters, kinds: ReadonlyMap<string, string> = new Map()): CollectionCardOut[] {
+type CollectionFacet = 'em' | 'src' | 'q' | 'fn' | 'rarity' | 'treatment' | 'chase' | 'finish' | 'show';
+
+const FACET_GROUP: Record<'rarity' | 'treatment' | 'chase', TraitGroup> = { rarity: 'Rarity', treatment: 'Treatment', chase: 'Chase' };
+
+/** One predicate per collection filter (see `core/facets`). Each trait group hides a
+ *  printing that carries one of ITS excluded traits; together they equal "any excluded trait". */
+/** Where a printing lands for the Show filter, judged on its checked finishes: owned,
+ *  missing, or neither (no checked finish; or, counting gaps, owned in another printing). */
+function showState(c: CollectionCardOut, excluded: ReadonlySet<string>, gaps?: boolean): 'owned' | 'missing' | null {
+  const fins = allowedFinishes(c, excluded);
+  if (!fins.length) return null;
+  if (ownedIn(c, fins) > 0) return 'owned';
+  return gaps && (c.card_owned ?? 0) > 0 ? null : 'missing';
+}
+
+function collectionFacets(f: CollectionFilters, kinds: ReadonlyMap<string, string> = new Map()): Facets<CollectionCardOut, CollectionFacet> {
   const q = f.q.trim().toLowerCase();
   const wantOwned = f.show.includes('owned');
   const wantMissing = f.show.includes('missing');
   const excluded = new Set(f.exclude);
   const fn = new Set(f.fn ?? []);
   const src = new Set(f.src ?? []);
-  return cards.filter((c) => {
-    if (f.em && !c.earmarked) return false;
-    if (src.size && !sourceMatch(c, src, kinds)) return false;
-    if (q && !c.name.toLowerCase().includes(q)) return false;
-    if (fn.size && !fnKeys(c).some((k) => fn.has(k))) return false;
-    if (excluded.size && traitsOf(c).some((t) => excluded.has(t))) return false;
-    const fins = allowedFinishes(c, excluded);
-    if (!fins.length) return false;
-    const n = ownedIn(c, fins);
-    return (wantOwned && n > 0) || (wantMissing && n === 0 && !(f.gaps && (c.card_owned ?? 0) > 0));
-  });
+  const groupKeep = (g: TraitGroup) => {
+    const keys = new Set(traitsIn(g).map((t) => t.key));
+    const ex = new Set([...excluded].filter((k) => keys.has(k)));
+    return (c: CollectionCardOut) => !ex.size || !traitsOf(c).some((t) => ex.has(t));
+  };
+  const rarity = groupKeep(FACET_GROUP.rarity), treatment = groupKeep(FACET_GROUP.treatment), chase = groupKeep(FACET_GROUP.chase);
+  return {
+    em: (c) => !f.em || !!c.earmarked,
+    src: (c) => !src.size || sourceMatch(c, src, kinds),
+    q: (c) => !q || c.name.toLowerCase().includes(q),
+    fn: (c) => !fn.size || fnKeys(c).some((k) => fn.has(k)),
+    rarity, treatment, chase,
+    finish: (c) => allowedFinishes(c, excluded).length > 0,
+    show: (c) => {
+      const st = showState(c, excluded, f.gaps);
+      return (wantOwned && st === 'owned') || (wantMissing && st === 'missing');
+    },
+  };
+}
+
+export function filterCollection(cards: readonly CollectionCardOut[], f: CollectionFilters, kinds: ReadonlyMap<string, string> = new Map()): CollectionCardOut[] {
+  const facets = collectionFacets(f, kinds);
+  return cards.filter((c) => passes(c, facets));
+}
+
+export type CollectionCounts = {
+  show: { owned: number; missing: number };
+  /** Every trait key (rarity, finish, treatment, chase), each group counted under the other filters. */
+  traits: Map<string, number>;
+  fn: Map<string, number>;
+  /** Source keys and `kind:<kind>`, per printing. */
+  src: Map<string, number>;
+};
+
+/** Option counts for every collection control, each under every OTHER filter. */
+export function collectionCounts(cards: readonly CollectionCardOut[], f: CollectionFilters, kinds: ReadonlyMap<string, string> = new Map()): CollectionCounts {
+  const facets = collectionFacets(f, kinds);
+  const excluded = new Set(f.exclude);
+  const show = { owned: 0, missing: 0 };
+  for (const c of cards) {
+    if (!passes(c, facets, 'show')) continue;
+    const st = showState(c, excluded, f.gaps);
+    if (st) show[st]++;
+  }
+  // Each trait option is counted with only ITS OWN exclusion lifted: the printings that
+  // would show if you ticked it (for a checked option, exactly the ones shown). Lifting
+  // a whole group would miscount multi-valued groups (Finish, Treatment) — and Show
+  // judges owned/missing on the checked finishes, so other finish exclusions must stay.
+  const traits = new Map<string, number>();
+  for (const t of TRAITS) {
+    const facetsT = collectionFacets({ ...f, exclude: f.exclude.filter((k) => k !== t.key) }, kinds);
+    const carries = t.group === 'Finish'
+      ? (c: CollectionCardOut) => finishTraits(c).some((x) => x.trait === t.key)
+      : (c: CollectionCardOut) => traitsOf(c).includes(t.key);
+    let n = 0;
+    for (const c of cards) if (carries(c) && passes(c, facetsT)) n++;
+    if (n) traits.set(t.key, n);
+  }
+  return {
+    show,
+    traits,
+    fn: facetCounts(cards, facets, 'fn', fnKeys),
+    src: facetCounts(cards, facets, 'src', (c) => (c.sources ?? []).flatMap((s) => [s, ...(kinds.has(s) ? [`kind:${kinds.get(s)}`] : [])])),
+  };
 }
 
 /** Σ market price of a buy list (each printing at the finish its line names). */
@@ -194,15 +247,13 @@ const KIND_ORDER = ['pool', 'deck', 'singles', 'unknown'];
 const PRODUCT_GROUP: Record<string, string> = { pool: 'Card pools', deck: 'Precon decks' };
 
 /** "Acquired from" picker options: one per kind present, then every pool and
- *  precon deck product by name (· SET), with owned-printing counts. */
-export function sourceOptions(cards: readonly CollectionCardOut[], sources: readonly SourceOut[]) {
-  const kinds = sourceKinds(sources);
-  const byKind = new Map<string, number>();
-  for (const c of cards) for (const k of new Set((c.sources ?? []).map((s) => kinds.get(s) ?? ''))) if (k) byKind.set(k, (byKind.get(k) ?? 0) + 1);
-  const kindOpts = KIND_ORDER.filter((k) => byKind.has(k)).map((k) => ({ value: `kind:${k}`, label: KIND_LABEL[k], count: byKind.get(k), group: 'By kind' }));
+ *  precon deck product by name (· SET), with counts from `collectionCounts().src`. */
+export function sourceOptions(sources: readonly SourceOut[], counts: ReadonlyMap<string, number>) {
+  const present = new Set<string>(sources.map((s) => s.kind));
+  const kindOpts = KIND_ORDER.filter((k) => present.has(k)).map((k) => ({ value: `kind:${k}`, label: KIND_LABEL[k], count: counts.get(`kind:${k}`) ?? 0, group: 'By kind' }));
   const products = sources
     .filter((s) => s.kind in PRODUCT_GROUP)
     .sort((a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind) || a.label.localeCompare(b.label))
-    .map((s) => ({ value: s.key, label: s.set_code ? `${s.label} · ${s.set_code.toUpperCase()}` : s.label, count: s.printings, group: PRODUCT_GROUP[s.kind] }));
+    .map((s) => ({ value: s.key, label: s.set_code ? `${s.label} · ${s.set_code.toUpperCase()}` : s.label, count: counts.get(s.key) ?? 0, group: PRODUCT_GROUP[s.kind] }));
   return [...kindOpts, ...products];
 }

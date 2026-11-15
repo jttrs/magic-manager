@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { getRouteApi, useNavigate } from '@tanstack/react-router';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { collectionQuery, familiesQuery } from '../app/queries';
 import { useSelection } from '../app/selection';
 import { ViewLayout } from '../components/AppShell';
@@ -26,7 +26,7 @@ import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../components/St
 import { VirtualGuide, type GuideSection } from '../components/VirtualGuide';
 import { collectionBuyList, type CollectionCardOut, type CollectionOut } from '../core/api';
 import { activeRules, collectionPresets, collectionSortKeys, COLLECTION_SORT, NO_SCENE, sceneRanks, type CollectionSortKey } from '../core/scenes';
-import { buyFinish, buyTotal, collectionStats, filterCollection, functionCounts, isMissing, NO_FUNCTION, setGroupIncluded, sourceKinds, sourceOptions, TRAITS, traitCounts, traitsIn, type TraitGroup } from '../core/collection';
+import { buyFinish, buyTotal, collectionCounts, collectionStats, filterCollection, isMissing, NO_FUNCTION, setGroupIncluded, sourceKinds, sourceOptions, TRAITS, traitsIn, type TraitGroup } from '../core/collection';
 import { InfoTip } from '../components/InfoTip';
 import { summaryLine } from '../core/checklist';
 import { fmtInt, fmtUsd } from '../core/format';
@@ -37,6 +37,22 @@ import { decodeSort, encodeSort, leadSection, sortBy, type SortRule } from '../c
 const route = getRouteApi('/collection');
 
 const LAST_FAMILIES = 'mm.collection.families';
+/** The families you last looked at; storage can be blocked (private windows), so never throw. */
+function readLastFamilies(): string[] {
+  try {
+    const v: unknown = JSON.parse(localStorage.getItem(LAST_FAMILIES) ?? '[]');
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+function saveLastFamilies(codes: readonly string[]) {
+  try {
+    localStorage.setItem(LAST_FAMILIES, JSON.stringify(codes));
+  } catch {
+    // blocked storage: the choice just isn't remembered
+  }
+}
 /** "Reset filters" clears what narrows the cards — the card-name search and every
  *  Show filter except the set families you chose. How cards are arranged (sort,
  *  view type) and what "missing" means (a Settings preference) are not filters,
@@ -75,36 +91,45 @@ export function CollectionView() {
   }), [missingMeans]);
   useSettingsSection(settings);
 
-  // Default scope: the families you last looked at (first visit opens the picker).
+  // Default scope: the families you last looked at, restored ONCE when the page opens
+  // with none (a first visit opens the picker). Clearing them later stays cleared.
+  const restored = useRef(false);
   useEffect(() => {
-    if (search.families.length) localStorage.setItem(LAST_FAMILIES, JSON.stringify(search.families));
-    else {
-      const last = JSON.parse(localStorage.getItem(LAST_FAMILIES) ?? '[]') as string[];
-      if (last.length) navigate({ search: (s) => ({ ...s, families: last }), replace: true });
+    if (search.families.length) {
+      restored.current = true;
+      saveLastFamilies(search.families);
+      return;
     }
+    if (restored.current) return;
+    restored.current = true;
+    const last = readLastFamilies();
+    if (last.length) navigate({ search: (s) => ({ ...s, families: last }), replace: true });
   }, [search.families, navigate]);
 
   const view = useMemo(() => (q.data ? buildView(q.data, { ...search, gaps }, rules) : null), [q.data, search, gaps, rules]);
-  const counts = useMemo(() => (q.data ? traitCounts(q.data.cards) : null), [q.data]);
+  // Every control's counts: under all the OTHER filters (core/facets), never its own.
+  const facetData = useMemo(
+    () => (q.data ? collectionCounts(q.data.cards, { ...search, gaps }, sourceKinds(q.data.sources)) : null),
+    [q.data, search, gaps],
+  );
+  const counts = facetData?.traits ?? null;
   const included = (g: TraitGroup) => traitsIn(g).map((t) => t.key).filter((k) => !search.exclude.includes(k));
   /** A group's options present in the data (or currently excluded), with counts. */
   const traitOptions = (g: TraitGroup) =>
     traitsIn(g)
-      .filter((t) => !counts || counts.has(t.key) || search.exclude.includes(t.key))
+      .filter((t) => !counts || (counts.get(t.key) ?? 0) > 0 || search.exclude.includes(t.key))
       .map((t) => ({ value: t.key, label: t.label, count: counts?.get(t.key) ?? 0 }));
-  const groupSummary = (g: TraitGroup, all: string) => {
-    const off = traitsIn(g).filter((t) => search.exclude.includes(t.key)).map((t) => t.label);
-    return off.length ? `Hiding ${off.slice(0, 2).join(', ')}${off.length > 2 ? ` +${off.length - 2}` : ''}` : all;
-  };
-  const fnCounts = useMemo(() => (q.data ? functionCounts(q.data.cards) : null), [q.data]);
-  const fnOptions = q.data && fnCounts && fnCounts.size > (fnCounts.has(NO_FUNCTION) ? 1 : 0)
+  const fnCounts = facetData?.fn ?? null;
+  // Offered while the payload has any tagged function at all, however the other filters narrow it.
+  const hasFunctions = !!q.data?.cards.some((c) => c.functions?.length);
+  const fnOptions = q.data && fnCounts && hasFunctions
     ? [
-        ...(q.data.functions ?? []).filter((r) => fnCounts.has(r.key) || search.fn.includes(r.key)).map((r) => ({ value: r.key, label: r.label, count: fnCounts.get(r.key) ?? 0 })),
+        ...(q.data.functions ?? []).filter((r) => (fnCounts.get(r.key) ?? 0) > 0 || search.fn.includes(r.key)).map((r) => ({ value: r.key, label: r.label, count: fnCounts.get(r.key) ?? 0 })),
         { value: NO_FUNCTION, label: 'No tagged function', count: fnCounts.get(NO_FUNCTION) ?? 0 },
       ]
     : null;
 
-  const srcOptions = useMemo(() => (q.data?.sources?.length ? sourceOptions(q.data.cards, q.data.sources) : null), [q.data]);
+  const srcOptions = q.data?.sources?.length && facetData ? sourceOptions(q.data.sources, facetData.src) : null;
 
   const cartCheck = useFeature('cart_check');
   const checklist = useChecklist();
@@ -133,6 +158,7 @@ export function CollectionView() {
           <MultiSelect
             label="Set families"
             noun="families"
+            mode="scope"
             value={search.families}
             onChange={(families) => set({ families })}
             options={fams.data.map((f) => ({ value: f.code, label: f.name }))}
@@ -152,8 +178,8 @@ export function CollectionView() {
           value={search.show}
           onChange={(show) => set({ show: SHOW.filter((s) => show.includes(s)) })}
           options={[
-            { value: 'owned', label: 'Owned', count: view?.stats.owned },
-            { value: 'missing', label: 'Missing', count: view?.stats.missing },
+            { value: 'owned', label: 'Owned', count: facetData?.show.owned },
+            { value: 'missing', label: 'Missing', count: facetData?.show.missing },
           ]}
         />
         {srcOptions && (
@@ -165,7 +191,6 @@ export function CollectionView() {
               </InfoTip>
             }
             noun="sources"
-            summary={search.src.length ? undefined : 'Any source'}
             value={search.src}
             onChange={(src) => set({ src })}
             options={srcOptions}
@@ -174,9 +199,9 @@ export function CollectionView() {
         <MultiSelect
           label="Rarity"
           noun="rarities"
+          mode="exclude"
           searchable={false}
           keepOrder
-          summary={groupSummary('Rarity', 'All rarities')}
           value={included('Rarity')}
           onChange={(v) => set({ exclude: setGroupIncluded(search.exclude, 'Rarity', v) })}
           options={traitOptions('Rarity')}
@@ -184,9 +209,9 @@ export function CollectionView() {
         <MultiSelect
           label="Finish"
           noun="finishes"
+          mode="exclude"
           searchable={false}
           keepOrder
-          summary={groupSummary('Finish', 'All finishes')}
           value={included('Finish')}
           onChange={(v) => set({ exclude: setGroupIncluded(search.exclude, 'Finish', v) })}
           options={traitOptions('Finish')}
@@ -194,9 +219,9 @@ export function CollectionView() {
         <MultiSelect
           label="Treatment"
           noun="treatments"
+          mode="exclude"
           searchable={false}
           keepOrder
-          summary={groupSummary('Treatment', 'All treatments')}
           value={included('Treatment')}
           onChange={(v) => set({ exclude: setGroupIncluded(search.exclude, 'Treatment', v) })}
           options={traitOptions('Treatment')}
@@ -216,9 +241,13 @@ export function CollectionView() {
         {fnOptions && (
           <MultiSelect
             label="Function"
+            labelExtra={
+              <InfoTip label="Where do functions come from?">
+                What the card does, from Scryfall’s community tags (Tagger). A card can have several functions. <b>No tagged function</b> means none of these.
+              </InfoTip>
+            }
             noun="functions"
             searchable={false}
-            summary={search.fn.length ? undefined : 'Any function'}
             value={search.fn}
             onChange={(fn) => set({ fn })}
             options={fnOptions}
@@ -264,7 +293,20 @@ export function CollectionView() {
   } else if (q.isError) {
     body = <ErrorNote error={q.error} onRetry={() => q.refetch()} />;
   } else if (!view || view.cards.length === 0) {
-    body = <EmptyNote title="Nothing matches">No printings match these filters. Check a card type back on, or show both owned and missing cards.</EmptyNote>;
+    // An exclude picker with every listed option unchecked hides everything — say which.
+    const allHidden = (['Rarity', 'Finish', 'Treatment'] as const).find((g) => {
+      const listed = traitOptions(g);
+      return listed.length > 0 && listed.every((o) => search.exclude.includes(o.value));
+    });
+    body = allHidden ? (
+      <EmptyNote title={`Every ${allHidden.toLowerCase()} is hidden`}>
+        <Button tone="paper" onClick={() => set({ exclude: setGroupIncluded(search.exclude, allHidden, traitsIn(allHidden).map((t) => t.key)) })}>
+          Check all
+        </Button>
+      </EmptyNote>
+    ) : (
+      <EmptyNote title="Nothing matches">No printings match these filters. Check a card type back on, or show both owned and missing cards.</EmptyNote>
+    );
   } else if (counting) {
     const familyNames = new Map(q.data.families.map((f) => [f.code, f.name]));
     body = (

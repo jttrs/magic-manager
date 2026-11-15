@@ -231,7 +231,7 @@ test('the watchlist: a filterable table with an inspector; read prices again', a
   await expect(row).toHaveCount(0);
   await page.getByLabel('Product name or set', { exact: true }).fill('');
   const types = page.getByRole('button', { name: /^Product type/ });
-  await expect(types).toContainText('All types');
+  await expect(types).toContainText('All product types');
   await types.click();
   await page.getByRole('checkbox', { name: /^Decks/ }).check();
   await page.keyboard.press('Escape');

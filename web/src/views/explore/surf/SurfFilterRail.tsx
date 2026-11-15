@@ -30,7 +30,6 @@ export function SurfFilterRail({ state, onChange }: { state: SurfState; onChange
         <MultiSelect
           label="Set"
           noun="sets"
-          summary={f.families.length ? undefined : 'Any set'}
           value={f.families}
           onChange={(families) => setF({ families })}
           options={(opts.data?.families ?? []).map((o) => ({ value: o.value, label: o.year ? `${o.label} · ${o.year}` : o.label }))}
@@ -40,7 +39,6 @@ export function SurfFilterRail({ state, onChange }: { state: SurfState; onChange
           noun="treatments"
           searchable={false}
           keepOrder
-          summary={f.treatments.length ? undefined : 'Any treatment'}
           value={f.treatments}
           onChange={(treatments) => setF({ treatments })}
           options={opts.data?.treatments ?? []}
@@ -67,10 +65,9 @@ export function SurfFilterRail({ state, onChange }: { state: SurfState; onChange
         />
         <MultiSelect
           label="Card type"
-          noun="types"
+          noun="card types"
           searchable={false}
           keepOrder
-          summary={f.types.length ? undefined : 'Any type'}
           value={f.types}
           onChange={(types) => setF({ types })}
           options={opts.data?.types ?? []}
@@ -87,7 +84,6 @@ export function SurfFilterRail({ state, onChange }: { state: SurfState; onChange
           noun="rarities"
           searchable={false}
           keepOrder
-          summary={f.rarity.length ? undefined : 'Any rarity'}
           value={f.rarity}
           onChange={(rarity) => setF({ rarity })}
           options={opts.data?.rarities ?? []}

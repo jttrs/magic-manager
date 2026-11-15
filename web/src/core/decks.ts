@@ -6,6 +6,7 @@
 // from the engine (magic_manager.recipes).
 import type { DeckCardOut, RecipeOut, ResolvedLineOut } from './api';
 import { TYPE_GROUPS, typeGroup } from './cardFacts';
+import { facetCounts, passes, type Facets } from './facets';
 import { fmtCount, fmtInt } from './format';
 import { treatmentLabels, type GuideCard, type GuideGroup } from './guideCard';
 import { COVER, OWNERSHIP, RECIPE_KINDS, type DecksSearch } from './search';
@@ -34,35 +35,30 @@ const readyFromUnused = (r: Pick<RecipeOut, 'built' | 'status'>) => coverStatus(
 const coverKeep = (r: RecipeOut, cover: Cover) =>
   cover === 'any' || readyFromUnused(r) || (cover === 'close' && coverStatus(r) === 'close');
 
-/** Every filter except `skip` (so a control can count what each of its options would show). */
-function keep(r: RecipeOut, f: RecipeFilters, skip?: keyof RecipeFilters): boolean {
+/** One predicate per recipe filter (see `core/facets`). */
+function recipeFacets(f: RecipeFilters): Facets<RecipeOut, keyof RecipeFilters> {
   const q = f.q.trim().toLowerCase();
-  return (
-    (skip === 'kinds' || !f.kinds.length || f.kinds.includes(r.kind)) &&
-    (skip === 'own' || f.own.includes(r.ownership)) &&
-    (skip === 'cover' || coverKeep(r, f.cover)) &&
-    (skip === 'types' || !f.types.length || f.types.includes(r.deck_type)) &&
-    (skip === 'sets' || !f.sets.length || (!!r.set_code && f.sets.includes(r.set_code))) &&
-    (skip === 'q' || !q || [r.name, r.set_name, r.set_code, r.source, r.author, r.deck_type, KIND_LABEL[r.kind]].some((v) => v?.toLowerCase().includes(q)))
-  );
+  return {
+    kinds: (r) => !f.kinds.length || f.kinds.includes(r.kind),
+    own: (r) => f.own.includes(r.ownership),
+    cover: (r) => coverKeep(r, f.cover),
+    types: (r) => !f.types.length || f.types.includes(r.deck_type),
+    sets: (r) => !f.sets.length || (!!r.set_code && f.sets.includes(r.set_code)),
+    q: (r) => !q || [r.name, r.set_name, r.set_code, r.source, r.author, r.deck_type, KIND_LABEL[r.kind]].some((v) => v?.toLowerCase().includes(q)),
+  };
 }
 
 export function filterRecipes(rs: readonly RecipeOut[], f: RecipeFilters): RecipeOut[] {
-  return rs.filter((r) => keep(r, f));
+  const facets = recipeFacets(f);
+  return rs.filter((r) => passes(r, facets));
 }
 
 type Count = { value: string; label: string; count: number };
 
 /** Counts per option of one control, under every OTHER filter. */
 export function optionCounts(rs: readonly RecipeOut[], f: RecipeFilters) {
-  const by = <K extends keyof RecipeFilters>(skip: K, key: (r: RecipeOut) => string | null) => {
-    const m = new Map<string, number>();
-    for (const r of rs) {
-      const k = key(r);
-      if (k != null && keep(r, f, skip)) m.set(k, (m.get(k) ?? 0) + 1);
-    }
-    return m;
-  };
+  const facets = recipeFacets(f);
+  const by = (skip: keyof RecipeFilters, key: (r: RecipeOut) => string | null) => facetCounts(rs, facets, skip, key);
   const kinds = by('kinds', (r) => r.kind);
   const own = by('own', (r) => r.ownership);
   const types = by('types', (r) => r.deck_type);

@@ -121,7 +121,7 @@ export function ExploreView() {
           <MultiSelect label="EDHREC lists" noun="lists" value={cmdView.activeTags} onChange={(tags) => set({ tags })} options={cmdView.tags.map(([t, n]) => ({ value: t, label: tagLabel(t), count: n }))} />
         )}
         {role === 'card' && prof && (
-          <MultiSelect label="Played alongside · card types" noun="types" searchable={false} keepOrder summary={cardTags.length ? undefined : 'All card types'} value={cardTags} onChange={(tags) => set({ tags })} options={cardGroups.map(([g, n]) => ({ value: g, label: g, count: n }))} />
+          <MultiSelect label="Played alongside · card types" noun="card types" searchable={false} keepOrder value={cardTags} onChange={(tags) => set({ tags })} options={cardGroups.map(([g, n]) => ({ value: g, label: g, count: n }))} />
         )}
       </SideSection>
       <SideSection title="Show">

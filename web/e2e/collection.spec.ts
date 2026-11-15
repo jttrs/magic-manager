@@ -25,6 +25,16 @@ test('first visit opens the family picker; later visits reopen the last families
   await expect(page).toHaveURL(/families=%5B%22blb%22%5D/);
 });
 
+test('Clear all empties the families and they stay empty until the page reopens', async ({ page }) => {
+  await page.goto(COLLECTION_URL);
+  await page.getByRole('button', { name: /Set families/ }).click();
+  await page.getByRole('button', { name: 'Clear all' }).click();
+  await expect(page.getByText('0 selected')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: /Set families/ })).toContainText('Choose families…');
+  await expect(page).not.toHaveURL(/families=/);
+});
+
 test('families are a searchable checkbox list, never a chip wall', async ({ page }) => {
   await page.goto(COLLECTION_URL);
   await expect(page.getByRole('toolbar', { name: 'Set families' })).toHaveCount(0);
@@ -57,6 +67,16 @@ test('show owned / missing filters', async ({ page }) => {
   await expect(page.getByRole('article')).toHaveCount(missingN);
 });
 
+test('Uncheck all on a card-type picker says what is hidden and offers Check all', async ({ page }) => {
+  await page.goto(COLLECTION_URL);
+  await page.getByRole('button', { name: /^Rarity/ }).click();
+  await page.getByRole('button', { name: 'Uncheck all' }).click();
+  await page.keyboard.press('Escape');
+  await expect(page.getByText('Every rarity is hidden')).toBeVisible();
+  await page.getByRole('button', { name: 'Check all' }).click();
+  await expect(page.getByRole('article')).toHaveCount(cards.length);
+});
+
 test('card-type filters: rarity, finish and treatment pickers (with counts), chase include/exclude with an explainer', async ({ page }) => {
   await page.goto(COLLECTION_URL);
   const rarity = page.getByRole('button', { name: /^Rarity/ });
@@ -67,14 +87,14 @@ test('card-type filters: rarity, finish and treatment pickers (with counts), cha
   await page.getByRole('checkbox', { name: /^Uncommon/ }).uncheck();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('article')).toHaveCount(cards.filter((c) => !['common', 'uncommon'].includes(c.rarity)).length);
-  await expect(rarity).toContainText('Hiding Uncommon, Common');
+  await expect(rarity).toContainText('2 rarities hidden');
   await expect(page).toHaveURL(/exclude=/);
   await page.getByRole('button', { name: 'Reset filters' }).click();
 
   const treat = page.getByRole('button', { name: /^Treatment/ });
   await expect(treat).toContainText('All treatments');
   await treat.click();
-  await page.getByRole('button', { name: 'Clear all' }).click();
+  await page.getByRole('button', { name: 'Uncheck all' }).click();
   await page.getByRole('checkbox', { name: /^Standard frame/ }).check();
   await page.keyboard.press('Escape');
   const codes = (c: (typeof cards)[number]) => (c.treatment ? c.treatment.split('|') : []);
