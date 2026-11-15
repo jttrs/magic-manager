@@ -92,10 +92,6 @@ export function CollectionView() {
     traitsIn(g)
       .filter((t) => !counts || counts.has(t.key) || search.exclude.includes(t.key))
       .map((t) => ({ value: t.key, label: t.label, count: counts?.get(t.key) ?? 0 }));
-  const groupSummary = (g: TraitGroup, all: string) => {
-    const off = traitsIn(g).filter((t) => search.exclude.includes(t.key)).map((t) => t.label);
-    return off.length ? `Hiding ${off.slice(0, 2).join(', ')}${off.length > 2 ? ` +${off.length - 2}` : ''}` : all;
-  };
   const fnCounts = useMemo(() => (q.data ? functionCounts(q.data.cards) : null), [q.data]);
   const fnOptions = q.data && fnCounts && fnCounts.size > (fnCounts.has(NO_FUNCTION) ? 1 : 0)
     ? [
@@ -133,6 +129,7 @@ export function CollectionView() {
           <MultiSelect
             label="Set families"
             noun="families"
+            mode="scope"
             value={search.families}
             onChange={(families) => set({ families })}
             options={fams.data.map((f) => ({ value: f.code, label: f.name }))}
@@ -165,7 +162,6 @@ export function CollectionView() {
               </InfoTip>
             }
             noun="sources"
-            summary={search.src.length ? undefined : 'Any source'}
             value={search.src}
             onChange={(src) => set({ src })}
             options={srcOptions}
@@ -174,9 +170,9 @@ export function CollectionView() {
         <MultiSelect
           label="Rarity"
           noun="rarities"
+          mode="exclude"
           searchable={false}
           keepOrder
-          summary={groupSummary('Rarity', 'All rarities')}
           value={included('Rarity')}
           onChange={(v) => set({ exclude: setGroupIncluded(search.exclude, 'Rarity', v) })}
           options={traitOptions('Rarity')}
@@ -184,9 +180,9 @@ export function CollectionView() {
         <MultiSelect
           label="Finish"
           noun="finishes"
+          mode="exclude"
           searchable={false}
           keepOrder
-          summary={groupSummary('Finish', 'All finishes')}
           value={included('Finish')}
           onChange={(v) => set({ exclude: setGroupIncluded(search.exclude, 'Finish', v) })}
           options={traitOptions('Finish')}
@@ -194,9 +190,9 @@ export function CollectionView() {
         <MultiSelect
           label="Treatment"
           noun="treatments"
+          mode="exclude"
           searchable={false}
           keepOrder
-          summary={groupSummary('Treatment', 'All treatments')}
           value={included('Treatment')}
           onChange={(v) => set({ exclude: setGroupIncluded(search.exclude, 'Treatment', v) })}
           options={traitOptions('Treatment')}
@@ -218,7 +214,6 @@ export function CollectionView() {
             label="Function"
             noun="functions"
             searchable={false}
-            summary={search.fn.length ? undefined : 'Any function'}
             value={search.fn}
             onChange={(fn) => set({ fn })}
             options={fnOptions}

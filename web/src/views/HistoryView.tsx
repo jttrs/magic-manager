@@ -76,7 +76,6 @@ export function HistoryView() {
           noun="kinds"
           searchable={false}
           keepOrder
-          summary={search.kinds.length ? undefined : 'Every kind'}
           value={search.kinds}
           onChange={(v) => set({ kinds: v as HistorySearch['kinds'] })}
           options={kinds}

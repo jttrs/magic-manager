@@ -14,8 +14,6 @@ type Props = {
   placeholder?: string;
   /** What the value means (see `core/multiSelect`): `include` (default), `scope` or `exclude`. */
   mode?: PickMode;
-  /** @deprecated callers move to `mode`; overrides the trigger text until they do. */
-  summary?: string;
   /** Hide the search box (short, grouped lists). */
   searchable?: boolean;
   /** Keep the authored option order (e.g. rarity) instead of pinning the selection first. */
@@ -29,7 +27,7 @@ type Props = {
  * searchable checkbox list. DESIGN.md: chip groups stop at 5 options; anything
  * larger uses this, so long lists never take over the sidebar.
  */
-export function MultiSelect({ label, options, value, onChange, noun, placeholder = 'Filter…', mode = 'include', summary: summaryText, searchable = true, keepOrder = false, labelExtra }: Props) {
+export function MultiSelect({ label, options, value, onChange, noun, placeholder = 'Filter…', mode = 'include', searchable = true, keepOrder = false, labelExtra }: Props) {
   const [q, setQ] = useState('');
   const id = useId();
   const selected = useMemo(() => new Set(value), [value]);
@@ -47,7 +45,7 @@ export function MultiSelect({ label, options, value, onChange, noun, placeholder
     return [...m];
   }, [shown]);
 
-  const summary = summaryText ?? pickSummary(mode, options, value, noun);
+  const summary = pickSummary(mode, options, value, noun);
   const unfiltered = mode === 'exclude' ? options.every((o) => selected.has(o.value)) : !value.length;
   const bulk = bulkActions(mode, q ? shown : options, value, Boolean(q));
 

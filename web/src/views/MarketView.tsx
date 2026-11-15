@@ -136,17 +136,15 @@ export function MarketView() {
               label="Stores"
               noun="stores"
               searchable={false}
-              summary={search.stores.length ? undefined : 'All stores'}
               value={search.stores}
               onChange={(stores) => setFilter({ stores })}
               options={dealsData.storeOptions.map((s) => ({ value: s, label: s }))}
             />
             <MultiSelect
               label="Product type"
-              noun="types"
+              noun="product types"
               searchable={false}
               keepOrder
-              summary={search.types.length ? undefined : 'All types'}
               value={search.types}
               onChange={(types) => setFilter({ types: types as MarketSearch['types'] })}
               options={PRODUCT_TYPES.map((t) => ({ value: t, label: PRODUCT_TYPE_LABEL[t], count: counts[t] }))}

@@ -67,14 +67,14 @@ test('card-type filters: rarity, finish and treatment pickers (with counts), cha
   await page.getByRole('checkbox', { name: /^Uncommon/ }).uncheck();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('article')).toHaveCount(cards.filter((c) => !['common', 'uncommon'].includes(c.rarity)).length);
-  await expect(rarity).toContainText('Hiding Uncommon, Common');
+  await expect(rarity).toContainText('2 rarities hidden');
   await expect(page).toHaveURL(/exclude=/);
   await page.getByRole('button', { name: 'Reset filters' }).click();
 
   const treat = page.getByRole('button', { name: /^Treatment/ });
   await expect(treat).toContainText('All treatments');
   await treat.click();
-  await page.getByRole('button', { name: 'Clear all' }).click();
+  await page.getByRole('button', { name: 'Uncheck all' }).click();
   await page.getByRole('checkbox', { name: /^Standard frame/ }).check();
   await page.keyboard.press('Escape');
   const codes = (c: (typeof cards)[number]) => (c.treatment ? c.treatment.split('|') : []);

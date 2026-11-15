@@ -92,7 +92,6 @@ export function DecksView() {
           noun="kinds"
           searchable={false}
           keepOrder
-          summary={search.kinds.length ? undefined : 'Every kind'}
           value={search.kinds}
           onChange={(kinds) => set({ kinds: kinds as DecksSearch['kinds'] })}
           options={counts.kinds}
@@ -102,7 +101,6 @@ export function DecksView() {
           noun="deck types"
           searchable={false}
           keepOrder
-          summary={search.types.length ? undefined : 'All deck types'}
           value={search.types}
           onChange={(types) => set({ types })}
           options={counts.types}
@@ -112,7 +110,6 @@ export function DecksView() {
           noun="sets"
           keepOrder
           placeholder="Find a set…"
-          summary={search.sets.length ? undefined : 'Every set'}
           value={search.sets}
           onChange={(sets) => set({ sets })}
           options={counts.sets}
