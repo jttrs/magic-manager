@@ -855,11 +855,14 @@ def set_reprint_slugs(set_family: str) -> set[str]:
         rows = conn.execute(
             f"SELECT json FROM edhrec_pages WHERE slug IN ({','.join('?' * len(codes))})",
             [f"sets/{c}" for c in codes]).fetchall()
+    own: set[str] = set()
     for r in rows:
-        for cv in cardlists(json.loads(r["json"])).get("reprints") or []:
-            if cv.get("slug"):
-                out.add(cv["slug"])
-    return out
+        for tagname, cvs in cardlists(json.loads(r["json"])).items():
+            bucket = out if tagname == "reprints" else own if _is_set_card_list(tagname) else None
+            if bucket is not None:
+                bucket.update(cv["slug"] for cv in cvs or [] if cv.get("slug"))
+    # A card new to the family stays new even when a later child set reprints it.
+    return out - own
 
 
 def _is_set_commander_list(tag: str) -> bool:

@@ -101,6 +101,8 @@ Small PRs, one per item.
   is cast `as unknown as` to keep the router's key types (apply the legacy `kinds` mapping in
   `validateSearch` instead); Market's Deck type option counting duplicates `optionCounts.types`
   (lift it into `core/decks.ts`).
+  Top cards by set family re-read the family's stored EDHREC set pages on every request to tag
+  reprints (`edhrec.set_reprint_slugs`); memoize it per cached batch if it ever shows up as slow.
 
 ## 4. Deferred by decision
 

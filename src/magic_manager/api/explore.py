@@ -139,7 +139,9 @@ RankingScope = Literal["commanders", "cards", "salt"]
 class RankingQuery(BaseModel):
     """One EDHREC ranking. Color, tag and set narrow COMMANDER rankings and stack:
     EDHREC serves one axis per page, so the most selective one (set, else color,
-    else tag) is read from EDHREC and the others filter it locally."""
+    else tag) is read from EDHREC and the others filter it locally. Top cards take
+    a set family (its cards + reprints) and a color (cards that fit within it);
+    a tag narrows commanders only, and salt takes no filter."""
     scope: RankingScope = "commanders"
     timeframe: Literal["week", "month", "year"] = Field(
         "week", description="Applies to top commanders/cards and a color identity on its own or with a tag; "
@@ -150,8 +152,10 @@ class RankingQuery(BaseModel):
 
     @model_validator(mode="after")
     def _commander_filters(self):
-        if any((self.color, self.tag, self.set_family)) and self.scope != "commanders":
-            raise ValueError("color, tag and set filters apply only to commander rankings")
+        if self.tag and self.scope != "commanders":
+            raise ValueError("a tag narrows commander rankings only")
+        if (self.color or self.set_family) and self.scope == "salt":
+            raise ValueError("color and set filters apply to commander and card rankings, not salt")
         return self
 
     def args(self) -> dict:

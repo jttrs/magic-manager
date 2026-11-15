@@ -120,6 +120,9 @@ def test_ranking_endpoint_and_job(client, pages, fake_scryfall):
     stacked = client.get("/api/explore/ranking", params={"color": "r", "tag": "goblins"})
     assert stacked.status_code == 200 and stacked.json()["cached"] is False   # filters stack now
     assert client.get("/api/explore/ranking", params={"scope": "salt", "color": "r"}).status_code == 422
+    # top cards take a colour and a set family (not a tag)
+    assert client.get("/api/explore/ranking", params={"scope": "cards", "color": "r"}).status_code == 200
+    assert client.get("/api/explore/ranking", params={"scope": "cards", "tag": "goblins"}).status_code == 422
 
     job = client.post("/api/jobs/edhrec.rankings", json={"scope": "commanders", "color": "r"})
     assert job.status_code == 202, job.text
@@ -492,3 +495,18 @@ def test_top_cards_of_a_set_family_include_reprints_ranked_by_decks(tmp_db, seed
     # the commanders scope on the same family is unchanged
     explore.sync_ranking("commanders", set_family="tst")
     assert [x.name for x in explore.ranking("commanders", set_family="tst").rows] == ["A Commander"]
+
+
+def test_a_card_new_to_the_family_is_not_a_reprint_because_a_child_set_reprints_it(tmp_db, monkeypatch):
+    class _RS:
+        code, all_codes = "aaa", ["aaa", "bbb"]
+    monkeypatch.setattr(sets, "resolve", lambda s: _RS())
+    page = lambda lists: {"header": "x", "container": {"json_dict": {"cardlists": lists}}}
+    with db.connect() as conn:
+        edhrec._store_page(conn, page_type="commanders", slug="sets/aaa", timeframe="", at="2026-01-01",
+                           page=page([{"tag": "cards(aaa)", "cardviews": [{"name": "New Thing", "slug": "new-thing"}]}]))
+        edhrec._store_page(conn, page_type="commanders", slug="sets/bbb", timeframe="", at="2026-01-01",
+                           page=page([{"tag": "reprints", "cardviews": [{"name": "New Thing", "slug": "new-thing"},
+                                                                        {"name": "Sol Ring", "slug": "sol-ring"}]}]))
+        conn.commit()
+    assert edhrec.set_reprint_slugs("aaa") == {"sol-ring"}
