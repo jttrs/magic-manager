@@ -67,11 +67,11 @@ describe('add decklist or product: one field', () => {
     expect(readDeckQuery('fic')).toEqual({ kind: 'search', q: 'fic' });
     expect(readDeckQuery('')).toEqual({ kind: 'search', q: '' });
   });
-  it('ownership hint drops zeros and says broken down, never loose', () => {
+  it('ownership hint drops zeros and says loose', () => {
     expect(productOwned(0, 0)).toBeNull();
     expect(productOwned(1, 0)).toBe('you own 1 built');
-    expect(productOwned(1, 2)).toBe('you own 1 built · 2 broken down');
-    expect(productOwned(0, 3)).toBe('you own 3 broken down');
+    expect(productOwned(1, 2)).toBe('you own 1 built · 2 loose');
+    expect(productOwned(0, 3)).toBe('you own 3 loose');
   });
   it('a read deck says how many cards, whose, and where from', () => {
     const r = { lines: [line({ qty: 99 }), line({ qty: 1 })], deck: { source: 'moxfield', id: 'x', name: 'G', author: 'goblinfan', cards: [] } };

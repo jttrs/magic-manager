@@ -3,9 +3,10 @@ import { expect, fixtures, test } from './support';
 const detail = fixtures.deckDetail;
 const DECK_URL = `/decks?deck=${encodeURIComponent(detail.deck.slug)}`;
 
-const owned = fixtures.recipes.recipes.filter((r) => r.ownership !== 'none');
+// Untouched, the list shows the default deck type (Commander) of what you own.
+const owned = fixtures.recipes.recipes.filter((r) => r.ownership !== 'none' && r.deck_type === 'Commander');
 
-test('recipe list shows what you own by default; ownership, kind, deck type and text filter it; the rail is Find → Show', async ({ page }) => {
+test('recipe list shows what you own by default; status, source, deck type and text filter it; the rail is Find → Show', async ({ page }) => {
   await page.goto('/decks');
   await expect(page.getByRole('link', { name: 'Decks' })).toHaveAttribute('aria-current', 'page');
   const list = page.getByRole('navigation', { name: 'Deck recipes' });
@@ -16,21 +17,33 @@ test('recipe list shows what you own by default; ownership, kind, deck type and 
   await expect(rail.getByRole('heading', { level: 2 })).toHaveText(['Find', 'Show']);
   await expect(rail.getByRole('searchbox').first()).toHaveAccessibleName('Deck, set or author');
 
-  await page.getByRole('button', { name: /^None/ }).click();
+  await page.getByRole('button', { name: /^Recipes/ }).click();
   await expect(page).toHaveURL(/own=/);
-  await expect(list.getByRole('button')).toHaveCount(fixtures.recipes.recipes.length);
+  await expect(list.getByRole('button')).toHaveCount(fixtures.recipes.recipes.filter((r) => r.deck_type === 'Commander').length);
+  // Deck type starts at Commander; adding Jumpstart shows the packs too.
+  await page.getByRole('button', { name: /^Deck type/ }).click();
+  await page.getByRole('checkbox', { name: /^Jumpstart/ }).check();
+  await page.keyboard.press('Escape');
+  await expect(list.getByRole('button')).toHaveCount(fixtures.recipes.recipes.filter((r) => r.deck_type === 'Commander' || r.deck_type === 'Jumpstart').length);
   const unowned = list.getByRole('button', { name: /Spider Society/ });
-  await expect(unowned).toContainText('Precon');
+  await expect(unowned).toContainText('Wizards');
   await expect(unowned).toContainText('not owned');
   await expect(unowned).toContainText('not read');
   await expect(list.getByRole('button', { name: /^Armed/ })).toContainText('All 20 unused');
   await expect(list.getByRole('button', { name: /Bounty Hunter/ })).toContainText('2 short');
   await expect(list.getByRole('button', { name: /My Brew/ })).toContainText('Imported');
 
-  await page.getByRole('button', { name: /^Kind/ }).click();
-  await page.getByRole('checkbox', { name: /^Jumpstart/ }).check();
+  await page.getByRole('button', { name: /^Deck type/ }).click();
+  await page.getByRole('checkbox', { name: /^Commander/ }).uncheck();
   await page.keyboard.press('Escape');
-  await expect(list.getByRole('button')).toHaveCount(fixtures.recipes.recipes.filter((r) => r.kind === 'jumpstart').length);
+  await expect(list.getByRole('button')).toHaveCount(fixtures.recipes.recipes.filter((r) => r.deck_type === 'Jumpstart').length);
+  await page.getByRole('button', { name: /^Source/ }).click();
+  await page.getByRole('checkbox', { name: /^Imported/ }).check();
+  await page.keyboard.press('Escape');
+  await expect(list.getByRole('button')).toHaveCount(0);
+  await page.getByRole('button', { name: /^Source/ }).click();
+  await page.getByRole('checkbox', { name: /^Imported/ }).uncheck();
+  await page.keyboard.press('Escape');
   await page.getByRole('searchbox', { name: 'Deck, set or author' }).fill('armed');
   await expect(list.getByRole('button')).toHaveCount(1);
   await page.getByRole('searchbox', { name: 'Deck, set or author' }).fill('');
@@ -44,7 +57,7 @@ test('recipe list shows what you own by default; ownership, kind, deck type and 
 test('old built-only links keep showing only built recipes', async ({ page }) => {
   await page.goto('/decks?built=true');
   await expect(page).toHaveURL(/own=/);
-  await expect(page.getByRole('navigation', { name: 'Deck recipes' }).getByRole('button')).toHaveCount(fixtures.recipes.recipes.filter((r) => r.ownership === 'built').length);
+  await expect(page.getByRole('navigation', { name: 'Deck recipes' }).getByRole('button')).toHaveCount(fixtures.recipes.recipes.filter((r) => r.ownership === 'built' && r.deck_type === 'Commander').length);
 });
 
 test('inspector: sections by board then type, card facts, deep link', async ({ page }) => {
@@ -113,12 +126,12 @@ test('deck list is one tab stop with arrow-key navigation', async ({ page }) => 
   await expect(page).toHaveURL(/deck=/);
 });
 
-test('one row per recipe: built copies and broken-down copies are marked', async ({ page }) => {
-  await page.goto('/decks');
+test('one row per recipe: built copies and loose copies are marked', async ({ page }) => {
+  await page.goto('/decks?types=%5B%22all%22%5D');
   const list = page.getByRole('navigation', { name: 'Deck recipes' });
   const d = fixtures.recipes.recipes.find((x) => x.name === 'Avengers Assemble')!;
   await expect(list.getByRole('button', { name: /Avengers Assemble/ })).toContainText(`×${d.built} built`);
-  await expect(list.getByRole('button', { name: /Bounty Hunter/ })).toContainText('1 broken down');
+  await expect(list.getByRole('button', { name: /Bounty Hunter/ })).toContainText('1 loose');
   await expect(list.getByRole('button', { name: /My Brew/ })).toContainText('not built');
 });
 
@@ -251,4 +264,10 @@ test('editor: card names open the inspector; checks show legality and the bracke
   const name = detail.cards.find((c) => c.board !== 'token')!.printing.name;
   await page.getByRole('button', { name, exact: true }).first().click();
   await expect(page.getByRole('dialog', { name })).toBeVisible();
+});
+
+test('an old kinds=jumpstart link opens Jumpstart as a deck type', async ({ page }) => {
+  await page.goto('/decks?kinds=%5B%22jumpstart%22%5D&own=%5B%22built%22%2C%22loose%22%2C%22none%22%5D');
+  await expect(page.getByRole('button', { name: /^Deck type/ })).toContainText('Jumpstart');
+  await expect(page.getByRole('navigation', { name: 'Deck recipes' }).getByRole('button', { name: /^Counterargument/ })).toBeVisible();
 });

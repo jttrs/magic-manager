@@ -14867,15 +14867,15 @@
             "type": "string",
             "title": "Name"
           },
-          "kind": {
+          "origin": {
             "type": "string",
             "enum": [
               "precon",
-              "jumpstart",
               "import",
               "custom"
             ],
-            "title": "Kind"
+            "title": "Origin",
+            "description": "Where the recipe comes from: a Wizards product (precon or Jumpstart pack), an imported deck, or one you built. Jumpstart is a deck_type, not an origin."
           },
           "deck_type": {
             "type": "string",
@@ -15070,7 +15070,7 @@
           "slugs",
           "file_name",
           "name",
-          "kind",
+          "origin",
           "deck_type",
           "product_type",
           "source",

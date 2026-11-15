@@ -71,11 +71,11 @@ def test_catalog_kinds_ownership_and_exclusions(world):
     # and non-precon product types are not recipes.
     assert set(rows) == {"pack:dogs-jt", "imp", "fn:Cats1_JT", "fn:Boss_TST", "fn:Later_TST"}
     dogs = rows["pack:dogs-jt"]
-    assert (dogs["kind"], dogs["ownership"], dogs["built"], dogs["file_name"], dogs["read"]) == ("jumpstart", "built", 1, "Dogs_JT", True)
-    assert rows["imp"]["kind"] == "import" and rows["imp"]["ownership"] == "built"
+    assert (dogs["origin"], dogs["deck_type"], dogs["ownership"], dogs["built"], dogs["file_name"], dogs["read"]) == ("precon", "Jumpstart", "built", 1, "Dogs_JT", True)
+    assert rows["imp"]["origin"] == "import" and rows["imp"]["ownership"] == "built"
     cats = rows["fn:Cats1_JT"]
-    assert (cats["kind"], cats["ownership"], cats["slug"], cats["deck_type"]) == ("jumpstart", "none", None, "Jumpstart")
-    assert rows["fn:Boss_TST"]["kind"] == "precon" and rows["fn:Boss_TST"]["deck_type"] == "Commander"
+    assert (cats["origin"], cats["ownership"], cats["slug"], cats["deck_type"]) == ("precon", "none", None, "Jumpstart")
+    assert rows["fn:Boss_TST"]["origin"] == "precon" and rows["fn:Boss_TST"]["deck_type"] == "Commander"
 
 
 def test_read_recipes_carry_value_art_colour_and_free_coverage(world):
@@ -143,7 +143,7 @@ def test_api_routes(world):
     assert body["close_short"] == recipes.CLOSE_SHORT
     assert {r["key"] for r in body["recipes"]} >= {"fn:Cats1_JT", "imp"}
     d = client.get("/api/recipes/Cats1_JT").json()
-    assert d["ready"] and d["recipe"]["kind"] == "jumpstart" and len(d["cards"]) == 2
+    assert d["ready"] and d["recipe"]["origin"] == "precon" and d["recipe"]["deck_type"] == "Jumpstart" and len(d["cards"]) == 2
     assert client.get("/api/recipes/Nope").status_code == 404
 
 
@@ -161,7 +161,7 @@ def test_legacy_pack_slug_row_is_the_owned_recipe(world):
     with db.connect() as conn:  # a pre-fileName Jumpstart deck row: no source_precon_file_name
         decks.deck_create("pack:cats-1-jt", "Cats (1)", precon_state="built", conn=conn)
     rows = [r for r in recipes.catalog() if r["file_name"] == "Cats1_JT"]
-    assert [(r["key"], r["kind"], r["ownership"]) for r in rows] == [("pack:cats-1-jt", "jumpstart", "built")]
+    assert [(r["key"], r["origin"], r["deck_type"], r["ownership"]) for r in rows] == [("pack:cats-1-jt", "precon", "Jumpstart", "built")]
 
 
 def test_owned_decks_still_list_when_the_decklist_cannot_be_read(world, monkeypatch):

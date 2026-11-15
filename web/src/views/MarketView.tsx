@@ -31,6 +31,7 @@ import { fmtCount, fmtInt, fmtUsd } from '../core/format';
 import { filterListings, filterSortProducts, PRODUCT_TYPE_LABEL, PRODUCT_TYPES, dealCounts, type Basis, type DealSort } from '../core/deals';
 import { contentsGap, deckBuyItems, deckLedger, filterCardPrices, partialNote, premium, productGroups, type ProductRow } from '../core/market';
 import type { MarketSearch } from '../core/search';
+import { effectiveTypes, typesToSearch } from '../core/decks';
 
 const route = getRouteApi('/market');
 
@@ -46,6 +47,15 @@ export function MarketView() {
   const subject = search.subject === 'deals' && !dealsOn ? 'family' : search.subject;
   const fams = useQuery(familiesQuery());
   const decks = useQuery({ ...decksQuery(), enabled: subject === 'deck' });
+  // Deck lists default to Commander (Decks' rule, with no set to widen it); a deck in the URL stays pickable.
+  const defaultTypes = effectiveTypes({ types: search.dtypes, sets: [] });
+  // With no Commander deck at all, the default would leave an empty picker: show every type.
+  const deckTypes = !search.dtypes.length && defaultTypes && decks.data && !decks.data.some((d) => defaultTypes.includes(d.deck_type)) ? null : defaultTypes;
+  const deckTypeOptions = useMemo(() => {
+    const n = new Map<string, number>();
+    for (const d of decks.data ?? []) n.set(d.deck_type, (n.get(d.deck_type) ?? 0) + 1);
+    return [...n].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([t, c]) => ({ value: t, label: t, count: c }));
+  }, [decks.data]);
   const cost = useQuery({ ...deckCostQuery(search.deck, search.live), enabled: subject === 'deck' && Boolean(search.deck) });
 
   const famName = fams.data?.find((f) => f.code === search.code)?.name ?? search.code;
@@ -112,7 +122,23 @@ export function MarketView() {
           {decks.isError ? (
             <p role="alert" className="text-sm text-danger">Couldn’t load decks: {(decks.error as Error).message}</p>
           ) : (
-            <SearchSelect label="Deck" noun="deck" value={search.deck} onChange={(deck) => set({ deck, live: false })} options={(decks.data ?? []).map((d) => ({ value: d.slug, label: d.name, hint: d.deck_type }))} />
+            <>
+              <MultiSelect
+                label="Deck type"
+                noun="deck types"
+                searchable={false}
+                value={deckTypes ?? []}
+                onChange={(v) => set({ dtypes: typesToSearch(v) })}
+                options={deckTypeOptions}
+              />
+              <SearchSelect
+                label="Deck"
+                noun="deck"
+                value={search.deck}
+                onChange={(deck) => set({ deck, live: false })}
+                options={(decks.data ?? []).filter((d) => !deckTypes || deckTypes.includes(d.deck_type) || d.slug === search.deck).map((d) => ({ value: d.slug, label: d.name, hint: d.deck_type }))}
+              />
+            </>
           )}
         </SideSection>
       )}
