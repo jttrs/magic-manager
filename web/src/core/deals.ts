@@ -1,4 +1,5 @@
 // Deals view-model: framework-free.
+import { facetCounts, passes, type Facets } from './facets';
 import type { MatchOut, PriceOut, PricePointOut, ProductCostOut, TargetOut, WatchedOut, WatchStoreOut } from './api';
 
 /** One product page's reading (the deals.read_prices job artifact, or a confirm result). */
@@ -255,21 +256,28 @@ export function newlyMetFrom(artifacts: unknown): NewlyMet[] {
 
 export type DealFilters = { q: string; stores: string[]; types: ProductType[]; minOff: number; basis: Basis; sort: DealSort; inStock: boolean; atTarget?: boolean };
 
-export function filterSortProducts(products: DealProduct[], costs: Map<string, ProductCostOut | undefined>, o: DealFilters): DealProduct[] {
+type DealFacet = 'q' | 'stores' | 'types' | 'inStock' | 'atTarget' | 'minOff';
+
+/** One predicate per product filter (see `core/facets`). */
+function dealFacets(o: DealFilters, costs: Map<string, ProductCostOut | undefined>): Facets<DealProduct, DealFacet> {
   const q = o.q.trim().toLowerCase();
-  const kept = products.filter((p) => {
-    const cost = costs.get(p.key);
-    if (q && !p.name.toLowerCase().includes(q) && !p.set_code.toLowerCase().includes(q)) return false;
-    if (o.stores.length && !p.offers.some((x) => x.store != null && o.stores.includes(x.store))) return false;
-    if (o.types.length && !o.types.includes(effectiveType(p, cost))) return false;
-    if (o.inStock && (!p.best || p.best.available === false)) return false;
-    if (o.atTarget && targetMet(p, cost) !== true) return false;
-    if (o.minOff > 0) {
-      const g = gapOf(p, cost, o.basis);
-      if (!g || g.pct > -o.minOff) return false;
-    }
-    return true;
-  });
+  return {
+    q: (p) => !q || p.name.toLowerCase().includes(q) || p.set_code.toLowerCase().includes(q),
+    stores: (p) => !o.stores.length || p.offers.some((x) => x.store != null && o.stores.includes(x.store)),
+    types: (p) => !o.types.length || o.types.includes(effectiveType(p, costs.get(p.key))),
+    inStock: (p) => !o.inStock || (!!p.best && p.best.available !== false),
+    atTarget: (p) => !o.atTarget || targetMet(p, costs.get(p.key)) === true,
+    minOff: (p) => {
+      if (o.minOff <= 0) return true;
+      const g = gapOf(p, costs.get(p.key), o.basis);
+      return !!g && g.pct <= -o.minOff;
+    },
+  };
+}
+
+export function filterSortProducts(products: DealProduct[], costs: Map<string, ProductCostOut | undefined>, o: DealFilters): DealProduct[] {
+  const facets = dealFacets(o, costs);
+  const kept = products.filter((p) => passes(p, facets));
   const value = (p: DealProduct): number | null => {
     const cost = costs.get(p.key);
     switch (o.sort) {
@@ -294,11 +302,14 @@ export function filterSortProducts(products: DealProduct[], costs: Map<string, P
     .map((x) => x.p);
 }
 
-/** Counts per product type for the sidebar chips. */
-export function typeCounts(products: DealProduct[], costs: Map<string, ProductCostOut | undefined>): Record<ProductType, number> {
-  const out = Object.fromEntries(PRODUCT_TYPES.map((t) => [t, 0])) as Record<ProductType, number>;
-  for (const p of products) out[effectiveType(p, costs.get(p.key))] += 1;
-  return out;
+/** Counts per product type and per store, each under every OTHER filter. */
+export function dealCounts(products: DealProduct[], costs: Map<string, ProductCostOut | undefined>, o: DealFilters) {
+  const facets = dealFacets(o, costs);
+  const byType = facetCounts(products, facets, 'types', (p) => effectiveType(p, costs.get(p.key)));
+  return {
+    types: Object.fromEntries(PRODUCT_TYPES.map((t) => [t, byType.get(t) ?? 0])) as Record<ProductType, number>,
+    stores: facetCounts(products, facets, 'stores', (p) => p.offers.map((x) => x.store).filter((s): s is string => s != null)),
+  };
 }
 
 /** Store names present across the products, sorted. */

@@ -68,7 +68,7 @@ describe('compareSearch.groupBy', () => {
 
 describe('collection function filter', () => {
   it('keeps cards in any chosen function; _none matches untagged', async () => {
-    const { filterCollection, functionCounts, NO_FUNCTION: NONE } = await import('./collection');
+    const { collectionCounts, filterCollection, NO_FUNCTION: NONE } = await import('./collection');
     const card = (id: string, functions: string[]) => ({
       scryfall_id: id, oracle_id: id, name: id, family: 'f', set_code: 'f', collector_number: '1', rarity: 'rare',
       type_line: null, cmc: null, color_identity: [], released_at: null, finishes: ['nonfoil'], owned: {}, pledged: {},
@@ -81,6 +81,6 @@ describe('collection function filter', () => {
     expect(ids([])).toEqual(['a', 'b', 'c']);
     expect(ids(['removal'])).toEqual(['a']);
     expect(ids(['draw', NONE])).toEqual(['b', 'c']);
-    expect(Object.fromEntries(functionCounts(cards))).toEqual({ ramp: 1, removal: 1, draw: 1, [NONE]: 1 });
+    expect(Object.fromEntries(collectionCounts(cards, { ...base, show: [...base.show] }).fn)).toEqual({ ramp: 1, removal: 1, draw: 1, [NONE]: 1 });
   });
 });

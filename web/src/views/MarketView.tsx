@@ -27,7 +27,7 @@ import { IconAction } from '../components/IconAction';
 import { MarketTabs } from './market/MarketTabs';
 import { collectionBuyList, type CardPriceOut, type DeckCostOut } from '../core/api';
 import { fmtCount, fmtInt, fmtUsd } from '../core/format';
-import { filterListings, filterSortProducts, PRODUCT_TYPE_LABEL, PRODUCT_TYPES, typeCounts, type Basis, type DealSort } from '../core/deals';
+import { filterListings, filterSortProducts, PRODUCT_TYPE_LABEL, PRODUCT_TYPES, dealCounts, type Basis, type DealSort } from '../core/deals';
 import { contentsGap, deckBuyItems, deckLedger, filterCardPrices, partialNote, premium, productGroups, type ProductRow } from '../core/market';
 import type { MarketSearch } from '../core/search';
 
@@ -69,7 +69,7 @@ export function MarketView() {
       || filterListings(dealsData.listings, next).some((l) => l.key === search.item);
     set(search.item && !dealsData.loading && !stillShown ? { ...patch, item: undefined } : patch);
   };
-  const counts = typeCounts(dealProducts, dealCosts.data);
+  const counts = dealCounts(dealProducts, dealCosts.data, dealFilters(search));
   const toBuy = cost.data?.lines.reduce((n, l) => n + l.buy, 0) ?? 0;
   const toBuyUsd = cost.data?.lines.reduce((s, l) => s + l.buy * ((search.buyAt === 'floor' ? l.floor_usd : l.unit_usd) ?? 0), 0) ?? 0;
 
@@ -138,7 +138,7 @@ export function MarketView() {
               searchable={false}
               value={search.stores}
               onChange={(stores) => setFilter({ stores })}
-              options={dealsData.storeOptions.map((s) => ({ value: s, label: s }))}
+              options={dealsData.storeOptions.map((s) => ({ value: s, label: s, count: counts.stores.get(s) ?? 0 }))}
             />
             <MultiSelect
               label="Product type"
@@ -147,7 +147,7 @@ export function MarketView() {
               keepOrder
               value={search.types}
               onChange={(types) => setFilter({ types: types as MarketSearch['types'] })}
-              options={PRODUCT_TYPES.map((t) => ({ value: t, label: PRODUCT_TYPE_LABEL[t], count: counts[t] }))}
+              options={PRODUCT_TYPES.map((t) => ({ value: t, label: PRODUCT_TYPE_LABEL[t], count: counts.types[t] }))}
             />
             <Segmented<Basis>
               label="Compare to"

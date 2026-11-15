@@ -26,7 +26,7 @@ import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../components/St
 import { VirtualGuide, type GuideSection } from '../components/VirtualGuide';
 import { collectionBuyList, type CollectionCardOut, type CollectionOut } from '../core/api';
 import { activeRules, collectionPresets, collectionSortKeys, COLLECTION_SORT, NO_SCENE, sceneRanks, type CollectionSortKey } from '../core/scenes';
-import { buyFinish, buyTotal, collectionStats, filterCollection, functionCounts, isMissing, NO_FUNCTION, setGroupIncluded, sourceKinds, sourceOptions, TRAITS, traitCounts, traitsIn, type TraitGroup } from '../core/collection';
+import { buyFinish, buyTotal, collectionCounts, collectionStats, filterCollection, isMissing, NO_FUNCTION, setGroupIncluded, sourceKinds, sourceOptions, TRAITS, traitsIn, type TraitGroup } from '../core/collection';
 import { InfoTip } from '../components/InfoTip';
 import { summaryLine } from '../core/checklist';
 import { fmtInt, fmtUsd } from '../core/format';
@@ -107,22 +107,29 @@ export function CollectionView() {
   }, [search.families, navigate]);
 
   const view = useMemo(() => (q.data ? buildView(q.data, { ...search, gaps }, rules) : null), [q.data, search, gaps, rules]);
-  const counts = useMemo(() => (q.data ? traitCounts(q.data.cards) : null), [q.data]);
+  // Every control's counts: under all the OTHER filters (core/facets), never its own.
+  const facetData = useMemo(
+    () => (q.data ? collectionCounts(q.data.cards, { ...search, gaps }, sourceKinds(q.data.sources)) : null),
+    [q.data, search, gaps],
+  );
+  const counts = facetData?.traits ?? null;
   const included = (g: TraitGroup) => traitsIn(g).map((t) => t.key).filter((k) => !search.exclude.includes(k));
   /** A group's options present in the data (or currently excluded), with counts. */
   const traitOptions = (g: TraitGroup) =>
     traitsIn(g)
-      .filter((t) => !counts || counts.has(t.key) || search.exclude.includes(t.key))
+      .filter((t) => !counts || (counts.get(t.key) ?? 0) > 0 || search.exclude.includes(t.key))
       .map((t) => ({ value: t.key, label: t.label, count: counts?.get(t.key) ?? 0 }));
-  const fnCounts = useMemo(() => (q.data ? functionCounts(q.data.cards) : null), [q.data]);
-  const fnOptions = q.data && fnCounts && fnCounts.size > (fnCounts.has(NO_FUNCTION) ? 1 : 0)
+  const fnCounts = facetData?.fn ?? null;
+  // Offered while the payload has any tagged function at all, however the other filters narrow it.
+  const hasFunctions = !!q.data?.cards.some((c) => c.functions?.length);
+  const fnOptions = q.data && fnCounts && hasFunctions
     ? [
-        ...(q.data.functions ?? []).filter((r) => fnCounts.has(r.key) || search.fn.includes(r.key)).map((r) => ({ value: r.key, label: r.label, count: fnCounts.get(r.key) ?? 0 })),
+        ...(q.data.functions ?? []).filter((r) => (fnCounts.get(r.key) ?? 0) > 0 || search.fn.includes(r.key)).map((r) => ({ value: r.key, label: r.label, count: fnCounts.get(r.key) ?? 0 })),
         { value: NO_FUNCTION, label: 'No tagged function', count: fnCounts.get(NO_FUNCTION) ?? 0 },
       ]
     : null;
 
-  const srcOptions = useMemo(() => (q.data?.sources?.length ? sourceOptions(q.data.cards, q.data.sources) : null), [q.data]);
+  const srcOptions = q.data?.sources?.length && facetData ? sourceOptions(q.data.sources, facetData.src) : null;
 
   const cartCheck = useFeature('cart_check');
   const checklist = useChecklist();
@@ -171,8 +178,8 @@ export function CollectionView() {
           value={search.show}
           onChange={(show) => set({ show: SHOW.filter((s) => show.includes(s)) })}
           options={[
-            { value: 'owned', label: 'Owned', count: view?.stats.owned },
-            { value: 'missing', label: 'Missing', count: view?.stats.missing },
+            { value: 'owned', label: 'Owned', count: facetData?.show.owned },
+            { value: 'missing', label: 'Missing', count: facetData?.show.missing },
           ]}
         />
         {srcOptions && (

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { CollectionCardOut, CompareCardOut } from './api';
 import { CARD_SORT } from './cardSort';
 import { colorRank, typeGroup } from './cardFacts';
-import { buyFinish, buyTotal, collectionStats, filterCollection, isMissing, sourceKinds, sourceOptions, traitCounts, traitsOf, type CollectionFilters } from './collection';
+import { buyFinish, buyTotal, collectionCounts, collectionStats, filterCollection, isMissing, sourceKinds, sourceOptions, traitsOf, type CollectionFilters } from './collection';
 import { bucketCards, COMPARE_SORT, matches, tagLabel } from './compare';
 import { exportLines, fromCollection, fromCompare, groupCards, rarityLetter, treatmentLabels } from './guideCard';
 import { collectionSearch, compareSearch } from './search';
@@ -106,7 +106,7 @@ describe('collection filters', () => {
     expect(isMissing(owned, ['finish:nonfoil'])).toBe(true);
     expect(isMissing(card({ finishes: ['nonfoil'] }), ['finish:nonfoil'])).toBe(false);
     const fancy = card({ scryfall_id: 'ff', treatment: 'ff', finishes: ['foil'] });
-    expect(traitCounts([fancy]).get('finish:fancy')).toBe(1);
+    expect(collectionCounts([fancy], ALL).traits.get('finish:fancy')).toBe(1);
     expect(traitsOf(fancy)).toContain('treat:std');
     const pool = [owned, fancy, card({ scryfall_id: 'nf', finishes: ['nonfoil'] })];
     const shown = (exclude: string[]) => filterCollection(pool, { ...ALL, exclude }).map((c) => c.scryfall_id);
@@ -123,7 +123,7 @@ describe('collection filters', () => {
     expect(traitsOf(treated)).toEqual(['rarity:rare', 'treat:b', 'chase:no']);
     expect(traitsOf(card({ standard_frame: false, treatment: '' }))).toContain('treat:other');
     expect(traitsOf(card({ treatment: 'b|ext', standard_frame: false }))).toEqual(['rarity:rare', 'treat:b', 'treat:ext', 'chase:no']);
-    expect(traitCounts(all).get('rarity:rare')).toBe(4);
+    expect(collectionCounts(all, ALL).traits.get('rarity:rare')).toBe(4);
   });
   it('unchecked traits hide any card carrying them', () => {
     expect(ids({ exclude: ['rarity:common'] })).not.toContain('bulk');
@@ -158,7 +158,7 @@ describe('collection filters', () => {
     expect(shown(['kind:pool'])).toEqual(['p']);
     expect(shown(['product:Gob_FDN'])).toEqual(['d']);
     expect(shown(['kind:singles'])).toEqual(['p', 'd']);
-    const opts = sourceOptions(pool, sources);
+    const opts = sourceOptions(sources, collectionCounts(pool, ALL, kinds).src);
     expect(opts.map((o) => [o.value, o.count, o.group])).toEqual([
       ['kind:pool', 1, 'By kind'], ['kind:deck', 1, 'By kind'], ['kind:singles', 2, 'By kind'],
       ['product:Camp_FIN', 1, 'Card pools'], ['product:Gob_FDN', 1, 'Precon decks'],
