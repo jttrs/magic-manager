@@ -45,10 +45,10 @@ export function AdminView() {
 
   const sidebar = (
     <div className="flex flex-col gap-6">
-      <SideSection title="Find">
+      <SideSection title="Find" quiet>
         <TextField name="q" label="Name or email" value={search.q} placeholder="Search people…" onChange={(v) => set({ q: v })} />
       </SideSection>
-      <SideSection title="Show">
+      <SideSection title="Show" quiet>
         <Segmented<Show>
           label="Show"
           wrap

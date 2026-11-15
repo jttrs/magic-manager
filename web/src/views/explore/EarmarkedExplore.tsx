@@ -39,10 +39,10 @@ export function EarmarkedExplore({ search, set, subnav }: Props) {
 
   const sidebar = (
     <>
-      <SideSection title="Find">
+      <SideSection title="Find" quiet>
         <TextField name="rq" label="Card name or note" value={search.rq} placeholder="e.g. Sentinel…" onChange={(rq) => set({ rq })} />
       </SideSection>
-      <SideSection title="Show">
+      <SideSection title="Show" quiet>
         <SelectField<EarmarkReasonFilter> label="Why" value={search.er} onChange={(er) => set({ er })} options={EARMARK_REASONS.map((r) => ({ value: r, label: REASON_FILTER_LABEL[r] }))} />
         {decks.length > 0 && (
           <SelectField<string>

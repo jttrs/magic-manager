@@ -86,10 +86,10 @@ export function MarketView() {
     <>
       {subject === 'family' && (
         <>
-          <SideSection title="Find">
+          <SideSection title="Find" quiet>
             <TextField name="q" label={singles ? 'Card name' : 'Product name'} value={search.q} placeholder={singles ? 'e.g. Cloud…' : 'e.g. Bundle…'} onChange={(q) => set({ q })} />
           </SideSection>
-          <SideSection title="Show">
+          <SideSection title="Show" quiet>
             {famPicker}
             <Segmented<MarketSearch['tab']> label="Product type" showLabel value={search.tab} onChange={(tab) => set({ tab })} options={[{ value: 'products', label: 'Sealed' }, { value: 'cards', label: 'Singles' }]} />
             {singles && (
@@ -108,7 +108,7 @@ export function MarketView() {
         </>
       )}
       {subject === 'deck' && (
-        <SideSection title="Show">
+        <SideSection title="Show" quiet>
           {decks.isError ? (
             <p role="alert" className="text-sm text-danger">Couldn’t load decks: {(decks.error as Error).message}</p>
           ) : (
@@ -119,10 +119,10 @@ export function MarketView() {
       {subject === 'sld' && <SecretLairFind search={search} set={set} />}
       {inDeals && (
         <>
-          <SideSection title="Find">
+          <SideSection title="Find" quiet>
             <TextField name="dq" label="Product name or set" value={search.dq} placeholder="e.g. Bundle, fin…" onChange={(dq) => setFilter({ dq })} />
           </SideSection>
-          <SideSection title="Show">
+          <SideSection title="Show" quiet>
             <MultiSelect
               label="Stores"
               noun="stores"
@@ -188,11 +188,9 @@ export function MarketView() {
   let body: ReactNode;
   if (subject === 'sld') {
     title = 'Secret Lair';
-    summary = 'The newest drops: sealed value beside the cards inside, bonus card included';
     body = <SecretLairPanel search={search} set={set} />;
   } else if (inDeals) {
     title = 'Deals';
-    summary = 'Products you watch: best price now, what it’s worth, and what’s inside';
     body = <DealsPanel data={dealsData} costs={dealCosts} reads={dealReads} search={search} set={set} />;
     const busy = dealReads.busy ? 'Reading…' : undefined;
     actions = (

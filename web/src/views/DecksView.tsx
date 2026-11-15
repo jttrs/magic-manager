@@ -77,10 +77,10 @@ export function DecksView() {
 
   const sidebar = (
     <>
-      <SideSection title="Find">
+      <SideSection title="Find" quiet>
         <TextField name="q" label="Deck, set or author" value={search.q} placeholder="e.g. Counter Blitz, Angels, fic…" onChange={(q) => set({ q })} />
       </SideSection>
-      <SideSection title="Show">
+      <SideSection title="Show" quiet>
         <ChipToggles<Ownership>
           label="You own"
           showLabel

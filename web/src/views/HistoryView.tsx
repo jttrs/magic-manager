@@ -68,10 +68,10 @@ export function HistoryView() {
 
   const sidebar = (
     <>
-      <SideSection title="Find">
+      <SideSection title="Find" quiet>
         <TextField name="q" label={purchasesOn ? 'Product, set, file or order' : 'Product, set or file'} value={search.q} placeholder="e.g. Jumpstart, FIN…" onChange={(qv) => set({ q: qv })} />
       </SideSection>
-      <SideSection title="Show">
+      <SideSection title="Show" quiet>
         <MultiSelect
           label="Kind of entry"
           labelExtra={

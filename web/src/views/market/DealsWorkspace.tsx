@@ -13,6 +13,7 @@ import { fmtCount, fmtInt, fmtUsd } from '../../core/format';
 import type { MarketSearch } from '../../core/search';
 import { DealInspector, ListingInspector } from './DealInspector';
 import { dealFilters, dismiss, useWatch, type CostState, type DealCosts, type DealsData } from './useDealsData';
+import { SheetSummary } from '../../components/SheetSummary';
 
 type Props = {
   data: DealsData;
@@ -52,10 +53,10 @@ export function DealsWorkspace({ data, costs, search, set, header, emptyNote }: 
         </EmptyNote>
       ) : (
         <>
-          <p role="status" className="text-sm tabular text-ink-muted">
+          <SheetSummary>
             {fmtInt(shown.length)} of {fmtCount(data.products.length, 'watched product')}
             {pinnedTotal > 0 && ` · ${fmtInt(pinned.length + listings.length)} from your open tabs`} · compared to {BASIS_LABEL[search.basis]}
-          </p>
+          </SheetSummary>
           <ProductTable shown={shown} pinned={pinned} listings={listings} costs={costs} basis={search.basis} item={search.item} onPick={(item) => set({ item })} onDismiss={onDismiss} />
         </>
       )}

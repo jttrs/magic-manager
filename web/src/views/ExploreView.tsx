@@ -104,7 +104,7 @@ export function ExploreView() {
 
   const sidebar = (
     <>
-      <SideSection title="Cards">
+      <SideSection title="Cards" quiet>
         <div className="flex flex-col gap-3">
           <CommanderPicker scope="any" name="card-a" label="Card" value={search.a} onCommit={(a, p) => { setPicked(p ?? null); set({ a }); }} />
           <CommanderPicker scope="any" name="card-b" label="Compare with" placeholder="Add a second card…" value={search.b} onCommit={(b) => set({ b })} />
@@ -115,7 +115,7 @@ export function ExploreView() {
           )}
         </div>
       </SideSection>
-      <SideSection title="Find">
+      <SideSection title="Find" quiet>
         <TextField name="q" label="Card name" value={search.q} placeholder="e.g. Sol Ring…" onChange={(q) => set({ q })} />
         {role === 'commander' && cmdView && cmdView.tags.length > 0 && (
           <MultiSelect label="EDHREC lists" noun="lists" value={cmdView.activeTags} onChange={(tags) => set({ tags })} options={cmdView.tags.map(([t, n]) => ({ value: t, label: tagLabel(t), count: n }))} />
@@ -124,7 +124,7 @@ export function ExploreView() {
           <MultiSelect label="Played alongside · card types" noun="card types" searchable={false} keepOrder value={cardTags} onChange={(tags) => set({ tags })} options={cardGroups.map(([g, n]) => ({ value: g, label: g, count: n }))} />
         )}
       </SideSection>
-      <SideSection title="Show">
+      <SideSection title="Show" quiet>
         {role === null ? (
           <div role="status" aria-label="Checking whether it can lead a deck" className="h-16 animate-pulse rounded-sm bg-chrome-raised motion-reduce:animate-none" />
         ) : <Segmented<Role>

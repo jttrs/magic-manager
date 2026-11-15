@@ -146,10 +146,10 @@ export function CollectionView() {
 
   const sidebar = (
     <>
-      <SideSection title="Find">
+      <SideSection title="Find" quiet>
         <TextField name="q" label="Card name" value={search.q} placeholder="e.g. Cloud…" onChange={(qv) => set({ q: qv })} />
       </SideSection>
-      <SideSection title="Show">
+      <SideSection title="Show" quiet>
         {fams.isPending ? (
           <p role="status" className="text-sm text-on-chrome-muted">Loading your set families…</p>
         ) : fams.isError ? (

@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
+import { SheetSummarySlot } from './SheetSummary';
 import { ApiError } from '../core/apiError';
 import { CopyMarked, type MarkedCopy } from './CopyMarked';
 
@@ -27,6 +28,7 @@ export function GuideSheet({ title, summary, actions, actionsLabel, marked, arra
   const hasActions = Boolean(actions) || marked != null;
   const bare = !summary && !hasActions && !arrange;
   const toolbar = actionsLabel != null || marked != null;
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
   return (
     <div className="paper-grain flex h-full min-h-[70dvh] flex-col rounded-sm bg-paper text-ink shadow-[0_1px_0_var(--theme-chrome-line),0_18px_40px_-28px_var(--theme-scrim)]">
       {nav}
@@ -37,6 +39,7 @@ export function GuideSheet({ title, summary, actions, actionsLabel, marked, arra
           <div className="min-w-0">
             <h1 className="sr-only">{title}</h1>
             {summary && <p className="text-sm tabular text-ink-muted">{summary}</p>}
+            <p ref={setSlot} className="text-sm tabular text-ink-muted empty:hidden" />
           </div>
           {arrange && (
             <div role="group" aria-label="Arrange" className={`ml-auto flex items-center gap-1 ${hasActions ? 'border-r border-rule pr-2' : ''}`}>
@@ -51,7 +54,7 @@ export function GuideSheet({ title, summary, actions, actionsLabel, marked, arra
           )}
         </div>
       )}
-      <div className="min-h-0 flex-1">{children}</div>
+      <div className="min-h-0 flex-1"><SheetSummarySlot.Provider value={slot}>{children}</SheetSummarySlot.Provider></div>
     </div>
   );
 }

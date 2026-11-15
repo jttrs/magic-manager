@@ -1,10 +1,15 @@
 import { DropdownMenu, ToggleGroup } from 'radix-ui';
 import { useId, type ReactNode } from 'react';
 
-export function SideSection({ title, children, id }: { title: string; children: ReactNode; id?: string }) {
+/** A rail section. `quiet` keeps its heading for screen readers only: the rail's
+ *  search-then-filters order explains itself, so *Find* / *Show* print no label,
+ *  while sections that switch to something else (*Buy*, Surfer's groups) do. */
+export function SideSection({ title, children, id, quiet = false }: { title: string; children: ReactNode; id?: string; quiet?: boolean }) {
+  const own = useId();
+  const hid = id ?? own;
   return (
-    <section aria-labelledby={id} className="flex flex-col gap-2">
-      <h2 id={id} className="text-sm voice-condensed uppercase tracking-[0.06em] text-on-chrome-muted">{title}</h2>
+    <section aria-labelledby={hid} className="flex flex-col gap-2">
+      <h2 id={hid} className={quiet ? 'sr-only' : 'text-sm voice-condensed uppercase tracking-[0.06em] text-on-chrome-muted'}>{title}</h2>
       {children}
     </section>
   );

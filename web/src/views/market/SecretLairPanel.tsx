@@ -14,6 +14,7 @@ import { filterSortDrops, SLD_BASIS_LABEL, SLD_LIMITS, sldGap, sldRows, watchKey
 import { MasterDetail } from './DealsWorkspace';
 import type { CostState } from './useDealsData';
 import { SldInspector } from './SldInspector';
+import { SheetSummary } from '../../components/SheetSummary';
 
 type Set = (patch: Partial<MarketSearch>) => void;
 type SldCosts = { data: Map<string, ProductCostOut | undefined>; state: Map<string, CostState> };
@@ -66,10 +67,10 @@ export function SecretLairFind({ search, set }: { search: MarketSearch; set: Set
   const setFilter = useSldFilter(search, set);
   return (
     <>
-      <SideSection title="Find">
+      <SideSection title="Find" quiet>
         <TextField name="dq" label="Drop name" value={search.dq} placeholder="e.g. Garfield…" onChange={(dq) => setFilter({ dq })} />
       </SideSection>
-      <SideSection title="Show">
+      <SideSection title="Show" quiet>
         <SelectField<`${(typeof SLD_LIMITS)[number]}`>
           label="Drops"
           value={String(search.sldN) as '30'}
@@ -124,10 +125,10 @@ export function SecretLairPanel({ search, set }: { search: MarketSearch; set: Se
     </EmptyNote>
   ) : (
     <>
-      <p role="status" className="text-sm tabular text-ink-muted">
+      <SheetSummary>
         {fmtInt(shown.length)} of the {fmtInt(rows.length)} newest drops · compared to {SLD_BASIS_LABEL[search.sbasis]}
         {pricing > 0 && ` · pricing ${fmtInt(pricing)}…`}
-      </p>
+      </SheetSummary>
       <DropTable shown={shown} costs={costs} basis={search.sbasis} watched={watched} item={selected?.key} onPick={(item) => set({ item })} />
       {list.data && list.data.total > rows.length && search.sldN < SLD_LIMITS[SLD_LIMITS.length - 1] && (
         <Button tone="paper" className="self-start" onClick={() => set({ sldN: SLD_LIMITS.find((n) => n > search.sldN) })}>

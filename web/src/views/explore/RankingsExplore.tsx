@@ -101,10 +101,10 @@ export function RankingsExplore({ search, set, subnav }: Props) {
 
   const sidebar = (
     <>
-      <SideSection title="Find">
+      <SideSection title="Find" quiet>
         <TextField name="rq" label="Card name" value={search.rq} placeholder="e.g. Krenko…" onChange={(rq) => set({ rq })} />
       </SideSection>
-      <SideSection title="Show">
+      <SideSection title="Show" quiet>
         <SelectField<RankScope> label="List" value={search.rank} onChange={(rank) => set({ rank })} options={RANK_SCOPES.map((s) => ({ value: s, label: SCOPE_LABEL[s] }))} />
         <fieldset disabled={!commanders} className="flex min-w-0 flex-col gap-4 disabled:opacity-55" aria-describedby={commanders ? undefined : 'rank-filters-note'}>
           <legend className="sr-only">Narrow top commanders</legend>

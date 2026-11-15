@@ -47,7 +47,7 @@ test('Jumpstart lives in Decks: Collection has no Jumpstart tab, old links open 
   await expect(list.getByRole('button', { name: /^Armed/ })).toHaveAttribute('aria-current', 'true');
   await expect(page.getByRole('heading', { level: 2, name: 'Armed' })).toBeVisible();
   await expect(page.getByText('Unused cards cover')).toBeVisible();
-  await page.getByRole('radio', { name: 'List' }).click();
+  await page.getByRole('button', { name: 'List view' }).click();
   await expect(page.getByText('None unused')).toBeVisible();
   await expect(page.getByText('×8 in deck')).toBeVisible();
 });
