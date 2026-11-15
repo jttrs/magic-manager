@@ -41,15 +41,19 @@ export function GuideSheet({ title, summary, actions, actionsLabel, marked, arra
             {summary && <p className="text-sm tabular text-ink-muted">{summary}</p>}
             <p ref={setSlot} className="text-sm tabular text-ink-muted empty:hidden" />
           </div>
-          {arrange && (
-            <div role="group" aria-label="Arrange" className={`ml-auto flex items-center gap-1 ${hasActions ? 'border-r border-rule pr-2' : ''}`}>
-              {arrange}
-            </div>
-          )}
-          {hasActions && (
-            <div role={toolbar ? 'toolbar' : undefined} aria-label={toolbar ? (actionsLabel ?? 'Sheet actions') : undefined} className={`${arrange ? '' : 'ml-auto'} flex items-center ${toolbar ? 'gap-1' : 'gap-2'}`}>
-              {actions}
-              {marked && <CopyMarked {...marked} />}
+          {(arrange || hasActions) && (
+            <div className="ml-auto flex flex-wrap items-center justify-end gap-x-2 gap-y-1">
+              {arrange && (
+                <div role="group" aria-label="Arrange" className={`flex items-center gap-1 ${hasActions ? 'border-r border-rule pr-2' : ''}`}>
+                  {arrange}
+                </div>
+              )}
+              {hasActions && (
+                <div role={toolbar ? 'toolbar' : undefined} aria-label={toolbar ? (actionsLabel ?? 'Sheet actions') : undefined} className={`flex items-center ${toolbar ? 'gap-1' : 'gap-2'}`}>
+                  {actions}
+                  {marked && <CopyMarked {...marked} />}
+                </div>
+              )}
             </div>
           )}
         </div>
