@@ -1,5 +1,6 @@
 import { Popover } from 'radix-ui';
 import { useId, useMemo, useState, type ReactNode } from 'react';
+import { bulkActions, pickCount, pickSummary, type PickMode } from '../core/multiSelect';
 
 type MultiOption = { value: string; label: string; count?: number; group?: string };
 
@@ -11,7 +12,9 @@ type Props = {
   /** Noun for the trigger summary, e.g. "families". */
   noun: string;
   placeholder?: string;
-  /** Overrides the trigger text (e.g. "All card types"). */
+  /** What the value means (see `core/multiSelect`): `include` (default), `scope` or `exclude`. */
+  mode?: PickMode;
+  /** @deprecated callers move to `mode`; overrides the trigger text until they do. */
   summary?: string;
   /** Hide the search box (short, grouped lists). */
   searchable?: boolean;
@@ -26,7 +29,7 @@ type Props = {
  * searchable checkbox list. DESIGN.md: chip groups stop at 5 options; anything
  * larger uses this, so long lists never take over the sidebar.
  */
-export function MultiSelect({ label, options, value, onChange, noun, placeholder = 'Filter…', summary: summaryText, searchable = true, keepOrder = false, labelExtra }: Props) {
+export function MultiSelect({ label, options, value, onChange, noun, placeholder = 'Filter…', mode = 'include', summary: summaryText, searchable = true, keepOrder = false, labelExtra }: Props) {
   const [q, setQ] = useState('');
   const id = useId();
   const selected = useMemo(() => new Set(value), [value]);
@@ -44,8 +47,9 @@ export function MultiSelect({ label, options, value, onChange, noun, placeholder
     return [...m];
   }, [shown]);
 
-  const first = options.find((o) => selected.has(o.value));
-  const summary = summaryText ?? (!value.length ? `Choose ${noun}…` : value.length === 1 ? first?.label ?? value[0] : `${first?.label ?? value[0]} +${value.length - 1}`);
+  const summary = summaryText ?? pickSummary(mode, options, value, noun);
+  const unfiltered = mode === 'exclude' ? options.every((o) => selected.has(o.value)) : !value.length;
+  const bulk = bulkActions(mode, q ? shown : options, value, Boolean(q));
 
   const toggle = (v: string) => onChange(selected.has(v) ? value.filter((x) => x !== v) : [...value, v]);
 
@@ -60,8 +64,7 @@ export function MultiSelect({ label, options, value, onChange, noun, placeholder
           aria-labelledby={`${id}-l ${id}-s`}
           className="flex min-h-9 w-full cursor-pointer items-center gap-2 rounded-sm border border-chrome-line bg-chrome-raised px-2.5 text-left text-md text-on-chrome transition-colors ease-guide hover:border-on-chrome-muted data-[state=open]:border-accent"
         >
-          <span id={`${id}-s`} className={`min-w-0 flex-1 truncate ${value.length ? '' : 'text-on-chrome-muted'}`}>{summary}</span>
-          {!summaryText && value.length > 1 && <span className="tabular text-xs text-on-chrome-muted">{value.length}</span>}
+          <span id={`${id}-s`} className={`min-w-0 flex-1 truncate ${unfiltered ? 'text-on-chrome-muted' : ''}`}>{summary}</span>
           <span aria-hidden="true" className="text-on-chrome-muted">▾</span>
         </Popover.Trigger>
         <Popover.Portal>
@@ -90,31 +93,14 @@ export function MultiSelect({ label, options, value, onChange, noun, placeholder
                 onChange={(e) => setQ(e.target.value)}
                 className="min-h-8 rounded-sm border border-chrome-line bg-chrome px-2 text-sm text-on-chrome placeholder:text-on-chrome-muted focus-visible:border-accent"
               />}
-              {grouped ? (
-                <div className="flex gap-3 text-xs">
-                  <button type="button" className="cursor-pointer text-on-chrome-muted underline hover:text-on-chrome" onClick={() => onChange(options.map((o) => o.value))}>
-                    Check all
-                  </button>
-                  <span className="ml-auto tabular text-on-chrome-muted">{options.filter((o) => !selected.has(o.value)).length} unchecked</span>
-                </div>
-              ) : (
               <div className="flex gap-3 text-xs">
-                {q && shown.length > 0 && (
-                  <button type="button" className="cursor-pointer text-on-chrome-muted underline hover:text-on-chrome" onClick={() => onChange([...new Set([...value, ...shown.map((o) => o.value)])])}>
-                    Select shown
+                {bulk.map((b) => (
+                  <button key={b.label} type="button" className="cursor-pointer text-on-chrome-muted underline hover:text-on-chrome" onClick={() => onChange(b.next)}>
+                    {b.label}
                   </button>
-                )}
-                {!q && value.length < options.length && (
-                  <button type="button" className="cursor-pointer text-on-chrome-muted underline hover:text-on-chrome" onClick={() => onChange(options.map((o) => o.value))}>
-                    Select all
-                  </button>
-                )}
-                <button type="button" className="cursor-pointer text-on-chrome-muted underline hover:text-on-chrome" onClick={() => onChange(q ? value.filter((v) => !shown.some((o) => o.value === v)) : [])}>
-                  Clear {q ? 'shown' : 'all'}
-                </button>
-                <span className="ml-auto tabular text-on-chrome-muted">{value.length} selected</span>
+                ))}
+                <span className="ml-auto tabular text-on-chrome-muted">{pickCount(mode, options, value)}</span>
               </div>
-              )}
             </div>
             <div className={`min-h-0 overflow-y-auto overscroll-contain py-1 ${grouped ? "gap-x-2 sm:columns-2" : ""}`}>
               {shown.length === 0 && <p className="px-3 py-2 text-sm text-on-chrome-muted">No {noun} match “{q}”.</p>}
