@@ -338,6 +338,8 @@ class Ranked:
     num_decks: int | None = None
     salt: float | None = None
     trend: float | None = None
+    #: A top card from a set family that EDHREC lists as a reprint there (printed before the set).
+    reprint: bool = False
 
 
 @dataclass
@@ -370,6 +372,11 @@ def ranking_bases(scope: str = "commanders", timeframe: str = "week", *,
     (read :data:`edhrec.RANKING_POOL_PAGES` deep), else a tag — and the other
     axes narrow it locally (see :func:`ranking`). A tag that narrows another
     base also needs the tag's own list. First entry = the base."""
+    if scope == "cards":
+        # Top cards: a set family is read from its set pages (the family's cards +
+        # reprints); colour narrows locally (fits within). Tags are commander-only.
+        return [dict(scope="cards", timeframe=timeframe, set_family=set_family) if set_family
+                else dict(scope="cards", timeframe=timeframe)]
     if scope != "commanders" or not (color or tag or set_family):
         return [dict(scope=scope, timeframe=timeframe)]
     if set_family:
@@ -437,7 +444,7 @@ def ranking_title(scope: str = "commanders", timeframe: str = "week", *,
     extra = []
     if color and not key.filter.startswith("color:"):
         extra.append("-".join(p.capitalize() for p in edhrec.color_filter_slug(color).split("-")))
-    if tag and not key.filter.startswith("tag:"):
+    if tag and scope == "commanders" and not key.filter.startswith("tag:"):
         extra.append(f"{edhrec.slugify(tag).replace('-', ' ').capitalize()} tag")
     if not extra:
         return title
@@ -483,6 +490,15 @@ def ranking(scope: str = "commanders", timeframe: str = "week", *,
         letters = _color_letters(color)
         pool = [x for x in pool if (x.facts.oracle_id or x.facts.partner) and set(x.facts.color_identity) == letters]
         applied.append("color")
+    if scope == "cards" and color:
+        # A card in the 99 must FIT the deck's colours: its identity ⊆ the chosen one
+        # (colourless cards fit every deck). Commanders above match exactly.
+        letters = _color_letters(color)
+        pool = [x for x in pool if x.facts.oracle_id and set(x.facts.color_identity) <= letters]
+        applied.append("color")
+    if scope == "cards" and set_family:
+        reprints = edhrec.set_reprint_slugs(set_family)
+        pool = [replace(x, reprint=x.slug in reprints) for x in pool]
     if scope == "commanders" and tag and not keys[0].filter.startswith("tag:"):
         tslug = edhrec.slugify(tag)
         listed = reads[-1].rows

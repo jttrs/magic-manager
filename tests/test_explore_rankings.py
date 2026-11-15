@@ -458,3 +458,37 @@ def test_non_local_double_faced_card_resolves_as_one_card(tmp_db, monkeypatch, m
     got = edhrec.resolve_names_to_oracle([dfc["name"]])
     assert got[dfc["name"].casefold()]["oracle_id"] == "oracle-dfc"
     assert "partners" not in got[dfc["name"].casefold()]
+
+
+def test_top_cards_of_a_set_family_include_reprints_ranked_by_decks(tmp_db, seed_cards, make_card, monkeypatch):
+    """Top cards x set family read the family's set pages: the set's own card lists
+    plus its reprints, ranked together by deck count; reprints are tagged; colour
+    narrows by FITTING within (colourless fits every deck)."""
+    seed_cards([
+        make_card(id=GOB, oracle_id="oracle-gob", name="Set Goblin", collector_number="3", color_identity=["R"]),
+        make_card(id=ELF, oracle_id="oracle-elf", name="Set Elf", collector_number="4", color_identity=["G"]),
+        make_card(id=TREASURE, oracle_id="oracle-ring", name="Sol Ring", collector_number="5", color_identity=[]),
+    ])
+    oid = {"Set Goblin": "oracle-gob", "Set Elf": "oracle-elf", "Sol Ring": "oracle-ring"}
+    monkeypatch.setattr(edhrec, "resolve_names_to_oracle",
+                        lambda names, **_: {n.casefold(): {"oracle_id": oid.get(n)} for n in names if n in oid})
+
+    class _RS:
+        code, all_codes = "tst", ["tst"]
+    monkeypatch.setattr(sets, "resolve", lambda s: _RS())
+    monkeypatch.setattr(edhrec, "set_page", lambda code: {"header": "TST", "container": {"json_dict": {"cardlists": [
+        {"tag": "commanders(tst)", "cardviews": [{"name": "A Commander", "slug": "a-commander", "num_decks": 99999}]},
+        {"tag": "cards(tst)", "cardviews": [{"name": "Set Goblin", "slug": "set-goblin", "num_decks": 300},
+                                            {"name": "Set Elf", "slug": "set-elf", "num_decks": 100}]},
+        {"tag": "reprints", "cardviews": [{"name": "Sol Ring", "slug": "sol-ring", "num_decks": 5000}]},
+    ]}}})
+
+    assert edhrec.ranking_key("cards", set_family="tst") == edhrec.RankingKey("cards", "", "set:tst")
+    explore.sync_ranking("cards", set_family="tst")
+    r = explore.ranking("cards", set_family="tst")
+    assert [(x.name, x.reprint) for x in r.rows] == [("Sol Ring", True), ("Set Goblin", False), ("Set Elf", False)]
+    red = explore.ranking("cards", set_family="tst", color="r")
+    assert [x.name for x in red.rows] == ["Sol Ring", "Set Goblin"]       # R fits; colourless fits; G doesn't
+    # the commanders scope on the same family is unchanged
+    explore.sync_ranking("commanders", set_family="tst")
+    assert [x.name for x in explore.ranking("commanders", set_family="tst").rows] == ["A Commander"]

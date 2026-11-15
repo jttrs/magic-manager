@@ -173,6 +173,7 @@ class RankedOut(BaseModel):
     facts: FactsOut
     num_decks: int | None = None
     salt: float | None = Field(None, description="Average 0–4 'unfun to play against' rating (salt rankings).")
+    reprint: bool = Field(False, description="Top cards from a set family: EDHREC lists the card as a reprint there (printed before the set).")
     trend: float | None = Field(None, description="EDHREC trend z-score.")
 
 
@@ -226,7 +227,7 @@ def ranking(q: RankingPageQuery) -> RankingOut:
         scope=r.key.scope, timeframe=r.key.timeframe, filter=r.key.filter, title=r.title,
         cached=r.cached, fetched_at=r.fetched_at,
         rows=[RankedOut(rank=x.rank, name=x.name, slug=x.slug, facts=_facts(x.facts),
-                        num_decks=x.num_decks, salt=x.salt, trend=x.trend) for x in r.rows],
+                        num_decks=x.num_decks, salt=x.salt, trend=x.trend, reprint=x.reprint) for x in r.rows],
         total=r.total, base=r.base, pool=r.pool, owned=r.owned, unused=r.unused, offset=q.offset,
         local_filters=r.local_filters,
         pool_complete=r.partial_reason is None, pool_partial_reason=r.partial_reason,
