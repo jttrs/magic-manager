@@ -73,6 +73,18 @@ export function HistoryView() {
       <SideSection title="Show">
         <MultiSelect
           label="Kind of entry"
+          labelExtra={
+            <InfoTip label="What do the kinds mean?">
+              <dl className="flex flex-col gap-1.5">
+                {kinds.map((k) => (
+                  <div key={k.value}>
+                    <dt className="inline voice-semi">{k.label}: </dt>
+                    <dd className="inline text-on-chrome-muted">{KIND_HELP[k.value]}</dd>
+                  </div>
+                ))}
+              </dl>
+            </InfoTip>
+          }
           noun="kinds"
           searchable={false}
           keepOrder
@@ -87,16 +99,6 @@ export function HistoryView() {
             Clear filters
           </button>
         )}
-      </SideSection>
-      <SideSection title="What the kinds mean">
-        <dl className="flex flex-col gap-1.5 text-xs leading-snug text-on-chrome-muted">
-          {kinds.map((k) => (
-            <div key={k.value}>
-              <dt className="inline voice-semi text-on-chrome">{k.label}: </dt>
-              <dd className="inline">{KIND_HELP[k.value]}</dd>
-            </div>
-          ))}
-        </dl>
       </SideSection>
     </>
   );
