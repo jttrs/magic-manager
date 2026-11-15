@@ -1,5 +1,5 @@
 // Deck Manager derivations: the recipe list (every precon / Jumpstart pack in the
-// catalog plus your own decks) — filters, groups, kind + ownership markers and
+// catalog plus your own decks) — filters, groups, source + status markers and
 // unused-card coverage copy — a deck's cards as guide sections (Commander ·
 // Creatures · … · Sideboard · Tokens), and the add-cards review lines for "add
 // this deck / these cards to my collection". Framework-free; every number comes
@@ -9,24 +9,36 @@ import { TYPE_GROUPS, typeGroup } from './cardFacts';
 import { facetCounts, passes, type Facets } from './facets';
 import { fmtCount, fmtInt } from './format';
 import { treatmentLabels, type GuideCard, type GuideGroup } from './guideCard';
-import { COVER, OWNERSHIP, RECIPE_KINDS, type DecksSearch } from './search';
+import { COVER, OWNERSHIP, RECIPE_ORIGINS, type DecksSearch } from './search';
 
 export const DECK_GROUPS = ['set', 'year', 'kind', 'type', 'color', 'state'] as const;
 export type DeckGroupBy = (typeof DECK_GROUPS)[number];
-export const DECK_GROUP_LABEL: Record<DeckGroupBy, string> = { set: 'Set', year: 'Year', kind: 'Kind', type: 'Deck type', color: 'Color', state: 'Ownership' };
+export const DECK_GROUP_LABEL: Record<DeckGroupBy, string> = { set: 'Set', year: 'Year', kind: 'Source', type: 'Deck type', color: 'Color', state: 'Status' };
 
-export type RecipeKind = (typeof RECIPE_KINDS)[number];
+export type RecipeOrigin = (typeof RECIPE_ORIGINS)[number];
 export type Ownership = (typeof OWNERSHIP)[number];
 export type Cover = (typeof COVER)[number];
-export const KIND_LABEL: Record<RecipeKind, string> = { precon: 'Precon', jumpstart: 'Jumpstart', import: 'Imported', custom: 'Custom' };
-// `loose` (the engine's word) is a product copy you own but keep broken down — not the
-// same thing as Unused cards (owned copies no built deck holds), so it never says "loose".
-const OWNERSHIP_LABEL: Record<Ownership, string> = { built: 'Built', loose: 'Broken down', none: 'Not owned' };
-/** The sidebar's "You own" toggles: Built · Broken down · None. */
-const OWN_TOGGLE_LABEL: Record<Ownership, string> = { built: 'Built', loose: 'Broken down', none: 'None' };
+export const SOURCE_LABEL: Record<RecipeOrigin, string> = { precon: 'Wizards', import: 'Imported', custom: 'Custom' };
+/** Jumpstart is a deck type, not a source. */
+export const isJumpstart = (r: Pick<RecipeOut, 'deck_type'>): boolean => r.deck_type === 'Jumpstart';
+/** The deck types shown until the list is narrowed to a set or the type picker is used. */
+const DEFAULT_DECK_TYPES = ['Commander'];
+const ALL_TYPES = 'all';
+/** The deck-type filter in effect (null = every type): `['all']` = every type; a chosen list is
+ *  that list; untouched = Commander, unless a set is chosen. */
+export function effectiveTypes(f: Pick<DecksSearch, 'types' | 'sets'>): string[] | null {
+  if (f.types.length === 1 && f.types[0] === ALL_TYPES) return null;
+  if (f.types.length) return f.types;
+  return f.sets.length ? null : DEFAULT_DECK_TYPES;
+}
+/** The picker's value → the URL's `types` ("show all" is stored so it sticks). */
+export const typesToSearch = (v: string[]): string[] => (v.length ? v : [ALL_TYPES]);
+const OWNERSHIP_LABEL: Record<Ownership, string> = { built: 'Built', loose: 'Loose', none: 'Not owned' };
+/** The sidebar's "Status" toggles: Built · Loose · Recipes. */
+const OWN_TOGGLE_LABEL: Record<Ownership, string> = { built: 'Built', loose: 'Loose', none: 'Recipes' };
 export const COVER_LABEL: Record<Cover, string> = { any: 'Any', build: 'Ready to build', close: 'Ready or close' };
 
-export type RecipeFilters = Pick<DecksSearch, 'q' | 'kinds' | 'own' | 'cover' | 'types' | 'sets'>;
+export type RecipeFilters = Pick<DecksSearch, 'q' | 'source' | 'own' | 'cover' | 'types' | 'sets'>;
 
 /** Unused-card status when it applies: a built recipe's cards are pledged, so it has none. */
 const coverStatus = (r: Pick<RecipeOut, 'built' | 'status'>) => (r.built === 0 ? r.status : null);
@@ -38,13 +50,14 @@ const coverKeep = (r: RecipeOut, cover: Cover) =>
 /** One predicate per recipe filter (see `core/facets`). */
 function recipeFacets(f: RecipeFilters): Facets<RecipeOut, keyof RecipeFilters> {
   const q = f.q.trim().toLowerCase();
+  const types = effectiveTypes(f);
   return {
-    kinds: (r) => !f.kinds.length || f.kinds.includes(r.kind),
+    source: (r) => !f.source.length || f.source.includes(r.origin),
     own: (r) => f.own.includes(r.ownership),
     cover: (r) => coverKeep(r, f.cover),
-    types: (r) => !f.types.length || f.types.includes(r.deck_type),
+    types: (r) => types == null || types.includes(r.deck_type),
     sets: (r) => !f.sets.length || (!!r.set_code && f.sets.includes(r.set_code)),
-    q: (r) => !q || [r.name, r.set_name, r.set_code, r.source, r.author, r.deck_type, KIND_LABEL[r.kind]].some((v) => v?.toLowerCase().includes(q)),
+    q: (r) => !q || [r.name, r.set_name, r.set_code, r.source, r.author, r.deck_type, SOURCE_LABEL[r.origin]].some((v) => v?.toLowerCase().includes(q)),
   };
 }
 
@@ -59,7 +72,7 @@ type Count = { value: string; label: string; count: number };
 export function optionCounts(rs: readonly RecipeOut[], f: RecipeFilters) {
   const facets = recipeFacets(f);
   const by = (skip: keyof RecipeFilters, key: (r: RecipeOut) => string | null) => facetCounts(rs, facets, skip, key);
-  const kinds = by('kinds', (r) => r.kind);
+  const source = by('source', (r) => r.origin);
   const own = by('own', (r) => r.ownership);
   const types = by('types', (r) => r.deck_type);
   const sets = by('sets', (r) => r.set_code);
@@ -69,7 +82,7 @@ export function optionCounts(rs: readonly RecipeOut[], f: RecipeFilters) {
   const sorted = (m: Map<string, number>, keepKeys: readonly string[] = []): [string, number][] =>
     [...new Set([...m.keys(), ...keepKeys])].map((k) => [k, m.get(k) ?? 0] as [string, number]);
   return {
-    kinds: RECIPE_KINDS.map((k) => ({ value: k, label: KIND_LABEL[k], count: kinds.get(k) ?? 0 })),
+    source: RECIPE_ORIGINS.map((k) => ({ value: k, label: SOURCE_LABEL[k], count: source.get(k) ?? 0 })),
     own: OWNERSHIP.map((k) => ({ value: k, label: OWN_TOGGLE_LABEL[k], count: own.get(k) ?? 0 })),
     cover: { any: null, build: cover.get('build') ?? 0, close: (cover.get('build') ?? 0) + (cover.get('close') ?? 0) },
     types: sorted(types, f.types).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([v, n]): Count => ({ value: v, label: v, count: n })),
@@ -87,7 +100,7 @@ export const colorLabel = (code: string): string => COLOR_NAME[code] ?? code;
 
 export type DeckGroup = { key: string; label: string; decks: RecipeOut[]; ready: number };
 
-const KIND_RANK: Record<RecipeKind, string> = { precon: '3', jumpstart: '2', import: '1', custom: '0' };
+const ORIGIN_RANK: Record<RecipeOrigin, string> = { precon: '2', import: '1', custom: '0' };
 const OWN_RANK: Record<Ownership, string> = { built: '2', loose: '1', none: '0' };
 
 /** Group recipes; groups newest first for set/year, a fixed order otherwise. Recipes keep input order. */
@@ -101,7 +114,7 @@ export function groupRecipes(rs: readonly RecipeOut[], by: DeckGroupBy): DeckGro
         return [y || '~', y || 'Undated', y];
       }
       case 'kind':
-        return [r.kind, KIND_LABEL[r.kind], KIND_RANK[r.kind]];
+        return [r.origin, SOURCE_LABEL[r.origin], ORIGIN_RANK[r.origin]];
       case 'state':
         return [r.ownership, OWNERSHIP_LABEL[r.ownership], OWN_RANK[r.ownership]];
       case 'type':
@@ -128,10 +141,10 @@ export function groupRecipes(rs: readonly RecipeOut[], by: DeckGroupBy): DeckGro
   return groups.map(({ key, label, decks, ready }) => ({ key, label, decks, ready }));
 }
 
-/** What you own of a recipe: "×2 built" · "1 broken down" (precons/packs) · "not built" (your decks) · "not owned". */
-export function ownershipLabel(r: Pick<RecipeOut, 'ownership' | 'built' | 'loose' | 'kind'>): string {
+/** What you own of a recipe: "×2 built" · "1 loose" (precons/packs) · "not built" (your decks) · "not owned". */
+export function ownershipLabel(r: Pick<RecipeOut, 'ownership' | 'built' | 'loose' | 'origin'>): string {
   if (r.ownership === 'built') return `×${fmtInt(r.built)} built`;
-  if (r.ownership === 'loose') return r.kind === 'import' || r.kind === 'custom' ? 'not built' : `${fmtInt(r.loose)} broken down`;
+  if (r.ownership === 'loose') return r.origin === 'import' || r.origin === 'custom' ? 'not built' : `${fmtInt(r.loose)} loose`;
   return 'not owned';
 }
 
@@ -154,7 +167,7 @@ export function recipeSummary(shown: readonly RecipeOut[]): string {
 /** The one Jumpstart set the list is narrowed to (its shopping lists apply), else null. */
 export function jumpstartSet(rs: readonly RecipeOut[], f: Pick<DecksSearch, 'sets'>): string | null {
   if (f.sets.length !== 1) return null;
-  return rs.some((r) => r.kind === 'jumpstart' && r.set_code === f.sets[0]) ? f.sets[0] : null;
+  return rs.some((r) => isJumpstart(r) && r.set_code === f.sets[0]) ? f.sets[0] : null;
 }
 
 /** Catalog recipes of the one chosen set whose card lists haven't been read. */

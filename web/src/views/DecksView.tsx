@@ -17,7 +17,7 @@ import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../components/St
 import { buyListTargets } from '../components/buyTargets';
 import { ImportDeckMark, NewDeckMark, RereadMark } from '../components/StoreMarks';
 import { jumpstartBuyList } from '../core/api';
-import { COVER_LABEL, DECK_GROUP_LABEL, DECK_GROUPS, filterRecipes, groupRecipes, jumpstartSet, optionCounts, recipeFileName, recipeSummary, unreadInSet, type Cover, type DeckGroupBy, type Ownership } from '../core/decks';
+import { COVER_LABEL, DECK_GROUP_LABEL, DECK_GROUPS, effectiveTypes, filterRecipes, groupRecipes, jumpstartSet, optionCounts, recipeFileName, recipeSummary, typesToSearch, unreadInSet, type Cover, type DeckGroupBy, type Ownership } from '../core/decks';
 import { fmtCount, fmtInt } from '../core/format';
 import { shopLead, type Shop } from '../core/jumpstart';
 import { COVER, type DecksSearch } from '../core/search';
@@ -32,7 +32,7 @@ import { GroupControl, ViewToggle } from '../components/ArrangeControls';
 const route = getRouteApi('/decks');
 
 /** Decks: every deck recipe — catalog precons and Jumpstart packs plus your own decks —
- *  marked by kind and by what you own, on the left; the chosen recipe's cards on the right. */
+ *  marked by source and by status, on the left; the chosen recipe's cards on the right. */
 export function DecksView() {
   const search = route.useSearch();
   const navigate = useNavigate({ from: '/decks' });
@@ -42,8 +42,8 @@ export function DecksView() {
   const narrow = useMediaQuery('(max-width: 47.99rem)');
 
   const all = useMemo(() => recipes.data?.recipes ?? [], [recipes.data]);
-  const { q, kinds, own, cover, types, sets } = search;
-  const filters = useMemo(() => ({ q, kinds, own, cover, types, sets }), [q, kinds, own, cover, types, sets]);
+  const { q, source, own, cover, types, sets } = search;
+  const filters = useMemo(() => ({ q, source, own, cover, types, sets }), [q, source, own, cover, types, sets]);
   const shown = useMemo(() => filterRecipes(all, filters), [all, filters]);
   const counts = useMemo(() => optionCounts(all, filters), [all, filters]);
   const groups = useMemo(() => groupRecipes(shown, search.group), [shown, search.group]);
@@ -82,28 +82,28 @@ export function DecksView() {
       </SideSection>
       <SideSection title="Show" quiet>
         <ChipToggles<Ownership>
-          label="You own"
+          label="Status"
           showLabel
           value={search.own}
           onChange={(own) => set({ own })}
           options={counts.own.map((o) => ({ value: o.value, label: o.label, count: o.count }))}
         />
         <MultiSelect
-          label="Kind"
-          noun="kinds"
+          label="Source"
+          noun="sources"
           searchable={false}
           keepOrder
-          value={search.kinds}
-          onChange={(kinds) => set({ kinds: kinds as DecksSearch['kinds'] })}
-          options={counts.kinds}
+          value={search.source}
+          onChange={(source) => set({ source: source as DecksSearch['source'] })}
+          options={counts.source}
         />
         <MultiSelect
           label="Deck type"
           noun="deck types"
           searchable={false}
           keepOrder
-          value={search.types}
-          onChange={(types) => set({ types })}
+          value={effectiveTypes(search) ?? []}
+          onChange={(types) => set({ types: typesToSearch(types) })}
           options={counts.types}
         />
         <MultiSelect

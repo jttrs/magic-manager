@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { DeckCardOut, PrintingOut, RecipeOut } from './api';
-import { coverage, DECK_SECTIONS, deckGuideGroups, deckReviewLines, deckSection, filterRecipes, fromDeckCard, groupRecipes, jumpstartSet, optionCounts, ownershipLabel, recipeFileName, recipeSummary, unreadInSet, type RecipeFilters } from './decks';
-import { decksSearch } from './search';
+import { coverage, DECK_SECTIONS, deckGuideGroups, deckReviewLines, deckSection, effectiveTypes, filterRecipes, fromDeckCard, groupRecipes, jumpstartSet, optionCounts, ownershipLabel, recipeFileName, recipeSummary, typesToSearch, unreadInSet, type RecipeFilters } from './decks';
+import { decksSearch, legacyDecksSearch } from './search';
 
 const recipe = (o: Partial<RecipeOut>): RecipeOut => ({
-  key: 's', slug: 's', slugs: ['s'], file_name: 'S_FIC', name: 'Deck', kind: 'precon', deck_type: 'Commander', product_type: 'Commander Deck', source: 'Commander Deck', author: null,
+  key: 's', slug: 's', slugs: ['s'], file_name: 'S_FIC', name: 'Deck', origin: 'precon', deck_type: 'Commander', product_type: 'Commander Deck', source: 'Commander Deck', author: null,
   set_code: 'fic', set_name: 'Final Fantasy Commander', released: '2025-06-13', built: 1, loose: 0, ownership: 'built', pledged_pct: 100, read: true,
   cards: 100, value_usd: 50, image_uri: null, color: 'WU', have: 90, short: 10, status: 'far', ...o,
 });
@@ -20,21 +20,22 @@ const card = (o: Partial<DeckCardOut> & { p?: Partial<PrintingOut> } = {}): Deck
 describe('recipe list', () => {
   const rs = [
     recipe({ key: 'a', name: 'Counter Blitz' }),
-    recipe({ key: 'fn:Angels1_J25', slug: null, slugs: [], file_name: 'Angels1_J25', name: 'Angels (1)', kind: 'jumpstart', deck_type: 'Jumpstart', set_code: 'j25', set_name: 'Foundations Jumpstart', released: '2024-11-15', built: 0, ownership: 'none', color: 'W', have: 20, short: 0, status: 'build' }),
-    recipe({ key: 'fn:Angels2_J25', slug: null, slugs: [], file_name: 'Angels2_J25', name: 'Angels (2)', kind: 'jumpstart', deck_type: 'Jumpstart', set_code: 'j25', set_name: 'Foundations Jumpstart', released: '2024-11-15', built: 0, ownership: 'none', read: false, cards: null, value_usd: null, color: null, have: null, short: null, status: null }),
-    recipe({ key: 'p2', name: 'Pirates', kind: 'jumpstart', deck_type: 'Jumpstart', set_code: 'j25', set_name: 'Foundations Jumpstart', released: '2024-11-15', built: 0, loose: 2, ownership: 'loose', color: 'U', have: 18, short: 2, status: 'close' }),
-    recipe({ key: 'mine', file_name: null, name: 'Mine', kind: 'custom', set_code: null, set_name: null, released: null, source: null, author: 'me', built: 0, loose: 1, ownership: 'loose', color: 'B' }),
+    recipe({ key: 'fn:Angels1_J25', slug: null, slugs: [], file_name: 'Angels1_J25', name: 'Angels (1)', origin: 'precon', deck_type: 'Jumpstart', set_code: 'j25', set_name: 'Foundations Jumpstart', released: '2024-11-15', built: 0, ownership: 'none', color: 'W', have: 20, short: 0, status: 'build' }),
+    recipe({ key: 'fn:Angels2_J25', slug: null, slugs: [], file_name: 'Angels2_J25', name: 'Angels (2)', origin: 'precon', deck_type: 'Jumpstart', set_code: 'j25', set_name: 'Foundations Jumpstart', released: '2024-11-15', built: 0, ownership: 'none', read: false, cards: null, value_usd: null, color: null, have: null, short: null, status: null }),
+    recipe({ key: 'p2', name: 'Pirates', origin: 'precon', deck_type: 'Jumpstart', set_code: 'j25', set_name: 'Foundations Jumpstart', released: '2024-11-15', built: 0, loose: 2, ownership: 'loose', color: 'U', have: 18, short: 2, status: 'close' }),
+    recipe({ key: 'mine', file_name: null, name: 'Mine', origin: 'custom', set_code: null, set_name: null, released: null, source: null, author: 'me', built: 0, loose: 1, ownership: 'loose', color: 'B' }),
   ];
-  const f = (o: Partial<RecipeFilters>): string[] => filterRecipes(rs, { q: '', kinds: [], own: ['built', 'loose', 'none'], cover: 'any', types: [], sets: [], ...o }).map((r) => r.key);
+  const f = (o: Partial<RecipeFilters>): string[] => filterRecipes(rs, { q: '', source: [], own: ['built', 'loose', 'none'], cover: 'any', types: ['all'], sets: [], ...o }).map((r) => r.key);
 
-  it('defaults to what you own, every kind, every type', () => {
+  it('defaults to what you own, every source, the default deck type', () => {
     const d = decksSearch.parse({});
-    expect([d.own, d.kinds, d.types, d.sets, d.cover, d.group, d.view]).toEqual([['built', 'loose'], [], [], [], 'any', 'set', 'grid']);
+    expect([d.own, d.source, d.types, d.sets, d.cover, d.group, d.view]).toEqual([['built', 'loose'], [], [], [], 'any', 'set', 'grid']);
     expect(decksSearch.parse({ group: 'origin' }).group).toBe('kind');
     expect(f({ own: ['built', 'loose'] })).toEqual(['a', 'p2', 'mine']);
   });
-  it('filters by kind, ownership, unused-card cover, type, set and text', () => {
-    expect(f({ kinds: ['jumpstart'] })).toEqual(['fn:Angels1_J25', 'fn:Angels2_J25', 'p2']);
+  it('filters by source, ownership, unused-card cover, type, set and text', () => {
+    expect(f({ source: ['custom'] })).toEqual(['mine']);
+    expect(f({ types: ['Jumpstart'] })).toEqual(['fn:Angels1_J25', 'fn:Angels2_J25', 'p2']);
     expect(f({ own: ['none'] })).toEqual(['fn:Angels1_J25', 'fn:Angels2_J25']);
     expect(f({ cover: 'build' })).toEqual(['fn:Angels1_J25']);
     expect(f({ cover: 'close' })).toEqual(['fn:Angels1_J25', 'p2']);
@@ -44,24 +45,41 @@ describe('recipe list', () => {
     expect(f({ q: 'jumpstart' })).toEqual(['fn:Angels1_J25', 'fn:Angels2_J25', 'p2']);
   });
   it('counts each option under the other filters', () => {
-    const c = optionCounts(rs, { q: '', kinds: ['jumpstart'], own: ['built', 'loose'], cover: 'any', types: [], sets: [] });
-    expect(c.own).toEqual([{ value: 'built', label: 'Built', count: 0 }, { value: 'loose', label: 'Broken down', count: 1 }, { value: 'none', label: 'None', count: 2 }]);
-    expect(c.kinds.map((k) => k.count)).toEqual([1, 1, 0, 1]);
-    expect(c.sets.map((s) => s.label)).toEqual(['Foundations Jumpstart · J25']);
+    const c = optionCounts(rs, { q: '', source: ['precon'], own: ['built', 'loose'], cover: 'any', types: ['all'], sets: [] });
+    expect(c.own).toEqual([{ value: 'built', label: 'Built', count: 1 }, { value: 'loose', label: 'Loose', count: 1 }, { value: 'none', label: 'Recipes', count: 2 }]);
+    expect(c.source.map((k) => k.count)).toEqual([2, 0, 1]);
+    expect(c.sets.map((s) => s.label)).toEqual(['Final Fantasy Commander · FIC', 'Foundations Jumpstart · J25']);
     expect(c.cover).toEqual({ any: null, build: 0, close: 1 });
   });
   it('groups newest set/year first, kinds and ownership in a fixed order, colour with unread last', () => {
     expect(groupRecipes(rs, 'set').map((g) => g.label)).toEqual(['Final Fantasy Commander', 'Foundations Jumpstart', 'No set']);
     expect(groupRecipes(rs, 'year').map((g) => g.label)).toEqual(['2025', '2024', 'Undated']);
-    expect(groupRecipes(rs, 'kind').map((g) => g.label)).toEqual(['Precon', 'Jumpstart', 'Custom']);
-    expect(groupRecipes(rs, 'state').map((g) => g.label)).toEqual(['Built', 'Broken down', 'Not owned']);
+    expect(groupRecipes(rs, 'kind').map((g) => g.label)).toEqual(['Wizards', 'Custom']);
+    expect(groupRecipes(rs, 'state').map((g) => g.label)).toEqual(['Built', 'Loose', 'Not owned']);
     expect(groupRecipes(rs, 'color').map((g) => [g.label, g.ready])).toEqual([['White', 1], ['Blue', 0], ['Black', 0], ['Multicolor', 0], ['Not read yet', 0]]);
   });
   it('marks ownership and unused-card cover', () => {
-    expect(rs.map(ownershipLabel)).toEqual(['×1 built', 'not owned', 'not owned', '2 broken down', 'not built']);
+    expect(rs.map(ownershipLabel)).toEqual(['×1 built', 'not owned', 'not owned', '2 loose', 'not built']);
     expect(rs.map(coverage)).toEqual(['', 'All 20 unused', '', '2 short', '90 of 100 unused']);
     expect(coverage(recipe({ built: 0, have: 9, short: 11, status: 'far' }))).toBe('9 of 20 unused');
     expect(recipeSummary(rs)).toBe('5 recipes · 1 built · 1 ready from unused cards');
+  });
+  it('leaves the deck type to the default until a set or type is chosen', () => {
+    expect(effectiveTypes({ types: [], sets: [] })).toEqual(['Commander']);
+    expect(effectiveTypes({ types: [], sets: ['j25'] })).toBeNull();
+    expect(effectiveTypes({ types: ['all'], sets: [] })).toBeNull();
+    expect(effectiveTypes({ types: ['Commander', 'Planeswalker'], sets: [] })).toEqual(['Commander', 'Planeswalker']);
+    expect(effectiveTypes({ types: ['Commander', 'Planeswalker'], sets: ['fic'] })).toEqual(['Commander', 'Planeswalker']);
+    expect(typesToSearch([])).toEqual(['all']);
+    expect(typesToSearch(['Commander'])).toEqual(['Commander']);
+    expect(filterRecipes(rs, { q: '', source: [], own: ['built', 'loose', 'none'], cover: 'any', types: [], sets: [] }).map((r) => r.key)).toEqual(['a', 'mine']);
+  });
+  it('maps old kinds= links to source and the Jumpstart deck type', () => {
+    expect(legacyDecksSearch({ kinds: ['precon', 'jumpstart'], q: 'x' })).toEqual({ source: ['precon'], types: ['Jumpstart'], q: 'x' });
+    expect(legacyDecksSearch({ kinds: ['jumpstart'], types: ['Commander'] })).toEqual({ types: ['Commander', 'Jumpstart'] });
+    expect(legacyDecksSearch({ kinds: ['custom', 'import'] })).toEqual({ source: ['custom', 'import'] });
+    expect(legacyDecksSearch({ q: 'x' })).toEqual({ q: 'x' });
+    expect(decksSearch.parse({ kinds: ['jumpstart'] })).toMatchObject({ source: [], types: ['Jumpstart'] });
   });
   it('knows the one Jumpstart set in view and what is unread in it', () => {
     expect(jumpstartSet(rs, { sets: ['j25'] })).toBe('j25');

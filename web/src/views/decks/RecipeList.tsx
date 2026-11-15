@@ -3,7 +3,7 @@ import { useCallback, useMemo, useRef } from 'react';
 import { useRovingFocus } from '../../app/useRovingFocus';
 import { EmptyNote } from '../../components/States';
 import type { RecipeOut } from '../../core/api';
-import { coverage, KIND_LABEL, ownershipLabel, type DeckGroup } from '../../core/decks';
+import { coverage, SOURCE_LABEL, ownershipLabel, type DeckGroup } from '../../core/decks';
 import { fmtCount, fmtInt, fmtUsd } from '../../core/format';
 import { GroupHead } from '../../components/GroupHead';
 
@@ -91,17 +91,17 @@ export function RecipeList({ groups, total, active, onPick }: { groups: DeckGrou
   );
 }
 
-/** The kind of recipe, printed like a guide's product code: hairline, no fill, never amber. */
-export function KindMark({ kind }: { kind: RecipeOut['kind'] }) {
+/** Where the recipe comes from, printed like a guide's product code: hairline, no fill, never amber. */
+export function SourceMark({ origin }: { origin: RecipeOut['origin'] }) {
   return (
     <span className="shrink-0 rounded-xs border border-rule px-1 text-2xs leading-[1.15rem] voice-condensed font-medium uppercase tracking-[0.08em] text-ink-muted">
-      {KIND_LABEL[kind]}
+      {SOURCE_LABEL[origin]}
     </span>
   );
 }
 
-/** What you own of it: built copies in accent ink, broken down / not built in ink, not owned muted. */
-function OwnMark({ r }: { r: Pick<RecipeOut, 'ownership' | 'built' | 'loose' | 'kind'> }) {
+/** What you own of it: built copies in accent ink, loose / not built in ink, not owned muted. */
+function OwnMark({ r }: { r: Pick<RecipeOut, 'ownership' | 'built' | 'loose' | 'origin'> }) {
   const tone = r.ownership === 'built' ? 'text-accent-ink' : r.ownership === 'loose' ? 'text-ink' : 'text-ink-muted';
   return <span className={`shrink-0 text-xs voice-condensed uppercase tracking-[0.06em] ${tone}`}>{ownershipLabel(r)}</span>;
 }
@@ -127,10 +127,10 @@ function RecipeRow({ r, active, tabbable, onFocus, onPick }: { r: RecipeOut; act
       <span className="flex min-w-0 flex-1 flex-col">
         <span className={`truncate text-md voice-semi font-medium ${unowned ? 'text-ink-muted' : 'text-ink'}`}>{r.name}</span>
         <span className="flex min-w-0 items-baseline gap-1.5">
-          <KindMark kind={r.kind} />
+          <SourceMark origin={r.origin} />
           <OwnMark r={r} />
           <span className="truncate text-xs tabular text-ink-muted">
-            {[r.kind !== 'jumpstart' && r.deck_type, r.set_code?.toUpperCase(), r.released?.slice(0, 4)].filter(Boolean).join(' · ')}
+            {[r.deck_type, r.set_code?.toUpperCase(), r.released?.slice(0, 4)].filter(Boolean).join(' · ')}
           </span>
         </span>
       </span>

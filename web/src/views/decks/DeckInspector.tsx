@@ -15,7 +15,7 @@ import { fmtCount, fmtInt, fmtUsd } from '../../core/format';
 import type { MarkedCopy } from '../../components/CopyMarked';
 import { DeckActions } from './DeckActions';
 import { useReportMarked } from './marked';
-import { KindMark } from './RecipeList';
+import { SourceMark } from './RecipeList';
 
 /** A deck you track: its cards with owned / pledged / unused, and its actions. */
 export function DeckInspector({ slug, recipe, view, autoAdd = false, onAutoAdded, onView, onBack, onMarked }: { slug: string; recipe?: RecipeOut; view: 'grid' | 'list'; autoAdd?: boolean; onAutoAdded?: () => void; onView?: (v: 'grid' | 'list') => void; onBack?: () => void; onMarked?: (m: MarkedCopy | null) => void }) {
@@ -48,12 +48,12 @@ export function DeckInspector({ slug, recipe, view, autoAdd = false, onAutoAdded
         <div className="min-w-0">
           <h2 id="deck-h" className="text-2xl voice-condensed font-bold uppercase leading-none text-ink">{deck.name}</h2>
           <p className="mt-1 text-sm tabular text-ink-muted">
-            {recipe && <span className="mr-2 inline-flex align-[0.1em]"><KindMark kind={recipe.kind} /></span>}
+            {recipe && <span className="mr-2 inline-flex align-[0.1em]"><SourceMark origin={recipe.origin} /></span>}
             {[deck.deck_type, deck.set_name ?? deck.set_code?.toUpperCase(), deck.released?.slice(0, 4), deck.source !== deck.deck_type && deck.source, deck.author && `by ${deck.author}`].filter(Boolean).join(' · ')}
             {' · '}
             {fmtCount(deck.cards, 'card')} · {fmtUsd(deck.value_usd)}
             {deck.built > 0 && ` · ×${deck.built} built (${Math.round(deck.pledged_pct)}% pledged)`}
-            {recipe && recipe.loose > 0 && ` · ${fmtInt(recipe.loose)} ${recipe.kind === 'import' || recipe.kind === 'custom' ? 'not built' : 'broken down'}`}
+            {recipe && recipe.loose > 0 && ` · ${fmtInt(recipe.loose)} ${recipe.origin === 'import' || recipe.origin === 'custom' ? 'not built' : 'loose'}`}
             {recipe && coverage(recipe) && ` · ${coverage(recipe)}`}
             <span className="ml-1 inline-flex align-middle">
               <InfoTip label="What do built, pledged and unused mean?" tone="paper">

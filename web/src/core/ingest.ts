@@ -145,9 +145,9 @@ export function readDeckQuery(text: string): DeckQuery {
   return source ? { kind: 'deck', url, site: SITE_NAMES[source] ?? source } : { kind: 'link' };
 }
 
-/** A product row's ownership hint, zeros dropped: `you own 1 built · 2 broken down`. */
+/** A product row's ownership hint, zeros dropped: `you own 1 built · 2 loose`. */
 export function productOwned(built: number, brokenDown: number): string | null {
-  const parts = [built > 0 && `${fmtInt(built)} built`, brokenDown > 0 && `${fmtInt(brokenDown)} broken down`].filter(Boolean);
+  const parts = [built > 0 && `${fmtInt(built)} built`, brokenDown > 0 && `${fmtInt(brokenDown)} loose`].filter(Boolean);
   return parts.length ? `you own ${parts.join(' · ')}` : null;
 }
 

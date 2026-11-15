@@ -89,23 +89,24 @@ export const collectionSearch = z.object({
 export type CollectionSearch = z.infer<typeof collectionSearch>;
 
 const DECK_GROUPS = ['set', 'year', 'kind', 'type', 'color', 'state'] as const;
-export const RECIPE_KINDS = ['precon', 'jumpstart', 'import', 'custom'] as const;
+export const RECIPE_ORIGINS = ['precon', 'import', 'custom'] as const;
 export const OWNERSHIP = ['built', 'loose', 'none'] as const;
 export const COVER = ['any', 'build', 'close'] as const;
 const SHOPS = ['buildable', 'packs'] as const;
 
-export const decksSearch = z.object({
+const decksSearchShape = z.object({
   /** The recipe open in the inspector: your deck's slug, or `fn:<fileName>` for a catalog recipe. */
   deck: z.string().optional().catch(undefined),
   /** `origin` (old links) groups by kind now. */
   group: z.preprocess((v) => (v === 'origin' ? 'kind' : v), z.enum(DECK_GROUPS)).catch('set').default('set'),
-  /** Recipe kinds to keep; empty = all. */
-  kinds: list(z.enum(RECIPE_KINDS)).catch([]).default([]),
+  /** Where the recipe comes from (Wizards / Imported / Custom); empty = all. */
+  source: list(z.enum(RECIPE_ORIGINS)).catch([]).default([]),
   /** Ownership to keep: built, loose (yours, not assembled) and/or not owned. Owned only by default. */
   own: list(z.enum(OWNERSHIP)).catch(['built', 'loose']).default(['built', 'loose']),
   /** Only recipes your free cards cover (build) or nearly cover (close = build or close). */
   cover: z.enum(COVER).catch('any').default('any'),
-  /** Deck types to keep (deck_view.deck_type labels); empty = all. */
+  /** Deck types to keep (deck_view.deck_type labels). Absent = the default (Commander, unless a set
+   *  is chosen); `['all']` = every type (core/decks.ts effectiveTypes). */
   types: list(z.string()).catch([]).default([]),
   /** Set codes to keep; empty = all. One Jumpstart set opens its shopping lists. */
   sets: list(z.string()).catch([]).default([]),
@@ -118,7 +119,25 @@ export const decksSearch = z.object({
   built: z.boolean().optional().catch(undefined),
   view,
 });
-export type DecksSearch = z.infer<typeof decksSearch>;
+export type DecksSearch = z.infer<typeof decksSearchShape>;
+
+/** Old `/decks` links: `kinds=` precon|import|custom → `source`, `jumpstart` → the Jumpstart deck type. */
+export function legacyDecksSearch(raw: Record<string, unknown>): Record<string, unknown> {
+  if (!('kinds' in raw)) return raw;
+  const { kinds, ...rest } = raw;
+  const old = (Array.isArray(kinds) ? kinds : kinds == null ? [] : [kinds]).map(String);
+  const source = old.filter((k) => (RECIPE_ORIGINS as readonly string[]).includes(k));
+  const types = Array.isArray(rest.types) ? rest.types.map(String) : [];
+  if (old.includes('jumpstart') && !types.includes('Jumpstart')) types.push('Jumpstart');
+  const next: Record<string, unknown> = { ...rest };
+  if (source.length && !('source' in rest)) next.source = source;
+  if (types.length) next.types = types;
+  return next;
+}
+
+/** The `/decks` search schema: legacy links mapped first, then validated. (Typed as the plain shape so the
+ *  router keeps the key-level search types; the preprocess only reshapes old keys.) */
+export const decksSearch = z.preprocess((raw) => (raw && typeof raw === 'object' ? legacyDecksSearch(raw as Record<string, unknown>) : raw), decksSearchShape) as unknown as typeof decksSearchShape;
 
 const MARKET_SUBJECTS = ['family', 'deck', 'sld', 'deals'] as const;
 const MARKET_TABS = ['products', 'cards'] as const;
