@@ -279,3 +279,17 @@ test('a failed recheck says so and keeps the synced-set floor', async ({ page })
   await expect(page.getByRole('alert')).toContainText('Couldn’t recheck every printing — showing the cheapest among the sets synced here. timed out');
   await expect(page.getByText('Cheapest printings among the sets synced here.')).toBeVisible();
 });
+
+test('the Deck picker offers Commander decks until another deck type is chosen', async ({ page }) => {
+  await page.goto('/market?subject=deck');
+  await page.getByRole('button', { name: /^Deck Choose|^Deck\b/ }).last().click();
+  const options = page.getByRole('option');
+  await expect(options).toHaveText([/Avengers Assemble/, /Doom Prevails/]);
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: /^Deck type/ }).click();
+  await page.getByRole('button', { name: 'Show all' }).click();
+  await page.keyboard.press('Escape');
+  await expect(page).toHaveURL(/dtypes=/);
+  await page.getByRole('button', { name: /^Deck Choose|^Deck\b/ }).last().click();
+  await expect(page.getByRole('option')).toHaveCount(5);
+});

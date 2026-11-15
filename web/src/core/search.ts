@@ -151,6 +151,8 @@ export const marketSearch = z.object({
   code: z.string().optional().catch(undefined),
   /** Deck slug. */
   deck: z.string().optional().catch(undefined),
+  /** Deck types offered in the Deck picker (Decks' rule: empty = the default, Commander; ['all'] = every type). */
+  dtypes: list(z.string()).catch([]).default([]),
   tab: z.enum(MARKET_TABS).catch('products').default('products'),
   q: z.string().catch('').default(''),
   /** Cards: only printings that cost more than the card's cheapest printing. */
