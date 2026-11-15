@@ -27,6 +27,17 @@ describe('collection facet counts', () => {
     // only `d` has foil; with foil unchecked and only owned shown, `d` is owned in foil only
     const counts = collectionCounts(cards, { ...ALL, show: ['owned'], exclude: ['finish:foil'] });
     expect(counts.traits.get('finish:foil')).toBe(1);
+    // a CHECKED finish counts exactly what is shown: `d` (owned in foil only) is hidden
+    const shown = filterCollection(cards, { ...ALL, show: ['owned'], exclude: ['finish:foil'] });
+    expect(shown.map((c) => c.scryfall_id)).toEqual(['a']);
+    expect(counts.traits.get('finish:nonfoil')).toBe(1);
+  });
+  it('a multi-treatment printing hidden by one treatment is not counted under another', () => {
+    const both = [card({ scryfall_id: 'x', treatment: 'b|shw' }), card({ scryfall_id: 'y', treatment: 'shw' })];
+    const counts = collectionCounts(both, { ...ALL, exclude: ['treat:b'] });
+    expect(filterCollection(both, { ...ALL, exclude: ['treat:b'] }).map((c) => c.scryfall_id)).toEqual(['y']);
+    expect(counts.traits.get('treat:shw')).toBe(1);
+    expect(counts.traits.get('treat:b')).toBe(1);
   });
   it('rarity counts respect a function filter but ignore the rarity exclusion', () => {
     const counts = collectionCounts(cards, { ...ALL, fn: ['ramp'], exclude: ['rarity:rare'] });

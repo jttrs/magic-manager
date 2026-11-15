@@ -106,6 +106,15 @@ const FACET_GROUP: Record<'rarity' | 'treatment' | 'chase', TraitGroup> = { rari
 
 /** One predicate per collection filter (see `core/facets`). Each trait group hides a
  *  printing that carries one of ITS excluded traits; together they equal "any excluded trait". */
+/** Where a printing lands for the Show filter, judged on its checked finishes: owned,
+ *  missing, or neither (no checked finish; or, counting gaps, owned in another printing). */
+function showState(c: CollectionCardOut, excluded: ReadonlySet<string>, gaps?: boolean): 'owned' | 'missing' | null {
+  const fins = allowedFinishes(c, excluded);
+  if (!fins.length) return null;
+  if (ownedIn(c, fins) > 0) return 'owned';
+  return gaps && (c.card_owned ?? 0) > 0 ? null : 'missing';
+}
+
 function collectionFacets(f: CollectionFilters, kinds: ReadonlyMap<string, string> = new Map()): Facets<CollectionCardOut, CollectionFacet> {
   const q = f.q.trim().toLowerCase();
   const wantOwned = f.show.includes('owned');
@@ -127,10 +136,8 @@ function collectionFacets(f: CollectionFilters, kinds: ReadonlyMap<string, strin
     rarity, treatment, chase,
     finish: (c) => allowedFinishes(c, excluded).length > 0,
     show: (c) => {
-      const fins = allowedFinishes(c, excluded);
-      if (!fins.length) return false;
-      const n = ownedIn(c, fins);
-      return (wantOwned && n > 0) || (wantMissing && n === 0 && !(f.gaps && (c.card_owned ?? 0) > 0));
+      const st = showState(c, excluded, f.gaps);
+      return (wantOwned && st === 'owned') || (wantMissing && st === 'missing');
     },
   };
 }
@@ -156,26 +163,23 @@ export function collectionCounts(cards: readonly CollectionCardOut[], f: Collect
   const show = { owned: 0, missing: 0 };
   for (const c of cards) {
     if (!passes(c, facets, 'show')) continue;
-    const fins = allowedFinishes(c, excluded);
-    const n = ownedIn(c, fins);
-    if (n > 0) show.owned++;
-    else if (!(f.gaps && (c.card_owned ?? 0) > 0)) show.missing++;
+    const st = showState(c, excluded, f.gaps);
+    if (st) show[st]++;
   }
+  // Each trait option is counted with only ITS OWN exclusion lifted: the printings that
+  // would show if you ticked it (for a checked option, exactly the ones shown). Lifting
+  // a whole group would miscount multi-valued groups (Finish, Treatment) — and Show
+  // judges owned/missing on the checked finishes, so other finish exclusions must stay.
   const traits = new Map<string, number>();
-  const merge = (m: Map<string, number>) => { for (const [k, n] of m) traits.set(k, n); };
-  const traitKeys = (c: CollectionCardOut, g: TraitGroup) => {
-    const own = new Set(traitsIn(g).map((t) => t.key));
-    return traitsOf(c).filter((t) => own.has(t));
-  };
-  merge(facetCounts(cards, facets, 'rarity', (c) => traitKeys(c, 'Rarity')));
-  merge(facetCounts(cards, facets, 'treatment', (c) => traitKeys(c, 'Treatment')));
-  merge(facetCounts(cards, facets, 'chase', (c) => traitKeys(c, 'Chase')));
-  // Show also reads the finish exclusions (owned/missing are judged on checked finishes),
-  // so finish options are counted with no finish excluded anywhere — else an unchecked
-  // finish would still read 0.
-  const finishKeys = new Set(traitsIn('Finish').map((t) => t.key));
-  const noFinishOff = collectionFacets({ ...f, exclude: f.exclude.filter((k) => !finishKeys.has(k)) }, kinds);
-  merge(facetCounts(cards, noFinishOff, 'finish', (c) => finishTraits(c).map((x) => x.trait)));
+  for (const t of TRAITS) {
+    const facetsT = collectionFacets({ ...f, exclude: f.exclude.filter((k) => k !== t.key) }, kinds);
+    const carries = t.group === 'Finish'
+      ? (c: CollectionCardOut) => finishTraits(c).some((x) => x.trait === t.key)
+      : (c: CollectionCardOut) => traitsOf(c).includes(t.key);
+    let n = 0;
+    for (const c of cards) if (carries(c) && passes(c, facetsT)) n++;
+    if (n) traits.set(t.key, n);
+  }
   return {
     show,
     traits,
