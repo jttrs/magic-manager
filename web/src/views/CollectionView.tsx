@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { getRouteApi, useNavigate } from '@tanstack/react-router';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { collectionQuery, familiesQuery } from '../app/queries';
 import { useSelection } from '../app/selection';
 import { ViewLayout } from '../components/AppShell';
@@ -37,6 +37,22 @@ import { decodeSort, encodeSort, leadSection, sortBy, type SortRule } from '../c
 const route = getRouteApi('/collection');
 
 const LAST_FAMILIES = 'mm.collection.families';
+/** The families you last looked at; storage can be blocked (private windows), so never throw. */
+function readLastFamilies(): string[] {
+  try {
+    const v: unknown = JSON.parse(localStorage.getItem(LAST_FAMILIES) ?? '[]');
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+function saveLastFamilies(codes: readonly string[]) {
+  try {
+    localStorage.setItem(LAST_FAMILIES, JSON.stringify(codes));
+  } catch {
+    // blocked storage: the choice just isn't remembered
+  }
+}
 /** "Reset filters" clears what narrows the cards — the card-name search and every
  *  Show filter except the set families you chose. How cards are arranged (sort,
  *  view type) and what "missing" means (a Settings preference) are not filters,
@@ -75,13 +91,19 @@ export function CollectionView() {
   }), [missingMeans]);
   useSettingsSection(settings);
 
-  // Default scope: the families you last looked at (first visit opens the picker).
+  // Default scope: the families you last looked at, restored ONCE when the page opens
+  // with none (a first visit opens the picker). Clearing them later stays cleared.
+  const restored = useRef(false);
   useEffect(() => {
-    if (search.families.length) localStorage.setItem(LAST_FAMILIES, JSON.stringify(search.families));
-    else {
-      const last = JSON.parse(localStorage.getItem(LAST_FAMILIES) ?? '[]') as string[];
-      if (last.length) navigate({ search: (s) => ({ ...s, families: last }), replace: true });
+    if (search.families.length) {
+      restored.current = true;
+      saveLastFamilies(search.families);
+      return;
     }
+    if (restored.current) return;
+    restored.current = true;
+    const last = readLastFamilies();
+    if (last.length) navigate({ search: (s) => ({ ...s, families: last }), replace: true });
   }, [search.families, navigate]);
 
   const view = useMemo(() => (q.data ? buildView(q.data, { ...search, gaps }, rules) : null), [q.data, search, gaps, rules]);

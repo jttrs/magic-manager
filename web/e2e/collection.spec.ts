@@ -25,6 +25,16 @@ test('first visit opens the family picker; later visits reopen the last families
   await expect(page).toHaveURL(/families=%5B%22blb%22%5D/);
 });
 
+test('Clear all empties the families and they stay empty until the page reopens', async ({ page }) => {
+  await page.goto(COLLECTION_URL);
+  await page.getByRole('button', { name: /Set families/ }).click();
+  await page.getByRole('button', { name: 'Clear all' }).click();
+  await expect(page.getByText('0 selected')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: /Set families/ })).toContainText('Choose families…');
+  await expect(page).not.toHaveURL(/families=/);
+});
+
 test('families are a searchable checkbox list, never a chip wall', async ({ page }) => {
   await page.goto(COLLECTION_URL);
   await expect(page.getByRole('toolbar', { name: 'Set families' })).toHaveCount(0);
