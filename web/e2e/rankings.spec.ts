@@ -8,7 +8,7 @@ test('Explore opens on rankings, as a grid; Rankings is the first tab', async ({
   const tabs = page.getByRole('navigation', { name: 'Explore views' }).getByRole('link');
   await expect(tabs).toHaveText(['Rankings', 'Cards', 'Earmarked', 'Surfer']);
   await expect(tabs.first()).toHaveAttribute('aria-current', 'page');
-  await expect(page.getByRole('radio', { name: 'Grid' })).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByRole('button', { name: 'Grid view' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('table')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Inspect Krenko, Mob Boss' })).toBeVisible();
   await expect(page.getByRole('heading', { level: 2 }).first()).toHaveText('Find');
@@ -49,7 +49,7 @@ test('partner commanders show both cards: one in front, the partner peeking from
   const pair = page.getByRole('img', { name: /Frodo, Adventurous Hobbit \/\/ Sam, Loyal Attendant: two partner commanders/ });
   await expect(pair).toBeVisible();
   await expect(pair.locator('img')).toHaveCount(2);
-  await page.getByRole('radio', { name: 'List' }).click();
+  await page.getByRole('button', { name: 'List view' }).click();
   const row = page.getByRole('row', { name: /Frodo/ });
   await expect(row).toContainText('$0.78');
   await row.getByRole('button', { name: /Inspect Frodo/ }).click();
@@ -129,7 +129,7 @@ test('color, tag and set are laid out together, each Any, and combine', async ({
   await expect(page).not.toHaveURL(/color=/);
 
   // the filters narrow commanders: on top cards they stay in place, disabled, and say so
-  await page.getByRole('button', { name: /^List/ }).click();
+  await page.getByRole('button', { name: /^List Top/ }).click();
   await page.getByRole('menuitemradio', { name: 'Top cards' }).click();
   await expect(color).toBeDisabled();
   await expect(page.getByText('Color, tag and set narrow top commanders.')).toBeVisible();

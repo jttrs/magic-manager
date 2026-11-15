@@ -27,6 +27,7 @@ import { NewDeckDialog } from './decks/NewDeckDialog';
 import { RecipeInspector } from './decks/RecipeInspector';
 import { refreshRecipes } from './decks/refresh';
 import { RecipeList } from './decks/RecipeList';
+import { GroupControl, ViewToggle } from '../components/ArrangeControls';
 
 const route = getRouteApi('/decks');
 
@@ -121,10 +122,6 @@ export function DecksView() {
           options={COVER.map((c) => ({ value: c, label: COVER_LABEL[c], count: counts.cover[c] ?? undefined }))}
         />
       </SideSection>
-      <SideSection title="Arrange">
-        <SelectField<DeckGroupBy> label="Group by" value={search.group} onChange={(group) => set({ group })} options={DECK_GROUPS.map((g) => ({ value: g, label: DECK_GROUP_LABEL[g] }))} />
-        <Segmented label="Card view" showLabel value={search.view} onChange={(view) => set({ view })} options={[{ value: 'grid', label: 'Grid' }, { value: 'list', label: 'List' }]} />
-      </SideSection>
       {jsSet && <JumpstartBuy code={jsSet} shop={search.shop} onShop={(shop) => set({ shop })} />}
     </>
   );
@@ -158,9 +155,15 @@ export function DecksView() {
   ) : undefined;
 
   return (
-    <ViewLayout label="Deck controls" summary={`${fmtInt(shown.length)} recipes · grouped by ${DECK_GROUP_LABEL[search.group].toLowerCase()}`} sidebar={sidebar}>
+    <ViewLayout label="Deck controls" summary={`${fmtInt(shown.length)} recipes`} sidebar={sidebar}>
       <GuideSheet
         title="Decks"
+        arrange={
+          <>
+            <GroupControl<DeckGroupBy> value={search.group} defaultValue="set" onChange={(group) => set({ group })} options={DECK_GROUPS.map((g) => ({ value: g, label: DECK_GROUP_LABEL[g] }))} />
+            <ViewToggle value={search.view} onChange={(view) => set({ view })} />
+          </>
+        }
         summary={<span role="status" aria-live="polite">{summary}</span>}
         actionsLabel="Deck list actions"
         marked={marked ?? undefined}

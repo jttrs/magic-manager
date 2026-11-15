@@ -23,9 +23,9 @@ import { CopyMarked, type MarkedCopy } from './CopyMarked';
  * now go in `ViewLayout`'s `subnav` slot, and every title is hidden. Both stay
  * accepted until each view adopts the strip.
  */
-export function GuideSheet({ title, summary, actions, actionsLabel, marked, nav, children }: { title: ReactNode; summary?: ReactNode; actions?: ReactNode; actionsLabel?: string; marked?: MarkedCopy; nav?: ReactNode; /** @deprecated titles are never printed now */ hideTitle?: boolean; children: ReactNode }) {
+export function GuideSheet({ title, summary, actions, actionsLabel, marked, arrange, nav, children }: { title: ReactNode; summary?: ReactNode; actions?: ReactNode; actionsLabel?: string; marked?: MarkedCopy; /** How the cards are arranged (sort, group, grid/list): `components/ArrangeControls`. */ arrange?: ReactNode; nav?: ReactNode; /** @deprecated titles are never printed now */ hideTitle?: boolean; children: ReactNode }) {
   const hasActions = Boolean(actions) || marked != null;
-  const bare = !summary && !hasActions;
+  const bare = !summary && !hasActions && !arrange;
   const toolbar = actionsLabel != null || marked != null;
   return (
     <div className="paper-grain flex h-full min-h-[70dvh] flex-col rounded-sm bg-paper text-ink shadow-[0_1px_0_var(--theme-chrome-line),0_18px_40px_-28px_var(--theme-scrim)]">
@@ -38,8 +38,13 @@ export function GuideSheet({ title, summary, actions, actionsLabel, marked, nav,
             <h1 className="sr-only">{title}</h1>
             {summary && <p className="text-sm tabular text-ink-muted">{summary}</p>}
           </div>
+          {arrange && (
+            <div role="group" aria-label="Arrange" className={`ml-auto flex items-center gap-1 ${hasActions ? 'border-r border-rule pr-2' : ''}`}>
+              {arrange}
+            </div>
+          )}
           {hasActions && (
-            <div role={toolbar ? 'toolbar' : undefined} aria-label={toolbar ? (actionsLabel ?? 'Sheet actions') : undefined} className={`ml-auto flex items-center ${toolbar ? 'gap-1' : 'gap-2'}`}>
+            <div role={toolbar ? 'toolbar' : undefined} aria-label={toolbar ? (actionsLabel ?? 'Sheet actions') : undefined} className={`${arrange ? '' : 'ml-auto'} flex items-center ${toolbar ? 'gap-1' : 'gap-2'}`}>
               {actions}
               {marked && <CopyMarked {...marked} />}
             </div>

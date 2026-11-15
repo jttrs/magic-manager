@@ -229,10 +229,10 @@ test('"Acquired from" narrows to owned printings from a card pool; the inspector
   await expect(copies.getByText(/also own 3 copies in other printings/)).toBeVisible();
 });
 
-test('the rail reads Find → Show → Arrange → Buy, with the card-name search first', async ({ page }) => {
+test('the rail reads Find → Show → Buy, with the card-name search first', async ({ page }) => {
   await page.goto(COLLECTION_URL);
   const rail = page.getByRole('complementary').or(page.locator('aside')).first();
-  await expect(rail.getByRole('heading', { level: 2 })).toHaveText(['Find', 'Show', 'Arrange', 'Buy']);
+  await expect(rail.getByRole('heading', { level: 2 })).toHaveText(['Find', 'Show', 'Buy']);
   await expect(page.getByRole('heading', { level: 1, name: 'Collection' })).toHaveClass(/sr-only/);
 });
 

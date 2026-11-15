@@ -19,6 +19,7 @@ import { MarkToggle } from '../../components/MarkToggle';
 import { ProgressRule } from '../../components/ProgressRule';
 import { SearchSelect } from '../../components/SearchSelect';
 import { Segmented, SelectField, SideSection, TextField } from '../../components/Sidebar';
+import { ViewToggle } from '../../components/ArrangeControls';
 import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../../components/States';
 import { EdhrecMark, RereadMark } from '../../components/StoreMarks';
 import { VirtualGuide } from '../../components/VirtualGuide';
@@ -137,9 +138,6 @@ export function RankingsExplore({ search, set, subnav }: Props) {
         </fieldset>
         <Segmented<RankOwn> label="Ownership" showLabel value={search.own} onChange={(own) => set({ own })} options={RANK_OWN.map((o) => ({ value: o, label: OWN_LABEL[o] }))} />
       </SideSection>
-      <SideSection title="Arrange">
-        <Segmented label="View type" showLabel value={search.rview} onChange={(rview) => set({ rview })} options={[{ value: 'grid', label: 'Grid' }, { value: 'list', label: 'List' }]} />
-      </SideSection>
     </>
   );
 
@@ -191,6 +189,7 @@ export function RankingsExplore({ search, set, subnav }: Props) {
   return (
     <ViewLayout label="Explore controls" summary={r ? `Rankings · ${r.title}` : 'Rankings'} sidebar={sidebar} subnav={subnav}>
       <GuideSheet
+        arrange={<ViewToggle value={search.rview} onChange={(rview) => set({ rview })} />}
         title={r?.title ?? SCOPE_LABEL[search.rank]}
         summary={r ? `${rankingSummary(r)}${ago ? ` · read ${ago}` : ''}` : undefined}
         actionsLabel="Ranking actions"

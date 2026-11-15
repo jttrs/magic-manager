@@ -10,7 +10,7 @@ import { GuideColumns, type Column } from '../components/GuideColumns';
 import { InfoTip } from '../components/InfoTip';
 import { MultiSelect } from '../components/MultiSelect';
 import { ChipToggles, Segmented, SideSection, TextField } from '../components/Sidebar';
-import { SortBuilder } from '../components/SortBuilder';
+import { GroupControl, SortControl, ViewToggle } from '../components/ArrangeControls';
 import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../components/States';
 import { CardCombos } from '../components/Combos';
 import { ComboMark, EdhrecMark, ScryfallMark } from '../components/StoreMarks';
@@ -152,31 +152,6 @@ export function ExploreView() {
           />
         )}
       </SideSection>
-      <SideSection title="Arrange">
-        <Segmented label="View type" showLabel value={search.view} onChange={(view) => set({ view })} options={[{ value: 'grid', label: 'Grid' }, { value: 'list', label: 'List' }]} />
-        {role === 'commander' && (
-          <>
-            <Segmented<GroupBy>
-              label="Group by"
-              value={search.groupBy}
-              onChange={(groupBy) => set({ groupBy })}
-              options={[{ value: 'lists', label: 'Card type' }, { value: 'function', label: 'Function' }]}
-            />
-            {search.groupBy === 'function' && cmdView && (
-              cmdView.tagged ? (
-                <p className="text-xs leading-relaxed text-on-chrome-muted">
-                  Deck roles from Scryfall Tagger. A card with several roles is listed under each; column totals count it once.
-                </p>
-              ) : (
-                <p role="note" className="text-sm leading-relaxed text-on-chrome-muted">
-                  No Scryfall function tags yet — run <Link to="/jobs" className="text-on-chrome underline">Sync card and art tags</Link>, then reload.
-                </p>
-              )
-            )}
-          </>
-        )}
-        {role === 'commander' && <SortBuilder keys={COMPARE_SORT} rules={rules} presets={COMPARE_SORT_PRESETS} onChange={(r) => set({ sort: encodeSort(r, COMPARE_SORT) })} />}
-      </SideSection>
     </>
   );
 
@@ -212,9 +187,42 @@ export function ExploreView() {
       <GuideSheet
         title={search.a ? `Explore ${search.a}${search.b ? ` and ${search.b}` : ''}` : 'Explore'}
         summary={role ? summaryLine(role, prof, cmd.data) : undefined}
+        arrange={
+          <>
+            <ViewToggle value={search.view} onChange={(view) => set({ view })} />
+            {role === 'commander' && (
+              <>
+                <GroupControl<GroupBy>
+                  value={search.groupBy}
+                  defaultValue="lists"
+                  onChange={(groupBy) => set({ groupBy })}
+                  options={[{ value: 'lists', label: 'Card type' }, { value: 'function', label: 'Function' }]}
+                />
+                <SortControl
+                  keys={COMPARE_SORT}
+                  rules={rules}
+                  presets={COMPARE_SORT_PRESETS}
+                  defaultRules={decodeSort(undefined, COMPARE_SORT)}
+                  onChange={(r) => set({ sort: encodeSort(r, COMPARE_SORT) })}
+                />
+              </>
+            )}
+          </>
+        }
         marked={{ count: marked.length, getText: () => exportLines(marked, 'plain'), onClear: clear }}
       >
         <div className="flex h-full min-h-0 flex-col">
+          {role === 'commander' && search.groupBy === 'function' && cmdView && (
+            cmdView.tagged ? (
+              <p className="mx-4 mb-2 text-sm leading-relaxed text-ink-muted">
+                Deck roles from Scryfall Tagger. A card with several roles is listed under each; column totals count it once.
+              </p>
+            ) : (
+              <p role="note" className="mx-4 mb-2 text-sm leading-relaxed text-ink-muted">
+                No Scryfall function tags yet — run <Link to="/jobs" className="text-ink underline">Sync card and art tags</Link>, then reload.
+              </p>
+            )
+          )}
           <EdhrecHealth keys={role === 'commander' ? COMMANDER_HEALTH : CARD_HEALTH} />
           {prof && role && <Plates r={prof} role={role} onInspect={(p) => setInspecting(profileCard(p))} />}
           <div className="min-h-0 flex-1">{body}</div>

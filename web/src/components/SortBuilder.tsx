@@ -2,9 +2,8 @@ import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine';
 import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import { attachClosestEdge, extractClosestEdge, type Edge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge';
 import { reorderWithEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/util/reorder-with-edge';
-import { Popover } from 'radix-ui';
-import { useEffect, useId, useRef, useState } from 'react';
-import type { SortDir, SortPreset, SortRule } from '../core/sort';
+import { useEffect, useRef, useState } from 'react';
+import { type SortDir, type SortPreset, type SortRule } from '../core/sort';
 
 type KeyMeta = { label: string; defaultDir: SortDir };
 
@@ -17,18 +16,11 @@ type Props<K extends string> = {
 
 const DIR_LABEL: Record<SortDir, string> = { asc: 'A→Z / low→high', desc: 'Z→A / high→low' };
 
-/**
- * Hierarchical sort editor. The sidebar shows the current hierarchy as one line
- * ("Set › Rarity › #"); the popover edits it: add/remove levels, flip direction,
- * reorder by drag (Pragmatic drag-and-drop) or by the ↑/↓ buttons, or start
- * from a preset. The first level also sets the guide's section heads.
- */
-export function SortBuilder<K extends string>({ keys, rules, presets, onChange }: Props<K>) {
-  const id = useId();
+/** The sort hierarchy editor (levels, direction, drag/↑↓ reorder, presets) — the
+ *  body of every sort popover. */
+export function SortRulesEditor<K extends string>({ keys, rules, presets, onChange }: Props<K>) {
   const [live, setLive] = useState('');
   const unused = (Object.keys(keys) as K[]).filter((k) => !rules.some((r) => r.key === k));
-  const summary = rules.length ? rules.map((r) => `${keys[r.key].label}${r.dir !== keys[r.key].defaultDir ? (r.dir === 'asc' ? ' ↑' : ' ↓') : ''}`).join(' › ') : 'Unsorted';
-
   const move = (from: number, to: number) => {
     if (to < 0 || to >= rules.length) return;
     const next = [...rules];
@@ -37,93 +29,67 @@ export function SortBuilder<K extends string>({ keys, rules, presets, onChange }
     onChange(next);
     setLive(`${keys[r.key].label} moved to level ${to + 1} of ${next.length}`);
   };
-
   return (
-    <div className="flex flex-col gap-1.5">
-      <span id={`${id}-l`} className="text-sm voice-semi text-on-chrome-muted">Sort</span>
-      <Popover.Root>
-        <Popover.Trigger
-          aria-labelledby={`${id}-l ${id}-s`}
-          className="flex min-h-9 w-full cursor-pointer items-center gap-2 rounded-sm border border-chrome-line bg-chrome-raised px-2.5 text-left text-md text-on-chrome transition-colors ease-guide hover:border-on-chrome-muted data-[state=open]:border-accent"
-        >
-          <span id={`${id}-s`} className="min-w-0 flex-1 truncate voice-semi">{summary}</span>
-          <span aria-hidden="true" className="text-on-chrome-muted">▾</span>
-        </Popover.Trigger>
-        <Popover.Portal>
-          <Popover.Content
-            align="start"
-            sideOffset={4}
-            collisionPadding={12}
-            aria-label="Sort hierarchy"
-            tabIndex={-1}
-            onOpenAutoFocus={(e) => {
-              e.preventDefault();
-              (e.currentTarget as HTMLElement).focus({ preventScroll: true });
+    <>
+      <div className="flex items-baseline justify-between">
+        <h2 className="text-sm voice-condensed uppercase tracking-[0.06em] text-on-chrome-muted">Sort by, in order</h2>
+        {rules.length > 0 && (
+          <button type="button" onClick={() => onChange([])} className="cursor-pointer text-xs text-on-chrome-muted underline hover:text-on-chrome">Clear</button>
+        )}
+      </div>
+      <ol className="flex flex-col gap-1" aria-label="Sort levels">
+        {rules.map((r, i) => (
+          <RuleRow
+            key={r.key}
+            index={i}
+            count={rules.length}
+            label={keys[r.key].label}
+            dir={r.dir}
+            onDir={(dir) => onChange(rules.map((x, j) => (j === i ? { ...x, dir } : x)))}
+            onRemove={() => onChange(rules.filter((_, j) => j !== i))}
+            onMove={move}
+            onDropAt={(from, edge) => {
+              const next = reorderWithEdge({ list: rules, startIndex: from, indexOfTarget: i, closestEdgeOfTarget: edge, axis: 'vertical' });
+              onChange(next);
+              setLive(`${keys[rules[from].key].label} moved to level ${next.findIndex((x) => x.key === rules[from].key) + 1}`);
             }}
-            className="z-50 flex focus:outline-none w-[22rem] max-w-[calc(100vw-1.5rem)] flex-col gap-3 rounded-sm border border-chrome-line bg-chrome-raised p-3 text-on-chrome shadow-[0_12px_28px_-12px_var(--theme-scrim)]"
+          />
+        ))}
+      </ol>
+      {rules.length === 0 && <p className="text-sm text-on-chrome-muted">No sort levels. Add one below or pick a preset.</p>}
+      {unused.length > 0 && (
+        <label className="flex items-center gap-2 text-sm text-on-chrome-muted">
+          Then by
+          <select
+            value=""
+            onChange={(e) => {
+              const k = e.target.value as K;
+              if (k) onChange([...rules, { key: k, dir: keys[k].defaultDir }]);
+            }}
+            className="min-h-8 flex-1 cursor-pointer rounded-sm border border-chrome-line bg-chrome px-2 text-sm text-on-chrome"
           >
-            <div className="flex items-baseline justify-between">
-              <h2 className="text-sm voice-condensed uppercase tracking-[0.06em] text-on-chrome-muted">Sort by, in order</h2>
-              {rules.length > 0 && (
-                <button type="button" onClick={() => onChange([])} className="cursor-pointer text-xs text-on-chrome-muted underline hover:text-on-chrome">Clear</button>
-              )}
-            </div>
-            <ol className="flex flex-col gap-1" aria-label="Sort levels">
-              {rules.map((r, i) => (
-                <RuleRow
-                  key={r.key}
-                  index={i}
-                  count={rules.length}
-                  label={keys[r.key].label}
-                  dir={r.dir}
-                  onDir={(dir) => onChange(rules.map((x, j) => (j === i ? { ...x, dir } : x)))}
-                  onRemove={() => onChange(rules.filter((_, j) => j !== i))}
-                  onMove={move}
-                  onDropAt={(from, edge) => {
-                    const next = reorderWithEdge({ list: rules, startIndex: from, indexOfTarget: i, closestEdgeOfTarget: edge, axis: 'vertical' });
-                    onChange(next);
-                    setLive(`${keys[rules[from].key].label} moved to level ${next.findIndex((x) => x.key === rules[from].key) + 1}`);
-                  }}
-                />
-              ))}
-            </ol>
-            {rules.length === 0 && <p className="text-sm text-on-chrome-muted">No sort levels. Add one below or pick a preset.</p>}
-            {unused.length > 0 && (
-              <label className="flex items-center gap-2 text-sm text-on-chrome-muted">
-                Then by
-                <select
-                  value=""
-                  onChange={(e) => {
-                    const k = e.target.value as K;
-                    if (k) onChange([...rules, { key: k, dir: keys[k].defaultDir }]);
-                  }}
-                  className="min-h-8 flex-1 cursor-pointer rounded-sm border border-chrome-line bg-chrome px-2 text-sm text-on-chrome"
-                >
-                  <option value="">Add a level…</option>
-                  {unused.map((k) => <option key={k} value={k}>{keys[k].label}</option>)}
-                </select>
-              </label>
-            )}
-            <div className="flex flex-col gap-1.5 border-t border-chrome-line pt-2">
-              <span className="text-xs voice-condensed uppercase tracking-[0.06em] text-on-chrome-muted">Presets</span>
-              <div className="flex flex-wrap gap-1.5">
-                {presets.map((p) => (
-                  <button
-                    key={p.label}
-                    type="button"
-                    onClick={() => onChange(p.rules)}
-                    className="min-h-7 cursor-pointer rounded-pill border border-chrome-line px-2.5 text-xs voice-semi text-on-chrome-muted transition-colors ease-guide hover:border-on-chrome-muted hover:text-on-chrome"
-                  >
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <p aria-live="polite" className="sr-only">{live}</p>
-          </Popover.Content>
-        </Popover.Portal>
-      </Popover.Root>
-    </div>
+            <option value="">Add a level…</option>
+            {unused.map((k) => <option key={k} value={k}>{keys[k].label}</option>)}
+          </select>
+        </label>
+      )}
+      <div className="flex flex-col gap-1.5 border-t border-chrome-line pt-2">
+        <span className="text-xs voice-condensed uppercase tracking-[0.06em] text-on-chrome-muted">Presets</span>
+        <div className="flex flex-wrap gap-1.5">
+          {presets.map((p) => (
+            <button
+              key={p.label}
+              type="button"
+              onClick={() => onChange(p.rules)}
+              className="min-h-7 cursor-pointer rounded-pill border border-chrome-line px-2.5 text-xs voice-semi text-on-chrome-muted transition-colors ease-guide hover:border-on-chrome-muted hover:text-on-chrome"
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <p aria-live="polite" className="sr-only">{live}</p>
+    </>
   );
 }
 

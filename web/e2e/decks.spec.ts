@@ -5,15 +5,15 @@ const DECK_URL = `/decks?deck=${encodeURIComponent(detail.deck.slug)}`;
 
 const owned = fixtures.recipes.recipes.filter((r) => r.ownership !== 'none');
 
-test('recipe list shows what you own by default; ownership, kind, deck type and text filter it; the rail is Find → Show → Arrange', async ({ page }) => {
+test('recipe list shows what you own by default; ownership, kind, deck type and text filter it; the rail is Find → Show', async ({ page }) => {
   await page.goto('/decks');
   await expect(page.getByRole('link', { name: 'Decks' })).toHaveAttribute('aria-current', 'page');
   const list = page.getByRole('navigation', { name: 'Deck recipes' });
   await expect(list.getByRole('button')).toHaveCount(owned.length);
   await expect(page.getByRole('status').filter({ hasText: `${owned.length} recipes` })).toBeVisible();
-  // The rail reads Find (the search field alone) → Show → Arrange.
+  // The rail reads Find (the search field alone) → Show.
   const rail = page.getByRole('complementary', { name: 'Deck controls' });
-  await expect(rail.getByRole('heading', { level: 2 })).toHaveText(['Find', 'Show', 'Arrange']);
+  await expect(rail.getByRole('heading', { level: 2 })).toHaveText(['Find', 'Show']);
   await expect(rail.getByRole('searchbox').first()).toHaveAccessibleName('Deck, set or author');
 
   await page.getByRole('button', { name: /^None/ }).click();
@@ -38,7 +38,7 @@ test('recipe list shows what you own by default; ownership, kind, deck type and 
   await page.getByRole('menuitemradio', { name: 'Color' }).click();
   await expect(page).toHaveURL(/group=color/);
   await expect(list.getByRole('heading', { name: /^Red/ })).toBeVisible();
-  await expect(page.getByRole('radiogroup', { name: 'Card view' }).getByRole('radio')).toHaveText(['Grid', 'List']);
+  await expect(page.getByRole('group', { name: 'Card view' }).getByRole('button', { name: /view$/ })).toHaveCount(2);
 });
 
 test('old built-only links keep showing only built recipes', async ({ page }) => {
@@ -57,7 +57,7 @@ test('inspector: sections by board then type, card facts, deep link', async ({ p
   await tile.getByRole('button', { name: `Inspect ${commander.printing.name}` }).click();
   await expect(page.getByRole('dialog', { name: commander.printing.name })).toBeVisible();
   await page.keyboard.press('Escape');
-  await page.getByRole('radio', { name: 'List' }).click();
+  await page.getByRole('button', { name: 'List view' }).click();
   await expect(page.getByRole('article')).toHaveCount(0);
   await expect(page.getByRole('button', { name: /^Mark (?!cards to copy)/ }).first()).toBeVisible();
 });

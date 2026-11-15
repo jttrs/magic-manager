@@ -6,6 +6,7 @@ import { ViewLayout } from '../../components/AppShell';
 import { CardArt } from '../../components/CardFace';
 import { CardInspector } from '../../components/CardInspector';
 import { Segmented, SelectField, SideSection, TextField } from '../../components/Sidebar';
+import { ViewToggle } from '../../components/ArrangeControls';
 import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../../components/States';
 import { VirtualGuide } from '../../components/VirtualGuide';
 import type { EarmarkEntryOut } from '../../core/api';
@@ -53,9 +54,6 @@ export function EarmarkedExplore({ search, set, subnav }: Props) {
         )}
         <Segmented<RankOwn> label="Ownership" showLabel value={search.own} onChange={(own) => set({ own })} options={RANK_OWN.map((o) => ({ value: o, label: OWN_LABEL[o] }))} />
       </SideSection>
-      <SideSection title="Arrange">
-        <Segmented label="View type" showLabel value={search.rview} onChange={(rview) => set({ rview })} options={[{ value: 'grid', label: 'Grid' }, { value: 'list', label: 'List' }]} />
-      </SideSection>
     </>
   );
 
@@ -77,7 +75,7 @@ export function EarmarkedExplore({ search, set, subnav }: Props) {
 
   return (
     <ViewLayout label="Explore controls" summary="Earmarked" sidebar={sidebar} subnav={subnav}>
-      <GuideSheet title="Earmarked" summary={q.data ? `${fmtInt(shown.length)} of ${fmtInt(all.length)} cards` : undefined} marked={{ count: marked.length, getText: () => exportLines(marked, 'plain'), onClear: clear }}>
+      <GuideSheet title="Earmarked" arrange={<ViewToggle value={search.rview} onChange={(rview) => set({ rview })} />} summary={q.data ? `${fmtInt(shown.length)} of ${fmtInt(all.length)} cards` : undefined} marked={{ count: marked.length, getText: () => exportLines(marked, 'plain'), onClear: clear }}>
         <div className="flex h-full min-h-0 flex-col">{body}</div>
       </GuideSheet>
       <CardInspector card={inspecting} onClose={() => setInspecting(null)} />
