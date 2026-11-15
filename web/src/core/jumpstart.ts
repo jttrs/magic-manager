@@ -23,7 +23,7 @@ export type LegacyJumpstartSearch = z.infer<typeof legacyJumpstartSearch>;
 /** An old Jumpstart sheet link → the same packs in Decks. */
 export function jumpstartToDecks(s: LegacyJumpstartSearch): Partial<DecksSearch> {
   return {
-    kinds: ['jumpstart'],
+    types: ['Jumpstart'],
     own: s.show === 'own' ? ['built', 'loose'] : ['built', 'loose', 'none'],
     cover: s.show === 'build' ? 'build' : s.show === 'close' ? 'close' : 'any',
     sets: s.set ? [s.set] : [],

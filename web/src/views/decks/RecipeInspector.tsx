@@ -11,9 +11,9 @@ import { ProgressRule } from '../../components/ProgressRule';
 import { EmptyNote, ErrorNote, GridSkeleton } from '../../components/States';
 import { AddCardMark } from '../../components/StoreMarks';
 import { VirtualGuide } from '../../components/VirtualGuide';
-import { colorLabel, deckGuideGroups, ownershipLabel } from '../../core/decks';
+import { colorLabel, deckGuideGroups, isJumpstart, ownershipLabel } from '../../core/decks';
 import { fmtCount, fmtInt, fmtUsd } from '../../core/format';
-import { KindMark } from './RecipeList';
+import { SourceMark } from './RecipeList';
 import type { MarkedCopy } from '../../components/CopyMarked';
 import { useReportMarked } from './marked';
 import { refreshRecipes } from './refresh';
@@ -69,7 +69,7 @@ export function RecipeInspector({ fileName, view, closeShort, onView, onBack, on
   if (q.isPending) return <GridSkeleton label="Loading recipe…" />;
   if (q.isError) return <ErrorNote error={q.error} onRetry={() => q.refetch()} />;
   const { recipe: r, cards, unknown, ready } = q.data;
-  const pack = r.kind === 'jumpstart';
+  const pack = isJumpstart(r);
 
   return (
     <section aria-labelledby="recipe-h" className="flex h-full min-h-0 flex-col">
@@ -83,7 +83,7 @@ export function RecipeInspector({ fileName, view, closeShort, onView, onBack, on
           <div className="min-w-0">
             <h2 id="recipe-h" className="text-2xl voice-condensed font-bold uppercase leading-none text-ink">{r.name}</h2>
             <p className="mt-1 flex flex-wrap items-baseline gap-x-2 text-sm tabular text-ink-muted">
-              <KindMark kind={r.kind} />
+              <SourceMark origin={r.origin} />
               <span>
                 {[!pack && r.product_type, r.set_name ?? r.set_code?.toUpperCase(), r.released?.slice(0, 4), r.color && colorLabel(r.color), r.cards != null && fmtCount(r.cards, 'card'), r.read && fmtUsd(r.value_usd)].filter(Boolean).join(' · ')}
               </span>
@@ -148,10 +148,10 @@ export function RecipeInspector({ fileName, view, closeShort, onView, onBack, on
         title={`Add ${r.name} to your collection?`}
         confirmLabel="Add and keep it built"
         onConfirm={addAs('built')}
-        alternate={{ label: 'Add it broken down', onConfirm: addAs('deconstructed') }}
+        alternate={{ label: 'Add it loose', onConfirm: addAs('deconstructed') }}
       >
         <p>
-          Adds its {fmtCount(r.cards ?? 0, 'card')} to your collection and tracks one copy as a deck. <b>Built</b> pledges the cards to it; <b>broken down</b> keeps them unused, for other decks.
+          Adds its {fmtCount(r.cards ?? 0, 'card')} to your collection and tracks one copy as a deck. <b>Built</b> pledges the cards to it; <b>loose</b> keeps them unused, for other decks.
         </p>
       </ConfirmDialog>
     </section>

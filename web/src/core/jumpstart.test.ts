@@ -4,7 +4,7 @@ import { jumpstartToDecks, legacyJumpstartSearch, shopLead } from './jumpstart';
 describe('jumpstart view-model', () => {
   it('maps old Collection → Jumpstart links onto the same packs in Decks', () => {
     expect(jumpstartToDecks(legacyJumpstartSearch.parse({ set: 'j25', pack: 'Angels2_J25', show: 'close' }))).toEqual({
-      kinds: ['jumpstart'], own: ['built', 'loose', 'none'], cover: 'close', sets: ['j25'], deck: 'fn:Angels2_J25', group: 'color', q: '', shop: 'buildable', view: 'list',
+      types: ['Jumpstart'], own: ['built', 'loose', 'none'], cover: 'close', sets: ['j25'], deck: 'fn:Angels2_J25', group: 'color', q: '', shop: 'buildable', view: 'list',
     });
     expect(jumpstartToDecks(legacyJumpstartSearch.parse({ show: 'own', shop: 'packs' }))).toMatchObject({ own: ['built', 'loose'], cover: 'any', sets: [], deck: undefined, shop: 'packs' });
     expect(jumpstartToDecks(legacyJumpstartSearch.parse({ show: 'nope' })).cover).toBe('any');

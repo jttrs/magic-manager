@@ -47,7 +47,7 @@ class RecipeOut(BaseModel):
     slugs: list[str]
     file_name: str | None = Field(description="MTGJSON deck fileName (precons and Jumpstart packs).")
     name: str
-    kind: Literal["precon", "jumpstart", "import", "custom"]
+    origin: Literal["precon", "import", "custom"] = Field(description="Where the recipe comes from: a Wizards product (precon or Jumpstart pack), an imported deck, or one you built. Jumpstart is a deck_type, not an origin.")
     deck_type: str = Field(description="Game format or precon product family (see DeckSummaryOut.deck_type).")
     product_type: str | None = Field(description="MTGJSON product type (Commander Deck, Jumpstart…).")
     source: str | None

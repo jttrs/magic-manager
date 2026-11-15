@@ -5786,9 +5786,11 @@ export type RecipeOut = {
      */
     name: string;
     /**
-     * Kind
+     * Origin
+     *
+     * Where the recipe comes from: a Wizards product (precon or Jumpstart pack), an imported deck, or one you built. Jumpstart is a deck_type, not an origin.
      */
-    kind: 'precon' | 'jumpstart' | 'import' | 'custom';
+    origin: 'precon' | 'import' | 'custom';
     /**
      * Deck Type
      *

@@ -1,10 +1,10 @@
 """Deck recipes: every playable precon and Jumpstart pack in the MTGJSON catalog,
-merged with the decks you track, each marked by kind and by what you own.
+merged with the decks you track, each marked by origin and by what you own.
 
 Single source of truth behind the web Decks list (``api.decks`` recipes).
 
 Kinds. ``precon`` = a catalog product in ``mtgjson.PRECON_MODERN_TYPES``;
-``jumpstart`` = a DeckList ``type: Jumpstart`` entry (one pack version);
+``jumpstart`` packs = DeckList ``type: Jumpstart`` entries (one pack version each; origin precon, deck_type Jumpstart);
 ``import`` / ``custom`` = decks you imported from a builder or built by hand.
 Card pools (``mtgjson.precon_kind`` == 'pool', run offline: product type and
 name tests before a recipe is read, card-count tests after) are not recipes; a
@@ -39,7 +39,10 @@ CLOSE_SHORT = 3
 _BOARDS = (("commander", "commander"), ("mainBoard", "main"), ("sideBoard", "side"))
 JUMPSTART_TYPE = "Jumpstart"
 
-Kind = Literal["precon", "jumpstart", "import", "custom"]
+# Where a recipe comes from: a Wizards product (precons and Jumpstart packs alike),
+# a deck imported from a deck site, or one you built here. Jumpstart is a deck TYPE
+# (``deck_type == "Jumpstart"``), not a source.
+Origin = Literal["precon", "import", "custom"]
 Status = Literal["build", "close", "far"]
 
 
@@ -109,9 +112,6 @@ def status(short: int) -> Status:
 
 
 # ---------- the catalog ----------
-
-def kind_of(product_type: str | None) -> Kind:
-    return "jumpstart" if product_type == JUMPSTART_TYPE else "precon"
 
 
 def _is_pool(entry: dict, es: list[Entry] | None = None) -> bool:
@@ -247,7 +247,7 @@ def _base(entry: dict, set_names: dict[str, dict]) -> dict:
     sset = set_names.get(code) if code else None
     return {
         "key": f"fn:{entry['fileName']}", "slug": None, "slugs": [], "file_name": entry["fileName"],
-        "name": entry.get("name") or entry["fileName"], "kind": kind_of(entry.get("type")),
+        "name": entry.get("name") or entry["fileName"], "origin": "precon",
         "deck_type": deck_view.deck_type(None, entry.get("type")), "product_type": entry.get("type"),
         "source": entry.get("type"), "author": None, "set_code": code,
         "set_name": (sset or {}).get("name"),
@@ -277,9 +277,11 @@ def catalog() -> list[dict]:
     for d in deck_view.deck_summaries():
         fn = d.get("file_name") or legacy.get(d["slug"])
         entry = all_fns.get(fn) if fn else None
-        kind: Kind = kind_of(entry.get("type")) if entry else ("precon" if d["origin"] == "precon" else d["origin"])
+        origin: Origin = "precon" if entry else d["origin"]
         row = {
-            **d, "key": d["slug"], "file_name": fn, "kind": kind,
+            **d, "key": d["slug"], "file_name": fn, "origin": origin,
+            # a catalog pack is a Jumpstart deck whatever the tracked row recorded (legacy pack: slugs)
+            **({"deck_type": deck_view.deck_type(None, entry.get("type"))} if entry and entry.get("type") == JUMPSTART_TYPE else {}),
             "product_type": (entry or {}).get("type"),
             "ownership": _ownership(d["built"], d["loose"]), "read": True, "color": None,
             "have": None, "short": None, "status": None,
