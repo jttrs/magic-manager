@@ -282,7 +282,7 @@ test('a failed recheck says so and keeps the synced-set floor', async ({ page })
 
 test('the Deck picker offers Commander decks until another deck type is chosen', async ({ page }) => {
   await page.goto('/market?subject=deck');
-  await page.getByRole('button', { name: /^Deck Choose|^Deck\b/ }).last().click();
+  await page.getByRole('button', { name: /^Deck(?! type)/ }).click();
   const options = page.getByRole('option');
   await expect(options).toHaveText([/Avengers Assemble/, /Doom Prevails/]);
   await page.keyboard.press('Escape');
@@ -290,6 +290,13 @@ test('the Deck picker offers Commander decks until another deck type is chosen',
   await page.getByRole('button', { name: 'Show all' }).click();
   await page.keyboard.press('Escape');
   await expect(page).toHaveURL(/dtypes=/);
-  await page.getByRole('button', { name: /^Deck Choose|^Deck\b/ }).last().click();
+  await page.getByRole('button', { name: /^Deck(?! type)/ }).click();
   await expect(page.getByRole('option')).toHaveCount(5);
+});
+
+test('a deck already open stays pickable even when its type is filtered out', async ({ page }) => {
+  await page.goto('/market?subject=deck&deck=eerie');
+  await page.getByRole('button', { name: /^Deck(?! type)/ }).click();
+  await expect(page.getByRole('option', { name: /Eerie/ })).toBeVisible();
+  await expect(page.getByRole('option', { name: /Counterargument/ })).toHaveCount(0);
 });

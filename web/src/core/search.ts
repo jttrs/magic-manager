@@ -128,7 +128,15 @@ export function legacyDecksSearch(raw: Record<string, unknown>): Record<string, 
   const old = (Array.isArray(kinds) ? kinds : kinds == null ? [] : [kinds]).map(String);
   const source = old.filter((k) => (RECIPE_ORIGINS as readonly string[]).includes(k));
   const types = Array.isArray(rest.types) ? rest.types.map(String) : [];
-  if (old.includes('jumpstart') && !types.includes('Jumpstart')) types.push('Jumpstart');
+  const jumpstart = old.includes('jumpstart');
+  if (jumpstart && !source.length) {
+    // jumpstart alone: the Jumpstart deck type
+    if (!types.includes('Jumpstart')) types.push('Jumpstart');
+  } else if (jumpstart && !source.includes('precon')) {
+    source.push('precon'); // jumpstart + others widened: Jumpstart packs are Wizards products
+  }
+  // An old link showed every deck type; keep that rather than the newer Commander default.
+  if (old.length && !types.length) types.push('all');
   const next: Record<string, unknown> = { ...rest };
   if (source.length && !('source' in rest)) next.source = source;
   if (types.length) next.types = types;

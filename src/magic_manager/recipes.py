@@ -1,5 +1,5 @@
 """Deck recipes: every playable precon and Jumpstart pack in the MTGJSON catalog,
-merged with the decks you track, each marked by kind and by what you own.
+merged with the decks you track, each marked by origin and by what you own.
 
 Single source of truth behind the web Decks list (``api.decks`` recipes).
 
@@ -112,7 +112,6 @@ def status(short: int) -> Status:
 
 
 # ---------- the catalog ----------
-
 
 
 def _is_pool(entry: dict, es: list[Entry] | None = None) -> bool:

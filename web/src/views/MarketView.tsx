@@ -48,7 +48,9 @@ export function MarketView() {
   const fams = useQuery(familiesQuery());
   const decks = useQuery({ ...decksQuery(), enabled: subject === 'deck' });
   // Deck lists default to Commander (Decks' rule, with no set to widen it); a deck in the URL stays pickable.
-  const deckTypes = effectiveTypes({ types: search.dtypes, sets: [] });
+  const defaultTypes = effectiveTypes({ types: search.dtypes, sets: [] });
+  // With no Commander deck at all, the default would leave an empty picker: show every type.
+  const deckTypes = !search.dtypes.length && defaultTypes && decks.data && !decks.data.some((d) => defaultTypes.includes(d.deck_type)) ? null : defaultTypes;
   const deckTypeOptions = useMemo(() => {
     const n = new Map<string, number>();
     for (const d of decks.data ?? []) n.set(d.deck_type, (n.get(d.deck_type) ?? 0) + 1);

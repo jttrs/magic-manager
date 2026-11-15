@@ -27,7 +27,7 @@ const ALL_TYPES = 'all';
 /** The deck-type filter in effect (null = every type): `['all']` = every type; a chosen list is
  *  that list; untouched = Commander, unless a set is chosen. */
 export function effectiveTypes(f: Pick<DecksSearch, 'types' | 'sets'>): string[] | null {
-  if (f.types.length === 1 && f.types[0] === ALL_TYPES) return null;
+  if (f.types.includes(ALL_TYPES)) return null;
   if (f.types.length) return f.types;
   return f.sets.length ? null : DEFAULT_DECK_TYPES;
 }
@@ -75,7 +75,10 @@ export function optionCounts(rs: readonly RecipeOut[], f: RecipeFilters) {
   const source = by('source', (r) => r.origin);
   const own = by('own', (r) => r.ownership);
   const types = by('types', (r) => r.deck_type);
-  const sets = by('sets', (r) => r.set_code);
+  // Choosing a set lifts the Commander default, so sets are counted without it — a
+  // Jumpstart-only set must stay listed to be pickable.
+  const setFacets = f.types.length ? facets : recipeFacets({ ...f, types: [ALL_TYPES] });
+  const sets = facetCounts(rs, setFacets, 'sets', (r) => r.set_code);
   const cover = by('cover', coverStatus);
   const names = new Map<string, { name: string; released: string }>();
   for (const r of rs) if (r.set_code && !names.has(r.set_code)) names.set(r.set_code, { name: r.set_name ?? r.set_code.toUpperCase(), released: r.released ?? '' });
@@ -85,7 +88,7 @@ export function optionCounts(rs: readonly RecipeOut[], f: RecipeFilters) {
     source: RECIPE_ORIGINS.map((k) => ({ value: k, label: SOURCE_LABEL[k], count: source.get(k) ?? 0 })),
     own: OWNERSHIP.map((k) => ({ value: k, label: OWN_TOGGLE_LABEL[k], count: own.get(k) ?? 0 })),
     cover: { any: null, build: cover.get('build') ?? 0, close: (cover.get('build') ?? 0) + (cover.get('close') ?? 0) },
-    types: sorted(types, f.types).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([v, n]): Count => ({ value: v, label: v, count: n })),
+    types: sorted(types, f.types.filter((t) => t !== ALL_TYPES)).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([v, n]): Count => ({ value: v, label: v, count: n })),
     sets: sorted(sets, f.sets)
       .sort((a, b) => (names.get(b[0])?.released ?? '').localeCompare(names.get(a[0])?.released ?? '') || a[0].localeCompare(b[0]))
       .map(([v, n]): Count => ({ value: v, label: `${names.get(v)?.name ?? v.toUpperCase()} · ${v.toUpperCase()}`, count: n })),

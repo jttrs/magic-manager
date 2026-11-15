@@ -265,3 +265,9 @@ test('editor: card names open the inspector; checks show legality and the bracke
   await page.getByRole('button', { name, exact: true }).first().click();
   await expect(page.getByRole('dialog', { name })).toBeVisible();
 });
+
+test('an old kinds=jumpstart link opens Jumpstart as a deck type', async ({ page }) => {
+  await page.goto('/decks?kinds=%5B%22jumpstart%22%5D&own=%5B%22built%22%2C%22loose%22%2C%22none%22%5D');
+  await expect(page.getByRole('button', { name: /^Deck type/ })).toContainText('Jumpstart');
+  await expect(page.getByRole('navigation', { name: 'Deck recipes' }).getByRole('button', { name: /^Counterargument/ })).toBeVisible();
+});

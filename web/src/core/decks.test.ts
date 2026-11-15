@@ -68,6 +68,25 @@ describe('recipe list', () => {
     expect(effectiveTypes({ types: [], sets: [] })).toEqual(['Commander']);
     expect(effectiveTypes({ types: [], sets: ['j25'] })).toBeNull();
     expect(effectiveTypes({ types: ['all'], sets: [] })).toBeNull();
+    expect(effectiveTypes({ types: ['all', 'Commander'], sets: [] })).toBeNull();
+  });
+  it("'Show all' never becomes a deck type option", () => {
+    const rs = [recipe({ deck_type: 'Commander' }), recipe({ key: 'j', deck_type: 'Jumpstart' })];
+    const f: RecipeFilters = { ...decksSearch.parse({}), types: ['all'] };
+    expect(optionCounts(rs, f).types.map((t) => t.value).sort()).toEqual(['Commander', 'Jumpstart']);
+  });
+  it('old kinds= links keep every deck type', () => {
+    expect(legacyDecksSearch({ kinds: ['import'] })).toEqual({ source: ['import'], types: ['all'] });
+    expect(legacyDecksSearch({ kinds: 'jumpstart' })).toEqual({ types: ['Jumpstart'] });
+    expect(legacyDecksSearch({ kinds: ['custom'], source: ['precon'] })).toEqual({ source: ['precon'], types: ['all'] });
+    expect(legacyDecksSearch({ kinds: [] })).toEqual({});
+    expect(legacyDecksSearch({ kinds: ['precon', 'jumpstart'] })).toEqual({ source: ['precon'], types: ['all'] });
+    expect(legacyDecksSearch({ kinds: ['import', 'jumpstart'] })).toEqual({ source: ['import', 'precon'], types: ['all'] });
+  });
+  it('a Jumpstart-only set stays pickable under the Commander default', () => {
+    const two = [recipe({ set_code: 'fic', deck_type: 'Commander' }), recipe({ key: 'j', set_code: 'j25', deck_type: 'Jumpstart' })];
+    const f: RecipeFilters = { ...decksSearch.parse({}), own: ['built', 'loose', 'none'] };
+    expect(optionCounts(two, f).sets.map((x) => x.value).sort()).toEqual(['fic', 'j25']);
     expect(effectiveTypes({ types: ['Commander', 'Planeswalker'], sets: [] })).toEqual(['Commander', 'Planeswalker']);
     expect(effectiveTypes({ types: ['Commander', 'Planeswalker'], sets: ['fic'] })).toEqual(['Commander', 'Planeswalker']);
     expect(typesToSearch([])).toEqual(['all']);
@@ -75,9 +94,9 @@ describe('recipe list', () => {
     expect(filterRecipes(rs, { q: '', source: [], own: ['built', 'loose', 'none'], cover: 'any', types: [], sets: [] }).map((r) => r.key)).toEqual(['a', 'mine']);
   });
   it('maps old kinds= links to source and the Jumpstart deck type', () => {
-    expect(legacyDecksSearch({ kinds: ['precon', 'jumpstart'], q: 'x' })).toEqual({ source: ['precon'], types: ['Jumpstart'], q: 'x' });
+    expect(legacyDecksSearch({ kinds: ['precon', 'jumpstart'], q: 'x' })).toEqual({ source: ['precon'], types: ['all'], q: 'x' });
     expect(legacyDecksSearch({ kinds: ['jumpstart'], types: ['Commander'] })).toEqual({ types: ['Commander', 'Jumpstart'] });
-    expect(legacyDecksSearch({ kinds: ['custom', 'import'] })).toEqual({ source: ['custom', 'import'] });
+    expect(legacyDecksSearch({ kinds: ['custom', 'import'] })).toEqual({ source: ['custom', 'import'], types: ['all'] });
     expect(legacyDecksSearch({ q: 'x' })).toEqual({ q: 'x' });
     expect(decksSearch.parse({ kinds: ['jumpstart'] })).toMatchObject({ source: [], types: ['Jumpstart'] });
   });
