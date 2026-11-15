@@ -13,6 +13,7 @@ import { artView, choiceFor, choiceNote, draftPrintingIds, swapAllFree, wasPrint
 import { restorePrinting, swapPrinting, type Draft } from '../../core/deckDraft';
 import { fmtCount, fmtInt } from '../../core/format';
 import { ADMIN_JOB_NOTE } from '../../core/jobs';
+import { GroupHead } from '../../components/GroupHead';
 
 const crop = (url: string) => url.replace('/normal/', '/art_crop/');
 const QUICK = ['cat', 'moon', 'ocean', 'dragon', 'forest'];
@@ -155,9 +156,7 @@ function Group({ title, count, children }: { title: string; count: number; child
   if (!count) return null;
   return (
     <section aria-labelledby={id}>
-      <h3 id={id} className="sticky top-0 z-10 flex items-baseline gap-2 border-b border-rule bg-paper pb-1 pt-3 text-sm voice-condensed font-medium uppercase tracking-[0.06em] text-ink-muted">
-        {title}<span className="ml-auto tabular">{count}</span>
-      </h3>
+      <GroupHead as="h3" id={id} label={title} meta={count} />
       <ul>{children}</ul>
     </section>
   );

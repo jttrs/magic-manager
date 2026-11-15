@@ -2,6 +2,7 @@ import { useQueries, useQuery } from '@tanstack/react-query';
 import { useMemo, useRef, type KeyboardEvent } from 'react';
 import { productCostQuery, secretLairQuery, watchedQuery } from '../../app/queries';
 import { useFeature } from '../../app/features';
+import { SortMenu } from '../../components/ArrangeControls';
 import { Button } from '../../components/Button';
 import { InfoTip } from '../../components/InfoTip';
 import { Segmented, SelectField, SideSection, TextField } from '../../components/Sidebar';
@@ -13,6 +14,7 @@ import { filterSortDrops, SLD_BASIS_LABEL, SLD_LIMITS, sldGap, sldRows, watchKey
 import { MasterDetail } from './DealsWorkspace';
 import type { CostState } from './useDealsData';
 import { SldInspector } from './SldInspector';
+import { SheetSummary } from '../../components/SheetSummary';
 
 type Set = (patch: Partial<MarketSearch>) => void;
 type SldCosts = { data: Map<string, ProductCostOut | undefined>; state: Map<string, CostState> };
@@ -40,20 +42,35 @@ function useWatchedDrops(): Map<string, string[]> {
   return useMemo(() => new Map((watched.data ?? []).filter((w) => w.kind === 'sld').map((w) => [watchKey(w.name, w.finish ?? 'nonfoil'), w.stores.map((s) => s.url)])), [watched.data]);
 }
 
-/** Rail for the Secret Lair mode: Find → Show → Arrange. */
-export function SecretLairFind({ search, set }: { search: MarketSearch; set: Set }) {
+const SLD_SORT_OPTIONS: { value: SldSort; label: string }[] = [
+  { value: 'gap_pct', label: 'Biggest discount %' }, { value: 'gap_usd', label: 'Biggest discount $' },
+  { value: 'price', label: 'Lowest sealed value' }, { value: 'release', label: 'Newest' }, { value: 'name', label: 'Name' },
+];
+
+/** Changing a filter keeps the open drop only while it's still listed (a new edition is a new row). */
+function useSldFilter(search: MarketSearch, set: Set) {
   const { rows, costs } = useSecretLair(search);
-  // A filter change keeps the open drop only while it's still listed (a new edition is a new row).
-  const setFilter = (patch: Partial<MarketSearch>) => {
+  return (patch: Partial<MarketSearch>) => {
     const kept = !patch.edition && filterSortDrops(rows, costs.data, filtersOf({ ...search, ...patch })).some((r) => r.key === search.item);
     set(search.item && !kept ? { ...patch, item: undefined } : patch);
   };
+}
+
+/** The sheet-header sort for the Secret Lair mode. */
+export function SecretLairSort({ search, set }: { search: MarketSearch; set: Set }) {
+  const setFilter = useSldFilter(search, set);
+  return <SortMenu value={search.ssort} defaultValue="gap_pct" options={SLD_SORT_OPTIONS} onChange={(ssort) => setFilter({ ssort })} />;
+}
+
+/** Rail for the Secret Lair mode: Find → Show. */
+export function SecretLairFind({ search, set }: { search: MarketSearch; set: Set }) {
+  const setFilter = useSldFilter(search, set);
   return (
     <>
-      <SideSection title="Find">
+      <SideSection title="Find" quiet>
         <TextField name="dq" label="Drop name" value={search.dq} placeholder="e.g. Garfield…" onChange={(dq) => setFilter({ dq })} />
       </SideSection>
-      <SideSection title="Show">
+      <SideSection title="Show" quiet>
         <SelectField<`${(typeof SLD_LIMITS)[number]}`>
           label="Drops"
           value={String(search.sldN) as '30'}
@@ -85,17 +102,6 @@ export function SecretLairFind({ search, set }: { search: MarketSearch; set: Set
           options={[{ value: '0', label: 'Any' }, { value: '10', label: '10%+' }, { value: '20', label: '20%+' }, { value: '30', label: '30%+' }]}
         />
       </SideSection>
-      <SideSection title="Arrange">
-        <SelectField<SldSort>
-          label="Sort"
-          value={search.ssort}
-          onChange={(ssort) => setFilter({ ssort })}
-          options={[
-            { value: 'gap_pct', label: 'Biggest discount %' }, { value: 'gap_usd', label: 'Biggest discount $' },
-            { value: 'price', label: 'Lowest sealed value' }, { value: 'release', label: 'Newest' }, { value: 'name', label: 'Name' },
-          ]}
-        />
-      </SideSection>
     </>
   );
 }
@@ -119,10 +125,10 @@ export function SecretLairPanel({ search, set }: { search: MarketSearch; set: Se
     </EmptyNote>
   ) : (
     <>
-      <p role="status" className="text-sm tabular text-ink-muted">
+      <SheetSummary>
         {fmtInt(shown.length)} of the {fmtInt(rows.length)} newest drops · compared to {SLD_BASIS_LABEL[search.sbasis]}
         {pricing > 0 && ` · pricing ${fmtInt(pricing)}…`}
-      </p>
+      </SheetSummary>
       <DropTable shown={shown} costs={costs} basis={search.sbasis} watched={watched} item={selected?.key} onPick={(item) => set({ item })} />
       {list.data && list.data.total > rows.length && search.sldN < SLD_LIMITS[SLD_LIMITS.length - 1] && (
         <Button tone="paper" className="self-start" onClick={() => set({ sldN: SLD_LIMITS.find((n) => n > search.sldN) })}>

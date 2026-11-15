@@ -150,7 +150,7 @@ test('the built SPA runs under the hosted CSP with no violations', async ({ page
   // HoverCard: a card name's art preview.
   await page.goto(COMPARE_URL);
   await page.waitForLoadState('networkidle');
-  await page.getByRole('radio', { name: 'List' }).click();   // list rows carry the hover preview
+  await page.getByRole('button', { name: 'List view' }).click();   // list rows carry the hover preview
   const tile = page.getByRole('region', { name: 'Tifa Lockhart only cards' }).getByRole('button', { name: /^Inspect / }).first();
   await tile.hover();
   await expect(page.locator('[data-radix-popper-content-wrapper]').first()).toBeVisible();

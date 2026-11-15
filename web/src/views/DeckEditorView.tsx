@@ -22,6 +22,7 @@ import { fmtInt, fmtUsd } from '../core/format';
 import { fromPrinting, type GuideCard } from '../core/guideCard';
 import { ArtSwapTab } from './decks/ArtSwapTab';
 import { BulkAddTab } from './decks/BulkAddTab';
+import { GroupHead } from '../components/GroupHead';
 
 const route = getRouteApi('/decks/$slug/edit');
 const crop = (url: string) => url.replace('/normal/', '/art_crop/');
@@ -214,9 +215,7 @@ function DraftList({ draft, onEdit, onInspect }: { draft: Draft; onEdit: (fn: (d
     <div className="h-full min-h-0 overflow-y-auto overscroll-contain px-4 pb-8 [scrollbar-gutter:stable]">
       {sections.map((s) => (
         <section key={s.key} aria-labelledby={`ds-${s.key}`}>
-          <h2 id={`ds-${s.key}`} className="sticky top-0 z-10 flex items-baseline gap-2 border-b border-rule bg-paper pb-1 pt-3 text-sm voice-condensed font-medium uppercase tracking-[0.06em] text-ink-muted">
-            {s.label}<span className="ml-auto tabular">{s.count}</span>
-          </h2>
+          <GroupHead id={`ds-${s.key}`} label={s.label} meta={s.count} />
           <ul>
             {s.rows.map((r) => <DraftLine key={r.key} row={r} onEdit={onEdit} onInspect={onInspect} />)}
           </ul>

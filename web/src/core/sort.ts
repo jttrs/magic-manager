@@ -80,3 +80,19 @@ export function leadSection<T, K extends string>(rules: readonly SortRule<K>[], 
   const lead = rules[0] ? registry[rules[0].key] : undefined;
   return lead?.section ?? null;
 }
+
+type KeyLabels<K extends string> = Record<K, { label: string; defaultDir: SortDir }>;
+
+const dirMark = <K extends string>(keys: KeyLabels<K>, r: SortRule<K>) =>
+  r.dir !== keys[r.key].defaultDir ? (r.dir === 'asc' ? ' ↑' : ' ↓') : '';
+
+/** The whole hierarchy in one line: `Set › Rarity ↑ › #` (or `Unsorted`). */
+export function sortSummary<K extends string>(keys: KeyLabels<K>, rules: readonly SortRule<K>[]): string {
+  return rules.length ? rules.map((r) => `${keys[r.key].label}${dirMark(keys, r)}`).join(' › ') : 'Unsorted';
+}
+
+/** The short form for a header control: the first level, `+N` for the rest. */
+export function sortShort<K extends string>(keys: KeyLabels<K>, rules: readonly SortRule<K>[]): string {
+  if (!rules.length) return 'Unsorted';
+  return `${keys[rules[0].key].label}${dirMark(keys, rules[0])}${rules.length > 1 ? ` +${rules.length - 1}` : ''}`;
+}

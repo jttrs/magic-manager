@@ -9,7 +9,7 @@ test('Group by Function regroups each column under Tagger function roots (P4)', 
   const aOnly = page.locator('section[aria-labelledby="col-a_only"]');
   await expect(aOnly.getByRole('heading', { name: /^Creatures/, level: 3 })).toBeVisible();
 
-  await page.getByRole('radio', { name: 'Function' }).click();
+  await page.getByRole('group', { name: 'Group by' }).getByRole('button', { name: 'Function' }).click();
   await expect(page).toHaveURL(/groupBy=function/);
   await expect(aOnly.getByRole('heading', { name: /^Ramp/, level: 3 })).toBeVisible();
   await expect(aOnly.getByRole('heading', { name: /^Creatures/, level: 3 })).toHaveCount(0);
@@ -23,11 +23,11 @@ test('Group by Function regroups each column under Tagger function roots (P4)', 
   await expect(page.getByText('A card with several roles is listed under each')).toBeVisible();
 
   // List view keeps the also-note inline.
-  await page.getByRole('radio', { name: 'List' }).click();
+  await page.getByRole('button', { name: 'List view' }).click();
   await expect(aOnly.getByText(`also: ${others}`).first()).toBeVisible();
 
   await page.reload();
-  await expect(page.getByRole('radio', { name: 'Function' })).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByRole('group', { name: 'Group by' }).getByRole('button', { name: 'Function' })).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('card inspector lists its functions and Scryfall tags', async ({ page }) => {

@@ -5,6 +5,10 @@ import { z } from 'zod';
 import { BASES, DEAL_SORTS, PRODUCT_TYPES } from './deals';
 import { SLD_BASES, SLD_EDITIONS, SLD_SORTS } from './secretLair';
 
+/** Default sort hierarchies (URL form) — the schema defaults and the header SortControl's "changed" baseline. */
+export const COMPARE_SORT_DEFAULT = 'inclusion,name';
+export const COLLECTION_SORT_DEFAULT = 'set,cn';
+
 export const BUCKETS = ['a_only', 'both', 'b_only'] as const;
 export type Bucket = (typeof BUCKETS)[number];
 
@@ -55,7 +59,7 @@ export const compareSearch = z.object({
   q: z.string().catch('').default(''),
   tags: list(z.string()).catch([]).default([]),
   /** Encoded sort rules (core/sort.ts), e.g. `inclusion,name`. */
-  sort: z.string().catch('inclusion,name').default('inclusion,name'),
+  sort: z.string().catch(COMPARE_SORT_DEFAULT).default(COMPARE_SORT_DEFAULT),
   groupBy: z.enum(GROUP_BYS).catch('lists').default('lists'),
   view,
   /** Card surfer (the Surfer tab): its source + filters (core/surf.ts codec). */
@@ -77,7 +81,7 @@ export const collectionSearch = z.object({
   src: list(z.string()).catch([]).default([]),
   /** Only cards you earmarked (any printing). */
   em: z.boolean().catch(false).default(false),
-  sort: z.string().catch('set,cn').default('set,cn'),
+  sort: z.string().catch(COLLECTION_SORT_DEFAULT).default(COLLECTION_SORT_DEFAULT),
   view,
   /** Checklist mode: count owned copies inline (views/collection/Checklist*). */
   count: z.boolean().catch(false).default(false),

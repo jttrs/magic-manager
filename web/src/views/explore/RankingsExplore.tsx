@@ -19,6 +19,7 @@ import { MarkToggle } from '../../components/MarkToggle';
 import { ProgressRule } from '../../components/ProgressRule';
 import { SearchSelect } from '../../components/SearchSelect';
 import { Segmented, SelectField, SideSection, TextField } from '../../components/Sidebar';
+import { ViewToggle } from '../../components/ArrangeControls';
 import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../../components/States';
 import { EdhrecMark, RereadMark } from '../../components/StoreMarks';
 import { VirtualGuide } from '../../components/VirtualGuide';
@@ -100,10 +101,10 @@ export function RankingsExplore({ search, set, subnav }: Props) {
 
   const sidebar = (
     <>
-      <SideSection title="Find">
+      <SideSection title="Find" quiet>
         <TextField name="rq" label="Card name" value={search.rq} placeholder="e.g. Krenko…" onChange={(rq) => set({ rq })} />
       </SideSection>
-      <SideSection title="Show">
+      <SideSection title="Show" quiet>
         <SelectField<RankScope> label="List" value={search.rank} onChange={(rank) => set({ rank })} options={RANK_SCOPES.map((s) => ({ value: s, label: SCOPE_LABEL[s] }))} />
         <fieldset disabled={!commanders} className="flex min-w-0 flex-col gap-4 disabled:opacity-55" aria-describedby={commanders ? undefined : 'rank-filters-note'}>
           <legend className="sr-only">Narrow top commanders</legend>
@@ -136,9 +137,6 @@ export function RankingsExplore({ search, set, subnav }: Props) {
           {!tfOn && <p id="rank-tf-note" className="mt-1.5 text-sm text-on-chrome-muted">{search.rank === 'salt' ? 'Salt is rated over all time.' : 'Set and tag lists cover all time.'}</p>}
         </fieldset>
         <Segmented<RankOwn> label="Ownership" showLabel value={search.own} onChange={(own) => set({ own })} options={RANK_OWN.map((o) => ({ value: o, label: OWN_LABEL[o] }))} />
-      </SideSection>
-      <SideSection title="Arrange">
-        <Segmented label="View type" showLabel value={search.rview} onChange={(rview) => set({ rview })} options={[{ value: 'grid', label: 'Grid' }, { value: 'list', label: 'List' }]} />
       </SideSection>
     </>
   );
@@ -191,6 +189,7 @@ export function RankingsExplore({ search, set, subnav }: Props) {
   return (
     <ViewLayout label="Explore controls" summary={r ? `Rankings · ${r.title}` : 'Rankings'} sidebar={sidebar} subnav={subnav}>
       <GuideSheet
+        arrange={<ViewToggle value={search.rview} onChange={(rview) => set({ rview })} />}
         title={r?.title ?? SCOPE_LABEL[search.rank]}
         summary={r ? `${rankingSummary(r)}${ago ? ` · read ${ago}` : ''}` : undefined}
         actionsLabel="Ranking actions"

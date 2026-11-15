@@ -21,7 +21,7 @@ import { setMissingMeans, useMissingMeans, type MissingMeans } from './collectio
 import { Button } from '../components/Button';
 import { MultiSelect } from '../components/MultiSelect';
 import { Segmented, SegmentedToggles, SideSection, TextField } from '../components/Sidebar';
-import { SortBuilder } from '../components/SortBuilder';
+import { SortControl, ViewToggle } from '../components/ArrangeControls';
 import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../components/States';
 import { VirtualGuide, type GuideSection } from '../components/VirtualGuide';
 import { collectionBuyList, type CollectionCardOut, type CollectionOut } from '../core/api';
@@ -31,7 +31,7 @@ import { InfoTip } from '../components/InfoTip';
 import { summaryLine } from '../core/checklist';
 import { fmtInt, fmtUsd } from '../core/format';
 import { exportLines, fromCollection, groupCards, type GuideCard } from '../core/guideCard';
-import { SHOW, type CollectionSearch } from '../core/search';
+import { SHOW, type CollectionSearch, COLLECTION_SORT_DEFAULT } from '../core/search';
 import { decodeSort, encodeSort, leadSection, sortBy, type SortRule } from '../core/sort';
 
 const route = getRouteApi('/collection');
@@ -146,10 +146,10 @@ export function CollectionView() {
 
   const sidebar = (
     <>
-      <SideSection title="Find">
+      <SideSection title="Find" quiet>
         <TextField name="q" label="Card name" value={search.q} placeholder="e.g. Cloud…" onChange={(qv) => set({ q: qv })} />
       </SideSection>
-      <SideSection title="Show">
+      <SideSection title="Show" quiet>
         {fams.isPending ? (
           <p role="status" className="text-sm text-on-chrome-muted">Loading your set families…</p>
         ) : fams.isError ? (
@@ -265,10 +265,6 @@ export function CollectionView() {
           <button type="button" onClick={() => set(RESET)} className="self-start cursor-pointer text-sm text-on-chrome-muted underline hover:text-on-chrome">Reset filters</button>
         )}
       </SideSection>
-      <SideSection title="Arrange">
-        <SortBuilder keys={collectionSortKeys(hasScenes)} rules={rules} presets={collectionPresets(hasScenes)} onChange={(r) => set({ sort: encodeSort(r, COLLECTION_SORT) })} />
-        <Segmented label="View type" showLabel value={search.view} onChange={(view) => set({ view })} options={[{ value: 'grid', label: 'Grid' }, { value: 'list', label: 'List' }]} />
-      </SideSection>
       <SideSection title="Buy">
         <CopyTargets
           lead={`Copy bulk lists · ${marked.length ? `${fmtInt(marked.length)} marked` : `${fmtInt(buyPool.length)} missing shown`} · ≈ ${fmtUsd(buyTotal(buyPool, search.exclude))} at market`}
@@ -322,9 +318,21 @@ export function CollectionView() {
   const s = view?.stats;
   const famN = q.data?.families.length ?? 0;
   return (
-    <ViewLayout label="Collection controls" summary={controlsSummary(search, rules, fams.data)} sidebar={sidebar} startOpen={!search.families.length} subnav={<CollectionTabs />}>
+    <ViewLayout label="Collection controls" summary={controlsSummary(search, fams.data)} sidebar={sidebar} startOpen={!search.families.length} subnav={<CollectionTabs />}>
       <GuideSheet
         title="Collection"
+        arrange={
+          <>
+            <SortControl
+              keys={collectionSortKeys(hasScenes)}
+              rules={rules}
+              presets={collectionPresets(hasScenes)}
+              defaultRules={activeRules(decodeSort(COLLECTION_SORT_DEFAULT, COLLECTION_SORT), hasScenes)}
+              onChange={(r) => set({ sort: encodeSort(r, COLLECTION_SORT) })}
+            />
+            <ViewToggle value={search.view} onChange={(view) => set({ view })} />
+          </>
+        }
         actionsLabel="Collection actions"
         marked={view ? { count: marked.length, getText: () => exportLines(view.cards.filter((c) => selected.has(c.key)), 'plain'), onClear: clear } : undefined}
         actions={
@@ -457,7 +465,7 @@ function OwnedMeter({ owned, printings }: { owned: number; printings: number }) 
   );
 }
 
-function controlsSummary(search: CollectionSearch, rules: SortRule<CollectionSortKey>[], fams: { code: string; name: string }[] | undefined): string {
+function controlsSummary(search: CollectionSearch, fams: { code: string; name: string }[] | undefined): string {
   const names = search.families.map((c) => fams?.find((f) => f.code === c)?.name ?? c.toUpperCase());
   const show = search.show.length === 2 ? 'Owned + missing' : search.show[0] === 'owned' ? 'Owned only' : search.show[0] === 'missing' ? 'Missing only' : 'Nothing shown';
 
@@ -467,7 +475,6 @@ function controlsSummary(search: CollectionSearch, rules: SortRule<CollectionSor
     search.exclude.length ? typesSummary(search.exclude) : '',
     search.fn.length ? `${search.fn.length} function${search.fn.length > 1 ? 's' : ''}` : '',
     search.src.length ? `${search.src.length} source${search.src.length > 1 ? 's' : ''}` : '',
-    rules.map((r) => COLLECTION_SORT[r.key].label).join(' › '),
   ];
   return parts.filter(Boolean).join(' · ');
 }

@@ -56,7 +56,7 @@ test('display printing is the standard one returned by the API (F3)', async ({ p
 
 test('list view shows a dense checklist and persists in the URL', async ({ page }) => {
   await page.goto(COMPARE_URL);
-  await page.getByRole('radio', { name: 'List' }).click();
+  await page.getByRole('button', { name: 'List view' }).click();
   await expect(page).toHaveURL(/view=list/);
   await expect(page.getByRole('button', { name: /^Mark / }).first()).toBeVisible();
   await expect(page.getByRole('button', { name: /^Inspect / }).first()).toBeVisible();

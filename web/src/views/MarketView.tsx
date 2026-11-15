@@ -3,10 +3,11 @@ import { getRouteApi, useNavigate } from '@tanstack/react-router';
 import { useMemo, useState, type ReactNode } from 'react';
 import { decksQuery, deckCostQuery, familiesQuery, marketCardsQuery, marketProductsQuery } from '../app/queries';
 import { ViewLayout } from '../components/AppShell';
+import { SortMenu } from '../components/ArrangeControls';
 import { useFeature } from '../app/features';
 import { DealsPanel } from './market/DealsPanel';
 import { useDealsReads } from './market/useDealsReads';
-import { SecretLairFind, SecretLairPanel } from './market/SecretLairPanel';
+import { SecretLairFind, SecretLairPanel, SecretLairSort } from './market/SecretLairPanel';
 import { dealFilters, useDealCosts, useDealsData } from './market/useDealsData';
 import { CardLines } from './market/CardLines';
 import { ProductContents } from './market/ProductContents';
@@ -18,7 +19,7 @@ import { CopyTargets } from '../components/CopyButton';
 import { InfoTip } from '../components/InfoTip';
 import { ProgressRule } from '../components/ProgressRule';
 import { SearchSelect } from '../components/SearchSelect';
-import { Segmented, SelectField, SideSection, TextField } from '../components/Sidebar';
+import { Segmented, SideSection, TextField } from '../components/Sidebar';
 import { MultiSelect } from '../components/MultiSelect';
 import { EmptyNote, ErrorNote, GuideSheet } from '../components/States';
 import { buyListTargets } from '../components/buyTargets';
@@ -80,15 +81,15 @@ export function MarketView() {
   );
   const singles = search.tab === 'cards';
 
-  // Every mode's rail follows Find (text search alone) → Show → Arrange.
+  // Every mode's rail follows Find (text search alone) → Show.
   const sidebar = (
     <>
       {subject === 'family' && (
         <>
-          <SideSection title="Find">
+          <SideSection title="Find" quiet>
             <TextField name="q" label={singles ? 'Card name' : 'Product name'} value={search.q} placeholder={singles ? 'e.g. Cloud…' : 'e.g. Bundle…'} onChange={(q) => set({ q })} />
           </SideSection>
-          <SideSection title="Show">
+          <SideSection title="Show" quiet>
             {famPicker}
             <Segmented<MarketSearch['tab']> label="Product type" showLabel value={search.tab} onChange={(tab) => set({ tab })} options={[{ value: 'products', label: 'Sealed' }, { value: 'cards', label: 'Singles' }]} />
             {singles && (
@@ -104,20 +105,10 @@ export function MarketView() {
               </>
             )}
           </SideSection>
-          {singles && (
-            <SideSection title="Arrange">
-              <SelectField<MarketSearch['sort']>
-                label="Sort"
-                value={search.sort}
-                onChange={(sort) => set({ sort })}
-                options={[{ value: 'savings', label: 'Biggest premium' }, { value: 'price', label: 'Highest value' }, { value: 'foil', label: 'Smallest foil premium' }, { value: 'set', label: 'Set and number' }]}
-              />
-            </SideSection>
-          )}
         </>
       )}
       {subject === 'deck' && (
-        <SideSection title="Show">
+        <SideSection title="Show" quiet>
           {decks.isError ? (
             <p role="alert" className="text-sm text-danger">Couldn’t load decks: {(decks.error as Error).message}</p>
           ) : (
@@ -128,10 +119,10 @@ export function MarketView() {
       {subject === 'sld' && <SecretLairFind search={search} set={set} />}
       {inDeals && (
         <>
-          <SideSection title="Find">
+          <SideSection title="Find" quiet>
             <TextField name="dq" label="Product name or set" value={search.dq} placeholder="e.g. Bundle, fin…" onChange={(dq) => setFilter({ dq })} />
           </SideSection>
-          <SideSection title="Show">
+          <SideSection title="Show" quiet>
             <MultiSelect
               label="Stores"
               noun="stores"
@@ -168,17 +159,6 @@ export function MarketView() {
             <Segmented<'all' | 'in'> label="Availability" showLabel value={search.inStock ? 'in' : 'all'} onChange={(v) => setFilter({ inStock: v === 'in' })} options={[{ value: 'all', label: 'Any' }, { value: 'in', label: 'In stock' }]} />
             <Segmented<'all' | 'met'> label="Target" showLabel value={search.atTarget ? 'met' : 'all'} onChange={(v) => setFilter({ atTarget: v === 'met' })} options={[{ value: 'all', label: 'Any' }, { value: 'met', label: 'At or under' }]} />
           </SideSection>
-          <SideSection title="Arrange">
-            <SelectField<DealSort>
-              label="Sort"
-              value={search.dsort}
-              onChange={(dsort) => setFilter({ dsort })}
-              options={[
-                { value: 'gap_pct', label: 'Biggest discount %' }, { value: 'gap_usd', label: 'Biggest discount $' }, { value: 'price', label: 'Lowest price' },
-                { value: 'market', label: 'Sealed value' }, { value: 'exact', label: 'Cards value, exact' }, { value: 'floor', label: 'Cards value, cheapest' }, { value: 'name', label: 'Name' },
-              ]}
-            />
-          </SideSection>
         </>
       )}
       {subject === 'deck' && search.deck && (
@@ -208,11 +188,9 @@ export function MarketView() {
   let body: ReactNode;
   if (subject === 'sld') {
     title = 'Secret Lair';
-    summary = 'The newest drops: sealed value beside the cards inside, bonus card included';
     body = <SecretLairPanel search={search} set={set} />;
   } else if (inDeals) {
     title = 'Deals';
-    summary = 'Products you watch: best price now, what it’s worth, and what’s inside';
     body = <DealsPanel data={dealsData} costs={dealCosts} reads={dealReads} search={search} set={set} />;
     const busy = dealReads.busy ? 'Reading…' : undefined;
     actions = (
@@ -247,10 +225,31 @@ export function MarketView() {
     if (!search.live) actions = <IconAction label="Recheck for cheapest" Icon={RefreshMark} disabled={cost.isPending} disabledReason="Working out the cost…" onClick={() => set({ live: true })} />;
   }
 
+  const arrange =
+    subject === 'family' && singles ? (
+      <SortMenu<MarketSearch['sort']>
+        value={search.sort}
+        defaultValue="savings"
+        onChange={(sort) => set({ sort })}
+        options={[{ value: 'savings', label: 'Biggest premium' }, { value: 'price', label: 'Highest value' }, { value: 'foil', label: 'Smallest foil premium' }, { value: 'set', label: 'Set and number' }]}
+      />
+    ) : inDeals ? (
+      <SortMenu<DealSort>
+        value={search.dsort}
+        defaultValue="gap_pct"
+        onChange={(dsort) => setFilter({ dsort })}
+        options={[
+          { value: 'gap_pct', label: 'Biggest discount %' }, { value: 'gap_usd', label: 'Biggest discount $' }, { value: 'price', label: 'Lowest price' },
+          { value: 'market', label: 'Sealed value' }, { value: 'exact', label: 'Cards value, exact' }, { value: 'floor', label: 'Cards value, cheapest' }, { value: 'name', label: 'Name' },
+        ]}
+      />
+    ) : subject === 'sld' ? (
+      <SecretLairSort search={search} set={set} />
+    ) : undefined;
   const sideSummary = subject === 'family' ? famName : subject === 'sld' ? 'Secret Lair' : subject === 'deals' ? 'Deals' : deckName;
   return (
     <ViewLayout label="Market controls" summary={sideSummary} sidebar={sidebar} subnav={<MarketTabs subject={subject} />} startOpen={!(search.code || search.deck || search.subject === 'deals' || subject === 'sld')}>
-      <GuideSheet title={title} summary={summary} actions={actions} actionsLabel={inDeals ? 'Deals actions' : undefined}>
+      <GuideSheet title={title} summary={summary} arrange={arrange} actions={actions} actionsLabel={inDeals ? 'Deals actions' : undefined}>
         {inDeals || subject === 'sld' ? <div className="h-full min-h-0">{body}</div> : <div className="h-full overflow-y-auto pb-8">{body}</div>}
       </GuideSheet>
     </ViewLayout>

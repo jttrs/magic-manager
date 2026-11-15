@@ -54,6 +54,19 @@ test('Secret Lair lists drops by biggest discount vs the cards inside', async ({
   await expect(rows).toHaveText(['Garfield: As Intended']);
 });
 
+test('Secret Lair: the live count sits in the sheet header, and the header sort reorders the drops', async ({ page }) => {
+  await page.goto('/market?subject=sld');
+  const rows = page.locator('tbody th[scope="row"] button[data-drop]');
+  await expect(rows).toHaveCount(2);
+  // the count line renders in the header, before the table — not a tagline
+  await expect(page.getByRole('status').filter({ hasText: /of the 2 newest drops/ })).toBeVisible();
+  await expect(page.getByText('The newest drops: sealed value')).toHaveCount(0);
+  await page.getByRole('button', { name: /^Sort: Biggest discount %/ }).click();
+  await page.getByRole('menuitemradio', { name: 'Name' }).click();
+  await expect(rows).toHaveText(['Cats of Chaos', 'Garfield: As Intended']);
+  await expect(page).toHaveURL(/ssort=name/);
+});
+
 test('a drop opens its worth, bonus card and cards; Watch needs the deals flag', async ({ page }) => {
   await page.goto('/market?subject=sld');
   await page.getByRole('button', { name: 'Garfield: As Intended' }).click();
