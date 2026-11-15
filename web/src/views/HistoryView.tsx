@@ -28,6 +28,7 @@ import { OrderReview } from './history/OrderReview';
 import { OrderRow, OrdersTotals } from './history/OrderRow';
 import { ReadOrdersDialog } from './history/ReadOrdersDialog';
 import { RevertImport } from './history/RevertImport';
+import { GroupHead } from '../components/GroupHead';
 
 const route = getRouteApi('/collection/history');
 const DAY = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
@@ -177,10 +178,7 @@ function Timeline({ review, groups, total, orderOf, active, onEntry, onOrder }: 
     <nav ref={navRef} aria-label="Purchase history" onKeyDown={move} className="h-full min-h-0 overflow-y-auto overscroll-contain px-4 pb-6 [scrollbar-gutter:stable]">
       {review.length > 0 && (
         <section aria-labelledby="hm-review" className="mb-2">
-          <h2 id="hm-review" className="sticky top-0 z-10 flex items-baseline gap-2 border-b border-rule-strong bg-paper pb-1 pt-3 text-sm voice-condensed font-medium uppercase tracking-[0.06em] text-accent-ink">
-            <span className="min-w-0 truncate">Needs review</span>
-            <span className="ml-auto tabular normal-case tracking-normal text-ink-muted">{fmtCount(review.length, 'order')} · paid {fmtUsd(paid)}</span>
-          </h2>
+          <GroupHead id="hm-review" tone="accent" label="Needs review" meta={`${fmtCount(review.length, 'order')} · paid ${fmtUsd(paid)}`} />
           <p className="pt-1 text-xs text-ink-muted">Store orders not fully in your collection yet. Open one to match its cards to copies you own or add them.</p>
           <ul>
             {review.map((p, i) => (
@@ -193,10 +191,7 @@ function Timeline({ review, groups, total, orderOf, active, onEntry, onOrder }: 
       )}
       {groups.map((g) => (
         <section key={g.key} aria-labelledby={`hm-${g.key}`} className="[content-visibility:auto] [contain-intrinsic-size:auto_24rem]">
-          <h2 id={`hm-${g.key}`} className="sticky top-0 z-10 flex items-baseline gap-2 border-b border-rule bg-paper pb-1 pt-3 text-sm voice-condensed font-medium uppercase tracking-[0.06em] text-ink-muted">
-            <span className="min-w-0 truncate">{g.label}</span>
-            <span className="ml-auto tabular normal-case tracking-normal">{g.copiesIn ? `${fmtInt(g.copiesIn)} held · ${fmtUsd(g.valueUsd)}` : ''}</span>
-          </h2>
+          <GroupHead id={`hm-${g.key}`} label={g.label} meta={g.copiesIn ? `${fmtInt(g.copiesIn)} held · ${fmtUsd(g.valueUsd)}` : ''} />
           <ul>
             {g.rows.map((r) => (
               <li key={r.key}>

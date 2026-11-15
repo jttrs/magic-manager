@@ -5,6 +5,7 @@ import { EmptyNote } from '../../components/States';
 import type { RecipeOut } from '../../core/api';
 import { coverage, KIND_LABEL, ownershipLabel, type DeckGroup } from '../../core/decks';
 import { fmtCount, fmtInt, fmtUsd } from '../../core/format';
+import { GroupHead } from '../../components/GroupHead';
 
 const crop = (url: string) => url.replace('/normal/', '/art_crop/');
 
@@ -78,10 +79,7 @@ export function RecipeList({ groups, total, active, onPick }: { groups: DeckGrou
               style={sticky ? undefined : { transform: `translateY(${vi.start}px)` }}
             >
               {it.type === 'head' ? (
-                <h2 className="flex items-baseline gap-2 border-b border-rule bg-paper pb-1 pt-3 text-sm voice-condensed font-medium uppercase tracking-[0.06em] text-ink-muted">
-                  <span className="min-w-0 truncate">{it.g.label}</span>
-                  <span className="ml-auto tabular normal-case tracking-normal">{fmtCount(it.g.decks.length, 'recipe')}{it.g.ready ? ` · ${fmtInt(it.g.ready)} ready` : ''}</span>
-                </h2>
+                <GroupHead sticky={false} label={it.g.label} meta={`${fmtCount(it.g.decks.length, 'recipe')}${it.g.ready ? ` · ${fmtInt(it.g.ready)} ready` : ''}`} />
               ) : (
                 <RecipeRow r={it.r} active={it.r.key === activeKey} tabbable={it.r.key === tabKey} onFocus={() => setFocusKey(it.r.key)} onPick={() => onPick(it.r.key)} />
               )}
