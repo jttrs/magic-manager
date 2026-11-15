@@ -67,6 +67,16 @@ test('show owned / missing filters', async ({ page }) => {
   await expect(page.getByRole('article')).toHaveCount(missingN);
 });
 
+test('Uncheck all on a card-type picker says what is hidden and offers Check all', async ({ page }) => {
+  await page.goto(COLLECTION_URL);
+  await page.getByRole('button', { name: /^Rarity/ }).click();
+  await page.getByRole('button', { name: 'Uncheck all' }).click();
+  await page.keyboard.press('Escape');
+  await expect(page.getByText('Every rarity is hidden')).toBeVisible();
+  await page.getByRole('button', { name: 'Check all' }).click();
+  await expect(page.getByRole('article')).toHaveCount(cards.length);
+});
+
 test('card-type filters: rarity, finish and treatment pickers (with counts), chase include/exclude with an explainer', async ({ page }) => {
   await page.goto(COLLECTION_URL);
   const rarity = page.getByRole('button', { name: /^Rarity/ });

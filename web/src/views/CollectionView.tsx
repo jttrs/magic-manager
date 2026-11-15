@@ -241,6 +241,11 @@ export function CollectionView() {
         {fnOptions && (
           <MultiSelect
             label="Function"
+            labelExtra={
+              <InfoTip label="Where do functions come from?">
+                What the card does, from Scryfall’s community tags (Tagger). A card can have several functions. <b>No tagged function</b> means none of these.
+              </InfoTip>
+            }
             noun="functions"
             searchable={false}
             value={search.fn}
@@ -288,7 +293,20 @@ export function CollectionView() {
   } else if (q.isError) {
     body = <ErrorNote error={q.error} onRetry={() => q.refetch()} />;
   } else if (!view || view.cards.length === 0) {
-    body = <EmptyNote title="Nothing matches">No printings match these filters. Check a card type back on, or show both owned and missing cards.</EmptyNote>;
+    // An exclude picker with every listed option unchecked hides everything — say which.
+    const allHidden = (['Rarity', 'Finish', 'Treatment'] as const).find((g) => {
+      const listed = traitOptions(g);
+      return listed.length > 0 && listed.every((o) => search.exclude.includes(o.value));
+    });
+    body = allHidden ? (
+      <EmptyNote title={`Every ${allHidden.toLowerCase()} is hidden`}>
+        <Button tone="paper" onClick={() => set({ exclude: setGroupIncluded(search.exclude, allHidden, traitsIn(allHidden).map((t) => t.key)) })}>
+          Check all
+        </Button>
+      </EmptyNote>
+    ) : (
+      <EmptyNote title="Nothing matches">No printings match these filters. Check a card type back on, or show both owned and missing cards.</EmptyNote>
+    );
   } else if (counting) {
     const familyNames = new Map(q.data.families.map((f) => [f.code, f.name]));
     body = (
