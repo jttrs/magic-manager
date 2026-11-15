@@ -18,7 +18,7 @@ import { InfoTip } from '../../components/InfoTip';
 import { MarkToggle } from '../../components/MarkToggle';
 import { ProgressRule } from '../../components/ProgressRule';
 import { SearchSelect } from '../../components/SearchSelect';
-import { Segmented, SelectField, SideSection, TextField } from '../../components/Sidebar';
+import { Segmented, SideSection, TextField } from '../../components/Sidebar';
 import { ViewToggle } from '../../components/ArrangeControls';
 import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../../components/States';
 import { EdhrecMark, RereadMark } from '../../components/StoreMarks';
@@ -29,8 +29,8 @@ import { fmtInt, fmtUsd } from '../../core/format';
 import { exportLines, type GuideCard } from '../../core/guideCard';
 import { RANKING_UNREAD_NOTE } from '../../core/jobs';
 import {
-  edhrecUrl, emptyRankingNote, failureText, fetchedAgo, filtersApply, FIRST_PAGE, fmtMetric, metricLabel, nextPage, OWN_LABEL, partialRankingNote, rankedCard, rankedTypes,
-  rankingPage, rankingRequest, rankingSummary, roleFor, SCOPE_LABEL, TIMEFRAME_LABEL, timeframeApplies,
+  edhrecUrl, emptyRankingNote, failureText, fetchedAgo, FIRST_PAGE, fmtMetric, metricLabel, nextPage, OWN_LABEL, partialRankingNote, rankedCard, rankedTypes,
+  rankingPage, rankingRequest, rankingSummary, roleFor, SCOPE_LABEL, tagApplies, TIMEFRAME_LABEL, timeframeApplies,
 } from '../../core/rankings';
 import { RANK_OWN, RANK_SCOPES, RANK_TIMEFRAMES, type CompareSearch, type RankOwn, type RankScope, type RankTimeframe } from '../../core/search';
 
@@ -39,7 +39,7 @@ const RANKING_HEALTH = ['edhrec-rankings/edhrec'];
 type Props = { search: CompareSearch; set: (p: Partial<CompareSearch>) => void; subnav: ReactNode };
 
 /** Explore → Rankings: EDHREC's top commanders (narrowed by any mix of color,
- *  tag and set), top cards and saltiest cards, each joined to what you own. The
+ *  tag and set) and top cards (narrowed by color and set), each joined to what you own. The
  *  first 100 show; "Load more" adds 50 at a time from the cached list. A list
  *  never read is fetched as a job with progress. */
 export function RankingsExplore({ search, set, subnav }: Props) {
@@ -55,7 +55,7 @@ export function RankingsExplore({ search, set, subnav }: Props) {
   // The list dims while a filter change loads, not while "Load more" fetches.
   const dim = ranking.isPlaceholderData && limit === FIRST_PAGE;
   const opts = useQuery(rankingOptionsQuery());
-  const commanders = filtersApply(search);
+  const commanders = tagApplies(search);
   const { selected, toggle, clear } = useSelection('explore');
   const [inspecting, setInspecting] = useState<GuideCard | null>(null);
 
@@ -105,18 +105,22 @@ export function RankingsExplore({ search, set, subnav }: Props) {
         <TextField name="rq" label="Card name" value={search.rq} placeholder="e.g. Krenko…" onChange={(rq) => set({ rq })} />
       </SideSection>
       <SideSection title="Show" quiet>
-        <SelectField<RankScope> label="List" value={search.rank} onChange={(rank) => set({ rank })} options={RANK_SCOPES.map((s) => ({ value: s, label: SCOPE_LABEL[s] }))} />
-        <fieldset disabled={!commanders} className="flex min-w-0 flex-col gap-4 disabled:opacity-55" aria-describedby={commanders ? undefined : 'rank-filters-note'}>
-          <legend className="sr-only">Narrow top commanders</legend>
+        <Segmented<RankScope> label="List" showLabel value={search.rank} onChange={(rank) => set({ rank })} options={RANK_SCOPES.map((s) => ({ value: s, label: SCOPE_LABEL[s] }))} />
+        <div className="flex min-w-0 flex-col gap-4">
           <SearchSelect
             label="Color identity"
             noun="color identity"
             nouns="color identities"
             value={search.color ?? ''}
+            labelExtra={<InfoTip label="What does color identity narrow?">{commanders ? 'Commanders with exactly this colour identity.' : 'Cards that fit in a deck of these colours, colourless included.'}</InfoTip>}
             onChange={(color) => set({ color: color || undefined })}
             options={[{ value: '', label: 'Any' }, ...(opts.data?.colors ?? []).map((c) => ({ value: c.slug, label: c.label, hint: c.colors || 'C' }))]}
           />
-          <TagField key={search.tag ?? ''} value={search.tag ?? ''} suggestions={opts.data?.tags ?? []} onCommit={(tag) => set({ tag: tag || undefined })} />
+          <fieldset disabled={!commanders} className="min-w-0 disabled:opacity-55" aria-describedby={commanders ? undefined : 'rank-filters-note'}>
+            <legend className="sr-only">Narrow top commanders</legend>
+            <TagField key={search.tag ?? ''} value={search.tag ?? ''} suggestions={opts.data?.tags ?? []} onCommit={(tag) => set({ tag: tag || undefined })} />
+            {!commanders && <p id="rank-filters-note" className="mt-1.5 text-sm text-on-chrome-muted">Tag narrows top commanders.</p>}
+          </fieldset>
           <SearchSelect
             label="Set family"
             noun="family"
@@ -130,11 +134,10 @@ export function RankingsExplore({ search, set, subnav }: Props) {
               ...(fams ?? []).map((f) => ({ value: f.value, label: f.label, hint: f.owned ? `${f.value.toUpperCase()} · owned` : f.value.toUpperCase() })),
             ]}
           />
-          {!commanders && <p id="rank-filters-note" className="text-sm text-on-chrome-muted">Color, tag and set narrow top commanders.</p>}
-        </fieldset>
+        </div>
         <fieldset disabled={!tfOn} className="min-w-0 disabled:opacity-55" aria-describedby={tfOn ? undefined : 'rank-tf-note'}>
           <Segmented<RankTimeframe> label="Timeframe" showLabel value={search.tf} onChange={(tf) => set({ tf })} options={RANK_TIMEFRAMES.map((t) => ({ value: t, label: TIMEFRAME_LABEL[t] }))} />
-          {!tfOn && <p id="rank-tf-note" className="mt-1.5 text-sm text-on-chrome-muted">{search.rank === 'salt' ? 'Salt is rated over all time.' : 'Set and tag lists cover all time.'}</p>}
+          {!tfOn && <p id="rank-tf-note" className="mt-1.5 text-sm text-on-chrome-muted">Set and tag lists cover all time.</p>}
         </fieldset>
         <Segmented<RankOwn> label="Ownership" showLabel value={search.own} onChange={(own) => set({ own })} options={RANK_OWN.map((o) => ({ value: o, label: OWN_LABEL[o] }))} />
       </SideSection>
@@ -170,7 +173,7 @@ export function RankingsExplore({ search, set, subnav }: Props) {
   } else if (r && r.pool === 0) {
     body = (
       <EmptyNote title="Nothing ranked">
-        {r.base > 0 ? 'No commander in this list matches all your filters. Set one of them to Any.' : emptyRankingNote(search, famName)}
+        {r.base > 0 ? `No ${search.rank === 'cards' ? 'card' : 'commander'} in this list matches all your filters. Set one of them to Any.` : emptyRankingNote(search, famName)}
       </EmptyNote>
     );
   } else if (r && r.total === 0) {
@@ -257,7 +260,7 @@ function TagField({ value, suggestions, onCommit }: { value: string; suggestions
 }
 
 /** The ranking as a ruled list: # · art · name · card type · creature type ·
- *  color identity · mana cost · decks or salt · from $ · you own. Lower-priority
+ *  color identity · mana cost · decks · from $ · you own. Lower-priority
  *  columns give way as the sheet narrows (container queries). */
 function RankingList({ r, rows, cards, selected, onToggle, onInspect, footer }: { r: RankingOut; rows: RankedOut[]; cards: GuideCard[]; selected: ReadonlySet<string>; onToggle: (k: string) => void; onInspect: (c: GuideCard) => void; footer?: ReactNode }) {
   const scope = r.scope as RankScope;
@@ -277,9 +280,7 @@ function RankingList({ r, rows, cards, selected, onToggle, onInspect, footer }: 
             <th scope="col" className="hidden w-[5.5rem] py-1.5 pl-3 font-medium @[36rem]:table-cell">Colors</th>
             <th scope="col" className="hidden w-28 py-1.5 pl-3 font-medium @[54rem]:table-cell">Cost</th>
             <th scope="col" className="w-14 py-1.5 pl-3 text-right font-medium @[30rem]:w-20">
-              {scope === 'salt' ? (
-                <span className="inline-flex items-center gap-1">Salt<InfoTip label="What is salt?" tone="paper">EDHREC players’ average rating (0–4) of how unfun a card is to play against.</InfoTip></span>
-              ) : 'Decks'}
+              {metricLabel(scope)}
             </th>
             <th scope="col" className="hidden w-20 py-1.5 pl-3 text-right font-medium @[30rem]:table-cell">From</th>
             <th scope="col" className="w-14 py-1.5 pl-3 text-right font-medium @[30rem]:w-28">You own</th>
@@ -311,6 +312,7 @@ function RankingList({ r, rows, cards, selected, onToggle, onInspect, footer }: 
                       {x.name}
                     </Link>
                   </CardHover>
+                  {x.reprint && <span className="block text-xs text-ink-muted">reprint</span>}
                 </th>
                 <td className="hidden truncate pl-3 text-ink-muted @[46rem]:table-cell" title={types.card ?? undefined}>{types.card ?? '—'}</td>
                 <td className="hidden truncate pl-3 text-ink-muted @[64rem]:table-cell" title={types.sub ?? undefined}>{types.sub ?? '—'}</td>

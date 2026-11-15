@@ -63,16 +63,16 @@ test('partner commanders show both cards: one in front, the partner peeking from
 test('a ranking never read is fetched as a job with progress, then shown', async ({ page }) => {
   let cached = false;
   let submitted: unknown = null;
-  const salt = {
-    scope: 'salt', timeframe: 'all', filter: '', title: 'Saltiest cards', fetched_at: '2026-10-06T10:00:00+00:00',
+  const top = {
+    scope: 'cards', timeframe: 'week', filter: 'color:azorius', title: 'Top cards · Azorius · past week', fetched_at: '2026-10-06T10:00:00+00:00',
     total: 1, base: 1, pool: 1, owned: 0, unused: 0, offset: 0, local_filters: [],
-    rows: [{ rank: 1, name: 'Stasis', slug: 'stasis', num_decks: 18038, salt: 3.0572, trend: null, facts: { ...ranking.rows[1].facts, owned: 0, free: 0 } }],
+    rows: [{ rank: 1, name: 'Stasis', slug: 'stasis', num_decks: 18038, salt: null, trend: null, reprint: true, facts: { ...ranking.rows[1].facts, owned: 0, free: 0 } }],
   };
-  await page.route('**/api/explore/ranking?*', (r) => r.fulfill({ json: cached ? { ...salt, cached: true } : { ...salt, cached: false, fetched_at: null, rows: [] } }));
+  await page.route('**/api/explore/ranking?*', (r) => r.fulfill({ json: cached ? { ...top, cached: true } : { ...top, cached: false, fetched_at: null, rows: [] } }));
   const sse = [
     ['status', { status: 'running' }],
     ['progress', { done: 1, total: 1, message: 'Matching 100 cards to your collection', level: 'info' }],
-    ['result', { summary: 'Saltiest cards: 100 entries', artifacts: [] }],
+    ['result', { summary: 'Top cards: 100 entries', artifacts: [] }],
     ['status', { status: 'succeeded' }],
   ].map(([e, d], i) => `event: ${e}\ndata: ${JSON.stringify(d)}\nid: ${i + 1}\n\n`).join('');
   await page.route('**/api/jobs/edhrec.rankings', (r) => {
@@ -84,12 +84,13 @@ test('a ranking never read is fetched as a job with progress, then shown', async
     await r.fulfill({ status: 200, contentType: 'text/event-stream', body: sse });
   });
 
-  await page.goto('/explore?rank=salt&rview=list');
-  await expect(page.getByRole('row', { name: /Stasis/ })).toContainText('3.06');
-  expect(submitted).toEqual({ scope: 'salt', timeframe: 'week', refresh: false });
-  // salt is all-time: the timeframe stays in place, disabled, and says why
-  await expect(page.getByRole('radio', { name: 'Week' })).toBeDisabled();
-  await expect(page.getByText('Salt is rated over all time.')).toBeVisible();
+  // a stale tag in the URL is never sent for top cards; colour is
+  await page.goto('/explore?rank=cards&color=azorius&tag=goblins&rview=list');
+  await expect(page.getByRole('row', { name: /Stasis/ })).toContainText('reprint');
+  expect(submitted).toEqual({ scope: 'cards', timeframe: 'week', color: 'azorius', refresh: false });
+  // colour alone keeps the timeframe; the tag control is disabled and says why
+  await expect(page.getByRole('radio', { name: 'Week' })).toBeEnabled();
+  await expect(page.getByText('Tag narrows top commanders.')).toBeVisible();
 });
 
 test('color, tag and set are laid out together, each Any, and combine', async ({ page }) => {
@@ -128,11 +129,12 @@ test('color, tag and set are laid out together, each Any, and combine', async ({
   await page.getByRole('option', { name: 'Any', exact: true }).click();
   await expect(page).not.toHaveURL(/color=/);
 
-  // the filters narrow commanders: on top cards they stay in place, disabled, and say so
-  await page.getByRole('button', { name: /^List Top/ }).click();
-  await page.getByRole('menuitemradio', { name: 'Top cards' }).click();
-  await expect(color).toBeDisabled();
-  await expect(page.getByText('Color, tag and set narrow top commanders.')).toBeVisible();
+  // on top cards colour and set stay, the tag is disabled and says so
+  await page.getByRole('radio', { name: 'Top cards' }).click();
+  await expect(color).toBeEnabled();
+  await expect(fam).toBeEnabled();
+  await expect(page.getByRole('combobox', { name: 'Tag or creature type' })).toBeDisabled();
+  await expect(page.getByText('Tag narrows top commanders.')).toBeVisible();
 });
 
 test('the first 100 show; Load more adds 50 at a time', async ({ page }) => {
