@@ -510,3 +510,24 @@ def test_a_card_new_to_the_family_is_not_a_reprint_because_a_child_set_reprints_
                                                                         {"name": "Sol Ring", "slug": "sol-ring"}]}]))
         conn.commit()
     assert edhrec.set_reprint_slugs("aaa") == {"sol-ring"}
+
+
+def test_reprint_slugs_are_memoized_until_a_page_is_refetched(tmp_db, monkeypatch):
+    class _RS:
+        code, all_codes = "mmm", ["mmm"]
+    monkeypatch.setattr(sets, "resolve", lambda s: _RS())
+    edhrec._reprint_memo.clear()
+    page = lambda: {"header": "x", "container": {"json_dict": {"cardlists": [
+        {"tag": "reprints", "cardviews": [{"name": "Sol Ring", "slug": "sol-ring"}]}]}}}
+    with db.connect() as conn:
+        edhrec._store_page(conn, page_type="commanders", slug="sets/mmm", timeframe="", at="2026-01-01", page=page())
+        conn.commit()
+    parsed = []
+    real = edhrec.cardlists
+    monkeypatch.setattr(edhrec, "cardlists", lambda p: (parsed.append(1), real(p))[1])
+    assert edhrec.set_reprint_slugs("mmm") == {"sol-ring"}
+    assert edhrec.set_reprint_slugs("mmm") == {"sol-ring"} and len(parsed) == 1
+    with db.connect() as conn:
+        edhrec._store_page(conn, page_type="commanders", slug="sets/mmm", timeframe="", at="2026-02-01", page=page())
+        conn.commit()
+    assert edhrec.set_reprint_slugs("mmm") == {"sol-ring"} and len(parsed) == 2

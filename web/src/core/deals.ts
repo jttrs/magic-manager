@@ -85,6 +85,8 @@ export const BASIS_LABEL: Record<Basis, string> = { market: 'sealed value', exac
 
 export const DEAL_SORTS = ['gap_pct', 'gap_usd', 'price', 'market', 'exact', 'floor', 'name'] as const;
 export type DealSort = (typeof DEAL_SORTS)[number];
+/** Sort labels the Deals and Secret Lair menus share. */
+export const DISCOUNT_SORT_LABEL = { gap_pct: 'Biggest discount %', gap_usd: 'Biggest discount $', name: 'Name' } as const;
 
 export type Offer = {
   url: string; store: string | null; price: number | null; available: boolean | null;

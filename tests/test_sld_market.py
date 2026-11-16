@@ -199,3 +199,80 @@ def test_price_refresh_bypasses_the_wrapper_cache(monkeypatch):
     monkeypatch.setattr(util, "run_wrapper", lambda argv, **kw: (seen.setdefault("env", kw.get("env")), _Res())[1])
     scryfall.collection([{"id": "x"}], live=True)
     assert seen["env"]["SCRYFALL_CACHE_TTL"] == "0"
+
+
+def _drop(monkeypatch, product, ids=None, name="Z"):
+    monkeypatch.setattr(sld, "identify_drop", lambda n: {"name": name, "release_date": "2026-01-01",
+                                                         "file_names": ["Z_SLD"], "ids": ids or [CARD]})
+    monkeypatch.setattr(valuation, "sld_sealed_product", lambda *a, **k: product)
+    monkeypatch.setattr(valuation, "sld_sealed_market", lambda n, edition, **k: (10.0, "tcgcsv"))
+
+
+def test_floor_unpriced_counts_lines_without_a_floor_price(tmp_db, seed_cards, make_card, monkeypatch):
+    seed_cards([make_card(id=CARD, oracle_id="o1", name="Counterspell", set="sld", collector_number="2664", prices={})])
+    _drop(monkeypatch, None)
+    c = market.product_cost("sld", "sld", "z", "nonfoil")
+    assert c["floor_unpriced"] == 1 and c["known_floor"] is None and c["unpriced"] == 1
+
+
+def test_foil_edition_priced_nonfoil_prices_bonus_lines_nonfoil_too(tmp_db, seed_cards, make_card, monkeypatch):
+    seed_cards([
+        make_card(id=CARD, oracle_id="o1", name="Counterspell", set="sld", collector_number="2664", prices={"usd": "13.00"}),
+        make_card(id=BONUS, oracle_id="o2", name="Clone", set="sld", collector_number="7164", prices={"usd": "3.00"}),
+    ])
+    _drop(monkeypatch, {"name": "P", "contents": {"card": [{"set": "sld", "number": "7164"}]}})
+    monkeypatch.setattr(construct, "product_card_ids", lambda p: [BONUS])
+    c = market.product_cost("sld", "sld", "z", "foil")
+    assert any("only priced nonfoil" in n for n in c["notes"])
+    assert {ln["name"]: (ln["finish"], ln["unit_usd"]) for ln in c["lines"]} == {
+        "Counterspell": ("nonfoil", 13.0), "Clone": ("nonfoil", 3.0)}
+
+
+def test_possible_candidate_equal_to_a_named_id_is_listed_once_as_named(monkeypatch):
+    product = {"contents": {"pack": [{"code": "bonus-z"}]}}
+    monkeypatch.setattr(construct, "product_card_ids", lambda p: [BONUS])
+    monkeypatch.setattr(mtgjson, "set_file", lambda code: {"booster": {"bonus-z": {"sheets": {"s": {"cards": {"u": 1}}}}}})
+    monkeypatch.setattr(mtgjson, "uuid_scryfall_ids", functools.cache(lambda code: {"u": BONUS}))
+    assert market._sld_bonus_ids(product) == ([BONUS], [], None)
+
+
+def test_a_bonus_id_that_is_also_a_decklist_id_is_not_listed_as_bonus(tmp_db, seed_cards, make_card, monkeypatch):
+    _seed(seed_cards, make_card)
+    _drop(monkeypatch, {"name": "P", "contents": {"card": [{"set": "sld", "number": "2664"}]}})
+    monkeypatch.setattr(construct, "product_card_ids", lambda p: [CARD])
+    c = market.product_cost("sld", "sld", "z", "nonfoil")
+    assert [(ln["name"], ln["bonus"]) for ln in c["lines"]] == [("Counterspell", None)]
+
+
+def test_unreadable_bonus_candidates_are_noted_not_swallowed(tmp_db, seed_cards, make_card, monkeypatch):
+    _seed(seed_cards, make_card)
+    _drop(monkeypatch, {"name": "P", "contents": {"pack": [{"code": "bonus-z"}]}})
+
+    def boom(code):
+        raise mtgjson.MtgJsonError("HTTP 503")
+    monkeypatch.setattr(mtgjson, "set_file", boom)
+    c = market.product_cost("sld", "sld", "z", "nonfoil")
+    assert any("couldn't read the bonus pack's candidates (HTTP 503)" in n for n in c["notes"])
+    assert [ln["bonus"] for ln in c["lines"]] == [None]
+
+
+def test_cost_lines_carry_the_exact_printings_image(tmp_db, seed_cards, make_card, monkeypatch):
+    _seed(seed_cards, make_card)
+    _drop(monkeypatch, None)
+    c = market.product_cost("sld", "sld", "z", "nonfoil")
+    with market.db.connect() as conn:
+        want = conn.execute("SELECT image_uri FROM cards WHERE scryfall_id=?", (CARD,)).fetchone()[0]
+    assert c["lines"][0]["image_uri"] == want
+
+
+def test_a_refresh_clears_that_products_memo_in_every_scope(tmp_db, seed_cards, make_card, monkeypatch):
+    _seed(seed_cards, make_card)
+    _drop(monkeypatch, None)
+    other = ("someone-else", "sld", "sld", "z", "nonfoil")
+    unrelated = ("someone-else", "sld", "sld", "other drop", "nonfoil")
+    market._cost_memo[other] = (0.0, (), {})
+    market._cost_memo[unrelated] = (0.0, (), {})
+    monkeypatch.setattr(market.sets, "refresh_printing_prices",
+                        lambda ids: {"refreshed": 1, "prices_at": None, "preorder": False})
+    market.product_cost("sld", "sld", "z", "nonfoil")
+    assert other not in market._cost_memo and unrelated in market._cost_memo

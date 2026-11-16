@@ -28,10 +28,10 @@ import { IconAction } from '../components/IconAction';
 import { MarketTabs } from './market/MarketTabs';
 import { collectionBuyList, type CardPriceOut, type DeckCostOut } from '../core/api';
 import { fmtCount, fmtInt, fmtUsd } from '../core/format';
-import { filterListings, filterSortProducts, PRODUCT_TYPE_LABEL, PRODUCT_TYPES, dealCounts, type Basis, type DealSort } from '../core/deals';
+import { filterListings, filterSortProducts, PRODUCT_TYPE_LABEL, PRODUCT_TYPES, dealCounts, DISCOUNT_SORT_LABEL, type Basis, type DealSort } from '../core/deals';
 import { contentsGap, deckBuyItems, deckLedger, filterCardPrices, partialNote, premium, productGroups, type ProductRow } from '../core/market';
 import type { MarketSearch } from '../core/search';
-import { effectiveTypes, typesToSearch } from '../core/decks';
+import { deckTypeCounts, effectiveTypes, typesToSearch } from '../core/decks';
 
 const route = getRouteApi('/market');
 
@@ -51,11 +51,7 @@ export function MarketView() {
   const defaultTypes = effectiveTypes({ types: search.dtypes, sets: [] });
   // With no Commander deck at all, the default would leave an empty picker: show every type.
   const deckTypes = !search.dtypes.length && defaultTypes && decks.data && !decks.data.some((d) => defaultTypes.includes(d.deck_type)) ? null : defaultTypes;
-  const deckTypeOptions = useMemo(() => {
-    const n = new Map<string, number>();
-    for (const d of decks.data ?? []) n.set(d.deck_type, (n.get(d.deck_type) ?? 0) + 1);
-    return [...n].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([t, c]) => ({ value: t, label: t, count: c }));
-  }, [decks.data]);
+  const deckTypeOptions = useMemo(() => deckTypeCounts(decks.data ?? []), [decks.data]);
   const cost = useQuery({ ...deckCostQuery(search.deck, search.live), enabled: subject === 'deck' && Boolean(search.deck) });
 
   const famName = fams.data?.find((f) => f.code === search.code)?.name ?? search.code;
@@ -265,8 +261,8 @@ export function MarketView() {
         defaultValue="gap_pct"
         onChange={(dsort) => setFilter({ dsort })}
         options={[
-          { value: 'gap_pct', label: 'Biggest discount %' }, { value: 'gap_usd', label: 'Biggest discount $' }, { value: 'price', label: 'Lowest price' },
-          { value: 'market', label: 'Sealed value' }, { value: 'exact', label: 'Cards value, exact' }, { value: 'floor', label: 'Cards value, cheapest' }, { value: 'name', label: 'Name' },
+          { value: 'gap_pct', label: DISCOUNT_SORT_LABEL.gap_pct }, { value: 'gap_usd', label: DISCOUNT_SORT_LABEL.gap_usd }, { value: 'price', label: 'Lowest price' },
+          { value: 'market', label: 'Sealed value' }, { value: 'exact', label: 'Cards value, exact' }, { value: 'floor', label: 'Cards value, cheapest' }, { value: 'name', label: DISCOUNT_SORT_LABEL.name },
         ]}
       />
     ) : subject === 'sld' ? (

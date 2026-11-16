@@ -845,16 +845,26 @@ def _is_set_card_list(tag: str) -> bool:
     return tag in ("cards", "reprints") or tag.startswith("cards(")
 
 
+_reprint_memo: dict[str, tuple[tuple, set[str]]] = {}
+
+
 def set_reprint_slugs(set_family: str) -> set[str]:
     """Slugs EDHREC lists as REPRINTS on a family's stored set pages (offline: the
     snapshots a set ranking already read). Used to tag top cards that ship in the
-    family but were printed before it."""
-    codes = [c.lower() for c in sets.resolve(set_family).all_codes]
-    out: set[str] = set()
+    family but were printed before it. Memoized per family anchor on the stored
+    pages' ``(slug, fetched_at, size)`` stamp, so the json is parsed only after a re-fetch."""
+    resolved = sets.resolve(set_family)
+    codes = [c.lower() for c in resolved.all_codes]
+    slugs = [f"sets/{c}" for c in codes]
+    marks = ",".join("?" * len(slugs))
     with db.connect() as conn:
-        rows = conn.execute(
-            f"SELECT json FROM edhrec_pages WHERE slug IN ({','.join('?' * len(codes))})",
-            [f"sets/{c}" for c in codes]).fetchall()
+        stamp = tuple(tuple(r) for r in conn.execute(
+            f"SELECT slug, fetched_at, length(json) FROM edhrec_pages WHERE slug IN ({marks}) ORDER BY slug, page_type, timeframe", slugs).fetchall())
+        hit = _reprint_memo.get(resolved.code)
+        if hit and hit[0] == stamp:
+            return set(hit[1])
+        rows = conn.execute(f"SELECT json FROM edhrec_pages WHERE slug IN ({marks})", slugs).fetchall()
+    out: set[str] = set()
     own: set[str] = set()
     for r in rows:
         for tagname, cvs in cardlists(json.loads(r["json"])).items():
@@ -862,7 +872,9 @@ def set_reprint_slugs(set_family: str) -> set[str]:
             if bucket is not None:
                 bucket.update(cv["slug"] for cv in cvs or [] if cv.get("slug"))
     # A card new to the family stays new even when a later child set reprints it.
-    return out - own
+    result = out - own
+    _reprint_memo[resolved.code] = (stamp, result)
+    return set(result)
 
 
 def _is_set_commander_list(tag: str) -> bool:

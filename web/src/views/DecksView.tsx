@@ -42,8 +42,8 @@ export function DecksView() {
   const narrow = useMediaQuery('(max-width: 47.99rem)');
 
   const all = useMemo(() => recipes.data?.recipes ?? [], [recipes.data]);
-  const { q, source, own, cover, types, sets } = search;
-  const filters = useMemo(() => ({ q, source, own, cover, types, sets }), [q, source, own, cover, types, sets]);
+  const { q, origins, own, cover, types, sets } = search;
+  const filters = useMemo(() => ({ q, origins, own, cover, types, sets }), [q, origins, own, cover, types, sets]);
   const shown = useMemo(() => filterRecipes(all, filters), [all, filters]);
   const counts = useMemo(() => optionCounts(all, filters), [all, filters]);
   const groups = useMemo(() => groupRecipes(shown, search.group), [shown, search.group]);
@@ -93,9 +93,9 @@ export function DecksView() {
           noun="sources"
           searchable={false}
           keepOrder
-          value={search.source}
-          onChange={(source) => set({ source: source as DecksSearch['source'] })}
-          options={counts.source}
+          value={search.origins}
+          onChange={(source) => set({ origins: source as DecksSearch['origins'] })}
+          options={counts.origins}
         />
         <MultiSelect
           label="Deck type"

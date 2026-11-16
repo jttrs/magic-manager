@@ -94,13 +94,13 @@ export const OWNERSHIP = ['built', 'loose', 'none'] as const;
 export const COVER = ['any', 'build', 'close'] as const;
 const SHOPS = ['buildable', 'packs'] as const;
 
-const decksSearchShape = z.object({
+export const decksSearch = z.object({
   /** The recipe open in the inspector: your deck's slug, or `fn:<fileName>` for a catalog recipe. */
   deck: z.string().optional().catch(undefined),
   /** `origin` (old links) groups by kind now. */
   group: z.preprocess((v) => (v === 'origin' ? 'kind' : v), z.enum(DECK_GROUPS)).catch('set').default('set'),
   /** Where the recipe comes from (Wizards / Imported / Custom); empty = all. */
-  source: list(z.enum(RECIPE_ORIGINS)).catch([]).default([]),
+  origins: list(z.enum(RECIPE_ORIGINS)).catch([]).default([]),
   /** Ownership to keep: built, loose (yours, not assembled) and/or not owned. Owned only by default. */
   own: list(z.enum(OWNERSHIP)).catch(['built', 'loose']).default(['built', 'loose']),
   /** Only recipes your free cards cover (build) or nearly cover (close = build or close). */
@@ -119,33 +119,45 @@ const decksSearchShape = z.object({
   built: z.boolean().optional().catch(undefined),
   view,
 });
-export type DecksSearch = z.infer<typeof decksSearchShape>;
+export type DecksSearch = z.infer<typeof decksSearch>;
 
-/** Old `/decks` links: `kinds=` precon|import|custom → `source`, `jumpstart` → the Jumpstart deck type. */
+/** Old `/decks` links: `source=` (the old key) → `origins`; `kinds=` precon|import|custom → `origins`,
+ *  `jumpstart` → the Jumpstart deck type. The route applies this before validating. */
 export function legacyDecksSearch(raw: Record<string, unknown>): Record<string, unknown> {
-  if (!('kinds' in raw)) return raw;
-  const { kinds, ...rest } = raw;
+  let next = raw;
+  if ('source' in next) {
+    const { source, ...rest } = next;
+    next = 'origins' in rest ? rest : { ...rest, origins: source };
+  }
+  if (!('kinds' in next)) return next;
+  const { kinds, ...rest } = next;
   const old = (Array.isArray(kinds) ? kinds : kinds == null ? [] : [kinds]).map(String);
-  const source = old.filter((k) => (RECIPE_ORIGINS as readonly string[]).includes(k));
+  const origins = old.filter((k) => (RECIPE_ORIGINS as readonly string[]).includes(k));
   const types = Array.isArray(rest.types) ? rest.types.map(String) : [];
   const jumpstart = old.includes('jumpstart');
-  if (jumpstart && !source.length) {
+  if (jumpstart && !origins.length) {
     // jumpstart alone: the Jumpstart deck type
     if (!types.includes('Jumpstart')) types.push('Jumpstart');
-  } else if (jumpstart && !source.includes('precon')) {
-    source.push('precon'); // jumpstart + others widened: Jumpstart packs are Wizards products
+  } else if (jumpstart && !origins.includes('precon')) {
+    origins.push('precon'); // jumpstart + others widened: Jumpstart packs are Wizards products
   }
   // An old link showed every deck type; keep that rather than the newer Commander default.
   if (old.length && !types.length) types.push('all');
-  const next: Record<string, unknown> = { ...rest };
-  if (source.length && !('source' in rest)) next.source = source;
-  if (types.length) next.types = types;
-  return next;
+  const out: Record<string, unknown> = { ...rest };
+  if (origins.length && !('origins' in rest)) out.origins = origins;
+  if (types.length) out.types = types;
+  return out;
 }
 
-/** The `/decks` search schema: legacy links mapped first, then validated. (Typed as the plain shape so the
- *  router keeps the key-level search types; the preprocess only reshapes old keys.) */
-export const decksSearch = z.preprocess((raw) => (raw && typeof raw === 'object' ? legacyDecksSearch(raw as Record<string, unknown>) : raw), decksSearchShape) as unknown as typeof decksSearchShape;
+/** The `/decks` route's search validator: `decksSearch` after the legacy keys are mapped. A Standard Schema
+ *  that keeps `decksSearch`'s input/output types, so the router's key-level link types are unchanged. */
+export const decksSearchValidator = {
+  '~standard': {
+    ...decksSearch['~standard'],
+    validate: (value: unknown) =>
+      decksSearch['~standard'].validate(value && typeof value === 'object' ? legacyDecksSearch(value as Record<string, unknown>) : value),
+  },
+};
 
 const MARKET_SUBJECTS = ['family', 'deck', 'sld', 'deals'] as const;
 const MARKET_TABS = ['products', 'cards'] as const;
