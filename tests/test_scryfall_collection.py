@@ -18,7 +18,7 @@ from magic_manager import scryfall
 def _run_raising_on(bad_set):
     """A fake _run that 400s any page containing a {'set': bad_set} identifier,
     else echoes each identifier back as a found card keyed by its 'set'."""
-    def fake_run(args, stdin=None):
+    def fake_run(args, stdin=None, **_):
         idents = json.loads(stdin)["identifiers"]
         if any(i.get("set") == bad_set for i in idents):
             raise scryfall.ScryfallError("HTTP 400: bad set code")
@@ -39,7 +39,7 @@ def test_collection_bisects_to_quarantine_bad_identifier(monkeypatch):
 
 def test_collection_all_bad_degrades_to_all_not_found(monkeypatch):
     # Every identifier malformed → each isolated, none found, no raise.
-    def fake_run(args, stdin=None):
+    def fake_run(args, stdin=None, **_):
         raise scryfall.ScryfallError("400")
     monkeypatch.setattr(scryfall, "_run", fake_run)
     idents = [{"set": "x"}, {"set": "y"}]
@@ -50,7 +50,7 @@ def test_collection_all_bad_degrades_to_all_not_found(monkeypatch):
 
 def test_collection_clean_batch_no_bisection(monkeypatch):
     calls = {"n": 0}
-    def fake_run(args, stdin=None):
+    def fake_run(args, stdin=None, **_):
         calls["n"] += 1
         idents = json.loads(stdin)["identifiers"]
         return {"data": [{"id": i["id"]} for i in idents], "not_found": []}
@@ -61,7 +61,7 @@ def test_collection_clean_batch_no_bisection(monkeypatch):
 
 
 def test_resolve_identifiers_builds_indexes(monkeypatch):
-    monkeypatch.setattr(scryfall, "_run", lambda args, stdin=None: {
+    monkeypatch.setattr(scryfall, "_run", lambda args, stdin=None, **_: {
         "data": [{"id": "sid1", "set": "fin", "collector_number": "233", "name": "Lightning"},
                  {"id": "sid2", "set": "pw25", "collector_number": "16", "name": "Yuna // Back"}],
         "not_found": [],
@@ -78,7 +78,7 @@ def test_resolve_identifiers_builds_indexes(monkeypatch):
 
 
 def test_resolve_identifiers_folds_not_found_into_warnings(monkeypatch):
-    monkeypatch.setattr(scryfall, "_run", lambda args, stdin=None: {
+    monkeypatch.setattr(scryfall, "_run", lambda args, stdin=None, **_: {
         "data": [], "not_found": [{"id": "ghost"}],
     })
     by_sid, by_setcn, by_name, warnings = scryfall.resolve_identifiers([{"id": "ghost"}], [])

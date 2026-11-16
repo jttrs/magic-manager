@@ -11,7 +11,7 @@ import functools
 import pytest
 from fastapi.testclient import TestClient
 
-from magic_manager import construct, market, mtgjson, sealed, sld, sld_market, valuation
+from magic_manager import construct, market, mtgjson, scryfall, sealed, sld, sld_market, valuation
 from magic_manager.web.app import create_app
 
 CARD = "44444444-0000-0000-0000-000000000001"
@@ -159,3 +159,43 @@ def test_secret_lair_route(tmp_db, monkeypatch):
         r = c.get("/api/market/secret-lair", params={"limit": 5})
         assert r.status_code == 200 and r.json()["total"] == 7
         assert c.get("/api/market/secret-lair", params={"limit": 0}).status_code == 422
+
+
+def test_sld_cost_refreshes_the_drops_printings_and_reports_freshness(tmp_db, seed_cards, make_card, monkeypatch):
+    _seed(seed_cards, make_card)
+    product = {"name": "X", "contents": {"card": [{"set": "sld", "number": "7164"}]}}
+    monkeypatch.setattr(sld, "identify_drop", lambda name: {"name": "X", "release_date": "2026-11-12", "file_names": ["X_SLD"], "ids": [CARD]})
+    monkeypatch.setattr(valuation, "sld_sealed_product", lambda *a, **k: product)
+    monkeypatch.setattr(valuation, "sld_sealed_market", lambda name, edition, **k: (10.0, "tcgcsv"))
+    monkeypatch.setattr(construct, "product_card_ids", lambda p: [BONUS])
+    asked = []
+    monkeypatch.setattr(market.sets, "refresh_printing_prices",
+                        lambda ids: (asked.append(list(ids)), {"refreshed": 1, "prices_at": "2026-11-10T00:00:00+00:00", "preorder": True})[1])
+    c = market.product_cost("sld", "sld", "x", "nonfoil")
+    assert asked == [[BONUS], [CARD]]           # bonus printings refreshed too; freshness reported for the guaranteed cards
+    assert c["prices_at"].startswith("2026-11-10") and c["preorder"] is True
+
+
+def test_sld_cost_keeps_last_prices_when_scryfall_fails(tmp_db, seed_cards, make_card, monkeypatch):
+    _seed(seed_cards, make_card)
+    monkeypatch.setattr(sld, "identify_drop", lambda name: {"name": "Y", "release_date": "2026-01-01", "file_names": ["Y_SLD"], "ids": [CARD]})
+    monkeypatch.setattr(valuation, "sld_sealed_product", lambda *a, **k: None)
+    monkeypatch.setattr(valuation, "sld_sealed_market", lambda name, edition, **k: (None, None))
+
+    def boom(ids):
+        raise scryfall.ScryfallError("HTTP 503")
+    monkeypatch.setattr(market.sets, "refresh_printing_prices", boom)
+    c = market.product_cost("sld", "sld", "y", "nonfoil")
+    assert c["exact"] == 13.0 and c["prices_at"] is None and c["preorder"] is False
+    assert any("couldn't refresh prices" in n for n in c["notes"])
+
+
+def test_price_refresh_bypasses_the_wrapper_cache(monkeypatch):
+    from magic_manager import util
+    seen = {}
+
+    class _Res:
+        returncode, stdout, stderr = 0, '{"data": [], "not_found": []}', ""
+    monkeypatch.setattr(util, "run_wrapper", lambda argv, **kw: (seen.setdefault("env", kw.get("env")), _Res())[1])
+    scryfall.collection([{"id": "x"}], live=True)
+    assert seen["env"]["SCRYFALL_CACHE_TTL"] == "0"

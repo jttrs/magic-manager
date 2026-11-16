@@ -16,8 +16,10 @@ web app and Deals):
     cards).
 
 Prices are local-first (CLAUDE.md § Price freshness): a missing ``sld`` sync is
-filled; stale prices are used as-is. ``--refresh`` is accepted for CLI surface
-consistency and has no additional effect.
+filled. Exception: each drop's own printings whose prices are stale or dated
+before release (preorder) are re-read from Scryfall first (``sets.refresh_printing_prices``,
+targeted — a few cards per drop, not a set sync). ``--refresh`` is accepted for CLI
+surface consistency and has no additional effect.
 
 Usage:
     uv run python scripts/secret_lair_value.py            # 10 newest, regular editions

@@ -14,6 +14,7 @@ Thin composition over the existing engines (no new valuation math):
 from __future__ import annotations
 
 import re
+import sqlite3
 import time
 from dataclasses import dataclass, field
 from typing import Callable
@@ -329,13 +330,18 @@ def _sld_cost(name: str, finish: str | None) -> dict:
     ids = drop.get("ids") or sld.collect_drop_ids(drop["file_names"])
     notes = []
     named, possible = _sld_bonus_ids(product)
+    named = [i for i in named if i not in ids]          # a bonus is never also a decklist card
+    possible = [i for i in possible if i not in ids]
     # New drops are first priced before release (preorder prices, which fall once
     # boxes ship): re-read stale or pre-release prices for these printings only.
+    # Freshness is reported for the guaranteed cards (the ones in the totals).
     try:
-        fresh = sets.refresh_printing_prices([*ids, *named, *possible])
-    except scryfall.ScryfallError as e:
+        if named or possible:
+            sets.refresh_printing_prices([*named, *possible])
+        fresh = sets.refresh_printing_prices(ids)
+    except (scryfall.ScryfallError, sqlite3.OperationalError) as e:
         fresh = {"prices_at": None, "preorder": False}
-        notes.append(f"couldn't refresh prices from Scryfall ({e}); showing the last prices read")
+        notes.append(f"couldn't refresh prices ({e}); showing the last prices read")
     exp = construct.expand_printings(ids, finish=fin, label=drop["name"], set_code="sld")
     price_fin = fin
     if fin == "foil" and not any(n.unit_usd is not None for n in exp.needs):

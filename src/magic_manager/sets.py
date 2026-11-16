@@ -2084,7 +2084,7 @@ def refresh_printing_prices(scryfall_ids: Iterable[str], *, older_than_days: int
            if not stamp or stamp[:10] < cutoff or _preorder(stamp, released)]
     refreshed = 0
     if due:
-        found, _missing = scryfall.collection([{"id": sid} for sid in due])
+        found, _missing = scryfall.collection([{"id": sid} for sid in due], live=True)   # never a cached body
         if found:
             with db.connect() as conn:
                 with db.catalog_first(conn):

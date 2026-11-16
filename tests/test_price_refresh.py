@@ -21,7 +21,7 @@ def test_rereads_only_stale_or_preorder_prices(tmp_db, seed_cards, make_card, mo
     _stamp(PREORDER, "2026-11-10T00:00:00+00:00", "2026-11-12")   # read before release
     asked: list[str] = []
 
-    def collection(identifiers):
+    def collection(identifiers, **_):
         ids = [i["id"] for i in identifiers]
         asked.extend(ids)
         cn = {STALE: "1", FRESH: "2", PREORDER: "3"}
@@ -39,7 +39,7 @@ def test_rereads_only_stale_or_preorder_prices(tmp_db, seed_cards, make_card, mo
 
 def test_a_price_still_dated_before_release_is_flagged(tmp_db, seed_cards, make_card, monkeypatch):
     seed_cards([make_card(id=PREORDER, set="sld", collector_number="3")])
-    monkeypatch.setattr(scryfall, "collection", lambda ids: ([], [{"id": PREORDER}]))   # Scryfall has nothing newer
+    monkeypatch.setattr(scryfall, "collection", lambda ids, **_: ([], [{"id": PREORDER}]))   # Scryfall has nothing newer
     _stamp(PREORDER, "2026-11-10T00:00:00+00:00", "2026-11-12")
     assert sets.refresh_printing_prices([PREORDER], today="2026-11-11")["preorder"] is True
     assert sets.refresh_printing_prices([], today="2026-11-11") == {"refreshed": 0, "prices_at": None, "preorder": False}

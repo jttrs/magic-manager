@@ -27,10 +27,13 @@ class ScryfallError(RuntimeError):
     """Raised when the wrapper exits non-zero or the API returns an error object."""
 
 
-def _run(args: list[str], stdin: str | None = None) -> dict:
+def _run(args: list[str], stdin: str | None = None, *, live: bool = False) -> dict:
+    """``live`` bypasses the wrapper's 24h cache for this call (a price re-read must
+    not replay a cached body under a fresh stamp)."""
     if not WRAPPER.exists():
         raise ScryfallError(f"wrapper missing: {WRAPPER}")
-    res = util.run_wrapper([str(WRAPPER), *args], error=ScryfallError, service="Scryfall", input=stdin)
+    env = {**os.environ, "SCRYFALL_CACHE_TTL": "0"} if live else None
+    res = util.run_wrapper([str(WRAPPER), *args], error=ScryfallError, service="Scryfall", input=stdin, env=env)
     if res.returncode != 0:
         raise ScryfallError(
             f"scryfall.sh {' '.join(args)} exited {res.returncode}: "
@@ -175,7 +178,7 @@ def deck_export(deck_id: str) -> dict:
 
 # ---------- bulk identifier lookup ----------
 
-def collection(identifiers: Iterable[dict]) -> tuple[list[dict], list[dict]]:
+def collection(identifiers: Iterable[dict], *, live: bool = False) -> tuple[list[dict], list[dict]]:
     """POST /cards/collection in batches of 75. Returns (found, not_found).
 
     Each ``identifier`` is one of ``{"name": ...}``, ``{"name": ..., "set": ...}``,
@@ -194,26 +197,26 @@ def collection(identifiers: Iterable[dict]) -> tuple[list[dict], list[dict]]:
     found: list[dict] = []
     not_found: list[dict] = []
     for i in range(0, len(ids), 75):
-        f, nf = _collection_page(ids[i : i + 75])
+        f, nf = _collection_page(ids[i : i + 75], live=live)
         found.extend(f)
         not_found.extend(nf)
     return found, not_found
 
 
-def _collection_page(ids: list[dict]) -> tuple[list[dict], list[dict]]:
+def _collection_page(ids: list[dict], live: bool = False) -> tuple[list[dict], list[dict]]:
     """One ≤75 /cards/collection call, bisecting on a hard error to quarantine a
     malformed identifier. Returns ``(found, not_found)`` for this page."""
     if not ids:
         return [], []
     try:
-        page = _run(["collection"], stdin=json.dumps({"identifiers": ids}))
+        page = _run(["collection"], stdin=json.dumps({"identifiers": ids}), live=live)
         return page.get("data", []), page.get("not_found", [])
     except ScryfallError:
         if len(ids) == 1:
             return [], [ids[0]]  # this lone identifier is the malformed one
         mid = len(ids) // 2
-        lf, lnf = _collection_page(ids[:mid])
-        rf, rnf = _collection_page(ids[mid:])
+        lf, lnf = _collection_page(ids[:mid], live)
+        rf, rnf = _collection_page(ids[mid:], live)
         return lf + rf, lnf + rnf
 
 

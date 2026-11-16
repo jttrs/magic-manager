@@ -8,6 +8,7 @@ import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { dealsMatch, dealsUnwatch, type MatchOut, type ProductCostOut } from '../../core/api';
 import { effectiveType, PRODUCT_TYPE_LABEL, stockLabel, tabProductKey, type DealProduct, type Offer, type PriceRow, type TabListing } from '../../core/deals';
 import { fmtUsd } from '../../core/format';
+import { splitBonus } from '../../core/secretLair';
 import { CardLines } from './CardLines';
 import { H3 } from './inspectorStyles';
 import { PriceHistory } from './PriceHistory';
@@ -65,9 +66,7 @@ export function DealInspector({ product: p, cost, costState, onPick }: { product
         </section>
       )}
 
-      {cost?.lines?.length ? (
-        <CardLines title="Cards" lines={cost.lines} sortable labels={{ need: 'Qty', exact: 'This printing', floor: 'Cheapest' }} />
-      ) : null}
+      {cost?.lines?.length ? <DealCardLines lines={cost.lines} /> : null}
     </section>
   );
 }
@@ -260,5 +259,23 @@ function WatchControl({ p }: { p: DealProduct }): ReactNode {
         <p>It stops being tracked at {urls.length === 1 ? 'its store' : `all ${urls.length} stores`}.</p>
       </ConfirmDialog>
     </span>
+  );
+}
+
+/** The product's cards; a Secret Lair's bonus cards sit in their own groups, never counted in its totals. */
+function DealCardLines({ lines }: { lines: ProductCostOut['lines'] }) {
+  const { cards, named, possible } = splitBonus(lines);
+  const labels = { need: 'Qty', exact: 'This printing', floor: 'Cheapest' };
+  return (
+    <>
+      {cards.length > 0 && <CardLines title="Cards" lines={cards} sortable labels={labels} />}
+      {named.length > 0 && <CardLines title="Bonus" lines={named} labels={labels} />}
+      {possible.length > 0 && (
+        <section aria-label="Possible bonus" className="flex flex-col gap-1">
+          <CardLines title="Possible bonus" lines={possible} labels={labels} />
+          <p className="text-sm text-ink-muted">One of these ships with the drop — odds unknown, so not counted.</p>
+        </section>
+      )}
+    </>
   );
 }
