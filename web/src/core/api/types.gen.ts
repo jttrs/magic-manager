@@ -2592,9 +2592,9 @@ export type DeckLineOut = {
     /**
      * Bonus
      *
-     * A Secret Lair drop's bonus card (shipped with the drop, not in its decklist).
+     * A Secret Lair drop's bonus, never counted in its totals: `named` = MTGJSON names the card, `possible` = one of a random bonus pack's candidates.
      */
-    bonus?: boolean;
+    bonus?: 'named' | 'possible' | null;
 };
 
 /**
@@ -5285,6 +5285,30 @@ export type ProductCostOut = {
      * Known cards with no price at their exact printing.
      */
     unpriced?: number;
+    /**
+     * Floor Unpriced
+     *
+     * Known cards with no price at any printing (the cheapest totals undercount).
+     */
+    floor_unpriced?: number;
+    /**
+     * Has Bonus
+     *
+     * Secret Lair: the drop ships a bonus card, never counted in the totals (they are the guaranteed value).
+     */
+    has_bonus?: boolean;
+    /**
+     * Prices At
+     *
+     * Secret Lair: the oldest price stamp behind the totals (after any refresh).
+     */
+    prices_at?: string | null;
+    /**
+     * Preorder
+     *
+     * Secret Lair: some price is still dated before its printing's release (a preorder price).
+     */
+    preorder?: boolean;
     /**
      * Notes
      */

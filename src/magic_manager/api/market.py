@@ -104,7 +104,7 @@ class DeckLineOut(BaseModel):
     floor_scryfall_id: str = Field(description="The cheapest printing (this one when unpriced elsewhere).")
     floor_finish: Literal["nonfoil", "foil"] = Field(
         "nonfoil", description="The floor printing's finish: nonfoil when a cheaper nonfoil printing exists, else this line's finish.")
-    bonus: bool = Field(False, description="A Secret Lair drop's bonus card (shipped with the drop, not in its decklist).")
+    bonus: Literal["named", "possible"] | None = Field(None, description="A Secret Lair drop's bonus, never counted in its totals: `named` = MTGJSON names the card, `possible` = one of a random bonus pack's candidates.")
 
 
 class DeckCostOut(BaseModel):
@@ -143,6 +143,10 @@ class ProductCostOut(BaseModel):
     booster_only: bool = False
     total_cards: int = 0
     unpriced: int = Field(0, description="Known cards with no price at their exact printing.")
+    floor_unpriced: int = Field(0, description="Known cards with no price at any printing (the cheapest totals undercount).")
+    has_bonus: bool = Field(False, description="Secret Lair: the drop ships a bonus card, never counted in the totals (they are the guaranteed value).")
+    prices_at: str | None = Field(None, description="Secret Lair: the oldest price stamp behind the totals (after any refresh).")
+    preorder: bool = Field(False, description="Secret Lair: some price is still dated before its printing's release (a preorder price).")
     notes: list[str] = Field(default_factory=list)
     sealed_name: str | None = Field(None, description="Secret Lair: the MTGJSON sealed product valued (None for older drops without one).")
     lines: list[DeckLineOut] = Field(default_factory=list, description="Every known card (exact + cheapest printing, your free copies).")
