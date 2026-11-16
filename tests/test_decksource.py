@@ -430,7 +430,7 @@ def test_import_deck_bad_identifier_does_not_sink_batch(tmp_db, monkeypatch, mak
     from magic_manager import scryfall
     good = make_card(id="sid-good", set="tst", collector_number="1", name="Good")
 
-    def fake_run(args, stdin=None):
+    def fake_run(args, stdin=None, **_):
         idents = _json.loads(stdin)["identifiers"]
         if any(i.get("set") == "bogus" for i in idents):
             raise scryfall.ScryfallError("HTTP 400: bad set code")  # whole-page 400

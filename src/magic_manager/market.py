@@ -14,6 +14,7 @@ Thin composition over the existing engines (no new valuation math):
 from __future__ import annotations
 
 import re
+import sqlite3
 import time
 from dataclasses import dataclass, field
 from typing import Callable
@@ -198,7 +199,7 @@ def card_lines(rows: list[construct.NetRow], *, live: bool = False) -> tuple[lis
             "unit_usd": r.unit_usd, "floor_usd": floor,
             "floor_set_code": f.get("set_code"), "floor_collector_number": f.get("collector_number"),
             "floor_scryfall_id": f.get("scryfall_id") or r.scryfall_id,
-            "floor_finish": "nonfoil" if f else r.finish, "bonus": False,
+            "floor_finish": "nonfoil" if f else r.finish, "bonus": None,
         })
     buying = [ln for ln in lines if ln["buy"] > 0]
     need_known = any(ln["floor_usd"] is not None for ln in lines)
@@ -262,7 +263,8 @@ def _cost_totals(rows: list[construct.NetRow], ev: float | None) -> dict:
     total = sum(ln["need"] for ln in lines)
     return {"known_exact": known_exact, "known_floor": known_floor, "booster_ev": ev,
             "exact": plus(known_exact), "floor": plus(known_floor),
-            "total_cards": total, "unpriced": total - sum(ln["need"] for ln in priced), "lines": lines}
+            "total_cards": total, "unpriced": total - sum(ln["need"] for ln in priced),
+            "floor_unpriced": sum(ln["need"] for ln in lines if ln.get("floor_usd") is None), "lines": lines}
 
 
 # Valuation diagnostics the cost ledger already shows as numbers (booster EV, unpriced count).
@@ -280,37 +282,86 @@ def _sealed_cost(set_code: str, name: str) -> dict:
             "notes": [d for d in v.diagnostics if not _LEDGER_NOTE.search(d)], **_cost_totals(rows, v.booster_ev)}
 
 
+def _sld_bonus_ids(product: dict | None) -> tuple[list[str], list[str]]:
+    """A drop's bonus, as exact printings: ``named`` (MTGJSON's ``contents.card`` —
+    a specific card) and ``possible`` (the candidates on its ``bonus-…`` pack's
+    sheets — one of them ships, odds unknown: MTGJSON's weights are placeholders)."""
+    if not product:
+        return [], []
+    named = construct.product_card_ids(product)
+    possible: list[str] = []
+    packs = (product.get("contents") or {}).get("pack") or []
+    if packs:
+        try:
+            data = mtgjson.set_file("sld")
+            by_uuid = mtgjson.uuid_scryfall_ids("sld")
+        except Exception:  # noqa: BLE001 — bonus candidates are display-only
+            return named, []
+        for pk in packs:
+            cfg = (data.get("booster") or {}).get(pk.get("code") or "") or {}
+            for sheet in (cfg.get("sheets") or {}).values():
+                for uuid in (sheet.get("cards") or {}):
+                    sid = by_uuid.get(uuid)
+                    if sid and sid not in possible and sid not in named:
+                        possible.append(sid)
+    return named, possible
+
+
+def _sld_has_bonus(product: dict | None) -> bool:
+    """MTGJSON says the drop ships a bonus (named, a random pack, or "Bonus card unknown")."""
+    c = (product or {}).get("contents") or {}
+    if c.get("card") or c.get("pack"):
+        return True
+    return any("bonus card unknown" in (o.get("name") or "").lower() for o in c.get("other") or [])
+
+
 def _sld_cost(name: str, finish: str | None) -> dict:
-    """A Secret Lair drop's worth. When MTGJSON lists the drop's sealed product
-    (base or foil edition), it is valued through that product — the drop's
-    cards PLUS its bonus card (``contents.card``; flagged ``bonus`` on its line)
-    or bonus-pack EV (``contents.pack``), and the product's own market price.
-    Older drops without a sealed product fall back to the drop's cards alone."""
+    """A Secret Lair drop's GUARANTEED worth: the drop's own decklist cards, at
+    their exact printings and at their cheapest printings anywhere. A bonus card
+    is never counted — which one ships (and how often) isn't known, so the totals
+    are a floor the buyer is sure to get. Bonus cards are returned as lines flagged
+    ``bonus`` (``named`` = MTGJSON names the card, ``possible`` = one of a bonus
+    pack's candidates) so they can be shown beside the total, never in it.
+    The sealed market price comes from the drop's MTGJSON sealed product."""
     from . import sld
     drop = sld.identify_drop(name)
     fin = "foil" if finish == "foil" else "nonfoil"
     product = valuation.sld_sealed_product(drop["name"], fin, strict=True)
-    if product is not None:
-        out = _sealed_cost("sld", product.get("name") or "")
-        if out["known_exact"] is not None or out["booster_ev"] is not None:
-            bonus = set(construct.product_card_ids(product))
-            for ln in out["lines"]:
-                ln["bonus"] = ln["scryfall_id"] in bonus
-            return {**out, "kind": "sld", "name": drop["name"], "finish": finish,
-                    "category": "secret_lair", "subtype": None, "release_date": drop.get("release_date"),
-                    "sealed_name": product.get("name")}
     ids = drop.get("ids") or sld.collect_drop_ids(drop["file_names"])
     notes = []
+    named, possible = _sld_bonus_ids(product)
+    named = [i for i in named if i not in ids]          # a bonus is never also a decklist card
+    possible = [i for i in possible if i not in ids]
+    # New drops are first priced before release (preorder prices, which fall once
+    # boxes ship): re-read stale or pre-release prices for these printings only.
+    # Freshness is reported for the guaranteed cards (the ones in the totals).
+    try:
+        if named or possible:
+            sets.refresh_printing_prices([*named, *possible])
+        fresh = sets.refresh_printing_prices(ids)
+    except (scryfall.ScryfallError, sqlite3.OperationalError) as e:
+        fresh = {"prices_at": None, "preorder": False}
+        notes.append(f"couldn't refresh prices ({e}); showing the last prices read")
     exp = construct.expand_printings(ids, finish=fin, label=drop["name"], set_code="sld")
+    price_fin = fin
     if fin == "foil" and not any(n.unit_usd is not None for n in exp.needs):
+        price_fin = "nonfoil"
         exp = construct.expand_printings(ids, finish="nonfoil", label=drop["name"], set_code="sld")
         notes.append("foil edition, but these cards are only priced nonfoil — cards use nonfoil prices")
     market, source = valuation.sld_sealed_market(drop["name"], fin)
     totals = _cost_totals(construct.net_against_loose(exp.needs), None)
+    for kind, bonus_ids in (("named", named), ("possible", possible)):
+        if not bonus_ids:
+            continue
+        bonus_exp = construct.expand_printings(bonus_ids, finish=price_fin, label=f"{drop['name']} bonus", set_code="sld")
+        bonus_lines, _, _ = card_lines(construct.net_against_loose(bonus_exp.needs))
+        totals["lines"] += [{**ln, "bonus": kind} for ln in bonus_lines]
     return {"kind": "sld", "set_code": "sld", "name": drop["name"], "finish": finish,
             "category": "secret_lair", "subtype": None, "release_date": drop.get("release_date"),
             "market": market, "market_source": source, "contents": totals["exact"], "booster_only": False,
-            "sealed_name": product.get("name") if product else None, "notes": notes, **totals}
+            "sealed_name": product.get("name") if product else None, "notes": notes,
+            "has_bonus": _sld_has_bonus(product), "prices_at": fresh.get("prices_at"),
+            "preorder": bool(fresh.get("preorder")), **totals}
 
 
 def deck_cost(slug: str, *, with_sealed: bool = True, live: bool = False) -> dict:

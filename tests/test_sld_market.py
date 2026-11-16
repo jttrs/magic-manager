@@ -6,10 +6,12 @@ into a tmp DB.
 
 from __future__ import annotations
 
+import functools
+
 import pytest
 from fastapi.testclient import TestClient
 
-from magic_manager import construct, market, mtgjson, sealed, sld, sld_market, valuation
+from magic_manager import construct, market, mtgjson, scryfall, sealed, sld, sld_market, valuation
 from magic_manager.web.app import create_app
 
 CARD = "44444444-0000-0000-0000-000000000001"
@@ -49,33 +51,56 @@ def _seed(seed_cards, make_card):
     ])
 
 
-def test_sld_cost_includes_bonus_card_through_sealed_product(tmp_db, seed_cards, make_card, monkeypatch):
+def test_sld_cost_is_the_guaranteed_cards_only_a_named_bonus_is_listed_not_counted(tmp_db, seed_cards, make_card, monkeypatch):
     _seed(seed_cards, make_card)
     product = {"name": "Secret Lair Drop Garfield As Intended Foil",
                "contents": {"card": [{"set": "sld", "number": "7164", "identifiers": {"scryfallId": BONUS}, "foil": True}],
                             "deck": [{"name": "Garfield: As Intended Foil Edition", "set": "sld"}]}}
     monkeypatch.setattr(sld, "identify_drop", lambda name: {"name": "Garfield: As Intended", "release_date": "2026-06-16",
-                                                            "file_names": ["GarfieldAsIntended_SLD"]})
+                                                            "file_names": ["GarfieldAsIntended_SLD"], "ids": [CARD]})
     seen = {}
 
     def fake_product(drop, edition, *, strict=False):
         seen["edition"] = (drop, edition, strict)
         return product
     monkeypatch.setattr(valuation, "sld_sealed_product", fake_product)
-    monkeypatch.setattr(sealed, "identify_product", lambda set_code, name: {**product, "category": "box_set"})
-    needs = [construct.CardNeed(CARD, "foil", 1, "x", "Counterspell", "sld", "2664", 16.0),
-             construct.CardNeed(BONUS, "foil", 1, "x", "Clone", "sld", "7164", 3.5)]
-    monkeypatch.setattr(valuation, "value_sealed_product", lambda set_code, name, **kw: sealed.ProductValuation(
-        label=name, kind="sealed", sealed_market=15.0, sealed_market_source="tcgcsv", intrinsic=19.5, card_needs=needs))
+    monkeypatch.setattr(valuation, "sld_sealed_market", lambda name, edition, **k: (15.0, "tcgcsv"))
+    monkeypatch.setattr(construct, "product_card_ids", lambda p: [BONUS])
 
     c = market.product_cost("sld", "sld", "garfield as intended", "foil")
     assert seen["edition"] == ("Garfield: As Intended", "foil", True)
     assert (c["kind"], c["name"], c["finish"], c["category"]) == ("sld", "Garfield: As Intended", "foil", "secret_lair")
-    assert c["sealed_name"] == product["name"] and c["market"] == 15.0
-    assert c["known_exact"] == 19.5 and c["total_cards"] == 2
-    bonus = {ln["name"]: ln["bonus"] for ln in c["lines"]}
-    assert bonus == {"Counterspell": False, "Clone": True}
-    assert sld_market.gap(c) == {"usd": -4.5, "pct": -23.1}
+    assert c["sealed_name"] == product["name"] and c["market"] == 15.0 and c["has_bonus"] is True
+    assert c["known_exact"] == 16.0 and c["total_cards"] == 1          # the bonus is not in the total
+    assert {ln["name"]: ln["bonus"] for ln in c["lines"]} == {"Counterspell": None, "Clone": "named"}
+    assert sld_market.gap(c) == {"usd": -1.0, "pct": -6.2}
+
+
+def test_sld_cost_lists_a_bonus_packs_candidates_as_possible(tmp_db, seed_cards, make_card, monkeypatch):
+    _seed(seed_cards, make_card)
+    product = {"name": "Secret Lair Drop A Box of Rocks", "contents": {"pack": [{"code": "bonus-a-box-of-rocks", "set": "sld"}]}}
+    monkeypatch.setattr(sld, "identify_drop", lambda name: {"name": "A Box of Rocks", "release_date": "2026-01-01",
+                                                            "file_names": ["ABoxOfRocks_SLD"], "ids": [CARD]})
+    monkeypatch.setattr(valuation, "sld_sealed_product", lambda *a, **k: product)
+    monkeypatch.setattr(valuation, "sld_sealed_market", lambda name, edition, **k: (20.0, "tcgcsv"))
+    monkeypatch.setattr(mtgjson, "set_file", lambda code: {"booster": {"bonus-a-box-of-rocks": {
+        "sheets": {"bonus": {"cards": {"u-bonus": 1}}}}}})
+    monkeypatch.setattr(mtgjson, "uuid_scryfall_ids", functools.cache(lambda code: {"u-bonus": BONUS}))
+    c = market.product_cost("sld", "sld", "a box of rocks", "nonfoil")
+    assert c["exact"] == 13.0 and c["booster_ev"] is None and c["has_bonus"] is True
+    assert [(ln["name"], ln["bonus"]) for ln in c["lines"]] == [("Counterspell", None), ("Clone", "possible")]
+
+
+def test_sld_cost_bonus_unknown_counts_nothing_extra(tmp_db, seed_cards, make_card, monkeypatch):
+    _seed(seed_cards, make_card)
+    product = {"name": "Secret Lair Drop She-Ra", "contents": {"deck": [{"name": "She-Ra", "set": "sld"}],
+                                                              "other": [{"name": "Bonus card unknown"}]}}
+    monkeypatch.setattr(sld, "identify_drop", lambda name: {"name": "She-Ra", "release_date": "2026-09-29",
+                                                            "file_names": ["SheRa_SLD"], "ids": [CARD]})
+    monkeypatch.setattr(valuation, "sld_sealed_product", lambda *a, **k: product)
+    monkeypatch.setattr(valuation, "sld_sealed_market", lambda name, edition, **k: (39.62, "tcgcsv"))
+    c = market.product_cost("sld", "sld", "she-ra", "nonfoil")
+    assert c["exact"] == 13.0 and c["has_bonus"] is True and [ln["bonus"] for ln in c["lines"]] == [None]
 
 
 def test_sld_cost_without_sealed_product_falls_back_to_drop_cards(tmp_db, seed_cards, make_card, monkeypatch):
@@ -87,7 +112,7 @@ def test_sld_cost_without_sealed_product_falls_back_to_drop_cards(tmp_db, seed_c
     monkeypatch.setattr(valuation, "value_sealed_product", lambda *a, **k: pytest.fail("no sealed product to value"))
     c = market.product_cost("sld", "sld", "old drop", "nonfoil")
     assert c["sealed_name"] is None and c["market"] is None and c["exact"] == 13.0
-    assert [ln["bonus"] for ln in c["lines"]] == [False]
+    assert [ln["bonus"] for ln in c["lines"]] == [None] and c["has_bonus"] is False
     assert sld_market.gap(c) is None
 
 
@@ -134,3 +159,43 @@ def test_secret_lair_route(tmp_db, monkeypatch):
         r = c.get("/api/market/secret-lair", params={"limit": 5})
         assert r.status_code == 200 and r.json()["total"] == 7
         assert c.get("/api/market/secret-lair", params={"limit": 0}).status_code == 422
+
+
+def test_sld_cost_refreshes_the_drops_printings_and_reports_freshness(tmp_db, seed_cards, make_card, monkeypatch):
+    _seed(seed_cards, make_card)
+    product = {"name": "X", "contents": {"card": [{"set": "sld", "number": "7164"}]}}
+    monkeypatch.setattr(sld, "identify_drop", lambda name: {"name": "X", "release_date": "2026-11-12", "file_names": ["X_SLD"], "ids": [CARD]})
+    monkeypatch.setattr(valuation, "sld_sealed_product", lambda *a, **k: product)
+    monkeypatch.setattr(valuation, "sld_sealed_market", lambda name, edition, **k: (10.0, "tcgcsv"))
+    monkeypatch.setattr(construct, "product_card_ids", lambda p: [BONUS])
+    asked = []
+    monkeypatch.setattr(market.sets, "refresh_printing_prices",
+                        lambda ids: (asked.append(list(ids)), {"refreshed": 1, "prices_at": "2026-11-10T00:00:00+00:00", "preorder": True})[1])
+    c = market.product_cost("sld", "sld", "x", "nonfoil")
+    assert asked == [[BONUS], [CARD]]           # bonus printings refreshed too; freshness reported for the guaranteed cards
+    assert c["prices_at"].startswith("2026-11-10") and c["preorder"] is True
+
+
+def test_sld_cost_keeps_last_prices_when_scryfall_fails(tmp_db, seed_cards, make_card, monkeypatch):
+    _seed(seed_cards, make_card)
+    monkeypatch.setattr(sld, "identify_drop", lambda name: {"name": "Y", "release_date": "2026-01-01", "file_names": ["Y_SLD"], "ids": [CARD]})
+    monkeypatch.setattr(valuation, "sld_sealed_product", lambda *a, **k: None)
+    monkeypatch.setattr(valuation, "sld_sealed_market", lambda name, edition, **k: (None, None))
+
+    def boom(ids):
+        raise scryfall.ScryfallError("HTTP 503")
+    monkeypatch.setattr(market.sets, "refresh_printing_prices", boom)
+    c = market.product_cost("sld", "sld", "y", "nonfoil")
+    assert c["exact"] == 13.0 and c["prices_at"] is None and c["preorder"] is False
+    assert any("couldn't refresh prices" in n for n in c["notes"])
+
+
+def test_price_refresh_bypasses_the_wrapper_cache(monkeypatch):
+    from magic_manager import util
+    seen = {}
+
+    class _Res:
+        returncode, stdout, stderr = 0, '{"data": [], "not_found": []}', ""
+    monkeypatch.setattr(util, "run_wrapper", lambda argv, **kw: (seen.setdefault("env", kw.get("env")), _Res())[1])
+    scryfall.collection([{"id": "x"}], live=True)
+    assert seen["env"]["SCRYFALL_CACHE_TTL"] == "0"

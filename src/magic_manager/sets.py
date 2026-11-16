@@ -2053,6 +2053,49 @@ def upsert_lookup_cards(conn, cards: Iterable[dict]) -> int:
     return n
 
 
+def refresh_printing_prices(scryfall_ids: Iterable[str], *, older_than_days: int | None = None,
+                            today: str | None = None) -> dict:
+    """Re-read the prices of specific printings from Scryfall when they are stale
+    (fetched more than ``older_than_days`` ago, default :data:`STALE_AFTER_DAYS`) or
+    were fetched BEFORE the printing's release (a preorder price, which usually
+    falls once product ships). Targeted — one ``/cards/collection`` batch per 75
+    printings, not a whole-set sync. Upserted through :func:`upsert_lookup_cards`.
+
+    Returns ``{"refreshed": n, "prices_at": oldest stamp, "preorder": bool}`` over
+    the given printings after the read (``preorder`` = some price is still dated
+    before its printing's release — Scryfall had nothing newer)."""
+    from datetime import date, timedelta
+    ids = list(dict.fromkeys(i for i in scryfall_ids if i))
+    if not ids:
+        return {"refreshed": 0, "prices_at": None, "preorder": False}
+    days = STALE_AFTER_DAYS if older_than_days is None else older_than_days
+    cutoff = (date.fromisoformat((today or db._utcnow_iso())[:10]) - timedelta(days=days)).isoformat()
+
+    def _state() -> list[tuple[str, str | None, str | None]]:
+        with db.connect() as conn:
+            return [(r[0], r[1], r[2]) for r in conn.execute(
+                f"SELECT scryfall_id, prices_updated_at, released_at FROM cards WHERE scryfall_id IN ({','.join('?' * len(ids))})",
+                ids)]
+
+    def _preorder(stamp: str | None, released: str | None) -> bool:
+        return bool(stamp and released and stamp[:10] < released[:10])
+
+    due = [sid for sid, stamp, released in _state()
+           if not stamp or stamp[:10] < cutoff or _preorder(stamp, released)]
+    refreshed = 0
+    if due:
+        found, _missing = scryfall.collection([{"id": sid} for sid in due], live=True)   # never a cached body
+        if found:
+            with db.connect() as conn:
+                with db.catalog_first(conn):
+                    refreshed = upsert_lookup_cards(conn, found)
+                conn.commit()
+    after = _state()
+    stamps = [stamp for _, stamp, _ in after if stamp]
+    return {"refreshed": refreshed, "prices_at": min(stamps) if stamps else None,
+            "preorder": any(_preorder(stamp, released) for _, stamp, released in after)}
+
+
 def unsynced_set_codes(codes: Iterable[str]) -> list[str]:
     """Return the subset of ``codes`` (lowercased) with zero rows in ``cards``,
     or only the few printings a lookup added (see ``upsert_lookup_cards``).

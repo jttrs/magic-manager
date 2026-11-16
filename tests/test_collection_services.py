@@ -103,7 +103,7 @@ def test_bad_set_code_is_quarantined_not_fatal(tmp_db, make_card, monkeypatch):
     # row and report the bad one as not_found — resolve_rows never raises.
     good = make_card(id="sid-good", name="Good", set="fin", collector_number="233")
 
-    def fake_run(args, stdin=None):
+    def fake_run(args, stdin=None, **_):
         import json as _json
         idents = _json.loads(stdin)["identifiers"]
         if any(i.get("set") == "prm-wpn" for i in idents):

@@ -103,6 +103,12 @@ Small PRs, one per item.
   (lift it into `core/decks.ts`).
   Top cards by set family re-read the family's stored EDHREC set pages on every request to tag
   reprints (`edhrec.set_reprint_slugs`); memoize it per cached batch if it ever shows up as slow.
+- **Secret Lair value follow-ups (review of the guaranteed-value PR):** lift the stale-cutoff date
+  arithmetic shared by `sets.refresh_printing_prices` and `stale_set_codes` into one helper;
+  return `image_uri` on `DeckLineOut` instead of deriving the Scryfall CDN path in
+  `guideCard.fromCostLine`; `_sld_bonus_ids` swallows any MTGJSON error (note it like the Scryfall
+  refresh failure); tests for `floor_unpriced`, foil-edition bonus pricing, and the bonus-candidate
+  dedupe; the per-user `product_cost` memo can keep another user's pre-refresh total for ≤30 min.
 
 ## 4. Deferred by decision
 

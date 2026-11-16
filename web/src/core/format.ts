@@ -8,3 +8,7 @@ export const fmtPct = (v: number | null | undefined): string => (v == null ? '�
 export const fmtInt = (v: number | null | undefined): string => (v == null ? '—' : int.format(v));
 /** "1 card" / "3 cards" (count formatted). */
 export const fmtCount = (n: number, one: string, many = `${one}s`): string => `${int.format(n)} ${n === 1 ? one : many}`;
+
+const day = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
+/** "Nov 12" from an ISO date or timestamp, read as the date it was stamped (UTC). */
+export const fmtDay = (iso: string | null | undefined): string => (iso ? day.format(new Date(`${iso.slice(0, 10)}T00:00:00Z`)) : '—');

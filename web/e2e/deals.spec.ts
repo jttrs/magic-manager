@@ -221,8 +221,8 @@ test('the watchlist: a filterable table with an inspector; read prices again', a
   await expect(row).toContainText('−21%');
   await expect(row).toContainText('$15.51');
   await expect(row).toContainText('$90.00+');
-  await expect(row).toContainText('cheapest $70.00');
-  await expect(row).toContainText('$80.00 cards + $10.00 boosters');
+  await expect(row).toContainText('$70.00');
+  await expect(row).not.toContainText('boosters');
   await expect(page.getByText('2 of 2 watched products · compared to sealed value')).toBeVisible();
 
   // Search and type filters.

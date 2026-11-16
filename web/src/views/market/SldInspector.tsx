@@ -5,16 +5,16 @@ import { useFeature } from '../../app/features';
 import { Button } from '../../components/Button';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { dealsUnwatch, dealsWatch, type ProductCostOut } from '../../core/api';
-import type { SldRow } from '../../core/secretLair';
+import { splitBonus, type SldRow } from '../../core/secretLair';
 import { CardLines } from './CardLines';
 import { H3, Row } from './DealInspector';
 import { ProductContents } from './ProductContents';
 import type { CostState } from './useDealsData';
 
-/** One Secret Lair drop: its sealed value against the cards inside (bonus card included). */
+/** One Secret Lair drop: its sealed value against the cards inside (its guaranteed cards; any bonus is shown apart). */
 export function SldInspector({ row: r, cost, costState, watchedUrls }: { row: SldRow; cost?: ProductCostOut; costState?: CostState; watchedUrls?: string[] }) {
   const edition = r.finish === 'foil' ? 'Foil Edition' : 'Regular edition';
-  const bonus = cost?.lines?.filter((l) => l.bonus) ?? [];
+  const { cards, named, possible } = splitBonus(cost?.lines);
   return (
     <section aria-labelledby="sld-h" className="flex h-full min-h-0 flex-col gap-5 overflow-y-auto overscroll-contain px-4 pb-8 pt-1 [scrollbar-gutter:stable]">
       <header className="flex flex-wrap items-end gap-x-4 gap-y-2 border-b-2 border-rule-strong pb-1.5">
@@ -37,14 +37,12 @@ export function SldInspector({ row: r, cost, costState, watchedUrls }: { row: Sl
           <>
             <dl className="flex flex-col">
               <Row strong label="Sealed value" value={cost.market} best={null} note={cost.market_source} />
-              <Row label="Cards inside, exact printings" value={cost.exact} best={cost.market ?? null} />
-              <Row label="Cards inside, cheapest printings" value={cost.floor} best={cost.market ?? null} />
-              {(cost.booster_ev ?? 0) > 0 && <Row label="of which the bonus card, expected value" value={cost.booster_ev} best={null} />}
+              <Row label="Guaranteed cards, exact printings" value={cost.exact} best={cost.market ?? null} />
+              <Row label="Guaranteed cards, cheapest printings" value={cost.floor} best={cost.market ?? null} />
             </dl>
             <p className="text-sm text-ink-muted">
               The % beside each line is how far the sealed value sits under (−) or over (+) it.
-              {bonus.length > 0 && ` Includes the bonus card${bonus.length > 1 ? 's' : ''}: ${bonus.map((l) => l.name).join(', ')}.`}
-              {(cost.booster_ev ?? 0) > 0 && ' The bonus card is random, so it counts at its expected value.'}
+              {cost.has_bonus && ' Bonus cards aren’t counted.'}
             </p>
             {cost.market == null && <p className="text-sm text-ink-muted">No sealed market value yet — new drops take a while to list.</p>}
             {(cost.unpriced ?? 0) > 0 && (
@@ -67,9 +65,21 @@ export function SldInspector({ row: r, cost, costState, watchedUrls }: { row: Sl
         </section>
       )}
 
-      {cost?.lines?.length ? (
-        <CardLines title="Cards" lines={cost.lines} sortable labels={{ need: 'Qty', exact: 'This printing', floor: 'Cheapest' }} />
-      ) : null}
+      {cards.length > 0 && (
+        <CardLines title="Guaranteed cards" lines={cards} sortable labels={{ need: 'Qty', exact: 'This printing', floor: 'Cheapest' }} />
+      )}
+      {named.length > 0 && (
+        <section aria-label="Bonus" className="flex flex-col gap-1">
+          <CardLines title="Bonus" lines={named} labels={{ need: 'Qty', exact: 'This printing', floor: 'Cheapest' }} />
+          <p className="text-sm text-ink-muted">Prices are for reference — the bonus isn’t in any total.</p>
+        </section>
+      )}
+      {possible.length > 0 && (
+        <section aria-label="Possible bonus" className="flex flex-col gap-1">
+          <CardLines title="Possible bonus" lines={possible} labels={{ need: 'Qty', exact: 'This printing', floor: 'Cheapest' }} />
+          <p className="text-sm text-ink-muted">One of these ships with the drop — odds unknown, so not counted.</p>
+        </section>
+      )}
     </section>
   );
 }

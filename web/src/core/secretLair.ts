@@ -1,4 +1,4 @@
-import type { ProductCostOut, SldDropOut } from './api';
+import type { DeckLineOut, ProductCostOut, SldDropOut } from './api';
 
 /** Secret Lair in Market: one row per drop at the chosen edition, valued sealed vs the cards inside. */
 
@@ -10,7 +10,7 @@ export const SLD_BASES = ['exact', 'floor'] as const;
 export type SldBasis = (typeof SLD_BASES)[number];
 export const SLD_LIMITS = [10, 30, 60, 120] as const;
 
-export const SLD_BASIS_LABEL: Record<SldBasis, string> = { exact: 'cards, exact printings', floor: 'cards, cheapest printings' };
+export const SLD_BASIS_LABEL: Record<SldBasis, string> = { exact: 'guaranteed cards, exact printings', floor: 'guaranteed cards, cheapest printings' };
 
 export type SldRow = {
   key: string;
@@ -87,4 +87,20 @@ export function filterSortDrops(rows: SldRow[], costs: Map<string, ProductCostOu
       return a.r.name.localeCompare(b.r.name);
     })
     .map((x) => x.r);
+}
+
+/** The value column a Gap is measured against; none when it's measured against something else (sealed/market). */
+export const basisColumn = (basis: string): SldBasis | null => (basis === 'exact' || basis === 'floor' ? basis : null);
+
+/** The oldest `prices_at` across the loaded costs (ISO strings sort by time); null when none carries one. */
+export function oldestPricesAt(costs: Iterable<ProductCostOut | undefined>): string | null {
+  let oldest: string | null = null;
+  for (const c of costs) if (c?.prices_at && (oldest == null || c.prices_at < oldest)) oldest = c.prices_at;
+  return oldest;
+}
+
+/** A drop's cost lines split into the guaranteed cards and its bonus groups. */
+export function splitBonus(lines: DeckLineOut[] | undefined): { cards: DeckLineOut[]; named: DeckLineOut[]; possible: DeckLineOut[] } {
+  const ls = lines ?? [];
+  return { cards: ls.filter((l) => !l.bonus), named: ls.filter((l) => l.bonus === 'named'), possible: ls.filter((l) => l.bonus === 'possible') };
 }

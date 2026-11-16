@@ -9321,10 +9321,20 @@
             "default": "nonfoil"
           },
           "bonus": {
-            "type": "boolean",
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "named",
+                  "possible"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Bonus",
-            "description": "A Secret Lair drop's bonus card (shipped with the drop, not in its decklist).",
-            "default": false
+            "description": "A Secret Lair drop's bonus, never counted in its totals: `named` = MTGJSON names the card, `possible` = one of a random bonus pack's candidates."
           }
         },
         "type": "object",
@@ -14071,6 +14081,36 @@
             "title": "Unpriced",
             "description": "Known cards with no price at their exact printing.",
             "default": 0
+          },
+          "floor_unpriced": {
+            "type": "integer",
+            "title": "Floor Unpriced",
+            "description": "Known cards with no price at any printing (the cheapest totals undercount).",
+            "default": 0
+          },
+          "has_bonus": {
+            "type": "boolean",
+            "title": "Has Bonus",
+            "description": "Secret Lair: the drop ships a bonus card, never counted in the totals (they are the guaranteed value).",
+            "default": false
+          },
+          "prices_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prices At",
+            "description": "Secret Lair: the oldest price stamp behind the totals (after any refresh)."
+          },
+          "preorder": {
+            "type": "boolean",
+            "title": "Preorder",
+            "description": "Secret Lair: some price is still dated before its printing's release (a preorder price).",
+            "default": false
           },
           "notes": {
             "items": {
