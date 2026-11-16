@@ -9320,6 +9320,18 @@
             "description": "The floor printing's finish: nonfoil when a cheaper nonfoil printing exists, else this line's finish.",
             "default": "nonfoil"
           },
+          "image_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Uri",
+            "description": "The exact printing's Scryfall image (from the local catalog)."
+          },
           "bonus": {
             "anyOf": [
               {

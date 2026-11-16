@@ -189,7 +189,7 @@ const scryfallImage = (id: string): string => `https://cards.scryfall.io/normal/
 
 /** One cost line as a tile card, its caption price at the chosen basis. */
 export function fromCostLine(l: DeckLineOut, basis: 'exact' | 'floor'): GuideCard {
-  const image = scryfallImage(l.scryfall_id);
+  const image = l.image_uri ?? scryfallImage(l.scryfall_id);   // local art, else Scryfall's CDN path
   return {
     key: `${l.scryfall_id}|${l.finish}`, scryfallId: l.scryfall_id, name: l.name, image,
     href: `https://scryfall.com/card/${l.set_code}/${encodeURIComponent(l.collector_number)}`,

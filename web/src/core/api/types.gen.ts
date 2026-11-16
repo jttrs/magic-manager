@@ -2590,6 +2590,12 @@ export type DeckLineOut = {
      */
     floor_finish?: 'nonfoil' | 'foil';
     /**
+     * Image Uri
+     *
+     * The exact printing's Scryfall image (from the local catalog).
+     */
+    image_uri?: string | null;
+    /**
      * Bonus
      *
      * A Secret Lair drop's bonus, never counted in its totals: `named` = MTGJSON names the card, `possible` = one of a random bonus pack's candidates.

@@ -8,6 +8,7 @@ import { InfoTip } from '../../components/InfoTip';
 import { Segmented, SelectField, SideSection, TextField } from '../../components/Sidebar';
 import { EmptyNote, ErrorNote } from '../../components/States';
 import type { ProductCostOut } from '../../core/api';
+import { DISCOUNT_SORT_LABEL } from '../../core/deals';
 import { fmtDay, fmtInt, fmtUsd } from '../../core/format';
 import type { MarketSearch } from '../../core/search';
 import { filterSortDrops, oldestPricesAt, SLD_BASIS_LABEL, SLD_LIMITS, sldGap, sldRows, splitBonus, watchKey, type SldBasis, type SldEdition, type SldRow, type SldSort } from '../../core/secretLair';
@@ -46,8 +47,8 @@ function useWatchedDrops(): Map<string, string[]> {
 }
 
 const SLD_SORT_OPTIONS: { value: SldSort; label: string }[] = [
-  { value: 'gap_pct', label: 'Biggest discount %' }, { value: 'gap_usd', label: 'Biggest discount $' },
-  { value: 'price', label: 'Lowest sealed value' }, { value: 'release', label: 'Newest' }, { value: 'name', label: 'Name' },
+  { value: 'gap_pct', label: DISCOUNT_SORT_LABEL.gap_pct }, { value: 'gap_usd', label: DISCOUNT_SORT_LABEL.gap_usd },
+  { value: 'price', label: 'Lowest sealed value' }, { value: 'release', label: 'Newest' }, { value: 'name', label: DISCOUNT_SORT_LABEL.name },
 ];
 
 /** Changing a filter keeps the open drop only while it's still listed (a new edition is a new row). */

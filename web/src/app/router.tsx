@@ -1,6 +1,6 @@
 import { createRootRoute, createRoute, createRouter, lazyRouteComponent, Outlet, redirect, stripSearchParams } from '@tanstack/react-router';
 import { AppShell } from '../components/AppShell';
-import { collectionSearch, compareSearch, decksSearch, marketSearch } from '../core/search';
+import { collectionSearch, compareSearch, decksSearch, decksSearchValidator, marketSearch } from '../core/search';
 import { historySearch } from '../core/history';
 import { jumpstartToDecks, legacyJumpstartSearch } from '../core/jumpstart';
 import { analyticsSearch } from '../core/analyticsDashboard';
@@ -80,11 +80,15 @@ const legacySetsRoute = createRoute({
 const decksRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/decks',
-  validateSearch: decksSearch,
+    validateSearch: decksSearchValidator,
   search: { middlewares: [stripSearchParams(decksSearch.parse({}))] },
   // Old `built=true` links: only built recipes.
-  beforeLoad: ({ search }) => {
+  beforeLoad: ({ search, location }) => {
     if (search.built) throw redirect({ to: '/decks', search: { ...search, built: undefined, own: ['built'] } as never, replace: true });
+    // Old `kinds=` / `source=` links: the validator already mapped them; rewrite the URL so the
+    // raw legacy key can't map back after you clear the filter it became.
+    const raw = location.search as Record<string, unknown>;
+    if ('kinds' in raw || 'source' in raw) throw redirect({ to: '/decks', search: { ...search, kinds: undefined, source: undefined } as never, replace: true });
   },
   component: lazyRouteComponent(() => import('../views/DecksView'), 'DecksView'),
 });

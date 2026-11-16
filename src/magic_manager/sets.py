@@ -2053,6 +2053,12 @@ def upsert_lookup_cards(conn, cards: Iterable[dict]) -> int:
     return n
 
 
+def _stale_cutoff(today: str | None, days: int) -> str:
+    """ISO date ``days`` before ``today`` (``YYYY-MM-DD``; default: the current UTC date)."""
+    from datetime import date, timedelta
+    return (date.fromisoformat((today or db._utcnow_iso())[:10]) - timedelta(days=days)).isoformat()
+
+
 def refresh_printing_prices(scryfall_ids: Iterable[str], *, older_than_days: int | None = None,
                             today: str | None = None) -> dict:
     """Re-read the prices of specific printings from Scryfall when they are stale
@@ -2064,12 +2070,11 @@ def refresh_printing_prices(scryfall_ids: Iterable[str], *, older_than_days: int
     Returns ``{"refreshed": n, "prices_at": oldest stamp, "preorder": bool}`` over
     the given printings after the read (``preorder`` = some price is still dated
     before its printing's release — Scryfall had nothing newer)."""
-    from datetime import date, timedelta
     ids = list(dict.fromkeys(i for i in scryfall_ids if i))
     if not ids:
         return {"refreshed": 0, "prices_at": None, "preorder": False}
     days = STALE_AFTER_DAYS if older_than_days is None else older_than_days
-    cutoff = (date.fromisoformat((today or db._utcnow_iso())[:10]) - timedelta(days=days)).isoformat()
+    cutoff = _stale_cutoff(today, days)
 
     def _state() -> list[tuple[str, str | None, str | None]]:
         with db.connect() as conn:
@@ -2136,12 +2141,10 @@ def stale_set_codes(codes: Iterable[str], *, today: str | None = None,
     are present but stale. ``today`` (``YYYY-MM-DD``) is injectable for
     deterministic tests; it defaults to the current UTC date.
     """
-    from datetime import date, timedelta
     wanted = sorted({c.lower() for c in codes if c})
     if not wanted:
         return []
-    today_d = date.fromisoformat((today or db._utcnow_iso())[:10])
-    cutoff = (today_d - timedelta(days=max_age_days)).isoformat()
+    cutoff = _stale_cutoff(today, max_age_days)
     with db.connect() as conn:
         placeholders = ",".join("?" for _ in wanted)
         rows = conn.execute(

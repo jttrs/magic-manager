@@ -165,6 +165,18 @@ def _precon_product(slug: str) -> tuple[str, str] | None:
     return None
 
 
+def _image_uris(ids: list[str]) -> dict[str, str | None]:
+    """``scryfall_id`` -> the printing's local ``cards.image_uri`` (one batched lookup)."""
+    ids = list(dict.fromkeys(ids))
+    out: dict[str, str | None] = {}
+    with db.connect() as conn:
+        for i in range(0, len(ids), 500):
+            chunk = ids[i:i + 500]
+            out.update((r[0], r[1]) for r in conn.execute(
+                f"SELECT scryfall_id, image_uri FROM cards WHERE scryfall_id IN ({','.join('?' * len(chunk))})", chunk))
+    return out
+
+
 def card_lines(rows: list[construct.NetRow], *, live: bool = False) -> tuple[list[dict], float, float]:
     """Each netted card at its exact printing and at its cheapest nonfoil
     printing (the functional floor via :func:`card_floor.printing_floors` —
@@ -177,6 +189,7 @@ def card_lines(rows: list[construct.NetRow], *, live: bool = False) -> tuple[lis
     with nothing priced is ``None`` — unknown, not $0 (Σ floor·buy is a known $0
     when nothing is left to buy). Shared by deck cost and product cost."""
     floors = card_floor.printing_floors([r.scryfall_id for r in rows], live=live)
+    images = _image_uris([r.scryfall_id for r in rows])
     lines = []
     need_floor = buy_floor = 0.0
     for r in rows:
@@ -200,6 +213,7 @@ def card_lines(rows: list[construct.NetRow], *, live: bool = False) -> tuple[lis
             "floor_set_code": f.get("set_code"), "floor_collector_number": f.get("collector_number"),
             "floor_scryfall_id": f.get("scryfall_id") or r.scryfall_id,
             "floor_finish": "nonfoil" if f else r.finish, "bonus": None,
+            "image_uri": images.get(r.scryfall_id),
         })
     buying = [ln for ln in lines if ln["buy"] > 0]
     need_known = any(ln["floor_usd"] is not None for ln in lines)
@@ -216,6 +230,14 @@ _cost_memo: dict[tuple, tuple[float, tuple, dict]] = {}
 def forget_scope(scope: str) -> None:
     """Drop one user's memoized product costs (their owned/free counts; account deletion)."""
     for k in [k for k in list(_cost_memo) if k[0] == scope]:
+        _cost_memo.pop(k, None)
+
+
+def _forget_product(kind: str, set_code: str, name: str, finish: str | None) -> None:
+    """Drop one product's memoized cost in EVERY user scope (the shared catalog
+    prices under it changed, so no scope's cached total is right any more)."""
+    rest = (kind, set_code.lower(), name, finish)
+    for k in [k for k in list(_cost_memo) if k[1:] == rest]:
         _cost_memo.pop(k, None)
 
 
@@ -282,12 +304,12 @@ def _sealed_cost(set_code: str, name: str) -> dict:
             "notes": [d for d in v.diagnostics if not _LEDGER_NOTE.search(d)], **_cost_totals(rows, v.booster_ev)}
 
 
-def _sld_bonus_ids(product: dict | None) -> tuple[list[str], list[str]]:
+def _sld_bonus_ids(product: dict | None) -> tuple[list[str], list[str], str | None]:
     """A drop's bonus, as exact printings: ``named`` (MTGJSON's ``contents.card`` —
     a specific card) and ``possible`` (the candidates on its ``bonus-…`` pack's
     sheets — one of them ships, odds unknown: MTGJSON's weights are placeholders)."""
     if not product:
-        return [], []
+        return [], [], None
     named = construct.product_card_ids(product)
     possible: list[str] = []
     packs = (product.get("contents") or {}).get("pack") or []
@@ -295,8 +317,8 @@ def _sld_bonus_ids(product: dict | None) -> tuple[list[str], list[str]]:
         try:
             data = mtgjson.set_file("sld")
             by_uuid = mtgjson.uuid_scryfall_ids("sld")
-        except Exception:  # noqa: BLE001 — bonus candidates are display-only
-            return named, []
+        except mtgjson.MtgJsonError as e:  # bonus candidates are display-only
+            return named, [], f"couldn't read the bonus pack's candidates ({e})"
         for pk in packs:
             cfg = (data.get("booster") or {}).get(pk.get("code") or "") or {}
             for sheet in (cfg.get("sheets") or {}).values():
@@ -304,7 +326,7 @@ def _sld_bonus_ids(product: dict | None) -> tuple[list[str], list[str]]:
                     sid = by_uuid.get(uuid)
                     if sid and sid not in possible and sid not in named:
                         possible.append(sid)
-    return named, possible
+    return named, possible, None
 
 
 def _sld_has_bonus(product: dict | None) -> bool:
@@ -329,7 +351,9 @@ def _sld_cost(name: str, finish: str | None) -> dict:
     product = valuation.sld_sealed_product(drop["name"], fin, strict=True)
     ids = drop.get("ids") or sld.collect_drop_ids(drop["file_names"])
     notes = []
-    named, possible = _sld_bonus_ids(product)
+    named, possible, bonus_note = _sld_bonus_ids(product)
+    if bonus_note:
+        notes.append(bonus_note)
     named = [i for i in named if i not in ids]          # a bonus is never also a decklist card
     possible = [i for i in possible if i not in ids]
     # New drops are first priced before release (preorder prices, which fall once
@@ -339,6 +363,8 @@ def _sld_cost(name: str, finish: str | None) -> dict:
         if named or possible:
             sets.refresh_printing_prices([*named, *possible])
         fresh = sets.refresh_printing_prices(ids)
+        if fresh.get("refreshed"):
+            _forget_product("sld", "sld", name, finish)
     except (scryfall.ScryfallError, sqlite3.OperationalError) as e:
         fresh = {"prices_at": None, "preorder": False}
         notes.append(f"couldn't refresh prices ({e}); showing the last prices read")

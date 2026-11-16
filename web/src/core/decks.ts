@@ -38,7 +38,7 @@ const OWNERSHIP_LABEL: Record<Ownership, string> = { built: 'Built', loose: 'Loo
 const OWN_TOGGLE_LABEL: Record<Ownership, string> = { built: 'Built', loose: 'Loose', none: 'Recipes' };
 export const COVER_LABEL: Record<Cover, string> = { any: 'Any', build: 'Ready to build', close: 'Ready or close' };
 
-export type RecipeFilters = Pick<DecksSearch, 'q' | 'source' | 'own' | 'cover' | 'types' | 'sets'>;
+export type RecipeFilters = Pick<DecksSearch, 'q' | 'origins' | 'own' | 'cover' | 'types' | 'sets'>;
 
 /** Unused-card status when it applies: a built recipe's cards are pledged, so it has none. */
 const coverStatus = (r: Pick<RecipeOut, 'built' | 'status'>) => (r.built === 0 ? r.status : null);
@@ -52,7 +52,7 @@ function recipeFacets(f: RecipeFilters): Facets<RecipeOut, keyof RecipeFilters> 
   const q = f.q.trim().toLowerCase();
   const types = effectiveTypes(f);
   return {
-    source: (r) => !f.source.length || f.source.includes(r.origin),
+    origins: (r) => !f.origins.length || f.origins.includes(r.origin),
     own: (r) => f.own.includes(r.ownership),
     cover: (r) => coverKeep(r, f.cover),
     types: (r) => types == null || types.includes(r.deck_type),
@@ -68,11 +68,22 @@ export function filterRecipes(rs: readonly RecipeOut[], f: RecipeFilters): Recip
 
 type Count = { value: string; label: string; count: number };
 
+/** Deck-type options: most decks first, then by name. */
+const typeOptions = (counts: [string, number][]): Count[] =>
+  [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([v, n]): Count => ({ value: v, label: v, count: n }));
+
+/** Deck-type options with their deck counts. */
+export function deckTypeCounts(rows: readonly { deck_type: string }[]): Count[] {
+  const n = new Map<string, number>();
+  for (const r of rows) n.set(r.deck_type, (n.get(r.deck_type) ?? 0) + 1);
+  return typeOptions([...n]);
+}
+
 /** Counts per option of one control, under every OTHER filter. */
 export function optionCounts(rs: readonly RecipeOut[], f: RecipeFilters) {
   const facets = recipeFacets(f);
   const by = (skip: keyof RecipeFilters, key: (r: RecipeOut) => string | null) => facetCounts(rs, facets, skip, key);
-  const source = by('source', (r) => r.origin);
+  const origins = by('origins', (r) => r.origin);
   const own = by('own', (r) => r.ownership);
   const types = by('types', (r) => r.deck_type);
   // Choosing a set lifts the Commander default, so sets are counted without it — a
@@ -85,10 +96,10 @@ export function optionCounts(rs: readonly RecipeOut[], f: RecipeFilters) {
   const sorted = (m: Map<string, number>, keepKeys: readonly string[] = []): [string, number][] =>
     [...new Set([...m.keys(), ...keepKeys])].map((k) => [k, m.get(k) ?? 0] as [string, number]);
   return {
-    source: RECIPE_ORIGINS.map((k) => ({ value: k, label: SOURCE_LABEL[k], count: source.get(k) ?? 0 })),
+    origins: RECIPE_ORIGINS.map((k) => ({ value: k, label: SOURCE_LABEL[k], count: origins.get(k) ?? 0 })),
     own: OWNERSHIP.map((k) => ({ value: k, label: OWN_TOGGLE_LABEL[k], count: own.get(k) ?? 0 })),
     cover: { any: null, build: cover.get('build') ?? 0, close: (cover.get('build') ?? 0) + (cover.get('close') ?? 0) },
-    types: sorted(types, f.types.filter((t) => t !== ALL_TYPES)).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([v, n]): Count => ({ value: v, label: v, count: n })),
+    types: typeOptions(sorted(types, f.types.filter((t) => t !== ALL_TYPES))),
     sets: sorted(sets, f.sets)
       .sort((a, b) => (names.get(b[0])?.released ?? '').localeCompare(names.get(a[0])?.released ?? '') || a[0].localeCompare(b[0]))
       .map(([v, n]): Count => ({ value: v, label: `${names.get(v)?.name ?? v.toUpperCase()} · ${v.toUpperCase()}`, count: n })),

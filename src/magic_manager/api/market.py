@@ -104,6 +104,7 @@ class DeckLineOut(BaseModel):
     floor_scryfall_id: str = Field(description="The cheapest printing (this one when unpriced elsewhere).")
     floor_finish: Literal["nonfoil", "foil"] = Field(
         "nonfoil", description="The floor printing's finish: nonfoil when a cheaper nonfoil printing exists, else this line's finish.")
+    image_uri: str | None = Field(None, description="The exact printing's Scryfall image (from the local catalog).")
     bonus: Literal["named", "possible"] | None = Field(None, description="A Secret Lair drop's bonus, never counted in its totals: `named` = MTGJSON names the card, `possible` = one of a random bonus pack's candidates.")
 
 
