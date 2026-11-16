@@ -95,6 +95,10 @@ Small PRs, one per item.
   value back in the cache for up to 30 s (a generation counter bumped by `clear_cache` fixes it);
   `mm prefs set` from a terminal reaches a running `mm serve` only after its 30 s cache expires;
   a forget function that raises after the write commits turns a saved PUT into a 500.
+- **Product-cost memo spellings:** `market._forget_product` clears a refreshed product's memo across
+  user scopes by its exact `(kind, set_code, name, finish)`; if Deals and Secret Lair ever key the
+  same drop under different name spellings, the other spelling keeps pre-refresh totals for ≤30 min
+  (unconfirmed — check the two callers' names).
 
 ## 4. Deferred by decision
 

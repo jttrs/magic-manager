@@ -83,8 +83,12 @@ const decksRoute = createRoute({
     validateSearch: decksSearchValidator,
   search: { middlewares: [stripSearchParams(decksSearch.parse({}))] },
   // Old `built=true` links: only built recipes.
-  beforeLoad: ({ search }) => {
+  beforeLoad: ({ search, location }) => {
     if (search.built) throw redirect({ to: '/decks', search: { ...search, built: undefined, own: ['built'] } as never, replace: true });
+    // Old `kinds=` / `source=` links: the validator already mapped them; rewrite the URL so the
+    // raw legacy key can't map back after you clear the filter it became.
+    const raw = location.search as Record<string, unknown>;
+    if ('kinds' in raw || 'source' in raw) throw redirect({ to: '/decks', search: { ...search, kinds: undefined, source: undefined } as never, replace: true });
   },
   component: lazyRouteComponent(() => import('../views/DecksView'), 'DecksView'),
 });

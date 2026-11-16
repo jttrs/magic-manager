@@ -271,3 +271,13 @@ test('an old kinds=jumpstart link opens Jumpstart as a deck type', async ({ page
   await expect(page.getByRole('button', { name: /^Deck type/ })).toContainText('Jumpstart');
   await expect(page.getByRole('navigation', { name: 'Deck recipes' }).getByRole('button', { name: /^Counterargument/ })).toBeVisible();
 });
+
+test('an old source= link is rewritten, so clearing Source sticks', async ({ page }) => {
+  await page.goto('/decks?source=%5B%22custom%22%5D');
+  await expect(page).toHaveURL(/origins=/);
+  await expect(page).not.toHaveURL(/[?&]source=/);
+  await page.getByRole('button', { name: /^Source/ }).click();
+  await page.getByRole('button', { name: 'Show all' }).click();
+  await page.keyboard.press('Escape');
+  await expect(page).not.toHaveURL(/origins=|[?&]source=/);
+});
