@@ -9,8 +9,8 @@ Each row is valued through ``market.product_cost(kind='sld')`` (DRY with the
 web app and Deals):
   - Sealed mkt = the drop's sealed product (that edition) on the market
     (TCGplayer via the provider chain).
-  - Exact cards = the drop's cards PLUS its bonus card (or bonus-pack EV) at
-    their exact printings.
+  - Exact cards = the drop's GUARANTEED cards (its own decklist) at their exact
+    printings. A bonus card is never counted: which one ships isn't known.
   - Cheapest cards = each of those cards at its cheapest printing (local prices).
   - Gap = sealed − exact cards (negative ⇒ the sealed drop costs less than its
     cards).
@@ -69,7 +69,7 @@ def main() -> int:
     print(f"## Secret Lair Drop value — {n} newest, {edition}")
     print()
     print("*Sealed mkt = the drop's sealed product on the market. Exact cards = the drop's "
-          "cards plus its bonus card at their exact printings. Cheapest cards = each card at its "
+          "guaranteed cards (bonus cards not counted) at their exact printings. Cheapest cards = each at its "
           "cheapest printing anywhere. Gap = sealed − exact cards (negative ⇒ sealed is cheaper).*")
     print()
     print("| Drop | Release | Cards | Sealed mkt | Exact cards | Cheapest cards | Gap |")

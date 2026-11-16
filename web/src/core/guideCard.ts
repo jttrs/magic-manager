@@ -1,7 +1,7 @@
 // The ONE card view-model every guide component renders. Each domain view maps
 // into it with a pure function, so card-diff and commander-compare share every
 // component (tile, row, grid, preview) and differ only in their mapper.
-import type { CollectionCardOut, CompareCardOut, PrintingOut } from './api';
+import type { CollectionCardOut, CompareCardOut, DeckLineOut, PrintingOut } from './api';
 import { bucketInclusion } from './compare';
 import { typeGroup } from './cardFacts';
 
@@ -182,4 +182,20 @@ export function groupCards(cards: GuideCard[], order: readonly string[] = [], la
 
 export function exportLines(cards: GuideCard[], target: 'plain' | 'manapool' | 'tcgplayer'): string {
   return cards.map((c) => c.lines[target]).filter(Boolean).join('\n');
+}
+
+/** The card's front image on Scryfall's CDN, derived from its id (cost lines carry no image). */
+const scryfallImage = (id: string): string => `https://cards.scryfall.io/normal/front/${id[0]}/${id[1]}/${id}.jpg`;
+
+/** One cost line as a tile card, its caption price at the chosen basis. */
+export function fromCostLine(l: DeckLineOut, basis: 'exact' | 'floor'): GuideCard {
+  const image = scryfallImage(l.scryfall_id);
+  return {
+    key: `${l.scryfall_id}|${l.finish}`, scryfallId: l.scryfall_id, name: l.name, image,
+    href: `https://scryfall.com/card/${l.set_code}/${encodeURIComponent(l.collector_number)}`,
+    setCode: l.set_code.toUpperCase(), cn: l.collector_number, rarity: null, finish: l.finish,
+    price: basis === 'exact' ? l.unit_usd : l.floor_usd, pct: null, bars: null, group: typeGroup(null), cmc: null, colors: [],
+    typeGroup: typeGroup(null), released: null, owned: null, missing: false, tags: [],
+    lines: { plain: `${l.need} ${l.name}`, manapool: '', tcgplayer: '' },
+  };
 }

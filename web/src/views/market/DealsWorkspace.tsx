@@ -11,6 +11,7 @@ import type { ProductCostOut } from '../../core/api';
 import { BASIS_LABEL, deltaLabel, effectiveType, filterListings, filterSortProducts, gapOf, listingStatus, PRODUCT_TYPE_LABEL, stockLabel, targetMet, targetPriceOf, type DealProduct, type TabListing } from '../../core/deals';
 import { fmtCount, fmtInt, fmtUsd } from '../../core/format';
 import type { MarketSearch } from '../../core/search';
+import { CardValueCells, CardValueHeads } from './CardValueCells';
 import { DealInspector, ListingInspector } from './DealInspector';
 import { dealFilters, dismiss, useWatch, type CostState, type DealCosts, type DealsData } from './useDealsData';
 import { SheetSummary } from '../../components/SheetSummary';
@@ -128,15 +129,15 @@ function ProductTable({ shown, pinned, listings, costs, basis, item, onPick, onD
           <tr className="border-b-2 border-rule-strong text-left text-xs voice-semi text-ink-muted">
             <th scope="col" className="py-1.5 pr-3 font-medium">Product</th>
             <th scope="col" className={TH}>Best</th>
-            <th scope="col" className={TH}>Gap</th>
             <th scope="col" className={`${TH} hidden @lg:table-cell`}>Sealed</th>
-            <th scope="col" className={`${TH} hidden @md:table-cell`}>Cards inside</th>
+            <CardValueHeads basis={basis} />
+            <th scope="col" className={TH}>Gap</th>
           </tr>
         </thead>
         {fromTabs > 0 && (
           <tbody aria-label="From your open tabs">
             <tr className="border-b border-rule-strong">
-              <th scope="colgroup" colSpan={5} className={`${GROUP_H} text-accent-ink`}>
+              <th scope="colgroup" colSpan={6} className={`${GROUP_H} text-accent-ink`}>
                 <span className="flex items-baseline gap-2">
                   <span className="min-w-0 truncate">From your open tabs</span>
                   <span className="tabular normal-case tracking-normal text-ink-muted">{fmtInt(fromTabs)}</span>
@@ -160,7 +161,7 @@ function ProductTable({ shown, pinned, listings, costs, basis, item, onPick, onD
           <tbody aria-label="Watching">
             {fromTabs > 0 && (
               <tr className="border-b border-rule-strong">
-                <th scope="colgroup" colSpan={5} className={`${GROUP_H} text-ink-muted`}>Watching <span className="tabular normal-case tracking-normal">{fmtInt(shown.length)}</span></th>
+                <th scope="colgroup" colSpan={6} className={`${GROUP_H} text-ink-muted`}>Watching <span className="tabular normal-case tracking-normal">{fmtInt(shown.length)}</span></th>
               </tr>
             )}
             {shown.map((p) => (
@@ -213,9 +214,9 @@ function ListingRow({ l, selected, onPick, onDismiss }: { l: TabListing; selecte
         {l.store && <span className="flex items-baseline justify-end gap-1.5 text-xs text-ink-muted">{l.store}<ScraperDownMark health={storeHealth(l.store)} /></span>}
         {r.available === false && <span className="block text-xs text-danger">{stockLabel(r)}</span>}
       </td>
-      <td className="py-2 pl-3 text-right">{dash}</td>
       <td className="hidden py-2 pl-3 text-right @lg:table-cell">{dash}</td>
-      <td className="hidden py-2 pl-3 text-right @md:table-cell">{dash}</td>
+      <CardValueCells empty={dash} />
+      <td className="py-2 pl-3 text-right">{dash}</td>
     </tr>
   );
 }
@@ -234,7 +235,6 @@ function ProductRow({ p, cost, state, basis, selected, onPick, onDismiss }: { p:
   const dash = (title?: string) => <span className="text-ink-muted" title={title}>{loading ? '…' : '—'}</span>;
   const value = (v: number | null | undefined) => (v == null ? dash(failed) : fmtUsd(v));
   const sealedValue = p.kind === 'single' ? p.singleMarket : cost?.market;
-  const exact = cost?.exact;
   const target = targetPriceOf(p, cost);
   const met = targetMet(p, cost) === true;
   return (
@@ -274,6 +274,10 @@ function ProductRow({ p, cost, state, basis, selected, onPick, onDismiss }: { p:
           </>
         ) : <span className="text-ink-muted">—</span>}
       </td>
+      <td className="hidden py-2 pl-3 text-right text-ink @lg:table-cell">{value(sealedValue)}</td>
+      {p.kind === 'single'
+        ? <><td className="hidden py-2 pl-3 text-right @md:table-cell"><span className="text-ink-muted">—</span></td><td className="hidden py-2 pl-3 text-right @lg:table-cell"><span className="text-ink-muted">—</span></td></>
+        : <CardValueCells values={{ exact: cost?.exact, floor: cost?.floor, unpriced: cost?.unpriced, floorUnpriced: cost?.floor_unpriced, total: cost?.total_cards }} empty={dash(failed)} />}
       <td className="py-2 pl-3 text-right" title={label?.text}>
         {gap && pct ? (
           <>
@@ -281,19 +285,6 @@ function ProductRow({ p, cost, state, basis, selected, onPick, onDismiss }: { p:
             <span className="block text-xs text-ink-muted">{fmtUsd(Math.abs(gap.usd))}</span>
           </>
         ) : dash(failed)}
-      </td>
-      <td className="hidden py-2 pl-3 text-right text-ink @lg:table-cell">{value(sealedValue)}</td>
-      <td className="hidden py-2 pl-3 text-right @md:table-cell">
-        {p.kind === 'single' ? <span className="text-ink-muted">—</span> : exact == null ? dash(failed) : (
-          <>
-            <span className="text-ink">{fmtUsd(exact)}{(cost?.unpriced ?? 0) > 0 && <span aria-hidden="true" className="text-ink-muted">+</span>}</span>
-            {(cost?.unpriced ?? 0) > 0 && <span className="block text-xs text-danger">{fmtInt(cost!.unpriced)} of {fmtInt(cost!.total_cards)} unpriced</span>}
-            {cost?.floor != null && <span className="block text-xs text-ink-muted">cheapest {fmtUsd(cost.floor)}</span>}
-            {(cost?.booster_ev ?? 0) > 0 && cost?.known_exact != null && (
-              <span className="block text-xs text-ink-muted">{fmtUsd(cost.known_exact)} cards + {fmtUsd(cost.booster_ev)} boosters</span>
-            )}
-          </>
-        )}
       </td>
     </tr>
   );

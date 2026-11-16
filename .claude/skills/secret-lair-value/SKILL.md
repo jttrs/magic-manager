@@ -1,6 +1,6 @@
 ---
 name: secret-lair-value
-description: "Deterministic markdown table of the most recent N Secret Lair drops by release date (newest first), each valued sealed vs the cards inside — the drop's sealed market price (TCGplayer), its cards PLUS its bonus card at their exact printings, and each of those cards at its cheapest printing anywhere, with the gap (sealed − exact cards). Regular edition by default, `--foil` for the Foil Editions. Same engine as the web Market → Secret Lair view. Triggers: \"/secret-lair-value\", \"value of recent Secret Lairs\", \"how much are the latest Secret Lair drops worth\", \"recent SLD drop values\", \"newest Secret Lairs value\", \"which Secret Lairs are a good deal\", \"Secret Lair drop price table\"."
+description: "Deterministic markdown table of the most recent N Secret Lair drops by release date (newest first), each valued sealed vs the cards inside — the drop's sealed market price (TCGplayer), its GUARANTEED cards (the decklist; bonus cards are never counted) at their exact printings, and each of those cards at its cheapest printing anywhere, with the gap (sealed − exact cards). Regular edition by default, `--foil` for the Foil Editions. Same engine as the web Market → Secret Lair view. Triggers: \"/secret-lair-value\", \"value of recent Secret Lairs\", \"how much are the latest Secret Lair drops worth\", \"recent SLD drop values\", \"newest Secret Lairs value\", \"which Secret Lairs are a good deal\", \"Secret Lair drop price table\"."
 ---
 
 # Secret Lair Value
@@ -35,7 +35,7 @@ uv run python scripts/secret_lair_value.py [N] [--foil]
 ```
 
 - **Sealed mkt** — the drop's sealed product (that edition) on the market (`—` until TCGplayer lists it).
-- **Exact cards** — the drop's cards plus its bonus card at their exact printings (a random bonus pack counts at its expected value).
+- **Exact cards** — the drop's guaranteed cards (its decklist) at their exact printings. A bonus card — named or from a random bonus pack — is never counted, so the totals are the value a buyer is sure to get. Stale or pre-release (preorder) prices for the drop's printings are re-read from Scryfall first.
 - **Cheapest cards** — each of those cards at its cheapest printing anywhere (local prices).
 - **Gap** — sealed − exact cards; negative ⇒ the sealed drop costs less than its cards.
 
@@ -48,4 +48,4 @@ uv run python scripts/secret_lair_value.py [N] [--foil]
 ## Cross-references
 
 - `scripts/secret_lair_value.py` — the driver. `src/magic_manager/sld_market.py` — the engine (`recent`, `value`, `gap`, `survey`).
-- `src/magic_manager/market.py` — `product_cost` / `_sld_cost` (bonus card via the drop's MTGJSON sealed product).
+- `src/magic_manager/market.py` — `product_cost` / `_sld_cost` (guaranteed cards only; bonus lines flagged, never summed; `sets.refresh_printing_prices` first).

@@ -11,7 +11,7 @@ const drops = {
   ],
 };
 
-const line = (name: string, cn: string, unit: number, floor: number, bonus = false) => ({
+const line = (name: string, cn: string, unit: number, floor: number, bonus: 'named' | null = null) => ({
   scryfall_id: `id-${cn}`, finish: 'nonfoil', name, set_code: 'sld', collector_number: cn, need: 1, free: 0, buy: 1,
   unit_usd: unit, floor_usd: floor, floor_set_code: null, floor_collector_number: null, floor_scryfall_id: `id-${cn}`, bonus,
 });
@@ -20,13 +20,13 @@ const costs: Record<string, object> = {
   'Garfield: As Intended': {
     kind: 'sld', set_code: 'sld', name: 'Garfield: As Intended', finish: 'nonfoil', category: 'secret_lair', release_date: '2026-06-16',
     market: 30, market_source: 'tcgcsv', contents: 45, exact: 45, floor: 10, known_exact: 45, known_floor: 10, booster_ev: null,
-    total_cards: 2, unpriced: 0, notes: [], sealed_name: 'Secret Lair Drop Garfield As Intended',
-    lines: [line('Counterspell', '2664', 42, 8), line('Clone', '7164', 3, 2, true)],
+    total_cards: 2, unpriced: 0, floor_unpriced: 0, has_bonus: true, prices_at: '2026-11-12T08:00:00', preorder: false, notes: [], sealed_name: 'Secret Lair Drop Garfield As Intended',
+    lines: [line('Counterspell', '2664', 42, 8), line('Clone', '7164', 3, 2, 'named')],
   },
   'Cats of Chaos': {
     kind: 'sld', set_code: 'sld', name: 'Cats of Chaos', finish: 'nonfoil', category: 'secret_lair', release_date: '2026-06-16',
     market: 50, market_source: 'tcgcsv', contents: 40, exact: 40, floor: 20, known_exact: 40, known_floor: 20, booster_ev: null,
-    total_cards: 1, unpriced: 0, notes: [], sealed_name: null, lines: [line('Sol Ring', '1', 40, 20)],
+    total_cards: 1, unpriced: 0, floor_unpriced: 0, has_bonus: false, prices_at: '2026-11-14T08:00:00', preorder: true, notes: [], sealed_name: null, lines: [line('Sol Ring', '1', 40, 20)],
   },
 };
 
@@ -72,10 +72,49 @@ test('a drop opens its worth, bonus card and cards; Watch needs the deals flag',
   await page.getByRole('button', { name: 'Garfield: As Intended' }).click();
   const worth = page.getByRole('region', { name: 'What it’s worth' });
   await expect(worth).toContainText('Sealed value');
-  await expect(worth).toContainText('Includes the bonus card: Clone.');
-  await expect(page.getByRole('row', { name: /Clone/ })).toContainText('bonus');
+  await expect(worth).toContainText('Guaranteed cards, exact printings');
+  await expect(worth).toContainText('Guaranteed cards, cheapest printings');
+  await expect(worth).toContainText('Bonus cards aren’t counted.');
+  await expect(page.getByRole('region', { name: 'Bonus' })).toContainText('Clone');
+  await expect(page.getByRole('region', { name: 'Bonus' })).toContainText('isn’t in any total');
   await expect(page.getByRole('link', { name: /TCGplayer/ })).toHaveAttribute('href', 'https://www.tcgplayer.com/product/694967');
   await expect(page.getByRole('button', { name: 'Watch' })).toHaveCount(0);
+});
+
+test('Secret Lair: Exact and Cheapest columns, the compared one marked; header says when prices are from', async ({ page }) => {
+  await page.goto('/market?subject=sld');
+  const head = page.getByRole('columnheader');
+  await expect(head).toContainText(['Drop', 'Sealed', 'Exact', 'Cheapest', 'Gap']);
+  await expect(page.getByRole('columnheader', { name: /Exact/ })).toContainText('the Gap is measured against');
+  await expect(page.getByRole('columnheader', { name: /Cheapest/ })).not.toContainText('the Gap is measured against');
+  const garfield = page.getByRole('row', { name: /Garfield/ });
+  await expect(garfield).toContainText('$45.00');
+  await expect(garfield).toContainText('$10.00');
+  await expect(garfield).toContainText('+ bonus');
+  await expect(page.getByRole('row', { name: /Cats of Chaos/ })).not.toContainText('+ bonus');
+  await expect(page.getByRole('status').filter({ hasText: /prices from Nov 12/ })).toBeVisible();
+  await page.getByRole('radio', { name: 'Cheapest' }).click();
+  await expect(page.getByRole('columnheader', { name: /Cheapest/ })).toContainText('the Gap is measured against');
+});
+
+test('Secret Lair: a preorder cost is tagged under the drop name', async ({ page }) => {
+  await page.goto('/market?subject=sld');
+  await expect(page.getByRole('row', { name: /Cats of Chaos/ })).toContainText('preorder');
+  await expect(page.getByRole('row', { name: /Garfield/ })).not.toContainText('preorder');
+});
+
+test('Secret Lair: a row twirls open to its card tiles, bonus apart', async ({ page }) => {
+  await page.goto('/market?subject=sld');
+  const garfield = page.getByRole('row', { name: /Garfield/ });
+  const toggle = garfield.getByRole('button', { name: 'Show cards' });
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await toggle.click();
+  await expect(garfield.getByRole('button', { name: 'Hide cards' })).toHaveAttribute('aria-expanded', 'true');
+  const tiles = page.getByRole('region', { name: 'Guaranteed cards' });
+  await expect(tiles.getByText('Counterspell')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Bonus' }).getByText('Clone')).toBeVisible();
+  await garfield.getByRole('button', { name: 'Hide cards' }).click();
+  await expect(tiles).toHaveCount(0);
 });
 
 test('with the deals flag: Watch tracks the drop at its TCGplayer page', async ({ page }) => {

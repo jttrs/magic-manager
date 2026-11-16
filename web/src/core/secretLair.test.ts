@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { ProductCostOut, SldDropOut } from './api';
 import { marketSearch } from './search';
-import { dropBase, filterSortDrops, sldGap, sldKey, sldRows, watchKey, type SldFilters } from './secretLair';
+import { fmtDay } from './format';
+import { basisColumn, dropBase, filterSortDrops, oldestPricesAt, splitBonus, sldGap, sldKey, sldRows, watchKey, type SldFilters } from './secretLair';
 
 const cost = (p: Partial<ProductCostOut>): ProductCostOut => ({ kind: 'sld', set_code: 'sld', name: 'x', ...p }) as ProductCostOut;
 
@@ -55,5 +56,30 @@ describe('secret lair view-model', () => {
     expect([s.subject, s.edition, s.sldN, s.sbasis, s.ssort]).toEqual(['sld', 'nonfoil', 30, 'exact', 'gap_pct']);
     const bad = marketSearch.parse({ subject: 'sld', edition: 'etched', sldN: 9999, ssort: 'x' });
     expect([bad.edition, bad.sldN, bad.ssort]).toEqual(['nonfoil', 30, 'gap_pct']);
+  });
+});
+
+describe('secret lair columns + freshness', () => {
+  it('marks a value column only when the gap is measured against one', () => {
+    expect(basisColumn('exact')).toBe('exact');
+    expect(basisColumn('floor')).toBe('floor');
+    expect(basisColumn('market')).toBeNull();
+  });
+
+  it('finds the oldest prices_at', () => {
+    expect(oldestPricesAt([cost({ prices_at: '2026-11-14T08:00:00' }), undefined, cost({ prices_at: '2026-11-12T08:00:00' }), cost({})])).toBe('2026-11-12T08:00:00');
+    expect(oldestPricesAt([cost({})])).toBeNull();
+  });
+
+  it('splits bonus lines apart from the guaranteed cards', () => {
+    const l = (name: string, bonus: 'named' | 'possible' | null) => ({ name, bonus }) as never;
+    const s = splitBonus([l('A', null), l('B', 'named'), l('C', 'possible')]);
+    expect([s.cards.length, s.named.length, s.possible.length]).toEqual([1, 1, 1]);
+    expect(splitBonus(undefined).cards).toEqual([]);
+  });
+
+  it('formats the stamped day', () => {
+    expect(fmtDay('2026-11-12T23:30:00')).toBe(fmtDay('2026-11-12'));
+    expect(fmtDay(null)).toBe('—');
   });
 });
