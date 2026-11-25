@@ -11,6 +11,7 @@ import { useSettingsSection } from '../app/settings';
 import { UndoButton } from './UndoButton';
 import { PrivacyPrompt } from './Telemetry';
 import { useAnalytics } from '../app/analytics';
+import { useCanonicalUrl } from '../app/useCanonicalUrl';
 import { CompanionButton } from './companion/CompanionSetup';
 import { useFeature } from '../app/features';
 import { SettingsButton } from './settings/SettingsDialog';
@@ -32,6 +33,7 @@ const NAV = [
 /** Global frame: masthead + full-width top nav; views supply sidebar + main below it. */
 export function AppShell({ children }: { children: ReactNode }) {
   useAnalytics();
+  useCanonicalUrl();
   useAppearanceSettings();
   useCollectionPrefsSettings();
   return (
