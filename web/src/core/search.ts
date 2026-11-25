@@ -12,8 +12,14 @@ export const COLLECTION_SORT_DEFAULT = 'set,cn';
 export const BUCKETS = ['a_only', 'both', 'b_only'] as const;
 export type Bucket = (typeof BUCKETS)[number];
 
-const list = <T extends z.ZodTypeAny>(item: T) =>
-  z.preprocess((v) => (v == null ? undefined : Array.isArray(v) ? v : [v]), z.array(item));
+/** A URL list: an array (old JSON links), a comma list (`dft,tla` — app/urlCodec.ts writes
+ *  these), or one bare value. */
+export const list = <T extends z.ZodTypeAny>(item: T) =>
+  z.preprocess(
+    (v) => (v == null ? undefined : Array.isArray(v) ? v : typeof v === 'string' ? splitList(v) : [v]),
+    z.array(item),
+  );
+const splitList = (v: string): string[] => (v === '' ? [] : v.split(','));
 
 const VIEW_TYPES = ['grid', 'list'] as const;
 const view = z.enum(VIEW_TYPES).catch('grid').default('grid');
@@ -70,15 +76,15 @@ export type CompareSearch = z.infer<typeof compareSearch>;
 export const SHOW = ['owned', 'missing'] as const;
 
 export const collectionSearch = z.object({
+  /** Set families to look at; empty = every family you own. */
   families: list(z.string()).catch([]).default([]),
-  show: list(z.enum(SHOW)).catch([...SHOW]).default([...SHOW]),
+  /** Owned only by default: the collection you have. Add `missing` for the gaps. */
+  show: list(z.enum(SHOW)).catch(['owned']).default(['owned']),
   /** Unchecked card-type traits (core/collection.ts TRAITS keys). */
   exclude: list(z.string()).catch([]).default([]),
   q: z.string().catch('').default(''),
   /** Scryfall Tagger function roots to keep (OR); empty = all. */
   fn: list(z.string()).catch([]).default([]),
-  /** Acquisition sources to keep (OR): `kind:<k>` or a source key (core/collection.ts sourceMatch). */
-  src: list(z.string()).catch([]).default([]),
   /** Only cards you earmarked (any printing). */
   em: z.boolean().catch(false).default(false),
   sort: z.string().catch(COLLECTION_SORT_DEFAULT).default(COLLECTION_SORT_DEFAULT),
@@ -90,8 +96,10 @@ export type CollectionSearch = z.infer<typeof collectionSearch>;
 
 const DECK_GROUPS = ['set', 'year', 'kind', 'type', 'color', 'state'] as const;
 export const RECIPE_ORIGINS = ['precon', 'import', 'custom'] as const;
-export const OWNERSHIP = ['built', 'loose', 'none'] as const;
-export const COVER = ['any', 'build', 'close'] as const;
+/** Decklist status: built (an assembled copy), buildable (not built, your unused cards cover it
+ *  within the Settings → Decks threshold) or unbuilt (everything else, incl. unread catalog recipes). */
+export const DECK_STATUS = ['built', 'buildable', 'unbuilt'] as const;
+export type DeckStatus = (typeof DECK_STATUS)[number];
 const SHOPS = ['buildable', 'packs'] as const;
 
 export const decksSearch = z.object({
@@ -101,10 +109,8 @@ export const decksSearch = z.object({
   group: z.preprocess((v) => (v === 'origin' ? 'kind' : v), z.enum(DECK_GROUPS)).catch('set').default('set'),
   /** Where the recipe comes from (Wizards / Imported / Custom); empty = all. */
   origins: list(z.enum(RECIPE_ORIGINS)).catch([]).default([]),
-  /** Ownership to keep: built, loose (yours, not assembled) and/or not owned. Owned only by default. */
-  own: list(z.enum(OWNERSHIP)).catch(['built', 'loose']).default(['built', 'loose']),
-  /** Only recipes your free cards cover (build) or nearly cover (close = build or close). */
-  cover: z.enum(COVER).catch('any').default('any'),
+  /** Decklist status to keep; built only by default. */
+  status: list(z.enum(DECK_STATUS)).catch(['built']).default(['built']),
   /** Deck types to keep (deck_view.deck_type labels). Absent = the default (Commander, unless a set
    *  is chosen); `['all']` = every type (core/decks.ts effectiveTypes). */
   types: list(z.string()).catch([]).default([]),
@@ -115,7 +121,7 @@ export const decksSearch = z.object({
   shop: z.enum(SHOPS).catch('buildable').default('buildable'),
   /** Open the "add deck cards to collection" review once (after an import). */
   add: z.boolean().optional().catch(undefined),
-  /** Legacy `built=true` links; the route turns them into `own=built`. */
+  /** Legacy `built=true` links; the route turns them into `status=built`. */
   built: z.boolean().optional().catch(undefined),
   view,
 });
@@ -124,7 +130,7 @@ export type DecksSearch = z.infer<typeof decksSearch>;
 /** Old `/decks` links: `source=` (the old key) → `origins`; `kinds=` precon|import|custom → `origins`,
  *  `jumpstart` → the Jumpstart deck type. The route applies this before validating. */
 export function legacyDecksSearch(raw: Record<string, unknown>): Record<string, unknown> {
-  let next = raw;
+  let next = legacyStatus(raw);
   if ('source' in next) {
     const { source, ...rest } = next;
     next = 'origins' in rest ? rest : { ...rest, origins: source };
@@ -147,6 +153,23 @@ export function legacyDecksSearch(raw: Record<string, unknown>): Record<string, 
   if (origins.length && !('origins' in rest)) out.origins = origins;
   if (types.length) out.types = types;
   return out;
+}
+
+/** Old `own=` (built|loose|none) + `cover=` (any|build|close) links → `status`. A cover filter meant
+ *  "ready to build", so it becomes Buildable; otherwise built stays Built and loose / not owned became
+ *  the not-built buckets. */
+function legacyStatus(raw: Record<string, unknown>): Record<string, unknown> {
+  if (!('own' in raw) && !('cover' in raw)) return raw;
+  const { own, cover, ...rest } = raw;
+  if ('status' in rest) return rest;
+  const owned = (Array.isArray(own) ? own : typeof own === 'string' ? splitList(own) : own == null ? ['built', 'loose'] : []).map(String);
+  const status: DeckStatus[] = [];
+  if (cover === 'build' || cover === 'close') status.push('buildable');
+  else {
+    if (owned.includes('built')) status.push('built');
+    if (owned.includes('loose') || owned.includes('none')) status.push('buildable', 'unbuilt');
+  }
+  return status.length ? { ...rest, status } : rest;
 }
 
 /** The `/decks` route's search validator: `decksSearch` after the legacy keys are mapped. A Standard Schema

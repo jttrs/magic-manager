@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { jobsQuery } from '../app/queries';
 import type { ReactNode } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { IconTooltip } from './IconTooltip';
 import { iconActionClass } from './iconActionClass';
 import { applyTheme, readTheme, type ThemePref } from '../app/theme';
@@ -16,6 +16,7 @@ import { useFeature } from '../app/features';
 import { SettingsButton } from './settings/SettingsDialog';
 import { SettingsChoice, SettingsRow } from './settings/SettingsControls';
 import { SubnavSlot } from './subnavSlot';
+import { SheetHeaderSlots } from './sheetHeaderSlots';
 import { FlagsButton } from './flags/FlagsButton';
 import { AccountButton } from './auth/AccountButton';
 import { useCollectionPrefsSettings } from './settings/CollectionPrefsSettings';
@@ -81,29 +82,44 @@ function CompanionSlot() {
   return useFeature('companion') ? <span className="contents max-sm:hidden"><CompanionButton /></span> : null;
 }
 
-/** Sidebar (starts below the nav) + main region, with an optional sub-nav strip.
+/** Sidebar (starts below the nav) + main region, under ONE full-width strip.
  *
- *  `subnav` — the section's modes (Collection: Cards · Purchase history; Explore:
- *  Rankings · Cards · Surfer). Pass `<SectionTabs label=… tabs=… />`: inside the
- *  slot it takes the strip's chrome look (quieter than the top nav, amber
- *  underline on the active mode). The strip spans the full width under the top
- *  nav — above BOTH the rail and the sheet, since a mode scopes both — and stays
- *  visible on phones while the rail is collapsed. A section with one mode shows
- *  no strip: `SectionTabs` renders nothing for fewer than two tabs and the empty
- *  strip collapses (`empty:hidden`), so views needn't special-case it. */
+ *  The strip sits under the top nav, above BOTH the rail and the sheet, in chrome
+ *  stock (`surface-chrome` remaps the paper-styled header controls to it). It is a
+ *  row of delimited sections, each hidden (with its divider) while empty:
+ *  [tabs] | [stats, one truncating line] | [arrange] | [actions, rightmost].
+ *  - `subnav` fills the tabs section — the section's modes (Collection: Cards ·
+ *    Purchase history; Explore: Rankings · Cards · Surfer). Pass
+ *    `<SectionTabs label=… tabs=… />`; it takes the strip's look and renders
+ *    nothing for fewer than two tabs.
+ *  - stats / arrange / actions are slots: the first `GuideSheet` under the layout
+ *    portals its summary, `arrange` and `actions` into them (`SheetHeaderSlots`).
+ *  With nothing in any section the strip collapses to nothing. Below `lg` it wraps:
+ *  tabs on one row, then stats + arrange + actions; it stays visible while the
+ *  rail is collapsed. */
 export function ViewLayout({ sidebar, children, label, summary, startOpen = false, subnav }: { sidebar: ReactNode; children: ReactNode; label: string; summary?: string; startOpen?: boolean; subnav?: ReactNode }) {
   const wide = useMediaQuery('(min-width: 64rem)');
   const [open, setOpen] = useState(startOpen);
   const shown = wide || open;
+  const [stats, setStats] = useState<HTMLElement | null>(null);
+  const [arrange, setArrange] = useState<HTMLElement | null>(null);
+  const [actions, setActions] = useState<HTMLElement | null>(null);
+  const owner = useRef<symbol | null>(null);
+  const slots = useMemo(() => ({ stats, arrange, actions, owner }), [stats, arrange, actions]);
+  // A divider after a section only while a later section has content.
+  const rule = 'lg:has-[~*:not(:empty)]:border-r lg:border-chrome-line';
   return (
     <div className="flex min-h-0 min-w-0 flex-col lg:h-[calc(100dvh-var(--size-topbar))]">
-      {subnav != null && (
-        <SubnavSlot.Provider value>
-          <div data-subnav="" className="shrink-0 border-b border-chrome-line empty:hidden">{subnav}</div>
-        </SubnavSlot.Provider>
-      )}
+      <div data-subnav="" className="surface-chrome flex shrink-0 flex-wrap items-stretch border-b border-chrome-line bg-chrome text-on-chrome not-has-[>:not(:empty)]:hidden">
+        <div className={`w-full max-w-full empty:hidden lg:w-auto ${rule}`}>
+          <SubnavSlot.Provider value>{subnav}</SubnavSlot.Provider>
+        </div>
+        <div ref={setStats} className={`min-w-0 flex-1 basis-40 truncate px-sheet py-2.5 text-sm tabular text-ink-muted empty:hidden [&>*+*]:ml-3 ${rule}`} />
+        <div ref={setArrange} className={`flex min-h-10 items-center px-sheet empty:hidden ${rule}`} />
+        <div ref={setActions} className="ml-auto flex min-h-10 items-center px-sheet empty:hidden" />
+      </div>
       <div className="grid min-h-0 min-w-0 flex-1 grid-cols-1 lg:grid-cols-[var(--size-sidebar)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
-        <aside aria-label={label} className="relative min-w-0 border-b border-chrome-line px-4 py-3 lg:overflow-y-auto lg:border-b-0 lg:border-r lg:px-5 lg:py-5">
+        <aside aria-label={label} className="relative min-w-0 border-b border-chrome-line px-4 py-3 lg:overflow-y-auto lg:border-b-0 lg:border-r lg:px-5 lg:py-3">
           {!wide && (
             <button
               type="button"
@@ -119,10 +135,10 @@ export function ViewLayout({ sidebar, children, label, summary, startOpen = fals
               <span aria-hidden="true" className={`text-on-chrome transition-transform ease-guide ${open ? 'rotate-180' : ''}`}>▾</span>
             </button>
           )}
-          <div id="view-controls" hidden={!shown} className={`flex-col gap-6 ${shown ? 'flex' : ''} ${wide ? '' : 'pt-3'}`}>{sidebar}</div>
+          <div id="view-controls" hidden={!shown} className={`flex-col gap-4 ${shown ? 'flex' : ''} ${wide ? '' : 'pt-3'}`}>{sidebar}</div>
         </aside>
-        <main id="main" tabIndex={-1} className="min-h-0 min-w-0 p-2 sm:p-3 lg:h-full lg:p-4">
-          {children}
+        <main id="main" tabIndex={-1} className="min-h-0 min-w-0 lg:h-full">
+          <SheetHeaderSlots.Provider value={slots}>{children}</SheetHeaderSlots.Provider>
         </main>
       </div>
     </div>

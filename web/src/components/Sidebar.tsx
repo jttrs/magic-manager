@@ -8,7 +8,7 @@ export function SideSection({ title, children, id, quiet = false }: { title: str
   const own = useId();
   const hid = id ?? own;
   return (
-    <section aria-labelledby={hid} className="flex flex-col gap-2">
+    <section aria-labelledby={hid} className={`flex flex-col gap-2 ${quiet ? '' : 'mt-2'}`}>
       <h2 id={hid} className={quiet ? 'sr-only' : 'text-sm voice-condensed uppercase tracking-[0.06em] text-on-chrome-muted'}>{title}</h2>
       {children}
     </section>

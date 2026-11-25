@@ -1,4 +1,4 @@
-import { COLLECTION_URL, COMPARE_URL, expect, fixtures, mockApi, test } from './support';
+import { COLLECTION_ALL_URL, COLLECTION_URL, COMPARE_URL, expect, fixtures, mockApi, test } from './support';
 
 const card = (name: string) => fixtures.compare.cards.find((c) => c.name === name)!;
 const label = (key: string) => fixtures.compare.functions.find((f) => f.key === key)!.label;
@@ -72,7 +72,7 @@ test('Collection filters by Tagger function; untagged cards are their own option
   const cards = fixtures.collectionBlb.cards;
   const draw = cards.filter((c) => c.functions.includes('draw')).length;
   const none = cards.filter((c) => !c.functions.length).length;
-  await page.goto(COLLECTION_URL);
+  await page.goto(COLLECTION_ALL_URL);
   await expect(page.getByRole('article')).toHaveCount(cards.length);
   await page.getByRole('button', { name: /Function/ }).click();
   await page.getByRole('checkbox', { name: /Card draw/ }).check();
@@ -85,5 +85,6 @@ test('Collection filters by Tagger function; untagged cards are their own option
   await page.keyboard.press('Escape');
   await expect(page.getByRole('article')).toHaveCount(none);
   await page.getByRole('button', { name: 'Reset filters' }).click();
-  await expect(page.getByRole('article')).toHaveCount(cards.length);
+  // Reset also returns Ownership to owned-only.
+  await expect(page.getByRole('article')).toHaveCount(cards.filter((c) => Object.values(c.owned).some((n) => (n as number) > 0)).length);
 });

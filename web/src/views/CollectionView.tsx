@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { getRouteApi, useNavigate } from '@tanstack/react-router';
-import { useEffect, useMemo, useRef } from 'react';
+import { useMemo } from 'react';
 import { collectionQuery, familiesQuery } from '../app/queries';
 import { useSelection } from '../app/selection';
 import { ViewLayout } from '../components/AppShell';
@@ -26,51 +26,37 @@ import { EmptyNote, ErrorNote, GridSkeleton, GuideSheet } from '../components/St
 import { VirtualGuide, type GuideSection } from '../components/VirtualGuide';
 import { collectionBuyList, type CollectionCardOut, type CollectionOut } from '../core/api';
 import { activeRules, collectionPresets, collectionSortKeys, COLLECTION_SORT, NO_SCENE, sceneRanks, type CollectionSortKey } from '../core/scenes';
-import { buyFinish, buyTotal, collectionCounts, collectionStats, filterCollection, isMissing, NO_FUNCTION, setGroupIncluded, sourceKinds, sourceOptions, TRAITS, traitsIn, type TraitGroup } from '../core/collection';
+import { buyFinish, buyTotal, collectionCounts, collectionStats, filterCollection, isMissing, NO_FUNCTION, setGroupIncluded, TRAITS, traitsIn, type TraitGroup } from '../core/collection';
 import { InfoTip } from '../components/InfoTip';
 import { summaryLine } from '../core/checklist';
-import { fmtInt, fmtUsd } from '../core/format';
+import { fmtCount, fmtInt, fmtUsd } from '../core/format';
 import { exportLines, fromCollection, groupCards, type GuideCard } from '../core/guideCard';
 import { SHOW, type CollectionSearch, COLLECTION_SORT_DEFAULT } from '../core/search';
 import { decodeSort, encodeSort, leadSection, sortBy, type SortRule } from '../core/sort';
 
 const route = getRouteApi('/collection');
 
-const LAST_FAMILIES = 'mm.collection.families';
-/** The families you last looked at; storage can be blocked (private windows), so never throw. */
-function readLastFamilies(): string[] {
-  try {
-    const v: unknown = JSON.parse(localStorage.getItem(LAST_FAMILIES) ?? '[]');
-    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
-  } catch {
-    return [];
-  }
-}
-function saveLastFamilies(codes: readonly string[]) {
-  try {
-    localStorage.setItem(LAST_FAMILIES, JSON.stringify(codes));
-  } catch {
-    // blocked storage: the choice just isn't remembered
-  }
-}
 /** "Reset filters" clears what narrows the cards — the card-name search and every
  *  Show filter except the set families you chose. How cards are arranged (sort,
  *  view type) and what "missing" means (a Settings preference) are not filters,
  *  so they stay put. */
-const RESET: Partial<CollectionSearch> = { show: [...SHOW], exclude: [], q: '', fn: [], src: [], em: false };
+const RESET: Partial<CollectionSearch> = { show: ['owned'], exclude: [], q: '', fn: [], em: false };
 
 export function CollectionView() {
   const search = route.useSearch();
   const navigate = useNavigate({ from: '/collection' });
   const set = (patch: Partial<CollectionSearch>) => navigate({ search: (s) => ({ ...s, ...patch }), replace: true });
   const fams = useQuery(familiesQuery());
-  const q = useQuery(collectionQuery(search.families));
+  // No families chosen = every family you own; the query waits for the list in that case.
+  const allCodes = useMemo(() => fams.data?.map((f) => f.code) ?? [], [fams.data]);
+  const scope = search.families.length ? search.families : allCodes;
+  const q = useQuery({ ...collectionQuery(scope), enabled: scope.length > 0 });
   const { selected, toggle, clear } = useSelection('collection');
   const hasScenes = (q.data?.scenes?.length ?? 0) > 0;
   const rules = useMemo(() => activeRules(decodeSort(search.sort, COLLECTION_SORT), hasScenes), [search.sort, hasScenes]);
   const missingMeans = useMissingMeans();
   const gaps = missingMeans === 'card';
-  const filtered = search.exclude.length > 0 || search.show.length < 2 || Boolean(search.q) || search.fn.length > 0 || search.src.length > 0 || search.em;
+  const filtered = search.exclude.length > 0 || !(search.show.length === 1 && search.show[0] === 'owned') || Boolean(search.q) || search.fn.length > 0 || search.em;
   const settings = useMemo(() => ({
     id: 'collection',
     title: 'Collection',
@@ -91,25 +77,10 @@ export function CollectionView() {
   }), [missingMeans]);
   useSettingsSection(settings);
 
-  // Default scope: the families you last looked at, restored ONCE when the page opens
-  // with none (a first visit opens the picker). Clearing them later stays cleared.
-  const restored = useRef(false);
-  useEffect(() => {
-    if (search.families.length) {
-      restored.current = true;
-      saveLastFamilies(search.families);
-      return;
-    }
-    if (restored.current) return;
-    restored.current = true;
-    const last = readLastFamilies();
-    if (last.length) navigate({ search: (s) => ({ ...s, families: last }), replace: true });
-  }, [search.families, navigate]);
-
   const view = useMemo(() => (q.data ? buildView(q.data, { ...search, gaps }, rules) : null), [q.data, search, gaps, rules]);
   // Every control's counts: under all the OTHER filters (core/facets), never its own.
   const facetData = useMemo(
-    () => (q.data ? collectionCounts(q.data.cards, { ...search, gaps }, sourceKinds(q.data.sources)) : null),
+    () => (q.data ? collectionCounts(q.data.cards, { ...search, gaps }) : null),
     [q.data, search, gaps],
   );
   const counts = facetData?.traits ?? null;
@@ -129,11 +100,9 @@ export function CollectionView() {
       ]
     : null;
 
-  const srcOptions = q.data?.sources?.length && facetData ? sourceOptions(q.data.sources, facetData.src) : null;
-
   const cartCheck = useFeature('cart_check');
   const checklist = useChecklist();
-  const counting = search.count && search.families.length > 0;
+  const counting = search.count && scope.length > 0;
   const marked = view ? [...selected].map((k) => view.byId.get(k)).filter((c) => c != null) : [];
   const buyPool = marked.length ? marked : (view?.shown.filter((c) => isMissing(c, search.exclude)) ?? []);
   const buyText = (target: 'manapool' | 'tcgplayer' | 'cardkingdom') => async () => {
@@ -158,14 +127,13 @@ export function CollectionView() {
           <MultiSelect
             label="Set families"
             noun="families"
-            mode="scope"
             value={search.families}
-            onChange={(families) => set({ families })}
+            onChange={(families) => set({ families: families.length === fams.data.length ? [] : families })}
             options={fams.data.map((f) => ({ value: f.code, label: f.name }))}
           />
         )}
         <SegmentedToggles
-          label="Cards"
+          label="Ownership"
           showLabel
           labelExtra={
             <InfoTip label="What does missing mean?">
@@ -182,20 +150,6 @@ export function CollectionView() {
             { value: 'missing', label: 'Missing', count: facetData?.show.missing },
           ]}
         />
-        {srcOptions && (
-          <MultiSelect
-            label="Acquired from"
-            labelExtra={
-              <InfoTip label="What does acquired from mean?">
-                Where your copies came from: a <b>card pool</b> (land pack, scene box, most Secret Lair drops), a <b>precon deck</b>, cards added as <b>singles</b>, or <b>unknown</b> for copies recorded before tracking began. Picking a source shows only owned cards.
-              </InfoTip>
-            }
-            noun="sources"
-            value={search.src}
-            onChange={(src) => set({ src })}
-            options={srcOptions}
-          />
-        )}
         <MultiSelect
           label="Rarity"
           noun="rarities"
@@ -267,7 +221,7 @@ export function CollectionView() {
       </SideSection>
       <SideSection title="Buy">
         <CopyTargets
-          lead={`Copy bulk lists · ${marked.length ? `${fmtInt(marked.length)} marked` : `${fmtInt(buyPool.length)} missing shown`} · ≈ ${fmtUsd(buyTotal(buyPool, search.exclude))} at market`}
+          describe={() => `${fmtCount(buyPool.length, 'card')} · ≈ ${fmtUsd(buyTotal(buyPool, search.exclude))} at market`}
           targets={buyListTargets(buyText)}
         />
         {cartCheck && (
@@ -278,11 +232,9 @@ export function CollectionView() {
   );
 
   let body;
-  if (!search.families.length) {
+  if (fams.isSuccess && !allCodes.length) {
     body = (
-      <EmptyNote title="Choose the sets you collect">
-        Pick one or more set families in the sidebar. Every printing appears with your copies counted under the card; gaps are marked Missing.
-      </EmptyNote>
+      <EmptyNote title="No cards in your collection yet">Use Add cards to put your first cards here.</EmptyNote>
     );
   } else if (q.isPending) {
     body = <GridSkeleton label="Loading your collection…" />;
@@ -317,8 +269,13 @@ export function CollectionView() {
 
   const s = view?.stats;
   const famN = q.data?.families.length ?? 0;
+  const skipped = q.data?.skipped?.length ? ` · skipped ${q.data.skipped.join(', ')}` : '';
+  const showMissing = search.show.includes('missing');
+  type Stats = NonNullable<typeof s>;
+  const full = (st: Stats) => `${famN} set ${famN === 1 ? 'family' : 'families'} · showing ${fmtInt(st.printings)} printings: ${fmtInt(st.owned)} owned (${fmtInt(st.copies)} copies), ${gaps && showMissing ? `${fmtInt(st.missingCards)} cards you own in no printing · ${fmtUsd(st.missingCardsUsd)}${st.missingCardsUnpriced ? '+' : ''} at the cheapest printing of each` : `${fmtInt(st.missing)} missing · ${fmtUsd(st.missingUsd)}${st.missingUnpriced ? '+' : ''} to complete`}${skipped}`;
+  const short = (st: Stats) => `${fmtInt(st.printings)} printings · ${fmtInt(st.copies)} copies${showMissing ? (gaps ? ` · ${fmtInt(st.missingCards)} cards missing · ${fmtUsd(st.missingCardsUsd)}${st.missingCardsUnpriced ? '+' : ''} at the cheapest printing` : ` · ${fmtInt(st.missing)} missing · ${fmtUsd(st.missingUsd)}${st.missingUnpriced ? '+' : ''} to complete`) : ''}${skipped}`;
   return (
-    <ViewLayout label="Collection controls" summary={controlsSummary(search, fams.data)} sidebar={sidebar} startOpen={!search.families.length} subnav={<CollectionTabs />}>
+    <ViewLayout label="Collection controls" summary={controlsSummary(search, fams.data)} sidebar={sidebar} subnav={<CollectionTabs />}>
       <GuideSheet
         title="Collection"
         arrange={
@@ -342,8 +299,8 @@ export function CollectionView() {
               Icon={CountCardsMark}
               aria-pressed={counting}
               label={counting ? 'Done modifying counts' : checklist.dirty ? `Bulk modify counts · ${fmtInt(checklist.summary.cells)} unsaved` : 'Bulk modify counts'}
-              disabled={!search.families.length}
-              disabledReason="Choose a set family to modify its counts"
+              disabled={!scope.length}
+              disabledReason="No set families to modify"
               onClick={() => set({ count: !search.count })}
             />
             <AddCardsDialog trigger={<IconAction Icon={AddCardMark} label="Add cards" />} />
@@ -353,7 +310,12 @@ export function CollectionView() {
           counting
             ? summaryLine(checklist.summary, checklist.saved)
             : s
-            ? `${famN} set ${famN === 1 ? 'family' : 'families'} · showing ${fmtInt(s.printings)} printings: ${fmtInt(s.owned)} owned (${fmtInt(s.copies)} copies), ${gaps && search.show.includes('missing') ? `${fmtInt(s.missingCards)} cards you own in no printing · ${fmtUsd(s.missingCardsUsd)}${s.missingCardsUnpriced ? '+' : ''} at the cheapest printing of each` : `${fmtInt(s.missing)} missing · ${fmtUsd(s.missingUsd)}${s.missingUnpriced ? '+' : ''} to complete`}${q.data?.skipped?.length ? ` · skipped ${q.data.skipped.join(', ')}` : ''}`
+            ? (
+              <span title={full(s)}>
+                {short(s)}
+                <span className="sr-only">{full(s)}</span>
+              </span>
+            )
             : undefined
         }
       >
@@ -375,7 +337,7 @@ type Built = { cards: GuideCard[]; shown: CollectionCardOut[]; sections: GuideSe
 
 /** Filter → map → sort → section (set-family head, then the lead sort key's groups). */
 function buildView(data: CollectionOut, search: CollectionSearch & { gaps: boolean }, rules: SortRule<CollectionSortKey>[]): Built {
-  const shown = filterCollection(data.cards, search, sourceKinds(data.sources));
+  const shown = filterCollection(data.cards, search);
   const fnLabels = Object.fromEntries((data.functions ?? []).map((r) => [r.key, r.label]));
   const ranks = sceneRanks(data.scenes ?? []);
   const scenes = new Map((data.scenes ?? []).map((sc) => [sc.key, sc]));
@@ -470,11 +432,10 @@ function controlsSummary(search: CollectionSearch, fams: { code: string; name: s
   const show = search.show.length === 2 ? 'Owned + missing' : search.show[0] === 'owned' ? 'Owned only' : search.show[0] === 'missing' ? 'Missing only' : 'Nothing shown';
 
   const parts = [
-    names.length > 2 ? `${names[0]} +${names.length - 1}` : names.join(', '),
+    !names.length ? 'All families' : names.length > 2 ? `${names[0]} +${names.length - 1}` : names.join(', '),
     show,
     search.exclude.length ? typesSummary(search.exclude) : '',
     search.fn.length ? `${search.fn.length} function${search.fn.length > 1 ? 's' : ''}` : '',
-    search.src.length ? `${search.src.length} source${search.src.length > 1 ? 's' : ''}` : '',
   ];
   return parts.filter(Boolean).join(' · ');
 }

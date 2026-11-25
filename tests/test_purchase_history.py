@@ -127,11 +127,8 @@ def test_held_nets_later_removals_newest_first(seeded):
     assert [(ln.copies_in, ln.held) for ln in lines] == [(1, 0)]
 
 
-def test_card_sources_checklist_path_is_not_a_product(seeded):
-    jump = _event("precon", "jumpstart:fin", "checklists/fin-jumpstart-checklist.xlsx")
-    inventory.inventory_add(A, "nonfoil", 1, ingest_id=jump)
-    bare = _event("precon", None, "Goblins_FIN")
-    inventory.inventory_add(B, "nonfoil", 1, ingest_id=bare)
-    got = provenance.card_sources([A, B])
-    assert [cs.source.key for cs in got[A]] == ["singles"]
-    assert [cs.source.key for cs in got[B]] == ["product:Goblins_FIN"]
+def test_checklist_path_is_not_a_product():
+    path = "checklists/fin-jumpstart-checklist.xlsx"
+    assert provenance._classify("precon", "jumpstart:fin", path, {}).key == "singles"
+    bare = provenance._classify("precon", None, "Goblins_FIN", {})
+    assert bare.key == "product:Goblins_FIN"

@@ -105,7 +105,7 @@ function Editor({ slug, detail }: { slug: string; detail: DeckDetailOut }) {
   return (
     <main id="main" tabIndex={-1} className="min-h-0 min-w-0 p-2 sm:p-3 lg:h-[calc(100dvh-var(--size-topbar))] lg:p-4">
       <div className="paper-grain flex h-full min-h-[70dvh] flex-col rounded-sm bg-paper text-ink shadow-[0_1px_0_var(--theme-chrome-line),0_18px_40px_-28px_var(--theme-scrim)]">
-        <header className="flex flex-wrap items-end gap-x-5 gap-y-2 border-b-2 border-rule-strong px-5 pb-2 pt-3">
+        <header className="flex flex-wrap items-end gap-x-5 gap-y-2 border-b-2 border-rule-strong px-sheet pb-2 pt-3">
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             <h1 className="sr-only">Edit {detail.deck.name}</h1>
             <Link to="/decks" search={(s) => ({ ...s, deck: slug })} className="inline-flex items-center gap-0.5 self-start text-sm voice-semi text-accent-ink">
@@ -144,7 +144,7 @@ function Editor({ slug, detail }: { slug: string; detail: DeckDetailOut }) {
 
         {narrow ? (
           <Tabs.Root value={pane} onValueChange={(v) => setPane(v as 'deck' | 'find')} className="flex min-h-0 flex-1 flex-col">
-            <Tabs.List aria-label="Editor panes" className="mx-4 mt-2 flex gap-px overflow-hidden rounded-sm border border-rule-strong bg-rule">
+            <Tabs.List aria-label="Editor panes" className="mx-sheet mt-2 flex gap-px overflow-hidden rounded-sm border border-rule-strong bg-rule">
               <PaneTab value="deck">Deck · {fmtInt(stats.size)}</PaneTab>
               <PaneTab value="find">Find cards</PaneTab>
             </Tabs.List>
@@ -212,7 +212,7 @@ function DraftList({ draft, onEdit, onInspect }: { draft: Draft; onEdit: (fn: (d
     return <EmptyNote title="An empty deck">Search for cards on the right{'\u00a0'}— add a commander first to get EDHREC suggestions.</EmptyNote>;
   }
   return (
-    <div className="h-full min-h-0 overflow-y-auto overscroll-contain px-4 pb-8 [scrollbar-gutter:stable]">
+    <div className="h-full min-h-0 overflow-y-auto overscroll-contain px-sheet pb-8 [scrollbar-gutter:stable]">
       {sections.map((s) => (
         <section key={s.key} aria-labelledby={`ds-${s.key}`}>
           <GroupHead id={`ds-${s.key}`} label={s.label} meta={s.count} />
@@ -315,7 +315,7 @@ function FindCards({ slug, draft, format, onAdd, onEdit, onInspect, bulk, onBulk
   const wantsCommander = !commander && ['commander', 'brawl', 'paupercommander', 'oathbreaker', 'edh'].includes((format ?? '').toLowerCase());
   return (
     <Tabs.Root value={tab} onValueChange={(v) => setTab(v as FindTab)} className="flex h-full min-h-0 flex-col">
-      <Tabs.List aria-label="Find cards" className="mx-4 mt-3 flex max-w-[calc(100%-2rem)] gap-px self-start overflow-x-auto rounded-sm border border-rule-strong bg-rule">
+      <Tabs.List aria-label="Find cards" className="mx-sheet mt-3 flex max-w-[calc(100%-2*var(--spacing-sheet))] gap-px self-start overflow-x-auto rounded-sm border border-rule-strong bg-rule">
         <PaneTab value="search">Search</PaneTab>
         <PaneTab value="bulk">Bulk Add</PaneTab>
         <PaneTab value="suggest">Suggestions</PaneTab>
@@ -352,7 +352,7 @@ function CombosTab({ draft, onAdd, onInspect }: { draft: Draft; onAdd: (p: Print
   const cards = useDebounced(draftCards(draft), 600);
   const q = useQuery(draftCombosQuery(cards));
   return (
-    <div className="mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-8 [scrollbar-gutter:stable]">
+    <div className="mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain px-sheet pb-8 [scrollbar-gutter:stable]">
       <DeckCombosBody data={q.data} pending={q.isFetching} error={q.error} onAdd={(p) => onAdd(p, 'main')} onInspect={onInspect} />
     </div>
   );
@@ -369,7 +369,7 @@ function SearchTab({ inDeck, wantsCommander, onAdd, onInspect }: { inDeck: Set<s
   const hits = useMemo(() => collectionFirst(res.data?.printings ?? []), [res.data]);
   return (
     <>
-      <label className="mx-4 mt-3 flex flex-col gap-1.5 text-sm voice-semi text-ink-muted">
+      <label className="mx-sheet mt-3 flex flex-col gap-1.5 text-sm voice-semi text-ink-muted">
         {wantsCommander ? 'Search all cards — start with your commander' : 'Search all cards'}
         <input
           type="search"
@@ -381,7 +381,7 @@ function SearchTab({ inDeck, wantsCommander, onAdd, onInspect }: { inDeck: Set<s
           className="h-10 rounded-sm border border-rule-strong bg-paper-raised px-3 text-md text-ink placeholder:text-ink-muted focus-visible:border-accent"
         />
       </label>
-      <p className="mx-4 mt-1 text-xs text-ink-muted">Your unused cards are listed first.</p>
+      <p className="mx-sheet mt-1 text-xs text-ink-muted">Your unused cards are listed first.</p>
       <ResultList
         empty={q.trim().length < 2 ? 'Type at least two letters.' : res.isPending ? null : 'No cards match.'}
         loading={q.trim().length >= 2 && res.isFetching && !res.data}
@@ -409,7 +409,7 @@ function SuggestTab({ commander, inDeck, onAdd, onInspect }: { commander: string
   if (!commander) return <EmptyNote title="No commander yet">Add a commander from Search to see what EDHREC players run with it.</EmptyNote>;
   return (
     <>
-      <div className="mx-4 mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+      <div className="mx-sheet mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
         <span className="min-w-0 truncate text-ink-muted">EDHREC picks for <b className="text-ink">{res.data?.commander ?? commander}</b></span>
         <label className="ml-auto inline-flex cursor-pointer items-center gap-1.5"><input type="checkbox" checked={freeOnly} onChange={(e) => setFreeOnly(e.target.checked)} className="accent-[var(--theme-accent)]" /> Only unused cards</label>
         <label className="inline-flex cursor-pointer items-center gap-1.5"><input type="checkbox" checked={hideInDeck} onChange={(e) => setHideInDeck(e.target.checked)} className="accent-[var(--theme-accent)]" /> Hide cards in deck</label>
@@ -437,8 +437,8 @@ function SuggestTab({ commander, inDeck, onAdd, onInspect }: { commander: string
 function EarmarkTab({ slug, draft, onAdd, onInspect }: { slug: string; draft: Draft; onAdd: (p: PrintingOut, board: Board) => void; onInspect: Inspect }) {
   const cards = useDebounced(draftCards(draft), 400);
   const q = useQuery(deckEarmarksQuery(slug, cards));
-  if (q.isError) return <p role="alert" className="mx-4 mt-4 text-sm text-danger">{(q.error as Error).message}</p>;
-  if (q.isPending) return <p role="status" className="mx-4 mt-4 text-sm text-ink-muted">Looking…</p>;
+  if (q.isError) return <p role="alert" className="mx-sheet mt-4 text-sm text-danger">{(q.error as Error).message}</p>;
+  if (q.isPending) return <p role="status" className="mx-sheet mt-4 text-sm text-ink-muted">Looking…</p>;
   const d = q.data;
   if (!d.for_deck.length && !d.legal.length && !d.hidden.length) {
     return <EmptyNote title="No earmarked cards yet">Open any card and press Earmark{'\u00a0'}— mark it as a deck idea for this deck and it’s listed here first.</EmptyNote>;
@@ -460,7 +460,7 @@ function EarmarkTab({ slug, draft, onAdd, onInspect }: { slug: string; draft: Dr
     />
   );
   return (
-    <div className="mt-2 min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-8 [scrollbar-gutter:stable]">
+    <div className="mt-2 min-h-0 flex-1 overflow-y-auto overscroll-contain px-sheet pb-8 [scrollbar-gutter:stable]">
       <p className="text-sm text-ink-muted">{d.rule}</p>
       {d.for_deck.length > 0 && (
         <section aria-label="For this deck" className="mt-3">
@@ -490,10 +490,10 @@ function EarmarkTab({ slug, draft, onAdd, onInspect }: { slug: string; draft: Dr
 }
 
 function ResultList({ children, empty, loading, error }: { children: ReactNode[]; empty: string | null; loading: boolean; error: string | null }) {
-  if (error) return <p role="alert" className="mx-4 mt-4 text-sm text-danger">{error}</p>;
-  if (loading) return <p role="status" className="mx-4 mt-4 text-sm text-ink-muted">Looking…</p>;
-  if (!children.length) return empty ? <p className="mx-4 mt-4 text-sm text-ink-muted">{empty}</p> : null;
-  return <ul className="mt-2 min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-8 [scrollbar-gutter:stable]">{children}</ul>;
+  if (error) return <p role="alert" className="mx-sheet mt-4 text-sm text-danger">{error}</p>;
+  if (loading) return <p role="status" className="mx-sheet mt-4 text-sm text-ink-muted">Looking…</p>;
+  if (!children.length) return empty ? <p className="mx-sheet mt-4 text-sm text-ink-muted">{empty}</p> : null;
+  return <ul className="mt-2 min-h-0 flex-1 overflow-y-auto overscroll-contain px-sheet pb-8 [scrollbar-gutter:stable]">{children}</ul>;
 }
 
 function ResultLine({ p, inDeck, lead, note, warn, onAdd, onInspect, offerCommander = false }: { p: PrintingOut; inDeck: boolean; lead?: string; note: string | null; warn?: string | null; onAdd: (p: PrintingOut, board: Board) => void; onInspect: Inspect; offerCommander?: boolean }) {

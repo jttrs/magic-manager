@@ -12,13 +12,14 @@ pinned "Order history → Purchase history" follow-up (`docs/browser-companion.m
    Tick orders (or *Read all*); the companion reads those orders' lines and, after you approve, the
    app stores each as a **purchase** (`purchases` + `purchase_lines`, deduped by store + order
    number). Reading never changes your collection.
-2. **Assign** — open an order. Per line, choose how many copies to **match** to copies you already
-   own (net-zero: only their *source* moves to the order) and how many to **add** as new copies.
-   *Match to cards I own* and *Add all as new* fill the counts; *Save to collection* writes them.
+2. **Add** — open an order: its lines are listed read-only (what you paid, worth today). One button,
+   *Add N cards to your collection*, adds every single with a known printing that isn't in yet.
+   Sealed products and other lines are recorded only, never added. Copies are **not** tied to
+   orders (the old per-line "match to cards I own" is retired — nobody tracks that).
 3. **See** — store orders live in Purchase history (no separate tab): orders not fully added are
    pinned under **Needs review** with Paid / Worth today / gain or loss; an applied order is one
    **Store order** timeline entry (its ledger event, with what you paid); the sheet summary carries
-   the total for all orders.
+   the total paid vs. what the whole collection is worth now (a rough return).
 
 ## Engine (`src/magic_manager/purchases.py`)
 
@@ -27,14 +28,16 @@ pinned "Order history → Purchase history" follow-up (`docs/browser-companion.m
   TCGplayer: the product id → `scryfall.by_tcgplayer_id` (`/cards/tcgplayer/<id>`); else set code +
   collector number). Re-reading an order you haven't assigned anything from replaces it; one you
   have is skipped. Never touches inventory.
-- `review(id)` — per line: owned now, **matchable** (copies held by events whose source is
-  *unknown* or *singles* — never another purchase or a product; `provenance._held`'s LIFO netting so
-  a removed copy is never matched), remaining.
-- `apply(id, decisions)` — ONE `purchase` ingest event per order (label
-  `purchase:<store>:<order>`, dated at the order date). Adds → `inventory.inventory_add(ingest_id=)`;
-  matches → `ingest.reattribute` (the seam product true-up uses; unknown buckets first, then singles
-  newest first). All-or-nothing; `inventory == SUM(delta)` is checked before commit. A fully
-  assigned order is refused (`AlreadyApplied`, HTTP 409).
+- `review(id)` — per line: paid, today's price, owned now, remaining (quantity − added − legacy matched).
+- `add_to_collection(id)` — ONE `purchase` ingest event per order (label
+  `purchase:<store>:<order>`, dated at the order date). Adds every single line with a known printing
+  not yet added via `inventory.inventory_add(ingest_id=)`. All-or-nothing; `inventory == SUM(delta)`
+  is checked before commit. Fully added → `AlreadyApplied` (HTTP 409); nothing addable
+  (sealed only / no printing) → `PurchaseError` (422). `POST /api/purchases/{id}/apply`, no body.
+- `totals()` — paid across all orders (singles / sealed / other split) vs `inventory.inventory_value()`
+  (the same local-first math as `mm inventory value`) → `gain`; returned as `totals` on
+  `GET /api/purchases`. `ingest.reattribute` stays (product true-up uses it); `purchase_lines.matched`
+  is a legacy read-only count from the retired matching.
 - `forget(id)` — delete a stored order nothing was assigned from.
 - `provenance`: method `purchase` → source kind `purchase` ("Mana Pool order #…"); history kind
   `purchase` carries `purchase_id` + `paid_usd` (unit price × copies still held).
@@ -60,7 +63,7 @@ order), and a line kind a store isn't verified for is stored as `other` — reco
 
 | Store | Verified (2026-10-10, against the owner's real pages) | Not verified |
 |---|---|---|
-| Mana Pool — **verified** | **Live, end to end**: the real unpacked extension (bridge → worker → its own tab → approval window → Send) read the owner's order list (5 orders) and all 5 orders (496 lines, 0 warnings, every single's printing found). Saved pages: two full orders resolved and applied (match + add) on a copy of the real DB with 0 ledger drift. | Pagination of the order list (the owner has 5 orders — one page); refunded-item rows; whether the item list is capped (one order shows exactly 200 lines). |
+| Mana Pool — **verified** | **Live, end to end**: the real unpacked extension (bridge → worker → its own tab → approval window → Send) read the owner's order list (5 orders) and all 5 orders (496 lines, 0 warnings, every single's printing found). Saved pages: two full orders resolved and applied (match + add, the old flow) on a copy of the real DB with 0 ledger drift. | Pagination of the order list (the owner has 5 orders — one page); refunded-item rows; whether the item list is capped (one order shows exactly 200 lines). |
 | TCGplayer — **partly verified** | First page of Order History (10 orders, items inline): all orders and lines read, all 22 singles resolved via product id, item sums equal each order's subtotal. | Following the pager to page 2+ (`?PageNumber=N`); other years (pick the year on TCGplayer's page — the companion never submits its forms). Sign-in reading (hCaptcha blocks automated sign-in, so captured from the owner's own Chrome). |
 | Card Kingdom — **partly verified** | Order list (4 orders) and one invoice (a sealed product). | **Single cards** — the owner has no single-card orders, so every non-product line is `other` (recorded, never added). |
 

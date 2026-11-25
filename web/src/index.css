@@ -12,6 +12,9 @@
   --shadow-*: initial;
   --text-*: initial;
   --font-weight-*: initial;
+
+  /* The sheet's horizontal inset: where content sits from the paper's edge. */
+  --spacing-sheet: 0.625rem;
 }
 
 @theme inline {
@@ -236,4 +239,24 @@
     position: absolute;
     inset: min(0px, calc((100% - 2.75rem) / 2));
   }
+}
+
+/* Chrome-stock remap: controls styled for paper (ink, rule, accent-ink, paper-sunk)
+   read correctly on the chrome strip. Utilities resolve the vars at the use site. */
+.surface-chrome {
+  --theme-ink: var(--theme-on-chrome);
+  --theme-ink-muted: var(--theme-on-chrome-muted);
+  --theme-rule: var(--theme-chrome-line);
+  --theme-rule-strong: var(--theme-on-chrome-muted);
+  --theme-paper: var(--theme-chrome);
+  --theme-paper-raised: var(--theme-chrome-raised);
+  --theme-paper-sunk: var(--theme-chrome-raised);
+  --theme-accent-ink: var(--theme-accent);
+}
+
+/* Tooltips only label things: never let one (or Radix's positioning wrapper around it) catch a
+   click meant for the control under it — e.g. the gear's tooltip, reopened when focus returns
+   after Settings closes, sitting over the strip's action icons. */
+[data-radix-popper-content-wrapper]:has(> [role='tooltip']) {
+  pointer-events: none;
 }

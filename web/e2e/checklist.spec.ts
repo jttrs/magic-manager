@@ -1,4 +1,4 @@
-import { COLLECTION_URL, expect, fixtures, mockApi, test } from './support';
+import { COLLECTION_ALL_URL, COLLECTION_URL, expect, fixtures, mockApi, test } from './support';
 
 const COUNT_URL = `${COLLECTION_URL}&count=true`;
 const STALE_ID = fixtures.collectionBlb.cards.find((c) => c.name === 'Azure Beastbinder')!.scryfall_id;
@@ -12,7 +12,7 @@ test('checklist mode: type counts, keyboard walks the column, Save sends one bat
     body = r.request().postDataJSON();
     await r.fallback();
   });
-  await page.goto(COLLECTION_URL);
+  await page.goto(COLLECTION_ALL_URL); // Enter walks past missing printings too
   await page.getByRole('button', { name: 'Bulk modify counts' }).click();
   await expect(page).toHaveURL(/count=true/);
   await expect(page.getByText(/^Modifying counts · type how many/)).toBeVisible();

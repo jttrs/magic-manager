@@ -5,6 +5,7 @@ import { historySearch } from '../core/history';
 import { jumpstartToDecks, legacyJumpstartSearch } from '../core/jumpstart';
 import { analyticsSearch } from '../core/analyticsDashboard';
 import { adminSearch } from '../core/admin';
+import { parseSearch, stringifySearch } from './urlCodec';
 
 const rootRoute = createRootRoute({
   component: () => (
@@ -84,7 +85,7 @@ const decksRoute = createRoute({
   search: { middlewares: [stripSearchParams(decksSearch.parse({}))] },
   // Old `built=true` links: only built recipes.
   beforeLoad: ({ search, location }) => {
-    if (search.built) throw redirect({ to: '/decks', search: { ...search, built: undefined, own: ['built'] } as never, replace: true });
+    if (search.built) throw redirect({ to: '/decks', search: { ...search, built: undefined, status: ['built'] } as never, replace: true });
     // Old `kinds=` / `source=` links: the validator already mapped them; rewrite the URL so the
     // raw legacy key can't map back after you clear the filter it became.
     const raw = location.search as Record<string, unknown>;
@@ -133,6 +134,9 @@ const adminRoute = createRoute({
 export const router = createRouter({
   routeTree: rootRoute.addChildren([indexRoute, collectionRoute, historyRoute, legacyJumpstartRoute, legacySetsRoute, decksRoute, deckEditRoute, exploreRoute, legacyCommandersRoute, marketRoute, jobsRoute, analyticsRoute, adminRoute]),
   defaultPreload: 'intent',
+  // Lists go out as `a,b,c` (app/urlCodec.ts).
+  stringifySearch,
+  parseSearch,
 });
 
 declare module '@tanstack/react-router' {

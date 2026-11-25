@@ -99,12 +99,12 @@ export function ChecklistTable({ sections, byId, familyNames, checklist }: {
 
   return (
     <div className="@container flex h-full min-h-0 flex-col">
-      <div aria-hidden className="mx-4 grid grid-cols-[minmax(0,1fr)_repeat(2,5.25rem)] items-end gap-2 border-b-2 border-rule-strong pb-1 text-xs voice-semi font-medium uppercase tracking-[0.08em] text-ink-muted @[26rem]:grid-cols-[var(--size-thumb)_minmax(0,1fr)_repeat(2,6rem)]">
+      <div aria-hidden className="mx-sheet grid grid-cols-[minmax(0,1fr)_repeat(2,5.25rem)] items-end gap-2 border-b-2 border-rule-strong pb-1 text-xs voice-semi font-medium uppercase tracking-[0.08em] text-ink-muted @[26rem]:grid-cols-[var(--size-thumb)_minmax(0,1fr)_repeat(2,6rem)]">
         <span className="@[26rem]:col-span-2">Printing</span>
         <span className="text-right">Nonfoil</span>
         <span className="text-right">Foil ✦</span>
       </div>
-      <div ref={scrollRef} role="region" aria-label="Your counts" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-6">
+      <div ref={scrollRef} role="region" aria-label="Your counts" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-sheet pb-6">
         <div className="relative w-full" style={{ height: virt.getTotalSize() }}>
           {virt.getVirtualItems().map((vi) => {
             const row = rows[vi.index];
@@ -286,7 +286,7 @@ export function ChecklistNotes({ checklist: c }: { checklist: Checklist }) {
   const moved = c.summary.moved;
   if (!c.error && !low.length && !moved) return null;
   return (
-    <div className="mx-4 mb-2 flex flex-col gap-1 text-sm">
+    <div className="mx-sheet mb-2 flex flex-col gap-1 text-sm">
       {c.error && <p role="alert" className="text-danger">Couldn’t save: {c.error}</p>}
       {moved > 0 && (
         <p role="status" className="flex flex-wrap items-center gap-x-3 gap-y-1 text-ink">

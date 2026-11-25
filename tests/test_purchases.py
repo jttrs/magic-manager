@@ -4,7 +4,7 @@ from __future__ import annotations
 import pytest
 
 from magic_manager import addcards, db, ingest, inventory, provenance, purchases
-from magic_manager.purchases import Decision, Order, OrderLine
+from magic_manager.purchases import Order, OrderLine
 
 A = "00000000-0000-0000-0000-00000000000a"
 B = "00000000-0000-0000-0000-00000000000b"
@@ -69,69 +69,68 @@ def test_save_resolves_printings_and_dedupes(cards):
     assert purchases.known_orders("manapool") == {"637477": "new"}
 
 
-def test_add_creates_copies_on_one_purchase_event(cards):
+def test_add_to_collection_adds_every_single_on_one_purchase_event(cards):
     pid = purchases.save([_order()]).saved[0]
-    res = purchases.apply(pid, [Decision(1, add=2), Decision(2, add=1)])
-    assert (res.matched, res.added) == (0, 3)
+    res = purchases.add_to_collection(pid)
+    assert res.added == 3          # 2 Alpha + 1 Beta foil; the sealed line and the unresolved line are not added
     with db.connect() as conn:
         ev = conn.execute("SELECT method, at, label FROM ingest_events WHERE ingest_id = ?", (res.ingest_id,)).fetchone()
     assert tuple(ev) == ("purchase", "2026-09-23T11:07:00", "purchase:manapool:637477")
-    assert _qty(A, "nonfoil") == 2
+    assert (_qty(A, "nonfoil"), _qty(B, "foil")) == (2, 1)
     assert _reconciled()
     (s,) = purchases.catalog()
     assert (s.status, s.assigned, s.ingest_id) == ("done", 3, res.ingest_id)
-    # Fully assigned → refused; and re-reading it is skipped, never re-added.
+    # Fully added → refused; and re-reading it is skipped, never re-added.
     with pytest.raises(purchases.AlreadyApplied):
-        purchases.apply(pid, [Decision(1, add=1)])
+        purchases.add_to_collection(pid)
     assert purchases.save([_order()]).skipped == ["637477"]
     assert _qty(A, "nonfoil") == 2
 
 
-def test_match_reattributes_owned_copies_net_zero(cards):
-    unknown = _event("unattributed-backfill", "backfill:unattributed", status="backfill")
-    inventory.inventory_add(A, "nonfoil", 1, ingest_id=unknown)
-    singles = _event("checklist", "set:fin")
-    inventory.inventory_add(A, "nonfoil", 2, ingest_id=singles)
-    product = _event("precon", "precon:Goblins_FDN")
-    inventory.inventory_add(A, "nonfoil", 5, ingest_id=product)     # a product's copies are never matched
+def test_add_to_collection_never_touches_existing_copies(cards):
+    inventory.inventory_add(A, "nonfoil", 4, ingest_id=_event("checklist", "set:fin"))
     pid = purchases.save([_order()]).saved[0]
     rv = {ln.line_no: ln for ln in purchases.review(pid).lines}
-    assert (rv[1].owned, rv[1].matchable, rv[1].remaining) == (8, 3, 2)
-
-    res = purchases.apply(pid, [Decision(1, match=2)])
-    assert (res.matched, res.added) == (2, 0)
-    assert _qty(A, "nonfoil") == 8      # counts unchanged
-    assert _reconciled()
-    src = {cs.source.key: cs.copies for cs in provenance.card_sources([A])[A]}
-    # The unknown bucket is drawn first, then singles.
-    assert src == {"purchase:manapool:637477": 2, "singles": 1, "product:Goblins_FDN": 5}
-    assert (purchases.catalog()[0].status) == "partial"
-
-    # Asking to match more than is left unassigned refuses, all-or-nothing.
-    with pytest.raises(purchases.PurchaseError):
-        purchases.apply(pid, [Decision(2, add=1), Decision(1, match=0, add=1), Decision(4, add=1)])
-    assert _qty(B, "foil") == 0
+    assert (rv[1].owned, rv[1].remaining) == (4, 2)
+    purchases.add_to_collection(pid)
+    assert _qty(A, "nonfoil") == 6 and _reconciled()
 
 
-def test_apply_validates(cards):
+def test_legacy_matched_copies_are_not_added_again(cards):
     pid = purchases.save([_order()]).saved[0]
-    for bad in ([Decision(1, add=3)], [Decision(3, add=1)], [Decision(9, add=1)],
-                [Decision(1, match=1)], [Decision(1, add=1), Decision(1, add=1)], []):
-        with pytest.raises(purchases.PurchaseError):
-            purchases.apply(pid, bad)
+    with db.connect() as conn:
+        conn.execute("UPDATE purchase_lines SET matched = 1 WHERE purchase_id = ? AND line_no = 1", (pid,))
+    assert purchases.add_to_collection(pid).added == 2    # 1 Alpha left + 1 Beta foil
+    assert _qty(A, "nonfoil") == 1
+
+
+def test_add_to_collection_validates(cards):
+    sealed = purchases.save([_order("5", lines=[OrderLine(name="Box", quantity=1, unit_price=9.0, kind="sealed")])]).saved[0]
+    with pytest.raises(purchases.PurchaseError):
+        purchases.add_to_collection(sealed)
     with pytest.raises(LookupError):
-        purchases.apply(999, [Decision(1, add=1)])
+        purchases.add_to_collection(999)
     with db.connect() as conn:
         assert conn.execute("SELECT COUNT(*) FROM ingest_events WHERE method = 'purchase'").fetchone()[0] == 0
 
 
+def test_totals_compare_paid_to_the_whole_collection(cards):
+    assert purchases.totals().orders == 0
+    purchases.save([_order()])
+    inventory.inventory_add(A, "nonfoil", 5, ingest_id=_event("checklist", "set:fin"))   # not from an order
+    t = purchases.totals()
+    assert (t.orders, t.paid_usd, t.singles_paid_usd, t.sealed_paid_usd) == (1, 381.25, 6.25, 375.0)
+    assert t.other_paid_usd == 0.0
+    assert (t.collection_value_usd, t.gain_usd) == (10.0, round(10.0 - 381.25, 2))
+
+
 def test_history_shows_purchase_with_paid(cards):
     pid = purchases.save([_order()]).saved[0]
-    purchases.apply(pid, [Decision(1, add=2)])
+    purchases.add_to_collection(pid)
     (e,) = [h for h in provenance.history().entries if h.kind == "purchase"]
-    assert (e.title, e.purchase_id, e.held, e.value_usd, e.paid_usd) == ("Mana Pool order #637477", pid, 2, 4.0, 3.0)
+    assert (e.title, e.purchase_id, e.held, e.value_usd, e.paid_usd) == ("Mana Pool order #637477", pid, 3, 4.0, 3.25)
     entry, lines = provenance.history_event(e.ingest_id)
-    assert entry.paid_usd == 3.0 and lines[0].held == 2
+    assert entry.paid_usd == 3.25 and lines[0].held == 2
 
 
 def test_rejects_bad_orders(cards):
@@ -141,25 +140,6 @@ def test_rejects_bad_orders(cards):
         purchases.save([Order(store="ebay", order_id="1", ordered_at="2026-01-01", lines=[])])
     with pytest.raises(purchases.PurchaseError):
         purchases.save([Order(store="manapool", order_id="1", ordered_at="yesterday", lines=[])])
-
-
-def test_removed_copy_is_not_matched_twice(cards):
-    """A removal written before a match must not land on the order later, which
-    would make the source look as if it still held the copy (retro review, #133)."""
-    unknown = _event("unattributed-backfill", "backfill:unattributed", status="backfill")
-    inventory.inventory_add(A, "nonfoil", 3, ingest_id=unknown)
-    inventory.inventory_remove(A, "nonfoil", 1)
-    alpha = lambda n: [OrderLine(name="Alpha", quantity=n, unit_price=1.0, scryfall_id=A)]  # noqa: E731
-    one = purchases.save([_order("1", lines=alpha(2))]).saved[0]
-    res = purchases.apply(one, [Decision(1, match=2)])
-    two = purchases.save([_order("2", lines=alpha(1))]).saved[0]
-    assert purchases.review(two).lines[0].matchable == 0
-    with pytest.raises(purchases.PurchaseError):
-        purchases.apply(two, [Decision(1, match=1)])
-    with db.connect() as conn:
-        held = provenance._held(conn, [A])
-    assert held[(res.ingest_id, A, "nonfoil")] == 2 and held[(unknown, A, "nonfoil")] == 0
-    assert _qty(A, "nonfoil") == 2 and _reconciled()
 
 
 def test_held_draws_a_removal_from_copies_held_at_that_time(cards):
@@ -200,7 +180,7 @@ def test_purchase_after_a_reattribution_from_a_raw_balance(cards):
         to = ingest.create_event(conn, "precon", label="trueup:X")
         ingest.reattribute(conn, to_ingest_id=to, needs={(A, "nonfoil"): 3}, sources=[(src, {(A, "nonfoil"): 3})])
     pid = purchases.save([_order("9", lines=[OrderLine(name="Alpha", quantity=1, unit_price=1.0, scryfall_id=A)])]).saved[0]
-    res = purchases.apply(pid, [Decision(1, add=1)])
+    res = purchases.add_to_collection(pid)
     with db.connect() as conn:
         held = provenance._held(conn, [A])
     assert (held[(to, A, "nonfoil")], held[(res.ingest_id, A, "nonfoil")]) == (2, 1)

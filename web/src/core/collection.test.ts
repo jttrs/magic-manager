@@ -49,13 +49,9 @@ describe('collection facet counts', () => {
     expect(noChase.traits.get('rarity:mythic')).toBeUndefined();
     expect(noChase.traits.get('chase:yes')).toBe(1);
   });
-  it('function counts ignore the function filter, sources count kinds', () => {
+  it('function counts ignore the function filter', () => {
     const counts = collectionCounts(cards, { ...ALL, fn: ['draw'], q: 'y' });
     expect(counts.fn.get('ramp')).toBe(2);
-    const withSrc = [card({ scryfall_id: 's', owned: { nonfoil: 1 }, sources: ['p1', 's1'] })];
-    const kinds = new Map([['p1', 'pool'], ['s1', 'singles']]);
-    const c = collectionCounts(withSrc, { ...ALL, src: ['kind:pool'] }, kinds).src;
-    expect([c.get('p1'), c.get('kind:pool'), c.get('kind:singles')]).toEqual([1, 1, 1]);
   });
   it('filters like the old rule for a mixed exclude list', () => {
     const exclude = ['rarity:common', 'treat:b', 'finish:foil'];

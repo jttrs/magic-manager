@@ -1,4 +1,4 @@
-import { COLLECTION_URL, expect, fixtures, test } from './support';
+import { COLLECTION_ALL_URL, COLLECTION_URL, expect, fixtures, test } from './support';
 
 // Bloomburrow with its first five printings re-cast as two scenes, so the Scene
 // group, its per-finish heads and the per-scene buy lists run against a real payload.
@@ -56,7 +56,7 @@ test('a scene’s buy lists copy its missing printings in one finish', async ({ 
 
 test('families without scenes never offer the Scene group', async ({ page }) => {
   await page.route((u) => u.pathname === '/api/collection', (r) => r.fulfill({ json: base }));
-  await page.goto(COLLECTION_URL + '&sort=scene,cn');
+  await page.goto(COLLECTION_ALL_URL + '&sort=scene,cn');
   await expect(page.getByRole('heading', { name: 'Not in a scene' })).toHaveCount(0);
   await expect(page.getByRole('article')).toHaveCount(base.cards.length);
 });

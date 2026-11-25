@@ -194,7 +194,7 @@ export function MarketView() {
             options={[{ value: 'floor', label: 'Cheapest' }, { value: 'exact', label: 'Deck’s' }]}
           />
           <CopyTargets
-            lead={`Copy bulk lists · ${fmtCount(toBuy, 'card')} to buy · ≈ ${fmtUsd(toBuyUsd)} at market`}
+            describe={() => `${fmtCount(toBuy, 'card')} · ≈ ${fmtUsd(toBuyUsd)} at market`}
             targets={buyListTargets(buyText, { cardKingdomNote: 'Card Kingdom takes names only; pick each printing after Find Cards' })}
           />
         </SideSection>
@@ -279,7 +279,7 @@ export function MarketView() {
 }
 
 function Loading({ label }: { label: string }) {
-  return <p role="status" className="px-5 pt-6 text-md text-ink-muted">{label}</p>;
+  return <p role="status" className="px-sheet pt-6 text-md text-ink-muted">{label}</p>;
 }
 
 // ---------- sealed products ----------
@@ -298,15 +298,15 @@ function ProductsPanel({ code, q }: { code: string; q: string }) {
   const unpriced = values?.filter((v) => v.error).length ?? 0;
   return (
     <div className="flex flex-col gap-2">
-      {running && live && <div className="mx-5"><ProgressRule label="Valuing products" verb="Valuing" done={live.done} total={live.total} message={live.log.at(-1)?.msg} /></div>}
+      {running && live && <div className="mx-sheet"><ProgressRule label="Valuing products" verb="Valuing" done={live.done} total={live.total} message={live.log.at(-1)?.msg} /></div>}
       {failure && (
-        <p role="alert" className="mx-5 text-sm text-danger">
+        <p role="alert" className="mx-sheet text-sm text-danger">
           Couldn’t value these products: {failure}.{' '}
           <button type="button" className="cursor-pointer underline" onClick={reprice}>Try again</button>
         </p>
       )}
       {unpriced > 0 && (
-        <p className="mx-5 text-sm text-ink-muted">
+        <p className="mx-sheet text-sm text-ink-muted">
           {fmtCount(unpriced, 'product')} couldn’t be valued.{' '}
           <button type="button" className="cursor-pointer text-ink underline" onClick={reprice}>Value again</button>
         </p>
@@ -314,7 +314,7 @@ function ProductsPanel({ code, q }: { code: string; q: string }) {
       {groups.length === 0 ? (
         <EmptyNote title="Nothing matches">Clear the product name filter.</EmptyNote>
       ) : (
-        <table className="mx-5 w-[calc(100%-2.5rem)] border-collapse text-sm tabular">
+        <table className="mx-sheet w-[calc(100%-2*var(--spacing-sheet))] border-collapse text-sm tabular">
           <caption className="sr-only">Sealed products: sealed value and contents value</caption>
           <thead>
             <tr className="border-b-2 border-rule-strong text-left text-xs voice-semi text-ink-muted">
@@ -446,7 +446,7 @@ function CardsPanel({ code, search }: { code: string; search: MarketSearch }) {
   if (!shown.length) return <EmptyNote title="Nothing matches">Clear the name filter, show all printings, or allow any foil premium.</EmptyNote>;
   return (
     <div className="flex flex-col">
-      <table className="mx-5 w-[calc(100%-2.5rem)] border-collapse text-sm tabular">
+      <table className="mx-sheet w-[calc(100%-2*var(--spacing-sheet))] border-collapse text-sm tabular">
         <caption className="sr-only">Singles: each printing’s value beside the cheapest printing of the same card</caption>
         <thead className="sticky top-0 z-10 bg-paper">
           <tr className="border-b-2 border-rule-strong text-left text-xs voice-semi text-ink-muted">
@@ -463,7 +463,7 @@ function CardsPanel({ code, search }: { code: string; search: MarketSearch }) {
         </tbody>
       </table>
       {shown.length > limit && (
-        <button type="button" onClick={() => setPage({ key: filterKey, n: limit + CARD_PAGE * 2 })} className="mx-5 mt-3 cursor-pointer self-start rounded-sm border border-rule px-3 py-1.5 text-sm voice-semi text-ink hover:border-rule-strong">
+        <button type="button" onClick={() => setPage({ key: filterKey, n: limit + CARD_PAGE * 2 })} className="mx-sheet mt-3 cursor-pointer self-start rounded-sm border border-rule px-3 py-1.5 text-sm voice-semi text-ink hover:border-rule-strong">
           Show more · {fmtInt(shown.length - limit)} left
         </button>
       )}
@@ -499,7 +499,7 @@ function DeckPanel({ d, buyAt, checkedAt }: { d: DeckCostOut; buyAt: MarketSearc
   const toBuy = d.lines.filter((l) => l.buy > 0);
   const covered = d.lines.filter((l) => l.buy === 0);
   return (
-    <div className="flex flex-col gap-6 px-5 pt-2">
+    <div className="flex flex-col gap-6 px-sheet pt-2">
       <table className="w-full max-w-[40rem] border-collapse text-md tabular">
         <caption className="sr-only">Three ways to get this deck</caption>
         <thead>

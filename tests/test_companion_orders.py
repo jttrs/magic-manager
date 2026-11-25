@@ -72,12 +72,13 @@ def test_manapool_order_from_the_reader_golden(client, monkeypatch):
     sealed = [ln for ln in rv["lines"] if ln["kind"] == "sealed"]
     assert len(sealed) == 1 and sealed[0]["printing"] is None
     # Add everything assignable → one purchase event, ledger reconciles.
-    dec = [{"line_no": ln["line_no"], "add": ln["remaining"]} for ln in rv["lines"] if ln["printing"]]
-    out = client.post(f"/api/purchases/{p['purchase_id']}/apply", json={"lines": dec}).json()
+    out = client.post(f"/api/purchases/{p['purchase_id']}/apply").json()
     assert out["added"] == 7
+    totals = client.get("/api/purchases").json()["totals"]
+    assert totals["orders"] == 1 and totals["paid_usd"] > 0 and "collection_value_usd" in totals
     with db.connect() as conn:
         assert ingest.reconcile_inventory_ledger(conn) == []
-    again = client.post(f"/api/purchases/{p['purchase_id']}/apply", json={"lines": dec[:1]})
+    again = client.post(f"/api/purchases/{p['purchase_id']}/apply")
     assert again.status_code == 409
     assert client.post("/api/purchases/orders", json=_orders("manapool")).json()["skipped"] == ["100102"]
     hist = [e for e in client.get("/api/history").json()["entries"] if e["kind"] == "purchase"]

@@ -1,7 +1,7 @@
 import { createContext, useContext, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
-/** The sheet header's summary element, provided by `GuideSheet`. */
+/** The summary element (the strip's stats section, else the in-sheet row), provided by `GuideSheet`. */
 export const SheetSummarySlot = createContext<HTMLElement | null>(null);
 
 /**

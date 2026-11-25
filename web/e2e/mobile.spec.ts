@@ -15,7 +15,7 @@ test('phones: controls collapse into a disclosure once inputs are set', async ({
   await page.goto(COLLECTION_URL);
   const toggle = page.getByRole('button', { name: 'Collection controls' });
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-  await expect(toggle).toContainText('Bloomburrow · Owned + missing');
+  await expect(toggle).toContainText('Bloomburrow · Owned only');
   await toggle.click();
   await expect(page.getByRole('button', { name: 'Copy ManaPool list' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);

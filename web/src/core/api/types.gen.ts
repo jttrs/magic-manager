@@ -81,16 +81,6 @@ export type AdminUsersOut = {
 };
 
 /**
- * ApplyIn
- */
-export type ApplyIn = {
-    /**
-     * Lines
-     */
-    lines: Array<DecisionIn>;
-};
-
-/**
  * ApplyOut
  */
 export type ApplyOut = {
@@ -103,11 +93,9 @@ export type ApplyOut = {
      */
     ingest_id: number;
     /**
-     * Matched
-     */
-    matched: number;
-    /**
      * Added
+     *
+     * Cards added to your collection (every single of the order not yet added).
      */
     added: number;
 };
@@ -825,29 +813,6 @@ export type CardProfileOut = {
 };
 
 /**
- * CardSourceOut
- */
-export type CardSourceOut = {
-    source: SourceOut;
-    /**
-     * Finish
-     */
-    finish: 'nonfoil' | 'foil';
-    /**
-     * Copies
-     *
-     * Copies acquired from this source (history: may exceed what is owned today).
-     */
-    copies: number;
-    /**
-     * Acquisitions
-     *
-     * Separate ingests from this source (e.g. 2 = two purchases of the same product).
-     */
-    acquisitions?: number;
-};
-
-/**
  * CartAuditOut
  */
 export type CartAuditOut = {
@@ -1401,12 +1366,6 @@ export type CollectionCardOut = {
      */
     card_owned?: number;
     /**
-     * Sources
-     *
-     * Source keys this owned printing's copies were acquired from (see CollectionOut.sources).
-     */
-    sources?: Array<string>;
-    /**
      * Scene
      *
      * Key of the scene/poster this printing belongs to (see CollectionOut.scenes).
@@ -1603,12 +1562,6 @@ export type CollectionOut = {
      * Function roots, display order.
      */
     functions?: Array<FunctionRootOut>;
-    /**
-     * Sources
-     *
-     * Every source behind an owned printing in this view, most printings first.
-     */
-    sources?: Array<SourceOut>;
     /**
      * Scenes
      *
@@ -2218,24 +2171,6 @@ export type DayCount = {
      * N
      */
     n: number;
-};
-
-/**
- * DecisionIn
- */
-export type DecisionIn = {
-    /**
-     * Line No
-     */
-    line_no: number;
-    /**
-     * Match
-     */
-    match?: number;
-    /**
-     * Add
-     */
-    add?: number;
 };
 
 /**
@@ -3828,10 +3763,6 @@ export type HoldingsOut = {
      * Decks
      */
     decks: Array<DeckPledgeOut>;
-    /**
-     * Sources
-     */
-    sources: Array<CardSourceOut>;
     /**
      * Other Printings Owned
      *
@@ -5496,7 +5427,7 @@ export type PurchaseOut = {
     /**
      * Assigned
      *
-     * Copies matched to cards you owned or added new.
+     * Copies added to your collection (plus legacy matches).
      */
     assigned: number;
     /**
@@ -5575,6 +5506,10 @@ export type PurchasesOut = {
      * Purchases
      */
     purchases: Array<PurchaseOut>;
+    /**
+     * Everything paid vs. what the whole collection is worth today.
+     */
+    totals: TotalsOut;
     /**
      * Paid Usd
      */
@@ -6246,6 +6181,8 @@ export type ReviewLineOut = {
     today_usd: number | null;
     /**
      * Matched
+     *
+     * Legacy: copies matched to cards you owned before matching was retired.
      */
     matched: number;
     /**
@@ -6254,18 +6191,14 @@ export type ReviewLineOut = {
     added: number;
     /**
      * Remaining
+     *
+     * Quantity not yet in your collection (singles with a known printing).
      */
     remaining: number;
     /**
      * Owned
      */
     owned: number;
-    /**
-     * Matchable
-     *
-     * Owned copies whose source is unknown or singles — they can be matched to this order.
-     */
-    matchable: number;
 };
 
 /**
@@ -6665,38 +6598,6 @@ export type SldEditionOut = {
      * Its TCGplayer product page — the link a watched drop tracks.
      */
     tcgplayer_url?: string | null;
-};
-
-/**
- * SourceOut
- */
-export type SourceOut = {
-    /**
-     * Key
-     *
-     * 'singles' | 'unknown' | 'product:<MTGJSON fileName>' | 'purchase:<store>:<order id>'
-     */
-    key: string;
-    /**
-     * Kind
-     *
-     * deck = playable precon; pool = card pool (land pack, scene box, most Secret Lair drops); singles = bought/added individually; purchase = a store order you read with the companion; unknown = provenance not reconstructed.
-     */
-    kind: 'singles' | 'unknown' | 'deck' | 'pool' | 'purchase';
-    /**
-     * Label
-     */
-    label: string;
-    /**
-     * Set Code
-     */
-    set_code?: string | null;
-    /**
-     * Printings
-     *
-     * Owned printings in this view acquired from this source.
-     */
-    printings?: number;
 };
 
 /**
@@ -7309,6 +7210,52 @@ export type Totals = {
      * Sessions With Errors
      */
     sessions_with_errors: number;
+};
+
+/**
+ * TotalsOut
+ */
+export type TotalsOut = {
+    /**
+     * Orders
+     */
+    orders: number;
+    /**
+     * Paid Usd
+     *
+     * Item prices × quantity across every line of every order.
+     */
+    paid_usd: number;
+    /**
+     * Singles Paid Usd
+     */
+    singles_paid_usd: number;
+    /**
+     * Sealed Paid Usd
+     */
+    sealed_paid_usd: number;
+    /**
+     * Other Paid Usd
+     */
+    other_paid_usd: number;
+    /**
+     * Collection Value Usd
+     *
+     * Today's value of your whole collection at local prices (not just what was bought).
+     */
+    collection_value_usd: number;
+    /**
+     * Collection Unpriced
+     *
+     * Collection rows with no price (not counted in the value).
+     */
+    collection_unpriced: number;
+    /**
+     * Gain Usd
+     *
+     * collection_value_usd - paid_usd.
+     */
+    gain_usd: number;
 };
 
 /**
@@ -10613,7 +10560,7 @@ export type PurchaseReviewResponses = {
 export type PurchaseReviewResponse = PurchaseReviewResponses[keyof PurchaseReviewResponses];
 
 export type PurchaseApplyData = {
-    body: ApplyIn;
+    body?: never;
     path: {
         /**
          * Purchase Id

@@ -56,9 +56,9 @@ export function AnalyticsView() {
         ) : q.error ? (
           <ErrorNote error={q.error} onRetry={() => void q.refetch()} />
         ) : !s ? (
-          <p role="status" className="px-5 py-6 text-md text-ink-muted">Reading the event store…</p>
+          <p role="status" className="px-sheet py-6 text-md text-ink-muted">Reading the event store…</p>
         ) : (
-          <div className="h-full min-h-0 overflow-y-auto px-5 pb-8">
+          <div className="h-full min-h-0 overflow-y-auto px-sheet pb-8">
             {ref && <Trace refId={ref} onClose={() => void navigate({ search: (prev) => ({ ...prev, ref: undefined }) })} />}
             <Figures s={s} />
             <div className="mt-6 grid gap-x-8 gap-y-8 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">

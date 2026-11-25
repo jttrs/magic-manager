@@ -1,4 +1,4 @@
-import { COLLECTION_URL, expect, fixtures, test } from './support';
+import { COLLECTION_ALL_URL, COLLECTION_URL, expect, fixtures, test } from './support';
 
 const cards = fixtures.collectionBlb.cards;
 const total = (c: (typeof cards)[number]) => Object.values(c.owned).reduce((s: number, n) => s + (n as number), 0);
@@ -10,29 +10,18 @@ test('Collection is the first tab and the default route; /sets redirects to its 
   await expect(page).toHaveURL(/\/collection/);
   await expect(page.getByRole('navigation', { name: 'Primary' }).getByRole('link').first()).toHaveText('Collection');
   await page.goto('/sets?families=%5B%22blb%22%5D');
-  await expect(page).toHaveURL(/\/collection\?.*show=%5B%22missing%22%5D/);
+  await expect(page).toHaveURL(/\/collection\?.*show=missing/);
 });
 
-test('first visit opens the family picker; later visits reopen the last families', async ({ page }) => {
+test('no families in the URL means every family you own; picking narrows, picking all goes back to all', async ({ page }) => {
   await page.goto('/collection');
-  await expect(page.getByText('Choose the sets you collect')).toBeVisible();
+  await expect(page.getByRole('button', { name: /Set families/ })).toContainText('All families');
+  await expect(page).not.toHaveURL(/families=/);
   await page.getByRole('button', { name: /Set families/ }).click();
   await page.getByRole('searchbox', { name: 'Filter families' }).fill('bloom');
   await page.getByRole('checkbox', { name: 'Bloomburrow' }).check();
   await page.keyboard.press('Escape');
-  await expect(page).toHaveURL(/families=/);
-  await page.goto('/collection');
-  await expect(page).toHaveURL(/families=%5B%22blb%22%5D/);
-});
-
-test('Clear all empties the families and they stay empty until the page reopens', async ({ page }) => {
-  await page.goto(COLLECTION_URL);
-  await page.getByRole('button', { name: /Set families/ }).click();
-  await page.getByRole('button', { name: 'Clear all' }).click();
-  await expect(page.getByText('0 selected')).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('button', { name: /Set families/ })).toContainText('Choose families…');
-  await expect(page).not.toHaveURL(/families=/);
+  await expect(page).toHaveURL(/families=blb/);
 });
 
 test('families are a searchable checkbox list, never a chip wall', async ({ page }) => {
@@ -45,7 +34,7 @@ test('families are a searchable checkbox list, never a chip wall', async ({ page
 });
 
 test('every printing shows; owned counts and missing marks sit under the art', async ({ page }) => {
-  await page.goto(COLLECTION_URL);
+  await page.goto(COLLECTION_ALL_URL);
   await expect(page.getByRole('article')).toHaveCount(cards.length);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Collection');
   const foil = cards.find((c) => c.owned.foil)!;
@@ -59,8 +48,7 @@ test('every printing shows; owned counts and missing marks sit under the art', a
 
 test('show owned / missing filters', async ({ page }) => {
   await page.goto(COLLECTION_URL);
-  const show = page.getByRole('toolbar', { name: 'Cards' });
-  await show.getByRole('button', { name: /Missing/ }).click();
+  const show = page.getByRole('toolbar', { name: 'Ownership' });
   await expect(page.getByRole('article')).toHaveCount(ownedN);
   await show.getByRole('button', { name: /Missing/ }).click();
   await show.getByRole('button', { name: /Owned/ }).click();
@@ -68,7 +56,7 @@ test('show owned / missing filters', async ({ page }) => {
 });
 
 test('Uncheck all on a card-type picker says what is hidden and offers Check all', async ({ page }) => {
-  await page.goto(COLLECTION_URL);
+  await page.goto(COLLECTION_ALL_URL);
   await page.getByRole('button', { name: /^Rarity/ }).click();
   await page.getByRole('button', { name: 'Uncheck all' }).click();
   await page.keyboard.press('Escape');
@@ -78,7 +66,7 @@ test('Uncheck all on a card-type picker says what is hidden and offers Check all
 });
 
 test('card-type filters: rarity, finish and treatment pickers (with counts), chase include/exclude with an explainer', async ({ page }) => {
-  await page.goto(COLLECTION_URL);
+  await page.goto(COLLECTION_ALL_URL);
   const rarity = page.getByRole('button', { name: /^Rarity/ });
   await expect(rarity).toContainText('All rarities');
   await rarity.click();
@@ -90,6 +78,7 @@ test('card-type filters: rarity, finish and treatment pickers (with counts), cha
   await expect(rarity).toContainText('2 rarities hidden');
   await expect(page).toHaveURL(/exclude=/);
   await page.getByRole('button', { name: 'Reset filters' }).click();
+  await page.getByRole('toolbar', { name: 'Ownership' }).getByRole('button', { name: /Missing/ }).click(); // reset is owned-only again
 
   const treat = page.getByRole('button', { name: /^Treatment/ });
   await expect(treat).toContainText('All treatments');
@@ -100,6 +89,7 @@ test('card-type filters: rarity, finish and treatment pickers (with counts), cha
   const codes = (c: (typeof cards)[number]) => (c.treatment ? c.treatment.split('|') : []);
   await expect(page.getByRole('article')).toHaveCount(cards.filter((c) => !codes(c).some((t) => t !== 'ff') && (c.standard_frame || codes(c).length > 0)).length);
   await page.getByRole('button', { name: 'Reset filters' }).click();
+  await page.getByRole('toolbar', { name: 'Ownership' }).getByRole('button', { name: /Missing/ }).click();
 
   await page.getByRole('radio', { name: 'Exclude' }).click();
   await expect(page.getByRole('article')).toHaveCount(cards.filter((c) => !c.is_chase).length);
@@ -108,17 +98,19 @@ test('card-type filters: rarity, finish and treatment pickers (with counts), cha
   await page.getByRole('button', { name: 'What counts as chase?' }).focus();
   await expect(page.getByRole('tooltip')).toContainText('ultra-premium variants');
   await expect(page.getByRole('tooltip')).not.toContainText('.toml');
+  // Showing missing cards is itself a non-default view; back to owned-only, nothing is left to reset.
+  await page.getByRole('toolbar', { name: 'Ownership' }).getByRole('button', { name: /Missing/ }).click();
   await expect(page.getByRole('button', { name: 'Reset filters' })).toHaveCount(0);
 });
 
 test('finish picker: unchecking Nonfoil judges owned/missing on foils', async ({ page }) => {
-  await page.goto(COLLECTION_URL);
+  await page.goto(COLLECTION_ALL_URL);
   await page.getByRole('button', { name: /^Finish/ }).click();
   await page.getByRole('checkbox', { name: /^Nonfoil/ }).uncheck();
   await page.keyboard.press('Escape');
   const foilish = cards.filter((c) => c.finishes.includes('foil'));
   await expect(page.getByRole('article')).toHaveCount(foilish.length);
-  const show = page.getByRole('toolbar', { name: 'Cards' });
+  const show = page.getByRole('toolbar', { name: 'Ownership' });
   await show.getByRole('button', { name: /Owned/ }).click();
   await expect(page.getByRole('article')).toHaveCount(foilish.filter((c) => !(c.owned.foil ?? 0)).length);
 });
@@ -141,17 +133,17 @@ test('sort builder: presets, keyboard reorder, direction, URL', async ({ page })
 });
 
 test('buy list copies the missing printings shown (or the marked ones)', async ({ page }) => {
-  await page.goto(COLLECTION_URL);
+  await page.goto(COLLECTION_ALL_URL);
   await page.getByRole('button', { name: 'Copy ManaPool list' }).click();
   await expect(page.getByText(`Copied ${missingN} lines`)).toBeVisible();
   const first = cards.find((c) => total(c) === 0)!;
   await page.getByRole('button', { name: `Mark ${first.name}` }).first().click();
-  await expect(page.getByText(/^Copy bulk lists · 1 marked · ≈ \$[\d.,]+ at market$/)).toBeVisible();
   await page.getByRole('button', { name: 'Copy TCGplayer list' }).click();
+  await expect(page.getByText(/^Copied 1 cards? · ≈ \$[\d.,]+ at market for TCGplayer/)).toBeVisible();
   await expect(page.getByText('Copied 1 line', { exact: true })).toBeVisible();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`1 ${first.scryfall_id} [tcgplayer]`);
   await page.getByRole('button', { name: 'Copy Card Kingdom list' }).click();
-  await expect(page.getByText(/Card Kingdom takes names only/)).toBeVisible();
+  await expect(page.getByRole('dialog').filter({ hasText: /Card Kingdom takes names only/ })).toBeVisible();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`1 ${first.scryfall_id} [cardkingdom]`);
 });
 
@@ -199,36 +191,6 @@ test('pressing the art inspects a card (large art, facts, Scryfall/TCGplayer lin
   await expect(page.getByRole('button', { name: `Unmark ${name}` }).first()).toBeVisible();
 });
 
-test('"Acquired from" narrows to owned printings from a card pool; the inspector lists your copies', async ({ page }) => {
-  const owned = cards.filter((c) => Object.values(c.owned).some((n) => n > 0));
-  const [pooled, single] = owned;
-  const pool = { key: 'product:CampComrades_FIN', kind: 'pool', label: 'Camp Comrades', set_code: 'fin', printings: 1 };
-  const data = {
-    ...fixtures.collectionBlb,
-    cards: cards.map((c) => ({ ...c, sources: c === pooled ? [pool.key] : c === single ? ['singles'] : [] })),
-    sources: [pool, { key: 'singles', kind: 'singles', label: 'Singles', set_code: null, printings: 1 }],
-  };
-  await page.route('**/api/collection?**', (r) => r.fulfill({ json: data }));
-  await page.route('**/api/cards/*/holdings', (r) => r.fulfill({ json: {
-    scryfall_id: pooled.scryfall_id, owned: { nonfoil: 2 }, pledged: { nonfoil: 1 }, free: { nonfoil: 1 },
-    decks: [{ slug: 'hop-to-it', name: 'Hop To It', finish: 'nonfoil', count: 1 }],
-    sources: [{ source: pool, finish: 'nonfoil', copies: 2 }], other_printings_owned: 3,
-  } }));
-  await page.goto(COLLECTION_URL);
-  await page.getByRole('button', { name: /Acquired from/ }).click();
-  await page.getByRole('checkbox', { name: /Any card pool/ }).check();
-  await page.keyboard.press('Escape');
-  await expect(page).toHaveURL(/src=/);
-  await expect(page.getByRole('article')).toHaveCount(1);
-
-  await page.getByRole('button', { name: `Inspect ${pooled.name}` }).click();
-  const copies = page.getByRole('dialog').getByRole('region', { name: 'Your copies' });
-  await expect(copies.getByText('owned')).toContainText('2');
-  await expect(copies.getByRole('link', { name: 'Hop To It' })).toHaveAttribute('href', /\/decks\?.*deck=hop-to-it/);
-  await expect(copies.getByText('Camp Comrades')).toBeVisible();
-  await expect(copies.getByText(/also own 3 copies in other printings/)).toBeVisible();
-});
-
 test('the rail reads Find → Show → Buy, with the card-name search first', async ({ page }) => {
   await page.goto(COLLECTION_URL);
   const rail = page.getByRole('complementary').or(page.locator('aside')).first();
@@ -237,7 +199,7 @@ test('the rail reads Find → Show → Buy, with the card-name search first', as
 });
 
 test('“Missing means” is a Settings preference, not a rail filter, and it sticks', async ({ page }) => {
-  await page.goto(COLLECTION_URL);
+  await page.goto(COLLECTION_ALL_URL);
   await expect(page.getByText('Missing means')).toHaveCount(0);
   await expect(page.getByText(/missing · \$/)).toBeVisible();
   await page.getByRole('button', { name: 'Settings' }).click();
@@ -254,12 +216,12 @@ test('earmarked cards carry a mark, and a filter shows only them', async ({ page
   const ids = new Set(cards.slice(0, 2).map((c) => c.oracle_id));
   const marked = cards.filter((c) => ids.has(c.oracle_id));
   await page.route((u) => u.pathname === '/api/collection', (r) => r.fulfill({ json: { ...fixtures.collectionBlb, cards: cards.map((c) => ({ ...c, earmarked: ids.has(c.oracle_id) })) } }));
-  await page.goto(COLLECTION_URL);
+  await page.goto(COLLECTION_ALL_URL);
   await expect(page.getByRole('article')).toHaveCount(cards.length);
   await page.getByRole('radio', { name: 'Only earmarked' }).click();
   await expect(page).toHaveURL(/em=true/);
   await expect(page.getByRole('article')).toHaveCount(marked.length);
   await expect(page.getByRole('article').first()).toContainText('Earmarked');
   await page.getByRole('button', { name: 'Reset filters' }).click();
-  await expect(page.getByRole('article')).toHaveCount(cards.length);
+  await expect(page.getByRole('article')).toHaveCount(ownedN);
 });

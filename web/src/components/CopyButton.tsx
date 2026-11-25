@@ -1,4 +1,5 @@
-import { type ComponentType, type ReactNode, type SVGProps } from 'react';
+import { Popover } from 'radix-ui';
+import { useState, type ComponentType, type SVGProps } from 'react';
 import { Button } from './Button';
 import { useCopy, type GetText } from './useCopy';
 
@@ -21,49 +22,67 @@ export function CopyButton({ label, getText, emphasis = 'quiet', tone = 'chrome'
 
 export type CopyTarget = { id: string; name: string; Mark: ComponentType<SVGProps<SVGSVGElement>>; getText: GetText; note?: string };
 
-/** A label line (what will be copied) over a compact row of icon-only store
- *  marks; each copies that store's list and shows a check when done. The
- *  copy result briefly takes the label line's place, so nothing below moves. */
-export function CopyTargets({ targets, lead }: { targets: readonly CopyTarget[]; lead?: ReactNode }) {
-  const { status, busy, done, copy } = useCopy();
+/** A compact row of icon-only store marks; each copies that store's list and
+ *  shows a check when done. The result appears in a small bubble anchored on
+ *  the clicked mark (and is announced politely); `describe` says what was
+ *  copied ("14,254 cards · ≈ $185,299 at market"), read when the copy starts. */
+export function CopyTargets({ targets, describe }: { targets: readonly CopyTarget[]; describe?: () => string }) {
+  const { status, failed, busy, done, copy } = useCopy();
+  const [last, setLast] = useState<{ id: string; what: string } | null>(null);
+  const click = (id: string, name: string, getText: GetText, note?: string) => {
+    // Keep the target's note (e.g. what Card Kingdom's list can't carry) beside the description.
+    setLast({ id, what: describe ? `Copied ${describe()} for ${name}${note ? `. ${note}` : ''}` : '' });
+    void copy(id, getText, note);
+  };
   return (
     <div className="flex flex-col gap-1.5">
-      {lead != null && (
-        <>
-          {!status && <span className="text-sm voice-semi tabular text-on-chrome-muted">{lead}</span>}
-          <Status text={status} className="text-sm voice-semi text-on-chrome" />
-        </>
-      )}
       {/* Names ride beside the marks only when the strip is wide enough for all of them. */}
       <div className="@container">
         <div className="flex w-full divide-x divide-chrome-line overflow-hidden rounded-sm border border-chrome-line">
           {targets.map(({ id, name, Mark, getText, note }) => {
             const state = busy === id ? 'busy' : done === id ? 'done' : 'idle';
+            const open = last?.id === id && !!status && busy == null;
+            const text = !failed && last?.what ? last.what : status;
             return (
-              <button
-                key={id}
-                type="button"
-                onClick={() => copy(id, getText, note)}
-                disabled={busy != null}
-                aria-label={`Copy ${name} list`}
-                title={`Copy ${name} list`}
-                data-state={state}
-                className="group relative flex h-8 min-w-0 flex-auto cursor-pointer items-center justify-center gap-1.5 px-2 text-accent transition-colors duration-200 ease-guide hover:bg-chrome focus-visible:z-10 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus disabled:cursor-wait"
-              >
-                {state === 'done' ? (
-                  <svg viewBox="0 0 16 16" aria-hidden="true" className="size-4">
-                    <path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                ) : (
-                  <Mark className="size-[1.125rem] shrink-0 group-data-[state=busy]:animate-pulse group-disabled:group-data-[state=idle]:opacity-45" />
-                )}
-                <span className="hidden truncate text-xs voice-condensed font-medium uppercase tracking-[0.06em] text-on-chrome @[21.5rem]:inline">{name}</span>
-              </button>
+              <Popover.Root key={id} open={open} onOpenChange={(o) => !o && setLast(null)}>
+                <Popover.Anchor asChild>
+                  <button
+                    type="button"
+                    onClick={() => click(id, name, getText, note)}
+                    disabled={busy != null}
+                    aria-label={`Copy ${name} list`}
+                    title={`Copy ${name} list`}
+                    data-state={state}
+                    className="group relative flex h-8 min-w-0 flex-auto cursor-pointer items-center justify-center gap-1.5 px-2 text-accent transition-colors duration-200 ease-guide hover:bg-chrome focus-visible:z-10 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus disabled:cursor-wait"
+                  >
+                    {state === 'done' ? (
+                      <svg viewBox="0 0 16 16" aria-hidden="true" className="size-4">
+                        <path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    ) : (
+                      <Mark className="size-[1.125rem] shrink-0 group-data-[state=busy]:animate-pulse group-disabled:group-data-[state=idle]:opacity-45" />
+                    )}
+                    <span className="hidden truncate text-xs voice-condensed font-medium uppercase tracking-[0.06em] text-on-chrome @[21.5rem]:inline">{name}</span>
+                  </button>
+                </Popover.Anchor>
+                <Popover.Portal>
+                  <Popover.Content
+                    side="top"
+                    sideOffset={6}
+                    collisionPadding={12}
+                    onOpenAutoFocus={(e) => e.preventDefault()}
+                    onCloseAutoFocus={(e) => e.preventDefault()}
+                    className={`z-50 max-w-[16rem] rounded-sm border bg-chrome-raised px-2.5 py-1.5 text-sm leading-snug text-on-chrome shadow-[0_12px_28px_-12px_var(--theme-scrim)] focus:outline-none ${failed ? 'border-danger' : 'border-chrome-line'}`}
+                  >
+                    {text}
+                  </Popover.Content>
+                </Popover.Portal>
+              </Popover.Root>
             );
           })}
         </div>
       </div>
-      {lead == null && <Status text={status} />}
+      <Status text={status} className="sr-only" />
     </div>
   );
 }

@@ -9,7 +9,7 @@ import { confirmed, coveragePhase, productMeta, readNotMine, rememberNotMine, sc
 
 /** Find which products your unused cards came from — scene boxes, precon and
  *  jumpstart decks, land packs, complete Secret Lair drops — review the matches,
- *  and record the ones you bought, so Acquired from can trace their cards. */
+ *  and record the ones you bought as entries in Purchase history. */
 export function FindProductsDialog({ trigger }: { trigger: ReactNode }) {
   const [open, setOpen] = useState(false);
   // While products are being recorded the dialog stays open (Escape included),
@@ -174,7 +174,7 @@ function Review({ onClose, onBusy }: { onClose: () => void; onBusy: (busy: boole
         )}
         {phase === 'done' && recorded && (
           <p role="status" className="text-md leading-relaxed">
-            Recorded {fmtCount(recorded.registered, 'product')}. {fmtCount(recorded.reattributed, 'card')} now show where they came from under <b>Acquired from</b>.
+            Recorded {fmtCount(recorded.registered, 'product')} in Purchase history, covering {fmtCount(recorded.reattributed, 'card')}.
           </p>
         )}
       </div>

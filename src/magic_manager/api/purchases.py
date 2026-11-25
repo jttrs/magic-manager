@@ -3,7 +3,7 @@
 Thin adapters over :mod:`magic_manager.purchases`: the browser companion reads
 your order history in your own browser and the app posts the normalized orders
 here (strict models — unknown fields are refused, sizes capped, so nothing but
-order lines can ride along); the review/apply routes drive the engine.
+order lines can ride along); the review/add routes drive the engine.
 Threat model: ``docs/browser-companion-security.md``; design: ``docs/purchases.md``.
 """
 from __future__ import annotations
@@ -125,7 +125,7 @@ class PurchaseOut(BaseModel):
     read_at: str
     lines: int
     copies: int
-    assigned: int = Field(description="Copies matched to cards you owned or added new.")
+    assigned: int = Field(description="Copies added to your collection (plus legacy matches).")
     assignable: int = Field(description="Copies on lines with a known printing.")
     unresolved: int
     status: Literal["new", "partial", "done", "nothing"]
@@ -143,8 +143,20 @@ class PurchaseOut(BaseModel):
     ingest_id: int | None = None
 
 
+class TotalsOut(BaseModel):
+    orders: int
+    paid_usd: float = Field(description="Item prices × quantity across every line of every order.")
+    singles_paid_usd: float
+    sealed_paid_usd: float
+    other_paid_usd: float
+    collection_value_usd: float = Field(description="Today's value of your whole collection at local prices (not just what was bought).")
+    collection_unpriced: int = Field(description="Collection rows with no price (not counted in the value).")
+    gain_usd: float = Field(description="collection_value_usd - paid_usd.")
+
+
 class PurchasesOut(BaseModel):
     purchases: list[PurchaseOut]
+    totals: TotalsOut = Field(description="Everything paid vs. what the whole collection is worth today.")
     paid_usd: float
     compared_paid_usd: float
     worth_usd: float
@@ -157,7 +169,8 @@ def catalog() -> PurchasesOut:
     cmp_paid = round(sum(p.compared_paid_usd for p in ps), 2)
     worth = round(sum(p.worth_usd for p in ps), 2)
     return PurchasesOut(purchases=ps, paid_usd=round(sum(p.paid_usd for p in ps), 2), compared_paid_usd=cmp_paid,
-                        worth_usd=worth, gain_usd=round(worth - cmp_paid, 2))
+                        worth_usd=worth, gain_usd=round(worth - cmp_paid, 2),
+                        totals=TotalsOut(**vars(purchases.totals())))
 
 
 class ReviewLineOut(BaseModel):
@@ -171,11 +184,10 @@ class ReviewLineOut(BaseModel):
     quantity: int
     unit_usd: float | None
     today_usd: float | None
-    matched: int
+    matched: int = Field(description="Legacy: copies matched to cards you owned before matching was retired.")
     added: int
-    remaining: int
+    remaining: int = Field(description="Quantity not yet in your collection (singles with a known printing).")
     owned: int
-    matchable: int = Field(description="Owned copies whose source is unknown or singles — they can be matched to this order.")
 
 
 class ReviewOut(BaseModel):
@@ -194,26 +206,15 @@ def review(purchase_id: int) -> ReviewOut:
     ])
 
 
-class DecisionIn(_Strict):
-    line_no: int = Field(ge=1)
-    match: int = Field(0, ge=0, le=9999)
-    add: int = Field(0, ge=0, le=9999)
-
-
-class ApplyIn(_Strict):
-    lines: list[DecisionIn] = Field(max_length=2000)
-
-
 class ApplyOut(BaseModel):
     purchase_id: int
     ingest_id: int
-    matched: int
-    added: int
+    added: int = Field(description="Cards added to your collection (every single of the order not yet added).")
 
 
-def apply(purchase_id: int, req: ApplyIn) -> ApplyOut:
+def apply(purchase_id: int) -> ApplyOut:
     features.require("purchases")
-    r = purchases.apply(purchase_id, [purchases.Decision(d.line_no, d.match, d.add) for d in req.lines])
+    r = purchases.add_to_collection(purchase_id)
     return ApplyOut(**vars(r))
 
 

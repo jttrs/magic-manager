@@ -3,7 +3,7 @@ import { useCallback, useMemo, useRef } from 'react';
 import { useRovingFocus } from '../../app/useRovingFocus';
 import { EmptyNote } from '../../components/States';
 import type { RecipeOut } from '../../core/api';
-import { coverage, SOURCE_LABEL, ownershipLabel, type DeckGroup } from '../../core/decks';
+import { coverage, readiness, SOURCE_LABEL, ownershipLabel, type DeckGroup } from '../../core/decks';
 import { fmtCount, fmtInt, fmtUsd } from '../../core/format';
 import { GroupHead } from '../../components/GroupHead';
 
@@ -13,7 +13,7 @@ type Item = { type: 'head'; g: DeckGroup } | { type: 'row'; r: RecipeOut };
 
 /** Every recipe as ruled rows under group heads — virtualized (the catalog runs to ~1,300 rows),
  *  the current group head pinned. One tab stop for the list (↑/↓, Home/End, Enter opens). */
-export function RecipeList({ groups, total, active, onPick }: { groups: DeckGroup[]; total: number; active?: string; onPick: (key: string) => void }) {
+export function RecipeList({ groups, total, active, threshold, onPick }: { groups: DeckGroup[]; total: number; active?: string; threshold: number; onPick: (key: string) => void }) {
   const items = useMemo<Item[]>(() => groups.flatMap((g) => [{ type: 'head', g } as Item, ...g.decks.map((r) => ({ type: 'row', r }) as Item)]), [groups]);
   const heads = useMemo(() => items.flatMap((it, i) => (it.type === 'head' ? [i] : [])), [items]);
   const keys = useMemo(() => items.flatMap((it) => (it.type === 'row' ? [it.r.key] : [])), [items]);
@@ -81,7 +81,7 @@ export function RecipeList({ groups, total, active, onPick }: { groups: DeckGrou
               {it.type === 'head' ? (
                 <GroupHead sticky={false} label={it.g.label} meta={`${fmtCount(it.g.decks.length, 'recipe')}${it.g.ready ? ` · ${fmtInt(it.g.ready)} ready` : ''}`} />
               ) : (
-                <RecipeRow r={it.r} active={it.r.key === activeKey} tabbable={it.r.key === tabKey} onFocus={() => setFocusKey(it.r.key)} onPick={() => onPick(it.r.key)} />
+                <RecipeRow r={it.r} threshold={threshold} active={it.r.key === activeKey} tabbable={it.r.key === tabKey} onFocus={() => setFocusKey(it.r.key)} onPick={() => onPick(it.r.key)} />
               )}
             </div>
           );
@@ -106,8 +106,8 @@ function OwnMark({ r }: { r: Pick<RecipeOut, 'ownership' | 'built' | 'loose' | '
   return <span className={`shrink-0 text-xs voice-condensed uppercase tracking-[0.06em] ${tone}`}>{ownershipLabel(r)}</span>;
 }
 
-function RecipeRow({ r, active, tabbable, onFocus, onPick }: { r: RecipeOut; active: boolean; tabbable: boolean; onFocus: () => void; onPick: () => void }) {
-  const cover = coverage(r);
+function RecipeRow({ r, threshold, active, tabbable, onFocus, onPick }: { r: RecipeOut; threshold: number; active: boolean; tabbable: boolean; onFocus: () => void; onPick: () => void }) {
+  const cover = coverage(r, threshold);
   const unowned = r.ownership === 'none';
   return (
     <button
@@ -136,7 +136,7 @@ function RecipeRow({ r, active, tabbable, onFocus, onPick }: { r: RecipeOut; act
       </span>
       <span className="flex shrink-0 flex-col items-end gap-0.5 text-xs tabular">
         {r.read ? <span className="text-ink">{fmtUsd(r.value_usd)}</span> : <span className="text-ink-muted" title="Open it to read its card list">not read</span>}
-        {cover && <span className={r.status === 'far' ? 'text-ink-muted' : 'voice-semi text-accent-ink'}>{cover}</span>}
+        {cover && <span className={readiness(r, threshold) === 'far' ? 'text-ink-muted' : 'voice-semi text-accent-ink'}>{cover}</span>}
       </span>
     </button>
   );

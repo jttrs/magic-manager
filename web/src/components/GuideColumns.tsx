@@ -22,7 +22,7 @@ export function GuideColumns({ columns, visible, onHide, storageKey }: { columns
     const active = shown.find((c) => c.id === tab) ?? shown[0];
     return (
       <div className="flex h-[calc(100dvh-10rem)] min-h-0 flex-col">
-        <div role="tablist" aria-label="Columns" className="mx-3 flex gap-1 border-b-2 border-rule-strong">
+        <div role="tablist" aria-label="Columns" className="mx-sheet flex gap-1 border-b-2 border-rule-strong">
           {shown.map((c) => (
             <button
               key={c.id}
@@ -38,7 +38,7 @@ export function GuideColumns({ columns, visible, onHide, storageKey }: { columns
           ))}
         </div>
         <div role="tabpanel" id={`tabpanel-${active.id}`} aria-label={active.title} className="flex min-h-0 flex-1 flex-col">
-          {active.legend && <div className="mx-4 pt-1.5">{active.legend}</div>}
+          {active.legend && <div className="mx-sheet pt-1.5">{active.legend}</div>}
           <div className="min-h-0 flex-1">{active.body}</div>
         </div>
       </div>
@@ -73,7 +73,7 @@ function PanelFrag({ col, first, onHide, canHide }: { col: Column; first: boolea
       )}
       <Panel id={col.id} minSize="18" className="flex min-w-0 flex-col">
         <section aria-labelledby={`col-${col.id}`} className="flex h-full min-h-0 flex-col">
-          <header className="mx-4 flex items-baseline gap-3 border-b-2 border-rule-strong pb-1 pt-2">
+          <header className="mx-sheet flex items-baseline gap-3 border-b-2 border-rule-strong pb-1 pt-2">
             <h2 id={`col-${col.id}`} className="min-w-0 truncate text-2xl voice-condensed font-bold uppercase leading-none text-ink">
               {col.title}
               <span className="font-regular text-ink-muted"> · <span className="tabular">{col.count}</span></span>
@@ -89,7 +89,7 @@ function PanelFrag({ col, first, onHide, canHide }: { col: Column; first: boolea
               </button>
             )}
           </header>
-          {col.legend && <div className="mx-4 pt-1.5">{col.legend}</div>}
+          {col.legend && <div className="mx-sheet pt-1.5">{col.legend}</div>}
           <div className="min-h-0 flex-1">{col.body}</div>
         </section>
       </Panel>
