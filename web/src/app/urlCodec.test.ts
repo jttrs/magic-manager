@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { collectionSearch } from '../core/search';
-import { parseSearch, stringifySearch } from './urlCodec';
+import { canonicalizeAddressBar, parseSearch, stringifySearch } from './urlCodec';
 
 const roundTrip = (search: Record<string, unknown>) => parseSearch(stringifySearch(search));
 
@@ -34,5 +34,21 @@ describe('every route reads back the lists it writes', () => {
     expect(d.status).toEqual(['built', 'buildable']);
     const c = collectionSearch.parse(parseSearch(stringifySearch({ show: ['owned', 'missing'] })));
     expect(c.show).toEqual(['owned', 'missing']);
+  });
+});
+
+describe('canonicalizeAddressBar', () => {
+  const run = (search: string) => {
+    let wrote: string | null = null;
+    canonicalizeAddressBar({ pathname: '/collection', search, hash: '' }, { state: null, replaceState: (_s, _t, url) => { wrote = String(url); } });
+    return wrote;
+  };
+  it('rewrites JSON lists to the short form', () => {
+    expect(run('?families=%5B%22dft%22%2C%22tla%22%5D')).toBe('/collection?families=dft%2Ctla');
+  });
+  it('leaves a short link, an empty search and a re-encoded search alone', () => {
+    expect(run('?families=dft%2Ctla')).toBeNull();
+    expect(run('')).toBeNull();
+    expect(run('?q=Ahoy%20Mateys%27')).toBeNull();
   });
 });

@@ -5,7 +5,7 @@ import { historySearch } from '../core/history';
 import { jumpstartToDecks, legacyJumpstartSearch } from '../core/jumpstart';
 import { analyticsSearch } from '../core/analyticsDashboard';
 import { adminSearch } from '../core/admin';
-import { parseSearch, stringifySearch } from './urlCodec';
+import { canonicalizeAddressBar, parseSearch, stringifySearch } from './urlCodec';
 
 const rootRoute = createRootRoute({
   component: () => (
@@ -130,6 +130,9 @@ const adminRoute = createRoute({
   search: { middlewares: [stripSearchParams(adminSearch.parse({}))] },
   component: lazyRouteComponent(() => import('../views/AdminView'), 'AdminView'),
 });
+
+// Tidy an old-style link before the router reads the address bar (app/urlCodec.ts).
+if (typeof window !== 'undefined') canonicalizeAddressBar();
 
 export const router = createRouter({
   routeTree: rootRoute.addChildren([indexRoute, collectionRoute, historyRoute, legacyJumpstartRoute, legacySetsRoute, decksRoute, deckEditRoute, exploreRoute, legacyCommandersRoute, marketRoute, jobsRoute, analyticsRoute, adminRoute]),

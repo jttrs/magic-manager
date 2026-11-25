@@ -25,3 +25,14 @@ function stringifyValue(value: unknown): string {
 // JSON.parse as the parser keeps strings symmetric: a string that reads as JSON (`123`) is quoted.
 export const stringifySearch = stringifySearchWith(stringifyValue, JSON.parse);
 export const parseSearch = parseSearchWith(JSON.parse);
+
+/** Old links (bookmarks, history, pasted) may still carry JSON lists
+ *  (`families=%5B%22dft%22…`). Rewrite the address bar ONCE, before the router reads it, to the
+ *  short form every in-app navigation writes — so there is nothing to race. Compared
+ *  normalized, so a different encoding of the same search (`'` vs `%27`) is left alone. */
+export function canonicalizeAddressBar(loc: Pick<Location, 'pathname' | 'search' | 'hash'> = window.location, history: Pick<History, 'replaceState' | 'state'> = window.history) {
+  if (!loc.search) return;
+  const canonical = stringifySearch(parseSearch(loc.search));
+  if (new URLSearchParams(canonical).toString() === new URLSearchParams(loc.search).toString()) return;
+  history.replaceState(history.state, '', `${loc.pathname}${canonical}${loc.hash}`);
+}
